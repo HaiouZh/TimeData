@@ -1,0 +1,31 @@
+{
+  "name": "timedata",
+  "private": true,
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:client": "pnpm --filter @timedata/client dev",
+    "dev:server": "pnpm --filter @timedata/server dev",
+    "build:shared": "pnpm --filter @timedata/shared build",
+    "build:client": "pnpm --filter @timedata/client build",
+    "build:server": "pnpm --filter @timedata/server build",
+    "build:cli": "pnpm --filter @timedata/cli build",
+    "build:mobile": "pnpm build:shared && pnpm --filter @timedata/mobile build",
+    "build:mobile:apk": "pnpm build:shared && pnpm --filter @timedata/mobile android:debug",
+    "build:mobile:release-apk": "pnpm build:shared && pnpm --filter @timedata/mobile android:release",
+    "build": "pnpm build:shared && pnpm build:client && pnpm build:server && pnpm build:cli",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "check:docs": "node scripts/check-evergreen-docs.mjs",
+    "check:docs:strict": "node scripts/check-evergreen-docs.mjs --mode=strict",
+    "check:docs:stale": "node scripts/check-evergreen-docs.mjs --mode=stale"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  }
+}

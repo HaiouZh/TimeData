@@ -1,0 +1,32 @@
+{
+  "name": "@timedata/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build:web": "pnpm --filter @timedata/client build:mobile",
+    "android:add": "cap add android",
+    "android:sync": "pnpm build:web && cap sync android",
+    "android:gradle:debug": "node scripts/gradle.mjs assembleDebug",
+    "android:gradle:release": "node scripts/gradle.mjs assembleRelease",
+    "android:debug": "pnpm android:sync && pnpm android:gradle:debug",
+    "android:release": "pnpm android:sync && pnpm android:gradle:release",
+    "android:open": "cap open android",
+    "android:run": "pnpm android:sync && cap run android",
+    "build": "pnpm android:sync",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.5",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/browser": "^7.0.5",
+    "@capacitor/core": "^7.6.5"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.5",
+    "typescript": "^5.7.0"
+  }
+}

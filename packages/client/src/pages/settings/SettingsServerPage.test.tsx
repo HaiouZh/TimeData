@@ -1,0 +1,83 @@
+// @vitest-environment jsdom
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import SettingsServerPage from "./SettingsServerPage.js";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const updateApiUrlMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../../contexts/SyncContext.tsx", () => ({
+  useSyncContext: () => ({
+    apiUrl: localStorage.getItem("timedata_api_url") || "",
+    updateApiUrl: updateApiUrlMock,
+  }),
+}));
+
+const localStorageMock = (() => {
+  let store = new Map<string, string>();
+
+  return {
+    clear: () => {
+      store = new Map<string, string>();
+    },
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+  };
+})();
+
+Object.defineProperty(globalThis, "localStorage", {
+  value: localStorageMock,
+  configurable: true,
+});
+
+describe("SettingsServerPage", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_api_token", "secret-token");
+    updateApiUrlMock.mockClear();
+  });
+
+  it("renders server configuration controls with saved values", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+
+    expect(html).toContain("服务器配置");
+    expect(html).toContain("API 地址");
+    expect(html).toContain("Token");
+    expect(html).toContain("https://example.com");
+    expect(html).toContain("secret-token");
+    expect(html).toContain("保存配置");
+  });
+
+  it("saves api url through sync context", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+    });
+
+    const apiInput = host.querySelector('input[type="url"]') as HTMLInputElement;
+    apiInput.value = " https://new.example ";
+    await act(async () => {
+      apiInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
+    await act(async () => {
+      saveButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(updateApiUrlMock).toHaveBeenCalledWith("https://new.example");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});

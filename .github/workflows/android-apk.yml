@@ -1,0 +1,125 @@
+name: android-apk
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "packages/client/**"
+      - "packages/mobile/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".github/workflows/android-apk.yml"
+
+jobs:
+  build-release-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version code
+        id: version
+        run: |
+          TODAY=$(date -u +%y%m%d)
+          EXISTING=$(git tag -l "android-${TODAY}*" | wc -l)
+          SEQ=$(printf "%02d" $((EXISTING + 1)))
+          VERSION_CODE="${TODAY}${SEQ}"
+          echo "code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "tag=android-${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "Version code: ${VERSION_CODE}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+          run_install: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Decode release keystore
+        env:
+          TIMEDATA_RELEASE_KEYSTORE_BASE64: ${{ secrets.TIMEDATA_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$TIMEDATA_RELEASE_KEYSTORE_BASE64"
+          printf '%s' "$TIMEDATA_RELEASE_KEYSTORE_BASE64" | base64 --decode > packages/mobile/android/timedata-release.keystore
+
+      - name: Allow Gradle wrapper execution
+        run: chmod +x packages/mobile/android/gradlew
+
+      - name: Build signed release APK
+        env:
+          TIMEDATA_ANDROID_VERSION_CODE: ${{ steps.version.outputs.code }}
+          ORG_GRADLE_PROJECT_TIMEDATA_ANDROID_VERSION_CODE: ${{ steps.version.outputs.code }}
+          ORG_GRADLE_PROJECT_TIMEDATA_RELEASE_STORE_FILE: ../timedata-release.keystore
+          ORG_GRADLE_PROJECT_TIMEDATA_RELEASE_STORE_PASSWORD: ${{ secrets.TIMEDATA_RELEASE_STORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_TIMEDATA_RELEASE_KEY_ALIAS: ${{ secrets.TIMEDATA_RELEASE_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_TIMEDATA_RELEASE_KEY_PASSWORD: ${{ secrets.TIMEDATA_RELEASE_KEY_PASSWORD }}
+        run: pnpm build:mobile:release-apk
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: timedata-release-apk
+          path: packages/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Publish latest release APK release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.version.outputs.tag }}
+          RELEASE_NAME: TimeData Android ${{ steps.version.outputs.code }}
+          APK_PATH: packages/mobile/android/app/build/outputs/apk/release/app-release.apk
+        run: |
+          BODY=$(cat <<'EOF'
+          Android release APK version `${{ steps.version.outputs.code }}`, built from `${{ github.sha }}`.
+
+          Android users must download the APK and confirm installation manually. The APK is signed with the stable TimeData release key so future releases can update over this build.
+          EOF
+          )
+
+          for attempt in 1 2 3; do
+            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+              gh release upload "$TAG_NAME" "$APK_PATH" --clobber && \
+              gh release edit "$TAG_NAME" --title "$RELEASE_NAME" --notes "$BODY" --latest && \
+              exit 0
+            else
+              gh release create "$TAG_NAME" "$APK_PATH" \
+                --target "$GITHUB_SHA" \
+                --title "$RELEASE_NAME" \
+                --notes "$BODY" \
+                --latest && \
+              exit 0
+            fi
+            echo "Release publish attempt $attempt failed; retrying..."
+            sleep $((attempt * 10))
+          done
+
+          echo "Release publish failed after 3 attempts."
+          exit 1

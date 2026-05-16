@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@keyframes sync-pulse {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes sync-blink {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-sync-pulse {
+  animation: sync-pulse 1.5s ease-in-out infinite;
+}
+
+.animate-sync-blink {
+  animation: sync-blink 2.5s ease-in-out infinite;
+}
+
+.wheel-scroll {
+  scrollbar-width: none;
+}
+.wheel-scroll::-webkit-scrollbar {
+  display: none;
+}

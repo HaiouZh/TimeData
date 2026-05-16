@@ -1,0 +1,703 @@
+import Database from "better-sqlite3";
+import { Hono } from "hono";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+let db: Database.Database;
+let app: Hono;
+let createServerBackupMock: ReturnType<typeof vi.fn>;
+let markServerBackupProtectedMock: ReturnType<typeof vi.fn>;
+
+function createSchema() {
+  db.exec(`
+    CREATE TABLE categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT,
+      color TEXT NOT NULL DEFAULT '#808080',
+      icon TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (parent_id) REFERENCES categories(id)
+    );
+
+    CREATE TABLE time_entries (
+      id TEXT PRIMARY KEY,
+      category_id TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (category_id) REFERENCES categories(id)
+    );
+
+    CREATE TABLE sync_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      device TEXT,
+      action TEXT NOT NULL,
+      detail TEXT,
+      record_count INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE sync_tombstones (
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      deleted_at TEXT NOT NULL,
+      PRIMARY KEY (table_name, record_id)
+    );
+
+    CREATE TABLE sync_seq (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
+
+beforeEach(async () => {
+  db = new Database(":memory:");
+  db.pragma("foreign_keys = ON");
+  createSchema();
+  db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+
+  vi.resetModules();
+  createServerBackupMock = vi.fn(async (operation: string) => ({
+    id: operation === "sync_local_wins" ? "sync_local_wins-backup-1" : "backup-1",
+    path: "backup.db",
+    createdAt: "2026-05-08T09:00:00",
+    operation,
+  }));
+  markServerBackupProtectedMock = vi.fn();
+  vi.doMock("../db/connection.js", () => ({ getDb: () => db, getDbPath: () => ":memory:" }));
+  vi.doMock("../sync/backup.js", () => ({ createServerBackup: createServerBackupMock, markServerBackupProtected: markServerBackupProtectedMock }));
+  const syncRoute = (await import("./sync.js")).default;
+  app = new Hono().route("/api/sync", syncRoute);
+});
+
+afterEach(() => {
+  db.close();
+  vi.doUnmock("../db/connection.js");
+  vi.doUnmock("../sync/backup.js");
+});
+describe("sync route", () => {
+  it("returns server sync status counts and latest update", async () => {
+    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run(
+      "cat-2",
+      "学习",
+      "#22c55e",
+      "2026-05-08T12:00:00",
+      "2026-05-08T12:30:00",
+    );
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-1",
+      "cat-1",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      null,
+      "2026-05-08T09:00:00",
+      "2026-05-08T13:00:00",
+    );
+
+    const res = await app.request("/api/sync/status");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      categoryCount: 2,
+      entryCount: 1,
+      lastUpdatedAt: "2026-05-08T13:00:00",
+      latestSeq: null,
+    });
+    expect(typeof body.serverTime).toBe("string");
+  });
+
+  it("returns latest sync sequence in server sync status", async () => {
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("categories", "cat-1", "create");
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("time_entries", "entry-1", "create");
+
+    const res = await app.request("/api/sync/status");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.latestSeq).toBe(2);
+  });
+
+  it("creates a short-lived force-push confirmation token", async () => {
+    const res = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        categoryCount: 1,
+        entryCount: 0,
+        lastUpdatedAt: "2026-05-08T08:00:00",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(typeof body.confirmToken).toBe("string");
+    expect(body.confirmToken.length).toBeGreaterThan(20);
+    expect(body.confirmationPhrase).toBe("OVERWRITE_SERVER");
+    expect(typeof body.expiresAt).toBe("string");
+    expect(body.serverStatus).toMatchObject({ categoryCount: 1, entryCount: 0 });
+  });
+
+  it("backs up and replaces server data during confirmed force push", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 2, entryCount: 1, lastUpdatedAt: "2026-05-08T15:00:00" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [
+          {
+            id: "cat-local-parent",
+            name: "本地父分类",
+            parentId: null,
+            color: "#64748b",
+            icon: null,
+            sortOrder: 0,
+            isArchived: false,
+            createdAt: "2026-05-08T14:00:00",
+            updatedAt: "2026-05-08T14:00:00",
+          },
+          {
+            id: "cat-local-child",
+            name: "本地子分类",
+            parentId: "cat-local-parent",
+            color: "#22c55e",
+            icon: null,
+            sortOrder: 1,
+            isArchived: false,
+            createdAt: "2026-05-08T14:00:00",
+            updatedAt: "2026-05-08T14:00:00",
+          },
+        ],
+        timeEntries: [
+          {
+            id: "entry-local",
+            categoryId: "cat-local-child",
+            startTime: "2026-05-08T15:00:00",
+            endTime: "2026-05-08T16:00:00",
+            note: "本地恢复后的记录",
+            createdAt: "2026-05-08T15:00:00",
+            updatedAt: "2026-05-08T15:00:00",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ importedCategories: 2, importedTimeEntries: 1, backupId: "backup-1", latestSeq: 3 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM sync_seq").get()).toMatchObject({ count: 3 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 2 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM time_entries").get()).toMatchObject({ count: 1 });
+    expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-1")).toBeUndefined();
+    expect(db.prepare("SELECT note FROM time_entries WHERE id = ?").get("entry-local")).toMatchObject({ note: "本地恢复后的记录" });
+    expect(db.prepare("SELECT action FROM sync_logs WHERE action = ?").get("force_push_applied")).toMatchObject({ action: "force_push_applied" });
+  });
+
+  it("rejects force push without a valid confirmation token", async () => {
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: "not-a-valid-token",
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body).toMatchObject({ error: "Invalid or expired force-push confirmation token." });
+  });
+
+  it("rejects force push when entries reference missing categories", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 1, lastUpdatedAt: "2026-05-08T15:00:00" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [{
+          id: "entry-orphan",
+          categoryId: "missing-cat",
+          startTime: "2026-05-08T15:00:00",
+          endTime: "2026-05-08T16:00:00",
+          note: null,
+          createdAt: "2026-05-08T15:00:00",
+          updatedAt: "2026-05-08T15:00:00",
+        }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("missing category");
+    expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
+  });
+
+  it("rejects force push categories that reference themselves", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 1, entryCount: 0, lastUpdatedAt: "2026-05-08T15:00:00" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [{
+          id: "cat-self",
+          name: "自引用",
+          parentId: "cat-self",
+          color: "#64748b",
+          icon: null,
+          sortOrder: 0,
+          isArchived: false,
+          createdAt: "2026-05-08T14:00:00",
+          updatedAt: "2026-05-08T14:00:00",
+        }],
+        timeEntries: [],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("references itself");
+    expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
+  });
+
+  it("rejects force push categories that would create a third level", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 3, entryCount: 0, lastUpdatedAt: "2026-05-08T15:00:00" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [
+          {
+            id: "cat-parent",
+            name: "父分类",
+            parentId: null,
+            color: "#64748b",
+            icon: null,
+            sortOrder: 0,
+            isArchived: false,
+            createdAt: "2026-05-08T14:00:00",
+            updatedAt: "2026-05-08T14:00:00",
+          },
+          {
+            id: "cat-child",
+            name: "子分类",
+            parentId: "cat-parent",
+            color: "#22c55e",
+            icon: null,
+            sortOrder: 1,
+            isArchived: false,
+            createdAt: "2026-05-08T14:00:00",
+            updatedAt: "2026-05-08T14:00:00",
+          },
+          {
+            id: "cat-grandchild",
+            name: "三级分类",
+            parentId: "cat-child",
+            color: "#f97316",
+            icon: null,
+            sortOrder: 0,
+            isArchived: false,
+            createdAt: "2026-05-08T14:00:00",
+            updatedAt: "2026-05-08T14:00:00",
+          },
+        ],
+        timeEntries: [],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("third level");
+    expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
+  });
+
+  it("creates a protected unknown-base backup when baseSeq is missing", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [{
+          tableName: "categories",
+          recordId: "cat-1",
+          action: "update",
+          data: {
+            id: "cat-1",
+            name: "工作",
+            parentId: null,
+            color: "#22c55e",
+            icon: null,
+            sortOrder: 0,
+            isArchived: false,
+            createdAt: "2026-05-08T08:00:00",
+            updatedAt: "2026-05-08T09:00:00",
+          },
+          timestamp: "2026-05-08T09:00:00",
+        }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
+    expect(createServerBackupMock).toHaveBeenCalledWith("sync_unknown_base");
+    expect(markServerBackupProtectedMock).toHaveBeenCalledWith("backup-1", {
+      protected: true,
+      reason: "unknown_base",
+      details: {
+        baseSeq: null,
+        cloudAheadCount: 0,
+        overlappingRecords: [],
+        pushedRecords: [{ tableName: "categories", recordId: "cat-1", action: "update" }],
+      },
+    });
+    const logRow = db.prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1").get("push_received") as { detail: string };
+    expect(JSON.parse(logRow.detail)).toMatchObject({
+      protected: true,
+      seqAnalysis: { strategy: "unknown_base", cloudAheadCount: 0, overlappingRecords: [] },
+    });
+  });
+
+  it("returns per-change outcomes and a backup id for accepted pushes", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [{
+          tableName: "time_entries",
+          recordId: "entry-1",
+          action: "create",
+          data: {
+            id: "entry-1",
+            categoryId: "cat-1",
+            startTime: "2026-05-08T09:00:00.000Z",
+            endTime: "2026-05-08T10:00:00.000Z",
+            note: null,
+            createdAt: "2026-05-08T09:00:00.000Z",
+            updatedAt: "2026-05-08T09:00:00.000Z",
+          },
+          timestamp: "2026-05-08T09:00:00.000Z",
+        }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
+    expect(body.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied", recordId: "entry-1" });
+  });
+
+  it("deletes a category through sync push and exposes a category tombstone on pull", async () => {
+    const pushRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [{
+          tableName: "categories",
+          recordId: "cat-1",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-08T10:00:00.000Z",
+        }],
+      }),
+    });
+
+    expect(pushRes.status).toBe(200);
+    await expect(pushRes.json()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    expect(db.prepare("SELECT id FROM categories WHERE id = ?").get("cat-1")).toBeUndefined();
+    expect(db.prepare("SELECT * FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get("categories", "cat-1")).toMatchObject({
+      table_name: "categories",
+      record_id: "cat-1",
+      deleted_at: "2026-05-08T10:00:00.000Z",
+    });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0, lastSyncedAt: null }),
+    });
+
+    expect(pullRes.status).toBe(200);
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tableName: "categories", recordId: "cat-1", action: "delete", data: null }),
+    ]));
+  });
+
+  it("deletes category descendants and records tombstones for each category", async () => {
+    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run(
+      "cat-child",
+      "子分类",
+      "cat-1",
+      "#22c55e",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
+    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run(
+      "cat-grandchild",
+      "异常三级分类",
+      "cat-child",
+      "#f97316",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-grandchild",
+      "cat-grandchild",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      null,
+      "2026-05-08T09:00:00",
+      "2026-05-08T09:00:00",
+    );
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [{
+          tableName: "categories",
+          recordId: "cat-1",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-08T10:00:00.000Z",
+        }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM categories").get()).toMatchObject({ count: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM time_entries").get()).toMatchObject({ count: 0 });
+    expect(db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = ? ORDER BY record_id").all("categories")).toEqual([
+      { record_id: "cat-1" },
+      { record_id: "cat-child" },
+      { record_id: "cat-grandchild" },
+    ]);
+  });
+
+  it("orders entry deletes before category deletes to satisfy foreign keys", async () => {
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-cat-1",
+      "cat-1",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      null,
+      "2026-05-08T09:00:00",
+      "2026-05-08T09:00:00",
+    );
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "cat-1",
+            action: "delete",
+            data: null,
+            timestamp: "2026-05-08T10:00:00.000Z",
+          },
+          {
+            tableName: "time_entries",
+            recordId: "entry-cat-1",
+            action: "delete",
+            data: null,
+            timestamp: "2026-05-08T10:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ accepted: 2, rejected: 0, conflicts: 0 });
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-cat-1")).toBeUndefined();
+    expect(db.prepare("SELECT id FROM categories WHERE id = ?").get("cat-1")).toBeUndefined();
+  });
+
+  it("rejects invalid push request shapes before sync validation", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [{
+          tableName: "time_entries",
+          recordId: "entry-1",
+          action: "create",
+          data: null,
+          timestamp: "2026-05-08T09:00:00",
+        }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid_request");
+    expect(body.issues.length).toBeGreaterThan(0);
+  });
+
+  it("includes tombstones in pull responses", async () => {
+    db.prepare(`INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)`).run("time_entries", "entry-deleted", "2026-05-08T11:00:00");
+
+    const res = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lastSyncedAt: "2026-05-08T10:00:00" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.changes).toContainEqual({
+      tableName: "time_entries",
+      recordId: "entry-deleted",
+      action: "delete",
+      data: null,
+      timestamp: "2026-05-08T11:00:00",
+    });
+  });
+
+  it("pulls deduplicated changes after a seq cursor and returns latest seq", async () => {
+    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run(
+      "cat-seq",
+      "Seq 分类",
+      "#22c55e",
+      "2026-05-08T10:00:00",
+      "2026-05-08T11:00:00",
+    );
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-seq",
+      "cat-seq",
+      "2026-05-08T11:00:00",
+      "2026-05-08T12:00:00",
+      "seq record",
+      "2026-05-08T11:00:00",
+      "2026-05-08T11:00:00",
+    );
+    db.prepare(`INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)`).run("categories", "cat-old", "update");
+    const baseSeq = (db.prepare(`INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)`).run("categories", "cat-seq", "create").lastInsertRowid) as number;
+    db.prepare(`INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)`).run("categories", "cat-seq", "update");
+    db.prepare(`INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)`).run("time_entries", "entry-seq", "create");
+    const latestSeq = Number(db.prepare("SELECT MAX(id) as seq FROM sync_seq").get().seq);
+
+    const res = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lastSyncedAt: null, sinceSeq: baseSeq }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.latestSeq).toBe(latestSeq);
+    expect(body.changes).toEqual([
+      expect.objectContaining({ tableName: "categories", recordId: "cat-seq", action: "update" }),
+      expect.objectContaining({ tableName: "time_entries", recordId: "entry-seq", action: "update" }),
+    ]);
+  });
+
+  it("creates a protected local-wins backup for non-fast-forward overlapping pushes", async () => {
+    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run(
+      "cat-overlap",
+      "server name",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T12:00:00",
+    );
+    const baseSeq = (db.prepare(`INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)`).run("categories", "cat-overlap", "create").lastInsertRowid) as number;
+    const serverSeq = Number(db.prepare(`INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)`).run("categories", "cat-overlap", "update").lastInsertRowid);
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq,
+        changes: [{
+          tableName: "categories",
+          recordId: "cat-overlap",
+          action: "update",
+          data: {
+            id: "cat-overlap",
+            name: "local name",
+            parentId: null,
+            color: "#22c55e",
+            icon: null,
+            sortOrder: 0,
+            isArchived: false,
+            createdAt: "2026-05-08T08:00:00",
+            updatedAt: "2026-05-08T10:00:00",
+          },
+          timestamp: "2026-05-08T10:00:00",
+        }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "sync_local_wins-backup-1" });
+    expect(createServerBackupMock).toHaveBeenCalledWith("sync_local_wins");
+    expect(markServerBackupProtectedMock).toHaveBeenCalledWith("sync_local_wins-backup-1", {
+      protected: true,
+      reason: "local_wins_non_fast_forward",
+      details: {
+        baseSeq,
+        cloudAheadCount: 1,
+        overlappingRecords: [{ tableName: "categories", recordId: "cat-overlap", serverSeq }],
+        pushedRecords: [{ tableName: "categories", recordId: "cat-overlap", action: "update" }],
+      },
+    });
+    expect(db.prepare("SELECT name, updated_at FROM categories WHERE id = ?").get("cat-overlap")).toMatchObject({ name: "local name", updated_at: "2026-05-08T10:00:00" });
+  });
+});

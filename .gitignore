@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Runtime data and databases
+data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local AI/editor state
+.claude/
+.qoder/
+.worktrees/
+
+# Local-only development documents
+docs_local/
+
+# Legacy process-doc locations; never track again
+docs/superpowers/
+docs/Achieve/
+
+# Local scripts/debug artifacts
+scripts/_debug.*
+*.log
+
+# Reference code kept outside public Git
+参考代码/
+不同步/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
