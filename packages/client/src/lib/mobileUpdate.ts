@@ -43,7 +43,7 @@ export function getAndroidApkUpdateFromRelease(release: GitHubRelease, currentVe
 export type AndroidApkUpdateOpener = (url: string) => Promise<void> | void;
 
 export function getAndroidApkUpdateUrl(update: AndroidApkUpdate): string {
-  return update.pageUrl;
+  return update.apkUrl;
 }
 
 export async function openAndroidApkUpdate(update: AndroidApkUpdate, opener: AndroidApkUpdateOpener = openExternalUrl): Promise<void> {

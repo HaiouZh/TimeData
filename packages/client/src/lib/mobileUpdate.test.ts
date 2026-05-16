@@ -54,16 +54,16 @@ describe("getAndroidApkUpdateFromRelease", () => {
 });
 
 describe("getAndroidApkUpdateUrl", () => {
-  it("opens the release page instead of the APK asset URL", () => {
+  it("opens the APK asset URL", () => {
     const update = getAndroidApkUpdateFromRelease(release, "26050701");
 
     expect(update).not.toBeNull();
-    expect(getAndroidApkUpdateUrl(update!)).toBe("https://github.com/HaiouZh/TimeData/releases/tag/android-26050801");
+    expect(getAndroidApkUpdateUrl(update!)).toBe("https://example.com/timedata-debug.apk");
   });
 });
 
 describe("openAndroidApkUpdate", () => {
-  it("delegates opening the release page to the provided opener", async () => {
+  it("delegates opening the APK asset URL to the provided opener", async () => {
     const update = getAndroidApkUpdateFromRelease(release, "26050701");
     const opened: string[] = [];
 
@@ -71,6 +71,6 @@ describe("openAndroidApkUpdate", () => {
       opened.push(url);
     });
 
-    expect(opened).toEqual(["https://github.com/HaiouZh/TimeData/releases/tag/android-26050801"]);
+    expect(opened).toEqual(["https://example.com/timedata-debug.apk"]);
   });
 });
