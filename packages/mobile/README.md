@@ -2,29 +2,28 @@
 
 This package contains the Capacitor Android shell for TimeData.
 
-## Prerequisites
+## 本地环境
 
-Android debug APK builds require:
+Android APK 构建需要：
 
-- JDK 17
-- Android SDK Platform 34
-- Android SDK Build-Tools 34.0.0
+- Node.js 22+
+- pnpm 9+
+- JDK 21
+- Android SDK Platform 35
+- Android SDK Build-Tools 35.0.0
 - Android SDK Platform-Tools
 - Android SDK Command-line Tools
+- Android Studio 可用于打开 `packages/mobile/android`
 
-The local build used these Windows paths:
-
-```text
-JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot
-ANDROID_HOME=C:\Users\yanzh\AppData\Local\Android\Sdk
-```
-
-If a new machine cannot run Gradle, install Android Studio or the Android command-line tools, then install:
+常用命令：
 
 ```bash
-sdkmanager --sdk_root="C:\Users\yanzh\AppData\Local\Android\Sdk" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-sdkmanager --sdk_root="C:\Users\yanzh\AppData\Local\Android\Sdk" --licenses
+pnpm build:mobile
+pnpm build:mobile:apk
+pnpm --filter @timedata/mobile android:open
 ```
+
+如果新机器不能运行 Gradle，安装 Android Studio 或 Android command-line tools 后，安装 SDK Platform 35、Build-Tools 35.0.0、Platform-Tools，并执行 `sdkmanager --licenses`。
 
 ## Build Android web assets
 

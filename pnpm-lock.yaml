@@ -27,20 +27,20 @@ importers:
   packages/client:
     dependencies:
       '@capacitor/app':
-        specifier: ^6.0.3
-        version: 6.0.3(@capacitor/core@6.2.1)
+        specifier: ^7.1.2
+        version: 7.1.2(@capacitor/core@7.6.5)
       '@capacitor/browser':
-        specifier: ^6.0.6
-        version: 6.0.6(@capacitor/core@6.2.1)
+        specifier: ^7.0.5
+        version: 7.0.5(@capacitor/core@7.6.5)
       '@capacitor/core':
-        specifier: ^6.2.1
-        version: 6.2.1
+        specifier: ^7.6.5
+        version: 7.6.5
       '@capacitor/filesystem':
-        specifier: ^6.0.4
-        version: 6.0.4(@capacitor/core@6.2.1)
+        specifier: ^7.1.8
+        version: 7.1.8(@capacitor/core@7.6.5)
       '@capacitor/share':
-        specifier: ^6.0.4
-        version: 6.0.4(@capacitor/core@6.2.1)
+        specifier: ^7.0.4
+        version: 7.0.4(@capacitor/core@7.6.5)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -792,20 +792,10 @@ packages:
     peerDependencies:
       '@capacitor/core': ^7.6.0
 
-  '@capacitor/app@6.0.3':
-    resolution: {integrity: sha512-4gFUCbcVz0N/YYN32OBFerocWXslIv3Nc90gDiRsBkJc0plwK6kIUT6PKa5WtW2kfhteUeCVXQbvArH2fH+0Ug==}
-    peerDependencies:
-      '@capacitor/core': ^6.0.0
-
   '@capacitor/app@7.1.2':
     resolution: {integrity: sha512-d4I/oF/PRu4megL7/IGKYfe5j7yzSON1FRFgq6kH+m5kH6g7V+wyjHRLauCzGNjdRx4S+nWOumINds0qcRBtKg==}
     peerDependencies:
       '@capacitor/core': '>=7.0.0'
-
-  '@capacitor/browser@6.0.6':
-    resolution: {integrity: sha512-VHOPkMR+JqKz2mf5YncnnOWvFdVYFTTLnPW+JRcsP1LobXmA0gtchER35PQ7XXqXU16eeacrehX+XF+rC6wmQw==}
-    peerDependencies:
-      '@capacitor/core': ^6.0.0
 
   '@capacitor/browser@7.0.5':
     resolution: {integrity: sha512-YF/kC1m1e6c81X/agtAnYItVlqiQ/nXLG+Q3QXNDuiMoRynqa3Guu8ZaV9kWvqQcHoE2w18xz7WGpPOuh+R1fA==}
@@ -817,26 +807,13 @@ packages:
     engines: {node: '>=20.0.0'}
     hasBin: true
 
-  '@capacitor/core@6.2.1':
-    resolution: {integrity: sha512-urZwxa7hVE/BnA18oCFAdizXPse6fCKanQyEqpmz6cBJ2vObwMpyJDG5jBeoSsgocS9+Ax+9vb4ducWJn0y2qQ==}
-
   '@capacitor/core@7.6.5':
     resolution: {integrity: sha512-JWyxD9LaK1oY588B/khJIG3Ec4NHI/Ki4v1b4XzqPNt2a27au0F2AhLTwYexV4Bp3Ruxf+8oYqxFAC8/7sGBWA==}
-
-  '@capacitor/filesystem@6.0.4':
-    resolution: {integrity: sha512-eFlg/ZrwYA4Y6ClLRRikudVu2XvuZxfX/XC0ky9MgfbC9dyqTnVkkEoWM6vr1xR89YNY4mB0EeVTet1m1Jcumw==}
-    peerDependencies:
-      '@capacitor/core': ^6.0.0
 
   '@capacitor/filesystem@7.1.8':
     resolution: {integrity: sha512-Qpw/2SE4/CzqAUvGgSM9hw/uXQ5qoOaF4wxbToXwpAaKPS+tzletS1h5ti3jjLmGcqizTs2sEXMtcsARW/Ceew==}
     peerDependencies:
       '@capacitor/core': '>=7.0.0'
-
-  '@capacitor/share@6.0.4':
-    resolution: {integrity: sha512-Ij8C3as4n6L+SUj3M1ko+DGIsrDw2VTkn5Y/pQnFRI9dRk6YoSpGKLN54yOyN7ew3N9bVa8Rko+dFwdcNg7ESA==}
-    peerDependencies:
-      '@capacitor/core': ^6.0.0
 
   '@capacitor/share@7.0.4':
     resolution: {integrity: sha512-wNXxmXUcChrtbZ5jQv8scFIbIGKo3rk6B7qpWySxfUhYJP5NANgAqQ9Z69m0k/zYsucdh66SBU7XW1ykd9aUug==}
@@ -4217,17 +4194,9 @@ snapshots:
     dependencies:
       '@capacitor/core': 7.6.5
 
-  '@capacitor/app@6.0.3(@capacitor/core@6.2.1)':
-    dependencies:
-      '@capacitor/core': 6.2.1
-
   '@capacitor/app@7.1.2(@capacitor/core@7.6.5)':
     dependencies:
       '@capacitor/core': 7.6.5
-
-  '@capacitor/browser@6.0.6(@capacitor/core@6.2.1)':
-    dependencies:
-      '@capacitor/core': 6.2.1
 
   '@capacitor/browser@7.0.5(@capacitor/core@7.6.5)':
     dependencies:
@@ -4255,26 +4224,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@capacitor/core@6.2.1':
-    dependencies:
-      tslib: 2.8.1
-
   '@capacitor/core@7.6.5':
     dependencies:
       tslib: 2.8.1
-
-  '@capacitor/filesystem@6.0.4(@capacitor/core@6.2.1)':
-    dependencies:
-      '@capacitor/core': 6.2.1
 
   '@capacitor/filesystem@7.1.8(@capacitor/core@7.6.5)':
     dependencies:
       '@capacitor/core': 7.6.5
       '@capacitor/synapse': 1.0.4
-
-  '@capacitor/share@6.0.4(@capacitor/core@6.2.1)':
-    dependencies:
-      '@capacitor/core': 6.2.1
 
   '@capacitor/share@7.0.4(@capacitor/core@7.6.5)':
     dependencies:

@@ -35,8 +35,8 @@ last-reviewed: 2026-05-17
 客户端入口是 `regularSync()`（`packages/client/src/sync/engine.ts`）。同一 JS context 内如果已有一次 `regularSync()` 尚未结束，新的调用会复用进行中的 promise，不会再次执行 status/push/pull 主流程；这只去重同浏览器上下文里的快速重复触发，不是跨 tab leader election。
 
 ```
-1. getLocalStatus() + GET /api/sync/status  比较本地与云端 meta 摘要
-2. 如果 unsyncedCount=0 且 categoryCount/entryCount/lastUpdatedAt 一致：推进 `timedata_last_synced_seq` 到 status.latestSeq，返回 no-op（不 push、不 pull、不创建备份）
+1. getLocalStatus() + GET /api/sync/status  比较本地与云端 meta 摘要（优先用 `contentHash`，否则退回 count + lastUpdatedAt）
+2. 如果 unsyncedCount=0 且摘要一致：推进 `timedata_last_synced_seq` 到 status.latestSeq，返回 no-op（不 push、不 pull、不创建备份）
 3. 如果不一致：先创建本地自动备份
 4. unsyncedCount=0 时执行 syncPullRecent(7) 做 pull-only repair
 5. unsyncedCount>0 时执行 syncPush() 本地未同步变更 → 服务器，再 syncPullRecent(7)
@@ -44,7 +44,7 @@ last-reviewed: 2026-05-17
 7. reportToServer()   往服务器写一条 sync_logs 摘要（best-effort）
 ```
 
-普通同步主路径的一致性校验只比较业务 meta：`categoryCount`、`entryCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。它不再为了普通 no-op 拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
+普通同步主路径的一致性校验比较业务 meta：优先比较 `contentHash`；如果任一端缺少 `contentHash`，退回比较 `categoryCount`、`entryCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。`contentHash` 是 categories 与 time_entries 按 ID 排序后的稳定 SHA-256 摘要，可识别“数量和最新时间不变但内容改变”的状态差异。普通 no-op 同步不会为了校验拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
 
 客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量替换等可能更慢的同步拉取可在调用处设置 `timeoutMs: 30_000`。`apiFetch` 会把 204 / 空 body 的成功响应视为 `undefined`，而不是强制解析 JSON。`apiFetch` 抛出的人类可读字符串来自 `packages/client/src/lib/messages.ts` 集中字符串表，方便后续 i18n。
 
@@ -91,7 +91,8 @@ last-reviewed: 2026-05-17
 5. 写入前创建服务端备份：普通路径用 `createServerBackup('sync_push')`；`unknown_base` 用 `createServerBackup('sync_unknown_base')`；`local_wins_non_fast_forward` 用 `createServerBackup('sync_local_wins')`，并标记受保护，`reason = local_wins_non_fast_forward`，details 记录 `baseSeq`、`cloudAheadCount`、`overlappingRecords` 和 `pushedRecords`。
 6. 在一个 SQLite 事务里逐条 `applyChange` 写入。每条成功写入都会追加 `sync_seq`，客户端下一次 pull 会从响应里的 `latestSeq` 继续。
 7. 对 `time_entries` 来说，服务端仍会先删除与本地记录重叠的旧远端记录，再写入本地版本；被覆盖删除的旧记录会写 `sync_tombstones(table_name='time_entries')` 和 `sync_seq(action='delete')`，让其他设备的 seq cursor pull 能拉到删除消息。如果发生时间段覆盖，返回的 outcome 会带 `overriddenRecordIds` 和 `backupId`，对应备份会被额外标成受保护并写入 `reason = local_override_overlap`。`sync_tombstones` 没有固定 TTL 清理规则：当前不会按天数自动删墓碑，是否引入保留策略要单独评估。
-8. 写一条 server-side `sync_logs` 摘要（device='server', action='push_received'），并把 `backupId`、`seqAnalysis`、`overriddenRecordIds` 写进去，方便 `/api/admin/sync` 直接读。
+8. `applyChange` 返回 skipped 时会带结构化 `skipReason`；`outcomeFromApplyResult()` 优先用它作为 `reasonCode`，不会把所有 skipped 都折叠成 `server_version_newer_or_same`。
+9. 写一条 server-side `sync_logs` 摘要（device='server', action='push_received'），并把 `backupId`、`seqAnalysis`、`overriddenRecordIds` 写进去，方便 `/api/admin/sync` 直接读。
 
 ### 2.3 校验规则（`validateSyncChanges`）
 
@@ -135,14 +136,14 @@ last-reviewed: 2026-05-17
 
 `/api/sync/pull` 行为：
 
-- 入参 `{ lastSyncedAt: string | null, since?: string | null, sinceSeq?: number | null }`。`sinceSeq` 存在时优先，按 `sync_seq.id > sinceSeq` 拉取；否则走兼容 timestamp cursor：`since` 优先，其次 `lastSyncedAt`，再不济 `1970-01-01`。
+- 入参 `{ lastSyncedAt?: string | null, since?: string, sinceSeq?: number | null }`。服务端入口先用 `SyncPullRequestSchema` 做运行时校验：时间字段必须是带毫秒和 `Z` 的 UTC ISO 字符串，`sinceSeq` 必须是非负整数或 `null`；畸形 JSON 或字段类型错误返回 400 `invalid_request`，不会进入拉取逻辑。`sinceSeq` 存在时优先，按 `sync_seq.id > sinceSeq` 拉取；否则走兼容 timestamp cursor：`since` 优先，其次 `lastSyncedAt`，再不济 `1970-01-01`。
 - 客户端收到响应后用 `SyncPullResponseSchema` 做运行时校验；不符合 `SyncChange` 判别联合契约的响应会抛出 `Invalid /api/sync/pull response`，不会写入本地 Dexie。
 - seq cursor 路径会按 `sync_seq` 找出 cursor 后每个 `table_name + record_id` 的最新变更，再读取当前业务表或 tombstone 组成 `SyncChange[]`，并在响应中返回 `latestSeq`。
 - timestamp cursor 路径拉取 `categories.updated_at >= since` + `time_entries.updated_at >= since`，转成 `SyncChange[]` 返回（`action` 永远是 `update`，无论实际是新增还是修改）。包含边界是为了重放与 cursor 同时间戳的记录，避免同毫秒/同时间窗口记录被 `> since` 跳过。
 - timestamp cursor 路径也会拉取 `sync_tombstones.deleted_at >= since`，转成 `time_entries/delete` 或 `categories/delete` 变更返回。
 - 客户端应用 `categories/delete` 时会在单个 Dexie 事务中删除本地目标分类、后代分类和这些分类下的 entries；远端拉取应用删除不写本地 `syncLog`。如果删除 entries 后删除 categories 失败，事务会回滚，避免留下半删除状态。
 
-**已知缺口（待优化）**：tombstone 当前没有保留期/清理策略。如果老设备长期离线，未来一旦清理 tombstone，就需要手动"将本地数据替换为云端数据"（`syncForceReplace`）修复本地状态。
+**tombstone 保留约束**：`sync_tombstones` 不能按固定 90 天 TTL 直接删除。长期离线客户端可能仍持有旧 `sinceSeq` 或旧本地记录；如果服务端提前删除 tombstone，客户端上线后会把已删除记录当作本地独有数据重新 push，造成数据回滚。安全清理必须同时满足：服务端知道所有活跃客户端的同步水位、存在全量修复兜底（force-pull/force-push），并且清理任务有人工确认或可审计日志。
 
 ## 3.5 全量同步兜底
 
@@ -152,11 +153,11 @@ last-reviewed: 2026-05-17
 
 | 接口 | 作用 |
 |---|---|
-| `GET /api/sync/status` | 返回服务端分类数、记录数、最新更新时间、最新 `sync_seq` 和服务器时间 |
+| `GET /api/sync/status` | 返回服务端分类数、记录数、最新更新时间、稳定内容哈希、最新 `sync_seq` 和服务器时间 |
 | `POST /api/sync/force-push/prepare` | 生成短时确认 token，返回当前服务端摘要 |
 | `POST /api/sync/force-push` | 在确认 token + 短语正确时，用客户端提交的完整 categories/timeEntries 覆盖服务器 |
 
-`force-push` 是破坏性操作：服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据。成功后写 `sync_logs.action = 'force_push_applied'`。
+`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` 是非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` 的完整数据。畸形 JSON 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据。成功后写 `sync_logs.action = 'force_push_applied'`。
 
 `force-push/prepare` 生成的确认 token 当前存放在 `packages/server/src/routes/sync.ts` 的进程内 `Map`，TTL 为 5 分钟。token 只能消费一次：成功执行 `/api/sync/force-push` 后立即从内存中删除；过期、缺失或复用都会返回 403，并写入 `sync_logs`（例如 `force_push_expired` 或 `force_push_rejected`）。`prepare` 和最终成功覆盖也分别写入 `force_push_prepare`、`force_push_applied`，用于审计高风险覆盖操作。它只适合单实例部署：进程重启会清空 token，横向扩容时不同实例之间不会共享 token。启动时如果设置了 `SERVER_REPLICAS>1`，服务端会打印告警；真正多实例部署前应改成 SQLite 或 Redis 存储。
 
@@ -168,7 +169,7 @@ last-reviewed: 2026-05-17
 
 1. 服务器先更新到包含本节接口的版本；旧服务器会让新 APK 在 `/api/sync/status` 或 `/api/sync/force-push/*` 上遇到 404。
 2. 用同一 API 地址和 Token 访问 `GET /api/health`，确认基础连接、反向代理和鉴权配置没有问题。
-3. 用带鉴权请求访问 `GET /api/sync/status`，应返回 `categoryCount`、`entryCount`、`lastUpdatedAt`、`latestSeq`、`serverTime`。
+3. 用带鉴权请求访问 `GET /api/sync/status`，应返回 `categoryCount`、`entryCount`、`lastUpdatedAt`、`contentHash`、`latestSeq`、`serverTime`。
 4. 客户端进入 `设置 → 数据设置 → 同步健康诊断`，点击"检查本地与云端状态"，应显示本地/云端摘要和建议原因。
 5. 非生产环境可继续点"准备覆盖云端"，确认后应返回短时 token 并展示 `OVERWRITE_SERVER` 输入框；生产数据不要为了验收执行最后的"确认用本地覆盖云端"。
 6. 只在测试库或已确认要恢复的真实事故中执行最终覆盖；成功后服务端 `data/backups/` 必须有 `sync_force_push` 备份，响应里也会返回 `backupId`。

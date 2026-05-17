@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SyncChange } from "@timedata/shared";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string; reason: string; overriddenRecordIds?: string[] };
+let applyChange: (change: SyncChange) => { status: string; reason: string; skipReason?: string; overriddenRecordIds?: string[] };
 
 beforeEach(async () => {
   db = new Database(":memory:");
@@ -80,7 +80,7 @@ describe("applyChange", () => {
     const category = db.prepare("SELECT id FROM categories WHERE id = ?").get("missing-category");
     const entry = db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-missing-category");
 
-    expect(result).toMatchObject({ status: "skipped", reason: "missing category" });
+    expect(result).toMatchObject({ status: "skipped", reason: "missing category", skipReason: "missing_category" });
     expect(category).toBeUndefined();
     expect(entry).toBeUndefined();
   });

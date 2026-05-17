@@ -1,26 +1,30 @@
 import { z } from "zod";
 
+const UtcIsoStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/).refine((value) => Number.isFinite(Date.parse(value)), "Invalid UTC ISO timestamp");
+const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const NonEmptyTrimmedStringSchema = z.string().refine((value) => value.trim().length > 0, "String must not be empty");
+
 export const CategorySchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  parentId: z.string().nullable(),
-  color: z.string().min(1),
-  icon: z.string().nullable(),
-  sortOrder: z.number(),
+  id: NonEmptyTrimmedStringSchema,
+  name: NonEmptyTrimmedStringSchema,
+  parentId: z.string().min(1).nullable(),
+  color: HexColorSchema,
+  icon: z.string().min(1).nullable(),
+  sortOrder: z.number().int().finite(),
   isArchived: z.boolean(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
 });
 
 export const TimeEntrySchema = z.object({
-  id: z.string().min(1),
-  categoryId: z.string().min(1),
-  startTime: z.string(),
-  endTime: z.string(),
+  id: NonEmptyTrimmedStringSchema,
+  categoryId: NonEmptyTrimmedStringSchema,
+  startTime: UtcIsoStringSchema,
+  endTime: UtcIsoStringSchema,
   note: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
+}).refine((entry) => entry.endTime > entry.startTime, { path: ["endTime"], message: "endTime must be after startTime" });
 
 export const SyncLogEntrySchema = z.object({
   id: z.string(),
@@ -83,6 +87,34 @@ export const SyncPushReasonCodeSchema = z.enum([
 export const SyncPushRequestSchema = z.object({
   changes: z.array(SyncChangeSchema),
   baseSeq: z.number().nullable().optional(),
+});
+
+export const SyncPullRequestSchema = z.object({
+  lastSyncedAt: UtcIsoStringSchema.nullable().optional(),
+  since: UtcIsoStringSchema.optional(),
+  sinceSeq: z.number().int().nonnegative().nullable().optional(),
+});
+
+export const SyncForcePushPrepareRequestSchema = z.object({
+  categoryCount: z.number().int().nonnegative(),
+  entryCount: z.number().int().nonnegative(),
+  lastUpdatedAt: UtcIsoStringSchema.nullable(),
+});
+
+export const SyncForcePushRequestSchema = z.object({
+  confirmToken: z.string().min(1),
+  confirmationPhrase: z.literal("OVERWRITE_SERVER"),
+  categories: z.array(CategorySchema),
+  timeEntries: z.array(TimeEntrySchema),
+});
+
+export const SyncStatusResponseSchema = z.object({
+  categoryCount: z.number(),
+  entryCount: z.number(),
+  lastUpdatedAt: z.string().nullable(),
+  contentHash: z.string().min(1).optional(),
+  latestSeq: z.number().nullable().optional(),
+  serverTime: z.string(),
 });
 
 export const SyncPullResponseSchema = z.object({

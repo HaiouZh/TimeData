@@ -5,33 +5,39 @@ import { validateBackup } from "./validateBackup.js";
 
 const now = "2026-05-07T12:00:00.000Z";
 
-function category(id: string, parentId: string | null = null): Category {
+function category(overrides: Partial<Category> & Pick<Category, "id">): Category;
+function category(id: string, parentId?: string | null): Category;
+function category(value: string | (Partial<Category> & Pick<Category, "id">), parentId: string | null = null): Category {
+  const overrides = typeof value === "string" ? { id: value, parentId } : value;
   return {
-    id,
-    name: id,
-    parentId,
-    color: "#4A90D9",
-    icon: null,
-    sortOrder: 0,
-    isArchived: false,
-    createdAt: now,
-    updatedAt: now,
+    id: overrides.id,
+    name: overrides.name ?? overrides.id,
+    parentId: overrides.parentId ?? null,
+    color: overrides.color ?? "#4A90D9",
+    icon: overrides.icon ?? null,
+    sortOrder: overrides.sortOrder ?? 0,
+    isArchived: overrides.isArchived ?? false,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
   };
 }
 
-function entry(id: string, categoryId = "cat-1"): TimeEntry {
+function entry(overrides: Partial<TimeEntry> & Pick<TimeEntry, "id">): TimeEntry;
+function entry(id: string, categoryId?: string): TimeEntry;
+function entry(value: string | (Partial<TimeEntry> & Pick<TimeEntry, "id">), categoryId = "cat-1"): TimeEntry {
+  const overrides = typeof value === "string" ? { id: value, categoryId } : value;
   return {
-    id,
-    categoryId,
-    startTime: "2026-05-07T10:00:00.000Z",
-    endTime: "2026-05-07T11:00:00.000Z",
-    note: null,
-    createdAt: now,
-    updatedAt: now,
+    id: overrides.id,
+    categoryId: overrides.categoryId ?? "cat-1",
+    startTime: overrides.startTime ?? "2026-05-07T10:00:00.000Z",
+    endTime: overrides.endTime ?? "2026-05-07T11:00:00.000Z",
+    note: overrides.note ?? null,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
   };
 }
 
-function validBackup() {
+function validBackup(overrides: Record<string, unknown> = {}) {
   return {
     format: BACKUP_FORMAT_V2,
     timeFormat: "utc" as const,
@@ -40,6 +46,7 @@ function validBackup() {
     device: { deviceId: "device-1", deviceName: "Web" },
     categories: [category("cat-1")],
     timeEntries: [entry("entry-1")],
+    ...overrides,
   };
 }
 
@@ -104,6 +111,67 @@ describe("validateBackup", () => {
       ok: false,
       error: { code: "ORPHAN_ENTRY_CATEGORY", message: "记录 entry-1 引用了不存在的分类 missing-category。" },
     });
+  });
+
+  it("rejects v2 backups without utc timeFormat", () => {
+    const missingTimeFormat = validBackup({ timeFormat: undefined });
+    expect(validateBackup(missingTimeFormat)).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_TIME_FORMAT" }),
+    }));
+
+    const localBackup = validBackup({ timeFormat: "local" });
+    expect(validateBackup(localBackup)).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_TIME_FORMAT" }),
+    }));
+  });
+
+  it("rejects entries with non-UTC times or endTime not after startTime", () => {
+    const nonUtc = validBackup({
+      timeEntries: [entry({ id: "entry-1", startTime: "2026-05-17T09:00:00", endTime: "2026-05-17T10:00:00.000Z" })],
+    });
+    expect(validateBackup(nonUtc)).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_TIME_ENTRY_TIME" }),
+    }));
+
+    const reversed = validBackup({
+      timeEntries: [entry({ id: "entry-1", startTime: "2026-05-17T10:00:00.000Z", endTime: "2026-05-17T09:00:00.000Z" })],
+    });
+    expect(validateBackup(reversed)).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_TIME_ENTRY_TIME" }),
+    }));
+  });
+
+  it("rejects invalid category parent relationships", () => {
+    expect(validateBackup(validBackup({ categories: [category({ id: "a", parentId: "a" })] }))).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
+    }));
+
+    expect(validateBackup(validBackup({
+      categories: [
+        category({ id: "a", parentId: null }),
+        category({ id: "b", parentId: "a" }),
+        category({ id: "c", parentId: "b" }),
+      ],
+    }))).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
+    }));
+
+    expect(validateBackup(validBackup({
+      categories: [
+        category({ id: "a", parentId: "b" }),
+        category({ id: "b", parentId: "a" }),
+      ],
+      timeEntries: [],
+    }))).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
+    }));
   });
 });
 

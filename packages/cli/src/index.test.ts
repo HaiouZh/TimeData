@@ -69,10 +69,11 @@ describe("runCli", () => {
     });
 
     expect(result).toEqual({ ok: true, categories: [] });
-    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/categories", {
+    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/categories", expect.objectContaining({
       method: "GET",
       headers: { Authorization: "Bearer secret" },
-    });
+      signal: expect.any(AbortSignal),
+    }));
   });
 
   it("dispatches doctor before normal command configuration handling", async () => {

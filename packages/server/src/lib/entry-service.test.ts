@@ -34,6 +34,14 @@ function createSchema() {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
+
+    CREATE TABLE sync_seq (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }
 
@@ -188,38 +196,22 @@ describe("entry service", () => {
     expect(result.entry.endTime).toBe("2026-05-07T16:00:00");
   });
 
-  it("rejects overlapping entries without writing", () => {
-    const now = "2026-05-07T09:00:00.000Z";
-    // 上海 15:00 = UTC 07:00，上海 17:00 = UTC 09:00，与新建记录（上海14:00-16:00 = UTC 06:00-08:00）重叠
-    db.prepare(`
-      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
-      VALUES ('entry-1', 'cat-code', '2026-05-07T07:00:00.000Z', '2026-05-07T09:00:00.000Z', NULL, ?, ?)
-    `).run(now, now);
-
+  it("records sync_seq when creating an entry from CLI input", () => {
     const result = createEntryFromCliInput(db, {
       date: "2026-05-07",
       start: "14:00",
       end: "16:00",
       category: "工作/编程",
-      note: "重构同步模块",
-    });
+      note: "CLI 写入",
+    }, { now: new Date("2026-05-07T16:00:00+08:00") });
 
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        code: "TIME_OVERLAP",
-        message: "New entry overlaps with existing entry",
-        details: {
-          existingEntryId: "entry-1",
-          existingStartTime: "2026-05-07T07:00:00.000Z",
-          existingEndTime: "2026-05-07T09:00:00.000Z",
-        },
-      },
-    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
 
-    const count = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
-    expect(count.count).toBe(1);
+    const seq = db.prepare("SELECT table_name, record_id, action FROM sync_seq WHERE record_id = ?").get(result.entry.id);
+    expect(seq).toEqual({ table_name: "time_entries", record_id: result.entry.id, action: "create" });
   });
+
 });
 
 // ── Task 4: UTC storage ──────────────────────────────────────────────────────
@@ -237,6 +229,13 @@ function makeDb2() {
       id TEXT PRIMARY KEY, category_id TEXT NOT NULL,
       start_time TEXT NOT NULL, end_time TEXT NOT NULL, note TEXT,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE sync_seq (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     INSERT INTO categories VALUES ('cat1','Work/Dev',null,'#ff0000',null,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
   `);

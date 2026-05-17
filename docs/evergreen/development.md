@@ -92,6 +92,7 @@ pnpm build:client      # 构建前端
 pnpm build:server      # 构建后端
 pnpm build:cli         # 构建 CLI
 pnpm build:mobile      # 构建并同步 Android WebView 资源
+pnpm --filter @timedata/mobile test # 检查 Android 明文流量和 Capacitor v7 版本约束
 pnpm build:mobile:apk          # 构建 Android debug APK
 pnpm build:mobile:release-apk  # 构建 Android release APK（需要签名参数）
 pnpm build             # 构建 Web/Server/CLI，不包含 Android APK
@@ -154,7 +155,7 @@ GitHub Actions 的 `android-apk` workflow 会使用仓库 Secrets 构建签名 r
 
 - `base` 使用 `./`，保证 Android WebView 能加载相对路径资源。
 - PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`。
-- `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS。
+- `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS；`pnpm --filter @timedata/mobile test` 会静态检查生产 Manifest 不允许明文流量，并检查 `packages/client` 与 `packages/mobile` 的 Capacitor 依赖都保持 v7。
 - Android 系统返回键/边缘返回通过 `packages/mobile` 的 `@capacitor/app` 原生插件监听，并交给前端路由处理，二级页应先回应用上一层级，首页才退出 App。
 - 备份导出走 `@capacitor/filesystem` + `@capacitor/share`：在 native 端把 JSON 写入 `Directory.Documents` 后弹出系统分享面板。新增/删除这两个插件后必须重跑 `pnpm --filter @timedata/mobile android:sync` 把原生侧重新同步。
 

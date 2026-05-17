@@ -242,41 +242,97 @@ describe("validateSyncChanges", () => {
     expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: "missing_category" });
   });
 
-  it("accepts an entry that references a category created in the same push batch", () => {
-    const result = validateSyncChanges(db, [
-      {
-        tableName: "categories",
-        recordId: "cat-new",
-        action: "create",
-        data: {
-          id: "cat-new",
-          name: "新分类",
-          parentId: null,
-          color: "#3366ff",
-          icon: null,
-          sortOrder: 2,
-          isArchived: false,
-          createdAt: "2026-05-08T08:30:00",
-          updatedAt: "2026-05-08T08:30:00",
-        },
-        timestamp: "2026-05-08T08:30:00",
+  it("accepts a child category whose parent is created in the same push batch", () => {
+    const parent = categoryChange({
+      recordId: "cat-parent",
+      data: {
+        id: "cat-parent",
+        name: "父分类",
+        parentId: null,
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-08T08:30:00",
+        updatedAt: "2026-05-08T08:30:00",
       },
-      entryChange({
-        data: {
-          id: "entry-1",
-          categoryId: "cat-new",
-          startTime: "2026-05-08T09:00:00.000Z",
-          endTime: "2026-05-08T10:00:00.000Z",
-          note: null,
-          createdAt: "2026-05-08T09:00:00.000Z",
-          updatedAt: "2026-05-08T09:00:00.000Z",
-        },
-      }),
-    ]);
+      timestamp: "2026-05-08T08:30:00",
+    });
+    const child = categoryChange({
+      recordId: "cat-child",
+      data: {
+        id: "cat-child",
+        name: "子分类",
+        parentId: "cat-parent",
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 1,
+        isArchived: false,
+        createdAt: "2026-05-08T08:31:00",
+        updatedAt: "2026-05-08T08:31:00",
+      },
+      timestamp: "2026-05-08T08:31:00",
+    });
+
+    const result = validateSyncChanges(db, [parent, child]);
 
     expect(result.valid).toBe(true);
     expect(result.outcomes.map((item) => item.status)).toEqual(["accepted", "accepted"]);
   });
+
+  it("rejects a same-batch category that would create a third level", () => {
+    const parent = categoryChange({
+      recordId: "cat-parent",
+      data: {
+        id: "cat-parent",
+        name: "父分类",
+        parentId: null,
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-08T08:30:00",
+        updatedAt: "2026-05-08T08:30:00",
+      },
+      timestamp: "2026-05-08T08:30:00",
+    });
+    const child = categoryChange({
+      recordId: "cat-child",
+      data: {
+        id: "cat-child",
+        name: "子分类",
+        parentId: "cat-parent",
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 1,
+        isArchived: false,
+        createdAt: "2026-05-08T08:31:00",
+        updatedAt: "2026-05-08T08:31:00",
+      },
+      timestamp: "2026-05-08T08:31:00",
+    });
+    const grandChild = categoryChange({
+      recordId: "cat-grandchild",
+      data: {
+        id: "cat-grandchild",
+        name: "孙分类",
+        parentId: "cat-child",
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 2,
+        isArchived: false,
+        createdAt: "2026-05-08T08:32:00",
+        updatedAt: "2026-05-08T08:32:00",
+      },
+      timestamp: "2026-05-08T08:32:00",
+    });
+
+    const result = validateSyncChanges(db, [parent, child, grandChild]);
+
+    expect(result.valid).toBe(false);
+    expect(result.outcomes[2]).toMatchObject({ status: "rejected", reasonCode: "invalid_shape" });
+  });
+
 
   it("rejects an entry that references an archived category", () => {
     const result = validateSyncChanges(db, [entryChange({

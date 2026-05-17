@@ -7,6 +7,7 @@ interface RequestOptions {
   method?: "GET" | "POST";
   body?: unknown;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }
 
 export async function requestJson(config: ApiConfig, path: string, options: RequestOptions = {}): Promise<unknown> {
@@ -16,13 +17,21 @@ export async function requestJson(config: ApiConfig, path: string, options: Requ
   if (config.token) headers.Authorization = `Bearer ${config.token}`;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
+  const timeoutMs = options.timeoutMs ?? 30000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetchImpl(url, {
       method: options.method || "GET",
       headers,
+      signal: controller.signal,
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     });
-    const json = await res.json().catch(() => null);
+    const json = await res.json().catch(() => undefined);
+    if (json === undefined) {
+      return { ok: false, error: { code: "INVALID_RESPONSE", message: "Server returned invalid JSON" } };
+    }
     if (!res.ok) {
       if (res.status === 401) {
         return { ok: false, error: { code: "AUTH_FAILED", message: "Authentication failed" } };
@@ -32,6 +41,11 @@ export async function requestJson(config: ApiConfig, path: string, options: Requ
     }
     return json;
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      return { ok: false, error: { code: "TIMEOUT", message: "Request timed out" } };
+    }
     return { ok: false, error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" } };
+  } finally {
+    clearTimeout(timeout);
   }
 }

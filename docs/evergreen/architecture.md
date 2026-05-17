@@ -19,7 +19,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # 架构总览
@@ -114,7 +114,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 1. 创建 Hono app
 2. 装 `secureHeaders` 中间件（全局 `*`）：注入 `Referrer-Policy: strict-origin-when-cross-origin`、`X-Frame-Options: DENY`、`Strict-Transport-Security` 等安全响应头；CSP 故意留空，避免破坏生产 SPA 的内联样式
 3. 装 CORS 中间件（`/api/*`，来源由 `ALLOWED_ORIGINS` 白名单控制，默认 `*`）
-4. 装 `bodyLimit` 中间件（`/api/*`，上限由 `MAX_BODY_BYTES` 控制，默认 5 MB；超出返回 HTTP 413）
+4. 装 `bodyLimit` 中间件（`/api/*`，上限由 `MAX_BODY_BYTES` 控制，默认 5 MB；`Content-Length` 超限会快速拒绝，无/未知长度 body 会先读取 cloned request 计数，超出返回 HTTP 413 且不消费原始 body）
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
 6. 装 auth 中间件（之后所有 `/api/*` 都需要 Bearer Token；`NODE_ENV=production` 会在启动前强制要求 `AUTH_TOKEN`）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
@@ -159,7 +159,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 
 ## 5. 关键约定
 
-1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema。改这些 = 改公开 API。同步契约还承载 seq cursor 字段（`baseSeq`、`sinceSeq`、`latestSeq`）、本地优先诊断字段（如 `overriddenRecordIds`、`backupId`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
+1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间、`#RRGGBB` 色值、整数排序、非空字符串、pull / force-push 请求形状等输入。改这些 = 改公开 API。同步契约还承载 seq cursor 字段（`baseSeq`、`sinceSeq`、`latestSeq`）、本地优先诊断字段（如 `overriddenRecordIds`、`backupId`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
 2. **时间用 ISO 字符串**：服务端 SQLite 的 `start_time` / `end_time` / `*_at` 都是字符串字段，比较直接靠字典序。Dexie 同样存字符串。
 3. **写入路径只有两条**：用户在 Web 端通过组件 → Dexie；脚本/AI 通过 CLI → HTTP API → SQLite。**不存在第三条**。服务器不再暴露 JSONL/CSV 导入写库接口；`GET /api/export` 只读，`POST /api/data/reset` 是人工维护入口，必须先调用 `/api/data/reset/prepare` 拿短时确认 token 并提交确认短语。
 4. **服务端是权威**：时间段重叠、分类存在、archived、时间格式合法等的最终判定都在 `packages/server/src/sync/validation.ts` 和 `packages/server/src/lib/entry-service.ts`。同步校验里需要按应用时区比较当前时间的逻辑统一走 `packages/server/src/lib/timezone.ts`；client / CLI 的同名校验只是为了体验，不能让 server 跳过。

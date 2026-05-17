@@ -30,6 +30,14 @@ function createSchema() {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
+
+    CREATE TABLE sync_seq (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }
 

@@ -12,6 +12,43 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isUtcIsoString(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && Number.isFinite(Date.parse(value));
+}
+
+function validateCategoryTree(categories: Array<Record<string, unknown>>): BackupValidationResult | null {
+  const byId = new Map(categories.map((category) => [category.id as string, category]));
+
+  for (const category of categories) {
+    const id = category.id as string;
+    const parentId = category.parentId as string | null;
+
+    if (parentId === id) {
+      return { ok: false, error: { code: "INVALID_CATEGORY_TREE", message: `分类 ${id} 不能引用自身。` } };
+    }
+
+    if (!parentId) {
+      continue;
+    }
+
+    const parent = byId.get(parentId);
+    if (!parent) {
+      return { ok: false, error: { code: "ORPHAN_CATEGORY_PARENT", message: `分类 ${id} 引用了不存在的父分类 ${parentId}。` } };
+    }
+
+    if (parent.parentId !== null) {
+      return { ok: false, error: { code: "INVALID_CATEGORY_TREE", message: `分类 ${id} 会形成超过两级的分类树。` } };
+    }
+
+    const grandParentId = parent.parentId as string | null;
+    if (grandParentId && byId.has(grandParentId)) {
+      return { ok: false, error: { code: "INVALID_CATEGORY_TREE", message: `分类 ${id} 会形成循环分类树。` } };
+    }
+  }
+
+  return null;
+}
+
 function hasCategoryShape(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return isString(value.id)
@@ -54,6 +91,10 @@ export function validateBackup(value: unknown): BackupValidationResult {
     return { ok: false, error: { code: "INVALID_FORMAT", message: "备份文件格式不支持。" } };
   }
 
+  if (value.timeFormat !== "utc") {
+    return { ok: false, error: { code: "INVALID_TIME_FORMAT", message: "备份文件必须使用 UTC 时间格式。" } };
+  }
+
   if (!isString(value.exportedAt)) {
     return { ok: false, error: { code: "INVALID_EXPORTED_AT", message: "备份文件缺少有效导出时间。" } };
   }
@@ -92,6 +133,12 @@ export function validateBackup(value: unknown): BackupValidationResult {
     entryIds.add(id);
   }
 
+  const categoryRecords = value.categories as Array<Record<string, unknown>>;
+  const treeError = validateCategoryTree(categoryRecords);
+  if (treeError) {
+    return treeError;
+  }
+
   for (const category of value.categories) {
     const parentId = category.parentId as string | null;
     if (parentId && !categoryIds.has(parentId)) {
@@ -103,6 +150,10 @@ export function validateBackup(value: unknown): BackupValidationResult {
     const categoryId = entry.categoryId as string;
     if (!categoryIds.has(categoryId)) {
       return { ok: false, error: { code: "ORPHAN_ENTRY_CATEGORY", message: `记录 ${entry.id as string} 引用了不存在的分类 ${categoryId}。` } };
+    }
+
+    if (!isUtcIsoString(entry.startTime) || !isUtcIsoString(entry.endTime) || entry.endTime <= entry.startTime) {
+      return { ok: false, error: { code: "INVALID_TIME_ENTRY_TIME", message: `记录 ${entry.id as string} 的时间范围无效。` } };
     }
   }
 

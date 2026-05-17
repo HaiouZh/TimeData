@@ -17,6 +17,7 @@
     "android:open": "cap open android",
     "android:run": "pnpm android:sync && cap run android",
     "build": "pnpm android:sync",
+    "test": "node scripts/check-android-config.mjs && node scripts/check-capacitor-versions.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

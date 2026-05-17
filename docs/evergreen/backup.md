@@ -42,7 +42,7 @@ TimeData 现有三种备份：
 
 v1（`timedata.backup.v1`）是历史格式，不再支持导入——`validateBackup` 会返回 `UNSUPPORTED_FORMAT` 错误，明确提示用户用新版本应用重新导出备份。
 
-v2 新增 `timeFormat: "utc"` 字段，表示 `timeEntries` 中的 `startTime` / `endTime` 为 UTC ISO 字符串（带 `Z`）。
+v2 新增 `timeFormat: "utc"` 字段，恢复前必须存在且值只能是 `"utc"`。`timeEntries` 中的 `startTime` / `endTime` 必须是带毫秒和 `Z` 的 UTC ISO 字符串（例如 `2026-05-07T10:00:00.000Z`），且每条记录必须满足 `endTime > startTime`。分类树仍只支持两级结构：顶层分类 `parentId = null`，子分类只能指向顶层分类，不能自引用、形成环或引用不存在的父分类。
 
 **只包含**：`categories` 和 `timeEntries`。
 
@@ -80,19 +80,19 @@ v2 新增 `timeFormat: "utc"` 字段，表示 `timeEntries` 中的 `startTime` /
 | `INVALID_DEVICE` | `device` 字段不规范 |
 | `INVALID_CATEGORIES` | `categories` 不是数组或单条形状错 |
 | `INVALID_TIME_ENTRIES` | `timeEntries` 同上 |
+| `INVALID_TIME_FORMAT` | v2 备份缺少 `timeFormat: "utc"` |
+| `INVALID_TIME_ENTRY_TIME` | 记录时间不是 UTC ISO，或 `endTime <= startTime` |
+| `INVALID_CATEGORY_TREE` | 分类自引用、形成环，或超过两级分类树 |
 | `DUPLICATE_CATEGORY_ID` | 分类 ID 重复 |
 | `DUPLICATE_ENTRY_ID` | 记录 ID 重复 |
 | `ORPHAN_CATEGORY_PARENT` | 子分类的 `parentId` 在备份里找不到 |
 | `ORPHAN_ENTRY_CATEGORY` | 记录的 `categoryId` 在备份里找不到 |
 
-**没检查**（已知缺口）：
+**仍未检查**（已知缺口）：
 
-- 字段类型严格性（如 `sortOrder` 必须 number 已经查了，但 `color` 是否合法 CSS 颜色没查）
-- `endTime > startTime`
-- 时间字符串格式
-- 分类树循环（A → B → A）
+- 字段类型严格性之外的业务格式（如 `color` 是否合法 CSS 颜色）
 
-这些缺失是**有意的轻量化**：恢复后用户同步时 server 会再校验一次，校验失败的记录会被拒绝并冒泡给用户。如果未来出现"恢复看似成功但同步全被拒"的常见反馈，可以把更严的校验前置到客户端；但 `endTime > startTime`、UTC 格式和分类树循环仍然是恢复前就应明确遵守的语义约束。
+这些缺失是**有意的轻量化**：恢复后用户同步时 server 会再校验一次，校验失败的记录会被拒绝并冒泡给用户。如果未来出现“恢复看似成功但同步全被拒”的常见反馈，可以把更严的校验前置到客户端；但 `endTime > startTime`、UTC 格式和分类树循环等会导致同步大面积失败的问题，恢复入口已经前置拦截。
 
 ## 4. 恢复（`importBackup`）
 

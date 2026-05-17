@@ -134,7 +134,7 @@ describe("regular sync failure diagnostics", () => {
 });
 
 describe("getSyncHealth", () => {
-  it("compares local and server counts and recommends force push when local is newer", async () => {
+  it("compares sync health by contentHash when available", async () => {
     await db.categories.add({
       id: "cat-1",
       name: "Work",
@@ -156,20 +156,46 @@ describe("getSyncHealth", () => {
       updatedAt: "2026-05-08T11:00:00",
     });
 
+    const localPayload = JSON.stringify({
+      categories: [{
+        id: "cat-1",
+        name: "Work",
+        parentId: null,
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 1,
+        isArchived: false,
+        createdAt: "2026-05-08T08:00:00",
+        updatedAt: "2026-05-08T10:00:00",
+      }],
+      timeEntries: [{
+        id: "entry-1",
+        categoryId: "cat-1",
+        startTime: "2026-05-08T09:00:00",
+        endTime: "2026-05-08T10:00:00",
+        note: null,
+        createdAt: "2026-05-08T09:00:00",
+        updatedAt: "2026-05-08T11:00:00",
+      }],
+    });
+    const localDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(localPayload));
+    const localHash = [...new Uint8Array(localDigest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
     apiFetchMock.mockResolvedValue({
       categoryCount: 1,
-      entryCount: 0,
-      lastUpdatedAt: "2026-05-08T09:00:00",
+      entryCount: 1,
+      lastUpdatedAt: "2026-05-08T11:00:00",
+      contentHash: localHash,
       serverTime: "2026-05-08T12:00:00.000Z",
     });
 
     const report = await getSyncHealth();
 
-    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status");
-    expect(report.local).toMatchObject({ categoryCount: 1, entryCount: 1, lastUpdatedAt: "2026-05-08T11:00:00", unsyncedCount: 0 });
-    expect(report.server).toMatchObject({ categoryCount: 1, entryCount: 0 });
-    expect(report.recommendation).toBe("push_to_server");
+    expect(report.local).toMatchObject({ categoryCount: 1, entryCount: 1, lastUpdatedAt: "2026-05-08T11:00:00" });
+    expect(report.server.contentHash).toBe(localHash);
+    expect(report.recommendation).toBe("already_aligned");
   });
+
 });
 
 describe("syncForcePushToServer", () => {

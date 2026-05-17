@@ -11,6 +11,12 @@ interface SyncValidationOptions {
   now?: Date | string;
 }
 
+interface CategoryParentInfo {
+  id: string;
+  parentId: string | null;
+  isArchived: boolean;
+}
+
 function outcome(
   change: SyncChange,
   status: SyncPushOutcome["status"],
@@ -39,6 +45,26 @@ function nowUtcString(now: Date | string | undefined): string {
   return (now || new Date()).toISOString();
 }
 
+function collectBatchCategories(changes: SyncChange[]): Map<string, CategoryParentInfo> {
+  const categories = new Map<string, CategoryParentInfo>();
+  for (const change of changes) {
+    if (change.tableName !== "categories" || change.action === "delete" || !change.data) continue;
+    const data = change.data as Category;
+    categories.set(data.id, { id: data.id, parentId: data.parentId, isArchived: data.isArchived });
+  }
+  return categories;
+}
+
+function getCategoryParentInfo(db: Database, batchCategories: Map<string, CategoryParentInfo>, id: string): CategoryParentInfo | null {
+  const batch = batchCategories.get(id);
+  if (batch) return batch;
+
+  const row = db.prepare("SELECT id, parent_id, is_archived FROM categories WHERE id = ?").get(id) as
+    | { id: string; parent_id: string | null; is_archived: number }
+    | undefined;
+  return row ? { id: row.id, parentId: row.parent_id, isArchived: Boolean(row.is_archived) } : null;
+}
+
 function validateCategoryShape(change: SyncChange, data: Category): SyncPushOutcome | null {
   if (data.id !== change.recordId) return outcome(change, "rejected", "id_mismatch", "category payload id does not match recordId");
   if (typeof data.name !== "string" || !data.name.trim()) return outcome(change, "rejected", "invalid_shape", "category name is required");
@@ -62,7 +88,7 @@ function validateEntryShape(change: SyncChange, data: TimeEntry, options: SyncVa
   return null;
 }
 
-function validateCategoryChange(db: Database, change: SyncChange): SyncPushOutcome {
+function validateCategoryChange(db: Database, batchCategories: Map<string, CategoryParentInfo>, change: SyncChange): SyncPushOutcome {
   if (change.action !== "delete" && !change.data) return outcome(change, "rejected", "missing_payload", "category create/update requires payload");
 
   if (change.action === "delete") return outcome(change, "accepted", "applied", "category delete can be applied");
@@ -76,25 +102,15 @@ function validateCategoryChange(db: Database, change: SyncChange): SyncPushOutco
   }
 
   if (data.parentId) {
-    const parent = db.prepare("SELECT id, parent_id FROM categories WHERE id = ?").get(data.parentId) as { id: string; parent_id: string | null } | undefined;
+    const parent = getCategoryParentInfo(db, batchCategories, data.parentId);
     if (!parent) return outcome(change, "rejected", "missing_category", "parent category does not exist");
-    if (parent.parent_id !== null) return outcome(change, "rejected", "invalid_shape", "categories support only two levels");
+    if (parent.parentId !== null) return outcome(change, "rejected", "invalid_shape", "categories support only two levels");
   }
 
   return outcome(change, "accepted", "applied", "category change can be applied");
 }
 
-function collectAcceptedCategoryIds(changes: SyncChange[]): Set<string> {
-  const ids = new Set<string>();
-  for (const change of changes) {
-    if (change.tableName === "categories" && change.action !== "delete" && change.data) {
-      ids.add(change.recordId);
-    }
-  }
-  return ids;
-}
-
-function validateEntryChange(db: Database, change: SyncChange, batchCategoryIds: Set<string>, options: SyncValidationOptions): SyncPushOutcome {
+function validateEntryChange(db: Database, batchCategories: Map<string, CategoryParentInfo>, change: SyncChange, options: SyncValidationOptions): SyncPushOutcome {
   if (change.action !== "delete" && !change.data) return outcome(change, "rejected", "missing_payload", "entry create/update requires payload");
 
   if (change.action === "delete") return outcome(change, "accepted", "applied", "entry delete can be applied");
@@ -103,9 +119,9 @@ function validateEntryChange(db: Database, change: SyncChange, batchCategoryIds:
   const shapeError = validateEntryShape(change, data, options);
   if (shapeError) return shapeError;
 
-  const category = db.prepare("SELECT is_archived FROM categories WHERE id = ?").get(data.categoryId) as { is_archived: number } | undefined;
-  if (!category && !batchCategoryIds.has(data.categoryId)) return outcome(change, "rejected", "missing_category", "entry category does not exist");
-  if (category?.is_archived) return outcome(change, "rejected", "archived_category", "entry category is archived");
+  const category = getCategoryParentInfo(db, batchCategories, data.categoryId);
+  if (!category) return outcome(change, "rejected", "missing_category", "entry category does not exist");
+  if (category.isArchived) return outcome(change, "rejected", "archived_category", "entry category is archived");
 
   return outcome(change, "accepted", "applied", "entry change can be applied");
 }
@@ -127,16 +143,16 @@ function incomingEntryOverlap(change: SyncChange, previousChanges: SyncChange[])
 }
 
 export function validateSyncChanges(db: Database, changes: SyncChange[], options: SyncValidationOptions = {}): SyncValidationResult {
-  const batchCategoryIds = collectAcceptedCategoryIds(changes);
+  const batchCategories = collectBatchCategories(changes);
   const previousChanges: SyncChange[] = [];
   const outcomes = changes.map((change) => {
     let result: SyncPushOutcome;
     if (!change.recordId || !change.timestamp || !["create", "update", "delete"].includes(change.action)) {
       result = outcome(change, "rejected", "invalid_shape", "sync change shape is invalid");
     } else if (change.tableName === "categories") {
-      result = validateCategoryChange(db, change);
+      result = validateCategoryChange(db, batchCategories, change);
     } else if (change.tableName === "time_entries") {
-      result = incomingEntryOverlap(change, previousChanges) ?? validateEntryChange(db, change, batchCategoryIds, options);
+      result = incomingEntryOverlap(change, previousChanges) ?? validateEntryChange(db, batchCategories, change, options);
     } else {
       result = outcome(change, "rejected", "invalid_shape", "sync tableName is invalid");
     }

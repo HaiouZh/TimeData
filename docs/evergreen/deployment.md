@@ -111,6 +111,8 @@ Capacitor 7 版本的 Android 构建要求：Node 22+、Java 21、Android SDK Pl
 
 Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/browser`（外链浏览器）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，否则原生工程拿不到新插件。
 
+Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
+
 ### 3.1.1 本地生成 release keystore
 
 CI 用的 keystore 是一次性生成，长期复用。本地需要时可以用 JDK 自带的 `keytool`：

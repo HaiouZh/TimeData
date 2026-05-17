@@ -11,10 +11,11 @@ describe("runList", () => {
       fetchImpl,
     )).resolves.toEqual({ ok: true, entries: [] });
 
-    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/entries?date=2026-05-08&format=cli", {
+    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/entries?date=2026-05-08&format=cli", expect.objectContaining({
       method: "GET",
       headers: { Authorization: "Bearer secret" },
-    });
+      signal: expect.any(AbortSignal),
+    }));
   });
 
   it("rejects invalid dates before calling fetch", async () => {

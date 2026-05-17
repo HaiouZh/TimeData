@@ -190,6 +190,8 @@ export function createEntryFromCliInput(db: Database.Database, input: CliEntryIn
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, category.categoryId, startTime, endTime, input.note || null, now, now);
 
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("time_entries", id, "create");
+
     return {
       ok: true,
       entry: {

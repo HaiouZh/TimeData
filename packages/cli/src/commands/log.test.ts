@@ -31,10 +31,11 @@ describe("runLog", () => {
       fetchImpl,
     )).resolves.toEqual({ ok: true, entry: { id: "entry-1" } });
 
-    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/entries", {
+    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/entries", expect.objectContaining({
       method: "POST",
       headers: { Authorization: "Bearer secret", "Content-Type": "application/json" },
       body: JSON.stringify({ date: "2026-05-07", start: "14:00", end: "16:00", category: "工作/编程", note: "重构同步模块" }),
-    });
+      signal: expect.any(AbortSignal),
+    }));
   });
 });

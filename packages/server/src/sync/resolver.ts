@@ -1,7 +1,7 @@
 import { getDb } from "../db/connection.js";
 import { type CategoryRow, type EntryRow } from "../lib/db-rows.js";
 import { recordSeq } from "./seq.js";
-import type { Category, SyncChange, TimeEntry } from "@timedata/shared";
+import type { Category, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 
 type CategoryChange = Extract<SyncChange, { tableName: "categories" }>;
@@ -15,6 +15,7 @@ export interface ApplyChangeResult {
   reason: string;
   serverUpdatedAt?: string;
   incomingTimestamp: string;
+  skipReason?: SyncPushOutcome["reasonCode"];
   overriddenRecordIds?: string[];
 }
 
@@ -126,7 +127,7 @@ function applyEntryChange(db: Database, change: EntryChange): ApplyChangeResult 
 
   const category = db.prepare("SELECT id FROM categories WHERE id = ?").get(data.categoryId);
   // 分类不存在时 skip（可能是顺序依赖尚未应用），路由层会将 skipped 映射为 conflict/server_version_newer_or_same。
-  if (!category) return result(change, "skipped", "missing category");
+  if (!category) return result(change, "skipped", "missing category", undefined, undefined, "missing_category");
 
   const overriddenRecordIds = deleteOverlappingEntries(db, data, change.timestamp);
   const existing = db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get(change.recordId) as Pick<EntryRow, "updated_at"> | undefined;
@@ -153,6 +154,7 @@ function result(
   reason: string,
   serverUpdatedAt?: string,
   overriddenRecordIds?: string[],
+  skipReason?: ApplyChangeResult["skipReason"],
 ): ApplyChangeResult {
   return {
     recordId: change.recordId,
@@ -163,5 +165,6 @@ function result(
     serverUpdatedAt,
     incomingTimestamp: change.timestamp,
     overriddenRecordIds,
+    skipReason,
   };
 }

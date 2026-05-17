@@ -3,22 +3,43 @@ import type { SyncChange } from "@timedata/shared";
 import { orderPushChanges } from "./order.js";
 
 describe("orderPushChanges", () => {
-  it("applies category changes before time entries", () => {
-    const entry: SyncChange = {
-      tableName: "time_entries",
-      recordId: "entry-1",
-      action: "create",
-      data: null,
-      timestamp: "2026-05-05T00:00:00.000Z",
-    };
-    const category: SyncChange = {
+  it("orders category upserts so parents are applied before children", () => {
+    const child: SyncChange = {
       tableName: "categories",
-      recordId: "category-1",
+      recordId: "child",
       action: "create",
-      data: null,
-      timestamp: "2026-05-05T00:00:00.000Z",
+      data: {
+        id: "child",
+        name: "子分类",
+        parentId: "parent",
+        color: "#22c55e",
+        icon: null,
+        sortOrder: 1,
+        isArchived: false,
+        createdAt: "2026-05-17T00:00:01.000Z",
+        updatedAt: "2026-05-17T00:00:01.000Z",
+      },
+      timestamp: "2026-05-17T00:00:01.000Z",
+    };
+    const parent: SyncChange = {
+      tableName: "categories",
+      recordId: "parent",
+      action: "create",
+      data: {
+        id: "parent",
+        name: "父分类",
+        parentId: null,
+        color: "#22c55e",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-17T00:00:00.000Z",
+        updatedAt: "2026-05-17T00:00:00.000Z",
+      },
+      timestamp: "2026-05-17T00:00:00.000Z",
     };
 
-    expect(orderPushChanges([entry, category])).toEqual([category, entry]);
+    expect(orderPushChanges([child, parent]).map((change) => change.recordId)).toEqual(["parent", "child"]);
   });
+
 });

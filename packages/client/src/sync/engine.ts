@@ -406,19 +406,31 @@ function latestTimestamp(values: Array<string | null | undefined>): string | nul
   return values.filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 }
 
+async function localContentHash(categories: Category[], timeEntries: TimeEntry[]): Promise<string> {
+  const payload = JSON.stringify({
+    categories: [...categories].sort((a, b) => a.id.localeCompare(b.id)),
+    timeEntries: [...timeEntries].sort((a, b) => a.id.localeCompare(b.id)),
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function getLocalStatus(): Promise<SyncHealthReport["local"]> {
   const categories = await db.categories.toArray();
   const timeEntries = await db.timeEntries.toArray();
   const unsyncedCount = await db.syncLog.filter((entry) => !entry.synced).count();
+  const contentHash = await localContentHash(categories, timeEntries);
   return {
     categoryCount: categories.length,
     entryCount: timeEntries.length,
     lastUpdatedAt: latestTimestamp([...categories.map((item) => item.updatedAt), ...timeEntries.map((item) => item.updatedAt)]),
+    contentHash,
     unsyncedCount,
   };
 }
 
-function syncStatusMatches(local: Pick<SyncHealthReport["local"], "categoryCount" | "entryCount" | "lastUpdatedAt">, server: SyncStatusResponse): boolean {
+function syncStatusMatches(local: Pick<SyncHealthReport["local"], "categoryCount" | "entryCount" | "lastUpdatedAt" | "contentHash">, server: SyncStatusResponse): boolean {
+  if (local.contentHash && server.contentHash) return local.contentHash === server.contentHash;
   return local.categoryCount === server.categoryCount
     && local.entryCount === server.entryCount
     && local.lastUpdatedAt === server.lastUpdatedAt;

@@ -32,8 +32,8 @@ last-reviewed: 2026-05-17
 
 | 实体 | SQLite 表 | 作用 |
 |---|---|---|
-| 服务端同步日志 | `sync_logs` | 记录每次 push/pull 的摘要、状态和保留的 `reasonCode` 细节，供运维和排障查看 |
-| 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` / `categories.id` 与删除时间，用于按序拉取删除事件重放 |
+| 服务端同步日志 | `sync_logs` | 记录每次 push/pull 的摘要、状态、备份信息和保留的 `reasonCode` 细节，供运维和排障查看 |
+| 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` / `categories.id` 与删除时间，用于按序拉取删除事件重放；不能按固定 TTL 直接清理 |
 | 服务端同步序列 | `sync_seq` | 记录每次成功写入后的单调递增序号，用于 `sinceSeq` 拉取和 `baseSeq` 快进判断 |
 | 应用元数据 | `app_metadata` | 记录全局一次性迁移/重置标记，例如 `utc_reset_v1` |
 
@@ -68,6 +68,7 @@ last-reviewed: 2026-05-17
 约束：
 
 - **两级**：要么 `parentId === null`（顶层），要么 `parentId` 指向另一个顶层分类。服务端会拒绝自引用和第三级分类；UI 和 CLI 也按两级假设处理（如 `categories/path` 是 `parent.name/child.name`）。**如未来加第三级**，至少 CLI 的 path 解析、统计页、备份校验都要改。
+- **运行时字段约束**：跨边界 `CategorySchema` 要求 `id` / `name` 是 trim 后非空字符串，`parentId` 为非空字符串或 `null`，`color` 是 `#RRGGBB`，`icon` 为非空字符串或 `null`，`sortOrder` 是有限整数，`createdAt` / `updatedAt` 是带毫秒与 `Z` 的 UTC ISO 字符串。
 - **同层级排序**：`sortOrder` 只表示同一个 `parentId` 下的顺序。分类管理页拖拽排序只允许一级分类之间重排，或同一个父分类下的子分类之间重排；保存时会更新变化项的 `sortOrder` / `updatedAt` 并写入 `syncLog`。客户端入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categorySort.ts`；相关测试是 `packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`、`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/hooks/useCategories.test.ts`。`useCategories()` 在内部用 `categoryById` / `childrenByParentId` Map 缓存查找，`getCategoryPath` / `getCategoryColor` / `getChildren` 都是 O(1)，时间轴和统计页因此免去 O(n²) 扫描。
 - **名称可改、身份不变**：`name` 是当前展示名，`id` 才是分类身份。新增分类和重命名分类都会在客户端 hook 层 trim 名称并拒绝空名；同层级未归档分类重名也会被拒绝。重命名分类只更新 `name` / `updatedAt` 并写 `syncLog` update，不迁移 `TimeEntry.categoryId`，历史记录按当前名称展示。分类管理页会拒绝同层级未归档分类重名，并同步更新本地 `autoBackups` 里同 ID 分类的名称。
 - **颜色属于一级分类**：一级分类的 `color` 用 `#RRGGBB` 格式展示和同步；子分类沿用父分类颜色，不单独改色。客户端颜色入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categoryColors.ts`；单个改色和一键配色都会更新变化项的 `color` / `updatedAt` 并写 `syncLog` update。一键配色只作用于未归档一级分类，并按当前一级分类排序循环应用预设色板。相关测试是 `packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`。
@@ -91,7 +92,7 @@ last-reviewed: 2026-05-17
 
 约束（**服务端权威**，见 `packages/server/src/sync/validation.ts`）：
 
-- `endTime > startTime`，否则 `invalid_time_range`。
+- `endTime > startTime`，否则 `invalid_time_range`。运行时 `TimeEntrySchema` 在 shared 边界也会要求 `startTime` / `endTime` / `createdAt` / `updatedAt` 是带毫秒与 `Z` 的 UTC ISO 字符串，并在 schema 层拒绝 `endTime <= startTime`。
 - `categoryId` 必须存在于 `categories` 表（同一批 push 里同时新增的分类也算存在）。
 - 引用的分类不能是 archived，否则 `archived_category`。
 - 同 `id` 之外的任何记录，时间段不能与本记录重叠（半开区间 `[start, end)`），否则 `overlap`。
@@ -166,8 +167,8 @@ type SyncChange =
 
 相关共享类型只描述同步摘要和确认流程：
 
-- `SyncDatasetStatus`：分类数、记录数、最新更新时间；可选 `latestSeq` 表示服务端当前最新 `sync_seq`，可选 `contentHash` 预留给未来内容哈希校验。
-- `SyncStatusResponse`：服务端摘要 + `serverTime`；`/api/sync/status` 当前返回 `latestSeq`，但不计算 `contentHash`。
+- `SyncDatasetStatus`：分类数、记录数、最新更新时间；`contentHash` 是业务内容稳定哈希，用于识别数量和时间摘要不变但内容不同的状态；可选 `latestSeq` 表示服务端当前最新 `sync_seq`。
+- `SyncStatusResponse`：服务端摘要 + `serverTime`；`/api/sync/status` 当前返回 `contentHash` 与 `latestSeq`。
 - `SyncForcePushPrepareRequest` / `SyncForcePushPrepareResponse`：客户端提交本地摘要，服务端返回短时确认 token、过期时间、确认短语和当前服务端摘要。
 - `SyncForcePushRequest` / `SyncForcePushResponse`：客户端提交完整数据；服务端返回导入数量、服务器备份 ID、服务器时间和最新 `latestSeq`。
 - `SyncHealthReport`：客户端比较本地摘要和服务端摘要后的诊断结果，不会自动触发全量拉取或推送。

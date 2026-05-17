@@ -3,8 +3,12 @@ import { z } from "zod";
 import {
   CategorySchema,
   SyncChangeSchema,
+  SyncForcePushPrepareRequestSchema,
+  SyncForcePushRequestSchema,
   SyncLogEntrySchema,
+  SyncPullRequestSchema,
   SyncPullResponseSchema,
+  SyncStatusResponseSchema,
   SyncPushReasonCodeSchema,
   SyncPushRequestSchema,
   TimeEntrySchema,
@@ -17,6 +21,12 @@ export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 export type SyncLogEntry = z.infer<typeof SyncLogEntrySchema>;
 
 export type SyncPushRequest = z.infer<typeof SyncPushRequestSchema>;
+
+export type SyncPullRequest = z.infer<typeof SyncPullRequestSchema>;
+
+export type SyncForcePushPrepareRequest = z.infer<typeof SyncForcePushPrepareRequestSchema>;
+
+export type SyncForcePushRequest = z.infer<typeof SyncForcePushRequestSchema>;
 
 export type SyncChange = z.infer<typeof SyncChangeSchema>;
 
@@ -46,12 +56,6 @@ export interface SyncPushResponse {
   serverTime: string;
 }
 
-export interface SyncPullRequest {
-  lastSyncedAt: string | null;
-  since?: string | null;
-  sinceSeq?: number | null;
-}
-
 export type SyncPullResponse = z.infer<typeof SyncPullResponseSchema>;
 
 export interface SyncDatasetStatus {
@@ -62,24 +66,13 @@ export interface SyncDatasetStatus {
   latestSeq?: number | null;
 }
 
-export interface SyncStatusResponse extends SyncDatasetStatus {
-  serverTime: string;
-}
-
-export interface SyncForcePushPrepareRequest extends SyncDatasetStatus {}
+export type SyncStatusResponse = z.infer<typeof SyncStatusResponseSchema>;
 
 export interface SyncForcePushPrepareResponse {
   confirmToken: string;
   expiresAt: string;
   confirmationPhrase: "OVERWRITE_SERVER";
   serverStatus: SyncStatusResponse;
-}
-
-export interface SyncForcePushRequest {
-  confirmToken: string;
-  confirmationPhrase: "OVERWRITE_SERVER";
-  categories: Category[];
-  timeEntries: TimeEntry[];
 }
 
 export interface SyncForcePushResponse {

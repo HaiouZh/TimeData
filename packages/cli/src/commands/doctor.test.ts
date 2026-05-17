@@ -87,13 +87,15 @@ describe("runDoctor", () => {
       ],
     });
 
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, "https://server.example/api/health", {
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, "https://server.example/api/health", expect.objectContaining({
       method: "GET",
       headers: { Authorization: "Bearer secret" },
-    });
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://server.example/api/categories", {
+      signal: expect.any(AbortSignal),
+    }));
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://server.example/api/categories", expect.objectContaining({
       method: "GET",
       headers: { Authorization: "Bearer secret" },
-    });
+      signal: expect.any(AbortSignal),
+    }));
   });
 });

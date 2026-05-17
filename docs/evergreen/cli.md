@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # CLI（受控写入入口）
@@ -113,8 +113,11 @@ CLI 自身校验产生：
 
 api-client 包装：
 
-- `AUTH_FAILED`（HTTP 401）、`HTTP_<status>`、`NETWORK_ERROR`、`HTTP_INVALID_RESPONSE`
-- API 请求默认 15 秒超时；超时属于网络类失败，会以 `NETWORK_ERROR` 风格提示用户检查服务器地址、代理或网络
+- `TIMEOUT`：请求超过默认 30 秒超时（测试可通过 `timeoutMs` 注入更短时间）
+- `NETWORK_ERROR`：fetch 抛出的非超时网络错误
+- `AUTH_FAILED`（HTTP 401）
+- `HTTP_<status>`：非 401 HTTP 错误且响应不是 CLI/服务端标准 `{ ok, error }` 形状
+- `INVALID_RESPONSE`：成功或错误响应体不是合法 JSON
 
 服务端 `entries` 路由产生（透传给 CLI）：
 
@@ -146,6 +149,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 检查结束时间不能晚于当前 UTC 时间（`INVALID_TIME_RANGE`）
 - 通过受控 `timedata log` 写入唯一数据入口；`help`、`doctor`、`categories`、`list`、`version` 都是只读
 - 将本地日期+时间转为 UTC ISO（`localDateTimeToUtc()`），写入 `time_entries` 的 `start_time` / `end_time` 为 UTC 格式
+- 写入成功后追加 `sync_seq(table_name='time_entries', action='create')`，让其他设备可通过 seq cursor 拉到 CLI 新增记录
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
 - 分配 UUID
 

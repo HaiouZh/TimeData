@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import crypto from "node:crypto";
-import { SyncPushRequestSchema } from "@timedata/shared";
+import {
+  SyncForcePushPrepareRequestSchema,
+  SyncForcePushRequestSchema,
+  SyncPullRequestSchema,
+  SyncPushRequestSchema,
+} from "@timedata/shared";
 import type {
   Category,
   SyncChange,
@@ -163,6 +168,14 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
   }
 }
 
+function stableContentHash(db: Database): string {
+  const hash = crypto.createHash("sha256");
+  const categories = (db.prepare("SELECT id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at FROM categories ORDER BY id").all() as CategoryRow[]).map(rowToCategory);
+  const timeEntries = (db.prepare("SELECT id, category_id, start_time, end_time, note, created_at, updated_at FROM time_entries ORDER BY id").all() as EntryRow[]).map(rowToEntry);
+  hash.update(JSON.stringify({ categories, timeEntries }));
+  return hash.digest("hex");
+}
+
 function readServerStatus(db: Database): SyncStatusResponse {
   const categoryCount = (db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow).count;
   const entryCount = (db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as CountRow).count;
@@ -174,6 +187,7 @@ function readServerStatus(db: Database): SyncStatusResponse {
     categoryCount,
     entryCount,
     lastUpdatedAt,
+    contentHash: stableContentHash(db),
     latestSeq: getLatestSeq(),
     serverTime: new Date().toISOString(),
   };
@@ -236,7 +250,7 @@ function outcomeFromApplyResult(result: ApplyChangeResult, backupId: string | nu
     recordId: result.recordId,
     action: result.action,
     status: result.status === "applied" ? "accepted" : "conflict",
-    reasonCode: result.status === "applied" ? "applied" : "server_version_newer_or_same",
+    reasonCode: result.status === "applied" ? "applied" : (result.skipReason ?? "server_version_newer_or_same"),
     message: result.reason,
     incomingTimestamp: result.incomingTimestamp,
     serverUpdatedAt: result.serverUpdatedAt,
@@ -251,7 +265,13 @@ sync.get("/status", (c) => {
 });
 
 sync.post("/force-push/prepare", async (c) => {
-  const body = await c.req.json<SyncForcePushPrepareRequest>();
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const parsed = SyncForcePushPrepareRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+  }
+
+  const body = parsed.data;
   const db = getDb();
   const { token, expiresAt } = createForcePushToken({
     categoryCount: Number(body.categoryCount || 0),
@@ -276,7 +296,13 @@ sync.post("/force-push/prepare", async (c) => {
 });
 
 sync.post("/force-push", async (c) => {
-  const body = await c.req.json<SyncForcePushRequest>();
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const parsed = SyncForcePushRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+  }
+
+  const body = parsed.data;
   const db = getDb();
   if (body.confirmationPhrase !== FORCE_PUSH_CONFIRMATION_PHRASE) {
     writeSyncLog(db, "force_push_rejected", { reason: "invalid_phrase" });
@@ -479,7 +505,13 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[
 }
 
 sync.post("/pull", async (c) => {
-  const body = await c.req.json<SyncPullRequest>();
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const parsed = SyncPullRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+  }
+
+  const body = parsed.data;
   const db = getDb();
   const since = body.since || body.lastSyncedAt || "1970-01-01T00:00:00.000Z";
   const sinceSeq = typeof body.sinceSeq === "number" ? body.sinceSeq : null;
