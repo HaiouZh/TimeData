@@ -27,20 +27,29 @@ export function assertProductionAuthConfigured(env: NodeJS.ProcessEnv = process.
   }
 }
 
-export const authMiddleware: MiddlewareHandler = async (c, next) => {
-  const token = process.env.AUTH_TOKEN;
-  if (!token) {
-    if (!hasWarnedAuthUnset) {
-      console.warn(AUTH_UNSET_WARNING);
-      hasWarnedAuthUnset = true;
+export interface AuthAuditLogger {
+  recordAuthFailure?: (event: { path: string; ip?: string }) => void;
+}
+
+export function createAuthMiddleware(audit?: AuthAuditLogger): MiddlewareHandler {
+  return async (c, next) => {
+    const token = process.env.AUTH_TOKEN;
+    if (!token) {
+      if (!hasWarnedAuthUnset) {
+        console.warn(AUTH_UNSET_WARNING);
+        hasWarnedAuthUnset = true;
+      }
+      await next();
+      return;
     }
+
+    if (!bearerTokenMatches(c.req.header("Authorization"), token)) {
+      audit?.recordAuthFailure?.({ path: c.req.path, ip: c.req.header("X-Forwarded-For") || undefined });
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
     await next();
-    return;
-  }
+  };
+}
 
-  if (!bearerTokenMatches(c.req.header("Authorization"), token)) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  await next();
-};
+export const authMiddleware = createAuthMiddleware();

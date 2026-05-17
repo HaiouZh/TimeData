@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertProductionAuthConfigured, authMiddleware } from "./auth.js";
+import { assertProductionAuthConfigured, authMiddleware, createAuthMiddleware } from "./auth.js";
 
 const originalAuthToken = process.env.AUTH_TOKEN;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -50,6 +50,22 @@ describe("authMiddleware", () => {
     expect(warn).toHaveBeenCalledWith(
       "[auth] AUTH_TOKEN unset — all /api/* endpoints are open. Do NOT use in production.",
     );
+  });
+
+  it("records unauthorized requests through the audit hook", async () => {
+    const audit = vi.fn();
+    const app = new Hono();
+    app.use("/api/*", createAuthMiddleware({ recordAuthFailure: audit }));
+    app.get("/api/protected", (c) => c.json({ ok: true }));
+    process.env.AUTH_TOKEN = "correct-token";
+
+    const res = await app.request("/api/protected", {
+      headers: { Authorization: "Bearer wrong-token" },
+    });
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
+    expect(audit).toHaveBeenCalledTimes(1);
   });
 
   it("passes through for the correct bearer token", async () => {

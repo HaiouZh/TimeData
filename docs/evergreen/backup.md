@@ -23,7 +23,7 @@ TimeData 现有三种备份：
 
 ## 1. Backup JSON 格式
 
-当前格式版本：`"format": "timedata.backup.v2"`（常量在 `packages/client/src/backup/schema.ts`）。
+当前格式版本：`"format": "timedata.backup.v2"`（常量在 `packages/client/src/backup/schema.ts`）。v2 只接受 UTC 时间：`timeFormat` 必须是 `"utc"`，`timeEntries` 中的 `startTime` / `endTime` 也必须是带 `Z` 的 UTC ISO 字符串。
 
 ```json
 {
@@ -92,7 +92,7 @@ v2 新增 `timeFormat: "utc"` 字段，表示 `timeEntries` 中的 `startTime` /
 - 时间字符串格式
 - 分类树循环（A → B → A）
 
-这些缺失是**有意的轻量化**：恢复后用户同步时 server 会再校验一次，校验失败的记录会被拒绝并冒泡给用户。如果未来出现"恢复看似成功但同步全被拒"的常见反馈，可以把更严的校验前置到客户端。
+这些缺失是**有意的轻量化**：恢复后用户同步时 server 会再校验一次，校验失败的记录会被拒绝并冒泡给用户。如果未来出现"恢复看似成功但同步全被拒"的常见反馈，可以把更严的校验前置到客户端；但 `endTime > startTime`、UTC 格式和分类树循环仍然是恢复前就应明确遵守的语义约束。
 
 ## 4. 恢复（`importBackup`）
 

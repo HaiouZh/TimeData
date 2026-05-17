@@ -37,6 +37,7 @@ export default function SettingsServerPage() {
             placeholder="Bearer token"
             className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
           />
+          <p className="mt-2 text-xs text-amber-300">Token 会保存在本机浏览器存储中，请只在可信设备上保存服务器 Token。</p>
         </div>
         <button type="button" onClick={saveConfig} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
           {saved ? "已保存" : "保存配置"}

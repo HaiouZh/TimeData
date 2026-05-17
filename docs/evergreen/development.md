@@ -176,6 +176,8 @@ TimeData/
 └── docs/                        # 设计和实现计划文档
 ```
 
+`tsconfig.base.json` 是所有 package 共享的 TypeScript 基础配置：除了 `strict: true`，还显式开启 `noImplicitOverride`（覆盖父类成员必须写 `override`，例如 `packages/client/src/components/ErrorBoundary.tsx` 的 `state` / `componentDidCatch` / `render`）和 `noFallthroughCasesInSwitch`（`switch` 漏写 `break` / `return` 会编译失败）。各 package 的 `tsconfig.json` 只在这份配置上做最小扩展，新增 package 时直接 `extends` 它即可保证启用同一组严格选项。
+
 ## 技术栈
 
 - 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、dnd-kit

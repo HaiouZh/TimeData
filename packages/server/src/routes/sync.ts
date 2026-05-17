@@ -33,16 +33,12 @@ interface ForcePushTokenRecord {
   localSummary: SyncForcePushPrepareRequest;
 }
 
-/**
- * In-memory force-push token store.
- *
- * Single-instance only:
- * - Process restart clears all pending tokens.
- * - Horizontal scaling breaks because each instance has its own map.
- *
- * TTL: 5 minutes. Move this to SQLite or Redis before multi-instance deployment.
- */
 const forcePushTokens = new Map<string, ForcePushTokenRecord>();
+
+type ForcePushTokenLookup =
+  | { status: "valid"; record: ForcePushTokenRecord }
+  | { status: "expired" }
+  | { status: "missing" };
 
 function pruneForcePushTokens(now = Date.now()): void {
   for (const [token, record] of forcePushTokens.entries()) {
@@ -58,12 +54,15 @@ function createForcePushToken(localSummary: SyncForcePushPrepareRequest, now = D
   return { token, expiresAt };
 }
 
-function consumeForcePushToken(token: string, now = Date.now()): ForcePushTokenRecord | null {
-  pruneForcePushTokens(now);
+function consumeForcePushToken(token: string, now = Date.now()): ForcePushTokenLookup {
   const record = forcePushTokens.get(token);
-  if (!record) return null;
+  if (!record) return { status: "missing" };
+  if (record.expiresAt <= now) {
+    forcePushTokens.delete(token);
+    return { status: "expired" };
+  }
   forcePushTokens.delete(token);
-  return record;
+  return { status: "valid", record };
 }
 
 function assertCategoryShape(category: Category): string | null {
@@ -278,12 +277,19 @@ sync.post("/force-push/prepare", async (c) => {
 
 sync.post("/force-push", async (c) => {
   const body = await c.req.json<SyncForcePushRequest>();
+  const db = getDb();
   if (body.confirmationPhrase !== FORCE_PUSH_CONFIRMATION_PHRASE) {
+    writeSyncLog(db, "force_push_rejected", { reason: "invalid_phrase" });
     return c.json({ error: "Invalid force-push confirmation phrase." }, 400);
   }
 
-  const tokenRecord = consumeForcePushToken(body.confirmToken || "");
-  if (!tokenRecord) {
+  const tokenRecord = consumeForcePushToken(body.confirmToken || "", Date.now());
+  if (tokenRecord.status === "expired") {
+    writeSyncLog(db, "force_push_expired", { reason: "expired_token" });
+    return c.json({ error: "Invalid or expired force-push confirmation token." }, 403);
+  }
+  if (tokenRecord.status === "missing") {
+    writeSyncLog(db, "force_push_rejected", { reason: "missing_token" });
     return c.json({ error: "Invalid or expired force-push confirmation token." }, 403);
   }
 
@@ -292,7 +298,6 @@ sync.post("/force-push", async (c) => {
     return c.json({ error: validationError }, 400);
   }
 
-  const db = getDb();
   const backup = await createServerBackup("sync_force_push");
   const replaceAll = db.transaction(() => {
     replaceServerData(db, body.categories, body.timeEntries);
@@ -316,7 +321,7 @@ sync.post("/force-push", async (c) => {
 
   writeSyncLog(db, "force_push_applied", {
     backupId: backup.id,
-    localSummary: tokenRecord.localSummary,
+    localSummary: tokenRecord.record.localSummary,
     importedCategories: response.importedCategories,
     importedTimeEntries: response.importedTimeEntries,
   }, body.categories.length + body.timeEntries.length);

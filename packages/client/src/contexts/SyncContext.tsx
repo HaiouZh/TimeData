@@ -79,7 +79,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     lastAutoAttemptAtRef.current = now;
     await syncState.sync();
-  }, [cloudSyncEnabled, syncState]);
+  }, [cloudSyncEnabled, syncState.sync, syncState.syncing]);
 
   const value = useMemo<SyncContextValue>(() => ({
     ...syncState,
@@ -89,7 +89,32 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     cloudSyncEnabled,
     setCloudSyncEnabledInContext,
     syncIfStale,
-  }), [apiUrl, cloudSyncEnabled, setCloudSyncEnabledInContext, status, syncIfStale, syncState, updateApiUrl]);
+  }), [
+    apiUrl,
+    cloudSyncEnabled,
+    setCloudSyncEnabledInContext,
+    status,
+    syncIfStale,
+    syncState.conflicts,
+    syncState.error,
+    syncState.forcePushPreparation,
+    syncState.forcePushToServer,
+    syncState.forceReplace,
+    syncState.handleConflictResolution,
+    syncState.healthLoading,
+    syncState.healthReport,
+    syncState.lastResult,
+    syncState.lastSynced,
+    syncState.needsSyncDiagnostics,
+    syncState.prepareForcePushToServer,
+    syncState.refreshSyncStatus,
+    syncState.runDiagnostics,
+    syncState.sync,
+    syncState.syncFailureCount,
+    syncState.syncing,
+    syncState.unsyncedCount,
+    updateApiUrl,
+  ]);
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }

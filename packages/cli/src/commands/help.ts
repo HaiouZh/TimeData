@@ -1,11 +1,11 @@
-interface CommandHelp {
+export interface CommandHelp {
   name: string;
   writesData: boolean;
   summary: string;
   usage: string;
 }
 
-const commands: CommandHelp[] = [
+export const commandRegistry: CommandHelp[] = [
   {
     name: "categories",
     writesData: false,
@@ -33,7 +33,7 @@ const commands: CommandHelp[] = [
   {
     name: "doctor",
     writesData: false,
-    summary: "Check CLI configuration, server reachability, and read-only authentication.",
+    summary: "Check CLI configuration, server reachability, and read-only authentication with TIMEDATA_SERVER_URL and TIMEDATA_TOKEN.",
     usage: "timedata doctor [--server URL] [--token TOKEN]",
   },
   {
@@ -55,7 +55,7 @@ const redLines = [
 const docs = ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"];
 
 export function runHelp(topic?: string): unknown {
-  const selected = topic ? commands.filter((command) => command.name === topic) : commands;
+  const selected = topic ? commandRegistry.filter((command) => command.name === topic) : commandRegistry;
   if (topic && selected.length === 0) {
     return { ok: false, error: { code: "UNKNOWN_COMMAND", message: `Unknown command: ${topic}` } };
   }
@@ -71,5 +71,5 @@ export function runHelp(topic?: string): unknown {
 }
 
 export function isKnownCommand(command: string): boolean {
-  return commands.some((item) => item.name === command);
+  return commandRegistry.some((item) => item.name === command);
 }

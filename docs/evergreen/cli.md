@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-14
+last-reviewed: 2026-05-17
 ---
 
 # CLI（受控写入入口）
@@ -35,7 +35,7 @@ last-reviewed: 2026-05-14
 
 - `timedata help` 和 `timedata help <command>`：不需要 server 配置；未知 topic 返回 `UNKNOWN_COMMAND`。
 - `--help`：任意已知命令都可用，例如 `timedata log --help`，不需要 server 配置。
-- `timedata doctor`：只读诊断；允许用 `--server`、`--token` 覆盖配置。
+- `timedata doctor`：只读诊断；允许用 `--server`、`--token` 覆盖配置。**优先使用 `TIMEDATA_SERVER_URL` 和 `TIMEDATA_TOKEN` 做短期使用**，尤其是在共享机器上；配置文件适合稳定本机配置，但不建议把长寿命 token 长期留在共享设备上。
 - `--date`：`YYYY-MM-DD`，缺省取本机日期（`todayLocal()`）。
 - `--start` / `--end`：`HH:mm`（24 小时）。`end > start` 必须，否则 `INVALID_TIME_RANGE`；解析后的结束时间不能晚于服务端当前本地时间，结束时间等于当前时间允许。
 - `--category`：传分类**路径**，例如 `投资/读书`。也支持单层（`投资`）但服务端会拒绝二级名称冲突的情况。
@@ -48,9 +48,7 @@ last-reviewed: 2026-05-14
 
 `packages/cli/src/lib/config.ts` 的 `resolveConfig` 顺序（由强到弱）：
 
-1. 命令行 `--server` / `--token`
-2. 环境变量 `TIMEDATA_SERVER_URL` / `TIMEDATA_TOKEN`
-3. 配置文件 `serverUrl` / `token`
+`TIMEDATA_SERVER_URL` / `TIMEDATA_TOKEN` 的优先级低于命令行 `--server` / `--token`，高于配置文件 `serverUrl` / `token`。环境变量是脚本和 CI 覆盖配置的主要入口；如果三者都存在，最终以命令行参数为准。
 
 配置文件位置：
 
@@ -116,6 +114,7 @@ CLI 自身校验产生：
 api-client 包装：
 
 - `AUTH_FAILED`（HTTP 401）、`HTTP_<status>`、`NETWORK_ERROR`、`HTTP_INVALID_RESPONSE`
+- API 请求默认 15 秒超时；超时属于网络类失败，会以 `NETWORK_ERROR` 风格提示用户检查服务器地址、代理或网络
 
 服务端 `entries` 路由产生（透传给 CLI）：
 
@@ -145,6 +144,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 检查分类不存在（`CATEGORY_NOT_FOUND`）/ 路径多于一条匹配（`CATEGORY_AMBIGUOUS`）
 - 检查同日时间段重叠（`TIME_OVERLAP`）
 - 检查结束时间不能晚于当前 UTC 时间（`INVALID_TIME_RANGE`）
+- 通过受控 `timedata log` 写入唯一数据入口；`help`、`doctor`、`categories`、`list`、`version` 都是只读
 - 将本地日期+时间转为 UTC ISO（`localDateTimeToUtc()`），写入 `time_entries` 的 `start_time` / `end_time` 为 UTC 格式
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
 - 分配 UUID

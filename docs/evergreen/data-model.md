@@ -32,9 +32,10 @@ last-reviewed: 2026-05-17
 
 | 实体 | SQLite 表 | 作用 |
 |---|---|---|
-| 服务端同步日志 | `sync_logs` | 服务器收到 push/pull 后写入摘要，供运维查看 |
-| 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` 与时间，用于拉取删除事件重放 |
+| 服务端同步日志 | `sync_logs` | 记录每次 push/pull 的摘要、状态和保留的 `reasonCode` 细节，供运维和排障查看 |
+| 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` / `categories.id` 与删除时间，用于按序拉取删除事件重放 |
 | 服务端同步序列 | `sync_seq` | 记录每次成功写入后的单调递增序号，用于 `sinceSeq` 拉取和 `baseSeq` 快进判断 |
+| 应用元数据 | `app_metadata` | 记录全局一次性迁移/重置标记，例如 `utc_reset_v1` |
 
 客户端 Dexie 多一张：
 
@@ -57,7 +58,7 @@ last-reviewed: 2026-05-17
   parentId: string | null;   // null = 顶层分类
   color: string;             // CSS 颜色字符串，例如 "#7B68EE"
   icon: string | null;
-  sortOrder: number;         // 同层级内排序
+  sortOrder: number;         // 同层级内排序（只在同一 parentId 下比较）
   isArchived: boolean;       // 软删除标记
   createdAt: string;         // ISO 字符串
   updatedAt: string;         // ISO 字符串，**同步冲突解决用这个比较**
@@ -67,9 +68,9 @@ last-reviewed: 2026-05-17
 约束：
 
 - **两级**：要么 `parentId === null`（顶层），要么 `parentId` 指向另一个顶层分类。服务端会拒绝自引用和第三级分类；UI 和 CLI 也按两级假设处理（如 `categories/path` 是 `parent.name/child.name`）。**如未来加第三级**，至少 CLI 的 path 解析、统计页、备份校验都要改。
-- **同层级排序**：`sortOrder` 只表示同一个 `parentId` 下的顺序。分类管理页拖拽排序只允许一级分类之间重排，或同一个父分类下的子分类之间重排；保存时会更新变化项的 `sortOrder` / `updatedAt` 并写入 `syncLog`。客户端入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categorySort.ts`；相关测试是 `packages/client/src/lib/categorySort.test.ts`、`packages/client/src/hooks/useCategories.test.ts`。`useCategories()` 在内部用 `categoryById` / `childrenByParentId` Map 缓存查找，`getCategoryPath` / `getCategoryColor` / `getChildren` 都是 O(1)，时间轴和统计页因此免去 O(n²) 扫描。
+- **同层级排序**：`sortOrder` 只表示同一个 `parentId` 下的顺序。分类管理页拖拽排序只允许一级分类之间重排，或同一个父分类下的子分类之间重排；保存时会更新变化项的 `sortOrder` / `updatedAt` 并写入 `syncLog`。客户端入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categorySort.ts`；相关测试是 `packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`、`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/hooks/useCategories.test.ts`。`useCategories()` 在内部用 `categoryById` / `childrenByParentId` Map 缓存查找，`getCategoryPath` / `getCategoryColor` / `getChildren` 都是 O(1)，时间轴和统计页因此免去 O(n²) 扫描。
 - **名称可改、身份不变**：`name` 是当前展示名，`id` 才是分类身份。新增分类和重命名分类都会在客户端 hook 层 trim 名称并拒绝空名；同层级未归档分类重名也会被拒绝。重命名分类只更新 `name` / `updatedAt` 并写 `syncLog` update，不迁移 `TimeEntry.categoryId`，历史记录按当前名称展示。分类管理页会拒绝同层级未归档分类重名，并同步更新本地 `autoBackups` 里同 ID 分类的名称。
-- **颜色属于一级分类**：一级分类的 `color` 用 `#RRGGBB` 格式展示和同步；子分类沿用父分类颜色，不单独改色。客户端颜色入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categoryColors.ts`；单个改色和一键配色都会更新变化项的 `color` / `updatedAt` 并写 `syncLog` update。一键配色只作用于未归档一级分类，并按当前一级分类排序循环应用预设色板。相关测试是 `packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`。
+- **颜色属于一级分类**：一级分类的 `color` 用 `#RRGGBB` 格式展示和同步；子分类沿用父分类颜色，不单独改色。客户端颜色入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categoryColors.ts`；单个改色和一键配色都会更新变化项的 `color` / `updatedAt` 并写 `syncLog` update。一键配色只作用于未归档一级分类，并按当前一级分类排序循环应用预设色板。相关测试是 `packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`。
 - **归档与直接删除不同**：归档保留分类行，只把 `isArchived` 设为 `true`，更新 `updatedAt`，并写入 `syncLog` update 后通过 `categories/update` 同步；客户端分类列表默认隐藏归档分类。归档写入入口是 `packages/client/src/hooks/useCategories.ts` 导出的 `archiveCategory()`，`useCategories()` 仍把同名 mutation 暴露给页面使用。
 - **直接删除是真删除**：分类管理页允许删除一级分类或子分类。删除一级分类会级联删除其子分类和这些分类下的 `TimeEntry`；删除子分类会删除该子分类及其记录。客户端会为被删记录和分类写 `syncLog` delete；服务端收到 `categories/delete` 后真删分类及后代，并写 `categories` tombstone，供其他设备拉取删除事件。客户端入口是 `packages/client/src/hooks/useCategories.ts`，服务端入口是 `packages/server/src/sync/resolver.ts`；相关测试是 `packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/sync/engine.test.ts`、`packages/server/src/routes/sync.test.ts`。
 - **首次启动播种**：服务端 `initializeDatabase()` 检测到 `categories` 为空时，插入 `createDefaultCategories()` 的默认值；客户端 `seedDefaultCategories()` 同理。两端用同一份 `DEFAULT_CATEGORIES` 常量。

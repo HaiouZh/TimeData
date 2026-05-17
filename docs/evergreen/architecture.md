@@ -146,6 +146,8 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 5. 数据命令解析 config（优先级：flag > 环境变量 > 配置文件）后路由到 `categories` / `list` / `log`
 6. 输出 JSON（带 `ok: true/false`），按结果设置退出码
 
+命令清单由 `packages/cli/src/commands/help.ts` 的 `commandRegistry` 统一维护：`runHelp()` 直接渲染它，`packages/cli/src/index.ts` 用 `commandRegistry.some(...)` 判断未知命令，并从中派生 `dispatchCommandNames`（去掉只读特例 `help` / `version`）。注册表覆盖测试在 `packages/cli/src/index.test.ts` 断言 `dispatchCommandNames` 等于注册表里所有需要运行时分发的命令，防止以后新增命令时漏接 dispatch。
+
 ### 4.4 Android 壳（`packages/mobile`）
 
 1. 通过 `pnpm --filter @timedata/client build:mobile` 产出 `client/dist`（mobile 模式：相对路径 + 关闭 service worker）
@@ -167,7 +169,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
    - 相关测试：`packages/server/src/routes/admin.test.ts`、`packages/client/src/lib/adminApi.test.ts`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/pages/SettingsPage.test.tsx`
 7. **分类管理页负责分类排序、重命名、新增、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。新增分类和重命名都会 trim 名称并拒绝空名；同层级未归档分类重名会被拒绝。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，并同步更新本地 `autoBackups` 里同 ID 分类的名称。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。
    - 代码入口：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts`、`packages/client/src/lib/categorySort.ts`、`packages/client/src/lib/categoryColors.ts`
-   - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`
+   - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`
 
 ## 6. 模块速查（结合代码路径）
 

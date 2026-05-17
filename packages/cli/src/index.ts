@@ -2,13 +2,17 @@
 import { pathToFileURL } from "node:url";
 import { runCategories } from "./commands/categories.js";
 import { runDoctor } from "./commands/doctor.js";
-import { runHelp, isKnownCommand } from "./commands/help.js";
+import { commandRegistry, runHelp } from "./commands/help.js";
 import { runList } from "./commands/list.js";
 import { runLog } from "./commands/log.js";
 import { runVersion } from "./commands/version.js";
 import { parseFlags } from "./lib/args.js";
 import { readFileConfig, resolveConfig, type FileConfigResult } from "./lib/config.js";
 import { formatResult, resolveOutputFormat } from "./lib/format.js";
+
+export const dispatchCommandNames = commandRegistry
+  .map((command) => command.name)
+  .filter((name) => !["help", "version"].includes(name));
 
 interface CliDeps {
   env?: Record<string, string | undefined>;
@@ -38,7 +42,7 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<unknow
 
   if (command === "version") return runVersion(deps.env || process.env);
 
-  if (!isKnownCommand(command)) {
+  if (!commandRegistry.some((item) => item.name === command)) {
     return {
       ok: false,
       error: {

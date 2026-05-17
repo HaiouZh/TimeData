@@ -150,6 +150,70 @@ describe("sync route", () => {
     expect(body.serverStatus).toMatchObject({ categoryCount: 1, entryCount: 0 });
   });
 
+  it("records expired force-push tokens as rejected", async () => {
+    vi.setSystemTime(new Date("2026-05-17T00:00:00.000Z"));
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    vi.setSystemTime(new Date("2026-05-17T00:06:00.000Z"));
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(db.prepare("SELECT action, detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1").get("force_push_expired")).toMatchObject({
+      action: "force_push_expired",
+    });
+  });
+
+  it("rejects reusing a force-push token", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const first = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+      }),
+    });
+    expect(first.status).toBe(200);
+
+    const second = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+      }),
+    });
+
+    expect(second.status).toBe(403);
+    const audit = db.prepare("SELECT action, detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1").get("force_push_rejected") as { action: string; detail: string };
+    expect(audit).toMatchObject({ action: "force_push_rejected" });
+    expect(audit.detail).not.toContain(prepareBody.confirmToken);
+  });
+
   it("backs up and replaces server data during confirmed force push", async () => {
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",

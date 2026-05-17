@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { runCli } from "./index.js";
+import { commandRegistry } from "./commands/help.js";
+import { dispatchCommandNames, runCli } from "./index.js";
 
 describe("runCli", () => {
+  it("has dispatch coverage for registry commands that need runtime handlers", () => {
+    const runtimeCommandNames = commandRegistry
+      .map((command) => command.name)
+      .filter((name) => !["help", "version"].includes(name));
+
+    expect(dispatchCommandNames).toEqual(runtimeCommandNames);
+  });
+
   it("returns help without configuration for an empty command", async () => {
     const result = await runCli([], { env: {}, fileConfig: null });
 

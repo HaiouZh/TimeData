@@ -22,8 +22,17 @@ export function configPath(platform = process.platform, env = process.env): stri
   return path.join(env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "timedata", "config.json");
 }
 
-export function readFileConfig(filePath = configPath()): FileConfigResult {
+function hasUnsafePermissions(filePath: string, platform = process.platform): boolean {
+  if (platform === "win32") return false;
+  const mode = fs.statSync(filePath).mode & 0o777;
+  return (mode & 0o077) !== 0;
+}
+
+export function readFileConfig(filePath = configPath(), platform = process.platform): FileConfigResult {
   if (!fs.existsSync(filePath)) return null;
+  if (hasUnsafePermissions(filePath, platform)) {
+    return { ok: false, error: { code: "CONFIG_INVALID", message: `Config file permissions are too open: ${filePath}` } };
+  }
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8")) as FileConfig;
   } catch {

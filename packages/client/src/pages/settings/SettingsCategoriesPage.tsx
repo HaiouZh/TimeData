@@ -150,7 +150,7 @@ export default function SettingsCategoriesPage() {
             />
             <div className="flex items-center gap-2">
               <label className="text-sm text-slate-400">颜色</label>
-              <input type="color" value={newColor} onChange={(event) => setNewColor(event.target.value)} className="h-8 w-8" />
+              <input type="color" aria-label="分类颜色" value={newColor} onChange={(event) => setNewColor(event.target.value)} className="h-8 w-8" />
             </div>
             {addError && <p className="text-sm text-red-400">{addError}</p>}
             <div className="flex gap-2">

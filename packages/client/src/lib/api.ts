@@ -73,5 +73,9 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     }
     throw new ApiError(res.status, res.statusText, details, body);
   }
-  return res.json();
+  const bodyText = await res.text();
+  if (!bodyText) {
+    return undefined as T;
+  }
+  return JSON.parse(bodyText) as T;
 }

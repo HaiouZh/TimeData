@@ -55,6 +55,12 @@ describe("SettingsServerPage", () => {
     expect(html).toContain("保存配置");
   });
 
+  it("shows a warning that the API token is stored locally", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+
+    expect(html).toContain("Token 会保存在本机浏览器存储中");
+  });
+
   it("saves api url through sync context", async () => {
     const host = document.createElement("div");
     const root = createRoot(host);

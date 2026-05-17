@@ -296,7 +296,7 @@ export default function SettingsCategoryDetailPage() {
             <div className="flex items-center gap-3">
               <span className="h-8 w-8 rounded-full border border-slate-700" style={{ backgroundColor: selectedColor }} />
               <span className="text-sm text-slate-300">{category.name}</span>
-              <input type="color" value={selectedColor} onChange={(event) => setSelectedColor(event.target.value)} className="ml-auto h-8 w-10" />
+              <input type="color" aria-label="分类颜色" value={selectedColor} onChange={(event) => setSelectedColor(event.target.value)} className="ml-auto h-8 w-10" />
             </div>
             <div className="flex gap-2">
               {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (

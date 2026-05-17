@@ -86,6 +86,8 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 统计页的日/周/月分类汇总使用 `packages/client/src/lib/stats.ts`。它和时间轴使用同样的本地日期边界：先用 `localDateTimeToUtc()` 生成统计窗口，再按 `entry.startTime < rangeEnd && entry.endTime > rangeStart` 找出与窗口有交集的记录，最终只累计落在窗口内的可见时长。对合法且不晚于当前时间的记录，日统计与同一天时间轴使用一致的本地日期交集口径；统计展示会按 0.1 小时取整。跨日记录只统计落在当天或统计窗口内的部分。
 
+统计页顶部的「日 / 周 / 月」切换按钮都显式声明 `type="button"`，并通过 `aria-pressed` 暴露当前选中的窗口模式，方便屏幕阅读器和键盘用户感知切换；窗口内没有数据时统一显示「暂无统计数据」占位。相关测试在 `packages/client/src/pages/StatsPage.test.tsx`。
+
 ## 7. 时间轴同步状态指示器
 
 时间轴页的圆环容器右上角显示同步状态圆点。圆点由 `packages/client/src/components/SyncIndicator.tsx` 渲染，挂在 `CircularTimeline` 的 overlay 插槽上；圆环本身的 SVG 绘制和选中段展示仍由 `CircularTimeline` 负责。

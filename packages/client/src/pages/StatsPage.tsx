@@ -47,7 +47,7 @@ export default function StatsPage() {
     <div className="p-4 space-y-6">
       <div className="flex gap-2">
         {(["day", "week", "month"] as ViewMode[]).map((m) => (
-          <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded text-sm ${mode === m ? "bg-blue-600" : "bg-slate-800 text-slate-400"}`}>
+          <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m} className={`px-3 py-1.5 rounded text-sm ${mode === m ? "bg-blue-600" : "bg-slate-800 text-slate-400"}`}>
             {{ day: "日", week: "周", month: "月" }[m]}
           </button>
         ))}
@@ -75,7 +75,7 @@ export default function StatsPage() {
           </BarChart>
         </ResponsiveContainer>
       )}
-      {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无数据</div>}
+      {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无统计数据</div>}
     </div>
   );
 }

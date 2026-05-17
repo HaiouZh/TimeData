@@ -44,4 +44,19 @@ describe("resolveConfig", () => {
       error: { code: "CONFIG_INVALID", message: `Invalid config file: ${configPath}` },
     });
   });
+
+  it("rejects world-readable config files on unix", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-cli-config-"));
+    const configPath = path.join(tempDir, "config.json");
+    fs.writeFileSync(configPath, JSON.stringify({ serverUrl: "https://server.example" }), "utf8");
+    fs.chmodSync(configPath, 0o644);
+
+    expect(readFileConfig(configPath, "linux")).toEqual({
+      ok: false,
+      error: {
+        code: "CONFIG_INVALID",
+        message: `Config file permissions are too open: ${configPath}`,
+      },
+    });
+  });
 });

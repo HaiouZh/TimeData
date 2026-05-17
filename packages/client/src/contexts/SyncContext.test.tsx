@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,26 +13,32 @@ import {
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const mockSyncConflicts: unknown[] = [];
+
+const mockSyncActions = {
+  sync: vi.fn(),
+  forceReplace: vi.fn(),
+  runDiagnostics: vi.fn(),
+  prepareForcePushToServer: vi.fn(),
+  forcePushToServer: vi.fn(),
+  handleConflictResolution: vi.fn(),
+  refreshSyncStatus: vi.fn(),
+};
+
 vi.mock("../hooks/useSync.ts", () => ({
   useSync: () => ({
     syncing: false,
     lastSynced: null,
     unsyncedCount: 0,
     error: null,
-    conflicts: [],
+    conflicts: mockSyncConflicts,
     lastResult: null,
     healthReport: null,
     healthLoading: false,
     forcePushPreparation: null,
     syncFailureCount: 0,
     needsSyncDiagnostics: false,
-    sync: vi.fn(),
-    forceReplace: vi.fn(),
-    runDiagnostics: vi.fn(),
-    prepareForcePushToServer: vi.fn(),
-    forcePushToServer: vi.fn(),
-    handleConflictResolution: vi.fn(),
-    refreshSyncStatus: vi.fn(),
+    ...mockSyncActions,
   }),
 }));
 
@@ -90,6 +96,41 @@ describe("SyncProvider", () => {
     const html = renderToStaticMarkup(createElement(SyncProvider, null, createElement("span", null, "child")));
 
     expect(html).toContain("child");
+  });
+
+  it("keeps provided value stable across unrelated parent rerenders", async () => {
+    const seenValues: unknown[] = [];
+    let triggerUnrelatedRerender: () => void = () => undefined;
+
+    function Probe() {
+      seenValues.push(useSyncContext());
+      return createElement("span", null, "probe");
+    }
+
+    function Wrapper() {
+      const [unrelated, setUnrelated] = useState(0);
+      triggerUnrelatedRerender = () => setUnrelated((value) => value + 1);
+      return createElement(SyncProvider, null, createElement("div", { "data-unrelated": unrelated }, createElement(Probe)));
+    }
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(Wrapper));
+    });
+
+    const initialValue = seenValues.at(-1);
+
+    await act(async () => {
+      triggerUnrelatedRerender();
+    });
+
+    expect(seenValues.at(-1)).toBe(initialValue);
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 
   it("updates api url in localStorage and context", async () => {

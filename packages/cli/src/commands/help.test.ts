@@ -1,49 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { runHelp } from "./help.js";
+import { commandRegistry, runHelp } from "./help.js";
 
 describe("runHelp", () => {
-  it("returns the full command catalog", () => {
+  it("exposes the command registry in stable order", () => {
+    const names = commandRegistry.map((command) => command.name);
+
+    expect(names).toEqual(["categories", "list", "log", "help", "doctor", "version"]);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("returns the full command catalog from the registry", () => {
     expect(runHelp()).toEqual({
       ok: true,
       command: "help",
-      commands: [
-        {
-          name: "categories",
-          writesData: false,
-          summary: "List active categories with AI-safe category paths.",
-          usage: "timedata categories [--server URL] [--token TOKEN]",
-        },
-        {
-          name: "list",
-          writesData: false,
-          summary: "List time entries for one local date in CLI format.",
-          usage: "timedata list [--date YYYY-MM-DD] [--server URL] [--token TOKEN]",
-        },
-        {
-          name: "log",
-          writesData: true,
-          summary: "Create one time entry through the server API.",
-          usage: "timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note TEXT] [--server URL] [--token TOKEN]",
-        },
-        {
-          name: "help",
-          writesData: false,
-          summary: "Show this JSON help without reading server configuration.",
-          usage: "timedata help [command]",
-        },
-        {
-          name: "doctor",
-          writesData: false,
-          summary: "Check CLI configuration, server reachability, and read-only authentication.",
-          usage: "timedata doctor [--server URL] [--token TOKEN]",
-        },
-        {
-          name: "version",
-          writesData: false,
-          summary: "Print the CLI version and git sha baked in at build time.",
-          usage: "timedata version",
-        },
-      ],
+      commands: commandRegistry,
       redLines: [
         "Do not edit SQLite database files directly.",
         "Do not edit IndexedDB directly.",
@@ -60,14 +30,7 @@ describe("runHelp", () => {
       ok: true,
       command: "help",
       topic: "log",
-      commands: [
-        {
-          name: "log",
-          writesData: true,
-          summary: "Create one time entry through the server API.",
-          usage: "timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note TEXT] [--server URL] [--token TOKEN]",
-        },
-      ],
+      commands: [commandRegistry.find((command) => command.name === "log")],
       redLines: [
         "Do not edit SQLite database files directly.",
         "Do not edit IndexedDB directly.",
@@ -77,6 +40,11 @@ describe("runHelp", () => {
       ],
       docs: ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"],
     });
+  });
+
+  it("mentions short-lived tokens in doctor guidance", () => {
+    expect(JSON.stringify(runHelp("doctor"))).toContain("TIMEDATA_SERVER_URL");
+    expect(JSON.stringify(runHelp("doctor"))).toContain("TIMEDATA_TOKEN");
   });
 
   it("returns UNKNOWN_COMMAND for an unknown help topic", () => {

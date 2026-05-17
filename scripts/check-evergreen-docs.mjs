@@ -6,11 +6,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EVERGREEN_DIRS = ["docs/evergreen", "docs/adr"];
 const STALE_DAYS = 180;
+const SETTINGS_PAGE_REFS = [
+  "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+  "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+];
+const DATA_MODEL_OLD_PAGE_REF = "packages/client/src/pages/CategoriesPage.tsx";
 
 function parseArgs(argv) {
   const opts = { mode: "warn", since: "HEAD", help: false };
@@ -18,10 +23,14 @@ function parseArgs(argv) {
     if (arg === "--help" || arg === "-h") opts.help = true;
     else if (arg.startsWith("--mode=")) opts.mode = arg.slice(7);
     else if (arg.startsWith("--since=")) opts.since = arg.slice(8);
-    else { console.error("Unknown argument:", arg); process.exit(2); }
+    else {
+      console.error("Unknown argument:", arg);
+      process.exit(2);
+    }
   }
   if (!["warn", "strict", "stale"].includes(opts.mode)) {
-    console.error("--mode must be warn|strict|stale, got:", opts.mode); process.exit(2);
+    console.error("--mode must be warn|strict|stale, got:", opts.mode);
+    process.exit(2);
   }
   return opts;
 }
@@ -74,12 +83,20 @@ function parseFrontmatter(content) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (!line.trim() || line.trim().startsWith("#")) { i++; continue; }
+    if (!line.trim() || line.trim().startsWith("#")) {
+      i++;
+      continue;
+    }
     const m = line.match(/^([a-zA-Z][\w-]*):\s*(.*)$/);
-    if (!m) { i++; continue; }
+    if (!m) {
+      i++;
+      continue;
+    }
     const [, key, raw] = m;
-    if (raw !== "") { data[key] = unquote(raw); i++; }
-    else {
+    if (raw !== "") {
+      data[key] = unquote(raw);
+      i++;
+    } else {
       i++;
       const arr = [];
       while (i < lines.length && /^\s+-\s+/.test(lines[i])) {
@@ -115,12 +132,27 @@ function patternToRegex(pattern) {
     const c = pattern[i];
     if (c === "*") {
       if (pattern[i + 1] === "*") {
-        if (pattern[i + 2] === "/") { out += "(?:.*/)?"; i += 3; }
-        else { out += ".*"; i += 2; }
-      } else { out += "[^/]*"; i += 1; }
-    } else if (c === "?") { out += "[^/]"; i += 1; }
-    else if (".+^${}()|[]\\".includes(c)) { out += "\\" + c; i += 1; }
-    else { out += c; i += 1; }
+        if (pattern[i + 2] === "/") {
+          out += "(?:.*/)?";
+          i += 3;
+        } else {
+          out += ".*";
+          i += 2;
+        }
+      } else {
+        out += "[^/]*";
+        i += 1;
+      }
+    } else if (c === "?") {
+      out += "[^/]";
+      i += 1;
+    } else if (".+^${}()|[]\\".includes(c)) {
+      out += "\\" + c;
+      i += 1;
+    } else {
+      out += c;
+      i += 1;
+    }
   }
   return new RegExp("^" + out + "$");
 }
@@ -138,10 +170,16 @@ function getChangedFiles(since) {
   const out = [];
   try {
     const diff = execSync("git diff " + shellArg(since) + " --name-only", { cwd: REPO_ROOT, encoding: "utf8" });
-    for (const line of diff.split("\n")) { const f = line.trim(); if (f) out.push(f); }
+    for (const line of diff.split("\n")) {
+      const f = line.trim();
+      if (f) out.push(f);
+    }
     if (since === "HEAD") {
       const untracked = execSync("git ls-files --others --exclude-standard", { cwd: REPO_ROOT, encoding: "utf8" });
-      for (const line of untracked.split("\n")) { const f = line.trim(); if (f) out.push(f); }
+      for (const line of untracked.split("\n")) {
+        const f = line.trim();
+        if (f) out.push(f);
+      }
     }
   } catch (err) {
     console.error("git diff failed:", err.message);
@@ -157,11 +195,15 @@ function isCodeFile(f) {
 }
 
 function isDocFile(f) {
-  return f.startsWith("docs/evergreen/") || f.startsWith("docs/adr/")
-    || f === "README.md" || f === "CLAUDE.md";
+  return f.startsWith("docs/evergreen/") || f.startsWith("docs/adr/") || f === "README.md" || f === "CLAUDE.md";
 }
 
-function modeWarnOrStrict(docs, changed, strict) {
+export function hasStaleDataModelCategoriesPageReference(changedFiles, dataModelContent) {
+  const touchedSettingsPages = SETTINGS_PAGE_REFS.every((file) => changedFiles.includes(file));
+  return touchedSettingsPages && dataModelContent.includes(DATA_MODEL_OLD_PAGE_REF);
+}
+
+function modeWarnOrStrict(docs, changed, strict, dataModelContent) {
   const codeChanged = changed.filter(isCodeFile);
   const docsChanged = new Set(changed.filter(isDocFile));
   const hits = [];
@@ -169,8 +211,12 @@ function modeWarnOrStrict(docs, changed, strict) {
     const md = docs.filter((d) => matchesAny(f, d.covers));
     if (md.length > 0) hits.push({ file: f, docs: md });
   }
-  if (codeChanged.length === 0) { console.log("（没有代码改动需要检查。）"); return 0; }
-  if (hits.length === 0) {
+  const staleDataModelReference = hasStaleDataModelCategoriesPageReference(changed, dataModelContent);
+  if (codeChanged.length === 0) {
+    console.log("（没有代码改动需要检查。）");
+    return 0;
+  }
+  if (hits.length === 0 && !staleDataModelReference) {
     console.log("✓ 检查了 " + codeChanged.length + " 个改动的代码文件，没有命中任何长期文档的 covers。");
     return 0;
   }
@@ -186,7 +232,14 @@ function modeWarnOrStrict(docs, changed, strict) {
       console.log("| `" + hit.file + "` | [" + doc.title + "](" + doc.filePath + ") | " + status + " |");
     }
   }
-  if (unmatched === 0) { console.log("\n✓ 所有相关文档都在本次改动里同步更新了。"); return 0; }
+  if (staleDataModelReference) {
+    unmatched++;
+    console.log("| `packages/client/src/pages/settings/SettingsCategoriesPage.tsx` + `packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx` | [data-model](docs/evergreen/data-model.md) | ⚠️ 仍引用旧的 CategoriesPage.tsx | ");
+  }
+  if (unmatched === 0) {
+    console.log("\n✓ 所有相关文档都在本次改动里同步更新了。");
+    return 0;
+  }
   if (strict) {
     console.error("\n✗ 有 " + unmatched + " 处文档命中但未同步更新（strict 模式）。");
     console.error("  请同步更新文档，或在确认无需修改时通过其他方式跳过此检查。");
@@ -202,9 +255,15 @@ function modeStale(docs) {
   const missing = [];
   for (const d of docs) {
     if (d.type === "adr") continue;
-    if (!d.lastReviewed) { missing.push(d); continue; }
+    if (!d.lastReviewed) {
+      missing.push(d);
+      continue;
+    }
     const reviewed = new Date(d.lastReviewed);
-    if (Number.isNaN(reviewed.getTime())) { missing.push(d); continue; }
+    if (Number.isNaN(reviewed.getTime())) {
+      missing.push(d);
+      continue;
+    }
     const ageDays = Math.floor((now - reviewed.getTime()) / 86400000);
     if (ageDays > STALE_DAYS) stale.push({ doc: d, ageDays });
   }
@@ -228,14 +287,20 @@ function modeStale(docs) {
   return 0;
 }
 
-function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.help) { printHelp(); return 0; }
+export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
+  if (args.help) {
+    printHelp();
+    return 0;
+  }
   const docs = EVERGREEN_DIRS.flatMap(listMarkdownFiles).map(readDoc);
+  const dataModelContent = fs.readFileSync(path.join(REPO_ROOT, "docs/evergreen/data-model.md"), "utf8");
   console.log("Loaded " + docs.length + " long-lived doc(s) from " + EVERGREEN_DIRS.join(", ") + ".\n");
   if (args.mode === "stale") return modeStale(docs);
   const changed = getChangedFiles(args.since);
-  return modeWarnOrStrict(docs, changed, args.mode === "strict");
+  return modeWarnOrStrict(docs, changed, args.mode === "strict", dataModelContent);
 }
 
-process.exit(main());
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exit(runEvergreenDocCheck());
+}

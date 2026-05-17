@@ -33,6 +33,13 @@ describe("apiFetch", () => {
     vi.restoreAllMocks();
   });
 
+  it("returns undefined for 204 No Content responses", async () => {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(apiFetch("/api/sync/status")).resolves.toBeUndefined();
+  });
+
   it("preserves JSON error body on API errors", async () => {
     const body = { outcomes: [{ status: "conflict", reasonCode: "overlap" }] };
     localStorage.setItem("timedata_api_url", "https://example.com");
