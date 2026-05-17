@@ -63,10 +63,13 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
     setStatus("");
     try {
       const beforeRestore = await exportBackup();
-      downloadBackupFile(beforeRestore, "TimeData-before-auto-backup-restore");
+      await downloadBackupFile(beforeRestore, "TimeData-before-auto-backup-restore");
       const result = await importBackup({
-        format: "timedata.backup.v1",
+        format: "timedata.backup.v2",
+        timeFormat: "utc",
         exportedAt: record.createdAt,
+        appVersion: "0.1.0",
+        device: { deviceId: null, deviceName: "AutoBackup" },
         categories: record.categories,
         timeEntries: record.timeEntries,
       });

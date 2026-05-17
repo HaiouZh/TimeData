@@ -2,17 +2,20 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.js";
-import { applyEntryOverlapAdjustments, deleteFutureEndedEntries, findFutureEndedEntries, findLatestEntryEndingBefore, findOverlappingEntries, findPreviousEntry, planEntryOverlapAdjustments, useEntryMutations, validateEntryTimeRange } from "./useEntries.js";
+import { applyEntryOverlapAdjustments, deleteFutureEndedEntries, findFutureEndedEntries, findLatestEntryEndingBefore, findOverlappingEntries, findPreviousEntry, planEntryOverlapAdjustments, saveEntryWithOverlapAdjustments, useEntryMutations, validateEntryTimeRange } from "./useEntries.js";
 
-function entry(id: string, startTime: string, endTime: string): TimeEntry {
+function entry(id: string, startTime: string, endTime: string): TimeEntry;
+function entry(overrides: Partial<TimeEntry> & { id: string; startTime: string; endTime: string }): TimeEntry;
+function entry(idOrOverrides: string | (Partial<TimeEntry> & { id: string; startTime: string; endTime: string }), startTime?: string, endTime?: string): TimeEntry {
+  const overrides = typeof idOrOverrides === "string"
+    ? { id: idOrOverrides, startTime: startTime ?? "", endTime: endTime ?? "" }
+    : idOrOverrides;
   return {
-    id,
     categoryId: "cat-sleep-sleep",
-    startTime,
-    endTime,
     note: null,
     createdAt: "2026-05-08T00:00:00.000Z",
     updatedAt: "2026-05-08T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -89,9 +92,9 @@ describe("local future-ended entry repair", () => {
 describe("findOverlappingEntries", () => {
   it("finds local entries overlapping a range and excludes the current entry", async () => {
     await db.timeEntries.bulkAdd([
-      entry("before", "2026-05-07T20:00:00", "2026-05-07T22:00:00"),
-      entry("overlap", "2026-05-08T05:00:00", "2026-05-08T07:00:00"),
-      entry("self", "2026-05-08T01:00:00", "2026-05-08T02:00:00"),
+      entry({ id: "before", startTime: "2026-05-07T20:00:00", endTime: "2026-05-07T22:00:00" }),
+      entry({ id: "overlap", startTime: "2026-05-08T05:00:00", endTime: "2026-05-08T07:00:00" }),
+      entry({ id: "self", startTime: "2026-05-08T01:00:00", endTime: "2026-05-08T02:00:00" }),
     ]);
 
     const overlaps = await findOverlappingEntries("2026-05-07T23:00:00", "2026-05-08T06:00:00", "self");
@@ -192,6 +195,54 @@ describe("applyEntryOverlapAdjustments", () => {
     await expect(db.timeEntries.get("update-me")).resolves.toMatchObject({ startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T07:00:00" });
     await expect(db.timeEntries.get("delete-me")).resolves.toBeUndefined();
     await expect(db.syncLog.where("tableName").equals("time_entries").count()).resolves.toBe(2);
+  });
+});
+
+describe("saveEntryWithOverlapAdjustments", () => {
+  it("saves an entry and overlap adjustments in one transaction", async () => {
+    await db.timeEntries.bulkAdd([
+      entry({ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T10:00:00.000Z" }),
+    ]);
+
+    const plan = planEntryOverlapAdjustments(await findOverlappingEntries("2026-05-17T09:00:00.000Z", "2026-05-17T11:00:00.000Z"), "2026-05-17T09:00:00.000Z", "2026-05-17T11:00:00.000Z");
+    expect(plan.ok).toBe(true);
+
+    const saved = await saveEntryWithOverlapAdjustments({
+      existingEntryId: null,
+      categoryId: "cat-work",
+      startTime: "2026-05-17T09:00:00.000Z",
+      endTime: "2026-05-17T11:00:00.000Z",
+      note: "new",
+      overlapPlan: plan,
+      now: new Date("2026-05-17T12:00:00.000Z"),
+    });
+
+    expect(saved.id).toBeTruthy();
+    await expect(db.timeEntries.get("old")).resolves.toEqual(expect.objectContaining({ endTime: "2026-05-17T09:00:00.000Z" }));
+    const logs = await db.syncLog.toArray();
+    expect(logs).toHaveLength(2);
+    expect(logs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tableName: "time_entries", recordId: "old", action: "update", synced: 0 }),
+      expect.objectContaining({ tableName: "time_entries", recordId: saved.id, action: "create", synced: 0 }),
+    ]));
+  });
+
+  it("rolls back overlap adjustments when the target entry cannot be saved", async () => {
+    await db.timeEntries.add(entry({ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T10:00:00.000Z" }));
+    const plan = { ok: true as const, updates: [{ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T09:00:00.000Z" }], deletes: [] };
+
+    await expect(saveEntryWithOverlapAdjustments({
+      existingEntryId: "missing-entry",
+      categoryId: "cat-work",
+      startTime: "2026-05-17T09:00:00.000Z",
+      endTime: "2026-05-17T11:00:00.000Z",
+      note: null,
+      overlapPlan: plan,
+      now: new Date("2026-05-17T12:00:00.000Z"),
+    })).rejects.toThrow("记录不存在");
+
+    await expect(db.timeEntries.get("old")).resolves.toEqual(expect.objectContaining({ endTime: "2026-05-17T10:00:00.000Z" }));
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
 

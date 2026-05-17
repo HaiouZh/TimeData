@@ -56,6 +56,7 @@ export default function SettingsCategoryDetailPage() {
   const [colorError, setColorError] = useState<string | null>(null);
   const [addingChild, setAddingChild] = useState(false);
   const [childName, setChildName] = useState("");
+  const [childAddError, setChildAddError] = useState<string | null>(null);
   const [renamingChild, setRenamingChild] = useState<{ id: string; name: string } | null>(null);
   const [childRenameName, setChildRenameName] = useState("");
   const [childRenameError, setChildRenameError] = useState<string | null>(null);
@@ -110,9 +111,14 @@ export default function SettingsCategoryDetailPage() {
     const name = childName.trim();
     if (!name) return;
 
-    await addCategory(name, category.id, category.color);
-    setChildName("");
-    setAddingChild(false);
+    try {
+      await addCategory(name, category.id, category.color);
+      setChildName("");
+      setChildAddError(null);
+      setAddingChild(false);
+    } catch (error) {
+      setChildAddError(error instanceof Error ? error.message : "新增子分类失败。");
+    }
   }
 
   function openRenameChild(child: { id: string; name: string }) {
@@ -216,7 +222,10 @@ export default function SettingsCategoryDetailPage() {
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4">
         <div className="flex items-center justify-between gap-4">
           <h3 className="text-sm font-medium text-slate-400">子分类</h3>
-          <button type="button" onClick={() => setAddingChild(true)} className="text-sm text-blue-400 hover:text-blue-300">
+          <button type="button" onClick={() => {
+            setAddingChild(true);
+            setChildAddError(null);
+          }} className="text-sm text-blue-400 hover:text-blue-300">
             + 新增
           </button>
         </div>
@@ -326,7 +335,18 @@ export default function SettingsCategoryDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAddingChild(false)}>
           <div className="w-80 space-y-3 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">添加子分类</h3>
-            <input type="text" value={childName} onChange={(event) => setChildName(event.target.value)} placeholder="子分类名称" className="w-full rounded bg-slate-800 px-3 py-2 text-sm" autoFocus />
+            <input
+              type="text"
+              value={childName}
+              onChange={(event) => {
+                setChildName(event.target.value);
+                setChildAddError(null);
+              }}
+              placeholder="子分类名称"
+              className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
+              autoFocus
+            />
+            {childAddError && <p className="text-sm text-red-400">{childAddError}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={handleAddChild} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">添加</button>
               <button type="button" onClick={() => setAddingChild(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>

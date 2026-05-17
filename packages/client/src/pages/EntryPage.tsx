@@ -4,7 +4,7 @@ import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shar
 import EntryForm from "../components/EntryForm.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { applyEntryOverlapAdjustments, findOverlappingEntries, planEntryOverlapAdjustments, useEntry, useEntryMutations, useLatestEntryEndTimeBefore } from "../hooks/useEntries.ts";
+import { findOverlappingEntries, planEntryOverlapAdjustments, saveEntryWithOverlapAdjustments, useEntry, useEntryMutations, useLatestEntryEndTimeBefore } from "../hooks/useEntries.ts";
 import { messages } from "../lib/messages.ts";
 import { toLocalDateTimeString } from "../lib/time.ts";
 
@@ -39,7 +39,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const existingEntry = useEntry(id);
-  const { addEntry, updateEntry, deleteEntry } = useEntryMutations();
+  const { deleteEntry } = useEntryMutations();
   const { syncIfStale } = useSyncContext();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const isEdit = Boolean(id);
@@ -82,6 +82,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     const utcEnd   = localDateTimeToUtc(nextEndTime);
 
     const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
+    let overlapPlan: Extract<ReturnType<typeof planEntryOverlapAdjustments>, { ok: true }> | null = null;
     if (overlaps.length > 0) {
       const plan = planEntryOverlapAdjustments(overlaps, utcStart, utcEnd);
 
@@ -104,14 +105,17 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
       });
       if (!confirmed) return;
 
-      await applyEntryOverlapAdjustments(plan);
+      overlapPlan = plan;
     }
 
-    if (existingEntry) {
-      await updateEntry(existingEntry.id, { categoryId, startTime: utcStart, endTime: utcEnd, note: note || null });
-    } else {
-      await addEntry(categoryId, utcStart, utcEnd, note || undefined);
-    }
+    await saveEntryWithOverlapAdjustments({
+      existingEntryId: existingEntry?.id ?? null,
+      categoryId,
+      startTime: utcStart,
+      endTime: utcEnd,
+      note: note || null,
+      overlapPlan,
+    });
     void syncIfStale();
     navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
   }

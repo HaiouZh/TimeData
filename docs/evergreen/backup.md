@@ -5,7 +5,7 @@ covers:
   - packages/client/src/backup/**
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-05-14
+last-reviewed: 2026-05-17
 ---
 
 # 备份与恢复
@@ -131,7 +131,18 @@ UI 提示文案在 `SettingsDataPage.tsx`，每次改恢复流程时都要顺便
 - 手动 Backup JSON 恢复入口使用 `TimeData-before-restore` 文件名前缀。
 - 自动备份记录恢复入口使用 `TimeData-before-auto-backup-restore` 文件名前缀。
 
-**Mobile WebView 注意**：`<a download>` 在 Android WebView 上兼容性不稳定。Phase 5.3 的人工验收清单里有"导出 + 恢复 Backup JSON"一步（见 `packages/mobile/README.md`），改这块代码后必须重跑该清单。
+### 4.2 下载实现（`fileDownload.ts`）
+
+`downloadBackupFile()` 会根据运行环境选择落盘方式，所有调用方必须 `await`：
+
+- **浏览器/PWA**：构造 Blob、创建 `<a download>` 并触发点击，1 秒后再 `URL.revokeObjectURL()`。锚点临时挂到 `document.body` 上以兼容 Firefox。
+- **Capacitor Android**：用 `@capacitor/filesystem` 把 JSON 写入 `Directory.Documents`，再调用 `@capacitor/share` 让用户选择保存或分享目标（系统 Files、邮件、即时通讯等）。文件名前缀与浏览器侧一致。若用户取消分享会被静默吞掉，已经写盘的文件仍保留。
+
+Phase 5.3 的人工验收清单里有“导出 + 恢复 Backup JSON”一步（见 `packages/mobile/README.md`）。修改这块代码后必须：
+
+- 在 Web 端验收浏览器下载文件；
+- 在 Android APK 上验收 `Filesystem.writeFile` + Share 流程；
+- 执行 `pnpm --filter @timedata/mobile android:sync` 让新增的 Capacitor 插件落到 Android 工程。
 
 ## 5. 自动滚动备份（`autoBackup`）
 

@@ -11,7 +11,7 @@ covers:
   - packages/client/src/hooks/useEntries.ts
   - packages/client/src/lib/stats.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-05-16
+last-reviewed: 2026-05-17
 ---
 
 # 时间轴与记录时间规则
@@ -82,7 +82,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 `CircularTimeline` 使用 `buildTimeSlots` 生成的同一组 `slots` 绘制 24 小时单环。圆环参考 iTime 的单环时间轴：每个记录或空档都是两个同心圆之间的闭合 SVG 环形扇区，段首段尾由径向直线切分，而不是用圆头粗线描边。记录槽位用分类颜色填充，空档槽位用低透明度灰色填充；点击圆环上的任意记录或空档只会切换当前选中段，不会立即跳转。
 
-刻度数字显示 `0, 2, 4, ..., 22`，放在圆环内侧；刻度线从内边缘向圆心短线延伸。圆心展示当前选中段的分类路径或“待记录”、时长和时间范围。点击圆心按钮才执行跳转：记录进入编辑页，空档进入新增页并通过 URL query 带上 `start` / `end`。当槽位变化时，默认选中最后一个空档；如果没有空档，则选中最后一条记录。
+刻度线压在圆环带内部（`OUTER_RADIUS - 4` 到 `INNER_RADIUS + 4`），刻度数字 `0, 2, 4, ..., 22` 居中在圆环带中线上，文字以深色描边压在分段之上，避免被分类色淹没；圆环和中心圆之间的间隙完全留白，给中心信息让位。选中段会叠加同色描边，并在圆环外侧画一个朝向中心的三角形指示器，比之前的引线 + 小圆点更显眼。圆心展示当前选中段的分类路径或“待记录”、时长和时间范围。点击圆心按钮才执行跳转：记录进入编辑页，空档进入新增页并通过 URL query 带上 `start` / `end`。当槽位变化时，默认选中最后一个空档；如果没有空档，则选中最后一条记录。
 
 统计页的日/周/月分类汇总使用 `packages/client/src/lib/stats.ts`。它和时间轴使用同样的本地日期边界：先用 `localDateTimeToUtc()` 生成统计窗口，再按 `entry.startTime < rangeEnd && entry.endTime > rangeStart` 找出与窗口有交集的记录，最终只累计落在窗口内的可见时长。对合法且不晚于当前时间的记录，日统计与同一天时间轴使用一致的本地日期交集口径；统计展示会按 0.1 小时取整。跨日记录只统计落在当天或统计窗口内的部分。
 
@@ -136,6 +136,6 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 `EntryForm` 会用解析后的 `nextEndTime` 派生即时错误：结束时间在未来时，顶部“本次记录时长”区域直接显示“不能记录尚未发生的时间”，不等到用户点击保存后才提示。保存时仍复用同一个错误状态，不调用保存回调；这条规则同时作用于新增和编辑记录。
 
-`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。
+`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。
 
 如果旧版本已经把未来结束记录写进本地 IndexedDB，用户可在 `设置 → 数据设置 → 本地未来记录修复` 中检查并删除这类当前设备本地记录。该入口只删除本地 `timeEntries`，不直接修改服务器数据库。对已同步过的记录，删除会按正常删除语义写入 `syncLog delete`；对本地创建后从未成功同步的记录，修复会把对应未同步 create 轨迹标为已处理（新数据用 `synced=1`），避免下次同步继续推送这条未来记录。

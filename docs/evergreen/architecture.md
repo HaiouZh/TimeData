@@ -5,7 +5,8 @@ covers:
   - packages/shared/**
   - packages/client/src/main.tsx
   - packages/client/src/App.tsx
-  - packages/client/src/pages/CategoriesPage.tsx
+  - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
+  - packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx
   - packages/client/src/components/SortableCategoryItem.tsx
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
@@ -18,7 +19,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-14
+last-reviewed: 2026-05-17
 ---
 
 # 架构总览
@@ -164,9 +165,9 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 6. **后台洞察只读**：`/api/admin/*` 只做概览、最近记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析；它复用现有 Bearer Token 鉴权，不提供任意 SQL，也不写 SQLite。
    - 代码入口：`packages/server/src/routes/admin.ts`、`packages/server/src/index.ts`、`packages/client/src/lib/adminApi.ts`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/App.tsx`
    - 相关测试：`packages/server/src/routes/admin.test.ts`、`packages/client/src/lib/adminApi.test.ts`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/pages/SettingsPage.test.tsx`
-7. **分类管理页负责分类排序、重命名、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，会拒绝同层级未归档分类重名，并同步更新本地 `autoBackups` 里同 ID 分类的名称。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。
-   - 代码入口：`packages/client/src/pages/CategoriesPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts`、`packages/client/src/lib/categorySort.ts`、`packages/client/src/lib/categoryColors.ts`
-   - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/CategoriesPage.test.tsx`
+7. **分类管理页负责分类排序、重命名、新增、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。新增分类和重命名都会 trim 名称并拒绝空名；同层级未归档分类重名会被拒绝。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，并同步更新本地 `autoBackups` 里同 ID 分类的名称。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。
+   - 代码入口：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts`、`packages/client/src/lib/categorySort.ts`、`packages/client/src/lib/categoryColors.ts`
+   - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`
 
 ## 6. 模块速查（结合代码路径）
 

@@ -12,25 +12,37 @@ vi.mock("react-router-dom", () => ({
 }));
 
 const syncIfStaleMock = vi.hoisted(() => vi.fn());
+const confirmMock = vi.hoisted(() => vi.fn());
+const entryFormPropsMock = vi.hoisted(() => ({ value: null as null | { onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void> } }));
 
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: () => ({ syncIfStale: syncIfStaleMock }),
 }));
 
 const useLatestEntryEndTimeBeforeMock = vi.hoisted(() => vi.fn<(...args: any[]) => string | null>(() => null));
+const findOverlappingEntriesMock = vi.hoisted(() => vi.fn());
+const planEntryOverlapAdjustmentsMock = vi.hoisted(() => vi.fn());
+const saveEntryWithOverlapAdjustmentsMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../hooks/useConfirm.tsx", () => ({
+  useConfirm: () => ({ confirm: confirmMock, dialog: null }),
+}));
 
 vi.mock("../hooks/useEntries.js", () => ({
   useEntry: () => null,
   useEntryMutations: () => ({ addEntry: vi.fn(), updateEntry: vi.fn(), deleteEntry: vi.fn() }),
   useLatestEntryEndTimeBefore: useLatestEntryEndTimeBeforeMock,
-  findOverlappingEntries: vi.fn(),
-  planEntryOverlapAdjustments: vi.fn(),
+  findOverlappingEntries: findOverlappingEntriesMock,
+  planEntryOverlapAdjustments: planEntryOverlapAdjustmentsMock,
   applyEntryOverlapAdjustments: vi.fn(),
+  saveEntryWithOverlapAdjustments: saveEntryWithOverlapAdjustmentsMock,
 }));
 
 vi.mock("../components/EntryForm.js", () => ({
-  default: ({ startTime, endTime }: { startTime: string; endTime: string }) =>
-    createElement("div", null, `${startTime} ${endTime}`),
+  default: (props: { startTime: string; endTime: string; onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void> }) => {
+    entryFormPropsMock.value = props;
+    return createElement("div", null, `${props.startTime} ${props.endTime}`);
+  },
 }));
 
 describe("EntryPage default times", () => {
@@ -38,6 +50,14 @@ describe("EntryPage default times", () => {
     vi.useFakeTimers();
     searchParamsMock.value = new URLSearchParams("");
     useLatestEntryEndTimeBeforeMock.mockReturnValue(null);
+    confirmMock.mockReset();
+    confirmMock.mockResolvedValue(true);
+    findOverlappingEntriesMock.mockReset();
+    findOverlappingEntriesMock.mockResolvedValue([]);
+    planEntryOverlapAdjustmentsMock.mockReset();
+    saveEntryWithOverlapAdjustmentsMock.mockReset();
+    saveEntryWithOverlapAdjustmentsMock.mockResolvedValue({});
+    entryFormPropsMock.value = null;
   });
 
   it("keeps the URL gap bounds when start and end are already provided", () => {
@@ -98,5 +118,26 @@ describe("EntryPage default times", () => {
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
 
     expect(html).toContain("2026-05-08T06:30:00 2026-05-08T07:30:00");
+  });
+
+  it("saves with overlap adjustments after confirmation", async () => {
+    vi.setSystemTime(new Date("2026-05-17T20:00:00+08:00"));
+    const overlap = { id: "old", startTime: "2026-05-17T00:00:00.000Z", endTime: "2026-05-17T02:00:00.000Z" };
+    const plan = { ok: true, updates: [{ id: "old", startTime: "2026-05-17T00:00:00.000Z", endTime: "2026-05-17T01:00:00.000Z" }], deletes: [] };
+    findOverlappingEntriesMock.mockResolvedValue([overlap]);
+    planEntryOverlapAdjustmentsMock.mockReturnValue(plan);
+
+    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    await entryFormPropsMock.value?.onSave("cat-work", "2026-05-17T09:00:00", "2026-05-17T11:00:00", "new");
+
+    expect(confirmMock).toHaveBeenCalledOnce();
+    expect(saveEntryWithOverlapAdjustmentsMock).toHaveBeenCalledWith({
+      existingEntryId: null,
+      categoryId: "cat-work",
+      startTime: "2026-05-17T01:00:00.000Z",
+      endTime: "2026-05-17T03:00:00.000Z",
+      note: "new",
+      overlapPlan: plan,
+    });
   });
 });

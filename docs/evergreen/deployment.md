@@ -15,7 +15,7 @@ covers:
   - packages/mobile/**
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-05-16
+last-reviewed: 2026-05-17
 ---
 
 # 部署与自更新
@@ -108,6 +108,8 @@ packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 设置页的「APK 更新」读取最新 GitHub Release；发现新版本时打开该 Release 里的 APK asset 下载链接，让系统浏览器处理下载。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
 
 Capacitor 7 版本的 Android 构建要求：Node 22+、Java 21、Android SDK Platform 35 / Build-tools 35.0.0、Gradle 8.11.1、Android Gradle Plugin 8.7.2。`packages/mobile/android/variables.gradle` 中 `minSdkVersion = 24`，因此 APK 支持 Android 7.0（API 24）及以上设备；`compileSdkVersion` 和 `targetSdkVersion` 均为 35。CI 的 `android-apk.yml` 也按这些版本安装 Java 与 Android SDK。
+
+Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/browser`（外链浏览器）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，否则原生工程拿不到新插件。
 
 ### 3.1.1 本地生成 release keystore
 

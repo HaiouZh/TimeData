@@ -512,7 +512,18 @@ export function shouldOpenSyncDiagnostics(): boolean {
   return getConsecutiveSyncFailureCount() >= SYNC_DIAGNOSTIC_FAILURE_THRESHOLD;
 }
 
+let regularSyncInFlight: Promise<RegularSyncResult> | null = null;
+
 export async function regularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
+  if (regularSyncInFlight && !options.beforeMutating) return regularSyncInFlight;
+  if (regularSyncInFlight) await regularSyncInFlight;
+  regularSyncInFlight = runRegularSync(options).finally(() => {
+    regularSyncInFlight = null;
+  });
+  return regularSyncInFlight;
+}
+
+async function runRegularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
   if (localStorage.getItem(STORAGE_KEYS.legacySnapshotSync) === "1") {
     return regularSyncLegacy(options);
   }

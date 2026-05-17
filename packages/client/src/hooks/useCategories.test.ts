@@ -15,19 +15,22 @@ import {
   persistCategoryOrder,
   renameCategory,
   updateCategoryColor,
+  addCategory,
 } from "./useCategories.js";
 
-function category(id: string, parentId: string | null, sortOrder: number): Category {
+function category(id: string, parentId: string | null, sortOrder: number): Category;
+function category(overrides: Partial<Category> & { id: string }): Category;
+function category(idOrOverrides: string | (Partial<Category> & { id: string }), parentId?: string | null, sortOrder?: number): Category {
+  const overrides = typeof idOrOverrides === "string"
+    ? { id: idOrOverrides, name: idOrOverrides, parentId: parentId ?? null, sortOrder: sortOrder ?? 0 }
+    : idOrOverrides;
   return {
-    id,
-    name: id,
-    parentId,
     color: "#4A90D9",
     icon: null,
-    sortOrder,
     isArchived: false,
     createdAt: "2026-05-08T00:00:00.000Z",
     updatedAt: "2026-05-08T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -48,6 +51,55 @@ beforeEach(async () => {
   await db.timeEntries.clear();
   await db.syncLog.clear();
   await db.autoBackups.clear();
+});
+
+describe("addCategory", () => {
+  it("rejects blank category names", async () => {
+    await expect(addCategory("   ", null, "#4A90D9")).rejects.toThrow("分类名称不能为空");
+
+    await expect(db.categories.toArray()).resolves.toHaveLength(0);
+  });
+
+  it("rejects duplicate category names within the same parent", async () => {
+    await db.categories.add(category({ id: "parent", name: "工作", parentId: null }));
+
+    await expect(addCategory(" 工作 ", null, "#4A90D9")).rejects.toThrow("同层级已存在同名分类");
+  });
+
+  it("allows the same category name under a different parent", async () => {
+    await db.categories.bulkAdd([
+      category({ id: "parent-a", name: "A", parentId: null }),
+      category({ id: "parent-b", name: "B", parentId: null }),
+      category({ id: "child-a", name: "阅读", parentId: "parent-a" }),
+    ]);
+
+    await expect(addCategory("阅读", "parent-b", "#4A90D9")).resolves.toBeDefined();
+  });
+
+  it("trims names and writes a create sync log", async () => {
+    const saved = await addCategory(" 工作 ", null, "#4A90D9");
+
+    expect(saved.name).toBe("工作");
+    await expect(db.categories.get(saved.id)).resolves.toMatchObject({ name: "工作" });
+    await expect(db.syncLog.toArray()).resolves.toEqual([
+      expect.objectContaining({ tableName: "categories", recordId: saved.id, action: "create", synced: 0 }),
+    ]);
+  });
+
+  it("rolls back the category when sync log creation fails", async () => {
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
+
+    await expect(addCategory("工作", null, "#4A90D9")).rejects.toThrow("sync log failed");
+
+    await expect(db.categories.toArray()).resolves.toHaveLength(0);
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
+  });
+
+  it("allows reusing the name of an archived sibling", async () => {
+    await db.categories.add(category({ id: "old", name: "工作", parentId: null, isArchived: true }));
+
+    await expect(addCategory("工作", null, "#4A90D9")).resolves.toBeDefined();
+  });
 });
 
 describe("persistCategoryOrder", () => {

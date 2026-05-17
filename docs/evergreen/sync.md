@@ -22,7 +22,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-05-15
+last-reviewed: 2026-05-17
 ---
 
 # 同步机制
@@ -32,7 +32,7 @@ last-reviewed: 2026-05-15
 
 ## 1. 整体流程
 
-客户端入口是 `regularSync()`（`packages/client/src/sync/engine.ts`）：
+客户端入口是 `regularSync()`（`packages/client/src/sync/engine.ts`）。同一 JS context 内如果已有一次 `regularSync()` 尚未结束，新的调用会复用进行中的 promise，不会再次执行 status/push/pull 主流程；这只去重同浏览器上下文里的快速重复触发，不是跨 tab leader election。
 
 ```
 1. getLocalStatus() + GET /api/sync/status  比较本地与云端 meta 摘要

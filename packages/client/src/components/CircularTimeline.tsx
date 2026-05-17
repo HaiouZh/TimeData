@@ -21,7 +21,11 @@ const CENTER = SIZE / 2;
 const OUTER_RADIUS = 104;
 const INNER_RADIUS = 72;
 const RADIUS = (OUTER_RADIUS + INNER_RADIUS) / 2;
-const CENTER_RADIUS = 52;
+const CENTER_RADIUS = 56;
+const TICK_OUTER_OFFSET = 4;
+const TICK_INNER_OFFSET = 4;
+const LABEL_RADIUS = RADIUS;
+const INDICATOR_RADIUS = OUTER_RADIUS + 10;
 const DAY_MINUTES = 24 * 60;
 
 function minutesFromClock(value: string): number {
@@ -154,6 +158,8 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
     }
   }
 
+  const currentSelectionKey = selectionKey(selection);
+
   return (
     <section className="px-4 pt-4">
       <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4">
@@ -166,39 +172,12 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
             {overlay}
             <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-full">
               <path d={describeRingSegment(0, DAY_MINUTES)} fill="rgb(51 65 85)" />
-              {Array.from({ length: 12 }, (_, index) => index * 2).map((hour) => {
-                const angle = (hour / 24) * 360;
-                const outer = polarToCartesian(angle, INNER_RADIUS);
-                const inner = polarToCartesian(angle, INNER_RADIUS - 8);
-                const label = polarToCartesian(angle, INNER_RADIUS - 18);
-                return (
-                  <g key={hour}>
-                    <line
-                      x1={inner.x}
-                      y1={inner.y}
-                      x2={outer.x}
-                      y2={outer.y}
-                      stroke="rgb(71 85 105)"
-                      strokeWidth="1.5"
-                    />
-                    <text
-                      x={label.x}
-                      y={label.y}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="fill-slate-500 text-[9px]"
-                      data-tick-placement="inner"
-                    >
-                      {hour}
-                    </text>
-                  </g>
-                );
-              })}
               {slots.map((slot, index) => {
                 const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
                 if (end <= start) return null;
                 const key = slot.entry ? `entry:${slot.entry.id}` : `gap:${slot.startTime}:${slot.endTime}:${index}`;
-                const selected = selectionKey(selection) === (slot.entry ? `entry:${slot.entry.id}` : `gap:${slot.startTime}:${slot.endTime}`);
+                const slotKey = slot.entry ? `entry:${slot.entry.id}` : `gap:${slot.startTime}:${slot.endTime}`;
+                const selected = currentSelectionKey === slotKey;
                 const color = slot.entry ? getCategoryColor(slot.entry.categoryId) : "rgb(71 85 105)";
                 const nextSelection: Selection = slot.entry
                   ? { type: "entry", entry: slot.entry }
@@ -212,40 +191,95 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                     opacity={slot.entry ? 1 : selected ? 0.32 : 0.08}
                     className="cursor-pointer"
                     data-segment-type={slot.entry ? "entry" : "gap"}
+                    data-segment-selected={selected ? "true" : "false"}
                     onClick={() => setSelection(nextSelection)}
                   />
                 );
               })}
-              {selectedMinutes && selectedMinutes.end > selectedMinutes.start && (() => {
-                const midpoint = selectedMinutes.start + (selectedMinutes.end - selectedMinutes.start) / 2;
-                const point = polarToCartesian(angleFromMinutes(midpoint));
-                const inner = polarToCartesian(angleFromMinutes(midpoint), CENTER_RADIUS);
+              {Array.from({ length: 12 }, (_, index) => index * 2).map((hour) => {
+                const angle = (hour / 24) * 360;
+                const tickOuter = polarToCartesian(angle, OUTER_RADIUS - TICK_OUTER_OFFSET);
+                const tickInner = polarToCartesian(angle, INNER_RADIUS + TICK_INNER_OFFSET);
+                const label = polarToCartesian(angle, LABEL_RADIUS);
                 return (
-                  <g data-ring-indicator="true">
+                  <g key={hour}>
                     <line
-                      x1={point.x}
-                      y1={point.y}
-                      x2={inner.x}
-                      y2={inner.y}
-                      stroke={selectedColor}
-                      strokeWidth="2"
-                      opacity="0.9"
+                      x1={tickOuter.x}
+                      y1={tickOuter.y}
+                      x2={tickInner.x}
+                      y2={tickInner.y}
+                      stroke="rgba(248, 250, 252, 0.55)"
+                      strokeWidth="1"
+                      pointerEvents="none"
                     />
-                    <circle cx={point.x} cy={point.y} r="6" fill={selectedColor} stroke="rgb(15 23 42)" strokeWidth="2" />
+                    <text
+                      x={label.x}
+                      y={label.y}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="fill-slate-100/85 text-[9px]"
+                      style={{ paintOrder: "stroke" }}
+                      stroke="rgb(15 23 42)"
+                      strokeWidth="2"
+                      strokeLinejoin="round"
+                      pointerEvents="none"
+                      data-tick-placement="inner"
+                    >
+                      {hour}
+                    </text>
+                  </g>
+                );
+              })}
+              {selectedMinutes && selectedMinutes.end > selectedMinutes.start && (() => {
+                const startAngle = angleFromMinutes(selectedMinutes.start);
+                const endAngle = angleFromMinutes(selectedMinutes.end);
+                const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+                const outerStart = polarToCartesian(startAngle, OUTER_RADIUS);
+                const outerEnd = polarToCartesian(endAngle, OUTER_RADIUS);
+                const innerEnd = polarToCartesian(endAngle, INNER_RADIUS);
+                const innerStart = polarToCartesian(startAngle, INNER_RADIUS);
+                const outlinePath = [
+                  "M", outerStart.x, outerStart.y,
+                  "A", OUTER_RADIUS, OUTER_RADIUS, 0, largeArcFlag, 1, outerEnd.x, outerEnd.y,
+                  "L", innerEnd.x, innerEnd.y,
+                  "A", INNER_RADIUS, INNER_RADIUS, 0, largeArcFlag, 0, innerStart.x, innerStart.y,
+                  "Z",
+                ].join(" ");
+                const midpoint = (selectedMinutes.start + selectedMinutes.end) / 2;
+                const midAngle = angleFromMinutes(midpoint);
+                const arrowTip = polarToCartesian(midAngle, OUTER_RADIUS + 2);
+                const arrowLeft = polarToCartesian(midAngle - 3, INDICATOR_RADIUS);
+                const arrowRight = polarToCartesian(midAngle + 3, INDICATOR_RADIUS);
+                return (
+                  <g data-ring-indicator="true" pointerEvents="none">
+                    <path
+                      d={outlinePath}
+                      fill="none"
+                      stroke={selectedColor}
+                      strokeWidth="1.5"
+                      opacity="0.95"
+                    />
+                    <polygon
+                      points={`${arrowTip.x},${arrowTip.y} ${arrowLeft.x},${arrowLeft.y} ${arrowRight.x},${arrowRight.y}`}
+                      fill={selectedColor}
+                      stroke="rgb(15 23 42)"
+                      strokeWidth="1"
+                      strokeLinejoin="round"
+                    />
                   </g>
                 );
               })()}
-              <circle cx={CENTER} cy={CENTER} r={CENTER_RADIUS} fill={selectedColor} opacity="0.88" />
+              <circle cx={CENTER} cy={CENTER} r={CENTER_RADIUS} fill={selectedColor} opacity="0.92" />
             </svg>
             <button
               type="button"
               onClick={handleCenterClick}
-              className="absolute inset-0 m-auto flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="absolute inset-0 m-auto flex h-[112px] w-[112px] flex-col items-center justify-center rounded-full text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label={selection?.type === "entry" ? "编辑选中记录" : "新增选中空档记录"}
             >
-              <span className="max-w-[86px] truncate text-xs text-white/80">{centerTitle}</span>
+              <span className="max-w-[92px] truncate text-xs text-white/85">{centerTitle}</span>
               <span className="text-base font-semibold text-white">{centerDuration}</span>
-              <span className="text-[10px] text-white/80">{centerRange}</span>
+              <span className="text-[10px] text-white/85">{centerRange}</span>
             </button>
           </div>
         </div>

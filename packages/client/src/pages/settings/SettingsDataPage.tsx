@@ -164,7 +164,7 @@ export default function SettingsDataPage() {
     setDataStatus("");
     try {
       const backup = await exportBackup();
-      downloadBackupFile(backup);
+      await downloadBackupFile(backup);
       setDataStatus(`完整备份已生成：${backup.categories.length} 个分类，${backup.timeEntries.length} 条记录。`);
     } catch (e: unknown) {
       setDataStatus(`完整备份导出失败：${e instanceof Error ? e.message : "未知错误"}`);
@@ -199,7 +199,7 @@ export default function SettingsDataPage() {
       if (!confirmed) return;
 
       const beforeRestore = await exportBackup();
-      downloadBackupFile(beforeRestore, "TimeData-before-restore");
+      await downloadBackupFile(beforeRestore, "TimeData-before-restore");
       const result = await importBackup(validation.backup);
       await refreshSyncStatus();
       setDataStatus(`已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。`);

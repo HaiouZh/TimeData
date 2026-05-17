@@ -130,6 +130,63 @@ export async function applyEntryOverlapAdjustments(plan: Extract<EntryOverlapPla
   }
 }
 
+export interface SaveEntryWithOverlapAdjustmentsInput {
+  existingEntryId: string | null;
+  categoryId: string;
+  startTime: string;
+  endTime: string;
+  note: string | null;
+  overlapPlan: Extract<EntryOverlapPlan, { ok: true }> | null;
+  now?: Date;
+}
+
+export async function saveEntryWithOverlapAdjustments(input: SaveEntryWithOverlapAdjustmentsInput): Promise<TimeEntry> {
+  validateEntryTimeRange(input.startTime, input.endTime, input.now ?? new Date());
+  const now = (input.now ?? new Date()).toISOString();
+
+  return db.transaction("rw", db.timeEntries, db.syncLog, async () => {
+    if (input.overlapPlan) {
+      for (const update of input.overlapPlan.updates) {
+        await db.timeEntries.update(update.id, { startTime: update.startTime, endTime: update.endTime, updatedAt: now });
+        await recordSyncLog("time_entries", update.id, "update");
+      }
+      for (const id of input.overlapPlan.deletes) {
+        await db.timeEntries.delete(id);
+        await recordSyncLog("time_entries", id, "delete");
+      }
+    }
+
+    if (input.existingEntryId) {
+      const existing = await db.timeEntries.get(input.existingEntryId);
+      if (!existing) throw new Error("记录不存在");
+      const entry: TimeEntry = {
+        ...existing,
+        categoryId: input.categoryId,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        note: input.note,
+        updatedAt: now,
+      };
+      await db.timeEntries.put(entry);
+      await recordSyncLog("time_entries", entry.id, "update");
+      return entry;
+    }
+
+    const entry: TimeEntry = {
+      id: uuid(),
+      categoryId: input.categoryId,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      note: input.note,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.timeEntries.add(entry);
+    await recordSyncLog("time_entries", entry.id, "create");
+    return entry;
+  });
+}
+
 export function useEntry(id?: string) {
   return useLiveQuery(() => (id ? db.timeEntries.get(id) : undefined), [id]);
 }

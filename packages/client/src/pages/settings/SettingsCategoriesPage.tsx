@@ -36,6 +36,7 @@ export default function SettingsCategoriesPage() {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState("#4A90D9");
+  const [addError, setAddError] = useState<string | null>(null);
   const [paletteDialogOpen, setPaletteDialogOpen] = useState(false);
   const [oneClickPalette, setOneClickPalette] = useState<CategoryColorPaletteId>("classic");
   const [colorError, setColorError] = useState<string | null>(null);
@@ -50,10 +51,15 @@ export default function SettingsCategoriesPage() {
     const name = newName.trim();
     if (!name) return;
 
-    await addCategory(name, null, newColor);
-    setNewName("");
-    setNewColor("#4A90D9");
-    setAdding(false);
+    try {
+      await addCategory(name, null, newColor);
+      setNewName("");
+      setNewColor("#4A90D9");
+      setAddError(null);
+      setAdding(false);
+    } catch (error) {
+      setAddError(error instanceof Error ? error.message : "新增分类失败。");
+    }
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -134,7 +140,10 @@ export default function SettingsCategoriesPage() {
             <input
               type="text"
               value={newName}
-              onChange={(event) => setNewName(event.target.value)}
+              onChange={(event) => {
+                setNewName(event.target.value);
+                setAddError(null);
+              }}
               placeholder="分类名称"
               className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
               autoFocus
@@ -143,6 +152,7 @@ export default function SettingsCategoriesPage() {
               <label className="text-sm text-slate-400">颜色</label>
               <input type="color" value={newColor} onChange={(event) => setNewColor(event.target.value)} className="h-8 w-8" />
             </div>
+            {addError && <p className="text-sm text-red-400">{addError}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={handleAdd} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">添加</button>
               <button type="button" onClick={() => setAdding(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>

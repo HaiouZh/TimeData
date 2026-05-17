@@ -8,7 +8,7 @@ covers:
   - packages/*/package.json
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-14
+last-reviewed: 2026-05-17
 ---
 
 # 本地开发指南
@@ -156,6 +156,7 @@ GitHub Actions 的 `android-apk` workflow 会使用仓库 Secrets 构建签名 r
 - PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`。
 - `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS。
 - Android 系统返回键/边缘返回通过 `packages/mobile` 的 `@capacitor/app` 原生插件监听，并交给前端路由处理，二级页应先回应用上一层级，首页才退出 App。
+- 备份导出走 `@capacitor/filesystem` + `@capacitor/share`：在 native 端把 JSON 写入 `Directory.Documents` 后弹出系统分享面板。新增/删除这两个插件后必须重跑 `pnpm --filter @timedata/mobile android:sync` 把原生侧重新同步。
 
 ## 项目结构
 

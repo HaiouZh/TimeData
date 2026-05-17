@@ -264,6 +264,36 @@ export async function archiveCategory(id: string): Promise<void> {
   await recordSyncLog("categories", id, "update");
 }
 
+export async function addCategory(name: string, parentId: string | null, color: string): Promise<Category> {
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error("分类名称不能为空");
+
+  return db.transaction("rw", db.categories, db.syncLog, async () => {
+    const siblings = await db.categories.filter((category) => category.parentId === (parentId ?? null)).toArray();
+    if (siblings.some((category) => !category.isArchived && category.name.trim() === trimmedName)) {
+      throw new Error("同层级已存在同名分类");
+    }
+
+    const now = new Date().toISOString();
+    const id = uuid();
+    const cat: Category = {
+      id,
+      name: trimmedName,
+      parentId,
+      color,
+      icon: null,
+      sortOrder: siblings.filter((category) => !category.isArchived).length,
+      isArchived: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.categories.add(cat);
+    await recordSyncLog("categories", id, "create");
+    return cat;
+  });
+}
+
 export function useCategories() {
   const categories =
     useLiveQuery(() =>
@@ -312,29 +342,6 @@ export function useCategories() {
     },
     [categoryById],
   );
-
-  async function addCategory(name: string, parentId: string | null, color: string): Promise<void> {
-    const now = new Date().toISOString();
-    const siblings = parentId
-      ? categories.filter((c) => c.parentId === parentId)
-      : parentCategories;
-    const id = uuid();
-
-    const cat: Category = {
-      id,
-      name,
-      parentId,
-      color,
-      icon: null,
-      sortOrder: siblings.length,
-      isArchived: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    await db.categories.add(cat);
-    await recordSyncLog("categories", id, "create");
-  }
 
   async function updateCategory(
     id: string,

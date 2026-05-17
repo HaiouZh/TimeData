@@ -1205,6 +1205,45 @@ describe("syncPullRecent", () => {
 });
 
 describe("regularSync", () => {
+  it("deduplicates concurrent regularSync calls in one browser context", async () => {
+    const fetchCalls: string[] = [];
+    apiFetchMock.mockImplementation(async (url: string) => {
+      fetchCalls.push(url.toString());
+      if (url.toString().endsWith("/api/sync/status")) {
+        return { categoryCount: 0, entryCount: 0, lastUpdatedAt: null, latestSeq: 1, serverTime: "2026-05-17T00:00:00.000Z", contentHash: "empty" };
+      }
+      if (url.toString().endsWith("/api/sync/pull")) {
+        return { changes: [], serverTime: "2026-05-17T00:00:01.000Z", latestSeq: 1 };
+      }
+      return { outcomes: [], accepted: 0, rejected: 0, conflicts: 0, backupId: null, serverTime: "2026-05-17T00:00:01.000Z" };
+    });
+
+    await Promise.all([regularSync(), regularSync()]);
+
+    expect(fetchCalls.filter((url) => url.endsWith("/api/sync/status"))).toHaveLength(1);
+  });
+
+  it("runs a separate sync when a concurrent call needs beforeMutating", async () => {
+    let releaseStatus: (() => void) | null = null;
+    const firstStatus = new Promise((resolve) => {
+      releaseStatus = () => resolve({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null, latestSeq: 1, serverTime: "2026-05-17T00:00:00.000Z" });
+    });
+    apiFetchMock
+      .mockReturnValueOnce(firstStatus)
+      .mockResolvedValueOnce({ categoryCount: 0, entryCount: 1, lastUpdatedAt: "2026-05-17T00:00:00.000Z", latestSeq: 1, serverTime: "2026-05-17T00:00:01.000Z" })
+      .mockResolvedValueOnce({ changes: [], serverTime: "2026-05-17T00:00:02.000Z", latestSeq: 1 })
+      .mockResolvedValueOnce({ ok: true });
+
+    const first = regularSync();
+    const beforeMutating = vi.fn().mockResolvedValue(undefined);
+    const second = regularSync({ beforeMutating });
+    releaseStatus?.();
+    await Promise.all([first, second]);
+
+    expect(beforeMutating).toHaveBeenCalledOnce();
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === "/api/sync/status")).toHaveLength(2);
+  });
+
   it("returns identical from meta status without pulling a full snapshot", async () => {
     await db.categories.add({
       id: "cat-1",
