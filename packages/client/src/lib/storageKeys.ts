@@ -5,4 +5,6 @@ export const STORAGE_KEYS = {
   lastSyncedSeq: "timedata_last_synced_seq",
   syncFailureCount: "timedata_sync_failure_count",
   legacySnapshotSync: "timedata_legacy_snapshot_sync",
+  cloudSyncEnabled: "timedata_cloud_sync_enabled",
+  mergeOvernight: "timedata_merge_overnight",
 } as const;
