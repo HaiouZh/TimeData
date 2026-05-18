@@ -1,24 +1,14 @@
 import type { Category, TimeEntry } from "@timedata/shared";
 
-export const BACKUP_FORMAT_V1 = "timedata.backup.v1" as const;
-export const BACKUP_FORMAT_V2 = "timedata.backup.v2" as const;
+export const BACKUP_FORMAT = "timedata.backup" as const;
 
 export interface BackupDeviceInfo {
   deviceId: string | null;
   deviceName: string | null;
 }
 
-export interface BackupDocumentV1 {
-  format: typeof BACKUP_FORMAT_V1;
-  exportedAt: string;
-  appVersion: string;
-  device: BackupDeviceInfo;
-  categories: Category[];
-  timeEntries: TimeEntry[];
-}
-
-export interface BackupDocumentV2 {
-  format: typeof BACKUP_FORMAT_V2;
+export interface BackupDocument {
+  format: typeof BACKUP_FORMAT;
   timeFormat: "utc";
   exportedAt: string;
   appVersion: string;
@@ -36,7 +26,6 @@ export interface BackupSummary {
 export type BackupValidationErrorCode =
   | "NOT_OBJECT"
   | "INVALID_FORMAT"
-  | "UNSUPPORTED_FORMAT"
   | "INVALID_EXPORTED_AT"
   | "INVALID_APP_VERSION"
   | "INVALID_DEVICE"
@@ -56,5 +45,5 @@ export interface BackupValidationError {
 }
 
 export type BackupValidationResult =
-  | { ok: true; backup: BackupDocumentV2; summary: BackupSummary }
+  | { ok: true; backup: BackupDocument; summary: BackupSummary }
   | { ok: false; error: BackupValidationError };

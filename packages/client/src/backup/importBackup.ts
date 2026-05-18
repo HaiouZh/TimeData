@@ -1,6 +1,6 @@
 import { db, resetSyncCursors } from "../db/index.js";
 import { validateBackup } from "./validateBackup.js";
-import type { BackupDocumentV2 } from "./schema.js";
+import type { BackupDocument } from "./schema.js";
 
 export interface ImportBackupResult {
   categoryCount: number;
@@ -13,7 +13,7 @@ export async function importBackup(value: unknown): Promise<ImportBackupResult> 
     throw new Error(validation.error.message);
   }
 
-  const backup: BackupDocumentV2 = validation.backup;
+  const backup: BackupDocument = validation.backup;
 
   await db.transaction("rw", db.categories, db.timeEntries, db.syncLog, async () => {
     const currentCategories = await db.categories.toArray();

@@ -5,6 +5,7 @@ import { exportBackup } from "../../backup/exportBackup.js";
 import { downloadBackupFile } from "../../backup/fileDownload.js";
 import { importBackup } from "../../backup/importBackup.js";
 import { listAutoBackups } from "../../backup/autoBackup.js";
+import { BACKUP_FORMAT } from "../../backup/schema.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { formatAppDateTime } from "../../lib/time.js";
 import SettingsDetailPage from "./SettingsDetailPage.js";
@@ -65,7 +66,7 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
       const beforeRestore = await exportBackup();
       await downloadBackupFile(beforeRestore, "TimeData-before-auto-backup-restore");
       const result = await importBackup({
-        format: "timedata.backup.v2",
+        format: BACKUP_FORMAT,
         timeFormat: "utc",
         exportedAt: record.createdAt,
         appVersion: "0.1.0",

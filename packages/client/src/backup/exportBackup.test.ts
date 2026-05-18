@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Category, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.js";
-import { BACKUP_FORMAT_V2 } from "./schema.js";
+import { BACKUP_FORMAT } from "./schema.js";
 import { exportBackup } from "./exportBackup.js";
 
 const now = "2026-05-07T12:00:00.000Z";
@@ -36,7 +36,7 @@ beforeEach(async () => {
 });
 
 describe("exportBackup", () => {
-  it("exports all categories and time entries in Backup JSON v2", async () => {
+  it("exports all categories and time entries in Backup JSON", async () => {
     await db.categories.add(category);
     await db.timeEntries.add(entry);
 
@@ -47,7 +47,7 @@ describe("exportBackup", () => {
     });
 
     expect(backup).toEqual({
-      format: BACKUP_FORMAT_V2,
+      format: BACKUP_FORMAT,
       timeFormat: "utc",
       exportedAt: "2026-05-07T12:30:00.000Z",
       appVersion: "0.1.0-test",

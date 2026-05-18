@@ -37,7 +37,7 @@ describe("resolveConflicts", () => {
         recordId: id,
         action: "update",
         timestamp: "2026-05-08T00:30:00.000Z",
-        synced: false,
+        synced: 0,
       },
       {
         id: "log-2",
@@ -45,7 +45,7 @@ describe("resolveConflicts", () => {
         recordId: id,
         action: "update",
         timestamp: "2026-05-08T00:30:00.000Z",
-        synced: false,
+        synced: 0,
       },
     ]);
 
@@ -56,7 +56,7 @@ describe("resolveConflicts", () => {
     expect(applied).toBe(1);
     await expect(db.categories.get(id)).resolves.toMatchObject({ name: "remote" });
     await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
-    await expect(db.syncLog.get("log-2")).resolves.toMatchObject({ synced: false });
+    await expect(db.syncLog.get("log-2")).resolves.toMatchObject({ synced: 0 });
   });
 
   it("does nothing when keeping local conflicts", async () => {

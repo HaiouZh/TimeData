@@ -27,7 +27,7 @@
 - **写入路径只有两条**：用户在 Web 端 → Dexie；脚本/AI 通过 CLI → HTTP API → SQLite。不存在第三条。AI 不直接编辑 SQLite / IndexedDB / syncLog / Backup JSON / JSONL / CSV 导出文件。详见 [`docs/adr/0001-cli-as-only-write-path.md`](docs/adr/0001-cli-as-only-write-path.md)。
 - **服务端是最终裁判**：时间合法性、分类存在性、重叠、认证最终判定在 `packages/server/`。client / CLI 校验只为体验，不可让 server 跳过。
 - **SQLite schema 不就地改已有列含义**：新增表 / 列 / 索引可走兼容迁移；改列类型或语义必须写一次性迁移代码。
-- **Backup 格式破坏性变更必须升版本号**：当前 `timedata.backup.v2`（`timeFormat: "utc"`）；改格式升 v3，旧版本不再支持导入。
+- **Backup 格式破坏性变更必须明确改当前格式契约**：当前 `timedata.backup`（`timeFormat: "utc"`）；不维护旧 Backup 格式兼容路径。
 - **`参考代码/` 只读**，可借鉴思路，不直接 import 进 `packages/`。
 
 ------

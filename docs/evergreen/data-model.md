@@ -12,7 +12,7 @@ covers:
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # 数据模型与契约
@@ -109,11 +109,11 @@ last-reviewed: 2026-05-17
   recordId: string;
   action: "create" | "update" | "delete";
   timestamp: string;   // ISO，写日志当时的时间
-  synced: boolean | 0 | 1;  // 0/false = 待同步，1/true = 已同步
+  synced: 0 | 1;        // 0 = 待同步，1 = 已同步
 }
 ```
 
-客户端 Dexie v3 为 `syncLog` 增加 `[tableName+synced]` 复合索引，并在升级时把旧 boolean 值迁移为 0/1。新写入路径（`recordSyncLog`、分类批量写日志等）写 `synced: 0`，标记完成写 `synced: 1`；同步引擎筛选时仍兼容旧 boolean。
+客户端 Dexie `syncLog` 使用 `[tableName+synced]` 复合索引。新写入路径（`recordSyncLog`、分类批量写日志等）写 `synced: 0`，标记完成写 `synced: 1`；运行时 `SyncLogEntrySchema` 只接受 `0 | 1`。
 
 每次本地写入业务表（`categories` / `timeEntries`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改业务表却忘了写 syncLog 是常见 bug**。
 
@@ -213,7 +213,7 @@ type SyncChange =
 - CLI 输入仍是本地日期和 `HH:mm`，服务端在 `entry-service.ts` 内部转换：写入时 `localDateTimeToUtc()` 转为 UTC 存储，返回时 `utcToLocalDateTime()` 转回本地时间给 CLI 展示。
 - 展示层函数（`formatTime`、`formatDateTimeRange`、`buildTimeSlots`）统一接受 UTC 输入，内部转换后展示本地时间（`packages/client/src/lib/time.ts`）。
 
-迁移方式：数据重置（不转换历史数据）。服务端首次启动检测 `app_metadata.utc_reset_v1` 标记，若不存在则清空旧业务数据并写入默认分类；客户端 Dexie v4 升级清空所有表并重建默认分类。Backup 升级到 v2（`timeFormat: "utc"`），拒绝导入 v1。
+迁移方式：数据重置（不转换历史数据）。服务端首次启动检测 `app_metadata.utc_reset_v1` 标记，若不存在则清空旧业务数据并写入默认分类；客户端 Dexie 当前只保留单一 v1 schema。Backup 使用当前唯一格式 `timedata.backup`（`timeFormat: "utc"`）。
 
 ## 7. 默认分类预设
 
@@ -238,16 +238,20 @@ type SyncChange =
 
 映射代码散落在各路由里（`packages/server/src/routes/*`），没有集中的 mapper。改字段名需要全文搜索。
 
-## 9. Dexie 版本迁移
+## 9. Dexie schema
 
-`packages/client/src/db/index.ts` 中：
+`packages/client/src/db/index.ts` 当前只声明一个 Dexie 版本：
 
 ```ts
-db.version(1).stores({...});
-db.version(2).stores({..., autoBackups: "id, createdAt"});
+db.version(1).stores({
+  categories: "id, parentId, sortOrder",
+  timeEntries: "id, categoryId, startTime, endTime",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+});
 ```
 
-**已发布的 Dexie version 不能改**，要改 schema 就加 `db.version(3)`。这是 Dexie 的硬性要求。
+本项目按当前 schema 作为全新本地库处理，不维护历史 Dexie 版本迁移链。
 
 **SQLite 这边**目前的迁移机制是 `CREATE TABLE IF NOT EXISTS`——只能加表，**不能改已有列定义**。改 schema 时需要：
 1. 加新表 / 加新列（用 `ALTER TABLE ... ADD COLUMN`）— 现有数据自动兼容。

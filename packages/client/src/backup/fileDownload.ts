@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
-import type { BackupDocumentV2 } from "./schema.js";
+import type { BackupDocument } from "./schema.js";
 
 export type BackupFilePrefix = "TimeData-backup" | "TimeData-before-restore" | "TimeData-before-auto-backup-restore";
 
@@ -11,7 +11,7 @@ export function backupFileName(prefix: BackupFilePrefix, exportedAt: string): st
 }
 
 export async function downloadBackupFile(
-  backup: BackupDocumentV2,
+  backup: BackupDocument,
   prefix: BackupFilePrefix = "TimeData-backup",
 ): Promise<void> {
   const fileName = backupFileName(prefix, backup.exportedAt);

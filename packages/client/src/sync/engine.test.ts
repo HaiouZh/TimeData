@@ -57,7 +57,7 @@ function log(
     recordId,
     action,
     timestamp: `2026-05-06T00:${minute}:00.000Z`,
-    synced: false,
+    synced: 0,
   };
 }
 
@@ -220,7 +220,7 @@ describe("syncForcePushToServer", () => {
       createdAt: "2026-05-08T09:00:00",
       updatedAt: "2026-05-08T09:00:00",
     });
-    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: false });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
 
     apiFetchMock
       .mockResolvedValueOnce({
@@ -292,8 +292,8 @@ describe("syncPush", () => {
       },
     ]);
     await db.syncLog.bulkAdd([
-      { id: acceptedLogId, tableName: "time_entries", recordId: "entry-accepted", action: "create", timestamp: "2026-05-08T09:00:00", synced: false },
-      { id: conflictLogId, tableName: "time_entries", recordId: "entry-conflict", action: "create", timestamp: "2026-05-08T09:30:00", synced: false },
+      { id: acceptedLogId, tableName: "time_entries", recordId: "entry-accepted", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 },
+      { id: conflictLogId, tableName: "time_entries", recordId: "entry-conflict", action: "create", timestamp: "2026-05-08T09:30:00", synced: 0 },
     ]);
 
     const pushResponse = {
@@ -314,7 +314,7 @@ describe("syncPush", () => {
 
     expect(result).toEqual({ accepted: 1, rejected: 0, conflicts: 1, issues: [expect.objectContaining({ recordId: "entry-conflict", reasonCode: "overlap" })] });
     await expect(db.syncLog.get(acceptedLogId)).resolves.toMatchObject({ synced: 1 });
-    await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: false });
+    await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 0 });
   });
 
   it("keeps rejected push logs unsynced", async () => {
@@ -353,8 +353,8 @@ describe("syncPush", () => {
       },
     ]);
     await db.syncLog.bulkAdd([
-      { id: acceptedLogId, tableName: "time_entries", recordId: "entry-accepted", action: "create", timestamp: "2026-05-08T09:00:00", synced: false },
-      { id: rejectedLogId, tableName: "time_entries", recordId: "entry-rejected", action: "create", timestamp: "2026-05-08T09:30:00", synced: false },
+      { id: acceptedLogId, tableName: "time_entries", recordId: "entry-accepted", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 },
+      { id: rejectedLogId, tableName: "time_entries", recordId: "entry-rejected", action: "create", timestamp: "2026-05-08T09:30:00", synced: 0 },
     ]);
 
     apiFetchMock.mockResolvedValue({
@@ -373,7 +373,7 @@ describe("syncPush", () => {
 
     expect(result).toMatchObject({ accepted: 1, rejected: 1, conflicts: 0, issues: [expect.objectContaining({ recordId: "entry-rejected", reasonCode: "overlap" })] });
     await expect(db.syncLog.get(acceptedLogId)).resolves.toMatchObject({ synced: 1 });
-    await expect(db.syncLog.get(rejectedLogId)).resolves.toMatchObject({ synced: false });
+    await expect(db.syncLog.get(rejectedLogId)).resolves.toMatchObject({ synced: 0 });
   });
 
   it("sends base seq with push requests", async () => {
@@ -398,7 +398,7 @@ describe("syncPush", () => {
       createdAt: "2026-05-08T09:00:00",
       updatedAt: "2026-05-08T09:00:00",
     });
-    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: false });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
 
     apiFetchMock.mockResolvedValue({
       outcomes: [{ tableName: "time_entries", recordId: "entry-1", action: "create", status: "accepted", reasonCode: "applied", message: "applied", incomingTimestamp: "2026-05-08T09:00:00" }],
@@ -980,7 +980,7 @@ describe("syncPullRecent", () => {
       recordId: "entry-1",
       action: "update",
       timestamp: "2026-05-07T12:00:00.000Z",
-      synced: false,
+      synced: 0,
     });
 
     apiFetchMock.mockResolvedValue({
@@ -1392,7 +1392,7 @@ describe("regularSync", () => {
       createdAt: "2026-05-08T09:00:00.000Z",
       updatedAt: "2026-05-08T09:00:00.000Z",
     });
-    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: "2026-05-08T09:00:00.000Z", synced: false });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: "2026-05-08T09:00:00.000Z", synced: 0 });
     setLastSyncedSeq(3);
 
     apiFetchMock
@@ -1460,7 +1460,7 @@ describe("regularSync", () => {
       recordId: "entry-1",
       action: "update",
       timestamp: "2026-05-08T09:00:00.000Z",
-      synced: false,
+      synced: 0,
     });
 
     apiFetchMock.mockResolvedValue({

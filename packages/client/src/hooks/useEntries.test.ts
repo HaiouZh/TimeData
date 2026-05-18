@@ -76,7 +76,7 @@ describe("local future-ended entry repair", () => {
       recordId: "future",
       action: "create",
       timestamp: "2026-05-08T07:00:00.000Z",
-      synced: false,
+      synced: 0,
     });
 
     const result = await deleteFutureEndedEntries(new Date("2026-05-08T08:00:00+08:00"));

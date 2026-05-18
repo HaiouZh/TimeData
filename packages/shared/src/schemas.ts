@@ -32,7 +32,7 @@ export const SyncLogEntrySchema = z.object({
   recordId: z.string(),
   action: z.enum(["create", "update", "delete"]),
   timestamp: z.string(),
-  synced: z.union([z.boolean(), z.literal(0), z.literal(1)]),
+  synced: z.union([z.literal(0), z.literal(1)]),
 });
 
 const BaseChangeFields = z.object({

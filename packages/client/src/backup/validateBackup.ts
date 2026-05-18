@@ -1,4 +1,4 @@
-import { BACKUP_FORMAT_V1, BACKUP_FORMAT_V2, type BackupDocumentV2, type BackupValidationResult } from "./schema.js";
+import { BACKUP_FORMAT, type BackupDocument, type BackupValidationResult } from "./schema.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -78,16 +78,7 @@ export function validateBackup(value: unknown): BackupValidationResult {
     return { ok: false, error: { code: "NOT_OBJECT", message: "备份文件不是有效的 JSON 对象。" } };
   }
 
-  if (value.format === BACKUP_FORMAT_V1) {
-    return {
-      ok: false,
-      error: {
-        code: "UNSUPPORTED_FORMAT",
-        message: "此备份使用旧版本格式（v1），与当前版本不兼容。请使用新版本应用重新导出备份。",
-      },
-    };
-  }
-  if (value.format !== BACKUP_FORMAT_V2) {
+  if (value.format !== BACKUP_FORMAT) {
     return { ok: false, error: { code: "INVALID_FORMAT", message: "备份文件格式不支持。" } };
   }
 
@@ -157,7 +148,7 @@ export function validateBackup(value: unknown): BackupValidationResult {
     }
   }
 
-  const backup = value as unknown as BackupDocumentV2;
+  const backup = value as unknown as BackupDocument;
   return {
     ok: true,
     backup,

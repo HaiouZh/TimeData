@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
 import { db, LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY } from "../db/index.js";
-import { BACKUP_FORMAT_V2, type BackupDocumentV2 } from "./schema.js";
+import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 import { importBackup } from "./importBackup.js";
 
 const now = "2026-05-07T12:00:00.000Z";
@@ -79,12 +79,12 @@ const syncLog: SyncLogEntry = {
   recordId: "old-cat",
   action: "update",
   timestamp: now,
-  synced: true,
+  synced: 1,
 };
 
-function backup(): BackupDocumentV2 {
+function backup(): BackupDocument {
   return {
-    format: BACKUP_FORMAT_V2,
+    format: BACKUP_FORMAT,
     timeFormat: "utc",
     exportedAt: now,
     appVersion: "0.1.0-test",

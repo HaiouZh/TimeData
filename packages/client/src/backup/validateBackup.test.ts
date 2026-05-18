@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Category, TimeEntry } from "@timedata/shared";
-import { BACKUP_FORMAT_V1, BACKUP_FORMAT_V2 } from "./schema.js";
+import { BACKUP_FORMAT } from "./schema.js";
 import { validateBackup } from "./validateBackup.js";
 
 const now = "2026-05-07T12:00:00.000Z";
@@ -39,7 +39,7 @@ function entry(value: string | (Partial<TimeEntry> & Pick<TimeEntry, "id">), cat
 
 function validBackup(overrides: Record<string, unknown> = {}) {
   return {
-    format: BACKUP_FORMAT_V2,
+    format: BACKUP_FORMAT,
     timeFormat: "utc" as const,
     exportedAt: now,
     appVersion: "0.1.0-test",
@@ -71,18 +71,6 @@ describe("validateBackup", () => {
     expect(result).toEqual({
       ok: false,
       error: { code: "INVALID_FORMAT", message: "备份文件格式不支持。" },
-    });
-  });
-
-  it("rejects v1 backup with UNSUPPORTED_FORMAT", () => {
-    const result = validateBackup({ ...validBackup(), format: BACKUP_FORMAT_V1 });
-
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        code: "UNSUPPORTED_FORMAT",
-        message: "此备份使用旧版本格式（v1），与当前版本不兼容。请使用新版本应用重新导出备份。",
-      },
     });
   });
 
@@ -177,9 +165,9 @@ describe("validateBackup", () => {
 
 const NOW_V9 = new Date().toISOString();
 
-function makeV2Backup(overrides: Record<string, unknown> = {}) {
+function makeBackup(overrides: Record<string, unknown> = {}) {
   return {
-    format: BACKUP_FORMAT_V2,
+    format: BACKUP_FORMAT,
     timeFormat: "utc" as const,
     exportedAt: NOW_V9,
     appVersion: "1.0.0",
@@ -190,24 +178,9 @@ function makeV2Backup(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("validateBackup v2", () => {
-  it("accepts a valid v2 backup", () => {
-    const result = validateBackup(makeV2Backup());
+describe("validateBackup current format", () => {
+  it("accepts a valid backup", () => {
+    const result = validateBackup(makeBackup());
     expect(result.ok).toBe(true);
-  });
-
-  it("rejects v1 backup with UNSUPPORTED_FORMAT", () => {
-    const v1 = {
-      format: "timedata.backup.v1",
-      exportedAt: NOW_V9,
-      appVersion: "0.9.0",
-      device: { deviceId: null, deviceName: "Web" },
-      categories: [],
-      timeEntries: [],
-    };
-    const result = validateBackup(v1);
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("unexpected");
-    expect(result.error.code).toBe("UNSUPPORTED_FORMAT");
   });
 });

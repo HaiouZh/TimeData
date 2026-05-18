@@ -22,7 +22,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # 同步机制
@@ -63,7 +63,7 @@ last-reviewed: 2026-05-17
 
 ### 2.1 客户端做了什么（`syncPush`）
 
-1. **从 Dexie `syncLog` 取所有未同步日志**。新写入使用 `synced=0`，已同步使用 `synced=1`；旧库可能仍有 boolean，客户端筛选保持兼容。
+1. **从 Dexie `syncLog` 取所有未同步日志**。新写入使用 `synced=0`，已同步使用 `synced=1`。
 2. **按 `tableName:recordId` 分组压缩**（`compactSyncLogs`）：
    - 同一记录在同一次同步内被多次改：只保留最后一条。
    - `create + ... + delete` 的轨迹：整组**省略不发送**（远端从未见过这条记录），但本地日志全部标为已同步。
@@ -71,9 +71,9 @@ last-reviewed: 2026-05-17
 3. **从业务表读最新数据**填进 `change.data`（除 delete 外）。
 4. **附带分类依赖**（`categoryDependencyChangesForEntry`）：如果 push 一条 entry 引用的分类还没在服务器上，把分类（和它的父分类）一起塞进 changes。
 5. `regularSync()` 只有在 meta 主路径判断 `unsyncedCount > 0` 时才调用 `syncPush()`；没有未同步日志但 meta 不一致时只做 pull-only repair。
-6. `legacy_snapshot_sync` 回退路径如果发现本地快照里有云端缺失的记录，但本地 `syncLog` 没有对应未同步日志，会先补一条 create 日志，再走同一条 `syncPush()` 路径。这是恢复旧版本/Android 本地已有数据但 syncLog 丢失时的兜底。
+6. `legacy_snapshot_sync` 本地快照修复路径如果发现本地快照里有云端缺失的记录，但本地 `syncLog` 没有对应未同步日志，会先补一条 create 日志，再走同一条 `syncPush()` 路径。这是本地已有数据但 syncLog 丢失时的兜底。
 7. POST `/api/sync/push`，请求体 `{ changes: SyncChange[], baseSeq?: number | null }`。`baseSeq` 来自客户端保存的 `timedata_last_synced_seq`，用于让服务端判断这次 push 相对云端是快进、非重叠合并，还是 non-fast-forward 本地覆盖。服务端入口会先用 `SyncPushRequestSchema` 做运行时校验；不符合 `SyncChange` 判别联合契约的请求返回 400 `invalid_request`，不会进入同步校验或写库。
-8. 服务器返回 `SyncPushResponse` 后，客户端把 `status === 'accepted'` 对应的本地 syncLog 标为已同步（新值 `synced=1`，旧 boolean 仍兼容）。即使服务器因整批原子校验返回 HTTP 409，`apiFetch` 也会保留 JSON body，`syncPush()` 会读取其中的 `outcomes`：已接受项仍标记为已同步，非 accepted 项保留在 `syncLog` 里等待用户处理或下次重试。
+8. 服务器返回 `SyncPushResponse` 后，客户端把 `status === 'accepted'` 对应的本地 syncLog 标为已同步（`synced=1`）。即使服务器因整批原子校验返回 HTTP 409，`apiFetch` 也会保留 JSON body，`syncPush()` 会读取其中的 `outcomes`：已接受项仍标记为已同步，非 accepted 项保留在 `syncLog` 里等待用户处理或下次重试。
 9. `syncPush()` 把非 accepted outcomes 暴露为 `pushIssues`，设置页同步摘要会优先展示真正失败的 `tableName/recordId`、`reasonCode` 和服务端 message，避免用户只看到响应 JSON 开头的 accepted 项。
 
 > **关键：不止同步日志关心的那条记录，还会同步它的分类依赖**。这是为了避免"先 push entry，因为分类不存在被拒"的死锁。
@@ -176,7 +176,7 @@ last-reviewed: 2026-05-17
 
 如果 APK 显示服务器连接失败，先区分三类问题：`/api/health` 失败通常是地址、HTTPS、反代或网络问题；`/api/health` 成功但 `/api/sync/status` 404 通常是服务器版本旧；`/api/sync/status` 返回 401/403 通常是 Token 不匹配或请求没带 `Authorization`。
 
-客户端 `syncPullRecent(days)` 拉最近 `days` 天的服务器变更；普通 `regularSync()` 的 meta 主路径当前传 `7`，旧 `legacy_snapshot_sync` 回退路径仍传 `2`：
+客户端 `syncPullRecent(days)` 拉最近 `days` 天的服务器变更；普通 `regularSync()` 的 meta 主路径当前传 `7`，`legacy_snapshot_sync` 本地快照修复路径当前传 `2`：
 
 - 对每条 change：
   - 本地不存在 → 直接写入。
@@ -228,7 +228,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
 | 表 | 在哪 | 作用 |
 |---|---|---|
-| Dexie `syncLog` | 客户端 IndexedDB | 待同步队列；新数据用 `synced=0/1`，旧 boolean 仍兼容；未同步项才会被 push |
+| Dexie `syncLog` | 客户端 IndexedDB | 待同步队列；新数据用 `synced=0/1`；未同步项才会被 push |
 | SQLite `sync_logs` | 服务端 | 运维审计；记录每次 push/pull 的摘要、谁同步的、有没有冲突 |
 
 客户端每次 `regularSync` 完成会调 `reportToServer`，把 push/pull/conflict 的摘要写到服务端 `sync_logs`。这是**纯日志，best-effort**——失败不影响同步，只影响运维可观测性。
@@ -243,5 +243,5 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 - [ ] 看 `packages/client/src/sync/engine.test.ts`：客户端压缩、冲突收集都有测。
 - [ ] 跨 client/server 同步链路改动后，跑 `pnpm --filter @timedata/client test:e2e`；测试入口是 `packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`，server 内存实例 helper 在 `packages/server/src/__tests__/e2e/helpers.ts`。
 - [ ] 改 `SyncPushReasonCode` 枚举：在 `shared/src/types.ts` 加值后，server 验证、client 处理、本文档第 6 节、`data-model.md` 的表都要更新。
-- [ ] 改 `regularSync` 主路径：先测 meta no-op、pull-only repair、push + pull_recent_7d，以及 `timedata_legacy_snapshot_sync="1"` 回退路径。
+- [ ] 改 `regularSync` 主路径：先测 meta no-op、pull-only repair、push + pull_recent_7d，以及 `legacy_snapshot_sync` 本地快照修复路径。
 - [ ] 验 full sync fallback：先测 `/api/health`，再测带鉴权的 `/api/sync/status`，最后在测试库走 `设置 → 数据设置 → 同步健康诊断` 和 force-push prepare；不要在生产库为验收执行最终覆盖。

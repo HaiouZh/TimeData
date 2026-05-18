@@ -5,6 +5,7 @@ import {
   SyncChangeSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
+  SyncLogEntrySchema,
   SyncPullRequestSchema,
   SyncStatusResponseSchema,
   TimeEntrySchema,
@@ -31,6 +32,23 @@ const timeEntry = {
   createdAt: "2026-05-13T00:00:00.000Z",
   updatedAt: "2026-05-13T00:00:00.000Z",
 };
+
+describe("SyncLogEntrySchema", () => {
+  it("only accepts synced as 0 or 1", () => {
+    const base = {
+      id: "log-1",
+      tableName: "categories" as const,
+      recordId: "c1",
+      action: "update" as const,
+      timestamp: "2026-05-13T00:00:00.000Z",
+    };
+
+    expect(SyncLogEntrySchema.safeParse({ ...base, synced: 0 }).success).toBe(true);
+    expect(SyncLogEntrySchema.safeParse({ ...base, synced: 1 }).success).toBe(true);
+    expect(SyncLogEntrySchema.safeParse({ ...base, synced: true }).success).toBe(false);
+    expect(SyncLogEntrySchema.safeParse({ ...base, synced: false }).success).toBe(false);
+  });
+});
 
 describe("runtime schemas", () => {
   it("rejects categories with invalid colors or non-integer sortOrder", () => {

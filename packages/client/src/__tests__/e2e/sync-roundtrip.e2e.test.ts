@@ -46,7 +46,7 @@ function syncLog(recordId: string, tableName: SyncLogEntry["tableName"]): SyncLo
     recordId,
     action: "create",
     timestamp: "2026-05-13T09:00:00.000Z",
-    synced: false,
+    synced: 0,
   };
 }
 
@@ -128,7 +128,7 @@ describe("e2e: sync round trip", () => {
     expect(result.issues).toEqual([expect.objectContaining({ recordId: "entry-overlap", status: "conflict", reasonCode: "overlap" })]);
     await expect(db.syncLog.get("log-cat-conflict")).resolves.toMatchObject({ synced: 1 });
     await expect(db.syncLog.get("log-entry-first")).resolves.toMatchObject({ synced: 1 });
-    await expect(db.syncLog.get("log-entry-overlap")).resolves.toMatchObject({ synced: false });
+    await expect(db.syncLog.get("log-entry-overlap")).resolves.toMatchObject({ synced: 0 });
   });
 
   it("applies server tombstone deletes during pull", async () => {
