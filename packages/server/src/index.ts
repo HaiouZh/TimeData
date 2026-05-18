@@ -24,6 +24,20 @@ import adminRoute from "./routes/admin/index.js";
 const app = new Hono();
 const allowedOrigins = allowedOriginsFromEnv(process.env);
 
+if (allowedOrigins.includes("*")) {
+  console.warn(
+    "[cors] ALLOWED_ORIGINS includes '*' while credentials are enabled. " +
+    "This reflects the request origin back, defeating the browser's same-credentials guard. " +
+    "Set ALLOWED_ORIGINS to an explicit comma-separated allowlist in production.",
+  );
+}
+if (allowedOrigins.length === 0) {
+  console.warn(
+    "[cors] ALLOWED_ORIGINS not configured. All cross-origin /api/* requests will be rejected. " +
+    "Set ALLOWED_ORIGINS in the environment to enable client connectivity.",
+  );
+}
+
 const MAX_BODY_BYTES = Number.parseInt(process.env.MAX_BODY_BYTES || "", 10) || 5 * 1024 * 1024;
 const SYNC_RATE_MAX = Number.parseInt(process.env.SYNC_RATE_MAX || "", 10) || 60;
 const ADMIN_RATE_MAX = Number.parseInt(process.env.ADMIN_RATE_MAX || "", 10) || 120;

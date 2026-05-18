@@ -1,5 +1,6 @@
-export function allowedOriginsFromEnv(env: NodeJS.ProcessEnv): string[] {
-  const origins = env.ALLOWED_ORIGINS ?? "*";
+export function allowedOriginsFromEnv(env: Record<string, string | undefined>): string[] {
+  const origins = env.ALLOWED_ORIGINS;
+  if (origins === undefined) return [];
   return origins
     .split(",")
     .map((origin) => origin.trim())
