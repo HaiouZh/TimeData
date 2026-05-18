@@ -4,7 +4,13 @@ const root = new URL("../../../", import.meta.url);
 const clientPkg = JSON.parse(readFileSync(new URL("packages/client/package.json", root), "utf8"));
 const mobilePkg = JSON.parse(readFileSync(new URL("packages/mobile/package.json", root), "utf8"));
 
-const sharedPackages = ["@capacitor/app", "@capacitor/browser", "@capacitor/core"];
+const sharedPackages = [
+  "@capacitor/app",
+  "@capacitor/browser",
+  "@capacitor/core",
+  "@capacitor/filesystem",
+  "@capacitor/share",
+];
 for (const name of sharedPackages) {
   const clientVersion = clientPkg.dependencies[name];
   const mobileVersion = mobilePkg.dependencies[name];
