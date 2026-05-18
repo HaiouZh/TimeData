@@ -1,3 +1,5 @@
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+
 export const ErrorCode = {
   INVALID_BODY: "INVALID_BODY",
   INVALID_JSON: "INVALID_JSON",
@@ -36,10 +38,10 @@ export interface ErrorBody {
 
 export function errorJson(
   code: ErrorCode,
-  status: number,
+  status: ContentfulStatusCode,
   message?: string,
   details?: unknown,
-): { body: ErrorBody; status: number } {
+): { body: ErrorBody; status: ContentfulStatusCode } {
   const body: ErrorBody = {
     ok: false,
     error: { code, message: message ?? DEFAULT_MESSAGE[code] },
