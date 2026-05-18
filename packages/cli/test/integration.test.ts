@@ -1,18 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startE2EServer } from "../../server/src/__tests__/e2e/helpers.js";
 import { runCli } from "../src/index.js";
 
 const TEST_TOKEN = "integration-test-token";
 let server: Awaited<ReturnType<typeof startE2EServer>>;
 
-beforeEach(async () => {
+beforeAll(async () => {
   process.env.AUTH_TOKEN = TEST_TOKEN;
   process.env.ALLOWED_ORIGINS = "http://localhost";
   server = await startE2EServer();
-});
+}, 30_000);
 
-afterEach(() => {
-  server.close();
+afterAll(() => {
+  server?.close();
   delete process.env.AUTH_TOKEN;
   delete process.env.ALLOWED_ORIGINS;
 });
