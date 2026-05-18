@@ -2,14 +2,13 @@ import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
-import { SyncPullResponseSchema } from "@timedata/shared";
+import { SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport, SyncPullResponse, SyncPushResponse, SyncChange, SyncStatusResponse, Category, TimeEntry, SyncLogEntry, SyncPushOutcome } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
 const LAST_SYNCED_KEY = STORAGE_KEYS.lastSynced;
 const LAST_SYNCED_SEQ_KEY = STORAGE_KEYS.lastSyncedSeq;
 const SYNC_FAILURE_COUNT_KEY = STORAGE_KEYS.syncFailureCount;
-const SYNC_DIAGNOSTIC_FAILURE_THRESHOLD = 3;
 type SyncLog = SyncLogEntry;
 
 export interface SyncConflict {
