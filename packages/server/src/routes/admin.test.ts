@@ -197,6 +197,15 @@ describe("admin route", () => {
     expect(body.entries.map((entry: { id: string }) => entry.id)).toEqual(["entry-overlap-b", "entry-overlap-a"]);
   });
 
+  it("returns INVALID_REQUEST when entries query params are invalid", async () => {
+    const res = await app.request("/api/admin/entries?limit=bad");
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+  });
+
   it("filters entries by missing-category anomaly", async () => {
     const res = await app.request("/api/admin/entries?anomaly=missing_category");
 

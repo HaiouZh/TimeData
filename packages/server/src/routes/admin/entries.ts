@@ -1,16 +1,22 @@
 import type { AdminEntriesResponse } from "@timedata/shared";
 import { Hono } from "hono";
+import { z } from "zod";
 import { getDb } from "../../db/connection.js";
-import { type CountRow, type EntryRow, buildEntryFilters, mapEntry, parsePositiveInteger } from "./_helpers.js";
+import { validateQuery } from "../../middleware/validate.js";
+import { type CountRow, type EntryRow, allowedAnomalies, buildEntryFilters, mapEntry } from "./_helpers.js";
 
 const entries = new Hono();
 
-entries.get("/", (c) => {
-  const from = c.req.query("from");
-  const to = c.req.query("to");
-  const anomaly = c.req.query("anomaly");
-  const limit = parsePositiveInteger(c.req.query("limit"), 50, 200);
-  const offset = parsePositiveInteger(c.req.query("offset"), 0);
+const entriesQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  anomaly: z.enum([...allowedAnomalies] as [string, ...string[]]).optional(),
+  limit: z.coerce.number().int().min(0).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+entries.get("/", validateQuery(entriesQuerySchema), (c) => {
+  const { from, to, anomaly, limit, offset } = c.var.query;
   const { whereSql, params } = buildEntryFilters(from, to, anomaly);
 
   const total = (
