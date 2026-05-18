@@ -1,8 +1,10 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { getDb } from "../db/connection.js";
 import { type EntryRow, rowToEntry } from "../lib/db-rows.js";
 import { createEntryFromCliInput, listEntriesForCliDate, nextDate } from "../lib/entry-service.js";
 import { localDateTimeToUtc } from "@timedata/shared";
+import { errorJson, ErrorCode } from "../lib/errors.js";
 
 const entries = new Hono();
 
@@ -57,27 +59,37 @@ entries.get("/", (c) => {
   return c.json(mapped);
 });
 
-entries.post("/", async (c) => {
-  let body: {
-    date?: string;
-    start?: string;
-    end?: string;
-    category?: string;
-    note?: string | null;
-  };
+const EntriesPostBodySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
+  start: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "start must be HH:mm or HH:mm:ss"),
+  end: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "end must be HH:mm or HH:mm:ss"),
+  category: z.string().min(1),
+  note: z.string().nullable().optional(),
+}).strict();
 
+entries.post("/", async (c) => {
+  let raw: unknown;
   try {
-    body = await c.req.json();
+    raw = await c.req.json();
   } catch {
-    return c.json({ ok: false, error: { code: "INVALID_JSON", message: "Request body must be valid JSON" } }, 400);
+    const { body, status } = errorJson(ErrorCode.INVALID_JSON, 400);
+    return c.json(body, status);
+  }
+
+  const parsed = EntriesPostBodySchema.safeParse(raw);
+  if (!parsed.success) {
+    const { body, status } = errorJson(ErrorCode.INVALID_BODY, 400, undefined, {
+      issues: parsed.error.issues,
+    });
+    return c.json(body, status);
   }
 
   const result = createEntryFromCliInput(getDb(), {
-    date: body.date || "",
-    start: body.start || "",
-    end: body.end || "",
-    category: body.category || "",
-    note: body.note || null,
+    date: parsed.data.date,
+    start: parsed.data.start,
+    end: parsed.data.end,
+    category: parsed.data.category,
+    note: parsed.data.note ?? null,
   });
 
   return c.json(result, result.ok ? 200 : 400);

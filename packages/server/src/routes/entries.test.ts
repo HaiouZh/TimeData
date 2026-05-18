@@ -128,4 +128,31 @@ describe("entries route", () => {
       },
     });
   });
+
+  it("rejects missing required fields with INVALID_BODY", async () => {
+    const res = await app.request("/api/entries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start: "09:00" }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_BODY");
+  });
+
+  it("rejects wrong time format with INVALID_BODY and details.issues", async () => {
+    const res = await app.request("/api/entries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: "2026-05-19", start: "9", end: "10", category: "投资/读书" }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_BODY");
+    expect(body.error.details).toBeDefined();
+  });
 });
