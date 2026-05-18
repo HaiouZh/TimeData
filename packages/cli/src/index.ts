@@ -18,6 +18,7 @@ interface CliDeps {
 interface RunFromArgvDeps {
   isTTY?: boolean;
   writeStdout?: (text: string) => void;
+  writeStderr?: (text: string) => void;
   exit?: (code: number) => void;
 }
 
@@ -78,7 +79,16 @@ export async function runFromArgv(processArgv: string[], deps: RunFromArgvDeps =
 
   const result = await runCli(argv);
   const ok = Boolean(result && typeof result === "object" && "ok" in result && result.ok === true);
-  (deps.writeStdout ?? ((text) => process.stdout.write(text)))(`${formatResult(result, format)}\n`);
+  const formatted = `${formatResult(result, format)}\n`;
+  const writeStdout = deps.writeStdout ?? ((text) => process.stdout.write(text));
+  const writeStderr = deps.writeStderr ?? ((text) => process.stderr.write(text));
+
+  if (ok) {
+    writeStdout(formatted);
+  } else {
+    writeStderr(formatted);
+  }
+
   (deps.exit ?? process.exit)(ok ? 0 : 1);
 }
 

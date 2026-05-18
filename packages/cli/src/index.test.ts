@@ -83,16 +83,51 @@ describe("runCli", () => {
 
   it("direct execution parses --format human", async () => {
     const writeStdout = vi.fn();
+    const writeStderr = vi.fn();
     const exit = vi.fn();
 
     await runFromArgv(["node", "timedata", "list", "--format", "human"], {
       isTTY: false,
       writeStdout,
+      writeStderr,
       exit,
     });
 
-    expect(writeStdout).toHaveBeenCalledWith("Error [CONFIG_MISSING]: Missing TimeData server URL\n");
+    expect(writeStdout).not.toHaveBeenCalled();
+    expect(writeStderr).toHaveBeenCalledWith("Error [CONFIG_MISSING]: Missing TimeData server URL\n");
     expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it("失败结果走 stderr，stdout 保持空字符串", async () => {
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    const exit = vi.fn();
+
+    await runFromArgv(["node", "timedata", "unknown-cmd"], {
+      writeStdout: (text) => stdoutChunks.push(text),
+      writeStderr: (text) => stderrChunks.push(text),
+      exit,
+    });
+
+    expect(stdoutChunks.join("")).toBe("");
+    expect(stderrChunks.join("")).toContain("UNKNOWN_COMMAND");
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it("成功结果走 stdout 不出现在 stderr", async () => {
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    const exit = vi.fn();
+
+    await runFromArgv(["node", "timedata", "--help"], {
+      writeStdout: (text) => stdoutChunks.push(text),
+      writeStderr: (text) => stderrChunks.push(text),
+      exit,
+    });
+
+    expect(stdoutChunks.join("")).toContain('"ok": true');
+    expect(stderrChunks.join("")).toBe("");
+    expect(exit).toHaveBeenCalledWith(0);
   });
 
   it("dispatches doctor before normal command configuration handling", async () => {
