@@ -180,6 +180,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |
 | 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts` | [`deployment.md`](./deployment.md) |
+| 审查 / 排期边界 | `AGENT.md` | [`AGENT.md#项目定位边界`](../../AGENT.md#项目定位边界) |
 
 ## 7. 不在这份文档里的事
 
