@@ -1,17 +1,25 @@
+import { CategorySchema } from "@timedata/shared";
 import { requestJson, type ApiConfig } from "../lib/api-client.js";
 
-interface CategoryResponseItem {
-  id: string;
-  name: string;
-  parentId: string | null;
-  isArchived: boolean;
-}
+const CategoriesResponseSchema = CategorySchema.array();
 
 export async function runCategories(config: ApiConfig, fetchImpl?: typeof fetch): Promise<unknown> {
-  const categories = await requestJson(config, "/api/categories", { fetchImpl });
-  if (!Array.isArray(categories)) return categories;
+  const raw = await requestJson(config, "/api/categories", { fetchImpl });
+  if (raw && typeof raw === "object" && "ok" in raw && (raw as any).ok === false) return raw;
 
-  const active = categories.filter((category): category is CategoryResponseItem => Boolean(category) && !category.isArchived);
+  const parsed = CategoriesResponseSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: {
+        code: "SCHEMA_MISMATCH",
+        message: "Server returned categories in an unexpected shape",
+        details: { issues: parsed.error.issues.slice(0, 5) },
+      },
+    };
+  }
+
+  const active = parsed.data.filter((category) => !category.isArchived);
   const byId = new Map(active.map((category) => [category.id, category]));
   return {
     ok: true,
