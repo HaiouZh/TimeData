@@ -25,21 +25,23 @@ const mockSyncActions = {
   refreshSyncStatus: vi.fn(),
 };
 
+const mockSyncState = {
+  syncing: false,
+  lastSynced: null,
+  unsyncedCount: 0,
+  error: null,
+  conflicts: mockSyncConflicts,
+  lastResult: null,
+  healthReport: null,
+  healthLoading: false,
+  forcePushPreparation: null,
+  syncFailureCount: 0,
+  needsSyncDiagnostics: false,
+  ...mockSyncActions,
+};
+
 vi.mock("../hooks/useSync.ts", () => ({
-  useSync: () => ({
-    syncing: false,
-    lastSynced: null,
-    unsyncedCount: 0,
-    error: null,
-    conflicts: mockSyncConflicts,
-    lastResult: null,
-    healthReport: null,
-    healthLoading: false,
-    forcePushPreparation: null,
-    syncFailureCount: 0,
-    needsSyncDiagnostics: false,
-    ...mockSyncActions,
-  }),
+  useSync: () => mockSyncState,
 }));
 
 const localStorageMock = (() => {

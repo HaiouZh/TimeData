@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   getConsecutiveSyncFailureCount,
   getSyncHealth,
@@ -156,7 +156,9 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     }
   }, [autoSyncOnMount, sync]);
 
-  return {
+  const needsSyncDiagnostics = shouldShowSyncDiagnosticsHint(syncFailureCount);
+
+  return useMemo(() => ({
     syncing,
     lastSynced,
     unsyncedCount,
@@ -167,7 +169,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     healthLoading,
     forcePushPreparation,
     syncFailureCount,
-    needsSyncDiagnostics: shouldShowSyncDiagnosticsHint(syncFailureCount),
+    needsSyncDiagnostics,
     sync,
     forceReplace,
     runDiagnostics,
@@ -175,5 +177,24 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     forcePushToServer,
     handleConflictResolution,
     refreshSyncStatus,
-  };
+  }), [
+    conflicts,
+    error,
+    forcePushPreparation,
+    forcePushToServer,
+    forceReplace,
+    handleConflictResolution,
+    healthLoading,
+    healthReport,
+    lastResult,
+    lastSynced,
+    needsSyncDiagnostics,
+    prepareForcePushToServer,
+    refreshSyncStatus,
+    runDiagnostics,
+    sync,
+    syncFailureCount,
+    syncing,
+    unsyncedCount,
+  ]);
 }
