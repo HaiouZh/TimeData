@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "vite-tsconfig-paths": "^6.1.1"
   }
 }

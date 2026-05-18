@@ -12,6 +12,13 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "composite": true,
+    "incremental": true,
+    "paths": {
+      "@timedata/shared": ["./packages/shared/src/index.ts"],
+      "@timedata/shared/*": ["./packages/shared/src/*"]
+    },
+    "baseUrl": "."
   }
 }

@@ -1,22 +1,12 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-
-const sharedSrc = fileURLToPath(new URL("../shared/src/index.ts", import.meta.url));
-
-const resolveSharedSource = {
-  resolve: {
-    alias: {
-      "@timedata/shared": sharedSrc,
-    },
-  },
-};
+import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   test: {
     exclude: ["src/**/__tests__/e2e/**"],
     projects: [
       {
-        ...resolveSharedSource,
+        plugins: [tsconfigPaths()],
         define: {
           __TIMEDATA_ANDROID_VERSION_CODE__: JSON.stringify("260507"),
         },
@@ -27,7 +17,7 @@ export default defineConfig({
         },
       },
       {
-        ...resolveSharedSource,
+        plugins: [tsconfigPaths()],
         define: {
           __TIMEDATA_ANDROID_VERSION_CODE__: JSON.stringify("260507"),
         },

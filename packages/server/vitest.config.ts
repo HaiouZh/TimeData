@@ -1,14 +1,8 @@
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-
-const sharedSrc = fileURLToPath(new URL("../shared/src/index.ts", import.meta.url));
+import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      "@timedata/shared": sharedSrc,
-    },
-  },
+  plugins: [tsconfigPaths()],
   test: {
     hookTimeout: 15_000,
     testTimeout: 15_000,
