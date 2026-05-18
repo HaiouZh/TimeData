@@ -1,4 +1,5 @@
-export const APP_TIME_ZONE = "Asia/Shanghai";
+import { APP_TIME_ZONE } from "@timedata/shared";
+export { APP_TIME_ZONE };
 
 export function toAppLocalDateTimeString(value: Date): string {
   const dateParts = new Intl.DateTimeFormat("en-CA", {

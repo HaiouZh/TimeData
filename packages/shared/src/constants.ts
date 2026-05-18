@@ -93,3 +93,5 @@ export function createDefaultCategories(timestamp = new Date().toISOString()): C
 }
 
 export const DAY_START_HOUR = 0;
+
+export const SYNC_DIAGNOSTIC_FAILURE_THRESHOLD = 3;

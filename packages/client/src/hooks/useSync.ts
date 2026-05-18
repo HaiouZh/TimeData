@@ -14,13 +14,14 @@ import { createAutoBackup } from "../backup/autoBackup.ts";
 import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
+import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 
 export function shouldAutoSyncOnMount(apiUrl: string | null, cloudSyncEnabled: boolean): boolean {
   return Boolean(apiUrl) && cloudSyncEnabled;
 }
 
 export function shouldShowSyncDiagnosticsHint(failureCount: number): boolean {
-  return failureCount >= 3;
+  return failureCount >= SYNC_DIAGNOSTIC_FAILURE_THRESHOLD;
 }
 
 interface UseSyncOptions {

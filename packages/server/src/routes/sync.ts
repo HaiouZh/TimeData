@@ -192,11 +192,17 @@ function readServerStatus(db: Database): SyncStatusResponse {
 
 const sync = new Hono();
 
+const SYNC_LOG_DETAIL_MAX = 4096;
+
 function writeSyncLog(db: Database, action: string, detail: unknown, recordCount = 0): void {
+  let serialized = typeof detail === "string" ? detail : JSON.stringify(detail);
+  if (serialized.length > SYNC_LOG_DETAIL_MAX) {
+    serialized = serialized.slice(0, SYNC_LOG_DETAIL_MAX - 16) + "...[truncated]";
+  }
   db.prepare("INSERT INTO sync_logs (device, action, detail, record_count) VALUES (?, ?, ?, ?)").run(
     "server",
     action,
-    typeof detail === "string" ? detail : JSON.stringify(detail),
+    serialized,
     recordCount,
   );
 }
