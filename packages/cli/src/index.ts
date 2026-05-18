@@ -1,18 +1,13 @@
 #!/usr/bin/env node
 import { pathToFileURL } from "node:url";
-import { runCategories } from "./commands/categories.js";
-import { runDoctor } from "./commands/doctor.js";
 import { commandRegistry, runHelp } from "./commands/help.js";
-import { runList } from "./commands/list.js";
-import { runLog } from "./commands/log.js";
-import { runVersion } from "./commands/version.js";
 import { parseFlags } from "./lib/args.js";
 import { readFileConfig, resolveConfig, type FileConfigResult } from "./lib/config.js";
 import { formatResult, resolveOutputFormat } from "./lib/format.js";
 
 export const dispatchCommandNames = commandRegistry
-  .map((command) => command.name)
-  .filter((name) => !["help", "version"].includes(name));
+  .filter((command) => command.handler)
+  .map((command) => command.name);
 
 interface CliDeps {
   env?: Record<string, string | undefined>;
@@ -46,9 +41,8 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<unknow
 
   if (flags.help === "true") return runHelp(command);
 
-  if (command === "version") return runVersion(deps.env || process.env);
-
-  if (!commandRegistry.some((item) => item.name === command)) {
+  const entry = commandRegistry.find((item) => item.name === command);
+  if (!entry || !entry.handler) {
     return {
       ok: false,
       error: {
@@ -58,20 +52,19 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<unknow
     };
   }
 
+  const env = deps.env || process.env;
   const fileConfig = deps.fileConfig === undefined ? readFileConfig() : deps.fileConfig;
+  const needsConfig = !["doctor", "version"].includes(entry.name);
+  const config = needsConfig ? resolveConfig(flags, env, fileConfig) : null;
+  if (config && "ok" in config) return config;
 
-  if (command === "doctor") {
-    return runDoctor(flags, deps.env || process.env, fileConfig, deps.fetchImpl);
-  }
-
-  const config = resolveConfig(flags, deps.env || process.env, fileConfig);
-  if ("ok" in config) return config;
-
-  if (command === "categories") return runCategories(config, deps.fetchImpl);
-  if (command === "list") return runList(config, flags, deps.fetchImpl);
-  if (command === "log") return runLog(config, flags, deps.fetchImpl);
-
-  return runHelp(command);
+  return entry.handler({
+    config,
+    flags,
+    env,
+    fileConfig,
+    fetchImpl: deps.fetchImpl,
+  });
 }
 
 function isDirectExecution(): boolean {

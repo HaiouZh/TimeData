@@ -1,8 +1,25 @@
+import { runCategories } from "./categories.js";
+import { runDoctor } from "./doctor.js";
+import { runList } from "./list.js";
+import { runLog } from "./log.js";
+import { runVersion } from "./version.js";
+import type { ApiConfig } from "../lib/api-client.js";
+import type { FileConfigResult } from "../lib/config.js";
+
+export interface CommandContext {
+  config: ApiConfig | null;
+  flags: Record<string, string | undefined>;
+  env: Record<string, string | undefined>;
+  fileConfig: FileConfigResult;
+  fetchImpl?: typeof fetch;
+}
+
 export interface CommandHelp {
   name: string;
   writesData: boolean;
   summary: string;
   usage: string;
+  handler?: (ctx: CommandContext) => Promise<unknown> | unknown;
 }
 
 export const commandRegistry: CommandHelp[] = [
@@ -11,18 +28,21 @@ export const commandRegistry: CommandHelp[] = [
     writesData: false,
     summary: "List active categories with AI-safe category paths.",
     usage: "timedata categories [--server URL] [--token TOKEN]",
+    handler: (ctx) => runCategories(ctx.config!, ctx.fetchImpl),
   },
   {
     name: "list",
     writesData: false,
     summary: "List time entries for one local date in CLI format.",
     usage: "timedata list [--date YYYY-MM-DD] [--server URL] [--token TOKEN]",
+    handler: (ctx) => runList(ctx.config!, ctx.flags, ctx.fetchImpl),
   },
   {
     name: "log",
     writesData: true,
     summary: "Create one time entry through the server API.",
     usage: "timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note TEXT] [--server URL] [--token TOKEN]",
+    handler: (ctx) => runLog(ctx.config!, ctx.flags, ctx.fetchImpl),
   },
   {
     name: "help",
@@ -35,12 +55,14 @@ export const commandRegistry: CommandHelp[] = [
     writesData: false,
     summary: "Check CLI configuration, server reachability, and read-only authentication with TIMEDATA_SERVER_URL and TIMEDATA_TOKEN.",
     usage: "timedata doctor [--server URL] [--token TOKEN]",
+    handler: (ctx) => runDoctor(ctx.flags, ctx.env, ctx.fileConfig, ctx.fetchImpl),
   },
   {
     name: "version",
     writesData: false,
     summary: "Print the CLI version and git sha baked in at build time.",
     usage: "timedata version",
+    handler: (ctx) => runVersion(ctx.env),
   },
 ];
 

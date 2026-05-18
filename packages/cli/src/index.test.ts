@@ -9,10 +9,11 @@ describe("runCli", () => {
 
   it("has dispatch coverage for registry commands that need runtime handlers", () => {
     const runtimeCommandNames = commandRegistry
-      .map((command) => command.name)
-      .filter((name) => !["help", "version"].includes(name));
+      .filter((command) => command.handler)
+      .map((command) => command.name);
 
     expect(dispatchCommandNames).toEqual(runtimeCommandNames);
+    expect(runtimeCommandNames).toEqual(expect.arrayContaining(["categories", "list", "log", "doctor"]));
   });
 
   it("returns help without configuration for an empty command", async () => {
