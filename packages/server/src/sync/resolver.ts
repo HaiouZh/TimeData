@@ -1,8 +1,8 @@
-import { getDb } from "../db/connection.js";
-import { type CategoryRow, type EntryRow } from "../lib/db-rows.js";
-import { recordSeq } from "./seq.js";
 import type { Category, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
+import { getDb } from "../db/connection.js";
+import type { CategoryRow, EntryRow } from "../lib/db-rows.js";
+import { recordSeq } from "./seq.js";
 
 type CategoryChange = Extract<SyncChange, { tableName: "categories" }>;
 type EntryChange = Extract<SyncChange, { tableName: "time_entries" }>;
@@ -21,9 +21,8 @@ export interface ApplyChangeResult {
 
 export function applyChange(change: SyncChange): ApplyChangeResult {
   const db = getDb();
-  const changeResult = change.tableName === "categories"
-    ? applyCategoryChange(db, change)
-    : applyEntryChange(db, change);
+  const changeResult =
+    change.tableName === "categories" ? applyCategoryChange(db, change) : applyEntryChange(db, change);
 
   // 只有成功写入才推进 seq cursor，skipped 的变更不占 seq 位置（供上游判断应用顺序）。
   if (changeResult.status === "applied") {
@@ -38,7 +37,9 @@ function applyCategoryChange(db: Database, change: CategoryChange): ApplyChangeR
     const categoryIds = [change.recordId];
     for (let index = 0; index < categoryIds.length; index++) {
       const parentId = categoryIds[index];
-      const childRows = db.prepare("SELECT id FROM categories WHERE parent_id = ? ORDER BY sort_order, id").all(parentId) as Array<{ id: string }>;
+      const childRows = db
+        .prepare("SELECT id FROM categories WHERE parent_id = ? ORDER BY sort_order, id")
+        .all(parentId) as Array<{ id: string }>;
       categoryIds.push(...childRows.map((row) => row.id));
     }
 
@@ -55,7 +56,9 @@ function applyCategoryChange(db: Database, change: CategoryChange): ApplyChangeR
     const cascadedEntryIds: string[] = [];
 
     for (const categoryId of [...categoryIds].reverse()) {
-      const entries = db.prepare("SELECT id FROM time_entries WHERE category_id = ? ORDER BY id").all(categoryId) as Array<{ id: string }>;
+      const entries = db
+        .prepare("SELECT id FROM time_entries WHERE category_id = ? ORDER BY id")
+        .all(categoryId) as Array<{ id: string }>;
       for (const entry of entries) {
         db.prepare("DELETE FROM time_entries WHERE id = ?").run(entry.id);
         insertEntryTombstone.run(entry.id, change.timestamp);
@@ -72,31 +75,54 @@ function applyCategoryChange(db: Database, change: CategoryChange): ApplyChangeR
 
   const data: Category = change.data;
 
-  const existing = db.prepare("SELECT updated_at FROM categories WHERE id = ?").get(change.recordId) as Pick<CategoryRow, "updated_at"> | undefined;
+  const existing = db.prepare("SELECT updated_at FROM categories WHERE id = ?").get(change.recordId) as
+    | Pick<CategoryRow, "updated_at">
+    | undefined;
 
   // 服务端用 syncLog 时间作为 updated_at，避免 payload.updatedAt 受客户端时钟漂移影响。
   if (existing) {
     db.prepare(`
       UPDATE categories SET name = ?, parent_id = ?, color = ?, icon = ?, sort_order = ?, is_archived = ?, updated_at = ?
       WHERE id = ?
-    `).run(data.name, data.parentId, data.color, data.icon, data.sortOrder, data.isArchived ? 1 : 0, change.timestamp, change.recordId);
+    `).run(
+      data.name,
+      data.parentId,
+      data.color,
+      data.icon,
+      data.sortOrder,
+      data.isArchived ? 1 : 0,
+      change.timestamp,
+      change.recordId,
+    );
     return result(change, "applied", "updated category", existing.updated_at);
   }
 
   db.prepare(`
     INSERT INTO categories (id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(data.id, data.name, data.parentId, data.color, data.icon, data.sortOrder, data.isArchived ? 1 : 0, data.createdAt, change.timestamp);
+  `).run(
+    data.id,
+    data.name,
+    data.parentId,
+    data.color,
+    data.icon,
+    data.sortOrder,
+    data.isArchived ? 1 : 0,
+    data.createdAt,
+    change.timestamp,
+  );
   return result(change, "applied", "inserted category");
 }
 
 // 删除与新记录时间段重叠的现有记录，并写 tombstone + seq，返回被删除的 ID 列表。
 function deleteOverlappingEntries(db: Database, data: TimeEntry, deletedAt: string): string[] {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT id FROM time_entries
     WHERE id != ? AND start_time < ? AND end_time > ?
     ORDER BY start_time, id
-  `).all(data.id, data.endTime, data.startTime) as Array<{ id: string }>;
+  `)
+    .all(data.id, data.endTime, data.startTime) as Array<{ id: string }>;
 
   const insertTombstone = db.prepare(`
     INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
@@ -131,7 +157,9 @@ function applyEntryChange(db: Database, change: EntryChange): ApplyChangeResult 
   if (!category) return result(change, "skipped", "missing category", undefined, undefined, "missing_category");
 
   const overriddenRecordIds = deleteOverlappingEntries(db, data, change.timestamp);
-  const existing = db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get(change.recordId) as Pick<EntryRow, "updated_at"> | undefined;
+  const existing = db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get(change.recordId) as
+    | Pick<EntryRow, "updated_at">
+    | undefined;
 
   // 服务端用 syncLog 时间作为 updated_at，避免 payload.updatedAt 受客户端时钟漂移影响。
   if (existing) {

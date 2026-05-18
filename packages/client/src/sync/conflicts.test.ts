@@ -49,9 +49,10 @@ describe("resolveConflicts", () => {
       },
     ]);
 
-    const applied = await resolveConflicts([
-      { tableName: "categories", recordId: id, local, remote, remoteAction: "update" },
-    ], "use_remote");
+    const applied = await resolveConflicts(
+      [{ tableName: "categories", recordId: id, local, remote, remoteAction: "update" }],
+      "use_remote",
+    );
 
     expect(applied).toBe(1);
     await expect(db.categories.get(id)).resolves.toMatchObject({ name: "remote" });
@@ -79,9 +80,10 @@ describe("resolveConflicts", () => {
       synced: false,
     });
 
-    const applied = await resolveConflicts([
-      { tableName: "time_entries", recordId: local.id, local, remote: null, remoteAction: "delete" },
-    ], "use_remote");
+    const applied = await resolveConflicts(
+      [{ tableName: "time_entries", recordId: local.id, local, remote: null, remoteAction: "delete" }],
+      "use_remote",
+    );
 
     expect(applied).toBe(1);
     await expect(db.timeEntries.get(local.id)).resolves.toBeUndefined();
@@ -136,9 +138,10 @@ describe("resolveConflicts", () => {
       },
     ]);
 
-    const applied = await resolveConflicts([
-      { tableName: "categories", recordId: "work", local: work, remote: null, remoteAction: "delete" },
-    ], "use_remote");
+    const applied = await resolveConflicts(
+      [{ tableName: "categories", recordId: "work", local: work, remote: null, remoteAction: "delete" }],
+      "use_remote",
+    );
 
     expect(applied).toBe(1);
     await expect(db.categories.get("work")).resolves.toBeUndefined();

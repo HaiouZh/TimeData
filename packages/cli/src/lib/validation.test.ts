@@ -9,7 +9,13 @@ describe("CLI validation", () => {
 
   it("validates HH:mm ranges", () => {
     expect(validateTimeRange("14:00", "16:00")).toBeNull();
-    expect(validateTimeRange("24:00", "16:00")).toEqual({ code: "INVALID_TIME_RANGE", message: "Start and end must use HH:mm format" });
-    expect(validateTimeRange("16:00", "14:00")).toEqual({ code: "INVALID_TIME_RANGE", message: "End time must be later than start time" });
+    expect(validateTimeRange("24:00", "16:00")).toEqual({
+      code: "INVALID_TIME_RANGE",
+      message: "Start and end must use HH:mm format",
+    });
+    expect(validateTimeRange("16:00", "14:00")).toEqual({
+      code: "INVALID_TIME_RANGE",
+      message: "End time must be later than start time",
+    });
   });
 });

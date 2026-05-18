@@ -1,7 +1,7 @@
+import type { TimeEntry } from "@timedata/shared";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { TimeEntry } from "@timedata/shared";
 import type { TimeSlot } from "../lib/time.js";
 import Timeline from "./Timeline.js";
 
@@ -45,7 +45,7 @@ describe("Timeline", () => {
         slots,
         onGapClick: () => {},
         onEntryClick: () => {},
-      })
+      }),
     );
 
     expect(html).toContain("07:30 - 08:00");

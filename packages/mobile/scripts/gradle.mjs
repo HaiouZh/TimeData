@@ -12,8 +12,8 @@
  * a single line per scenario and lets us add diagnostics in one place.
  */
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 function resolveWrapper(androidDir) {
   const isWin = process.platform === "win32";

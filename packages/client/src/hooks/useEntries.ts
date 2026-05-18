@@ -1,15 +1,15 @@
+import type { TimeEntry } from "@timedata/shared";
+import { localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.ts";
 import { addDays, isFutureLocalDateTime } from "../lib/time.ts";
 import { recordSyncLog } from "../sync/engine.ts";
-import type { TimeEntry } from "@timedata/shared";
-import { localDateTimeToUtc } from "@timedata/shared";
 
 function dayBounds(date: string) {
   return {
     dayStart: localDateTimeToUtc(`${date}T00:00:00`),
-    dayEnd:   localDateTimeToUtc(`${addDays(date, 1)}T00:00:00`),
+    dayEnd: localDateTimeToUtc(`${addDays(date, 1)}T00:00:00`),
   };
 }
 
@@ -48,7 +48,11 @@ export async function deleteFutureEndedEntries(now: Date = new Date()): Promise<
   await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
     for (const id of deletedEntryIds) {
       await db.timeEntries.delete(id);
-      const pendingLogs = await db.syncLog.where("recordId").equals(id).filter((log) => log.tableName === "time_entries" && !log.synced).toArray();
+      const pendingLogs = await db.syncLog
+        .where("recordId")
+        .equals(id)
+        .filter((log) => log.tableName === "time_entries" && !log.synced)
+        .toArray();
       if (pendingLogs.some((log) => log.action === "create")) {
         await db.syncLog.bulkUpdate(pendingLogs.map((log) => ({ key: log.id, changes: { synced: 1 } })));
       } else {
@@ -60,7 +64,11 @@ export async function deleteFutureEndedEntries(now: Date = new Date()): Promise<
   return { deletedCount: deletedEntryIds.length, deletedEntryIds };
 }
 
-export async function findOverlappingEntries(startTime: string, endTime: string, excludeId?: string): Promise<TimeEntry[]> {
+export async function findOverlappingEntries(
+  startTime: string,
+  endTime: string,
+  excludeId?: string,
+): Promise<TimeEntry[]> {
   const candidates = await db.timeEntries.where("startTime").below(endTime).toArray();
   return candidates
     .filter((entry) => entry.id !== excludeId && entry.endTime > startTime)
@@ -70,11 +78,17 @@ export async function findOverlappingEntries(startTime: string, endTime: string,
 export async function findPreviousEntry(date: string): Promise<TimeEntry | null> {
   const dayStart = localDateTimeToUtc(`${date}T00:00:00`);
   const previousEntries = await db.timeEntries.where("startTime").below(dayStart).toArray();
-  const overlapping = previousEntries.filter((entry) => entry.endTime > dayStart).sort((a, b) => b.endTime.localeCompare(a.endTime));
+  const overlapping = previousEntries
+    .filter((entry) => entry.endTime > dayStart)
+    .sort((a, b) => b.endTime.localeCompare(a.endTime));
   if (overlapping.length > 0) return overlapping[0];
 
   const previousDayStart = localDateTimeToUtc(`${addDays(date, -1)}T00:00:00`);
-  return previousEntries.filter((entry) => entry.endTime >= previousDayStart).sort((a, b) => b.endTime.localeCompare(a.endTime))[0] || null;
+  return (
+    previousEntries
+      .filter((entry) => entry.endTime >= previousDayStart)
+      .sort((a, b) => b.endTime.localeCompare(a.endTime))[0] || null
+  );
 }
 
 export async function findLatestEntryEndingBefore(utcCutoff: string): Promise<TimeEntry | null> {
@@ -94,7 +108,11 @@ export function useLatestEntryEndTimeBefore(utcCutoff: string | null): string | 
   );
 }
 
-export function planEntryOverlapAdjustments(overlaps: TimeEntry[], startTime: string, endTime: string): EntryOverlapPlan {
+export function planEntryOverlapAdjustments(
+  overlaps: TimeEntry[],
+  startTime: string,
+  endTime: string,
+): EntryOverlapPlan {
   const updates: EntryOverlapUpdate[] = [];
   const deletes: string[] = [];
 
@@ -149,7 +167,11 @@ export async function saveEntryWithOverlapAdjustments(input: SaveEntryWithOverla
   return db.transaction("rw", db.timeEntries, db.syncLog, async () => {
     if (input.overlapPlan) {
       for (const update of input.overlapPlan.updates) {
-        await db.timeEntries.update(update.id, { startTime: update.startTime, endTime: update.endTime, updatedAt: now });
+        await db.timeEntries.update(update.id, {
+          startTime: update.startTime,
+          endTime: update.endTime,
+          updatedAt: now,
+        });
         await recordSyncLog("time_entries", update.id, "update");
       }
       for (const id of input.overlapPlan.deletes) {
@@ -194,12 +216,7 @@ export function useEntry(id?: string) {
 }
 
 export function useEntryMutations() {
-  async function addEntry(
-    categoryId: string,
-    startTime: string,
-    endTime: string,
-    note?: string
-  ): Promise<void> {
+  async function addEntry(categoryId: string, startTime: string, endTime: string, note?: string): Promise<void> {
     const now = new Date().toISOString();
     const id = uuid();
 
@@ -223,7 +240,7 @@ export function useEntryMutations() {
 
   async function updateEntry(
     id: string,
-    updates: Partial<Pick<TimeEntry, "categoryId" | "startTime" | "endTime" | "note">>
+    updates: Partial<Pick<TimeEntry, "categoryId" | "startTime" | "endTime" | "note">>,
   ): Promise<void> {
     if (updates.startTime || updates.endTime) {
       const existing = await db.timeEntries.get(id);
@@ -252,22 +269,16 @@ export function useEntryMutations() {
 export function useEntries(date: string) {
   const { dayStart, dayEnd } = dayBounds(date);
   const entries =
-    useLiveQuery(
-      async () => {
-        const candidates = await db.timeEntries.where("startTime").below(dayEnd).toArray();
-        return candidates
-          .filter((entry) => entry.endTime > dayStart)
-          .sort((a, b) => a.startTime.localeCompare(b.startTime));
-      },
-      [dayStart, dayEnd]
-    ) || [];
+    useLiveQuery(async () => {
+      const candidates = await db.timeEntries.where("startTime").below(dayEnd).toArray();
+      return candidates
+        .filter((entry) => entry.endTime > dayStart)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }, [dayStart, dayEnd]) || [];
   const previousEntry =
-    useLiveQuery(
-      async () => {
-        return findPreviousEntry(date);
-      },
-      [date]
-    ) || null;
+    useLiveQuery(async () => {
+      return findPreviousEntry(date);
+    }, [date]) || null;
   const mutations = useEntryMutations();
 
   return { entries, previousEntry, ...mutations };

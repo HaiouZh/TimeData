@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it } from "vitest";
 import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
-import { db, LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY } from "../db/index.js";
-import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
+import { beforeEach, describe, expect, it } from "vitest";
+import { LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY, db } from "../db/index.js";
 import { importBackup } from "./importBackup.js";
+import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 
 const now = "2026-05-07T12:00:00.000Z";
 
@@ -123,7 +123,9 @@ describe("importBackup", () => {
     await db.categories.add(oldCategory);
     await db.timeEntries.add(oldEntry);
 
-    await expect(importBackup({ ...backup(), timeEntries: [{ ...newEntry, categoryId: "missing" }] })).rejects.toThrow("记录 new-entry 引用了不存在的分类 missing。");
+    await expect(importBackup({ ...backup(), timeEntries: [{ ...newEntry, categoryId: "missing" }] })).rejects.toThrow(
+      "记录 new-entry 引用了不存在的分类 missing。",
+    );
 
     await expect(db.categories.toArray()).resolves.toEqual([oldCategory]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([oldEntry]);

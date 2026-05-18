@@ -1,6 +1,10 @@
 import { getDb } from "../db/connection.js";
 
-export type PushSeqStrategy = "unknown_base" | "fast_forward_push" | "merge_non_overlapping" | "local_wins_non_fast_forward";
+export type PushSeqStrategy =
+  | "unknown_base"
+  | "fast_forward_push"
+  | "merge_non_overlapping"
+  | "local_wins_non_fast_forward";
 
 export interface PushSeqRecord {
   tableName: "categories" | "time_entries";
@@ -22,13 +26,15 @@ export function analyzePushBaseSeq(baseSeq: number | null, pushRecords: PushSeqR
     return { strategy: "unknown_base", cloudAheadCount: 0, overlappingRecords: [] };
   }
 
-  const rows = getDb().prepare(`
+  const rows = getDb()
+    .prepare(`
     SELECT table_name, record_id, MAX(id) as seq
     FROM sync_seq
     WHERE id > ?
     GROUP BY table_name, record_id
     ORDER BY seq ASC
-  `).all(baseSeq) as Array<{
+  `)
+    .all(baseSeq) as Array<{
     table_name: PushSeqRecord["tableName"];
     record_id: string;
     seq: number;

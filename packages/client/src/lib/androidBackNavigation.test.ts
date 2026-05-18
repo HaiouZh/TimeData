@@ -23,23 +23,35 @@ describe("resolveAndroidBackAction", () => {
   });
 
   it("returns settings parent for /settings/categories list", () => {
-    expect(resolveAndroidBackAction("/settings/categories"))
-      .toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/categories")).toEqual({
+      type: "navigate",
+      to: "/settings",
+      replace: true,
+    });
   });
 
   it("returns categories list parent for /settings/categories/:id detail", () => {
-    expect(resolveAndroidBackAction("/settings/categories/abc-123"))
-      .toEqual({ type: "navigate", to: "/settings/categories", replace: true });
+    expect(resolveAndroidBackAction("/settings/categories/abc-123")).toEqual({
+      type: "navigate",
+      to: "/settings/categories",
+      replace: true,
+    });
   });
 
   it("returns data settings parent for /settings/data/backup-history", () => {
-    expect(resolveAndroidBackAction("/settings/data/backup-history"))
-      .toEqual({ type: "navigate", to: "/settings/data", replace: true });
+    expect(resolveAndroidBackAction("/settings/data/backup-history")).toEqual({
+      type: "navigate",
+      to: "/settings/data",
+      replace: true,
+    });
   });
 
   it("returns settings parent for /settings/admin-insights", () => {
-    expect(resolveAndroidBackAction("/settings/admin-insights"))
-      .toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/admin-insights")).toEqual({
+      type: "navigate",
+      to: "/settings",
+      replace: true,
+    });
   });
 });
 

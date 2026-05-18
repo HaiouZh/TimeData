@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { AutoBackupRecord } from "../../db/index.js";
+import { listAutoBackups } from "../../backup/autoBackup.js";
 import { exportBackup } from "../../backup/exportBackup.js";
 import { downloadBackupFile } from "../../backup/fileDownload.js";
 import { importBackup } from "../../backup/importBackup.js";
-import { listAutoBackups } from "../../backup/autoBackup.js";
 import { BACKUP_FORMAT } from "../../backup/schema.js";
+import type { AutoBackupRecord } from "../../db/index.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { formatAppDateTime } from "../../lib/time.js";
 import SettingsDetailPage from "./SettingsDetailPage.js";
@@ -76,7 +76,9 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
       });
       navigate("/settings/data", {
         replace: true,
-        state: { dataStatus: `已恢复自动备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。` },
+        state: {
+          dataStatus: `已恢复自动备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。`,
+        },
       });
     } catch (e: unknown) {
       setStatus(`恢复失败：${e instanceof Error ? e.message : "未知错误"}`);

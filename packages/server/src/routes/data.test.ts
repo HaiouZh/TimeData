@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupRouteTestDb, seedEntry, setupRouteTestApp } from "../__tests__/helpers.js";
@@ -89,7 +89,12 @@ describe("data route reset", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json() as { backupId: string; categories: number; entriesDeleted: number; resetAt: string };
+    const body = (await res.json()) as {
+      backupId: string;
+      categories: number;
+      entriesDeleted: number;
+      resetAt: string;
+    };
     expect(body.backupId).toBe("data-reset-backup-1");
     expect(body.entriesDeleted).toBe(1);
     expect(body.categories).toBeGreaterThan(0);

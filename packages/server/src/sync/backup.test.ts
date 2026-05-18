@@ -22,7 +22,12 @@ beforeEach(() => {
 describe("createServerBackup", () => {
   it("creates a SQLite backup file before server mutation", async () => {
     const db = getDb();
-    db.prepare("INSERT INTO sync_logs (device, action, detail, record_count) VALUES (?, ?, ?, ?)").run("test", "before_backup", "{}", 1);
+    db.prepare("INSERT INTO sync_logs (device, action, detail, record_count) VALUES (?, ?, ?, ?)").run(
+      "test",
+      "before_backup",
+      "{}",
+      1,
+    );
 
     const backup = await createServerBackup("sync_push");
 
@@ -34,7 +39,11 @@ describe("createServerBackup", () => {
     const backup = await createServerBackup("sync_local_wins", {
       protected: true,
       reason: "local_wins_non_fast_forward",
-      details: { baseSeq: 10, cloudAheadCount: 1, overlappingRecords: [{ tableName: "time_entries", recordId: "entry-local", serverSeq: 11 }] },
+      details: {
+        baseSeq: 10,
+        cloudAheadCount: 1,
+        overlappingRecords: [{ tableName: "time_entries", recordId: "entry-local", serverSeq: 11 }],
+      },
     });
 
     const manifestPath = path.join(tempRoot, "backups", "manifest.json");
@@ -48,7 +57,11 @@ describe("createServerBackup", () => {
       protected: true,
       reason: "local_wins_non_fast_forward",
       relatedSyncLogId: null,
-      details: { baseSeq: 10, cloudAheadCount: 1, overlappingRecords: [{ tableName: "time_entries", recordId: "entry-local", serverSeq: 11 }] },
+      details: {
+        baseSeq: 10,
+        cloudAheadCount: 1,
+        overlappingRecords: [{ tableName: "time_entries", recordId: "entry-local", serverSeq: 11 }],
+      },
     });
   });
 

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { getDb } from "../db/connection.js";
-import { type CategoryRow, type EntryRow } from "../lib/db-rows.js";
+import type { CategoryRow, EntryRow } from "../lib/db-rows.js";
 
 const exportRoute = new Hono();
 
@@ -29,45 +29,51 @@ exportRoute.get("/", (c) => {
     const lines: string[] = [];
 
     for (const cat of categories) {
-      lines.push(JSON.stringify({
-        type: "category",
-        id: cat.id,
-        name: cat.name,
-        parentId: cat.parent_id,
-        color: cat.color,
-        sortOrder: cat.sort_order,
-      }));
+      lines.push(
+        JSON.stringify({
+          type: "category",
+          id: cat.id,
+          name: cat.name,
+          parentId: cat.parent_id,
+          color: cat.color,
+          sortOrder: cat.sort_order,
+        }),
+      );
     }
 
     for (const entry of entries) {
-      lines.push(JSON.stringify({
-        type: "entry",
-        id: entry.id,
-        category: categoryMap.get(entry.category_id) || "unknown",
-        start: entry.start_time,
-        end: entry.end_time,
-        note: entry.note,
-      }));
+      lines.push(
+        JSON.stringify({
+          type: "entry",
+          id: entry.id,
+          category: categoryMap.get(entry.category_id) || "unknown",
+          start: entry.start_time,
+          end: entry.end_time,
+          note: entry.note,
+        }),
+      );
     }
 
     c.header("Content-Disposition", "attachment; filename=timedata-export.jsonl");
-    return c.body(lines.join("\n") + "\n", 200, { "Content-Type": "application/x-ndjson" });
+    return c.body(`${lines.join("\n")}\n`, 200, { "Content-Type": "application/x-ndjson" });
   }
 
   if (format === "csv") {
     const csvLines = ["category,start,end,note"];
     for (const entry of entries) {
       const cat = categoryMap.get(entry.category_id) || "unknown";
-      csvLines.push([
-        escapeCsvCell(cat),
-        escapeCsvCell(entry.start_time),
-        escapeCsvCell(entry.end_time),
-        escapeCsvCell(entry.note),
-      ].join(","));
+      csvLines.push(
+        [
+          escapeCsvCell(cat),
+          escapeCsvCell(entry.start_time),
+          escapeCsvCell(entry.end_time),
+          escapeCsvCell(entry.note),
+        ].join(","),
+      );
     }
 
     c.header("Content-Disposition", "attachment; filename=timedata-export.csv");
-    return c.body(csvLines.join("\n") + "\n", 200, { "Content-Type": "text/csv" });
+    return c.body(`${csvLines.join("\n")}\n`, 200, { "Content-Type": "text/csv" });
   }
 
   return c.json({ error: "Unsupported format. Use jsonl or csv." }, 400);

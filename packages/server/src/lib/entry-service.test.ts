@@ -1,12 +1,12 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getCommitHash } from "../sync/state.js";
 import {
   createEntryFromCliInput,
-  listEntriesForCliDate,
   listCategoryPaths,
+  listEntriesForCliDate,
   resolveCategoryPath,
 } from "./entry-service.js";
-import { getCommitHash } from "../sync/state.js";
 
 let db: Database.Database;
 
@@ -158,7 +158,9 @@ describe("entry service", () => {
     expect(result.entry.date).toBe("2026-05-07");
     expect(result.entry.category).toBe("工作/编程");
 
-    const row = db.prepare("SELECT category_id, start_time, end_time, note FROM time_entries WHERE id = ?").get(result.entry.id);
+    const row = db
+      .prepare("SELECT category_id, start_time, end_time, note FROM time_entries WHERE id = ?")
+      .get(result.entry.id);
     // 上海 14:00 = UTC 06:00，上海 16:00 = UTC 08:00
     expect(row).toEqual({
       category_id: "cat-code",
@@ -169,13 +171,17 @@ describe("entry service", () => {
   });
 
   it("rejects CLI entries whose end time is in the future", () => {
-    const result = createEntryFromCliInput(db, {
-      date: "2026-05-07",
-      start: "14:00",
-      end: "16:00",
-      category: "工作/编程",
-      note: "未来记录",
-    }, { now: new Date("2026-05-07T15:59:00+08:00") });
+    const result = createEntryFromCliInput(
+      db,
+      {
+        date: "2026-05-07",
+        start: "14:00",
+        end: "16:00",
+        category: "工作/编程",
+        note: "未来记录",
+      },
+      { now: new Date("2026-05-07T15:59:00+08:00") },
+    );
 
     expect(result).toEqual({
       ok: false,
@@ -190,13 +196,17 @@ describe("entry service", () => {
   });
 
   it("allows CLI entries ending exactly at the current time", () => {
-    const result = createEntryFromCliInput(db, {
-      date: "2026-05-07",
-      start: "14:00",
-      end: "16:00",
-      category: "工作/编程",
-      note: "当前记录",
-    }, { now: new Date("2026-05-07T16:00:00+08:00") });
+    const result = createEntryFromCliInput(
+      db,
+      {
+        date: "2026-05-07",
+        start: "14:00",
+        end: "16:00",
+        category: "工作/编程",
+        note: "当前记录",
+      },
+      { now: new Date("2026-05-07T16:00:00+08:00") },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
@@ -205,22 +215,27 @@ describe("entry service", () => {
 
   it("records sync_seq and refreshes sync state when creating an entry from CLI input", () => {
     const before = getCommitHash(db).hash;
-    const result = createEntryFromCliInput(db, {
-      date: "2026-05-07",
-      start: "14:00",
-      end: "16:00",
-      category: "工作/编程",
-      note: "CLI 写入",
-    }, { now: new Date("2026-05-07T16:00:00+08:00") });
+    const result = createEntryFromCliInput(
+      db,
+      {
+        date: "2026-05-07",
+        start: "14:00",
+        end: "16:00",
+        category: "工作/编程",
+        note: "CLI 写入",
+      },
+      { now: new Date("2026-05-07T16:00:00+08:00") },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("expected success");
 
-    const seq = db.prepare("SELECT table_name, record_id, action FROM sync_seq WHERE record_id = ?").get(result.entry.id);
+    const seq = db
+      .prepare("SELECT table_name, record_id, action FROM sync_seq WHERE record_id = ?")
+      .get(result.entry.id);
     expect(seq).toEqual({ table_name: "time_entries", record_id: result.entry.id, action: "create" });
     expect(getCommitHash(db).hash).not.toBe(before);
   });
-
 });
 
 // ── Task 4: UTC storage ──────────────────────────────────────────────────────
@@ -260,15 +275,22 @@ function makeDb2() {
 describe("createEntryFromCliInput — UTC storage", () => {
   it("stores start_time and end_time as UTC ISO strings", () => {
     const db2 = makeDb2();
-    const result = createEntryFromCliInput(db2, {
-      date: "2026-05-14",
-      start: "15:00",
-      end: "16:00",
-      category: "Work/Dev",
-    }, { now: new Date("2026-05-14T16:00:00+08:00") });
+    const result = createEntryFromCliInput(
+      db2,
+      {
+        date: "2026-05-14",
+        start: "15:00",
+        end: "16:00",
+        category: "Work/Dev",
+      },
+      { now: new Date("2026-05-14T16:00:00+08:00") },
+    );
 
     expect(result.ok).toBe(true);
-    const row = db2.prepare("SELECT start_time, end_time FROM time_entries LIMIT 1").get() as { start_time: string; end_time: string };
+    const row = db2.prepare("SELECT start_time, end_time FROM time_entries LIMIT 1").get() as {
+      start_time: string;
+      end_time: string;
+    };
     // 上海 15:00 = UTC 07:00
     expect(row.start_time).toBe("2026-05-14T07:00:00.000Z");
     expect(row.end_time).toBe("2026-05-14T08:00:00.000Z");
@@ -277,12 +299,16 @@ describe("createEntryFromCliInput — UTC storage", () => {
 
   it("returns startTime/endTime in local time for CLI display", () => {
     const db2 = makeDb2();
-    const result = createEntryFromCliInput(db2, {
-      date: "2026-05-14",
-      start: "09:00",
-      end: "10:00",
-      category: "Work/Dev",
-    }, { now: new Date("2026-05-14T10:00:00+08:00") });
+    const result = createEntryFromCliInput(
+      db2,
+      {
+        date: "2026-05-14",
+        start: "09:00",
+        end: "10:00",
+        category: "Work/Dev",
+      },
+      { now: new Date("2026-05-14T10:00:00+08:00") },
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unexpected");
@@ -296,9 +322,18 @@ describe("listEntriesForCliDate — UTC storage", () => {
   it("returns entries that fall on the given local date, with local display time", () => {
     const db2 = makeDb2();
     // 直接写入 UTC 数据
-    db2.prepare(
-      "INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run("e1", "cat1", "2026-05-14T07:00:00.000Z", "2026-05-14T08:00:00.000Z", new Date().toISOString(), new Date().toISOString());
+    db2
+      .prepare(
+        "INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        "e1",
+        "cat1",
+        "2026-05-14T07:00:00.000Z",
+        "2026-05-14T08:00:00.000Z",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
 
     const result = listEntriesForCliDate(db2, "2026-05-14");
     expect(result.ok).toBe(true);

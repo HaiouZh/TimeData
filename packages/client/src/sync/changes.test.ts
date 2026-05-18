@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { Category, TimeEntry } from "@timedata/shared";
+import { describe, expect, it } from "vitest";
 import { categoryDependencyChangesForEntry } from "./changes.js";
 
 const now = "2026-05-05T00:00:00.000Z";
@@ -38,7 +38,15 @@ describe("categoryDependencyChangesForEntry", () => {
       updatedAt: now,
     };
 
-    const changes = categoryDependencyChangesForEntry(entry, new Map([[parent.id, parent], [child.id, child]]), now, new Set());
+    const changes = categoryDependencyChangesForEntry(
+      entry,
+      new Map([
+        [parent.id, parent],
+        [child.id, child],
+      ]),
+      now,
+      new Set(),
+    );
 
     expect(changes.map((change) => change.recordId)).toEqual(["local-parent", "local-child"]);
     expect(changes.every((change) => change.tableName === "categories")).toBe(true);

@@ -1,6 +1,6 @@
 import { db, resetSyncCursors } from "../db/index.js";
-import { validateBackup } from "./validateBackup.js";
 import type { BackupDocument } from "./schema.js";
+import { validateBackup } from "./validateBackup.js";
 
 export interface ImportBackupResult {
   categoryCount: number;

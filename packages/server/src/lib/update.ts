@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
 
 export interface UpdaterOpts {
   hostComposeDir: string;
@@ -54,7 +53,11 @@ function logTail(filePath: string, maxChars = 4000): string {
   return content.slice(-maxChars);
 }
 
-export function createUpdateStatus(opts: { hostComposeDir: string; updateId: string; now?: () => string }): UpdateStatus {
+export function createUpdateStatus(opts: {
+  hostComposeDir: string;
+  updateId: string;
+  now?: () => string;
+}): UpdateStatus {
   const now = opts.now ? opts.now() : new Date().toISOString();
   fs.mkdirSync(updateDataDir(opts.hostComposeDir), { recursive: true });
   fs.writeFileSync(updateLogPath(opts.hostComposeDir), `[${now}] update ${opts.updateId} started\n`, "utf8");
@@ -89,7 +92,7 @@ export function buildUpdaterArgs(opts: UpdaterOpts & { startedAt?: string }): st
   const statusFile = updateStatusPath(opts.hostComposeDir);
   const lockFile = updateLockPath(opts.hostComposeDir);
   const command = [
-    `set +e`,
+    "set +e",
     `LOG=${shellQuote(logFile)}`,
     `STATUS=${shellQuote(statusFile)}`,
     `LOCK=${shellQuote(lockFile)}`,
@@ -100,16 +103,16 @@ export function buildUpdaterArgs(opts: UpdaterOpts & { startedAt?: string }): st
     `health_check() { i=0; while [ "$i" -lt 30 ]; do wget -q -O - http://127.0.0.1:3000/api/health >/dev/null 2>&1 && return 0; i=$((i + 1)); sleep 2; done; return 1; }`,
     `echo "[$(date -Iseconds)] docker compose pull" >> "$LOG"`,
     `docker compose pull >> "$LOG" 2>&1`,
-    `pull_code=$?`,
+    "pull_code=$?",
     `echo "[$(date -Iseconds)] docker compose up -d --force-recreate" >> "$LOG"`,
     `docker compose up -d --force-recreate >> "$LOG" 2>&1`,
-    `up_code=$?`,
+    "up_code=$?",
     `if [ "$pull_code" -eq 0 ] && [ "$up_code" -eq 0 ] && health_check; then write_status succeeded 0; exit 0; fi`,
-    `code=$up_code`,
+    "code=$up_code",
     `if [ "$pull_code" -ne 0 ]; then code=$pull_code; fi`,
     `echo "[$(date -Iseconds)] update failed or health check failed; attempting docker compose up -d recovery" >> "$LOG"`,
     `docker compose up -d >> "$LOG" 2>&1`,
-    `recover_code=$?`,
+    "recover_code=$?",
     `if [ "$recover_code" -eq 0 ] && health_check; then write_status succeeded 0; exit 0; fi`,
     `if [ "$recover_code" -ne 0 ]; then code=$recover_code; fi`,
     `write_status failed "$code"`,
@@ -117,14 +120,23 @@ export function buildUpdaterArgs(opts: UpdaterOpts & { startedAt?: string }): st
   ].join("; ");
 
   return [
-    "run", "--rm", "-d",
-    "--network", "host",
-    "--name", `timedata-updater-${updateId}`,
-    "-v", "/var/run/docker.sock:/var/run/docker.sock",
-    "-v", `${opts.hostComposeDir}:${opts.hostComposeDir}`,
-    "-w", opts.hostComposeDir,
+    "run",
+    "--rm",
+    "-d",
+    "--network",
+    "host",
+    "--name",
+    `timedata-updater-${updateId}`,
+    "-v",
+    "/var/run/docker.sock:/var/run/docker.sock",
+    "-v",
+    `${opts.hostComposeDir}:${opts.hostComposeDir}`,
+    "-w",
+    opts.hostComposeDir,
     opts.image,
-    "sh", "-c", command,
+    "sh",
+    "-c",
+    command,
   ];
 }
 

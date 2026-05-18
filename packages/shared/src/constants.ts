@@ -42,9 +42,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     id: "cat-leisure",
     name: "享乐",
     color: "#FFB347",
-    children: [
-      { id: "cat-leisure-fun", name: "娱乐" },
-    ],
+    children: [{ id: "cat-leisure-fun", name: "娱乐" }],
   },
   {
     id: "cat-ops",

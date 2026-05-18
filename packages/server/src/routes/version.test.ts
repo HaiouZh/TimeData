@@ -7,7 +7,10 @@ beforeEach(async () => {
   vi.resetModules();
   vi.stubEnv("UPDATE_REPO", "HaiouZh/TimeData");
   vi.stubEnv("GIT_SHA", "abcdef1234567890");
-  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ workflow_runs: [{ head_sha: "1234567890abcdef" }] }))));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ workflow_runs: [{ head_sha: "1234567890abcdef" }] }))),
+  );
   const { Hono } = await import("hono");
   const { _resetCache } = await import("../lib/version.js");
   _resetCache();

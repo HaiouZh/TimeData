@@ -1,5 +1,5 @@
 import { requestJson } from "../lib/api-client.js";
-import { resolveConfig, type FileConfigResult } from "../lib/config.js";
+import { type FileConfigResult, resolveConfig } from "../lib/config.js";
 
 interface DoctorCheck {
   name: "config" | "serverUrl" | "server" | "auth";
@@ -69,7 +69,12 @@ export async function runDoctor(
     return { ok: false, checks };
   }
   if (!isHealthy(health)) {
-    checks.push({ name: "server", ok: false, code: "HTTP_INVALID_RESPONSE", message: "Health check returned an unexpected response" });
+    checks.push({
+      name: "server",
+      ok: false,
+      code: "HTTP_INVALID_RESPONSE",
+      message: "Health check returned an unexpected response",
+    });
     return { ok: false, checks };
   }
 
@@ -81,7 +86,12 @@ export async function runDoctor(
     return { ok: false, checks };
   }
   if (!isValidReadOnlyResponse(categories)) {
-    checks.push({ name: "auth", ok: false, code: "HTTP_INVALID_RESPONSE", message: "Read-only API returned an unexpected response" });
+    checks.push({
+      name: "auth",
+      ok: false,
+      code: "HTTP_INVALID_RESPONSE",
+      message: "Read-only API returned an unexpected response",
+    });
     return { ok: false, checks };
   }
 

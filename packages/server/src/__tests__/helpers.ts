@@ -2,7 +2,10 @@ import Database from "better-sqlite3";
 import type { Hono } from "hono";
 import { afterEach, vi } from "vitest";
 
-export async function setupRouteTestApp(routePath: string, routeModulePath: string): Promise<{ app: Hono; db: Database.Database }> {
+export async function setupRouteTestApp(
+  routePath: string,
+  routeModulePath: string,
+): Promise<{ app: Hono; db: Database.Database }> {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
 

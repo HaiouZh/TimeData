@@ -1,11 +1,11 @@
+import type { VersionInfo } from "@timedata/shared";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { fetchAndroidApkUpdate, openAndroidApkUpdate, type AndroidApkUpdate } from "../lib/mobileUpdate.ts";
+import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
 import { fetchServerVersion, fetchUpdateStatus, triggerServerUpdate } from "../lib/serverVersion.ts";
 import { formatAppDateTime } from "../lib/time.ts";
-import type { VersionInfo } from "@timedata/shared";
 import type { RegularSyncResult } from "../sync/engine.ts";
 
 type ServerConnectionColor = "green" | "gray" | "red";
@@ -15,7 +15,11 @@ interface ServerConnectionState {
   subtitle: string;
 }
 
-export function getServerConnectionState(apiUrl: string, serverVersion: VersionInfo | null, checked: boolean): ServerConnectionState {
+export function getServerConnectionState(
+  apiUrl: string,
+  serverVersion: VersionInfo | null,
+  checked: boolean,
+): ServerConnectionState {
   if (!apiUrl) {
     return { color: "gray", subtitle: "未配置服务器" };
   }
@@ -34,9 +38,17 @@ function statusDotClass(color: ServerConnectionColor): string {
   return "bg-slate-500";
 }
 
-function SettingsLinkRow({ to, title, subtitle, accessory }: { to: string; title: string; subtitle?: string; accessory?: string }) {
+function SettingsLinkRow({
+  to,
+  title,
+  subtitle,
+  accessory,
+}: { to: string; title: string; subtitle?: string; accessory?: string }) {
   return (
-    <Link to={to} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 hover:bg-slate-900">
+    <Link
+      to={to}
+      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 hover:bg-slate-900"
+    >
       <div className="min-w-0">
         <div className="text-sm font-medium text-slate-100">{title}</div>
         {subtitle && <div className="mt-1 truncate text-xs text-slate-500">{subtitle}</div>}
@@ -49,7 +61,13 @@ function SettingsLinkRow({ to, title, subtitle, accessory }: { to: string; title
   );
 }
 
-function SettingsActionRow({ title, subtitle, accessory, disabled, onClick }: { title: string; subtitle?: string; accessory?: string; disabled?: boolean; onClick: () => void }) {
+function SettingsActionRow({
+  title,
+  subtitle,
+  accessory,
+  disabled,
+  onClick,
+}: { title: string; subtitle?: string; accessory?: string; disabled?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -95,16 +113,29 @@ function CloudSyncSummary() {
           <div className="mt-2 space-y-1 text-xs text-slate-300">
             <p>上次同步: {lastSynced ? formatAppDateTime(lastSynced) : "从未"}</p>
             <p>待同步: {unsyncedCount} 条</p>
-            {lastResult && lastResult.identical && <p className="text-emerald-300">本地与云端数据一致，无需同步。</p>}
-            {lastResult && !lastResult.identical && !conflicts.length && <p className="text-emerald-300">已推送 {lastResult.pushed} 条，已拉取 {lastResult.pulled} 条</p>}
+            {lastResult?.identical && <p className="text-emerald-300">本地与云端数据一致，无需同步。</p>}
+            {lastResult && !lastResult.identical && !conflicts.length && (
+              <p className="text-emerald-300">
+                已推送 {lastResult.pushed} 条，已拉取 {lastResult.pulled} 条
+              </p>
+            )}
             {lastResult && lastResult.rejected > 0 && <p className="text-red-300">云端拒绝 {lastResult.rejected} 条</p>}
-            {lastResult && lastResult.pushConflicts > 0 && <p className="text-amber-300">云端冲突 {lastResult.pushConflicts} 条</p>}
+            {lastResult && lastResult.pushConflicts > 0 && (
+              <p className="text-amber-300">云端冲突 {lastResult.pushConflicts} 条</p>
+            )}
             {lastResult?.pushIssues && <SyncIssueList issues={lastResult.pushIssues} />}
-            {conflicts.length > 0 && <p className="text-amber-300">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>}
+            {conflicts.length > 0 && (
+              <p className="text-amber-300">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>
+            )}
             {error && <p className="text-red-300">{error}</p>}
           </div>
         </div>
-        <button type="button" onClick={sync} disabled={syncing} className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50">
+        <button
+          type="button"
+          onClick={sync}
+          disabled={syncing}
+          className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        >
           {syncing ? "同步中…" : "同步"}
         </button>
       </div>
@@ -185,7 +216,14 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!(await confirm({ title: "确认服务端更新", body: `确认更新到 ${serverVersion.latest}？过程中页面会短暂不可用。`, danger: false }))) return;
+    if (
+      !(await confirm({
+        title: "确认服务端更新",
+        body: `确认更新到 ${serverVersion.latest}？过程中页面会短暂不可用。`,
+        danger: false,
+      }))
+    )
+      return;
 
     setServerUpdating(true);
     setServerUpdateStatus("已发起更新…");
@@ -210,7 +248,10 @@ export default function SettingsPage() {
       <h2 className="text-lg font-medium">设置</h2>
 
       <section className="space-y-3">
-        <Link to="/settings/server" className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 hover:bg-slate-900">
+        <Link
+          to="/settings/server"
+          className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-3 hover:bg-slate-900"
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-100">
               <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(connectionState.color)}`} />
@@ -225,7 +266,11 @@ export default function SettingsPage() {
 
         <SettingsLinkRow to="/settings/categories" title="分类管理" subtitle="新增、排序、改色、子分类与删除" />
         <SettingsLinkRow to="/settings/data" title="数据设置" subtitle="云同步、强制替换、导出、恢复、重置" />
-        <SettingsLinkRow to="/settings/admin-insights" title="服务端数据洞察" subtitle="只读查看服务器数据、同步、备份和健康检查" />
+        <SettingsLinkRow
+          to="/settings/admin-insights"
+          title="服务端数据洞察"
+          subtitle="只读查看服务器数据、同步、备份和健康检查"
+        />
         <SettingsActionRow
           title="APK 更新"
           subtitle={apkStatus || `当前版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`}
@@ -235,7 +280,10 @@ export default function SettingsPage() {
         />
         <SettingsActionRow
           title="服务端更新"
-          subtitle={serverUpdateStatus || (serverVersion ? `当前 ${serverVersion.current} / 最新 ${serverVersion.latest}` : connectionState.subtitle)}
+          subtitle={
+            serverUpdateStatus ||
+            (serverVersion ? `当前 ${serverVersion.current} / 最新 ${serverVersion.latest}` : connectionState.subtitle)
+          }
           accessory={serverVersion?.hasUpdate ? "有新版本" : undefined}
           disabled={serverUpdating || !apiUrl}
           onClick={handleServerUpdate}

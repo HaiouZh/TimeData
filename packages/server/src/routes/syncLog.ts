@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { Hono } from "hono";
+import { z } from "zod";
 import { getDb } from "../db/connection.js";
 
 const syncLog = new Hono();
@@ -22,18 +22,11 @@ syncLog.post("/", async (c) => {
   const db = getDb();
   const entries = Array.isArray(parsed.data) ? parsed.data : [parsed.data];
 
-  const insert = db.prepare(
-    "INSERT INTO sync_logs (device, action, detail, record_count) VALUES (?, ?, ?, ?)"
-  );
+  const insert = db.prepare("INSERT INTO sync_logs (device, action, detail, record_count) VALUES (?, ?, ?, ?)");
 
   const insertAll = db.transaction(() => {
     for (const entry of entries) {
-      insert.run(
-        entry.device || null,
-        entry.action,
-        entry.detail || null,
-        entry.record_count,
-      );
+      insert.run(entry.device || null, entry.action, entry.detail || null, entry.record_count);
     }
   });
 
@@ -45,9 +38,7 @@ syncLog.get("/", (c) => {
   const db = getDb();
   const rawLimit = Number(c.req.query("limit") ?? 50);
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(500, Math.floor(rawLimit))) : 50;
-  const rows = db.prepare(
-    "SELECT * FROM sync_logs ORDER BY id DESC LIMIT ?"
-  ).all(limit);
+  const rows = db.prepare("SELECT * FROM sync_logs ORDER BY id DESC LIMIT ?").all(limit);
   return c.json(rows);
 });
 

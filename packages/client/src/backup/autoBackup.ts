@@ -1,13 +1,10 @@
-import { db, type AutoBackupRecord } from "../db/index.js";
 import { v4 as uuid } from "uuid";
+import { type AutoBackupRecord, db } from "../db/index.js";
 
 const MAX_AUTO_BACKUPS = 7;
 
 export async function createAutoBackup(): Promise<void> {
-  const [categories, timeEntries] = await Promise.all([
-    db.categories.toArray(),
-    db.timeEntries.toArray(),
-  ]);
+  const [categories, timeEntries] = await Promise.all([db.categories.toArray(), db.timeEntries.toArray()]);
 
   if (categories.length === 0 && timeEntries.length === 0) return;
 

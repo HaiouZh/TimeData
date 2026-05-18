@@ -1,10 +1,17 @@
+import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import EntryForm from "../components/EntryForm.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
-import { findOverlappingEntries, planEntryOverlapAdjustments, saveEntryWithOverlapAdjustments, useEntry, useEntryMutations, useLatestEntryEndTimeBefore } from "../hooks/useEntries.ts";
+import {
+  findOverlappingEntries,
+  planEntryOverlapAdjustments,
+  saveEntryWithOverlapAdjustments,
+  useEntry,
+  useEntryMutations,
+  useLatestEntryEndTimeBefore,
+} from "../hooks/useEntries.ts";
 import { messages } from "../lib/messages.ts";
 import { toLocalDateTimeString } from "../lib/time.ts";
 
@@ -44,7 +51,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const isEdit = Boolean(id);
 
-  const nowLocal = toLocalDateTimeString(new Date()).slice(0, 16) + ":00";
+  const nowLocal = `${toLocalDateTimeString(new Date()).slice(0, 16)}:00`;
   const queryEnd = normalizeDateTime(searchParams.get("end"));
   const end = queryEnd && queryEnd <= nowLocal ? queryEnd : nowLocal;
   const queryStart = normalizeDateTime(searchParams.get("start"));
@@ -69,17 +76,19 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     return (
       <div className="p-6 space-y-4 text-center">
         <p className="text-slate-400">没有找到这条记录。</p>
-        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg bg-slate-800 text-sm">返回</button>
+        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg bg-slate-800 text-sm">
+          返回
+        </button>
       </div>
     );
   }
 
   const startTime = existingEntry ? utcToLocalDateTime(existingEntry.startTime) : defaults.start;
-  const endTime   = existingEntry ? utcToLocalDateTime(existingEntry.endTime)   : defaults.end;
+  const endTime = existingEntry ? utcToLocalDateTime(existingEntry.endTime) : defaults.end;
 
   async function handleSave(categoryId: string, nextStartTime: string, nextEndTime: string, note: string) {
     const utcStart = localDateTimeToUtc(nextStartTime);
-    const utcEnd   = localDateTimeToUtc(nextEndTime);
+    const utcEnd = localDateTimeToUtc(nextEndTime);
 
     const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
     let overlapPlan: Extract<ReturnType<typeof planEntryOverlapAdjustments>, { ok: true }> | null = null;
@@ -131,7 +140,9 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   return (
     <div className="min-h-full bg-slate-950">
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-3 py-2 backdrop-blur">
-        <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-sm text-slate-300">返回</button>
+        <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-sm text-slate-300">
+          返回
+        </button>
         <h1 className="text-lg font-medium">{existingEntry ? "编辑记录" : "新增记录"}</h1>
       </header>
       <main className="p-3">

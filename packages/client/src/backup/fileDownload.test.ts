@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 import { backupFileName, downloadBackupFile } from "./fileDownload.js";
+import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 
 const sampleBackup: BackupDocument = {
   format: BACKUP_FORMAT,

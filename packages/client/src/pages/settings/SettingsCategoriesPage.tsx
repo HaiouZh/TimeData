@@ -1,14 +1,12 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   DndContext,
+  type DragEndEvent,
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -16,22 +14,15 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { useCategories } from "../../hooks/useCategories.ts";
-import {
-  CATEGORY_COLOR_PALETTES,
-  type CategoryColorPaletteId,
-} from "../../lib/categoryColors.ts";
+import { CATEGORY_COLOR_PALETTES, type CategoryColorPaletteId } from "../../lib/categoryColors.ts";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 export default function SettingsCategoriesPage() {
-  const {
-    parentCategories,
-    getChildren,
-    addCategory,
-    applyCategoryPalette,
-    reorderCategories,
-  } = useCategories();
+  const { parentCategories, getChildren, addCategory, applyCategoryPalette, reorderCategories } = useCategories();
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
@@ -43,7 +34,7 @@ export default function SettingsCategoriesPage() {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const parentIds = useMemo(() => parentCategories.map((parent) => parent.id), [parentCategories]);
 
@@ -89,10 +80,18 @@ export default function SettingsCategoriesPage() {
   return (
     <SettingsDetailPage title="分类">
       <div className="flex items-center justify-end gap-2">
-        <button type="button" onClick={() => setPaletteDialogOpen(true)} className="rounded bg-slate-800 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-700">
+        <button
+          type="button"
+          onClick={() => setPaletteDialogOpen(true)}
+          className="rounded bg-slate-800 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-700"
+        >
           一键配色
         </button>
-        <button type="button" onClick={() => setAdding(true)} className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500">
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500"
+        >
           + 新增分类
         </button>
       </div>
@@ -134,7 +133,10 @@ export default function SettingsCategoriesPage() {
       </DndContext>
 
       {adding && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAdding(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setAdding(false)}
+        >
           <div className="w-80 space-y-3 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">新增分类</h3>
             <input
@@ -146,23 +148,39 @@ export default function SettingsCategoriesPage() {
               }}
               placeholder="分类名称"
               className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
-              autoFocus
             />
             <div className="flex items-center gap-2">
               <label className="text-sm text-slate-400">颜色</label>
-              <input type="color" aria-label="分类颜色" value={newColor} onChange={(event) => setNewColor(event.target.value)} className="h-8 w-8" />
+              <input
+                type="color"
+                aria-label="分类颜色"
+                value={newColor}
+                onChange={(event) => setNewColor(event.target.value)}
+                className="h-8 w-8"
+              />
             </div>
             {addError && <p className="text-sm text-red-400">{addError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleAdd} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">添加</button>
-              <button type="button" onClick={() => setAdding(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleAdd}
+                className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500"
+              >
+                添加
+              </button>
+              <button type="button" onClick={() => setAdding(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">
+                取消
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {paletteDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPaletteDialogOpen(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setPaletteDialogOpen(false)}
+        >
           <div className="w-96 space-y-4 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">一键配色</h3>
             <p className="text-sm text-slate-400">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>
@@ -186,16 +204,39 @@ export default function SettingsCategoriesPage() {
             <div className="space-y-1">
               {parentCategories.slice(0, 6).map((category, index) => (
                 <div key={category.id} className="flex items-center gap-2 text-sm text-slate-300">
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: CATEGORY_COLOR_PALETTES[oneClickPalette].colors[index % CATEGORY_COLOR_PALETTES[oneClickPalette].colors.length] }} />
+                  <span
+                    className="h-3 w-3 rounded-full"
+                    style={{
+                      backgroundColor:
+                        CATEGORY_COLOR_PALETTES[oneClickPalette].colors[
+                          index % CATEGORY_COLOR_PALETTES[oneClickPalette].colors.length
+                        ],
+                    }}
+                  />
                   <span>{category.name}</span>
                 </div>
               ))}
-              {parentCategories.length > 6 && <p className="text-xs text-slate-500">还有 {parentCategories.length - 6} 个一级分类会继续循环配色。</p>}
+              {parentCategories.length > 6 && (
+                <p className="text-xs text-slate-500">还有 {parentCategories.length - 6} 个一级分类会继续循环配色。</p>
+              )}
             </div>
             {colorError && <p className="text-sm text-red-400">{colorError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleApplyPalette} disabled={parentCategories.length === 0} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400">应用</button>
-              <button type="button" onClick={() => setPaletteDialogOpen(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleApplyPalette}
+                disabled={parentCategories.length === 0}
+                className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400"
+              >
+                应用
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaletteDialogOpen(false)}
+                className="rounded bg-slate-800 px-4 py-2 text-sm"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>

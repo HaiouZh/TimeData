@@ -21,11 +21,13 @@ describe("resolveOutputFormat", () => {
 
 describe("formatResult", () => {
   it("serializes to JSON when format=json", () => {
-    expect(formatResult({ ok: true, command: "version", version: "1.0" }, "json")).toContain("\"version\"");
+    expect(formatResult({ ok: true, command: "version", version: "1.0" }, "json")).toContain('"version"');
   });
 
   it("renders version compactly when human", () => {
-    expect(formatResult({ ok: true, command: "version", version: "1.0", gitSha: "abc" }, "human")).toBe("timedata 1.0 (abc)");
+    expect(formatResult({ ok: true, command: "version", version: "1.0", gitSha: "abc" }, "human")).toBe(
+      "timedata 1.0 (abc)",
+    );
   });
 
   it("renders error code and message in human mode", () => {
@@ -39,7 +41,13 @@ describe("formatResult", () => {
       {
         ok: true,
         entries: [
-          { startTime: "2026-05-13T09:00:00.000Z", endTime: "2026-05-13T10:00:00.000Z", category: "Work", durationMinutes: 60, note: null },
+          {
+            startTime: "2026-05-13T09:00:00.000Z",
+            endTime: "2026-05-13T10:00:00.000Z",
+            category: "Work",
+            durationMinutes: 60,
+            note: null,
+          },
         ],
       },
       "human",

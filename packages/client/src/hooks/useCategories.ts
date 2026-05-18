@@ -1,15 +1,15 @@
-import { useCallback, useMemo } from "react";
+import type { Category } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useCallback, useMemo } from "react";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.ts";
-import { compareCategoryOrder } from "../lib/categorySort.ts";
 import {
+  type CategoryColorPaletteId,
   applyCategoryPaletteByIndex,
   normalizeCategoryColor,
-  type CategoryColorPaletteId,
 } from "../lib/categoryColors.ts";
+import { compareCategoryOrder } from "../lib/categorySort.ts";
 import { recordSyncLog } from "../sync/engine.ts";
-import type { Category } from "@timedata/shared";
 
 interface CategorySortUpdate {
   key: string;
@@ -38,10 +38,9 @@ export async function persistCategoryOrder(parentId: string | null, orderedIds: 
   const now = new Date().toISOString();
 
   await db.transaction("rw", db.categories, db.syncLog, async () => {
-    const siblings = (await db.categories
-      .filter((category) => !category.isArchived && category.parentId === parentId)
-      .toArray())
-      .sort(compareCategoryOrder);
+    const siblings = (
+      await db.categories.filter((category) => !category.isArchived && category.parentId === parentId).toArray()
+    ).sort(compareCategoryOrder);
     const siblingIds = new Set(siblings.map((category) => category.id));
 
     if (orderedIds.length !== siblings.length || orderedIds.some((id) => !siblingIds.has(id))) {
@@ -72,7 +71,7 @@ export async function persistCategoryOrder(parentId: string | null, orderedIds: 
         action: "update" as const,
         timestamp: now,
         synced: 0,
-      }))
+      })),
     );
   });
 }
@@ -87,7 +86,7 @@ async function updateAutoBackupCategoryName(categoryId: string, name: string, up
         key: backup.id,
         changes: {
           categories: backup.categories.map((category) =>
-            category.id === categoryId ? { ...category, name, updatedAt } : category
+            category.id === categoryId ? { ...category, name, updatedAt } : category,
           ),
         },
       };
@@ -112,11 +111,9 @@ export async function renameCategory(id: string, name: string): Promise<void> {
     }
 
     const duplicate = await db.categories
-      .filter((item) =>
-        !item.isArchived
-        && item.id !== id
-        && item.parentId === category.parentId
-        && item.name === trimmedName
+      .filter(
+        (item) =>
+          !item.isArchived && item.id !== id && item.parentId === category.parentId && item.name === trimmedName,
       )
       .first();
 
@@ -229,10 +226,9 @@ export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): P
   const now = new Date().toISOString();
 
   await db.transaction("rw", db.categories, db.syncLog, async () => {
-    const parents = (await db.categories
-      .filter((category) => !category.isArchived && category.parentId === null)
-      .toArray())
-      .sort(compareCategoryOrder);
+    const parents = (
+      await db.categories.filter((category) => !category.isArchived && category.parentId === null).toArray()
+    ).sort(compareCategoryOrder);
 
     const updates = parents
       .map((category, index) => {
@@ -253,7 +249,7 @@ export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): P
         action: "update" as const,
         timestamp: now,
         synced: 0,
-      }))
+      })),
     );
   });
 }
@@ -298,9 +294,7 @@ export async function addCategory(name: string, parentId: string | null, color: 
 
 export function useCategories() {
   const categories =
-    useLiveQuery(() =>
-      db.categories.filter((category) => !category.isArchived).sortBy("sortOrder")
-    ) || [];
+    useLiveQuery(() => db.categories.filter((category) => !category.isArchived).sortBy("sortOrder")) || [];
 
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const parentCategories = useMemo(() => categories.filter((c) => c.parentId === null), [categories]);
@@ -316,10 +310,7 @@ export function useCategories() {
     return map;
   }, [categories]);
 
-  const getChildren = useCallback(
-    (parentId: string) => childrenByParentId.get(parentId) ?? [],
-    [childrenByParentId],
-  );
+  const getChildren = useCallback((parentId: string) => childrenByParentId.get(parentId) ?? [], [childrenByParentId]);
 
   const getCategoryPath = useCallback(
     (categoryId: string): string => {
@@ -347,7 +338,7 @@ export function useCategories() {
 
   async function updateCategory(
     id: string,
-    updates: Partial<Pick<Category, "name" | "color" | "icon" | "sortOrder">>
+    updates: Partial<Pick<Category, "name" | "color" | "icon" | "sortOrder">>,
   ): Promise<void> {
     const now = new Date().toISOString();
     await db.transaction("rw", db.categories, db.syncLog, async () => {

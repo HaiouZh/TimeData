@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getAndroidApkUpdateFromRelease, getAndroidApkUpdateUrl, getAndroidVersionCodeFromReleaseTag, openAndroidApkUpdate } from "./mobileUpdate.js";
+import {
+  getAndroidApkUpdateFromRelease,
+  getAndroidApkUpdateUrl,
+  getAndroidVersionCodeFromReleaseTag,
+  openAndroidApkUpdate,
+} from "./mobileUpdate.js";
 
 const release = {
   tag_name: "android-26050801",

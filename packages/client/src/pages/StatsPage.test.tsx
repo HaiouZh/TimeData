@@ -1,7 +1,7 @@
+import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import StatsPage from "./StatsPage.js";
 
@@ -54,7 +54,7 @@ describe("StatsPage", () => {
     expect(weekButton?.getAttribute("aria-pressed")).toBe("true");
 
     await act(async () => {
-      monthButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      monthButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(monthButton?.getAttribute("aria-pressed")).toBe("true");

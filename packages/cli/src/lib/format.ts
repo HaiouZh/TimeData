@@ -48,9 +48,7 @@ function renderHuman(result: unknown): string {
 
 function renderError(data: CommandResultLike): string {
   const error = data.error as { code?: string; message?: string; details?: Record<string, unknown> } | undefined;
-  const lines = [
-    `Error${error?.code ? ` [${error.code}]` : ""}: ${error?.message ?? "unknown error"}`,
-  ];
+  const lines = [`Error${error?.code ? ` [${error.code}]` : ""}: ${error?.message ?? "unknown error"}`];
   if (error?.details) {
     for (const [key, value] of Object.entries(error.details)) {
       lines.push(`  ${key}: ${formatValue(value)}`);

@@ -13,13 +13,17 @@ vi.mock("react-router-dom", () => ({
 
 const syncIfStaleMock = vi.hoisted(() => vi.fn());
 const confirmMock = vi.hoisted(() => vi.fn());
-const entryFormPropsMock = vi.hoisted(() => ({ value: null as null | { onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void> } }));
+const entryFormPropsMock = vi.hoisted(() => ({
+  value: null as null | {
+    onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void>;
+  },
+}));
 
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: () => ({ syncIfStale: syncIfStaleMock }),
 }));
 
-const useLatestEntryEndTimeBeforeMock = vi.hoisted(() => vi.fn<(...args: any[]) => string | null>(() => null));
+const useLatestEntryEndTimeBeforeMock = vi.hoisted(() => vi.fn<(categoryId: string | null) => string | null>(() => null));
 const findOverlappingEntriesMock = vi.hoisted(() => vi.fn());
 const planEntryOverlapAdjustmentsMock = vi.hoisted(() => vi.fn());
 const saveEntryWithOverlapAdjustmentsMock = vi.hoisted(() => vi.fn());
@@ -39,7 +43,11 @@ vi.mock("../hooks/useEntries.js", () => ({
 }));
 
 vi.mock("../components/EntryForm.js", () => ({
-  default: (props: { startTime: string; endTime: string; onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void> }) => {
+  default: (props: {
+    startTime: string;
+    endTime: string;
+    onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void>;
+  }) => {
     entryFormPropsMock.value = props;
     return createElement("div", null, `${props.startTime} ${props.endTime}`);
   },
@@ -123,7 +131,11 @@ describe("EntryPage default times", () => {
   it("saves with overlap adjustments after confirmation", async () => {
     vi.setSystemTime(new Date("2026-05-17T20:00:00+08:00"));
     const overlap = { id: "old", startTime: "2026-05-17T00:00:00.000Z", endTime: "2026-05-17T02:00:00.000Z" };
-    const plan = { ok: true, updates: [{ id: "old", startTime: "2026-05-17T00:00:00.000Z", endTime: "2026-05-17T01:00:00.000Z" }], deletes: [] };
+    const plan = {
+      ok: true,
+      updates: [{ id: "old", startTime: "2026-05-17T00:00:00.000Z", endTime: "2026-05-17T01:00:00.000Z" }],
+      deletes: [],
+    };
     findOverlappingEntriesMock.mockResolvedValue([overlap]);
     planEntryOverlapAdjustmentsMock.mockReturnValue(plan);
 

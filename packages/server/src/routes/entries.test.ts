@@ -49,8 +49,12 @@ function createSchema() {
 
 function seed() {
   const now = "2026-05-07T00:00:00.000Z";
-  db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES ('cat-work', '工作', '#4A90D9', ?, ?)`).run(now, now);
-  db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES ('cat-code', '编程', 'cat-work', '#4A90D9', ?, ?)`).run(now, now);
+  db.prepare(
+    `INSERT INTO categories (id, name, color, created_at, updated_at) VALUES ('cat-work', '工作', '#4A90D9', ?, ?)`,
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES ('cat-code', '编程', 'cat-work', '#4A90D9', ?, ?)`,
+  ).run(now, now);
 }
 
 beforeEach(async () => {

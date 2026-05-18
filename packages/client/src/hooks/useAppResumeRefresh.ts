@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { useEffect, useRef } from "react";
 
 interface ResumeRefreshTarget {
   document: Pick<Document, "addEventListener" | "removeEventListener" | "visibilityState">;

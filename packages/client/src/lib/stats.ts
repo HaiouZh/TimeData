@@ -70,7 +70,11 @@ export function summarizeEntriesByParentCategory(
 
     const category = categoryById.get(entry.categoryId);
     const categoryParentId = category?.parentId;
-    const parentId = categoryParentId ? (parentById.has(categoryParentId) ? categoryParentId : "unknown") : category?.id || "unknown";
+    const parentId = categoryParentId
+      ? parentById.has(categoryParentId)
+        ? categoryParentId
+        : "unknown"
+      : category?.id || "unknown";
     totals.set(parentId, (totals.get(parentId) || 0) + (visibleEndMs - visibleStartMs));
   }
 

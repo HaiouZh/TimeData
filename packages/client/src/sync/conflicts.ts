@@ -1,5 +1,5 @@
+import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.js";
-import type { Category, TimeEntry, SyncLogEntry } from "@timedata/shared";
 import type { SyncConflict } from "./engine.js";
 
 export type ConflictResolution = "keep_local" | "use_remote";
@@ -40,20 +40,16 @@ async function deletePendingLogs(tableName: SyncLogEntry["tableName"], recordIds
 
 async function markPendingLogsSynced(conflict: SyncConflict): Promise<void> {
   const pending = await db.syncLog
-    .where("recordId").equals(conflict.recordId)
+    .where("recordId")
+    .equals(conflict.recordId)
     .filter((log) => log.tableName === conflict.tableName && !log.synced)
     .toArray();
   if (pending.length > 0) {
-    await db.syncLog.bulkUpdate(
-      pending.map((log) => ({ key: log.id, changes: { synced: 1 } })),
-    );
+    await db.syncLog.bulkUpdate(pending.map((log) => ({ key: log.id, changes: { synced: 1 } })));
   }
 }
 
-export async function resolveConflicts(
-  conflicts: SyncConflict[],
-  resolution: ConflictResolution,
-): Promise<number> {
+export async function resolveConflicts(conflicts: SyncConflict[], resolution: ConflictResolution): Promise<number> {
   if (resolution === "keep_local") return 0;
 
   return db.transaction("rw", db.categories, db.timeEntries, db.syncLog, async () => {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CATEGORY_COLOR_PALETTES,
-  applyCategoryPaletteByIndex,
-  normalizeCategoryColor,
-} from "./categoryColors.js";
+import { CATEGORY_COLOR_PALETTES, applyCategoryPaletteByIndex, normalizeCategoryColor } from "./categoryColors.js";
 
 describe("categoryColors", () => {
   it("defines three named palettes with usable CSS hex colors", () => {

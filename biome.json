@@ -1,22 +1,38 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
-    "ignore": [
-      "**/dist/**",
-      "**/node_modules/**",
-      "**/android/**",
-      "packages/mobile/android/**"
-    ]
+    "ignore": ["**/dist/**", "**/node_modules/**", "**/android/**", "packages/mobile/android/**"]
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": false,
+      "recommended": true,
+      "a11y": {
+        "noAutofocus": "off",
+        "noLabelWithoutControl": "off",
+        "noSvgWithoutTitle": "off",
+        "useButtonType": "off",
+        "useFocusableInteractive": "off",
+        "useKeyWithClickEvents": "off",
+        "useSemanticElements": "off"
+      },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "error",
+        "noArrayIndexKey": "warn"
       },
       "style": {
-        "useImportType": "warn"
+        "useImportType": "error",
+        "noNonNullAssertion": "warn"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "useExhaustiveDependencies": "warn"
+      },
+      "complexity": {
+        "noUselessStringConcat": "off"
+      },
+      "performance": {
+        "noDelete": "warn"
       }
     }
   },

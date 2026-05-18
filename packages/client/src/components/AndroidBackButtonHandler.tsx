@@ -18,12 +18,9 @@ export default function AndroidBackButtonHandler() {
     let disposed = false;
     const listener = CapacitorApp.addListener("backButton", () => {
       const current = locationRef.current;
-      executeAndroidBackAction(
-        resolveAndroidBackAction(current.pathname),
-        current.key,
-        navigateRef.current,
-        () => { void CapacitorApp.exitApp(); },
-      );
+      executeAndroidBackAction(resolveAndroidBackAction(current.pathname), current.key, navigateRef.current, () => {
+        void CapacitorApp.exitApp();
+      });
     });
 
     return () => {

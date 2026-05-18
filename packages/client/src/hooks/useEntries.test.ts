@@ -1,15 +1,31 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TimeEntry } from "@timedata/shared";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/index.js";
-import { applyEntryOverlapAdjustments, deleteFutureEndedEntries, findFutureEndedEntries, findLatestEntryEndingBefore, findOverlappingEntries, findPreviousEntry, planEntryOverlapAdjustments, saveEntryWithOverlapAdjustments, useEntryMutations, validateEntryTimeRange } from "./useEntries.js";
+import {
+  applyEntryOverlapAdjustments,
+  deleteFutureEndedEntries,
+  findFutureEndedEntries,
+  findLatestEntryEndingBefore,
+  findOverlappingEntries,
+  findPreviousEntry,
+  planEntryOverlapAdjustments,
+  saveEntryWithOverlapAdjustments,
+  useEntryMutations,
+  validateEntryTimeRange,
+} from "./useEntries.js";
 
 function entry(id: string, startTime: string, endTime: string): TimeEntry;
 function entry(overrides: Partial<TimeEntry> & { id: string; startTime: string; endTime: string }): TimeEntry;
-function entry(idOrOverrides: string | (Partial<TimeEntry> & { id: string; startTime: string; endTime: string }), startTime?: string, endTime?: string): TimeEntry {
-  const overrides = typeof idOrOverrides === "string"
-    ? { id: idOrOverrides, startTime: startTime ?? "", endTime: endTime ?? "" }
-    : idOrOverrides;
+function entry(
+  idOrOverrides: string | (Partial<TimeEntry> & { id: string; startTime: string; endTime: string }),
+  startTime?: string,
+  endTime?: string,
+): TimeEntry {
+  const overrides =
+    typeof idOrOverrides === "string"
+      ? { id: idOrOverrides, startTime: startTime ?? "", endTime: endTime ?? "" }
+      : idOrOverrides;
   return {
     categoryId: "cat-sleep-sleep",
     note: null,
@@ -28,19 +44,25 @@ describe("validateEntryTimeRange", () => {
   it("rejects entries ending in the future", () => {
     const now = new Date("2026-05-08T08:00:00+08:00");
 
-    expect(() => validateEntryTimeRange("2026-05-08T07:00:00", "2026-05-08T08:01:00", now)).toThrow("不能记录尚未发生的时间");
+    expect(() => validateEntryTimeRange("2026-05-08T07:00:00", "2026-05-08T08:01:00", now)).toThrow(
+      "不能记录尚未发生的时间",
+    );
     expect(() => validateEntryTimeRange("2026-05-08T07:00:00", "2026-05-08T08:00:00", now)).not.toThrow();
   });
 
   it("rejects entries whose end is not after start", () => {
-    expect(() => validateEntryTimeRange("2026-05-08T08:00:00", "2026-05-08T08:00:00", new Date("2026-05-08T08:00:00+08:00"))).toThrow("结束时间必须晚于开始时间");
+    expect(() =>
+      validateEntryTimeRange("2026-05-08T08:00:00", "2026-05-08T08:00:00", new Date("2026-05-08T08:00:00+08:00")),
+    ).toThrow("结束时间必须晚于开始时间");
   });
 });
 describe("useEntryMutations", () => {
   it("does not save future entries locally or create sync logs", async () => {
     const { addEntry } = useEntryMutations();
 
-    await expect(addEntry("cat-sleep-sleep", "2099-05-08T07:00:00", "2099-05-08T08:01:00")).rejects.toThrow("不能记录尚未发生的时间");
+    await expect(addEntry("cat-sleep-sleep", "2099-05-08T07:00:00", "2099-05-08T08:01:00")).rejects.toThrow(
+      "不能记录尚未发生的时间",
+    );
     await expect(db.timeEntries.count()).resolves.toBe(0);
     await expect(db.syncLog.count()).resolves.toBe(0);
   });
@@ -58,7 +80,9 @@ describe("useEntryMutations", () => {
     vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
     const { addEntry } = useEntryMutations();
 
-    await expect(addEntry("cat-sleep-sleep", "2026-05-08T06:00:00", "2026-05-08T07:00:00")).rejects.toThrow("sync log failed");
+    await expect(addEntry("cat-sleep-sleep", "2026-05-08T06:00:00", "2026-05-08T07:00:00")).rejects.toThrow(
+      "sync log failed",
+    );
 
     await expect(db.timeEntries.toArray()).resolves.toHaveLength(0);
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
@@ -71,7 +95,10 @@ describe("useEntryMutations", () => {
 
     await expect(updateEntry("existing", { note: "changed" })).rejects.toThrow("sync log failed");
 
-    await expect(db.timeEntries.get("existing")).resolves.toMatchObject({ note: null, updatedAt: "2026-05-08T00:00:00.000Z" });
+    await expect(db.timeEntries.get("existing")).resolves.toMatchObject({
+      note: null,
+      updatedAt: "2026-05-08T00:00:00.000Z",
+    });
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 
@@ -140,19 +167,22 @@ describe("findPreviousEntry", () => {
   it("returns the latest entry before the selected day starts", async () => {
     await db.timeEntries.bulkAdd([
       entry("older", "2026-05-06T12:00:00.000Z", "2026-05-06T15:30:00.000Z"), // 上海 20:00–23:30 on May 6
-      entry("old",    "2026-05-07T12:00:00.000Z", "2026-05-07T13:00:00.000Z"), // 上海 20:00–21:00 on May 7
+      entry("old", "2026-05-07T12:00:00.000Z", "2026-05-07T13:00:00.000Z"), // 上海 20:00–21:00 on May 7
       entry("latest", "2026-05-07T14:00:00.000Z", "2026-05-07T15:30:00.000Z"), // 上海 22:00–23:30 on May 7
-      entry("today",  "2026-05-07T17:00:00.000Z", "2026-05-07T18:00:00.000Z"), // 上海 01:00–02:00 on May 8
+      entry("today", "2026-05-07T17:00:00.000Z", "2026-05-07T18:00:00.000Z"), // 上海 01:00–02:00 on May 8
     ]);
 
-    await expect(findPreviousEntry("2026-05-08")).resolves.toMatchObject({ id: "latest", endTime: "2026-05-07T15:30:00.000Z" });
+    await expect(findPreviousEntry("2026-05-08")).resolves.toMatchObject({
+      id: "latest",
+      endTime: "2026-05-07T15:30:00.000Z",
+    });
   });
 
   it("returns a previous-day entry that overlaps the selected day", async () => {
     await db.timeEntries.bulkAdd([
-      entry("old",      "2026-05-07T12:00:00.000Z", "2026-05-07T13:00:00.000Z"), // 上海 20:00–21:00 on May 7
-      entry("overnight","2026-05-07T15:57:00.000Z", "2026-05-07T22:00:00.000Z"), // 上海 23:57 May 7 – 06:00 May 8
-      entry("today",    "2026-05-07T23:00:00.000Z", "2026-05-08T00:00:00.000Z"), // 上海 07:00–08:00 on May 8
+      entry("old", "2026-05-07T12:00:00.000Z", "2026-05-07T13:00:00.000Z"), // 上海 20:00–21:00 on May 7
+      entry("overnight", "2026-05-07T15:57:00.000Z", "2026-05-07T22:00:00.000Z"), // 上海 23:57 May 7 – 06:00 May 8
+      entry("today", "2026-05-07T23:00:00.000Z", "2026-05-08T00:00:00.000Z"), // 上海 07:00–08:00 on May 8
     ]);
 
     await expect(findPreviousEntry("2026-05-08")).resolves.toMatchObject({
@@ -165,8 +195,8 @@ describe("findPreviousEntry", () => {
   it("returns an older entry that still overlaps the selected day", async () => {
     await db.timeEntries.bulkAdd([
       entry("two-day", "2026-05-06T15:57:00.000Z", "2026-05-07T22:00:00.000Z"), // 上海 23:57 May 6 – 06:00 May 8
-      entry("old",     "2026-05-07T12:00:00.000Z", "2026-05-07T13:00:00.000Z"), // 上海 20:00–21:00 on May 7
-      entry("today",   "2026-05-07T23:00:00.000Z", "2026-05-08T00:00:00.000Z"), // 上海 07:00–08:00 on May 8
+      entry("old", "2026-05-07T12:00:00.000Z", "2026-05-07T13:00:00.000Z"), // 上海 20:00–21:00 on May 7
+      entry("today", "2026-05-07T23:00:00.000Z", "2026-05-08T00:00:00.000Z"), // 上海 07:00–08:00 on May 8
     ]);
 
     await expect(findPreviousEntry("2026-05-08")).resolves.toMatchObject({
@@ -179,7 +209,11 @@ describe("findPreviousEntry", () => {
 
 describe("planEntryOverlapAdjustments", () => {
   it("clips an overlapped tail to the new start", () => {
-    const result = planEntryOverlapAdjustments([entry("old", "2026-05-07T20:00:00", "2026-05-08T01:00:00")], "2026-05-07T23:00:00", "2026-05-08T06:00:00");
+    const result = planEntryOverlapAdjustments(
+      [entry("old", "2026-05-07T20:00:00", "2026-05-08T01:00:00")],
+      "2026-05-07T23:00:00",
+      "2026-05-08T06:00:00",
+    );
 
     expect(result).toEqual({
       ok: true,
@@ -189,7 +223,11 @@ describe("planEntryOverlapAdjustments", () => {
   });
 
   it("clips an overlapped head to the new end", () => {
-    const result = planEntryOverlapAdjustments([entry("old", "2026-05-08T05:00:00", "2026-05-08T07:00:00")], "2026-05-07T23:00:00", "2026-05-08T06:00:00");
+    const result = planEntryOverlapAdjustments(
+      [entry("old", "2026-05-08T05:00:00", "2026-05-08T07:00:00")],
+      "2026-05-07T23:00:00",
+      "2026-05-08T06:00:00",
+    );
 
     expect(result).toEqual({
       ok: true,
@@ -199,13 +237,21 @@ describe("planEntryOverlapAdjustments", () => {
   });
 
   it("deletes entries fully covered by the new range", () => {
-    const result = planEntryOverlapAdjustments([entry("old", "2026-05-08T01:00:00", "2026-05-08T02:00:00")], "2026-05-07T23:00:00", "2026-05-08T06:00:00");
+    const result = planEntryOverlapAdjustments(
+      [entry("old", "2026-05-08T01:00:00", "2026-05-08T02:00:00")],
+      "2026-05-07T23:00:00",
+      "2026-05-08T06:00:00",
+    );
 
     expect(result).toEqual({ ok: true, updates: [], deletes: ["old"] });
   });
 
   it("rejects middle coverage that would require splitting one old entry", () => {
-    const result = planEntryOverlapAdjustments([entry("old", "2026-05-07T20:00:00", "2026-05-08T07:00:00")], "2026-05-07T23:00:00", "2026-05-08T06:00:00");
+    const result = planEntryOverlapAdjustments(
+      [entry("old", "2026-05-07T20:00:00", "2026-05-08T07:00:00")],
+      "2026-05-07T23:00:00",
+      "2026-05-08T06:00:00",
+    );
 
     expect(result).toEqual({ ok: false, blockedEntryId: "old" });
   });
@@ -224,7 +270,10 @@ describe("applyEntryOverlapAdjustments", () => {
       deletes: ["delete-me"],
     });
 
-    await expect(db.timeEntries.get("update-me")).resolves.toMatchObject({ startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T07:00:00" });
+    await expect(db.timeEntries.get("update-me")).resolves.toMatchObject({
+      startTime: "2026-05-08T06:00:00",
+      endTime: "2026-05-08T07:00:00",
+    });
     await expect(db.timeEntries.get("delete-me")).resolves.toBeUndefined();
     await expect(db.syncLog.where("tableName").equals("time_entries").count()).resolves.toBe(2);
   });
@@ -236,13 +285,18 @@ describe("applyEntryOverlapAdjustments", () => {
     ]);
     vi.spyOn(db.syncLog, "add").mockResolvedValueOnce("first-log").mockRejectedValueOnce(new Error("sync log failed"));
 
-    await expect(applyEntryOverlapAdjustments({
-      ok: true,
-      updates: [{ id: "first", startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T07:00:00" }],
-      deletes: ["second"],
-    })).rejects.toThrow("sync log failed");
+    await expect(
+      applyEntryOverlapAdjustments({
+        ok: true,
+        updates: [{ id: "first", startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T07:00:00" }],
+        deletes: ["second"],
+      }),
+    ).rejects.toThrow("sync log failed");
 
-    await expect(db.timeEntries.get("first")).resolves.toMatchObject({ startTime: "2026-05-08T05:00:00", endTime: "2026-05-08T07:00:00" });
+    await expect(db.timeEntries.get("first")).resolves.toMatchObject({
+      startTime: "2026-05-08T05:00:00",
+      endTime: "2026-05-08T07:00:00",
+    });
     await expect(db.timeEntries.get("second")).resolves.toMatchObject({ id: "second" });
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
@@ -254,7 +308,11 @@ describe("saveEntryWithOverlapAdjustments", () => {
       entry({ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T10:00:00.000Z" }),
     ]);
 
-    const plan = planEntryOverlapAdjustments(await findOverlappingEntries("2026-05-17T09:00:00.000Z", "2026-05-17T11:00:00.000Z"), "2026-05-17T09:00:00.000Z", "2026-05-17T11:00:00.000Z");
+    const plan = planEntryOverlapAdjustments(
+      await findOverlappingEntries("2026-05-17T09:00:00.000Z", "2026-05-17T11:00:00.000Z"),
+      "2026-05-17T09:00:00.000Z",
+      "2026-05-17T11:00:00.000Z",
+    );
     expect(plan.ok).toBe(true);
 
     const saved = await saveEntryWithOverlapAdjustments({
@@ -268,30 +326,44 @@ describe("saveEntryWithOverlapAdjustments", () => {
     });
 
     expect(saved.id).toBeTruthy();
-    await expect(db.timeEntries.get("old")).resolves.toEqual(expect.objectContaining({ endTime: "2026-05-17T09:00:00.000Z" }));
+    await expect(db.timeEntries.get("old")).resolves.toEqual(
+      expect.objectContaining({ endTime: "2026-05-17T09:00:00.000Z" }),
+    );
     const logs = await db.syncLog.toArray();
     expect(logs).toHaveLength(2);
-    expect(logs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ tableName: "time_entries", recordId: "old", action: "update", synced: 0 }),
-      expect.objectContaining({ tableName: "time_entries", recordId: saved.id, action: "create", synced: 0 }),
-    ]));
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: "time_entries", recordId: "old", action: "update", synced: 0 }),
+        expect.objectContaining({ tableName: "time_entries", recordId: saved.id, action: "create", synced: 0 }),
+      ]),
+    );
   });
 
   it("rolls back overlap adjustments when the target entry cannot be saved", async () => {
-    await db.timeEntries.add(entry({ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T10:00:00.000Z" }));
-    const plan = { ok: true as const, updates: [{ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T09:00:00.000Z" }], deletes: [] };
+    await db.timeEntries.add(
+      entry({ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T10:00:00.000Z" }),
+    );
+    const plan = {
+      ok: true as const,
+      updates: [{ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T09:00:00.000Z" }],
+      deletes: [],
+    };
 
-    await expect(saveEntryWithOverlapAdjustments({
-      existingEntryId: "missing-entry",
-      categoryId: "cat-work",
-      startTime: "2026-05-17T09:00:00.000Z",
-      endTime: "2026-05-17T11:00:00.000Z",
-      note: null,
-      overlapPlan: plan,
-      now: new Date("2026-05-17T12:00:00.000Z"),
-    })).rejects.toThrow("记录不存在");
+    await expect(
+      saveEntryWithOverlapAdjustments({
+        existingEntryId: "missing-entry",
+        categoryId: "cat-work",
+        startTime: "2026-05-17T09:00:00.000Z",
+        endTime: "2026-05-17T11:00:00.000Z",
+        note: null,
+        overlapPlan: plan,
+        now: new Date("2026-05-17T12:00:00.000Z"),
+      }),
+    ).rejects.toThrow("记录不存在");
 
-    await expect(db.timeEntries.get("old")).resolves.toEqual(expect.objectContaining({ endTime: "2026-05-17T10:00:00.000Z" }));
+    await expect(db.timeEntries.get("old")).resolves.toEqual(
+      expect.objectContaining({ endTime: "2026-05-17T10:00:00.000Z" }),
+    );
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
@@ -304,8 +376,10 @@ describe("findLatestEntryEndingBefore", () => {
       entry("c", "2026-05-15T06:00:00.000Z", "2026-05-15T07:00:00.000Z"),
     ]);
 
-    await expect(findLatestEntryEndingBefore("2026-05-15T06:00:00.000Z"))
-      .resolves.toMatchObject({ id: "b", endTime: "2026-05-15T05:00:00.000Z" });
+    await expect(findLatestEntryEndingBefore("2026-05-15T06:00:00.000Z")).resolves.toMatchObject({
+      id: "b",
+      endTime: "2026-05-15T05:00:00.000Z",
+    });
   });
 
   it("returns null when no entry ends before the cutoff", async () => {

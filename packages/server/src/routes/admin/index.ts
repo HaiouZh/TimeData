@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import syncLogRoute from "../syncLog.js";
 import analytics from "./analytics.js";
 import backups from "./backups.js";
 import categories from "./categories.js";
@@ -6,7 +7,6 @@ import entries from "./entries.js";
 import health from "./health.js";
 import summary from "./summary.js";
 import sync from "./sync.js";
-import syncLogRoute from "../syncLog.js";
 
 const admin = new Hono();
 

@@ -24,7 +24,9 @@ describe("syncState", () => {
 
     expect(result.hash).toMatch(/^[0-9a-f]{64}$/);
     expect(result.latestSeq).toBeNull();
-    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get()).toMatchObject({ value: result.hash });
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get()).toMatchObject({
+      value: result.hash,
+    });
     expect(db.prepare("SELECT value FROM sync_state WHERE key = 'latest_seq'").get()).toMatchObject({ value: "" });
   });
 
@@ -35,7 +37,9 @@ describe("syncState", () => {
     const result = getCommitHash();
 
     expect(result.hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get()).toMatchObject({ value: result.hash });
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get()).toMatchObject({
+      value: result.hash,
+    });
   });
 
   it("returns the same hash for unchanged content", async () => {

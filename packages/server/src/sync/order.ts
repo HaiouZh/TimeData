@@ -10,9 +10,10 @@ function orderCategoryUpserts(changes: SyncChange[]): SyncChange[] {
     if (visited.has(change.recordId) || visiting.has(change.recordId)) return;
     visiting.add(change.recordId);
 
-    const parentId = change.data && typeof change.data === "object" && "parentId" in change.data
-      ? (change.data as { parentId?: unknown }).parentId
-      : null;
+    const parentId =
+      change.data && typeof change.data === "object" && "parentId" in change.data
+        ? (change.data as { parentId?: unknown }).parentId
+        : null;
     if (typeof parentId === "string") {
       const parent = byId.get(parentId);
       if (parent) visit(parent);
@@ -28,7 +29,9 @@ function orderCategoryUpserts(changes: SyncChange[]): SyncChange[] {
 }
 
 export function orderPushChanges(changes: SyncChange[]): SyncChange[] {
-  const categoryUpserts = orderCategoryUpserts(changes.filter((change) => change.tableName === "categories" && change.action !== "delete"));
+  const categoryUpserts = orderCategoryUpserts(
+    changes.filter((change) => change.tableName === "categories" && change.action !== "delete"),
+  );
   const entryChanges = changes.filter((change) => change.tableName === "time_entries");
   const categoryDeletes = changes.filter((change) => change.tableName === "categories" && change.action === "delete");
 

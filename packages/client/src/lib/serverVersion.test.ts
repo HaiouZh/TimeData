@@ -40,8 +40,11 @@ describe("serverVersion", () => {
 
     await expect(fetchServerVersion()).resolves.toEqual(versionInfo);
 
-    expect(fetchSpy).toHaveBeenCalledWith("http://x/api/version", expect.objectContaining({
-      headers: expect.objectContaining({ Authorization: "Bearer tk" }),
-    }));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://x/api/version",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer tk" }),
+      }),
+    );
   });
 });

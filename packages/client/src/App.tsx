@@ -1,20 +1,20 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
-import TimelinePage from "./pages/TimelinePage.tsx";
+import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import EntryPage from "./pages/EntryPage.tsx";
+import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
+import TimelinePage from "./pages/TimelinePage.tsx";
+import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
+import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "./pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "./pages/settings/SettingsCategoryDetailPage.tsx";
-import SettingsPage from "./pages/SettingsPage.tsx";
-import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
 import SettingsDataPage from "./pages/settings/SettingsDataPage.tsx";
-import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
-import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
-import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
+import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
 
 export function AppShell() {
   const location = useLocation();

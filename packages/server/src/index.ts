@@ -1,25 +1,24 @@
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
-import { initializeDatabase } from "./db/schema.js";
 import { getDb } from "./db/connection.js";
+import { initializeDatabase } from "./db/schema.js";
 import { runUtcResetIfNeeded } from "./db/utcReset.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
 import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
-import { cleanupServerBackups } from "./sync/backup.js";
-import categoriesRoute from "./routes/categories.js";
-import entriesRoute from "./routes/entries.js";
-import syncRoute from "./routes/sync.js";
-import syncLogRoute from "./routes/syncLog.js";
-import exportRoute from "./routes/export.js";
-import versionRoute from "./routes/version.js";
-import updateRoute from "./routes/update.js";
-import dataRoute from "./routes/data.js";
 import adminRoute from "./routes/admin/index.js";
+import categoriesRoute from "./routes/categories.js";
+import dataRoute from "./routes/data.js";
+import entriesRoute from "./routes/entries.js";
+import exportRoute from "./routes/export.js";
+import syncRoute from "./routes/sync.js";
+import updateRoute from "./routes/update.js";
+import versionRoute from "./routes/version.js";
+import { cleanupServerBackups } from "./sync/backup.js";
 
 const app = new Hono();
 const allowedOrigins = allowedOriginsFromEnv(process.env);
@@ -123,7 +122,7 @@ if (process.env.SERVER_REPLICAS && Number(process.env.SERVER_REPLICAS) > 1) {
   );
 }
 
-const PORT = parseInt(process.env.PORT || "3000", 10);
+const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`TimeData server running on http://localhost:${info.port}`);

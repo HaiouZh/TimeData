@@ -70,7 +70,11 @@ type BackupManifestEntry = {
 export const allowedAnomalies = new Set(["invalid_time_range", "missing_category", "archived_category"]);
 
 export function count(sql: string, params: unknown[] = []): number {
-  return (getDb().prepare(sql).get(...params) as CountRow).count;
+  return (
+    getDb()
+      .prepare(sql)
+      .get(...params) as CountRow
+  ).count;
 }
 
 export function parsePositiveInteger(value: string | undefined, fallback: number, max?: number): number {
@@ -155,7 +159,9 @@ export function listServerBackups(): AdminBackupRow[] {
         relatedSyncLogId: manifestEntry?.relatedSyncLogId ?? null,
       };
     })
-    .sort((a, b) => (a.createdAt === b.createdAt ? a.fileName.localeCompare(b.fileName) : b.createdAt.localeCompare(a.createdAt)));
+    .sort((a, b) =>
+      a.createdAt === b.createdAt ? a.fileName.localeCompare(b.fileName) : b.createdAt.localeCompare(a.createdAt),
+    );
 }
 
 export function buildEntryFilters(from: string | undefined, to: string | undefined, anomaly: string | undefined) {
@@ -216,7 +222,9 @@ export function getHealthCheck(
   sql: string,
   params: unknown[] = [],
 ): AdminHealthCheckItem {
-  const rows = getDb().prepare(sql).all(...params) as HealthSampleRow[];
+  const rows = getDb()
+    .prepare(sql)
+    .all(...params) as HealthSampleRow[];
   return {
     code,
     severity,

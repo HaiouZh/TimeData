@@ -1,5 +1,5 @@
+import type { CountRow } from "../lib/db-rows.js";
 import { getDb } from "./connection.js";
-import { type CountRow } from "../lib/db-rows.js";
 import { insertDefaultCategories } from "./reset.js";
 
 export function initializeDatabase(): void {

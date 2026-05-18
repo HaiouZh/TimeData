@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db, LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY, resetSyncCursors, seedDefaultCategories } from "./index.js";
+import { LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY, db, resetSyncCursors, seedDefaultCategories } from "./index.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();

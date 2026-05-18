@@ -11,9 +11,7 @@ export type ConfigError = { ok: false; error: { code: "CONFIG_MISSING" | "CONFIG
 
 export type FileConfigResult = FileConfig | ConfigError | null;
 
-export type ConfigResult =
-  | { serverUrl: string; token: string }
-  | ConfigError;
+export type ConfigResult = { serverUrl: string; token: string } | ConfigError;
 
 export function configPath(platform = process.platform, env = process.env): string {
   if (platform === "win32") {
@@ -31,7 +29,10 @@ function hasUnsafePermissions(filePath: string, platform = process.platform): bo
 export function readFileConfig(filePath = configPath(), platform = process.platform): FileConfigResult {
   if (!fs.existsSync(filePath)) return null;
   if (hasUnsafePermissions(filePath, platform)) {
-    return { ok: false, error: { code: "CONFIG_INVALID", message: `Config file permissions are too open: ${filePath}` } };
+    return {
+      ok: false,
+      error: { code: "CONFIG_INVALID", message: `Config file permissions are too open: ${filePath}` },
+    };
   }
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8")) as FileConfig;

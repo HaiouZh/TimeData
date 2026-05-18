@@ -74,11 +74,14 @@ describe("runCli", () => {
     });
 
     expect(result).toEqual({ ok: true, categories: [] });
-    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/categories", expect.objectContaining({
-      method: "GET",
-      headers: { Authorization: "Bearer secret" },
-      signal: expect.any(AbortSignal),
-    }));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://server.example/api/categories",
+      expect.objectContaining({
+        method: "GET",
+        headers: { Authorization: "Bearer secret" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it("direct execution parses --format human", async () => {

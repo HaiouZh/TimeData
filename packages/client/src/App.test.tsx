@@ -47,7 +47,7 @@ vi.mock("./pages/settings/SettingsDataPage.tsx", () => ({
 describe("AppShell settings routes", () => {
   it("renders settings data route without bottom navigation", () => {
     const html = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/data"] }, createElement(AppShell))
+      createElement(MemoryRouter, { initialEntries: ["/settings/data"] }, createElement(AppShell)),
     );
 
     expect(html).toContain("数据设置页");
@@ -57,7 +57,7 @@ describe("AppShell settings routes", () => {
 
   it("renders settings server route without bottom navigation", () => {
     const html = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/server"] }, createElement(AppShell))
+      createElement(MemoryRouter, { initialEntries: ["/settings/server"] }, createElement(AppShell)),
     );
 
     expect(html).toContain("服务器配置页");
@@ -67,10 +67,10 @@ describe("AppShell settings routes", () => {
 
   it("renders category settings routes without bottom navigation", () => {
     const listHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/categories"] }, createElement(AppShell))
+      createElement(MemoryRouter, { initialEntries: ["/settings/categories"] }, createElement(AppShell)),
     );
     const detailHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/categories/category-1"] }, createElement(AppShell))
+      createElement(MemoryRouter, { initialEntries: ["/settings/categories/category-1"] }, createElement(AppShell)),
     );
 
     expect(listHtml).toContain("分类列表页");
@@ -81,10 +81,10 @@ describe("AppShell settings routes", () => {
 
   it("passes the resume refresh key to time-sensitive pages", () => {
     const timelineHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(AppShell))
+      createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(AppShell)),
     );
     const entryHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/entries/new"] }, createElement(AppShell))
+      createElement(MemoryRouter, { initialEntries: ["/entries/new"] }, createElement(AppShell)),
     );
 
     expect(timelineHtml).toContain("时间轴页面 0");

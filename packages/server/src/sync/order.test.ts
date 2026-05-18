@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { SyncChange } from "@timedata/shared";
+import { describe, expect, it } from "vitest";
 import { orderPushChanges } from "./order.js";
 
 describe("orderPushChanges", () => {
@@ -41,5 +41,4 @@ describe("orderPushChanges", () => {
 
     expect(orderPushChanges([child, parent]).map((change) => change.recordId)).toEqual(["parent", "child"]);
   });
-
 });

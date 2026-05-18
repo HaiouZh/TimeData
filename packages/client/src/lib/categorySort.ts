@@ -10,7 +10,7 @@ export function reorderCategoriesWithinParent(
   categories: Category[],
   activeId: string,
   overId: string,
-  parentId: string | null
+  parentId: string | null,
 ): Category[] {
   const siblings = categories
     .filter((category) => !category.isArchived && category.parentId === parentId)

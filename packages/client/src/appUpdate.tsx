@@ -1,5 +1,5 @@
-import { createContext, type ReactNode, useContext } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
+import { type ReactNode, createContext, useContext } from "react";
 
 type AppUpdateContextValue = {
   needRefresh: boolean;
@@ -10,12 +10,18 @@ type AppUpdateContextValue = {
 const AppUpdateContext = createContext<AppUpdateContextValue | null>(null);
 
 export function AppUpdateProvider({ children }: { children: ReactNode }) {
-  const { needRefresh: [needRefresh, setNeedRefresh], updateServiceWorker } = useRegisterSW({
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
     onRegisteredSW(_swUrl, registration) {
       if (!registration) return;
-      setInterval(() => {
-        registration.update();
-      }, 60 * 60 * 1000);
+      setInterval(
+        () => {
+          registration.update();
+        },
+        60 * 60 * 1000,
+      );
     },
   });
 
@@ -28,9 +34,7 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppUpdateContext.Provider value={{ needRefresh, updateApp, dismissUpdate }}>
-      {children}
-    </AppUpdateContext.Provider>
+    <AppUpdateContext.Provider value={{ needRefresh, updateApp, dismissUpdate }}>{children}</AppUpdateContext.Provider>
   );
 }
 

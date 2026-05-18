@@ -52,18 +52,19 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
     hour12: false,
   });
   const parts = Object.fromEntries(
-    fmt.formatToParts(approxUtc)
+    fmt
+      .formatToParts(approxUtc)
       .filter((p) => p.type !== "literal")
       .map((p) => [p.type, p.value]),
   );
-  const displayH = parts.hour === "24" ? 0 : parseInt(parts.hour);
+  const displayH = parts.hour === "24" ? 0 : Number.parseInt(parts.hour);
   const displayedLocalMs = Date.UTC(
-    parseInt(parts.year),
-    parseInt(parts.month) - 1,
-    parseInt(parts.day),
+    Number.parseInt(parts.year),
+    Number.parseInt(parts.month) - 1,
+    Number.parseInt(parts.day),
     displayH,
-    parseInt(parts.minute),
-    parseInt(parts.second),
+    Number.parseInt(parts.minute),
+    Number.parseInt(parts.second),
   );
 
   const targetLocalMs = Date.UTC(y, mo - 1, d, h, mi, s);
@@ -85,7 +86,8 @@ export function utcToLocalDateTime(utcStr: string, timeZone = APP_TIME_ZONE): Lo
     hour12: false,
   });
   const parts = Object.fromEntries(
-    fmt.formatToParts(date)
+    fmt
+      .formatToParts(date)
       .filter((p) => p.type !== "literal")
       .map((p) => [p.type, p.value]),
   );

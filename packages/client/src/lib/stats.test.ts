@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { Category, TimeEntry } from "@timedata/shared";
+import { describe, expect, it } from "vitest";
 import { buildStatsRange, buildStatsRangeForDate, summarizeEntriesByParentCategory } from "./stats.js";
 
 function entry(id: string, categoryId: string, startTime: string, endTime: string): TimeEntry {

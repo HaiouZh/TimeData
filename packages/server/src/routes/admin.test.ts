@@ -1,8 +1,8 @@
-import Database from "better-sqlite3";
-import { Hono } from "hono";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import Database from "better-sqlite3";
+import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let db: Database.Database;
@@ -122,14 +122,14 @@ function seed() {
     "2026-05-08T15:30:00.000Z",
   );
 
-  db.prepare(`INSERT INTO sync_logs (timestamp, device, action, detail, record_count) VALUES (?, ?, ?, ?, ?)`).run(
+  db.prepare("INSERT INTO sync_logs (timestamp, device, action, detail, record_count) VALUES (?, ?, ?, ?, ?)").run(
     "2026-05-08T16:00:00.000Z",
     "desktop",
     "push_rejected",
     JSON.stringify({ rejected: 1, conflicts: 1, outcomes: [] }),
     2,
   );
-  db.prepare(`INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)`).run(
+  db.prepare("INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)").run(
     "time_entries",
     "entry-deleted",
     "2026-05-08T17:00:00.000Z",
@@ -194,10 +194,7 @@ describe("admin route", () => {
     expect(body).toMatchObject({ limit: 2, offset: 0, total: 6 });
     expect(body.entries).toHaveLength(2);
     expect(body.entries[0]).toEqual(expect.objectContaining({ id: "entry-overlap-b" }));
-    expect(body.entries.map((entry: { id: string }) => entry.id)).toEqual([
-      "entry-overlap-b",
-      "entry-overlap-a",
-    ]);
+    expect(body.entries.map((entry: { id: string }) => entry.id)).toEqual(["entry-overlap-b", "entry-overlap-a"]);
   });
 
   it("filters entries by missing-category anomaly", async () => {
@@ -217,8 +214,23 @@ describe("admin route", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.categories).toEqual([
-      expect.objectContaining({ id: "cat-work", name: "工作", parentId: null, entryCount: 0, totalMinutes: 0, isArchived: false }),
-      expect.objectContaining({ id: "cat-code", name: "编程", parentId: "cat-work", parentName: "工作", entryCount: 4, totalMinutes: 180, isArchived: false }),
+      expect.objectContaining({
+        id: "cat-work",
+        name: "工作",
+        parentId: null,
+        entryCount: 0,
+        totalMinutes: 0,
+        isArchived: false,
+      }),
+      expect.objectContaining({
+        id: "cat-code",
+        name: "编程",
+        parentId: "cat-work",
+        parentName: "工作",
+        entryCount: 4,
+        totalMinutes: 180,
+        isArchived: false,
+      }),
       expect.objectContaining({ id: "cat-archived", name: "归档", entryCount: 1, totalMinutes: 30, isArchived: true }),
     ]);
   });
@@ -243,7 +255,7 @@ describe("admin route", () => {
   });
 
   it("counts rejected and conflicts from JSON sync details", async () => {
-    db.prepare(`INSERT INTO sync_logs (timestamp, device, action, detail, record_count) VALUES (?, ?, ?, ?, ?)`).run(
+    db.prepare("INSERT INTO sync_logs (timestamp, device, action, detail, record_count) VALUES (?, ?, ?, ?, ?)").run(
       "2026-05-08T16:30:00.000Z",
       "desktop",
       "push_received",
@@ -261,7 +273,7 @@ describe("admin route", () => {
   });
 
   it("falls back to action names when sync detail is not structured", async () => {
-    db.prepare(`INSERT INTO sync_logs (timestamp, device, action, detail, record_count) VALUES (?, ?, ?, ?, ?)`).run(
+    db.prepare("INSERT INTO sync_logs (timestamp, device, action, detail, record_count) VALUES (?, ?, ?, ?, ?)").run(
       "2026-05-08T16:45:00.000Z",
       "desktop",
       "push_conflict",
@@ -312,12 +324,19 @@ describe("admin route", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.checks).toEqual(expect.arrayContaining([
-      { code: "invalid_time_range", severity: "error", count: 2, sampleIds: ["entry-invalid-time", "entry-future-time"] },
-      { code: "missing_category", severity: "error", count: 1, sampleIds: ["entry-missing-category"] },
-      { code: "archived_category", severity: "warning", count: 1, sampleIds: ["entry-archived-category"] },
-      { code: "overlap", severity: "warning", count: 2, sampleIds: ["entry-overlap-a", "entry-overlap-b"] },
-    ]));
+    expect(body.checks).toEqual(
+      expect.arrayContaining([
+        {
+          code: "invalid_time_range",
+          severity: "error",
+          count: 2,
+          sampleIds: ["entry-invalid-time", "entry-future-time"],
+        },
+        { code: "missing_category", severity: "error", count: 1, sampleIds: ["entry-missing-category"] },
+        { code: "archived_category", severity: "warning", count: 1, sampleIds: ["entry-archived-category"] },
+        { code: "overlap", severity: "warning", count: 2, sampleIds: ["entry-overlap-a", "entry-overlap-b"] },
+      ]),
+    );
   });
 
   it("detects overlaps across categories and start dates", async () => {
@@ -325,10 +344,42 @@ describe("admin route", () => {
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    insertEntry.run("entry-cross-category-a", "cat-code", "2026-05-08T18:00:00.000Z", "2026-05-08T19:00:00.000Z", "cross category a", now, "2026-05-08T19:00:00.000Z");
-    insertEntry.run("entry-cross-category-b", "cat-work", "2026-05-08T18:30:00.000Z", "2026-05-08T18:45:00.000Z", "cross category b", now, "2026-05-08T18:45:00.000Z");
-    insertEntry.run("entry-cross-date-a", "cat-code", "2026-05-08T23:30:00.000Z", "2026-05-09T00:30:00.000Z", "cross date a", now, "2026-05-09T00:30:00.000Z");
-    insertEntry.run("entry-cross-date-b", "cat-code", "2026-05-09T00:00:00.000Z", "2026-05-09T01:00:00.000Z", "cross date b", now, "2026-05-09T01:00:00.000Z");
+    insertEntry.run(
+      "entry-cross-category-a",
+      "cat-code",
+      "2026-05-08T18:00:00.000Z",
+      "2026-05-08T19:00:00.000Z",
+      "cross category a",
+      now,
+      "2026-05-08T19:00:00.000Z",
+    );
+    insertEntry.run(
+      "entry-cross-category-b",
+      "cat-work",
+      "2026-05-08T18:30:00.000Z",
+      "2026-05-08T18:45:00.000Z",
+      "cross category b",
+      now,
+      "2026-05-08T18:45:00.000Z",
+    );
+    insertEntry.run(
+      "entry-cross-date-a",
+      "cat-code",
+      "2026-05-08T23:30:00.000Z",
+      "2026-05-09T00:30:00.000Z",
+      "cross date a",
+      now,
+      "2026-05-09T00:30:00.000Z",
+    );
+    insertEntry.run(
+      "entry-cross-date-b",
+      "cat-code",
+      "2026-05-09T00:00:00.000Z",
+      "2026-05-09T01:00:00.000Z",
+      "cross date b",
+      now,
+      "2026-05-09T01:00:00.000Z",
+    );
 
     const res = await app.request("/api/admin/health-checks");
 
@@ -346,9 +397,27 @@ describe("admin route", () => {
       range: { from: "2026-05-08", to: "2026-05-08", groupBy: "day" },
       byTime: [{ bucket: "2026-05-08", totalMinutes: 240, entryCount: 5 }],
       byCategory: [
-        expect.objectContaining({ categoryId: "cat-code", categoryName: "编程", parentCategoryName: "工作", totalMinutes: 180, entryCount: 3 }),
-        expect.objectContaining({ categoryId: "cat-missing", categoryName: "cat-missing", parentCategoryName: null, totalMinutes: 30, entryCount: 1 }),
-        expect.objectContaining({ categoryId: "cat-archived", categoryName: "归档", parentCategoryName: null, totalMinutes: 30, entryCount: 1 }),
+        expect.objectContaining({
+          categoryId: "cat-code",
+          categoryName: "编程",
+          parentCategoryName: "工作",
+          totalMinutes: 180,
+          entryCount: 3,
+        }),
+        expect.objectContaining({
+          categoryId: "cat-missing",
+          categoryName: "cat-missing",
+          parentCategoryName: null,
+          totalMinutes: 30,
+          entryCount: 1,
+        }),
+        expect.objectContaining({
+          categoryId: "cat-archived",
+          categoryName: "归档",
+          parentCategoryName: null,
+          totalMinutes: 30,
+          entryCount: 1,
+        }),
       ],
     });
   });

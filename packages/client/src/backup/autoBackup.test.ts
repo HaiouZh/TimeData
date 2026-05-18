@@ -34,8 +34,9 @@ const entry = (id: string, updatedAt: string) => ({
 
 describe("backupSignature", () => {
   it("differs when entry count differs", () => {
-    expect(backupSignature({ categories: [], timeEntries: [] }))
-      .not.toBe(backupSignature({ categories: [], timeEntries: [entry("entry-1", "2026-05-08T09:00:00.000Z")] }));
+    expect(backupSignature({ categories: [], timeEntries: [] })).not.toBe(
+      backupSignature({ categories: [], timeEntries: [entry("entry-1", "2026-05-08T09:00:00.000Z")] }),
+    );
   });
 
   it("is stable across array order", () => {

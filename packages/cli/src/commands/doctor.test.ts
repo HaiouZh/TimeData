@@ -7,9 +7,7 @@ describe("runDoctor", () => {
 
     await expect(runDoctor({}, {}, null, fetchImpl)).resolves.toEqual({
       ok: false,
-      checks: [
-        { name: "config", ok: false, code: "CONFIG_MISSING", message: "Missing TimeData server URL" },
-      ],
+      checks: [{ name: "config", ok: false, code: "CONFIG_MISSING", message: "Missing TimeData server URL" }],
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -17,11 +15,16 @@ describe("runDoctor", () => {
   it("reports invalid config files without calling fetch", async () => {
     const fetchImpl = vi.fn();
 
-    await expect(runDoctor({}, {}, { ok: false, error: { code: "CONFIG_INVALID", message: "Invalid config file: config.json" } }, fetchImpl)).resolves.toEqual({
+    await expect(
+      runDoctor(
+        {},
+        {},
+        { ok: false, error: { code: "CONFIG_INVALID", message: "Invalid config file: config.json" } },
+        fetchImpl,
+      ),
+    ).resolves.toEqual({
       ok: false,
-      checks: [
-        { name: "config", ok: false, code: "CONFIG_INVALID", message: "Invalid config file: config.json" },
-      ],
+      checks: [{ name: "config", ok: false, code: "CONFIG_INVALID", message: "Invalid config file: config.json" }],
     });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -44,7 +47,9 @@ describe("runDoctor", () => {
       throw new Error("connection refused");
     });
 
-    await expect(runDoctor({ server: "https://server.example", token: "secret" }, {}, null, fetchImpl)).resolves.toEqual({
+    await expect(
+      runDoctor({ server: "https://server.example", token: "secret" }, {}, null, fetchImpl),
+    ).resolves.toEqual({
       ok: false,
       checks: [
         { name: "config", ok: true, message: "Configuration resolved" },
@@ -58,7 +63,9 @@ describe("runDoctor", () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, statusText: "Unauthorized" }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, statusText: "Unauthorized" }),
+      );
 
     await expect(runDoctor({ server: "https://server.example", token: "bad" }, {}, null, fetchImpl)).resolves.toEqual({
       ok: false,
@@ -77,7 +84,9 @@ describe("runDoctor", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
 
-    await expect(runDoctor({ server: "https://server.example", token: "secret" }, {}, null, fetchImpl)).resolves.toEqual({
+    await expect(
+      runDoctor({ server: "https://server.example", token: "secret" }, {}, null, fetchImpl),
+    ).resolves.toEqual({
       ok: true,
       checks: [
         { name: "config", ok: true, message: "Configuration resolved" },
@@ -87,15 +96,23 @@ describe("runDoctor", () => {
       ],
     });
 
-    expect(fetchImpl).toHaveBeenNthCalledWith(1, "https://server.example/api/health", expect.objectContaining({
-      method: "GET",
-      headers: { Authorization: "Bearer secret" },
-      signal: expect.any(AbortSignal),
-    }));
-    expect(fetchImpl).toHaveBeenNthCalledWith(2, "https://server.example/api/categories", expect.objectContaining({
-      method: "GET",
-      headers: { Authorization: "Bearer secret" },
-      signal: expect.any(AbortSignal),
-    }));
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      "https://server.example/api/health",
+      expect.objectContaining({
+        method: "GET",
+        headers: { Authorization: "Bearer secret" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://server.example/api/categories",
+      expect.objectContaining({
+        method: "GET",
+        headers: { Authorization: "Bearer secret" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 });

@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 @keyframes sync-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.4;
   }
   50% {
@@ -10,7 +11,8 @@
 }
 
 @keyframes sync-blink {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.3;
   }
   50% {

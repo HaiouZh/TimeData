@@ -72,7 +72,7 @@ describe("SettingsServerPage", () => {
 
     const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
     await act(async () => {
-      saveButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(localStorage.getItem("timedata_api_token")).toBe("abc123");
@@ -98,7 +98,7 @@ describe("SettingsServerPage", () => {
 
     const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
     await act(async () => {
-      saveButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(updateApiUrlMock).toHaveBeenCalledWith("https://new.example");

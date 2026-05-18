@@ -2,7 +2,7 @@
 import { pathToFileURL } from "node:url";
 import { commandRegistry, runHelp } from "./commands/help.js";
 import { parseFlags } from "./lib/args.js";
-import { readFileConfig, resolveConfig, type FileConfigResult } from "./lib/config.js";
+import { type FileConfigResult, readFileConfig, resolveConfig } from "./lib/config.js";
 import { formatResult, resolveOutputFormat } from "./lib/format.js";
 
 export const dispatchCommandNames = commandRegistry

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "../db/connection.js";
 import { initializeDatabase } from "../db/schema.js";
-import { recordSeq, getChangesSinceSeq, getLatestSeq } from "./seq.js";
+import { getChangesSinceSeq, getLatestSeq, recordSeq } from "./seq.js";
 import { computeAndPersistCommitHash, getCommitHash } from "./state.js";
 
 describe("sync_seq", () => {

@@ -25,7 +25,9 @@ function installLocalStorage(): void {
 
 installLocalStorage();
 
-export function bindClientToServer(serverApp: { fetch: (request: Request) => Response | Promise<Response> }): () => void {
+export function bindClientToServer(serverApp: {
+  fetch: (request: Request) => Response | Promise<Response>;
+}): () => void {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;

@@ -1,6 +1,6 @@
-import { v4 as uuid } from "uuid";
-import type Database from "better-sqlite3";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
+import type Database from "better-sqlite3";
+import { v4 as uuid } from "uuid";
 import { recordSeqWithDb } from "../sync/seq.js";
 
 export interface CategoryPathItem {
@@ -37,12 +37,7 @@ interface EntryServiceOptions {
   now?: Date;
 }
 
-type ErrorCode =
-  | "INVALID_DATE"
-  | "INVALID_TIME_RANGE"
-  | "CATEGORY_NOT_FOUND"
-  | "CATEGORY_AMBIGUOUS"
-  | "TIME_OVERLAP";
+type ErrorCode = "INVALID_DATE" | "INVALID_TIME_RANGE" | "CATEGORY_NOT_FOUND" | "CATEGORY_AMBIGUOUS" | "TIME_OVERLAP";
 
 export interface ApiErrorBody {
   ok: false;
@@ -58,7 +53,9 @@ export interface CategoryResolveSuccess {
   categoryId: string;
 }
 
-export type CategoryResolveResult = CategoryResolveSuccess | { ok: false; code: "CATEGORY_NOT_FOUND" | "CATEGORY_AMBIGUOUS" };
+export type CategoryResolveResult =
+  | CategoryResolveSuccess
+  | { ok: false; code: "CATEGORY_NOT_FOUND" | "CATEGORY_AMBIGUOUS" };
 
 function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -84,7 +81,9 @@ function error(code: ErrorCode, message: string, details?: Record<string, string
 }
 
 export function listCategoryPaths(db: Database.Database): CategoryPathItem[] {
-  const rows = db.prepare("SELECT id, name, parent_id, is_archived FROM categories WHERE is_archived = 0 ORDER BY sort_order, name").all() as CategoryRow[];
+  const rows = db
+    .prepare("SELECT id, name, parent_id, is_archived FROM categories WHERE is_archived = 0 ORDER BY sort_order, name")
+    .all() as CategoryRow[];
   const byId = new Map(rows.map((row) => [row.id, row]));
 
   return rows.map((row) => {
@@ -118,19 +117,21 @@ export function nextDate(date: string): string {
 export function listEntriesForCliDate(db: Database.Database, date: string) {
   if (!isValidDate(date)) return error("INVALID_DATE", `Invalid date: ${date}`);
 
-  const dayStartUtc    = localDateTimeToUtc(`${date}T00:00:00`);
+  const dayStartUtc = localDateTimeToUtc(`${date}T00:00:00`);
   const nextDayStartUtc = localDateTimeToUtc(`${nextDate(date)}T00:00:00`);
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(`
     SELECT * FROM time_entries
     WHERE start_time < ? AND end_time > ?
     ORDER BY start_time
-  `).all(nextDayStartUtc, dayStartUtc) as EntryRow[];
+  `)
+    .all(nextDayStartUtc, dayStartUtc) as EntryRow[];
   const paths = categoryPathMap(db);
 
   const entries = rows.map((row) => ({
     id: row.id,
     startTime: utcToLocalDateTime(row.start_time),
-    endTime:   utcToLocalDateTime(row.end_time),
+    endTime: utcToLocalDateTime(row.end_time),
     durationMinutes: durationMinutes(row.start_time, row.end_time),
     category: paths.get(row.category_id) || "未知",
     note: row.note,
@@ -147,7 +148,11 @@ export function listEntriesForCliDate(db: Database.Database, date: string) {
   };
 }
 
-export function createEntryFromCliInput(db: Database.Database, input: CliEntryInput, options: EntryServiceOptions = {}) {
+export function createEntryFromCliInput(
+  db: Database.Database,
+  input: CliEntryInput,
+  options: EntryServiceOptions = {},
+) {
   if (!isValidDate(input.date)) return error("INVALID_DATE", `Invalid date: ${input.date}`);
   if (!isValidTime(input.start) || !isValidTime(input.end)) {
     return error("INVALID_TIME_RANGE", "Start and end must use HH:mm format");
@@ -158,23 +163,30 @@ export function createEntryFromCliInput(db: Database.Database, input: CliEntryIn
 
   const category = resolveCategoryPath(db, input.category);
   if (!category.ok) {
-    return error(category.code, category.code === "CATEGORY_AMBIGUOUS" ? `Category path is ambiguous: ${input.category}` : `Category not found: ${input.category}`);
+    return error(
+      category.code,
+      category.code === "CATEGORY_AMBIGUOUS"
+        ? `Category path is ambiguous: ${input.category}`
+        : `Category not found: ${input.category}`,
+    );
   }
 
   const startTime = localDateTimeToUtc(`${input.date}T${input.start}:00`);
-  const endTime   = localDateTimeToUtc(`${input.date}T${input.end}:00`);
+  const endTime = localDateTimeToUtc(`${input.date}T${input.end}:00`);
   const nowUtc = (options.now ?? new Date()).toISOString();
   if (endTime > nowUtc) {
     return error("INVALID_TIME_RANGE", "End time cannot be in the future");
   }
 
   const createInTransaction = db.transaction(() => {
-    const overlap = db.prepare(`
+    const overlap = db
+      .prepare(`
       SELECT id, start_time, end_time FROM time_entries
       WHERE start_time < ? AND ? < end_time
       ORDER BY start_time
       LIMIT 1
-    `).get(endTime, startTime) as { id: string; start_time: string; end_time: string } | undefined;
+    `)
+      .get(endTime, startTime) as { id: string; start_time: string; end_time: string } | undefined;
 
     if (overlap) {
       return error("TIME_OVERLAP", "New entry overlaps with existing entry", {
@@ -199,7 +211,7 @@ export function createEntryFromCliInput(db: Database.Database, input: CliEntryIn
         id,
         date: input.date,
         startTime: utcToLocalDateTime(startTime),
-        endTime:   utcToLocalDateTime(endTime),
+        endTime: utcToLocalDateTime(endTime),
         category: input.category,
         note: input.note || "",
       },

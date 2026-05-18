@@ -1,15 +1,12 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import type { Category } from "@timedata/shared";
 import {
   DndContext,
+  type DragEndEvent,
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -17,12 +14,12 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import type { Category } from "@timedata/shared";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { useCategories } from "../../hooks/useCategories.ts";
-import {
-  CATEGORY_COLOR_PALETTES,
-  type CategoryColorPaletteId,
-} from "../../lib/categoryColors.ts";
+import { CATEGORY_COLOR_PALETTES, type CategoryColorPaletteId } from "../../lib/categoryColors.ts";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 interface DeletingCategoryState {
@@ -65,7 +62,7 @@ export default function SettingsCategoryDetailPage() {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   function openEditName() {
@@ -206,14 +203,21 @@ export default function SettingsCategoryDetailPage() {
         <h3 className="text-sm font-medium text-slate-400">基本信息</h3>
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm text-slate-300">名称</span>
-          <button type="button" onClick={openEditName} className="min-w-0 truncate text-sm text-blue-400 hover:text-blue-300">
+          <button
+            type="button"
+            onClick={openEditName}
+            className="min-w-0 truncate text-sm text-blue-400 hover:text-blue-300"
+          >
             {category.name}
           </button>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-sm text-slate-300">颜色</span>
           <button type="button" onClick={openColorEditor} className="flex items-center gap-2">
-            <span className="h-5 w-5 rounded-full border border-slate-700" style={{ backgroundColor: category.color }} />
+            <span
+              className="h-5 w-5 rounded-full border border-slate-700"
+              style={{ backgroundColor: category.color }}
+            />
             <span className="text-sm text-blue-400 hover:text-blue-300">修改</span>
           </button>
         </div>
@@ -222,10 +226,14 @@ export default function SettingsCategoryDetailPage() {
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4">
         <div className="flex items-center justify-between gap-4">
           <h3 className="text-sm font-medium text-slate-400">子分类</h3>
-          <button type="button" onClick={() => {
-            setAddingChild(true);
-            setChildAddError(null);
-          }} className="text-sm text-blue-400 hover:text-blue-300">
+          <button
+            type="button"
+            onClick={() => {
+              setAddingChild(true);
+              setChildAddError(null);
+            }}
+            className="text-sm text-blue-400 hover:text-blue-300"
+          >
             + 新增
           </button>
         </div>
@@ -242,10 +250,18 @@ export default function SettingsCategoryDetailPage() {
                     className="flex items-center rounded-lg bg-slate-800/50 px-2 py-2"
                   >
                     <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                      <button type="button" onClick={() => openRenameChild(child)} className="min-w-0 truncate text-sm text-slate-200 hover:text-blue-300">
+                      <button
+                        type="button"
+                        onClick={() => openRenameChild(child)}
+                        className="min-w-0 truncate text-sm text-slate-200 hover:text-blue-300"
+                      >
                         {child.name}
                       </button>
-                      <button type="button" onClick={() => openDelete(child)} className="shrink-0 text-xs text-red-400 hover:text-red-300">
+                      <button
+                        type="button"
+                        onClick={() => openDelete(child)}
+                        className="shrink-0 text-xs text-red-400 hover:text-red-300"
+                      >
                         删除
                       </button>
                     </div>
@@ -259,14 +275,21 @@ export default function SettingsCategoryDetailPage() {
 
       <section className="space-y-3 rounded-xl border border-red-900/50 bg-red-950/20 p-4">
         <h3 className="text-sm font-medium text-red-300">危险操作</h3>
-        <button type="button" onClick={() => openDelete(category)} className="w-full rounded bg-red-600 py-2 text-sm hover:bg-red-500">
+        <button
+          type="button"
+          onClick={() => openDelete(category)}
+          className="w-full rounded bg-red-600 py-2 text-sm hover:bg-red-500"
+        >
           删除分类
         </button>
         {deleteError && !deleting && <p className="text-sm text-red-400">{deleteError}</p>}
       </section>
 
       {editingName && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setEditingName(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setEditingName(false)}
+        >
           <div className="w-80 space-y-3 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">重命名分类</h3>
             <input
@@ -278,25 +301,48 @@ export default function SettingsCategoryDetailPage() {
               }}
               placeholder="分类名称"
               className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
-              autoFocus
             />
             {nameError && <p className="text-sm text-red-400">{nameError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleSaveName} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">保存</button>
-              <button type="button" onClick={() => setEditingName(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleSaveName}
+                className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingName(false)}
+                className="rounded bg-slate-800 px-4 py-2 text-sm"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {colorEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setColorEditing(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setColorEditing(false)}
+        >
           <div className="w-96 space-y-4 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">修改分类颜色</h3>
             <div className="flex items-center gap-3">
-              <span className="h-8 w-8 rounded-full border border-slate-700" style={{ backgroundColor: selectedColor }} />
+              <span
+                className="h-8 w-8 rounded-full border border-slate-700"
+                style={{ backgroundColor: selectedColor }}
+              />
               <span className="text-sm text-slate-300">{category.name}</span>
-              <input type="color" aria-label="分类颜色" value={selectedColor} onChange={(event) => setSelectedColor(event.target.value)} className="ml-auto h-8 w-10" />
+              <input
+                type="color"
+                aria-label="分类颜色"
+                value={selectedColor}
+                onChange={(event) => setSelectedColor(event.target.value)}
+                className="ml-auto h-8 w-10"
+              />
             </div>
             <div className="flex gap-2">
               {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (
@@ -324,15 +370,30 @@ export default function SettingsCategoryDetailPage() {
             </div>
             {colorError && <p className="text-sm text-red-400">{colorError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleSaveColor} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">保存</button>
-              <button type="button" onClick={() => setColorEditing(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleSaveColor}
+                className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={() => setColorEditing(false)}
+                className="rounded bg-slate-800 px-4 py-2 text-sm"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {addingChild && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setAddingChild(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setAddingChild(false)}
+        >
           <div className="w-80 space-y-3 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">添加子分类</h3>
             <input
@@ -344,19 +405,33 @@ export default function SettingsCategoryDetailPage() {
               }}
               placeholder="子分类名称"
               className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
-              autoFocus
             />
             {childAddError && <p className="text-sm text-red-400">{childAddError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleAddChild} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">添加</button>
-              <button type="button" onClick={() => setAddingChild(false)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleAddChild}
+                className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500"
+              >
+                添加
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddingChild(false)}
+                className="rounded bg-slate-800 px-4 py-2 text-sm"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {renamingChild && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setRenamingChild(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setRenamingChild(null)}
+        >
           <div className="w-80 space-y-3 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">重命名子分类</h3>
             <input
@@ -368,26 +443,52 @@ export default function SettingsCategoryDetailPage() {
               }}
               placeholder="子分类名称"
               className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
-              autoFocus
             />
             {childRenameError && <p className="text-sm text-red-400">{childRenameError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleRenameChild} className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500">保存</button>
-              <button type="button" onClick={() => setRenamingChild(null)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleRenameChild}
+                className="flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={() => setRenamingChild(null)}
+                className="rounded bg-slate-800 px-4 py-2 text-sm"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {deleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setDeleting(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={() => setDeleting(null)}
+        >
           <div className="w-96 space-y-3 rounded-xl bg-slate-900 p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium text-red-300">删除分类</h3>
             <p className="text-sm leading-6 text-slate-300">{deleteMessage()}</p>
             {deleteError && <p className="text-sm text-red-400">{deleteError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={handleDelete} className="flex-1 rounded bg-red-600 py-2 text-sm hover:bg-red-500">确认删除</button>
-              <button type="button" onClick={() => setDeleting(null)} className="rounded bg-slate-800 px-4 py-2 text-sm">取消</button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="flex-1 rounded bg-red-600 py-2 text-sm hover:bg-red-500"
+              >
+                确认删除
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleting(null)}
+                className="rounded bg-slate-800 px-4 py-2 text-sm"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>

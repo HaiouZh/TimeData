@@ -18,7 +18,17 @@ function defaultSyncState() {
     unsyncedCount: 2,
     error: null,
     conflicts: [],
-    lastResult: { checked: true, identical: false, backupCreated: true, pushed: 1, rejected: 0, pushConflicts: 0, pushIssues: [], pulled: 3, conflicts: [] },
+    lastResult: {
+      checked: true,
+      identical: false,
+      backupCreated: true,
+      pushed: 1,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 3,
+      conflicts: [],
+    },
     apiUrl: localStorage.getItem("timedata_api_url") || "",
     updateApiUrl: vi.fn(),
     cloudSyncEnabled: true,
@@ -87,11 +97,11 @@ describe("SettingsPage", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 
     expect(html).toContain("服务器配置");
-    expect(html).toContain("href=\"/settings/server\"");
+    expect(html).toContain('href="/settings/server"');
     expect(html).toContain("数据设置");
-    expect(html).toContain("href=\"/settings/data\"");
+    expect(html).toContain('href="/settings/data"');
     expect(html).toContain("服务端数据洞察");
-    expect(html).toContain("href=\"/settings/admin-insights\"");
+    expect(html).toContain('href="/settings/admin-insights"');
     expect(html).toContain("APK 更新");
     expect(html).toContain("服务端更新");
   });
@@ -111,7 +121,17 @@ describe("SettingsPage", () => {
   it("shows rejected and push conflict counts from the last cloud sync", () => {
     useSyncContextMock.mockReturnValue({
       ...defaultSyncState(),
-      lastResult: { checked: true, identical: false, backupCreated: true, pushed: 1, rejected: 2, pushConflicts: 1, pushIssues: [], pulled: 3, conflicts: [] },
+      lastResult: {
+        checked: true,
+        identical: false,
+        backupCreated: true,
+        pushed: 1,
+        rejected: 2,
+        pushConflicts: 1,
+        pushIssues: [],
+        pulled: 3,
+        conflicts: [],
+      },
     });
 
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
@@ -156,7 +176,17 @@ describe("SettingsPage", () => {
   it("shows no-op sync text when local and cloud data already match", () => {
     useSyncContextMock.mockReturnValue({
       ...defaultSyncState(),
-      lastResult: { checked: true, identical: true, backupCreated: false, pushed: 0, rejected: 0, pushConflicts: 0, pushIssues: [], pulled: 0, conflicts: [] },
+      lastResult: {
+        checked: true,
+        identical: true,
+        backupCreated: false,
+        pushed: 0,
+        rejected: 0,
+        pushConflicts: 0,
+        pushIssues: [],
+        pulled: 0,
+        conflicts: [],
+      },
     });
 
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
@@ -167,12 +197,18 @@ describe("SettingsPage", () => {
 
 describe("getServerConnectionState", () => {
   it("uses a green dot when a configured server returns version info", () => {
-    expect(getServerConnectionState("https://example.com", {
-      current: "abc1234",
-      latest: "def5678",
-      hasUpdate: true,
-      checkedAt: "2026-05-08T08:00:00.000Z",
-    }, true)).toEqual({
+    expect(
+      getServerConnectionState(
+        "https://example.com",
+        {
+          current: "abc1234",
+          latest: "def5678",
+          hasUpdate: true,
+          checkedAt: "2026-05-08T08:00:00.000Z",
+        },
+        true,
+      ),
+    ).toEqual({
       color: "green",
       subtitle: "服务器已连接",
     });

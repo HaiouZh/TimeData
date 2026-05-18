@@ -1,13 +1,7 @@
 import type { AdminEntriesResponse } from "@timedata/shared";
 import { Hono } from "hono";
 import { getDb } from "../../db/connection.js";
-import {
-  buildEntryFilters,
-  type CountRow,
-  type EntryRow,
-  mapEntry,
-  parsePositiveInteger,
-} from "./_helpers.js";
+import { type CountRow, type EntryRow, buildEntryFilters, mapEntry, parsePositiveInteger } from "./_helpers.js";
 
 const entries = new Hono();
 
@@ -19,14 +13,19 @@ entries.get("/", (c) => {
   const offset = parsePositiveInteger(c.req.query("offset"), 0);
   const { whereSql, params } = buildEntryFilters(from, to, anomaly);
 
-  const total = (getDb().prepare(`
+  const total = (
+    getDb()
+      .prepare(`
     SELECT COUNT(*) AS count
     FROM time_entries e
     LEFT JOIN categories c ON c.id = e.category_id
     ${whereSql}
-  `).get(...params) as CountRow).count;
+  `)
+      .get(...params) as CountRow
+  ).count;
 
-  const rows = getDb().prepare(`
+  const rows = getDb()
+    .prepare(`
     SELECT
       e.id,
       e.category_id,
@@ -44,7 +43,8 @@ entries.get("/", (c) => {
     ${whereSql}
     ORDER BY e.start_time DESC, e.id DESC
     LIMIT ? OFFSET ?
-  `).all(...params, limit, offset) as EntryRow[];
+  `)
+    .all(...params, limit, offset) as EntryRow[];
 
   const response: AdminEntriesResponse = {
     entries: rows.map(mapEntry),

@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanupRouteTestDb, setupRouteTestApp } from "../__tests__/helpers.js";
@@ -101,7 +101,7 @@ describe("GET /api/admin/sync-logs", () => {
     const res = await syncLogRequest("?limit=3");
 
     expect(res.status).toBe(200);
-    const body = await res.json() as Array<{ id: number; action: string }>;
+    const body = (await res.json()) as Array<{ id: number; action: string }>;
     expect(body).toHaveLength(3);
     expect(body.map((entry) => entry.action)).toEqual(["action-599", "action-598", "action-597"]);
   });
@@ -110,7 +110,7 @@ describe("GET /api/admin/sync-logs", () => {
     const res = await syncLogRequest();
 
     expect(res.status).toBe(200);
-    const body = await res.json() as unknown[];
+    const body = (await res.json()) as unknown[];
     expect(body).toHaveLength(50);
   });
 
@@ -118,7 +118,7 @@ describe("GET /api/admin/sync-logs", () => {
     const res = await syncLogRequest("?limit=9999");
 
     expect(res.status).toBe(200);
-    const body = await res.json() as unknown[];
+    const body = (await res.json()) as unknown[];
     expect(body).toHaveLength(500);
   });
 
@@ -126,7 +126,7 @@ describe("GET /api/admin/sync-logs", () => {
     const res = await syncLogRequest("?limit=-5");
 
     expect(res.status).toBe(200);
-    const body = await res.json() as unknown[];
+    const body = (await res.json()) as unknown[];
     expect(body).toHaveLength(1);
   });
 });

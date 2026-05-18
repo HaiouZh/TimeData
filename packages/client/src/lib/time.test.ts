@@ -1,3 +1,4 @@
+import type { TimeEntry } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import {
   buildTimeSlots,
@@ -8,7 +9,6 @@ import {
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
 } from "./time.js";
-import type { TimeEntry } from "@timedata/shared";
 
 describe("formatAppDateTime", () => {
   it("formats server UTC timestamps in the app time zone", () => {
@@ -22,7 +22,9 @@ describe("formatDateTimeRange", () => {
   });
 
   it("formats truncated day-end ranges as 24:00", () => {
-    expect(formatDateTimeRange("2026-05-07T23:57:00", "2026-05-08T00:00:00", { mode: "truncated" })).toBe("23:57 - 24:00");
+    expect(formatDateTimeRange("2026-05-07T23:57:00", "2026-05-08T00:00:00", { mode: "truncated" })).toBe(
+      "23:57 - 24:00",
+    );
   });
 
   it("formats merged overnight ranges as clock-only", () => {
@@ -61,12 +63,12 @@ describe("buildTimeSlots", () => {
 
   it("continues the first gap from the previous entry end when the selected day has no earlier entry", () => {
     const slots = buildTimeSlots([], "2026-05-08", 0, {
-      now: "2026-05-08T08:00:00",          // 上海 08:00 = UTC 00:00:00.000Z
-      previousEntryEndTime: "2026-05-07T23:30:00",  // 本地时间，作为 cursor
+      now: "2026-05-08T08:00:00", // 上海 08:00 = UTC 00:00:00.000Z
+      previousEntryEndTime: "2026-05-07T23:30:00", // 本地时间，作为 cursor
     });
 
     expect(slots[0]).toMatchObject({
-      startTime: "2026-05-07T23:30:00",    // cursor 保持 previousEntryEndTime 原值
+      startTime: "2026-05-07T23:30:00", // cursor 保持 previousEntryEndTime 原值
       endTime: "2026-05-08T00:00:00.000Z", // dayEnd = UTC（上海 08:00）
       entry: null,
       displayMode: "default",
@@ -96,7 +98,7 @@ describe("buildTimeSlots", () => {
     // entrySlot.endTime = 被 clip 到 dayEnd = localDateTimeToUtc("2026-05-08T00:00:00") = "2026-05-07T16:00:00.000Z"
     expect(entrySlot).toMatchObject({
       startTime: "2026-05-07T23:57:00",
-      endTime: "2026-05-07T16:00:00.000Z",  // UTC 下午四点 = 上海 2026-05-08T00:00:00
+      endTime: "2026-05-07T16:00:00.000Z", // UTC 下午四点 = 上海 2026-05-08T00:00:00
       displayMode: "truncated",
     });
   });
@@ -141,13 +143,13 @@ describe("buildTimeSlots", () => {
     });
 
     expect(slots[0]).toMatchObject({
-      startTime: "2026-05-07T23:57:00",  // previousEntry.startTime 原值
-      endTime: "2026-05-08T06:00:00",    // previousEntry.endTime 原值
+      startTime: "2026-05-07T23:57:00", // previousEntry.startTime 原值
+      endTime: "2026-05-08T06:00:00", // previousEntry.endTime 原值
       entry: previousEntry,
       displayMode: "merged",
     });
     expect(slots[1]).toMatchObject({
-      startTime: "2026-05-08T06:00:00",    // cursor = previousEntry.endTime 原值
+      startTime: "2026-05-08T06:00:00", // cursor = previousEntry.endTime 原值
       endTime: "2026-05-08T00:00:00.000Z", // dayEnd = UTC（上海 08:00）
       entry: null,
     });
@@ -173,7 +175,7 @@ describe("buildTimeSlots", () => {
 
     expect(slots[0]).toMatchObject({
       startTime: "2026-05-08T16:00:00.000Z", // dayStart = UTC（上海 2026-05-09T00:00）
-      endTime: "2026-05-09T04:00:00.000Z",   // dayEnd = UTC（上海 2026-05-09T12:00）
+      endTime: "2026-05-09T04:00:00.000Z", // dayEnd = UTC（上海 2026-05-09T12:00）
       entry: null,
       displayMode: "default",
     });
@@ -186,7 +188,7 @@ describe("buildTimeSlots", () => {
     });
 
     expect(slots[0]).toMatchObject({
-      startTime: "2026-05-08T20:30:00",    // cursor = previousEntryEndTime 原值
+      startTime: "2026-05-08T20:30:00", // cursor = previousEntryEndTime 原值
       endTime: "2026-05-09T00:00:00.000Z", // dayEnd = UTC（上海 08:00）
       entry: null,
       displayMode: "default",
@@ -201,7 +203,7 @@ describe("buildTimeSlots", () => {
 
     expect(slots[0]).toMatchObject({
       startTime: "2026-05-08T16:00:00.000Z", // dayStart = UTC（上海 2026-05-09T00:00）
-      endTime: "2026-05-09T00:00:00.000Z",   // dayEnd = UTC（上海 08:00）
+      endTime: "2026-05-09T00:00:00.000Z", // dayEnd = UTC（上海 08:00）
       entry: null,
       displayMode: "default",
     });
@@ -226,7 +228,7 @@ describe("buildTimeSlots", () => {
 
     expect(slots[0]).toMatchObject({
       startTime: "2026-05-07T16:00:00.000Z", // dayStart = UTC（上海 2026-05-08T00:00）
-      endTime: "2026-05-08T00:00:00.000Z",   // dayEnd = UTC（上海 08:00）
+      endTime: "2026-05-08T00:00:00.000Z", // dayEnd = UTC（上海 08:00）
       entry: null,
       displayMode: "default",
     });
@@ -256,19 +258,24 @@ describe("formatDateTimeRange — UTC input", () => {
 
 describe("buildTimeSlots — UTC entries", () => {
   it("places a UTC entry correctly in the local-day timeline", () => {
-    const entries: TimeEntry[] = [{
-      id: "e1", categoryId: "c1",
-      startTime: "2026-05-14T07:00:00.000Z",  // Shanghai 15:00
-      endTime:   "2026-05-14T08:00:00.000Z",  // Shanghai 16:00
-      note: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    }];
+    const entries: TimeEntry[] = [
+      {
+        id: "e1",
+        categoryId: "c1",
+        startTime: "2026-05-14T07:00:00.000Z", // Shanghai 15:00
+        endTime: "2026-05-14T08:00:00.000Z", // Shanghai 16:00
+        note: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
     const slots = buildTimeSlots(entries, "2026-05-14", 0, {
-      now: new Date("2026-05-14T12:00:00.000Z"),  // Shanghai 20:00
+      now: new Date("2026-05-14T12:00:00.000Z"), // Shanghai 20:00
     });
     const entrySlot = slots.find((s) => s.entry?.id === "e1");
     expect(entrySlot).toBeDefined();
     // formatTime of the slot's startTime should give 15:00
-    expect(formatTime(entrySlot!.startTime)).toBe("15:00");
+    expect(formatTime(entrySlot?.startTime)).toBe("15:00");
   });
 });
 

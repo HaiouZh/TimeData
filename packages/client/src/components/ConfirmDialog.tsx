@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -59,7 +59,11 @@ export default function ConfirmDialog({
         </h2>
         <div className="mt-3 whitespace-pre-line text-slate-300">{body}</div>
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onCancel} className="rounded-lg bg-slate-800 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg bg-slate-800 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700"
+          >
             {cancelLabel}
           </button>
           <button type="button" ref={confirmButtonRef} onClick={onConfirm} className={confirmClass}>

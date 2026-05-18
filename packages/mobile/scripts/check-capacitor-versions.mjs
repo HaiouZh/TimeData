@@ -18,7 +18,9 @@ for (const name of sharedPackages) {
     throw new Error(`${name} must exist in both client and mobile package.json`);
   }
   if (!clientVersion.startsWith("^7.") || !mobileVersion.startsWith("^7.")) {
-    throw new Error(`${name} must use Capacitor v7 in both packages; got client=${clientVersion}, mobile=${mobileVersion}`);
+    throw new Error(
+      `${name} must use Capacitor v7 in both packages; got client=${clientVersion}, mobile=${mobileVersion}`,
+    );
   }
 }
 

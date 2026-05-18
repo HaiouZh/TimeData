@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
-import { runUtcResetIfNeeded } from "./utcReset.js";
+import { describe, expect, it } from "vitest";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
+import { runUtcResetIfNeeded } from "./utcReset.js";
 
 function makeTestDb(): Database.Database {
   const db = new Database(":memory:");
@@ -49,14 +49,14 @@ describe("runUtcResetIfNeeded", () => {
     const db = makeTestDb();
     // 插入旧数据
     db.prepare(
-      "INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
     ).run("e1", "c1", "2026-05-13T15:00:00", "2026-05-13T16:00:00", new Date().toISOString(), new Date().toISOString());
-    db.prepare(
-      "INSERT INTO sync_logs (action) VALUES (?)"
-    ).run("push");
-    db.prepare(
-      "INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)"
-    ).run("time_entries", "e1", new Date().toISOString());
+    db.prepare("INSERT INTO sync_logs (action) VALUES (?)").run("push");
+    db.prepare("INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)").run(
+      "time_entries",
+      "e1",
+      new Date().toISOString(),
+    );
     computeAndPersistCommitHash(db);
 
     const result = runUtcResetIfNeeded(db);
@@ -69,7 +69,9 @@ describe("runUtcResetIfNeeded", () => {
     // 默认分类已重建
     expect((db.prepare("SELECT COUNT(*) as n FROM categories").get() as { n: number }).n).toBeGreaterThan(0);
     // 标记已写入
-    const flag = db.prepare("SELECT value FROM app_metadata WHERE key = ?").get("utc_reset_v1") as { value: string } | undefined;
+    const flag = db.prepare("SELECT value FROM app_metadata WHERE key = ?").get("utc_reset_v1") as
+      | { value: string }
+      | undefined;
     expect(flag?.value).toBeTruthy();
     expect(getCommitHash(db).latestSeq).toBeNull();
   });
@@ -79,8 +81,15 @@ describe("runUtcResetIfNeeded", () => {
     runUtcResetIfNeeded(db);
     // 插入新数据（模拟重置后正常写入的 UTC 记录）
     db.prepare(
-      "INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run("e2", "cat1", "2026-05-14T07:00:00.000Z", "2026-05-14T08:00:00.000Z", new Date().toISOString(), new Date().toISOString());
+      "INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      "e2",
+      "cat1",
+      "2026-05-14T07:00:00.000Z",
+      "2026-05-14T08:00:00.000Z",
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
 
     const result = runUtcResetIfNeeded(db);
 

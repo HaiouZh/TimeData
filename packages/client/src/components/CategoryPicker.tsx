@@ -32,14 +32,20 @@ export default function CategoryPicker({ onSelect, selectedId }: CategoryPickerP
       return;
     }
 
-    const parent = parentCategories.find((candidate) => getChildren(candidate.id).some((child) => child.id === selectedId));
+    const parent = parentCategories.find((candidate) =>
+      getChildren(candidate.id).some((child) => child.id === selectedId),
+    );
     if (parent) {
       setActiveParentId(parent.id);
     }
   }, [getChildren, parentCategories, selectedId]);
 
   if (parentCategories.length === 0) {
-    return <div className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-500">还没有分类，请先在分类页添加。</div>;
+    return (
+      <div className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-500">
+        还没有分类，请先在分类页添加。
+      </div>
+    );
   }
 
   function chooseParent(parentId: string) {

@@ -34,13 +34,18 @@ export function computeAndPersistCommitHash(db: Database.Database = getDb()): Sy
   const latestSeq = readLatestSeq(db);
   const entryCount = (db.prepare("SELECT COUNT(*) AS count FROM time_entries").get() as { count: number }).count;
   const categoryCount = (db.prepare("SELECT COUNT(*) AS count FROM categories").get() as { count: number }).count;
-  const lastUpdatedAt = (db.prepare(`
+  const lastUpdatedAt =
+    (
+      db
+        .prepare(`
     SELECT MAX(updated_at) AS value FROM (
       SELECT updated_at FROM time_entries
       UNION ALL
       SELECT updated_at FROM categories
     )
-  `).get() as { value: string | null }).value ?? "";
+  `)
+        .get() as { value: string | null }
+    ).value ?? "";
   const hash = createHash("sha256")
     .update(`${latestSeq ?? ""}|${entryCount}|${categoryCount}|${lastUpdatedAt}`)
     .digest("hex");
@@ -58,7 +63,9 @@ export function computeAndPersistCommitHash(db: Database.Database = getDb()): Sy
 
 export function getCommitHash(db: Database.Database = getDb()): SyncCommitHashState {
   const hashRow = db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get() as StateRow | undefined;
-  const latestSeqRow = db.prepare("SELECT value FROM sync_state WHERE key = 'latest_seq'").get() as StateRow | undefined;
+  const latestSeqRow = db.prepare("SELECT value FROM sync_state WHERE key = 'latest_seq'").get() as
+    | StateRow
+    | undefined;
   const dirtyRow = db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get() as StateRow | undefined;
   if (!hashRow || !latestSeqRow || dirtyRow?.value === DIRTY_VALUE) return computeAndPersistCommitHash(db);
 

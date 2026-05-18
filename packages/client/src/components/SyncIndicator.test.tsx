@@ -27,7 +27,7 @@ describe("SyncIndicator", () => {
 
     const html = renderToStaticMarkup(createElement(SyncIndicator));
 
-    expect(html).toContain("aria-label=\"同步状态：syncing\"");
+    expect(html).toContain('aria-label="同步状态：syncing"');
     expect(html).toContain("animate-sync-pulse");
     expect(html).not.toContain("<button");
     expect(html).not.toContain("href=");

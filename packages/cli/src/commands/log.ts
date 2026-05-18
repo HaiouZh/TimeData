@@ -1,4 +1,4 @@
-import { requestJson, type ApiConfig } from "../lib/api-client.js";
+import { type ApiConfig, requestJson } from "../lib/api-client.js";
 import { todayLocal, validateDate, validateTimeRange } from "../lib/validation.js";
 
 export async function runLog(
@@ -8,7 +8,13 @@ export async function runLog(
 ): Promise<unknown> {
   const missing = ["start", "end", "category"].filter((key) => !flags[key]);
   if (missing.length > 0) {
-    return { ok: false, error: { code: "MISSING_ARGUMENT", message: `Missing required arguments: ${missing.map((key) => `--${key}`).join(", ")}` } };
+    return {
+      ok: false,
+      error: {
+        code: "MISSING_ARGUMENT",
+        message: `Missing required arguments: ${missing.map((key) => `--${key}`).join(", ")}`,
+      },
+    };
   }
 
   const date = flags.date || todayLocal();

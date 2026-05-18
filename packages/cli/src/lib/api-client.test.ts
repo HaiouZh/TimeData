@@ -11,32 +11,43 @@ describe("requestJson", () => {
       { fetchImpl },
     );
 
-    expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/entries?format=cli", expect.objectContaining({
-      method: "GET",
-      headers: { Authorization: "Bearer secret" },
-      signal: expect.any(AbortSignal),
-    }));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://server.example/api/entries?format=cli",
+      expect.objectContaining({
+        method: "GET",
+        headers: { Authorization: "Bearer secret" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(result).toEqual({ ok: true });
   });
 
   it("maps authentication failures to AUTH_FAILED", async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, statusText: "Unauthorized" }));
-
-    const result = await requestJson(
-      { serverUrl: "https://server.example", token: "bad" },
-      "/api/entries?format=cli",
-      { fetchImpl },
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, statusText: "Unauthorized" }),
     );
+
+    const result = await requestJson({ serverUrl: "https://server.example", token: "bad" }, "/api/entries?format=cli", {
+      fetchImpl,
+    });
 
     expect(result).toEqual({ ok: false, error: { code: "AUTH_FAILED", message: "Authentication failed" } });
   });
 
   it("returns TIMEOUT when a request exceeds the default timeout", async () => {
-    const fetchImpl = vi.fn((_url, init) => new Promise((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted", "AbortError")));
-    })) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted", "AbortError")),
+          );
+        }),
+    ) as unknown as typeof fetch;
 
-    const result = await requestJson({ serverUrl: "https://example.test", token: "token" }, "/api/test", { fetchImpl, timeoutMs: 1 });
+    const result = await requestJson({ serverUrl: "https://example.test", token: "token" }, "/api/test", {
+      fetchImpl,
+      timeoutMs: 1,
+    });
 
     expect(result).toEqual({ ok: false, error: { code: "TIMEOUT", message: "Request timed out" } });
   });

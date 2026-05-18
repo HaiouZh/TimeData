@@ -39,9 +39,17 @@ describe("adminApi", () => {
   it("serializes entries filters", async () => {
     apiFetch.mockResolvedValue({});
 
-    await fetchAdminEntries({ from: "2026-05-08", to: "2026-05-09", anomaly: "missing_category", limit: 25, offset: 50 });
+    await fetchAdminEntries({
+      from: "2026-05-08",
+      to: "2026-05-09",
+      anomaly: "missing_category",
+      limit: 25,
+      offset: 50,
+    });
 
-    expect(apiFetch).toHaveBeenCalledWith("/api/admin/entries?from=2026-05-08&to=2026-05-09&anomaly=missing_category&limit=25&offset=50");
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/admin/entries?from=2026-05-08&to=2026-05-09&anomaly=missing_category&limit=25&offset=50",
+    );
   });
 
   it("omits empty analytics filters", async () => {

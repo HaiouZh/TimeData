@@ -1,7 +1,7 @@
-import { fileURLToPath, URL } from "node:url";
-import { defineConfig, type PluginOption } from "vite";
-import react from "@vitejs/plugin-react";
+import { URL, fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { type PluginOption, defineConfig } from "vite";
 import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
 import { readAndroidVersionCode } from "./viteVersion";
 

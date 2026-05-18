@@ -5,10 +5,10 @@ import { exportBackup } from "../../backup/exportBackup.ts";
 import { downloadBackupFile } from "../../backup/fileDownload.ts";
 import { importBackup } from "../../backup/importBackup.ts";
 import { validateBackup } from "../../backup/validateBackup.ts";
-import { resetLocalDataToDefaults } from "../../db/index.ts";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
-import { findFutureEndedEntries, deleteFutureEndedEntries } from "../../hooks/useEntries.ts";
+import { resetLocalDataToDefaults } from "../../db/index.ts";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
+import { deleteFutureEndedEntries, findFutureEndedEntries } from "../../hooks/useEntries.ts";
 import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
 import { getMergeOvernightEnabled, setMergeOvernightEnabled } from "../../lib/overnightDisplaySetting.ts";
 import { safeGetItem } from "../../lib/safeStorage.js";
@@ -36,7 +36,10 @@ export default function SettingsDataPage() {
   } = useSyncContext();
   const { confirm, dialog } = useConfirm();
   const location = useLocation();
-  const initialDataStatus = typeof location.state === "object" && location.state && "dataStatus" in location.state ? String(location.state.dataStatus) : "";
+  const initialDataStatus =
+    typeof location.state === "object" && location.state && "dataStatus" in location.state
+      ? String(location.state.dataStatus)
+      : "";
   const [cloudSyncEnabled, setCloudSyncEnabledState] = useState(getCloudSyncEnabled());
   const [mergeOvernightEnabled, setMergeOvernightEnabledState] = useState(getMergeOvernightEnabled());
   const [dataBusy, setDataBusy] = useState(false);
@@ -89,7 +92,11 @@ export default function SettingsDataPage() {
     try {
       const entries = await findFutureEndedEntries();
       setFutureEntries(entries);
-      setFutureEntriesStatus(entries.length > 0 ? `发现 ${entries.length} 条结束时间晚于现在的本地记录。` : "未发现结束时间晚于现在的本地记录。");
+      setFutureEntriesStatus(
+        entries.length > 0
+          ? `发现 ${entries.length} 条结束时间晚于现在的本地记录。`
+          : "未发现结束时间晚于现在的本地记录。",
+      );
     } catch (e: unknown) {
       setFutureEntriesStatus(`检查本地未来记录失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
@@ -133,7 +140,9 @@ export default function SettingsDataPage() {
     if (preparation) {
       setForcePushPhrase("");
       setForcePushConfirmation(false);
-      setDataStatus(`请在下方输入 ${preparation.confirmationPhrase} 后执行覆盖。确认令牌将在 ${formatAppDateTime(preparation.expiresAt)} 过期。`);
+      setDataStatus(
+        `请在下方输入 ${preparation.confirmationPhrase} 后执行覆盖。确认令牌将在 ${formatAppDateTime(preparation.expiresAt)} 过期。`,
+      );
     }
   }
 
@@ -159,7 +168,9 @@ export default function SettingsDataPage() {
     if (result) {
       setForcePushPhrase("");
       setForcePushConfirmation(false);
-      setDataStatus(`已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录。服务器备份：${result.backupId}。`);
+      setDataStatus(
+        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录。服务器备份：${result.backupId}。`,
+      );
     }
   }
 
@@ -194,7 +205,9 @@ export default function SettingsDataPage() {
         body: (
           <>
             <p>导出时间：{formatAppDateTime(summary.exportedAt)}</p>
-            <p>分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}</p>
+            <p>
+              分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}
+            </p>
             <p>恢复会替换当前设备上的本地分类、时间记录和同步队列。恢复前会先下载一份当前本地数据的安全备份。</p>
           </>
         ),
@@ -206,7 +219,9 @@ export default function SettingsDataPage() {
       await downloadBackupFile(beforeRestore, "TimeData-before-restore");
       const result = await importBackup(validation.backup);
       await refreshSyncStatus();
-      setDataStatus(`已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。`);
+      setDataStatus(
+        `已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。`,
+      );
     } catch (e: unknown) {
       setDataStatus(`恢复失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
@@ -221,7 +236,14 @@ export default function SettingsDataPage() {
   }
 
   async function handleResetLocalData() {
-    if (!(await confirm({ title: "确认清空本地数据", body: "清空本地时间记录、同步队列，并把分类恢复为默认预设。", danger: true }))) return;
+    if (
+      !(await confirm({
+        title: "确认清空本地数据",
+        body: "清空本地时间记录、同步队列，并把分类恢复为默认预设。",
+        danger: true,
+      }))
+    )
+      return;
 
     setDataBusy(true);
     setDataStatus("");
@@ -278,9 +300,16 @@ export default function SettingsDataPage() {
         <label className="flex items-center justify-between gap-4">
           <span>
             <span className="block text-sm font-medium text-slate-100">跨天记录合并展示</span>
-            <span className="mt-1 block text-xs text-slate-500">开启后，结束于当天的跨天记录会显示完整时间段，例如 23:57 - 06:00。统计仍按自然日计算。</span>
+            <span className="mt-1 block text-xs text-slate-500">
+              开启后，结束于当天的跨天记录会显示完整时间段，例如 23:57 - 06:00。统计仍按自然日计算。
+            </span>
           </span>
-          <input type="checkbox" checked={mergeOvernightEnabled} onChange={handleMergeOvernightChange} className="h-5 w-5" />
+          <input
+            type="checkbox"
+            checked={mergeOvernightEnabled}
+            onChange={handleMergeOvernightChange}
+            className="h-5 w-5"
+          />
         </label>
       </section>
 
@@ -301,8 +330,13 @@ export default function SettingsDataPage() {
         </button>
         {healthReport && (
           <div className="space-y-1 text-xs text-slate-400">
-            <div>本地：{healthReport.local.categoryCount} 个分类，{healthReport.local.entryCount} 条记录，未同步 {healthReport.local.unsyncedCount} 条。</div>
-            <div>云端：{healthReport.server.categoryCount} 个分类，{healthReport.server.entryCount} 条记录。</div>
+            <div>
+              本地：{healthReport.local.categoryCount} 个分类，{healthReport.local.entryCount} 条记录，未同步{" "}
+              {healthReport.local.unsyncedCount} 条。
+            </div>
+            <div>
+              云端：{healthReport.server.categoryCount} 个分类，{healthReport.server.entryCount} 条记录。
+            </div>
             <div className="text-slate-300">建议：{healthReport.reason}</div>
           </div>
         )}
@@ -311,7 +345,9 @@ export default function SettingsDataPage() {
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-sm font-medium text-slate-400">本地未来记录修复</h3>
         <div className="text-xs text-slate-500">
-          当同步报 invalid_time_range 或 entry endTime cannot be in the future 时，可检查当前设备本地是否存在结束时间晚于现在的记录。修复只删除当前设备 IndexedDB 中的异常记录，不直接修改服务器数据库。
+          当同步报 invalid_time_range 或 entry endTime cannot be in the future
+          时，可检查当前设备本地是否存在结束时间晚于现在的记录。修复只删除当前设备 IndexedDB
+          中的异常记录，不直接修改服务器数据库。
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -333,13 +369,19 @@ export default function SettingsDataPage() {
             </button>
           )}
         </div>
-        {futureEntriesStatus && <div className="rounded border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-300">{futureEntriesStatus}</div>}
+        {futureEntriesStatus && (
+          <div className="rounded border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-300">
+            {futureEntriesStatus}
+          </div>
+        )}
         {futureEntries.length > 0 && (
           <div className="space-y-1 text-xs text-slate-400">
             <div>发现 {futureEntries.length} 条结束时间晚于现在的本地记录：</div>
             <ul className="list-disc space-y-1 pl-4">
               {futureEntries.slice(0, 5).map((entry) => (
-                <li key={entry.id}>{entry.startTime} - {entry.endTime}</li>
+                <li key={entry.id}>
+                  {entry.startTime} - {entry.endTime}
+                </li>
               ))}
             </ul>
             {futureEntries.length > 5 && <div>另有 {futureEntries.length - 5} 条未展示。</div>}
@@ -376,7 +418,9 @@ export default function SettingsDataPage() {
         {forcePushPreparation && (
           <div className="space-y-2 rounded border border-red-900 bg-slate-950/40 p-3">
             <div className="text-xs text-slate-400">
-              云端当前：{forcePushPreparation.serverStatus.categoryCount} 个分类，{forcePushPreparation.serverStatus.entryCount} 条记录。令牌过期时间：{formatAppDateTime(forcePushPreparation.expiresAt)}。
+              云端当前：{forcePushPreparation.serverStatus.categoryCount} 个分类，
+              {forcePushPreparation.serverStatus.entryCount} 条记录。令牌过期时间：
+              {formatAppDateTime(forcePushPreparation.expiresAt)}。
             </div>
             <label className="block text-xs text-slate-300">
               输入确认短语：{forcePushPreparation.confirmationPhrase}
@@ -399,7 +443,9 @@ export default function SettingsDataPage() {
             <button
               type="button"
               onClick={handleForcePushToServer}
-              disabled={syncing || forcePushPhrase !== forcePushPreparation.confirmationPhrase || !forcePushConfirmation}
+              disabled={
+                syncing || forcePushPhrase !== forcePushPreparation.confirmationPhrase || !forcePushConfirmation
+              }
               className="rounded bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-600 disabled:opacity-40"
             >
               确认用本地覆盖云端
@@ -410,15 +456,31 @@ export default function SettingsDataPage() {
 
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-sm font-medium text-slate-400">数据导出</h3>
-        <button type="button" onClick={handleFullBackupExport} disabled={dataBusy} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40">
+        <button
+          type="button"
+          onClick={handleFullBackupExport}
+          disabled={dataBusy}
+          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+        >
           导出完整备份
         </button>
       </section>
 
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-sm font-medium text-slate-400">数据恢复</h3>
-        <input ref={restoreInputRef} type="file" accept="application/json,.json" onChange={handleRestoreInputChange} className="hidden" />
-        <button type="button" onClick={() => restoreInputRef.current?.click()} disabled={dataBusy} className="rounded bg-amber-700 px-4 py-2 text-sm text-amber-50 hover:bg-amber-600 disabled:opacity-40">
+        <input
+          ref={restoreInputRef}
+          type="file"
+          accept="application/json,.json"
+          onChange={handleRestoreInputChange}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => restoreInputRef.current?.click()}
+          disabled={dataBusy}
+          className="rounded bg-amber-700 px-4 py-2 text-sm text-amber-50 hover:bg-amber-600 disabled:opacity-40"
+        >
           从完整备份恢复
         </button>
         <div className="text-xs text-slate-500">恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。</div>
@@ -437,7 +499,12 @@ export default function SettingsDataPage() {
 
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <h3 className="text-sm font-medium text-slate-400">数据重置</h3>
-        <button type="button" onClick={handleResetLocalData} disabled={dataBusy} className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900 disabled:opacity-40">
+        <button
+          type="button"
+          onClick={handleResetLocalData}
+          disabled={dataBusy}
+          className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900 disabled:opacity-40"
+        >
           清空本地并恢复预设
         </button>
       </section>

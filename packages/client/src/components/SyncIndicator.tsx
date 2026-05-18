@@ -1,4 +1,4 @@
-import { useSyncContext, type SyncStatus } from "../contexts/SyncContext.tsx";
+import { type SyncStatus, useSyncContext } from "../contexts/SyncContext.tsx";
 
 const BASE_CLASS = "absolute right-2 top-2 h-2 w-2 rounded-full border border-white/90 shadow-sm pointer-events-none";
 
@@ -12,11 +12,5 @@ export function syncIndicatorClassName(status: SyncStatus): string {
 export default function SyncIndicator() {
   const { status } = useSyncContext();
 
-  return (
-    <span
-      aria-label={`同步状态：${status}`}
-      className={syncIndicatorClassName(status)}
-      role="status"
-    />
-  );
+  return <span aria-label={`同步状态：${status}`} className={syncIndicatorClassName(status)} role="status" />;
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const UtcIsoStringSchema = z.string()
+export const UtcIsoStringSchema = z
+  .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   .refine((value) => {
     const date = new Date(value);
@@ -21,15 +22,20 @@ export const CategorySchema = z.object({
   updatedAt: UtcIsoStringSchema,
 });
 
-export const TimeEntrySchema = z.object({
-  id: NonEmptyTrimmedStringSchema,
-  categoryId: NonEmptyTrimmedStringSchema,
-  startTime: UtcIsoStringSchema,
-  endTime: UtcIsoStringSchema,
-  note: z.string().nullable(),
-  createdAt: UtcIsoStringSchema,
-  updatedAt: UtcIsoStringSchema,
-}).refine((entry) => entry.endTime > entry.startTime, { path: ["endTime"], message: "endTime must be after startTime" });
+export const TimeEntrySchema = z
+  .object({
+    id: NonEmptyTrimmedStringSchema,
+    categoryId: NonEmptyTrimmedStringSchema,
+    startTime: UtcIsoStringSchema,
+    endTime: UtcIsoStringSchema,
+    note: z.string().nullable(),
+    createdAt: UtcIsoStringSchema,
+    updatedAt: UtcIsoStringSchema,
+  })
+  .refine((entry) => entry.endTime > entry.startTime, {
+    path: ["endTime"],
+    message: "endTime must be after startTime",
+  });
 
 export const SyncLogEntrySchema = z.object({
   id: z.string(),

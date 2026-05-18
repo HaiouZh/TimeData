@@ -44,7 +44,10 @@ export async function requestJson(config: ApiConfig, path: string, options: Requ
     if (err instanceof Error && err.name === "AbortError") {
       return { ok: false, error: { code: "TIMEOUT", message: "Request timed out" } };
     }
-    return { ok: false, error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" } };
+    return {
+      ok: false,
+      error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" },
+    };
   } finally {
     clearTimeout(timeout);
   }

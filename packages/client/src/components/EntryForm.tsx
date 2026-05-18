@@ -1,9 +1,9 @@
+import type { TimeEntry } from "@timedata/shared";
 import { useEffect, useState } from "react";
-import CategoryPicker from "./CategoryPicker.tsx";
-import TimeRangeWheelPicker, { type DateTimeValue } from "./TimeRangeWheelPicker.tsx";
 import { useCategories } from "../hooks/useCategories.ts";
 import { isFutureLocalDateTime, resolveClockRangeAroundEndDate } from "../lib/time.ts";
-import type { TimeEntry } from "@timedata/shared";
+import CategoryPicker from "./CategoryPicker.tsx";
+import TimeRangeWheelPicker, { type DateTimeValue } from "./TimeRangeWheelPicker.tsx";
 
 interface EntryFormProps {
   startTime: string;
@@ -35,7 +35,7 @@ export default function EntryForm({ startTime, endTime, existingEntry, onSave, o
     start.hour,
     start.minute,
     end.hour,
-    end.minute
+    end.minute,
   );
   const timeError = isFutureLocalDateTime(nextEndTime) ? "不能记录尚未发生的时间" : "";
 
@@ -99,7 +99,9 @@ export default function EntryForm({ startTime, endTime, existingEntry, onSave, o
       </section>
 
       <div className="grid grid-cols-2 gap-3 pb-4">
-        <button onClick={onCancel} className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium">取消</button>
+        <button onClick={onCancel} className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium">
+          取消
+        </button>
         <button
           onClick={handleSave}
           disabled={!categoryId}
@@ -110,7 +112,10 @@ export default function EntryForm({ startTime, endTime, existingEntry, onSave, o
       </div>
 
       {onDelete && (
-        <button onClick={onDelete} className="w-full py-3 rounded-xl bg-red-950/70 hover:bg-red-950 text-sm font-medium text-red-300">
+        <button
+          onClick={onDelete}
+          className="w-full py-3 rounded-xl bg-red-950/70 hover:bg-red-950 text-sm font-medium text-red-300"
+        >
           删除这条记录
         </button>
       )}

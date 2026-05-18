@@ -86,18 +86,28 @@ function updateBackupManifestEntry(id: string, patch: UpdateServerBackupOptions)
   return manifest.backups[id];
 }
 
-export function markServerBackupProtected(id: string, patch: UpdateServerBackupOptions): ServerBackupManifestEntry | null {
+export function markServerBackupProtected(
+  id: string,
+  patch: UpdateServerBackupOptions,
+): ServerBackupManifestEntry | null {
   return updateBackupManifestEntry(id, patch);
 }
 
-export function classifyBackupRetention(createdAt: string, protectedBackup: boolean, now = new Date()): BackupRetention {
+export function classifyBackupRetention(
+  createdAt: string,
+  protectedBackup: boolean,
+  now = new Date(),
+): BackupRetention {
   if (protectedBackup) return "protected";
   const ageMs = now.getTime() - Date.parse(createdAt);
   if (ageMs <= 15 * 24 * 60 * 60 * 1000) return "recent";
   return "deletable";
 }
 
-export async function createServerBackup(operation: string, options: CreateServerBackupOptions = {}): Promise<ServerBackup> {
+export async function createServerBackup(
+  operation: string,
+  options: CreateServerBackupOptions = {},
+): Promise<ServerBackup> {
   const createdAt = new Date().toISOString();
   const id = `${safeOperationName(operation)}-${createdAt.replace(/[:.]/g, "-")}`;
   const backupDir = getBackupDir();
@@ -175,4 +185,3 @@ export function cleanupServerBackups(now = new Date()): string[] {
   writeBackupManifest(manifest);
   return removed.sort();
 }
-

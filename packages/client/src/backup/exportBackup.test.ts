@@ -1,9 +1,9 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it } from "vitest";
 import type { Category, TimeEntry } from "@timedata/shared";
+import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
-import { BACKUP_FORMAT } from "./schema.js";
 import { exportBackup } from "./exportBackup.js";
+import { BACKUP_FORMAT } from "./schema.js";
 
 const now = "2026-05-07T12:00:00.000Z";
 

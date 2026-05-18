@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -49,20 +49,35 @@ describe("AndroidBackButtonHandler listener lifecycle", () => {
 
     await act(async () => {
       root.render(
-        createElement(MemoryRouter, { initialEntries: ["/"] },
+        createElement(
+          MemoryRouter,
+          { initialEntries: ["/"] },
           createElement(AndroidBackButtonHandler),
-          createElement(Routes, null,
+          createElement(
+            Routes,
+            null,
             createElement(Route, { path: "/", element: createElement(NavigateOnMount, { to: "/settings" }) }),
-            createElement(Route, { path: "/settings", element: createElement(NavigateOnMount, { to: "/settings/categories" }) }),
-            createElement(Route, { path: "/settings/categories", element: createElement(NavigateOnMount, { to: "/settings/categories/abc-123" }) }),
-            createElement(Route, { path: "/settings/categories/:id", element: createElement(NavigateOnMount, { to: null }) }),
+            createElement(Route, {
+              path: "/settings",
+              element: createElement(NavigateOnMount, { to: "/settings/categories" }),
+            }),
+            createElement(Route, {
+              path: "/settings/categories",
+              element: createElement(NavigateOnMount, { to: "/settings/categories/abc-123" }),
+            }),
+            createElement(Route, {
+              path: "/settings/categories/:id",
+              element: createElement(NavigateOnMount, { to: null }),
+            }),
           ),
         ),
       );
     });
 
     // Let the chained navigates settle
-    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
 
     expect(addListenerMock).toHaveBeenCalledTimes(1);
   });
@@ -81,7 +96,10 @@ describe("AndroidBackButtonHandler listener lifecycle", () => {
         queueMicrotask(() => navigate(to));
       }
       // expose navigate for assertions through a side channel
-      (globalThis as any).__lastNavigate = (target: string, opts?: unknown) => {
+      (globalThis as typeof globalThis & { __lastNavigate?: (target: string, opts?: unknown) => void }).__lastNavigate = (
+        target: string,
+        opts?: unknown,
+      ) => {
         navigateCalls.push([target, opts]);
         navigate(target, opts as { replace?: boolean });
       };
@@ -93,25 +111,42 @@ describe("AndroidBackButtonHandler listener lifecycle", () => {
 
     await act(async () => {
       root.render(
-        createElement(MemoryRouter, { initialEntries: ["/"] },
+        createElement(
+          MemoryRouter,
+          { initialEntries: ["/"] },
           createElement(AndroidBackButtonHandler),
-          createElement(Routes, null,
+          createElement(
+            Routes,
+            null,
             createElement(Route, { path: "/", element: createElement(CaptureNavigate, { to: "/settings" }) }),
-            createElement(Route, { path: "/settings", element: createElement(CaptureNavigate, { to: "/settings/categories" }) }),
-            createElement(Route, { path: "/settings/categories", element: createElement(CaptureNavigate, { to: "/settings/categories/abc-123" }) }),
-            createElement(Route, { path: "/settings/categories/:id", element: createElement(CaptureNavigate, { to: null }) }),
+            createElement(Route, {
+              path: "/settings",
+              element: createElement(CaptureNavigate, { to: "/settings/categories" }),
+            }),
+            createElement(Route, {
+              path: "/settings/categories",
+              element: createElement(CaptureNavigate, { to: "/settings/categories/abc-123" }),
+            }),
+            createElement(Route, {
+              path: "/settings/categories/:id",
+              element: createElement(CaptureNavigate, { to: null }),
+            }),
           ),
         ),
       );
     });
 
-    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
 
     expect(backCallback).not.toBeNull();
     expect(addListenerMock).toHaveBeenCalledTimes(1);
 
     // Press back from /settings/categories/abc-123 — should navigate to /settings/categories, NOT to "/"
-    await act(async () => { backCallback!(); });
+    await act(async () => {
+      backCallback?.();
+    });
 
     // exitApp should NOT have fired (it would only fire if back read pathname as "/")
     expect(exitAppMock).not.toHaveBeenCalled();
@@ -125,11 +160,7 @@ describe("AndroidBackButtonHandler listener lifecycle", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(
-        createElement(MemoryRouter, { initialEntries: ["/"] },
-          createElement(AndroidBackButtonHandler),
-        ),
-      );
+      root.render(createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(AndroidBackButtonHandler)));
     });
 
     expect(addListenerMock).not.toHaveBeenCalled();

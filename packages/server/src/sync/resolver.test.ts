@@ -1,9 +1,14 @@
+import type { SyncChange } from "@timedata/shared";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SyncChange } from "@timedata/shared";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => { status: string; reason: string; skipReason?: string; overriddenRecordIds?: string[] };
+let applyChange: (change: SyncChange) => {
+  status: string;
+  reason: string;
+  skipReason?: string;
+  overriddenRecordIds?: string[];
+};
 let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ tableName: string; recordId: string; action: string }>;
 
 beforeEach(async () => {
@@ -94,11 +99,25 @@ describe("applyChange", () => {
   });
 
   it("updates an existing entry even when the server timestamp is newer", () => {
-    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-1",
+      "工作",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("entry-1", "cat-1", "2026-05-08T09:00:00", "2026-05-08T10:00:00", "server", "2026-05-08T09:00:00", "2026-05-08T12:00:00");
+    `).run(
+      "entry-1",
+      "cat-1",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      "server",
+      "2026-05-08T09:00:00",
+      "2026-05-08T12:00:00",
+    );
 
     const result = applyChange({
       tableName: "time_entries",
@@ -117,19 +136,35 @@ describe("applyChange", () => {
     });
 
     expect(result).toMatchObject({ status: "applied", reason: "updated entry" });
-    expect(db.prepare("SELECT note, end_time, updated_at FROM time_entries WHERE id = ?").get("entry-1")).toMatchObject({
-      note: "local wins",
-      end_time: "2026-05-08T10:30:00",
-      updated_at: "2026-05-08T10:30:00",
-    });
+    expect(db.prepare("SELECT note, end_time, updated_at FROM time_entries WHERE id = ?").get("entry-1")).toMatchObject(
+      {
+        note: "local wins",
+        end_time: "2026-05-08T10:30:00",
+        updated_at: "2026-05-08T10:30:00",
+      },
+    );
   });
 
   it("uses change timestamp instead of payload updatedAt for server updated_at", () => {
-    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-1",
+      "工作",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("entry-1", "cat-1", "2026-05-08T09:00:00", "2026-05-08T10:00:00", "server", "2026-05-08T09:00:00", "2026-05-08T09:00:00");
+    `).run(
+      "entry-1",
+      "cat-1",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      "server",
+      "2026-05-08T09:00:00",
+      "2026-05-08T09:00:00",
+    );
 
     const timestamp = "2026-06-01T00:00:00.000Z";
     applyChange({
@@ -154,11 +189,25 @@ describe("applyChange", () => {
   });
 
   it("deletes overlapping remote entries before inserting a local entry", () => {
-    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-1",
+      "工作",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("remote-overlap", "cat-1", "2026-05-08T09:00:00", "2026-05-08T10:00:00", "remote", "2026-05-08T09:00:00", "2026-05-08T09:00:00");
+    `).run(
+      "remote-overlap",
+      "cat-1",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      "remote",
+      "2026-05-08T09:00:00",
+      "2026-05-08T09:00:00",
+    );
 
     const result = applyChange({
       tableName: "time_entries",
@@ -176,17 +225,37 @@ describe("applyChange", () => {
       timestamp: "2026-05-08T09:30:00",
     });
 
-    expect(result).toMatchObject({ status: "applied", reason: "inserted entry", overriddenRecordIds: ["remote-overlap"] });
+    expect(result).toMatchObject({
+      status: "applied",
+      reason: "inserted entry",
+      overriddenRecordIds: ["remote-overlap"],
+    });
     expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("remote-overlap")).toBeUndefined();
-    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("local-entry")).toMatchObject({ id: "local-entry" });
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("local-entry")).toMatchObject({
+      id: "local-entry",
+    });
   });
 
   it("records tombstone and seq for entries deleted by overlap resolution", () => {
-    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-1",
+      "工作",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("remote-overlap", "cat-1", "2026-05-08T09:00:00", "2026-05-08T10:00:00", "remote", "2026-05-08T09:00:00", "2026-05-08T09:00:00");
+    `).run(
+      "remote-overlap",
+      "cat-1",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      "remote",
+      "2026-05-08T09:00:00",
+      "2026-05-08T09:00:00",
+    );
 
     const result = applyChange({
       tableName: "time_entries",
@@ -205,12 +274,20 @@ describe("applyChange", () => {
     });
 
     expect(result).toMatchObject({ status: "applied", overriddenRecordIds: ["remote-overlap"] });
-    expect(db.prepare("SELECT table_name, record_id, deleted_at FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get("time_entries", "remote-overlap")).toMatchObject({
+    expect(
+      db
+        .prepare("SELECT table_name, record_id, deleted_at FROM sync_tombstones WHERE table_name = ? AND record_id = ?")
+        .get("time_entries", "remote-overlap"),
+    ).toMatchObject({
       table_name: "time_entries",
       record_id: "remote-overlap",
       deleted_at: "2026-05-08T09:30:00",
     });
-    expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq WHERE table_name = ? AND record_id = ?").get("time_entries", "remote-overlap")).toMatchObject({
+    expect(
+      db
+        .prepare("SELECT table_name, record_id, action FROM sync_seq WHERE table_name = ? AND record_id = ?")
+        .get("time_entries", "remote-overlap"),
+    ).toMatchObject({
       table_name: "time_entries",
       record_id: "remote-overlap",
       action: "delete",
@@ -218,16 +295,40 @@ describe("applyChange", () => {
   });
 
   it("records tombstone, seq, and overridden ids for entries deleted by category cascade", () => {
-    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("parent-cat", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
-    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run("child-cat", "深度工作", "parent-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "parent-cat",
+      "工作",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
+    db.prepare(
+      "INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("child-cat", "深度工作", "parent-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("parent-entry", "parent-cat", "2026-05-08T09:00:00", "2026-05-08T10:00:00", "parent", "2026-05-08T09:00:00", "2026-05-08T09:00:00");
+    `).run(
+      "parent-entry",
+      "parent-cat",
+      "2026-05-08T09:00:00",
+      "2026-05-08T10:00:00",
+      "parent",
+      "2026-05-08T09:00:00",
+      "2026-05-08T09:00:00",
+    );
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("child-entry", "child-cat", "2026-05-08T10:00:00", "2026-05-08T11:00:00", "child", "2026-05-08T10:00:00", "2026-05-08T10:00:00");
+    `).run(
+      "child-entry",
+      "child-cat",
+      "2026-05-08T10:00:00",
+      "2026-05-08T11:00:00",
+      "child",
+      "2026-05-08T10:00:00",
+      "2026-05-08T10:00:00",
+    );
 
     const result = applyChange({
       tableName: "categories",
@@ -240,20 +341,40 @@ describe("applyChange", () => {
     expect(result.overriddenRecordIds).toEqual(expect.arrayContaining(["parent-entry", "child-entry"]));
     expect(result.overriddenRecordIds).toHaveLength(2);
     expect(db.prepare("SELECT id FROM time_entries WHERE id IN (?, ?)").all("parent-entry", "child-entry")).toEqual([]);
-    expect(db.prepare("SELECT table_name, record_id, deleted_at FROM sync_tombstones WHERE table_name = ? ORDER BY record_id").all("time_entries")).toEqual([
+    expect(
+      db
+        .prepare(
+          "SELECT table_name, record_id, deleted_at FROM sync_tombstones WHERE table_name = ? ORDER BY record_id",
+        )
+        .all("time_entries"),
+    ).toEqual([
       { table_name: "time_entries", record_id: "child-entry", deleted_at: "2026-05-08T12:00:00" },
       { table_name: "time_entries", record_id: "parent-entry", deleted_at: "2026-05-08T12:00:00" },
     ]);
-    expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq WHERE table_name = ? ORDER BY record_id").all("time_entries")).toEqual([
+    expect(
+      db
+        .prepare("SELECT table_name, record_id, action FROM sync_seq WHERE table_name = ? ORDER BY record_id")
+        .all("time_entries"),
+    ).toEqual([
       { table_name: "time_entries", record_id: "child-entry", action: "delete" },
       { table_name: "time_entries", record_id: "parent-entry", action: "delete" },
     ]);
   });
 
   it("records seq for every category deleted by category cascade", () => {
-    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("parent-cat", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
-    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run("child-cat", "深度工作", "parent-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
-    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run("grandchild-cat", "写作", "child-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "parent-cat",
+      "工作",
+      "#4A90D9",
+      "2026-05-08T08:00:00",
+      "2026-05-08T08:00:00",
+    );
+    db.prepare(
+      "INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("child-cat", "深度工作", "parent-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare(
+      "INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("grandchild-cat", "写作", "child-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
 
     const baseSeq = db.prepare("SELECT MAX(id) AS max_id FROM sync_seq").get() as { max_id: number | null };
 
@@ -265,7 +386,9 @@ describe("applyChange", () => {
     });
 
     expect(result).toMatchObject({ status: "applied", reason: "deleted category" });
-    expect(db.prepare("SELECT id FROM categories WHERE id IN (?, ?, ?)").all("parent-cat", "child-cat", "grandchild-cat")).toEqual([]);
+    expect(
+      db.prepare("SELECT id FROM categories WHERE id IN (?, ?, ?)").all("parent-cat", "child-cat", "grandchild-cat"),
+    ).toEqual([]);
     expect(getChangesSinceSeq(baseSeq.max_id)).toEqual([
       { id: expect.any(Number), tableName: "categories", recordId: "grandchild-cat", action: "delete" },
       { id: expect.any(Number), tableName: "categories", recordId: "child-cat", action: "delete" },

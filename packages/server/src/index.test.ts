@@ -21,7 +21,7 @@ beforeEach(() => {
   vi.doMock("./db/utcReset.js", () => ({ runUtcResetIfNeeded: vi.fn(() => ({ ran: false })) }));
   vi.doMock("@hono/node-server", () => ({ serve: vi.fn() }));
   vi.doMock("@hono/node-server/serve-static", () => ({
-    serveStatic: vi.fn(() => async (_c: any, next: () => Promise<void>) => {
+    serveStatic: vi.fn(() => async (_c: unknown, next: () => Promise<void>) => {
       await next();
     }),
   }));
@@ -66,52 +66,64 @@ afterEach(() => {
 const INDEX_TEST_TIMEOUT_MS = 15_000;
 
 describe("server app middleware order", () => {
-  it("keeps production startup available without AUTH_TOKEN and fails closed for protected API routes", async () => {
-    delete process.env.AUTH_TOKEN;
+  it(
+    "keeps production startup available without AUTH_TOKEN and fails closed for protected API routes",
+    async () => {
+      delete process.env.AUTH_TOKEN;
 
-    const { default: app } = await import("./index.js");
+      const { default: app } = await import("./index.js");
 
-    expect((await app.request("/api/health")).status).toBe(200);
-    expect((await app.request("/api/version")).status).toBe(200);
-    const protectedResponse = await app.request("/api/categories");
-    expect(protectedResponse.status).toBe(500);
-    expect(await protectedResponse.json()).toEqual({ error: "Server misconfigured: AUTH_TOKEN not set" });
-  }, INDEX_TEST_TIMEOUT_MS);
+      expect((await app.request("/api/health")).status).toBe(200);
+      expect((await app.request("/api/version")).status).toBe(200);
+      const protectedResponse = await app.request("/api/categories");
+      expect(protectedResponse.status).toBe(500);
+      expect(await protectedResponse.json()).toEqual({ error: "Server misconfigured: AUTH_TOKEN not set" });
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
 
-  it("leaves health and version public while protecting later API routes", async () => {
-    const { default: app } = await import("./index.js");
+  it(
+    "leaves health and version public while protecting later API routes",
+    async () => {
+      const { default: app } = await import("./index.js");
 
-    expect((await app.request("/api/health")).status).toBe(200);
-    expect((await app.request("/api/version")).status).toBe(200);
-    expect((await app.request("/api/categories")).status).toBe(401);
-    expect(
-      (
-        await app.request("/api/categories", {
-          headers: { Authorization: "Bearer secret" },
-        })
-      ).status,
-    ).not.toBe(401);
-  }, INDEX_TEST_TIMEOUT_MS);
+      expect((await app.request("/api/health")).status).toBe(200);
+      expect((await app.request("/api/version")).status).toBe(200);
+      expect((await app.request("/api/categories")).status).toBe(401);
+      expect(
+        (
+          await app.request("/api/categories", {
+            headers: { Authorization: "Bearer secret" },
+          })
+        ).status,
+      ).not.toBe(401);
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
 
-  it("applies the configured CORS allowlist to protected API preflight requests", async () => {
-    const { default: app } = await import("./index.js");
+  it(
+    "applies the configured CORS allowlist to protected API preflight requests",
+    async () => {
+      const { default: app } = await import("./index.js");
 
-    const allowed = await app.request("/api/categories", {
-      method: "OPTIONS",
-      headers: {
-        Origin: "https://app.example.com",
-        "Access-Control-Request-Method": "GET",
-      },
-    });
-    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
+      const allowed = await app.request("/api/categories", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://app.example.com",
+          "Access-Control-Request-Method": "GET",
+        },
+      });
+      expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
 
-    const blocked = await app.request("/api/categories", {
-      method: "OPTIONS",
-      headers: {
-        Origin: "https://evil.example.com",
-        "Access-Control-Request-Method": "GET",
-      },
-    });
-    expect(blocked.headers.get("Access-Control-Allow-Origin")).toBeNull();
-  }, INDEX_TEST_TIMEOUT_MS);
+      const blocked = await app.request("/api/categories", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://evil.example.com",
+          "Access-Control-Request-Method": "GET",
+        },
+      });
+      expect(blocked.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
 });

@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
+import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Category, TimeEntry, SyncLogEntry } from "@timedata/shared";
-import { startE2EServer, type E2EServer } from "../../../../server/src/__tests__/e2e/helpers.ts";
+import { type E2EServer, startE2EServer } from "../../../../server/src/__tests__/e2e/helpers.ts";
 import { db } from "../../db/index.ts";
 import { regularSync, syncPull, syncPush } from "../../sync/engine.ts";
 import { bindClientToServer, resetClientDb } from "./helpers.ts";
@@ -51,17 +51,31 @@ function syncLog(recordId: string, tableName: SyncLogEntry["tableName"]): SyncLo
 }
 
 function insertServerCategory(item: Category): void {
-  server!.db.prepare(`
+  server?.db
+    .prepare(`
     INSERT INTO categories (id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(item.id, item.name, item.parentId, item.color, item.icon, item.sortOrder, item.isArchived ? 1 : 0, item.createdAt, item.updatedAt);
+  `)
+    .run(
+      item.id,
+      item.name,
+      item.parentId,
+      item.color,
+      item.icon,
+      item.sortOrder,
+      item.isArchived ? 1 : 0,
+      item.createdAt,
+      item.updatedAt,
+    );
 }
 
 function insertServerEntry(item: TimeEntry): void {
-  server!.db.prepare(`
+  server?.db
+    .prepare(`
     INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(item.id, item.categoryId, item.startTime, item.endTime, item.note, item.createdAt, item.updatedAt);
+  `)
+    .run(item.id, item.categoryId, item.startTime, item.endTime, item.note, item.createdAt, item.updatedAt);
 }
 
 beforeEach(async () => {
@@ -84,16 +98,24 @@ describe("e2e: sync round trip", () => {
     const localEntry = entry();
     await db.categories.add(localCategory);
     await db.timeEntries.add(localEntry);
-    await db.syncLog.bulkAdd([
-      syncLog(localCategory.id, "categories"),
-      syncLog(localEntry.id, "time_entries"),
-    ]);
+    await db.syncLog.bulkAdd([syncLog(localCategory.id, "categories"), syncLog(localEntry.id, "time_entries")]);
 
     const result = await regularSync();
 
-    expect(result).toMatchObject({ checked: true, identical: false, pushed: 2, rejected: 0, pushConflicts: 0, conflicts: [] });
-    expect(server!.db.prepare("SELECT id FROM categories WHERE id = ?").get(localCategory.id)).toEqual({ id: localCategory.id });
-    expect(server!.db.prepare("SELECT id FROM time_entries WHERE id = ?").get(localEntry.id)).toEqual({ id: localEntry.id });
+    expect(result).toMatchObject({
+      checked: true,
+      identical: false,
+      pushed: 2,
+      rejected: 0,
+      pushConflicts: 0,
+      conflicts: [],
+    });
+    expect(server?.db.prepare("SELECT id FROM categories WHERE id = ?").get(localCategory.id)).toEqual({
+      id: localCategory.id,
+    });
+    expect(server?.db.prepare("SELECT id FROM time_entries WHERE id = ?").get(localEntry.id)).toEqual({
+      id: localEntry.id,
+    });
     expect(await db.syncLog.filter((log) => !log.synced).count()).toBe(0);
   });
 
@@ -112,8 +134,18 @@ describe("e2e: sync round trip", () => {
 
   it("reports push conflicts for overlapping local entries", async () => {
     const localCategory = category({ id: "cat-conflict" });
-    const firstEntry = entry({ id: "entry-first", categoryId: localCategory.id, startTime: "2026-05-13T09:00:00.000Z", endTime: "2026-05-13T10:00:00.000Z" });
-    const overlappingEntry = entry({ id: "entry-overlap", categoryId: localCategory.id, startTime: "2026-05-13T09:30:00.000Z", endTime: "2026-05-13T10:30:00.000Z" });
+    const firstEntry = entry({
+      id: "entry-first",
+      categoryId: localCategory.id,
+      startTime: "2026-05-13T09:00:00.000Z",
+      endTime: "2026-05-13T10:00:00.000Z",
+    });
+    const overlappingEntry = entry({
+      id: "entry-overlap",
+      categoryId: localCategory.id,
+      startTime: "2026-05-13T09:30:00.000Z",
+      endTime: "2026-05-13T10:30:00.000Z",
+    });
     await db.categories.add(localCategory);
     await db.timeEntries.bulkAdd([firstEntry, overlappingEntry]);
     await db.syncLog.bulkAdd([
@@ -125,7 +157,9 @@ describe("e2e: sync round trip", () => {
     const result = await syncPush();
 
     expect(result).toMatchObject({ accepted: 2, rejected: 0, conflicts: 1 });
-    expect(result.issues).toEqual([expect.objectContaining({ recordId: "entry-overlap", status: "conflict", reasonCode: "overlap" })]);
+    expect(result.issues).toEqual([
+      expect.objectContaining({ recordId: "entry-overlap", status: "conflict", reasonCode: "overlap" }),
+    ]);
     await expect(db.syncLog.get("log-cat-conflict")).resolves.toMatchObject({ synced: 1 });
     await expect(db.syncLog.get("log-entry-first")).resolves.toMatchObject({ synced: 1 });
     await expect(db.syncLog.get("log-entry-overlap")).resolves.toMatchObject({ synced: 0 });
@@ -136,14 +170,18 @@ describe("e2e: sync round trip", () => {
     const localEntry = entry({ id: "entry-delete", categoryId: localCategory.id });
     await db.categories.add(localCategory);
     await db.timeEntries.add(localEntry);
-    server!.db.prepare(`
+    server?.db
+      .prepare(`
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
       VALUES (?, ?, ?)
-    `).run("time_entries", localEntry.id, "2026-05-13T11:00:00.000Z");
-    server!.db.prepare(`
+    `)
+      .run("time_entries", localEntry.id, "2026-05-13T11:00:00.000Z");
+    server?.db
+      .prepare(`
       INSERT INTO sync_seq (table_name, record_id, action, created_at)
       VALUES (?, ?, ?, ?)
-    `).run("time_entries", localEntry.id, "delete", "2026-05-13T11:00:00.000Z");
+    `)
+      .run("time_entries", localEntry.id, "delete", "2026-05-13T11:00:00.000Z");
 
     const pulled = await syncPull({ mode: "repair" });
 

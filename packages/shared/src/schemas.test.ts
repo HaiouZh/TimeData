@@ -87,10 +87,23 @@ describe("runtime schemas", () => {
     expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0, lastSyncedAt: null }).success).toBe(true);
     expect(SyncPullRequestSchema.safeParse({ sinceSeq: "not-a-number" }).success).toBe(false);
     expect(
-      SyncForcePushPrepareRequestSchema.safeParse({ categoryCount: 1, entryCount: 0, lastUpdatedAt: "2026-05-13T00:00:00.000Z" }).success,
+      SyncForcePushPrepareRequestSchema.safeParse({
+        categoryCount: 1,
+        entryCount: 0,
+        lastUpdatedAt: "2026-05-13T00:00:00.000Z",
+      }).success,
     ).toBe(true);
-    expect(SyncForcePushPrepareRequestSchema.safeParse({ categoryCount: -1, entryCount: 0, lastUpdatedAt: null }).success).toBe(false);
-    expect(SyncForcePushRequestSchema.safeParse({ confirmToken: "token", confirmationPhrase: "WRONG", categories: [], timeEntries: [] }).success).toBe(false);
+    expect(
+      SyncForcePushPrepareRequestSchema.safeParse({ categoryCount: -1, entryCount: 0, lastUpdatedAt: null }).success,
+    ).toBe(false);
+    expect(
+      SyncForcePushRequestSchema.safeParse({
+        confirmToken: "token",
+        confirmationPhrase: "WRONG",
+        categories: [],
+        timeEntries: [],
+      }).success,
+    ).toBe(false);
   });
 });
 

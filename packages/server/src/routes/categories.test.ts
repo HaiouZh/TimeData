@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanupRouteTestDb, seedCategory, setupRouteTestApp } from "../__tests__/helpers.js";
@@ -39,7 +39,7 @@ describe("GET /api/categories", () => {
     const res = await app.request("/api/categories");
 
     expect(res.status).toBe(200);
-    const body = await res.json() as Array<{ id: string; isArchived: boolean }>;
+    const body = (await res.json()) as Array<{ id: string; isArchived: boolean }>;
     expect(body).toHaveLength(1);
     expect(body[0]).toMatchObject({ id: "cat-active", isArchived: false });
     expect(body.find((category) => category.id === "cat-archived")).toBeUndefined();

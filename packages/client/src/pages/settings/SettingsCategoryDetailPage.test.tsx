@@ -1,7 +1,7 @@
+import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsCategoryDetailPage from "./SettingsCategoryDetailPage.js";
 
@@ -42,8 +42,7 @@ vi.mock("react-router-dom", () => ({
 vi.mock("../../hooks/useCategories.ts", () => ({
   useCategories: () => ({
     parentCategories: categoriesState.categories.filter((category) => category.parentId === null),
-    getChildren: (parentId: string) =>
-      categoriesState.categories.filter((category) => category.parentId === parentId),
+    getChildren: (parentId: string) => categoriesState.categories.filter((category) => category.parentId === parentId),
     addCategory: addCategoryMock,
     renameCategory: vi.fn(),
     updateCategoryColor: updateCategoryColorMock,
@@ -125,13 +124,11 @@ describe("SettingsCategoryDetailPage", () => {
       root.render(createElement(SettingsCategoryDetailPage));
     });
 
-    const openButton = [...host.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "+ 新增",
-    );
+    const openButton = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === "+ 新增");
     expect(openButton).toBeDefined();
 
     await act(async () => {
-      openButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const nameInput = document.body.querySelector<HTMLInputElement>('input[placeholder="子分类名称"]');
@@ -140,7 +137,7 @@ describe("SettingsCategoryDetailPage", () => {
     await act(async () => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       valueSetter?.call(nameInput, "会议");
-      nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      nameInput?.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
     const confirmButton = [...document.body.querySelectorAll("button")].find(
@@ -149,7 +146,7 @@ describe("SettingsCategoryDetailPage", () => {
     expect(confirmButton).toBeDefined();
 
     await act(async () => {
-      confirmButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(addCategoryMock).toHaveBeenCalledWith("会议", "cat-work", "#4A90D9");
@@ -169,20 +166,18 @@ describe("SettingsCategoryDetailPage", () => {
       root.render(createElement(SettingsCategoryDetailPage));
     });
 
-    const openEditor = [...host.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === "修改",
-    );
+    const openEditor = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === "修改");
     expect(openEditor).toBeDefined();
 
     await act(async () => {
-      openEditor!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      openEditor?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const swatch = document.body.querySelector<HTMLButtonElement>('button[aria-label="选择颜色 #D0021B"]');
     expect(swatch).not.toBeNull();
 
     await act(async () => {
-      swatch!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      swatch?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const saveButton = [...document.body.querySelectorAll("button")].find(
@@ -191,7 +186,7 @@ describe("SettingsCategoryDetailPage", () => {
     expect(saveButton).toBeDefined();
 
     await act(async () => {
-      saveButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(updateCategoryColorMock).toHaveBeenCalledWith("cat-work", "#D0021B");

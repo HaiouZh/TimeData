@@ -1,7 +1,7 @@
-import type Database from "better-sqlite3";
 import { createDefaultCategories } from "@timedata/shared";
-import { getDb } from "./connection.js";
+import type Database from "better-sqlite3";
 import { computeAndPersistCommitHash } from "../sync/state.js";
+import { getDb } from "./connection.js";
 
 export interface ResetDatabaseResult {
   categories: number;

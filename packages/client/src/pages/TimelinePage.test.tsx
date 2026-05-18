@@ -43,7 +43,7 @@ describe("TimelinePage sync indicator", () => {
       createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
     );
 
-    expect(html).toContain("data-sync-indicator=\"true\"");
+    expect(html).toContain('data-sync-indicator="true"');
     expect(html).toContain("timeline");
   });
 });

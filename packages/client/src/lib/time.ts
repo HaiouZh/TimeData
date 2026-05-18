@@ -1,5 +1,5 @@
 import type { TimeEntry } from "@timedata/shared";
-import { localDateTimeToUtc, APP_TIME_ZONE } from "@timedata/shared";
+import { APP_TIME_ZONE, localDateTimeToUtc } from "@timedata/shared";
 
 export { APP_TIME_ZONE } from "@timedata/shared";
 
@@ -41,9 +41,9 @@ function datePartsInAppTimeZone(date: Date): { year: string; month: string; day:
   }).formatToParts(date);
 
   return {
-    year: parts.find((part) => part.type === "year")!.value,
-    month: parts.find((part) => part.type === "month")!.value,
-    day: parts.find((part) => part.type === "day")!.value,
+    year: parts.find((part) => part.type === "year")?.value,
+    month: parts.find((part) => part.type === "month")?.value,
+    day: parts.find((part) => part.type === "day")?.value,
   };
 }
 
@@ -52,7 +52,12 @@ function toMs(value: string): number {
   return parseAppLocalDateTime(value).getTime();
 }
 
-export function buildTimeSlots(entries: TimeEntry[], date: string, dayStartHour: number = 0, options: BuildTimeSlotsOptions = {}): TimeSlot[] {
+export function buildTimeSlots(
+  entries: TimeEntry[],
+  date: string,
+  dayStartHour = 0,
+  options: BuildTimeSlotsOptions = {},
+): TimeSlot[] {
   const sorted = [...entries].sort((a, b) => toMs(a.startTime) - toMs(b.startTime));
 
   const dayStart = localDateTimeToUtc(`${date}T${String(dayStartHour).padStart(2, "0")}:00:00`);
@@ -62,24 +67,31 @@ export function buildTimeSlots(entries: TimeEntry[], date: string, dayStartHour:
   const dayEnd = date === todayStr ? now.toISOString() : localDateTimeToUtc(`${addDays(date, 1)}T00:00:00`);
 
   const dayStartMs = toMs(dayStart);
-  const dayEndMs   = toMs(dayEnd);
+  const dayEndMs = toMs(dayEnd);
 
   const slots: TimeSlot[] = [];
-  const previousDayContinuationStart = localDateTimeToUtc(`${addDays(date, -1)}T${String(24 - PREVIOUS_DAY_GAP_CONTINUATION_HOURS).padStart(2, "0")}:00:00`);
+  const previousDayContinuationStart = localDateTimeToUtc(
+    `${addDays(date, -1)}T${String(24 - PREVIOUS_DAY_GAP_CONTINUATION_HOURS).padStart(2, "0")}:00:00`,
+  );
   const previousDayContinuationStartMs = toMs(previousDayContinuationStart);
   const mergeOvernight = options.mergeOvernight ?? true;
   const previousEntry = options.previousEntry || null;
   const previousEntryEndTime = options.previousEntryEndTime || previousEntry?.endTime || null;
   const shouldMergePreviousEntry = Boolean(
     mergeOvernight &&
-    previousEntry &&
-    toMs(previousEntry.startTime) < dayStartMs &&
-    toMs(previousEntry.endTime) > dayStartMs &&
-    toMs(previousEntry.endTime) <= dayEndMs,
+      previousEntry &&
+      toMs(previousEntry.startTime) < dayStartMs &&
+      toMs(previousEntry.endTime) > dayStartMs &&
+      toMs(previousEntry.endTime) <= dayEndMs,
   );
 
   if (shouldMergePreviousEntry && previousEntry) {
-    slots.push({ startTime: previousEntry.startTime, endTime: previousEntry.endTime, entry: previousEntry, displayMode: "merged" });
+    slots.push({
+      startTime: previousEntry.startTime,
+      endTime: previousEntry.endTime,
+      entry: previousEntry,
+      displayMode: "merged",
+    });
   }
 
   // cursor 保持为字符串（slot 的边界），初始值为 dayStart（UTC）
@@ -99,13 +111,13 @@ export function buildTimeSlots(entries: TimeEntry[], date: string, dayStartHour:
 
   for (const entry of sorted) {
     if (shouldMergePreviousEntry && previousEntry && entry.id === previousEntry.id) continue;
-    const entryEndMs   = toMs(entry.endTime);
+    const entryEndMs = toMs(entry.endTime);
     const entryStartMs = toMs(entry.startTime);
     if (entryEndMs <= dayStartMs || entryStartMs >= dayEndMs) continue;
 
-    const displayStart   = entryStartMs < dayStartMs ? dayStart : entry.startTime;
+    const displayStart = entryStartMs < dayStartMs ? dayStart : entry.startTime;
     const displayStartMs = entryStartMs < dayStartMs ? dayStartMs : entryStartMs;
-    const displayEnd   = entryEndMs > dayEndMs ? dayEnd : entry.endTime;
+    const displayEnd = entryEndMs > dayEndMs ? dayEnd : entry.endTime;
     const displayEndMs = entryEndMs > dayEndMs ? dayEndMs : entryEndMs;
     if (displayEndMs <= displayStartMs) continue;
 
@@ -128,13 +140,17 @@ export function buildTimeSlots(entries: TimeEntry[], date: string, dayStartHour:
   return slots;
 }
 
-export function formatDateTimeRange(startTime: string, endTime: string, options: FormatDateTimeRangeOptions = {}): string {
+export function formatDateTimeRange(
+  startTime: string,
+  endTime: string,
+  options: FormatDateTimeRangeOptions = {},
+): string {
   const startLocal = toLocalDateTimeString(parseAppLocalDateTime(startTime));
-  const endLocal   = toLocalDateTimeString(parseAppLocalDateTime(endTime));
-  const startDate  = startLocal.slice(5, 10);
-  const endDate    = endLocal.slice(5, 10);
+  const endLocal = toLocalDateTimeString(parseAppLocalDateTime(endTime));
+  const startDate = startLocal.slice(5, 10);
+  const endDate = endLocal.slice(5, 10);
   const startClock = formatTime(startTime);
-  const endClock   = options.mode === "truncated" ? "24:00" : formatTime(endTime);
+  const endClock = options.mode === "truncated" ? "24:00" : formatTime(endTime);
 
   if (options.mode === "merged" || options.mode === "truncated" || startLocal.slice(0, 10) === endLocal.slice(0, 10)) {
     return `${startClock} - ${endClock}`;
@@ -143,13 +159,18 @@ export function formatDateTimeRange(startTime: string, endTime: string, options:
   return `${startDate} ${startClock} - ${endDate} ${endClock}`;
 }
 
-export function formatTimelineTimeRange(startTime: string, endTime: string, options: FormatDateTimeRangeOptions = {}): string {
+export function formatTimelineTimeRange(
+  startTime: string,
+  endTime: string,
+  options: FormatDateTimeRangeOptions = {},
+): string {
   const startLocalDate = toLocalDateTimeString(parseAppLocalDateTime(startTime)).slice(0, 10);
-  const endLocalDate   = toLocalDateTimeString(parseAppLocalDateTime(endTime)).slice(0, 10);
+  const endLocalDate = toLocalDateTimeString(parseAppLocalDateTime(endTime)).slice(0, 10);
   const startClock = formatTime(startTime);
-  const endClock = options.mode === "truncated" || (startLocalDate !== endLocalDate && formatTime(endTime) === "00:00")
-    ? "24:00"
-    : formatTime(endTime);
+  const endClock =
+    options.mode === "truncated" || (startLocalDate !== endLocalDate && formatTime(endTime) === "00:00")
+      ? "24:00"
+      : formatTime(endTime);
 
   return `${startClock} - ${endClock}`;
 }
@@ -184,9 +205,9 @@ export function toLocalDateTimeString(date: Date): string {
     second: "2-digit",
   }).formatToParts(date);
 
-  const hour = timeParts.find((part) => part.type === "hour")!.value;
-  const minute = timeParts.find((part) => part.type === "minute")!.value;
-  const second = timeParts.find((part) => part.type === "second")!.value;
+  const hour = timeParts.find((part) => part.type === "hour")?.value;
+  const minute = timeParts.find((part) => part.type === "minute")?.value;
+  const second = timeParts.find((part) => part.type === "second")?.value;
 
   return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 }
@@ -222,7 +243,7 @@ export function resolveClockRangeAroundEndDate(
   startHour: string,
   startMinute: string,
   endHour: string,
-  endMinute: string
+  endMinute: string,
 ): { startTime: string; endTime: string } {
   const startClock = `${startHour}:${startMinute}`;
   const endClock = `${endHour}:${endMinute}`;

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fetchLatestSha, getVersionInfo, _resetCache } from "./version.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetCache, fetchLatestSha, getVersionInfo } from "./version.js";
 
 const originalFetch = global.fetch;
 
@@ -16,7 +16,7 @@ describe("fetchLatestSha", () => {
       json: async () => ({
         workflow_runs: [{ head_sha: "abcdef1234567890", status: "completed", conclusion: "success" }],
       }),
-    }) as any;
+    }) as unknown as typeof fetch;
 
     const sha = await fetchLatestSha("HaiouZh", "TimeData");
     expect(sha).toBe("abcdef1");
@@ -26,13 +26,13 @@ describe("fetchLatestSha", () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ workflow_runs: [] }),
-    }) as any;
+    }) as unknown as typeof fetch;
     const sha = await fetchLatestSha("HaiouZh", "TimeData");
     expect(sha).toBe("unknown");
   });
 
   it("returns 'unknown' on network error", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error("network down")) as any;
+    global.fetch = vi.fn().mockRejectedValue(new Error("network down")) as unknown as typeof fetch;
     const sha = await fetchLatestSha("HaiouZh", "TimeData");
     expect(sha).toBe("unknown");
   });
@@ -43,7 +43,7 @@ describe("getVersionInfo", () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ workflow_runs: [{ head_sha: "deadbeef00000000" }] }),
-    }) as any;
+    }) as unknown as typeof fetch;
 
     const info = await getVersionInfo({ currentSha: "abc1234", repo: "HaiouZh/TimeData" });
     expect(info.current).toBe("abc1234");
@@ -55,7 +55,7 @@ describe("getVersionInfo", () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ workflow_runs: [{ head_sha: "abc12340000" }] }),
-    }) as any;
+    }) as unknown as typeof fetch;
     const info = await getVersionInfo({ currentSha: "abc1234", repo: "HaiouZh/TimeData" });
     expect(info.hasUpdate).toBe(false);
   });
@@ -64,7 +64,7 @@ describe("getVersionInfo", () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ workflow_runs: [{ head_sha: "deadbeef" }] }),
-    }) as any;
+    }) as unknown as typeof fetch;
     const info = await getVersionInfo({ currentSha: "dev", repo: "HaiouZh/TimeData" });
     expect(info.hasUpdate).toBe(false);
   });
@@ -74,7 +74,7 @@ describe("getVersionInfo", () => {
       ok: true,
       json: async () => ({ workflow_runs: [{ head_sha: "aaaaaaa1111" }] }),
     });
-    global.fetch = mockFetch as any;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     await getVersionInfo({ currentSha: "x", repo: "a/b" });
     await getVersionInfo({ currentSha: "x", repo: "a/b" });
@@ -87,13 +87,16 @@ describe("getVersionInfo", () => {
       ok: true,
       json: async () => ({ workflow_runs: [{ head_sha: "abcdef1234567890" }] }),
     });
-    global.fetch = mockFetch as any;
+    global.fetch = mockFetch as unknown as typeof fetch;
 
     await fetchLatestSha("HaiouZh", "TimeData");
 
-    expect(mockFetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-      headers: expect.objectContaining({ Authorization: "Bearer github-token" }),
-    }));
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer github-token" }),
+      }),
+    );
     delete process.env.GITHUB_TOKEN;
   });
 });

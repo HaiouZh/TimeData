@@ -1,7 +1,7 @@
+import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsCategoriesPage from "./SettingsCategoriesPage.js";
 
@@ -34,8 +34,7 @@ vi.mock("react-router-dom", () => ({
 vi.mock("../../hooks/useCategories.ts", () => ({
   useCategories: () => ({
     parentCategories: categoriesState.categories.filter((category) => category.parentId === null),
-    getChildren: (parentId: string) =>
-      categoriesState.categories.filter((category) => category.parentId === parentId),
+    getChildren: (parentId: string) => categoriesState.categories.filter((category) => category.parentId === parentId),
     addCategory: addCategoryMock,
     applyCategoryPalette: vi.fn(),
     reorderCategories: vi.fn(),
@@ -105,7 +104,7 @@ describe("SettingsCategoriesPage", () => {
     expect(openButton).toBeDefined();
 
     await act(async () => {
-      openButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const nameInput = document.body.querySelector<HTMLInputElement>('input[placeholder="分类名称"]');
@@ -114,7 +113,7 @@ describe("SettingsCategoriesPage", () => {
     await act(async () => {
       const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       valueSetter?.call(nameInput, "健康");
-      nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      nameInput?.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
     const confirmButton = [...document.body.querySelectorAll("button")].find(
@@ -123,7 +122,7 @@ describe("SettingsCategoriesPage", () => {
     expect(confirmButton).toBeDefined();
 
     await act(async () => {
-      confirmButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(addCategoryMock).toHaveBeenCalledWith("健康", null, "#4A90D9");

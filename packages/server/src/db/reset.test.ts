@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resetDatabaseConnectionToDefaults } from "./reset.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
+import { resetDatabaseConnectionToDefaults } from "./reset.js";
 
 let db: Database.Database;
 
@@ -92,7 +92,10 @@ describe("resetDatabaseConnectionToDefaults", () => {
     const result = resetDatabaseConnectionToDefaults(db);
 
     const entries = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
-    const sleep = db.prepare("SELECT id, name FROM categories WHERE id = 'cat-sleep'").get() as { id: string; name: string };
+    const sleep = db.prepare("SELECT id, name FROM categories WHERE id = 'cat-sleep'").get() as {
+      id: string;
+      name: string;
+    };
     const custom = db.prepare("SELECT id FROM categories WHERE id = 'custom-cat'").get();
     const seqCount = db.prepare("SELECT COUNT(*) as count FROM sync_seq").get() as { count: number };
     const tombstoneCount = db.prepare("SELECT COUNT(*) as count FROM sync_tombstones").get() as { count: number };

@@ -43,7 +43,7 @@ describe("EntryForm future time validation", () => {
           endTime: "2026-05-08T08:30:00",
           onSave: vi.fn(),
           onCancel: () => {},
-        })
+        }),
       );
     });
 
@@ -62,7 +62,7 @@ describe("EntryForm future time validation", () => {
           endTime: "2026-05-08T08:30:00",
           onSave,
           onCancel: () => {},
-        })
+        }),
       );
     });
 

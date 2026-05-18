@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { isUtcIso, utcToLocalDateTime, type TimeEntry } from "@timedata/shared";
+import { type TimeEntry, isUtcIso, utcToLocalDateTime } from "@timedata/shared";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
 import { formatDuration, formatTimelineTimeRange } from "../lib/time.ts";
-import { useCategories } from "../hooks/useCategories.ts";
 
 interface CircularTimelineProps {
   date: string;
@@ -12,9 +12,7 @@ interface CircularTimelineProps {
   overlay?: ReactNode;
 }
 
-type Selection =
-  | { type: "gap"; startTime: string; endTime: string }
-  | { type: "entry"; entry: TimeEntry };
+type Selection = { type: "gap"; startTime: string; endTime: string } | { type: "entry"; entry: TimeEntry };
 
 const SIZE = 240;
 const CENTER = SIZE / 2;
@@ -53,7 +51,11 @@ function minuteOnDate(date: string, value: string): number {
   return minutesFromClock(localValue);
 }
 
-export function clampSlotToDayMinutes(date: string, startTime: string, endTime: string): { start: number; end: number } {
+export function clampSlotToDayMinutes(
+  date: string,
+  startTime: string,
+  endTime: string,
+): { start: number; end: number } {
   const start = Math.max(0, Math.min(DAY_MINUTES, minuteOnDate(date, startTime)));
   const end = Math.max(start, Math.min(DAY_MINUTES, minuteOnDate(date, endTime)));
   return { start, end };
@@ -143,9 +145,16 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
       ? { startTime: selection.entry.startTime, endTime: selection.entry.endTime }
       : { startTime: selection.startTime, endTime: selection.endTime }
     : null;
-  const selectedMinutes = selectedRange ? clampSlotToDayMinutes(date, selectedRange.startTime, selectedRange.endTime) : null;
+  const selectedMinutes = selectedRange
+    ? clampSlotToDayMinutes(date, selectedRange.startTime, selectedRange.endTime)
+    : null;
   const selectedColor = selection?.type === "entry" ? getCategoryColor(selection.entry.categoryId) : "rgb(100 116 139)";
-  const centerTitle = selection?.type === "entry" ? getCategoryPath(selection.entry.categoryId) : selection?.type === "gap" ? "待记录" : "没有时间段";
+  const centerTitle =
+    selection?.type === "entry"
+      ? getCategoryPath(selection.entry.categoryId)
+      : selection?.type === "gap"
+        ? "待记录"
+        : "没有时间段";
   const centerDuration = selectedRange ? formatDuration(selectedRange.startTime, selectedRange.endTime) : "";
   const centerRange = selectedRange ? formatTimelineTimeRange(selectedRange.startTime, selectedRange.endTime) : "";
 
@@ -230,45 +239,59 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                   </g>
                 );
               })}
-              {selectedMinutes && selectedMinutes.end > selectedMinutes.start && (() => {
-                const startAngle = angleFromMinutes(selectedMinutes.start);
-                const endAngle = angleFromMinutes(selectedMinutes.end);
-                const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
-                const outerStart = polarToCartesian(startAngle, OUTER_RADIUS);
-                const outerEnd = polarToCartesian(endAngle, OUTER_RADIUS);
-                const innerEnd = polarToCartesian(endAngle, INNER_RADIUS);
-                const innerStart = polarToCartesian(startAngle, INNER_RADIUS);
-                const outlinePath = [
-                  "M", outerStart.x, outerStart.y,
-                  "A", OUTER_RADIUS, OUTER_RADIUS, 0, largeArcFlag, 1, outerEnd.x, outerEnd.y,
-                  "L", innerEnd.x, innerEnd.y,
-                  "A", INNER_RADIUS, INNER_RADIUS, 0, largeArcFlag, 0, innerStart.x, innerStart.y,
-                  "Z",
-                ].join(" ");
-                const midpoint = (selectedMinutes.start + selectedMinutes.end) / 2;
-                const midAngle = angleFromMinutes(midpoint);
-                const arrowTip = polarToCartesian(midAngle, OUTER_RADIUS + 2);
-                const arrowLeft = polarToCartesian(midAngle - 3, INDICATOR_RADIUS);
-                const arrowRight = polarToCartesian(midAngle + 3, INDICATOR_RADIUS);
-                return (
-                  <g data-ring-indicator="true" pointerEvents="none">
-                    <path
-                      d={outlinePath}
-                      fill="none"
-                      stroke={selectedColor}
-                      strokeWidth="1.5"
-                      opacity="0.95"
-                    />
-                    <polygon
-                      points={`${arrowTip.x},${arrowTip.y} ${arrowLeft.x},${arrowLeft.y} ${arrowRight.x},${arrowRight.y}`}
-                      fill={selectedColor}
-                      stroke="rgb(15 23 42)"
-                      strokeWidth="1"
-                      strokeLinejoin="round"
-                    />
-                  </g>
-                );
-              })()}
+              {selectedMinutes &&
+                selectedMinutes.end > selectedMinutes.start &&
+                (() => {
+                  const startAngle = angleFromMinutes(selectedMinutes.start);
+                  const endAngle = angleFromMinutes(selectedMinutes.end);
+                  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+                  const outerStart = polarToCartesian(startAngle, OUTER_RADIUS);
+                  const outerEnd = polarToCartesian(endAngle, OUTER_RADIUS);
+                  const innerEnd = polarToCartesian(endAngle, INNER_RADIUS);
+                  const innerStart = polarToCartesian(startAngle, INNER_RADIUS);
+                  const outlinePath = [
+                    "M",
+                    outerStart.x,
+                    outerStart.y,
+                    "A",
+                    OUTER_RADIUS,
+                    OUTER_RADIUS,
+                    0,
+                    largeArcFlag,
+                    1,
+                    outerEnd.x,
+                    outerEnd.y,
+                    "L",
+                    innerEnd.x,
+                    innerEnd.y,
+                    "A",
+                    INNER_RADIUS,
+                    INNER_RADIUS,
+                    0,
+                    largeArcFlag,
+                    0,
+                    innerStart.x,
+                    innerStart.y,
+                    "Z",
+                  ].join(" ");
+                  const midpoint = (selectedMinutes.start + selectedMinutes.end) / 2;
+                  const midAngle = angleFromMinutes(midpoint);
+                  const arrowTip = polarToCartesian(midAngle, OUTER_RADIUS + 2);
+                  const arrowLeft = polarToCartesian(midAngle - 3, INDICATOR_RADIUS);
+                  const arrowRight = polarToCartesian(midAngle + 3, INDICATOR_RADIUS);
+                  return (
+                    <g data-ring-indicator="true" pointerEvents="none">
+                      <path d={outlinePath} fill="none" stroke={selectedColor} strokeWidth="1.5" opacity="0.95" />
+                      <polygon
+                        points={`${arrowTip.x},${arrowTip.y} ${arrowLeft.x},${arrowLeft.y} ${arrowRight.x},${arrowRight.y}`}
+                        fill={selectedColor}
+                        stroke="rgb(15 23 42)"
+                        strokeWidth="1"
+                        strokeLinejoin="round"
+                      />
+                    </g>
+                  );
+                })()}
               <circle cx={CENTER} cy={CENTER} r={CENTER_RADIUS} fill={selectedColor} opacity="0.92" />
             </svg>
             <button

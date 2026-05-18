@@ -29,7 +29,9 @@ export class ErrorBoundary extends Component<Props, State> {
         <div className="p-6 space-y-3 text-center text-slate-100">
           <h1 className="text-lg font-medium">应用出错了</h1>
           <p className="text-xs text-slate-400">{error.message}</p>
-          <button onClick={() => location.reload()} className="rounded bg-slate-700 px-4 py-2 text-sm">刷新</button>
+          <button onClick={() => location.reload()} className="rounded bg-slate-700 px-4 py-2 text-sm">
+            刷新
+          </button>
         </div>
       );
     }

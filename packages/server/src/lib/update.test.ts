@@ -1,8 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, it, expect } from "vitest";
-import { buildUpdaterArgs, createUpdateStatus, getUpdateStatus, triggerUpdate, UpdateAlreadyRunningError, updateLockPath, updateLogPath, updateStatusPath } from "./update.js";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  UpdateAlreadyRunningError,
+  buildUpdaterArgs,
+  createUpdateStatus,
+  getUpdateStatus,
+  triggerUpdate,
+  updateLockPath,
+  updateLogPath,
+  updateStatusPath,
+} from "./update.js";
 
 let tempDir: string | null = null;
 
@@ -47,15 +56,16 @@ describe("buildUpdaterArgs", () => {
     expect(command).toContain("docker compose up -d --force-recreate");
     expect(command).toContain("--network host");
     expect(command).toContain("http://127.0.0.1:3000/api/health");
-    expect(command).toContain("docker compose up -d >> \"$LOG\" 2>&1");
+    expect(command).toContain('docker compose up -d >> "$LOG" 2>&1');
     expect(command).toContain("write_status succeeded 0");
     expect(command).toContain('write_status failed "$code"');
     expect(command).toContain("STARTED_AT='2026-05-07T12:00:00.000Z'");
   });
 
   it("throws when hostComposeDir is missing", () => {
-    expect(() => buildUpdaterArgs({ hostComposeDir: "", image: "docker:24-cli", updateId: "update-1" }))
-      .toThrow(/HOST_COMPOSE_DIR/);
+    expect(() => buildUpdaterArgs({ hostComposeDir: "", image: "docker:24-cli", updateId: "update-1" })).toThrow(
+      /HOST_COMPOSE_DIR/,
+    );
   });
 });
 
@@ -63,7 +73,11 @@ describe("update status files", () => {
   it("creates and reads running update status", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
 
-    const status = createUpdateStatus({ hostComposeDir: tempDir, updateId: "update-1", now: () => "2026-05-07T12:00:00.000Z" });
+    const status = createUpdateStatus({
+      hostComposeDir: tempDir,
+      updateId: "update-1",
+      now: () => "2026-05-07T12:00:00.000Z",
+    });
 
     expect(status).toEqual({
       updateId: "update-1",
@@ -92,9 +106,14 @@ describe("triggerUpdate locking", () => {
   it("rejects a second update while update.lock exists", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
     fs.mkdirSync(path.join(tempDir, "data"), { recursive: true });
-    fs.writeFileSync(updateLockPath(tempDir), JSON.stringify({ updateId: "update-1", createdAt: "2026-05-07T12:00:00.000Z" }), "utf8");
+    fs.writeFileSync(
+      updateLockPath(tempDir),
+      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-07T12:00:00.000Z" }),
+      "utf8",
+    );
 
-    expect(() => triggerUpdate({ hostComposeDir: tempDir, image: "docker:24-cli", updateId: "update-2" }))
-      .toThrow(UpdateAlreadyRunningError);
+    expect(() => triggerUpdate({ hostComposeDir: tempDir, image: "docker:24-cli", updateId: "update-2" })).toThrow(
+      UpdateAlreadyRunningError,
+    );
   });
 });

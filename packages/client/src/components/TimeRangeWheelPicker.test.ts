@@ -19,7 +19,7 @@ describe("TimeRangeWheelPicker", () => {
         end: { date: "2026-05-08", hour: "08", minute: "01" },
         onStartChange: () => {},
         onEndChange: () => {},
-      })
+      }),
     );
 
     expect(html).toContain("8小时8分钟");
@@ -35,7 +35,7 @@ describe("TimeRangeWheelPicker scroll container", () => {
         end: { date: "2026-05-15", hour: "10", minute: "00" },
         onStartChange: () => {},
         onEndChange: () => {},
-      })
+      }),
     );
     expect(html).toContain("wheel-scroll");
     expect(html).not.toMatch(/style="[^"]*scrollbar-width/);
@@ -48,7 +48,7 @@ describe("TimeRangeWheelPicker scroll container", () => {
         end: { date: "2026-05-15", hour: "10", minute: "00" },
         onStartChange: () => {},
         onEndChange: () => {},
-      })
+      }),
     );
     expect(html).not.toContain("transition-all");
     expect(html).not.toContain("scale-110");

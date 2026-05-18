@@ -24,7 +24,10 @@ export function getAndroidVersionCodeFromReleaseTag(tagName: string): string | n
   return match?.[1] ?? null;
 }
 
-export function getAndroidApkUpdateFromRelease(release: GitHubRelease, currentVersionCode: string): AndroidApkUpdate | null {
+export function getAndroidApkUpdateFromRelease(
+  release: GitHubRelease,
+  currentVersionCode: string,
+): AndroidApkUpdate | null {
   const versionCode = getAndroidVersionCodeFromReleaseTag(release.tag_name);
   if (!versionCode) return null;
 
@@ -46,7 +49,10 @@ export function getAndroidApkUpdateUrl(update: AndroidApkUpdate): string {
   return update.apkUrl;
 }
 
-export async function openAndroidApkUpdate(update: AndroidApkUpdate, opener: AndroidApkUpdateOpener = openExternalUrl): Promise<void> {
+export async function openAndroidApkUpdate(
+  update: AndroidApkUpdate,
+  opener: AndroidApkUpdateOpener = openExternalUrl,
+): Promise<void> {
   await opener(getAndroidApkUpdateUrl(update));
 }
 
@@ -65,5 +71,5 @@ export async function fetchAndroidApkUpdate(currentVersionCode: string): Promise
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GitHub Release 检查失败：${res.status}`);
 
-  return getAndroidApkUpdateFromRelease(await res.json() as GitHubRelease, currentVersionCode);
+  return getAndroidApkUpdateFromRelease((await res.json()) as GitHubRelease, currentVersionCode);
 }

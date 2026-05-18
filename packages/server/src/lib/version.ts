@@ -13,7 +13,7 @@ export async function fetchLatestSha(owner: string, repo: string): Promise<strin
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const headers: Record<string, string> = { "Accept": "application/vnd.github+json" };
+    const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
     if (process.env.GITHUB_TOKEN) {
       headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
     }
@@ -22,7 +22,7 @@ export async function fetchLatestSha(owner: string, repo: string): Promise<strin
       signal: controller.signal,
     });
     if (!res.ok) return "unknown";
-    const body = await res.json() as { workflow_runs?: Array<{ head_sha: string }> };
+    const body = (await res.json()) as { workflow_runs?: Array<{ head_sha: string }> };
     const sha = body.workflow_runs?.[0]?.head_sha;
     return sha ? sha.slice(0, 7) : "unknown";
   } catch {

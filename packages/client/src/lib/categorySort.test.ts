@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { Category } from "@timedata/shared";
+import { describe, expect, it } from "vitest";
 import { changedCategorySortOrders, reorderCategoriesWithinParent } from "./categorySort.js";
 
 function category(id: string, parentId: string | null, sortOrder: number): Category {
@@ -22,7 +22,7 @@ describe("reorderCategoriesWithinParent", () => {
       [category("sleep", null, 0), category("work", null, 1), category("play", null, 2)],
       "play",
       "sleep",
-      null
+      null,
     );
 
     expect(result.map((item) => [item.id, item.sortOrder])).toEqual([
@@ -42,7 +42,7 @@ describe("reorderCategoriesWithinParent", () => {
       ],
       "sleep-b",
       "sleep-a",
-      "sleep"
+      "sleep",
     );
 
     expect(result.map((item) => [item.id, item.parentId, item.sortOrder])).toEqual([
@@ -56,7 +56,7 @@ describe("reorderCategoriesWithinParent", () => {
       [category("sleep-a", "sleep", 0), category("work-a", "work", 0)],
       "sleep-a",
       "work-a",
-      "sleep"
+      "sleep",
     );
 
     expect(result.map((item) => [item.id, item.sortOrder])).toEqual([["sleep-a", 0]]);

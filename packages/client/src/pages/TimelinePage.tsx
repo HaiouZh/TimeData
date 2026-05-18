@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import DateNav from "../components/DateNav.tsx";
-import Timeline from "../components/Timeline.tsx";
 import CircularTimeline from "../components/CircularTimeline.tsx";
+import DateNav from "../components/DateNav.tsx";
 import SyncIndicator from "../components/SyncIndicator.tsx";
+import Timeline from "../components/Timeline.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useEntries } from "../hooks/useEntries.ts";
 import { useMidnightTick } from "../hooks/useMidnightTick.ts";
@@ -28,7 +28,7 @@ export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
   const navigate = useNavigate();
   const slots = useMemo(
     () => buildTimeSlots(entries, date, 0, { previousEntry, mergeOvernight, now }),
-    [date, entries, mergeOvernight, now, previousEntry]
+    [date, entries, mergeOvernight, now, previousEntry],
   );
   const { syncIfStale } = useSyncContext();
 
@@ -52,12 +52,16 @@ export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
         date={date}
         slots={slots}
         onEntryOpen={(entry) => navigate(`/entries/${entry.id}/edit`)}
-        onGapOpen={(startTime, endTime) => navigate(`/entries/new?start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`)}
+        onGapOpen={(startTime, endTime) =>
+          navigate(`/entries/new?start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`)
+        }
         overlay={<SyncIndicator />}
       />
       <Timeline
         slots={slots}
-        onGapClick={(startTime, endTime) => navigate(`/entries/new?start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`)}
+        onGapClick={(startTime, endTime) =>
+          navigate(`/entries/new?start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`)
+        }
         onEntryClick={(entry) => navigate(`/entries/${entry.id}/edit`)}
       />
     </>

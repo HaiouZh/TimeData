@@ -12,5 +12,5 @@ createRoot(document.getElementById("root")!).render(
     <AppUpdateProvider>
       <App />
     </AppUpdateProvider>
-  </StrictMode>
+  </StrictMode>,
 );

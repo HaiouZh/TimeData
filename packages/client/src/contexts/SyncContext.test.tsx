@@ -69,27 +69,54 @@ beforeEach(() => {
 
 describe("deriveSyncStatus", () => {
   it("maps disabled before all runtime states", () => {
-    expect(deriveSyncStatus({ cloudSyncEnabled: false, syncing: true, error: "boom", lastSynced: "2026-05-11T00:00:00.000Z" })).toBe("disabled");
+    expect(
+      deriveSyncStatus({
+        cloudSyncEnabled: false,
+        syncing: true,
+        error: "boom",
+        lastSynced: "2026-05-11T00:00:00.000Z",
+      }),
+    ).toBe("disabled");
   });
 
   it("maps syncing, error, success, and idle", () => {
     expect(deriveSyncStatus({ cloudSyncEnabled: true, syncing: true, error: null, lastSynced: null })).toBe("syncing");
     expect(deriveSyncStatus({ cloudSyncEnabled: true, syncing: false, error: "boom", lastSynced: null })).toBe("error");
-    expect(deriveSyncStatus({ cloudSyncEnabled: true, syncing: false, error: null, lastSynced: "2026-05-11T00:00:00.000Z" })).toBe("success");
+    expect(
+      deriveSyncStatus({ cloudSyncEnabled: true, syncing: false, error: null, lastSynced: "2026-05-11T00:00:00.000Z" }),
+    ).toBe("success");
     expect(deriveSyncStatus({ cloudSyncEnabled: true, syncing: false, error: null, lastSynced: null })).toBe("idle");
   });
 });
 
 describe("shouldRunThrottledSync", () => {
   it("blocks disabled and in-flight sync", () => {
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: false, syncing: false, now: 1000, lastAttemptAt: 0 })).toBe(false);
+    expect(shouldRunThrottledSync({ cloudSyncEnabled: false, syncing: false, now: 1000, lastAttemptAt: 0 })).toBe(
+      false,
+    );
     expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: true, now: 1000, lastAttemptAt: 0 })).toBe(false);
   });
 
   it("allows the first enabled sync and throttles the next attempt", () => {
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: false, now: 1000, lastAttemptAt: null })).toBe(true);
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: false, now: 1000 + SYNC_AUTO_THROTTLE_MS - 1, lastAttemptAt: 1000 })).toBe(false);
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: false, now: 1000 + SYNC_AUTO_THROTTLE_MS, lastAttemptAt: 1000 })).toBe(true);
+    expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: false, now: 1000, lastAttemptAt: null })).toBe(
+      true,
+    );
+    expect(
+      shouldRunThrottledSync({
+        cloudSyncEnabled: true,
+        syncing: false,
+        now: 1000 + SYNC_AUTO_THROTTLE_MS - 1,
+        lastAttemptAt: 1000,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRunThrottledSync({
+        cloudSyncEnabled: true,
+        syncing: false,
+        now: 1000 + SYNC_AUTO_THROTTLE_MS,
+        lastAttemptAt: 1000,
+      }),
+    ).toBe(true);
   });
 });
 
@@ -112,7 +139,11 @@ describe("SyncProvider", () => {
     function Wrapper() {
       const [unrelated, setUnrelated] = useState(0);
       triggerUnrelatedRerender = () => setUnrelated((value) => value + 1);
-      return createElement(SyncProvider, null, createElement("div", { "data-unrelated": unrelated }, createElement(Probe)));
+      return createElement(
+        SyncProvider,
+        null,
+        createElement("div", { "data-unrelated": unrelated }, createElement(Probe)),
+      );
     }
 
     const host = document.createElement("div");

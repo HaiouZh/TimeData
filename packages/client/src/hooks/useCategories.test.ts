@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import type { Category, TimeEntry } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Category, TimeEntry } from "@timedata/shared";
-import { db, type AutoBackupRecord } from "../db/index.js";
+import { type AutoBackupRecord, db } from "../db/index.js";
 
 vi.mock("dexie-react-hooks", () => ({
   useLiveQuery: vi.fn(() => []),
 }));
 import { CATEGORY_COLOR_PALETTES } from "../lib/categoryColors.js";
 import {
+  addCategory,
   applyCategoryPalette,
   archiveCategory,
   deleteCategory,
@@ -19,15 +20,19 @@ import {
   renameCategory,
   updateCategoryColor,
   useCategories,
-  addCategory,
 } from "./useCategories.js";
 
 function category(id: string, parentId: string | null, sortOrder: number): Category;
 function category(overrides: Partial<Category> & { id: string }): Category;
-function category(idOrOverrides: string | (Partial<Category> & { id: string }), parentId?: string | null, sortOrder?: number): Category {
-  const overrides = typeof idOrOverrides === "string"
-    ? { id: idOrOverrides, name: idOrOverrides, parentId: parentId ?? null, sortOrder: sortOrder ?? 0 }
-    : idOrOverrides;
+function category(
+  idOrOverrides: string | (Partial<Category> & { id: string }),
+  parentId?: string | null,
+  sortOrder?: number,
+): Category {
+  const overrides =
+    typeof idOrOverrides === "string"
+      ? { id: idOrOverrides, name: idOrOverrides, parentId: parentId ?? null, sortOrder: sortOrder ?? 0 }
+      : idOrOverrides;
   return {
     color: "#4A90D9",
     icon: null,
@@ -142,7 +147,12 @@ describe("persistCategoryOrder", () => {
 
     await persistCategoryOrder(null, ["play", "sleep", "work"]);
 
-    await expect(db.categories.orderBy("sortOrder").filter((item) => item.parentId === null).toArray()).resolves.toMatchObject([
+    await expect(
+      db.categories
+        .orderBy("sortOrder")
+        .filter((item) => item.parentId === null)
+        .toArray(),
+    ).resolves.toMatchObject([
       { id: "play", sortOrder: 0 },
       { id: "sleep", sortOrder: 1 },
       { id: "work", sortOrder: 2 },
@@ -179,11 +189,20 @@ describe("persistCategoryOrder", () => {
   });
 
   it("ignores ordered ids that do not exactly match the current sibling scope", async () => {
-    await db.categories.bulkAdd([category("sleep", null, 0), category("work", null, 1), category("sleep-a", "sleep", 0)]);
+    await db.categories.bulkAdd([
+      category("sleep", null, 0),
+      category("work", null, 1),
+      category("sleep-a", "sleep", 0),
+    ]);
 
     await persistCategoryOrder(null, ["sleep-a", "sleep"]);
 
-    await expect(db.categories.orderBy("sortOrder").filter((item) => item.parentId === null).toArray()).resolves.toMatchObject([
+    await expect(
+      db.categories
+        .orderBy("sortOrder")
+        .filter((item) => item.parentId === null)
+        .toArray(),
+    ).resolves.toMatchObject([
       { id: "sleep", sortOrder: 0 },
       { id: "work", sortOrder: 1 },
     ]);
@@ -193,14 +212,8 @@ describe("persistCategoryOrder", () => {
 
 describe("deleteCategory", () => {
   it("reports delete impact for a child category", async () => {
-    await db.categories.bulkAdd([
-      category("work", null, 0),
-      category("work-code", "work", 0),
-    ]);
-    await db.timeEntries.bulkAdd([
-      entry("entry-1", "work-code"),
-      entry("entry-2", "work"),
-    ]);
+    await db.categories.bulkAdd([category("work", null, 0), category("work-code", "work", 0)]);
+    await db.timeEntries.bulkAdd([entry("entry-1", "work-code"), entry("entry-2", "work")]);
 
     await expect(getCategoryDeleteImpact("work-code")).resolves.toEqual({
       categoryIds: ["work-code"],
@@ -216,10 +229,7 @@ describe("deleteCategory", () => {
       category("work-docs", "work", 1),
       category("life", null, 1),
     ]);
-    await db.timeEntries.bulkAdd([
-      entry("entry-1", "work-code"),
-      entry("entry-2", "work-docs"),
-    ]);
+    await db.timeEntries.bulkAdd([entry("entry-1", "work-code"), entry("entry-2", "work-docs")]);
 
     await expect(getCategoryDeleteImpact("work")).resolves.toEqual({
       categoryIds: ["work-code", "work-docs", "work"],
@@ -229,14 +239,8 @@ describe("deleteCategory", () => {
   });
 
   it("deletes a child category and its time entries with sync logs", async () => {
-    await db.categories.bulkAdd([
-      category("work", null, 0),
-      category("work-code", "work", 0),
-    ]);
-    await db.timeEntries.bulkAdd([
-      entry("entry-1", "work-code"),
-      entry("entry-2", "work"),
-    ]);
+    await db.categories.bulkAdd([category("work", null, 0), category("work-code", "work", 0)]);
+    await db.timeEntries.bulkAdd([entry("entry-1", "work-code"), entry("entry-2", "work")]);
 
     await deleteCategory("work-code");
 
@@ -257,22 +261,21 @@ describe("deleteCategory", () => {
       category("work-docs", "work", 1),
       category("life", null, 1),
     ]);
-    await db.timeEntries.bulkAdd([
-      entry("entry-1", "work-code"),
-      entry("entry-2", "work-docs"),
-    ]);
+    await db.timeEntries.bulkAdd([entry("entry-1", "work-code"), entry("entry-2", "work-docs")]);
 
     await deleteCategory("work");
 
     await expect(db.categories.toArray()).resolves.toMatchObject([{ id: "life" }]);
     await expect(db.timeEntries.count()).resolves.toBe(0);
-    await expect(db.syncLog.toArray()).resolves.toEqual(expect.arrayContaining([
-      expect.objectContaining({ tableName: "categories", recordId: "work-code", action: "delete" }),
-      expect.objectContaining({ tableName: "categories", recordId: "work-docs", action: "delete" }),
-      expect.objectContaining({ tableName: "categories", recordId: "work", action: "delete" }),
-      expect.objectContaining({ tableName: "time_entries", recordId: "entry-1", action: "delete" }),
-      expect.objectContaining({ tableName: "time_entries", recordId: "entry-2", action: "delete" }),
-    ]));
+    await expect(db.syncLog.toArray()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: "categories", recordId: "work-code", action: "delete" }),
+        expect.objectContaining({ tableName: "categories", recordId: "work-docs", action: "delete" }),
+        expect.objectContaining({ tableName: "categories", recordId: "work", action: "delete" }),
+        expect.objectContaining({ tableName: "time_entries", recordId: "entry-1", action: "delete" }),
+        expect.objectContaining({ tableName: "time_entries", recordId: "entry-2", action: "delete" }),
+      ]),
+    );
   });
 
   it("throws when deleting a missing category", async () => {
@@ -283,10 +286,7 @@ describe("deleteCategory", () => {
 
 describe("category color mutations", () => {
   it("updates a top-level category color and writes one sync log", async () => {
-    await db.categories.bulkAdd([
-      category("work", null, 0),
-      category("work-code", "work", 0),
-    ]);
+    await db.categories.bulkAdd([category("work", null, 0), category("work-code", "work", 0)]);
 
     await updateCategoryColor("work", "#a3b18a");
 
@@ -299,10 +299,7 @@ describe("category color mutations", () => {
   });
 
   it("rejects child category color updates", async () => {
-    await db.categories.bulkAdd([
-      category("work", null, 0),
-      category("work-code", "work", 0),
-    ]);
+    await db.categories.bulkAdd([category("work", null, 0), category("work-code", "work", 0)]);
 
     await expect(updateCategoryColor("work-code", "#A3B18A")).rejects.toThrow("子分类颜色跟随父分类，不单独改色。");
     await expect(db.categories.get("work-code")).resolves.toMatchObject({ color: "#4A90D9" });
@@ -352,8 +349,12 @@ describe("category color mutations", () => {
 
     await applyCategoryPalette("classic");
 
-    await expect(db.categories.get("life")).resolves.toMatchObject({ color: CATEGORY_COLOR_PALETTES.classic.colors[0] });
-    await expect(db.categories.get("work")).resolves.toMatchObject({ color: CATEGORY_COLOR_PALETTES.classic.colors[1] });
+    await expect(db.categories.get("life")).resolves.toMatchObject({
+      color: CATEGORY_COLOR_PALETTES.classic.colors[0],
+    });
+    await expect(db.categories.get("work")).resolves.toMatchObject({
+      color: CATEGORY_COLOR_PALETTES.classic.colors[1],
+    });
     await expect(db.syncLog.toArray()).resolves.toMatchObject([
       { tableName: "categories", recordId: "work", action: "update", synced: 0 },
     ]);
@@ -368,8 +369,12 @@ describe("category color mutations", () => {
 
     await applyCategoryPalette("classic");
 
-    await expect(db.categories.get("life")).resolves.toMatchObject({ color: CATEGORY_COLOR_PALETTES.classic.colors[0].toLowerCase() });
-    await expect(db.categories.get("work")).resolves.toMatchObject({ color: CATEGORY_COLOR_PALETTES.classic.colors[1] });
+    await expect(db.categories.get("life")).resolves.toMatchObject({
+      color: CATEGORY_COLOR_PALETTES.classic.colors[0].toLowerCase(),
+    });
+    await expect(db.categories.get("work")).resolves.toMatchObject({
+      color: CATEGORY_COLOR_PALETTES.classic.colors[1],
+    });
     await expect(db.categories.get("work-code")).resolves.toMatchObject({ color: "#4A90D9" });
     await expect(db.syncLog.count()).resolves.toBe(0);
   });
@@ -401,7 +406,10 @@ describe("archiveCategory", () => {
 
     await expect(archiveCategory("sleep")).rejects.toThrow("sync log failed");
 
-    await expect(db.categories.get("sleep")).resolves.toMatchObject({ isArchived: false, updatedAt: "2026-05-08T00:00:00.000Z" });
+    await expect(db.categories.get("sleep")).resolves.toMatchObject({
+      isArchived: false,
+      updatedAt: "2026-05-08T00:00:00.000Z",
+    });
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
@@ -414,17 +422,17 @@ describe("updateCategory", () => {
 
     await expect(updateCategory("sleep", { name: "休息" })).rejects.toThrow("sync log failed");
 
-    await expect(db.categories.get("sleep")).resolves.toMatchObject({ name: "睡眠", updatedAt: "2026-05-08T00:00:00.000Z" });
+    await expect(db.categories.get("sleep")).resolves.toMatchObject({
+      name: "睡眠",
+      updatedAt: "2026-05-08T00:00:00.000Z",
+    });
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
 
 describe("renameCategory", () => {
   it("renames a category, updates updatedAt, and writes one sync log", async () => {
-    await db.categories.bulkAdd([
-      category("sleep", null, 0),
-      category("work", null, 1),
-    ]);
+    await db.categories.bulkAdd([category("sleep", null, 0), category("work", null, 1)]);
 
     await renameCategory("sleep", "休息");
 
@@ -503,4 +511,3 @@ describe("renameCategory", () => {
     });
   });
 });
-

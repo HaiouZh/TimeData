@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanupRouteTestDb, seedCategory, seedEntry, setupRouteTestApp } from "../__tests__/helpers.js";
@@ -64,8 +64,7 @@ describe("GET /api/export", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("text/csv");
     expect(await res.text()).toBe(
-      "category,start,end,note\n" +
-      "工作/编程,2026-05-13T09:00:00.000Z,2026-05-13T10:00:00.000Z,写测试\n",
+      "category,start,end,note\n" + "工作/编程,2026-05-13T09:00:00.000Z,2026-05-13T10:00:00.000Z,写测试\n",
     );
   });
 
@@ -92,19 +91,18 @@ describe("export route CSV escaping", () => {
 
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(
-      "category,start,end,note\n" +
-      "\"工作,会议\",2026-05-13T09:00:00.000Z,2026-05-13T10:00:00.000Z,普通记录\n",
+      "category,start,end,note\n" + '"工作,会议",2026-05-13T09:00:00.000Z,2026-05-13T10:00:00.000Z,普通记录\n',
     );
   });
 
   it("doubles internal double quotes in exported category names and notes", async () => {
-    seedCategory(db, { id: "cat-quote", name: "研究\"开发", sortOrder: 1 });
+    seedCategory(db, { id: "cat-quote", name: '研究"开发', sortOrder: 1 });
     seedEntry(db, {
       id: "entry-quote",
       categoryId: "cat-quote",
       startTime: "2026-05-13T10:00:00.000Z",
       endTime: "2026-05-13T11:00:00.000Z",
-      note: "记录\"引用\"内容",
+      note: '记录"引用"内容',
     });
 
     const res = await app.request("/api/export?format=csv");
@@ -112,7 +110,7 @@ describe("export route CSV escaping", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(
       "category,start,end,note\n" +
-      "\"研究\"\"开发\",2026-05-13T10:00:00.000Z,2026-05-13T11:00:00.000Z,\"记录\"\"引用\"\"内容\"\n",
+        '"研究""开发",2026-05-13T10:00:00.000Z,2026-05-13T11:00:00.000Z,"记录""引用""内容"\n',
     );
   });
 
@@ -130,8 +128,7 @@ describe("export route CSV escaping", () => {
 
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(
-      "category,start,end,note\n" +
-      "复盘,2026-05-13T11:00:00.000Z,2026-05-13T12:00:00.000Z,\"第一行\n第二行\"\n",
+      "category,start,end,note\n" + '复盘,2026-05-13T11:00:00.000Z,2026-05-13T12:00:00.000Z,"第一行\n第二行"\n',
     );
   });
 
@@ -149,8 +146,7 @@ describe("export route CSV escaping", () => {
 
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(
-      "category,start,end,note\n" +
-      "'@自动化,2026-05-13T12:00:00.000Z,2026-05-13T13:00:00.000Z,'=SUM(A1:A2)\n",
+      "category,start,end,note\n" + "'@自动化,2026-05-13T12:00:00.000Z,2026-05-13T13:00:00.000Z,'=SUM(A1:A2)\n",
     );
   });
 });

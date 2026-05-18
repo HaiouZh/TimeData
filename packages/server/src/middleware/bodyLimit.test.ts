@@ -50,8 +50,12 @@ describe("bodyLimit", () => {
     const c = {
       req: {
         method: "POST",
-        header: (name: string) => name === "Content-Length" ? "10" : undefined,
-        raw: { clone: vi.fn(() => { throw new Error("clone should not be called"); }) },
+        header: (name: string) => (name === "Content-Length" ? "10" : undefined),
+        raw: {
+          clone: vi.fn(() => {
+            throw new Error("clone should not be called");
+          }),
+        },
       },
       json: vi.fn(),
     };

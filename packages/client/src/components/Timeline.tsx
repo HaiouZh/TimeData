@@ -1,7 +1,7 @@
 import type { TimeEntry } from "@timedata/shared";
+import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
 import TimeSlotComponent from "./TimeSlot.tsx";
-import { useCategories } from "../hooks/useCategories.ts";
 
 interface TimelineProps {
   slots: TimeSlot[];

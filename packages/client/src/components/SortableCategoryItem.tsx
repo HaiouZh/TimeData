@@ -1,6 +1,6 @@
-import type { CSSProperties, ReactNode } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import type { CSSProperties, ReactNode } from "react";
 
 interface SortableCategoryItemProps {
   id: string;
@@ -19,15 +19,9 @@ export default function SortableCategoryItem({
   style,
   handleClassName = "",
 }: SortableCategoryItemProps) {
-  const {
-    attributes,
-    listeners,
-    setActivatorNodeRef,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
 
   const sortableStyle: CSSProperties = {
     ...style,

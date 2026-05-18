@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
-import path from "node:path";
 import fs from "node:fs";
+import path from "node:path";
+import Database from "better-sqlite3";
 
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), "data", "timedata.db");
 

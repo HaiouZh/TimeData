@@ -1,6 +1,6 @@
+import { act, createElement } from "react";
 // @vitest-environment jsdom
 import { createRoot } from "react-dom/client";
-import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -118,21 +118,23 @@ describe("SettingsDataPage", () => {
   });
 
   it("shows remote delete conflict choices", () => {
-    syncContextMock.value.conflicts = [{
-      tableName: "time_entries",
-      recordId: "entry-delete-conflict",
-      local: {
-        id: "entry-delete-conflict",
-        categoryId: "cat-local",
-        startTime: "2026-05-07T09:00:00.000Z",
-        endTime: "2026-05-07T10:00:00.000Z",
-        note: "local pending",
-        createdAt: "2026-05-07T08:00:00.000Z",
-        updatedAt: "2026-05-07T12:00:00.000Z",
+    syncContextMock.value.conflicts = [
+      {
+        tableName: "time_entries",
+        recordId: "entry-delete-conflict",
+        local: {
+          id: "entry-delete-conflict",
+          categoryId: "cat-local",
+          startTime: "2026-05-07T09:00:00.000Z",
+          endTime: "2026-05-07T10:00:00.000Z",
+          note: "local pending",
+          createdAt: "2026-05-07T08:00:00.000Z",
+          updatedAt: "2026-05-07T12:00:00.000Z",
+        },
+        remote: null,
+        remoteAction: "delete",
       },
-      remote: null,
-      remoteAction: "delete",
-    }];
+    ];
 
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
 
@@ -154,7 +156,7 @@ describe("SettingsDataPage", () => {
     expect(button).toBeTruthy();
 
     await act(async () => {
-      button!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(host.textContent).toContain("未发现结束时间晚于现在的本地记录。");

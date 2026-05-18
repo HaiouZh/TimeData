@@ -3,9 +3,9 @@
 // Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale] [--since=<rev>]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,16 +36,18 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log([
-    "Usage: node scripts/check-evergreen-docs.mjs [options]",
-    "",
-    "Options:",
-    "  --mode=warn      (default) print impacted docs, exit 0",
-    "  --mode=strict    exit 1 if any covered doc was not updated",
-    "  --mode=stale     warn about docs whose last-reviewed is older than " + STALE_DAYS + " days",
-    "  --since=<rev>    compare against <rev> (default: HEAD; e.g. origin/main for CI)",
-    "  --help, -h       show this message",
-  ].join("\n"));
+  console.log(
+    [
+      "Usage: node scripts/check-evergreen-docs.mjs [options]",
+      "",
+      "Options:",
+      "  --mode=warn      (default) print impacted docs, exit 0",
+      "  --mode=strict    exit 1 if any covered doc was not updated",
+      `  --mode=stale     warn about docs whose last-reviewed is older than ${STALE_DAYS} days`,
+      "  --since=<rev>    compare against <rev> (default: HEAD; e.g. origin/main for CI)",
+      "  --help, -h       show this message",
+    ].join("\n"),
+  );
 }
 
 function listMarkdownFiles(dir) {
@@ -123,16 +125,14 @@ function readDoc(rel) {
 
 function patternToRegex(pattern) {
   const colonIdx = pattern.lastIndexOf(":");
-  if (colonIdx > 0 && !pattern.slice(colonIdx + 1).includes("/")) {
-    pattern = pattern.slice(0, colonIdx);
-  }
+  const normalizedPattern = colonIdx > 0 && !pattern.slice(colonIdx + 1).includes("/") ? pattern.slice(0, colonIdx) : pattern;
   let out = "";
   let i = 0;
-  while (i < pattern.length) {
-    const c = pattern[i];
+  while (i < normalizedPattern.length) {
+    const c = normalizedPattern[i];
     if (c === "*") {
-      if (pattern[i + 1] === "*") {
-        if (pattern[i + 2] === "/") {
+      if (normalizedPattern[i + 1] === "*") {
+        if (normalizedPattern[i + 2] === "/") {
           out += "(?:.*/)?";
           i += 3;
         } else {
@@ -147,14 +147,14 @@ function patternToRegex(pattern) {
       out += "[^/]";
       i += 1;
     } else if (".+^${}()|[]\\".includes(c)) {
-      out += "\\" + c;
+      out += `\\${c}`;
       i += 1;
     } else {
       out += c;
       i += 1;
     }
   }
-  return new RegExp("^" + out + "$");
+  return new RegExp(`^${out}$`);
 }
 
 function matchesAny(file, globs) {
@@ -163,13 +163,13 @@ function matchesAny(file, globs) {
 
 function shellArg(s) {
   if (/^[\w./-]+$/.test(s)) return s;
-  return "'" + s.replace(/'/g, "'\\''") + "'";
+  return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
 function getChangedFiles(since) {
   const out = [];
   try {
-    const diff = execSync("git diff " + shellArg(since) + " --name-only", { cwd: REPO_ROOT, encoding: "utf8" });
+    const diff = execSync(`git diff ${shellArg(since)} --name-only`, { cwd: REPO_ROOT, encoding: "utf8" });
     for (const line of diff.split("\n")) {
       const f = line.trim();
       if (f) out.push(f);
@@ -217,7 +217,7 @@ function modeWarnOrStrict(docs, changed, strict, dataModelContent) {
     return 0;
   }
   if (hits.length === 0 && !staleDataModelReference) {
-    console.log("✓ 检查了 " + codeChanged.length + " 个改动的代码文件，没有命中任何长期文档的 covers。");
+    console.log(`✓ 检查了 ${codeChanged.length} 个改动的代码文件，没有命中任何长期文档的 covers。`);
     return 0;
   }
   console.log("📚 本次代码改动可能影响以下长期文档：\n");
@@ -229,23 +229,25 @@ function modeWarnOrStrict(docs, changed, strict, dataModelContent) {
       const updated = docsChanged.has(doc.filePath);
       const status = updated ? "✅ 已同步更新" : "⚠️ 未更新";
       if (!updated) unmatched++;
-      console.log("| `" + hit.file + "` | [" + doc.title + "](" + doc.filePath + ") | " + status + " |");
+      console.log(`| \`${hit.file}\` | [${doc.title}](${doc.filePath}) | ${status} |`);
     }
   }
   if (staleDataModelReference) {
     unmatched++;
-    console.log("| `packages/client/src/pages/settings/SettingsCategoriesPage.tsx` + `packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx` | [data-model](docs/evergreen/data-model.md) | ⚠️ 仍引用旧的 CategoriesPage.tsx | ");
+    console.log(
+      "| `packages/client/src/pages/settings/SettingsCategoriesPage.tsx` + `packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx` | [data-model](docs/evergreen/data-model.md) | ⚠️ 仍引用旧的 CategoriesPage.tsx | ",
+    );
   }
   if (unmatched === 0) {
     console.log("\n✓ 所有相关文档都在本次改动里同步更新了。");
     return 0;
   }
   if (strict) {
-    console.error("\n✗ 有 " + unmatched + " 处文档命中但未同步更新（strict 模式）。");
+    console.error(`\n✗ 有 ${unmatched} 处文档命中但未同步更新（strict 模式）。`);
     console.error("  请同步更新文档，或在确认无需修改时通过其他方式跳过此检查。");
     return 1;
   }
-  console.log("\n⚠️ 有 " + unmatched + " 处文档命中但未更新。请确认是否需要同步修改。");
+  console.log(`\n⚠️ 有 ${unmatched} 处文档命中但未更新。请确认是否需要同步修改。`);
   return 0;
 }
 
@@ -269,19 +271,19 @@ function modeStale(docs) {
   }
   if (stale.length === 0 && missing.length === 0) {
     const ev = docs.filter((d) => d.type !== "adr").length;
-    console.log("✓ 所有 " + ev + " 份 evergreen 文档的 last-reviewed 都在 " + STALE_DAYS + " 天内。");
+    console.log(`✓ 所有 ${ev} 份 evergreen 文档的 last-reviewed 都在 ${STALE_DAYS} 天内。`);
     return 0;
   }
   if (stale.length > 0) {
-    console.log("⏰ 以下 evergreen 文档超过 " + STALE_DAYS + " 天未审阅：\n");
+    console.log(`⏰ 以下 evergreen 文档超过 ${STALE_DAYS} 天未审阅：\n`);
     for (const s of stale.sort((a, b) => b.ageDays - a.ageDays)) {
-      console.log("  " + s.doc.filePath + "  (" + s.ageDays + " 天前 reviewed: " + s.doc.lastReviewed + ")");
+      console.log(`  ${s.doc.filePath}  (${s.ageDays} 天前 reviewed: ${s.doc.lastReviewed})`);
     }
     console.log("");
   }
   if (missing.length > 0) {
     console.log("⚠️ 以下 evergreen 文档缺少 last-reviewed 字段：\n");
-    for (const d of missing) console.log("  " + d.filePath);
+    for (const d of missing) console.log(`  ${d.filePath}`);
     console.log("");
   }
   return 0;
@@ -295,7 +297,7 @@ export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
   }
   const docs = EVERGREEN_DIRS.flatMap(listMarkdownFiles).map(readDoc);
   const dataModelContent = fs.readFileSync(path.join(REPO_ROOT, "docs/evergreen/data-model.md"), "utf8");
-  console.log("Loaded " + docs.length + " long-lived doc(s) from " + EVERGREEN_DIRS.join(", ") + ".\n");
+  console.log(`Loaded ${docs.length} long-lived doc(s) from ${EVERGREEN_DIRS.join(", ")}.\n`);
   if (args.mode === "stale") return modeStale(docs);
   const changed = getChangedFiles(args.since);
   return modeWarnOrStrict(docs, changed, args.mode === "strict", dataModelContent);
