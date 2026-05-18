@@ -1,14 +1,12 @@
+import { UtcIsoStringSchema } from "./schemas.js";
+
 export type UtcIsoString = string & { readonly _brand: "UtcIsoString" };
 export type LocalDateTimeString = string & { readonly _brand: "LocalDateTimeString" };
 
 export const APP_TIME_ZONE = "Asia/Shanghai";
 
-/** Returns true for any timezone-aware ISO string (Z or explicit offset like +08:00). */
 export function isUtcIso(value: unknown): value is UtcIsoString {
-  return (
-    typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.*([zZ]|[+-]\d{2}:\d{2})$/.test(value)
-  );
+  return UtcIsoStringSchema.safeParse(value).success;
 }
 
 export function isLocalDateTime(value: unknown): value is LocalDateTimeString {

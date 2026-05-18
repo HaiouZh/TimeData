@@ -210,7 +210,7 @@ type SyncChange =
 - Dexie / SQLite 里所有 `*_at` 字段是 `new Date().toISOString()` 的产物，**带 Z**（UTC）。
 - `TimeEntry.startTime` / `endTime` 也是 UTC ISO 字符串（带 `Z`）。
 - 客户端表单输入本地时间 → 保存前用 `localDateTimeToUtc()` 转 UTC 写入；加载已有记录时用 `utcToLocalDateTime()` 转本地时间展示（`packages/client/src/pages/EntryPage.tsx`）。
-- 服务端同步校验要求 `startTime` / `endTime` 必须是 UTC 格式（`isUtcIso()`），否则返回 `invalid_shape`（`packages/server/src/sync/validation.ts`）。
+- 服务端同步校验要求 `startTime` / `endTime` 必须是严格 `YYYY-MM-DDTHH:mm:ss.sssZ` 格式（`UtcIsoStringSchema` / `isUtcIso()`），否则返回 `invalid_shape`（`packages/server/src/sync/validation.ts`）。
 - CLI 输入仍是本地日期和 `HH:mm`，服务端在 `entry-service.ts` 内部转换：写入时 `localDateTimeToUtc()` 转为 UTC 存储，返回时 `utcToLocalDateTime()` 转回本地时间给 CLI 展示。
 - 展示层函数（`formatTime`、`formatDateTimeRange`、`buildTimeSlots`）统一接受 UTC 输入，内部转换后展示本地时间（`packages/client/src/lib/time.ts`）。
 

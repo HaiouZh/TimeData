@@ -15,13 +15,22 @@ describe("APP_TIME_ZONE", () => {
 });
 
 describe("isUtcIso", () => {
-  it("accepts strings ending with Z", () => {
+  it("accepts .sssZ strings", () => {
     expect(isUtcIso("2026-05-13T07:00:00.000Z")).toBe(true);
-    expect(isUtcIso("2026-05-13T07:00:00Z")).toBe(true);
   });
-  it("accepts strings with timezone offset", () => {
-    expect(isUtcIso("2026-05-13T15:00:00+08:00")).toBe(true);
+
+  it("rejects strings without milliseconds", () => {
+    expect(isUtcIso("2026-05-13T07:00:00Z")).toBe(false);
   });
+
+  it("rejects strings with timezone offset", () => {
+    expect(isUtcIso("2026-05-13T15:00:00.000+08:00")).toBe(false);
+  });
+
+  it("rejects invalid calendar dates", () => {
+    expect(isUtcIso("2026-02-30T10:00:00.000Z")).toBe(false);
+  });
+
   it("rejects local datetime without timezone", () => {
     expect(isUtcIso("2026-05-13T15:00:00")).toBe(false);
   });

@@ -104,7 +104,7 @@ last-reviewed: 2026-05-18
 3. **create/update 没带 data** → `missing_payload`。
 4. **字段形状**：每个字段类型对、`isIsoLike` 通过、id 一致 → 否则 `invalid_shape` / `id_mismatch` / `invalid_time_range`。
 5. **分类层级**：category 不能 `parentId === id`，且 `parentId` 只能指向顶层分类；自引用或第三级都返回 `invalid_shape`。
-6. **时间范围**：entry 的 `endTime` 必须晚于 `startTime`，且不能晚于当前 UTC 时间；未来记录返回 `invalid_time_range`。服务端校验要求 `startTime` / `endTime` 必须是 UTC ISO 格式（`isUtcIso()`），否则返回 `invalid_shape`。未来时间比较使用 `nowUtcString()` 直接比较 UTC ISO 字符串。
+6. **时间范围**：entry 的 `endTime` 必须晚于 `startTime`，且不能晚于当前 UTC 时间；未来记录返回 `invalid_time_range`。服务端校验要求 `startTime` / `endTime` 必须通过 `UtcIsoStringSchema`，也就是严格 `YYYY-MM-DDTHH:mm:ss.sssZ`；省略毫秒、offset 形式或非法日历日期都返回 `invalid_shape`。未来时间比较使用 `nowUtcString()` 直接比较 UTC ISO 字符串。
 7. **外键**：
    - category 的 `parentId` 必须存在（除非也在本批 push 里）→ `missing_category`。
    - entry 的 `categoryId` 必须存在 + 不能 archived → `missing_category` / `archived_category`。

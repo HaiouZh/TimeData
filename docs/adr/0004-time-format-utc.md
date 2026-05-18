@@ -124,3 +124,8 @@ TimeData 当前混用了两套时间字符串格式：
 - 历史设计和实施过程文档已迁入本地-only 的 `docs_local/`，公开仓库只保留本 ADR 与长期文档结论。
 - 数据模型长期文档：[`docs/evergreen/data-model.md`](../evergreen/data-model.md)
 - Backup 版本 ADR：[`docs/adr/0003-backup-format-versioning.md`](0003-backup-format-versioning.md)
+
+## 2026-05-18 修订
+
+`isUtcIso` 与 server `validateEntryShape` 统一调用 `UtcIsoStringSchema`，严格只接受 `YYYY-MM-DDTHH:mm:ss.sssZ` 形式。
+存量数据格式不变（client 一直用 `Date.prototype.toISOString()` 产出）。

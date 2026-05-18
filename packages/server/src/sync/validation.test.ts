@@ -404,6 +404,30 @@ describe("validateSyncChanges", () => {
     expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: "invalid_shape" });
   });
 
+  it("rejects time entries whose UTC timestamps omit milliseconds", () => {
+    const result = validateSyncChanges(db, [entryChange({
+      data: {
+        id: "entry-1",
+        categoryId: "cat-1",
+        startTime: "2026-05-08T09:00:00Z",
+        endTime: "2026-05-08T10:00:00Z",
+        note: null,
+        createdAt: "2026-05-08T09:00:00.000Z",
+        updatedAt: "2026-05-08T09:00:00.000Z",
+      },
+    })]);
+
+    expect(result.valid).toBe(false);
+    expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: "invalid_shape" });
+  });
+
+  it("accepts time entries whose UTC timestamps use .sssZ", () => {
+    const result = validateSyncChanges(db, [entryChange()], { now: "2026-05-08T10:00:00.000Z" });
+
+    expect(result.valid).toBe(true);
+    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied" });
+  });
+
   it("rejects a batch when two incoming local entries overlap each other", () => {
     const result = validateSyncChanges(db, [
       entryChange({

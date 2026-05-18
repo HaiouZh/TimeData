@@ -1,6 +1,6 @@
 import type { Database } from "better-sqlite3";
 import type { Category, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
-import { isUtcIso } from "@timedata/shared";
+import { UtcIsoStringSchema } from "@timedata/shared";
 
 export interface SyncValidationResult {
   valid: boolean;
@@ -79,8 +79,7 @@ function validateEntryShape(change: SyncChange, data: TimeEntry, options: SyncVa
   if (!isIsoLike(data.createdAt) || !isIsoLike(data.updatedAt)) {
     return outcome(change, "rejected", "invalid_shape", "entry timestamps are invalid");
   }
-  if (!isUtcIso(data.startTime) || !data.startTime.endsWith("Z") ||
-      !isUtcIso(data.endTime) || !data.endTime.endsWith("Z")) {
+  if (!UtcIsoStringSchema.safeParse(data.startTime).success || !UtcIsoStringSchema.safeParse(data.endTime).success) {
     return outcome(change, "rejected", "invalid_shape", "entry startTime/endTime must be UTC ISO format (ending with Z)");
   }
   if (data.endTime <= data.startTime) return outcome(change, "rejected", "invalid_time_range", "entry endTime must be after startTime");

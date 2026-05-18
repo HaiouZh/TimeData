@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const UtcIsoStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/).refine((value) => Number.isFinite(Date.parse(value)), "Invalid UTC ISO timestamp");
+export const UtcIsoStringSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  .refine((value) => {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) && date.toISOString() === value;
+  }, "Invalid UTC ISO timestamp");
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const NonEmptyTrimmedStringSchema = z.string().refine((value) => value.trim().length > 0, "String must not be empty");
 
