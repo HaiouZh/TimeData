@@ -65,6 +65,8 @@ last-reviewed: 2026-05-18
 
 `serverUrl` 缺失即报 `CONFIG_MISSING`；token 缺失不会报错（私有服务器可能允许无 token）。
 
+在 unix（Linux / mac）下 `readFileConfig` 会先做权限检查：若配置文件的 mode 含任何 group / other 位（即 `mode & 0o077 !== 0`），直接返回 `CONFIG_INVALID` 并提示 `Config file permissions are too open`，**早于**任何 JSON 解析。建议把文件 chmod 到 `0o600`。Windows 下没有 POSIX 权限概念，跳过此检查。这条也解释了为什么 cli 单测里专门验证 JSON 解析失败的用例需要显式传 `"win32"` 平台参数。
+
 ## 4. 输出格式
 
 CLI 默认输出 JSON 到 stdout，`process.exit(0/1)` 表示成功/失败。在 TTY 终端下（或显式传 `--format=human`）会输出人类可读的文本；在管道、重定向或显式传 `--format=json` 时输出纯 JSON。格式选择逻辑在 `packages/cli/src/lib/format.ts` 的 `resolveOutputFormat()` 中。
