@@ -14,6 +14,7 @@ covers:
   - packages/shared/src/schemas.ts
   - packages/shared/src/types.ts:SyncPushOutcome
   - packages/shared/src/types.ts:SyncPushReasonCode
+  - packages/shared/src/types.ts:SyncReasonCategory
   - packages/shared/src/types.ts:SyncPullRequest
   - packages/shared/src/types.ts:SyncPullResponse
   - packages/shared/src/types.ts:SyncDatasetStatus
@@ -23,7 +24,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-19
 ---
 
 # 同步机制
@@ -74,8 +75,8 @@ last-reviewed: 2026-05-18
 5. `regularSync()` 只有在 meta 主路径判断 `unsyncedCount > 0` 时才调用 `syncPush()`；没有未同步日志但 meta 不一致时只做 pull-only repair。
 6. `legacy_snapshot_sync` 本地快照修复路径如果发现本地快照里有云端缺失的记录，但本地 `syncLog` 没有对应未同步日志，会先补一条 create 日志，再走同一条 `syncPush()` 路径。这是本地已有数据但 syncLog 丢失时的兜底。
 7. POST `/api/sync/push`，请求体 `{ changes: SyncChange[], baseSeq?: number | null }`。`baseSeq` 来自客户端保存的 `timedata_last_synced_seq`，用于让服务端判断这次 push 相对云端是快进、非重叠合并，还是 non-fast-forward 本地覆盖。服务端入口会先用 `SyncPushRequestSchema` 做运行时校验；不符合 `SyncChange` 判别联合契约的请求返回 400 `invalid_request`，不会进入同步校验或写库。
-8. 服务器返回 `SyncPushResponse` 后，客户端把 `status === 'accepted'` 对应的本地 syncLog 标为已同步（`synced=1`）。即使服务器因整批原子校验返回 HTTP 409，`apiFetch` 也会保留 JSON body，`syncPush()` 会读取其中的 `outcomes`：已接受项仍标记为已同步，非 accepted 项保留在 `syncLog` 里等待用户处理或下次重试。
-9. `syncPush()` 把非 accepted outcomes 暴露为 `pushIssues`，设置页同步摘要会优先展示真正失败的 `tableName/recordId`、`reasonCode` 和服务端 message，避免用户只看到响应 JSON 开头的 accepted 项。
+8. 服务器返回 `SyncPushResponse` 后，客户端按 `SyncPushOutcome.reasonCode` 分类处理本地 syncLog：`applied` 和 `client_bug` 类会标为已同步，`user_actionable` / `conflict` / `unknown` 保留未同步，等待用户处理、冲突流程或后续诊断。即使服务器因整批原子校验返回 HTTP 409，`apiFetch` 也会保留 JSON body，`syncPush()` 会读取其中的 `outcomes` 并按同一套分类处理。
+9. `syncPush()` 把 `user_actionable`、`conflict`、`unknown` outcomes 暴露为 `pushIssues`，并额外返回 `clientBugIssues` 与 `userActionableIssues` 供 UI/诊断区分处理；设置页同步摘要会优先展示真正失败的 `tableName/recordId`、`reasonCode` 和服务端 message。
 
 > **关键：不止同步日志关心的那条记录，还会同步它的分类依赖**。这是为了避免"先 push entry，因为分类不存在被拒"的死锁。
 
@@ -224,18 +225,17 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
 ## 6. 错误码处理（客户端侧）
 
-`SyncPushOutcome.reasonCode` 各值客户端的处理（在 `engine.ts`）：
+`SyncPushOutcome.reasonCode` 各值客户端的处理由 `packages/client/src/sync/reason.ts` 的 `classifyReasonCode()` 统一分类，分类类型为 `SyncReasonCategory`：
 
-- `applied` → 标 syncLog 已同步；即使当前 push 因同批次其他记录失败而返回 409，也会根据结构化 outcomes 标记对应本地日志。
-- 其他所有 → 不标已同步，下次 push 还会再试，并在设置页同步摘要中显示 `tableName/recordId`、`reasonCode` 和服务端 message。
+| reasonCode | 分类 | 客户端处理 |
+|---|---|---|
+| `applied` | `applied` | 标记对应 Dexie `syncLog` 为 `synced=1`。 |
+| `missing_payload` / `invalid_shape` / `id_mismatch` | `client_bug` | 标记对应 `syncLog` 为 `synced=1`，停止反复推送；同时放入 `clientBugIssues`，用于诊断/开发者可见错误。 |
+| `archived_category` / `missing_category` / `overlap` / `invalid_time_range` / `foreign_key_failed` | `user_actionable` | 不标记已同步，保留在 `syncLog`；放入 `pushIssues` 与 `userActionableIssues`，设置页同步摘要提示用户处理。对 `invalid_time_range` 且 message 指向未来结束时间的本地记录，用户可进入 `设置 → 数据设置 → 本地未来记录修复`，检查并删除当前设备本地的未来结束记录；该入口只改本地 IndexedDB 和 `syncLog`，不直接修改服务器数据库。若异常记录在本地创建后从未成功同步，修复会把对应未同步 create 轨迹标为已处理，不再追加 delete 意图，避免下次同步继续推送同一条未来记录。 |
+| `server_version_newer_or_same` | `conflict` | 不标记已同步，保留在 `pushIssues`，进入现有冲突/同步问题处理路径。 |
+| 未识别值 | `unknown` | 不标记已同步，保留在 `pushIssues`，避免静默丢弃未来新增原因码。 |
 
-**已知问题（待优化）**：当前处理偏粗糙——`archived_category`、`overlap` 等"客户端无法自动修复"的错误会反复重试推送，每次都被拒。
-
-待优化方向：按 reasonCode 分类处理：
-- `applied` → 标 synced
-- `missing_payload` / `invalid_shape` / `id_mismatch` → 客户端 bug，标 synced + 报错给开发者（避免卡死）
-- `archived_category` / `missing_category` / `overlap` / `invalid_time_range` → 不标 synced，但需要 UI 冒泡给用户处理。对 `invalid_time_range` 且 message 指向未来结束时间的本地记录，用户可进入 `设置 → 数据设置 → 本地未来记录修复`，检查并删除当前设备本地的未来结束记录；该入口只改本地 IndexedDB 和 `syncLog`，不直接修改服务器数据库。若异常记录在本地创建后从未成功同步，修复会把对应未同步 create 轨迹标为已处理，不再追加 delete 意图，避免下次同步继续推送同一条未来记录。
-- `server_version_newer_or_same` → 不标 synced，进入冲突流程（当前已经这么处理）
+`SyncPushReasonCode` 是封闭枚举；新增值必须同步更新 shared schema、server validation / resolver 映射、`classifyReasonCode()`、客户端测试和本文档表。
 
 ## 7. 同步日志
 
