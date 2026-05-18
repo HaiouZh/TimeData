@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-19
 ---
 
 # CLI（受控写入入口）
@@ -168,6 +168,8 @@ pnpm --filter @timedata/cli typecheck
 ```
 
 `typecheck` 只做 `tsc --noEmit`，不会生成新的 CLI 产物；发布或本地试用前仍需跑 `build`。
+
+CLI 的 Vitest 配置把 `@timedata/shared` alias 到 `packages/shared/src/index.ts`，保证 CLI 运行时 schema 测试直接覆盖 shared 源码契约，而不依赖先构建出的 `packages/shared/dist`。
 
 ## 8. 加新命令的流程
 
