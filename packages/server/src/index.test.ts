@@ -10,6 +10,14 @@ beforeEach(() => {
   process.env.AUTH_TOKEN = "secret";
   process.env.ALLOWED_ORIGINS = "https://app.example.com";
   vi.doMock("./db/schema.js", () => ({ initializeDatabase: vi.fn() }));
+  vi.doMock("./db/connection.js", () => ({
+    getDb: vi.fn(() => ({
+      prepare: vi.fn(() => ({
+        get: vi.fn(() => ({ ok: 1 })),
+      })),
+    })),
+    getDbPath: vi.fn(() => "/tmp/test-timedata.db"),
+  }));
   vi.doMock("./db/utcReset.js", () => ({ runUtcResetIfNeeded: vi.fn(() => ({ ran: false })) }));
   vi.doMock("@hono/node-server", () => ({ serve: vi.fn() }));
   vi.doMock("@hono/node-server/serve-static", () => ({
@@ -29,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock("./db/schema.js");
+  vi.doUnmock("./db/connection.js");
   vi.doUnmock("./db/utcReset.js");
   vi.doUnmock("@hono/node-server");
   vi.doUnmock("@hono/node-server/serve-static");

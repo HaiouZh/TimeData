@@ -75,7 +75,16 @@ app.use(
 
 app.use("/api/*", bodyLimit(MAX_BODY_BYTES));
 
-app.get("/api/health", (c) => c.json({ status: "ok" }));
+app.get("/api/health", (c) => {
+  try {
+    const row = getDb().prepare("SELECT 1 as ok").get() as { ok: number } | undefined;
+    if (row?.ok !== 1) throw new Error("db ping returned unexpected row");
+    return c.json({ status: "ok", db: "ok" });
+  } catch (err) {
+    console.error("[health] db ping failed:", (err as Error).message);
+    return c.json({ status: "ok", db: "error" }, 503);
+  }
+});
 app.route("/api/version", versionRoute);
 
 app.use("/api/*", authMiddleware);
