@@ -41,7 +41,7 @@ docker compose up -d
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `AUTH_TOKEN` | 生产必填 | — | API 鉴权密钥，所有 API 请求需携带 `Authorization: Bearer <TOKEN>`；Docker 部署会以 `NODE_ENV=production` 运行，未设置时服务端会拒绝启动 |
-| `ALLOWED_ORIGINS` | 否 | `*` | CORS 允许来源白名单，多个来源用英文逗号分隔；移动壳常见 `https://localhost,capacitor://localhost` |
+| `ALLOWED_ORIGINS` | 生产必填 | 空数组（拒绝跨域） | CORS 允许来源白名单，多个来源用英文逗号分隔；Web 部署填网页域名，移动壳按实际来源追加 `https://localhost,capacitor://localhost` |
 | `HOST_COMPOSE_DIR` | 是 | — | host 上 docker-compose.yml 所在目录的绝对路径，一键更新功能依赖此变量 |
 | `DB_PATH` | 否 | `/app/data/timedata.db` | SQLite 数据库路径 |
 | `PORT` | 否 | `3000` | 服务监听端口 |
@@ -73,7 +73,7 @@ API 地址：https://你的域名 或 http://服务器IP:3000
 Token：.env 中 AUTH_TOKEN 的值
 ```
 
-保存后即可使用同步、数据导出和服务端数据洞察功能。生产环境如果收窄了 `ALLOWED_ORIGINS`，需要把网页域名和 Android/Capacitor 壳实际来源加入白名单。
+保存后即可使用同步、数据导出和服务端数据洞察功能。生产环境必须设置 `ALLOWED_ORIGINS`，把网页域名和 Android/Capacitor 壳实际来源加入白名单；未设置时跨域 `/api/*` 请求会被拒绝。
 
 ## 服务端数据洞察
 

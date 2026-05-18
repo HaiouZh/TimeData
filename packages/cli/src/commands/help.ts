@@ -22,27 +22,32 @@ export interface CommandHelp {
   handler?: (ctx: CommandContext) => Promise<unknown> | unknown;
 }
 
+function requireConfig(config: ApiConfig | null): ApiConfig {
+  if (!config) throw new Error("Command requires resolved config");
+  return config;
+}
+
 export const commandRegistry: CommandHelp[] = [
   {
     name: "categories",
     writesData: false,
     summary: "List active categories with AI-safe category paths.",
     usage: "timedata categories [--server URL] [--token TOKEN]",
-    handler: (ctx) => runCategories(ctx.config!, ctx.fetchImpl),
+    handler: (ctx) => runCategories(requireConfig(ctx.config), ctx.fetchImpl),
   },
   {
     name: "list",
     writesData: false,
     summary: "List time entries for one local date in CLI format.",
     usage: "timedata list [--date YYYY-MM-DD] [--server URL] [--token TOKEN]",
-    handler: (ctx) => runList(ctx.config!, ctx.flags, ctx.fetchImpl),
+    handler: (ctx) => runList(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
   },
   {
     name: "log",
     writesData: true,
     summary: "Create one time entry through the server API.",
     usage: "timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note TEXT] [--server URL] [--token TOKEN]",
-    handler: (ctx) => runLog(ctx.config!, ctx.flags, ctx.fetchImpl),
+    handler: (ctx) => runLog(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
   },
   {
     name: "help",

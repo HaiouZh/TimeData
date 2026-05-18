@@ -120,6 +120,7 @@ api-client 包装：
 - `AUTH_FAILED`（HTTP 401）
 - `HTTP_<status>`：非 401 HTTP 错误且响应不是 CLI/服务端标准 `{ ok, error }` 形状
 - `INVALID_RESPONSE`：成功或错误响应体不是合法 JSON
+- `SCHEMA_MISMATCH`：server 响应未通过 CLI 端 schema 校验，常见于客户端/服务端版本不匹配。先升级 CLI 到与 server 一致的版本；仍异常时运行 `timedata version` 与 `GET /api/version` 比对版本。
 
 服务端 `entries` 路由产生（透传给 CLI）：
 

@@ -9,7 +9,7 @@ covers:
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
   - packages/server/src/routes/admin/index.ts
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-19
 ---
 
 # 安全与凭据处理

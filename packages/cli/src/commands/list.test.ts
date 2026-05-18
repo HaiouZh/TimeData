@@ -6,9 +6,9 @@ const config = { serverUrl: "https://server.example", token: "secret" };
 describe("runList schema 校验", () => {
   it("响应缺字段时返回 SCHEMA_MISMATCH", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true, entries: [{}] }), { status: 200 }));
-    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch);
-    expect((result as any).ok).toBe(false);
-    expect((result as any).error?.code).toBe("SCHEMA_MISMATCH");
+    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch) as { ok: false; error?: { code: string } };
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("SCHEMA_MISMATCH");
   });
 
   it("正常响应通过 schema", async () => {
@@ -21,9 +21,9 @@ describe("runList schema 校验", () => {
       }],
       summary: { totalMinutes: 60, entryCount: 1 },
     }), { status: 200 }));
-    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch);
-    expect((result as any).ok).toBe(true);
-    expect((result as any).entries).toHaveLength(1);
+    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch) as { ok: true; entries: Array<{ id: string }> };
+    expect(result.ok).toBe(true);
+    expect(result.entries).toHaveLength(1);
   });
 });
 

@@ -32,7 +32,7 @@ export async function runList(
   if (dateError) return { ok: false, error: dateError };
 
   const raw = await requestJson(config, `/api/entries?date=${encodeURIComponent(date)}&format=cli`, { fetchImpl });
-  if (raw && typeof raw === "object" && "ok" in raw && (raw as any).ok === false && "error" in raw) return raw;
+  if (raw && typeof raw === "object" && "ok" in raw && (raw as { ok: unknown }).ok === false && "error" in raw) return raw;
 
   const parsed = CliEntriesListResponseSchema.safeParse(raw);
   if (!parsed.success) {

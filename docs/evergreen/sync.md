@@ -254,6 +254,8 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
 ## 8. 改这块代码前的清单
 
+> 2026-05-19 复核：Plan 09 收尾仅做 lint 形式修复（移除未用类型 import、字符串拼接改模板字面量、测试 SQL 字符串格式化），同步语义不变。
+
 - [ ] 看 `packages/server/src/sync/validation.test.ts`、`resolver.test.ts`、`order.test.ts`、`backup.test.ts`：覆盖很全，**先跑测试**。
 - [ ] 看 `packages/client/src/sync/engine.test.ts`：客户端压缩、冲突收集都有测。
 - [ ] 跨 client/server 同步链路改动后，跑 `pnpm --filter @timedata/client test:e2e`；测试入口是 `packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`，server 内存实例 helper 在 `packages/server/src/__tests__/e2e/helpers.ts`。

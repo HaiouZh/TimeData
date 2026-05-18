@@ -19,7 +19,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-19
 ---
 
 # 架构总览
@@ -113,7 +113,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 
 1. 创建 Hono app
 2. 装 `secureHeaders` 中间件（全局 `*`）：注入 `Referrer-Policy: strict-origin-when-cross-origin`、`X-Frame-Options: DENY`、`Strict-Transport-Security` 等安全响应头；CSP 故意留空，避免破坏生产 SPA 的内联样式
-3. 装 CORS 中间件（`/api/*`，来源由 `ALLOWED_ORIGINS` 白名单控制，默认 `*`）
+3. 装 CORS 中间件（`/api/*`，来源由 `ALLOWED_ORIGINS` 白名单控制，默认空数组 fail-closed）
 4. 装 `bodyLimit` 中间件（`/api/*`，上限由 `MAX_BODY_BYTES` 控制，默认 5 MB；`Content-Length` 超限会快速拒绝，无/未知长度 body 会先读取 cloned request 计数，超出返回 HTTP 413 且不消费原始 body）
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
 6. 装 auth 中间件（之后所有受保护的 `/api/*` 默认需要 Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）

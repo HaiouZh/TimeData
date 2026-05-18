@@ -2,6 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startE2EServer } from "../../server/src/__tests__/e2e/helpers.js";
 import { runCli } from "../src/index.js";
 
+type CliOk = { ok: true };
+type CliError = { ok: false; error?: { code: string } };
+type CliCategories = CliOk & { categories: unknown[] };
+type CliEntries = CliOk & { entries: unknown[] };
+
 const TEST_TOKEN = "integration-test-token";
 let server: Awaited<ReturnType<typeof startE2EServer>>;
 
@@ -13,8 +18,8 @@ beforeAll(async () => {
 
 afterAll(() => {
   server?.close();
-  delete process.env.AUTH_TOKEN;
-  delete process.env.ALLOWED_ORIGINS;
+  process.env.AUTH_TOKEN = undefined;
+  process.env.ALLOWED_ORIGINS = undefined;
 });
 
 function makeFetch(): typeof fetch {
@@ -38,40 +43,40 @@ describe("CLI 真实 server-backed 集成", () => {
   it("doctor 通过", async () => {
     const result = await runCli(["doctor", "--server", "http://localhost:3000", "--token", TEST_TOKEN], {
       fetchImpl: makeFetch(),
-    });
-    expect((result as any).ok).toBe(true);
+    }) as CliOk;
+    expect(result.ok).toBe(true);
   });
 
   it("categories 返回默认分类", async () => {
     const result = await runCli(["categories", "--server", "http://localhost:3000", "--token", TEST_TOKEN], {
       fetchImpl: makeFetch(),
-    });
-    expect((result as any).ok).toBe(true);
-    expect((result as any).categories.length).toBeGreaterThan(0);
+    }) as CliCategories;
+    expect(result.ok).toBe(true);
+    expect(result.categories.length).toBeGreaterThan(0);
   });
 
   it("list 返回 cli 格式 entries", async () => {
     const today = new Date().toISOString().slice(0, 10);
     const result = await runCli(["list", "--date", today, "--server", "http://localhost:3000", "--token", TEST_TOKEN], {
       fetchImpl: makeFetch(),
-    });
-    expect((result as any).ok).toBe(true);
-    expect(Array.isArray((result as any).entries)).toBe(true);
+    }) as CliEntries;
+    expect(result.ok).toBe(true);
+    expect(Array.isArray(result.entries)).toBe(true);
   });
 
   it("server 返回 401 时失败", async () => {
     const result = await runCli(["categories", "--server", "http://localhost:3000", "--token", "bad"], {
       fetchImpl: makeFetch(),
-    });
-    expect((result as any).ok).toBe(false);
-    expect((result as any).error?.code).toBe("AUTH_FAILED");
+    }) as CliError;
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("AUTH_FAILED");
   });
 
   it("无效命令返回 UNKNOWN_COMMAND", async () => {
     const result = await runCli(["nope"], {
       fetchImpl: makeFetch(),
-    });
-    expect((result as any).ok).toBe(false);
-    expect((result as any).error?.code).toBe("UNKNOWN_COMMAND");
+    }) as CliError;
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("UNKNOWN_COMMAND");
   });
 });

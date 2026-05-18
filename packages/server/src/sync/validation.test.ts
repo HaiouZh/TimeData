@@ -41,8 +41,8 @@ beforeEach(async () => {
   db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   createSchema();
-  db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
-  db.prepare(`INSERT INTO categories (id, name, color, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run("cat-archived", "归档", "#777777", 1, "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+  db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run("cat-1", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+  db.prepare("INSERT INTO categories (id, name, color, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run("cat-archived", "归档", "#777777", 1, "2026-05-08T08:00:00", "2026-05-08T08:00:00");
   vi.resetModules();
   ({ validateSyncChanges } = await import("./validation.js"));
 });
@@ -113,7 +113,7 @@ describe("validateSyncChanges", () => {
   });
 
   it("rejects a third-level category", () => {
-    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run(
+    db.prepare("INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(
       "cat-child",
       "子分类",
       "cat-1",

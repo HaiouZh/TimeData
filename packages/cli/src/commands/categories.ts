@@ -5,7 +5,7 @@ const CategoriesResponseSchema = CategorySchema.array();
 
 export async function runCategories(config: ApiConfig, fetchImpl?: typeof fetch): Promise<unknown> {
   const raw = await requestJson(config, "/api/categories", { fetchImpl });
-  if (raw && typeof raw === "object" && "ok" in raw && (raw as any).ok === false) return raw;
+  if (raw && typeof raw === "object" && "ok" in raw && (raw as { ok: unknown }).ok === false) return raw;
 
   const parsed = CategoriesResponseSchema.safeParse(raw);
   if (!parsed.success) {

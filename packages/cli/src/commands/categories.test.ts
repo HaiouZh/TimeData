@@ -12,18 +12,18 @@ describe("runCategories schema 校验", () => {
         createdAt: "2026-05-19T03:00:00.000Z", updatedAt: "2026-05-19T03:00:00.000Z",
       },
     ]), { status: 200, headers: { "Content-Type": "application/json" } }));
-    const result = await runCategories(config, fetchImpl as unknown as typeof fetch);
-    expect((result as any).ok).toBe(true);
-    expect((result as any).categories).toHaveLength(1);
+    const result = await runCategories(config, fetchImpl as unknown as typeof fetch) as { ok: true; categories: Array<{ id: string; path: string; name: string; parentId: string | null }> };
+    expect(result.ok).toBe(true);
+    expect(result.categories).toHaveLength(1);
   });
 
   it("响应缺字段时返回 SCHEMA_MISMATCH 而非 silently 失败", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify([
       { id: "c1", name: "X" },
     ]), { status: 200, headers: { "Content-Type": "application/json" } }));
-    const result = await runCategories(config, fetchImpl as unknown as typeof fetch);
-    expect((result as any).ok).toBe(false);
-    expect((result as any).error?.code).toBe("SCHEMA_MISMATCH");
+    const result = await runCategories(config, fetchImpl as unknown as typeof fetch) as { ok: false; error?: { code: string } };
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("SCHEMA_MISMATCH");
   });
 });
 

@@ -6,8 +6,16 @@ export async function runLog(
   flags: Record<string, string | undefined>,
   fetchImpl?: typeof fetch,
 ): Promise<unknown> {
-  const missing = ["start", "end", "category"].filter((key) => !flags[key]);
-  if (missing.length > 0) {
+  const start = flags.start;
+  const end = flags.end;
+  const category = flags.category;
+
+  if (!start || !end || !category) {
+    const missing = [
+      ["start", start],
+      ["end", end],
+      ["category", category],
+    ].filter(([, value]) => !value).map(([key]) => key);
     return {
       ok: false,
       error: {
@@ -21,16 +29,16 @@ export async function runLog(
   const dateError = validateDate(date);
   if (dateError) return { ok: false, error: dateError };
 
-  const timeError = validateTimeRange(flags.start!, flags.end!);
+  const timeError = validateTimeRange(start, end);
   if (timeError) return { ok: false, error: timeError };
 
   return requestJson(config, "/api/entries", {
     method: "POST",
     body: {
       date,
-      start: flags.start!,
-      end: flags.end!,
-      category: flags.category!,
+      start,
+      end,
+      category,
       note: flags.note || "",
     },
     fetchImpl,

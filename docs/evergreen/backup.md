@@ -5,7 +5,7 @@ covers:
   - packages/client/src/backup/**
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-19
 ---
 
 # 备份与恢复
@@ -64,17 +64,19 @@ TimeData 现有三种备份：
 
 ## 3. 校验（`validateBackup`）
 
-恢复前必跑。`packages/client/src/backup/validateBackup.ts` 检查：
+恢复前必跑。自 2026-05-19 起，`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema` 与 `UtcIsoStringSchema` 严格校验分类、记录和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。
+
+`packages/client/src/backup/validateBackup.ts` 检查：
 
 | 错误码 | 检查内容 |
 |---|---|
 | `NOT_OBJECT` | 根不是 object |
 | `INVALID_FORMAT` | `format` 不是 `timedata.backup` |
-| `INVALID_EXPORTED_AT` | `exportedAt` 不是字符串 |
+| `INVALID_EXPORTED_AT` | `exportedAt` 不是 UTC `.sssZ` 字符串 |
 | `INVALID_APP_VERSION` | `appVersion` 不是字符串 |
 | `INVALID_DEVICE` | `device` 字段不规范 |
-| `INVALID_CATEGORIES` | `categories` 不是数组或单条形状错 |
-| `INVALID_TIME_ENTRIES` | `timeEntries` 同上 |
+| `INVALID_CATEGORIES` | `categories` 不是数组，或单条未通过 `CategorySchema` |
+| `INVALID_TIME_ENTRIES` | `timeEntries` 不是数组，或单条未通过 `TimeEntrySchema` |
 | `INVALID_TIME_FORMAT` | 备份缺少 `timeFormat: "utc"` |
 | `INVALID_TIME_ENTRY_TIME` | 记录时间不是 UTC ISO，或 `endTime <= startTime` |
 | `INVALID_CATEGORY_TREE` | 分类自引用、形成环，或超过两级分类树 |
