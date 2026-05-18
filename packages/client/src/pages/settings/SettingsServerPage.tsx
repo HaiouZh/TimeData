@@ -10,7 +10,7 @@ export default function SettingsServerPage() {
 
   function saveConfig() {
     updateApiUrl(apiUrl.trim());
-    localStorage.setItem("timedata_api_token", apiToken);
+    localStorage.setItem("timedata_api_token", apiToken.replace(/^Bearer\s+/i, "").trim());
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -34,7 +34,7 @@ export default function SettingsServerPage() {
             type="password"
             value={apiToken}
             onChange={(e) => setApiToken(e.target.value)}
-            placeholder="Bearer token"
+            placeholder="不带 Bearer 前缀的 token"
             className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
           />
           <p className="mt-2 text-xs text-amber-300">Token 会保存在本机浏览器存储中，请只在可信设备上保存服务器 Token。</p>

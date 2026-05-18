@@ -61,6 +61,27 @@ describe("SettingsServerPage", () => {
     expect(html).toContain("Token 会保存在本机浏览器存储中");
   });
 
+  it("strips Bearer prefix before saving api token", async () => {
+    localStorage.setItem("timedata_api_token", "Bearer abc123");
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+    });
+
+    const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
+    await act(async () => {
+      saveButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(localStorage.getItem("timedata_api_token")).toBe("abc123");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("saves api url through sync context", async () => {
     const host = document.createElement("div");
     const root = createRoot(host);
