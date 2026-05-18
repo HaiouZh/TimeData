@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "pnpm --filter @timedata/shared build && tsc --noEmit"
   },
   "dependencies": {
     "@timedata/shared": "workspace:*",

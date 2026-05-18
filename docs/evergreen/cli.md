@@ -168,7 +168,7 @@ pnpm --filter @timedata/cli test
 pnpm --filter @timedata/cli typecheck
 ```
 
-`typecheck` 只做 `tsc --noEmit`，不会生成新的 CLI 产物；发布或本地试用前仍需跑 `build`。
+`typecheck` 会先构建 `@timedata/shared`，再运行 `tsc --noEmit`；这是为了让全新 CI clone 中 CLI 通过 package `types` 字段读取到 `packages/shared/dist/index.d.ts`。发布或本地试用前仍需跑 `build` 生成 CLI 自身产物。
 
 CLI 的 Vitest 配置把 `@timedata/shared` alias 到 `packages/shared/src/index.ts`，保证 CLI 运行时 schema 测试直接覆盖 shared 源码契约，而不依赖先构建出的 `packages/shared/dist`。
 

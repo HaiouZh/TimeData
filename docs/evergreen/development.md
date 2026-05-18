@@ -8,7 +8,7 @@ covers:
   - packages/*/package.json
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-19
 ---
 
 # 本地开发指南
@@ -107,7 +107,7 @@ pnpm check:docs:strict # CI 使用的严格文档检查
 pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon 全套图标
 ```
 
-`packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。
+`packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。`@timedata/cli` 的 `typecheck` 会先构建 shared，因为 CLI 在 package 解析时读取 `packages/shared/dist/index.d.ts`；干净 CI 环境不能依赖本地已有 dist。
 
 > 测试阶段 Vitest 直接解析 `packages/shared/src/index.ts`，因此全新 clone 后无需先 `pnpm build:shared` 即可 `pnpm test`。构建 / dev / 部署仍读 `packages/shared/dist`。
 
