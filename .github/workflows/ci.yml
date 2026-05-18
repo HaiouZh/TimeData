@@ -1,49 +1,50 @@
 name: CI
 
 on:
-pull_request:
-push:
-branches: [main]
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
-test:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout repository
-uses: actions/checkout@v4
-with:
-fetch-depth: 0
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-- name: Setup pnpm
-uses: pnpm/action-setup@v4
-with:
-version: 10.10.0
-run_install: false
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+          run_install: false
 
-- name: Setup Node.js
-uses: actions/setup-node@v4
-with:
-node-version: 22
-cache: pnpm
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
-- name: Install dependencies
-run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-- name: pnpm audit (advisory only)
-run: pnpm audit --audit-level=moderate || true
-continue-on-error: true
+      - name: pnpm audit (advisory only)
+        run: pnpm audit --audit-level=moderate || true
+        continue-on-error: true
 
-- name: Lint
-run: pnpm lint
+      - name: Lint
+        run: pnpm lint
 
-- name: Typecheck
-run: pnpm -r typecheck
+      - name: Typecheck
+        run: pnpm -r typecheck
 
-- name: Test
-run: pnpm -r --parallel test
+      - name: Test
+        run: pnpm -r --parallel test
 
-- name: Docs consistency
-run: pnpm check:docs:strict --since=${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+      - name: Docs consistency
+        run: pnpm check:docs:strict --since=${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
 
-- name: Build
-run: pnpm build
+      - name: Build
+        run: pnpm build
+
