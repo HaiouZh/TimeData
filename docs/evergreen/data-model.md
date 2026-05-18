@@ -115,7 +115,7 @@ last-reviewed: 2026-05-18
 
 客户端 Dexie `syncLog` 使用 `[tableName+synced]` 复合索引。新写入路径（`recordSyncLog`、分类批量写日志等）写 `synced: 0`，标记完成写 `synced: 1`；运行时 `SyncLogEntrySchema` 只接受 `0 | 1`。
 
-每次本地写入业务表（`categories` / `timeEntries`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改业务表却忘了写 syncLog 是常见 bug**。
+每次本地写入业务表（`categories` / `timeEntries`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改业务表却忘了写 syncLog 是常见 bug**。业务表写入与对应 `syncLog` 写入必须在同一个 Dexie transaction 内完成；如果同步日志写入失败，业务表变更也要回滚，避免本地数据与待同步队列不一致。
 
 ## 5. 同步推送：`SyncChange` / `SyncPushOutcome`
 

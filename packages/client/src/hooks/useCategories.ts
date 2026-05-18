@@ -260,8 +260,10 @@ export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): P
 
 export async function archiveCategory(id: string): Promise<void> {
   const now = new Date().toISOString();
-  await db.categories.update(id, { isArchived: true, updatedAt: now });
-  await recordSyncLog("categories", id, "update");
+  await db.transaction("rw", db.categories, db.syncLog, async () => {
+    await db.categories.update(id, { isArchived: true, updatedAt: now });
+    await recordSyncLog("categories", id, "update");
+  });
 }
 
 export async function addCategory(name: string, parentId: string | null, color: string): Promise<Category> {
@@ -348,8 +350,10 @@ export function useCategories() {
     updates: Partial<Pick<Category, "name" | "color" | "icon" | "sortOrder">>
   ): Promise<void> {
     const now = new Date().toISOString();
-    await db.categories.update(id, { ...updates, updatedAt: now });
-    await recordSyncLog("categories", id, "update");
+    await db.transaction("rw", db.categories, db.syncLog, async () => {
+      await db.categories.update(id, { ...updates, updatedAt: now });
+      await recordSyncLog("categories", id, "update");
+    });
   }
 
   return {

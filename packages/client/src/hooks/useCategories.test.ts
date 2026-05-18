@@ -1,4 +1,7 @@
+// @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Category, TimeEntry } from "@timedata/shared";
 import { db, type AutoBackupRecord } from "../db/index.js";
@@ -15,6 +18,7 @@ import {
   persistCategoryOrder,
   renameCategory,
   updateCategoryColor,
+  useCategories,
   addCategory,
 } from "./useCategories.js";
 
@@ -44,6 +48,31 @@ function entry(id: string, categoryId: string): TimeEntry {
     createdAt: "2026-05-08T00:00:00.000Z",
     updatedAt: "2026-05-08T00:00:00.000Z",
   };
+}
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type UpdateCategory = ReturnType<typeof useCategories>["updateCategory"];
+
+async function captureUpdateCategory(): Promise<UpdateCategory> {
+  let updateCategory: UpdateCategory | null = null;
+  const host = document.createElement("div");
+  const root = createRoot(host);
+
+  function Probe() {
+    updateCategory = useCategories().updateCategory;
+    return null;
+  }
+
+  await act(async () => {
+    root.render(createElement(Probe));
+  });
+  await act(async () => {
+    root.unmount();
+  });
+
+  if (!updateCategory) throw new Error("updateCategory not captured");
+  return updateCategory;
 }
 
 beforeEach(async () => {
@@ -364,6 +393,29 @@ describe("archiveCategory", () => {
         synced: 0,
       },
     ]);
+  });
+
+  it("rolls back archived category when sync log creation fails", async () => {
+    await db.categories.add(category("sleep", null, 0));
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
+
+    await expect(archiveCategory("sleep")).rejects.toThrow("sync log failed");
+
+    await expect(db.categories.get("sleep")).resolves.toMatchObject({ isArchived: false, updatedAt: "2026-05-08T00:00:00.000Z" });
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
+  });
+});
+
+describe("updateCategory", () => {
+  it("rolls back category update when sync log creation fails", async () => {
+    await db.categories.add(category({ id: "sleep", name: "睡眠", parentId: null }));
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
+    const updateCategory = await captureUpdateCategory();
+
+    await expect(updateCategory("sleep", { name: "休息" })).rejects.toThrow("sync log failed");
+
+    await expect(db.categories.get("sleep")).resolves.toMatchObject({ name: "睡眠", updatedAt: "2026-05-08T00:00:00.000Z" });
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
 

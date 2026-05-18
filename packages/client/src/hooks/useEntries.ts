@@ -119,15 +119,17 @@ export function planEntryOverlapAdjustments(overlaps: TimeEntry[], startTime: st
 export async function applyEntryOverlapAdjustments(plan: Extract<EntryOverlapPlan, { ok: true }>): Promise<void> {
   const now = new Date().toISOString();
 
-  for (const update of plan.updates) {
-    await db.timeEntries.update(update.id, { startTime: update.startTime, endTime: update.endTime, updatedAt: now });
-    await recordSyncLog("time_entries", update.id, "update");
-  }
+  await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
+    for (const update of plan.updates) {
+      await db.timeEntries.update(update.id, { startTime: update.startTime, endTime: update.endTime, updatedAt: now });
+      await recordSyncLog("time_entries", update.id, "update");
+    }
 
-  for (const id of plan.deletes) {
-    await db.timeEntries.delete(id);
-    await recordSyncLog("time_entries", id, "delete");
-  }
+    for (const id of plan.deletes) {
+      await db.timeEntries.delete(id);
+      await recordSyncLog("time_entries", id, "delete");
+    }
+  });
 }
 
 export interface SaveEntryWithOverlapAdjustmentsInput {
@@ -213,8 +215,10 @@ export function useEntryMutations() {
       updatedAt: now,
     };
 
-    await db.timeEntries.add(entry);
-    await recordSyncLog("time_entries", id, "create");
+    await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
+      await db.timeEntries.add(entry);
+      await recordSyncLog("time_entries", id, "create");
+    });
   }
 
   async function updateEntry(
@@ -229,13 +233,17 @@ export function useEntryMutations() {
     }
 
     const now = new Date().toISOString();
-    await db.timeEntries.update(id, { ...updates, updatedAt: now });
-    await recordSyncLog("time_entries", id, "update");
+    await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
+      await db.timeEntries.update(id, { ...updates, updatedAt: now });
+      await recordSyncLog("time_entries", id, "update");
+    });
   }
 
   async function deleteEntry(id: string): Promise<void> {
-    await db.timeEntries.delete(id);
-    await recordSyncLog("time_entries", id, "delete");
+    await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
+      await db.timeEntries.delete(id);
+      await recordSyncLog("time_entries", id, "delete");
+    });
   }
 
   return { addEntry, updateEntry, deleteEntry };

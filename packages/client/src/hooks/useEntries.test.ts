@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.js";
 import { applyEntryOverlapAdjustments, deleteFutureEndedEntries, findFutureEndedEntries, findLatestEntryEndingBefore, findOverlappingEntries, findPreviousEntry, planEntryOverlapAdjustments, saveEntryWithOverlapAdjustments, useEntryMutations, validateEntryTimeRange } from "./useEntries.js";
@@ -52,6 +52,38 @@ describe("useEntryMutations", () => {
     await expect(updateEntry("existing", { endTime: "2099-05-08T08:01:00" })).rejects.toThrow("不能记录尚未发生的时间");
     await expect(db.timeEntries.get("existing")).resolves.toMatchObject({ endTime: "2026-05-08T07:00:00" });
     await expect(db.syncLog.count()).resolves.toBe(0);
+  });
+
+  it("rolls back added entry when sync log creation fails", async () => {
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
+    const { addEntry } = useEntryMutations();
+
+    await expect(addEntry("cat-sleep-sleep", "2026-05-08T06:00:00", "2026-05-08T07:00:00")).rejects.toThrow("sync log failed");
+
+    await expect(db.timeEntries.toArray()).resolves.toHaveLength(0);
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
+  });
+
+  it("rolls back updated entry when sync log creation fails", async () => {
+    await db.timeEntries.add(entry("existing", "2026-05-08T06:00:00", "2026-05-08T07:00:00"));
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
+    const { updateEntry } = useEntryMutations();
+
+    await expect(updateEntry("existing", { note: "changed" })).rejects.toThrow("sync log failed");
+
+    await expect(db.timeEntries.get("existing")).resolves.toMatchObject({ note: null, updatedAt: "2026-05-08T00:00:00.000Z" });
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
+  });
+
+  it("rolls back deleted entry when sync log creation fails", async () => {
+    await db.timeEntries.add(entry("existing", "2026-05-08T06:00:00", "2026-05-08T07:00:00"));
+    vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
+    const { deleteEntry } = useEntryMutations();
+
+    await expect(deleteEntry("existing")).rejects.toThrow("sync log failed");
+
+    await expect(db.timeEntries.get("existing")).resolves.toMatchObject({ id: "existing" });
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
 
@@ -195,6 +227,24 @@ describe("applyEntryOverlapAdjustments", () => {
     await expect(db.timeEntries.get("update-me")).resolves.toMatchObject({ startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T07:00:00" });
     await expect(db.timeEntries.get("delete-me")).resolves.toBeUndefined();
     await expect(db.syncLog.where("tableName").equals("time_entries").count()).resolves.toBe(2);
+  });
+
+  it("rolls back all overlap adjustments when a later sync log creation fails", async () => {
+    await db.timeEntries.bulkAdd([
+      entry("first", "2026-05-08T05:00:00", "2026-05-08T07:00:00"),
+      entry("second", "2026-05-08T01:00:00", "2026-05-08T02:00:00"),
+    ]);
+    vi.spyOn(db.syncLog, "add").mockResolvedValueOnce("first-log").mockRejectedValueOnce(new Error("sync log failed"));
+
+    await expect(applyEntryOverlapAdjustments({
+      ok: true,
+      updates: [{ id: "first", startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T07:00:00" }],
+      deletes: ["second"],
+    })).rejects.toThrow("sync log failed");
+
+    await expect(db.timeEntries.get("first")).resolves.toMatchObject({ startTime: "2026-05-08T05:00:00", endTime: "2026-05-08T07:00:00" });
+    await expect(db.timeEntries.get("second")).resolves.toMatchObject({ id: "second" });
+    await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
   });
 });
 

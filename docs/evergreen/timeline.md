@@ -11,7 +11,7 @@ covers:
   - packages/client/src/hooks/useEntries.ts
   - packages/client/src/lib/stats.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # 时间轴与记录时间规则
@@ -138,6 +138,6 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 `EntryForm` 会用解析后的 `nextEndTime` 派生即时错误：结束时间在未来时，顶部“本次记录时长”区域直接显示“不能记录尚未发生的时间”，不等到用户点击保存后才提示。保存时仍复用同一个错误状态，不调用保存回调；这条规则同时作用于新增和编辑记录。
 
-`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。
+`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。
 
 如果旧版本已经把未来结束记录写进本地 IndexedDB，用户可在 `设置 → 数据设置 → 本地未来记录修复` 中检查并删除这类当前设备本地记录。该入口只删除本地 `timeEntries`，不直接修改服务器数据库。对已同步过的记录，删除会按正常删除语义写入 `syncLog delete`；对本地创建后从未成功同步的记录，修复会把对应未同步 create 轨迹标为已处理（新数据用 `synced=1`），避免下次同步继续推送这条未来记录。
