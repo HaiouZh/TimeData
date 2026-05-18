@@ -900,4 +900,37 @@ describe("sync route", () => {
     });
     expect(db.prepare("SELECT name, updated_at FROM categories WHERE id = ?").get("cat-overlap")).toMatchObject({ name: "local name", updated_at: "2026-05-08T10:00:00.000Z" });
   });
+
+  it("writeSyncLog truncates detail exceeding 4096 characters", async () => {
+    // Send a push that generates a large sync_log detail by including many outcomes
+    // Use force-push flow which logs detailed outcomes
+    const changes = Array.from({ length: 100 }, (_, i) => ({
+      tableName: "categories" as const,
+      recordId: `cat-new-${i}`,
+      action: "update" as const,
+      data: {
+        id: `cat-new-${i}`,
+        name: `category-name-that-is-quite-long-${"x".repeat(50)}`,
+        parentId: null,
+        color: "#22c55e",
+        icon: null,
+        sortOrder: i,
+        isArchived: false,
+        createdAt: "2026-05-08T08:00:00.000Z",
+        updatedAt: "2026-05-08T09:00:00.000Z",
+      },
+      timestamp: "2026-05-08T09:00:00.000Z",
+    }));
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ changes }),
+    });
+
+    expect(res.status).toBe(200);
+    // The push_received log entry should have its detail truncated if > 4096
+    const logRow = db.prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1").get("push_received") as { detail: string };
+    expect(logRow.detail.length).toBeLessThanOrEqual(4096);
+  });
 });
