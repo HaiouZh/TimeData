@@ -14,7 +14,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@timedata/shared": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^25.0.0",
     "typescript": "^5.7.0",

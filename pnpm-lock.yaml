@@ -16,6 +16,10 @@ importers:
         version: 0.34.5
 
   packages/cli:
+    dependencies:
+      '@timedata/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^25.0.0
