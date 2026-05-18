@@ -1,4 +1,4 @@
-import { CategorySchema, TimeEntrySchema, UtcIsoStringSchema } from "@timedata/shared";
+import { CategorySchema, TimeEntrySchema, UtcIsoStringSchema, type Category, type TimeEntry } from "@timedata/shared";
 import { BACKUP_FORMAT, type BackupDocument, type BackupValidationResult } from "./schema.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,7 +54,8 @@ export function validateBackup(value: unknown): BackupValidationResult {
     return { ok: false, error: { code: "INVALID_TIME_FORMAT", message: "备份文件必须使用 UTC 时间格式。" } };
   }
 
-  if (!UtcIsoStringSchema.safeParse(value.exportedAt).success) {
+  const exportedAt = UtcIsoStringSchema.safeParse(value.exportedAt);
+  if (!exportedAt.success) {
     return { ok: false, error: { code: "INVALID_EXPORTED_AT", message: "备份文件缺少有效导出时间（必须 UTC .sssZ）。" } };
   }
 
@@ -65,30 +66,37 @@ export function validateBackup(value: unknown): BackupValidationResult {
   if (!isRecord(value.device) || !isNullableString(value.device.deviceId) || !isNullableString(value.device.deviceName)) {
     return { ok: false, error: { code: "INVALID_DEVICE", message: "备份文件设备信息无效。" } };
   }
+  const device = { deviceId: value.device.deviceId, deviceName: value.device.deviceName };
 
   if (!Array.isArray(value.categories)) {
     return { ok: false, error: { code: "INVALID_CATEGORIES", message: "备份文件分类数据无效。" } };
   }
 
+  const categories: Category[] = [];
   for (const raw of value.categories) {
-    if (!CategorySchema.safeParse(raw).success) {
+    const parsed = CategorySchema.safeParse(raw);
+    if (!parsed.success) {
       return { ok: false, error: { code: "INVALID_CATEGORIES", message: "备份文件分类数据无效。" } };
     }
+    categories.push(parsed.data);
   }
 
   if (!Array.isArray(value.timeEntries)) {
     return { ok: false, error: { code: "INVALID_TIME_ENTRIES", message: "备份文件记录数据无效。" } };
   }
 
+  const timeEntries: TimeEntry[] = [];
   for (const raw of value.timeEntries) {
-    if (!TimeEntrySchema.safeParse(raw).success) {
+    const parsed = TimeEntrySchema.safeParse(raw);
+    if (!parsed.success) {
       return { ok: false, error: { code: "INVALID_TIME_ENTRIES", message: "备份文件记录数据无效。" } };
     }
+    timeEntries.push(parsed.data);
   }
 
   const categoryIds = new Set<string>();
-  for (const category of value.categories) {
-    const id = (category as { id: string }).id;
+  for (const category of categories) {
+    const { id } = category;
     if (categoryIds.has(id)) {
       return { ok: false, error: { code: "DUPLICATE_CATEGORY_ID", message: `备份文件中存在重复分类 ID：${id}。` } };
     }
@@ -96,27 +104,35 @@ export function validateBackup(value: unknown): BackupValidationResult {
   }
 
   const entryIds = new Set<string>();
-  for (const entry of value.timeEntries) {
-    const id = (entry as { id: string }).id;
+  for (const entry of timeEntries) {
+    const { id } = entry;
     if (entryIds.has(id)) {
       return { ok: false, error: { code: "DUPLICATE_ENTRY_ID", message: `备份文件中存在重复记录 ID：${id}。` } };
     }
     entryIds.add(id);
   }
 
-  const treeError = validateCategoryTree(value.categories as Array<Record<string, unknown>>);
+  const treeError = validateCategoryTree(categories as Array<Record<string, unknown>>);
   if (treeError) {
     return treeError;
   }
 
-  for (const entry of value.timeEntries) {
-    const { id, categoryId } = entry as { id: string; categoryId: string };
+  for (const entry of timeEntries) {
+    const { id, categoryId } = entry;
     if (!categoryIds.has(categoryId)) {
       return { ok: false, error: { code: "ORPHAN_ENTRY_CATEGORY", message: `记录 ${id} 引用了不存在的分类 ${categoryId}。` } };
     }
   }
 
-  const backup = value as BackupDocument;
+  const backup: BackupDocument = {
+    format: BACKUP_FORMAT,
+    timeFormat: "utc",
+    exportedAt: exportedAt.data,
+    appVersion: value.appVersion,
+    device,
+    categories,
+    timeEntries,
+  };
   return {
     ok: true,
     backup,
