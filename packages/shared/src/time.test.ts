@@ -50,6 +50,12 @@ describe("isLocalDateTime", () => {
   it("rejects non-strings", () => {
     expect(isLocalDateTime(null)).toBe(false);
   });
+  it("rejects calendar-invalid strings like 9999-99-99T99:99:99", () => {
+    expect(isLocalDateTime("9999-99-99T99:99:99")).toBe(false);
+  });
+  it("rejects 2026-02-30T10:00:00 (Feb 30)", () => {
+    expect(isLocalDateTime("2026-02-30T10:00:00")).toBe(false);
+  });
 });
 
 describe("localDateTimeToUtc", () => {

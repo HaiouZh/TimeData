@@ -10,7 +10,20 @@ export function isUtcIso(value: unknown): value is UtcIsoString {
 }
 
 export function isLocalDateTime(value: unknown): value is LocalDateTimeString {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value);
+  if (typeof value !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) return false;
+  const [datePart, timePart] = value.split("T");
+  const [y, mo, d] = datePart.split("-").map(Number);
+  const [h, mi, s] = timePart.split(":").map(Number);
+  const probe = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  return (
+    probe.getUTCFullYear() === y &&
+    probe.getUTCMonth() === mo - 1 &&
+    probe.getUTCDate() === d &&
+    probe.getUTCHours() === h &&
+    probe.getUTCMinutes() === mi &&
+    probe.getUTCSeconds() === s
+  );
 }
 
 export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): UtcIsoString {
