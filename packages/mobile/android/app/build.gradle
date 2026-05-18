@@ -36,9 +36,14 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            if (hasReleaseSigning) {
-                signingConfig signingConfigs.release
+            if (!hasReleaseSigning) {
+                throw new GradleException(
+                    "Release build requires TIMEDATA_RELEASE_STORE_FILE, " +
+                    "TIMEDATA_RELEASE_STORE_PASSWORD, TIMEDATA_RELEASE_KEY_ALIAS, " +
+                    "TIMEDATA_RELEASE_KEY_PASSWORD"
+                )
             }
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
