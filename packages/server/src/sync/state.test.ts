@@ -47,4 +47,19 @@ describe("syncState", () => {
     expect(second.hash).toBe(first.hash);
     expect(second.latestSeq).toBe(first.latestSeq);
   });
+
+  it("marks commit hash dirty when sync_seq changes and recomputes on next read", async () => {
+    const { computeAndPersistCommitHash, getCommitHash } = await import("./state.js");
+    const { recordSeq } = await import("./seq.js");
+
+    const first = computeAndPersistCommitHash();
+    recordSeq("categories", "cat-1", "create");
+
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "1" });
+
+    const second = getCommitHash();
+    expect(second.latestSeq).toBe(1);
+    expect(second.hash).not.toBe(first.hash);
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "0" });
+  });
 });
