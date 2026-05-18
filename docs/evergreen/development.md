@@ -184,7 +184,7 @@ TimeData/
 
 - 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、dnd-kit
   - dnd-kit 目前用于设置页下的分类管理拖拽排序：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx` 组织一级分类 DnD 作用域，`SettingsCategoryDetailPage.tsx` 组织子分类 DnD 作用域，`SortableCategoryItem.tsx` 封装拖拽手柄，`useCategories.ts` 负责持久化 `sortOrder` 和 `syncLog`。
-- 后端：Node.js、Hono、better-sqlite3、TypeScript
+- 后端：Node.js、Hono、better-sqlite3、Zod、TypeScript
 - CLI：Node.js、TypeScript、受控 API 命令
 - Android：Capacitor、Gradle、Android SDK
 - 包管理：pnpm workspaces

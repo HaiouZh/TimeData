@@ -118,7 +118,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
 6. 装 auth 中间件（之后所有 `/api/*` 都需要 Bearer Token；`NODE_ENV=production` 会在启动前强制要求 `AUTH_TOKEN`）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
-8. 注册业务路由：`categories`/`entries`/`sync`/`sync-logs`/`export`/`update`/`data`/`admin`
+8. 注册业务路由：`categories`/`entries`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
 10. 调 `assertProductionAuthConfigured()` 和 `initializeDatabase()`：校验生产鉴权配置、建表、首次启动播种默认分类
 11. 启动时清理一次旧 server backup，并在 `SERVER_REPLICAS>1` 时提示 force-push token 仍是单实例内存存储
@@ -164,7 +164,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 3. **写入路径只有两条**：用户在 Web 端通过组件 → Dexie；脚本/AI 通过 CLI → HTTP API → SQLite。**不存在第三条**。服务器不再暴露 JSONL/CSV 导入写库接口；`GET /api/export` 只读，`POST /api/data/reset` 是人工维护入口，必须先调用 `/api/data/reset/prepare` 拿短时确认 token 并提交确认短语。
 4. **服务端是权威**：时间段重叠、分类存在、archived、时间格式合法等的最终判定都在 `packages/server/src/sync/validation.ts` 和 `packages/server/src/lib/entry-service.ts`。同步校验里需要按应用时区比较当前时间的逻辑统一走 `packages/server/src/lib/timezone.ts`；client / CLI 的同名校验只是为了体验，不能让 server 跳过。
 5. **SQL 字段名 vs JS 字段名**：服务端 SQLite 用 `snake_case`（`parent_id`、`start_time`），跨边界（路由 / 同步 / 后台洞察）时手工映射成 JS 的 `camelCase`（`parentId`、`startTime`）。这是**手工映射**，没有 ORM。
-6. **后台洞察只读**：`/api/admin/*` 只做概览、最近记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析；它复用现有 Bearer Token 鉴权，不提供任意 SQL，也不写 SQLite。
+6. **后台洞察只读**：`/api/admin/*` 的概览、最近记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析保持只读；受控维护端点（如 `/api/admin/sync-logs`）必须有独立校验和显式确认保护。admin 路由复用现有 Bearer Token 鉴权，不提供任意 SQL。
    - 代码入口：`packages/server/src/routes/admin.ts`、`packages/server/src/index.ts`、`packages/client/src/lib/adminApi.ts`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/App.tsx`
    - 相关测试：`packages/server/src/routes/admin.test.ts`、`packages/client/src/lib/adminApi.test.ts`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/pages/SettingsPage.test.tsx`
 7. **分类管理页负责分类排序、重命名、新增、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。新增分类和重命名都会 trim 名称并拒绝空名；同层级未归档分类重名会被拒绝。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，并同步更新本地 `autoBackups` 里同 ID 分类的名称。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。

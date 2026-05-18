@@ -67,7 +67,7 @@ last-reviewed: 2026-05-18
 | `ALLOWED_ORIGINS` | 否 | CORS 允许来源白名单，逗号分隔；默认 `*` 等同通配 |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
-| `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429 |
+| `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空也使用该限流，其中清空必须发送 `X-Confirm: true` |
 | `HOST_COMPOSE_DIR` | 是 | **host 上** docker-compose.yml 所在的绝对路径。`updater` 容器需要它来定位 compose 文件。**容器内的路径不行**——updater 容器跟 timedata 容器是同级 |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
 | `PORT` | 否 | 监听端口，默认 3000 |

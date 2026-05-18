@@ -18,7 +18,8 @@
     "hono": "^4.7.0",
     "@hono/node-server": "^1.14.0",
     "better-sqlite3": "^11.8.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

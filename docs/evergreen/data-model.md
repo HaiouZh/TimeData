@@ -43,7 +43,7 @@ last-reviewed: 2026-05-18
 |---|---|---|
 | 自动备份 | `autoBackups` | 客户端本地的滚动备份，保留最近 7 份（见 `backup.md`） |
 
-服务端后台洞察的 `Admin*Response` 类型也在 `packages/shared/src/types.ts`。这些类型只是 `/api/admin/*` 的只读响应契约，用来呈现概览、记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析，不对应新表，也不增加写入路径。
+服务端后台洞察的 `Admin*Response` 类型也在 `packages/shared/src/types.ts`。这些类型是 `/api/admin/*` 中概览、记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析的只读响应契约，不对应新表，也不增加写入路径。受控维护端点 `/api/admin/sync-logs` 操作既有 `sync_logs` 表，不属于 `Admin*Response` 契约。
 
 代码入口：`packages/shared/src/types.ts`、`packages/server/src/routes/admin.ts`、`packages/client/src/lib/adminApi.ts`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`
 

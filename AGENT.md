@@ -126,7 +126,7 @@
 - 不提交真实凭证 / token / API 地址 / SQLite 文件 / 备份文件 / `.env`。
 - 服务端鉴权：单一 Bearer Token；`NODE_ENV=production` 缺 `AUTH_TOKEN` 启动失败。
 - 速率限制：`/api/sync/*` 60s 窗口 `SYNC_RATE_MAX` 次（默认 60）；`/api/admin/*` 同窗口 `ADMIN_RATE_MAX` 次（默认 120）。
-- 后台洞察 `/api/admin/*` 只读，不暴露任意 SQL。
+- 后台洞察 `/api/admin/*` 不暴露任意 SQL；除受控维护端点（如 `/api/admin/sync-logs`）外保持只读。
 - 升级 / 发布 / 版本变更必须明确批准。
 - 依赖补丁 / 覆盖 / vendor 变更需要明确批准。
 

@@ -72,7 +72,6 @@ app.use("/api/admin/*", rateLimit({ windowMs: RATE_WINDOW_MS, max: ADMIN_RATE_MA
 app.route("/api/categories", categoriesRoute);
 app.route("/api/entries", entriesRoute);
 app.route("/api/sync", syncRoute);
-app.route("/api/sync-logs", syncLogRoute);
 app.route("/api/export", exportRoute);
 app.route("/api/update", updateRoute);
 app.route("/api/data", dataRoute);

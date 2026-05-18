@@ -248,7 +248,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
 `/api/admin/sync` 读取最近 50 条服务端 `sync_logs`，会优先把 JSON detail 解析为结构化对象；如果 `rejected` / `conflicts` 数字段大于 0，该日志分别计为 1 条近期拒绝/冲突日志。`row.action` 里的 `rejected` / `conflict` 仍作为兼容兜底。旧式 `accepted=1 rejected=1 conflict=1` 文本不再作为主要计数来源。
 
-服务端有 `/api/sync-logs` 路由可读/清/插（CLI 暂未使用）。客户端本地 timestamp 与 seq cursor 的 key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_KEY`、`LAST_SYNCED_SEQ_KEY`），恢复备份或重置本地数据时通过 `resetSyncCursors()` 一起清理。
+服务端有 `/api/admin/sync-logs` 路由可读/清/插（CLI 暂未使用），清空日志必须发送 `X-Confirm: true`。客户端本地 timestamp 与 seq cursor 的 key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_KEY`、`LAST_SYNCED_SEQ_KEY`），恢复备份或重置本地数据时通过 `resetSyncCursors()` 一起清理。
 
 ## 8. 改这块代码前的清单
 

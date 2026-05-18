@@ -38,7 +38,7 @@ export async function startE2EServer(): Promise<E2EServer> {
   const categoriesRoute = (await import("../../routes/categories.js")).default;
   const entriesRoute = (await import("../../routes/entries.js")).default;
   const syncRoute = (await import("../../routes/sync.js")).default;
-  const syncLogRoute = (await import("../../routes/syncLog.js")).default;
+  const adminRoute = (await import("../../routes/admin/index.js")).default;
 
   initializeDatabase();
 
@@ -46,7 +46,7 @@ export async function startE2EServer(): Promise<E2EServer> {
   app.route("/api/categories", categoriesRoute);
   app.route("/api/entries", entriesRoute);
   app.route("/api/sync", syncRoute);
-  app.route("/api/sync-logs", syncLogRoute);
+  app.route("/api/admin", adminRoute);
 
   return {
     app,

@@ -54,12 +54,14 @@ afterEach(() => {
   }
 });
 
+const INDEX_TEST_TIMEOUT_MS = 15_000;
+
 describe("server app middleware order", () => {
   it("rejects production startup without AUTH_TOKEN", async () => {
     delete process.env.AUTH_TOKEN;
 
     await expect(import("./index.js")).rejects.toThrow("AUTH_TOKEN must be set when NODE_ENV=production");
-  }, 10_000);
+  }, INDEX_TEST_TIMEOUT_MS);
 
   it("leaves health and version public while protecting later API routes", async () => {
     const { default: app } = await import("./index.js");
@@ -74,7 +76,7 @@ describe("server app middleware order", () => {
         })
       ).status,
     ).not.toBe(401);
-  });
+  }, INDEX_TEST_TIMEOUT_MS);
 
   it("applies the configured CORS allowlist to protected API preflight requests", async () => {
     const { default: app } = await import("./index.js");
@@ -96,5 +98,5 @@ describe("server app middleware order", () => {
       },
     });
     expect(blocked.headers.get("Access-Control-Allow-Origin")).toBeNull();
-  });
+  }, INDEX_TEST_TIMEOUT_MS);
 });

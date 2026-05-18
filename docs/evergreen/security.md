@@ -7,6 +7,8 @@ covers:
   - packages/client/vite.config.ts
   - packages/server/src/middleware/auth.ts
   - packages/server/src/routes/sync.ts
+  - packages/server/src/routes/syncLog.ts
+  - packages/server/src/routes/admin/index.ts
 last-reviewed: 2026-05-18
 ---
 
@@ -29,6 +31,10 @@ last-reviewed: 2026-05-18
 `/api/sync/force-push/prepare` 发放 5 分钟有效的内存确认 token。`/api/sync/force-push` 会先用 shared runtime schema 校验完整请求形状，畸形 JSON 或字段类型错误直接返回 `invalid_request`，不会进入确认 token 消费；请求形状合法后才校验确认短语和一次性 token：成功消费后立即失效，过期、缺失或复用都会被拒绝。
 
 服务端会把 force-push token 的 prepare、过期拒绝、普通拒绝和最终应用写入 `sync_logs`，用于追踪高风险覆盖操作。当前 token store 仍是单进程内存结构，多实例部署前必须迁移到 SQLite 或外部存储。
+
+## 同步日志管理接口
+
+`/api/admin/sync-logs` 复用 admin 限流，支持读取、写入和清空服务端 `sync_logs`。写入请求会用 Zod 校验单条或最多 100 条批量日志；读取的 `limit` 会限制在 1-500；清空日志必须显式发送 `X-Confirm: true` 头，否则返回 412。
 
 ## PWA API 缓存边界
 
