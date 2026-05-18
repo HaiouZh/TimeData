@@ -14,10 +14,10 @@
     "typecheck": "pnpm --filter @timedata/shared build && tsc --noEmit"
   },
   "dependencies": {
-    "@timedata/shared": "workspace:*",
-    "hono": "^4.7.0",
     "@hono/node-server": "^1.14.0",
+    "@timedata/shared": "workspace:*",
     "better-sqlite3": "^11.8.0",
+    "hono": "^4.12.19",
     "uuid": "^11.1.0",
     "zod": "^4.4.3"
   },

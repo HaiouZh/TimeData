@@ -150,7 +150,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.0
-        version: 1.19.14(hono@4.12.16)
+        version: 1.19.14(hono@4.12.19)
       '@timedata/shared':
         specifier: workspace:*
         version: link:../shared
@@ -158,8 +158,8 @@ importers:
         specifier: ^11.8.0
         version: 11.10.0
       hono:
-        specifier: ^4.7.0
-        version: 4.12.16
+        specifier: ^4.12.19
+        version: 4.12.19
       uuid:
         specifier: ^11.1.0
         version: 11.1.1
@@ -2410,8 +2410,8 @@ packages:
     resolution: {integrity: sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.16:
-    resolution: {integrity: sha512-jN0ZewiNAWSe5khM3EyCmBb250+b40wWbwNILNfEvq84VREWwOIkuUsFONk/3i3nqkz7Oe1PcpM2mwQEK2L9Kg==}
+  hono@4.12.19:
+    resolution: {integrity: sha512-xa3eYXYXx68XTT4hZ7dRzsXBhaq85ToSrlUJNoR0gwz/1Ap/CNwX47wfvV7pc/xWhjKVVkLT7zBJy8chhNguqQ==}
     engines: {node: '>=16.9.0'}
 
   html-encoding-sniffer@6.0.0:
@@ -4617,9 +4617,9 @@ snapshots:
 
   '@exodus/bytes@1.15.0': {}
 
-  '@hono/node-server@1.19.14(hono@4.12.16)':
+  '@hono/node-server@1.19.14(hono@4.12.19)':
     dependencies:
-      hono: 4.12.16
+      hono: 4.12.19
 
   '@img/colour@1.1.0': {}
 
@@ -5817,7 +5817,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.16: {}
+  hono@4.12.19: {}
 
   html-encoding-sniffer@6.0.0:
     dependencies:
