@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { commandRegistry } from "./commands/help.js";
-import { dispatchCommandNames, runCli } from "./index.js";
+import { dispatchCommandNames, runCli, runFromArgv } from "./index.js";
 
 describe("runCli", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("has dispatch coverage for registry commands that need runtime handlers", () => {
     const runtimeCommandNames = commandRegistry
       .map((command) => command.name)
@@ -74,6 +78,20 @@ describe("runCli", () => {
       headers: { Authorization: "Bearer secret" },
       signal: expect.any(AbortSignal),
     }));
+  });
+
+  it("direct execution parses --format human", async () => {
+    const writeStdout = vi.fn();
+    const exit = vi.fn();
+
+    await runFromArgv(["node", "timedata", "list", "--format", "human"], {
+      isTTY: false,
+      writeStdout,
+      exit,
+    });
+
+    expect(writeStdout).toHaveBeenCalledWith("Error [CONFIG_MISSING]: Missing TimeData server URL\n");
+    expect(exit).toHaveBeenCalledWith(1);
   });
 
   it("dispatches doctor before normal command configuration handling", async () => {

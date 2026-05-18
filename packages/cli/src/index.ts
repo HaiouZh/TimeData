@@ -20,6 +20,12 @@ interface CliDeps {
   fetchImpl?: typeof fetch;
 }
 
+interface RunFromArgvDeps {
+  isTTY?: boolean;
+  writeStdout?: (text: string) => void;
+  exit?: (code: number) => void;
+}
+
 export async function runCli(argv: string[], deps: CliDeps = {}): Promise<unknown> {
   const first = argv[0];
   const isFlagOnly = !first || first.startsWith("--");
@@ -72,14 +78,17 @@ function isDirectExecution(): boolean {
   return Boolean(process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href);
 }
 
-if (isDirectExecution()) {
-  const argv = process.argv.slice(2);
-  const flags = parseFlags(argv.filter((arg) => arg.startsWith("--")));
-  const format = resolveOutputFormat({ isTTY: Boolean(process.stdout.isTTY), format: flags.format });
+export async function runFromArgv(processArgv: string[], deps: RunFromArgvDeps = {}): Promise<void> {
+  const argv = processArgv.slice(2);
+  const flags = parseFlags(argv);
+  const format = resolveOutputFormat({ isTTY: Boolean(deps.isTTY), format: flags.format });
 
-  runCli(argv).then((result) => {
-    const ok = Boolean(result && typeof result === "object" && "ok" in result && result.ok === true);
-    console.log(formatResult(result, format));
-    process.exit(ok ? 0 : 1);
-  });
+  const result = await runCli(argv);
+  const ok = Boolean(result && typeof result === "object" && "ok" in result && result.ok === true);
+  (deps.writeStdout ?? ((text) => process.stdout.write(text)))(`${formatResult(result, format)}\n`);
+  (deps.exit ?? process.exit)(ok ? 0 : 1);
+}
+
+if (isDirectExecution()) {
+  void runFromArgv(process.argv);
 }
