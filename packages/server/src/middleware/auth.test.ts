@@ -138,4 +138,17 @@ describe("authMiddleware", () => {
     expect(await res.json()).toEqual({ error: "Unauthorized" });
     expect(handler).not.toHaveBeenCalled();
   });
+
+  it("rejects tokens of different length without length-based early return", async () => {
+    process.env.AUTH_TOKEN = "long-token-value";
+    const { app, handler } = createApp();
+
+    const res = await app.request("/api/protected", {
+      headers: { Authorization: "Bearer short" },
+    });
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
+    expect(handler).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { MiddlewareHandler } from "hono";
 
 const AUTH_DEV_BYPASS_WARNING =
@@ -11,14 +11,14 @@ function bearerTokenMatches(authHeader: string | undefined, token: string): bool
     return false;
   }
 
-  const provided = Buffer.from(authHeader);
-  const expected = Buffer.from(`Bearer ${token}`);
-
-  if (provided.length !== expected.length) {
-    return false;
-  }
-
-  return timingSafeEqual(provided, expected);
+  const providedHash = createHash("sha256")
+    .update(authHeader, "utf8")
+    .digest();
+  const expectedHash = createHash("sha256")
+    .update(`Bearer ${token}`, "utf8")
+    .digest();
+  // Both are 32-byte sha256 digests, equal length — no length side-channel
+  return timingSafeEqual(providedHash, expectedHash);
 }
 
 export interface AuthAuditLogger {
