@@ -1,4 +1,6 @@
 import { messages } from "./messages.ts";
+import { safeGetItem } from "./safeStorage.js";
+import { STORAGE_KEYS } from "./storageKeys.js";
 
 export class ApiError extends Error {
   constructor(
@@ -12,7 +14,7 @@ export class ApiError extends Error {
 }
 
 function getApiBase(): string {
-  return localStorage.getItem("timedata_api_url") || "";
+  return safeGetItem(STORAGE_KEYS.apiUrl) || "";
 }
 
 export function buildApiUrl(base: string, path: string): string {
@@ -20,7 +22,7 @@ export function buildApiUrl(base: string, path: string): string {
 }
 
 function getToken(): string {
-  return localStorage.getItem("timedata_api_token") || "";
+  return safeGetItem(STORAGE_KEYS.apiToken) || "";
 }
 
 function describeFetchFailure(url: string): Error {

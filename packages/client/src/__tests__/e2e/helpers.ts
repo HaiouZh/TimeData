@@ -1,5 +1,7 @@
 import "fake-indexeddb/auto";
 import { db } from "../../db/index.ts";
+import { safeSetItem } from "../../lib/safeStorage.js";
+import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 
 function installLocalStorage(): void {
   if ("localStorage" in globalThis) return;
@@ -33,7 +35,7 @@ export function bindClientToServer(serverApp: { fetch: (request: Request) => Res
     }
     return originalFetch(input, init);
   };
-  localStorage.setItem("timedata_api_url", "http://server");
+  safeSetItem(STORAGE_KEYS.apiUrl, "http://server");
   return () => {
     globalThis.fetch = originalFetch;
   };

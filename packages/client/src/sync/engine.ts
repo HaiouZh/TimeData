@@ -1,6 +1,7 @@
 import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
+import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
 import { classifyReasonCode } from "./reason.ts";
 import { SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
@@ -55,19 +56,19 @@ function buildPullCursor(mode: "incremental" | "repair", fallbackSince?: string)
   if (mode === "repair") return { lastSyncedAt: null };
   const sinceSeq = getLastSyncedSeq();
   if (sinceSeq != null) return { lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq };
-  const lastSyncedAt = localStorage.getItem(LAST_SYNCED_KEY);
+  const lastSyncedAt = safeGetItem(LAST_SYNCED_KEY);
   return fallbackSince ? { lastSyncedAt: null, since: fallbackSince } : { lastSyncedAt };
 }
 
 export function getLastSyncedSeq(): number | null {
-  const value = localStorage.getItem(LAST_SYNCED_SEQ_KEY);
+  const value = safeGetItem(LAST_SYNCED_SEQ_KEY);
   if (!value) return null;
   const seq = Number(value);
   return Number.isFinite(seq) ? seq : null;
 }
 
 export function setLastSyncedSeq(seq: number): void {
-  localStorage.setItem(LAST_SYNCED_SEQ_KEY, String(seq));
+  safeSetItem(LAST_SYNCED_SEQ_KEY, String(seq));
 }
 
 export function advanceSeqCursor(response: SyncPullResponse | SyncForcePushResponse): void {
@@ -445,7 +446,7 @@ function latestChangeTimestamp(changes: SyncChange[]): string | null {
 function advanceLastSyncedCursor(changes: SyncChange[]): void {
   const cursor = latestChangeTimestamp(changes);
   if (cursor) {
-    localStorage.setItem(LAST_SYNCED_KEY, cursor);
+    safeSetItem(LAST_SYNCED_KEY, cursor);
   }
 }
 
@@ -466,7 +467,7 @@ export async function syncForceReplace(): Promise<number> {
     }
   });
 
-  localStorage.setItem(LAST_SYNCED_KEY, response.serverTime);
+  safeSetItem(LAST_SYNCED_KEY, response.serverTime);
   advanceSeqCursor(response);
   return response.changes.length;
 }
@@ -562,7 +563,7 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
   });
 
   await db.syncLog.clear();
-  localStorage.setItem(LAST_SYNCED_KEY, response.serverTime);
+  safeSetItem(LAST_SYNCED_KEY, response.serverTime);
   advanceSeqCursor(response);
   return response;
 }
@@ -584,16 +585,16 @@ function isNetworkFailure(error: unknown): boolean {
 }
 
 export function getConsecutiveSyncFailureCount(): number {
-  return Number(localStorage.getItem(SYNC_FAILURE_COUNT_KEY) || "0");
+  return Number(safeGetItem(SYNC_FAILURE_COUNT_KEY) || "0");
 }
 
 export function resetConsecutiveSyncFailures(): void {
-  localStorage.removeItem(SYNC_FAILURE_COUNT_KEY);
+  safeRemoveItem(SYNC_FAILURE_COUNT_KEY);
 }
 
 export function recordRegularSyncFailure(error: unknown): void {
   if (isNetworkFailure(error)) return;
-  localStorage.setItem(SYNC_FAILURE_COUNT_KEY, String(getConsecutiveSyncFailureCount() + 1));
+  safeSetItem(SYNC_FAILURE_COUNT_KEY, String(getConsecutiveSyncFailureCount() + 1));
 }
 
 export function shouldOpenSyncDiagnostics(): boolean {
@@ -612,7 +613,7 @@ export async function regularSync(options: RegularSyncOptions = {}): Promise<Reg
 }
 
 async function runRegularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
-  if (localStorage.getItem(STORAGE_KEYS.legacySnapshotSync) === "1") {
+  if (safeGetItem(STORAGE_KEYS.legacySnapshotSync) === "1") {
     return regularSyncLegacy(options);
   }
 

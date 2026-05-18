@@ -1,6 +1,6 @@
 function getStorage(): Storage | null {
   try {
-    return typeof window !== "undefined" && window.localStorage ? window.localStorage : null;
+    return "localStorage" in globalThis ? globalThis.localStorage : null;
   } catch {
     return null;
   }

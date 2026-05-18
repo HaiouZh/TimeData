@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSync } from "../hooks/useSync.ts";
 import { getCloudSyncEnabled, setCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
+import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 
 export const SYNC_AUTO_THROTTLE_MS = 30_000;
 
@@ -49,7 +51,7 @@ const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const syncState = useSync({ autoSyncOnMount: false });
-  const [apiUrl, setApiUrl] = useState(() => localStorage.getItem("timedata_api_url") || "");
+  const [apiUrl, setApiUrl] = useState(() => safeGetItem(STORAGE_KEYS.apiUrl) || "");
   const [cloudSyncEnabled, setCloudSyncEnabledState] = useState(getCloudSyncEnabled);
   const lastAutoAttemptAtRef = useRef<number | null>(null);
 
@@ -61,7 +63,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   });
 
   const updateApiUrl = useCallback((url: string) => {
-    localStorage.setItem("timedata_api_url", url);
+    safeSetItem(STORAGE_KEYS.apiUrl, url);
     setApiUrl(url);
     setCloudSyncEnabledState(getCloudSyncEnabled());
   }, []);

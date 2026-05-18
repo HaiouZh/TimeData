@@ -1,13 +1,15 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { Category, TimeEntry, SyncLogEntry } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
+import { safeRemoveItem } from "../lib/safeStorage.js";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 
-export const LAST_SYNCED_KEY = "timedata_last_synced";
-export const LAST_SYNCED_SEQ_KEY = "timedata_last_synced_seq";
+export const LAST_SYNCED_KEY = STORAGE_KEYS.lastSynced;
+export const LAST_SYNCED_SEQ_KEY = STORAGE_KEYS.lastSyncedSeq;
 
 export function resetSyncCursors(): void {
-  localStorage.removeItem(LAST_SYNCED_KEY);
-  localStorage.removeItem(LAST_SYNCED_SEQ_KEY);
+  safeRemoveItem(STORAGE_KEYS.lastSynced);
+  safeRemoveItem(STORAGE_KEYS.lastSyncedSeq);
 }
 
 export interface AutoBackupRecord {

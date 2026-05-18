@@ -11,6 +11,8 @@ import { findFutureEndedEntries, deleteFutureEndedEntries } from "../../hooks/us
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
 import { getMergeOvernightEnabled, setMergeOvernightEnabled } from "../../lib/overnightDisplaySetting.ts";
+import { safeGetItem } from "../../lib/safeStorage.js";
+import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { formatAppDateTime } from "../../lib/time.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
@@ -45,7 +47,7 @@ export default function SettingsDataPage() {
   const [forcePushPhrase, setForcePushPhrase] = useState("");
   const [forcePushConfirmation, setForcePushConfirmation] = useState(false);
   const restoreInputRef = useRef<HTMLInputElement>(null);
-  const apiUrl = localStorage.getItem("timedata_api_url") || "";
+  const apiUrl = safeGetItem(STORAGE_KEYS.apiUrl) || "";
 
   function handleCloudSyncChange(e: ChangeEvent<HTMLInputElement>) {
     const enabled = e.target.checked;

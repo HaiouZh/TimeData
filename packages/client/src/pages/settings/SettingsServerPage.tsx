@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
+import { safeGetItem, safeSetItem } from "../../lib/safeStorage.js";
+import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
 export default function SettingsServerPage() {
   const { apiUrl: savedApiUrl, updateApiUrl } = useSyncContext();
   const [apiUrl, setApiUrl] = useState(savedApiUrl);
-  const [apiToken, setApiToken] = useState(localStorage.getItem("timedata_api_token") || "");
+  const [apiToken, setApiToken] = useState(safeGetItem(STORAGE_KEYS.apiToken) || "");
   const [saved, setSaved] = useState(false);
 
   function saveConfig() {
     updateApiUrl(apiUrl.trim());
-    localStorage.setItem("timedata_api_token", apiToken.replace(/^Bearer\s+/i, "").trim());
+    safeSetItem(STORAGE_KEYS.apiToken, apiToken.replace(/^Bearer\s+/i, "").trim());
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }

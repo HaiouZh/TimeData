@@ -1,13 +1,13 @@
-const CLOUD_SYNC_ENABLED_KEY = "timedata_cloud_sync_enabled";
-const API_URL_KEY = "timedata_api_url";
+import { safeGetItem, safeSetItem } from "./safeStorage.js";
+import { STORAGE_KEYS } from "./storageKeys.js";
 
 export function getCloudSyncEnabled(): boolean {
-  const saved = localStorage.getItem(CLOUD_SYNC_ENABLED_KEY);
+  const saved = safeGetItem(STORAGE_KEYS.cloudSyncEnabled);
   if (saved === "true") return true;
   if (saved === "false") return false;
-  return Boolean(localStorage.getItem(API_URL_KEY));
+  return Boolean(safeGetItem(STORAGE_KEYS.apiUrl));
 }
 
 export function setCloudSyncEnabled(enabled: boolean): void {
-  localStorage.setItem(CLOUD_SYNC_ENABLED_KEY, enabled ? "true" : "false");
+  safeSetItem(STORAGE_KEYS.cloudSyncEnabled, enabled ? "true" : "false");
 }

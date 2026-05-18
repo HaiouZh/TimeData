@@ -1,9 +1,10 @@
-const MERGE_OVERNIGHT_KEY = "timedata_merge_overnight";
+import { safeGetItem, safeSetItem } from "./safeStorage.js";
+import { STORAGE_KEYS } from "./storageKeys.js";
 
 export function getMergeOvernightEnabled(): boolean {
-  return localStorage.getItem(MERGE_OVERNIGHT_KEY) !== "false";
+  return safeGetItem(STORAGE_KEYS.mergeOvernight) !== "false";
 }
 
 export function setMergeOvernightEnabled(enabled: boolean): void {
-  localStorage.setItem(MERGE_OVERNIGHT_KEY, enabled ? "true" : "false");
+  safeSetItem(STORAGE_KEYS.mergeOvernight, enabled ? "true" : "false");
 }

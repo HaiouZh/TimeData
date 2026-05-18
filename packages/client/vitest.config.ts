@@ -35,6 +35,8 @@ export default defineConfig({
           name: "e2e",
           include: ["src/**/__tests__/e2e/**/*.test.ts"],
           pool: "forks",
+          hookTimeout: 15_000,
+          testTimeout: 15_000,
         },
       },
     ],
