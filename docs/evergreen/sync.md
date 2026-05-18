@@ -179,21 +179,34 @@ last-reviewed: 2026-05-18
 客户端 `syncPullRecent(days)` 拉最近 `days` 天的服务器变更；普通 `regularSync()` 的 meta 主路径当前传 `7`，`legacy_snapshot_sync` 本地快照修复路径当前传 `2`：
 
 - 对每条 change：
-  - 本地不存在 → 直接写入。
+  - 本地不存在 → 直接写入；delete tombstone 对本地不存在的记录是 no-op。
   - 本地存在 + `updatedAt` 相同 → 跳过。
   - 本地存在 + `updatedAt` 不同 + 有未同步的本地修改 → **冲突**，加进 `conflicts`。
   - 本地存在 + `updatedAt` 不同 + 没有本地修改 → 直接覆盖。
+  - 远端 `time_entries/delete` + 本地同 record 存在未同步 `syncLog` → 挂起为 `SyncConflict { remote: null, remoteAction: 'delete' }`，不删除本地记录。
+  - 远端 `categories/delete` 会先计算目标分类、后代分类和关联 entries；如果影响范围内任一 record 有未同步 `syncLog`，同样挂起为 `remoteAction: 'delete'` 冲突，不执行级联删除。
+  - 远端 delete + 本地无 pending change → 保持原行为，直接删除本地记录；分类删除仍级联删除后代分类和关联 entries。
 - 写完后，客户端只在本次 pull 返回了变更时更新 `localStorage.timedata_last_synced`，值取返回 `changes` 里的最大 `timestamp`；不再直接用 `response.serverTime` 推进游标，避免查询完成到响应返回之间的新变更被跳过。
 - 因为服务端会 `>= since` 重放边界记录，客户端必须把本地已有且 `updatedAt` 相同的 category / entry 当作幂等重复跳过；重复 tombstone 删除本地已不存在的 entry 时也不计入 applied。当前仍是兼容性的 timestamp cursor 修补，不是最终的 `(updated_at, id)` 复合 cursor 或服务端单调版本号方案。
 
-`syncPull({mode:'repair'})` 是修复模式：从头拉一遍，但**已完整且本地更新的 entry 不覆盖**（防止把好数据替换为残缺数据）。
+`syncPull({mode:'repair'})` 是修复模式：从头拉一遍，但**已完整且本地更新的 entry 不覆盖**（防止把好数据替换为残缺数据）。这条手动修复/全量拉取路径返回的是 applied 数量，不返回 `SyncConflict[]`；它按服务器状态直接应用 delete，用于用户明确选择“从云端修复/替换”的场景。A4 的“远端 delete vs 本地 pending”挂起保护只在普通同步使用的 `syncPullRecent()` 路径生效。
 
 ## 4. 冲突解决
 
 UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
-- `keep_local`：什么都不做，本地保留，下次 push 自然把本地版本送上去。
-- `use_remote`：在一个 Dexie 事务中用服务器版本覆盖本地，并把同一 `tableName + recordId` 的未同步本地 `syncLog` 标为 `synced=1`，避免下次 push 再把已放弃的本地版本推回服务器。
+- `keep_local`：什么都不做，本地保留，下次 push 自然把本地版本送上去。对 `remoteAction: 'delete'` 冲突来说，这等价于保留本地 pending log，下次 push 会把本地记录重新创建/更新到服务器。
+- `use_remote` + `remoteAction: 'update'`：在一个 Dexie 事务中用服务器版本覆盖本地，并把同一 `tableName + recordId` 的未同步本地 `syncLog` 标为 `synced=1`，避免下次 push 再把已放弃的本地版本推回服务器。
+- `use_remote` + `remoteAction: 'delete'`：接受服务器删除。本地删除对应 record，并删除受影响 record 的 pending `syncLog`；分类删除会级联删除目标分类、后代分类、关联 entries，并清除这些受影响记录的 pending log。
+
+### 远端删除 vs 本地未同步修改
+
+- 触发条件：pull 收到一条 `action: "delete"`，且本地同 record 或分类级联影响范围内存在 `synced=0` 的 `syncLog`。
+- 冲突形状：`SyncConflict { remote: null, remoteAction: "delete" }`，其中 `remote: null` 表示服务器上这条记录已经不存在。
+- 用户选项：
+  - 保留本地：pending log 不变，下次 push 会重新 create/update 到服务器。
+  - 接受删除：删除本地记录并清除 pending syncLog；分类删除按同一套级联范围处理。
+- 设计来源：审批意见 A4，“本地 commit 标志 + 远端 commit 标志，不一致则不同步”。
 
 > 同步整体设计正在评估优化方案。改这块前先看当前代码、本文长期文档，以及本地-only 的 `docs_local/plans/` 中是否有最新过程计划。
 

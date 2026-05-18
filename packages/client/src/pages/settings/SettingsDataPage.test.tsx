@@ -9,8 +9,8 @@ import SettingsDataPage from "./SettingsDataPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("../../contexts/SyncContext.tsx", () => ({
-  useSyncContext: () => ({
+const syncContextMock = vi.hoisted(() => ({
+  value: {
     syncing: false,
     error: null,
     forceReplace: vi.fn(),
@@ -27,7 +27,13 @@ vi.mock("../../contexts/SyncContext.tsx", () => ({
     updateApiUrl: vi.fn(),
     cloudSyncEnabled: true,
     setCloudSyncEnabledInContext: vi.fn(),
-  }),
+    conflicts: [],
+    handleConflictResolution: vi.fn(),
+  },
+}));
+
+vi.mock("../../contexts/SyncContext.tsx", () => ({
+  useSyncContext: () => syncContextMock.value,
 }));
 
 vi.mock("../../hooks/useEntries.js", () => ({
@@ -62,6 +68,26 @@ describe("SettingsDataPage", () => {
     localStorage.clear();
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    syncContextMock.value = {
+      syncing: false,
+      error: null,
+      forceReplace: vi.fn(),
+      refreshSyncStatus: vi.fn(),
+      healthReport: null,
+      healthLoading: false,
+      forcePushPreparation: null,
+      syncFailureCount: 0,
+      needsSyncDiagnostics: false,
+      runDiagnostics: vi.fn(),
+      prepareForcePushToServer: vi.fn(),
+      forcePushToServer: vi.fn(),
+      apiUrl: "https://example.com",
+      updateApiUrl: vi.fn(),
+      cloudSyncEnabled: true,
+      setCloudSyncEnabledInContext: vi.fn(),
+      conflicts: [],
+      handleConflictResolution: vi.fn(),
+    };
   });
 
   it("renders the target data setting sections", () => {
@@ -89,6 +115,30 @@ describe("SettingsDataPage", () => {
     );
 
     expect(html).toContain("已恢复自动备份");
+  });
+
+  it("shows remote delete conflict choices", () => {
+    syncContextMock.value.conflicts = [{
+      tableName: "time_entries",
+      recordId: "entry-delete-conflict",
+      local: {
+        id: "entry-delete-conflict",
+        categoryId: "cat-local",
+        startTime: "2026-05-07T09:00:00.000Z",
+        endTime: "2026-05-07T10:00:00.000Z",
+        note: "local pending",
+        createdAt: "2026-05-07T08:00:00.000Z",
+        updatedAt: "2026-05-07T12:00:00.000Z",
+      },
+      remote: null,
+      remoteAction: "delete",
+    }];
+
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+
+    expect(html).toContain("服务器上这条记录已被删除");
+    expect(html).toContain("保留本地（重新创建到服务器）");
+    expect(html).toContain("接受删除（丢弃本地修改）");
   });
 
   it("shows future repair check feedback next to the repair action", async () => {

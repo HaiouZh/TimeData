@@ -28,6 +28,8 @@ export default function SettingsDataPage() {
     runDiagnostics,
     prepareForcePushToServer,
     forcePushToServer,
+    conflicts,
+    handleConflictResolution,
     setCloudSyncEnabledInContext,
   } = useSyncContext();
   const { confirm, dialog } = useConfirm();
@@ -232,9 +234,34 @@ export default function SettingsDataPage() {
     }
   }
 
+  const remoteDeleteConflicts = conflicts.filter((conflict) => conflict.remoteAction === "delete");
+
   return (
     <SettingsDetailPage title="数据设置">
       {dialog}
+      {remoteDeleteConflicts.length > 0 && (
+        <section className="space-y-3 rounded-xl border border-amber-800 bg-amber-950/30 p-4">
+          <h3 className="text-sm font-medium text-amber-100">服务器上这条记录已被删除</h3>
+          <div className="text-xs text-amber-100/80">本地仍保留了一些未同步的修改。</div>
+          <div className="text-xs text-slate-400">受影响：{remoteDeleteConflicts.length} 条冲突。</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleConflictResolution("keep_local")}
+              className="rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600"
+            >
+              保留本地（重新创建到服务器）
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleConflictResolution("use_remote")}
+              className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900"
+            >
+              接受删除（丢弃本地修改）
+            </button>
+          </div>
+        </section>
+      )}
       <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <label className="flex items-center justify-between gap-4">
           <span>

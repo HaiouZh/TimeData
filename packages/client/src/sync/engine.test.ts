@@ -1128,6 +1128,80 @@ describe("syncPullRecent", () => {
     expect(result.applied).toBe(0);
   });
 
+  it("keeps local entry and reports conflict when remote delete meets pending local entry update", async () => {
+    await db.timeEntries.add({
+      id: "entry-delete-conflict",
+      categoryId: "cat-local",
+      startTime: "2026-05-07T09:00:00.000Z",
+      endTime: "2026-05-07T10:00:00.000Z",
+      note: "local pending",
+      createdAt: "2026-05-07T08:00:00.000Z",
+      updatedAt: "2026-05-07T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-entry-delete-conflict",
+      tableName: "time_entries",
+      recordId: "entry-delete-conflict",
+      action: "update",
+      timestamp: "2026-05-07T12:00:00.000Z",
+      synced: false,
+    });
+
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      changes: [{
+        tableName: "time_entries",
+        recordId: "entry-delete-conflict",
+        action: "delete",
+        data: null,
+        timestamp: "2026-05-07T12:30:00.000Z",
+      }],
+    });
+
+    const result = await syncPullRecent(2);
+
+    expect(result.applied).toBe(0);
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]).toMatchObject({
+      tableName: "time_entries",
+      recordId: "entry-delete-conflict",
+      remote: null,
+      remoteAction: "delete",
+    });
+    await expect(db.timeEntries.get("entry-delete-conflict")).resolves.toMatchObject({
+      note: "local pending",
+    });
+  });
+
+  it("deletes local entry when remote delete has no pending local change", async () => {
+    await db.timeEntries.add({
+      id: "entry-remote-deleted",
+      categoryId: "cat-local",
+      startTime: "2026-05-07T09:00:00.000Z",
+      endTime: "2026-05-07T10:00:00.000Z",
+      note: "already synced",
+      createdAt: "2026-05-07T08:00:00.000Z",
+      updatedAt: "2026-05-07T09:00:00.000Z",
+    });
+
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      changes: [{
+        tableName: "time_entries",
+        recordId: "entry-remote-deleted",
+        action: "delete",
+        data: null,
+        timestamp: "2026-05-07T12:30:00.000Z",
+      }],
+    });
+
+    const result = await syncPullRecent(2);
+
+    expect(result.applied).toBe(1);
+    expect(result.conflicts).toHaveLength(0);
+    await expect(db.timeEntries.get("entry-remote-deleted")).resolves.toBeUndefined();
+  });
+
   it("does not count repeated tombstones as applied during recent pull", async () => {
     apiFetchMock.mockResolvedValue({
       serverTime: "2026-05-07T13:00:00.000Z",
@@ -1227,6 +1301,65 @@ describe("syncPullRecent", () => {
     await expect(db.timeEntries.get("entry-1")).resolves.toBeUndefined();
     await expect(db.timeEntries.get("entry-2")).resolves.toMatchObject({ id: "entry-2" });
     await expect(db.syncLog.count()).resolves.toBe(0);
+  });
+  it("keeps local category tree and reports conflict when remote category delete impacts pending local changes", async () => {
+    await db.categories.bulkAdd([
+      {
+        id: "work",
+        name: "工作",
+        parentId: null,
+        color: "#4A90D9",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-08T00:00:00.000Z",
+        updatedAt: "2026-05-08T00:00:00.000Z",
+      },
+      {
+        id: "work-code",
+        name: "编码",
+        parentId: "work",
+        color: "#4A90D9",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-08T00:00:00.000Z",
+        updatedAt: "2026-05-08T01:00:00.000Z",
+      },
+    ]);
+    await db.syncLog.add({
+      id: "log-work-code",
+      tableName: "categories",
+      recordId: "work-code",
+      action: "update",
+      timestamp: "2026-05-08T01:00:00.000Z",
+      synced: false,
+    });
+
+    apiFetchMock.mockResolvedValue({
+      changes: [{
+        tableName: "categories",
+        recordId: "work",
+        action: "delete",
+        data: null,
+        timestamp: "2026-05-08T12:00:00.000Z",
+      }],
+      serverTime: "2026-05-08T12:00:00.000Z",
+      latestSeq: 9,
+    });
+
+    const result = await syncPullRecent(2);
+
+    expect(result.applied).toBe(0);
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.conflicts[0]).toMatchObject({
+      tableName: "categories",
+      recordId: "work",
+      remote: null,
+      remoteAction: "delete",
+    });
+    await expect(db.categories.get("work")).resolves.toMatchObject({ id: "work" });
+    await expect(db.categories.get("work-code")).resolves.toMatchObject({ id: "work-code" });
   });
 });
 

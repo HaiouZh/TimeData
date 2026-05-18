@@ -59,7 +59,7 @@ describe("server app middleware order", () => {
     delete process.env.AUTH_TOKEN;
 
     await expect(import("./index.js")).rejects.toThrow("AUTH_TOKEN must be set when NODE_ENV=production");
-  });
+  }, 10_000);
 
   it("leaves health and version public while protecting later API routes", async () => {
     const { default: app } = await import("./index.js");

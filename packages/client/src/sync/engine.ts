@@ -16,7 +16,8 @@ export interface SyncConflict {
   tableName: "categories" | "time_entries";
   recordId: string;
   local: Category | TimeEntry;
-  remote: Category | TimeEntry;
+  remote: Category | TimeEntry | null;
+  remoteAction: "update" | "delete";
   localLog?: SyncLogEntry;
 }
 
@@ -76,28 +77,41 @@ export function advanceSeqCursor(response: SyncPullResponse | SyncForcePushRespo
   }
 }
 
-async function applyRemoteCategoryDelete(categoryId: string): Promise<number> {
-  return db.transaction("rw", db.categories, db.timeEntries, async () => {
-    const categories = await db.categories.toArray();
-    const target = categories.find((category) => category.id === categoryId);
-    if (!target) return 0;
+interface CategoryDeleteImpact {
+  target: Category;
+  categoryIds: string[];
+  entryIds: string[];
+}
 
-    const categoryIds = [target.id];
-    for (let index = 0; index < categoryIds.length; index++) {
-      const parentId = categoryIds[index];
-      for (const category of categories) {
-        if (category.parentId === parentId) {
-          categoryIds.push(category.id);
-        }
+async function getCategoryDeleteImpact(categoryId: string): Promise<CategoryDeleteImpact | null> {
+  const categories = await db.categories.toArray();
+  const target = categories.find((category) => category.id === categoryId);
+  if (!target) return null;
+
+  const categoryIds = [target.id];
+  for (let index = 0; index < categoryIds.length; index++) {
+    const parentId = categoryIds[index];
+    for (const category of categories) {
+      if (category.parentId === parentId) {
+        categoryIds.push(category.id);
       }
     }
-    const categoryIdSet = new Set(categoryIds);
-    const entries = await db.timeEntries.filter((entry) => categoryIdSet.has(entry.categoryId)).toArray();
+  }
+  const categoryIdSet = new Set(categoryIds);
+  const entries = await db.timeEntries.filter((entry) => categoryIdSet.has(entry.categoryId)).toArray();
 
-    await db.timeEntries.bulkDelete(entries.map((entry) => entry.id));
-    await db.categories.bulkDelete(categoryIds);
+  return { target, categoryIds, entryIds: entries.map((entry) => entry.id) };
+}
 
-    return categoryIds.length + entries.length;
+async function applyRemoteCategoryDelete(categoryId: string): Promise<number> {
+  return db.transaction("rw", db.categories, db.timeEntries, async () => {
+    const impact = await getCategoryDeleteImpact(categoryId);
+    if (!impact) return 0;
+
+    await db.timeEntries.bulkDelete(impact.entryIds);
+    await db.categories.bulkDelete(impact.categoryIds);
+
+    return impact.categoryIds.length + impact.entryIds.length;
   });
 }
 
@@ -304,7 +318,27 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
   for (const change of response.changes) {
     if (change.tableName === "categories") {
       if (change.action === "delete") {
-        applied += await applyRemoteCategoryDelete(change.recordId);
+        const impact = await getCategoryDeleteImpact(change.recordId);
+        if (!impact) continue;
+        const pendingCategoryLog = impact.categoryIds
+          .map((id) => locallyModifiedById.get(`categories:${id}`))
+          .find((log): log is SyncLogEntry => Boolean(log));
+        const pendingEntryLog = impact.entryIds
+          .map((id) => locallyModifiedById.get(`time_entries:${id}`))
+          .find((log): log is SyncLogEntry => Boolean(log));
+        const localLog = pendingCategoryLog ?? pendingEntryLog;
+        if (localLog) {
+          conflicts.push({
+            tableName: "categories",
+            recordId: change.recordId,
+            local: impact.target,
+            remote: null,
+            remoteAction: "delete",
+            localLog,
+          });
+        } else {
+          applied += await applyRemoteCategoryDelete(change.recordId);
+        }
       } else if (change.data) {
         const existing = await db.categories.get(change.recordId);
         if (existing && existing.updatedAt !== (change.data as Category).updatedAt) {
@@ -315,6 +349,7 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
               recordId: change.recordId,
               local: existing,
               remote: change.data as Category,
+              remoteAction: "update",
               localLog,
             });
           } else {
@@ -329,7 +364,18 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
     } else if (change.tableName === "time_entries") {
       if (change.action === "delete") {
         const existing = await db.timeEntries.get(change.recordId);
-        if (existing) {
+        if (!existing) continue;
+        const localLog = locallyModifiedById.get(`time_entries:${change.recordId}`);
+        if (localLog) {
+          conflicts.push({
+            tableName: "time_entries",
+            recordId: change.recordId,
+            local: existing,
+            remote: null,
+            remoteAction: "delete",
+            localLog,
+          });
+        } else {
           await db.timeEntries.delete(change.recordId);
           applied++;
         }
@@ -343,6 +389,7 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
               recordId: change.recordId,
               local: existing,
               remote: change.data as TimeEntry,
+              remoteAction: "update",
               localLog,
             });
           } else {
@@ -616,7 +663,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 function describeConflicts(conflicts: SyncConflict[]): string {
   return conflicts.map((c) => {
     const localUp = (c.local as TimeEntry).updatedAt || (c.local as Category).updatedAt;
-    const remoteUp = (c.remote as TimeEntry).updatedAt || (c.remote as Category).updatedAt;
+    const remoteUp = c.remote ? ((c.remote as TimeEntry).updatedAt || (c.remote as Category).updatedAt) : "deleted";
     return `${c.tableName}:${c.recordId} local=${localUp} remote=${remoteUp} localLog=${c.localLog?.action || "none"}@${c.localLog?.timestamp || "none"}`;
   }).join("\n");
 }
