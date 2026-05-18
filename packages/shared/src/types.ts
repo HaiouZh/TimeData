@@ -246,3 +246,10 @@ export interface AdminAnalyticsResponse {
   byTime: AdminAnalyticsBucket[];
   byCategory: AdminAnalyticsCategoryBucket[];
 }
+
+export type SyncReasonCategory =
+  | "applied"
+  | "client_bug" // missing_payload / invalid_shape / id_mismatch — 客户端 bug，标 synced + 上报
+  | "user_actionable" // archived_category / missing_category / overlap / invalid_time_range — 用户处理
+  | "conflict" // server_version_newer_or_same — 进入冲突流程
+  | "unknown";
