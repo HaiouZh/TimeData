@@ -17,7 +17,7 @@ last-reviewed: 2026-05-18
 
 ```text
 Node.js 22+
-pnpm 9+
+pnpm 10.10+
 ```
 
 如果本机没有 pnpm，可以先启用 corepack：
