@@ -1,15 +1,45 @@
 import { describe, expect, it, vi } from "vitest";
 import { runList } from "./list.js";
 
+const config = { serverUrl: "https://server.example", token: "secret" };
+
+describe("runList schema 校验", () => {
+  it("响应缺字段时返回 SCHEMA_MISMATCH", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true, entries: [{}] }), { status: 200 }));
+    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch);
+    expect((result as any).ok).toBe(false);
+    expect((result as any).error?.code).toBe("SCHEMA_MISMATCH");
+  });
+
+  it("正常响应通过 schema", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      ok: true,
+      date: "2026-05-19",
+      entries: [{
+        id: "e1", startTime: "09:00", endTime: "10:00",
+        durationMinutes: 60, category: "工作/编程", note: null,
+      }],
+      summary: { totalMinutes: 60, entryCount: 1 },
+    }), { status: 200 }));
+    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch);
+    expect((result as any).ok).toBe(true);
+    expect((result as any).entries).toHaveLength(1);
+  });
+});
+
 describe("runList", () => {
   it("requests entries for an explicit date", async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true, entries: [] }), { status: 200 }));
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      ok: true, date: "2026-05-08", entries: [], summary: { totalMinutes: 0, entryCount: 0 },
+    }), { status: 200 }));
 
     await expect(runList(
       { serverUrl: "https://server.example", token: "secret" },
       { date: "2026-05-08" },
       fetchImpl,
-    )).resolves.toEqual({ ok: true, entries: [] });
+    )).resolves.toEqual({
+      ok: true, date: "2026-05-08", entries: [], summary: { totalMinutes: 0, entryCount: 0 },
+    });
 
     expect(fetchImpl).toHaveBeenCalledWith("https://server.example/api/entries?date=2026-05-08&format=cli", expect.objectContaining({
       method: "GET",
