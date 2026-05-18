@@ -115,13 +115,22 @@ describe("validateBackup", () => {
     }));
   });
 
+  it("rejects categories with non-strict UTC timestamps", () => {
+    const result = validateBackup({ ...validBackup(), categories: [category({ id: "cat-1", createdAt: "2026-05-07T12:00:00Z" })] });
+
+    expect(result).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "INVALID_CATEGORIES" }),
+    }));
+  });
+
   it("rejects entries with non-UTC times or endTime not after startTime", () => {
     const nonUtc = validBackup({
       timeEntries: [entry({ id: "entry-1", startTime: "2026-05-17T09:00:00", endTime: "2026-05-17T10:00:00.000Z" })],
     });
     expect(validateBackup(nonUtc)).toEqual(expect.objectContaining({
       ok: false,
-      error: expect.objectContaining({ code: "INVALID_TIME_ENTRY_TIME" }),
+      error: expect.objectContaining({ code: "INVALID_TIME_ENTRIES" }),
     }));
 
     const reversed = validBackup({
@@ -129,7 +138,7 @@ describe("validateBackup", () => {
     });
     expect(validateBackup(reversed)).toEqual(expect.objectContaining({
       ok: false,
-      error: expect.objectContaining({ code: "INVALID_TIME_ENTRY_TIME" }),
+      error: expect.objectContaining({ code: "INVALID_TIME_ENTRIES" }),
     }));
   });
 
