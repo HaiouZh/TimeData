@@ -39,12 +39,15 @@ function datePartsInAppTimeZone(date: Date): { year: string; month: string; day:
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
 
-  return {
-    year: parts.find((part) => part.type === "year")?.value,
-    month: parts.find((part) => part.type === "month")?.value,
-    day: parts.find((part) => part.type === "day")?.value,
-  };
+  if (!year || !month || !day) {
+    throw new Error("Failed to format date in app time zone");
+  }
+
+  return { year, month, day };
 }
 
 /** 把任意时间字符串（本地格式或 UTC ISO）转为毫秒时间戳，用于正确比较混合格式。 */
