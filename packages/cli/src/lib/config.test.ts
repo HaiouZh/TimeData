@@ -39,7 +39,7 @@ describe("resolveConfig", () => {
     const configPath = path.join(tempDir, "config.json");
     fs.writeFileSync(configPath, "{not-json", "utf8");
 
-    expect(readFileConfig(configPath)).toEqual({
+    expect(readFileConfig(configPath, "win32")).toEqual({
       ok: false,
       error: { code: "CONFIG_INVALID", message: `Invalid config file: ${configPath}` },
     });
