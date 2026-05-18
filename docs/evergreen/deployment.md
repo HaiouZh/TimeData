@@ -12,10 +12,20 @@ covers:
   - packages/server/src/index.ts
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/cors.ts
-  - packages/mobile/**
+  - packages/mobile/capacitor.config.ts
+  - packages/mobile/package.json
+  - packages/mobile/scripts/**
+  - packages/mobile/android/build.gradle
+  - packages/mobile/android/app/build.gradle
+  - packages/mobile/android/app/capacitor.build.gradle
+  - packages/mobile/android/app/proguard-rules.pro
+  - packages/mobile/android/settings.gradle
+  - packages/mobile/android/gradle.properties
+  - packages/mobile/android/variables.gradle
+  - packages/mobile/android/app/src/main/AndroidManifest.xml
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # 部署与自更新
