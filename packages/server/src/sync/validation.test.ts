@@ -83,10 +83,10 @@ function categoryChange(overrides: Partial<SyncChange> = {}): SyncChange {
       icon: null,
       sortOrder: 2,
       isArchived: false,
-      createdAt: "2026-05-08T08:30:00",
-      updatedAt: "2026-05-08T08:30:00",
+      createdAt: "2026-05-08T08:30:00.000Z",
+      updatedAt: "2026-05-08T08:30:00.000Z",
     },
-    timestamp: "2026-05-08T08:30:00",
+    timestamp: "2026-05-08T08:30:00.000Z",
     ...overrides,
   };
 }
@@ -103,8 +103,8 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 2,
         isArchived: false,
-        createdAt: "2026-05-08T08:30:00",
-        updatedAt: "2026-05-08T08:30:00",
+        createdAt: "2026-05-08T08:30:00.000Z",
+        updatedAt: "2026-05-08T08:30:00.000Z",
       },
     })]);
 
@@ -132,8 +132,8 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 0,
         isArchived: false,
-        createdAt: "2026-05-08T08:30:00",
-        updatedAt: "2026-05-08T08:30:00",
+        createdAt: "2026-05-08T08:30:00.000Z",
+        updatedAt: "2026-05-08T08:30:00.000Z",
       },
     })]);
 
@@ -253,10 +253,10 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 0,
         isArchived: false,
-        createdAt: "2026-05-08T08:30:00",
-        updatedAt: "2026-05-08T08:30:00",
+        createdAt: "2026-05-08T08:30:00.000Z",
+        updatedAt: "2026-05-08T08:30:00.000Z",
       },
-      timestamp: "2026-05-08T08:30:00",
+      timestamp: "2026-05-08T08:30:00.000Z",
     });
     const child = categoryChange({
       recordId: "cat-child",
@@ -268,10 +268,10 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 1,
         isArchived: false,
-        createdAt: "2026-05-08T08:31:00",
-        updatedAt: "2026-05-08T08:31:00",
+        createdAt: "2026-05-08T08:31:00.000Z",
+        updatedAt: "2026-05-08T08:31:00.000Z",
       },
-      timestamp: "2026-05-08T08:31:00",
+      timestamp: "2026-05-08T08:31:00.000Z",
     });
 
     const result = validateSyncChanges(db, [parent, child]);
@@ -291,10 +291,10 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 0,
         isArchived: false,
-        createdAt: "2026-05-08T08:30:00",
-        updatedAt: "2026-05-08T08:30:00",
+        createdAt: "2026-05-08T08:30:00.000Z",
+        updatedAt: "2026-05-08T08:30:00.000Z",
       },
-      timestamp: "2026-05-08T08:30:00",
+      timestamp: "2026-05-08T08:30:00.000Z",
     });
     const child = categoryChange({
       recordId: "cat-child",
@@ -306,10 +306,10 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 1,
         isArchived: false,
-        createdAt: "2026-05-08T08:31:00",
-        updatedAt: "2026-05-08T08:31:00",
+        createdAt: "2026-05-08T08:31:00.000Z",
+        updatedAt: "2026-05-08T08:31:00.000Z",
       },
-      timestamp: "2026-05-08T08:31:00",
+      timestamp: "2026-05-08T08:31:00.000Z",
     });
     const grandChild = categoryChange({
       recordId: "cat-grandchild",
@@ -321,10 +321,10 @@ describe("validateSyncChanges", () => {
         icon: null,
         sortOrder: 2,
         isArchived: false,
-        createdAt: "2026-05-08T08:32:00",
-        updatedAt: "2026-05-08T08:32:00",
+        createdAt: "2026-05-08T08:32:00.000Z",
+        updatedAt: "2026-05-08T08:32:00.000Z",
       },
-      timestamp: "2026-05-08T08:32:00",
+      timestamp: "2026-05-08T08:32:00.000Z",
     });
 
     const result = validateSyncChanges(db, [parent, child, grandChild]);
@@ -419,6 +419,27 @@ describe("validateSyncChanges", () => {
 
     expect(result.valid).toBe(false);
     expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: "invalid_shape" });
+  });
+
+  it("rejects categories whose createdAt/updatedAt omit .sssZ (口径与 entry 一致)", () => {
+    const result = validateSyncChanges(db, [categoryChange({
+      recordId: "cat-no-ms",
+      data: {
+        id: "cat-no-ms",
+        name: "无毫秒",
+        parentId: null,
+        color: "#3366ff",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-08T08:30:00Z",
+        updatedAt: "2026-05-08T08:30:00Z",
+      },
+    })]);
+
+    expect(result.valid).toBe(false);
+    expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: "invalid_shape" });
+    expect(result.outcomes[0].message).toMatch(/timestamp|UTC|format/i);
   });
 
   it("accepts time entries whose UTC timestamps use .sssZ", () => {

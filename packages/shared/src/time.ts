@@ -69,7 +69,7 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
   const targetLocalMs = Date.UTC(y, mo - 1, d, h, mi, s);
   const offsetMs = approxUtc.getTime() - displayedLocalMs;
 
-  return new Date(targetLocalMs + offsetMs).toISOString() as UtcIsoString;
+  return UtcIsoStringSchema.parse(new Date(targetLocalMs + offsetMs).toISOString()) as UtcIsoString;
 }
 
 export function utcToLocalDateTime(utcStr: string, timeZone = APP_TIME_ZONE): LocalDateTimeString {
@@ -94,5 +94,5 @@ export function utcToLocalDateTime(utcStr: string, timeZone = APP_TIME_ZONE): Lo
 }
 
 export function nowUtcIso(): UtcIsoString {
-  return new Date().toISOString() as UtcIsoString;
+  return UtcIsoStringSchema.parse(new Date().toISOString()) as UtcIsoString;
 }

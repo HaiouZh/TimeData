@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { UtcIsoStringSchema } from "./schemas.js";
 import {
   isUtcIso,
   isLocalDateTime,
@@ -69,6 +70,10 @@ describe("localDateTimeToUtc", () => {
     const result = localDateTimeToUtc("2026-05-14T09:30:00");
     expect(result.endsWith("Z")).toBe(true);
   });
+  it("outputs a value accepted by UtcIsoStringSchema", () => {
+    const result = localDateTimeToUtc("2026-05-19T10:00:00", APP_TIME_ZONE);
+    expect(UtcIsoStringSchema.safeParse(result).success).toBe(true);
+  });
 });
 
 describe("utcToLocalDateTime", () => {
@@ -89,5 +94,9 @@ describe("nowUtcIso", () => {
     const result = nowUtcIso();
     expect(result.endsWith("Z")).toBe(true);
     expect(new Date(result).getTime()).toBeGreaterThan(0);
+  });
+
+  it("outputs a value accepted by UtcIsoStringSchema", () => {
+    expect(UtcIsoStringSchema.safeParse(nowUtcIso()).success).toBe(true);
   });
 });

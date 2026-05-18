@@ -7,8 +7,10 @@ import {
   SyncForcePushRequestSchema,
   SyncLogEntrySchema,
   SyncPullRequestSchema,
+  SyncPullResponseSchema,
   SyncStatusResponseSchema,
   TimeEntrySchema,
+  UtcIsoStringSchema,
 } from "./schemas.js";
 
 const category = {
@@ -140,17 +142,47 @@ describe("SyncChangeSchema", () => {
   });
 });
 
-describe("SyncStatusResponseSchema", () => {
-  it("accepts a status response with content hash", () => {
-    expect(
-      SyncStatusResponseSchema.parse({
-        categoryCount: 2,
-        entryCount: 1,
-        lastUpdatedAt: "2026-05-13T00:00:00.000Z",
-        contentHash: "hash-1",
-        latestSeq: 8,
-        serverTime: "2026-05-13T00:00:00.000Z",
-      }),
-    ).toBeDefined();
+describe("SyncLogEntrySchema.timestamp (收紧前先验证现状)", () => {
+  it("现行 server 返回的 .sssZ ISO 字符串能通过 UtcIsoStringSchema", () => {
+    const sample = "2026-05-19T03:21:00.000Z";
+    expect(UtcIsoStringSchema.safeParse(sample).success).toBe(true);
+    expect(SyncLogEntrySchema.safeParse({
+      id: "1", tableName: "categories", recordId: "c1",
+      action: "create", timestamp: sample, synced: 1,
+    }).success).toBe(true);
+  });
+
+  it("不带毫秒的 ISO 字符串收紧后应被拒绝", () => {
+    const sample = "2026-05-19T03:21:00Z";
+    expect(UtcIsoStringSchema.safeParse(sample).success).toBe(false);
+    expect(SyncLogEntrySchema.safeParse({
+      id: "1", tableName: "categories", recordId: "c1",
+      action: "create", timestamp: sample, synced: 1,
+    }).success).toBe(false);
+  });
+});
+
+describe("SyncStatusResponseSchema / SyncPullResponseSchema serverTime 收紧", () => {
+  it("非 .sssZ 格式应被拒绝", () => {
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: 0, entryCount: 0,
+      lastUpdatedAt: "2026-05-19T03:00:00Z",
+      serverTime: "2026-05-19T03:00:00Z",
+    }).success).toBe(false);
+  });
+
+  it("合法 .sssZ 格式应通过", () => {
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: 0, entryCount: 0,
+      lastUpdatedAt: "2026-05-19T03:00:00.000Z",
+      serverTime: "2026-05-19T03:00:00.000Z",
+    }).success).toBe(true);
+  });
+
+  it("SyncPullResponseSchema serverTime 非 .sssZ 应被拒绝", () => {
+    expect(SyncPullResponseSchema.safeParse({
+      changes: [],
+      serverTime: "2026-05-19T03:00:00Z",
+    }).success).toBe(false);
   });
 });

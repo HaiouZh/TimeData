@@ -4,7 +4,7 @@ import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
 import { classifyReasonCode } from "./reason.ts";
-import { SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
+import { CategorySchema, SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD, TimeEntrySchema } from "@timedata/shared";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport, SyncPullResponse, SyncPushResponse, SyncChange, SyncStatusResponse, Category, TimeEntry, SyncLogEntry, SyncPushOutcome } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
@@ -171,6 +171,20 @@ async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: numbe
   const parsed = SyncPullResponseSchema.safeParse(response);
   if (!parsed.success) throw new Error("Invalid /api/sync/pull response");
   return parsed.data;
+}
+
+function parseRemoteCategory(data: unknown, recordId: string): Category | null {
+  const parsed = CategorySchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.warn(`[sync] dropping invalid category payload for ${recordId}:`, parsed.error.issues);
+  return null;
+}
+
+function parseRemoteTimeEntry(data: unknown, recordId: string): TimeEntry | null {
+  const parsed = TimeEntrySchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.warn(`[sync] dropping invalid time entry payload for ${recordId}:`, parsed.error.issues);
+  return null;
 }
 
 async function enqueueLocalOnlyChanges(localSnapshot: Snapshot, cloudSnapshot: Snapshot): Promise<void> {
@@ -370,24 +384,26 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
           applied += await applyRemoteCategoryDelete(change.recordId);
         }
       } else if (change.data) {
+        const remoteCategory = parseRemoteCategory(change.data, change.recordId);
+        if (!remoteCategory) continue;
         const existing = await db.categories.get(change.recordId);
-        if (existing && existing.updatedAt !== (change.data as Category).updatedAt) {
+        if (existing && existing.updatedAt !== remoteCategory.updatedAt) {
           if (locallyModifiedById.has(`categories:${change.recordId}`)) {
             const localLog = locallyModifiedById.get(`categories:${change.recordId}`);
             conflicts.push({
               tableName: "categories",
               recordId: change.recordId,
               local: existing,
-              remote: change.data as Category,
+              remote: remoteCategory,
               remoteAction: "update",
               localLog,
             });
           } else {
-            await db.categories.put(change.data as Category);
+            await db.categories.put(remoteCategory);
             applied++;
           }
         } else if (!existing) {
-          await db.categories.put(change.data as Category);
+          await db.categories.put(remoteCategory);
           applied++;
         }
       }
@@ -410,24 +426,26 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
           applied++;
         }
       } else if (change.data) {
+        const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
+        if (!remoteEntry) continue;
         const existing = await db.timeEntries.get(change.recordId);
-        if (existing && existing.updatedAt !== (change.data as TimeEntry).updatedAt) {
+        if (existing && existing.updatedAt !== remoteEntry.updatedAt) {
           if (locallyModifiedById.has(`time_entries:${change.recordId}`)) {
             const localLog = locallyModifiedById.get(`time_entries:${change.recordId}`);
             conflicts.push({
               tableName: "time_entries",
               recordId: change.recordId,
               local: existing,
-              remote: change.data as TimeEntry,
+              remote: remoteEntry,
               remoteAction: "update",
               localLog,
             });
           } else {
-            await db.timeEntries.put(change.data as TimeEntry);
+            await db.timeEntries.put(remoteEntry);
             applied++;
           }
         } else if (!existing) {
-          await db.timeEntries.put(change.data as TimeEntry);
+          await db.timeEntries.put(remoteEntry);
           applied++;
         }
       }
@@ -460,9 +478,13 @@ export async function syncForceReplace(): Promise<number> {
 
     for (const change of response.changes) {
       if (change.tableName === "categories" && change.data) {
-        await db.categories.put(change.data as Category);
+        const remoteCategory = parseRemoteCategory(change.data, change.recordId);
+        if (!remoteCategory) continue;
+        await db.categories.put(remoteCategory);
       } else if (change.tableName === "time_entries" && change.data) {
-        await db.timeEntries.put(change.data as TimeEntry);
+        const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
+        if (!remoteEntry) continue;
+        await db.timeEntries.put(remoteEntry);
       }
     }
   });
@@ -773,9 +795,11 @@ async function loadCloudSnapshot(): Promise<Snapshot> {
 
   for (const change of response.changes) {
     if (change.tableName === "categories" && change.action !== "delete" && change.data) {
-      categories.push(change.data as Category);
+      const remoteCategory = parseRemoteCategory(change.data, change.recordId);
+      if (remoteCategory) categories.push(remoteCategory);
     } else if (change.tableName === "time_entries" && change.action !== "delete" && change.data) {
-      timeEntries.push(change.data as TimeEntry);
+      const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
+      if (remoteEntry) timeEntries.push(remoteEntry);
     }
   }
 
@@ -809,9 +833,11 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
       if (change.action === "delete") {
         applied += await applyRemoteCategoryDelete(change.recordId);
       } else if (change.data) {
+        const remoteCategory = parseRemoteCategory(change.data, change.recordId);
+        if (!remoteCategory) continue;
         const existing = await db.categories.get(change.recordId);
-        if (!existing || existing.updatedAt !== (change.data as Category).updatedAt) {
-          await db.categories.put(change.data as Category);
+        if (!existing || existing.updatedAt !== remoteCategory.updatedAt) {
+          await db.categories.put(remoteCategory);
           applied++;
         }
       }
@@ -823,11 +849,13 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
           applied++;
         }
       } else if (change.data) {
+        const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
+        if (!remoteEntry) continue;
         const existing = await db.timeEntries.get(change.recordId);
-        if (mode === "repair" && existing && isCompleteEntry(existing) && existing.updatedAt >= change.data.updatedAt) {
+        if (mode === "repair" && existing && isCompleteEntry(existing) && existing.updatedAt >= remoteEntry.updatedAt) {
           // skip — local is complete and newer
-        } else if (!existing || existing.updatedAt !== (change.data as TimeEntry).updatedAt) {
-          await db.timeEntries.put(change.data as TimeEntry);
+        } else if (!existing || existing.updatedAt !== remoteEntry.updatedAt) {
+          await db.timeEntries.put(remoteEntry);
           applied++;
         }
       }

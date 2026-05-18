@@ -36,13 +36,13 @@ export const SyncLogEntrySchema = z.object({
   tableName: z.enum(["categories", "time_entries"]),
   recordId: z.string(),
   action: z.enum(["create", "update", "delete"]),
-  timestamp: z.string(),
+  timestamp: UtcIsoStringSchema,
   synced: z.union([z.literal(0), z.literal(1)]),
 });
 
 const BaseChangeFields = z.object({
   recordId: z.string().min(1),
-  timestamp: z.string(),
+  timestamp: UtcIsoStringSchema,
 });
 
 const CategoryUpsertChangeSchema = BaseChangeFields.extend({
@@ -116,14 +116,14 @@ export const SyncForcePushRequestSchema = z.object({
 export const SyncStatusResponseSchema = z.object({
   categoryCount: z.number(),
   entryCount: z.number(),
-  lastUpdatedAt: z.string().nullable(),
+  lastUpdatedAt: UtcIsoStringSchema.nullable(),
   contentHash: z.string().min(1).optional(),
   latestSeq: z.number().nullable().optional(),
-  serverTime: z.string(),
+  serverTime: UtcIsoStringSchema,
 });
 
 export const SyncPullResponseSchema = z.object({
   changes: z.array(SyncChangeSchema),
-  serverTime: z.string(),
+  serverTime: UtcIsoStringSchema,
   latestSeq: z.number().nullable().optional(),
 });

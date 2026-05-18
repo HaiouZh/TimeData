@@ -557,6 +557,55 @@ describe("syncPull", () => {
     await expect(syncPull()).rejects.toThrow("Invalid /api/sync/pull response");
   });
 
+  it("does not write invalid category payloads from pull responses", async () => {
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      changes: [{
+        tableName: "categories",
+        recordId: "cat-invalid",
+        action: "update",
+        data: {
+          id: "cat-invalid",
+          name: "Broken",
+          parentId: null,
+          icon: null,
+          sortOrder: 1,
+          isArchived: false,
+          createdAt: "2026-05-07T08:00:00.000Z",
+          updatedAt: "2026-05-07T09:00:00.000Z",
+        },
+        timestamp: "2026-05-07T09:00:00.000Z",
+      }],
+    });
+
+    await expect(syncPull()).rejects.toThrow("Invalid /api/sync/pull response");
+    await expect(db.categories.get("cat-invalid")).resolves.toBeUndefined();
+  });
+
+  it("does not write invalid time entry payloads from pull responses", async () => {
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      changes: [{
+        tableName: "time_entries",
+        recordId: "entry-invalid",
+        action: "update",
+        data: {
+          id: "entry-invalid",
+          categoryId: "cat-1",
+          startTime: "2026-05-07T09:00:00.000Z",
+          endTime: "2026-05-07T08:00:00.000Z",
+          note: null,
+          createdAt: "2026-05-07T08:00:00.000Z",
+          updatedAt: "2026-05-07T09:00:00.000Z",
+        },
+        timestamp: "2026-05-07T09:00:00.000Z",
+      }],
+    });
+
+    await expect(syncPull()).rejects.toThrow("Invalid /api/sync/pull response");
+    await expect(db.timeEntries.get("entry-invalid")).resolves.toBeUndefined();
+  });
+
   it("uses seq cursor for incremental pulls when available", async () => {
     setLastSyncedSeq(21);
 

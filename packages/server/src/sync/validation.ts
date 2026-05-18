@@ -36,10 +36,6 @@ function outcome(
   };
 }
 
-function isIsoLike(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
-}
-
 function nowUtcString(now: Date | string | undefined): string {
   if (typeof now === "string") return now;
   return (now || new Date()).toISOString();
@@ -70,14 +66,14 @@ function validateCategoryShape(change: SyncChange, data: Category): SyncPushOutc
   if (typeof data.name !== "string" || !data.name.trim()) return outcome(change, "rejected", "invalid_shape", "category name is required");
   if (typeof data.color !== "string" || !data.color.trim()) return outcome(change, "rejected", "invalid_shape", "category color is required");
   if (typeof data.sortOrder !== "number" || typeof data.isArchived !== "boolean") return outcome(change, "rejected", "invalid_shape", "category flags are invalid");
-  if (!isIsoLike(data.createdAt) || !isIsoLike(data.updatedAt)) return outcome(change, "rejected", "invalid_shape", "category timestamps are invalid");
+  if (!UtcIsoStringSchema.safeParse(data.createdAt).success || !UtcIsoStringSchema.safeParse(data.updatedAt).success) return outcome(change, "rejected", "invalid_shape", "category timestamps must be UTC ISO format (ending with .sssZ)");
   return null;
 }
 
 function validateEntryShape(change: SyncChange, data: TimeEntry, options: SyncValidationOptions): SyncPushOutcome | null {
   if (data.id !== change.recordId) return outcome(change, "rejected", "id_mismatch", "entry payload id does not match recordId");
-  if (!isIsoLike(data.createdAt) || !isIsoLike(data.updatedAt)) {
-    return outcome(change, "rejected", "invalid_shape", "entry timestamps are invalid");
+  if (!UtcIsoStringSchema.safeParse(data.createdAt).success || !UtcIsoStringSchema.safeParse(data.updatedAt).success) {
+    return outcome(change, "rejected", "invalid_shape", "entry timestamps must be UTC ISO format (ending with .sssZ)");
   }
   if (!UtcIsoStringSchema.safeParse(data.startTime).success || !UtcIsoStringSchema.safeParse(data.endTime).success) {
     return outcome(change, "rejected", "invalid_shape", "entry startTime/endTime must be UTC ISO format (ending with Z)");
