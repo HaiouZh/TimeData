@@ -38,9 +38,9 @@ describe("update route", () => {
     );
 
     const res = await app.request("/api/update", { method: "POST" });
-    const body = await res.json() as { error: string; updateId: string | null };
+    const body = await res.json() as { ok: boolean; error: { code: string; message: string; details?: { updateId: string | null } } };
 
     expect(res.status).toBe(409);
-    expect(body).toEqual({ error: "update already running", updateId: "update-1" });
+    expect(body).toEqual({ ok: false, error: { code: "CONFLICT", message: "update already running", details: { updateId: "update-1" } } });
   });
 });

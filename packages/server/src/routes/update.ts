@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { errorJson, ErrorCode } from "../lib/errors.js";
 import { getUpdateStatus, triggerUpdate, UpdateAlreadyRunningError } from "../lib/update.js";
 
 const update = new Hono();
@@ -11,12 +12,15 @@ update.post("/", async (c) => {
   const updaterImage = process.env.UPDATER_IMAGE || "docker:24-cli";
   try {
     const status = triggerUpdate({ hostComposeDir: hostComposeDir(), image: updaterImage });
-    return c.json({ status: "updating", updateId: status.updateId }, 202);
+    return c.json({ ok: true, status: "updating", updateId: status.updateId }, 202);
   } catch (err) {
     if (err instanceof UpdateAlreadyRunningError) {
-      return c.json({ error: err.message, updateId: err.updateId }, 409);
+      const { body, status } = errorJson(ErrorCode.CONFLICT, 409, err.message, { updateId: err.updateId });
+      return c.json(body, status);
     }
-    return c.json({ error: (err as Error).message }, 500);
+    console.error("[update] trigger failed:", (err as Error).message);
+    const { body, status } = errorJson(ErrorCode.INTERNAL_ERROR, 500);
+    return c.json(body, status);
   }
 });
 
@@ -24,7 +28,9 @@ update.get("/status", (c) => {
   try {
     return c.json(getUpdateStatus(hostComposeDir()));
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 500);
+    console.error("[update/status] failed:", (err as Error).message);
+    const { body, status } = errorJson(ErrorCode.INTERNAL_ERROR, 500);
+    return c.json(body, status);
   }
 });
 
