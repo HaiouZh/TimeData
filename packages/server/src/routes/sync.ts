@@ -29,6 +29,7 @@ import { applyChange, type ApplyChangeResult } from "../sync/resolver.js";
 import { orderPushChanges } from "../sync/order.js";
 import { validateSyncChanges } from "../sync/validation.js";
 import { analyzePushBaseSeq } from "../sync/conflict.js";
+import { validateForcePushBusinessRules } from "../sync/forcePushValidation.js";
 import { getChangesSinceSeq, getLatestSeq } from "../sync/seq.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 
@@ -72,60 +73,8 @@ function consumeForcePushToken(token: string, now = Date.now()): ForcePushTokenL
   return { status: "valid", record };
 }
 
-function assertCategoryShape(category: Category): string | null {
-  if (!category || typeof category.id !== "string" || typeof category.name !== "string") return "invalid category shape";
-  if (category.parentId !== null && typeof category.parentId !== "string") return `invalid parentId for category ${category.id}`;
-  if (typeof category.color !== "string" || typeof category.sortOrder !== "number") return `invalid category fields for ${category.id}`;
-  if (typeof category.isArchived !== "boolean" || typeof category.createdAt !== "string" || typeof category.updatedAt !== "string") return `invalid category timestamps for ${category.id}`;
-  return null;
-}
-
-function assertEntryShape(entry: TimeEntry): string | null {
-  if (!entry || typeof entry.id !== "string" || typeof entry.categoryId !== "string") return "invalid entry shape";
-  if (typeof entry.startTime !== "string" || typeof entry.endTime !== "string" || entry.endTime <= entry.startTime) return `invalid time range for entry ${entry.id}`;
-  if (entry.note !== null && typeof entry.note !== "string") return `invalid note for entry ${entry.id}`;
-  if (typeof entry.createdAt !== "string" || typeof entry.updatedAt !== "string") return `invalid entry timestamps for ${entry.id}`;
-  return null;
-}
-
 function validateForcePushPayload(body: SyncForcePushRequest): string | null {
-  if (!Array.isArray(body.categories)) return "categories must be an array";
-  if (!Array.isArray(body.timeEntries)) return "timeEntries must be an array";
-
-  const categoryIds = new Set<string>();
-  for (const category of body.categories) {
-    const error = assertCategoryShape(category);
-    if (error) return error;
-    if (categoryIds.has(category.id)) return `duplicate category ${category.id}`;
-    categoryIds.add(category.id);
-  }
-
-  for (const category of body.categories) {
-    if (category.parentId === category.id) return `category ${category.id} references itself`;
-    if (category.parentId && !categoryIds.has(category.parentId)) return `missing parent category ${category.parentId}`;
-    if (category.parentId) {
-      const parent = body.categories.find((item) => item.id === category.parentId);
-      if (parent && parent.parentId !== null) return `category ${category.id} would create a third level`;
-    }
-  }
-
-  const entryIds = new Set<string>();
-  for (const entry of body.timeEntries) {
-    const error = assertEntryShape(entry);
-    if (error) return error;
-    if (entryIds.has(entry.id)) return `duplicate entry ${entry.id}`;
-    if (!categoryIds.has(entry.categoryId)) return `missing category ${entry.categoryId}`;
-    entryIds.add(entry.id);
-  }
-
-  const sortedEntries = [...body.timeEntries].sort((a, b) => a.startTime.localeCompare(b.startTime));
-  for (let i = 1; i < sortedEntries.length; i += 1) {
-    if (sortedEntries[i - 1].endTime > sortedEntries[i].startTime) {
-      return `overlapping entries ${sortedEntries[i - 1].id} and ${sortedEntries[i].id}`;
-    }
-  }
-
-  return null;
+  return validateForcePushBusinessRules(body.categories, body.timeEntries);
 }
 
 function replaceServerData(db: Database, categories: Category[], timeEntries: TimeEntry[]): void {
