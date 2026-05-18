@@ -101,7 +101,9 @@ describe("sync route", () => {
     });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual(expect.objectContaining({ error: "invalid_request" }));
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
   it("returns 400 for malformed force-push prepare requests", async () => {
@@ -112,7 +114,9 @@ describe("sync route", () => {
     });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual(expect.objectContaining({ error: "invalid_request" }));
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
   it("returns server sync status counts and latest update", async () => {
@@ -364,7 +368,9 @@ describe("sync route", () => {
 
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body).toMatchObject({ error: "Invalid or expired force-push confirmation token." });
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+    expect(body.error.message).toBe("Invalid or expired force-push confirmation token.");
   });
 
   it("rejects force push when entries reference missing categories", async () => {
@@ -396,7 +402,9 @@ describe("sync route", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("missing category");
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_BODY");
+    expect(body.error.message).toContain("missing category");
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
   });
 
@@ -431,7 +439,9 @@ describe("sync route", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("references itself");
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_BODY");
+    expect(body.error.message).toContain("references itself");
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
   });
 
@@ -490,7 +500,9 @@ describe("sync route", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toContain("third level");
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_BODY");
+    expect(body.error.message).toContain("third level");
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
   });
 
@@ -747,8 +759,9 @@ describe("sync route", () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toBe("invalid_request");
-    expect(body.issues.length).toBeGreaterThan(0);
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+    expect(body.error.details.issues.length).toBeGreaterThan(0);
   });
 
   it("includes tombstones in pull responses", async () => {

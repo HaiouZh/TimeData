@@ -22,6 +22,7 @@ import type {
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
 import { type CategoryRow, type CountRow, type EntryRow, type MaxRow, type TombstoneRow, rowToCategory, rowToEntry } from "../lib/db-rows.js";
+import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup, markServerBackupProtected } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
 import { applyChange, type ApplyChangeResult } from "../sync/resolver.js";
@@ -271,7 +272,8 @@ sync.post("/force-push/prepare", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncForcePushPrepareRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
-    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+    const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, undefined, { issues: parsed.error.issues });
+    return c.json(body, status);
   }
 
   const body = parsed.data;
@@ -302,29 +304,34 @@ sync.post("/force-push", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncForcePushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
-    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+    const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, undefined, { issues: parsed.error.issues });
+    return c.json(body, status);
   }
 
   const body = parsed.data;
   const db = getDb();
   if (body.confirmationPhrase !== FORCE_PUSH_CONFIRMATION_PHRASE) {
     writeSyncLog(db, "force_push_rejected", { reason: "invalid_phrase" });
-    return c.json({ error: "Invalid force-push confirmation phrase." }, 400);
+    const { body: errBody, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, "Invalid force-push confirmation phrase.");
+    return c.json(errBody, status);
   }
 
   const tokenRecord = consumeForcePushToken(body.confirmToken || "", Date.now());
   if (tokenRecord.status === "expired") {
     writeSyncLog(db, "force_push_expired", { reason: "expired_token" });
-    return c.json({ error: "Invalid or expired force-push confirmation token." }, 403);
+    const { body: errBody, status } = errorJson(ErrorCode.INVALID_REQUEST, 403, "Invalid or expired force-push confirmation token.");
+    return c.json(errBody, status);
   }
   if (tokenRecord.status === "missing") {
     writeSyncLog(db, "force_push_rejected", { reason: "missing_token" });
-    return c.json({ error: "Invalid or expired force-push confirmation token." }, 403);
+    const { body: errBody, status } = errorJson(ErrorCode.INVALID_REQUEST, 403, "Invalid or expired force-push confirmation token.");
+    return c.json(errBody, status);
   }
 
   const validationError = validateForcePushPayload(body);
   if (validationError) {
-    return c.json({ error: validationError }, 400);
+    const { body: errBody, status } = errorJson(ErrorCode.INVALID_BODY, 400, validationError);
+    return c.json(errBody, status);
   }
 
   const backup = await createServerBackup("sync_force_push");
@@ -336,8 +343,15 @@ sync.post("/force-push", async (c) => {
     replaceAll();
   } catch (err) {
     const message = (err as Error).message;
+    console.error("[sync/force-push] apply failed:", message);
     writeSyncLog(db, "force_push_failed_after_backup", { backupId: backup.id, message }, body.categories.length + body.timeEntries.length);
-    return c.json({ error: message, backupId: backup.id }, 500);
+    const { body: errBody, status } = errorJson(
+      ErrorCode.INTERNAL_ERROR,
+      500,
+      undefined,
+      { backupId: backup.id },
+    );
+    return c.json(errBody, status);
   }
 
   const response: SyncForcePushResponse = {
@@ -362,7 +376,8 @@ sync.post("/push", async (c) => {
   const rawBody: unknown = await c.req.json();
   const parsed = SyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
-    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+    const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, undefined, { issues: parsed.error.issues });
+    return c.json(body, status);
   }
 
   const body = parsed.data;
@@ -396,8 +411,15 @@ sync.post("/push", async (c) => {
     applyAll();
   } catch (err) {
     const message = (err as Error).message;
+    console.error("[sync/push] apply failed:", message);
     writeSyncLog(db, "push_failed_after_backup", { backupId: backup.id, message }, orderedChanges.length);
-    return c.json({ error: message, backupId: backup.id }, 500);
+    const { body: errBody, status } = errorJson(
+      ErrorCode.INTERNAL_ERROR,
+      500,
+      undefined,
+      { backupId: backup.id },
+    );
+    return c.json(errBody, status);
   }
 
   const outcomes = results.map((result) => outcomeFromApplyResult(result, backup.id));
@@ -511,7 +533,8 @@ sync.post("/pull", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncPullRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
-    return c.json({ error: "invalid_request", issues: parsed.error.issues }, 400);
+    const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, undefined, { issues: parsed.error.issues });
+    return c.json(body, status);
   }
 
   const body = parsed.data;
