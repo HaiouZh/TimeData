@@ -2,6 +2,7 @@ import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
+import { classifyReasonCode } from "./reason.ts";
 import { SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport, SyncPullResponse, SyncPushResponse, SyncChange, SyncStatusResponse, Category, TimeEntry, SyncLogEntry, SyncPushOutcome } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -25,6 +26,8 @@ export interface SyncPushResult {
   rejected: number;
   conflicts: number;
   issues: SyncPushOutcome[];
+  clientBugIssues: SyncPushOutcome[];
+  userActionableIssues: SyncPushOutcome[];
 }
 
 export interface RegularSyncResult {
@@ -201,11 +204,36 @@ async function applyPushResponse(
   sourceLogIdsByChangeKey: Map<string, string[]>,
   changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
 ): Promise<SyncPushResult> {
-  const acceptedLogIds = response.outcomes
-    .filter((item) => item.status === "accepted")
-    .flatMap((item) => sourceLogIdsByChangeKey.get(changeKey(item.tableName, item.recordId, item.action)) || []);
-  const logIdsToMarkSynced = [...new Set([...omittedLogIds, ...acceptedLogIds])];
+  const acceptedLogIds: string[] = [];
+  const clientBugLogIds: string[] = [];
+  const clientBugIssues: SyncPushOutcome[] = [];
+  const userActionableIssues: SyncPushOutcome[] = [];
+  const issues: SyncPushOutcome[] = [];
 
+  for (const outcome of response.outcomes) {
+    const category = classifyReasonCode(outcome.reasonCode);
+    const logIds = sourceLogIdsByChangeKey.get(changeKey(outcome.tableName, outcome.recordId, outcome.action)) || [];
+
+    switch (category) {
+      case "applied":
+        acceptedLogIds.push(...logIds);
+        break;
+      case "client_bug":
+        clientBugLogIds.push(...logIds);
+        clientBugIssues.push(outcome);
+        break;
+      case "user_actionable":
+        userActionableIssues.push(outcome);
+        issues.push(outcome);
+        break;
+      case "conflict":
+      case "unknown":
+        issues.push(outcome);
+        break;
+    }
+  }
+
+  const logIdsToMarkSynced = [...new Set([...omittedLogIds, ...acceptedLogIds, ...clientBugLogIds])];
   if (logIdsToMarkSynced.length > 0) {
     await db.syncLog.bulkUpdate(logIdsToMarkSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
   }
@@ -214,13 +242,15 @@ async function applyPushResponse(
     accepted: response.accepted,
     rejected: response.rejected,
     conflicts: response.conflicts,
-    issues: response.outcomes.filter((item) => item.status !== "accepted"),
+    issues,
+    clientBugIssues,
+    userActionableIssues,
   };
 }
 
 export async function syncPush(): Promise<SyncPushResult> {
   const unsynced = await db.syncLog.filter((entry) => !entry.synced).toArray();
-  if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [] };
+  if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
 
   const compacted = compactSyncLogs(unsynced);
   const changes: SyncChange[] = [];
@@ -284,7 +314,7 @@ export async function syncPush(): Promise<SyncPushResult> {
     if (omittedLogIds.length > 0) {
       await db.syncLog.bulkUpdate(omittedLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
     }
-    return { accepted: 0, rejected: 0, conflicts: 0, issues: [] };
+    return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
   }
 
   let response: SyncPushResponse;

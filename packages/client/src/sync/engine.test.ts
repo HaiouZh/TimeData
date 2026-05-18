@@ -312,7 +312,7 @@ describe("syncPush", () => {
 
     const result = await syncPush();
 
-    expect(result).toEqual({ accepted: 1, rejected: 0, conflicts: 1, issues: [expect.objectContaining({ recordId: "entry-conflict", reasonCode: "overlap" })] });
+    expect(result).toMatchObject({ accepted: 1, rejected: 0, conflicts: 1, issues: [expect.objectContaining({ recordId: "entry-conflict", reasonCode: "overlap" })] });
     await expect(db.syncLog.get(acceptedLogId)).resolves.toMatchObject({ synced: 1 });
     await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 0 });
   });
@@ -378,6 +378,7 @@ describe("syncPush", () => {
 
   it("sends base seq with push requests", async () => {
     setLastSyncedSeq(9);
+
     await db.categories.add({
       id: "cat-1",
       name: "Work",
@@ -413,6 +414,130 @@ describe("syncPush", () => {
 
     const body = JSON.parse(apiFetchMock.mock.calls[0][1].body);
     expect(body.baseSeq).toBe(9);
+  });
+
+  it("client_bug reasonCode marks syncLog synced to stop retrying", async () => {
+    const clientBugLogId = "entry-bug-create-00";
+
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00",
+      updatedAt: "2026-05-08T08:00:00",
+    });
+    await db.timeEntries.add({
+      id: "entry-bug",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00",
+      endTime: "2026-05-08T10:00:00",
+      note: null,
+      createdAt: "2026-05-08T09:00:00",
+      updatedAt: "2026-05-08T09:00:00",
+    });
+    await db.syncLog.add({ id: clientBugLogId, tableName: "time_entries", recordId: "entry-bug", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{ tableName: "time_entries", recordId: "entry-bug", action: "create", status: "rejected", reasonCode: "invalid_shape", message: "invalid shape", incomingTimestamp: "2026-05-08T09:00:00" }],
+      accepted: 0,
+      rejected: 1,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-05-08T09:01:00.000Z",
+    });
+
+    const result = await syncPush();
+
+    expect(result.clientBugIssues).toHaveLength(1);
+    expect(result.clientBugIssues[0]).toMatchObject({ reasonCode: "invalid_shape" });
+    await expect(db.syncLog.get(clientBugLogId)).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("user_actionable reasonCode does not mark synced but returns in userActionableIssues", async () => {
+    const actionableLogId = "entry-actionable-create-00";
+
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00",
+      updatedAt: "2026-05-08T08:00:00",
+    });
+    await db.timeEntries.add({
+      id: "entry-actionable",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00",
+      endTime: "2026-05-08T10:00:00",
+      note: null,
+      createdAt: "2026-05-08T09:00:00",
+      updatedAt: "2026-05-08T09:00:00",
+    });
+    await db.syncLog.add({ id: actionableLogId, tableName: "time_entries", recordId: "entry-actionable", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{ tableName: "time_entries", recordId: "entry-actionable", action: "create", status: "rejected", reasonCode: "archived_category", message: "category is archived", incomingTimestamp: "2026-05-08T09:00:00" }],
+      accepted: 0,
+      rejected: 1,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-05-08T09:01:00.000Z",
+    });
+
+    const result = await syncPush();
+
+    expect(result.userActionableIssues).toHaveLength(1);
+    expect(result.userActionableIssues[0]).toMatchObject({ reasonCode: "archived_category" });
+    await expect(db.syncLog.get(actionableLogId)).resolves.toMatchObject({ synced: 0 });
+  });
+
+  it("conflict reasonCode (server_version_newer_or_same) is returned in issues but not synced", async () => {
+    const conflictLogId = "entry-conflict-create-30";
+
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00",
+      updatedAt: "2026-05-08T08:00:00",
+    });
+    await db.timeEntries.add({
+      id: "entry-conflict",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:30:00",
+      endTime: "2026-05-08T10:30:00",
+      note: null,
+      createdAt: "2026-05-08T09:30:00",
+      updatedAt: "2026-05-08T09:30:00",
+    });
+    await db.syncLog.add({ id: conflictLogId, tableName: "time_entries", recordId: "entry-conflict", action: "create", timestamp: "2026-05-08T09:30:00", synced: 0 });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{ tableName: "time_entries", recordId: "entry-conflict", action: "create", status: "conflict", reasonCode: "server_version_newer_or_same", message: "server has newer version", incomingTimestamp: "2026-05-08T09:30:00" }],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-05-08T09:31:00.000Z",
+    });
+
+    const result = await syncPush();
+
+    expect(result.conflicts).toBe(1);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({ reasonCode: "server_version_newer_or_same" });
+    await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 0 });
   });
 });
 
