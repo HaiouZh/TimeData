@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { MiddlewareHandler } from "hono";
 
 interface RateLimitOptions {
@@ -58,9 +59,13 @@ export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
   };
 }
 
+function hashAuth(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 16);
+}
+
 function defaultIdentifier(c: Parameters<MiddlewareHandler>[0]): string {
   const auth = c.req.header("Authorization");
-  if (auth) return `auth:${auth}`;
+  if (auth) return `auth:${hashAuth(auth)}`;
   const forwarded = c.req.header("X-Forwarded-For");
   if (forwarded) return `xff:${forwarded.split(",")[0]?.trim() ?? forwarded}`;
   const realIp = c.req.header("X-Real-IP");

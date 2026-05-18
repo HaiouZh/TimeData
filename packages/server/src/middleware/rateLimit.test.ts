@@ -39,4 +39,26 @@ describe("rateLimit", () => {
     const replayFirst = await app.request("/api/ping", { headers: { Authorization: "Bearer A" } });
     expect(replayFirst.status).toBe(429);
   });
+
+  it("does not expose raw Authorization header in rate limit keys", async () => {
+    const app = appWithLimit(1, 60_000);
+
+    const first = await app.request("/api/ping", { headers: { Authorization: "Bearer secret-token-123" } });
+    expect(first.status).toBe(200);
+    const second = await app.request("/api/ping", { headers: { Authorization: "Bearer secret-token-123" } });
+    expect(second.status).toBe(429);
+    const third = await app.request("/api/ping", { headers: { Authorization: "Bearer different-token-456" } });
+    expect(third.status).toBe(200);
+  });
+
+  it("uses IP-based identifier when no Authorization header is present", async () => {
+    const app = appWithLimit(1, 60_000);
+
+    const first = await app.request("/api/ping", { headers: { "X-Real-IP": "1.2.3.4" } });
+    expect(first.status).toBe(200);
+    const second = await app.request("/api/ping", { headers: { "X-Real-IP": "1.2.3.4" } });
+    expect(second.status).toBe(429);
+    const third = await app.request("/api/ping", { headers: { "X-Real-IP": "5.6.7.8" } });
+    expect(third.status).toBe(200);
+  });
 });
