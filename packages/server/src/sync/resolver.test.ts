@@ -4,6 +4,7 @@ import type { SyncChange } from "@timedata/shared";
 
 let db: Database.Database;
 let applyChange: (change: SyncChange) => { status: string; reason: string; skipReason?: string; overriddenRecordIds?: string[] };
+let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ tableName: string; recordId: string; action: string }>;
 
 beforeEach(async () => {
   db = new Database(":memory:");
@@ -52,6 +53,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.doMock("../db/connection.js", () => ({ getDb: () => db }));
   ({ applyChange } = await import("./resolver.js"));
+  ({ getChangesSinceSeq } = await import("./seq.js"));
 });
 
 afterEach(() => {
@@ -239,6 +241,29 @@ describe("applyChange", () => {
     expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq WHERE table_name = ? ORDER BY record_id").all("time_entries")).toEqual([
       { table_name: "time_entries", record_id: "child-entry", action: "delete" },
       { table_name: "time_entries", record_id: "parent-entry", action: "delete" },
+    ]);
+  });
+
+  it("records seq for every category deleted by category cascade", () => {
+    db.prepare(`INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`).run("parent-cat", "工作", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run("child-cat", "深度工作", "parent-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+    db.prepare(`INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`).run("grandchild-cat", "写作", "child-cat", "#4A90D9", "2026-05-08T08:00:00", "2026-05-08T08:00:00");
+
+    const baseSeq = db.prepare("SELECT MAX(id) AS max_id FROM sync_seq").get() as { max_id: number | null };
+
+    const result = applyChange({
+      tableName: "categories",
+      recordId: "parent-cat",
+      action: "delete",
+      timestamp: "2026-05-08T12:00:00",
+    });
+
+    expect(result).toMatchObject({ status: "applied", reason: "deleted category" });
+    expect(db.prepare("SELECT id FROM categories WHERE id IN (?, ?, ?)").all("parent-cat", "child-cat", "grandchild-cat")).toEqual([]);
+    expect(getChangesSinceSeq(baseSeq.max_id)).toEqual([
+      { id: expect.any(Number), tableName: "categories", recordId: "grandchild-cat", action: "delete" },
+      { id: expect.any(Number), tableName: "categories", recordId: "child-cat", action: "delete" },
+      { id: expect.any(Number), tableName: "categories", recordId: "parent-cat", action: "delete" },
     ]);
   });
 

@@ -64,6 +64,7 @@ function applyCategoryChange(db: Database, change: CategoryChange): ApplyChangeR
       }
       db.prepare("DELETE FROM categories WHERE id = ?").run(categoryId);
       insertCategoryTombstone.run(categoryId, change.timestamp);
+      recordSeq("categories", categoryId, "delete");
     }
 
     return result(change, "applied", "deleted category", undefined, cascadedEntryIds);
