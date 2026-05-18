@@ -8,7 +8,7 @@ covers:
   - packages/*/package.json
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-17
+last-reviewed: 2026-05-18
 ---
 
 # 本地开发指南
@@ -104,6 +104,7 @@ pnpm --filter @timedata/server test middleware/auth
 pnpm --filter @timedata/client test:e2e
 pnpm check:docs        # 检查本次改动是否命中需要同步的 evergreen 文档
 pnpm check:docs:strict # CI 使用的严格文档检查
+pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon 全套图标
 ```
 
 `packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。
@@ -154,7 +155,7 @@ GitHub Actions 的 `android-apk` workflow 会使用仓库 Secrets 构建签名 r
 移动端构建会使用 `packages/client` 的 mobile Vite 模式：
 
 - `base` 使用 `./`，保证 Android WebView 能加载相对路径资源。
-- PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`。
+- PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`，Android 启动图标位于 `packages/mobile/android/app/src/main/res/mipmap-*/`；这两处和 favicon 都由 `pnpm icons:generate` 从根目录 `icon.png` 生成，换图只需替换根目录源图后重跑该命令。
 - `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS；`pnpm --filter @timedata/mobile test` 会静态检查生产 Manifest 不允许明文流量，并检查 `packages/client` 与 `packages/mobile` 的 Capacitor 依赖都保持 v7。
 - Android 系统返回键/边缘返回通过 `packages/mobile` 的 `@capacitor/app` 原生插件监听，并交给前端路由处理，二级页应先回应用上一层级，首页才退出 App。
 - 备份导出走 `@capacitor/filesystem` + `@capacitor/share`：在 native 端把 JSON 写入 `Directory.Documents` 后弹出系统分享面板。新增/删除这两个插件后必须重跑 `pnpm --filter @timedata/mobile android:sync` 把原生侧重新同步。

@@ -21,11 +21,13 @@
     "format": "biome format --write .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "icons:generate": "node scripts/generate-icons.mjs",
     "check:docs": "node scripts/check-evergreen-docs.mjs",
     "check:docs:strict": "node scripts/check-evergreen-docs.mjs --mode=strict",
     "check:docs:stale": "node scripts/check-evergreen-docs.mjs --mode=stale"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4"
+    "@biomejs/biome": "^1.9.4",
+    "sharp": "^0.34.5"
   }
 }
