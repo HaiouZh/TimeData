@@ -60,6 +60,12 @@ export function initializeDatabase(): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_entries_start ON time_entries(start_time);
     CREATE INDEX IF NOT EXISTS idx_entries_end ON time_entries(end_time);
     CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);

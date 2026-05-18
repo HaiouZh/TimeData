@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { createDefaultCategories } from "@timedata/shared";
 import { getDb } from "./connection.js";
+import { computeAndPersistCommitHash } from "../sync/state.js";
 
 export interface ResetDatabaseResult {
   categories: number;
@@ -14,9 +15,13 @@ export function resetDatabaseConnectionToDefaults(db: Database.Database): ResetD
     const before = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
 
     db.prepare("DELETE FROM time_entries").run();
+    db.prepare("DELETE FROM sync_logs").run();
+    db.prepare("DELETE FROM sync_tombstones").run();
+    db.prepare("DELETE FROM sync_seq").run();
     db.prepare("DELETE FROM categories WHERE parent_id IS NOT NULL").run();
     db.prepare("DELETE FROM categories WHERE parent_id IS NULL").run();
     const categories = insertDefaultCategories(db, resetAt);
+    computeAndPersistCommitHash(db);
 
     return {
       categories,

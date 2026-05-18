@@ -35,6 +35,7 @@ last-reviewed: 2026-05-18
 | 服务端同步日志 | `sync_logs` | 记录每次 push/pull 的摘要、状态、备份信息和保留的 `reasonCode` 细节，供运维和排障查看 |
 | 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` / `categories.id` 与删除时间，用于按序拉取删除事件重放；不能按固定 TTL 直接清理 |
 | 服务端同步序列 | `sync_seq` | 记录每次成功写入后的单调递增序号，用于 `sinceSeq` 拉取和 `baseSeq` 快进判断 |
+| 服务端同步状态 | `sync_state` | 保存 `/api/sync/status` 的 commit hash、最新 seq、行数和最新更新时间摘要，避免每次 status 全量读取业务表 |
 | 应用元数据 | `app_metadata` | 记录全局一次性迁移/重置标记，例如 `utc_reset_v1` |
 
 客户端 Dexie 多一张：
@@ -179,7 +180,7 @@ type SyncChange =
 
 ### 5.2 增量同步序列契约
 
-服务端 `sync_seq` 是同步 cursor 的权威来源：每次 `applyChange()` 成功写入业务数据后追加一行；`force-push` 全量覆盖服务器时清空并按导入后的 categories/timeEntries 重建序列。
+服务端 `sync_seq` 是同步 cursor 的权威来源：每次 `applyChange()` 成功写入业务数据后追加一行；CLI `log` 成功创建记录后也追加 `time_entries/create` 序列；`force-push` 全量覆盖服务器时清空并按导入后的 categories/timeEntries 重建序列。每次序列推进都会刷新 `sync_state` 的 commit hash，供 `/api/sync/status` 轻量读取。
 
 共享契约：
 

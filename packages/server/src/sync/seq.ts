@@ -1,4 +1,6 @@
 import { getDb } from "../db/connection.js";
+import type { Database } from "better-sqlite3";
+import { markCommitHashDirty } from "./state.js";
 
 export interface SeqRecord {
   id: number;
@@ -7,16 +9,25 @@ export interface SeqRecord {
   action: "create" | "update" | "delete";
 }
 
+export function recordSeqWithDb(
+  db: Database,
+  tableName: SeqRecord["tableName"],
+  recordId: string,
+  action: SeqRecord["action"],
+): number {
+  const result = db
+    .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+    .run(tableName, recordId, action);
+  markCommitHashDirty(db);
+  return Number(result.lastInsertRowid);
+}
+
 export function recordSeq(
   tableName: SeqRecord["tableName"],
   recordId: string,
   action: SeqRecord["action"],
 ): number {
-  const db = getDb();
-  const result = db
-    .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
-    .run(tableName, recordId, action);
-  return Number(result.lastInsertRowid);
+  return recordSeqWithDb(getDb(), tableName, recordId, action);
 }
 
 export function getLatestSeq(): number | null {

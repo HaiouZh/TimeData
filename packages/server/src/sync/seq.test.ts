@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { getDb } from "../db/connection.js";
 import { initializeDatabase } from "../db/schema.js";
 import { recordSeq, getChangesSinceSeq, getLatestSeq } from "./seq.js";
+import { computeAndPersistCommitHash, getCommitHash } from "./state.js";
 
 describe("sync_seq", () => {
   beforeEach(() => {
@@ -13,6 +14,17 @@ describe("sync_seq", () => {
   it("recordSeq inserts a row and returns the new id", () => {
     const seq = recordSeq("categories", "cat-1", "create");
     expect(seq).toBeGreaterThan(0);
+  });
+
+  it("recordSeq marks the persisted commit hash dirty", () => {
+    computeAndPersistCommitHash();
+
+    const seq = recordSeq("categories", "cat-1", "create");
+    const db = getDb();
+
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "1" });
+    expect(getCommitHash().latestSeq).toBe(seq);
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "0" });
   });
 
   it("seq ids are strictly monotonic", () => {

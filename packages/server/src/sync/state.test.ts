@@ -1,0 +1,50 @@
+import Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+let db: Database.Database;
+
+beforeEach(async () => {
+  db = new Database(":memory:");
+  vi.resetModules();
+  vi.doMock("../db/connection.js", () => ({ getDb: () => db }));
+  const { initializeDatabase } = await import("../db/schema.js");
+  initializeDatabase();
+});
+
+afterEach(() => {
+  db.close();
+  vi.doUnmock("../db/connection.js");
+});
+
+describe("syncState", () => {
+  it("computeAndPersistCommitHash writes and returns the commit hash", async () => {
+    const { computeAndPersistCommitHash } = await import("./state.js");
+
+    const result = computeAndPersistCommitHash();
+
+    expect(result.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.latestSeq).toBeNull();
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get()).toMatchObject({ value: result.hash });
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'latest_seq'").get()).toMatchObject({ value: "" });
+  });
+
+  it("getCommitHash recomputes and stores state when missing", async () => {
+    const { getCommitHash } = await import("./state.js");
+    db.prepare("DELETE FROM sync_state").run();
+
+    const result = getCommitHash();
+
+    expect(result.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'commit_hash'").get()).toMatchObject({ value: result.hash });
+  });
+
+  it("returns the same hash for unchanged content", async () => {
+    const { computeAndPersistCommitHash } = await import("./state.js");
+
+    const first = computeAndPersistCommitHash();
+    const second = computeAndPersistCommitHash();
+
+    expect(second.hash).toBe(first.hash);
+    expect(second.latestSeq).toBe(first.latestSeq);
+  });
+});

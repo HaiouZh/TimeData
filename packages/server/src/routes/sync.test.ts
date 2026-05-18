@@ -1,8 +1,8 @@
-import crypto from "node:crypto";
 import Database from "better-sqlite3";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getLatestSeq } from "../sync/seq.js";
+import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 import { createEntryFromCliInput } from "../lib/entry-service.js";
 let db: Database.Database;
 let app: Hono;
@@ -57,6 +57,12 @@ function createSchema() {
       record_id TEXT NOT NULL,
       action TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
 }
@@ -144,46 +150,37 @@ describe("sync route", () => {
     expect(typeof body.contentHash).toBe("string");
   });
 
-  it("returns /status contentHash from canonical shared dataset shape", async () => {
+  it("returns /status contentHash from persisted sync_state", async () => {
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run("entry-1", "cat-1", "2026-05-08T09:00:00.000Z", "2026-05-08T10:00:00.000Z", null, "2026-05-08T09:00:00.000Z", "2026-05-08T11:00:00.000Z");
-    const canonicalPayload = JSON.stringify({
-      categories: [{
-        id: "cat-1",
-        name: "工作",
-        parentId: null,
-        color: "#4A90D9",
-        icon: null,
-        sortOrder: 0,
-        isArchived: false,
-        createdAt: "2026-05-08T08:00:00.000Z",
-        updatedAt: "2026-05-08T08:00:00.000Z",
-      }],
-      timeEntries: [{
-        id: "entry-1",
-        categoryId: "cat-1",
-        startTime: "2026-05-08T09:00:00.000Z",
-        endTime: "2026-05-08T10:00:00.000Z",
-        note: null,
-        createdAt: "2026-05-08T09:00:00.000Z",
-        updatedAt: "2026-05-08T11:00:00.000Z",
-      }],
-    });
-    const expectedHash = crypto.createHash("sha256").update(canonicalPayload).digest("hex");
+    computeAndPersistCommitHash(db);
+    const expected = getCommitHash(db);
 
     const res = await app.request("/api/sync/status", { headers: { Authorization: "Bearer test-token" } });
     const body = await res.json();
 
-    expect(body.contentHash).toBe(expectedHash);
+    expect(body.contentHash).toBe(expected.hash);
+    expect(body.latestSeq).toBe(expected.latestSeq);
   });
 
-  it("changes /status contentHash when record content changes without count changing", async () => {
+  it("does not stringify full datasets when reading /status contentHash", async () => {
+    computeAndPersistCommitHash(db);
+    const stringifySpy = vi.spyOn(JSON, "stringify");
+
+    await app.request("/api/sync/status", { headers: { Authorization: "Bearer test-token" } });
+
+    expect(stringifySpy).not.toHaveBeenCalledWith(expect.objectContaining({ categories: expect.any(Array), timeEntries: expect.any(Array) }));
+  });
+
+  it("changes /status contentHash when record content changes without count changing after sync state refresh", async () => {
+    computeAndPersistCommitHash(db);
     const before = await app.request("/api/sync/status", { headers: { Authorization: "Bearer test-token" } });
     const beforeBody = await before.json();
 
     db.prepare("UPDATE categories SET name = ?, updated_at = ? WHERE id = ?").run("工作-改名", "2026-05-08T14:00:00.000Z", "cat-1");
+    computeAndPersistCommitHash(db);
 
     const after = await app.request("/api/sync/status", { headers: { Authorization: "Bearer test-token" } });
     const afterBody = await after.json();

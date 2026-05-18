@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetDatabaseConnectionToDefaults } from "./reset.js";
+import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 
 let db: Database.Database;
 
@@ -31,6 +32,36 @@ beforeEach(() => {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
+
+    CREATE TABLE sync_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      device TEXT,
+      action TEXT NOT NULL,
+      detail TEXT,
+      record_count INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE sync_tombstones (
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      deleted_at TEXT NOT NULL,
+      PRIMARY KEY (table_name, record_id)
+    );
+
+    CREATE TABLE sync_seq (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 });
 
@@ -53,17 +84,41 @@ describe("resetDatabaseConnectionToDefaults", () => {
       INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at)
       VALUES ('entry-1', 'custom-child', ?, ?, ?, ?)
     `).run(now, "2026-05-06T01:00:00.000Z", now, now);
+    db.prepare(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
+      VALUES ('time_entries', 'entry-1', ?)
+    `).run(now);
 
     const result = resetDatabaseConnectionToDefaults(db);
 
     const entries = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
     const sleep = db.prepare("SELECT id, name FROM categories WHERE id = 'cat-sleep'").get() as { id: string; name: string };
     const custom = db.prepare("SELECT id FROM categories WHERE id = 'custom-cat'").get();
+    const seqCount = db.prepare("SELECT COUNT(*) as count FROM sync_seq").get() as { count: number };
+    const tombstoneCount = db.prepare("SELECT COUNT(*) as count FROM sync_tombstones").get() as { count: number };
 
     expect(result.entriesDeleted).toBe(1);
     expect(result.categories).toBeGreaterThan(0);
     expect(entries.count).toBe(0);
     expect(sleep).toEqual({ id: "cat-sleep", name: "睡眠" });
     expect(custom).toBeUndefined();
+    expect(seqCount.count).toBe(0);
+    expect(tombstoneCount.count).toBe(0);
+  });
+
+  it("refreshes sync_state after reset", () => {
+    const now = "2026-05-06T00:00:00.000Z";
+    db.prepare(`
+      INSERT INTO categories (id, name, color, created_at, updated_at)
+      VALUES ('custom-cat', '自定义', '#000000', ?, ?)
+    `).run(now, now);
+    computeAndPersistCommitHash(db);
+    const before = getCommitHash(db).hash;
+
+    resetDatabaseConnectionToDefaults(db);
+
+    const after = getCommitHash(db);
+    expect(after.hash).not.toBe(before);
+    expect(after.latestSeq).toBeNull();
   });
 });

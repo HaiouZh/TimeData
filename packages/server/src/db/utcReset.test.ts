@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
 import { runUtcResetIfNeeded } from "./utcReset.js";
+import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 
 function makeTestDb(): Database.Database {
   const db = new Database(":memory:");
@@ -34,6 +35,11 @@ function makeTestDb(): Database.Database {
       record_id TEXT NOT NULL, action TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -51,6 +57,7 @@ describe("runUtcResetIfNeeded", () => {
     db.prepare(
       "INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)"
     ).run("time_entries", "e1", new Date().toISOString());
+    computeAndPersistCommitHash(db);
 
     const result = runUtcResetIfNeeded(db);
 
@@ -64,6 +71,7 @@ describe("runUtcResetIfNeeded", () => {
     // 标记已写入
     const flag = db.prepare("SELECT value FROM app_metadata WHERE key = ?").get("utc_reset_v1") as { value: string } | undefined;
     expect(flag?.value).toBeTruthy();
+    expect(getCommitHash(db).latestSeq).toBeNull();
   });
 
   it("does NOT run reset on subsequent calls (idempotent)", () => {

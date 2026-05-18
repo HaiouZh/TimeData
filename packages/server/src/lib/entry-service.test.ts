@@ -6,6 +6,7 @@ import {
   listCategoryPaths,
   resolveCategoryPath,
 } from "./entry-service.js";
+import { getCommitHash } from "../sync/state.js";
 
 let db: Database.Database;
 
@@ -41,6 +42,12 @@ function createSchema() {
       record_id TEXT NOT NULL,
       action TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
 }
@@ -196,7 +203,8 @@ describe("entry service", () => {
     expect(result.entry.endTime).toBe("2026-05-07T16:00:00");
   });
 
-  it("records sync_seq when creating an entry from CLI input", () => {
+  it("records sync_seq and refreshes sync state when creating an entry from CLI input", () => {
+    const before = getCommitHash(db).hash;
     const result = createEntryFromCliInput(db, {
       date: "2026-05-07",
       start: "14:00",
@@ -210,6 +218,7 @@ describe("entry service", () => {
 
     const seq = db.prepare("SELECT table_name, record_id, action FROM sync_seq WHERE record_id = ?").get(result.entry.id);
     expect(seq).toEqual({ table_name: "time_entries", record_id: result.entry.id, action: "create" });
+    expect(getCommitHash(db).hash).not.toBe(before);
   });
 
 });
@@ -236,6 +245,12 @@ function makeDb2() {
       record_id TEXT NOT NULL,
       action TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
     INSERT INTO categories VALUES ('cat1','Work/Dev',null,'#ff0000',null,0,0,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
   `);

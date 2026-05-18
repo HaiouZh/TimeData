@@ -30,4 +30,20 @@ describe("initializeDatabase", () => {
       "idx_sync_seq_table_record",
     ]));
   });
+
+  it("creates sync_state for persisted sync commit hash state", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sync_state'").get();
+    expect(table).toMatchObject({ name: "sync_state" });
+
+    const columns = db.prepare("PRAGMA table_info(sync_state)").all() as Array<{ name: string; type: string; notnull: number; pk: number }>;
+    expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["key", "TEXT", 0, 1],
+      ["value", "TEXT", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+  });
 });

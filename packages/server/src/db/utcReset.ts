@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import { insertDefaultCategories } from "./reset.js";
+import { computeAndPersistCommitHash } from "../sync/state.js";
 
 export interface UtcResetResult {
   ran: boolean;
@@ -20,6 +21,7 @@ export function runUtcResetIfNeeded(db: Database.Database): UtcResetResult {
     db.prepare("DELETE FROM categories WHERE parent_id IS NOT NULL").run();
     db.prepare("DELETE FROM categories WHERE parent_id IS NULL").run();
     insertDefaultCategories(db, resetAt);
+    computeAndPersistCommitHash(db);
     db.prepare(
       "INSERT OR REPLACE INTO app_metadata (key, value, updated_at) VALUES (?, ?, ?)"
     ).run("utc_reset_v1", resetAt, resetAt);

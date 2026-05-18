@@ -3,6 +3,7 @@ type: evergreen
 title: 同步机制
 covers:
   - packages/server/src/sync/**
+  - packages/server/src/db/schema.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
   - packages/client/src/sync/**
@@ -44,7 +45,7 @@ last-reviewed: 2026-05-18
 7. reportToServer()   往服务器写一条 sync_logs 摘要（best-effort）
 ```
 
-普通同步主路径的一致性校验比较业务 meta：优先比较 `contentHash`；如果任一端缺少 `contentHash`，退回比较 `categoryCount`、`entryCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。`contentHash` 是 categories 与 time_entries 按 ID 排序后的稳定 SHA-256 摘要，可识别“数量和最新时间不变但内容改变”的状态差异。普通 no-op 同步不会为了校验拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
+普通同步主路径的一致性校验比较业务 meta：优先比较 `contentHash`；如果任一端缺少 `contentHash`，退回比较 `categoryCount`、`entryCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。服务端 `contentHash` 是持久化在 SQLite `sync_state` 表里的同步内容 commit hash，由 `latestSeq`、分类/记录行数与最新 `updated_at` 轻量摘要计算而来；`/api/sync/status` 直接读取这份状态，缺失或被写路径标记为 dirty 时一次性重算并写回，不再为每次 status 请求读取完整 categories/time_entries 后 JSON 序列化。普通 no-op 同步不会为了校验拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
 
 客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量替换等可能更慢的同步拉取可在调用处设置 `timeoutMs: 30_000`。`apiFetch` 会把 204 / 空 body 的成功响应视为 `undefined`，而不是强制解析 JSON。`apiFetch` 抛出的人类可读字符串来自 `packages/client/src/lib/messages.ts` 集中字符串表，方便后续 i18n。
 
@@ -157,7 +158,7 @@ last-reviewed: 2026-05-18
 | `POST /api/sync/force-push/prepare` | 生成短时确认 token，返回当前服务端摘要 |
 | `POST /api/sync/force-push` | 在确认 token + 短语正确时，用客户端提交的完整 categories/timeEntries 覆盖服务器 |
 
-`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` 是非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` 的完整数据。畸形 JSON 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据。成功后写 `sync_logs.action = 'force_push_applied'`。
+`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` 是非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` 的完整数据。畸形 JSON 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据。成功后写 `sync_logs.action = 'force_push_applied'`，并刷新 `sync_state` 中的 commit hash。
 
 `force-push/prepare` 生成的确认 token 当前存放在 `packages/server/src/routes/sync.ts` 的进程内 `Map`，TTL 为 5 分钟。token 只能消费一次：成功执行 `/api/sync/force-push` 后立即从内存中删除；过期、缺失或复用都会返回 403，并写入 `sync_logs`（例如 `force_push_expired` 或 `force_push_rejected`）。`prepare` 和最终成功覆盖也分别写入 `force_push_prepare`、`force_push_applied`，用于审计高风险覆盖操作。它只适合单实例部署：进程重启会清空 token，横向扩容时不同实例之间不会共享 token。启动时如果设置了 `SERVER_REPLICAS>1`，服务端会打印告警；真正多实例部署前应改成 SQLite 或 Redis 存储。
 
@@ -218,7 +219,8 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 2. **服务端 `sync_push` 是原子事务**：要么整批写入 + 备份，要么完全不动。
 3. **同步变更有依赖顺序**：`orderPushChanges` 必须保持 category create/update → time_entries → category delete，避免 entry 引用缺失分类或 category delete 早于 entry delete 触发外键失败。
 4. **`updatedAt` 字典序比较**：所有时间字段必须前缀格式一致（`YYYY-MM-DDTHH:mm:ss...`）。
-5. **server 是冲突仲裁者**：普通 push 不再因为服务器时间较新直接拒绝本地写入；服务端用 `baseSeq` 判断是否 fast-forward、非重叠合并或本地覆盖，并用受保护备份记录本地覆盖场景。
+5. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeq`、CLI 创建记录会把 `sync_state` 标记为 dirty，由下一次 `/api/sync/status` 惰性重算；force-push 与 reset 类全量替换会立即刷新 `sync_state`。新增服务端写路径时必须同步处理 commit hash，否则 `/api/sync/status` 会返回旧摘要。
+6. **server 是冲突仲裁者**：普通 push 不再因为服务器时间较新直接拒绝本地写入；服务端用 `baseSeq` 判断是否 fast-forward、非重叠合并或本地覆盖，并用受保护备份记录本地覆盖场景。
 
 ## 6. 错误码处理（客户端侧）
 

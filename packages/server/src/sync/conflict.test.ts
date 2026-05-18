@@ -8,6 +8,22 @@ let recordSeq: typeof import("./seq.js").recordSeq;
 beforeEach(async () => {
   db = new Database(":memory:");
   db.exec(`
+    CREATE TABLE categories (
+      id TEXT PRIMARY KEY,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE time_entries (
+      id TEXT PRIMARY KEY,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE sync_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_seq (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name TEXT NOT NULL,

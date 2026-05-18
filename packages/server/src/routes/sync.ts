@@ -29,6 +29,7 @@ import { orderPushChanges } from "../sync/order.js";
 import { validateSyncChanges } from "../sync/validation.js";
 import { analyzePushBaseSeq } from "../sync/conflict.js";
 import { getChangesSinceSeq, getLatestSeq } from "../sync/seq.js";
+import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 
 const FORCE_PUSH_CONFIRMATION_PHRASE = "OVERWRITE_SERVER" as const;
 const FORCE_PUSH_TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -166,14 +167,8 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
     insertEntry.run(entry.id, entry.categoryId, entry.startTime, entry.endTime, entry.note, entry.createdAt, entry.updatedAt);
     db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("time_entries", entry.id, "create");
   }
-}
 
-function stableContentHash(db: Database): string {
-  const hash = crypto.createHash("sha256");
-  const categories = (db.prepare("SELECT id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at FROM categories ORDER BY id").all() as CategoryRow[]).map(rowToCategory);
-  const timeEntries = (db.prepare("SELECT id, category_id, start_time, end_time, note, created_at, updated_at FROM time_entries ORDER BY id").all() as EntryRow[]).map(rowToEntry);
-  hash.update(JSON.stringify({ categories, timeEntries }));
-  return hash.digest("hex");
+  computeAndPersistCommitHash(db);
 }
 
 function readServerStatus(db: Database): SyncStatusResponse {
@@ -183,12 +178,14 @@ function readServerStatus(db: Database): SyncStatusResponse {
   const latestEntry = (db.prepare("SELECT MAX(updated_at) as value FROM time_entries").get() as MaxRow).value;
   const lastUpdatedAt = [latestCategory, latestEntry].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 
+  const commitState = getCommitHash(db);
+
   return {
     categoryCount,
     entryCount,
     lastUpdatedAt,
-    contentHash: stableContentHash(db),
-    latestSeq: getLatestSeq(),
+    contentHash: commitState.hash,
+    latestSeq: commitState.latestSeq,
     serverTime: new Date().toISOString(),
   };
 }

@@ -1,6 +1,7 @@
 import { v4 as uuid } from "uuid";
 import type Database from "better-sqlite3";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
+import { recordSeqWithDb } from "../sync/seq.js";
 
 export interface CategoryPathItem {
   id: string;
@@ -190,7 +191,7 @@ export function createEntryFromCliInput(db: Database.Database, input: CliEntryIn
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, category.categoryId, startTime, endTime, input.note || null, now, now);
 
-    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("time_entries", id, "create");
+    recordSeqWithDb(db, "time_entries", id, "create");
 
     return {
       ok: true,
