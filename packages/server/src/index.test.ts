@@ -57,10 +57,16 @@ afterEach(() => {
 const INDEX_TEST_TIMEOUT_MS = 15_000;
 
 describe("server app middleware order", () => {
-  it("rejects production startup without AUTH_TOKEN", async () => {
+  it("keeps production startup available without AUTH_TOKEN and fails closed for protected API routes", async () => {
     delete process.env.AUTH_TOKEN;
 
-    await expect(import("./index.js")).rejects.toThrow("AUTH_TOKEN must be set when NODE_ENV=production");
+    const { default: app } = await import("./index.js");
+
+    expect((await app.request("/api/health")).status).toBe(200);
+    expect((await app.request("/api/version")).status).toBe(200);
+    const protectedResponse = await app.request("/api/categories");
+    expect(protectedResponse.status).toBe(500);
+    expect(await protectedResponse.json()).toEqual({ error: "Server misconfigured: AUTH_TOKEN not set" });
   }, INDEX_TEST_TIMEOUT_MS);
 
   it("leaves health and version public while protecting later API routes", async () => {

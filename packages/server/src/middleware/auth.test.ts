@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assertProductionAuthConfigured, authMiddleware, createAuthMiddleware } from "./auth.js";
+import { authMiddleware, createAuthMiddleware } from "./auth.js";
 
 const originalAuthToken = process.env.AUTH_TOKEN;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalAllowUnauthenticatedDev = process.env.ALLOW_UNAUTHENTICATED_DEV;
 
 function createApp() {
   const handler = vi.fn((c) => c.json({ ok: true }));
@@ -16,6 +17,7 @@ function createApp() {
 beforeEach(() => {
   vi.restoreAllMocks();
   delete process.env.AUTH_TOKEN;
+  delete process.env.ALLOW_UNAUTHENTICATED_DEV;
   process.env.NODE_ENV = originalNodeEnv;
 });
 
@@ -32,10 +34,29 @@ afterEach(() => {
   } else {
     process.env.NODE_ENV = originalNodeEnv;
   }
+
+  if (originalAllowUnauthenticatedDev === undefined) {
+    delete process.env.ALLOW_UNAUTHENTICATED_DEV;
+  } else {
+    process.env.ALLOW_UNAUTHENTICATED_DEV = originalAllowUnauthenticatedDev;
+  }
 });
 
 describe("authMiddleware", () => {
-  it("passes through without AUTH_TOKEN and warns only once", async () => {
+  it("returns 500 when AUTH_TOKEN and ALLOW_UNAUTHENTICATED_DEV are unset", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { app, handler } = createApp();
+
+    const res = await app.request("/api/protected");
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "Server misconfigured: AUTH_TOKEN not set" });
+    expect(handler).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("passes through without AUTH_TOKEN only when ALLOW_UNAUTHENTICATED_DEV is enabled and warns once", async () => {
+    process.env.ALLOW_UNAUTHENTICATED_DEV = "1";
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const { app, handler } = createApp();
 
@@ -48,7 +69,7 @@ describe("authMiddleware", () => {
     expect(handler).toHaveBeenCalledTimes(2);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(
-      "[auth] AUTH_TOKEN unset — all /api/* endpoints are open. Do NOT use in production.",
+      "[auth] AUTH_TOKEN unset — all /api/* endpoints are open. ALLOW_UNAUTHENTICATED_DEV=1 is set.",
     );
   });
 
@@ -116,19 +137,5 @@ describe("authMiddleware", () => {
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthorized" });
     expect(handler).not.toHaveBeenCalled();
-  });
-});
-
-describe("assertProductionAuthConfigured", () => {
-  it("throws in production when AUTH_TOKEN is unset", () => {
-    expect(() => assertProductionAuthConfigured({ NODE_ENV: "production" })).toThrow(
-      "AUTH_TOKEN must be set when NODE_ENV=production",
-    );
-  });
-
-  it("does not throw in production when AUTH_TOKEN is set", () => {
-    expect(() =>
-      assertProductionAuthConfigured({ NODE_ENV: "production", AUTH_TOKEN: "configured" }),
-    ).not.toThrow();
   });
 });

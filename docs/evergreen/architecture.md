@@ -116,11 +116,11 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 3. 装 CORS 中间件（`/api/*`，来源由 `ALLOWED_ORIGINS` 白名单控制，默认 `*`）
 4. 装 `bodyLimit` 中间件（`/api/*`，上限由 `MAX_BODY_BYTES` 控制，默认 5 MB；`Content-Length` 超限会快速拒绝，无/未知长度 body 会先读取 cloned request 计数，超出返回 HTTP 413 且不消费原始 body）
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
-6. 装 auth 中间件（之后所有 `/api/*` 都需要 Bearer Token；`NODE_ENV=production` 会在启动前强制要求 `AUTH_TOKEN`）
+6. 装 auth 中间件（之后所有受保护的 `/api/*` 默认需要 Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
 8. 注册业务路由：`categories`/`entries`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
-10. 调 `assertProductionAuthConfigured()` 和 `initializeDatabase()`：校验生产鉴权配置、建表、首次启动播种默认分类
+10. 调 `initializeDatabase()`：建表、首次启动播种默认分类
 11. 启动时清理一次旧 server backup，并在 `SERVER_REPLICAS>1` 时提示 force-push token 仍是单实例内存存储
 12. 监听 `PORT`（默认 3000）
 

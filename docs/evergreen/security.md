@@ -22,7 +22,7 @@ last-reviewed: 2026-05-18
 
 ## 服务端认证与审计
 
-生产环境 `NODE_ENV=production` 时必须设置 `AUTH_TOKEN`，否则服务端启动前拒绝继续运行。未配置 token 的开发模式会放行 `/api/*` 并只打印一次警告，不能用于生产部署。
+未设置 `AUTH_TOKEN` 时，所有受保护的 `/api/*` 请求默认返回 HTTP 500；`/api/health` 和 `/api/version` 仍保持公开。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，开发环境才会放行未带 token 的 `/api/*` 请求，并且每个进程只打印一次警告。生产部署必须设置 `AUTH_TOKEN`，不再依赖 `NODE_ENV=production` 才 fail-closed。
 
 认证中间件通过 `createAuthMiddleware()` 暴露失败审计钩子，未授权请求会记录路径和代理 IP，便于后续接入持久化审计或告警。默认 `authMiddleware` 保持现有行为，不要求调用方配置审计后端。
 

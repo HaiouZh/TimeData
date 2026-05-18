@@ -6,7 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { initializeDatabase } from "./db/schema.js";
 import { getDb } from "./db/connection.js";
 import { runUtcResetIfNeeded } from "./db/utcReset.js";
-import { assertProductionAuthConfigured, authMiddleware } from "./middleware/auth.js";
+import { authMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
 import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
@@ -80,7 +80,6 @@ app.route("/api/admin", adminRoute);
 app.use("/*", serveStatic({ root: "./public" }));
 app.get("*", serveStatic({ root: "./public", path: "index.html" }));
 
-assertProductionAuthConfigured();
 initializeDatabase();
 
 const utcReset = runUtcResetIfNeeded(getDb());
