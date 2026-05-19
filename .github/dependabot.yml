@@ -19,3 +19,6 @@ updates:
     schedule:
       interval: "monthly"
     labels: ["ci", "deps"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
