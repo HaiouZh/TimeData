@@ -3,7 +3,7 @@
 // Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale] [--since=<rev>]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -17,20 +17,26 @@ const SETTINGS_PAGE_REFS = [
 ];
 const DATA_MODEL_OLD_PAGE_REF = "packages/client/src/pages/CategoriesPage.tsx";
 
-function parseArgs(argv) {
+export class CliUsageError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CliUsageError";
+    this.exitCode = 2;
+  }
+}
+
+export function parseArgs(argv) {
   const opts = { mode: "warn", since: "HEAD", help: false };
   for (const arg of argv) {
     if (arg === "--help" || arg === "-h") opts.help = true;
     else if (arg.startsWith("--mode=")) opts.mode = arg.slice(7);
     else if (arg.startsWith("--since=")) opts.since = arg.slice(8);
     else {
-      console.error("Unknown argument:", arg);
-      process.exit(2);
+      throw new CliUsageError(`Unknown argument: ${arg}`);
     }
   }
   if (!["warn", "strict", "stale"].includes(opts.mode)) {
-    console.error("--mode must be warn|strict|stale, got:", opts.mode);
-    process.exit(2);
+    throw new CliUsageError(`--mode must be warn|strict|stale, got: ${opts.mode}`);
   }
   return opts;
 }
@@ -161,21 +167,17 @@ function matchesAny(file, globs) {
   return globs.some((g) => patternToRegex(g).test(file));
 }
 
-function shellArg(s) {
-  if (/^[\w./-]+$/.test(s)) return s;
-  return `'${s.replace(/'/g, "'\\''")}'`;
-}
-
-function getChangedFiles(since) {
+export function getChangedFiles(since, { execFileSync: runExecFileSync = execFileSync } = {}) {
   const out = [];
+  const gitOptions = { cwd: REPO_ROOT, encoding: "utf8" };
   try {
-    const diff = execSync(`git diff ${shellArg(since)} --name-only`, { cwd: REPO_ROOT, encoding: "utf8" });
+    const diff = runExecFileSync("git", ["diff", since, "--name-only"], gitOptions);
     for (const line of diff.split("\n")) {
       const f = line.trim();
       if (f) out.push(f);
     }
     if (since === "HEAD") {
-      const untracked = execSync("git ls-files --others --exclude-standard", { cwd: REPO_ROOT, encoding: "utf8" });
+      const untracked = runExecFileSync("git", ["ls-files", "--others", "--exclude-standard"], gitOptions);
       for (const line of untracked.split("\n")) {
         const f = line.trim();
         if (f) out.push(f);
@@ -304,5 +306,13 @@ export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(runEvergreenDocCheck());
+  try {
+    process.exit(runEvergreenDocCheck());
+  } catch (err) {
+    if (err instanceof CliUsageError) {
+      console.error(err.message);
+      process.exit(err.exitCode);
+    }
+    throw err;
+  }
 }

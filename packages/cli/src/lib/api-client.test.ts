@@ -43,13 +43,51 @@ describe("requestJson", () => {
           );
         }),
     ) as unknown as typeof fetch;
+    const timeout = {} as ReturnType<typeof setTimeout>;
+    let triggerTimeout: (() => void) | undefined;
+    const setTimeoutImpl = vi.fn((handler: () => void, _timeoutMs: number) => {
+      triggerTimeout = handler;
+      return timeout;
+    }) as unknown as typeof setTimeout;
+    const clearTimeoutImpl = vi.fn() as unknown as typeof clearTimeout;
+
+    const resultPromise = requestJson({ serverUrl: "https://example.test", token: "token" }, "/api/test", {
+      fetchImpl,
+      setTimeoutImpl,
+      clearTimeoutImpl,
+    });
+    expect(setTimeoutImpl).toHaveBeenCalledWith(expect.any(Function), 30000);
+
+    expect(triggerTimeout).toBeDefined();
+    triggerTimeout?.();
+    const result = await resultPromise;
+
+    expect(result).toEqual({ ok: false, error: { code: "TIMEOUT", message: "Request timed out" } });
+    expect(clearTimeoutImpl).toHaveBeenCalledWith(timeout);
+  });
+
+  it("returns TIMEOUT when an injected setTimeout aborts immediately", async () => {
+    const fetchImpl = vi.fn(async (_url, init) => {
+      if (init?.signal?.aborted) {
+        throw new DOMException("The operation was aborted", "AbortError");
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const timeout = {} as ReturnType<typeof setTimeout>;
+    const setTimeoutImpl = vi.fn((handler: () => void, _timeoutMs: number) => {
+      handler();
+      return timeout;
+    }) as unknown as typeof setTimeout;
+    const clearTimeoutImpl = vi.fn() as unknown as typeof clearTimeout;
 
     const result = await requestJson({ serverUrl: "https://example.test", token: "token" }, "/api/test", {
       fetchImpl,
-      timeoutMs: 1,
+      setTimeoutImpl,
+      clearTimeoutImpl,
     });
 
     expect(result).toEqual({ ok: false, error: { code: "TIMEOUT", message: "Request timed out" } });
+    expect(clearTimeoutImpl).toHaveBeenCalledWith(timeout);
   });
 
   it("returns TIMEOUT when fetch rejects with a non-DOM AbortError", async () => {

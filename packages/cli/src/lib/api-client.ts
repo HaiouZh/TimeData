@@ -8,6 +8,8 @@ interface RequestOptions {
   body?: unknown;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  setTimeoutImpl?: typeof setTimeout;
+  clearTimeoutImpl?: typeof clearTimeout;
 }
 
 export async function requestJson(config: ApiConfig, path: string, options: RequestOptions = {}): Promise<unknown> {
@@ -18,8 +20,10 @@ export async function requestJson(config: ApiConfig, path: string, options: Requ
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
   const timeoutMs = options.timeoutMs ?? 30000;
+  const setTimeoutImpl = options.setTimeoutImpl ?? setTimeout;
+  const clearTimeoutImpl = options.clearTimeoutImpl ?? clearTimeout;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeoutImpl(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetchImpl(url, {
@@ -49,6 +53,6 @@ export async function requestJson(config: ApiConfig, path: string, options: Requ
       error: { code: "NETWORK_ERROR", message: err instanceof Error ? err.message : "Network error" },
     };
   } finally {
-    clearTimeout(timeout);
+    clearTimeoutImpl(timeout);
   }
 }

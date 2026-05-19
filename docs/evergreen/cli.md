@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-19
+last-reviewed: 2026-05-20
 ---
 
 # CLI（受控写入入口）
@@ -115,7 +115,7 @@ CLI 自身校验产生：
 
 api-client 包装：
 
-- `TIMEOUT`：请求超过默认 30 秒超时（测试可通过 `timeoutMs` 注入更短时间）
+- `TIMEOUT`：请求超过默认 30 秒超时（测试可通过 `timeoutMs` 注入更短时间；底层 `requestJson()` 也支持注入 `setTimeoutImpl` / `clearTimeoutImpl`，便于稳定测试超时路径）
 - `NETWORK_ERROR`：fetch 抛出的非超时网络错误
 - `AUTH_FAILED`（HTTP 401）
 - `HTTP_<status>`：非 401 HTTP 错误且响应不是 CLI/服务端标准 `{ ok, error }` 形状
