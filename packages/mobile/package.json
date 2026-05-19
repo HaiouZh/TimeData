@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@capacitor/android": "^7.6.5",
+    "@capacitor/android": "^8.3.4",
     "@capacitor/app": "^7.1.2",
     "@capacitor/app-launcher": "^7.0.4",
     "@capacitor/browser": "^7.0.5",
