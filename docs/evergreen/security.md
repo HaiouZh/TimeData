@@ -20,6 +20,8 @@ last-reviewed: 2026-05-19
 
 设置页必须明确提示用户：Token 会保存在本机浏览器存储中，只应在可信设备上保存服务器 Token。当前实现不引入 sessionStorage，也不在页面刷新后自动丢弃 Token。
 
+Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。
+
 ## 服务端认证与审计
 
 未设置 `AUTH_TOKEN` 时，所有受保护的 `/api/*` 请求默认返回 HTTP 500；`/api/health` 和 `/api/version` 仍保持公开。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，开发环境才会放行未带 token 的 `/api/*` 请求，并且每个进程只打印一次警告。生产部署必须设置 `AUTH_TOKEN`，不再依赖 `NODE_ENV=production` 才 fail-closed。

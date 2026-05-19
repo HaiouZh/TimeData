@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import { useState } from "react";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { safeGetItem, safeSetItem } from "../../lib/safeStorage.js";
@@ -9,10 +10,19 @@ export default function SettingsServerPage() {
   const [apiUrl, setApiUrl] = useState(savedApiUrl);
   const [apiToken, setApiToken] = useState(safeGetItem(STORAGE_KEYS.apiToken) || "");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   function saveConfig() {
-    updateApiUrl(apiUrl.trim());
+    const nextApiUrl = apiUrl.trim();
+    if (Capacitor.isNativePlatform() && nextApiUrl.toLowerCase().startsWith("http://")) {
+      setSaved(false);
+      setError("Android App 不支持 HTTP 明文地址，请使用 HTTPS 反向代理地址。");
+      return;
+    }
+
+    updateApiUrl(nextApiUrl);
     safeSetItem(STORAGE_KEYS.apiToken, apiToken.replace(/^Bearer\s+/i, "").trim());
+    setError("");
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -29,6 +39,7 @@ export default function SettingsServerPage() {
             placeholder="https://your-server.com"
             className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
           />
+          <p className="mt-2 text-xs text-slate-500">Android App 保持 HTTPS-only；自托管服务器请配置 HTTPS 反向代理后填写 https:// 地址。</p>
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Token</label>
@@ -43,6 +54,7 @@ export default function SettingsServerPage() {
             Token 会保存在本机浏览器存储中，请只在可信设备上保存服务器 Token。
           </p>
         </div>
+        {error ? <p className="text-xs text-red-300">{error}</p> : null}
         <button
           type="button"
           onClick={saveConfig}

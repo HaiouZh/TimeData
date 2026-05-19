@@ -1,3 +1,4 @@
+import { AppLauncher } from "@capacitor/app-launcher";
 import { Browser } from "@capacitor/browser";
 
 export interface GitHubReleaseAsset {
@@ -58,9 +59,15 @@ export async function openAndroidApkUpdate(
 
 async function openExternalUrl(url: string): Promise<void> {
   try {
-    await Browser.open({ url });
+    await AppLauncher.openUrl({ url });
+    return;
   } catch {
-    window.open(url, "_blank", "noopener,noreferrer");
+    try {
+      await Browser.open({ url });
+      return;
+    } catch {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
   }
 }
 

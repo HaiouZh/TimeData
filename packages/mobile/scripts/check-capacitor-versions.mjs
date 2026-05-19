@@ -6,6 +6,7 @@ const mobilePkg = JSON.parse(readFileSync(new URL("packages/mobile/package.json"
 
 const sharedPackages = [
   "@capacitor/app",
+  "@capacitor/app-launcher",
   "@capacitor/browser",
   "@capacitor/core",
   "@capacitor/filesystem",
