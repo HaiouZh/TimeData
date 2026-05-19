@@ -6,7 +6,10 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-    versioning-strategy: increase-if-necessary
+    # 用 increase 而不是 increase-if-necessary：后者在新版本仍满足 caret
+    # 范围时不会改 package.json 的 spec，但会改 pnpm-lock.yaml 的 specifier，
+    # 导致 pnpm install --frozen-lockfile 直接拒绝。
+    versioning-strategy: increase
     labels: ["deps"]
     ignore:
       - dependency-name: "@capacitor/*"
