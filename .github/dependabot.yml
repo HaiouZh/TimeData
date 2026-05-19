@@ -25,3 +25,8 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: "docker"
+    directory: "/packages/server"
+    schedule:
+      interval: "weekly"
+    labels: ["docker", "deps"]
