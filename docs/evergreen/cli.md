@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-20
+last-reviewed: 2026-05-21
 ---
 
 # CLI（受控写入入口）
