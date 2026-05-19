@@ -43,11 +43,11 @@ jobs:
         run: pnpm -r --parallel test
 
       - name: Docs consistency (strict)
-        if: github.actor != 'dependabot[bot]'
-        run: pnpm check:docs:strict --since=${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        run: pnpm check:docs:strict --since=${{ github.event.pull_request.base.sha }}
 
       - name: Docs consistency (warn, dependabot)
-        if: github.actor == 'dependabot[bot]'
+        if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
         run: pnpm check:docs --since=${{ github.event.pull_request.base.sha }}
 
       - name: Build
