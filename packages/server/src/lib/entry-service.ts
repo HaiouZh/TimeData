@@ -1,6 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import type Database from "better-sqlite3";
-import { v4 as uuid } from "uuid";
 import { recordSeqWithDb } from "../sync/seq.js";
 
 export interface CategoryPathItem {
@@ -196,7 +196,7 @@ export function createEntryFromCliInput(
       });
     }
 
-    const id = uuid();
+    const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
