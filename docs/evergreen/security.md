@@ -20,7 +20,7 @@ last-reviewed: 2026-05-19
 
 设置页必须明确提示用户：Token 会保存在本机浏览器存储中，只应在可信设备上保存服务器 Token。当前实现不引入 sessionStorage，也不在页面刷新后自动丢弃 Token。
 
-Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。
+Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` 的 `server.cleartext: false` / `android.allowMixedContent: false` 与 Manifest 的 `android:usesCleartextTraffic="false"` 共同禁止明文 API 请求。服务器设置页在原生环境会拒绝保存 `http://` API 地址，并提示用户改用 HTTPS 反向代理地址；Web/PWA 环境不做这层 Android 专属拦截。设置页还会提示自托管用户：服务端 `ALLOWED_ORIGINS` 必须包含 `https://localhost`，否则 Android（Capacitor `androidScheme: "https"`）的跨域请求会被 CORS fail-closed 中间件拒绝；具体配置位置和验证方法见 [部署与自更新](deployment.md) 的 `ALLOWED_ORIGINS` 段落。
 
 ## 服务端认证与审计
 

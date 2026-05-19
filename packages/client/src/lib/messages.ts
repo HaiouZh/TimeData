@@ -10,7 +10,7 @@ export const messages = {
   /** Network / API */
   network: {
     fetchFailed: (url: string): string =>
-      `网络请求失败：无法连接 ${url}。请确认手机能打开服务器 HTTPS 地址、服务器证书有效，并且 API 地址只填写域名根地址（例如 https://timedata.yanzhou.icu，不要带 /api）。`,
+      `网络请求失败：无法连接 ${url}。请确认手机能打开服务器 HTTPS 地址、服务器证书有效，并且 API 地址只填写域名根地址（例如 https://timedata.yanzhou.icu，不要带 /api）。自托管时还需确认服务端 ALLOWED_ORIGINS 已包含 https://localhost。`,
     timeout: (timeoutMs: number, url: string): string => `网络请求超时（${timeoutMs}ms）：${url}`,
   },
 

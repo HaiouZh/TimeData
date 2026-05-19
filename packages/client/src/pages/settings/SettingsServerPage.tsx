@@ -40,6 +40,7 @@ export default function SettingsServerPage() {
             className="w-full rounded bg-slate-800 px-3 py-2 text-sm"
           />
           <p className="mt-2 text-xs text-slate-500">Android App 保持 HTTPS-only；自托管服务器请配置 HTTPS 反向代理后填写 https:// 地址。</p>
+          <p className="mt-1 text-xs text-slate-500">自托管：服务端 <code className="font-mono">ALLOWED_ORIGINS</code> 必须包含 <code className="font-mono">https://localhost</code>，否则 Android 跨域请求会被 CORS 拒绝。</p>
         </div>
         <div>
           <label className="mb-1 block text-xs text-slate-500">Token</label>
