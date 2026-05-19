@@ -1,21 +1,28 @@
 services:
   timedata:
-    image: ghcr.io/haiouzh/timedata:latest
+    image: ghcr.io/haiouzh/timedata:${TIMEDATA_IMAGE_TAG:-latest}
     pull_policy: always
+    container_name: timedata
     ports:
       - "${PORT:-3000}:3000"
     volumes:
       - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
       - NODE_ENV=production
       - DB_PATH=${DB_PATH:-/app/data/timedata.db}
       - PORT=3000
-      - HOST_COMPOSE_DIR=${HOST_COMPOSE_DIR}
+      - WATCHTOWER_URL=http://watchtower:8080
+      - WATCHTOWER_TOKEN=${WATCHTOWER_TOKEN}
       - UPDATE_REPO=${UPDATE_REPO:-HaiouZh/TimeData}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    depends_on:
+      - watchtower
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - timedata-internal
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/api/health"]
       interval: 30s
@@ -23,3 +30,22 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower:1.7
+    container_name: timedata-watchtower
+    restart: unless-stopped
+    command:
+      - --label-enable
+      - --cleanup
+      - --http-api-update
+      - --http-api-periodic-polls=false
+    environment:
+      - WATCHTOWER_HTTP_API_TOKEN=${WATCHTOWER_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - timedata-internal
+
+networks:
+  timedata-internal:

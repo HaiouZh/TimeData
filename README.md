@@ -15,17 +15,11 @@ cd TimeData
 cp .env.example .env
 ```
 
-编辑 `.env`，至少修改以下两项：
+编辑 `.env`，至少修改鉴权密钥：
 
 ```text
 AUTH_TOKEN=你的随机密钥
-HOST_COMPOSE_DIR=/home/ubuntu/TimeData    # 当前目录的绝对路径
-```
-
-快捷设置 `HOST_COMPOSE_DIR`：
-
-```bash
-grep -q HOST_COMPOSE_DIR .env || echo "HOST_COMPOSE_DIR=$(pwd)" >> .env
+WATCHTOWER_TOKEN=你的另一段随机密钥
 ```
 
 启动：
@@ -36,18 +30,20 @@ docker compose up -d
 
 镜像自动从 GHCR 拉取，无需本地构建。服务默认监听 `3000` 端口。
 
+默认部署包含两个长期容器：`timedata` 运行应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器不挂载 `/var/run/docker.sock`，也不安装 docker CLI；网页“一键更新”只会通过内部网络触发 Watchtower 的受鉴权 HTTP API。容器启动时会自动修复 `./data` 的写入权限，通常不需要手动 `chown` 数据目录。
+
 ## 环境变量
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `AUTH_TOKEN` | 生产必填 | — | API 鉴权密钥，所有 API 请求需携带 `Authorization: Bearer <TOKEN>`；Docker 部署会以 `NODE_ENV=production` 运行，未设置时服务端会拒绝启动 |
 | `ALLOWED_ORIGINS` | 生产必填 | 空数组（拒绝跨域） | CORS 允许来源白名单，多个来源用英文逗号分隔；Web 部署填网页域名，移动壳按实际来源追加 `https://localhost,capacitor://localhost` |
-| `HOST_COMPOSE_DIR` | 是 | — | host 上 docker-compose.yml 所在目录的绝对路径，一键更新功能依赖此变量 |
 | `DB_PATH` | 否 | `/app/data/timedata.db` | SQLite 数据库路径 |
 | `PORT` | 否 | `3000` | 服务监听端口 |
 | `UPDATE_REPO` | 否 | `HaiouZh/TimeData` | GitHub owner/repo，用于查询最新版本 |
 | `GITHUB_TOKEN` | 否 | — | GitHub API Token，用于提高版本查询限额 |
-| `UPDATER_IMAGE` | 否 | `docker:24-cli` | 执行更新的临时容器镜像 |
+| `WATCHTOWER_TOKEN` | 生产必填 | — | Watchtower HTTP API Token，`/api/update` 触发内部 Watchtower 更新时使用 |
+| `TIMEDATA_IMAGE_TAG` | 否 | `latest` | TimeData 镜像 tag，可 pin 到指定版本 |
 
 ## 一键更新
 
@@ -58,11 +54,10 @@ push 到 main 后，GitHub Actions 自动构建镜像并推送到 GHCR。
 工作原理：
 
 1. `/api/version` 查询 GitHub Actions 最近一次成功构建的 commit SHA，与当前运行版本对比。
-2. `/api/update` 先在 `data/update.lock` 创建互斥锁；如果已有更新正在进行，会返回 `409 Conflict`，不会启动第二个 updater。
-3. `/api/update` 通过挂载的 docker socket 启动一个独立的 updater 容器，并让 updater 使用 host 网络。
-4. updater 容器执行 `docker compose pull && docker compose up -d --force-recreate`，拉取最新镜像并重启服务。
-5. updater 会轮询 `http://127.0.0.1:3000/api/health`；如果首次更新后服务未恢复，会在同一把锁内自动尝试一次 `docker compose up -d`。
-6. updater 容器独立于 timedata 容器的 cgroup，不会因 timedata 重启而中断；结束后会写 `data/update-status.json` 为 `succeeded` 或 `failed`。
+2. `/api/update` 先在 `data/update.lock` 创建互斥锁；如果已有更新正在进行，会返回 `409 Conflict`，不会启动第二次更新。
+3. 服务端通过 `WATCHTOWER_URL` 调用内部 `watchtower` 容器的 `POST /v1/update`，并用 `WATCHTOWER_TOKEN` 做 Bearer 鉴权。
+4. Watchtower 只处理带 `com.centurylinklabs.watchtower.enable=true` label 的容器；默认只有 `timedata` 带这个 label。
+5. Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec 重新创建 `timedata`。更新状态写入 `data/update-status.json`，网页会轮询 `/api/update/status` 展示结果和 `data/update.log` 尾部。
 
 ## 客户端配置
 
@@ -149,5 +144,5 @@ GitHub Actions 发布的是稳定 release keystore 签名的 APK。首次从旧 
 
 - 部署后浏览器无法访问：检查云服务器安全组/防火墙是否放行端口，`docker compose ps` 确认容器健康。
 - 同步失败：确认设置页 API 地址包含协议（`http://` 或 `https://`），Token 与服务器 `AUTH_TOKEN` 一致。
-- 一键更新无反应：确认 `.env` 中 `HOST_COMPOSE_DIR` 已设置，容器内能访问 `/var/run/docker.sock`；如果返回 409，说明已有更新任务或残留 `data/update.lock`，先看 `data/update.log` 和 `docker compose ps`。
+- 一键更新无反应：确认 `.env` 已设置 `WATCHTOWER_TOKEN`，compose 中存在 `watchtower` 服务，且 `timedata` 容器内 `WATCHTOWER_URL` 为 `http://watchtower:8080`；如果返回 409，说明已有更新任务或残留 `data/update.lock`，先看 `data/update.log` 和 `docker compose ps`。
 - Ubuntu 防火墙：`sudo ufw allow 3000/tcp`。

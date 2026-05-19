@@ -10,6 +10,7 @@ export const ErrorCode = {
   CORS_DENIED: "CORS_DENIED",
   INTERNAL_ERROR: "INTERNAL_ERROR",
   CONFLICT: "CONFLICT",
+  SELF_UPDATE_DISABLED: "SELF_UPDATE_DISABLED",
   NOT_FOUND: "NOT_FOUND",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -24,6 +25,7 @@ const DEFAULT_MESSAGE: Record<ErrorCode, string> = {
   CORS_DENIED: "Origin not allowed",
   INTERNAL_ERROR: "Internal error",
   CONFLICT: "Conflict",
+  SELF_UPDATE_DISABLED: "Self-update is disabled",
   NOT_FOUND: "Not found",
 };
 

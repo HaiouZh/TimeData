@@ -36,26 +36,35 @@ last-reviewed: 2026-05-20
 ## 1. 运行时拓扑
 
 ```
-┌─────────────────────────────────────────┐
-│ Linux host                              │
-│                                         │
-│  ┌────────────────────────────────────┐ │
-│  │ timedata 容器                       │ │
-│  │  - Hono on :3000                    │ │
-│  │  - 挂 ./data → /app/data            │ │
-│  │  - 挂 docker.sock → /var/run/...    │ │
-│  └────────────────────────────────────┘ │
-│                                         │
-│  ./data/timedata.db    SQLite 主库      │
-│  ./data/backups/*.db   sync push 备份   │
-│  ./data/update.log     自更新日志       │
-│  ./data/update-status.json  自更新状态   │
-│                                         │
-│  docker-compose.yml + .env              │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│ Linux host                                  │
+│                                             │
+│  ┌────────────────────────────────────────┐ │
+│  │ timedata 容器                           │ │
+│  │  - Hono on :3000                        │ │
+│  │  - 挂 ./data → /app/data                │ │
+│  │  - 不挂 docker.sock，不安装 docker CLI  │ │
+│  │  - 带 Watchtower enable label           │ │
+│  └────────────────────┬───────────────────┘ │
+│                       │ internal network     │
+│  ┌────────────────────▼───────────────────┐ │
+│  │ watchtower 容器                         │ │
+│  │  - 挂载 docker.sock                     │ │
+│  │  - 开启受 token 保护的 HTTP API         │ │
+│  │  - 只更新带 Watchtower label 的容器      │ │
+│  │  - 不向 host 暴露端口                   │ │
+│  └────────────────────────────────────────┘ │
+│                                             │
+│  ./data/timedata.db    SQLite 主库          │
+│  ./data/backups/*.db   sync push 备份       │
+│  ./data/update.log     自更新日志           │
+│  ./data/update-status.json  自更新状态       │
+│                                             │
+│  docker-compose.yml + .env                  │
+└─────────────────────────────────────────────┘
 ```
 
-只有一个长期容器（`timedata`）。自更新会临时拉起一个 `updater` 容器（`docker:24-cli`）执行 compose 命令再退出。
+默认部署有两个长期容器：`timedata` 跑应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器以非 root 用户运行，不挂载 `/var/run/docker.sock`，也不安装 docker CLI；自更新只通过内部网络触发 Watchtower 的受鉴权 HTTP API。Docker socket 权限集中在 `watchtower` 容器内，应用进程即便被攻陷也无法直接调用 Docker Engine API。
 
 ## 2. 关键环境变量
 
@@ -69,12 +78,14 @@ last-reviewed: 2026-05-20
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
 | `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空也使用该限流，其中清空必须发送 `X-Confirm: true` |
-| `HOST_COMPOSE_DIR` | 是 | **host 上** docker-compose.yml 所在的绝对路径。`updater` 容器需要它来定位 compose 文件。**容器内的路径不行**——updater 容器跟 timedata 容器是同级 |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
 | `PORT` | 否 | 监听端口，默认 3000 |
 | `UPDATE_REPO` | 否 | 查最新版本的 GitHub 仓库，默认 `HaiouZh/TimeData` |
 | `GITHUB_TOKEN` | 否 | 提高 GitHub API 限额（匿名 60 次/小时，带 token 5000） |
-| `UPDATER_IMAGE` | 否 | updater 容器镜像，默认 `docker:24-cli` |
+| `WATCHTOWER_URL` | 否 | Watchtower HTTP API 地址，默认由 compose 注入 `http://watchtower:8080` |
+| `WATCHTOWER_TOKEN` | 生产必填 | Watchtower HTTP API token；`/api/update` 用它触发内部 Watchtower 更新。缺失时 `/api/update` 返回 503 `SELF_UPDATE_DISABLED` |
+| `TIMEDATA_IMAGE_TAG` | 否 | TimeData 镜像 tag，默认 `latest`，可 pin 到指定版本 |
+| `UPDATE_STATE_DIR` | 否 | 自更新状态文件目录，默认 `/app/data`；一般不需要配置 |
 
 `AUTH_TOKEN` 缺失时：auth 中间件默认对受保护的 `/api/*` 返回 HTTP 500，不再按 `NODE_ENV` 区分开发/生产。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，才会放行所有 `/api/*` 并且每个进程只输出一次警告；这个旁路只用于本地开发，不能用于生产部署。
 
@@ -189,30 +200,32 @@ Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mob
 ```
 client POST /api/update
   ↓
-triggerUpdate({ hostComposeDir, image: 'docker:24-cli' })
+triggerUpdate({
+  stateDir: UPDATE_STATE_DIR || '/app/data',
+  watchtowerUrl: WATCHTOWER_URL,
+  watchtowerToken: WATCHTOWER_TOKEN
+})
   ↓
-原子创建 data/update.lock；如果锁已存在，返回 409，不启动第二个 updater
+原子创建 /app/data/update.lock；如果锁已存在，返回 409，不启动第二次更新
   ↓
-spawn 一个临时 updater 容器，挂 docker.sock + HOST_COMPOSE_DIR，并使用 host 网络
-  ↓ 在 updater 容器里跑：
-        docker compose pull
-        docker compose up -d --force-recreate
-        轮询 http://127.0.0.1:3000/api/health
-        如果失败，在同一把锁内尝试一次 docker compose up -d 恢复
-        写 data/update-status.json 为 succeeded 或 failed
+后台任务通过内部网络调用 Watchtower HTTP API：
+  POST /v1/update
+  Authorization: Bearer <WATCHTOWER_TOKEN>
   ↓
-updater 容器退出，trap 删除 update.lock，留下 update.log + update-status.json
+Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec 重新创建带 label 的 timedata 容器
+  ↓
+服务端把 Watchtower 接受触发请求的结果写入 update-status.json / update.log，并释放 update.lock
 ```
 
 关键点：
 
-1. **服务端互斥是强约束**：`data/update.lock` 通过原子创建保护同一部署目录；重复 `POST /api/update` 会返回 `409 Conflict`，不会启动第二个 updater。
-2. **updater 容器独立于 timedata 容器**：timedata 重启时 updater 不会被打断。
-3. **靠挂载 `/var/run/docker.sock`**：updater 容器实际用的是 host 的 docker daemon。
-4. **updater 使用 host 网络**：健康检查访问 `http://127.0.0.1:3000/api/health`，对应 host 上 compose 映射出的 TimeData 服务。
-5. `HOST_COMPOSE_DIR` 必须是 host 路径（**不是**容器内路径），否则 updater 找不到 compose 文件。
-6. 更新 ID 写到 `data/update-status.json`，前端轮询 `/api/update/status` 获取进度和日志尾部。
-7. updater 在 compose recreate 后轮询健康检查；失败时只在当前锁内自动尝试一次 `docker compose up -d` 恢复。
+1. **服务端互斥是强约束**：`data/update.lock` 通过原子创建保护同一部署；重复 `POST /api/update` 会返回 `409 Conflict`，不会启动第二次更新。
+2. **应用容器不挂 Docker socket**：`timedata` 不直接接触 Docker API，也不安装 docker CLI；它只调用内部网络里的 Watchtower HTTP API，攻击面收敛到“触发更新”一个动作。
+3. **更新范围由 Watchtower label 限定**：compose 使用 `--label-enable`，默认只有 `timedata` 带 `com.centurylinklabs.watchtower.enable=true`，因此按需更新只作用于 TimeData 容器，不会波及 host 上其它容器。
+4. **Watchtower 负责真正的 recreate**：Watchtower 拉取镜像、比较 digest，并在有新镜像时使用旧容器 spec 重新创建 `timedata`；这比单纯 restart 更符合"更新到新镜像"的目标。
+5. **状态语义是触发结果**：服务端的 `succeeded` 表示 Watchtower 已接受 `/v1/update` 请求，不保证新容器已经完成健康启动；部署排查仍以 `data/update.log` 和 `docker compose ps` 为准。
+6. **缺配置 fail closed**：`WATCHTOWER_URL` 或 `WATCHTOWER_TOKEN` 缺失时 `/api/update` 返回 503 `SELF_UPDATE_DISABLED`，不会跑空触发，也不会留下假成功状态。
+7. 更新状态写到 `/app/data/update-status.json`，前端轮询 `/api/update/status` 获取进度和日志尾部。
 
 ### 5.1 更新状态（`/api/update/status`）
 
@@ -231,12 +244,12 @@ updater 容器退出，trap 删除 update.lock，留下 update.log + update-stat
 
 状态语义：
 
-- `running`：服务端已接受更新请求，updater 正在执行。
-- `succeeded`：updater 完成 compose 更新，并通过本机 `/api/health` 健康检查；如果首次 recreate 后失败但一次恢复成功，也会写为 `succeeded`，细节看 `logTail`。
-- `failed`：compose、恢复或健康检查最终失败；此时看 `update.log` 和 `docker compose ps` 排查。
+- `running`：服务端已接受更新请求，后台任务正在调用 Watchtower。
+- `succeeded`：Watchtower 已接受 `/v1/update` 触发请求；后续是否拉到新镜像、是否需要 recreate、容器是否健康，以 Watchtower 行为和 `docker compose ps` 为准。
+- `failed`：Watchtower token、URL、网络或 HTTP 响应失败；此时看 `update.log` 和 `docker compose ps` 排查。
 - `unknown`：还没有状态文件。
 
-如果 `POST /api/update` 返回 `409 Conflict`，说明已有更新锁；不要手动重复触发。只有确认没有 updater 在运行、且 `update.log` 显示流程已经结束后，才考虑在 host 上删除残留的 `data/update.lock`。
+如果 `POST /api/update` 返回 `409 Conflict`，说明已有更新锁；不要手动重复触发。只有确认 `update.log` 显示流程已经结束、且没有正在重启的容器时，才考虑在 host 上删除残留的 `data/update.lock`。
 
 ## 6. 静态前端服务
 
@@ -293,8 +306,8 @@ data/
 
 ## 9. 改部署相关代码前的清单
 
-- [ ] 跑 `packages/server/src/lib/version.test.ts`、`update.test.ts`：用 mock 测过版本查询和 updater spawn。
-- [ ] 改 `HOST_COMPOSE_DIR` 用法：跨平台（Windows/Linux 路径分隔符）很容易踩坑。
+- [ ] 跑 `packages/server/src/lib/version.test.ts`、`update.test.ts`：用 mock 测过版本查询和 Watchtower 更新触发流程。
+- [ ] 改 `WATCHTOWER_URL`、`WATCHTOWER_TOKEN` 或 Watchtower compose 参数：确认 Watchtower 不暴露 host 端口，且只更新带 `com.centurylinklabs.watchtower.enable=true` label 的容器。
 - [ ] 改 `serveStatic` 的 root：影响生产 Dockerfile 的拷贝路径，需要同步改。
-- [ ] 改自更新流程：要在 staging 完整跑一次"`docker compose pull` 后服务能正常重启 + 接续提供服务"。
+- [ ] 改自更新流程：要在 staging 完整跑一次“拉镜像后服务能正常重启 + 接续提供服务”。
 - [ ] 改 `/api/version` 缓存 TTL：太短会打 GitHub API 限额，太长用户看不到新版本。

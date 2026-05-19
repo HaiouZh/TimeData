@@ -21,7 +21,11 @@ RUN pnpm --filter @timedata/server deploy --legacy --prod /prod
 
 FROM node:22-alpine
 
-RUN apk add --no-cache docker-cli
+RUN apk add --no-cache su-exec \
+ && addgroup -g 1000 timedata \
+ && adduser -u 1000 -G timedata -s /bin/sh -D timedata \
+ && mkdir -p /app/data \
+ && chown -R timedata:timedata /app
 
 WORKDIR /app
 COPY --from=builder /prod ./
@@ -35,5 +39,9 @@ ARG GIT_SHA=dev
 ENV GIT_SHA=${GIT_SHA}
 ENV NODE_ENV=production
 
+COPY packages/server/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 3000
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]
