@@ -71,4 +71,12 @@ describe("requestJson", () => {
 
     expect(result).toEqual({ ok: false, error: { code: "INVALID_RESPONSE", message: "Server returned invalid JSON" } });
   });
+
+  it("returns INVALID_RESPONSE with a no-body message for 204 responses", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
+
+    const result = await requestJson({ serverUrl: "https://example.test", token: "token" }, "/api/test", { fetchImpl });
+
+    expect(result).toEqual({ ok: false, error: { code: "INVALID_RESPONSE", message: "Server returned no JSON body" } });
+  });
 });

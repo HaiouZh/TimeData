@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-19
+last-reviewed: 2026-05-20
 ---
 
 # CLI（受控写入入口）
@@ -63,7 +63,7 @@ last-reviewed: 2026-05-19
 { "serverUrl": "https://timedata.example.com", "token": "your-token" }
 ```
 
-`serverUrl` 缺失即报 `CONFIG_MISSING`；token 缺失不会报错（私有服务器可能允许无 token）。
+`serverUrl` 缺失即报 `CONFIG_MISSING`；格式必须能解析为 `http:` 或 `https:` URL，否则报 `CONFIG_INVALID`。token 缺失不会报错（私有服务器可能允许无 token）。配置文件读取后会用 runtime schema 校验：文件必须是对象，`serverUrl` / `token` 如果存在必须是字符串；未知字段保留但不参与配置解析。
 
 在 unix（Linux / mac）下 `readFileConfig` 会先做权限检查：若配置文件的 mode 含任何 group / other 位（即 `mode & 0o077 !== 0`），直接返回 `CONFIG_INVALID` 并提示 `Config file permissions are too open`，**早于**任何 JSON 解析。建议把文件 chmod 到 `0o600`。Windows 下没有 POSIX 权限概念，跳过此检查。这条也解释了为什么 cli 单测里专门验证 JSON 解析失败的用例需要显式传 `"win32"` 平台参数。
 
@@ -119,8 +119,8 @@ api-client 包装：
 - `NETWORK_ERROR`：fetch 抛出的非超时网络错误
 - `AUTH_FAILED`（HTTP 401）
 - `HTTP_<status>`：非 401 HTTP 错误且响应不是 CLI/服务端标准 `{ ok, error }` 形状
-- `INVALID_RESPONSE`：成功或错误响应体不是合法 JSON
-- `SCHEMA_MISMATCH`：server 响应未通过 CLI 端 schema 校验，常见于客户端/服务端版本不匹配。先升级 CLI 到与 server 一致的版本；仍异常时运行 `timedata version` 与 `GET /api/version` 比对版本。
+- `INVALID_RESPONSE`：响应体不是合法 JSON；HTTP 204 / 空响应会明确报 `Server returned no JSON body`
+- `SCHEMA_MISMATCH`：server 响应未通过 CLI 端 schema 校验，常见于客户端/服务端版本不匹配。`list` 命令对 `ok: true` 响应要求 `date`、`entries`、`summary` 都存在，并校验条目字段形状；`ok: false` 响应必须有 `{ error: { code, message } }`。先升级 CLI 到与 server 一致的版本；仍异常时运行 `timedata version` 与 `GET /api/version` 比对版本。
 
 服务端 `entries` 路由产生（透传给 CLI）：
 
@@ -156,7 +156,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
 - 分配 UUID
 
-CLI 的 `list` 命令调 `listEntriesForCliDate`，返回带分类路径和时长的视图。这是和 `GET /api/entries`（不带 `format=cli`）不同的输出形状；普通 `GET /api/entries` 仍返回 `TimeEntry` 字段形态，服务端内部通过 row mapper 从 SQLite 的 snake_case 字段转换。
+CLI 的 `list` 命令调 `listEntriesForCliDate`，返回带分类路径和时长的视图。这是和 `GET /api/entries`（不带 `format=cli`）不同的输出形状；普通 `GET /api/entries` 仍返回 `TimeEntry` 字段形态，服务端内部通过 row mapper 从 SQLite 的 snake_case 字段转换。CLI 端会对 `format=cli` 响应做 discriminated union 校验：成功响应必须带 `date`、`entries`、`summary`，其中条目的 `startTime` / `endTime` 是服务端转回的本地日期时间字符串（`YYYY-MM-DDTHH:mm:ss`），不是 UTC 存储格式。
 
 ## 7. 包与运行环境
 

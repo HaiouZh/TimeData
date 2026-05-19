@@ -1,5 +1,6 @@
 import { requestJson } from "../lib/api-client.js";
 import { type FileConfigResult, resolveConfig } from "../lib/config.js";
+import { validateServerUrl } from "../lib/url.js";
 
 interface DoctorCheck {
   name: "config" | "serverUrl" | "server" | "auth";
@@ -42,7 +43,7 @@ export async function runDoctor(
   fetchImpl?: typeof fetch,
 ): Promise<unknown> {
   const checks: DoctorCheck[] = [];
-  const config = resolveConfig(flags, env, fileConfig);
+  const config = resolveConfig(flags, env, fileConfig, { validateUrl: false });
 
   if ("ok" in config) {
     return {
@@ -53,10 +54,7 @@ export async function runDoctor(
 
   checks.push({ name: "config", ok: true, message: "Configuration resolved" });
 
-  try {
-    const url = new URL(config.serverUrl);
-    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("unsupported protocol");
-  } catch {
+  if (!validateServerUrl(config.serverUrl)) {
     checks.push({ name: "serverUrl", ok: false, code: "CONFIG_INVALID", message: "Server URL must be http or https" });
     return { ok: false, checks };
   }

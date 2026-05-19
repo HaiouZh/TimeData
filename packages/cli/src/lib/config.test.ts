@@ -45,6 +45,36 @@ describe("resolveConfig", () => {
     });
   });
 
+  it("reads a valid JSON config file", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-cli-config-"));
+    const configPath = path.join(tempDir, "config.json");
+    fs.writeFileSync(configPath, JSON.stringify({ serverUrl: "https://server.example", token: "secret" }), "utf8");
+
+    expect(readFileConfig(configPath, "win32")).toEqual({ serverUrl: "https://server.example", token: "secret" });
+  });
+
+  it("rejects non-object JSON config files", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-cli-config-"));
+    const configPath = path.join(tempDir, "config.json");
+    fs.writeFileSync(configPath, JSON.stringify(["https://server.example"]), "utf8");
+
+    expect(readFileConfig(configPath, "win32")).toEqual({
+      ok: false,
+      error: { code: "CONFIG_INVALID", message: `Invalid config file: ${configPath}` },
+    });
+  });
+
+  it("rejects config files with non-string fields", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-cli-config-"));
+    const configPath = path.join(tempDir, "config.json");
+    fs.writeFileSync(configPath, JSON.stringify({ serverUrl: 123, token: false }), "utf8");
+
+    expect(readFileConfig(configPath, "win32")).toEqual({
+      ok: false,
+      error: { code: "CONFIG_INVALID", message: `Invalid config file: ${configPath}` },
+    });
+  });
+
   it("rejects world-readable config files on unix", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-cli-config-"));
     const configPath = path.join(tempDir, "config.json");

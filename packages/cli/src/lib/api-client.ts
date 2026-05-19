@@ -1,3 +1,5 @@
+import { validateServerUrl } from "./url.js";
+
 export interface ApiConfig {
   serverUrl: string;
   token: string;
@@ -12,7 +14,11 @@ interface RequestOptions {
 
 export async function requestJson(config: ApiConfig, path: string, options: RequestOptions = {}): Promise<unknown> {
   const fetchImpl = options.fetchImpl || fetch;
-  const url = `${config.serverUrl.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+  const baseUrl = validateServerUrl(config.serverUrl);
+  if (!baseUrl) {
+    return { ok: false, error: { code: "CONFIG_INVALID", message: "Server URL must be http or https" } };
+  }
+  const url = `${baseUrl.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
   const headers: Record<string, string> = {};
   if (config.token) headers.Authorization = `Bearer ${config.token}`;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
@@ -28,6 +34,9 @@ export async function requestJson(config: ApiConfig, path: string, options: Requ
       signal: controller.signal,
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     });
+    if (res.status === 204) {
+      return { ok: false, error: { code: "INVALID_RESPONSE", message: "Server returned no JSON body" } };
+    }
     const json = await res.json().catch(() => undefined);
     if (json === undefined) {
       return { ok: false, error: { code: "INVALID_RESPONSE", message: "Server returned invalid JSON" } };

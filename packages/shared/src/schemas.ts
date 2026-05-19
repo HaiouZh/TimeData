@@ -8,6 +8,8 @@ export const UtcIsoStringSchema = z
     return Number.isFinite(date.getTime()) && date.toISOString() === value;
   }, "Invalid UTC ISO timestamp");
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const NonNegativeIntSchema = z.number().int().nonnegative().finite();
+const SeqSchema = NonNegativeIntSchema;
 const NonEmptyTrimmedStringSchema = z.string().refine((value) => value.trim().length > 0, "String must not be empty");
 
 export const CategorySchema = z.object({
@@ -97,18 +99,18 @@ export const SyncPushReasonCodeSchema = z.enum([
 
 export const SyncPushRequestSchema = z.object({
   changes: z.array(SyncChangeSchema),
-  baseSeq: z.number().nullable().optional(),
+  baseSeq: SeqSchema.nullable().optional(),
 });
 
 export const SyncPullRequestSchema = z.object({
   lastSyncedAt: UtcIsoStringSchema.nullable().optional(),
   since: UtcIsoStringSchema.optional(),
-  sinceSeq: z.number().int().nonnegative().nullable().optional(),
+  sinceSeq: SeqSchema.nullable().optional(),
 });
 
 export const SyncForcePushPrepareRequestSchema = z.object({
-  categoryCount: z.number().int().nonnegative(),
-  entryCount: z.number().int().nonnegative(),
+  categoryCount: NonNegativeIntSchema,
+  entryCount: NonNegativeIntSchema,
   lastUpdatedAt: UtcIsoStringSchema.nullable(),
 });
 
@@ -120,16 +122,16 @@ export const SyncForcePushRequestSchema = z.object({
 });
 
 export const SyncStatusResponseSchema = z.object({
-  categoryCount: z.number(),
-  entryCount: z.number(),
+  categoryCount: NonNegativeIntSchema,
+  entryCount: NonNegativeIntSchema,
   lastUpdatedAt: UtcIsoStringSchema.nullable(),
   contentHash: z.string().min(1).optional(),
-  latestSeq: z.number().nullable().optional(),
+  latestSeq: SeqSchema.nullable().optional(),
   serverTime: UtcIsoStringSchema,
 });
 
 export const SyncPullResponseSchema = z.object({
   changes: z.array(SyncChangeSchema),
   serverTime: UtcIsoStringSchema,
-  latestSeq: z.number().nullable().optional(),
+  latestSeq: SeqSchema.nullable().optional(),
 });

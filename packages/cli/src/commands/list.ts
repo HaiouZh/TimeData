@@ -2,25 +2,36 @@ import { z } from "zod";
 import { requestJson, type ApiConfig } from "../lib/api-client.js";
 import { todayLocal, validateDate } from "../lib/validation.js";
 
+const LocalDateTimeSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+
 const CliEntryItemSchema = z.object({
   id: z.string().min(1),
-  startTime: z.string(),
-  endTime: z.string(),
+  startTime: LocalDateTimeSchema,
+  endTime: LocalDateTimeSchema,
   durationMinutes: z.number(),
   category: z.string(),
   note: z.string().nullable(),
 });
 
-const CliEntriesListResponseSchema = z.object({
-  ok: z.boolean(),
-  date: z.string().optional(),
-  entries: z.array(CliEntryItemSchema).optional(),
+const CliEntriesListSuccessSchema = z.object({
+  ok: z.literal(true),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  entries: z.array(CliEntryItemSchema),
   summary: z.object({
     totalMinutes: z.number(),
     entryCount: z.number(),
-  }).optional(),
-  error: z.object({ code: z.string(), message: z.string() }).optional(),
+  }),
 });
+
+const CliEntriesListErrorSchema = z.object({
+  ok: z.literal(false),
+  error: z.object({ code: z.string(), message: z.string() }),
+});
+
+const CliEntriesListResponseSchema = z.discriminatedUnion("ok", [
+  CliEntriesListSuccessSchema,
+  CliEntriesListErrorSchema,
+]);
 
 export async function runList(
   config: ApiConfig,

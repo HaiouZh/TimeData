@@ -138,7 +138,7 @@ last-reviewed: 2026-05-19
 
 `/api/sync/pull` 行为：
 
-- 入参 `{ lastSyncedAt?: string | null, since?: string, sinceSeq?: number | null }`。服务端入口先用 `SyncPullRequestSchema` 做运行时校验：时间字段必须是带毫秒和 `Z` 的 UTC ISO 字符串，`sinceSeq` 必须是非负整数或 `null`；畸形 JSON 或字段类型错误返回 400 `invalid_request`，不会进入拉取逻辑。`sinceSeq` 存在时优先，按 `sync_seq.id > sinceSeq` 拉取；否则走兼容 timestamp cursor：`since` 优先，其次 `lastSyncedAt`，再不济 `1970-01-01`。
+- 入参 `{ lastSyncedAt?: string | null, since?: string, sinceSeq?: number | null }`。服务端入口先用 `SyncPullRequestSchema` 做运行时校验：时间字段必须是带毫秒和 `Z` 的 UTC ISO 字符串，`sinceSeq` 必须是有限非负整数或 `null`；畸形 JSON、负数、小数、Infinity 或字段类型错误返回 400 `invalid_request`，不会进入拉取逻辑。`sinceSeq` 存在时优先，按 `sync_seq.id > sinceSeq` 拉取；否则走兼容 timestamp cursor：`since` 优先，其次 `lastSyncedAt`，再不济 `1970-01-01`。
 - 客户端收到响应后用 `SyncPullResponseSchema` 做运行时校验；不符合 `SyncChange` 判别联合契约的响应会抛出 `Invalid /api/sync/pull response`，不会写入本地 Dexie。
 - seq cursor 路径会按 `sync_seq` 找出 cursor 后每个 `table_name + record_id` 的最新变更，再读取当前业务表或 tombstone 组成 `SyncChange[]`，并在响应中返回 `latestSeq`。
 - timestamp cursor 路径拉取 `categories.updated_at >= since` + `time_entries.updated_at >= since`，转成 `SyncChange[]` 返回（`action` 永远是 `update`，无论实际是新增还是修改）。包含边界是为了重放与 cursor 同时间戳的记录，避免同毫秒/同时间窗口记录被 `> since` 跳过。
@@ -159,7 +159,7 @@ last-reviewed: 2026-05-19
 | `POST /api/sync/force-push/prepare` | 生成短时确认 token，返回当前服务端摘要 |
 | `POST /api/sync/force-push` | 在确认 token + 短语正确时，用客户端提交的完整 categories/timeEntries 覆盖服务器 |
 
-`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` 是非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` 的完整数据。畸形 JSON 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据。成功后写 `sync_logs.action = 'force_push_applied'`，并刷新 `sync_state` 中的 commit hash。
+`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` 是有限非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` 的完整数据。畸形 JSON、负数、小数、Infinity 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据。成功后写 `sync_logs.action = 'force_push_applied'`，并刷新 `sync_state` 中的 commit hash。
 
 `force-push/prepare` 生成的确认 token 当前存放在 `packages/server/src/routes/sync.ts` 的进程内 `Map`，TTL 为 5 分钟。token 只能消费一次：成功执行 `/api/sync/force-push` 后立即从内存中删除；过期、缺失或复用都会返回 403，并写入 `sync_logs`（例如 `force_push_expired` 或 `force_push_rejected`）。`prepare` 和最终成功覆盖也分别写入 `force_push_prepare`、`force_push_applied`，用于审计高风险覆盖操作。它只适合单实例部署：进程重启会清空 token，横向扩容时不同实例之间不会共享 token。启动时如果设置了 `SERVER_REPLICAS>1`，服务端会打印告警；真正多实例部署前应改成 SQLite 或 Redis 存储。
 
