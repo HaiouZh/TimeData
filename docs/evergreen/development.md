@@ -96,7 +96,7 @@ pnpm --filter @timedata/mobile test # 检查 Android 明文流量和 Capacitor v
 pnpm build:mobile:apk          # 构建 Android debug APK
 pnpm build:mobile:release-apk  # 构建 Android release APK（需要签名参数）
 pnpm build             # 构建 Web/Server/CLI，不包含 Android APK
-pnpm lint              # Biome lint，当前用于报告存量 any/import type warning，不因 warning 阻塞
+pnpm lint              # Biome lint（v2.4，配置在 biome.json 使用 files.includes 反向写法），当前用于报告存量 any/import type warning，不因 warning 阻塞
 pnpm -r typecheck      # 递归执行各 package TypeScript 检查
 pnpm test              # 递归执行各 package 测试；根脚本串行执行 workspace，避免本地全量测试资源争用导致 Vitest hook 超时
 pnpm --filter @timedata/server test routes
