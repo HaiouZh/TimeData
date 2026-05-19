@@ -16,7 +16,7 @@ last-reviewed: 2026-05-20
 ## 环境要求
 
 ```text
-Node.js 22+
+Node.js 22.12+   # Vite 7+ 要求
 pnpm 10.10+
 ```
 
