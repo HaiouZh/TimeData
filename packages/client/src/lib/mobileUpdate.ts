@@ -47,7 +47,11 @@ export function getAndroidApkUpdateFromRelease(
 export type AndroidApkUpdateOpener = (url: string) => Promise<void> | void;
 
 export function getAndroidApkUpdateUrl(update: AndroidApkUpdate): string {
-  return update.apkUrl;
+  // 故意返回 Release 页（HTML）而不是 .apk 直链：Android Intent.ACTION_VIEW
+  // 收到 .apk URL 时浏览器通常静默甩给下载管理器，部分机型 / 浏览器组合下
+  // 表现为"选了浏览器但什么都没发生"。Release 页是普通 HTML，任何浏览器都能
+  // 正常渲染，用户在页面上点 APK 资产开始下载，链路确定性最强。
+  return update.pageUrl;
 }
 
 export async function openAndroidApkUpdate(
@@ -58,16 +62,20 @@ export async function openAndroidApkUpdate(
 }
 
 async function openExternalUrl(url: string): Promise<void> {
+  // AppLauncher.openUrl 不抛错，靠返回的 completed 字段判断是否真的派发出去；
+  // completed=false（多见于 Android 11+ 包可见性未配置、URL 没人接）时落到
+  // Browser.open（Chrome Custom Tabs），最后 window.open 兜底非原生环境。
   try {
-    await AppLauncher.openUrl({ url });
+    const result = await AppLauncher.openUrl({ url });
+    if (result.completed) return;
+  } catch {
+    // AppLauncher 抛错（如插件未注册），继续 fallback
+  }
+  try {
+    await Browser.open({ url });
     return;
   } catch {
-    try {
-      await Browser.open({ url });
-      return;
-    } catch {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 }
 
