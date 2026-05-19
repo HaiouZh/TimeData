@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -30,7 +34,9 @@ jobs:
 
       - name: Compute short sha
         id: sha
-        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_SHA_VALUE: ${{ github.sha }}
+        run: echo "short=${GITHUB_SHA_VALUE::7}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v5
