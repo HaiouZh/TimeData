@@ -22,6 +22,8 @@ RUN pnpm --filter @timedata/server deploy --legacy --prod /prod
 FROM node:22-alpine
 
 RUN apk add --no-cache su-exec \
+ && deluser --remove-home node 2>/dev/null || true \
+ && (delgroup node 2>/dev/null || true) \
  && addgroup -g 1000 timedata \
  && adduser -u 1000 -G timedata -s /bin/sh -D timedata \
  && mkdir -p /app/data \
