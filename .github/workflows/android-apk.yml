@@ -36,16 +36,16 @@ jobs:
           echo "tag=android-${VERSION_CODE}" >> "$GITHUB_OUTPUT"
           echo "Version code: ${VERSION_CODE}"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.10.0
           run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
       - name: Set up Java
         uses: actions/setup-java@v4
