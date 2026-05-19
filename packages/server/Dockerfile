@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
 
@@ -19,7 +19,7 @@ RUN pnpm build:shared && pnpm build:client && pnpm build:server
 RUN mkdir -p packages/server/public && cp -r packages/client/dist/* packages/server/public/
 RUN pnpm --filter @timedata/server deploy --legacy --prod /prod
 
-FROM node:22-alpine
+FROM node:26-alpine
 
 RUN apk add --no-cache su-exec \
  && deluser --remove-home node 2>/dev/null || true \
