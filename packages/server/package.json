@@ -14,7 +14,7 @@
     "typecheck": "pnpm --filter @timedata/shared build && tsc --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.0",
+    "@hono/node-server": "^2.0.3",
     "@timedata/shared": "workspace:*",
     "better-sqlite3": "^11.8.0",
     "hono": "^4.12.19",
