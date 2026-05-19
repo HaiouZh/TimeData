@@ -1,13 +1,14 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
   "files": {
-    "ignore": [
-      "**/dist/**",
-      "**/node_modules/**",
-      "**/android/**",
-      "packages/mobile/android/**",
-      ".claude/worktrees/**",
-      "参考代码/**"
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/android",
+      "!packages/mobile/android",
+      "!.claude/worktrees",
+      "!参考代码"
     ]
   },
   "linter": {
@@ -17,6 +18,7 @@
       "a11y": {
         "noAutofocus": "off",
         "noLabelWithoutControl": "off",
+        "noStaticElementInteractions": "off",
         "noSvgWithoutTitle": "off",
         "useButtonType": "off",
         "useFocusableInteractive": "off",
