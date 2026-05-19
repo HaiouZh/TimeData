@@ -32,9 +32,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: pnpm audit (advisory only)
-        run: pnpm audit --audit-level=moderate || true
-        continue-on-error: true
+      - name: pnpm audit
+        run: pnpm audit --audit-level=high --prod
 
       - name: Lint
         run: pnpm lint

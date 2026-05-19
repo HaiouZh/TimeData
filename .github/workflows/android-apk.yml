@@ -88,6 +88,10 @@ jobs:
           ORG_GRADLE_PROJECT_TIMEDATA_RELEASE_KEY_PASSWORD: ${{ secrets.TIMEDATA_RELEASE_KEY_PASSWORD }}
         run: pnpm build:mobile:release-apk
 
+      - name: Cleanup release keystore
+        if: always()
+        run: rm -f packages/mobile/android/timedata-release.keystore
+
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
