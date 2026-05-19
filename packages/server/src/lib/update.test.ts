@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   UpdateAlreadyRunningError,
-  buildUpdaterArgs,
   createUpdateStatus,
   getUpdateStatus,
   triggerUpdate,
+  triggerUpdateViaWatchtower,
   updateLockPath,
   updateLogPath,
   updateStatusPath,
@@ -22,50 +22,37 @@ afterEach(() => {
   }
 });
 
-describe("buildUpdaterArgs", () => {
-  it("runs compose from the same absolute path used on the host", () => {
-    const args = buildUpdaterArgs({ hostComposeDir: "/opt/timedata", image: "docker:24-cli", updateId: "update-1" });
-    expect(args).toContain("run");
-    expect(args).toContain("--rm");
-    expect(args).toContain("-d");
-    expect(args).toContain("--name");
-    expect(args).toContain("timedata-updater-update-1");
-    expect(args).toContain("-v");
-    expect(args.join(" ")).toContain("/var/run/docker.sock:/var/run/docker.sock");
-    expect(args.join(" ")).toContain("/opt/timedata:/opt/timedata");
-    expect(args.join(" ")).toContain("-w /opt/timedata");
-    expect(args.join(" ")).not.toContain("/workspace");
-    expect(args).toContain("docker:24-cli");
-    expect(args.join(" ")).toContain("docker compose pull");
-    expect(args.join(" ")).toContain("docker compose up -d --force-recreate");
-    expect(args.join(" ")).toContain("/opt/timedata/data/update.log");
-    expect(args.join(" ")).toContain("/opt/timedata/data/update-status.json");
-  });
+describe("triggerUpdateViaWatchtower", () => {
+  it("posts to the Watchtower update endpoint with bearer token", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
 
-  it("passes lock path and writes terminal status from updater script", () => {
-    const args = buildUpdaterArgs({
-      hostComposeDir: "/opt/timedata",
-      image: "docker:24-cli",
-      updateId: "update-1",
-      startedAt: "2026-05-07T12:00:00.000Z",
+    await triggerUpdateViaWatchtower("http://watchtower:8080", "secret-token", { fetch: fetchMock });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("http://watchtower:8080/v1/update", {
+      method: "POST",
+      headers: { Authorization: "Bearer secret-token" },
     });
-    const command = args.join(" ");
-
-    expect(command).toContain("LOCK='/opt/timedata/data/update.lock'");
-    expect(command).toContain("trap 'rm -f \"$LOCK\"' EXIT");
-    expect(command).toContain("docker compose up -d --force-recreate");
-    expect(command).toContain("--network host");
-    expect(command).toContain("http://127.0.0.1:3000/api/health");
-    expect(command).toContain('docker compose up -d >> "$LOG" 2>&1');
-    expect(command).toContain("write_status succeeded 0");
-    expect(command).toContain('write_status failed "$code"');
-    expect(command).toContain("STARTED_AT='2026-05-07T12:00:00.000Z'");
   });
 
-  it("throws when hostComposeDir is missing", () => {
-    expect(() => buildUpdaterArgs({ hostComposeDir: "", image: "docker:24-cli", updateId: "update-1" })).toThrow(
-      /HOST_COMPOSE_DIR/,
-    );
+  it("trims trailing slashes from WATCHTOWER_URL", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+
+    await triggerUpdateViaWatchtower("http://watchtower:8080///", "secret-token", { fetch: fetchMock });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://watchtower:8080/v1/update", {
+      method: "POST",
+      headers: { Authorization: "Bearer secret-token" },
+    });
+  });
+
+  it("throws when Watchtower rejects the update trigger", async () => {
+    const fetchMock = vi.fn(async () => new Response("denied", { status: 401 }));
+
+    await expect(
+      triggerUpdateViaWatchtower("http://watchtower:8080", "bad-token", { fetch: fetchMock }),
+    ).rejects.toThrow(/watchtower update failed: 401/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -74,7 +61,7 @@ describe("update status files", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
 
     const status = createUpdateStatus({
-      hostComposeDir: tempDir,
+      stateDir: tempDir,
       updateId: "update-1",
       now: () => "2026-05-07T12:00:00.000Z",
     });
@@ -95,25 +82,61 @@ describe("update status files", () => {
     });
   });
 
-  it("uses update.lock in the shared data directory", () => {
+  it("uses update.lock in the update state directory", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
 
-    expect(updateLockPath(tempDir)).toBe(`${tempDir}/data/update.lock`);
+    expect(updateLockPath(tempDir)).toBe(`${tempDir}/update.lock`);
   });
 });
 
 describe("triggerUpdate locking", () => {
   it("rejects a second update while update.lock exists", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
-    fs.mkdirSync(path.join(tempDir, "data"), { recursive: true });
+    fs.mkdirSync(tempDir, { recursive: true });
     fs.writeFileSync(
       updateLockPath(tempDir),
       JSON.stringify({ updateId: "update-1", createdAt: "2026-05-07T12:00:00.000Z" }),
       "utf8",
     );
 
-    expect(() => triggerUpdate({ hostComposeDir: tempDir, image: "docker:24-cli", updateId: "update-2" })).toThrow(
-      UpdateAlreadyRunningError,
-    );
+    expect(() =>
+      triggerUpdate({
+        stateDir: tempDir!,
+        watchtowerUrl: "http://watchtower:8080",
+        watchtowerToken: "secret-token",
+        fetch: vi.fn() as typeof fetch,
+      }),
+    ).toThrow(UpdateAlreadyRunningError);
+  });
+
+  it("writes succeeded status and releases the lock after Watchtower accepts the update trigger", async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+
+    triggerUpdate({
+      stateDir: tempDir,
+      watchtowerUrl: "http://watchtower:8080",
+      watchtowerToken: "secret-token",
+      fetch: fetchMock,
+    });
+    await vi.waitFor(() => expect(getUpdateStatus(tempDir).status).toBe("succeeded"));
+
+    expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
+  });
+
+  it("writes failed status and releases the lock when Watchtower rejects the update trigger", async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    const fetchMock = vi.fn(async () => new Response("denied", { status: 401 }));
+
+    triggerUpdate({
+      stateDir: tempDir,
+      watchtowerUrl: "http://watchtower:8080",
+      watchtowerToken: "bad-token",
+      fetch: fetchMock,
+    });
+    await vi.waitFor(() => expect(getUpdateStatus(tempDir).status).toBe("failed"));
+
+    expect(getUpdateStatus(tempDir).logTail).toMatch(/watchtower update failed: 401/);
+    expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
   });
 });

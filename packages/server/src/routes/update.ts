@@ -4,14 +4,40 @@ import { getUpdateStatus, triggerUpdate, UpdateAlreadyRunningError } from "../li
 
 const update = new Hono();
 
-function hostComposeDir(): string {
-  return process.env.HOST_COMPOSE_DIR || "";
+function updateStateDir(): string {
+  return process.env.UPDATE_STATE_DIR || "/app/data";
+}
+
+function watchtowerUrl(): string {
+  return process.env.WATCHTOWER_URL || "";
+}
+
+function watchtowerToken(): string {
+  return process.env.WATCHTOWER_TOKEN || "";
 }
 
 update.post("/", async (c) => {
-  const updaterImage = process.env.UPDATER_IMAGE || "docker:24-cli";
   try {
-    const status = triggerUpdate({ hostComposeDir: hostComposeDir(), image: updaterImage });
+    const url = watchtowerUrl();
+    if (!url) {
+      const { body, status } = errorJson(
+        ErrorCode.SELF_UPDATE_DISABLED,
+        503,
+        "Self-update is disabled because WATCHTOWER_URL is not configured",
+      );
+      return c.json(body, status);
+    }
+    const token = watchtowerToken();
+    if (!token) {
+      const { body, status } = errorJson(
+        ErrorCode.SELF_UPDATE_DISABLED,
+        503,
+        "Self-update is disabled because WATCHTOWER_TOKEN is not configured",
+      );
+      return c.json(body, status);
+    }
+
+    const status = triggerUpdate({ stateDir: updateStateDir(), watchtowerUrl: url, watchtowerToken: token });
     return c.json({ ok: true, status: "updating", updateId: status.updateId }, 202);
   } catch (err) {
     if (err instanceof UpdateAlreadyRunningError) {
@@ -26,7 +52,7 @@ update.post("/", async (c) => {
 
 update.get("/status", (c) => {
   try {
-    return c.json(getUpdateStatus(hostComposeDir()));
+    return c.json(getUpdateStatus(updateStateDir()));
   } catch (err) {
     console.error("[update/status] failed:", (err as Error).message);
     const { body, status } = errorJson(ErrorCode.INTERNAL_ERROR, 500);

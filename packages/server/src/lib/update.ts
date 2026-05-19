@@ -1,10 +1,11 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 
 export interface UpdaterOpts {
-  hostComposeDir: string;
-  image: string;
+  stateDir: string;
+  watchtowerUrl: string;
+  watchtowerToken: string;
   updateId?: string;
+  fetch?: typeof fetch;
 }
 
 export interface UpdateStatus {
@@ -23,28 +24,24 @@ export class UpdateAlreadyRunningError extends Error {
   }
 }
 
-function updatePath(hostComposeDir: string, fileName: string): string {
-  return `${hostComposeDir.replace(/\/+$/, "")}/data/${fileName}`;
+function updatePath(stateDir: string, fileName: string): string {
+  return `${stateDir.replace(/\/+$/, "")}/${fileName}`;
 }
 
-export function updateLogPath(hostComposeDir: string): string {
-  return updatePath(hostComposeDir, "update.log");
+export function updateLogPath(stateDir: string): string {
+  return updatePath(stateDir, "update.log");
 }
 
-export function updateStatusPath(hostComposeDir: string): string {
-  return updatePath(hostComposeDir, "update-status.json");
+export function updateStatusPath(stateDir: string): string {
+  return updatePath(stateDir, "update-status.json");
 }
 
-export function updateLockPath(hostComposeDir: string): string {
-  return updatePath(hostComposeDir, "update.lock");
+export function updateLockPath(stateDir: string): string {
+  return updatePath(stateDir, "update.lock");
 }
 
-function updateDataDir(hostComposeDir: string): string {
-  return updatePath(hostComposeDir, "").replace(/\/+$/, "");
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
+function updateDataDir(stateDir: string): string {
+  return stateDir.replace(/\/+$/, "");
 }
 
 function logTail(filePath: string, maxChars = 4000): string {
@@ -53,14 +50,36 @@ function logTail(filePath: string, maxChars = 4000): string {
   return content.slice(-maxChars);
 }
 
+function appendUpdateLog(stateDir: string, message: string): void {
+  fs.appendFileSync(updateLogPath(stateDir), `[${new Date().toISOString()}] ${message}\n`, "utf8");
+}
+
+function writeTerminalStatus(opts: {
+  stateDir: string;
+  updateId: string;
+  startedAt: string;
+  status: "succeeded" | "failed";
+  exitCode: number;
+}): void {
+  const finishedAt = new Date().toISOString();
+  const status: Omit<UpdateStatus, "logTail"> = {
+    updateId: opts.updateId,
+    status: opts.status,
+    startedAt: opts.startedAt,
+    finishedAt,
+    exitCode: opts.exitCode,
+  };
+  fs.writeFileSync(updateStatusPath(opts.stateDir), JSON.stringify(status, null, 2), "utf8");
+}
+
 export function createUpdateStatus(opts: {
-  hostComposeDir: string;
+  stateDir: string;
   updateId: string;
   now?: () => string;
 }): UpdateStatus {
   const now = opts.now ? opts.now() : new Date().toISOString();
-  fs.mkdirSync(updateDataDir(opts.hostComposeDir), { recursive: true });
-  fs.writeFileSync(updateLogPath(opts.hostComposeDir), `[${now}] update ${opts.updateId} started\n`, "utf8");
+  fs.mkdirSync(updateDataDir(opts.stateDir), { recursive: true });
+  fs.writeFileSync(updateLogPath(opts.stateDir), `[${now}] update ${opts.updateId} started\n`, "utf8");
   const status: UpdateStatus = {
     updateId: opts.updateId,
     status: "running",
@@ -69,75 +88,36 @@ export function createUpdateStatus(opts: {
     exitCode: null,
     logTail: "",
   };
-  fs.writeFileSync(updateStatusPath(opts.hostComposeDir), JSON.stringify(status, null, 2), "utf8");
+  fs.writeFileSync(updateStatusPath(opts.stateDir), JSON.stringify(status, null, 2), "utf8");
   return status;
 }
 
-export function getUpdateStatus(hostComposeDir: string): UpdateStatus {
-  const statusFile = updateStatusPath(hostComposeDir);
+export function getUpdateStatus(stateDir: string): UpdateStatus {
+  const statusFile = updateStatusPath(stateDir);
   if (!fs.existsSync(statusFile)) {
     return { updateId: "", status: "unknown", startedAt: null, finishedAt: null, exitCode: null, logTail: "" };
   }
   const status = JSON.parse(fs.readFileSync(statusFile, "utf8")) as Omit<UpdateStatus, "logTail">;
-  return { ...status, logTail: logTail(updateLogPath(hostComposeDir)) };
+  return { ...status, logTail: logTail(updateLogPath(stateDir)) };
 }
 
-export function buildUpdaterArgs(opts: UpdaterOpts & { startedAt?: string }): string[] {
-  if (!opts.hostComposeDir) {
-    throw new Error("HOST_COMPOSE_DIR env var is required to trigger update");
-  }
-  const updateId = opts.updateId || `update-${Date.now()}`;
-  const startedAt = opts.startedAt || new Date().toISOString();
-  const logFile = updateLogPath(opts.hostComposeDir);
-  const statusFile = updateStatusPath(opts.hostComposeDir);
-  const lockFile = updateLockPath(opts.hostComposeDir);
-  const command = [
-    "set +e",
-    `LOG=${shellQuote(logFile)}`,
-    `STATUS=${shellQuote(statusFile)}`,
-    `LOCK=${shellQuote(lockFile)}`,
-    `UPDATE_ID=${shellQuote(updateId)}`,
-    `STARTED_AT=${shellQuote(startedAt)}`,
-    `trap 'rm -f "$LOCK"' EXIT`,
-    `write_status() { printf '{"updateId":"%s","status":"%s","startedAt":"%s","finishedAt":"%s","exitCode":%s}\n' "$UPDATE_ID" "$1" "$STARTED_AT" "$(date -Iseconds)" "$2" > "$STATUS"; }`,
-    `health_check() { i=0; while [ "$i" -lt 30 ]; do wget -q -O - http://127.0.0.1:3000/api/health >/dev/null 2>&1 && return 0; i=$((i + 1)); sleep 2; done; return 1; }`,
-    `echo "[$(date -Iseconds)] docker compose pull" >> "$LOG"`,
-    `docker compose pull >> "$LOG" 2>&1`,
-    "pull_code=$?",
-    `echo "[$(date -Iseconds)] docker compose up -d --force-recreate" >> "$LOG"`,
-    `docker compose up -d --force-recreate >> "$LOG" 2>&1`,
-    "up_code=$?",
-    `if [ "$pull_code" -eq 0 ] && [ "$up_code" -eq 0 ] && health_check; then write_status succeeded 0; exit 0; fi`,
-    "code=$up_code",
-    `if [ "$pull_code" -ne 0 ]; then code=$pull_code; fi`,
-    `echo "[$(date -Iseconds)] update failed or health check failed; attempting docker compose up -d recovery" >> "$LOG"`,
-    `docker compose up -d >> "$LOG" 2>&1`,
-    "recover_code=$?",
-    `if [ "$recover_code" -eq 0 ] && health_check; then write_status succeeded 0; exit 0; fi`,
-    `if [ "$recover_code" -ne 0 ]; then code=$recover_code; fi`,
-    `write_status failed "$code"`,
-    `exit "$code"`,
-  ].join("; ");
+async function fetchOrThrow(response: Response, context: string): Promise<void> {
+  if (response.ok) return;
+  throw new Error(`${context}: ${response.status}`);
+}
 
-  return [
-    "run",
-    "--rm",
-    "-d",
-    "--network",
-    "host",
-    "--name",
-    `timedata-updater-${updateId}`,
-    "-v",
-    "/var/run/docker.sock:/var/run/docker.sock",
-    "-v",
-    `${opts.hostComposeDir}:${opts.hostComposeDir}`,
-    "-w",
-    opts.hostComposeDir,
-    opts.image,
-    "sh",
-    "-c",
-    command,
-  ];
+export async function triggerUpdateViaWatchtower(
+  watchtowerUrl: string,
+  watchtowerToken: string,
+  opts?: { fetch?: typeof fetch },
+): Promise<void> {
+  const fetchImpl = opts?.fetch ?? globalThis.fetch;
+  const baseUrl = watchtowerUrl.replace(/\/+$/, "");
+  const response = await fetchImpl(`${baseUrl}/v1/update`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${watchtowerToken}` },
+  });
+  await fetchOrThrow(response, "watchtower update failed");
 }
 
 function readLockUpdateId(lockFile: string): string | null {
@@ -150,9 +130,9 @@ function readLockUpdateId(lockFile: string): string | null {
   }
 }
 
-function acquireUpdateLock(hostComposeDir: string, updateId: string): void {
-  fs.mkdirSync(updateDataDir(hostComposeDir), { recursive: true });
-  const lockFile = updateLockPath(hostComposeDir);
+function acquireUpdateLock(stateDir: string, updateId: string): void {
+  fs.mkdirSync(updateDataDir(stateDir), { recursive: true });
+  const lockFile = updateLockPath(stateDir);
   let fd: number | null = null;
   try {
     fd = fs.openSync(lockFile, "wx");
@@ -167,16 +147,45 @@ function acquireUpdateLock(hostComposeDir: string, updateId: string): void {
   }
 }
 
+function releaseUpdateLock(stateDir: string): void {
+  fs.rmSync(updateLockPath(stateDir), { force: true });
+}
+
+async function runUpdate(opts: UpdaterOpts & { updateId: string; startedAt: string }): Promise<void> {
+  try {
+    appendUpdateLog(opts.stateDir, "watchtower update requested");
+    await triggerUpdateViaWatchtower(opts.watchtowerUrl, opts.watchtowerToken, { fetch: opts.fetch });
+    appendUpdateLog(opts.stateDir, "watchtower update accepted");
+    writeTerminalStatus({
+      stateDir: opts.stateDir,
+      updateId: opts.updateId,
+      startedAt: opts.startedAt,
+      status: "succeeded",
+      exitCode: 0,
+    });
+  } catch (error) {
+    appendUpdateLog(opts.stateDir, `update failed: ${(error as Error).message}`);
+    writeTerminalStatus({
+      stateDir: opts.stateDir,
+      updateId: opts.updateId,
+      startedAt: opts.startedAt,
+      status: "failed",
+      exitCode: 1,
+    });
+  } finally {
+    releaseUpdateLock(opts.stateDir);
+  }
+}
+
 export function triggerUpdate(opts: UpdaterOpts): UpdateStatus {
+  if (!opts.stateDir) {
+    throw new Error("UPDATE_STATE_DIR env var is required to trigger update");
+  }
   const updateId = opts.updateId || `update-${Date.now()}`;
   const startedAt = new Date().toISOString();
-  acquireUpdateLock(opts.hostComposeDir, updateId);
-  const status = createUpdateStatus({ hostComposeDir: opts.hostComposeDir, updateId, now: () => startedAt });
-  const args = buildUpdaterArgs({ ...opts, updateId, startedAt: status.startedAt || undefined });
-  const child = spawn("docker", args, {
-    detached: true,
-    stdio: "ignore",
-  });
-  child.unref();
+  acquireUpdateLock(opts.stateDir, updateId);
+  const status = createUpdateStatus({ stateDir: opts.stateDir, updateId, now: () => startedAt });
+
+  void runUpdate({ ...opts, updateId, startedAt });
   return status;
 }
