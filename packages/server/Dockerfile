@@ -1,6 +1,7 @@
 FROM node:26-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
+# Node 25+ 不再默认带 corepack，直接安装 pnpm
+RUN npm install -g pnpm@10.10.0
 
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
