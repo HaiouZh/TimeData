@@ -1,5 +1,5 @@
 import { useRegisterSW } from "virtual:pwa-register/react";
-import { type ReactNode, createContext, useContext } from "react";
+import { type ReactNode, createContext, useContext, useEffect, useRef } from "react";
 
 type AppUpdateContextValue = {
   needRefresh: boolean;
@@ -10,13 +10,24 @@ type AppUpdateContextValue = {
 const AppUpdateContext = createContext<AppUpdateContextValue | null>(null);
 
 export function AppUpdateProvider({ children }: { children: ReactNode }) {
+  const updateIntervalRef = useRef<number | null>(null);
+  const disposedRef = useRef(false);
+
+  function clearUpdateInterval() {
+    if (updateIntervalRef.current !== null) {
+      clearInterval(updateIntervalRef.current);
+      updateIntervalRef.current = null;
+    }
+  }
+
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_swUrl, registration) {
-      if (!registration) return;
-      setInterval(
+      clearUpdateInterval();
+      if (disposedRef.current || !registration) return;
+      updateIntervalRef.current = window.setInterval(
         () => {
           registration.update();
         },
@@ -24,6 +35,14 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
       );
     },
   });
+
+  useEffect(() => {
+    disposedRef.current = false;
+    return () => {
+      disposedRef.current = true;
+      clearUpdateInterval();
+    };
+  }, []);
 
   function updateApp() {
     updateServiceWorker(true);

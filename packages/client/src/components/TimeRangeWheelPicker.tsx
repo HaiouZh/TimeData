@@ -59,6 +59,15 @@ function Wheel({ value, options, onChange }: WheelProps) {
     }
   }, [middleSetStart, normalizedValue, options]);
 
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current !== null) {
+        window.clearTimeout(scrollTimerRef.current);
+        scrollTimerRef.current = null;
+      }
+    };
+  }, []);
+
   function settle() {
     const container = containerRef.current;
     if (!container) return;

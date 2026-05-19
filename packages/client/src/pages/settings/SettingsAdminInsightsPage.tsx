@@ -21,13 +21,19 @@ import { formatAppDateTime } from "../../lib/time.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
 interface AdminInsightsState {
-  summary: AdminSummaryResponse;
-  entries: AdminEntriesResponse;
-  categories: AdminCategoriesResponse;
-  sync: AdminSyncResponse;
-  backups: AdminBackupsResponse;
-  health: AdminHealthChecksResponse;
-  analytics: AdminAnalyticsResponse;
+  summary?: AdminSummaryResponse;
+  entries?: AdminEntriesResponse;
+  categories?: AdminCategoriesResponse;
+  sync?: AdminSyncResponse;
+  backups?: AdminBackupsResponse;
+  health?: AdminHealthChecksResponse;
+  analytics?: AdminAnalyticsResponse;
+}
+
+function settledValue<T>(result: PromiseSettledResult<T>, errors: string[]): T | undefined {
+  if (result.status === "fulfilled") return result.value;
+  errors.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
+  return undefined;
 }
 
 const anomalyLabel: Record<string, string> = {
@@ -82,7 +88,7 @@ export default function SettingsAdminInsightsPage() {
       setLoading(true);
       setError("");
       try {
-        const [summary, entries, categories, sync, backups, health, analytics] = await Promise.all([
+        const [summaryR, entriesR, categoriesR, syncR, backupsR, healthR, analyticsR] = await Promise.allSettled([
           fetchAdminSummary(),
           fetchAdminEntries({ limit: 10 }),
           fetchAdminCategories(),
@@ -91,12 +97,19 @@ export default function SettingsAdminInsightsPage() {
           fetchAdminHealthChecks(),
           fetchAdminAnalytics({ groupBy: "day" }),
         ]);
+        const errors: string[] = [];
+        const nextData: AdminInsightsState = {
+          summary: settledValue(summaryR, errors),
+          entries: settledValue(entriesR, errors),
+          categories: settledValue(categoriesR, errors),
+          sync: settledValue(syncR, errors),
+          backups: settledValue(backupsR, errors),
+          health: settledValue(healthR, errors),
+          analytics: settledValue(analyticsR, errors),
+        };
         if (!cancelled) {
-          setData({ summary, entries, categories, sync, backups, health, analytics });
-        }
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "加载服务端数据洞察失败");
+          setData(nextData);
+          setError(errors.length ? `部分服务端洞察加载失败：${errors.join("；")}` : "");
         }
       } finally {
         if (!cancelled) {
@@ -123,32 +136,35 @@ export default function SettingsAdminInsightsPage() {
 
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard
-              label="时间记录"
-              value={data.summary.counts.timeEntries}
-              hint={`最近更新 ${maybeDateTime(data.summary.latest.entryUpdatedAt)}`}
-            />
-            <StatCard
-              label="分类"
-              value={data.summary.counts.categories}
-              hint={`${data.summary.counts.activeCategories} 个启用 / ${data.summary.counts.archivedCategories} 个归档`}
-            />
-            <StatCard
-              label="服务端备份"
-              value={data.summary.counts.serverBackups}
-              hint={`最近备份 ${maybeDateTime(data.summary.latest.backupCreatedAt)}`}
-            />
-            <StatCard
-              label="同步日志"
-              value={data.summary.counts.syncLogs}
-              hint={`最近同步 ${maybeDateTime(data.summary.latest.syncLogTimestamp)}`}
-            />
-          </div>
+          {data.summary && (
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard
+                label="时间记录"
+                value={data.summary.counts.timeEntries}
+                hint={`最近更新 ${maybeDateTime(data.summary.latest.entryUpdatedAt)}`}
+              />
+              <StatCard
+                label="分类"
+                value={data.summary.counts.categories}
+                hint={`${data.summary.counts.activeCategories} 个启用 / ${data.summary.counts.archivedCategories} 个归档`}
+              />
+              <StatCard
+                label="服务端备份"
+                value={data.summary.counts.serverBackups}
+                hint={`最近备份 ${maybeDateTime(data.summary.latest.backupCreatedAt)}`}
+              />
+              <StatCard
+                label="同步日志"
+                value={data.summary.counts.syncLogs}
+                hint={`最近同步 ${maybeDateTime(data.summary.latest.syncLogTimestamp)}`}
+              />
+            </div>
+          )}
 
-          <Section title="数据健康检查">
-            <div className="space-y-2">
-              {data.health.checks.map((check) => (
+          {data.health && (
+            <Section title="数据健康检查">
+              <div className="space-y-2">
+                {data.health.checks.map((check) => (
                 <div
                   key={check.code}
                   className="flex items-center justify-between gap-3 rounded-lg bg-slate-950/50 px-3 py-2 text-sm"
@@ -165,11 +181,13 @@ export default function SettingsAdminInsightsPage() {
                 </div>
               ))}
             </div>
-          </Section>
+            </Section>
+          )}
 
-          <Section title="分析概览">
-            <div className="space-y-3">
-              {data.analytics.byTime.slice(-7).map((bucket) => (
+          {data.analytics && (
+            <Section title="分析概览">
+              <div className="space-y-3">
+                {data.analytics.byTime.slice(-7).map((bucket) => (
                 <div key={bucket.bucket} className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">{bucket.bucket}</span>
                   <span className="text-slate-100">
@@ -193,11 +211,13 @@ export default function SettingsAdminInsightsPage() {
                 ))}
               </div>
             </div>
-          </Section>
+            </Section>
+          )}
 
-          <Section title="最近记录">
-            <div className="space-y-2">
-              {data.entries.entries.map((entry) => (
+          {data.entries && (
+            <Section title="最近记录">
+              <div className="space-y-2">
+                {data.entries.entries.map((entry) => (
                 <div key={entry.id} className="rounded-lg bg-slate-950/50 px-3 py-2 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <span className="min-w-0 truncate text-slate-100">{entry.categoryName ?? entry.categoryId}</span>
@@ -212,11 +232,13 @@ export default function SettingsAdminInsightsPage() {
                 </div>
               ))}
             </div>
-          </Section>
+            </Section>
+          )}
 
-          <Section title="分类汇总">
-            <div className="space-y-2">
-              {data.categories.categories.map((category) => (
+          {data.categories && (
+            <Section title="分类汇总">
+              <div className="space-y-2">
+                {data.categories.categories.map((category) => (
                 <div key={category.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="min-w-0 truncate text-slate-300">
                     {category.parentName ? `${category.parentName} / ${category.name}` : category.name}
@@ -227,14 +249,16 @@ export default function SettingsAdminInsightsPage() {
                 </div>
               ))}
             </div>
-          </Section>
+            </Section>
+          )}
 
-          <Section title="同步诊断">
-            <div className="space-y-2 text-sm text-slate-300">
-              <div>
-                最近拒绝 {data.sync.recentRejectedCount} 次，最近冲突 {data.sync.recentConflictCount} 次。
-              </div>
-              {data.sync.recentIssues.length > 0 && (
+          {data.sync && (
+            <Section title="同步诊断">
+              <div className="space-y-2 text-sm text-slate-300">
+                <div>
+                  最近拒绝 {data.sync.recentRejectedCount} 次，最近冲突 {data.sync.recentConflictCount} 次。
+                </div>
+                {data.sync.recentIssues.length > 0 && (
                 <div className="space-y-2">
                   {data.sync.recentIssues.map((issue) => (
                     <div
@@ -271,11 +295,13 @@ export default function SettingsAdminInsightsPage() {
                 ))}
               </div>
             </div>
-          </Section>
+            </Section>
+          )}
 
-          <Section title="服务端备份">
-            <div className="space-y-2">
-              {data.backups.backups.slice(0, 8).map((backup) => (
+          {data.backups && (
+            <Section title="服务端备份">
+              <div className="space-y-2">
+                {data.backups.backups.slice(0, 8).map((backup) => (
                 <div key={backup.id} className="rounded-lg bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
                   <div className="flex flex-wrap items-center gap-2 text-slate-200">
                     <span className="truncate">{backup.fileName}</span>
@@ -287,9 +313,10 @@ export default function SettingsAdminInsightsPage() {
                   </div>
                 </div>
               ))}
-              {!data.backups.backups.length && <div className="text-sm text-slate-500">暂无服务端备份。</div>}
-            </div>
-          </Section>
+                {!data.backups.backups.length && <div className="text-sm text-slate-500">暂无服务端备份。</div>}
+              </div>
+            </Section>
+          )}
         </>
       )}
     </SettingsDetailPage>

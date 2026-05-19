@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -7,6 +8,11 @@ export default defineConfig({
     projects: [
       {
         plugins: [tsconfigPaths()],
+        resolve: {
+          alias: {
+            "virtual:pwa-register/react": fileURLToPath(new URL("./src/test/pwaRegisterMock.ts", import.meta.url)),
+          },
+        },
         define: {
           __TIMEDATA_ANDROID_VERSION_CODE__: JSON.stringify("260507"),
         },
