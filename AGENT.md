@@ -8,6 +8,7 @@
 
 ## 入口
 
+- 仓库：`https://github.com/HaiouZh/TimeData`
 - **任何深入修改前先读** [`docs/evergreen/architecture.md`](docs/evergreen/architecture.md)。它讲清楚五个包的关系、数据流、启动顺序、关键约定，并按主题链向各 evergreen 子文档。
 - 本文件不再充当文档地图；不要在这里查"backup / sync / cli 看哪份"。
 - 子目录如有 `AGENTS.md` / `AGENT.md`，处理对应范围前先读。
