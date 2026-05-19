@@ -98,7 +98,7 @@ pnpm build:mobile:release-apk  # 构建 Android release APK（需要签名参数
 pnpm build             # 构建 Web/Server/CLI，不包含 Android APK
 pnpm lint              # Biome lint，当前用于报告存量 any/import type warning，不因 warning 阻塞
 pnpm -r typecheck      # 递归执行各 package TypeScript 检查
-pnpm test              # 递归执行各 package 测试；根脚本限制 workspace 并发为 2，避免本地全量测试资源争用导致 Vitest hook 超时
+pnpm test              # 递归执行各 package 测试；根脚本串行执行 workspace，避免本地全量测试资源争用导致 Vitest hook 超时
 pnpm --filter @timedata/server test routes
 pnpm --filter @timedata/server test middleware/auth
 pnpm --filter @timedata/client test:e2e

@@ -20,7 +20,7 @@
     "lint": "biome lint .",
     "format": "biome format --write .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r --workspace-concurrency=2 test",
+    "test": "pnpm -r --workspace-concurrency=1 test",
     "icons:generate": "node scripts/generate-icons.mjs",
     "check:docs": "node scripts/check-evergreen-docs.mjs",
     "check:docs:strict": "node scripts/check-evergreen-docs.mjs --mode=strict",
