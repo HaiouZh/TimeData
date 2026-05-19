@@ -35,29 +35,60 @@ export interface ApiFetchOptions extends RequestInit {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { timeoutMs: requestedTimeoutMs, signal: _signal, ...fetchOptions } = options;
-  const url = buildApiUrl(getApiBase(), path);
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(fetchOptions.headers as Record<string, string>),
+function combineSignals(signals: Array<AbortSignal | null | undefined>): AbortSignal {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
+  if (activeSignals.length === 1) return activeSignals[0];
+
+  const controller = new AbortController();
+  const abort = (signal: AbortSignal) => {
+    if (controller.signal.aborted) return;
+    controller.abort(signal.reason);
   };
+
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      abort(signal);
+      break;
+    }
+    signal.addEventListener("abort", () => abort(signal), { once: true });
+  }
+
+  return controller.signal;
+}
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  const { timeoutMs: requestedTimeoutMs, signal: callerSignal, ...fetchOptions } = options;
+  const url = buildApiUrl(getApiBase(), path);
+  const headers = new Headers(fetchOptions.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   const token = getToken();
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const controller = new AbortController();
   const timeoutMs = requestedTimeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
 
   let res: Response;
   try {
-    res = await fetch(url, { ...fetchOptions, headers, signal: controller.signal });
+    res = await fetch(url, { ...fetchOptions, headers, signal: combineSignals([callerSignal, controller.signal]) });
   } catch (error) {
-    if ((error as Error).name === "AbortError") {
+    if (timedOut) {
       throw new Error(messages.network.timeout(timeoutMs, url));
+    }
+    if (callerSignal?.aborted) {
+      throw error;
+    }
+    if ((error as Error).name === "AbortError") {
+      throw error;
     }
     throw describeFetchFailure(url);
   } finally {
@@ -79,5 +110,9 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (!bodyText) {
     return undefined as T;
   }
-  return JSON.parse(bodyText) as T;
+  try {
+    return JSON.parse(bodyText) as T;
+  } catch (error) {
+    throw new Error(messages.network.invalidJson(url, bodyText.slice(0, 200)), { cause: error });
+  }
 }

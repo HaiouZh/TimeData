@@ -41,10 +41,13 @@ function defaultSyncState() {
 
 vi.mock("../lib/serverVersion.ts", () => ({
   fetchServerVersion: vi.fn(async () => ({
-    current: "abc1234",
-    latest: "def5678",
-    hasUpdate: true,
-    checkedAt: "2026-05-08T08:00:00.000Z",
+    ok: true,
+    version: {
+      current: "abc1234",
+      latest: "def5678",
+      hasUpdate: true,
+      checkedAt: "2026-05-08T08:00:00.000Z",
+    },
   })),
   triggerServerUpdate: vi.fn(),
   fetchUpdateStatus: vi.fn(),
@@ -201,16 +204,26 @@ describe("getServerConnectionState", () => {
       getServerConnectionState(
         "https://example.com",
         {
-          current: "abc1234",
-          latest: "def5678",
-          hasUpdate: true,
-          checkedAt: "2026-05-08T08:00:00.000Z",
+          ok: true,
+          version: {
+            current: "abc1234",
+            latest: "def5678",
+            hasUpdate: true,
+            checkedAt: "2026-05-08T08:00:00.000Z",
+          },
         },
         true,
       ),
     ).toEqual({
       color: "green",
       subtitle: "服务器已连接",
+    });
+  });
+
+  it("uses the concrete server version error after checking a configured server", () => {
+    expect(getServerConnectionState("https://example.com", { ok: false, error: "请求超时（15000ms）" }, true)).toEqual({
+      color: "red",
+      subtitle: "请求超时（15000ms）",
     });
   });
 });

@@ -29,22 +29,45 @@ const versionInfo = {
 
 describe("serverVersion", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     localStorage.clear();
     vi.restoreAllMocks();
   });
 
-  it("fetchServerVersion passes Authorization header via apiFetch", async () => {
+  it("fetchServerVersion returns version info and passes Authorization header via apiFetch", async () => {
     localStorage.setItem("timedata_api_url", "http://x");
     localStorage.setItem("timedata_api_token", "tk");
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(versionInfo)));
 
-    await expect(fetchServerVersion()).resolves.toEqual(versionInfo);
+    await expect(fetchServerVersion()).resolves.toEqual({ ok: true, version: versionInfo });
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "http://x/api/version",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer tk" }),
-      }),
+    const headers = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+    expect(fetchSpy.mock.calls[0][0]).toBe("http://x/api/version");
+    expect(headers.get("Authorization")).toBe("Bearer tk");
+  });
+
+  it("fetchServerVersion returns the concrete apiFetch error message", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("timedata_api_url", "http://x");
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          if (!signal) {
+            reject(new Error("missing abort signal"));
+            return;
+          }
+          signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
     );
+
+    const result = fetchServerVersion();
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await expect(result).resolves.toEqual({
+      ok: false,
+      error: "网络请求超时（15000ms）：http://x/api/version",
+    });
+    vi.useRealTimers();
   });
 });

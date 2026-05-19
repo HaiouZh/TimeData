@@ -59,7 +59,7 @@ describe("apiFetch", () => {
     await expect(apiFetch("/api/sync/push", { method: "POST" })).rejects.toBeInstanceOf(ApiError);
   });
 
-  it("aborts after timeoutMs", async () => {
+  it("aborts after timeoutMs when no caller signal is provided", async () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     vi.spyOn(globalThis, "fetch").mockImplementation(
       (_url, init) =>
@@ -74,5 +74,62 @@ describe("apiFetch", () => {
     );
 
     await expect(apiFetch("/api/sync/pull", { timeoutMs: 50 })).rejects.toThrow(/超时/);
+  });
+
+  it("preserves the caller abort reason instead of reporting a network failure", async () => {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    const controller = new AbortController();
+    const abortReason = new Error("route-change");
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          const signal = init?.signal;
+          if (!signal) {
+            reject(new Error("missing abort signal"));
+            return;
+          }
+          signal.addEventListener("abort", () => reject(signal.reason ?? new DOMException("aborted", "AbortError")));
+        }),
+    );
+
+    const request = apiFetch("/api/sync/pull", { signal: controller.signal });
+    controller.abort(abortReason);
+
+    await expect(request).rejects.toMatchObject({ message: "route-change" });
+  });
+
+  it("reports successful response JSON parse failures with URL and body snippet", async () => {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>not json</html>", { status: 200 }));
+
+    await expect(apiFetch("/api/version")).rejects.toThrow(
+      "API 返回的 JSON 无法解析：https://example.com/api/version - <html>not json</html>",
+    );
+  });
+
+  it("merges object headers with default content type and authorization", async () => {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_api_token", "tk");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await apiFetch("/api/sync/pull", { headers: { "X-Custom": "v" } });
+
+    const headers = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("Authorization")).toBe("Bearer tk");
+    expect(headers.get("X-Custom")).toBe("v");
+  });
+
+  it("merges Headers instances with default content type and authorization", async () => {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_api_token", "tk");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    await apiFetch("/api/sync/pull", { headers: new Headers({ "X-Custom": "v" }) });
+
+    const headers = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("Authorization")).toBe("Bearer tk");
+    expect(headers.get("X-Custom")).toBe("v");
   });
 });

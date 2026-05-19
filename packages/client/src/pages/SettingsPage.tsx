@@ -10,6 +10,10 @@ import type { RegularSyncResult } from "../sync/engine.ts";
 
 type ServerConnectionColor = "green" | "gray" | "red";
 
+type ServerVersionState =
+  | { ok: true; version: VersionInfo }
+  | { ok: false; error: string };
+
 interface ServerConnectionState {
   color: ServerConnectionColor;
   subtitle: string;
@@ -17,17 +21,17 @@ interface ServerConnectionState {
 
 export function getServerConnectionState(
   apiUrl: string,
-  serverVersion: VersionInfo | null,
+  serverVersion: ServerVersionState | null,
   checked: boolean,
 ): ServerConnectionState {
   if (!apiUrl) {
     return { color: "gray", subtitle: "未配置服务器" };
   }
-  if (serverVersion) {
+  if (serverVersion?.ok) {
     return { color: "green", subtitle: "服务器已连接" };
   }
   if (checked) {
-    return { color: "red", subtitle: "服务器连接失败" };
+    return { color: "red", subtitle: serverVersion?.ok === false ? serverVersion.error : "服务器连接失败" };
   }
   return { color: "gray", subtitle: "正在检查服务器" };
 }
@@ -146,7 +150,7 @@ function CloudSyncSummary() {
 export default function SettingsPage() {
   const { apiUrl, cloudSyncEnabled } = useSyncContext();
   const { confirm, dialog } = useConfirm();
-  const [serverVersion, setServerVersion] = useState<VersionInfo | null>(null);
+  const [serverVersion, setServerVersion] = useState<ServerVersionState | null>(null);
   const [serverChecked, setServerChecked] = useState(!apiUrl);
   const [serverUpdating, setServerUpdating] = useState(false);
   const [serverUpdateStatus, setServerUpdateStatus] = useState("");
@@ -211,7 +215,14 @@ export default function SettingsPage() {
       return;
     }
 
-    if (!serverVersion.hasUpdate) {
+    if (!serverVersion.ok) {
+      setServerUpdateStatus(serverVersion.error);
+      return;
+    }
+
+    const version = serverVersion.version;
+
+    if (!version.hasUpdate) {
       setServerUpdateStatus("服务端已是最新版本。");
       return;
     }
@@ -219,7 +230,7 @@ export default function SettingsPage() {
     if (
       !(await confirm({
         title: "确认服务端更新",
-        body: `确认更新到 ${serverVersion.latest}？过程中页面会短暂不可用。`,
+        body: `确认更新到 ${version.latest}？过程中页面会短暂不可用。`,
         danger: false,
       }))
     )
@@ -282,9 +293,11 @@ export default function SettingsPage() {
           title="服务端更新"
           subtitle={
             serverUpdateStatus ||
-            (serverVersion ? `当前 ${serverVersion.current} / 最新 ${serverVersion.latest}` : connectionState.subtitle)
+            (serverVersion?.ok
+              ? `当前 ${serverVersion.version.current} / 最新 ${serverVersion.version.latest}`
+              : connectionState.subtitle)
           }
-          accessory={serverVersion?.hasUpdate ? "有新版本" : undefined}
+          accessory={serverVersion?.ok && serverVersion.version.hasUpdate ? "有新版本" : undefined}
           disabled={serverUpdating || !apiUrl}
           onClick={handleServerUpdate}
         />

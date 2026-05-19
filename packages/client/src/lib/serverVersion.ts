@@ -10,11 +10,11 @@ export interface UpdateStatusInfo {
   logTail: string;
 }
 
-export async function fetchServerVersion(): Promise<VersionInfo | null> {
+export async function fetchServerVersion(): Promise<{ ok: true; version: VersionInfo } | { ok: false; error: string }> {
   try {
-    return await apiFetch<VersionInfo>("/api/version");
-  } catch {
-    return null;
+    return { ok: true, version: await apiFetch<VersionInfo>("/api/version") };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "获取服务器版本失败" };
   }
 }
 

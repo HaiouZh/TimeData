@@ -24,7 +24,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-05-19
+last-reviewed: 2026-05-20
 ---
 
 # 同步机制
@@ -48,7 +48,7 @@ last-reviewed: 2026-05-19
 
 普通同步主路径的一致性校验比较业务 meta：优先比较 `contentHash`；如果任一端缺少 `contentHash`，退回比较 `categoryCount`、`entryCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。服务端 `contentHash` 是持久化在 SQLite `sync_state` 表里的同步内容 commit hash，由 `latestSeq`、分类/记录行数与最新 `updated_at` 轻量摘要计算而来；`/api/sync/status` 直接读取这份状态，缺失或被写路径标记为 dirty 时一次性重算并写回，不再为每次 status 请求读取完整 categories/time_entries 后 JSON 序列化。普通 no-op 同步不会为了校验拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
 
-客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量替换等可能更慢的同步拉取可在调用处设置 `timeoutMs: 30_000`。`apiFetch` 会把 204 / 空 body 的成功响应视为 `undefined`，而不是强制解析 JSON。`apiFetch` 抛出的人类可读字符串来自 `packages/client/src/lib/messages.ts` 集中字符串表，方便后续 i18n。
+客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量替换等可能更慢的同步拉取可在调用处设置 `timeoutMs: 30_000`。调用方传入的 `AbortSignal` 会和内部超时信号合并，组件卸载或路由切换取消请求时不会被误报成超时；成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误。`apiFetch` 会把 204 / 空 body 的成功响应视为 `undefined`，而不是强制解析 JSON。`apiFetch` 抛出的人类可读字符串来自 `packages/client/src/lib/messages.ts` 集中字符串表，方便后续 i18n。
 
 兼容回退开关是 `localStorage.timedata_legacy_snapshot_sync === "1"`（集中定义在 `packages/client/src/lib/storageKeys.ts` 的 `STORAGE_KEYS.legacySnapshotSync`）：打开后 `regularSync()` 会走旧的 `loadLocalSnapshot()` + `loadCloudSnapshot()` 全量快照比较路径，主要用于 D2 上线后的灰度回滚。旧路径仍会在快照不一致时补齐本地有、云端无且缺失 syncLog 的 create 日志；新 meta 主路径不会做全量云端快照比较，因此 `unsyncedCount=0` 但 meta 不一致时只执行 `syncPullRecent(7)` 作为 pull-only repair。
 
