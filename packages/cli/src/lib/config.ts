@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { z } from "zod";
+import { validateServerUrl } from "./url.js";
 
 export interface FileConfig {
   serverUrl?: string;
@@ -12,6 +14,11 @@ export type ConfigError = { ok: false; error: { code: "CONFIG_MISSING" | "CONFIG
 export type FileConfigResult = FileConfig | ConfigError | null;
 
 export type ConfigResult = { serverUrl: string; token: string } | ConfigError;
+
+const FileConfigSchema = z.object({
+  serverUrl: z.string().optional(),
+  token: z.string().optional(),
+}).passthrough();
 
 export function configPath(platform = process.platform, env = process.env): string {
   if (platform === "win32") {
@@ -35,7 +42,11 @@ export function readFileConfig(filePath = configPath(), platform = process.platf
     };
   }
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8")) as FileConfig;
+    const parsed = FileConfigSchema.safeParse(JSON.parse(fs.readFileSync(filePath, "utf8")));
+    if (!parsed.success) {
+      return { ok: false, error: { code: "CONFIG_INVALID", message: `Invalid config file: ${filePath}` } };
+    }
+    return parsed.data;
   } catch {
     return { ok: false, error: { code: "CONFIG_INVALID", message: `Invalid config file: ${filePath}` } };
   }
@@ -45,6 +56,7 @@ export function resolveConfig(
   flags: Record<string, string | undefined>,
   env: Record<string, string | undefined>,
   fileConfig: FileConfigResult,
+  options: { validateUrl?: boolean } = {},
 ): ConfigResult {
   if (fileConfig && "ok" in fileConfig) return fileConfig;
 
@@ -53,6 +65,9 @@ export function resolveConfig(
 
   if (!serverUrl) {
     return { ok: false, error: { code: "CONFIG_MISSING", message: "Missing TimeData server URL" } };
+  }
+  if ((options.validateUrl ?? true) && !validateServerUrl(serverUrl)) {
+    return { ok: false, error: { code: "CONFIG_INVALID", message: "Server URL must be http or https" } };
   }
 
   return { serverUrl, token };

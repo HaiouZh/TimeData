@@ -12,6 +12,31 @@ export interface GitHubRelease {
   assets: GitHubReleaseAsset[];
 }
 
+function isGitHubReleaseAsset(value: unknown): value is GitHubReleaseAsset {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "name" in value &&
+      typeof value.name === "string" &&
+      "browser_download_url" in value &&
+      typeof value.browser_download_url === "string",
+  );
+}
+
+function isGitHubRelease(value: unknown): value is GitHubRelease {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "tag_name" in value &&
+      typeof value.tag_name === "string" &&
+      "html_url" in value &&
+      typeof value.html_url === "string" &&
+      "assets" in value &&
+      Array.isArray(value.assets) &&
+      value.assets.every(isGitHubReleaseAsset),
+  );
+}
+
 export interface AndroidApkUpdate {
   versionCode: string;
   pageUrl: string;
@@ -86,5 +111,7 @@ export async function fetchAndroidApkUpdate(currentVersionCode: string): Promise
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GitHub Release 检查失败：${res.status}`);
 
-  return getAndroidApkUpdateFromRelease((await res.json()) as GitHubRelease, currentVersionCode);
+  const release = await res.json();
+  if (!isGitHubRelease(release)) throw new Error("GitHub Release 响应格式无效");
+  return getAndroidApkUpdateFromRelease(release, currentVersionCode);
 }

@@ -4,9 +4,11 @@ import {
   AdminAnalyticsResponseSchema,
   AdminBackupRetentionSchema,
   AdminBackupsResponseSchema,
+  AdminEntriesResponseSchema,
   AdminEntryAnomalySchema,
   AdminEntryRowSchema,
   AdminHealthChecksResponseSchema,
+  AdminSummaryResponseSchema,
 } from "./admin-schemas.js";
 
 describe("AdminEntryAnomalySchema", () => {
@@ -108,5 +110,61 @@ describe("admin response schemas", () => {
         color: "#3366ff",
       }],
     }).success).toBe(true);
+  });
+
+  it("rejects non-finite or non-integer counts and empty backup identifiers", () => {
+    expect(AdminSummaryResponseSchema.safeParse({
+      generatedAt: "2026-05-19T01:00:00.000Z",
+      counts: {
+        categories: 1.5,
+        activeCategories: 1,
+        archivedCategories: 0,
+        timeEntries: 1,
+        syncLogs: 1,
+        tombstones: 0,
+        serverBackups: 0,
+      },
+      latest: {
+        entryUpdatedAt: null,
+        syncLogTimestamp: null,
+        backupCreatedAt: null,
+      },
+    }).success).toBe(false);
+
+    expect(AdminEntriesResponseSchema.safeParse({ entries: [], limit: -1, offset: 0, total: 0 }).success).toBe(false);
+    expect(AdminEntriesResponseSchema.safeParse({ entries: [], limit: 10, offset: 0.5, total: 0 }).success).toBe(false);
+    expect(AdminEntriesResponseSchema.safeParse({
+      entries: [],
+      limit: 10,
+      offset: 0,
+      total: Number.POSITIVE_INFINITY,
+    }).success).toBe(false);
+
+    expect(AdminBackupsResponseSchema.safeParse({
+      backups: [{
+        id: "",
+        fileName: "sync-2026-05-19T01-00-00-000Z.db",
+        operation: "sync",
+        sizeBytes: 1024,
+        createdAt: "2026-05-19T01:00:00.000Z",
+        protected: true,
+        reason: "local-wins",
+        retention: "protected",
+        relatedSyncLogId: 1,
+      }],
+    }).success).toBe(false);
+    expect(AdminBackupsResponseSchema.safeParse({
+      backups: [{
+        id: "backup-1",
+        fileName: "",
+        operation: "sync",
+        sizeBytes: -1,
+        createdAt: "2026-05-19T01:00:00.000Z",
+        protected: true,
+        reason: "local-wins",
+        retention: "protected",
+        relatedSyncLogId: 1,
+      }],
+    }).success).toBe(false);
   });
 });

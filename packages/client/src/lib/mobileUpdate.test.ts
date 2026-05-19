@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchAndroidApkUpdate,
   getAndroidApkUpdateFromRelease,
   getAndroidApkUpdateUrl,
   getAndroidVersionCodeFromReleaseTag,
   openAndroidApkUpdate,
 } from "./mobileUpdate.js";
+
+const originalFetch = globalThis.fetch;
 
 const release = {
   tag_name: "android-26050801",
@@ -20,6 +23,11 @@ const release = {
     },
   ],
 };
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
 
 describe("getAndroidVersionCodeFromReleaseTag", () => {
   it("accepts eight-digit Android release tags with same-day sequence", () => {
@@ -77,5 +85,32 @@ describe("openAndroidApkUpdate", () => {
     });
 
     expect(opened).toEqual(["https://github.com/HaiouZh/TimeData/releases/tag/android-26050801"]);
+  });
+});
+
+describe("fetchAndroidApkUpdate", () => {
+  it("parses a valid GitHub release response", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(release), { status: 200 })) as unknown as typeof fetch;
+
+    await expect(fetchAndroidApkUpdate("26050701")).resolves.toMatchObject({
+      versionCode: "26050801",
+      hasUpdate: true,
+    });
+  });
+
+  it("rejects GitHub rate-limit JSON", async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ message: "API rate limit exceeded", documentation_url: "https://docs.github.com" }), {
+        status: 200,
+      })
+    ) as unknown as typeof fetch;
+
+    await expect(fetchAndroidApkUpdate("26050701")).rejects.toThrow("GitHub Release 响应格式无效");
+  });
+
+  it("rejects release JSON with missing fields", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ tag_name: "android-26050801" }), { status: 200 })) as unknown as typeof fetch;
+
+    await expect(fetchAndroidApkUpdate("26050701")).rejects.toThrow("GitHub Release 响应格式无效");
   });
 });

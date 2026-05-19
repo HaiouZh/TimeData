@@ -16,7 +16,7 @@ describe("runList schema 校验", () => {
       ok: true,
       date: "2026-05-19",
       entries: [{
-        id: "e1", startTime: "09:00", endTime: "10:00",
+        id: "e1", startTime: "2026-05-19T09:00:00", endTime: "2026-05-19T10:00:00",
         durationMinutes: 60, category: "工作/编程", note: null,
       }],
       summary: { totalMinutes: 60, entryCount: 1 },
@@ -24,6 +24,31 @@ describe("runList schema 校验", () => {
     const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch) as { ok: true; entries: Array<{ id: string }> };
     expect(result.ok).toBe(true);
     expect(result.entries).toHaveLength(1);
+  });
+
+  it("rejects ok responses without date, entries, or summary", async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+
+    const result = await runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch) as {
+      ok: false;
+      error?: { code: string };
+    };
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("SCHEMA_MISMATCH");
+  });
+
+  it("accepts error responses without success fields", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: false, error: { code: "VALIDATION_ERROR", message: "Invalid date" } }), {
+        status: 400,
+      })
+    );
+
+    await expect(runList(config, { date: "2026-05-19" }, fetchImpl as unknown as typeof fetch)).resolves.toEqual({
+      ok: false,
+      error: { code: "VALIDATION_ERROR", message: "Invalid date" },
+    });
   });
 });
 

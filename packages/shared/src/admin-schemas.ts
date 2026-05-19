@@ -2,6 +2,9 @@ import { z } from "zod";
 
 import { UtcIsoStringSchema } from "./schemas.js";
 
+const NonNegativeIntSchema = z.number().int().nonnegative().finite();
+const NonEmptyStringSchema = z.string().min(1);
+
 export const AdminEntryAnomalySchema = z.enum(["invalid_time_range", "missing_category", "archived_category"]);
 export const AdminBackupRetentionSchema = z.enum(["recent", "snapshot", "protected", "deletable"]);
 export const AdminHealthCheckCodeSchema = z.enum(["invalid_time_range", "missing_category", "archived_category", "overlap"]);
@@ -11,13 +14,13 @@ export const AdminAnalyticsGroupBySchema = z.enum(["day", "week", "month"]);
 export const AdminSummaryResponseSchema = z.object({
   generatedAt: UtcIsoStringSchema,
   counts: z.object({
-    categories: z.number(),
-    activeCategories: z.number(),
-    archivedCategories: z.number(),
-    timeEntries: z.number(),
-    syncLogs: z.number(),
-    tombstones: z.number(),
-    serverBackups: z.number(),
+    categories: NonNegativeIntSchema,
+    activeCategories: NonNegativeIntSchema,
+    archivedCategories: NonNegativeIntSchema,
+    timeEntries: NonNegativeIntSchema,
+    syncLogs: NonNegativeIntSchema,
+    tombstones: NonNegativeIntSchema,
+    serverBackups: NonNegativeIntSchema,
   }),
   latest: z.object({
     entryUpdatedAt: UtcIsoStringSchema.nullable(),
@@ -42,9 +45,9 @@ export const AdminEntryRowSchema = z.object({
 
 export const AdminEntriesResponseSchema = z.object({
   entries: z.array(AdminEntryRowSchema),
-  limit: z.number(),
-  offset: z.number(),
-  total: z.number(),
+  limit: NonNegativeIntSchema,
+  offset: NonNegativeIntSchema,
+  total: NonNegativeIntSchema,
 });
 
 export const AdminCategoryRowSchema = z.object({
@@ -95,15 +98,15 @@ export const AdminSyncResponseSchema = z.object({
 });
 
 export const AdminBackupRowSchema = z.object({
-  id: z.string(),
-  fileName: z.string(),
-  operation: z.string(),
-  sizeBytes: z.number(),
+  id: NonEmptyStringSchema,
+  fileName: NonEmptyStringSchema,
+  operation: NonEmptyStringSchema,
+  sizeBytes: NonNegativeIntSchema,
   createdAt: UtcIsoStringSchema,
   protected: z.boolean(),
   reason: z.string().nullable(),
   retention: AdminBackupRetentionSchema,
-  relatedSyncLogId: z.number().nullable(),
+  relatedSyncLogId: NonNegativeIntSchema.nullable(),
 });
 
 export const AdminBackupsResponseSchema = z.object({

@@ -12,7 +12,7 @@ covers:
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-05-18
+last-reviewed: 2026-05-20
 ---
 
 # 数据模型与契约
@@ -184,10 +184,10 @@ type SyncChange =
 
 共享契约：
 
-- `SyncPushRequest.baseSeq?: number | null`：客户端上次观察到的服务端序列，用来判断本次 push 相对云端是否可快进。
-- `SyncPullRequest.sinceSeq?: number | null`：客户端请求拉取某个服务端序列之后的变更；存在时优先于 timestamp cursor。
-- `SyncPullResponse.latestSeq?: number | null`：服务端当前最新序列；客户端只前进、不回退本地 `timedata_last_synced_seq`。
-- `SyncDatasetStatus.latestSeq?: number | null`：服务端状态摘要里的当前最新序列，用于普通同步 meta 预检和诊断展示，避免为了拿序列再多一次 round trip；meta no-op 同步会用它推进本地 `timedata_last_synced_seq`。
+- `SyncPushRequest.baseSeq?: number | null`：客户端上次观察到的服务端序列，用来判断本次 push 相对云端是否可快进；运行时 schema 只接受有限非负整数、`null` 或缺省。
+- `SyncPullRequest.sinceSeq?: number | null`：客户端请求拉取某个服务端序列之后的变更；存在时优先于 timestamp cursor；运行时 schema 只接受有限非负整数、`null` 或缺省。
+- `SyncPullResponse.latestSeq?: number | null`：服务端当前最新序列；客户端只前进、不回退本地 `timedata_last_synced_seq`；运行时 schema 只接受有限非负整数、`null` 或缺省。
+- `SyncDatasetStatus.latestSeq?: number | null`：服务端状态摘要里的当前最新序列，用于普通同步 meta 预检和诊断展示，避免为了拿序列再多一次 round trip；meta no-op 同步会用它推进本地 `timedata_last_synced_seq`；状态响应里的 `categoryCount` / `entryCount` 同样是有限非负整数。
 
 `sync_seq` 不改变 `Category` / `TimeEntry` 字段，也不是用户可见历史记录；它只表示服务端接收并落库的同步顺序。
 
@@ -291,16 +291,17 @@ db.version(1).stores({
   id: string;
   fileName: string;
   operation: string;
-  sizeBytes: number;
+  sizeBytes: number;          // 有限非负整数
   createdAt: string;
   protected: boolean;
   reason: string | null;
   retention: "recent" | "snapshot" | "protected" | "deletable";
-  relatedSyncLogId: number | null;
+  relatedSyncLogId: number | null; // 有限非负整数或 null
 }
 ```
 
 - `protected=true` 表示这个备份不参与自动清理。
+- `id`、`fileName`、`operation` 在运行时 schema 中必须是非空字符串；`sizeBytes` 与 `relatedSyncLogId`（非 `null` 时）必须是有限非负整数。
 - `reason` 主要用于说明为什么被保护，例如 `local_override_overlap`。
 - `retention` 是 UI 展示用的分类，不是新表字段。
 - `relatedSyncLogId` 用于把备份和服务端同步日志串起来。

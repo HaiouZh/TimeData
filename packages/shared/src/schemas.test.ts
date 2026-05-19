@@ -83,6 +83,43 @@ describe("runtime schemas", () => {
     expect(parsed.name).toBe(" 工作 ");
   });
 
+  it("rejects non-finite or non-integer sync cursors and counts", () => {
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: -1 }).success).toBe(false);
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: 1.5 }).success).toBe(false);
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: Number.POSITIVE_INFINITY }).success).toBe(false);
+
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: -1,
+      entryCount: 0,
+      lastUpdatedAt: null,
+      serverTime: "2026-05-13T00:00:00.000Z",
+    }).success).toBe(false);
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: 0,
+      entryCount: 1.5,
+      lastUpdatedAt: null,
+      serverTime: "2026-05-13T00:00:00.000Z",
+    }).success).toBe(false);
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: 0,
+      entryCount: Number.POSITIVE_INFINITY,
+      lastUpdatedAt: null,
+      serverTime: "2026-05-13T00:00:00.000Z",
+    }).success).toBe(false);
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: 0,
+      entryCount: 0,
+      lastUpdatedAt: null,
+      latestSeq: -1,
+      serverTime: "2026-05-13T00:00:00.000Z",
+    }).success).toBe(false);
+    expect(SyncPullResponseSchema.safeParse({
+      changes: [],
+      serverTime: "2026-05-13T00:00:00.000Z",
+      latestSeq: 1.5,
+    }).success).toBe(false);
+  });
+
   it("validates sync pull and force-push request payloads", () => {
     expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0, lastSyncedAt: null }).success).toBe(true);
     expect(SyncPullRequestSchema.safeParse({ sinceSeq: "not-a-number" }).success).toBe(false);
