@@ -57,14 +57,14 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
       .filter((p) => p.type !== "literal")
       .map((p) => [p.type, p.value]),
   );
-  const displayH = parts.hour === "24" ? 0 : Number.parseInt(parts.hour);
+  const displayH = parts.hour === "24" ? 0 : Number.parseInt(parts.hour, 10);
   const displayedLocalMs = Date.UTC(
-    Number.parseInt(parts.year),
-    Number.parseInt(parts.month) - 1,
-    Number.parseInt(parts.day),
+    Number.parseInt(parts.year, 10),
+    Number.parseInt(parts.month, 10) - 1,
+    Number.parseInt(parts.day, 10),
     displayH,
-    Number.parseInt(parts.minute),
-    Number.parseInt(parts.second),
+    Number.parseInt(parts.minute, 10),
+    Number.parseInt(parts.second, 10),
   );
 
   const targetLocalMs = Date.UTC(y, mo - 1, d, h, mi, s);

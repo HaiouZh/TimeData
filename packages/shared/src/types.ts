@@ -102,10 +102,14 @@ export interface ExportData {
 }
 
 export interface VersionInfo {
-  current: string; // 当前运行的 GIT_SHA 前 7 位，'dev' 表示开发模式
-  latest: string; // GitHub Actions 最近成功 build 的 head_sha 前 7 位
-  hasUpdate: boolean; // current !== latest && current !== 'dev'
-  checkedAt: string; // ISO 时间戳，便于前端显示
+  /** 当前运行的 GIT_SHA 前 7 位，'dev' 表示开发模式 */
+  current: string;
+  /** GitHub Actions 最近成功 build 的 head_sha 前 7 位 */
+  latest: string;
+  /** current !== latest && current !== 'dev' */
+  hasUpdate: boolean;
+  /** ISO 时间戳，便于前端显示 */
+  checkedAt: string;
 }
 
 export type {
