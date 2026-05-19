@@ -32,7 +32,7 @@
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.5.0",
     "recharts": "^3.8.1",
-    "uuid": "^11.1.0",
+    "uuid": "^14.0.0",
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {
