@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsServerPage from "./SettingsServerPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -43,11 +43,16 @@ Object.defineProperty(globalThis, "localStorage", {
 
 describe("SettingsServerPage", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     localStorage.clear();
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_api_token", "secret-token");
     updateApiUrlMock.mockClear();
     isNativePlatformMock.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders server configuration controls with saved values", () => {
@@ -82,6 +87,43 @@ describe("SettingsServerPage", () => {
     });
 
     expect(localStorage.getItem("timedata_api_token")).toBe("abc123");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("clears the saved timer when leaving the page right after saving", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+    });
+
+    const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).toContain("已保存");
+
+    await act(async () => {
+      root.render(createElement("div", null, "其他页面"));
+    });
+
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+    });
+
+    expect(host.textContent).toContain("保存配置");
+    expect(host.textContent).not.toContain("已保存");
 
     await act(async () => {
       root.unmount();

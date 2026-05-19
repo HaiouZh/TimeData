@@ -1,7 +1,12 @@
-import { createElement } from "react";
+// @vitest-environment jsdom
+
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import TimeRangeWheelPicker, { wheelIndexFromScrollTop, wheelScrollTopForIndex } from "./TimeRangeWheelPicker.js";
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 describe("wheel scroll positioning", () => {
   it("centers the same item that settle reads back", () => {
@@ -12,6 +17,51 @@ describe("wheel scroll positioning", () => {
 });
 
 describe("TimeRangeWheelPicker", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = "";
+  });
+
+  it("clears pending wheel settle timers when unmounted", () => {
+    vi.useFakeTimers();
+    const rootElement = document.createElement("div");
+    document.body.append(rootElement);
+    const root = createRoot(rootElement);
+    const onStartChange = vi.fn();
+    const onEndChange = vi.fn();
+
+    act(() => {
+      root.render(
+        createElement(TimeRangeWheelPicker, {
+          start: { date: "2026-05-15", hour: "09", minute: "00" },
+          end: { date: "2026-05-15", hour: "10", minute: "00" },
+          onStartChange,
+          onEndChange,
+        }),
+      );
+    });
+
+    const hourWheel = rootElement.querySelector<HTMLDivElement>("[role='listbox']");
+    expect(hourWheel).not.toBeNull();
+    act(() => {
+      hourWheel!.scrollTop = wheelScrollTopForIndex(11 * 24 + 11);
+      hourWheel!.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    act(() => {
+      root.unmount();
+    });
+    expect(vi.getTimerCount()).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(70);
+    });
+
+    expect(onStartChange).not.toHaveBeenCalled();
+    expect(onEndChange).not.toHaveBeenCalled();
+  });
+
   it("shows overnight duration using the same resolved range as saving", () => {
     const html = renderToStaticMarkup(
       createElement(TimeRangeWheelPicker, {

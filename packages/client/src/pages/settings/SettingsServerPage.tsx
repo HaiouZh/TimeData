@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { safeGetItem, safeSetItem } from "../../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
@@ -11,6 +11,16 @@ export default function SettingsServerPage() {
   const [apiToken, setApiToken] = useState(safeGetItem(STORAGE_KEYS.apiToken) || "");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const savedTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current !== null) {
+        window.clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = null;
+      }
+    };
+  }, []);
 
   function saveConfig() {
     const nextApiUrl = apiUrl.trim();
@@ -24,7 +34,13 @@ export default function SettingsServerPage() {
     safeSetItem(STORAGE_KEYS.apiToken, apiToken.replace(/^Bearer\s+/i, "").trim());
     setError("");
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (savedTimerRef.current !== null) {
+      window.clearTimeout(savedTimerRef.current);
+    }
+    savedTimerRef.current = window.setTimeout(() => {
+      setSaved(false);
+      savedTimerRef.current = null;
+    }, 2000);
   }
 
   return (
