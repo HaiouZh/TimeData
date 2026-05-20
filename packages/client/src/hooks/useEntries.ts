@@ -92,8 +92,7 @@ export async function findPreviousEntry(date: string): Promise<TimeEntry | null>
 }
 
 export async function findLatestEntryEndingBefore(utcCutoff: string): Promise<TimeEntry | null> {
-  const candidates = await db.timeEntries.where("endTime").below(utcCutoff).reverse().sortBy("endTime");
-  return candidates[0] ?? null;
+  return (await db.timeEntries.where("endTime").below(utcCutoff).reverse().first()) ?? null;
 }
 
 export function useLatestEntryEndTimeBefore(utcCutoff: string | null): string | null {

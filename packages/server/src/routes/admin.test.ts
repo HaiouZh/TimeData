@@ -457,4 +457,22 @@ describe("admin route", () => {
       ],
     });
   });
+
+  it("rejects invalid analytics date parameters", async () => {
+    const res = await app.request("/api/admin/analytics?from=invalid");
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("returns analytics for valid optional parameters", async () => {
+    const res = await app.request("/api/admin/analytics?from=2026-05-08&to=2026-05-09&groupBy=week");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      range: { from: "2026-05-08", to: "2026-05-09", groupBy: "week" },
+    });
+  });
 });

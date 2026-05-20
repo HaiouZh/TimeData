@@ -10,16 +10,18 @@ export function validateForcePushBusinessRules(
   timeEntries: TimeEntry[],
 ): string | null {
   const categoryIds = new Set<string>();
+  const categoriesById = new Map<string, Category>();
   for (const c of categories) {
     if (categoryIds.has(c.id)) return `duplicate category ${c.id}`;
     categoryIds.add(c.id);
+    categoriesById.set(c.id, c);
   }
 
   for (const c of categories) {
     if (c.parentId === c.id) return `category ${c.id} references itself`;
     if (c.parentId && !categoryIds.has(c.parentId)) return `missing parent category ${c.parentId}`;
     if (c.parentId) {
-      const parent = categories.find((x) => x.id === c.parentId);
+      const parent = categoriesById.get(c.parentId);
       if (parent && parent.parentId !== null) return `category ${c.id} would create a third level`;
     }
   }

@@ -1,6 +1,8 @@
 import type { AdminAnalyticsCategoryBucket, AdminAnalyticsResponse } from "@timedata/shared";
 import { Hono } from "hono";
+import { z } from "zod";
 import { getDb } from "../../db/connection.js";
+import { validateQuery } from "../../middleware/validate.js";
 import {
   type AnalyticsCategoryRow,
   type AnalyticsTimeRow,
@@ -10,12 +12,14 @@ import {
 
 const analytics = new Hono();
 
-analytics.get("/", (c) => {
-  const from = c.req.query("from");
-  const to = c.req.query("to");
-  const requestedGroupBy = c.req.query("groupBy");
-  const groupBy: AdminAnalyticsResponse["range"]["groupBy"] =
-    requestedGroupBy === "week" || requestedGroupBy === "month" ? requestedGroupBy : "day";
+const analyticsQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  groupBy: z.enum(["day", "week", "month"]).default("day"),
+});
+
+analytics.get("/", validateQuery(analyticsQuerySchema), (c) => {
+  const { from, to, groupBy } = c.var.query;
   const { whereSql, params } = buildAnalyticsFilters(from, to);
   const bucketExpression = analyticsBucketExpression(groupBy);
 

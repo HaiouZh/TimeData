@@ -6,7 +6,7 @@ const exportRoute = new Hono();
 
 function escapeCsvCell(value: unknown): string {
   const v = value == null ? "" : String(value);
-  const safe = /^[=+\-@]/.test(v) ? `'${v}` : v;
+  const safe = /^[\s]*[=+\-@]/.test(v) ? `'${v}` : v;
   const needsQuote = /[",\r\n]/.test(safe);
   const escaped = safe.replace(/"/g, '""');
   return needsQuote ? `"${escaped}"` : escaped;

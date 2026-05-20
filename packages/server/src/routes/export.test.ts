@@ -139,14 +139,50 @@ describe("export route CSV escaping", () => {
       categoryId: "cat-formula",
       startTime: "2026-05-13T12:00:00.000Z",
       endTime: "2026-05-13T13:00:00.000Z",
-      note: "=SUM(A1:A2)",
+      note: "   =SUM(A1)",
     });
 
     const res = await app.request("/api/export?format=csv");
 
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(
-      "category,start,end,note\n" + "'@自动化,2026-05-13T12:00:00.000Z,2026-05-13T13:00:00.000Z,'=SUM(A1:A2)\n",
+      "category,start,end,note\n" + "'@自动化,2026-05-13T12:00:00.000Z,2026-05-13T13:00:00.000Z,'   =SUM(A1)\n",
+    );
+  });
+
+  it("prefixes tab-indented formula-like cells", async () => {
+    seedCategory(db, { id: "cat-tab-formula", name: "制表", sortOrder: 1 });
+    seedEntry(db, {
+      id: "entry-tab-formula",
+      categoryId: "cat-tab-formula",
+      startTime: "2026-05-13T13:00:00.000Z",
+      endTime: "2026-05-13T14:00:00.000Z",
+      note: "\t=SUM(A1)",
+    });
+
+    const res = await app.request("/api/export?format=csv");
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(
+      "category,start,end,note\n" + "制表,2026-05-13T13:00:00.000Z,2026-05-13T14:00:00.000Z,'\t=SUM(A1)\n",
+    );
+  });
+
+  it("keeps formula protection when protected cells also need csv quotes", async () => {
+    seedCategory(db, { id: "cat-quoted-formula", name: "引用", sortOrder: 1 });
+    seedEntry(db, {
+      id: "entry-quoted-formula",
+      categoryId: "cat-quoted-formula",
+      startTime: "2026-05-13T14:00:00.000Z",
+      endTime: "2026-05-13T15:00:00.000Z",
+      note: " =SUM(A1, A2)",
+    });
+
+    const res = await app.request("/api/export?format=csv");
+
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe(
+      "category,start,end,note\n" + '引用,2026-05-13T14:00:00.000Z,2026-05-13T15:00:00.000Z,"\' =SUM(A1, A2)"\n',
     );
   });
 });

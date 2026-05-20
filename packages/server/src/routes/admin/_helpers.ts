@@ -224,20 +224,26 @@ export function analyticsBucketExpression(groupBy: AdminAnalyticsResponse["range
   return groupBy === "month" ? "substr(e.start_time, 1, 7)" : "substr(e.start_time, 1, 10)";
 }
 
+type HealthCheckQuery = {
+  countSql: string;
+  sampleSql: string;
+  params?: unknown[];
+};
+
 export function getHealthCheck(
   code: AdminHealthCheckItem["code"],
   severity: AdminHealthCheckItem["severity"],
-  sql: string,
-  params: unknown[] = [],
+  query: HealthCheckQuery,
 ): AdminHealthCheckItem {
-  const rows = getDb()
-    .prepare(sql)
-    .all(...params) as HealthSampleRow[];
+  const db = getDb();
+  const params = query.params ?? [];
+  const countRow = db.prepare(`SELECT COUNT(*) AS count FROM (${query.countSql})`).get(...params) as CountRow;
+  const rows = db.prepare(`SELECT id FROM (${query.sampleSql}) LIMIT 5`).all(...params) as HealthSampleRow[];
   return {
     code,
     severity,
-    count: rows.length,
-    sampleIds: rows.slice(0, 5).map((row) => row.id),
+    count: countRow.count,
+    sampleIds: rows.map((row) => row.id),
   };
 }
 

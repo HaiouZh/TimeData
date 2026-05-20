@@ -38,6 +38,21 @@ describe("validateForcePushBusinessRules", () => {
     expect(result).toMatch(/third level/);
   });
 
+  it("validates parent levels without array find lookups", () => {
+    const categories = [
+      baseCategory({ id: "p" }),
+      baseCategory({ id: "c", parentId: "p" }),
+      baseCategory({ id: "g", parentId: "c" }),
+    ];
+    categories.find = () => {
+      throw new Error("Array.find should not be used for parent lookup");
+    };
+
+    const result = validateForcePushBusinessRules(categories, []);
+
+    expect(result).toMatch(/third level/);
+  });
+
   it("rejects missing parent category", () => {
     const result = validateForcePushBusinessRules([baseCategory({ id: "c1", parentId: "missing" })], []);
     expect(result).toMatch(/missing parent/);
