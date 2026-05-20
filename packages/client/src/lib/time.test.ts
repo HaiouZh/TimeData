@@ -284,6 +284,7 @@ describe("resolveClockRangeAroundEndDate", () => {
     expect(resolveClockRangeAroundEndDate("2026-05-08", "07", "30", "08", "15")).toEqual({
       startTime: "2026-05-08T07:30:00",
       endTime: "2026-05-08T08:15:00",
+      shiftedDays: 0,
     });
   });
 
@@ -291,6 +292,7 @@ describe("resolveClockRangeAroundEndDate", () => {
     expect(resolveClockRangeAroundEndDate("2026-05-08", "23", "53", "08", "01")).toEqual({
       startTime: "2026-05-07T23:53:00",
       endTime: "2026-05-08T08:01:00",
+      shiftedDays: 0,
     });
   });
 
@@ -298,6 +300,61 @@ describe("resolveClockRangeAroundEndDate", () => {
     expect(resolveClockRangeAroundEndDate("2026-05-08", "08", "00", "08", "00")).toEqual({
       startTime: "2026-05-07T08:00:00",
       endTime: "2026-05-08T08:00:00",
+      shiftedDays: 0,
+    });
+  });
+
+  it("returns shiftedDays=0 for legal same-day ranges with now provided", () => {
+    const now = new Date("2026-05-20T15:00:00+08:00");
+    expect(resolveClockRangeAroundEndDate("2026-05-20", "14", "00", "15", "00", now)).toEqual({
+      startTime: "2026-05-20T14:00:00",
+      endTime: "2026-05-20T15:00:00",
+      shiftedDays: 0,
+    });
+  });
+
+  it("returns shiftedDays=0 for overnight ranges already in the past", () => {
+    const now = new Date("2026-05-20T03:00:00+08:00");
+    expect(resolveClockRangeAroundEndDate("2026-05-20", "22", "00", "02", "00", now)).toEqual({
+      startTime: "2026-05-19T22:00:00",
+      endTime: "2026-05-20T02:00:00",
+      shiftedDays: 0,
+    });
+  });
+
+  it("shifts back one day when endTime is in the future (3 AM filling yesterday 9-22)", () => {
+    const now = new Date("2026-05-20T03:00:00+08:00");
+    expect(resolveClockRangeAroundEndDate("2026-05-20", "09", "00", "22", "00", now)).toEqual({
+      startTime: "2026-05-19T09:00:00",
+      endTime: "2026-05-19T22:00:00",
+      shiftedDays: 1,
+    });
+  });
+
+  it("shifts back one day when endTime is in the future (3 AM filling 04-06)", () => {
+    const now = new Date("2026-05-20T03:00:00+08:00");
+    expect(resolveClockRangeAroundEndDate("2026-05-20", "04", "00", "06", "00", now)).toEqual({
+      startTime: "2026-05-19T04:00:00",
+      endTime: "2026-05-19T06:00:00",
+      shiftedDays: 1,
+    });
+  });
+
+  it("shifts back when endDate equals today but clock is in afternoon future", () => {
+    const now = new Date("2026-05-20T15:00:00+08:00");
+    expect(resolveClockRangeAroundEndDate("2026-05-20", "09", "00", "22", "00", now)).toEqual({
+      startTime: "2026-05-19T09:00:00",
+      endTime: "2026-05-19T22:00:00",
+      shiftedDays: 1,
+    });
+  });
+
+  it("does not shift when endDate is already yesterday (URL-driven backfill)", () => {
+    const now = new Date("2026-05-20T03:00:00+08:00");
+    expect(resolveClockRangeAroundEndDate("2026-05-19", "09", "00", "22", "00", now)).toEqual({
+      startTime: "2026-05-19T09:00:00",
+      endTime: "2026-05-19T22:00:00",
+      shiftedDays: 0,
     });
   });
 });
