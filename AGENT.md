@@ -114,11 +114,14 @@
 
 ## Git
 
-- 提交：约定式风格、简洁、分组。
+- 提交：约定式风格、简洁、分组。每个 worktree 尽量 1 个 commit；TDD 多步实现可保留每步一 commit。
 - 不删 / 重命名意外文件；阻碍时询问，否则忽略。
 - 用户说 `commit`：只提交本次变更。`commit all`：分组提交所有变更。`push`：可先 `git pull --rebase`。
 - 不主动推送至远端，除非用户明确要求。
-- 默认 `main`；无合并提交，推送前在最新 `origin/main` 上变基。
+- 默认 `main`，保持线性 history（不用 merge commit）。
+- **worktree 合 main 的标准做法**：在 main 仓库内 `git cherry-pick <base>..<branch>`（`<base>` 是 worktree 创建时的基底 commit，通常等于当时的 `origin/main`）。不用 `git merge`、不用 `--no-ff`。如果 worktree 内只有 1 个 commit，等价于 `git cherry-pick <hash>`。
+- 推送前在最新 `origin/main` 上变基；变基后重跑验收命令。
+- 合完清理 worktree：`git worktree remove <path>` 加 `git branch -D <branch>`，避免目录堆积。
 
 ------
 
@@ -133,4 +136,4 @@
 
 ------
 
-*Last reviewed: 2026-05-19（2026-05-19 审查整改完成：第一批 1.8/1.9/1.11/1.13/2.5/2.6/2.15/2.17/3.11/3.12 + Plan 02-08 全部合并；P3 推迟项与 P4 不排期项见 ADR 0009）*
+*Last reviewed: 2026-05-20（Git 段补全 worktree 合 main 的标准做法与清理步骤）*
