@@ -44,9 +44,9 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.0",
-    "typescript": "^5.7.0",
+    "typescript": "catalog:",
     "vite": "^8.0.0",
     "vite-plugin-pwa": "^1.0.0",
-    "vitest": "^3.2.0"
+    "vitest": "catalog:"
   }
 }

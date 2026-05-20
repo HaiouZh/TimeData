@@ -5,16 +5,47 @@ export type LocalDateTimeString = string & { readonly _brand: "LocalDateTimeStri
 
 export const APP_TIME_ZONE = "Asia/Shanghai";
 
+type DateTimeParts = {
+  y: number;
+  mo: number;
+  d: number;
+  h: number;
+  mi: number;
+  s: number;
+};
+
+function parseLocalDateTimeParts(value: string): DateTimeParts | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, y, mo, d, h, mi, s] = match;
+  if (!y || !mo || !d || !h || !mi || !s) return null;
+  return {
+    y: Number(y),
+    mo: Number(mo),
+    d: Number(d),
+    h: Number(h),
+    mi: Number(mi),
+    s: Number(s),
+  };
+}
+
+function getFormattedPart(parts: Record<string, string>, key: string): string {
+  const value = parts[key];
+  if (value === undefined) {
+    throw new Error(`Missing formatted date part: ${key}`);
+  }
+  return value;
+}
+
 export function isUtcIso(value: unknown): value is UtcIsoString {
   return UtcIsoStringSchema.safeParse(value).success;
 }
 
 export function isLocalDateTime(value: unknown): value is LocalDateTimeString {
   if (typeof value !== "string") return false;
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)) return false;
-  const [datePart, timePart] = value.split("T");
-  const [y, mo, d] = datePart.split("-").map(Number);
-  const [h, mi, s] = timePart.split(":").map(Number);
+  const parts = parseLocalDateTimeParts(value);
+  if (!parts) return false;
+  const { y, mo, d, h, mi, s } = parts;
   const probe = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
   return (
     probe.getUTCFullYear() === y &&
@@ -32,12 +63,11 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
   // 再用 Intl 求出 approxUtc 在 timeZone 内对应的本地时间，
   // 最后用差值修正得到正确的 UTC。
   // 中国无夏令时，此算法无歧义；带夏令时的时区（如美国）在时钟拨回时可能解析到两者之一。
-  const [datePart, timePart] = localStr.split("T");
-  const [y, mo, d] = datePart.split("-").map(Number);
-  const tParts = timePart.split(":");
-  const h = Number(tParts[0]);
-  const mi = Number(tParts[1]);
-  const s = Number(tParts[2] ?? 0);
+  const parsed = parseLocalDateTimeParts(localStr);
+  if (!parsed) {
+    throw new Error("Invalid local date time string");
+  }
+  const { y, mo, d, h, mi, s } = parsed;
 
   const approxUtc = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
 
@@ -57,14 +87,15 @@ export function localDateTimeToUtc(localStr: string, timeZone = APP_TIME_ZONE): 
       .filter((p) => p.type !== "literal")
       .map((p) => [p.type, p.value]),
   );
-  const displayH = parts.hour === "24" ? 0 : Number.parseInt(parts.hour, 10);
+  const hour = getFormattedPart(parts, "hour");
+  const displayH = hour === "24" ? 0 : Number.parseInt(hour, 10);
   const displayedLocalMs = Date.UTC(
-    Number.parseInt(parts.year, 10),
-    Number.parseInt(parts.month, 10) - 1,
-    Number.parseInt(parts.day, 10),
+    Number.parseInt(getFormattedPart(parts, "year"), 10),
+    Number.parseInt(getFormattedPart(parts, "month"), 10) - 1,
+    Number.parseInt(getFormattedPart(parts, "day"), 10),
     displayH,
-    Number.parseInt(parts.minute, 10),
-    Number.parseInt(parts.second, 10),
+    Number.parseInt(getFormattedPart(parts, "minute"), 10),
+    Number.parseInt(getFormattedPart(parts, "second"), 10),
   );
 
   const targetLocalMs = Date.UTC(y, mo - 1, d, h, mi, s);
@@ -91,8 +122,9 @@ export function utcToLocalDateTime(utcStr: string, timeZone = APP_TIME_ZONE): Lo
       .filter((p) => p.type !== "literal")
       .map((p) => [p.type, p.value]),
   );
-  const hVal = parts.hour === "24" ? "00" : parts.hour;
-  return `${parts.year}-${parts.month}-${parts.day}T${hVal}:${parts.minute}:${parts.second}` as LocalDateTimeString;
+  const hour = getFormattedPart(parts, "hour");
+  const hVal = hour === "24" ? "00" : hour;
+  return `${getFormattedPart(parts, "year")}-${getFormattedPart(parts, "month")}-${getFormattedPart(parts, "day")}T${hVal}:${getFormattedPart(parts, "minute")}:${getFormattedPart(parts, "second")}` as LocalDateTimeString;
 }
 
 export function nowUtcIso(): UtcIsoString {

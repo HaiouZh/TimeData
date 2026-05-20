@@ -43,7 +43,7 @@ docker compose up -d
 | `UPDATE_REPO` | 否 | `HaiouZh/TimeData` | GitHub owner/repo，用于查询最新版本 |
 | `GITHUB_TOKEN` | 否 | — | GitHub API Token，用于提高版本查询限额 |
 | `WATCHTOWER_TOKEN` | 生产必填 | — | Watchtower HTTP API Token，`/api/update` 触发内部 Watchtower 更新时使用 |
-| `TIMEDATA_IMAGE_TAG` | 否 | `latest` | TimeData 镜像 tag，可 pin 到指定版本 |
+| `TIMEDATA_IMAGE_TAG` | 否 | `latest` | TimeData 镜像 tag，可 pin 到指定版本；生产环境建议在 `.env` 中固定为已验证的提交 tag，例如 `TIMEDATA_IMAGE_TAG=sha-abcdef1` |
 
 ## 一键更新
 
