@@ -59,10 +59,12 @@ entries.get("/", (c) => {
   return c.json(mapped);
 });
 
+const TimeInputSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:mm");
+
 const EntriesPostBodySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
-  start: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "start must be HH:mm or HH:mm:ss"),
-  end: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, "end must be HH:mm or HH:mm:ss"),
+  start: TimeInputSchema,
+  end: TimeInputSchema,
   category: z.string().min(1),
   note: z.string().nullable().optional(),
 }).strict();

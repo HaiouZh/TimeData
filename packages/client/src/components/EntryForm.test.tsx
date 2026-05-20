@@ -121,4 +121,44 @@ describe("EntryForm", () => {
 
     expect(container.querySelector('[data-testid="time-error"]')?.textContent).toBe("不能记录尚未发生的时间");
   });
+
+  it("disables the save button and shows progress while onSave is pending", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    let resolveSave!: () => void;
+    const onSave = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+
+    await act(async () => {
+      createRoot(container).render(
+        createElement(EntryForm, {
+          startTime: "2026-05-20T09:00:00",
+          endTime: "2026-05-20T10:00:00",
+          onSave,
+          onCancel: () => {},
+        }),
+      );
+    });
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "保存");
+    if (!saveButton) throw new Error("save button not found");
+
+    await act(async () => {
+      saveButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(saveButton.disabled).toBe(true);
+    expect(saveButton.textContent).toBe("保存中…");
+
+    await act(async () => {
+      resolveSave();
+    });
+
+    expect(saveButton.disabled).toBe(false);
+    expect(saveButton.textContent).toBe("保存");
+  });
 });

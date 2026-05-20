@@ -44,6 +44,28 @@ describe("runCategories", () => {
     });
   });
 
+  it("returns categories in stable parent and child order regardless of server order", async () => {
+    const categories = [
+      { id: "child-b", name: "设计", parentId: "parent-b", isArchived: false, color: "#ffffff", icon: null, sortOrder: 2, createdAt: "2026-05-19T00:00:00.000Z", updatedAt: "2026-05-19T00:00:00.000Z" },
+      { id: "parent-b", name: "个人", parentId: null, isArchived: false, color: "#ffffff", icon: null, sortOrder: 1, createdAt: "2026-05-19T00:00:00.000Z", updatedAt: "2026-05-19T00:00:00.000Z" },
+      { id: "child-a", name: "编程", parentId: "parent-a", isArchived: false, color: "#ffffff", icon: null, sortOrder: 1, createdAt: "2026-05-19T00:00:00.000Z", updatedAt: "2026-05-19T00:00:00.000Z" },
+      { id: "parent-a", name: "工作", parentId: null, isArchived: false, color: "#ffffff", icon: null, sortOrder: 0, createdAt: "2026-05-19T00:00:00.000Z", updatedAt: "2026-05-19T00:00:00.000Z" },
+      { id: "child-c", name: "写作", parentId: "parent-a", isArchived: false, color: "#ffffff", icon: null, sortOrder: 0, createdAt: "2026-05-19T00:00:00.000Z", updatedAt: "2026-05-19T00:00:00.000Z" },
+    ];
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify(categories), { status: 200 }));
+
+    await expect(runCategories({ serverUrl: "https://server.example", token: "secret" }, fetchImpl)).resolves.toEqual({
+      ok: true,
+      categories: [
+        { id: "parent-a", path: "工作", name: "工作", parentId: null },
+        { id: "child-c", path: "工作/写作", name: "写作", parentId: "parent-a" },
+        { id: "child-a", path: "工作/编程", name: "编程", parentId: "parent-a" },
+        { id: "parent-b", path: "个人", name: "个人", parentId: null },
+        { id: "child-b", path: "个人/设计", name: "设计", parentId: "parent-b" },
+      ],
+    });
+  });
+
   it("passes API errors through unchanged", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ ok: false, error: { code: "AUTH_FAILED", message: "Authentication failed" } }), { status: 401 }));
 

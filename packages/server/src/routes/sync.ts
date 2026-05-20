@@ -29,7 +29,7 @@ import { orderPushChanges } from "../sync/order.js";
 import { validateSyncChanges } from "../sync/validation.js";
 import { analyzePushBaseSeq } from "../sync/conflict.js";
 import { validateForcePushBusinessRules } from "../sync/forcePushValidation.js";
-import { getChangesSinceSeq, getLatestSeq } from "../sync/seq.js";
+import { getChangesSinceSeq, getLatestSeq, recordSeqWithDb } from "../sync/seq.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 
 const FORCE_PUSH_CONFIRMATION_PHRASE = "OVERWRITE_SERVER" as const;
@@ -109,12 +109,12 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
       category.createdAt,
       category.updatedAt,
     );
-    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("categories", category.id, "create");
+    recordSeqWithDb(db, "categories", category.id, "create");
   }
 
   for (const entry of timeEntries) {
     insertEntry.run(entry.id, entry.categoryId, entry.startTime, entry.endTime, entry.note, entry.createdAt, entry.updatedAt);
-    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run("time_entries", entry.id, "create");
+    recordSeqWithDb(db, "time_entries", entry.id, "create");
   }
 
   computeAndPersistCommitHash(db);

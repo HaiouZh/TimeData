@@ -1,4 +1,5 @@
 import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
+import { collectCategoryTreeIds } from "../lib/categoryTree.js";
 import { db } from "../db/index.js";
 import type { SyncConflict } from "./engine.js";
 
@@ -6,18 +7,9 @@ export type ConflictResolution = "keep_local" | "use_remote";
 
 async function deleteCategoryTree(categoryId: string): Promise<{ categoryIds: string[]; entryIds: string[] }> {
   const categories = await db.categories.toArray();
-  const target = categories.find((category) => category.id === categoryId);
-  if (!target) return { categoryIds: [], entryIds: [] };
+  const categoryIds = collectCategoryTreeIds(categories, categoryId);
+  if (categoryIds.length === 0) return { categoryIds: [], entryIds: [] };
 
-  const categoryIds = [target.id];
-  for (let index = 0; index < categoryIds.length; index++) {
-    const parentId = categoryIds[index];
-    for (const category of categories) {
-      if (category.parentId === parentId) {
-        categoryIds.push(category.id);
-      }
-    }
-  }
   const categoryIdSet = new Set(categoryIds);
   const entries = await db.timeEntries.filter((entry) => categoryIdSet.has(entry.categoryId)).toArray();
   const entryIds = entries.map((entry) => entry.id);

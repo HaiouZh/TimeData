@@ -13,12 +13,11 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
-function validateCategoryTree(categories: ReadonlyArray<Record<string, unknown>>): BackupValidationResult | null {
-  const byId = new Map(categories.map((category) => [category.id as string, category]));
+function validateCategoryTree(categories: ReadonlyArray<Category>): BackupValidationResult | null {
+  const byId = new Map(categories.map((category) => [category.id, category]));
 
   for (const category of categories) {
-    const id = category.id as string;
-    const parentId = category.parentId as string | null;
+    const { id, parentId } = category;
 
     if (parentId === id) {
       return { ok: false, error: { code: "INVALID_CATEGORY_TREE", message: `分类 ${id} 不能引用自身。` } };
@@ -112,7 +111,7 @@ export function validateBackup(value: unknown): BackupValidationResult {
     entryIds.add(id);
   }
 
-  const treeError = validateCategoryTree(categories as Array<Record<string, unknown>>);
+  const treeError = validateCategoryTree(categories);
   if (treeError) {
     return treeError;
   }

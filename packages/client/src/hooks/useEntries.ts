@@ -160,8 +160,9 @@ export interface SaveEntryWithOverlapAdjustmentsInput {
 }
 
 export async function saveEntryWithOverlapAdjustments(input: SaveEntryWithOverlapAdjustmentsInput): Promise<TimeEntry> {
-  validateEntryTimeRange(input.startTime, input.endTime, input.now ?? new Date());
-  const now = (input.now ?? new Date()).toISOString();
+  const nowDate = input.now ?? new Date();
+  validateEntryTimeRange(input.startTime, input.endTime, nowDate);
+  const now = nowDate.toISOString();
 
   return db.transaction("rw", db.timeEntries, db.syncLog, async () => {
     if (input.overlapPlan) {

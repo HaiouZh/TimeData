@@ -23,10 +23,12 @@ export async function createAutoBackup(): Promise<void> {
 }
 
 export function backupSignature(data: Pick<AutoBackupRecord, "categories" | "timeEntries">): string {
-  const latestUpdate = (items: { updatedAt: string }[]) =>
-    items.reduce((max, item) => (item.updatedAt > max ? item.updatedAt : max), "");
+  const byId = <T extends { id: string }>(left: T, right: T) => left.id.localeCompare(right.id);
 
-  return `${data.categories.length}:${data.timeEntries.length}:${latestUpdate(data.categories)}|${latestUpdate(data.timeEntries)}`;
+  return JSON.stringify({
+    categories: [...data.categories].sort(byId),
+    timeEntries: [...data.timeEntries].sort(byId),
+  });
 }
 
 function sameBackupData(

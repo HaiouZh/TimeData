@@ -339,6 +339,37 @@ describe("saveEntryWithOverlapAdjustments", () => {
     );
   });
 
+  it("uses a single current time for validation and saved timestamps", async () => {
+    const RealDate = Date;
+    const firstNow = new RealDate("2026-05-17T12:00:00.000Z");
+    const secondNow = new RealDate("2026-05-17T12:00:01.000Z");
+    const DateMock = vi.fn((value?: string | number | Date) => {
+      if (value !== undefined) return new RealDate(value);
+      return DateMock.mock.calls.length === 1 ? firstNow : secondNow;
+    });
+    DateMock.UTC = RealDate.UTC;
+    DateMock.parse = RealDate.parse;
+    DateMock.now = vi.fn(() => firstNow.getTime());
+    DateMock.prototype = RealDate.prototype;
+    vi.stubGlobal("Date", DateMock);
+
+    try {
+      const saved = await saveEntryWithOverlapAdjustments({
+        existingEntryId: null,
+        categoryId: "cat-work",
+        startTime: "2026-05-17T09:00:00.000Z",
+        endTime: "2026-05-17T11:00:00.000Z",
+        note: "new",
+        overlapPlan: null,
+      });
+
+      expect(saved.createdAt).toBe(firstNow.toISOString());
+      expect(saved.updatedAt).toBe(firstNow.toISOString());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("rolls back overlap adjustments when the target entry cannot be saved", async () => {
     await db.timeEntries.add(
       entry({ id: "old", startTime: "2026-05-17T08:00:00.000Z", endTime: "2026-05-17T10:00:00.000Z" }),

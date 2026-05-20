@@ -109,10 +109,17 @@ describe("resolveConflicts", () => {
       parentId: "work",
       updatedAt: "2026-05-08T01:00:00.000Z",
     };
-    await db.categories.bulkAdd([work, workCode]);
+    const workCodeReview = {
+      ...work,
+      id: "work-code-review",
+      name: "复盘",
+      parentId: "work-code",
+      updatedAt: "2026-05-08T02:00:00.000Z",
+    };
+    await db.categories.bulkAdd([work, workCode, workCodeReview]);
     await db.timeEntries.put({
-      id: "entry-work-code",
-      categoryId: "work-code",
+      id: "entry-work-code-review",
+      categoryId: "work-code-review",
       startTime: "2026-05-08T09:00:00.000Z",
       endTime: "2026-05-08T10:00:00.000Z",
       note: null,
@@ -121,17 +128,17 @@ describe("resolveConflicts", () => {
     });
     await db.syncLog.bulkAdd([
       {
-        id: "log-work-code",
+        id: "log-work-code-review",
         tableName: "categories",
-        recordId: "work-code",
+        recordId: "work-code-review",
         action: "update",
-        timestamp: "2026-05-08T01:00:00.000Z",
+        timestamp: "2026-05-08T02:00:00.000Z",
         synced: false,
       },
       {
-        id: "log-entry-work-code",
+        id: "log-entry-work-code-review",
         tableName: "time_entries",
-        recordId: "entry-work-code",
+        recordId: "entry-work-code-review",
         action: "update",
         timestamp: "2026-05-08T09:00:00.000Z",
         synced: false,
@@ -146,7 +153,8 @@ describe("resolveConflicts", () => {
     expect(applied).toBe(1);
     await expect(db.categories.get("work")).resolves.toBeUndefined();
     await expect(db.categories.get("work-code")).resolves.toBeUndefined();
-    await expect(db.timeEntries.get("entry-work-code")).resolves.toBeUndefined();
+    await expect(db.categories.get("work-code-review")).resolves.toBeUndefined();
+    await expect(db.timeEntries.get("entry-work-code-review")).resolves.toBeUndefined();
     await expect(db.syncLog.count()).resolves.toBe(0);
   });
 

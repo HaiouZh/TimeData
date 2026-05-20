@@ -56,6 +56,7 @@ export default function EntryForm({
   const [end, setEnd] = useState<DateTimeValue>(() => splitDateTime(endTime));
   const [note, setNote] = useState(existingEntry?.note || "");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const resolvedRange = resolveClockRangeAroundEndDate(end.date, start.hour, start.minute, end.hour, end.minute, now);
   const { startTime: nextStartTime, endTime: nextEndTime, shiftedDays } = resolvedRange;
@@ -96,9 +97,14 @@ export default function EntryForm({
     }
 
     setError("");
-    const result = await onSave(categoryId, nextStartTime, nextEndTime, note);
-    if (result && result.ok === false) {
-      setError(result.error);
+    setSaving(true);
+    try {
+      const result = await onSave(categoryId, nextStartTime, nextEndTime, note);
+      if (result && result.ok === false) {
+        setError(result.error);
+      }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -139,10 +145,10 @@ export default function EntryForm({
         </button>
         <button
           onClick={handleSave}
-          disabled={!categoryId}
+          disabled={!categoryId || saving}
           className="py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-medium"
         >
-          保存
+          {saving ? "保存中…" : "保存"}
         </button>
       </div>
 

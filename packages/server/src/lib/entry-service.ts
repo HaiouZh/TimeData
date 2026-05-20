@@ -197,11 +197,10 @@ export function createEntryFromCliInput(
     }
 
     const id = randomUUID();
-    const now = new Date().toISOString();
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, category.categoryId, startTime, endTime, input.note || null, now, now);
+    `).run(id, category.categoryId, startTime, endTime, input.note || null, nowUtc, nowUtc);
 
     recordSeqWithDb(db, "time_entries", id, "create");
 

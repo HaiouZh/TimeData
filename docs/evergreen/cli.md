@@ -31,6 +31,8 @@ last-reviewed: 2026-05-21
 
 输出格式：`--format=json|human` 显式选择，未指定时根据 stdout 是否 TTY 自动判断（管道默认 JSON、终端默认 human）。所有命令的失败响应仍是 `{ ok: false, error: { code, message } }` JSON。
 
+`timedata categories` 输出未归档分类及路径，并在 CLI 端稳定排序：先按所属顶层分类的 `sortOrder`、顶层分类 `id` 分组，再按当前项的 `sortOrder`、`name`、`id` 排序。即使服务器返回顺序变化，脚本看到的分类列表顺序也保持稳定。
+
 ## 2. 输入格式约定
 
 - `timedata help` 和 `timedata help <command>`：不需要 server 配置；未知 topic 返回 `UNKNOWN_COMMAND`。

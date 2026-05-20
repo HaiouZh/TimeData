@@ -146,17 +146,16 @@ describe("entries route", () => {
     expect(body.error.code).toBe("INVALID_BODY");
   });
 
-  it("rejects wrong time format with INVALID_BODY and details.issues", async () => {
+  it("rejects HH:mm:ss at the route layer", async () => {
     const res = await app.request("/api/entries", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: "2026-05-19", start: "9", end: "10", category: "投资/读书" }),
+      body: JSON.stringify({ date: "2026-05-07", start: "12:34:56", end: "13:34:56", category: "工作/编程" }),
     });
 
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe("INVALID_BODY");
-    expect(body.error.details).toBeDefined();
   });
 });

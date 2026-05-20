@@ -213,6 +213,26 @@ describe("entry service", () => {
     expect(result.entry.endTime).toBe("2026-05-07T16:00:00");
   });
 
+  it("uses the injected current time for created_at and updated_at", () => {
+    const now = new Date("2026-05-07T16:00:00+08:00");
+    const result = createEntryFromCliInput(
+      db,
+      {
+        date: "2026-05-07",
+        start: "14:00",
+        end: "16:00",
+        category: "工作/编程",
+        note: "当前记录",
+      },
+      { now },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected success");
+    const row = db.prepare("SELECT created_at, updated_at FROM time_entries WHERE id = ?").get(result.entry.id);
+    expect(row).toEqual({ created_at: now.toISOString(), updated_at: now.toISOString() });
+  });
+
   it("records sync_seq and refreshes sync state when creating an entry from CLI input", () => {
     const before = getCommitHash(db).hash;
     const result = createEntryFromCliInput(

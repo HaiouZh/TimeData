@@ -48,6 +48,14 @@ describe("backupSignature", () => {
 
     expect(sig1).toBe(sig2);
   });
+
+  it("differs when content differs even if count and latest updatedAt match", () => {
+    const updatedAt = "2026-05-08T10:00:00.000Z";
+
+    expect(backupSignature({ categories: [category("cat-a", updatedAt)], timeEntries: [] })).not.toBe(
+      backupSignature({ categories: [{ ...category("cat-a", updatedAt), name: "changed" }], timeEntries: [] }),
+    );
+  });
 });
 
 describe("autoBackup", () => {
