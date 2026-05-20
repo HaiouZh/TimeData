@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-backup-test-"));
 const dbPath = path.join(tempRoot, "timedata.db");
@@ -10,13 +10,40 @@ vi.stubEnv("DB_PATH", dbPath);
 
 const { getDb } = await import("../db/connection.js");
 const { initializeDatabase } = await import("../db/schema.js");
-const { createServerBackup, cleanupServerBackups } = await import("./backup.js");
+const { createServerBackup, cleanupServerBackups, readBackupManifest } = await import("./backup.js");
 
 beforeEach(() => {
   const db = getDb();
   initializeDatabase();
   db.exec("DELETE FROM sync_logs; DELETE FROM sync_tombstones; DELETE FROM time_entries; DELETE FROM categories;");
   fs.rmSync(path.join(tempRoot, "backups"), { recursive: true, force: true });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("readBackupManifest", () => {
+  it("returns an empty manifest without warning when the manifest does not exist", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(readBackupManifest()).toEqual({ backups: {} });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("warns and returns an empty manifest when reading the manifest fails for a non-ENOENT error", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(fs, "readFileSync").mockImplementation(() => {
+      const error = new Error("permission denied") as NodeJS.ErrnoException;
+      error.code = "EACCES";
+      throw error;
+    });
+
+    expect(readBackupManifest()).toEqual({ backups: {} });
+
+    expect(warnSpy).toHaveBeenCalledWith("[backup] failed to read manifest", expect.any(Error));
+  });
 });
 
 describe("createServerBackup", () => {
@@ -104,6 +131,99 @@ describe("createServerBackup", () => {
 
     expect(fs.existsSync(path.join(backupDir, "stale_keep.db"))).toBe(true);
     expect(fs.existsSync(path.join(backupDir, "stale_delete.db"))).toBe(false);
+  });
+
+  it("logs structured cleanup results after creating a server backup", async () => {
+    const backupDir = path.join(tempRoot, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+
+    const manifest = {
+      backups: {
+        stale_keep: {
+          id: "stale_keep",
+          fileName: "stale_keep.db",
+          operation: "sync_push",
+          createdAt: "2000-01-01T12:00:00.000Z",
+          protected: false,
+          reason: null,
+          relatedSyncLogId: null,
+          details: null,
+        },
+        stale_delete: {
+          id: "stale_delete",
+          fileName: "stale_delete.db",
+          operation: "sync_push",
+          createdAt: "2000-01-01T00:00:00.000Z",
+          protected: false,
+          reason: null,
+          relatedSyncLogId: null,
+          details: null,
+        },
+      },
+    };
+
+    fs.writeFileSync(path.join(backupDir, "stale_keep.db"), "backup fixture");
+    fs.writeFileSync(path.join(backupDir, "stale_delete.db"), "backup fixture");
+    fs.writeFileSync(path.join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const backup = await createServerBackup("sync_push");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(logSpy).toHaveBeenCalledWith("[backup] cleanup removed old backups", {
+      backupId: backup.id,
+      operation: "sync_push",
+      removedCount: 1,
+    });
+  });
+
+  it("logs structured cleanup failures after creating a server backup", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const rmSync = fs.rmSync;
+    vi.spyOn(fs, "rmSync").mockImplementation((filePath, options) => {
+      if (typeof filePath === "string" && filePath.endsWith("stale_delete.db")) {
+        throw new Error("cleanup failed");
+      }
+      return rmSync(filePath, options as never) as never;
+    });
+    const backupDir = path.join(tempRoot, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+    const manifest = {
+      backups: {
+        stale_keep: {
+          id: "stale_keep",
+          fileName: "stale_keep.db",
+          operation: "sync_push",
+          createdAt: "2000-01-01T12:00:00.000Z",
+          protected: false,
+          reason: null,
+          relatedSyncLogId: null,
+          details: null,
+        },
+        stale_delete: {
+          id: "stale_delete",
+          fileName: "stale_delete.db",
+          operation: "sync_push",
+          createdAt: "2000-01-01T00:00:00.000Z",
+          protected: false,
+          reason: null,
+          relatedSyncLogId: null,
+          details: null,
+        },
+      },
+    };
+    fs.writeFileSync(path.join(backupDir, "stale_keep.db"), "backup fixture");
+    fs.writeFileSync(path.join(backupDir, "stale_delete.db"), "backup fixture");
+    fs.writeFileSync(path.join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+
+    const backup = await createServerBackup("sync_push");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(warnSpy).toHaveBeenCalledWith("[backup] cleanup failed", {
+      backupId: backup.id,
+      operation: "sync_push",
+      error: expect.any(Error),
+    });
   });
 
   it("keeps protected backups and one old snapshot per 15 day window", async () => {

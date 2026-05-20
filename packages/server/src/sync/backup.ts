@@ -60,7 +60,10 @@ export function readBackupManifest(): ServerBackupManifest {
   try {
     const parsed = JSON.parse(fs.readFileSync(manifestPath(), "utf8")) as ServerBackupManifest;
     return { backups: parsed.backups ?? {} };
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn("[backup] failed to read manifest", error);
+    }
     return { backups: {} };
   }
 }
@@ -135,9 +138,15 @@ export async function createServerBackup(
   setImmediate(() => {
     try {
       const removed = cleanupServerBackups();
-      if (removed.length > 0) console.log(`[backup] cleanup removed ${removed.length} old backups`);
+      if (removed.length > 0) {
+        console.log("[backup] cleanup removed old backups", {
+          backupId: id,
+          operation,
+          removedCount: removed.length,
+        });
+      }
     } catch (error) {
-      console.warn("[backup] cleanup failed", error);
+      console.warn("[backup] cleanup failed", { backupId: id, operation, error });
     }
   });
 

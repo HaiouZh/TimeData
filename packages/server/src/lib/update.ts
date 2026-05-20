@@ -184,8 +184,13 @@ export function triggerUpdate(opts: UpdaterOpts): UpdateStatus {
   const updateId = opts.updateId || `update-${Date.now()}`;
   const startedAt = new Date().toISOString();
   acquireUpdateLock(opts.stateDir, updateId);
-  const status = createUpdateStatus({ stateDir: opts.stateDir, updateId, now: () => startedAt });
+  try {
+    const status = createUpdateStatus({ stateDir: opts.stateDir, updateId, now: () => startedAt });
 
-  void runUpdate({ ...opts, updateId, startedAt });
-  return status;
+    void runUpdate({ ...opts, updateId, startedAt });
+    return status;
+  } catch (error) {
+    releaseUpdateLock(opts.stateDir);
+    throw error;
+  }
 }
