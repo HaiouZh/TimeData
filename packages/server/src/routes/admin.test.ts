@@ -315,6 +315,33 @@ describe("admin route", () => {
     });
   });
 
+  it("skips backup files that cannot be statted", async () => {
+    const brokenFileName = "sync_push-2026-05-08T09-00-00-000Z.db";
+    const backupDir = path.join(tempDir, "backups");
+    fs.writeFileSync(path.join(backupDir, brokenFileName), "broken backup fixture");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const statSync = fs.statSync;
+    vi.spyOn(fs, "statSync").mockImplementation((filePath, options) => {
+      if (filePath === path.join(backupDir, brokenFileName)) {
+        const error = new Error("stat failed") as NodeJS.ErrnoException;
+        error.code = "ENOENT";
+        throw error;
+      }
+      return statSync(filePath, options as never) as never;
+    });
+
+    const res = await app.request("/api/admin/backups");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.backups).toHaveLength(1);
+    expect(body.backups[0].fileName).toBe("sync_push-2026-05-08T08-00-00-000Z.db");
+    expect(warnSpy).toHaveBeenCalledWith("[backup] unable to stat backup file", {
+      fileName: brokenFileName,
+      error: expect.any(Error),
+    });
+  });
+
   it("returns health checks for data anomalies", async () => {
     db.prepare(`
       INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)

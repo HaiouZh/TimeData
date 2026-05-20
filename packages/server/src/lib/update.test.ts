@@ -109,6 +109,22 @@ describe("triggerUpdate locking", () => {
     ).toThrow(UpdateAlreadyRunningError);
   });
 
+  it("removes update.lock when status creation fails after acquiring the lock", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    fs.mkdirSync(path.join(tempDir, "update.log"));
+
+    expect(() =>
+      triggerUpdate({
+        stateDir: tempDir!,
+        watchtowerUrl: "http://watchtower:8080",
+        watchtowerToken: "secret-token",
+        fetch: vi.fn() as typeof fetch,
+      }),
+    ).toThrow();
+
+    expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
+  });
+
   it("writes succeeded status and releases the lock after Watchtower accepts the update trigger", async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
     const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));

@@ -90,7 +90,7 @@ last-reviewed: 2026-05-20
    - 云端没有更高 seq → `fast_forward_push`。
    - 云端有更高 seq，但不涉及本批 push 的同一记录 → `merge_non_overlapping`。
    - 云端有更高 seq，且涉及本批 push 的同一记录 → `local_wins_non_fast_forward`。
-5. 写入前创建服务端备份：普通路径用 `createServerBackup('sync_push')`；`unknown_base` 用 `createServerBackup('sync_unknown_base')`；`local_wins_non_fast_forward` 用 `createServerBackup('sync_local_wins')`，并标记受保护，`reason = local_wins_non_fast_forward`，details 记录 `baseSeq`、`cloudAheadCount`、`overlappingRecords` 和 `pushedRecords`。
+5. 写入前创建服务端备份：普通路径用 `createServerBackup('sync_push')`；`unknown_base` 用 `createServerBackup('sync_unknown_base')`；`local_wins_non_fast_forward` 用 `createServerBackup('sync_local_wins')`，并标记受保护，`reason = local_wins_non_fast_forward`，details 记录 `baseSeq`、`cloudAheadCount`、`overlappingRecords` 和 `pushedRecords`。Server backup manifest 不存在时按空 manifest 处理；其他读取失败会记录 `[backup] failed to read manifest` 后继续返回空 manifest，避免 manifest 损坏阻断同步写入前备份。
 6. 在一个 SQLite 事务里逐条 `applyChange` 写入。每条成功写入都会追加 `sync_seq`，客户端下一次 pull 会从响应里的 `latestSeq` 继续。
 7. 对 `time_entries` 来说，服务端仍会先删除与本地记录重叠的旧远端记录，再写入本地版本；被覆盖删除的旧记录会写 `sync_tombstones(table_name='time_entries')` 和 `sync_seq(action='delete')`，让其他设备的 seq cursor pull 能拉到删除消息。如果发生时间段覆盖，返回的 outcome 会带 `overriddenRecordIds` 和 `backupId`，对应备份会被额外标成受保护并写入 `reason = local_override_overlap`。`sync_tombstones` 没有固定 TTL 清理规则：当前不会按天数自动删墓碑，是否引入保留策略要单独评估。
 8. `applyChange` 返回 skipped 时会带结构化 `skipReason`；`outcomeFromApplyResult()` 优先用它作为 `reasonCode`，不会把所有 skipped 都折叠成 `server_version_newer_or_same`。

@@ -141,23 +141,31 @@ export function listServerBackups(): AdminBackupRow[] {
   return fs
     .readdirSync(backupDir)
     .filter((fileName) => fileName.endsWith(".db"))
-    .map((fileName): AdminBackupRow => {
+    .flatMap((fileName): AdminBackupRow[] => {
       const fullPath = path.join(backupDir, fileName);
-      const stat = fs.statSync(fullPath);
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch (error) {
+        console.warn("[backup] unable to stat backup file", { fileName, error });
+        return [];
+      }
       const manifestEntry = manifestByFileName.get(fileName);
       const protectedBackup = manifestEntry?.protected ?? false;
       const retention: AdminBackupRow["retention"] = protectedBackup ? "protected" : "recent";
-      return {
-        id: manifestEntry?.id ?? fileName,
-        fileName,
-        operation: manifestEntry?.operation ?? parseBackupOperation(fileName),
-        sizeBytes: stat.size,
-        createdAt: manifestEntry?.createdAt ?? parseBackupCreatedAt(fileName) ?? stat.mtime.toISOString(),
-        protected: protectedBackup,
-        reason: manifestEntry?.reason ?? null,
-        retention,
-        relatedSyncLogId: manifestEntry?.relatedSyncLogId ?? null,
-      };
+      return [
+        {
+          id: manifestEntry?.id ?? fileName,
+          fileName,
+          operation: manifestEntry?.operation ?? parseBackupOperation(fileName),
+          sizeBytes: stat.size,
+          createdAt: manifestEntry?.createdAt ?? parseBackupCreatedAt(fileName) ?? stat.mtime.toISOString(),
+          protected: protectedBackup,
+          reason: manifestEntry?.reason ?? null,
+          retention,
+          relatedSyncLogId: manifestEntry?.relatedSyncLogId ?? null,
+        },
+      ];
     })
     .sort((a, b) =>
       a.createdAt === b.createdAt ? a.fileName.localeCompare(b.fileName) : b.createdAt.localeCompare(a.createdAt),

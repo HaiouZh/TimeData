@@ -219,7 +219,7 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 
 关键点：
 
-1. **服务端互斥是强约束**：`data/update.lock` 通过原子创建保护同一部署；重复 `POST /api/update` 会返回 `409 Conflict`，不会启动第二次更新。
+1. **服务端互斥是强约束**：`data/update.lock` 通过原子创建保护同一部署；重复 `POST /api/update` 会返回 `409 Conflict`，不会启动第二次更新。锁创建成功后，如果状态文件初始化或后台任务启动前的同步步骤抛错，服务端会立即删除本次 `update.lock` 并把错误抛回调用方；后台 Watchtower 触发失败则写入 `failed` 状态并释放锁。
 2. **应用容器不挂 Docker socket**：`timedata` 不直接接触 Docker API，也不安装 docker CLI；它只调用内部网络里的 Watchtower HTTP API，攻击面收敛到“触发更新”一个动作。
 3. **更新范围由 Watchtower label 限定**：compose 使用 `--label-enable`，默认只有 `timedata` 带 `com.centurylinklabs.watchtower.enable=true`，因此按需更新只作用于 TimeData 容器，不会波及 host 上其它容器。
 4. **Watchtower 负责真正的 recreate**：Watchtower 拉取镜像、比较 digest，并在有新镜像时使用旧容器 spec 重新创建 `timedata`；这比单纯 restart 更符合"更新到新镜像"的目标。
