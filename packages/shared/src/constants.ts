@@ -58,8 +58,7 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
 export function createDefaultCategories(timestamp = new Date().toISOString()): Category[] {
   const categories: Category[] = [];
 
-  for (let i = 0; i < DEFAULT_CATEGORIES.length; i++) {
-    const def = DEFAULT_CATEGORIES[i];
+  for (const [i, def] of DEFAULT_CATEGORIES.entries()) {
     categories.push({
       id: def.id,
       name: def.name,
@@ -72,10 +71,10 @@ export function createDefaultCategories(timestamp = new Date().toISOString()): C
       updatedAt: timestamp,
     });
 
-    for (let j = 0; j < def.children.length; j++) {
+    for (const [j, child] of def.children.entries()) {
       categories.push({
-        id: def.children[j].id,
-        name: def.children[j].name,
+        id: child.id,
+        name: child.name,
         parentId: def.id,
         color: def.color,
         icon: null,

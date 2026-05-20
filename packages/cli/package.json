@@ -16,11 +16,11 @@
   },
   "dependencies": {
     "@timedata/shared": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "^25.0.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.2.0"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
