@@ -15,7 +15,12 @@ const syncIfStaleMock = vi.hoisted(() => vi.fn());
 const confirmMock = vi.hoisted(() => vi.fn());
 const entryFormPropsMock = vi.hoisted(() => ({
   value: null as null | {
-    onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void>;
+    onSave: (
+      categoryId: string,
+      nextStartTime: string,
+      nextEndTime: string,
+      note: string,
+    ) => Promise<{ ok: boolean; error?: string } | void>;
   },
 }));
 
@@ -46,7 +51,12 @@ vi.mock("../components/EntryForm.js", () => ({
   default: (props: {
     startTime: string;
     endTime: string;
-    onSave: (categoryId: string, nextStartTime: string, nextEndTime: string, note: string) => Promise<void>;
+    onSave: (
+      categoryId: string,
+      nextStartTime: string,
+      nextEndTime: string,
+      note: string,
+    ) => Promise<{ ok: boolean; error?: string } | void>;
   }) => {
     entryFormPropsMock.value = props;
     return createElement("div", null, `${props.startTime} ${props.endTime}`);
@@ -151,5 +161,57 @@ describe("EntryPage default times", () => {
       note: "new",
       overlapPlan: plan,
     });
+  });
+});
+
+describe("EntryPage shift save", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    searchParamsMock.value = new URLSearchParams("");
+    useLatestEntryEndTimeBeforeMock.mockReturnValue(null);
+    confirmMock.mockReset();
+    confirmMock.mockResolvedValue(true);
+    findOverlappingEntriesMock.mockReset();
+    planEntryOverlapAdjustmentsMock.mockReset();
+    saveEntryWithOverlapAdjustmentsMock.mockReset();
+    saveEntryWithOverlapAdjustmentsMock.mockResolvedValue({});
+    entryFormPropsMock.value = null;
+  });
+
+  it("saves the shifted range silently when yesterday slot is empty", async () => {
+    vi.setSystemTime(new Date("2026-05-20T03:00:00+08:00"));
+    findOverlappingEntriesMock.mockResolvedValue([]);
+
+    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const formProps = entryFormPropsMock.value;
+    if (!formProps) throw new Error("EntryForm not rendered");
+
+    const result = await formProps.onSave("cat-work", "2026-05-19T09:00:00", "2026-05-19T22:00:00", "");
+
+    expect(findOverlappingEntriesMock).toHaveBeenCalled();
+    expect(saveEntryWithOverlapAdjustmentsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startTime: expect.stringContaining("2026-05-19"),
+        endTime: expect.stringContaining("2026-05-19"),
+      }),
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("returns shift-conflict error when shifted range overlaps existing entries", async () => {
+    vi.setSystemTime(new Date("2026-05-20T03:00:00+08:00"));
+    findOverlappingEntriesMock.mockResolvedValue([
+      { id: "e1", startTime: "2026-05-19T01:00:00.000Z", endTime: "2026-05-19T14:00:00.000Z" },
+    ]);
+
+    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const formProps = entryFormPropsMock.value;
+    if (!formProps) throw new Error("EntryForm not rendered");
+
+    const result = await formProps.onSave("cat-work", "2026-05-19T09:00:00", "2026-05-19T22:00:00", "");
+
+    expect(result).toEqual({ ok: false, error: "不能记录尚未发生的时间" });
+    expect(saveEntryWithOverlapAdjustmentsMock).not.toHaveBeenCalled();
+    expect(confirmMock).not.toHaveBeenCalled();
   });
 });

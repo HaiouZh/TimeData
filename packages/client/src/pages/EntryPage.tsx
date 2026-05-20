@@ -13,7 +13,7 @@ import {
   useLatestEntryEndTimeBefore,
 } from "../hooks/useEntries.ts";
 import { messages } from "../lib/messages.ts";
-import { toLocalDateTimeString } from "../lib/time.ts";
+import { isFutureLocalDateTime, toLocalDateTimeString } from "../lib/time.ts";
 
 function addMinutes(value: string, minutes: number): string {
   const date = new Date(value);
@@ -86,9 +86,41 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   const startTime = existingEntry ? utcToLocalDateTime(existingEntry.startTime) : defaults.start;
   const endTime = existingEntry ? utcToLocalDateTime(existingEntry.endTime) : defaults.end;
 
-  async function handleSave(categoryId: string, nextStartTime: string, nextEndTime: string, note: string) {
+  async function handleSave(
+    categoryId: string,
+    nextStartTime: string,
+    nextEndTime: string,
+    note: string,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    // 防御性：7 天兜底失败的极端输入仍可能让 nextEndTime 在未来。
+    if (isFutureLocalDateTime(nextEndTime)) {
+      return { ok: false, error: "不能记录尚未发生的时间" };
+    }
+
     const utcStart = localDateTimeToUtc(nextStartTime);
     const utcEnd = localDateTimeToUtc(nextEndTime);
+
+    const initialEndDate = endTime.slice(0, 10);
+    const resolvedEndDate = nextEndTime.slice(0, 10);
+    const wasShifted = resolvedEndDate < initialEndDate;
+
+    if (wasShifted) {
+      const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
+      if (overlaps.length > 0) {
+        return { ok: false, error: "不能记录尚未发生的时间" };
+      }
+      await saveEntryWithOverlapAdjustments({
+        existingEntryId: existingEntry?.id ?? null,
+        categoryId,
+        startTime: utcStart,
+        endTime: utcEnd,
+        note: note || null,
+        overlapPlan: null,
+      });
+      void syncIfStale();
+      navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
+      return { ok: true };
+    }
 
     const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
     let overlapPlan: Extract<ReturnType<typeof planEntryOverlapAdjustments>, { ok: true }> | null = null;
@@ -102,7 +134,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
           confirmLabel: messages.dialog.ok,
           cancelLabel: messages.dialog.back,
         });
-        return;
+        return { ok: true };
       }
 
       const confirmed = await confirm({
@@ -112,7 +144,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
         cancelLabel: messages.dialog.cancel,
         danger: true,
       });
-      if (!confirmed) return;
+      if (!confirmed) return { ok: true };
 
       overlapPlan = plan;
     }
@@ -127,6 +159,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     });
     void syncIfStale();
     navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
+    return { ok: true };
   }
 
   async function handleDelete() {
