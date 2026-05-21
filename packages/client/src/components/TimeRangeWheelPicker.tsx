@@ -11,7 +11,6 @@ interface TimeRangeWheelPickerProps {
   start: DateTimeValue;
   end: DateTimeValue;
   error?: string;
-  now?: Date;
   onStartChange: (value: DateTimeValue) => void;
   onEndChange: (value: DateTimeValue) => void;
 }
@@ -27,8 +26,8 @@ const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(
 const REPEAT_COUNT = 11;
 const ITEM_HEIGHT = 34;
 
-function formatRangeDuration(start: DateTimeValue, end: DateTimeValue, now?: Date): string {
-  const range = resolveClockRangeAroundEndDate(end.date, start.hour, start.minute, end.hour, end.minute, now);
+function formatRangeDuration(start: DateTimeValue, end: DateTimeValue): string {
+  const range = resolveClockRangeAroundEndDate(end.date, start.hour, start.minute, end.hour, end.minute);
   return formatDuration(range.startTime, range.endTime);
 }
 
@@ -146,7 +145,6 @@ export default function TimeRangeWheelPicker({
   start,
   end,
   error,
-  now,
   onStartChange,
   onEndChange,
 }: TimeRangeWheelPickerProps) {
@@ -156,7 +154,7 @@ export default function TimeRangeWheelPicker({
         className={`rounded-xl px-3 py-2 text-center ${error ? "bg-red-950/50 text-red-300" : "bg-slate-950 text-slate-100"}`}
       >
         <div className="text-xs text-slate-500">本次记录时长</div>
-        <div className="text-lg font-semibold">{error || formatRangeDuration(start, end, now)}</div>
+        <div className="text-lg font-semibold">{error || formatRangeDuration(start, end)}</div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <TimeGroup label="开始" value={start} onChange={onStartChange} />
