@@ -53,14 +53,18 @@ export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
         slots={slots}
         onEntryOpen={(entry) => navigate(`/entries/${entry.id}/edit`)}
         onGapOpen={(startTime, endTime) =>
-          navigate(`/entries/new?start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`)
+          navigate(
+            `/entries/new?date=${encodeURIComponent(date)}&start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`,
+          )
         }
         overlay={<SyncIndicator />}
       />
       <Timeline
         slots={slots}
         onGapClick={(startTime, endTime) =>
-          navigate(`/entries/new?start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`)
+          navigate(
+            `/entries/new?date=${encodeURIComponent(date)}&start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`,
+          )
         }
         onEntryClick={(entry) => navigate(`/entries/${entry.id}/edit`)}
       />
