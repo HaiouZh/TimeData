@@ -244,38 +244,20 @@ export function addDays(dateStr: string, days: number): string {
 export interface ResolvedClockRange {
   startTime: string;
   endTime: string;
-  /** 当 endTime 落入未来、整体往前推的天数；正常路径为 0。 */
-  shiftedDays: number;
 }
 
-const MAX_FUTURE_SHIFT_DAYS = 7;
-
 export function resolveClockRangeAroundEndDate(
-  endDate: string,
+  anchorDate: string,
   startHour: string,
   startMinute: string,
   endHour: string,
   endMinute: string,
-  now: Date = new Date(),
 ): ResolvedClockRange {
   const startClock = `${startHour}:${startMinute}`;
   const endClock = `${endHour}:${endMinute}`;
-  let resolvedEndDate = endDate;
-  let resolvedStartDate = endClock <= startClock ? addDays(endDate, -1) : endDate;
-
-  let shiftedDays = 0;
-  while (
-    shiftedDays < MAX_FUTURE_SHIFT_DAYS &&
-    parseAppLocalDateTime(`${resolvedEndDate}T${endClock}:00`) > now
-  ) {
-    resolvedEndDate = addDays(resolvedEndDate, -1);
-    resolvedStartDate = addDays(resolvedStartDate, -1);
-    shiftedDays += 1;
-  }
-
+  const startDate = endClock <= startClock ? addDays(anchorDate, -1) : anchorDate;
   return {
-    startTime: `${resolvedStartDate}T${startClock}:00`,
-    endTime: `${resolvedEndDate}T${endClock}:00`,
-    shiftedDays,
+    startTime: `${startDate}T${startClock}:00`,
+    endTime: `${anchorDate}T${endClock}:00`,
   };
 }
