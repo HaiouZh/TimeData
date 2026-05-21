@@ -13,7 +13,7 @@ import {
   useLatestEntryEndTimeBefore,
 } from "../hooks/useEntries.ts";
 import { messages } from "../lib/messages.ts";
-import { isFutureLocalDateTime, toLocalDateTimeString } from "../lib/time.ts";
+import { getDateString, isFutureLocalDateTime, toLocalDateTimeString } from "../lib/time.ts";
 
 function addMinutes(value: string, minutes: number): string {
   const date = new Date(value);
@@ -33,6 +33,11 @@ function normalizeDateTime(value: string | null): string | null {
   return null;
 }
 
+function normalizeDateParam(value: string | null): string | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  return value;
+}
+
 function timelinePathForDate(date: string): string {
   return date ? `/?date=${encodeURIComponent(date)}` : "/";
 }
@@ -49,24 +54,49 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   const { deleteEntry } = useEntryMutations();
   const { syncIfStale } = useSyncContext();
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const isEdit = Boolean(id);
 
-  const nowLocal = `${toLocalDateTimeString(new Date()).slice(0, 16)}:00`;
-  const queryEnd = normalizeDateTime(searchParams.get("end"));
-  const end = queryEnd && queryEnd <= nowLocal ? queryEnd : nowLocal;
+  const isEdit = Boolean(id);
+  const now = new Date();
+  const todayStr = getDateString(now);
+  const nowLocal = `${toLocalDateTimeString(now).slice(0, 16)}:00`;
+
+  const queryDate = normalizeDateParam(searchParams.get("date"));
+  const anchorDate = queryDate ?? todayStr;
+
   const queryStart = normalizeDateTime(searchParams.get("start"));
-  const shouldLookUpPreviousEntry = !existingEntry && !queryStart && !queryEnd;
+  const queryEnd = normalizeDateTime(searchParams.get("end"));
+
+  // defaults.end：今天就用 now；其它日期固定到当天 23:59，避免 endDate 落到次日 00:00 把表单锚到错误的一天
+  const defaultEndForDate = anchorDate === todayStr ? nowLocal : `${anchorDate}T23:59:00`;
+
+  const clampedQueryEnd = (() => {
+    if (!queryEnd) return null;
+    const queryEndDate = queryEnd.slice(0, 10);
+    if (queryEndDate === anchorDate && queryEnd <= defaultEndForDate) return queryEnd;
+    return null;
+  })();
+
+  const end = clampedQueryEnd ?? defaultEndForDate;
+
+  const clampedQueryStart = (() => {
+    if (!queryStart) return null;
+    if (queryStart >= end) return null;
+    return queryStart;
+  })();
+
+  const shouldLookUpPreviousEntry = !existingEntry && !clampedQueryStart && !clampedQueryEnd;
+
   const utcEnd = localDateTimeToUtc(end);
   const prevEndUtc = useLatestEntryEndTimeBefore(shouldLookUpPreviousEntry ? utcEnd : null);
   const prevEndLocal = prevEndUtc ? utcToLocalDateTime(prevEndUtc) : null;
 
   const defaults = useMemo(() => {
     const fallbackStart = addMinutes(end, -60);
-    if (queryStart && queryStart < end) return { start: queryStart, end };
-    if (queryEnd && !queryStart) return { start: fallbackStart, end };
+    if (clampedQueryStart) return { start: clampedQueryStart, end };
+    if (clampedQueryEnd) return { start: fallbackStart, end };
     if (prevEndLocal && prevEndLocal < end) return { start: prevEndLocal, end };
     return { start: fallbackStart, end };
-  }, [end, queryStart, queryEnd, prevEndLocal, refreshKey]);
+  }, [end, clampedQueryStart, clampedQueryEnd, prevEndLocal, refreshKey]);
 
   if (isEdit && existingEntry === undefined) {
     return <div className="p-6 text-center text-slate-500">正在加载记录...</div>;
@@ -92,7 +122,6 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     nextEndTime: string,
     note: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    // 防御性：7 天兜底失败的极端输入仍可能让 nextEndTime 在未来。
     if (isFutureLocalDateTime(nextEndTime)) {
       return { ok: false, error: "不能记录尚未发生的时间" };
     }
@@ -100,30 +129,9 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     const utcStart = localDateTimeToUtc(nextStartTime);
     const utcEnd = localDateTimeToUtc(nextEndTime);
 
-    const initialEndDate = endTime.slice(0, 10);
-    const resolvedEndDate = nextEndTime.slice(0, 10);
-    const wasShifted = resolvedEndDate < initialEndDate;
-
-    if (wasShifted) {
-      const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
-      if (overlaps.length > 0) {
-        return { ok: false, error: "不能记录尚未发生的时间" };
-      }
-      await saveEntryWithOverlapAdjustments({
-        existingEntryId: existingEntry?.id ?? null,
-        categoryId,
-        startTime: utcStart,
-        endTime: utcEnd,
-        note: note || null,
-        overlapPlan: null,
-      });
-      void syncIfStale();
-      navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
-      return { ok: true };
-    }
-
     const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
     let overlapPlan: Extract<ReturnType<typeof planEntryOverlapAdjustments>, { ok: true }> | null = null;
+
     if (overlaps.length > 0) {
       const plan = planEntryOverlapAdjustments(overlaps, utcStart, utcEnd);
 
@@ -157,6 +165,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
       note: note || null,
       overlapPlan,
     });
+
     void syncIfStale();
     navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
     return { ok: true };

@@ -78,9 +78,11 @@ describe("EntryPage default times", () => {
     entryFormPropsMock.value = null;
   });
 
-  it("keeps the URL gap bounds when start and end are already provided", () => {
+  it("keeps the URL gap bounds when start and end (and date=today) are already provided", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
-    searchParamsMock.value = new URLSearchParams("start=2026-05-08T06:00:00&end=2026-05-08T07:00:00");
+    searchParamsMock.value = new URLSearchParams(
+      "date=2026-05-08&start=2026-05-08T06:00:00&end=2026-05-08T07:00:00",
+    );
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-08T00:30:00.000Z");
 
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
@@ -89,27 +91,33 @@ describe("EntryPage default times", () => {
     expect(html).toContain("2026-05-08T06:00:00 2026-05-08T07:00:00");
   });
 
-  it("converts UTC ISO gap bounds from timeline slots into local default times", () => {
+  it("clamps default end to ${date}T23:59:00 when date param points to a past day", () => {
     vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
-    searchParamsMock.value = new URLSearchParams("start=2026-05-14T16%3A00%3A00.000Z&end=2026-05-15T16%3A00%3A00.000Z");
+    // queryEnd 是次日 00:00（昨天尾部空挡的 dayEnd 转回来）；date=2026-05-15 表示用户在昨天页面点的
+    searchParamsMock.value = new URLSearchParams(
+      "date=2026-05-15&start=2026-05-14T16%3A00%3A00.000Z&end=2026-05-15T16%3A00%3A00.000Z",
+    );
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-16T00:30:00.000Z");
 
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
 
     expect(useLatestEntryEndTimeBeforeMock).toHaveBeenCalledWith(null);
-    expect(html).toContain("2026-05-15T00:00:00 2026-05-16T00:00:00");
+    // start 保留 queryStart（同 date 那天），end 被钉到 date 当天 23:59
+    expect(html).toContain("2026-05-15T00:00:00 2026-05-15T23:59:00");
   });
 
   it("ignores malformed timezone-aware query values instead of crashing", () => {
     vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
-    searchParamsMock.value = new URLSearchParams("start=2026-05-14T16%3A00%3A00fooZ&end=2026-99-99T16%3A00%3A00Z");
+    searchParamsMock.value = new URLSearchParams(
+      "date=2026-05-16&start=2026-05-14T16%3A00%3A00fooZ&end=2026-99-99T16%3A00%3A00Z",
+    );
 
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
 
     expect(html).toContain("2026-05-16T06:30:00 2026-05-16T07:30:00");
   });
 
-  it("computes default start and end times from the current clock", () => {
+  it("computes default start and end times from the current clock when no params", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
 
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
@@ -119,18 +127,15 @@ describe("EntryPage default times", () => {
 
   it("uses the latest entry end time only when no query params exist", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
-    // UTC 22:45 前一天 = 上海 06:45 当天，不等于 fallback 的 06:30
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-07T22:45:00.000Z");
 
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
 
-    // start 应是上一条 endTime 转回本地 06:45，而非 fallback 的 06:30
     expect(html).toContain("2026-05-08T06:45:00 2026-05-08T07:30:00");
   });
 
   it("falls back to now-60min when previous endTime is not before end", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
-    // UTC 00:45 = 上海 08:45，明显晚于 end=07:30
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-08T00:45:00.000Z");
 
     const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
@@ -138,7 +143,7 @@ describe("EntryPage default times", () => {
     expect(html).toContain("2026-05-08T06:30:00 2026-05-08T07:30:00");
   });
 
-  it("saves with overlap adjustments after confirmation", async () => {
+  it("saves with overlap adjustments after confirmation (no shift)", async () => {
     vi.setSystemTime(new Date("2026-05-17T20:00:00+08:00"));
     const overlap = { id: "old", startTime: "2026-05-17T00:00:00.000Z", endTime: "2026-05-17T02:00:00.000Z" };
     const plan = {
@@ -156,62 +161,27 @@ describe("EntryPage default times", () => {
     expect(saveEntryWithOverlapAdjustmentsMock).toHaveBeenCalledWith({
       existingEntryId: null,
       categoryId: "cat-work",
+      // 不再 shift：直接把表单回传的本地时间 toUtc
       startTime: "2026-05-17T01:00:00.000Z",
       endTime: "2026-05-17T03:00:00.000Z",
       note: "new",
       overlapPlan: plan,
     });
   });
-});
 
-describe("EntryPage shift save", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    searchParamsMock.value = new URLSearchParams("");
-    useLatestEntryEndTimeBeforeMock.mockReturnValue(null);
-    confirmMock.mockReset();
-    confirmMock.mockResolvedValue(true);
-    findOverlappingEntriesMock.mockReset();
-    planEntryOverlapAdjustmentsMock.mockReset();
-    saveEntryWithOverlapAdjustmentsMock.mockReset();
-    saveEntryWithOverlapAdjustmentsMock.mockResolvedValue({});
-    entryFormPropsMock.value = null;
-  });
-
-  it("saves the shifted range silently when yesterday slot is empty", async () => {
-    vi.setSystemTime(new Date("2026-05-20T03:00:00+08:00"));
-    findOverlappingEntriesMock.mockResolvedValue([]);
+  it("blocks save with future error when onSave receives a still-future endTime", async () => {
+    vi.setSystemTime(new Date("2026-05-20T14:00:00+08:00"));
 
     renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
-    const formProps = entryFormPropsMock.value;
-    if (!formProps) throw new Error("EntryForm not rendered");
-
-    const result = await formProps.onSave("cat-work", "2026-05-19T09:00:00", "2026-05-19T22:00:00", "");
-
-    expect(findOverlappingEntriesMock).toHaveBeenCalled();
-    expect(saveEntryWithOverlapAdjustmentsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startTime: expect.stringContaining("2026-05-19"),
-        endTime: expect.stringContaining("2026-05-19"),
-      }),
+    const result = await entryFormPropsMock.value?.onSave(
+      "cat-work",
+      "2026-05-20T17:00:00",
+      "2026-05-20T22:00:00",
+      "",
     );
-    expect(result).toEqual({ ok: true });
-  });
-
-  it("returns shift-conflict error when shifted range overlaps existing entries", async () => {
-    vi.setSystemTime(new Date("2026-05-20T03:00:00+08:00"));
-    findOverlappingEntriesMock.mockResolvedValue([
-      { id: "e1", startTime: "2026-05-19T01:00:00.000Z", endTime: "2026-05-19T14:00:00.000Z" },
-    ]);
-
-    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
-    const formProps = entryFormPropsMock.value;
-    if (!formProps) throw new Error("EntryForm not rendered");
-
-    const result = await formProps.onSave("cat-work", "2026-05-19T09:00:00", "2026-05-19T22:00:00", "");
 
     expect(result).toEqual({ ok: false, error: "不能记录尚未发生的时间" });
+    expect(findOverlappingEntriesMock).not.toHaveBeenCalled();
     expect(saveEntryWithOverlapAdjustmentsMock).not.toHaveBeenCalled();
-    expect(confirmMock).not.toHaveBeenCalled();
   });
 });
