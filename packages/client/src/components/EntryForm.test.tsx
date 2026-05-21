@@ -32,7 +32,7 @@ describe("EntryForm", () => {
     vi.useRealTimers();
   });
 
-  it("does not block save preemptively when endTime is in the future (defers to onSave)", async () => {
+  it("forwards the raw same-day range to onSave without any shifting", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const onSave = vi.fn().mockResolvedValue({ ok: true });
@@ -56,47 +56,11 @@ describe("EntryForm", () => {
       saveButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(onSave).toHaveBeenCalledWith("cat-work", "2026-05-19T09:00:00", "2026-05-19T22:00:00", "");
+    // 不再 shift：传入什么，原样回 onSave。
+    expect(onSave).toHaveBeenCalledWith("cat-work", "2026-05-20T09:00:00", "2026-05-20T22:00:00", "");
   });
 
-  it("shows the shift hint when the resolved range is moved to a previous day", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    await act(async () => {
-      createRoot(container).render(
-        createElement(EntryForm, {
-          startTime: "2026-05-20T09:00:00",
-          endTime: "2026-05-20T22:00:00",
-          onSave: vi.fn().mockResolvedValue({ ok: true }),
-          onCancel: () => {},
-        }),
-      );
-    });
-
-    expect(container.textContent).toContain("已识别为 2026-05-19 09:00 – 22:00");
-  });
-
-  it("does not show the shift hint when no shift happens", async () => {
-    vi.setSystemTime(new Date("2026-05-20T15:00:00+08:00"));
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    await act(async () => {
-      createRoot(container).render(
-        createElement(EntryForm, {
-          startTime: "2026-05-20T14:00:00",
-          endTime: "2026-05-20T15:00:00",
-          onSave: vi.fn().mockResolvedValue({ ok: true }),
-          onCancel: () => {},
-        }),
-      );
-    });
-
-    expect(container.textContent).not.toContain("已识别为");
-  });
-
-  it("renders the error returned from onSave (e.g. shift-conflict)", async () => {
+  it("renders the error returned from onSave (e.g. future endTime)", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const onSave = vi.fn().mockResolvedValue({ ok: false, error: "不能记录尚未发生的时间" });

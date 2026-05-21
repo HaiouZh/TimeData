@@ -11,7 +11,6 @@ interface EntryFormProps {
   startTime: string;
   endTime: string;
   existingEntry?: TimeEntry;
-  now?: Date;
   onSave: (
     categoryId: string,
     startTime: string,
@@ -30,22 +29,10 @@ function splitDateTime(value: string): DateTimeValue {
   };
 }
 
-function formatShiftHint(startTime: string, endTime: string): string {
-  const startDate = startTime.slice(0, 10);
-  const endDate = endTime.slice(0, 10);
-  const startClock = startTime.slice(11, 16);
-  const endClock = endTime.slice(11, 16);
-  if (startDate === endDate) {
-    return `已识别为 ${startDate} ${startClock} – ${endClock}`;
-  }
-  return `已识别为 ${startDate} ${startClock} – ${endDate} ${endClock}`;
-}
-
 export default function EntryForm({
   startTime,
   endTime,
   existingEntry,
-  now,
   onSave,
   onDelete,
   onCancel,
@@ -58,9 +45,13 @@ export default function EntryForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const resolvedRange = resolveClockRangeAroundEndDate(end.date, start.hour, start.minute, end.hour, end.minute, now);
-  const { startTime: nextStartTime, endTime: nextEndTime, shiftedDays } = resolvedRange;
-  const shiftHint = shiftedDays > 0 ? formatShiftHint(nextStartTime, nextEndTime) : "";
+  const { startTime: nextStartTime, endTime: nextEndTime } = resolveClockRangeAroundEndDate(
+    end.date,
+    start.hour,
+    start.minute,
+    end.hour,
+    end.minute,
+  );
 
   useEffect(() => {
     setStart(splitDateTime(startTime));
@@ -72,10 +63,8 @@ export default function EntryForm({
 
   useEffect(() => {
     if (existingEntry || categoryId) return;
-
     const firstParent = parentCategories[0];
     if (!firstParent) return;
-
     const firstChild = getChildren(firstParent.id)[0];
     setCategoryId(firstChild?.id || firstParent.id);
   }, [categoryId, existingEntry, getChildren, parentCategories]);
@@ -114,14 +103,9 @@ export default function EntryForm({
         start={start}
         end={end}
         error={error}
-        now={now}
         onStartChange={handleStartChange}
         onEndChange={handleEndChange}
       />
-
-      {shiftHint && (
-        <div className="rounded-xl bg-blue-950/40 px-3 py-2 text-center text-xs text-blue-300">{shiftHint}</div>
-      )}
 
       <section className="rounded-2xl bg-slate-900 border border-slate-800 p-3 space-y-2">
         <label className="text-sm text-slate-400 block">分类</label>
@@ -140,7 +124,10 @@ export default function EntryForm({
       </section>
 
       <div className="grid grid-cols-2 gap-3 pb-4">
-        <button onClick={onCancel} className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium">
+        <button
+          onClick={onCancel}
+          className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium"
+        >
           取消
         </button>
         <button
