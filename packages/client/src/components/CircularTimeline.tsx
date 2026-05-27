@@ -211,13 +211,9 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
 
   return (
     <section className="px-4 pt-4">
-      <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-slate-300">今日时间分布</h2>
-          <span className="text-xs text-slate-500">点击圆环选择时间段</span>
-        </div>
+      <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-3">
         <div className="flex justify-center">
-          <div className="relative w-[240px] h-[240px]">
+          <div className="relative w-full max-w-[340px] aspect-square">
             {overlay}
             <svg
               viewBox={`0 0 ${SIZE} ${SIZE}`}
