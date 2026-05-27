@@ -31,12 +31,14 @@ describe("Timeline", () => {
         startTime: "2026-05-08T07:00:00",
         endTime: "2026-05-08T07:30:00",
         entry: entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00"),
+        kind: "entry",
         displayMode: "default",
       },
       {
         startTime: "2026-05-08T07:30:00",
         endTime: "2026-05-08T08:00:00",
         entry: null,
+        kind: "gap",
         displayMode: "default",
       },
     ];
@@ -49,5 +51,22 @@ describe("Timeline", () => {
     );
 
     expect(html).toContain("07:30 - 08:00");
+  });
+
+  it("does not render future slots", () => {
+    const slots: TimeSlot[] = [
+      {
+        startTime: "2026-05-08T03:00:00.000Z",
+        endTime: "2026-05-08T16:00:00.000Z",
+        entry: null,
+        kind: "future",
+        displayMode: "default",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Timeline, { slots, onGapClick: () => {}, onEntryClick: () => {} }),
+    );
+
+    expect(html).toContain("今天还没有记录");
   });
 });

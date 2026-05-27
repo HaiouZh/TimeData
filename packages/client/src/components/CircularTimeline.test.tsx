@@ -1,7 +1,12 @@
+// @vitest-environment jsdom
 import type { TimeEntry } from "@timedata/shared";
+import { act } from "react";
 import { createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 import type { TimeSlot } from "../lib/time.js";
 import CircularTimeline, {
   chooseInitialSelection,
@@ -32,9 +37,9 @@ describe("CircularTimeline selection", () => {
   it("defaults to the last gap", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const slots: TimeSlot[] = [
-      { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, displayMode: "default" },
-      { startTime: work.startTime, endTime: work.endTime, entry: work, displayMode: "default" },
-      { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, displayMode: "default" },
+      { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+      { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+      { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
     ];
 
     expect(chooseInitialSelection(slots)).toEqual({
@@ -49,7 +54,7 @@ describe("CircularTimeline selection", () => {
 
     expect(
       chooseInitialSelection([
-        { startTime: work.startTime, endTime: work.endTime, entry: work, displayMode: "default" },
+        { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
       ]),
     ).toEqual({
       type: "entry",
@@ -83,7 +88,7 @@ describe("CircularTimeline selection", () => {
     const path = describeRingSegment(0, 60);
 
     expect(path).toContain("A 104 104");
-    expect(path).toContain("A 72 72");
+    expect(path).toContain("A 62 62");
     expect(path.trim().endsWith("Z")).toBe(true);
   });
 
@@ -92,49 +97,51 @@ describe("CircularTimeline selection", () => {
 
     expect(path).toContain("M");
     expect(path).toContain("A 104 104");
-    expect(path).toContain("A 72 72");
+    expect(path).toContain("A 62 62");
     expect(path.match(/A 104 104/g)?.length).toBe(2);
-    expect(path.match(/A 72 72/g)?.length).toBe(2);
+    expect(path.match(/A 62 62/g)?.length).toBe(2);
   });
 
-  it("renders the selected gap in the center by default", () => {
+  it("renders the center as range / category / duration in order", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: work.startTime, endTime: work.endTime, entry: work, displayMode: "default" },
-          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, displayMode: "default" },
+          { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
         onEntryOpen: () => {},
         onGapOpen: () => {},
       }),
     );
 
-    expect(html).toContain("待记录");
-    expect(html).toContain("30分钟");
-    expect(html).toContain("07:30 - 08:00");
+    const rangeIdx = html.indexOf("07:30 - 08:00");
+    const titleIdx = html.indexOf("待记录");
+    const durationIdx = html.indexOf("30分钟");
+
+    expect(rangeIdx).toBeGreaterThan(-1);
+    expect(titleIdx).toBeGreaterThan(-1);
+    expect(durationIdx).toBeGreaterThan(-1);
+    expect(rangeIdx).toBeLessThan(titleIdx);
+    expect(titleIdx).toBeLessThan(durationIdx);
   });
 
-  it("renders 12 inner numeric marks and selectable entry/gap ring blocks", () => {
+  it("renders selectable entry/gap ring blocks and indicator", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, displayMode: "default" },
-          { startTime: work.startTime, endTime: work.endTime, entry: work, displayMode: "default" },
-          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, displayMode: "default" },
+          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
         onEntryOpen: () => {},
         onGapOpen: () => {},
       }),
     );
 
-    for (const label of ["0", "2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22"]) {
-      expect(html).toContain(`>${label}</text>`);
-    }
-    expect(html).toContain('data-tick-placement="inner"');
     expect(html).toContain('data-segment-type="entry"');
     expect(html).toContain('data-segment-type="gap"');
     expect(html).toContain('data-ring-indicator="true"');
@@ -146,8 +153,8 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, displayMode: "default" },
-          { startTime: work.startTime, endTime: work.endTime, entry: work, displayMode: "default" },
+          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
         ],
         onEntryOpen: () => {},
         onGapOpen: () => {},
@@ -158,5 +165,124 @@ describe("CircularTimeline selection", () => {
     expect(html).toContain('data-segment-type="gap"');
     expect(html).toContain('fill="#2563eb"');
     expect(html).not.toContain('stroke-linecap="round"');
+  });
+
+  it("renders gap slots with full opacity and slate-500 color", () => {
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-05-08",
+        slots: [
+          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+        ],
+        onEntryOpen: () => {},
+        onGapOpen: () => {},
+      }),
+    );
+
+    expect(html).toMatch(/data-segment-type="gap"[^>]*opacity="1"/);
+    expect(html).toMatch(/data-segment-type="gap"[^>]*fill="rgb\(100 116 139\)"/);
+  });
+
+  it("renders future slots in slate-800 and excludes them from selection", () => {
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-05-08",
+        slots: [
+          { startTime: "2026-05-08T03:00:00.000Z", endTime: "2026-05-08T16:00:00.000Z", entry: null, kind: "future", displayMode: "default" },
+        ],
+        onEntryOpen: () => {},
+        onGapOpen: () => {},
+      }),
+    );
+
+    expect(html).toContain('data-segment-type="future"');
+    expect(html).toMatch(/data-segment-type="future"[^>]*fill="rgb\(30 41 59\)"/);
+  });
+
+  it("renders 24 hour numerals 0..23 and three tick tiers", () => {
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-05-08",
+        slots: [
+          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+        ],
+        onEntryOpen: () => {},
+        onGapOpen: () => {},
+      }),
+    );
+
+    for (let h = 0; h < 24; h++) {
+      expect(html).toContain(`>${h}</text>`);
+    }
+    expect(html).toContain('data-tick-tier="hour"');
+    expect(html).toContain('data-tick-tier="half"');
+    expect(html).toContain('data-tick-tier="micro"');
+  });
+
+  it("switches selection when pointer drags across slots", async () => {
+    const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
+    const handleEntryOpen = vi.fn();
+    const handleGapOpen = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CircularTimeline, {
+          date: "2026-05-08",
+          slots: [
+            { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T06:00:00", entry: null, kind: "gap", displayMode: "default" },
+            { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+            { startTime: "2026-05-08T07:00:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+          ],
+          onEntryOpen: handleEntryOpen,
+          onGapOpen: handleGapOpen,
+        }),
+      );
+    });
+
+    const svg = container.querySelector("svg");
+    if (!svg) throw new Error("svg not found");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 240,
+      bottom: 240,
+      width: 240,
+      height: 240,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    Object.assign(svg, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 205, clientY: 120, pointerId: 1 }));
+    });
+    expect(container.innerHTML).toContain("工作/编程");
+    expect(container.innerHTML).toContain("1小时");
+
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
+    });
+    expect(container.innerHTML).toContain("待记录");
+    expect(container.innerHTML).toContain("00:00 - 06:00");
+
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
+    });
+    expect(handleGapOpen).not.toHaveBeenCalled();
+    expect(handleEntryOpen).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
   });
 });

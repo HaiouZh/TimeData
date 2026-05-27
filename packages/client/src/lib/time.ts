@@ -4,11 +4,13 @@ import { APP_TIME_ZONE, localDateTimeToUtc } from "@timedata/shared";
 export { APP_TIME_ZONE } from "@timedata/shared";
 
 export type TimeSlotDisplayMode = "default" | "merged" | "truncated";
+export type TimeSlotKind = "entry" | "gap" | "future";
 
 export interface TimeSlot {
   startTime: string;
   endTime: string;
   entry: TimeEntry | null;
+  kind: TimeSlotKind;
   displayMode: TimeSlotDisplayMode;
 }
 
@@ -93,6 +95,7 @@ export function buildTimeSlots(
       startTime: previousEntry.startTime,
       endTime: previousEntry.endTime,
       entry: previousEntry,
+      kind: "entry",
       displayMode: "merged",
     });
   }
@@ -125,11 +128,11 @@ export function buildTimeSlots(
     if (displayEndMs <= displayStartMs) continue;
 
     if (displayStartMs > cursorMs) {
-      slots.push({ startTime: cursor, endTime: displayStart, entry: null, displayMode: "default" });
+      slots.push({ startTime: cursor, endTime: displayStart, entry: null, kind: "gap", displayMode: "default" });
     }
 
     const displayMode: TimeSlotDisplayMode = entryEndMs > dayEndMs ? "truncated" : "default";
-    slots.push({ startTime: displayStart, endTime: displayEnd, entry, displayMode });
+    slots.push({ startTime: displayStart, endTime: displayEnd, entry, kind: "entry", displayMode });
     if (displayEndMs > cursorMs) {
       cursor = displayEnd;
       cursorMs = displayEndMs;
@@ -137,7 +140,20 @@ export function buildTimeSlots(
   }
 
   if (cursorMs < dayEndMs) {
-    slots.push({ startTime: cursor, endTime: dayEnd, entry: null, displayMode: "default" });
+    slots.push({ startTime: cursor, endTime: dayEnd, entry: null, kind: "gap", displayMode: "default" });
+  }
+
+  if (date === todayStr) {
+    const trueDayEnd = localDateTimeToUtc(`${addDays(date, 1)}T00:00:00`);
+    if (toMs(trueDayEnd) > toMs(dayEnd)) {
+      slots.push({
+        startTime: dayEnd,
+        endTime: trueDayEnd,
+        entry: null,
+        kind: "future",
+        displayMode: "default",
+      });
+    }
   }
 
   return slots;

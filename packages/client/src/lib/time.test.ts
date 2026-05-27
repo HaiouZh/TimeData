@@ -125,6 +125,34 @@ describe("buildTimeSlots", () => {
     expect(entrySlot?.displayMode).toBe("default");
   });
 
+  it("marks gap slots with kind 'gap' and entry slots with kind 'entry'", () => {
+    const slots = buildTimeSlots(
+      [
+        {
+          id: "entry-1",
+          categoryId: "work",
+          startTime: "2026-05-08T07:30:00",
+          endTime: "2026-05-08T08:00:00",
+          note: null,
+          createdAt: "2026-05-08T07:30:00",
+          updatedAt: "2026-05-08T07:30:00",
+        },
+      ],
+      "2026-05-08",
+      0,
+      { now: "2026-05-08T09:00:00" },
+    );
+
+    const entrySlot = slots.find((slot) => slot.entry?.id === "entry-1");
+    expect(entrySlot?.kind).toBe("entry");
+
+    const gapSlots = slots.filter((slot) => slot.entry === null && slot.kind !== "future");
+    expect(gapSlots.length).toBeGreaterThan(0);
+    for (const gap of gapSlots) {
+      expect(gap.kind).toBe("gap");
+    }
+  });
+
   it("merges a previous overnight entry into the selected day when enabled", () => {
     const previousEntry = {
       id: "sleep-1",
@@ -232,6 +260,26 @@ describe("buildTimeSlots", () => {
       entry: null,
       displayMode: "default",
     });
+  });
+
+  it("appends a future slot from now to 24:00 when date is today", () => {
+    const slots = buildTimeSlots([], "2026-05-08", 0, {
+      now: "2026-05-08T11:00:00",
+    });
+
+    const last = slots[slots.length - 1];
+    expect(last?.kind).toBe("future");
+    expect(last?.entry).toBeNull();
+    expect(last?.startTime).toBe("2026-05-08T03:00:00.000Z");
+    expect(last?.endTime).toBe("2026-05-08T16:00:00.000Z");
+  });
+
+  it("does not append a future slot for past days", () => {
+    const slots = buildTimeSlots([], "2026-05-07", 0, {
+      now: "2026-05-08T09:00:00",
+    });
+
+    expect(slots.every((slot) => slot.kind !== "future")).toBe(true);
   });
 });
 
