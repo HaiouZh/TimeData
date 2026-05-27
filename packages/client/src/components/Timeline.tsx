@@ -11,9 +11,9 @@ interface TimelineProps {
 
 export default function Timeline({ slots, onGapClick, onEntryClick }: TimelineProps) {
   const { getCategoryPath, getCategoryColor } = useCategories();
-  const displaySlots = slots.slice().reverse();
+  const displaySlots = slots.filter((slot) => slot.kind !== "future").slice().reverse();
 
-  if (slots.length === 0) {
+  if (displaySlots.length === 0) {
     return <div className="p-8 text-center text-slate-500">今天还没有记录</div>;
   }
 

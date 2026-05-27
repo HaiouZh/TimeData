@@ -1,5 +1,6 @@
 import { type TimeEntry, isUtcIso, utcToLocalDateTime } from "@timedata/shared";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
 import { formatDuration, formatTimelineTimeRange } from "../lib/time.ts";
@@ -17,11 +18,9 @@ type Selection = { type: "gap"; startTime: string; endTime: string } | { type: "
 const SIZE = 240;
 const CENTER = SIZE / 2;
 const OUTER_RADIUS = 104;
-const INNER_RADIUS = 72;
+const INNER_RADIUS = 62;
 const RADIUS = (OUTER_RADIUS + INNER_RADIUS) / 2;
-const CENTER_RADIUS = 56;
-const TICK_OUTER_OFFSET = 4;
-const TICK_INNER_OFFSET = 4;
+const CENTER_RADIUS = 50;
 const LABEL_RADIUS = RADIUS;
 const INDICATOR_RADIUS = OUTER_RADIUS + 10;
 const DAY_MINUTES = 24 * 60;
@@ -62,10 +61,10 @@ export function clampSlotToDayMinutes(
 }
 
 export function chooseInitialSelection(slots: TimeSlot[]): Selection | null {
-  const lastGap = slots.filter((slot) => !slot.entry).at(-1);
+  const lastGap = slots.filter((slot) => slot.kind === "gap").at(-1);
   if (lastGap) return { type: "gap", startTime: lastGap.startTime, endTime: lastGap.endTime };
 
-  const lastEntry = slots.filter((slot) => slot.entry).at(-1)?.entry;
+  const lastEntry = slots.filter((slot) => slot.kind === "entry" && slot.entry).at(-1)?.entry;
   if (lastEntry) return { type: "entry", entry: lastEntry };
 
   return null;
@@ -81,6 +80,34 @@ function polarToCartesian(angle: number, radius = RADIUS) {
     x: CENTER + radius * Math.cos(radians),
     y: CENTER + radius * Math.sin(radians),
   };
+}
+
+function cartesianToMinutes(
+  clientX: number,
+  clientY: number,
+  rect: { left: number; top: number; width: number; height: number },
+): number | null {
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const dx = clientX - cx;
+  const dy = clientY - cy;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const scale = rect.width / SIZE;
+  if (distance < INNER_RADIUS * scale - 6 || distance > OUTER_RADIUS * scale + 8) return null;
+
+  let angle = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+  if (angle < 0) angle += 360;
+  if (angle >= 360) angle -= 360;
+  return (angle / 360) * DAY_MINUTES;
+}
+
+function findSlotAtMinutes(slots: TimeSlot[], date: string, minutes: number): TimeSlot | null {
+  for (const slot of slots) {
+    if (slot.kind === "future") continue;
+    const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
+    if (minutes >= start && minutes < end) return slot;
+  }
+  return null;
 }
 
 export function describeRingSegment(startMinutes: number, endMinutes: number): string {
@@ -136,6 +163,19 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
 
+  function selectFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const minutes = cartesianToMinutes(event.clientX, event.clientY, rect);
+    if (minutes === null) return;
+    const slot = findSlotAtMinutes(slots, date, minutes);
+    if (!slot) return;
+    setSelection(
+      slot.entry
+        ? { type: "entry", entry: slot.entry }
+        : { type: "gap", startTime: slot.startTime, endTime: slot.endTime },
+    );
+  }
+
   useEffect(() => {
     setSelection(initialSelection);
   }, [initialSelection]);
@@ -179,15 +219,40 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
         <div className="flex justify-center">
           <div className="relative w-[240px] h-[240px]">
             {overlay}
-            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-full">
+            <svg
+              viewBox={`0 0 ${SIZE} ${SIZE}`}
+              className="w-full h-full"
+              style={{ touchAction: "none" }}
+              onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                selectFromPointer(event);
+              }}
+              onPointerMove={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  selectFromPointer(event);
+                }
+              }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+              }}
+            >
               <path d={describeRingSegment(0, DAY_MINUTES)} fill="rgb(51 65 85)" />
               {slots.map((slot, index) => {
                 const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
                 if (end <= start) return null;
-                const key = slot.entry ? `entry:${slot.entry.id}` : `gap:${slot.startTime}:${slot.endTime}:${index}`;
-                const slotKey = slot.entry ? `entry:${slot.entry.id}` : `gap:${slot.startTime}:${slot.endTime}`;
+                const key = slot.entry ? `entry:${slot.entry.id}` : `${slot.kind}:${slot.startTime}:${slot.endTime}:${index}`;
+                const slotKey = slot.entry ? `entry:${slot.entry.id}` : `${slot.kind}:${slot.startTime}:${slot.endTime}`;
                 const selected = currentSelectionKey === slotKey;
-                const color = slot.entry ? getCategoryColor(slot.entry.categoryId) : "rgb(71 85 105)";
+                let fill: string;
+                if (slot.kind === "entry" && slot.entry) {
+                  fill = getCategoryColor(slot.entry.categoryId);
+                } else if (slot.kind === "future") {
+                  fill = "rgb(30 41 59)";
+                } else {
+                  fill = "rgb(100 116 139)";
+                }
                 const nextSelection: Selection = slot.entry
                   ? { type: "entry", entry: slot.entry }
                   : { type: "gap", startTime: slot.startTime, endTime: slot.endTime };
@@ -196,47 +261,60 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                   <path
                     key={key}
                     d={describeRingSegment(start, end)}
-                    fill={color}
-                    opacity={slot.entry ? 1 : selected ? 0.32 : 0.08}
-                    className="cursor-pointer"
-                    data-segment-type={slot.entry ? "entry" : "gap"}
+                    data-segment-type={slot.kind}
                     data-segment-selected={selected ? "true" : "false"}
-                    onClick={() => setSelection(nextSelection)}
+                    fill={fill}
+                    opacity={1}
+                    className={slot.kind === "future" ? "" : "cursor-pointer"}
+                    onClick={undefined}
                   />
                 );
               })}
-              {Array.from({ length: 12 }, (_, index) => index * 2).map((hour) => {
-                const angle = (hour / 24) * 360;
-                const tickOuter = polarToCartesian(angle, OUTER_RADIUS - TICK_OUTER_OFFSET);
-                const tickInner = polarToCartesian(angle, INNER_RADIUS + TICK_INNER_OFFSET);
-                const label = polarToCartesian(angle, LABEL_RADIUS);
+              {Array.from({ length: 144 }, (_, index) => {
+                const angle = (index / 144) * 360;
+                const isHour = index % 6 === 0;
+                const isHalf = !isHour && index % 3 === 0;
+                const tier = isHour ? "hour" : isHalf ? "half" : "micro";
+                const length = isHour ? 8 : isHalf ? 5 : 3;
+                const strokeWidth = isHour ? 1.5 : isHalf ? 1 : 0.6;
+                const opacity = isHour ? 0.85 : isHalf ? 0.6 : 0.35;
+                const outer = polarToCartesian(angle, OUTER_RADIUS - 2);
+                const inner = polarToCartesian(angle, OUTER_RADIUS - 2 - length);
                 return (
-                  <g key={hour}>
-                    <line
-                      x1={tickOuter.x}
-                      y1={tickOuter.y}
-                      x2={tickInner.x}
-                      y2={tickInner.y}
-                      stroke="rgba(248, 250, 252, 0.55)"
-                      strokeWidth="1"
-                      pointerEvents="none"
-                    />
-                    <text
-                      x={label.x}
-                      y={label.y}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="fill-slate-100/85 text-[9px]"
-                      style={{ paintOrder: "stroke" }}
-                      stroke="rgb(15 23 42)"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                      pointerEvents="none"
-                      data-tick-placement="inner"
-                    >
-                      {hour}
-                    </text>
-                  </g>
+                  <line
+                    key={`tick-${index}`}
+                    x1={outer.x}
+                    y1={outer.y}
+                    x2={inner.x}
+                    y2={inner.y}
+                    stroke="rgb(248 250 252)"
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
+                    data-tick-tier={tier}
+                    pointerEvents="none"
+                  />
+                );
+              })}
+              {Array.from({ length: 24 }, (_, index) => index).map((hour) => {
+                const angle = (hour / 24) * 360;
+                const label = polarToCartesian(angle, LABEL_RADIUS);
+                const isAnchor = hour === 0 || hour === 6 || hour === 12 || hour === 18;
+                return (
+                  <text
+                    key={`hour-${hour}`}
+                    x={label.x}
+                    y={label.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className={isAnchor ? "fill-slate-100 text-[9px] font-semibold" : "fill-slate-100/85 text-[9px]"}
+                    style={{ paintOrder: "stroke" }}
+                    stroke="rgb(15 23 42)"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    pointerEvents="none"
+                  >
+                    {hour}
+                  </text>
                 );
               })}
               {selectedMinutes &&
@@ -297,12 +375,12 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
             <button
               type="button"
               onClick={handleCenterClick}
-              className="absolute inset-0 m-auto flex h-[112px] w-[112px] flex-col items-center justify-center rounded-full text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
               aria-label={selection?.type === "entry" ? "编辑选中记录" : "新增选中空档记录"}
             >
-              <span className="max-w-[92px] truncate text-xs text-white/85">{centerTitle}</span>
-              <span className="text-base font-semibold text-white">{centerDuration}</span>
               <span className="text-[10px] text-white/85">{centerRange}</span>
+              <span className="max-w-[88px] truncate text-xs font-medium text-white">{centerTitle}</span>
+              <span className="text-base font-semibold text-white">{centerDuration}</span>
             </button>
           </div>
         </div>
