@@ -20,9 +20,10 @@ const CENTER = SIZE / 2;
 const OUTER_RADIUS = 104;
 const INNER_RADIUS = 62;
 const RADIUS = (OUTER_RADIUS + INNER_RADIUS) / 2;
-const CENTER_RADIUS = 50;
 const LABEL_RADIUS = RADIUS;
-const INDICATOR_RADIUS = OUTER_RADIUS + 10;
+const ARROW_TIP_RADIUS = INNER_RADIUS + (OUTER_RADIUS - INNER_RADIUS) * 0.25;
+const ARROW_BASE_RADIUS = INNER_RADIUS - 4;
+const ARROW_HALF_WIDTH_DEG = 6;
 const DAY_MINUTES = 24 * 60;
 
 function minutesFromClock(value: string): number {
@@ -162,11 +163,13 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
   const { getCategoryColor, getCategoryPath } = useCategories();
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
+  const [dragMinutes, setDragMinutes] = useState<number | null>(null);
 
   function selectFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const minutes = cartesianToMinutes(event.clientX, event.clientY, rect);
     if (minutes === null) return;
+    setDragMinutes(minutes);
     const slot = findSlotAtMinutes(slots, date, minutes);
     if (!slot) return;
     setSelection(
@@ -178,6 +181,7 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
 
   useEffect(() => {
     setSelection(initialSelection);
+    setDragMinutes(null);
   }, [initialSelection]);
 
   const selectedRange = selection
@@ -348,25 +352,41 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                     innerStart.y,
                     "Z",
                   ].join(" ");
-                  const midpoint = (selectedMinutes.start + selectedMinutes.end) / 2;
-                  const midAngle = angleFromMinutes(midpoint);
-                  const arrowTip = polarToCartesian(midAngle, OUTER_RADIUS + 2);
-                  const arrowLeft = polarToCartesian(midAngle - 3, INDICATOR_RADIUS);
-                  const arrowRight = polarToCartesian(midAngle + 3, INDICATOR_RADIUS);
                   return (
-                    <g data-ring-indicator="true" pointerEvents="none">
-                      <path d={outlinePath} fill="none" stroke={selectedColor} strokeWidth="1.5" opacity="0.95" />
-                      <polygon
-                        points={`${arrowTip.x},${arrowTip.y} ${arrowLeft.x},${arrowLeft.y} ${arrowRight.x},${arrowRight.y}`}
-                        fill={selectedColor}
-                        stroke="rgb(15 23 42)"
-                        strokeWidth="1"
-                        strokeLinejoin="round"
-                      />
-                    </g>
+                    <path
+                      d={outlinePath}
+                      fill="none"
+                      stroke={selectedColor}
+                      strokeWidth="1.5"
+                      opacity="0.95"
+                      pointerEvents="none"
+                    />
                   );
                 })()}
-              <circle cx={CENTER} cy={CENTER} r={CENTER_RADIUS} fill={selectedColor} opacity="0.92" />
+              {(() => {
+                const arrowMinutes =
+                  dragMinutes !== null
+                    ? dragMinutes
+                    : selectedMinutes && selectedMinutes.end > selectedMinutes.start
+                      ? (selectedMinutes.start + selectedMinutes.end) / 2
+                      : null;
+                if (arrowMinutes === null) return null;
+                const angle = angleFromMinutes(arrowMinutes);
+                const tip = polarToCartesian(angle, ARROW_TIP_RADIUS);
+                const baseLeft = polarToCartesian(angle - ARROW_HALF_WIDTH_DEG, ARROW_BASE_RADIUS);
+                const baseRight = polarToCartesian(angle + ARROW_HALF_WIDTH_DEG, ARROW_BASE_RADIUS);
+                return (
+                  <polygon
+                    data-ring-indicator="true"
+                    points={`${tip.x},${tip.y} ${baseLeft.x},${baseLeft.y} ${baseRight.x},${baseRight.y}`}
+                    fill={selectedColor}
+                    stroke="rgb(15 23 42)"
+                    strokeWidth="1"
+                    strokeLinejoin="round"
+                    pointerEvents="none"
+                  />
+                );
+              })()}
             </svg>
             <button
               type="button"

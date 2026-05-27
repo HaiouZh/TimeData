@@ -82,15 +82,15 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 `CircularTimeline` 使用 `buildTimeSlots` 生成的同一组 `slots` 绘制 24 小时单环。视觉规则借鉴仓库内 `参考代码/` 下的环形时间轴实现，配色按 TimeData 深色主题适配。
 
-**几何**：外半径 104、内半径 62（比例 0.6），中心圆半径 50；每段都是两个同心圆之间的闭合 SVG 环形扇区，段首段尾由径向直线切分，不用圆头粗线描边。
+**几何**：外半径 104、内半径 62（比例 0.6），内圈不再画底色圆，选中段的分类色作为指针填色暗示；每段都是两个同心圆之间的闭合 SVG 环形扇区，段首段尾由径向直线切分，不用圆头粗线描边。
 
 **段配色**：所有段一律 100% 不透明。`slot.kind === "entry"` 用分类色；`"gap"`（已过、未填）用 `rgb(100 116 139)`（slate-500 暖灰）；`"future"`（今天 `now → 24:00` 尚未到达）用 `rgb(30 41 59)`（slate-800，比底色 slate-700 更暗一档），并禁用点击交互。`buildTimeSlots` 在当日还有“未到达”区间时显式追加 `kind: "future"` 的 slot，列表组件 `Timeline.tsx` 会过滤掉该段，圆环则保留以维持“一整圈被填满”的视觉。
 
 **刻度**：三层刻度——144 个 10 分钟微刻度（弱、短），每隔 3 个升级为半点刻度，每隔 6 个升级为整点刻度（最长、最亮）；在 RADIUS 中线位置标 0–23 全部整点数字，0/6/12/18 加粗作为锚点。文字以深色描边压在分段之上避免被分类色淹没。
 
-**中心三行**：顺序为 `HH:mm - HH:mm` / 分类路径或“待记录” / 时长。点击中心按钮才执行跳转——记录进入编辑页，空档进入新增页并通过 URL query 带上 `start` / `end`、`date`。当槽位变化时默认选中最后一个空档；若没有空档则退选最后一条记录；`future` 段永远不会进入默认选中。
+**中心三行**：顺序为 `HH:mm - HH:mm` / 分类路径或“待记录” / 时长，直接绘在卡片底色之上（不再有内圈填色圆）。点击中心按钮才执行跳转——记录进入编辑页，空档进入新增页并通过 URL query 带上 `start` / `end`、`date`。当槽位变化时默认选中最后一个空档；若没有空档则退选最后一条记录；`future` 段永远不会进入默认选中。
 
-**指针交互**：圆环 `<svg>` 监听 `pointerDown` / `pointerMove` / `pointerUp`，按指针位置反算角度（atan2 + 12 点钟为 0 顺时针递增）→ 当日分钟数（0–1440）→ 落在哪段就选哪段。`future` 段在拖拽过程中被忽略。pointerDown 之后调用 `setPointerCapture`，touch-action 设为 none，避免与垂直滚动竞争。圆环外侧的三角箭头跟随当前选中段中点。
+**指针交互**：圆环 `<svg>` 监听 `pointerDown` / `pointerMove` / `pointerUp`，按指针位置反算角度（atan2 + 12 点钟为 0 顺时针递增）→ 当日分钟数（0–1440）→ 落在哪段就把 selection 切到哪段。`future` 段在拖拽过程中不切 selection。pointerDown 后调用 `setPointerCapture`，touch-action 设为 none，避免与垂直滚动竞争。指针箭头以 `ARROW_TIP_RADIUS`（环带靠内 25% 处）为尖、`ARROW_BASE_RADIUS`（内半径再向内 4px）为底，由内指向外；箭头位置由 `dragMinutes ?? selectedMidpoint` 驱动——任意 pointer 交互后箭头停在用户拖到的分钟数（无极、不吸附），只在 `initialSelection` 重算（切日期、记录变化等）时回到默认选中段中点。
 
 统计页的日/周/月分类汇总使用 `packages/client/src/lib/stats.ts`。它和时间轴使用同样的本地日期边界：先用 `localDateTimeToUtc()` 生成统计窗口，再按 `entry.startTime < rangeEnd && entry.endTime > rangeStart` 找出与窗口有交集的记录，最终只累计落在窗口内的可见时长。对合法且不晚于当前时间的记录，日统计与同一天时间轴使用一致的本地日期交集口径；统计展示会按 0.1 小时取整。跨日记录只统计落在当天或统计窗口内的部分。
 
