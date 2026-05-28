@@ -16,6 +16,7 @@ import dataRoute from "./routes/data.js";
 import entriesRoute from "./routes/entries.js";
 import exportRoute from "./routes/export.js";
 import syncRoute from "./routes/sync.js";
+import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
 import { cleanupServerBackups } from "./sync/backup.js";
@@ -103,6 +104,12 @@ app.use("/*", serveStatic({ root: "./public" }));
 app.get("*", serveStatic({ root: "./public", path: "index.html" }));
 
 initializeDatabase();
+
+try {
+  reconcileInterruptedUpdate(process.env.UPDATE_STATE_DIR || "/app/data");
+} catch (error) {
+  console.warn("[update] startup lock reconciliation failed", error);
+}
 
 const utcReset = runUtcResetIfNeeded(getDb());
 if (utcReset.ran) {

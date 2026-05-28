@@ -1,5 +1,10 @@
 import fs from "node:fs";
 
+// A self-update replaces this very container, so the process that holds the
+// lock is killed by Watchtower before it can release it. Any lock older than
+// this is treated as a leftover from such an interrupted update, not a live one.
+const STALE_LOCK_TTL_MS = 15 * 60 * 1000;
+
 export interface UpdaterOpts {
   stateDir: string;
   watchtowerUrl: string;
@@ -120,35 +125,76 @@ export async function triggerUpdateViaWatchtower(
   await fetchOrThrow(response, "watchtower update failed");
 }
 
-function readLockUpdateId(lockFile: string): string | null {
+function readLock(lockFile: string): { updateId: string | null; createdAt: string | null } {
   try {
-    const content = fs.readFileSync(lockFile, "utf8");
-    const parsed = JSON.parse(content) as { updateId?: string };
-    return parsed.updateId || null;
+    const parsed = JSON.parse(fs.readFileSync(lockFile, "utf8")) as { updateId?: string; createdAt?: string };
+    return { updateId: parsed.updateId || null, createdAt: parsed.createdAt || null };
   } catch {
-    return null;
+    return { updateId: null, createdAt: null };
+  }
+}
+
+function isStaleLock(lockFile: string): boolean {
+  const { createdAt } = readLock(lockFile);
+  if (!createdAt) return true;
+  const age = Date.now() - Date.parse(createdAt);
+  return Number.isNaN(age) || age > STALE_LOCK_TTL_MS;
+}
+
+function writeLock(stateDir: string, updateId: string): void {
+  const fd = fs.openSync(updateLockPath(stateDir), "wx");
+  try {
+    fs.writeFileSync(fd, JSON.stringify({ updateId, createdAt: new Date().toISOString() }, null, 2), "utf8");
+  } finally {
+    fs.closeSync(fd);
   }
 }
 
 function acquireUpdateLock(stateDir: string, updateId: string): void {
   fs.mkdirSync(updateDataDir(stateDir), { recursive: true });
   const lockFile = updateLockPath(stateDir);
-  let fd: number | null = null;
   try {
-    fd = fs.openSync(lockFile, "wx");
-    fs.writeFileSync(fd, JSON.stringify({ updateId, createdAt: new Date().toISOString() }, null, 2), "utf8");
+    writeLock(stateDir, updateId);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new UpdateAlreadyRunningError(readLockUpdateId(lockFile));
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    if (!isStaleLock(lockFile)) {
+      throw new UpdateAlreadyRunningError(readLock(lockFile).updateId);
     }
-    throw err;
-  } finally {
-    if (fd !== null) fs.closeSync(fd);
+    releaseUpdateLock(stateDir);
+    writeLock(stateDir, updateId);
   }
 }
 
 function releaseUpdateLock(stateDir: string): void {
   fs.rmSync(updateLockPath(stateDir), { force: true });
+}
+
+// Called at server startup. A lock present here means the previous update
+// process was killed (by the container restart that the update itself caused)
+// before it could release the lock. Without this, the stale lock would block
+// every future update with a 409 forever.
+export function reconcileInterruptedUpdate(stateDir: string): void {
+  const lockFile = updateLockPath(stateDir);
+  if (!fs.existsSync(lockFile)) return;
+  const { updateId } = readLock(lockFile);
+  appendUpdateLog(stateDir, "previous update was interrupted by a container restart; recovering");
+  const prior = getUpdateStatus(stateDir);
+  fs.writeFileSync(
+    updateStatusPath(stateDir),
+    JSON.stringify(
+      {
+        updateId: updateId ?? prior.updateId,
+        status: "unknown",
+        startedAt: prior.startedAt,
+        finishedAt: new Date().toISOString(),
+        exitCode: null,
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  releaseUpdateLock(stateDir);
 }
 
 async function runUpdate(opts: UpdaterOpts & { updateId: string; startedAt: string }): Promise<void> {

@@ -6,6 +6,7 @@ import {
   UpdateAlreadyRunningError,
   createUpdateStatus,
   getUpdateStatus,
+  reconcileInterruptedUpdate,
   triggerUpdate,
   triggerUpdateViaWatchtower,
   updateLockPath,
@@ -90,12 +91,12 @@ describe("update status files", () => {
 });
 
 describe("triggerUpdate locking", () => {
-  it("rejects a second update while update.lock exists", () => {
+  it("rejects a second update while a fresh update.lock exists", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
     fs.mkdirSync(tempDir, { recursive: true });
     fs.writeFileSync(
       updateLockPath(tempDir),
-      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-07T12:00:00.000Z" }),
+      JSON.stringify({ updateId: "update-1", createdAt: new Date().toISOString() }),
       "utf8",
     );
 
@@ -107,6 +108,67 @@ describe("triggerUpdate locking", () => {
         fetch: vi.fn() as typeof fetch,
       }),
     ).toThrow(UpdateAlreadyRunningError);
+  });
+
+  it("recovers a stale lock older than the TTL and proceeds with the update", async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    fs.mkdirSync(tempDir, { recursive: true });
+    const staleCreatedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    fs.writeFileSync(
+      updateLockPath(tempDir),
+      JSON.stringify({ updateId: "stale", createdAt: staleCreatedAt }),
+      "utf8",
+    );
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+
+    expect(() =>
+      triggerUpdate({
+        stateDir: tempDir!,
+        watchtowerUrl: "http://watchtower:8080",
+        watchtowerToken: "secret-token",
+        fetch: fetchMock,
+      }),
+    ).not.toThrow();
+    await vi.waitFor(() => expect(getUpdateStatus(tempDir!).status).toBe("succeeded"));
+    expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
+  });
+});
+
+describe("reconcileInterruptedUpdate", () => {
+  it("clears a leftover lock and marks the interrupted update as unknown", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    createUpdateStatus({ stateDir: tempDir, updateId: "update-1", now: () => "2026-05-27T06:18:33.524Z" });
+    fs.writeFileSync(
+      updateLockPath(tempDir),
+      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-27T06:18:33.527Z" }),
+      "utf8",
+    );
+
+    reconcileInterruptedUpdate(tempDir);
+
+    expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
+    const status = getUpdateStatus(tempDir);
+    expect(status.status).toBe("unknown");
+    expect(status.finishedAt).not.toBeNull();
+  });
+
+  it("is a no-op when no lock exists", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    fs.writeFileSync(
+      updateStatusPath(tempDir),
+      JSON.stringify({
+        updateId: "update-1",
+        status: "succeeded",
+        startedAt: "2026-05-07T12:00:00.000Z",
+        finishedAt: "2026-05-07T12:00:05.000Z",
+        exitCode: 0,
+      }),
+      "utf8",
+    );
+
+    reconcileInterruptedUpdate(tempDir);
+
+    expect(getUpdateStatus(tempDir).status).toBe("succeeded");
   });
 
   it("removes update.lock when status creation fails after acquiring the lock", () => {

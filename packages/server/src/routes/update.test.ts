@@ -116,10 +116,10 @@ describe("update route", () => {
     expect(fs.existsSync(path.join(tempDir!, "data", "update-status.json"))).toBe(true);
   });
 
-  it("returns 409 when an update lock already exists", async () => {
+  it("returns 409 when a fresh update lock already exists", async () => {
     fs.writeFileSync(
       path.join(tempDir!, "data", "update.lock"),
-      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-07T12:00:00.000Z" }),
+      JSON.stringify({ updateId: "update-1", createdAt: new Date().toISOString() }),
       "utf8",
     );
 
