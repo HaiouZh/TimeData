@@ -1,6 +1,7 @@
+import { APP_TIME_ZONE } from "@timedata/shared";
 import { percentile } from "./baseline.js";
 import { INSIGHT_CONSTANTS } from "./constants.js";
-import type { InsightSession } from "./types.js";
+import type { DailyRollup, InsightSession } from "./types.js";
 
 export interface DepthThresholds {
   deepThresholdMin: number;
@@ -101,4 +102,91 @@ export function computeDepthMetrics(pool: InsightSession[], thresholds: DepthThr
   };
 }
 
-// Task 3 会继续填充：碎片次级指标 / 熵 / 失衡。
+const toMs = (iso: string) => new Date(iso).getTime();
+const r2 = (x: number) => Math.round(x * 100) / 100;
+
+function localHour(ms: number): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: APP_TIME_ZONE,
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(ms));
+  return Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+}
+
+export function switchesPerActiveHour(rollups: DailyRollup[], sleepCategoryId: string | null): number {
+  let switches = 0;
+  const activeHours = new Set<string>();
+  for (const rollup of rollups) {
+    const segs = rollup.segments.filter((s) => !(sleepCategoryId !== null && s.parentId === sleepCategoryId));
+    for (let i = 1; i < segs.length; i++) if (segs[i].parentId !== segs[i - 1].parentId) switches++;
+    for (const seg of segs) {
+      const startMs = toMs(seg.start);
+      const spanH = Math.max(1, Math.ceil((toMs(seg.end) - startMs) / 3600000));
+      for (let k = 0; k < spanH; k++) activeHours.add(`${rollup.date}#${localHour(startMs + k * 3600000)}`);
+    }
+  }
+  return activeHours.size > 0 ? r2(switches / activeHours.size) : 0;
+}
+
+export function computeEntropy(byParent: Record<string, number>): EntropyResult {
+  const vals = Object.values(byParent).filter((v) => v > 0);
+  const total = vals.reduce((a, b) => a + b, 0);
+  if (total === 0) return { entropyBits: 0, maxBits: 0, normalizedPct: 0, parentCount: 0 };
+  let h = 0;
+  for (const v of vals) {
+    const p = v / total;
+    h -= p * Math.log2(p);
+  }
+  const maxBits = vals.length > 1 ? Math.log2(vals.length) : 0;
+  return {
+    entropyBits: r2(h),
+    maxBits: r2(maxBits),
+    normalizedPct: maxBits > 0 ? r1((h / maxBits) * 100) : 0,
+    parentCount: vals.length,
+  };
+}
+
+export function computeImbalance(
+  currentByParent: Record<string, number>,
+  baselineRollups: DailyRollup[],
+  options: StructureOptions = {},
+): ImbalanceItem[] {
+  const k = options.imbalanceStdevK ?? INSIGHT_CONSTANTS.imbalanceStdevK;
+  const minDays = options.imbalanceMinDaysWithData ?? INSIGHT_CONSTANTS.imbalanceMinDaysWithData;
+
+  const series = new Map<string, number[]>();
+  for (const rollup of baselineRollups) {
+    if (rollup.totalMin <= 0) continue;
+    for (const [parentId, min] of Object.entries(rollup.byParent)) {
+      const arr = series.get(parentId) ?? [];
+      arr.push(min / rollup.totalMin);
+      series.set(parentId, arr);
+    }
+  }
+
+  const currentTotal = Object.values(currentByParent).reduce((a, b) => a + b, 0);
+  if (currentTotal <= 0) return [];
+
+  const items: ImbalanceItem[] = [];
+  for (const [parentId, shares] of series) {
+    if (shares.length < minDays) continue;
+    const mu = shares.reduce((a, b) => a + b, 0) / shares.length;
+    const variance = shares.reduce((s, x) => s + (x - mu) ** 2, 0) / (shares.length - 1);
+    const sigma = Math.sqrt(variance);
+    if (sigma <= 0) continue;
+    const currentShare = (currentByParent[parentId] ?? 0) / currentTotal;
+    const z = (currentShare - mu) / sigma;
+    if (Math.abs(z) < k) continue;
+    items.push({
+      parentId,
+      currentSharePct: r1(currentShare * 100),
+      baselineMeanPct: r1(mu * 100),
+      baselineStdevPct: r1(sigma * 100),
+      z: r2(z),
+      direction: z > 0 ? "high" : "low",
+      daysWithData: shares.length,
+    });
+  }
+  return items.sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+}

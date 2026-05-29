@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { InsightSession } from "./types.js";
-import { computeDepthMetrics, computeDepthThresholds, poolSessions } from "./structure.js";
+import type { DailyRollup } from "./types.js";
+import { computeDepthMetrics, computeDepthThresholds, computeEntropy, computeImbalance, poolSessions, switchesPerActiveHour } from "./structure.js";
 
 function session(parentId: string, durationMin: number): InsightSession {
   return { parentId, startTime: "2026-05-08T02:00:00.000Z", endTime: "2026-05-08T03:00:00.000Z", entryIds: ["e"], durationMin };
@@ -62,3 +63,84 @@ describe("computeDepthMetrics", () => {
     expect(m.medianSessionMin).toBe(0);
   });
 });
+
+function rollup(date: string, byParent: Record<string, number>, segments: DailyRollup["segments"]): DailyRollup {
+  const totalMin = Object.values(byParent).reduce((a, b) => a + b, 0);
+  return { date, totalMin, byParent, segments, firstActivity: null, lastActivity: null };
+}
+function seg(parentId: string, start: string, end: string): DailyRollup["segments"][number] {
+  return { start, end, categoryId: parentId, parentId };
+}
+
+describe("switchesPerActiveHour", () => {
+  it("按非睡眠段计父分类切换 / 活跃小时桶", () => {
+    const r = rollup("2026-05-08", {}, [
+      seg("X", "2026-05-08T02:00:00.000Z", "2026-05-08T03:00:00.000Z"),
+      seg("Y", "2026-05-08T03:00:00.000Z", "2026-05-08T04:00:00.000Z"),
+      seg("X", "2026-05-08T04:00:00.000Z", "2026-05-08T04:30:00.000Z"),
+    ]);
+    expect(switchesPerActiveHour([r], null)).toBe(0.67);
+  });
+
+  it("指定睡眠分类时排除睡眠段后再计切换", () => {
+    const r = rollup("2026-05-08", {}, [
+      seg("X", "2026-05-08T02:00:00.000Z", "2026-05-08T03:00:00.000Z"),
+      seg("sleep", "2026-05-08T03:00:00.000Z", "2026-05-08T04:00:00.000Z"),
+      seg("X", "2026-05-08T04:00:00.000Z", "2026-05-08T05:00:00.000Z"),
+    ]);
+    expect(switchesPerActiveHour([r], "sleep")).toBe(0);
+  });
+
+  it("无段时返回 0", () => {
+    expect(switchesPerActiveHour([rollup("2026-05-08", {}, [])], null)).toBe(0);
+  });
+});
+
+describe("computeEntropy", () => {
+  it("两类均分 H=1bit、归一化100%", () => {
+    expect(computeEntropy({ a: 50, b: 50 })).toEqual({ entropyBits: 1, maxBits: 1, normalizedPct: 100, parentCount: 2 });
+  });
+
+  it("四类均分 H=2bit、归一化100%", () => {
+    expect(computeEntropy({ a: 25, b: 25, c: 25, d: 25 })).toEqual({ entropyBits: 2, maxBits: 2, normalizedPct: 100, parentCount: 4 });
+  });
+
+  it("单类 H=0、parentCount=1", () => {
+    expect(computeEntropy({ a: 100 })).toEqual({ entropyBits: 0, maxBits: 0, normalizedPct: 0, parentCount: 1 });
+  });
+
+  it("空分布全 0", () => {
+    expect(computeEntropy({})).toEqual({ entropyBits: 0, maxBits: 0, normalizedPct: 0, parentCount: 0 });
+  });
+});
+
+describe("computeImbalance", () => {
+  const baseline8: DailyRollup[] = [
+    rollup("2026-05-01", { work: 50, play: 20, misc: 30 }, []),
+    rollup("2026-05-02", { work: 50, play: 20, misc: 30 }, []),
+    rollup("2026-05-03", { work: 50, play: 20, misc: 30 }, []),
+    rollup("2026-05-04", { work: 50, play: 20, misc: 30 }, []),
+    rollup("2026-05-05", { work: 50, play: 30, misc: 20 }, []),
+    rollup("2026-05-06", { work: 50, play: 30, misc: 20 }, []),
+    rollup("2026-05-07", { work: 50, play: 30, misc: 20 }, []),
+    rollup("2026-05-08", { work: 50, play: 30, misc: 20 }, []),
+  ];
+
+  it("当期占比偏离个人 σ 达阈值才报；σ=0 的类跳过；按 |z| 降序", () => {
+    const items = computeImbalance({ work: 40, play: 55, misc: 5 }, baseline8);
+    expect(items.map((i) => i.parentId)).toEqual(["play", "misc"]);
+    expect(items.find((i) => i.parentId === "play")?.direction).toBe("high");
+    expect(items.find((i) => i.parentId === "misc")?.direction).toBe("low");
+    expect(items.some((i) => i.parentId === "work")).toBe(false);
+  });
+
+  it("基线有数据天数 < minDays 的类不评估（样本薄退化）", () => {
+    const thin = baseline8.slice(0, 6);
+    expect(computeImbalance({ work: 40, play: 55, misc: 5 }, thin)).toEqual([]);
+  });
+
+  it("当期无记录时不报失衡", () => {
+    expect(computeImbalance({}, baseline8)).toEqual([]);
+  });
+});
+
