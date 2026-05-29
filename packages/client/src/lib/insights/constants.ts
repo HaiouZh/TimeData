@@ -26,4 +26,15 @@ export const INSIGHT_CONSTANTS = {
   trendPctBaseFloorMin: 30,
   // 窗口预设（天）。
   trendPresetDays: [7, 30, 90],
+  // —— 结构诊断 / 深度·碎片（第四期，见结构校准 D2/D5）——
+  // 深度块下界 floor：会话 >= max(个人P70, 此值) 才算深度块（新用户/稀疏数据护栏，对本用户不绑定）。
+  deepBlockFloorMin: 20,
+  // 深度块分位：基线会话时长 P70 为深度下界（排除睡眠后真实 P70=120min）。
+  deepSessionPercentile: 0.7,
+  // 碎片分位：基线会话时长 P30 为碎片上界（排除睡眠后真实 P30=36.6min）。
+  fragmentSessionPercentile: 0.3,
+  // 占比失衡：当期日占比偏离个人基线均值达 此倍数 × 个人标准差(σ) 才提示。σ 大则自然难触发（少误报）。
+  imbalanceStdevK: 1.5,
+  // 占比失衡：某父分类基线「有数据天数」低于此值则不评估该类（样本薄退化，避免噪声）。
+  imbalanceMinDaysWithData: 7,
 } as const;
