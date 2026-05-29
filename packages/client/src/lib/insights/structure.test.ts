@@ -104,6 +104,21 @@ describe("switchesPerActiveHour", () => {
     expect(switchesPerActiveHour([r], "sleep")).toBe(0);
   });
 
+  it("指定睡眠分类时睡眠段会打断切换序列", () => {
+    const r = rollup("2026-05-08", {}, [
+      seg("work", "2026-05-08T14:00:00.000Z", "2026-05-08T15:00:00.000Z"),
+      seg("sleep", "2026-05-08T15:00:00.000Z", "2026-05-08T23:00:00.000Z"),
+      seg("exercise", "2026-05-08T23:00:00.000Z", "2026-05-09T00:00:00.000Z"),
+    ]);
+    expect(switchesPerActiveHour([r], "sleep")).toBe(0);
+  });
+
+  it("跨 rollup 的相邻非睡眠父分类切换会计入", () => {
+    const day1 = rollup("2026-05-08", {}, [seg("work", "2026-05-08T15:00:00.000Z", "2026-05-08T16:00:00.000Z")]);
+    const day2 = rollup("2026-05-09", {}, [seg("play", "2026-05-08T16:00:00.000Z", "2026-05-08T17:00:00.000Z")]);
+    expect(switchesPerActiveHour([day1, day2], null)).toBe(0.5);
+  });
+
   it("无段时返回 0", () => {
     expect(switchesPerActiveHour([rollup("2026-05-08", {}, [])], null)).toBe(0);
   });

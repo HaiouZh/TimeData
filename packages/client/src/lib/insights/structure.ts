@@ -125,12 +125,22 @@ function addActiveHourBuckets(activeHours: Set<string>, rollupDate: string, star
 
 export function switchesPerActiveHour(rollups: DailyRollup[], sleepCategoryId: string | null): number {
   let switches = 0;
+  let previousNonSleepParent: string | null = null;
   const activeHours = new Set<string>();
+
   for (const rollup of rollups) {
-    const segs = rollup.segments.filter((s) => !(sleepCategoryId !== null && s.parentId === sleepCategoryId));
-    for (let i = 1; i < segs.length; i++) if (segs[i].parentId !== segs[i - 1].parentId) switches++;
-    for (const seg of segs) addActiveHourBuckets(activeHours, rollup.date, toMs(seg.start), toMs(seg.end));
+    for (const seg of rollup.segments) {
+      if (sleepCategoryId !== null && seg.parentId === sleepCategoryId) {
+        previousNonSleepParent = null;
+        continue;
+      }
+
+      if (previousNonSleepParent !== null && previousNonSleepParent !== seg.parentId) switches++;
+      previousNonSleepParent = seg.parentId;
+      addActiveHourBuckets(activeHours, rollup.date, toMs(seg.start), toMs(seg.end));
+    }
   }
+
   return activeHours.size > 0 ? r2(switches / activeHours.size) : 0;
 }
 
