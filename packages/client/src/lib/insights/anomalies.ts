@@ -114,6 +114,7 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
   }
 
   // 3) 非睡眠活动落在通常睡眠时段。
+  // 设计选择：仅以 startTime 判定（开始于睡眠时段才报）；正常时段开始、延续到睡眠时段的条目不报，避免长条目噪声。
   for (const entry of entries) {
     if (isSleep(entry)) continue;
     if (inSleepWindow(entry.startTime)) {

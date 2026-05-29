@@ -56,4 +56,22 @@ describe("detectAnomalies", () => {
     const anomalies = detectAnomalies({ entries, categories, fromDate: "2026-05-08", toDate: "2026-05-08", sleepCategoryId: "sleep" });
     expect(anomalies.some((a) => a.type === "longGap")).toBe(true);
   });
+
+  it("sleepCategoryId=null 时不排除睡眠：睡眠超长记录也会报", () => {
+    const entries = [
+      ...Array.from({ length: 10 }, (_, i) =>
+        entry(`w${i}`, "work", `2026-05-0${(i % 8) + 1}T01:00:00.000Z`, `2026-05-0${(i % 8) + 1}T02:00:00.000Z`),
+      ),
+      entry("long-sleep", "nap", "2026-05-09T15:00:00.000Z", "2026-05-10T01:00:00.000Z"), // 10h 睡眠
+    ];
+    const anomalies = detectAnomalies({ entries, categories, fromDate: "2026-05-01", toDate: "2026-05-10", sleepCategoryId: null });
+    // 未指定睡眠分类 -> 睡眠 10h 也算超长
+    expect(anomalies.some((a) => a.type === "overlong" && a.categoryId === "nap")).toBe(true);
+  });
+
+  it("空 entries 时范围内每天报 unrecordedDay，其余类不报", () => {
+    const anomalies = detectAnomalies({ entries: [], categories, fromDate: "2026-05-08", toDate: "2026-05-09", sleepCategoryId: "sleep" });
+    expect(anomalies.filter((a) => a.type === "unrecordedDay").map((a) => a.date)).toEqual(["2026-05-09", "2026-05-08"]);
+    expect(anomalies.every((a) => a.type === "unrecordedDay")).toBe(true);
+  });
 });
