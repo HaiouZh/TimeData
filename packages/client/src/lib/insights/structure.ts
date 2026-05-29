@@ -57,7 +57,7 @@ export interface StructureOptions {
 }
 
 export interface StructureResult {
-  excludedSleep: boolean;
+  excludedSleep: boolean; // 深度/碎片会话池是否排除了睡眠；熵/占比失衡仍按整体父分类结构计算。
   thresholds: DepthThresholds;
   current: DepthMetrics;
   baseline: DepthMetrics;
@@ -272,6 +272,7 @@ export function buildStructure(input: BuildStructureInput): StructureResult {
       baseline.sessionCount > 0 ? r1((baseline.fragmentSessionCount / baseline.sessionCount) * 100) : 0,
   };
 
+  // 父分类分布/占比失衡按整体投入结构计算（包含睡眠），与校准 D4/D5 口径一致。
   const periodByParent: Record<string, number> = {};
   for (const rollup of periodRollups) {
     for (const [parentId, min] of Object.entries(rollup.byParent)) {
