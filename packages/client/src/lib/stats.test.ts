@@ -1,6 +1,13 @@
 import type { Category, TimeEntry } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { buildStatsRange, buildStatsRangeForDate, summarizeEntriesByParentCategory } from "./stats.js";
+import {
+  buildStatsRange,
+  buildStatsRangeForDate,
+  formatStatsRangeLabel,
+  isLatestPeriod,
+  shiftStatsAnchor,
+  summarizeEntriesByParentCategory,
+} from "./stats.js";
 
 function entry(id: string, categoryId: string, startTime: string, endTime: string): TimeEntry {
   return {
@@ -86,27 +93,29 @@ describe("stats helpers", () => {
     expect(rows).toEqual([]);
   });
 
-  it("builds week and month ranges from local whole-day boundaries", () => {
+  it("builds calendar week and month ranges from local whole-day boundaries", () => {
+    // 2026-05-08 是周五；自然周 = 周一 2026-05-04 ~ 周日 2026-05-10
     expect(buildStatsRange("week", new Date("2026-05-08T12:00:00+08:00"))).toMatchObject({
-      fromDate: "2026-05-02",
-      toDate: "2026-05-08",
-      startUtc: "2026-05-01T16:00:00.000Z",
-      endUtc: "2026-05-08T16:00:00.000Z",
+      fromDate: "2026-05-04",
+      toDate: "2026-05-10",
+      startUtc: "2026-05-03T16:00:00.000Z",
+      endUtc: "2026-05-10T16:00:00.000Z",
     });
+    // 自然月 = 2026-05-01 ~ 2026-05-31
     expect(buildStatsRange("month", new Date("2026-05-08T12:00:00+08:00"))).toMatchObject({
-      fromDate: "2026-04-09",
-      toDate: "2026-05-08",
-      startUtc: "2026-04-08T16:00:00.000Z",
-      endUtc: "2026-05-08T16:00:00.000Z",
+      fromDate: "2026-05-01",
+      toDate: "2026-05-31",
+      startUtc: "2026-04-30T16:00:00.000Z",
+      endUtc: "2026-05-31T16:00:00.000Z",
     });
   });
 
-  it("builds ranges from an explicit local date string", () => {
+  it("builds calendar week range from an explicit local date string", () => {
     expect(buildStatsRangeForDate("week", "2026-05-08")).toMatchObject({
-      fromDate: "2026-05-02",
-      toDate: "2026-05-08",
-      startUtc: "2026-05-01T16:00:00.000Z",
-      endUtc: "2026-05-08T16:00:00.000Z",
+      fromDate: "2026-05-04",
+      toDate: "2026-05-10",
+      startUtc: "2026-05-03T16:00:00.000Z",
+      endUtc: "2026-05-10T16:00:00.000Z",
     });
   });
 
@@ -132,5 +141,31 @@ describe("stats helpers", () => {
     );
 
     expect(rows).toEqual([{ id: "unknown", name: "其他", value: 2, color: "#808080" }]);
+  });
+});
+
+describe("stats navigation helpers", () => {
+  it("shiftStatsAnchor: 按周期前后移动锚点", () => {
+    expect(shiftStatsAnchor("day", "2026-05-08", -1)).toBe("2026-05-07");
+    expect(shiftStatsAnchor("day", "2026-05-08", 1)).toBe("2026-05-09");
+    expect(shiftStatsAnchor("week", "2026-05-08", -1)).toBe("2026-05-01");
+    expect(shiftStatsAnchor("week", "2026-05-08", 1)).toBe("2026-05-15");
+    expect(shiftStatsAnchor("month", "2026-05-08", -1)).toBe("2026-04-08");
+    expect(shiftStatsAnchor("month", "2026-05-08", 1)).toBe("2026-06-08");
+  });
+
+  it("isLatestPeriod: 周期含今天或在其后时为 true", () => {
+    expect(isLatestPeriod("week", "2026-05-08", "2026-05-06")).toBe(true);
+    expect(isLatestPeriod("week", "2026-05-01", "2026-05-20")).toBe(false);
+    expect(isLatestPeriod("month", "2026-05-15", "2026-05-31")).toBe(true);
+    expect(isLatestPeriod("month", "2026-04-15", "2026-05-31")).toBe(false);
+  });
+
+  it("formatStatsRangeLabel: 各周期标签", () => {
+    expect(formatStatsRangeLabel("day", buildStatsRangeForDate("day", "2026-05-08"))).toBe("2026-05-08");
+    expect(formatStatsRangeLabel("week", buildStatsRangeForDate("week", "2026-05-08"))).toBe(
+      "2026-05-04 ~ 2026-05-10",
+    );
+    expect(formatStatsRangeLabel("month", buildStatsRangeForDate("month", "2026-05-08"))).toBe("2026年05月");
   });
 });
