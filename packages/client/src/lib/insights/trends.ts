@@ -31,6 +31,7 @@ export function resolveTrendWindow(spec: TrendWindowSpec, today: string): TrendW
     to = spec.to > today ? today : spec.to;
     from = spec.from > to ? to : spec.from;
   } else {
+    // preset 与 customDays 语义相同：均取 [1,365] clamp 后 = 今天往前 N 天。
     const days = Math.min(Math.max(Math.round(spec.days), 1), 365);
     to = today;
     from = addDays(today, -(days - 1));
@@ -74,14 +75,80 @@ export interface BuildTrendOptions {
   pctBaseFloorMin?: number;
 }
 
-// Task 2 实现。先占位以便 Task 1 类型/窗口可独立测试与编译。
+// 单父分类环比分级（校准 T1/T2）。优先级：noBaseline > new > dropped > compared。
+function classifyTrend(
+  parentId: string,
+  currentMin: number,
+  previousMin: number,
+  prevComparable: boolean,
+  pctBaseFloorMin: number,
+): ParentTrend {
+  let state: TrendState;
+  let deltaPct: number | null = null;
+  if (!prevComparable) {
+    state = "noBaseline";
+  } else if (previousMin < pctBaseFloorMin && currentMin > 0) {
+    state = "new";
+  } else if (currentMin === 0 && previousMin >= pctBaseFloorMin) {
+    state = "dropped";
+  } else {
+    state = "compared";
+    deltaPct = previousMin > 0 ? Math.round(((currentMin - previousMin) / previousMin) * 1000) / 10 : 0;
+  }
+  return { parentId, currentMin: Math.round(currentMin), previousMin: Math.round(previousMin), deltaPct, state };
+}
+
+// 趋势聚合：复用日桶 byParent 按窗口求和，逐父分类算环比，给出 TopN 与折线序列。
 export function buildTrend(
-  _entries: TimeEntry[],
-  _categories: Category[],
-  _window: TrendWindow,
-  _options: BuildTrendOptions = {},
+  entries: TimeEntry[],
+  categories: Category[],
+  window: TrendWindow,
+  options: BuildTrendOptions = {},
 ): TrendResult {
-  void INSIGHT_CONSTANTS;
-  void buildDailyRollups;
-  throw new Error("buildTrend not implemented yet");
+  const topN = options.topN ?? INSIGHT_CONSTANTS.trendTopN;
+  const prevMinDays = options.prevMinDaysWithData ?? INSIGHT_CONSTANTS.trendPrevMinDaysWithData;
+  const pctFloor = options.pctBaseFloorMin ?? INSIGHT_CONSTANTS.trendPctBaseFloorMin;
+
+  // 一次性覆盖上期起到本期止（连续区间，中间空隙日为 0 桶）。
+  const rollups = buildDailyRollups(entries, categories, window.prevFrom, window.to);
+
+  const currentByParent = new Map<string, number>();
+  const previousByParent = new Map<string, number>();
+  let prevDaysWithData = 0;
+  const points: TrendPoint[] = [];
+
+  for (const rollup of rollups) {
+    if (rollup.date >= window.from && rollup.date <= window.to) {
+      points.push({ date: rollup.date, byParent: { ...rollup.byParent } });
+      for (const [parentId, min] of Object.entries(rollup.byParent)) {
+        currentByParent.set(parentId, (currentByParent.get(parentId) ?? 0) + min);
+      }
+    } else if (rollup.date >= window.prevFrom && rollup.date <= window.prevTo) {
+      if (rollup.totalMin > 0) prevDaysWithData += 1;
+      for (const [parentId, min] of Object.entries(rollup.byParent)) {
+        previousByParent.set(parentId, (previousByParent.get(parentId) ?? 0) + min);
+      }
+    }
+  }
+
+  const prevComparable = prevDaysWithData >= prevMinDays;
+  const parentIds = new Set<string>([...currentByParent.keys(), ...previousByParent.keys()]);
+  const parentTrends = [...parentIds]
+    .map((parentId) =>
+      classifyTrend(parentId, currentByParent.get(parentId) ?? 0, previousByParent.get(parentId) ?? 0, prevComparable, pctFloor),
+    )
+    .sort((a, b) => b.currentMin - a.currentMin);
+
+  const compared = parentTrends.filter((t) => t.state === "compared" && t.deltaPct !== null);
+  const topRising = [...compared]
+    .filter((t) => (t.deltaPct ?? 0) > 0)
+    .sort((a, b) => (b.deltaPct ?? 0) - (a.deltaPct ?? 0))
+    .slice(0, topN);
+  const topFalling = [...compared]
+    .filter((t) => (t.deltaPct ?? 0) < 0)
+    .sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0))
+    .slice(0, topN);
+  const droppedParents = parentTrends.filter((t) => t.state === "dropped");
+
+  return { window, parentTrends, topRising, topFalling, droppedParents, points, prevComparable };
 }
