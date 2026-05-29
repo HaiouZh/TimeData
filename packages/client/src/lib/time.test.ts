@@ -1,6 +1,7 @@
 import type { TimeEntry } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import {
+  addMonths,
   buildTimeSlots,
   formatAppDateTime,
   formatDateTimeRange,
@@ -8,6 +9,8 @@ import {
   formatTimelineTimeRange,
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
+  startOfWeek,
+  weekdayIndex,
 } from "./time.js";
 
 describe("formatAppDateTime", () => {
@@ -324,6 +327,28 @@ describe("buildTimeSlots — UTC entries", () => {
     expect(entrySlot).toBeDefined();
     // formatTime of the slot's startTime should give 15:00
     expect(formatTime(entrySlot?.startTime)).toBe("15:00");
+  });
+});
+
+describe("calendar date helpers", () => {
+  it("weekdayIndex: 周一为 0、周日为 6", () => {
+    // 2026-05-04 是周一，2026-05-08 是周五，2026-05-10 是周日
+    expect(weekdayIndex("2026-05-04")).toBe(0);
+    expect(weekdayIndex("2026-05-08")).toBe(4);
+    expect(weekdayIndex("2026-05-10")).toBe(6);
+  });
+
+  it("startOfWeek: 回退到本周周一", () => {
+    expect(startOfWeek("2026-05-08")).toBe("2026-05-04");
+    expect(startOfWeek("2026-05-04")).toBe("2026-05-04");
+    expect(startOfWeek("2026-05-10")).toBe("2026-05-04");
+  });
+
+  it("addMonths: 跨年与月末日钳制", () => {
+    expect(addMonths("2026-05-08", 1)).toBe("2026-06-08");
+    expect(addMonths("2026-05-08", -1)).toBe("2026-04-08");
+    expect(addMonths("2026-12-15", 1)).toBe("2027-01-15");
+    expect(addMonths("2026-01-31", 1)).toBe("2026-02-28"); // 2026 非闰年，钳到 28
   });
 });
 

@@ -257,6 +257,41 @@ export function addDays(dateStr: string, days: number): string {
   return getDateString(d);
 }
 
+const WEEKDAY_SHORT_TO_INDEX: Record<string, number> = {
+  Mon: 0,
+  Tue: 1,
+  Wed: 2,
+  Thu: 3,
+  Fri: 4,
+  Sat: 5,
+  Sun: 6,
+};
+
+// 0 = 周一 ... 6 = 周日。用正午 +08:00 锚点 + APP_TIME_ZONE 格式化，避开偏移边界。
+export function weekdayIndex(dateStr: string): number {
+  const noon = new Date(`${dateStr}T12:00:00+08:00`);
+  const short = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TIME_ZONE,
+    weekday: "short",
+  }).format(noon);
+  return WEEKDAY_SHORT_TO_INDEX[short] ?? 0;
+}
+
+export function startOfWeek(dateStr: string): string {
+  return addDays(dateStr, -weekdayIndex(dateStr));
+}
+
+// 月份偏移，日溢出钳制到目标月最后一天（如 1/31 + 1 月 → 2/28）。
+export function addMonths(dateStr: string, months: number): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const total = year * 12 + (month - 1) + months;
+  const targetYear = Math.floor(total / 12);
+  const targetMonth = total - targetYear * 12 + 1; // 1-based
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  const clampedDay = Math.min(day, lastDay);
+  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
+}
+
 export interface ResolvedClockRange {
   startTime: string;
   endTime: string;
