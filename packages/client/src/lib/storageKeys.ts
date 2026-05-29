@@ -7,4 +7,5 @@ export const STORAGE_KEYS = {
   legacySnapshotSync: "timedata_legacy_snapshot_sync",
   cloudSyncEnabled: "timedata_cloud_sync_enabled",
   mergeOvernight: "timedata_merge_overnight",
+  sleepCategoryId: "timedata_sleep_category_id",
 } as const;
