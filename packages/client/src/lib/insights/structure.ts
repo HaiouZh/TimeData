@@ -1,4 +1,4 @@
-import { APP_TIME_ZONE } from "@timedata/shared";
+import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { percentile } from "./baseline.js";
 import { INSIGHT_CONSTANTS } from "./constants.js";
 import type { DailyRollup, InsightSession } from "./types.js";
@@ -104,14 +104,23 @@ export function computeDepthMetrics(pool: InsightSession[], thresholds: DepthThr
 
 const toMs = (iso: string) => new Date(iso).getTime();
 const r2 = (x: number) => Math.round(x * 100) / 100;
+const MS_PER_DAY = 86400000;
 
-function localHour(ms: number): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: APP_TIME_ZONE,
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date(ms));
-  return Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+function nextLocalHourBoundaryMs(rollupDate: string, currentHour: number): number {
+  if (currentHour < 23) {
+    return toMs(localDateTimeToUtc(`${rollupDate}T${String(currentHour + 1).padStart(2, "0")}:00:00`));
+  }
+  return toMs(localDateTimeToUtc(`${rollupDate}T00:00:00`)) + MS_PER_DAY;
+}
+
+function addActiveHourBuckets(activeHours: Set<string>, rollupDate: string, startMs: number, endMs: number): void {
+  let cursor = startMs;
+  while (cursor < endMs) {
+    const hour = Number(utcToLocalDateTime(new Date(cursor).toISOString()).slice(11, 13));
+    activeHours.add(`${rollupDate}#${hour}`);
+    const nextHourStart = nextLocalHourBoundaryMs(rollupDate, hour);
+    cursor = nextHourStart > cursor ? Math.min(nextHourStart, endMs) : endMs;
+  }
 }
 
 export function switchesPerActiveHour(rollups: DailyRollup[], sleepCategoryId: string | null): number {
@@ -120,11 +129,7 @@ export function switchesPerActiveHour(rollups: DailyRollup[], sleepCategoryId: s
   for (const rollup of rollups) {
     const segs = rollup.segments.filter((s) => !(sleepCategoryId !== null && s.parentId === sleepCategoryId));
     for (let i = 1; i < segs.length; i++) if (segs[i].parentId !== segs[i - 1].parentId) switches++;
-    for (const seg of segs) {
-      const startMs = toMs(seg.start);
-      const spanH = Math.max(1, Math.ceil((toMs(seg.end) - startMs) / 3600000));
-      for (let k = 0; k < spanH; k++) activeHours.add(`${rollup.date}#${localHour(startMs + k * 3600000)}`);
-    }
+    for (const seg of segs) addActiveHourBuckets(activeHours, rollup.date, toMs(seg.start), toMs(seg.end));
   }
   return activeHours.size > 0 ? r2(switches / activeHours.size) : 0;
 }

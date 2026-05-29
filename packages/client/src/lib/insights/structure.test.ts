@@ -82,6 +82,19 @@ describe("switchesPerActiveHour", () => {
     expect(switchesPerActiveHour([r], null)).toBe(0.67);
   });
 
+  it("跨小时但不足整小时的段按覆盖到的本地小时桶计分母，整点结束不含结束小时", () => {
+    const r = rollup("2026-05-08", {}, [
+      seg("X", "2026-05-08T02:30:00.000Z", "2026-05-08T03:30:00.000Z"),
+      seg("Y", "2026-05-08T03:30:00.000Z", "2026-05-08T04:00:00.000Z"),
+    ]);
+    expect(switchesPerActiveHour([r], null)).toBe(0.5);
+  });
+
+  it("整点结束不包含结束小时桶", () => {
+    const r = rollup("2026-05-08", {}, [seg("X", "2026-05-08T02:00:00.000Z", "2026-05-08T03:00:00.000Z")]);
+    expect(switchesPerActiveHour([r], null)).toBe(0);
+  });
+
   it("指定睡眠分类时排除睡眠段后再计切换", () => {
     const r = rollup("2026-05-08", {}, [
       seg("X", "2026-05-08T02:00:00.000Z", "2026-05-08T03:00:00.000Z"),
