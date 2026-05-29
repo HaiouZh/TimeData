@@ -22,11 +22,6 @@ export function buildStatsRange(mode: StatsViewMode, now: Date = new Date()): St
   return buildStatsRangeForDate(mode, getDateString(now));
 }
 
-function endOfMonth(anchorDate: string): string {
-  const firstOfMonth = `${anchorDate.slice(0, 7)}-01`;
-  return addDays(addMonths(firstOfMonth, 1), -1);
-}
-
 export function buildStatsRangeForDate(mode: StatsViewMode, anchorDate: string): StatsRange {
   let fromDate: string;
   let toDate: string;
@@ -38,7 +33,7 @@ export function buildStatsRangeForDate(mode: StatsViewMode, anchorDate: string):
     toDate = addDays(fromDate, 6);
   } else {
     fromDate = `${anchorDate.slice(0, 7)}-01`;
-    toDate = endOfMonth(anchorDate);
+    toDate = addDays(addMonths(fromDate, 1), -1);
   }
 
   return {

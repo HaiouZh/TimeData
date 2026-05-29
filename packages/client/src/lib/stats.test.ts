@@ -152,6 +152,8 @@ describe("stats navigation helpers", () => {
     expect(shiftStatsAnchor("week", "2026-05-08", 1)).toBe("2026-05-15");
     expect(shiftStatsAnchor("month", "2026-05-08", -1)).toBe("2026-04-08");
     expect(shiftStatsAnchor("month", "2026-05-08", 1)).toBe("2026-06-08");
+    expect(shiftStatsAnchor("month", "2026-01-31", 1)).toBe("2026-02-28"); // 月末钳制
+    expect(shiftStatsAnchor("month", "2026-03-31", -1)).toBe("2026-02-28"); // 退月钳制
   });
 
   it("isLatestPeriod: 周期含今天或在其后时为 true", () => {
@@ -159,6 +161,9 @@ describe("stats navigation helpers", () => {
     expect(isLatestPeriod("week", "2026-05-01", "2026-05-20")).toBe(false);
     expect(isLatestPeriod("month", "2026-05-15", "2026-05-31")).toBe(true);
     expect(isLatestPeriod("month", "2026-04-15", "2026-05-31")).toBe(false);
+    expect(isLatestPeriod("day", "2026-05-08", "2026-05-08")).toBe(true); // 当天
+    expect(isLatestPeriod("day", "2026-05-07", "2026-05-08")).toBe(false); // 昨天周期已过
+    expect(isLatestPeriod("day", "2026-05-09", "2026-05-08")).toBe(true); // 未来
   });
 
   it("formatStatsRangeLabel: 各周期标签", () => {
