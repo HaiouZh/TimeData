@@ -16,4 +16,14 @@ export const INSIGHT_CONSTANTS = {
   // 通常睡眠时段（本地分钟 of day），用于「异常时段活动」判定与排除睡眠空档。23:00~07:00。
   sleepWindowStartMin: 23 * 60,
   sleepWindowEndMin: 7 * 60,
+  // —— 趋势（第三期）——
+  // 上升/下降榜各取前 N。真实数据父分类 5 个、前三占主体（见趋势校准 T3）。
+  trendTopN: 3,
+  // 上期可比最少「有数据天数」。低于此则环比退化为 noBaseline（仅显示绝对投入）。
+  // 校准 T1：近7天上期 7/7 远超阈值，近30/90天上期 0/N 必然不足 → 取 3 放行近7天、拦空上期。
+  trendPrevMinDaysWithData: 3,
+  // 防小基数百分比爆炸：上期投入低于此(min)时不算百分比，改判 new / 只显示绝对值（校准 T2）。
+  trendPctBaseFloorMin: 30,
+  // 窗口预设（天）。
+  trendPresetDays: [7, 30, 90],
 } as const;
