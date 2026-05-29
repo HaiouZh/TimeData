@@ -73,8 +73,8 @@ describe("StatsPage", () => {
       root.render(createElement(StatsPage));
     });
 
-    const prevButton = host.querySelector('[aria-label="上一周期"]') as HTMLButtonElement | null;
-    const nextButton = host.querySelector('[aria-label="下一周期"]') as HTMLButtonElement | null;
+    const prevButton = host.querySelector('[aria-label="上一周"]') as HTMLButtonElement | null;
+    const nextButton = host.querySelector('[aria-label="下一周"]') as HTMLButtonElement | null;
     expect(prevButton).not.toBeNull();
     expect(nextButton).not.toBeNull();
     // 锚点初始化为今天，最新周期不允许再往后
@@ -90,5 +90,60 @@ describe("StatsPage", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("回到今天：翻到上一周后出现，点击后回到最新", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    const prevButton = host.querySelector('[aria-label="上一周"]') as HTMLButtonElement | null;
+    // 初始最新周期，无"回到今天"
+    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "回到今天")).toBe(false);
+
+    await act(async () => {
+      prevButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const backButton = [...host.querySelectorAll("button")].find(
+      (button) => button.textContent === "回到今天",
+    ) as HTMLButtonElement | undefined;
+    expect(backButton).toBeTruthy();
+
+    await act(async () => {
+      backButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const nextButton = host.querySelector('[aria-label="下一周"]') as HTMLButtonElement | null;
+    expect(nextButton?.disabled).toBe(true);
+    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "回到今天")).toBe(false);
+  });
+
+  it("日模式可翻页，按钮标签随模式变化", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    const dayButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "日");
+    await act(async () => {
+      dayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const prevDay = host.querySelector('[aria-label="上一天"]') as HTMLButtonElement | null;
+    const nextDay = host.querySelector('[aria-label="下一天"]') as HTMLButtonElement | null;
+    expect(prevDay).not.toBeNull();
+    expect(nextDay?.disabled).toBe(true); // 今天是最新
+
+    await act(async () => {
+      prevDay?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(nextDay?.disabled).toBe(false);
   });
 });

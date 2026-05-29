@@ -37,6 +37,7 @@ export default function StatsPage() {
   const statsRange = useMemo(() => buildStatsRangeForDate(mode, anchor), [mode, anchor]);
   const atLatest = isLatestPeriod(mode, anchor, today);
   const rangeLabel = formatStatsRangeLabel(mode, statsRange);
+  const periodUnit = { day: "天", week: "周", month: "月" }[mode];
 
   const entries =
     useLiveQuery(async () => {
@@ -69,7 +70,7 @@ export default function StatsPage() {
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
-          aria-label="上一周期"
+          aria-label={`上一${periodUnit}`}
           onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
           className="px-3 py-1.5 rounded text-sm bg-slate-800 text-slate-300"
         >
@@ -79,7 +80,7 @@ export default function StatsPage() {
           <span className="text-sm text-slate-200">{rangeLabel}</span>
           <input
             type="date"
-            value={anchor}
+            value={statsRange.fromDate}
             max={today}
             onChange={(event) => {
               if (event.target.value) setAnchor(event.target.value);
@@ -89,7 +90,7 @@ export default function StatsPage() {
         </div>
         <button
           type="button"
-          aria-label="下一周期"
+          aria-label={`下一${periodUnit}`}
           disabled={atLatest}
           onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
           className="px-3 py-1.5 rounded text-sm bg-slate-800 text-slate-300 disabled:opacity-40"
