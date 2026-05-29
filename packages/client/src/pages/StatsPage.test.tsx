@@ -175,9 +175,11 @@ describe("StatsPage", () => {
       dayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     const dateInput = host.querySelector('input[type="date"]') as HTMLInputElement | null;
+    // React 受控 input：直接设 .value 不会被 React 的 onChange 识别，需用原型 setter 再派发 change。
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
-      if (dateInput) {
-        dateInput.value = "2026-05-08";
+      if (dateInput && nativeValueSetter) {
+        nativeValueSetter.call(dateInput, "2026-05-08");
         dateInput.dispatchEvent(new Event("change", { bubbles: true }));
       }
     });

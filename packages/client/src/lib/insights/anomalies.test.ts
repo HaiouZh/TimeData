@@ -74,4 +74,14 @@ describe("detectAnomalies", () => {
     expect(anomalies.filter((a) => a.type === "unrecordedDay").map((a) => a.date)).toEqual(["2026-05-09", "2026-05-08"]);
     expect(anomalies.every((a) => a.type === "unrecordedDay")).toBe(true);
   });
+
+  it("归属日落在 [fromDate,toDate] 外的越界跨天条目不报（Dexie 会带回前一天起始的条目）", () => {
+    // 该条 +8 = 2026-05-07 23:00 ~ 2026-05-08 09:00，归属日 05-07 在范围外；它会跨午夜且超长
+    const entries = [entry("cross", "work", "2026-05-07T15:00:00.000Z", "2026-05-08T01:00:00.000Z")];
+    const anomalies = detectAnomalies({ entries, categories, fromDate: "2026-05-08", toDate: "2026-05-08", sleepCategoryId: "sleep" });
+    // overlong/overnight/sleepTimeActivity 均按归属日 05-07 裁掉，不应出现
+    expect(anomalies.some((a) => a.type === "overlong")).toBe(false);
+    expect(anomalies.some((a) => a.type === "overnight")).toBe(false);
+    expect(anomalies.some((a) => a.type === "sleepTimeActivity")).toBe(false);
+  });
 });

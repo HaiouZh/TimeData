@@ -82,14 +82,19 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
   const baseline = buildInsightBaseline({ nonSleepSessionDurations, awakeGapMins });
   const anomalies: Anomaly[] = [];
 
+  // Dexie 查询会带回跨午夜进入范围的越界条目，按归属日（startTime 的本地日）裁剪到所选周期，避免产出范围外卡片。
+  const inRange = (date: string) => date >= fromDate && date <= toDate;
+
   // 1) 超长记录（排除睡眠，>= 阈值）。逐条 entry 判断。
   for (const entry of entries) {
     if (isSleep(entry)) continue;
+    const entryDate = localDate(entry.startTime);
+    if (!inRange(entryDate)) continue;
     const durMin = (toMs(entry.endTime) - toMs(entry.startTime)) / 60000;
     if (durMin < baseline.overlongThresholdMin) continue;
     anomalies.push({
       type: "overlong",
-      date: localDate(entry.startTime),
+      date: entryDate,
       startTime: entry.startTime,
       endTime: entry.endTime,
       categoryId: entry.categoryId,
@@ -101,14 +106,16 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
 
   // 2) 跨午夜条目。
   for (const entry of entries) {
-    if (localDate(entry.startTime) !== localDate(entry.endTime)) {
+    const entryDate = localDate(entry.startTime);
+    if (!inRange(entryDate)) continue;
+    if (entryDate !== localDate(entry.endTime)) {
       anomalies.push({
         type: "overnight",
-        date: localDate(entry.startTime),
+        date: entryDate,
         startTime: entry.startTime,
         endTime: entry.endTime,
         categoryId: entry.categoryId,
-        message: `跨午夜记录：${localDate(entry.startTime)} 延续到 ${localDate(entry.endTime)}。`,
+        message: `跨午夜记录：${entryDate} 延续到 ${localDate(entry.endTime)}。`,
       });
     }
   }
@@ -117,10 +124,12 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
   // 设计选择：仅以 startTime 判定（开始于睡眠时段才报）；正常时段开始、延续到睡眠时段的条目不报，避免长条目噪声。
   for (const entry of entries) {
     if (isSleep(entry)) continue;
+    const entryDate = localDate(entry.startTime);
+    if (!inRange(entryDate)) continue;
     if (inSleepWindow(entry.startTime)) {
       anomalies.push({
         type: "sleepTimeActivity",
-        date: localDate(entry.startTime),
+        date: entryDate,
         startTime: entry.startTime,
         endTime: entry.endTime,
         categoryId: entry.categoryId,
