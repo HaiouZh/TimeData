@@ -20,7 +20,8 @@ describe("buildInsightBaseline", () => {
   it("超长记录 P95 排除睡眠分类后计算", () => {
     const sessionDurations = [60, 60, 60, 60, 60, 60, 60, 60, 60, 600];
     const baseline = buildInsightBaseline({ nonSleepSessionDurations: sessionDurations, awakeGapMins: [] });
-    expect(baseline.overlongThresholdMin).toBeGreaterThanOrEqual(180);
+    // P95 = sorted[8] + (sorted[9]-sorted[8])*(9*0.95-8) = 60 + 540*0.55 = 357；max(357,180)=357
+    expect(baseline.overlongThresholdMin).toBeCloseTo(357, 5);
   });
 
   it("nonSleepSessionDurations 为空时 overlong 阈值等于 floor", () => {
@@ -38,5 +39,12 @@ describe("buildInsightBaseline", () => {
     const baselineFew = buildInsightBaseline({ nonSleepSessionDurations: [], awakeGapMins: few });
     expect(baselineFew.longGapThresholdMin).toBe(90); // fallback
     expect(baselineFew.longGapFromSample).toBe(false);
+  });
+
+  it("恰好 n=10 走分位（边界，>= 非 >）", () => {
+    const exactly = Array.from({ length: 10 }, (_, i) => (i + 1) * 30); // n=10
+    const baseline = buildInsightBaseline({ nonSleepSessionDurations: [], awakeGapMins: exactly });
+    expect(baseline.longGapThresholdMin).toBe(percentile(exactly, 0.75));
+    expect(baseline.longGapFromSample).toBe(true);
   });
 });
