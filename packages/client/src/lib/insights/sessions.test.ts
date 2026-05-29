@@ -41,6 +41,12 @@ describe("resolveParentId", () => {
     const byId = new Map(categories.map((c) => [c.id, c]));
     expect(resolveParentId(entry("e", "missing", "2026-05-08T01:00:00.000Z", "2026-05-08T02:00:00.000Z"), byId)).toBe("unknown");
   });
+
+  it("父分类 id 不在 map 中时返回 unknown", () => {
+    // 子分类 orphan 的 parentId 指向不存在的父分类
+    const byId = new Map([cat("orphan", "ghost-parent")].map((c) => [c.id, c]));
+    expect(resolveParentId(entry("e", "orphan", "2026-05-08T01:00:00.000Z", "2026-05-08T02:00:00.000Z"), byId)).toBe("unknown");
+  });
 });
 
 describe("buildSessions", () => {
@@ -75,5 +81,15 @@ describe("buildSessions", () => {
     const sessions = buildSessions(entries, categories);
     expect(sessions).toHaveLength(1);
     expect(sessions[0].entryIds).toEqual(["a", "b"]);
+  });
+
+  it("跳过非法时间区间（endTime <= startTime）", () => {
+    const entries = [
+      entry("bad", "c1", "2026-05-08T02:00:00.000Z", "2026-05-08T02:00:00.000Z"), // 零长度
+      entry("good", "c1", "2026-05-08T03:00:00.000Z", "2026-05-08T04:00:00.000Z"),
+    ];
+    const sessions = buildSessions(entries, categories);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].entryIds).toEqual(["good"]);
   });
 });
