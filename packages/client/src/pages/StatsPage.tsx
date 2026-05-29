@@ -12,8 +12,18 @@ import {
   summarizeEntriesByParentCategory,
 } from "../lib/stats.ts";
 import { getDateString } from "../lib/time.ts";
+import { detectAnomalies } from "../lib/insights/anomalies.ts";
+import { getSleepCategoryId, setSleepCategoryId } from "../lib/sleepCategorySetting.ts";
 
 type ViewMode = StatsViewMode;
+
+const ANOMALY_LABEL: Record<string, string> = {
+  overlong: "超长记录",
+  overnight: "跨午夜",
+  sleepTimeActivity: "睡眠时段活动",
+  longGap: "长空白",
+  unrecordedDay: "未记录",
+};
 
 export default function StatsPage() {
   const [mode, setMode] = useState<ViewMode>("week");
@@ -51,6 +61,20 @@ export default function StatsPage() {
   );
 
   const totalHours = pieData.reduce((sum, d) => sum + d.value, 0);
+
+  const [sleepCategoryId, setSleepCategoryIdState] = useState<string | null>(() => getSleepCategoryId());
+
+  const anomalies = useMemo(
+    () =>
+      detectAnomalies({
+        entries,
+        categories,
+        fromDate: statsRange.fromDate,
+        toDate: statsRange.toDate,
+        sleepCategoryId,
+      }),
+    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
+  );
 
   return (
     <div className="p-4 space-y-6">
@@ -145,6 +169,45 @@ export default function StatsPage() {
         </ResponsiveContainer>
       )}
       {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无统计数据</div>}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-slate-200">异常与空档</h3>
+          <select
+            aria-label="睡眠分类"
+            value={sleepCategoryId ?? ""}
+            onChange={(event) => {
+              const value = event.target.value || null;
+              setSleepCategoryId(value);
+              setSleepCategoryIdState(value);
+            }}
+            className="bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+          >
+            <option value="">睡眠分类：未指定</option>
+            {parentCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                睡眠：{category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {sleepCategoryId === null && (
+          <p className="text-xs text-slate-500">指定「睡眠」分类后，超长记录与异常时段判定会更准确。</p>
+        )}
+        {anomalies.length === 0 ? (
+          <p className="text-sm text-slate-500">本周期未发现异常。</p>
+        ) : (
+          <ul className="space-y-2">
+            {anomalies.map((anomaly, index) => (
+              <li key={index} className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200">
+                <span className="mr-2 rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
+                  {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
+                </span>
+                {anomaly.message}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

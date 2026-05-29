@@ -11,8 +11,9 @@ const categoriesState = vi.hoisted(() => ({
   categories: [] as Category[],
 }));
 
+const entriesState = vi.hoisted(() => ({ entries: [] as unknown[] }));
 vi.mock("dexie-react-hooks", () => ({
-  useLiveQuery: () => [],
+  useLiveQuery: () => entriesState.entries,
 }));
 
 vi.mock("recharts", () => ({
@@ -37,6 +38,7 @@ vi.mock("../hooks/useCategories.ts", () => ({
 describe("StatsPage", () => {
   beforeEach(() => {
     categoriesState.categories = [];
+    entriesState.entries = [];
   });
 
   it("renders empty state and allows period switching", async () => {
@@ -145,5 +147,46 @@ describe("StatsPage", () => {
     });
 
     expect(nextDay?.disabled).toBe(false);
+  });
+
+  it("指定睡眠分类后，工作类超长记录出现在异常区", async () => {
+    categoriesState.categories = [
+      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+      { id: "sleep", name: "睡眠", parentId: null, color: "#64748b", icon: null, sortOrder: 1, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+    ];
+    // 一条 10h 工作（超过 floor 180min）
+    entriesState.entries = [
+      { id: "long", categoryId: "work", startTime: "2026-05-08T01:00:00.000Z", endTime: "2026-05-08T11:00:00.000Z", note: null, createdAt: "2026-05-08T01:00:00.000Z", updatedAt: "2026-05-08T01:00:00.000Z" },
+    ];
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    // 默认未指定睡眠 -> 选择器存在
+    const select = host.querySelector('[aria-label="睡眠分类"]') as HTMLSelectElement | null;
+    expect(select).not.toBeNull();
+
+    // 切到日模式并跳到 2026-05-08，使该条落入范围
+    const dayButton = [...host.querySelectorAll("button")].find((b) => b.textContent === "日");
+    await act(async () => {
+      dayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dateInput = host.querySelector('input[type="date"]') as HTMLInputElement | null;
+    await act(async () => {
+      if (dateInput) {
+        dateInput.value = "2026-05-08";
+        dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    // 异常区出现超长记录文案
+    expect(host.textContent).toContain("疑似忘停");
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });
