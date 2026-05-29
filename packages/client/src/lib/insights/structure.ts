@@ -159,6 +159,7 @@ export function computeImbalance(
 ): ImbalanceItem[] {
   const k = options.imbalanceStdevK ?? INSIGHT_CONSTANTS.imbalanceStdevK;
   const minDays = options.imbalanceMinDaysWithData ?? INSIGHT_CONSTANTS.imbalanceMinDaysWithData;
+  const minSamples = Math.max(minDays, 2);
 
   const series = new Map<string, number[]>();
   for (const rollup of baselineRollups) {
@@ -175,14 +176,14 @@ export function computeImbalance(
 
   const items: ImbalanceItem[] = [];
   for (const [parentId, shares] of series) {
-    if (shares.length < minDays) continue;
+    if (shares.length < minSamples) continue;
     const mu = shares.reduce((a, b) => a + b, 0) / shares.length;
     const variance = shares.reduce((s, x) => s + (x - mu) ** 2, 0) / (shares.length - 1);
     const sigma = Math.sqrt(variance);
-    if (sigma <= 0) continue;
+    if (!Number.isFinite(sigma) || sigma <= 0) continue;
     const currentShare = (currentByParent[parentId] ?? 0) / currentTotal;
     const z = (currentShare - mu) / sigma;
-    if (Math.abs(z) < k) continue;
+    if (!Number.isFinite(z) || Math.abs(z) < k) continue;
     items.push({
       parentId,
       currentSharePct: r1(currentShare * 100),

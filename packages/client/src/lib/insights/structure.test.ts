@@ -152,6 +152,11 @@ describe("computeImbalance", () => {
     expect(computeImbalance({ work: 40, play: 55, misc: 5 }, thin)).toEqual([]);
   });
 
+  it("单样本基线即使 minDays 配成 1 也不输出 NaN 失衡", () => {
+    const oneDay = [rollup("2026-05-01", { work: 20 }, [])];
+    expect(computeImbalance({ work: 50 }, oneDay, { imbalanceMinDaysWithData: 1 })).toEqual([]);
+  });
+
   it("当期无记录时不报失衡", () => {
     expect(computeImbalance({}, baseline8)).toEqual([]);
   });
