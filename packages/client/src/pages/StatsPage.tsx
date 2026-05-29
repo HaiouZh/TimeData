@@ -3,7 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
-import { type StatsViewMode, buildStatsRangeForDate, summarizeEntriesByParentCategory } from "../lib/stats.ts";
+import {
+  type StatsViewMode,
+  buildStatsRangeForDate,
+  formatStatsRangeLabel,
+  isLatestPeriod,
+  shiftStatsAnchor,
+  summarizeEntriesByParentCategory,
+} from "../lib/stats.ts";
 import { getDateString } from "../lib/time.ts";
 
 type ViewMode = StatsViewMode;
@@ -11,6 +18,7 @@ type ViewMode = StatsViewMode;
 export default function StatsPage() {
   const [mode, setMode] = useState<ViewMode>("week");
   const [today, setToday] = useState(() => getDateString(new Date()));
+  const [anchor, setAnchor] = useState(() => getDateString(new Date()));
   const { parentCategories, categories } = useCategories();
 
   useEffect(() => {
@@ -26,7 +34,9 @@ export default function StatsPage() {
     };
   }, []);
 
-  const statsRange = useMemo(() => buildStatsRangeForDate(mode, today), [mode, today]);
+  const statsRange = useMemo(() => buildStatsRangeForDate(mode, anchor), [mode, anchor]);
+  const atLatest = isLatestPeriod(mode, anchor, today);
+  const rangeLabel = formatStatsRangeLabel(mode, statsRange);
 
   const entries =
     useLiveQuery(async () => {
@@ -56,6 +66,46 @@ export default function StatsPage() {
           </button>
         ))}
       </div>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          aria-label="上一周期"
+          onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
+          className="px-3 py-1.5 rounded text-sm bg-slate-800 text-slate-300"
+        >
+          ←
+        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-200">{rangeLabel}</span>
+          <input
+            type="date"
+            value={anchor}
+            max={today}
+            onChange={(event) => {
+              if (event.target.value) setAnchor(event.target.value);
+            }}
+            className="bg-slate-800 text-slate-300 text-sm rounded px-2 py-1"
+          />
+        </div>
+        <button
+          type="button"
+          aria-label="下一周期"
+          disabled={atLatest}
+          onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
+          className="px-3 py-1.5 rounded text-sm bg-slate-800 text-slate-300 disabled:opacity-40"
+        >
+          →
+        </button>
+      </div>
+      {!atLatest && (
+        <button
+          type="button"
+          onClick={() => setAnchor(today)}
+          className="mx-auto block px-3 py-1 rounded text-xs bg-slate-800 text-slate-400"
+        >
+          回到今天
+        </button>
+      )}
       <div className="text-center text-sm text-slate-400">已记录 {totalHours.toFixed(1)} 小时</div>
       {pieData.length > 0 && (
         <div className="flex justify-center">

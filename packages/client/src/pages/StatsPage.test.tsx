@@ -64,4 +64,31 @@ describe("StatsPage", () => {
       root.unmount();
     });
   });
+
+  it("初始停在最新周期，下一周期按钮禁用；上一周期后启用", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    const prevButton = host.querySelector('[aria-label="上一周期"]') as HTMLButtonElement | null;
+    const nextButton = host.querySelector('[aria-label="下一周期"]') as HTMLButtonElement | null;
+    expect(prevButton).not.toBeNull();
+    expect(nextButton).not.toBeNull();
+    // 锚点初始化为今天，最新周期不允许再往后
+    expect(nextButton?.disabled).toBe(true);
+
+    await act(async () => {
+      prevButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // 翻到上一周期后，可以再往后翻
+    expect(nextButton?.disabled).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
