@@ -349,6 +349,9 @@ describe("calendar date helpers", () => {
     expect(addMonths("2026-05-08", -1)).toBe("2026-04-08");
     expect(addMonths("2026-12-15", 1)).toBe("2027-01-15");
     expect(addMonths("2026-01-31", 1)).toBe("2026-02-28"); // 2026 非闰年，钳到 28
+    expect(addMonths("2026-03-31", -1)).toBe("2026-02-28"); // 退月也要钳制
+    expect(addMonths("2024-03-31", -1)).toBe("2024-02-29"); // 闰年退月
+    expect(addMonths("2024-01-31", 1)).toBe("2024-02-29"); // 2024 闰年，钳到 29
   });
 });
 

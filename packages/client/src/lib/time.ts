@@ -274,7 +274,9 @@ export function weekdayIndex(dateStr: string): number {
     timeZone: APP_TIME_ZONE,
     weekday: "short",
   }).format(noon);
-  return WEEKDAY_SHORT_TO_INDEX[short] ?? 0;
+  const index = WEEKDAY_SHORT_TO_INDEX[short];
+  if (index === undefined) throw new Error(`weekdayIndex: unexpected weekday token "${short}"`);
+  return index;
 }
 
 export function startOfWeek(dateStr: string): string {
