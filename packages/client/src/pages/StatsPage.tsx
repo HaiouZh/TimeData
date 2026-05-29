@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { localDateTimeToUtc } from "@timedata/shared";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import {
@@ -11,9 +12,10 @@ import {
   shiftStatsAnchor,
   summarizeEntriesByParentCategory,
 } from "../lib/stats.ts";
-import { getDateString } from "../lib/time.ts";
+import { addDays, getDateString } from "../lib/time.ts";
 import { detectAnomalies } from "../lib/insights/anomalies.ts";
 import { getSleepCategoryId, setSleepCategoryId } from "../lib/sleepCategorySetting.ts";
+import { type ParentTrend, type TrendWindowSpec, buildTrend, resolveTrendWindow } from "../lib/insights/trends.ts";
 
 type ViewMode = StatsViewMode;
 
@@ -24,6 +26,23 @@ const ANOMALY_LABEL: Record<string, string> = {
   longGap: "长空白",
   unrecordedDay: "未记录",
 };
+
+const TREND_PRESETS: { days: number; label: string }[] = [
+  { days: 7, label: "近7天" },
+  { days: 30, label: "近30天" },
+  { days: 90, label: "近90天" },
+];
+
+function trendLabel(t: ParentTrend): string {
+  const curH = (t.currentMin / 60).toFixed(1);
+  if (t.state === "compared" && t.deltaPct !== null) {
+    const sign = t.deltaPct > 0 ? "↑" : t.deltaPct < 0 ? "↓" : "→";
+    return `${curH}h（环比 ${sign}${Math.abs(t.deltaPct)}%）`;
+  }
+  if (t.state === "new") return `${curH}h（新增·无对比期数据）`;
+  if (t.state === "dropped") return `本期未投入（上期 ${(t.previousMin / 60).toFixed(1)}h）`;
+  return `${curH}h（无对比期数据）`;
+}
 
 export default function StatsPage() {
   const [mode, setMode] = useState<ViewMode>("week");
@@ -74,6 +93,42 @@ export default function StatsPage() {
         sleepCategoryId,
       }),
     [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
+  );
+
+  const [trendWindowSpec, setTrendWindowSpec] = useState<TrendWindowSpec>({ kind: "preset", days: 7 });
+  const [trendChart, setTrendChart] = useState<"line" | "area">("line");
+
+  const trendWindow = useMemo(() => resolveTrendWindow(trendWindowSpec, today), [trendWindowSpec, today]);
+
+  const trendEntries =
+    useLiveQuery(async () => {
+      const startUtc = localDateTimeToUtc(`${trendWindow.prevFrom}T00:00:00`);
+      const endUtc = localDateTimeToUtc(`${addDays(trendWindow.to, 1)}T00:00:00`);
+      const candidates = await db.timeEntries.where("endTime").above(startUtc).toArray();
+      return candidates.filter((entry) => entry.startTime < endUtc);
+    }, [trendWindow.prevFrom, trendWindow.to]) || [];
+
+  const trend = useMemo(
+    () => buildTrend(trendEntries, categories, trendWindow, {}),
+    [trendEntries, categories, trendWindow],
+  );
+
+  // 折线/面积图行数据：每行一天，键为父分类名，值为小时。
+  const parentNameById = useMemo(() => new Map(parentCategories.map((c) => [c.id, c.name])), [parentCategories]);
+  const trendChartData = useMemo(
+    () =>
+      trend.points.map((point) => {
+        const row: Record<string, number | string> = { date: point.date.slice(5) };
+        for (const t of trend.parentTrends) {
+          row[parentNameById.get(t.parentId) ?? t.parentId] = Math.round(((point.byParent[t.parentId] ?? 0) / 60) * 10) / 10;
+        }
+        return row;
+      }),
+    [trend, parentNameById],
+  );
+  const trendSeries = useMemo(
+    () => trend.parentTrends.map((t) => ({ key: parentNameById.get(t.parentId) ?? t.parentId, color: parentCategories.find((c) => c.id === t.parentId)?.color ?? "#808080" })),
+    [trend, parentNameById, parentCategories],
   );
 
   return (
@@ -206,6 +261,171 @@ export default function StatsPage() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-200">趋势变化</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          {TREND_PRESETS.map((preset) => {
+            const active = trendWindowSpec.kind === "preset" && trendWindowSpec.days === preset.days;
+            return (
+              <button
+                key={preset.days}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setTrendWindowSpec({ kind: "preset", days: preset.days })}
+                className={`px-2.5 py-1 rounded text-xs ${active ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+          <input
+            type="number"
+            min={1}
+            max={365}
+            placeholder="自定义天数"
+            aria-label="自定义天数"
+            onChange={(event) => {
+              const days = Number(event.target.value);
+              if (Number.isFinite(days) && days >= 1) setTrendWindowSpec({ kind: "customDays", days });
+            }}
+            className="w-24 bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+          />
+          <span className="text-xs text-slate-500">或</span>
+          <input
+            type="date"
+            max={today}
+            aria-label="趋势起始日"
+            value={trendWindowSpec.kind === "customRange" ? trendWindowSpec.from : ""}
+            onChange={(event) => {
+              const from = event.target.value;
+              if (from) {
+                const to = trendWindowSpec.kind === "customRange" ? trendWindowSpec.to : today;
+                setTrendWindowSpec({ kind: "customRange", from, to: to < from ? from : to });
+              }
+            }}
+            className="bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+          />
+          <input
+            type="date"
+            max={today}
+            aria-label="趋势结束日"
+            value={trendWindowSpec.kind === "customRange" ? trendWindowSpec.to : ""}
+            onChange={(event) => {
+              const to = event.target.value;
+              if (to) {
+                const from = trendWindowSpec.kind === "customRange" ? trendWindowSpec.from : to;
+                setTrendWindowSpec({ kind: "customRange", from: from > to ? to : from, to });
+              }
+            }}
+            className="bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+          />
+        </div>
+
+        <div className="text-xs text-slate-500">
+          {trend.window.from} ~ {trend.window.to}
+          {!trend.prevComparable && "（对比期数据不足，仅显示本期投入）"}
+        </div>
+
+        {trend.parentTrends.length === 0 ? (
+          <p className="text-sm text-slate-500">本期窗口无投入记录。</p>
+        ) : (
+          <>
+            <ul className="space-y-1.5">
+              {trend.parentTrends.map((t) => (
+                <li key={t.parentId} className="flex items-center justify-between rounded bg-slate-800/60 px-3 py-1.5 text-sm">
+                  <span className="text-slate-200">{parentNameById.get(t.parentId) ?? t.parentId}</span>
+                  <span
+                    className={
+                      t.state === "compared" && (t.deltaPct ?? 0) > 0
+                        ? "text-emerald-400"
+                        : t.state === "compared" && (t.deltaPct ?? 0) < 0
+                          ? "text-rose-400"
+                          : "text-slate-400"
+                    }
+                  >
+                    {trendLabel(t)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            {(trend.topRising.length > 0 || trend.topFalling.length > 0) && (
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <div className="text-slate-400 mb-1">上升最多</div>
+                  {trend.topRising.length === 0 ? (
+                    <div className="text-slate-600">—</div>
+                  ) : (
+                    trend.topRising.map((t) => (
+                      <div key={t.parentId} className="text-emerald-400">
+                        {parentNameById.get(t.parentId) ?? t.parentId} ↑{t.deltaPct}%
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div>
+                  <div className="text-slate-400 mb-1">下降最多</div>
+                  {trend.topFalling.length === 0 ? (
+                    <div className="text-slate-600">—</div>
+                  ) : (
+                    trend.topFalling.map((t) => (
+                      <div key={t.parentId} className="text-rose-400">
+                        {parentNameById.get(t.parentId) ?? t.parentId} ↓{Math.abs(t.deltaPct ?? 0)}%
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                aria-pressed={trendChart === "line"}
+                onClick={() => setTrendChart("line")}
+                className={`px-2.5 py-1 rounded text-xs ${trendChart === "line" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+              >
+                折线
+              </button>
+              <button
+                type="button"
+                aria-pressed={trendChart === "area"}
+                onClick={() => setTrendChart("area")}
+                className={`px-2.5 py-1 rounded text-xs ${trendChart === "area" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+              >
+                堆叠面积
+              </button>
+            </div>
+
+            <ResponsiveContainer width="100%" height={220}>
+              {trendChart === "line" ? (
+                <LineChart data={trendChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <YAxis unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <Tooltip formatter={(value) => `${value} 小时`} />
+                  <Legend />
+                  {trendSeries.map((s) => (
+                    <Line key={s.key} type="monotone" dataKey={s.key} stroke={s.color} dot={false} />
+                  ))}
+                </LineChart>
+              ) : (
+                <AreaChart data={trendChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <YAxis unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                  <Tooltip formatter={(value) => `${value} 小时`} />
+                  <Legend />
+                  {trendSeries.map((s) => (
+                    <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} fill={s.color} />
+                  ))}
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
+          </>
         )}
       </section>
     </div>

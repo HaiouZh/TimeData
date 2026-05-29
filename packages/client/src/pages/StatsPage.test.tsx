@@ -3,6 +3,7 @@ import type { Category } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getDateString } from "../lib/time.ts";
 import StatsPage from "./StatsPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,6 +23,12 @@ vi.mock("recharts", () => ({
   Cell: () => createElement("span"),
   BarChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
   Bar: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
+  LineChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
+  Line: () => createElement("span"),
+  AreaChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
+  Area: () => createElement("span"),
+  CartesianGrid: () => createElement("span"),
+  Legend: () => createElement("span"),
   XAxis: () => createElement("span"),
   YAxis: () => createElement("span"),
   Tooltip: () => createElement("span"),
@@ -186,6 +193,68 @@ describe("StatsPage", () => {
 
     // 异常区出现超长记录文案
     expect(host.textContent).toContain("疑似忘停");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("趋势区：预设窗口可切换，折线/堆叠面积可切换", async () => {
+    const today = getDateString(new Date());
+    categoriesState.categories = [
+      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+    ];
+    entriesState.entries = [
+      { id: "tw", categoryId: "work", startTime: `${today}T02:00:00.000Z`, endTime: `${today}T04:00:00.000Z`, note: null, createdAt: `${today}T02:00:00.000Z`, updatedAt: `${today}T02:00:00.000Z` },
+    ];
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    expect(host.textContent).toContain("趋势变化");
+    const preset30 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近30天") as HTMLButtonElement | undefined;
+    const preset7 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近7天") as HTMLButtonElement | undefined;
+    expect(preset7?.getAttribute("aria-pressed")).toBe("true");
+    expect(preset30).toBeTruthy();
+
+    await act(async () => {
+      preset30?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(preset30?.getAttribute("aria-pressed")).toBe("true");
+    expect(preset7?.getAttribute("aria-pressed")).toBe("false");
+
+    const areaBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "堆叠面积") as HTMLButtonElement | undefined;
+    const lineBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "折线") as HTMLButtonElement | undefined;
+    expect(lineBtn?.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => {
+      areaBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(areaBtn?.getAttribute("aria-pressed")).toBe("true");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("趋势区：本期有投入时列出父分类，上期无数据走 noBaseline 文案", async () => {
+    const today = getDateString(new Date());
+    categoriesState.categories = [
+      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+    ];
+    entriesState.entries = [
+      { id: "t1", categoryId: "work", startTime: `${today}T02:00:00.000Z`, endTime: `${today}T04:00:00.000Z`, note: null, createdAt: `${today}T02:00:00.000Z`, updatedAt: `${today}T02:00:00.000Z` },
+    ];
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    expect(host.textContent).toContain("工作");
+    expect(host.textContent).toContain("无对比期数据");
 
     await act(async () => {
       root.unmount();
