@@ -1,10 +1,24 @@
+import type { Category, TimeEntry } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import type { InsightSession } from "./types.js";
-import type { DailyRollup } from "./types.js";
-import { computeDepthMetrics, computeDepthThresholds, computeEntropy, computeImbalance, poolSessions, switchesPerActiveHour } from "./structure.js";
+import {
+  buildStructure,
+  computeDepthMetrics,
+  computeDepthThresholds,
+  computeEntropy,
+  computeImbalance,
+  poolSessions,
+  switchesPerActiveHour,
+} from "./structure.js";
+import type { DailyRollup, InsightSession } from "./types.js";
 
 function session(parentId: string, durationMin: number): InsightSession {
-  return { parentId, startTime: "2026-05-08T02:00:00.000Z", endTime: "2026-05-08T03:00:00.000Z", entryIds: ["e"], durationMin };
+  return {
+    parentId,
+    startTime: "2026-05-08T02:00:00.000Z",
+    endTime: "2026-05-08T03:00:00.000Z",
+    entryIds: ["e"],
+    durationMin,
+  };
 }
 
 describe("poolSessions", () => {
@@ -126,11 +140,21 @@ describe("switchesPerActiveHour", () => {
 
 describe("computeEntropy", () => {
   it("两类均分 H=1bit、归一化100%", () => {
-    expect(computeEntropy({ a: 50, b: 50 })).toEqual({ entropyBits: 1, maxBits: 1, normalizedPct: 100, parentCount: 2 });
+    expect(computeEntropy({ a: 50, b: 50 })).toEqual({
+      entropyBits: 1,
+      maxBits: 1,
+      normalizedPct: 100,
+      parentCount: 2,
+    });
   });
 
   it("四类均分 H=2bit、归一化100%", () => {
-    expect(computeEntropy({ a: 25, b: 25, c: 25, d: 25 })).toEqual({ entropyBits: 2, maxBits: 2, normalizedPct: 100, parentCount: 4 });
+    expect(computeEntropy({ a: 25, b: 25, c: 25, d: 25 })).toEqual({
+      entropyBits: 2,
+      maxBits: 2,
+      normalizedPct: 100,
+      parentCount: 4,
+    });
   });
 
   it("单类 H=0、parentCount=1", () => {
@@ -174,5 +198,84 @@ describe("computeImbalance", () => {
 
   it("当期无记录时不报失衡", () => {
     expect(computeImbalance({}, baseline8)).toEqual([]);
+  });
+});
+
+function cat(id: string, parentId: string | null): Category {
+  return {
+    id,
+    name: id,
+    parentId,
+    color: "#808080",
+    icon: null,
+    sortOrder: 0,
+    isArchived: false,
+    createdAt: "2026-05-01T00:00:00.000Z",
+    updatedAt: "2026-05-01T00:00:00.000Z",
+  };
+}
+function entry(id: string, categoryId: string, start: string, end: string): TimeEntry {
+  return {
+    id,
+    categoryId,
+    startTime: start,
+    endTime: end,
+    note: null,
+    createdAt: "2026-05-01T00:00:00.000Z",
+    updatedAt: "2026-05-01T00:00:00.000Z",
+  };
+}
+
+describe("buildStructure", () => {
+  const cats = [cat("work", null), cat("play", null)];
+  const entries: TimeEntry[] = [
+    entry("e1", "work", "2026-05-08T02:00:00.000Z", "2026-05-08T05:00:00.000Z"),
+    entry("e2", "work", "2026-05-09T02:00:00.000Z", "2026-05-09T02:30:00.000Z"),
+    entry("e3", "play", "2026-05-10T02:00:00.000Z", "2026-05-10T04:00:00.000Z"),
+  ];
+  const input = {
+    periodEntries: entries,
+    baselineEntries: entries,
+    categories: cats,
+    periodFrom: "2026-05-08",
+    periodTo: "2026-05-10",
+    baselineFrom: "2026-05-08",
+    baselineTo: "2026-05-10",
+    sleepCategoryId: null,
+  };
+
+  it("未指定睡眠 → excludedSleep=false，阈值/深度占比/中位正确", () => {
+    const r = buildStructure(input);
+    expect(r.excludedSleep).toBe(false);
+    expect(r.thresholds).toEqual({ deepThresholdMin: 144, fragmentThresholdMin: 84 });
+    expect(r.current.deepRatioPct).toBe(54.5);
+    expect(r.current.medianSessionMin).toBe(120);
+    expect(r.current.deepBlockCount).toBe(1);
+  });
+
+  it("熵覆盖两个父分类、归一化偏高", () => {
+    const r = buildStructure(input);
+    expect(r.entropy.parentCount).toBe(2);
+    expect(r.entropy.normalizedPct).toBeGreaterThan(90);
+    expect(r.entropy.normalizedPct).toBeLessThanOrEqual(100);
+  });
+
+  it("基线天数不足 → 占比失衡空、baselineDaysWithData 反映实际", () => {
+    const r = buildStructure(input);
+    expect(r.imbalances).toEqual([]);
+    expect(r.baselineDaysWithData).toBe(3);
+  });
+
+  it("指定睡眠分类 → excludedSleep=true，排除睡眠会话", () => {
+    const withSleep = {
+      ...input,
+      categories: [...cats, cat("sleep", null)],
+      periodEntries: [...entries, entry("s1", "sleep", "2026-05-08T14:00:00.000Z", "2026-05-08T20:00:00.000Z")],
+      baselineEntries: [...entries, entry("s1", "sleep", "2026-05-08T14:00:00.000Z", "2026-05-08T20:00:00.000Z")],
+      sleepCategoryId: "sleep",
+    };
+    const r = buildStructure(withSleep);
+    expect(r.excludedSleep).toBe(true);
+    expect(r.current.totalMin).toBe(330);
   });
 });

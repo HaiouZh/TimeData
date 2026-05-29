@@ -1,6 +1,9 @@
+import type { Category, TimeEntry } from "@timedata/shared";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { percentile } from "./baseline.js";
 import { INSIGHT_CONSTANTS } from "./constants.js";
+import { buildDailyRollups } from "./dailyRollup.js";
+import { buildSessions } from "./sessions.js";
 import type { DailyRollup, InsightSession } from "./types.js";
 
 export interface DepthThresholds {
@@ -68,8 +71,7 @@ const r1 = (x: number) => Math.round(x * 10) / 10;
 export function poolSessions(sessions: InsightSession[], sleepCategoryId: string | null): InsightSession[] {
   return sessions.filter(
     (s) =>
-      s.durationMin >= INSIGHT_CONSTANTS.minSessionMin &&
-      !(sleepCategoryId !== null && s.parentId === sleepCategoryId),
+      s.durationMin >= INSIGHT_CONSTANTS.minSessionMin && !(sleepCategoryId !== null && s.parentId === sleepCategoryId),
   );
 }
 
@@ -205,4 +207,69 @@ export function computeImbalance(
     });
   }
   return items.sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+}
+
+export interface BuildStructureInput {
+  periodEntries: TimeEntry[];
+  baselineEntries: TimeEntry[];
+  categories: Category[];
+  periodFrom: string;
+  periodTo: string;
+  baselineFrom: string;
+  baselineTo: string;
+  sleepCategoryId: string | null;
+  options?: StructureOptions;
+}
+
+export function buildStructure(input: BuildStructureInput): StructureResult {
+  const {
+    periodEntries,
+    baselineEntries,
+    categories,
+    periodFrom,
+    periodTo,
+    baselineFrom,
+    baselineTo,
+    sleepCategoryId,
+  } = input;
+  const options = input.options ?? {};
+
+  const periodPool = poolSessions(buildSessions(periodEntries, categories), sleepCategoryId);
+  const baselinePool = poolSessions(buildSessions(baselineEntries, categories), sleepCategoryId);
+  const periodRollups = buildDailyRollups(periodEntries, categories, periodFrom, periodTo);
+  const baselineRollups = buildDailyRollups(baselineEntries, categories, baselineFrom, baselineTo);
+
+  const thresholds = computeDepthThresholds(
+    baselinePool.map((s) => s.durationMin),
+    options,
+  );
+  const current = computeDepthMetrics(periodPool, thresholds);
+  const baseline = computeDepthMetrics(baselinePool, thresholds);
+
+  const fragment: FragmentMetrics = {
+    switchesPerActiveHour: switchesPerActiveHour(periodRollups, sleepCategoryId),
+    shortSessionRatioPct:
+      current.sessionCount > 0 ? r1((current.fragmentSessionCount / current.sessionCount) * 100) : 0,
+    baselineSwitchesPerActiveHour: switchesPerActiveHour(baselineRollups, sleepCategoryId),
+    baselineShortSessionRatioPct:
+      baseline.sessionCount > 0 ? r1((baseline.fragmentSessionCount / baseline.sessionCount) * 100) : 0,
+  };
+
+  const periodByParent: Record<string, number> = {};
+  for (const rollup of periodRollups) {
+    for (const [parentId, min] of Object.entries(rollup.byParent)) {
+      periodByParent[parentId] = (periodByParent[parentId] ?? 0) + min;
+    }
+  }
+
+  return {
+    excludedSleep: sleepCategoryId !== null,
+    thresholds,
+    current,
+    baseline,
+    fragment,
+    entropy: computeEntropy(periodByParent),
+    imbalances: computeImbalance(periodByParent, baselineRollups, options),
+    baselineDaysWithData: baselineRollups.filter((r) => r.totalMin > 0).length,
+  };
 }
