@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { getSleepCategoryId, setSleepCategoryId } from "./sleepCategorySetting.js";
-import { STORAGE_KEYS } from "./storageKeys.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -24,8 +23,8 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
 });
 
-afterEach(() => {
-  globalThis.localStorage?.removeItem(STORAGE_KEYS.sleepCategoryId);
+beforeEach(() => {
+  localStorage.clear();
 });
 
 describe("sleepCategorySetting", () => {
