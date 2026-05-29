@@ -1,5 +1,6 @@
 import type { Category, TimeEntry } from "@timedata/shared";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
+import { addDays } from "../time.ts";
 import { percentile } from "./baseline.js";
 import { INSIGHT_CONSTANTS } from "./constants.js";
 import { buildDailyRollups } from "./dailyRollup.js";
@@ -107,6 +108,20 @@ export function computeDepthMetrics(pool: InsightSession[], thresholds: DepthThr
 const toMs = (iso: string) => new Date(iso).getTime();
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const MS_PER_DAY = 86400000;
+
+function clipEntriesToLocalRange(entries: TimeEntry[], fromDate: string, toDate: string): TimeEntry[] {
+  const startMs = toMs(localDateTimeToUtc(`${fromDate}T00:00:00`));
+  const endMs = toMs(localDateTimeToUtc(`${addDays(toDate, 1)}T00:00:00`));
+
+  return entries.flatMap((entry) => {
+    const s = toMs(entry.startTime);
+    const e = toMs(entry.endTime);
+    const clippedS = Math.max(s, startMs);
+    const clippedE = Math.min(e, endMs);
+    if (!Number.isFinite(s) || !Number.isFinite(e) || clippedE <= clippedS) return [];
+    return [{ ...entry, startTime: new Date(clippedS).toISOString(), endTime: new Date(clippedE).toISOString() }];
+  });
+}
 
 function nextLocalHourBoundaryMs(rollupDate: string, currentHour: number): number {
   if (currentHour < 23) {
@@ -234,10 +249,12 @@ export function buildStructure(input: BuildStructureInput): StructureResult {
   } = input;
   const options = input.options ?? {};
 
-  const periodPool = poolSessions(buildSessions(periodEntries, categories), sleepCategoryId);
-  const baselinePool = poolSessions(buildSessions(baselineEntries, categories), sleepCategoryId);
-  const periodRollups = buildDailyRollups(periodEntries, categories, periodFrom, periodTo);
-  const baselineRollups = buildDailyRollups(baselineEntries, categories, baselineFrom, baselineTo);
+  const periodClippedEntries = clipEntriesToLocalRange(periodEntries, periodFrom, periodTo);
+  const baselineClippedEntries = clipEntriesToLocalRange(baselineEntries, baselineFrom, baselineTo);
+  const periodPool = poolSessions(buildSessions(periodClippedEntries, categories), sleepCategoryId);
+  const baselinePool = poolSessions(buildSessions(baselineClippedEntries, categories), sleepCategoryId);
+  const periodRollups = buildDailyRollups(periodClippedEntries, categories, periodFrom, periodTo);
+  const baselineRollups = buildDailyRollups(baselineClippedEntries, categories, baselineFrom, baselineTo);
 
   const thresholds = computeDepthThresholds(
     baselinePool.map((s) => s.durationMin),

@@ -278,4 +278,21 @@ describe("buildStructure", () => {
     expect(r.excludedSleep).toBe(true);
     expect(r.current.totalMin).toBe(330);
   });
+
+  it("会话指标按所选日期裁剪跨窗口记录", () => {
+    const r = buildStructure({
+      periodEntries: [entry("cross", "work", "2026-05-07T15:00:00.000Z", "2026-05-07T18:00:00.000Z")],
+      baselineEntries: [entry("cross", "work", "2026-05-07T15:00:00.000Z", "2026-05-07T18:00:00.000Z")],
+      categories: [cat("work", null)],
+      periodFrom: "2026-05-08",
+      periodTo: "2026-05-08",
+      baselineFrom: "2026-05-08",
+      baselineTo: "2026-05-08",
+      sleepCategoryId: null,
+    });
+    // UTC+8: 2026-05-07T15:00Z~18:00Z = 本地 05-07 23:00 ~ 05-08 02:00；本期 05-08 只应计 120min。
+    expect(r.current.totalMin).toBe(120);
+    expect(r.current.medianSessionMin).toBe(120);
+    expect(r.baseline.totalMin).toBe(120);
+  });
 });
