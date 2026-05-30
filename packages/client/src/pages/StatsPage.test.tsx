@@ -2,6 +2,7 @@ import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDateString } from "../lib/time.ts";
 import StatsPage from "./StatsPage.js";
@@ -13,8 +14,13 @@ const categoriesState = vi.hoisted(() => ({
 }));
 
 const entriesState = vi.hoisted(() => ({ entries: [] as unknown[] }));
+const sleepSettingState = vi.hoisted(() => ({ sleepCategoryId: null as string | null }));
 vi.mock("dexie-react-hooks", () => ({
   useLiveQuery: () => entriesState.entries,
+}));
+
+vi.mock("../lib/sleepCategorySetting.ts", () => ({
+  useSleepCategoryId: () => sleepSettingState.sleepCategoryId,
 }));
 
 vi.mock("recharts", () => ({
@@ -46,6 +52,7 @@ describe("StatsPage", () => {
   beforeEach(() => {
     categoriesState.categories = [];
     entriesState.entries = [];
+    sleepSettingState.sleepCategoryId = null;
     localStorage.clear();
   });
 
@@ -54,7 +61,7 @@ describe("StatsPage", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     expect(host.textContent).toContain("暂无统计数据");
@@ -80,7 +87,7 @@ describe("StatsPage", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     const prevButton = host.querySelector('[aria-label="上一周"]') as HTMLButtonElement | null;
@@ -107,7 +114,7 @@ describe("StatsPage", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     const prevButton = host.querySelector('[aria-label="上一周"]') as HTMLButtonElement | null;
@@ -137,7 +144,7 @@ describe("StatsPage", () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     const dayButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "日");
@@ -198,7 +205,7 @@ describe("StatsPage", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     expect(host.querySelector('[aria-label="睡眠分类"]')).toBeNull();
@@ -228,7 +235,7 @@ describe("StatsPage", () => {
   });
 
   it("总览与作息区展示覆盖率、二级占比和睡眠均值", async () => {
-    localStorage.setItem("timedata_sleep_category_id", "sleep");
+    sleepSettingState.sleepCategoryId = "sleep";
     categoriesState.categories = [
       {
         id: "work",
@@ -288,7 +295,7 @@ describe("StatsPage", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     const dayButton = [...host.querySelectorAll("button")].find((b) => b.textContent === "日");
@@ -346,7 +353,7 @@ describe("StatsPage", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     expect(host.textContent).toContain("趋势变化");
@@ -412,7 +419,7 @@ describe("StatsPage", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     expect(host.textContent).toContain("工作");
@@ -453,7 +460,7 @@ describe("StatsPage", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     await act(async () => {
-      root.render(createElement(StatsPage));
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
     });
 
     expect(host.textContent).toContain("结构诊断");

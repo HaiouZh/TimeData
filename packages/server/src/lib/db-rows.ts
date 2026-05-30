@@ -1,4 +1,4 @@
-import type { Category, TimeEntry } from "@timedata/shared";
+import type { Category, Setting, TimeEntry } from "@timedata/shared";
 
 export interface CountRow {
   count: number;
@@ -31,9 +31,15 @@ export interface EntryRow {
 }
 
 export interface TombstoneRow {
-  table_name: "categories" | "time_entries";
+  table_name: "categories" | "time_entries" | "settings";
   record_id: string;
   deleted_at: string;
+}
+
+export interface SettingRow {
+  key: string;
+  value: string;
+  updated_at: string;
 }
 
 export function rowToCategory(row: CategoryRow): Category {
@@ -58,6 +64,14 @@ export function rowToEntry(row: EntryRow): TimeEntry {
     endTime: row.end_time,
     note: row.note,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function rowToSetting(row: SettingRow): Setting {
+  return {
+    key: row.key,
+    value: row.value,
     updatedAt: row.updated_at,
   };
 }

@@ -39,6 +39,12 @@ beforeEach(async () => {
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
 
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,
@@ -418,5 +424,35 @@ describe("applyChange", () => {
     const seq = db.prepare("SELECT table_name, record_id, action FROM sync_seq").get();
     expect(result).toMatchObject({ status: "applied" });
     expect(seq).toMatchObject({ table_name: "categories", record_id: "test-cat-seq", action: "create" });
+  });
+
+  it("applies settings upsert and delete", () => {
+    const up = applyChange({
+      tableName: "settings",
+      recordId: "sleep.categoryId",
+      action: "update",
+      data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" },
+      timestamp: "2026-05-30T01:00:00.000Z",
+    });
+
+    expect(up.status).toBe("applied");
+    expect(db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").get("sleep.categoryId")).toMatchObject({
+      value: "cat-1",
+      updated_at: "2026-05-30T01:00:00.000Z",
+    });
+
+    const del = applyChange({
+      tableName: "settings",
+      recordId: "sleep.categoryId",
+      action: "delete",
+      data: null,
+      timestamp: "2026-05-30T02:00:00.000Z",
+    });
+
+    expect(del.status).toBe("applied");
+    expect(db.prepare("SELECT key FROM settings WHERE key = ?").get("sleep.categoryId")).toBeUndefined();
+    expect(
+      db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'settings' AND record_id = ?").get("sleep.categoryId"),
+    ).toBeDefined();
   });
 });

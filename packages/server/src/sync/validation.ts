@@ -1,5 +1,5 @@
 import type { Database } from "better-sqlite3";
-import type { Category, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
+import type { Category, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
 import { UtcIsoStringSchema } from "@timedata/shared";
 
 export interface SyncValidationResult {
@@ -121,6 +121,19 @@ function validateEntryChange(db: Database, batchCategories: Map<string, Category
   return outcome(change, "accepted", "applied", "entry change can be applied");
 }
 
+function validateSettingChange(change: SyncChange): SyncPushOutcome {
+  if (change.action === "delete") return outcome(change, "accepted", "applied", "setting delete can be applied");
+  if (!change.data) return outcome(change, "rejected", "missing_payload", "setting upsert requires payload");
+
+  const data = change.data as Setting;
+  if (data.key !== change.recordId) return outcome(change, "rejected", "id_mismatch", "setting key does not match recordId");
+  if (typeof data.value !== "string") return outcome(change, "rejected", "invalid_shape", "setting value must be a string");
+  if (!UtcIsoStringSchema.safeParse(data.updatedAt).success) {
+    return outcome(change, "rejected", "invalid_shape", "setting updatedAt must be UTC ISO");
+  }
+  return outcome(change, "accepted", "applied", "setting change can be applied");
+}
+
 function incomingEntryOverlap(change: SyncChange, previousChanges: SyncChange[]): SyncPushOutcome | null {
   if (change.tableName !== "time_entries" || change.action === "delete" || !change.data) return null;
   const data = change.data as TimeEntry;
@@ -148,6 +161,8 @@ export function validateSyncChanges(db: Database, changes: SyncChange[], options
       result = validateCategoryChange(db, batchCategories, change);
     } else if (change.tableName === "time_entries") {
       result = incomingEntryOverlap(change, previousChanges) ?? validateEntryChange(db, batchCategories, change, options);
+    } else if (change.tableName === "settings") {
+      result = validateSettingChange(change);
     } else {
       result = outcome(change, "rejected", "invalid_shape", "sync tableName is invalid");
     }

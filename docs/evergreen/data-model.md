@@ -9,10 +9,12 @@ covers:
   - packages/server/src/db/connection.ts
   - packages/server/src/db/reset.ts
   - packages/client/src/db/index.ts
+  - packages/client/src/lib/settings/**
+  - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-05-20
+last-reviewed: 2026-05-30
 ---
 
 # 数据模型与契约
@@ -20,12 +22,13 @@ last-reviewed: 2026-05-20
 > 本文是跨端数据契约的"唯一真相"——客户端 Dexie、服务端 SQLite、CLI 看到的字段都来自这里。
 > 想看静态类型，去 `packages/shared/src/types.ts`；想看运行时边界校验，去 `packages/shared/src/schemas.ts`。本文档解释**字段语义、约定、约束**。
 
-## 1. 三张主表
+## 1. 主表
 
 | 实体 | TS 类型 | SQLite 表 | Dexie 表 |
 |---|---|---|---|
 | 分类 | `Category` | `categories` | `categories` |
 | 时间记录 | `TimeEntry` | `time_entries` | `timeEntries` |
+| 同步设置 | `Setting` | `settings` | `settings` |
 | 同步日志（客户端用） | `SyncLogEntry` | — | `syncLog` |
 
 服务端还有两张辅助表：
@@ -43,6 +46,8 @@ last-reviewed: 2026-05-20
 | 实体 | Dexie 表 | 作用 |
 |---|---|---|
 | 自动备份 | `autoBackups` | 客户端本地的滚动备份，保留最近 7 份（见 `backup.md`） |
+
+`settings` 是同步键值表，当前用于跨设备保存睡眠分类等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`。
 
 服务端后台洞察的 `Admin*Response` 类型也在 `packages/shared/src/types.ts`。这些类型是 `/api/admin/*` 中概览、记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析的只读响应契约，不对应新表，也不增加写入路径。受控维护端点 `/api/admin/sync-logs` 操作既有 `sync_logs` 表，不属于 `Admin*Response` 契约。
 
@@ -106,7 +111,7 @@ last-reviewed: 2026-05-20
 ```ts
 {
   id: string;
-  tableName: "categories" | "time_entries";
+  tableName: "categories" | "time_entries" | "settings";
   recordId: string;
   action: "create" | "update" | "delete";
   timestamp: string;   // ISO，写日志当时的时间
@@ -116,7 +121,7 @@ last-reviewed: 2026-05-20
 
 客户端 Dexie `syncLog` 使用 `[tableName+synced]` 复合索引。新写入路径（`recordSyncLog`、分类批量写日志等）写 `synced: 0`，标记完成写 `synced: 1`；运行时 `SyncLogEntrySchema` 只接受 `0 | 1`。
 
-每次本地写入业务表（`categories` / `timeEntries`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改业务表却忘了写 syncLog 是常见 bug**。业务表写入与对应 `syncLog` 写入必须在同一个 Dexie transaction 内完成；如果同步日志写入失败，业务表变更也要回滚，避免本地数据与待同步队列不一致。
+每次本地写入同步实体（`categories` / `timeEntries` / `settings`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改同步实体却忘了写 syncLog 是常见 bug**。实体写入与对应 `syncLog` 写入必须在同一个 Dexie transaction 内完成；如果同步日志写入失败，实体变更也要回滚，避免本地数据与待同步队列不一致。
 
 ## 5. 同步推送：`SyncChange` / `SyncPushOutcome`
 
@@ -127,7 +132,9 @@ type SyncChange =
   | { tableName: "categories"; action: "create" | "update"; recordId: string; data: Category; timestamp: string }
   | { tableName: "categories"; action: "delete"; recordId: string; data: null; timestamp: string }
   | { tableName: "time_entries"; action: "create" | "update"; recordId: string; data: TimeEntry; timestamp: string }
-  | { tableName: "time_entries"; action: "delete"; recordId: string; data: null; timestamp: string };
+  | { tableName: "time_entries"; action: "delete"; recordId: string; data: null; timestamp: string }
+  | { tableName: "settings"; action: "create" | "update"; recordId: string; data: Setting; timestamp: string }
+  | { tableName: "settings"; action: "delete"; recordId: string; data: null; timestamp: string };
 ```
 
 服务端对每条 change 输出一个 `SyncPushOutcome`：
@@ -164,7 +171,7 @@ type SyncChange =
 
 ### 5.1 全量同步兜底契约
 
-全量推送兜底不新增表，也不改变 `Category` / `TimeEntry` 字段契约。它复用完整的 `Category[]` 和 `TimeEntry[]` 请求体，服务端在导入前校验 ID 唯一、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠。
+全量推送兜底复用完整的 `Category[]`、`TimeEntry[]` 和可选 `Setting[]` 请求体。服务端在导入前校验分类/记录 ID 唯一、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠；`settings` 缺省时按旧客户端兼容路径保留服务端现有设置，只有请求显式带 `settings` 时才清空重建设置表。
 
 相关共享类型只描述同步摘要和确认流程：
 
@@ -180,7 +187,7 @@ type SyncChange =
 
 ### 5.2 增量同步序列契约
 
-服务端 `sync_seq` 是同步 cursor 的权威来源：每次 `applyChange()` 成功写入业务数据后追加一行；CLI `log` 成功创建记录后也追加 `time_entries/create` 序列；`force-push` 全量覆盖服务器时清空并按导入后的 categories/timeEntries 重建序列。每次序列推进都会刷新 `sync_state` 的 commit hash，供 `/api/sync/status` 轻量读取。
+服务端 `sync_seq` 是同步 cursor 的权威来源：每次 `applyChange()` 成功写入同步实体后追加一行；CLI `log` 成功创建记录后也追加 `time_entries/create` 序列；`force-push` 全量覆盖服务器时清空并按导入后的 categories/timeEntries/settings 重建序列。每次序列推进都会刷新 `sync_state` 的 commit hash，供 `/api/sync/status` 轻量读取。
 
 共享契约：
 
@@ -189,7 +196,7 @@ type SyncChange =
 - `SyncPullResponse.latestSeq?: number | null`：服务端当前最新序列；客户端只前进、不回退本地 `timedata_last_synced_seq`；运行时 schema 只接受有限非负整数、`null` 或缺省。
 - `SyncDatasetStatus.latestSeq?: number | null`：服务端状态摘要里的当前最新序列，用于普通同步 meta 预检和诊断展示，避免为了拿序列再多一次 round trip；meta no-op 同步会用它推进本地 `timedata_last_synced_seq`；状态响应里的 `categoryCount` / `entryCount` 同样是有限非负整数。
 
-`sync_seq` 不改变 `Category` / `TimeEntry` 字段，也不是用户可见历史记录；它只表示服务端接收并落库的同步顺序。
+`sync_seq` 不改变 `Category` / `TimeEntry` / `Setting` 字段，也不是用户可见历史记录；它只表示服务端接收并落库的同步顺序。
 
 ## 6. 时间字段约定
 
@@ -214,7 +221,7 @@ type SyncChange =
 - CLI 输入仍是本地日期和 `HH:mm`，服务端在 `entry-service.ts` 内部转换：写入时 `localDateTimeToUtc()` 转为 UTC 存储，返回时 `utcToLocalDateTime()` 转回本地时间给 CLI 展示。
 - 展示层函数（`formatTime`、`formatDateTimeRange`、`buildTimeSlots`）统一接受 UTC 输入，内部转换后展示本地时间（`packages/client/src/lib/time.ts`）。
 
-迁移方式：数据重置（不转换历史数据）。服务端首次启动检测 `app_metadata.utc_reset_v1` 标记，若不存在则清空旧业务数据并写入默认分类；客户端 Dexie 当前只保留单一 v1 schema。Backup 使用当前唯一格式 `timedata.backup`（`timeFormat: "utc"`）。
+迁移方式：数据重置（不转换历史数据）。服务端首次启动检测 `app_metadata.utc_reset_v1` 标记，若不存在则清空旧业务数据并写入默认分类；客户端 Dexie 当前是 v2 schema，v2 新增 `settings` store。Backup 使用当前唯一格式 `timedata.backup`（`timeFormat: "utc"`）。
 
 ## 7. 默认分类预设
 

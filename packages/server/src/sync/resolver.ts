@@ -1,4 +1,4 @@
-import type { Category, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
+import type { Category, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import { getDb } from "../db/connection.js";
 import type { CategoryRow, EntryRow } from "../lib/db-rows.js";
@@ -6,6 +6,7 @@ import { recordSeq } from "./seq.js";
 
 type CategoryChange = Extract<SyncChange, { tableName: "categories" }>;
 type EntryChange = Extract<SyncChange, { tableName: "time_entries" }>;
+type SettingChange = Extract<SyncChange, { tableName: "settings" }>;
 
 export interface ApplyChangeResult {
   recordId: string;
@@ -21,8 +22,14 @@ export interface ApplyChangeResult {
 
 export function applyChange(change: SyncChange): ApplyChangeResult {
   const db = getDb();
-  const changeResult =
-    change.tableName === "categories" ? applyCategoryChange(db, change) : applyEntryChange(db, change);
+  let changeResult: ApplyChangeResult;
+  if (change.tableName === "categories") {
+    changeResult = applyCategoryChange(db, change);
+  } else if (change.tableName === "time_entries") {
+    changeResult = applyEntryChange(db, change);
+  } else {
+    changeResult = applySettingChange(db, change);
+  }
 
   // 只有成功写入才推进 seq cursor，skipped 的变更不占 seq 位置（供上游判断应用顺序）。
   if (changeResult.status === "applied") {
@@ -30,6 +37,25 @@ export function applyChange(change: SyncChange): ApplyChangeResult {
   }
 
   return changeResult;
+}
+
+function applySettingChange(db: Database, change: SettingChange): ApplyChangeResult {
+  if (change.action === "delete") {
+    db.prepare("DELETE FROM settings WHERE key = ?").run(change.recordId);
+    db.prepare(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
+      VALUES ('settings', ?, ?)
+      ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
+    `).run(change.recordId, change.timestamp);
+    return result(change, "applied", "deleted setting");
+  }
+
+  const data: Setting = change.data;
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(data.key, data.value, change.timestamp);
+  return result(change, "applied", "upserted setting");
 }
 
 function applyCategoryChange(db: Database, change: CategoryChange): ApplyChangeResult {

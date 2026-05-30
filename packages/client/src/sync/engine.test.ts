@@ -65,6 +65,7 @@ beforeEach(async () => {
   await db.timeEntries.clear();
   await db.syncLog.clear();
   await db.categories.clear();
+  await db.settings.clear();
   localStorage.clear();
   apiFetchMock.mockReset();
 });
@@ -221,6 +222,7 @@ describe("syncForcePushToServer", () => {
       updatedAt: "2026-05-08T09:00:00",
     });
     await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
+    await db.settings.add({ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-08T08:30:00.000Z" });
 
     apiFetchMock
       .mockResolvedValueOnce({
@@ -248,6 +250,7 @@ describe("syncForcePushToServer", () => {
     const forcePushBody = JSON.parse(apiFetchMock.mock.calls[1][1].body);
     expect(forcePushBody.categories).toHaveLength(1);
     expect(forcePushBody.timeEntries).toHaveLength(1);
+    expect(forcePushBody.settings).toEqual([{ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-08T08:30:00.000Z" }]);
     expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, backupId: "sync_force_push-1" });
     expect(await db.syncLog.count()).toBe(0);
     expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-08T12:01:00.000Z");
@@ -256,6 +259,49 @@ describe("syncForcePushToServer", () => {
 });
 
 describe("syncPush", () => {
+  it("pushes settings changes from syncLog", async () => {
+    await db.settings.add({ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-log-1",
+      tableName: "settings",
+      recordId: "sleep.categoryId",
+      action: "update",
+      timestamp: "2026-05-30T00:30:00.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "applied",
+          incomingTimestamp: "2026-05-30T00:30:00.000Z",
+        },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-05-30T01:00:00.000Z",
+    });
+
+    await expect(syncPush()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    expect(pushBody.changes).toEqual([
+      {
+        tableName: "settings",
+        recordId: "sleep.categoryId",
+        action: "update",
+        data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" },
+        timestamp: "2026-05-30T00:30:00.000Z",
+      },
+    ]);
+    await expect(db.syncLog.get("setting-log-1")).resolves.toMatchObject({ synced: 1 });
+  });
+
   it("handles 409 push outcomes without losing accepted sync logs", async () => {
     const acceptedLogId = "entry-accepted-create-00";
     const conflictLogId = "entry-conflict-create-30";
@@ -664,6 +710,40 @@ describe("syncPull", () => {
     await syncPull();
 
     expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T08:00:00.000Z");
+  });
+
+  it("applies settings upsert and delete changes from pull", async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-05-30T01:00:00.000Z",
+      changes: [
+        {
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" },
+          timestamp: "2026-05-30T00:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "cat-1" });
+
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-05-30T02:00:00.000Z",
+      changes: [
+        {
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-30T02:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.settings.get("sleep.categoryId")).resolves.toBeUndefined();
   });
 
   it("skips duplicate boundary records during incremental pull", async () => {
@@ -1135,6 +1215,50 @@ describe("syncPullRecent", () => {
     await syncPullRecent(2);
 
     expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T09:30:00.000Z");
+  });
+
+  it("applies remote settings unless the same key has a pending local change", async () => {
+    await db.settings.add({ key: "sleep.categoryId", value: "local-cat", updatedAt: "2026-05-30T00:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-log-1",
+      tableName: "settings",
+      recordId: "sleep.categoryId",
+      action: "update",
+      timestamp: "2026-05-30T00:30:00.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-05-30T01:00:00.000Z",
+      changes: [
+        {
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          data: { key: "sleep.categoryId", value: "remote-cat", updatedAt: "2026-05-30T01:00:00.000Z" },
+          timestamp: "2026-05-30T01:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 0, conflicts: [] });
+    await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "local-cat" });
+
+    await db.syncLog.clear();
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-05-30T02:00:00.000Z",
+      changes: [
+        {
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          data: { key: "sleep.categoryId", value: "remote-cat", updatedAt: "2026-05-30T02:00:00.000Z" },
+          timestamp: "2026-05-30T02:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 1, conflicts: [] });
+    await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "remote-cat" });
   });
 
   it("detects conflicts only when local has unsynced changes", async () => {
@@ -2103,6 +2227,7 @@ describe("syncForceReplace", () => {
       createdAt: "2026-05-07T08:00:00.000Z",
       updatedAt: "2026-05-07T09:00:00.000Z",
     });
+    await db.settings.add({ key: "sleep.categoryId", value: "local-cat", updatedAt: "2026-05-07T09:00:00.000Z" });
 
     apiFetchMock.mockResolvedValue({
       serverTime: "2026-05-07T13:00:00.000Z",
@@ -2140,12 +2265,19 @@ describe("syncForceReplace", () => {
           },
           timestamp: "2026-05-07T09:00:00.000Z",
         },
+        {
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          data: { key: "sleep.categoryId", value: "server-cat", updatedAt: "2026-05-07T09:00:00.000Z" },
+          timestamp: "2026-05-07T09:00:00.000Z",
+        },
       ],
     });
 
     const count = await syncForceReplace();
 
-    expect(count).toBe(2);
+    expect(count).toBe(3);
     await expect(db.timeEntries.get("local-only")).resolves.toBeUndefined();
     await expect(db.timeEntries.get("entry-server")).resolves.toMatchObject({
       note: "from server",
@@ -2153,6 +2285,7 @@ describe("syncForceReplace", () => {
     await expect(db.categories.get("cat-server")).resolves.toMatchObject({
       name: "Server Cat",
     });
+    await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "server-cat" });
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ timeoutMs: 30_000 }));
     expect(await db.syncLog.count()).toBe(0);
     expect(getLastSyncedSeq()).toBe(42);

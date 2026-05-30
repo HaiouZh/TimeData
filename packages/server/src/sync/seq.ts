@@ -4,7 +4,7 @@ import { markCommitHashDirty } from "./state.js";
 
 export interface SeqRecord {
   id: number;
-  tableName: "categories" | "time_entries";
+  tableName: "categories" | "time_entries" | "settings";
   recordId: string;
   action: "create" | "update" | "delete";
 }

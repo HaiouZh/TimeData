@@ -1,6 +1,7 @@
 import { localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { useInView } from "../hooks/useInView.ts";
@@ -8,7 +9,7 @@ import { memoAnomalies, memoOverview, memoRoutine, memoStructure, memoTrend } fr
 import { INSIGHT_CONSTANTS } from "../lib/insights/constants.ts";
 import { type buildRoutineInsights, formatClockFromMinute } from "../lib/insights/routine.ts";
 import { type ParentTrend, resolveTrendWindow, type TrendWindowSpec } from "../lib/insights/trends.ts";
-import { getSleepCategoryId } from "../lib/sleepCategorySetting.ts";
+import { useSleepCategoryId } from "../lib/sleepCategorySetting.ts";
 import {
   buildStatsRangeForDate,
   formatStatsRangeLabel,
@@ -117,7 +118,7 @@ export default function StatsPage() {
 
   const parentNameById = useMemo(() => new Map(parentCategories.map((c) => [c.id, c.name])), [parentCategories]);
 
-  const [sleepCategoryId] = useState<string | null>(() => getSleepCategoryId());
+  const sleepCategoryId = useSleepCategoryId();
 
   const overview = useMemo(
     () =>
@@ -353,9 +354,9 @@ export default function StatsPage() {
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-slate-200">作息</h3>
           {sleepCategoryId === null && (
-            <a href="/settings/insights" className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
+            <Link to="/settings/insights" className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
               去设置
-            </a>
+            </Link>
           )}
         </div>
         {sleepCategoryId === null ? (

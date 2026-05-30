@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import type {
   CategorySchema,
+  SettingSchema,
   SyncChangeSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
@@ -15,6 +16,8 @@ import type {
 } from "./schemas.js";
 
 export type Category = z.infer<typeof CategorySchema>;
+
+export type Setting = z.infer<typeof SettingSchema>;
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 
@@ -78,6 +81,7 @@ export interface SyncForcePushPrepareResponse {
 export interface SyncForcePushResponse {
   importedCategories: number;
   importedTimeEntries: number;
+  importedSettings?: number;
   backupId: string;
   serverTime: string;
   latestSeq?: number | null;

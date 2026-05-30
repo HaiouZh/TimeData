@@ -24,6 +24,12 @@ export const CategorySchema = z.object({
   updatedAt: UtcIsoStringSchema,
 });
 
+export const SettingSchema = z.object({
+  key: NonEmptyTrimmedStringSchema,
+  value: z.string(),
+  updatedAt: UtcIsoStringSchema,
+});
+
 export const TimeEntrySchema = z
   .object({
     id: NonEmptyTrimmedStringSchema,
@@ -41,7 +47,7 @@ export const TimeEntrySchema = z
 
 export const SyncLogEntrySchema = z.object({
   id: z.string(),
-  tableName: z.enum(["categories", "time_entries"]),
+  tableName: z.enum(["categories", "time_entries", "settings"]),
   recordId: z.string(),
   action: z.enum(["create", "update", "delete"]),
   timestamp: UtcIsoStringSchema,
@@ -77,11 +83,25 @@ const TimeEntryDeleteChangeSchema = BaseChangeFields.extend({
   data: z.null(),
 });
 
+const SettingUpsertChangeSchema = BaseChangeFields.extend({
+  tableName: z.literal("settings"),
+  action: z.enum(["create", "update"]),
+  data: SettingSchema,
+});
+
+const SettingDeleteChangeSchema = BaseChangeFields.extend({
+  tableName: z.literal("settings"),
+  action: z.literal("delete"),
+  data: z.null(),
+});
+
 export const SyncChangeSchema = z.union([
   CategoryUpsertChangeSchema,
   CategoryDeleteChangeSchema,
   TimeEntryUpsertChangeSchema,
   TimeEntryDeleteChangeSchema,
+  SettingUpsertChangeSchema,
+  SettingDeleteChangeSchema,
 ]);
 
 export const SyncPushReasonCodeSchema = z.enum([
@@ -119,6 +139,7 @@ export const SyncForcePushRequestSchema = z.object({
   confirmationPhrase: z.literal("OVERWRITE_SERVER"),
   categories: z.array(CategorySchema),
   timeEntries: z.array(TimeEntrySchema),
+  settings: z.array(SettingSchema).optional(),
 });
 
 export const SyncStatusResponseSchema = z.object({

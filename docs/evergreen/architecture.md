@@ -9,6 +9,8 @@ covers:
   - packages/client/src/pages/stats/**
   - packages/client/src/hooks/useInView.ts
   - packages/client/src/lib/insights/**
+  - packages/client/src/lib/settings/**
+  - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
   - packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx
@@ -92,7 +94,7 @@ TimeData 是个人时间记录工具：
 1. **预检**：先读取本地 `categories` / `timeEntries` / 未同步 `syncLog` 数量，再通过 `/api/sync/status` 读取云端 meta 摘要。
 2. **No-op**：如果本地无未同步变更，且本地/云端 `categoryCount`、`entryCount`、`lastUpdatedAt` 一致，直接返回“无需同步”，不 push、不 pull、不创建本地自动备份，也不触发服务端 `sync_push` 备份。
 3. **Pull-only repair**：如果本地无未同步变更但 meta 不一致，先创建本地自动备份，再拉最近 7 天服务器变更 → 本地。
-4. **真实同步**：如果本地有未同步变更，先创建本地自动备份，再 push 未同步的本地变更 → 服务器（合并、压缩、带分类依赖），然后拉最近 7 天服务器变更。
+4. **真实同步**：如果本地有未同步变更，先创建本地自动备份，再 push 未同步的本地变更 → 服务器（合并、压缩、带分类依赖，settings 走同一同步管线），然后拉最近 7 天服务器变更。
 5. 冲突交给用户决定 `keep_local` / `use_remote`。
 6. 每次同步把摘要写到服务器 `sync_logs` 表（best-effort，失败不影响同步）。`localStorage.timedata_legacy_snapshot_sync="1"` 可临时回退到旧的全量快照比较路径。
 
@@ -164,7 +166,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 
 ## 5. 关键约定
 
-1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间（严格 `YYYY-MM-DDTHH:mm:ss.sssZ`）、`#RRGGBB` 色值、整数排序、非空字符串、`SyncLogEntry.synced` 的 `0 | 1` 数字状态、pull / force-push 请求形状等输入。同步 cursor 和计数字段（`baseSeq`、`sinceSeq`、`latestSeq`、`categoryCount`、`entryCount`）必须是有限非负整数或按契约允许 `null` / 缺省；后台洞察响应里的分页、计数、备份大小和备份 ID / 文件名也由 shared runtime schema 收紧。改这些 = 改公开 API。同步契约还承载本地优先诊断字段（如 `overriddenRecordIds`、`backupId`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
+1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`Setting`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间（严格 `YYYY-MM-DDTHH:mm:ss.sssZ`）、`#RRGGBB` 色值、整数排序、非空字符串、`Setting.value` 字符串值、`SyncLogEntry.synced` 的 `0 | 1` 数字状态、pull / force-push 请求形状等输入。同步 cursor 和计数字段（`baseSeq`、`sinceSeq`、`latestSeq`、`categoryCount`、`entryCount`）必须是有限非负整数或按契约允许 `null` / 缺省；后台洞察响应里的分页、计数、备份大小和备份 ID / 文件名也由 shared runtime schema 收紧。改这些 = 改公开 API。同步契约还承载本地优先诊断字段（如 `overriddenRecordIds`、`backupId`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
 2. **时间用 ISO 字符串**：服务端 SQLite 的 `start_time` / `end_time` / `*_at` 都是字符串字段，比较直接靠字典序。Dexie 同样存字符串。
 3. **写入路径只有两条**：用户在 Web 端通过组件 → Dexie；脚本/AI 通过 CLI → HTTP API → SQLite。**不存在第三条**。服务器不再暴露 JSONL/CSV 导入写库接口；`GET /api/export` 只读，CSV 导出会对公式样式单元格（含前导空白后出现 `= + - @`）加单引号防护；`POST /api/data/reset` 是人工维护入口，必须先调用 `/api/data/reset/prepare` 拿短时确认 token 并提交确认短语。
 4. **服务端是权威**：时间段重叠、分类存在、archived、时间格式合法等的最终判定都在 `packages/server/src/sync/validation.ts` 和 `packages/server/src/lib/entry-service.ts`。同步校验里需要按应用时区比较当前时间的逻辑统一走 `packages/server/src/lib/timezone.ts`；client / CLI 的同名校验只是为了体验，不能让 server 跳过。
@@ -181,7 +183,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 | 模块 | 关键入口 | 进一步阅读 |
 |---|---|---|
 | 数据模型 | `packages/shared/src/types.ts`、`packages/shared/src/schemas.ts` | [`data-model.md`](./data-model.md) |
-| 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/` | [`sync.md`](./sync.md) |
+| 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/`、`packages/client/src/lib/settings/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
 | 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/hooks/useInView.ts`、`packages/client/src/lib/insights/`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx` | `cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率 |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |

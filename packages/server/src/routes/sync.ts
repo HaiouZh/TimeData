@@ -17,10 +17,11 @@ import type {
   SyncPushOutcome,
   SyncPushResponse,
   SyncStatusResponse,
+  Setting,
   TimeEntry,
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
-import { type CategoryRow, type CountRow, type EntryRow, type MaxRow, type TombstoneRow, rowToCategory, rowToEntry } from "../lib/db-rows.js";
+import { type CategoryRow, type CountRow, type EntryRow, type MaxRow, type SettingRow, type TombstoneRow, rowToCategory, rowToEntry, rowToSetting } from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup, markServerBackupProtected } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
@@ -76,11 +77,14 @@ function validateForcePushPayload(body: SyncForcePushRequest): string | null {
   return validateForcePushBusinessRules(body.categories, body.timeEntries);
 }
 
-function replaceServerData(db: Database, categories: Category[], timeEntries: TimeEntry[]): void {
+function replaceServerData(db: Database, categories: Category[], timeEntries: TimeEntry[], settings?: Setting[]): void {
   db.prepare("DELETE FROM sync_tombstones").run();
   db.prepare("DELETE FROM sync_seq").run();
   db.prepare("DELETE FROM time_entries").run();
   db.prepare("DELETE FROM categories").run();
+  if (settings !== undefined) {
+    db.prepare("DELETE FROM settings").run();
+  }
 
   const insertCategory = db.prepare(`
     INSERT INTO categories (id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at)
@@ -90,6 +94,7 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
     INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
+  const insertSetting = db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)");
 
   const orderedCategories = [...categories].sort((a, b) => {
     if (a.parentId === null && b.parentId !== null) return -1;
@@ -117,6 +122,13 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
     recordSeqWithDb(db, "time_entries", entry.id, "create");
   }
 
+  if (settings !== undefined) {
+    for (const setting of settings) {
+      insertSetting.run(setting.key, setting.value, setting.updatedAt);
+      recordSeqWithDb(db, "settings", setting.key, "create");
+    }
+  }
+
   computeAndPersistCommitHash(db);
 }
 
@@ -125,7 +137,8 @@ function readServerStatus(db: Database): SyncStatusResponse {
   const entryCount = (db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as CountRow).count;
   const latestCategory = (db.prepare("SELECT MAX(updated_at) as value FROM categories").get() as MaxRow).value;
   const latestEntry = (db.prepare("SELECT MAX(updated_at) as value FROM time_entries").get() as MaxRow).value;
-  const lastUpdatedAt = [latestCategory, latestEntry].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
+  const latestSetting = (db.prepare("SELECT MAX(updated_at) as value FROM settings").get() as MaxRow).value;
+  const lastUpdatedAt = [latestCategory, latestEntry, latestSetting].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 
   const commitState = getCommitHash(db);
 
@@ -284,7 +297,7 @@ sync.post("/force-push", async (c) => {
 
   const backup = await createServerBackup("sync_force_push");
   const replaceAll = db.transaction(() => {
-    replaceServerData(db, body.categories, body.timeEntries);
+    replaceServerData(db, body.categories, body.timeEntries, body.settings);
   });
 
   try {
@@ -305,6 +318,7 @@ sync.post("/force-push", async (c) => {
   const response: SyncForcePushResponse = {
     importedCategories: body.categories.length,
     importedTimeEntries: body.timeEntries.length,
+    importedSettings: body.settings?.length ?? 0,
     backupId: backup.id,
     serverTime: new Date().toISOString(),
     latestSeq: getLatestSeq(),
@@ -315,7 +329,8 @@ sync.post("/force-push", async (c) => {
     localSummary: tokenRecord.record.localSummary,
     importedCategories: response.importedCategories,
     importedTimeEntries: response.importedTimeEntries,
-  }, body.categories.length + body.timeEntries.length);
+    importedSettings: response.importedSettings,
+  }, body.categories.length + body.timeEntries.length + (body.settings?.length ?? 0));
 
   return c.json(response);
 });
@@ -423,6 +438,16 @@ function changeFromEntryRow(r: EntryRow): SyncChange {
   };
 }
 
+function changeFromSettingRow(r: SettingRow): SyncChange {
+  return {
+    tableName: "settings",
+    recordId: r.key,
+    action: "update",
+    data: rowToSetting(r),
+    timestamp: r.updated_at,
+  };
+}
+
 function changeFromTombstoneRow(r: TombstoneRow): SyncChange {
   return {
     tableName: r.table_name,
@@ -446,10 +471,12 @@ function sortChanges(changes: SyncChange[]): void {
 function readChangesSinceTimestamp(db: Database, since: string): SyncChange[] {
   const categories = db.prepare("SELECT * FROM categories WHERE updated_at >= ?").all(since) as CategoryRow[];
   const entries = db.prepare("SELECT * FROM time_entries WHERE updated_at >= ?").all(since) as EntryRow[];
+  const settings = db.prepare("SELECT * FROM settings WHERE updated_at >= ?").all(since) as SettingRow[];
   const tombstones = db.prepare("SELECT * FROM sync_tombstones WHERE deleted_at >= ?").all(since) as TombstoneRow[];
   const changes = [
     ...categories.map(changeFromCategoryRow),
     ...entries.map(changeFromEntryRow),
+    ...settings.map(changeFromSettingRow),
     ...tombstones.map(changeFromTombstoneRow),
   ];
   sortChanges(changes);
@@ -468,6 +495,12 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[
     if (seq.tableName === "categories") {
       const row = db.prepare("SELECT * FROM categories WHERE id = ?").get(seq.recordId) as CategoryRow | undefined;
       if (row) changes.push(changeFromCategoryRow(row));
+      continue;
+    }
+
+    if (seq.tableName === "settings") {
+      const row = db.prepare("SELECT * FROM settings WHERE key = ?").get(seq.recordId) as SettingRow | undefined;
+      if (row) changes.push(changeFromSettingRow(row));
       continue;
     }
 
@@ -503,6 +536,7 @@ sync.post("/pull", async (c) => {
     latestSeq: response.latestSeq,
     categoryIds: changes.filter((c) => c.tableName === "categories").map((c) => c.recordId),
     entryIds: changes.filter((c) => c.tableName === "time_entries").map((c) => c.recordId),
+    settingKeys: changes.filter((c) => c.tableName === "settings").map((c) => c.recordId),
   }, changes.length);
 
   return c.json(response);

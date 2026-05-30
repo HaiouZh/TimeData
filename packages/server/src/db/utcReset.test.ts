@@ -22,6 +22,11 @@ function makeTestDb(): Database.Database {
       start_time TEXT NOT NULL, end_time TEXT NOT NULL, note TEXT,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL DEFAULT (datetime('now')),
       device TEXT, action TEXT NOT NULL, detail TEXT, record_count INTEGER DEFAULT 0

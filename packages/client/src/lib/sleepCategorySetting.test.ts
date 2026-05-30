@@ -1,43 +1,29 @@
+import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { getSleepCategoryId, setSleepCategoryId } from "./sleepCategorySetting.js";
+import { db } from "../db/index.js";
+import { getSleepCategoryId, SLEEP_CATEGORY_KEY, setSleepCategoryId } from "./sleepCategorySetting.js";
 
-const localStorageMock = (() => {
-  let store = new Map<string, string>();
-
-  return {
-    clear: () => {
-      store = new Map<string, string>();
-    },
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-  };
-})();
-
-Object.defineProperty(globalThis, "localStorage", {
-  value: localStorageMock,
-  configurable: true,
-});
-
-beforeEach(() => {
-  localStorage.clear();
+beforeEach(async () => {
+  await db.settings.clear();
+  await db.syncLog.clear();
 });
 
 describe("sleepCategorySetting", () => {
-  it("默认未指定返回 null", () => {
-    expect(getSleepCategoryId()).toBeNull();
+  it("默认未指定返回 null", async () => {
+    await expect(getSleepCategoryId()).resolves.toBeNull();
   });
-  it("写入后可读回", () => {
-    setSleepCategoryId("cat-sleep");
-    expect(getSleepCategoryId()).toBe("cat-sleep");
+
+  it("写入后可读回", async () => {
+    await setSleepCategoryId("cat-sleep");
+
+    await expect(getSleepCategoryId()).resolves.toBe("cat-sleep");
+    await expect(db.settings.get(SLEEP_CATEGORY_KEY)).resolves.toMatchObject({ value: "cat-sleep" });
   });
-  it("传 null 清除设置", () => {
-    setSleepCategoryId("cat-sleep");
-    setSleepCategoryId(null);
-    expect(getSleepCategoryId()).toBeNull();
+
+  it("传 null 清除设置", async () => {
+    await setSleepCategoryId("cat-sleep");
+    await setSleepCategoryId(null);
+
+    await expect(getSleepCategoryId()).resolves.toBeNull();
   });
 });

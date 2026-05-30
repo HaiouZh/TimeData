@@ -2,15 +2,25 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { AppUpdateProvider } from "./appUpdate.tsx";
-import { seedDefaultCategories } from "./db/index.ts";
+import { migrateLocalSettingsToDexie, seedDefaultCategories } from "./db/index.ts";
 import "./index.css";
 
-seedDefaultCategories();
+async function bootstrap(): Promise<void> {
+  // 初始化（建默认分类、迁移本地设置）失败不应阻塞渲染，否则 IndexedDB 不可用时整页白屏。
+  try {
+    await seedDefaultCategories();
+    await migrateLocalSettingsToDexie();
+  } catch (error) {
+    console.error("[bootstrap] 初始化失败，仍继续渲染:", error);
+  }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <AppUpdateProvider>
-      <App />
-    </AppUpdateProvider>
-  </StrictMode>,
-);
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <AppUpdateProvider>
+        <App />
+      </AppUpdateProvider>
+    </StrictMode>,
+  );
+}
+
+void bootstrap();

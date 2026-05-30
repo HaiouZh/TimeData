@@ -7,7 +7,7 @@ export type PushSeqStrategy =
   | "local_wins_non_fast_forward";
 
 export interface PushSeqRecord {
-  tableName: "categories" | "time_entries";
+  tableName: "categories" | "time_entries" | "settings";
   recordId: string;
 }
 

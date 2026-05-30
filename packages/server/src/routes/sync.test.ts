@@ -34,6 +34,12 @@ function createSchema() {
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
 
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -390,6 +396,35 @@ describe("sync route", () => {
     });
     expect(db.prepare("SELECT action FROM sync_logs WHERE action = ?").get("force_push_applied")).toMatchObject({
       action: "force_push_applied",
+    });
+  });
+
+  it("force-push imports settings when provided and reports their count", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, lastUpdatedAt: "2026-05-30T00:00:00.000Z" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+        settings: [{ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ importedCategories: 0, importedTimeEntries: 0, importedSettings: 1, latestSeq: 1 });
+    expect(db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").get("sleep.categoryId")).toMatchObject({
+      value: "cat-1",
+      updated_at: "2026-05-30T00:00:00.000Z",
     });
   });
 
@@ -844,6 +879,30 @@ describe("sync route", () => {
     });
   });
 
+  it("includes settings in pull responses by timestamp", async () => {
+    db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+      "sleep.categoryId",
+      "cat-1",
+      "2026-05-30T00:00:00.000Z",
+    );
+
+    const res = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lastSyncedAt: "2026-05-29T00:00:00.000Z" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.changes).toContainEqual({
+      tableName: "settings",
+      recordId: "sleep.categoryId",
+      action: "update",
+      data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" },
+      timestamp: "2026-05-30T00:00:00.000Z",
+    });
+  });
+
   it("pulls deduplicated changes after a seq cursor and returns latest seq", async () => {
     db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
       "cat-seq",
@@ -898,6 +957,33 @@ describe("sync route", () => {
     expect(body.changes).toEqual([
       expect.objectContaining({ tableName: "categories", recordId: "cat-seq", action: "update" }),
       expect.objectContaining({ tableName: "time_entries", recordId: "entry-seq", action: "update" }),
+    ]);
+  });
+
+  it("pulls settings after a seq cursor", async () => {
+    db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+      "sleep.categoryId",
+      "cat-1",
+      "2026-05-30T00:00:00.000Z",
+    );
+    const baseSeq = db
+      .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+      .run("categories", "cat-old", "update").lastInsertRowid as number;
+    const settingSeq = db
+      .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+      .run("settings", "sleep.categoryId", "update").lastInsertRowid as number;
+
+    const res = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+      body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: baseSeq }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.latestSeq).toBe(Number(settingSeq));
+    expect(body.changes).toEqual([
+      expect.objectContaining({ tableName: "settings", recordId: "sleep.categoryId", action: "update" }),
     ]);
   });
 

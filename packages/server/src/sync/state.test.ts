@@ -66,4 +66,21 @@ describe("syncState", () => {
     expect(second.hash).not.toBe(first.hash);
     expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "0" });
   });
+
+  it("设置变更改变 commit-hash，避免已对齐快路径跳过设置同步", async () => {
+    const { computeAndPersistCommitHash } = await import("./state.js");
+
+    const before = computeAndPersistCommitHash().hash;
+    db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+      "sleep.categoryId",
+      "cat-1",
+      "2026-05-30T00:00:00.000Z",
+    );
+    const after = computeAndPersistCommitHash().hash;
+
+    expect(after).not.toBe(before);
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'row_count_settings'").get()).toMatchObject({
+      value: "1",
+    });
+  });
 });

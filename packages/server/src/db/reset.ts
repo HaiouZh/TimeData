@@ -15,6 +15,7 @@ export function resetDatabaseConnectionToDefaults(db: Database.Database): ResetD
     const before = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
 
     db.prepare("DELETE FROM time_entries").run();
+    db.prepare("DELETE FROM settings").run();
     db.prepare("DELETE FROM sync_logs").run();
     db.prepare("DELETE FROM sync_tombstones").run();
     db.prepare("DELETE FROM sync_seq").run();

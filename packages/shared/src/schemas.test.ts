@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CategorySchema,
+  SettingSchema,
   SyncChangeSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
@@ -49,6 +50,14 @@ describe("SyncLogEntrySchema", () => {
     expect(SyncLogEntrySchema.safeParse({ ...base, synced: 1 }).success).toBe(true);
     expect(SyncLogEntrySchema.safeParse({ ...base, synced: true }).success).toBe(false);
     expect(SyncLogEntrySchema.safeParse({ ...base, synced: false }).success).toBe(false);
+  });
+});
+
+describe("SettingSchema", () => {
+  it("接受合法设置，拒绝空 key / 非字符串 value", () => {
+    expect(SettingSchema.safeParse({ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" }).success).toBe(true);
+    expect(SettingSchema.safeParse({ key: "", value: "x", updatedAt: "2026-05-30T00:00:00.000Z" }).success).toBe(false);
+    expect(SettingSchema.safeParse({ key: "k", value: 1, updatedAt: "2026-05-30T00:00:00.000Z" }).success).toBe(false);
   });
 });
 
@@ -189,6 +198,27 @@ describe("SyncChangeSchema", () => {
         data: category,
       }),
     ).toThrow();
+  });
+
+  it("accepts settings upsert and delete changes", () => {
+    expect(
+      SyncChangeSchema.safeParse({
+        tableName: "settings",
+        recordId: "sleep.categoryId",
+        action: "update",
+        data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" },
+        timestamp: "2026-05-30T00:00:00.000Z",
+      }).success,
+    ).toBe(true);
+    expect(
+      SyncChangeSchema.safeParse({
+        tableName: "settings",
+        recordId: "sleep.categoryId",
+        action: "delete",
+        data: null,
+        timestamp: "2026-05-30T00:00:00.000Z",
+      }).success,
+    ).toBe(true);
   });
 });
 

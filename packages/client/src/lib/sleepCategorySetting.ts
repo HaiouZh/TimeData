@@ -1,14 +1,15 @@
-import { safeGetItem, safeRemoveItem, safeSetItem } from "./safeStorage.js";
-import { STORAGE_KEYS } from "./storageKeys.js";
+import { getSetting, setSetting, useSetting } from "./settings/index.ts";
 
-// 用户指定哪个父分类是「睡眠」，用于数据洞察中的作息、覆盖率和异常判定。null = 未指定。
-// 正式入口：/settings/insights。
-export function getSleepCategoryId(): string | null {
-  const value = safeGetItem(STORAGE_KEYS.sleepCategoryId);
-  return value && value.length > 0 ? value : null;
+export const SLEEP_CATEGORY_KEY = "sleep.categoryId";
+
+export function getSleepCategoryId(): Promise<string | null> {
+  return getSetting(SLEEP_CATEGORY_KEY);
 }
 
-export function setSleepCategoryId(categoryId: string | null): void {
-  if (categoryId) safeSetItem(STORAGE_KEYS.sleepCategoryId, categoryId);
-  else safeRemoveItem(STORAGE_KEYS.sleepCategoryId);
+export function setSleepCategoryId(categoryId: string | null): Promise<void> {
+  return setSetting(SLEEP_CATEGORY_KEY, categoryId);
+}
+
+export function useSleepCategoryId(): string | null {
+  return useSetting(SLEEP_CATEGORY_KEY);
 }

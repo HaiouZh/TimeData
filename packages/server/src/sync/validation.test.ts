@@ -91,6 +91,21 @@ function categoryChange(overrides: Partial<SyncChange> = {}): SyncChange {
   };
 }
 
+function settingChange(overrides: Partial<SyncChange> = {}): SyncChange {
+  return {
+    tableName: "settings",
+    recordId: "sleep.categoryId",
+    action: "update",
+    data: {
+      key: "sleep.categoryId",
+      value: "cat-1",
+      updatedAt: "2026-05-30T00:00:00.000Z",
+    },
+    timestamp: "2026-05-30T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("validateSyncChanges", () => {
   it("rejects a self-referencing category", () => {
     const result = validateSyncChanges(db, [categoryChange({
@@ -479,6 +494,44 @@ describe("validateSyncChanges", () => {
 
     expect(result.valid).toBe(false);
     expect(result.outcomes[1]).toMatchObject({ status: "conflict", reasonCode: "overlap" });
+  });
+
+  it("accepts valid settings changes", () => {
+    const result = validateSyncChanges(db, [
+      settingChange(),
+      settingChange({ action: "delete", data: null }),
+    ]);
+
+    expect(result.valid).toBe(true);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
+      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
+    ]);
+  });
+
+  it("rejects malformed settings changes", () => {
+    const cases: Array<{ change: SyncChange; reasonCode: string }> = [
+      { change: settingChange({ recordId: "" }), reasonCode: "invalid_shape" },
+      { change: settingChange({ recordId: "other.key" }), reasonCode: "id_mismatch" },
+      {
+        change: settingChange({
+          data: { key: "sleep.categoryId", value: 1, updatedAt: "2026-05-30T00:00:00.000Z" },
+        } as unknown as Partial<SyncChange>),
+        reasonCode: "invalid_shape",
+      },
+      {
+        change: settingChange({
+          data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00Z" },
+        }),
+        reasonCode: "invalid_shape",
+      },
+    ];
+
+    for (const item of cases) {
+      const result = validateSyncChanges(db, [item.change]);
+      expect(result.valid).toBe(false);
+      expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: item.reasonCode });
+    }
   });
 });
 

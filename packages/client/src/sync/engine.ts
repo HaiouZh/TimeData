@@ -4,8 +4,8 @@ import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
 import { classifyReasonCode } from "./reason.ts";
-import { CategorySchema, SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD, TimeEntrySchema } from "@timedata/shared";
-import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport, SyncPullResponse, SyncPushResponse, SyncChange, SyncStatusResponse, Category, TimeEntry, SyncLogEntry, SyncPushOutcome } from "@timedata/shared";
+import { CategorySchema, SettingSchema, SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD, TimeEntrySchema } from "@timedata/shared";
+import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport, SyncPullResponse, SyncPushResponse, SyncChange, SyncStatusResponse, Category, Setting, TimeEntry, SyncLogEntry, SyncPushOutcome } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
 const LAST_SYNCED_KEY = STORAGE_KEYS.lastSynced;
@@ -14,10 +14,10 @@ const SYNC_FAILURE_COUNT_KEY = STORAGE_KEYS.syncFailureCount;
 type SyncLog = SyncLogEntry;
 
 export interface SyncConflict {
-  tableName: "categories" | "time_entries";
+  tableName: "categories" | "time_entries" | "settings";
   recordId: string;
-  local: Category | TimeEntry;
-  remote: Category | TimeEntry | null;
+  local: Category | Setting | TimeEntry;
+  remote: Category | Setting | TimeEntry | null;
   remoteAction: "update" | "delete";
   localLog?: SyncLogEntry;
 }
@@ -187,6 +187,13 @@ function parseRemoteTimeEntry(data: unknown, recordId: string): TimeEntry | null
   return null;
 }
 
+function parseRemoteSetting(data: unknown, recordId: string): Setting | null {
+  const parsed = SettingSchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.warn(`[sync] dropping invalid setting payload for ${recordId}:`, parsed.error.issues);
+  return null;
+}
+
 async function enqueueLocalOnlyChanges(localSnapshot: Snapshot, cloudSnapshot: Snapshot): Promise<void> {
   const cloudCategoryIds = new Set(cloudSnapshot.categories.map((category) => category.id));
   const cloudEntryIds = new Set(cloudSnapshot.timeEntries.map((entry) => entry.id));
@@ -313,6 +320,19 @@ export async function syncPush(): Promise<SyncPushResult> {
       continue;
     }
 
+    if (log.tableName === "settings") {
+      const data = await db.settings.get(log.recordId);
+      if (!data) continue;
+      changes.push({
+        tableName: "settings",
+        recordId: log.recordId,
+        action: log.action,
+        data,
+        timestamp: log.timestamp,
+      });
+      continue;
+    }
+
     const data = await db.timeEntries.get(log.recordId);
     if (!data) continue;
     changes.push(...categoryDependencyChangesForEntry(data, categoriesById, log.timestamp, includedCategoryIds));
@@ -407,6 +427,24 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
           applied++;
         }
       }
+    } else if (change.tableName === "settings") {
+      if (change.action === "delete") {
+        const existing = await db.settings.get(change.recordId);
+        if (existing && !locallyModifiedById.has(`settings:${change.recordId}`)) {
+          await db.settings.delete(change.recordId);
+          applied++;
+        }
+      } else if (change.data) {
+        const remoteSetting = parseRemoteSetting(change.data, change.recordId);
+        if (!remoteSetting) continue;
+        if (!locallyModifiedById.has(`settings:${change.recordId}`)) {
+          const existing = await db.settings.get(change.recordId);
+          if (!existing || existing.updatedAt !== remoteSetting.updatedAt || existing.value !== remoteSetting.value) {
+            await db.settings.put(remoteSetting);
+            applied++;
+          }
+        }
+      }
     } else if (change.tableName === "time_entries") {
       if (change.action === "delete") {
         const existing = await db.timeEntries.get(change.recordId);
@@ -471,9 +509,10 @@ function advanceLastSyncedCursor(changes: SyncChange[]): void {
 export async function syncForceReplace(): Promise<number> {
   const response = await fetchSyncPullResponse({ lastSyncedAt: null }, { timeoutMs: 30000 });
 
-  await db.transaction("rw", db.categories, db.timeEntries, db.syncLog, async () => {
+  await db.transaction("rw", db.categories, db.timeEntries, db.syncLog, db.settings, async () => {
     await db.timeEntries.clear();
     await db.syncLog.clear();
+    await db.settings.clear();
     await db.categories.clear();
 
     for (const change of response.changes) {
@@ -485,6 +524,10 @@ export async function syncForceReplace(): Promise<number> {
         const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
         if (!remoteEntry) continue;
         await db.timeEntries.put(remoteEntry);
+      } else if (change.tableName === "settings" && change.action !== "delete" && change.data) {
+        const remoteSetting = parseRemoteSetting(change.data, change.recordId);
+        if (!remoteSetting) continue;
+        await db.settings.put(remoteSetting);
       }
     }
   });
@@ -569,9 +612,10 @@ export async function prepareForcePush(): Promise<SyncForcePushPrepareResponse> 
 }
 
 export async function syncForcePushToServer(confirmToken: string, confirmationPhrase: "OVERWRITE_SERVER"): Promise<SyncForcePushResponse> {
-  const [categories, timeEntries] = await Promise.all([
+  const [categories, timeEntries, settings] = await Promise.all([
     db.categories.toArray(),
     db.timeEntries.toArray(),
+    db.settings.toArray(),
   ]);
 
   const response = await apiFetch<SyncForcePushResponse>("/api/sync/force-push", {
@@ -581,6 +625,7 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
       confirmationPhrase,
       categories,
       timeEntries,
+      settings,
     }),
   });
 
@@ -841,6 +886,22 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
           applied++;
         }
       }
+    } else if (change.tableName === "settings") {
+      if (change.action === "delete") {
+        const existing = await db.settings.get(change.recordId);
+        if (existing) {
+          await db.settings.delete(change.recordId);
+          applied++;
+        }
+      } else if (change.data) {
+        const remoteSetting = parseRemoteSetting(change.data, change.recordId);
+        if (!remoteSetting) continue;
+        const existing = await db.settings.get(change.recordId);
+        if (!existing || existing.updatedAt !== remoteSetting.updatedAt || existing.value !== remoteSetting.value) {
+          await db.settings.put(remoteSetting);
+          applied++;
+        }
+      }
     } else if (change.tableName === "time_entries") {
       if (change.action === "delete") {
         const existing = await db.timeEntries.get(change.recordId);
@@ -872,7 +933,7 @@ function isCompleteEntry(entry: TimeEntry): boolean {
 }
 
 export async function recordSyncLog(
-  tableName: "categories" | "time_entries",
+  tableName: "categories" | "time_entries" | "settings",
   recordId: string,
   action: "create" | "update" | "delete"
 ): Promise<void> {

@@ -34,6 +34,7 @@ export function computeAndPersistCommitHash(db: Database.Database = getDb()): Sy
   const latestSeq = readLatestSeq(db);
   const entryCount = (db.prepare("SELECT COUNT(*) AS count FROM time_entries").get() as { count: number }).count;
   const categoryCount = (db.prepare("SELECT COUNT(*) AS count FROM categories").get() as { count: number }).count;
+  const settingsCount = (db.prepare("SELECT COUNT(*) AS count FROM settings").get() as { count: number }).count;
   const lastUpdatedAt =
     (
       db
@@ -42,12 +43,14 @@ export function computeAndPersistCommitHash(db: Database.Database = getDb()): Sy
       SELECT updated_at FROM time_entries
       UNION ALL
       SELECT updated_at FROM categories
+      UNION ALL
+      SELECT updated_at FROM settings
     )
   `)
         .get() as { value: string | null }
     ).value ?? "";
   const hash = createHash("sha256")
-    .update(`${latestSeq ?? ""}|${entryCount}|${categoryCount}|${lastUpdatedAt}`)
+    .update(`${latestSeq ?? ""}|${entryCount}|${categoryCount}|${settingsCount}|${lastUpdatedAt}`)
     .digest("hex");
   const now = new Date().toISOString();
 
@@ -55,6 +58,7 @@ export function computeAndPersistCommitHash(db: Database.Database = getDb()): Sy
   upsertState(db, "latest_seq", latestSeq == null ? "" : String(latestSeq), now);
   upsertState(db, "row_count_entries", String(entryCount), now);
   upsertState(db, "row_count_categories", String(categoryCount), now);
+  upsertState(db, "row_count_settings", String(settingsCount), now);
   upsertState(db, "last_updated_at", lastUpdatedAt, now);
   upsertState(db, "dirty", CLEAN_VALUE, now);
 

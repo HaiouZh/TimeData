@@ -12,6 +12,10 @@ import SettingsInsightsPage from "./SettingsInsightsPage.js";
 const categoriesState = vi.hoisted(() => ({
   categories: [] as Category[],
 }));
+const sleepSettingState = vi.hoisted(() => ({
+  sleepCategoryId: null as string | null,
+  setSleepCategoryId: vi.fn(),
+}));
 
 vi.mock("../../hooks/useCategories.ts", () => ({
   useCategories: () => ({
@@ -20,26 +24,10 @@ vi.mock("../../hooks/useCategories.ts", () => ({
   }),
 }));
 
-const localStorageMock = (() => {
-  let store = new Map<string, string>();
-  return {
-    clear: () => {
-      store = new Map<string, string>();
-    },
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-  };
-})();
-
-Object.defineProperty(globalThis, "localStorage", {
-  value: localStorageMock,
-  configurable: true,
-});
+vi.mock("../../lib/sleepCategorySetting.ts", () => ({
+  setSleepCategoryId: (value: string | null) => sleepSettingState.setSleepCategoryId(value),
+  useSleepCategoryId: () => sleepSettingState.sleepCategoryId,
+}));
 
 function cat(id: string, name: string): Category {
   return {
@@ -57,8 +45,9 @@ function cat(id: string, name: string): Category {
 
 describe("SettingsInsightsPage", () => {
   beforeEach(() => {
-    localStorage.clear();
     categoriesState.categories = [cat("work", "工作"), cat("sleep", "睡眠")];
+    sleepSettingState.sleepCategoryId = null;
+    sleepSettingState.setSleepCategoryId.mockReset();
   });
 
   it("renders the sleep category selector", () => {
@@ -69,7 +58,7 @@ describe("SettingsInsightsPage", () => {
     expect(html).toContain("睡眠");
   });
 
-  it("persists sleep category selection through safeStorage", async () => {
+  it("persists sleep category selection through synced setting", async () => {
     const host = document.createElement("div");
     const root = createRoot(host);
 
@@ -86,7 +75,13 @@ describe("SettingsInsightsPage", () => {
       }
     });
 
-    expect(localStorage.getItem("timedata_sleep_category_id")).toBe("sleep");
+    expect(sleepSettingState.setSleepCategoryId).toHaveBeenCalledWith("sleep");
+
+    sleepSettingState.sleepCategoryId = "sleep";
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
+    });
+
     expect(host.textContent).toContain("当前使用");
 
     await act(async () => {

@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY, db, resetSyncCursors, seedDefaultCategories } from "./index.js";
+import { LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY, db, migrateLocalSettingsToDexie, resetSyncCursors, seedDefaultCategories } from "./index.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -45,14 +45,28 @@ describe("resetSyncCursors", () => {
   });
 });
 
-describe("Dexie single-version database", () => {
-  it("creates v1 schema and seeds default categories on a fresh open", async () => {
+describe("Dexie database", () => {
+  it("creates v2 schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(1);
+    expect(db.verno).toBe(2);
+    expect(db.settings.schema.primKey.keyPath).toBe("key");
+  });
+
+  it("migrates legacy sleep category setting to synced settings once", async () => {
+    await db.open();
+    localStorage.setItem("timedata_sleep_category_id", "cat-sleep");
+
+    await migrateLocalSettingsToDexie();
+    await migrateLocalSettingsToDexie();
+
+    await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "cat-sleep" });
+    await expect(db.syncLog.toArray()).resolves.toMatchObject([
+      { tableName: "settings", recordId: "sleep.categoryId", action: "create", synced: 0 },
+    ]);
   });
 });

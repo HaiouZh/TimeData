@@ -15,6 +15,7 @@ export function runUtcResetIfNeeded(db: Database.Database): UtcResetResult {
 
   db.transaction(() => {
     db.prepare("DELETE FROM time_entries").run();
+    db.prepare("DELETE FROM settings").run();
     db.prepare("DELETE FROM sync_logs").run();
     db.prepare("DELETE FROM sync_tombstones").run();
     db.prepare("DELETE FROM sync_seq").run();
