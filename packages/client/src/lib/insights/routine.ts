@@ -38,7 +38,7 @@ export interface RoutineInsights {
   sleepWindow: SleepWindow;
 }
 
-interface RoutineInput {
+export interface RoutineInput {
   entries: TimeEntry[];
   categories: Category[];
   fromDate: string;

@@ -1,31 +1,13 @@
 import { localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
-import { detectAnomalies } from "../lib/insights/anomalies.ts";
+import { useInView } from "../hooks/useInView.ts";
+import { memoAnomalies, memoOverview, memoRoutine, memoStructure, memoTrend } from "../lib/insights/cache.ts";
 import { INSIGHT_CONSTANTS } from "../lib/insights/constants.ts";
-import { buildOverviewInsights } from "../lib/insights/overview.ts";
 import { buildRoutineInsights, formatClockFromMinute } from "../lib/insights/routine.ts";
-import { buildStructure } from "../lib/insights/structure.ts";
-import { buildTrend, type ParentTrend, resolveTrendWindow, type TrendWindowSpec } from "../lib/insights/trends.ts";
+import { type ParentTrend, resolveTrendWindow, type TrendWindowSpec } from "../lib/insights/trends.ts";
 import { getSleepCategoryId } from "../lib/sleepCategorySetting.ts";
 import {
   buildStatsRangeForDate,
@@ -35,6 +17,13 @@ import {
   shiftStatsAnchor,
 } from "../lib/stats.ts";
 import { addDays, getDateString } from "../lib/time.ts";
+import {
+  CategoryBarChart,
+  CategoryPieChart,
+  TrendChart,
+  type TrendChartKind,
+  type TrendChartRow,
+} from "./stats/InsightCharts.tsx";
 
 type ViewMode = StatsViewMode;
 
@@ -83,7 +72,11 @@ export default function StatsPage() {
   const { parentCategories, categories } = useCategories();
 
   useEffect(() => {
-    const refreshToday = () => setToday(getDateString(new Date()));
+    const refreshToday = () =>
+      setToday((current) => {
+        const next = getDateString(new Date());
+        return next === current ? current : next;
+      });
     const timer = window.setInterval(refreshToday, 60_000);
     window.addEventListener("focus", refreshToday);
     document.addEventListener("visibilitychange", refreshToday);
@@ -96,15 +89,31 @@ export default function StatsPage() {
   }, []);
 
   const statsRange = useMemo(() => buildStatsRangeForDate(mode, anchor), [mode, anchor]);
+  const baselineFrom = useMemo(() => addDays(today, -(INSIGHT_CONSTANTS.baselineWindowDays - 1)), [today]);
   const atLatest = isLatestPeriod(mode, anchor, today);
   const rangeLabel = formatStatsRangeLabel(mode, statsRange);
   const periodUnit = { day: "天", week: "周", month: "月" }[mode];
 
-  const entries =
+  const baselineEntries =
     useLiveQuery(async () => {
+      const startUtc = localDateTimeToUtc(`${baselineFrom}T00:00:00`);
+      const endUtc = localDateTimeToUtc(`${addDays(today, 1)}T00:00:00`);
+      const candidates = await db.timeEntries.where("endTime").above(startUtc).toArray();
+      return candidates.filter((entry) => entry.startTime < endUtc);
+    }, [baselineFrom, today]) || [];
+
+  const periodWithinBaseline = statsRange.fromDate >= baselineFrom;
+  const periodFallback =
+    useLiveQuery(async () => {
+      if (periodWithinBaseline) return [];
       const candidates = await db.timeEntries.where("endTime").above(statsRange.startUtc).toArray();
       return candidates.filter((entry) => entry.startTime < statsRange.endUtc);
-    }, [statsRange.startUtc, statsRange.endUtc]) || [];
+    }, [periodWithinBaseline, statsRange.startUtc, statsRange.endUtc]) || [];
+
+  const entries = useMemo(() => {
+    if (!periodWithinBaseline) return periodFallback;
+    return baselineEntries.filter((entry) => entry.endTime > statsRange.startUtc && entry.startTime < statsRange.endUtc);
+  }, [periodWithinBaseline, periodFallback, baselineEntries, statsRange.startUtc, statsRange.endUtc]);
 
   const parentNameById = useMemo(() => new Map(parentCategories.map((c) => [c.id, c.name])), [parentCategories]);
 
@@ -112,7 +121,7 @@ export default function StatsPage() {
 
   const overview = useMemo(
     () =>
-      buildOverviewInsights({
+      memoOverview({
         entries,
         categories,
         fromDate: statsRange.fromDate,
@@ -137,7 +146,7 @@ export default function StatsPage() {
 
   const routine = useMemo(
     () =>
-      buildRoutineInsights({
+      memoRoutine({
         entries,
         categories,
         fromDate: statsRange.fromDate,
@@ -149,7 +158,7 @@ export default function StatsPage() {
 
   const anomalies = useMemo(
     () =>
-      detectAnomalies({
+      memoAnomalies({
         entries,
         categories,
         fromDate: statsRange.fromDate,
@@ -161,20 +170,29 @@ export default function StatsPage() {
   );
 
   const [trendWindowSpec, setTrendWindowSpec] = useState<TrendWindowSpec>({ kind: "preset", days: 7 });
-  const [trendChart, setTrendChart] = useState<"line" | "area">("line");
+  const [trendChart, setTrendChart] = useState<TrendChartKind>("line");
 
   const trendWindow = useMemo(() => resolveTrendWindow(trendWindowSpec, today), [trendWindowSpec, today]);
 
-  const trendEntries =
+  const trendWithinBaseline = trendWindow.prevFrom >= baselineFrom;
+  const trendFallback =
     useLiveQuery(async () => {
+      if (trendWithinBaseline) return [];
       const startUtc = localDateTimeToUtc(`${trendWindow.prevFrom}T00:00:00`);
       const endUtc = localDateTimeToUtc(`${addDays(trendWindow.to, 1)}T00:00:00`);
       const candidates = await db.timeEntries.where("endTime").above(startUtc).toArray();
       return candidates.filter((entry) => entry.startTime < endUtc);
-    }, [trendWindow.prevFrom, trendWindow.to]) || [];
+    }, [trendWithinBaseline, trendWindow.prevFrom, trendWindow.to]) || [];
+
+  const trendEntries = useMemo(() => {
+    if (!trendWithinBaseline) return trendFallback;
+    const startUtc = localDateTimeToUtc(`${trendWindow.prevFrom}T00:00:00`);
+    const endUtc = localDateTimeToUtc(`${addDays(trendWindow.to, 1)}T00:00:00`);
+    return baselineEntries.filter((entry) => entry.endTime > startUtc && entry.startTime < endUtc);
+  }, [trendWithinBaseline, trendFallback, baselineEntries, trendWindow.prevFrom, trendWindow.to]);
 
   const trend = useMemo(
-    () => buildTrend(trendEntries, categories, trendWindow, {}),
+    () => memoTrend(trendEntries, categories, trendWindow),
     [trendEntries, categories, trendWindow],
   );
 
@@ -182,7 +200,7 @@ export default function StatsPage() {
   const trendChartData = useMemo(
     () =>
       trend.points.map((point) => {
-        const row: Record<string, number | string> = { date: point.date.slice(5) };
+        const row: TrendChartRow = { date: point.date.slice(5) };
         for (const t of trend.parentTrends) {
           row[parentNameById.get(t.parentId) ?? t.parentId] =
             Math.round(((point.byParent[t.parentId] ?? 0) / 60) * 10) / 10;
@@ -196,23 +214,13 @@ export default function StatsPage() {
       trend.parentTrends.map((t) => ({
         key: parentNameById.get(t.parentId) ?? t.parentId,
         color: parentCategories.find((c) => c.id === t.parentId)?.color ?? "#808080",
-      })),
+    })),
     [trend, parentNameById, parentCategories],
   );
 
-  const baselineFrom = useMemo(() => addDays(today, -(INSIGHT_CONSTANTS.baselineWindowDays - 1)), [today]);
-
-  const baselineEntries =
-    useLiveQuery(async () => {
-      const startUtc = localDateTimeToUtc(`${baselineFrom}T00:00:00`);
-      const endUtc = localDateTimeToUtc(`${addDays(today, 1)}T00:00:00`);
-      const candidates = await db.timeEntries.where("endTime").above(startUtc).toArray();
-      return candidates.filter((entry) => entry.startTime < endUtc);
-    }, [baselineFrom, today]) || [];
-
   const structure = useMemo(
     () =>
-      buildStructure({
+      memoStructure({
         periodEntries: entries,
         baselineEntries,
         categories,
@@ -233,9 +241,10 @@ export default function StatsPage() {
       sleepCategoryId,
     ],
   );
+  const [chartsRef, chartsInView] = useInView<HTMLDivElement>();
 
   return (
-    <div className="p-4 space-y-6">
+    <div ref={chartsRef} className="p-4 space-y-6">
       <div className="flex gap-2">
         {(["day", "week", "month"] as ViewMode[]).map((m) => (
           <button
@@ -328,40 +337,16 @@ export default function StatsPage() {
         )}
       </section>
       {pieData.length > 0 && (
-        <div className="flex justify-center">
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                label={({ name, value }) => `${name} ${value}h`}
-              >
-                {pieData.map((d) => (
-                  <Cell key={d.id} fill={d.color} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => `${value} 小时`} />
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="space-y-3">
+          {chartsInView ? (
+            <>
+              <CategoryPieChart data={pieData} />
+              <CategoryBarChart data={pieData} />
+            </>
+          ) : (
+            <div className="min-h-[462px]" />
+          )}
         </div>
-      )}
-      {pieData.length > 0 && (
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={pieData} layout="vertical">
-            <XAxis type="number" unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <YAxis type="category" dataKey="name" width={60} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <Tooltip formatter={(value) => `${value} 小时`} />
-            <Bar dataKey="value">
-              {pieData.map((d) => (
-                <Cell key={d.id} fill={d.color} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
       )}
       {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无统计数据</div>}
       <section className="space-y-3">
@@ -564,31 +549,11 @@ export default function StatsPage() {
               </button>
             </div>
 
-            <ResponsiveContainer width="100%" height={220}>
-              {trendChart === "line" ? (
-                <LineChart data={trendChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <YAxis unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <Tooltip formatter={(value) => `${value} 小时`} />
-                  <Legend />
-                  {trendSeries.map((s) => (
-                    <Line key={s.key} type="monotone" dataKey={s.key} stroke={s.color} dot={false} />
-                  ))}
-                </LineChart>
-              ) : (
-                <AreaChart data={trendChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <YAxis unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-                  <Tooltip formatter={(value) => `${value} 小时`} />
-                  <Legend />
-                  {trendSeries.map((s) => (
-                    <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} fill={s.color} />
-                  ))}
-                </AreaChart>
-              )}
-            </ResponsiveContainer>
+            {chartsInView ? (
+              <TrendChart chart={trendChart} data={trendChartData} series={trendSeries} />
+            ) : (
+              <div className="min-h-[220px]" />
+            )}
           </>
         )}
       </section>

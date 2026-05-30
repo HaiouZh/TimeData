@@ -1,4 +1,5 @@
 import type { Category, TimeEntry } from "@timedata/shared";
+import { localDateTimeToUtc } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import { buildDailyRollups } from "./dailyRollup.js";
 
@@ -38,6 +39,24 @@ describe("buildDailyRollups", () => {
     expect(d8?.totalMin).toBe(120);
     expect(d9?.totalMin).toBe(120);
     expect(rollups.every((r) => r.totalMin <= 1440)).toBe(true);
+  });
+
+  it("跨多天条目按本地午夜裁剪到各日", () => {
+    const rollups = buildDailyRollups(
+      [
+        entry(
+          "multi",
+          "p1",
+          localDateTimeToUtc("2026-03-01T22:00:00"),
+          localDateTimeToUtc("2026-03-03T02:00:00"),
+        ),
+      ],
+      categories,
+      "2026-03-01",
+      "2026-03-03",
+    );
+
+    expect(rollups.map((r) => r.totalMin)).toEqual([120, 1440, 120]);
   });
 
   it("范围内完全无记录的日产出 totalMin=0 的空桶", () => {

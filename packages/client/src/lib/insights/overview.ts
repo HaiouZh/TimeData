@@ -36,7 +36,7 @@ export interface OverviewInsights {
   parents: OverviewParentShare[];
 }
 
-interface OverviewInput {
+export interface OverviewInput {
   entries: TimeEntry[];
   categories: Category[];
   fromDate: string;

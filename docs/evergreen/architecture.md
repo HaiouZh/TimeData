@@ -6,6 +6,9 @@ covers:
   - packages/client/src/main.tsx
   - packages/client/src/App.tsx
   - packages/client/src/pages/StatsPage.tsx
+  - packages/client/src/pages/stats/**
+  - packages/client/src/hooks/useInView.ts
+  - packages/client/src/lib/insights/**
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
   - packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx
@@ -180,7 +183,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 | 数据模型 | `packages/shared/src/types.ts`、`packages/shared/src/schemas.ts` | [`data-model.md`](./data-model.md) |
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
-| 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/lib/insights/`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx` | `routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率 |
+| 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/hooks/useInView.ts`、`packages/client/src/lib/insights/`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx` | `cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率 |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |
 | 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts` | [`deployment.md`](./deployment.md) |
 | 审查 / 排期边界 | `AGENT.md` | [`AGENT.md#项目定位边界`](../../AGENT.md#项目定位边界) |
