@@ -1,8 +1,9 @@
 import type { Category, TimeEntry } from "@timedata/shared";
 import { APP_TIME_ZONE } from "@timedata/shared";
-import { INSIGHT_CONSTANTS } from "./constants.js";
 import { buildInsightBaseline } from "./baseline.js";
+import { INSIGHT_CONSTANTS } from "./constants.js";
 import { buildDailyRollups } from "./dailyRollup.js";
+import type { SleepWindow } from "./routine.js";
 import { buildSessions, resolveParentId } from "./sessions.js";
 import type { Anomaly } from "./types.js";
 
@@ -32,11 +33,20 @@ function localDate(iso: string): string {
   }).format(new Date(iso));
 }
 
-// 该时刻是否落在通常睡眠时段（23:00~07:00 跨午夜）。
-function inSleepWindow(iso: string): boolean {
+// 该时刻是否落在通常睡眠时段（支持跨午夜窗口）。
+function inSleepWindow(iso: string, sleepWindow: SleepWindow): boolean {
   const m = localMinuteOfDay(iso);
-  const { sleepWindowStartMin, sleepWindowEndMin } = INSIGHT_CONSTANTS;
-  return m >= sleepWindowStartMin || m < sleepWindowEndMin;
+  if (sleepWindow.startMin === sleepWindow.endMin) return true;
+  if (sleepWindow.startMin < sleepWindow.endMin) return m >= sleepWindow.startMin && m < sleepWindow.endMin;
+  return m >= sleepWindow.startMin || m < sleepWindow.endMin;
+}
+
+function sleepWindowLabel(sleepWindow: SleepWindow): string {
+  const toClock = (minute: number) => {
+    const normalized = ((Math.round(minute) % 1440) + 1440) % 1440;
+    return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+  };
+  return `${toClock(sleepWindow.startMin)}~${toClock(sleepWindow.endMin)}`;
 }
 
 export interface DetectAnomaliesInput {
@@ -45,10 +55,16 @@ export interface DetectAnomaliesInput {
   fromDate: string;
   toDate: string;
   sleepCategoryId: string | null; // 用户指定的睡眠父分类 id；null=未指定
+  sleepWindow?: SleepWindow;
 }
 
 export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
   const { entries, categories, fromDate, toDate, sleepCategoryId } = input;
+  const sleepWindow = input.sleepWindow ?? {
+    startMin: INSIGHT_CONSTANTS.sleepWindowStartMin,
+    endMin: INSIGHT_CONSTANTS.sleepWindowEndMin,
+    source: "fallback" as const,
+  };
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   const isSleep = (entry: TimeEntry) =>
     sleepCategoryId !== null && resolveParentId(entry, categoryById) === sleepCategoryId;
@@ -73,7 +89,7 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
       // 清醒空档：两端都不是睡眠分类，且间隙起点不在睡眠时段。
       const prevSleep = sleepCategoryId !== null && prev.parentId === sleepCategoryId;
       const nextSleep = sleepCategoryId !== null && next.parentId === sleepCategoryId;
-      if (prevSleep || nextSleep || inSleepWindow(prev.end)) continue;
+      if (prevSleep || nextSleep || inSleepWindow(prev.end, sleepWindow)) continue;
       awakeGapMins.push(gapMin);
       gapCandidates.push({ date: rollup.date, start: prev.end, end: next.start, min: gapMin });
     }
@@ -126,14 +142,14 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
     if (isSleep(entry)) continue;
     const entryDate = localDate(entry.startTime);
     if (!inRange(entryDate)) continue;
-    if (inSleepWindow(entry.startTime)) {
+    if (inSleepWindow(entry.startTime, sleepWindow)) {
       anomalies.push({
         type: "sleepTimeActivity",
         date: entryDate,
         startTime: entry.startTime,
         endTime: entry.endTime,
         categoryId: entry.categoryId,
-        message: `通常睡眠时段（23:00~07:00）仍有活动。`,
+        message: `通常睡眠时段（${sleepWindowLabel(sleepWindow)}）仍有活动。`,
       });
     }
   }
@@ -162,8 +178,6 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
 
   // 按日期倒序（最近在前），同日按 startTime。
   return anomalies.sort((a, b) =>
-    a.date === b.date
-      ? (a.startTime ?? "").localeCompare(b.startTime ?? "")
-      : b.date.localeCompare(a.date),
+    a.date === b.date ? (a.startTime ?? "").localeCompare(b.startTime ?? "") : b.date.localeCompare(a.date),
   );
 }

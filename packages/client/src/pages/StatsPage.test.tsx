@@ -46,6 +46,7 @@ describe("StatsPage", () => {
   beforeEach(() => {
     categoriesState.categories = [];
     entriesState.entries = [];
+    localStorage.clear();
   });
 
   it("renders empty state and allows period switching", async () => {
@@ -117,9 +118,9 @@ describe("StatsPage", () => {
       prevButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const backButton = [...host.querySelectorAll("button")].find(
-      (button) => button.textContent === "回到今天",
-    ) as HTMLButtonElement | undefined;
+    const backButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "回到今天") as
+      | HTMLButtonElement
+      | undefined;
     expect(backButton).toBeTruthy();
 
     await act(async () => {
@@ -156,14 +157,42 @@ describe("StatsPage", () => {
     expect(nextDay?.disabled).toBe(false);
   });
 
-  it("指定睡眠分类后，工作类超长记录出现在异常区", async () => {
+  it("工作类超长记录出现在异常区，睡眠分类入口迁到设置页", async () => {
     categoriesState.categories = [
-      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
-      { id: "sleep", name: "睡眠", parentId: null, color: "#64748b", icon: null, sortOrder: 1, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+      {
+        id: "work",
+        name: "工作",
+        parentId: null,
+        color: "#3b82f6",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
+      {
+        id: "sleep",
+        name: "睡眠",
+        parentId: null,
+        color: "#64748b",
+        icon: null,
+        sortOrder: 1,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
     ];
     // 一条 10h 工作（超过 floor 180min）
     entriesState.entries = [
-      { id: "long", categoryId: "work", startTime: "2026-05-08T01:00:00.000Z", endTime: "2026-05-08T11:00:00.000Z", note: null, createdAt: "2026-05-08T01:00:00.000Z", updatedAt: "2026-05-08T01:00:00.000Z" },
+      {
+        id: "long",
+        categoryId: "work",
+        startTime: "2026-05-08T01:00:00.000Z",
+        endTime: "2026-05-08T11:00:00.000Z",
+        note: null,
+        createdAt: "2026-05-08T01:00:00.000Z",
+        updatedAt: "2026-05-08T01:00:00.000Z",
+      },
     ];
 
     const host = document.createElement("div");
@@ -172,9 +201,8 @@ describe("StatsPage", () => {
       root.render(createElement(StatsPage));
     });
 
-    // 默认未指定睡眠 -> 选择器存在
-    const select = host.querySelector('[aria-label="睡眠分类"]') as HTMLSelectElement | null;
-    expect(select).not.toBeNull();
+    expect(host.querySelector('[aria-label="睡眠分类"]')).toBeNull();
+    expect(host.querySelector('a[href="/settings/insights"]')).not.toBeNull();
 
     // 切到日模式并跳到 2026-05-08，使该条落入范围
     const dayButton = [...host.querySelectorAll("button")].find((b) => b.textContent === "日");
@@ -199,13 +227,121 @@ describe("StatsPage", () => {
     });
   });
 
+  it("总览与作息区展示覆盖率、二级占比和睡眠均值", async () => {
+    localStorage.setItem("timedata_sleep_category_id", "sleep");
+    categoriesState.categories = [
+      {
+        id: "work",
+        name: "工作",
+        parentId: null,
+        color: "#3b82f6",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
+      {
+        id: "coding",
+        name: "编码",
+        parentId: "work",
+        color: "#60a5fa",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
+      {
+        id: "sleep",
+        name: "睡眠",
+        parentId: null,
+        color: "#64748b",
+        icon: null,
+        sortOrder: 1,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
+    ];
+    entriesState.entries = [
+      {
+        id: "sleep-1",
+        categoryId: "sleep",
+        startTime: "2026-05-07T15:00:00.000Z",
+        endTime: "2026-05-07T23:00:00.000Z",
+        note: null,
+        createdAt: "2026-05-07T15:00:00.000Z",
+        updatedAt: "2026-05-07T15:00:00.000Z",
+      },
+      {
+        id: "work-1",
+        categoryId: "coding",
+        startTime: "2026-05-08T01:00:00.000Z",
+        endTime: "2026-05-08T03:00:00.000Z",
+        note: null,
+        createdAt: "2026-05-08T01:00:00.000Z",
+        updatedAt: "2026-05-08T01:00:00.000Z",
+      },
+    ];
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    const dayButton = [...host.querySelectorAll("button")].find((b) => b.textContent === "日");
+    await act(async () => {
+      dayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dateInput = host.querySelector('input[type="date"]') as HTMLInputElement | null;
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      if (dateInput && nativeValueSetter) {
+        nativeValueSetter.call(dateInput, "2026-05-08");
+        dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    expect(host.textContent).toContain("总览");
+    expect(host.textContent).toContain("记录覆盖率");
+    expect(host.textContent).toContain("父分类 → 子分类占比");
+    expect(host.textContent).toContain("编码");
+    expect(host.textContent).toContain("作息");
+    expect(host.textContent).toContain("平均入睡");
+    expect(host.textContent).toContain("23:00");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("趋势区：预设窗口可切换，折线/堆叠面积可切换", async () => {
     const today = getDateString(new Date());
     categoriesState.categories = [
-      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+      {
+        id: "work",
+        name: "工作",
+        parentId: null,
+        color: "#3b82f6",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
     ];
     entriesState.entries = [
-      { id: "tw", categoryId: "work", startTime: `${today}T02:00:00.000Z`, endTime: `${today}T04:00:00.000Z`, note: null, createdAt: `${today}T02:00:00.000Z`, updatedAt: `${today}T02:00:00.000Z` },
+      {
+        id: "tw",
+        categoryId: "work",
+        startTime: `${today}T02:00:00.000Z`,
+        endTime: `${today}T04:00:00.000Z`,
+        note: null,
+        createdAt: `${today}T02:00:00.000Z`,
+        updatedAt: `${today}T02:00:00.000Z`,
+      },
     ];
     const host = document.createElement("div");
     const root = createRoot(host);
@@ -214,8 +350,12 @@ describe("StatsPage", () => {
     });
 
     expect(host.textContent).toContain("趋势变化");
-    const preset30 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近30天") as HTMLButtonElement | undefined;
-    const preset7 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近7天") as HTMLButtonElement | undefined;
+    const preset30 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近30天") as
+      | HTMLButtonElement
+      | undefined;
+    const preset7 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近7天") as
+      | HTMLButtonElement
+      | undefined;
     expect(preset7?.getAttribute("aria-pressed")).toBe("true");
     expect(preset30).toBeTruthy();
 
@@ -225,8 +365,12 @@ describe("StatsPage", () => {
     expect(preset30?.getAttribute("aria-pressed")).toBe("true");
     expect(preset7?.getAttribute("aria-pressed")).toBe("false");
 
-    const areaBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "堆叠面积") as HTMLButtonElement | undefined;
-    const lineBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "折线") as HTMLButtonElement | undefined;
+    const areaBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "堆叠面积") as
+      | HTMLButtonElement
+      | undefined;
+    const lineBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "折线") as
+      | HTMLButtonElement
+      | undefined;
     expect(lineBtn?.getAttribute("aria-pressed")).toBe("true");
     await act(async () => {
       areaBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -241,10 +385,28 @@ describe("StatsPage", () => {
   it("趋势区：本期有投入时列出父分类，上期无数据走 noBaseline 文案", async () => {
     const today = getDateString(new Date());
     categoriesState.categories = [
-      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+      {
+        id: "work",
+        name: "工作",
+        parentId: null,
+        color: "#3b82f6",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
     ];
     entriesState.entries = [
-      { id: "t1", categoryId: "work", startTime: `${today}T02:00:00.000Z`, endTime: `${today}T04:00:00.000Z`, note: null, createdAt: `${today}T02:00:00.000Z`, updatedAt: `${today}T02:00:00.000Z` },
+      {
+        id: "t1",
+        categoryId: "work",
+        startTime: `${today}T02:00:00.000Z`,
+        endTime: `${today}T04:00:00.000Z`,
+        note: null,
+        createdAt: `${today}T02:00:00.000Z`,
+        updatedAt: `${today}T02:00:00.000Z`,
+      },
     ];
 
     const host = document.createElement("div");
@@ -264,10 +426,28 @@ describe("StatsPage", () => {
   it("结构诊断区：渲染深度时间占比与熵，基线不足时提示占比失衡退化", async () => {
     const today = getDateString(new Date());
     categoriesState.categories = [
-      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+      {
+        id: "work",
+        name: "工作",
+        parentId: null,
+        color: "#3b82f6",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      },
     ];
     entriesState.entries = [
-      { id: "s1", categoryId: "work", startTime: `${today}T02:00:00.000Z`, endTime: `${today}T05:00:00.000Z`, note: null, createdAt: `${today}T02:00:00.000Z`, updatedAt: `${today}T02:00:00.000Z` },
+      {
+        id: "s1",
+        categoryId: "work",
+        startTime: `${today}T02:00:00.000Z`,
+        endTime: `${today}T05:00:00.000Z`,
+        note: null,
+        createdAt: `${today}T02:00:00.000Z`,
+        updatedAt: `${today}T02:00:00.000Z`,
+      },
     ];
 
     const host = document.createElement("div");

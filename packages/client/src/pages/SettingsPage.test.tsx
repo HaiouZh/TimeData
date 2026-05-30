@@ -2,8 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getServerConnectionState } from "./SettingsPage.js";
-import SettingsPage from "./SettingsPage.js";
+import SettingsPage, { getServerConnectionState } from "./SettingsPage.js";
 
 const useSyncContextMock = vi.hoisted(() => vi.fn());
 
@@ -102,6 +101,8 @@ describe("SettingsPage", () => {
     expect(html).toContain("服务器配置");
     expect(html).toContain('href="/settings/server"');
     expect(html).toContain("数据设置");
+    expect(html).toContain("数据洞察");
+    expect(html).toContain('href="/settings/insights"');
     expect(html).toContain('href="/settings/data"');
     expect(html).toContain("服务端数据洞察");
     expect(html).toContain('href="/settings/admin-insights"');

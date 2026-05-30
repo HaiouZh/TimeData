@@ -8,13 +8,14 @@ import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import EntryPage from "./pages/EntryPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
-import TimelinePage from "./pages/TimelinePage.tsx";
 import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
 import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "./pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "./pages/settings/SettingsCategoryDetailPage.tsx";
 import SettingsDataPage from "./pages/settings/SettingsDataPage.tsx";
+import SettingsInsightsPage from "./pages/settings/SettingsInsightsPage.tsx";
 import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
+import TimelinePage from "./pages/TimelinePage.tsx";
 
 export function AppShell() {
   const location = useLocation();
@@ -36,6 +37,7 @@ export function AppShell() {
           <Route path="/settings/categories" element={<SettingsCategoriesPage />} />
           <Route path="/settings/categories/:id" element={<SettingsCategoryDetailPage />} />
           <Route path="/settings/server" element={<SettingsServerPage />} />
+          <Route path="/settings/insights" element={<SettingsInsightsPage />} />
           <Route path="/settings/data" element={<SettingsDataPage />} />
           <Route path="/settings/data/backup-history" element={<BackupHistoryPage />} />
           <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />

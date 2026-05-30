@@ -5,6 +5,8 @@ covers:
   - packages/shared/**
   - packages/client/src/main.tsx
   - packages/client/src/App.tsx
+  - packages/client/src/pages/StatsPage.tsx
+  - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
   - packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx
   - packages/client/src/components/SortableCategoryItem.tsx
@@ -19,7 +21,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-20
+last-reviewed: 2026-05-30
 ---
 
 # 架构总览
@@ -130,7 +132,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 2. `<AppUpdateProvider>`：包住 PWA 自更新提示
 3. `ErrorBoundary` 包裹 `BrowserRouter` / `SyncProvider` / `AppShell`，顶层渲染错误会落到统一错误页，避免整屏空白。
 4. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口。
-5. React Router 装主路由：`/`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/admin-insights`、分类设置相关路由）、`/entries/:id/edit`
+5. React Router 装主路由：`/`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/admin-insights`、分类设置相关路由）、`/entries/:id/edit`
 6. `<AppShell>` 统一监听 PWA/Android 从后台恢复到前台的事件，并把刷新信号传给时间轴和新增记录页，让这些页面重新读取当前时间。
 7. `useMidnightTick`（`packages/client/src/hooks/useMidnightTick.ts`）在 `TimelinePage` 内独立调度本地午夜定时器，跨午夜后强制重新计算 `now`，避免长时间停留在前一天显示状态。
 8. 重复性 prompt 走 `useConfirm` / `ConfirmDialog`，不直接调 `window.confirm`/`alert`，便于本地化和 Android WebView 体验统一。
@@ -178,6 +180,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 | 数据模型 | `packages/shared/src/types.ts`、`packages/shared/src/schemas.ts` | [`data-model.md`](./data-model.md) |
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
+| 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/lib/insights/`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx` | `routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率 |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |
 | 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts` | [`deployment.md`](./deployment.md) |
 | 审查 / 排期边界 | `AGENT.md` | [`AGENT.md#项目定位边界`](../../AGENT.md#项目定位边界) |

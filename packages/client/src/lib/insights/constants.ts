@@ -16,6 +16,16 @@ export const INSIGHT_CONSTANTS = {
   // 通常睡眠时段（本地分钟 of day），用于「异常时段活动」判定与排除睡眠空档。23:00~07:00。
   sleepWindowStartMin: 23 * 60,
   sleepWindowEndMin: 7 * 60,
+  // 作息主睡眠段：低于 3h 的睡眠段不作为入睡/起床锚点，但仍计入总睡眠时长。
+  routineMainSleepMin: 180,
+  // 作息判断：样本少于该值时仅展示原始指标，不给稳定/波动结论，也不覆盖默认睡眠窗口。
+  routineMinRegularitySamples: 7,
+  // 作息稳定性：入睡、起床、睡眠时长三者标准差都不超过此值才判稳定。
+  routineStableStdevMaxMin: 60,
+  // 作息波动性：任一指标标准差达到该值时明确视为波动较大。
+  routineVolatileStdevMin: 120,
+  // 通常睡眠窗口：按中位入睡/起床各外扩该分钟数。
+  routineSleepWindowPaddingMin: 60,
   // —— 趋势（第三期）——
   // 上升/下降榜各取前 N。真实数据父分类 5 个、前三占主体（见趋势校准 T3）。
   trendTopN: 3,

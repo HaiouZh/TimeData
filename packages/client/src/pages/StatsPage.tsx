@@ -1,23 +1,40 @@
+import { localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { localDateTimeToUtc } from "@timedata/shared";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
+import { detectAnomalies } from "../lib/insights/anomalies.ts";
+import { INSIGHT_CONSTANTS } from "../lib/insights/constants.ts";
+import { buildOverviewInsights } from "../lib/insights/overview.ts";
+import { buildRoutineInsights, formatClockFromMinute } from "../lib/insights/routine.ts";
+import { buildStructure } from "../lib/insights/structure.ts";
+import { buildTrend, type ParentTrend, resolveTrendWindow, type TrendWindowSpec } from "../lib/insights/trends.ts";
+import { getSleepCategoryId } from "../lib/sleepCategorySetting.ts";
 import {
-  type StatsViewMode,
   buildStatsRangeForDate,
   formatStatsRangeLabel,
   isLatestPeriod,
+  type StatsViewMode,
   shiftStatsAnchor,
-  summarizeEntriesByParentCategory,
 } from "../lib/stats.ts";
 import { addDays, getDateString } from "../lib/time.ts";
-import { detectAnomalies } from "../lib/insights/anomalies.ts";
-import { getSleepCategoryId, setSleepCategoryId } from "../lib/sleepCategorySetting.ts";
-import { type ParentTrend, type TrendWindowSpec, buildTrend, resolveTrendWindow } from "../lib/insights/trends.ts";
-import { INSIGHT_CONSTANTS } from "../lib/insights/constants.ts";
-import { buildStructure } from "../lib/insights/structure.ts";
 
 type ViewMode = StatsViewMode;
 
@@ -44,6 +61,19 @@ function trendLabel(t: ParentTrend): string {
   if (t.state === "new") return `${curH}h（新增·无对比期数据）`;
   if (t.state === "dropped") return `本期未投入（上期 ${(t.previousMin / 60).toFixed(1)}h）`;
   return `${curH}h（无对比期数据）`;
+}
+
+function formatHoursFromMin(minutes: number | null): string {
+  if (minutes === null) return "--";
+  return `${(minutes / 60).toFixed(1)}h`;
+}
+
+function routineStateText(state: ReturnType<typeof buildRoutineInsights>["regularity"]["state"]): string {
+  if (state === "stable") return "作息较稳定";
+  if (state === "variable") return "作息波动较大";
+  if (state === "insufficientSamples") return "样本不足，仅展示原始指标";
+  if (state === "noSamples") return "暂无睡眠样本";
+  return "未配置睡眠分类";
 }
 
 export default function StatsPage() {
@@ -76,14 +106,46 @@ export default function StatsPage() {
       return candidates.filter((entry) => entry.startTime < statsRange.endUtc);
     }, [statsRange.startUtc, statsRange.endUtc]) || [];
 
-  const pieData = useMemo(
-    () => summarizeEntriesByParentCategory(entries, categories, parentCategories, statsRange),
-    [entries, categories, parentCategories, statsRange],
+  const parentNameById = useMemo(() => new Map(parentCategories.map((c) => [c.id, c.name])), [parentCategories]);
+
+  const [sleepCategoryId] = useState<string | null>(() => getSleepCategoryId());
+
+  const overview = useMemo(
+    () =>
+      buildOverviewInsights({
+        entries,
+        categories,
+        fromDate: statsRange.fromDate,
+        toDate: statsRange.toDate,
+        sleepCategoryId,
+      }),
+    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
   );
 
-  const totalHours = pieData.reduce((sum, d) => sum + d.value, 0);
+  const pieData = useMemo(
+    () =>
+      overview.parents.map((parent) => ({
+        id: parent.parentId,
+        name: parent.name,
+        value: parent.totalHours,
+        color: parent.color,
+      })),
+    [overview],
+  );
 
-  const [sleepCategoryId, setSleepCategoryIdState] = useState<string | null>(() => getSleepCategoryId());
+  const totalHours = overview.totalRecordedHours;
+
+  const routine = useMemo(
+    () =>
+      buildRoutineInsights({
+        entries,
+        categories,
+        fromDate: statsRange.fromDate,
+        toDate: statsRange.toDate,
+        sleepCategoryId,
+      }),
+    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
+  );
 
   const anomalies = useMemo(
     () =>
@@ -93,8 +155,9 @@ export default function StatsPage() {
         fromDate: statsRange.fromDate,
         toDate: statsRange.toDate,
         sleepCategoryId,
+        sleepWindow: routine.sleepWindow,
       }),
-    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
+    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId, routine.sleepWindow],
   );
 
   const [trendWindowSpec, setTrendWindowSpec] = useState<TrendWindowSpec>({ kind: "preset", days: 7 });
@@ -116,20 +179,24 @@ export default function StatsPage() {
   );
 
   // 折线/面积图行数据：每行一天，键为父分类名，值为小时。
-  const parentNameById = useMemo(() => new Map(parentCategories.map((c) => [c.id, c.name])), [parentCategories]);
   const trendChartData = useMemo(
     () =>
       trend.points.map((point) => {
         const row: Record<string, number | string> = { date: point.date.slice(5) };
         for (const t of trend.parentTrends) {
-          row[parentNameById.get(t.parentId) ?? t.parentId] = Math.round(((point.byParent[t.parentId] ?? 0) / 60) * 10) / 10;
+          row[parentNameById.get(t.parentId) ?? t.parentId] =
+            Math.round(((point.byParent[t.parentId] ?? 0) / 60) * 10) / 10;
         }
         return row;
       }),
     [trend, parentNameById],
   );
   const trendSeries = useMemo(
-    () => trend.parentTrends.map((t) => ({ key: parentNameById.get(t.parentId) ?? t.parentId, color: parentCategories.find((c) => c.id === t.parentId)?.color ?? "#808080" })),
+    () =>
+      trend.parentTrends.map((t) => ({
+        key: parentNameById.get(t.parentId) ?? t.parentId,
+        color: parentCategories.find((c) => c.id === t.parentId)?.color ?? "#808080",
+      })),
     [trend, parentNameById, parentCategories],
   );
 
@@ -155,7 +222,16 @@ export default function StatsPage() {
         baselineTo: today,
         sleepCategoryId,
       }),
-    [entries, baselineEntries, categories, statsRange.fromDate, statsRange.toDate, baselineFrom, today, sleepCategoryId],
+    [
+      entries,
+      baselineEntries,
+      categories,
+      statsRange.fromDate,
+      statsRange.toDate,
+      baselineFrom,
+      today,
+      sleepCategoryId,
+    ],
   );
 
   return (
@@ -214,6 +290,43 @@ export default function StatsPage() {
         </button>
       )}
       <div className="text-center text-sm text-slate-400">已记录 {totalHours.toFixed(1)} 小时</div>
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium text-slate-200">总览</h3>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+            <div className="text-xs text-slate-500">本周期总时长</div>
+            <div className="mt-1 text-slate-100">{overview.totalRecordedHours.toFixed(1)}h</div>
+          </div>
+          <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+            <div className="text-xs text-slate-500">记录覆盖率</div>
+            <div className="mt-1 text-slate-100">{overview.coverageDisplayPct.toFixed(1)}%</div>
+            {overview.coverageNote && <div className="mt-1 text-xs text-slate-500">{overview.coverageNote}</div>}
+          </div>
+        </div>
+        {overview.parents.length > 0 && (
+          <div className="space-y-2">
+            <div className="text-xs text-slate-500">父分类 → 子分类占比</div>
+            {overview.parents.map((parent) => (
+              <div key={parent.parentId} className="space-y-1 rounded-lg bg-slate-800/60 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-slate-200">{parent.name}</span>
+                  <span className="text-slate-400">
+                    {parent.totalHours.toFixed(1)}h · {parent.sharePct}%
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {parent.children.map((child) => (
+                    <div key={child.categoryId} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-slate-400">{child.name}</span>
+                      <span className="shrink-0 text-slate-500">{child.shareOfParentPct}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
       {pieData.length > 0 && (
         <div className="flex justify-center">
           <ResponsiveContainer width="100%" height={250}>
@@ -227,8 +340,8 @@ export default function StatsPage() {
                 outerRadius={90}
                 label={({ name, value }) => `${name} ${value}h`}
               >
-                {pieData.map((d, i) => (
-                  <Cell key={i} fill={d.color} />
+                {pieData.map((d) => (
+                  <Cell key={d.id} fill={d.color} />
                 ))}
               </Pie>
               <Tooltip formatter={(value) => `${value} 小时`} />
@@ -243,35 +356,53 @@ export default function StatsPage() {
             <YAxis type="category" dataKey="name" width={60} tick={{ fill: "#94a3b8", fontSize: 12 }} />
             <Tooltip formatter={(value) => `${value} 小时`} />
             <Bar dataKey="value">
-              {pieData.map((d, i) => (
-                <Cell key={i} fill={d.color} />
+              {pieData.map((d) => (
+                <Cell key={d.id} fill={d.color} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       )}
       {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无统计数据</div>}
-      <section className="space-y-2">
+      <section className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-slate-200">异常与空档</h3>
-          <select
-            aria-label="睡眠分类"
-            value={sleepCategoryId ?? ""}
-            onChange={(event) => {
-              const value = event.target.value || null;
-              setSleepCategoryId(value);
-              setSleepCategoryIdState(value);
-            }}
-            className="bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
-          >
-            <option value="">睡眠分类：未指定</option>
-            {parentCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                睡眠：{category.name}
-              </option>
-            ))}
-          </select>
+          <h3 className="text-sm font-medium text-slate-200">作息</h3>
+          {sleepCategoryId === null && (
+            <a href="/settings/insights" className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
+              去设置
+            </a>
+          )}
         </div>
+        {sleepCategoryId === null ? (
+          <p className="text-sm text-slate-500">指定睡眠分类后，可计算入睡、起床、睡眠时长和规律性。</p>
+        ) : routine.sampleCount === 0 ? (
+          <p className="text-sm text-slate-500">本周期暂无睡眠样本。</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                <div className="text-xs text-slate-500">平均入睡</div>
+                <div className="mt-1 text-slate-100">{formatClockFromMinute(routine.averageBedTimeMin)}</div>
+              </div>
+              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                <div className="text-xs text-slate-500">平均起床</div>
+                <div className="mt-1 text-slate-100">{formatClockFromMinute(routine.averageWakeTimeMin)}</div>
+              </div>
+              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                <div className="text-xs text-slate-500">平均睡眠</div>
+                <div className="mt-1 text-slate-100">{formatHoursFromMin(routine.averageDurationMin)}</div>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              {routineStateText(routine.regularity.state)} · 样本 {routine.sampleCount} 天
+              {routine.sleepWindow.source === "samples" &&
+                ` · 通常睡眠时段 ${formatClockFromMinute(routine.sleepWindow.startMin)}~${formatClockFromMinute(routine.sleepWindow.endMin)}`}
+            </p>
+          </div>
+        )}
+      </section>
+      <section className="space-y-2">
+        <h3 className="text-sm font-medium text-slate-200">异常与空档</h3>
         {sleepCategoryId === null && (
           <p className="text-xs text-slate-500">指定「睡眠」分类后，超长记录与异常时段判定会更准确。</p>
         )}
@@ -279,8 +410,11 @@ export default function StatsPage() {
           <p className="text-sm text-slate-500">本周期未发现异常。</p>
         ) : (
           <ul className="space-y-2">
-            {anomalies.map((anomaly, index) => (
-              <li key={index} className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200">
+            {anomalies.map((anomaly) => (
+              <li
+                key={`${anomaly.type}:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}`}
+                className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200"
+              >
                 <span className="mr-2 rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
                   {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
                 </span>
@@ -362,7 +496,10 @@ export default function StatsPage() {
           <>
             <ul className="space-y-1.5">
               {trend.parentTrends.map((t) => (
-                <li key={t.parentId} className="flex items-center justify-between rounded bg-slate-800/60 px-3 py-1.5 text-sm">
+                <li
+                  key={t.parentId}
+                  className="flex items-center justify-between rounded bg-slate-800/60 px-3 py-1.5 text-sm"
+                >
                   <span className="text-slate-200">{parentNameById.get(t.parentId) ?? t.parentId}</span>
                   <span
                     className={
@@ -472,23 +609,26 @@ export default function StatsPage() {
                 <span className="text-slate-500">（基线 {structure.baseline.deepRatioPct}%）</span>
               </div>
               <div className="text-slate-400 text-xs">
-                深度块 {structure.current.deepBlockCount} 个 · 深度门槛 ≥ {Math.round(structure.thresholds.deepThresholdMin)}min ·
-                中位会话 {structure.current.medianSessionMin}min（基线 {structure.baseline.medianSessionMin}min）
+                深度块 {structure.current.deepBlockCount} 个 · 深度门槛 ≥{" "}
+                {Math.round(structure.thresholds.deepThresholdMin)}min · 中位会话 {structure.current.medianSessionMin}
+                min（基线 {structure.baseline.medianSessionMin}min）
               </div>
             </div>
 
             <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200 space-y-1">
               <div className="text-slate-400 text-xs">碎片化（仅供观察，不报警）</div>
               <div className="text-slate-300 text-xs">
-                每活跃小时切换 {structure.fragment.switchesPerActiveHour} 次（基线 {structure.fragment.baselineSwitchesPerActiveHour}）
-                · 短会话占比 {structure.fragment.shortSessionRatioPct}%（基线 {structure.fragment.baselineShortSessionRatioPct}%）
+                每活跃小时切换 {structure.fragment.switchesPerActiveHour} 次（基线{" "}
+                {structure.fragment.baselineSwitchesPerActiveHour}） · 短会话占比{" "}
+                {structure.fragment.shortSessionRatioPct}%（基线 {structure.fragment.baselineShortSessionRatioPct}%）
               </div>
             </div>
 
             <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200 space-y-1">
               <div className="text-slate-400 text-xs">投入分散度（香农熵）</div>
               <div className="text-slate-300 text-xs">
-                {structure.entropy.normalizedPct}%（H={structure.entropy.entropyBits} / {structure.entropy.parentCount} 类）·
+                {structure.entropy.normalizedPct}%（H={structure.entropy.entropyBits} / {structure.entropy.parentCount}{" "}
+                类）·
                 {structure.entropy.normalizedPct >= 70 ? " 投入较分散" : " 投入较集中"}
               </div>
             </div>
@@ -507,8 +647,8 @@ export default function StatsPage() {
                     <li key={item.parentId} className="text-xs">
                       <span className="text-slate-200">{parentNameById.get(item.parentId) ?? item.parentId}</span>{" "}
                       <span className={item.direction === "high" ? "text-amber-400" : "text-sky-400"}>
-                        {item.currentSharePct}%，{item.direction === "high" ? "高于" : "低于"}你的常态
-                        （{item.baselineMeanPct}%±{item.baselineStdevPct}%）
+                        {item.currentSharePct}%，{item.direction === "high" ? "高于" : "低于"}你的常态 （
+                        {item.baselineMeanPct}%±{item.baselineStdevPct}%）
                       </span>
                     </li>
                   ))}

@@ -44,6 +44,10 @@ vi.mock("./pages/settings/SettingsDataPage.tsx", () => ({
   default: () => createElement("div", null, "数据设置页"),
 }));
 
+vi.mock("./pages/settings/SettingsInsightsPage.tsx", () => ({
+  default: () => createElement("div", null, "数据洞察设置页"),
+}));
+
 describe("AppShell settings routes", () => {
   it("renders settings data route without bottom navigation", () => {
     const html = renderToStaticMarkup(
@@ -61,6 +65,16 @@ describe("AppShell settings routes", () => {
     );
 
     expect(html).toContain("服务器配置页");
+    expect(html).not.toContain("时间轴");
+    expect(html).not.toContain("统计");
+  });
+
+  it("renders settings insights route without bottom navigation", () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, { initialEntries: ["/settings/insights"] }, createElement(AppShell)),
+    );
+
+    expect(html).toContain("数据洞察设置页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });

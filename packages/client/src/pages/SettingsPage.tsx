@@ -10,9 +10,7 @@ import type { RegularSyncResult } from "../sync/engine.ts";
 
 type ServerConnectionColor = "green" | "gray" | "red";
 
-type ServerVersionState =
-  | { ok: true; version: VersionInfo }
-  | { ok: false; error: string };
+type ServerVersionState = { ok: true; version: VersionInfo } | { ok: false; error: string };
 
 interface ServerConnectionState {
   color: ServerConnectionColor;
@@ -47,7 +45,12 @@ function SettingsLinkRow({
   title,
   subtitle,
   accessory,
-}: { to: string; title: string; subtitle?: string; accessory?: string }) {
+}: {
+  to: string;
+  title: string;
+  subtitle?: string;
+  accessory?: string;
+}) {
   return (
     <Link
       to={to}
@@ -71,7 +74,13 @@ function SettingsActionRow({
   accessory,
   disabled,
   onClick,
-}: { title: string; subtitle?: string; accessory?: string; disabled?: boolean; onClick: () => void }) {
+}: {
+  title: string;
+  subtitle?: string;
+  accessory?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -276,6 +285,7 @@ export default function SettingsPage() {
         {cloudSyncEnabled && <CloudSyncSummary />}
 
         <SettingsLinkRow to="/settings/categories" title="分类管理" subtitle="新增、排序、改色、子分类与删除" />
+        <SettingsLinkRow to="/settings/insights" title="数据洞察" subtitle="设置睡眠分类，用于作息、覆盖率和异常判定" />
         <SettingsLinkRow to="/settings/data" title="数据设置" subtitle="云同步、强制替换、导出、恢复、重置" />
         <SettingsLinkRow
           to="/settings/admin-insights"
