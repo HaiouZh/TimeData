@@ -351,16 +351,15 @@ export default function StatsPage() {
       )}
       {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无统计数据</div>}
       <section className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-slate-200">作息</h3>
-          {sleepCategoryId === null && (
-            <Link to="/settings/insights" className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
-              去设置
-            </Link>
-          )}
-        </div>
+        <h3 className="text-sm font-medium text-slate-200">作息</h3>
         {sleepCategoryId === null ? (
-          <p className="text-sm text-slate-500">指定睡眠分类后，可计算入睡、起床、睡眠时长和规律性。</p>
+          <Link
+            to="/settings/insights"
+            className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"
+          >
+            设置睡眠分类后可查看作息分析
+            <span aria-hidden>›</span>
+          </Link>
         ) : routine.sampleCount === 0 ? (
           <p className="text-sm text-slate-500">本周期暂无睡眠样本。</p>
         ) : (
@@ -389,9 +388,6 @@ export default function StatsPage() {
       </section>
       <section className="space-y-2">
         <h3 className="text-sm font-medium text-slate-200">异常与空档</h3>
-        {sleepCategoryId === null && (
-          <p className="text-xs text-slate-500">指定「睡眠」分类后，超长记录与异常时段判定会更准确。</p>
-        )}
         {anomalies.length === 0 ? (
           <p className="text-sm text-slate-500">本周期未发现异常。</p>
         ) : (
