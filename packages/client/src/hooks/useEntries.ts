@@ -28,42 +28,6 @@ export function validateEntryTimeRange(startTime: string, endTime: string, now: 
   if (isFutureLocalDateTime(endTime, now)) throw new Error("不能记录尚未发生的时间");
 }
 
-export interface FutureEndedEntriesDeleteResult {
-  deletedCount: number;
-  deletedEntryIds: string[];
-}
-
-export async function findFutureEndedEntries(now: Date = new Date()): Promise<TimeEntry[]> {
-  const entries = await db.timeEntries.toArray();
-  return entries
-    .filter((entry) => isFutureLocalDateTime(entry.endTime, now))
-    .sort((a, b) => a.endTime.localeCompare(b.endTime));
-}
-
-export async function deleteFutureEndedEntries(now: Date = new Date()): Promise<FutureEndedEntriesDeleteResult> {
-  const entries = await findFutureEndedEntries(now);
-  const deletedEntryIds = entries.map((entry) => entry.id);
-  if (deletedEntryIds.length === 0) return { deletedCount: 0, deletedEntryIds: [] };
-
-  await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
-    for (const id of deletedEntryIds) {
-      await db.timeEntries.delete(id);
-      const pendingLogs = await db.syncLog
-        .where("recordId")
-        .equals(id)
-        .filter((log) => log.tableName === "time_entries" && !log.synced)
-        .toArray();
-      if (pendingLogs.some((log) => log.action === "create")) {
-        await db.syncLog.bulkUpdate(pendingLogs.map((log) => ({ key: log.id, changes: { synced: 1 } })));
-      } else {
-        await recordSyncLog("time_entries", id, "delete");
-      }
-    }
-  });
-
-  return { deletedCount: deletedEntryIds.length, deletedEntryIds };
-}
-
 export async function findOverlappingEntries(
   startTime: string,
   endTime: string,

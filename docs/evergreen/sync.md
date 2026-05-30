@@ -237,7 +237,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 |---|---|---|
 | `applied` | `applied` | 标记对应 Dexie `syncLog` 为 `synced=1`。 |
 | `missing_payload` / `invalid_shape` / `id_mismatch` | `client_bug` | 标记对应 `syncLog` 为 `synced=1`，停止反复推送；同时放入 `clientBugIssues`，用于诊断/开发者可见错误。 |
-| `archived_category` / `missing_category` / `overlap` / `invalid_time_range` / `foreign_key_failed` | `user_actionable` | 不标记已同步，保留在 `syncLog`；放入 `pushIssues` 与 `userActionableIssues`，设置页同步摘要提示用户处理。对 `invalid_time_range` 且 message 指向未来结束时间的本地记录，用户可进入 `设置 → 数据设置 → 本地未来记录修复`，检查并删除当前设备本地的未来结束记录；该入口只改本地 IndexedDB 和 `syncLog`，不直接修改服务器数据库。若异常记录在本地创建后从未成功同步，修复会把对应未同步 create 轨迹标为已处理，不再追加 delete 意图，避免下次同步继续推送同一条未来记录。 |
+| `archived_category` / `missing_category` / `overlap` / `invalid_time_range` / `foreign_key_failed` | `user_actionable` | 不标记已同步，保留在 `syncLog`；放入 `pushIssues` 与 `userActionableIssues`，设置页同步摘要提示用户处理。对 `invalid_time_range` 且 message 指向未来结束时间的本地记录，当前客户端不再提供单条本地修复入口；用户应先校准设备时间，必要时进入 `设置 → 数据设置 → 高级 · 数据恢复` 运行同步诊断，并在确认云端数据正确时使用“将本地数据替换为云端数据”清掉未被服务器接受的本地异常记录。 |
 | `server_version_newer_or_same` | `conflict` | 不标记已同步，保留在 `pushIssues`，进入现有冲突/同步问题处理路径。 |
 | 未识别值 | `unknown` | 不标记已同步，保留在 `pushIssues`，避免静默丢弃未来新增原因码。 |
 

@@ -286,7 +286,7 @@ export default function SettingsPage() {
 
         <SettingsLinkRow to="/settings/categories" title="分类管理" subtitle="新增、排序、改色、子分类与删除" />
         <SettingsLinkRow to="/settings/insights" title="数据洞察" subtitle="设置睡眠分类，用于作息、覆盖率和异常判定" />
-        <SettingsLinkRow to="/settings/data" title="数据设置" subtitle="云同步、强制替换、导出、恢复、重置" />
+        <SettingsLinkRow to="/settings/data" title="数据设置" subtitle="云同步、显示、备份与高级数据恢复" />
         <SettingsLinkRow
           to="/settings/admin-insights"
           title="服务端数据洞察"

@@ -4,8 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/index.js";
 import {
   applyEntryOverlapAdjustments,
-  deleteFutureEndedEntries,
-  findFutureEndedEntries,
   findLatestEntryEndingBefore,
   findOverlappingEntries,
   findPreviousEntry,
@@ -111,40 +109,6 @@ describe("useEntryMutations", () => {
 
     await expect(db.timeEntries.get("existing")).resolves.toMatchObject({ id: "existing" });
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
-  });
-});
-
-describe("local future-ended entry repair", () => {
-  it("finds only entries whose end time is in the future", async () => {
-    await db.timeEntries.bulkAdd([
-      entry("past", "2026-05-08T07:00:00", "2026-05-08T08:00:00"),
-      entry("future-late", "2026-05-08T07:00:00", "2026-05-08T08:02:00"),
-      entry("future-early", "2026-05-08T06:00:00", "2026-05-08T08:01:00"),
-    ]);
-
-    const entries = await findFutureEndedEntries(new Date("2026-05-08T08:00:00+08:00"));
-
-    expect(entries.map((item) => item.id)).toEqual(["future-early", "future-late"]);
-  });
-
-  it("omits a local-only future entry from future repair push logs", async () => {
-    await db.timeEntries.add(entry("future", "2026-05-08T07:00:00", "2026-05-08T08:01:00"));
-    await db.syncLog.add({
-      id: "future-create",
-      tableName: "time_entries",
-      recordId: "future",
-      action: "create",
-      timestamp: "2026-05-08T07:00:00.000Z",
-      synced: 0,
-    });
-
-    const result = await deleteFutureEndedEntries(new Date("2026-05-08T08:00:00+08:00"));
-
-    expect(result).toEqual({ deletedCount: 1, deletedEntryIds: ["future"] });
-    await expect(db.timeEntries.get("future")).resolves.toBeUndefined();
-    await expect(db.syncLog.where("recordId").equals("future").toArray()).resolves.toMatchObject([
-      { action: "create", synced: 1 },
-    ]);
   });
 });
 

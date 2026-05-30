@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { findFutureEndedEntries } from "../../hooks/useEntries.js";
 import SettingsDataPage from "./SettingsDataPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,11 +33,6 @@ const syncContextMock = vi.hoisted(() => ({
 
 vi.mock("../../contexts/SyncContext.tsx", () => ({
   useSyncContext: () => syncContextMock.value,
-}));
-
-vi.mock("../../hooks/useEntries.js", () => ({
-  findFutureEndedEntries: vi.fn(async () => []),
-  deleteFutureEndedEntries: vi.fn(async () => ({ deletedCount: 0, deletedEntryIds: [] })),
 }));
 
 const localStorageMock = (() => {
@@ -95,14 +89,18 @@ describe("SettingsDataPage", () => {
 
     expect(html).toContain("数据设置");
     expect(html).toContain("是否开启云同步");
+    expect(html).toContain("跨天记录合并展示");
+    expect(html).toContain("备份与数据");
+    expect(html).toContain("高级 · 数据恢复");
     expect(html).toContain("强制替换");
-    expect(html).toContain("数据导出");
-    expect(html).toContain("数据恢复");
+    expect(html).toContain("导出完整备份");
+    expect(html).toContain("从完整备份恢复");
+    expect(html).toContain("查看本地备份记录");
     expect(html).toContain("同步健康诊断");
-    expect(html).toContain("本地未来记录修复");
-    expect(html).toContain("检查本地未来记录");
     expect(html).toContain("将本地数据覆盖到云端");
     expect(html).toContain("数据重置");
+    expect(html).not.toContain("本地未来记录修复");
+    expect(html).not.toContain("检查本地未来记录");
   });
 
   it("shows the restore status from navigation state", () => {
@@ -143,8 +141,9 @@ describe("SettingsDataPage", () => {
     expect(html).toContain("接受删除（丢弃本地修改）");
   });
 
-  it("shows future repair check feedback next to the repair action", async () => {
-    vi.mocked(findFutureEndedEntries).mockResolvedValueOnce([]);
+  it("opens the recovery details when sync diagnostics are needed", async () => {
+    syncContextMock.value.needsSyncDiagnostics = true;
+    syncContextMock.value.syncFailureCount = 3;
     const host = document.createElement("div");
     const root = createRoot(host);
 
@@ -152,14 +151,9 @@ describe("SettingsDataPage", () => {
       root.render(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
     });
 
-    const button = [...host.querySelectorAll("button")].find((item) => item.textContent === "检查本地未来记录");
-    expect(button).toBeTruthy();
-
-    await act(async () => {
-      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(host.textContent).toContain("未发现结束时间晚于现在的本地记录。");
+    const details = host.querySelector("details");
+    expect(details?.open).toBe(true);
+    expect(host.textContent).toContain("普通同步已连续失败 3 次");
 
     await act(async () => {
       root.unmount();
