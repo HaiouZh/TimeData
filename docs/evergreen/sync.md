@@ -52,7 +52,7 @@ last-reviewed: 2026-05-20
 
 兼容回退开关是 `localStorage.timedata_legacy_snapshot_sync === "1"`（集中定义在 `packages/client/src/lib/storageKeys.ts` 的 `STORAGE_KEYS.legacySnapshotSync`）：打开后 `regularSync()` 会走旧的 `loadLocalSnapshot()` + `loadCloudSnapshot()` 全量快照比较路径，主要用于 D2 上线后的灰度回滚。旧路径仍会在快照不一致时补齐本地有、云端无且缺失 syncLog 的 create 日志；新 meta 主路径不会做全量云端快照比较，因此 `unsyncedCount=0` 但 meta 不一致时只执行 `syncPullRecent(7)` 作为 pull-only repair。
 
-客户端 UI 层的同步状态由 `SyncContext` 统一提供。`SyncProvider` 包裹在 App 顶层，复用 `useSync` 的同步动作和诊断能力；时间轴页、设置首页和数据设置页共享同一个状态来源。自动触发入口包括：首次进入时间轴页，以及新增/编辑/删除记录成功写入本地后；这些自动触发走 30 秒节流，设置页手动同步按钮不受节流影响。
+客户端 UI 层的同步状态由 `SyncContext` 统一提供。`SyncProvider` 包裹在 App 顶层，复用 `useSync` 的同步动作和诊断能力；时间轴页、设置首页和数据设置页共享同一个状态来源。同步指示灯会区分 `pending`（本地 Dexie `syncLog.synced=0` 实时计数大于 0，表示仍有待上传记录）和 `success` / `idle`（本地待上传计数为 0）；这个 pending 状态只来自本地实时计数，不做额外网络探测。自动触发入口包括：首次进入时间轴页，以及新增/编辑/删除记录成功写入本地后；这些自动触发走 30 秒节流，设置页手动同步按钮不受节流影响。被节流挡下的自动触发会在当前 30 秒窗口结束时安排一次单次补推，补推执行前会再次检查本地是否仍有未上传记录。
 
 还有几个特殊入口：
 

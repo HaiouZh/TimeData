@@ -18,6 +18,7 @@ describe("syncIndicatorClassName", () => {
     expect(syncIndicatorClassName("syncing")).toContain("animate-sync-pulse");
     expect(syncIndicatorClassName("error")).toContain("bg-red-500");
     expect(syncIndicatorClassName("error")).toContain("animate-sync-blink");
+    expect(syncIndicatorClassName("pending")).toContain("bg-blue-500");
   });
 });
 
@@ -27,9 +28,18 @@ describe("SyncIndicator", () => {
 
     const html = renderToStaticMarkup(createElement(SyncIndicator));
 
-    expect(html).toContain('aria-label="同步状态：syncing"');
+    expect(html).toContain('aria-label="同步状态：同步中"');
     expect(html).toContain("animate-sync-pulse");
     expect(html).not.toContain("<button");
     expect(html).not.toContain("href=");
+  });
+
+  it("renders a readable pending aria label", () => {
+    useSyncContextMock.mockReturnValue({ status: "pending" });
+
+    const html = renderToStaticMarkup(createElement(SyncIndicator));
+
+    expect(html).toContain('aria-label="同步状态：待上传"');
+    expect(html).toContain("bg-blue-500");
   });
 });
