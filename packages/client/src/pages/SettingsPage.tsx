@@ -161,7 +161,6 @@ export default function SettingsPage() {
   const { apiUrl, cloudSyncEnabled } = useSyncContext();
   const { confirm, dialog } = useConfirm();
   const [serverVersion, setServerVersion] = useState<ServerVersionState | null>(null);
-  const [, setServerChecked] = useState(!apiUrl);
   const [serverHealth, setServerHealth] = useState<ServerHealthState>(() =>
     apiUrl && safeGetItem(STORAGE_KEYS.serverHealthy) === "1" ? "ok" : "checking",
   );
@@ -178,7 +177,6 @@ export default function SettingsPage() {
     fetchServerVersion().then((version) => {
       if (cancelled) return;
       setServerVersion(version);
-      setServerChecked(true);
     });
 
     return () => {
@@ -229,10 +227,8 @@ export default function SettingsPage() {
 
   async function refreshServerVersion() {
     if (!apiUrl) return;
-    setServerChecked(false);
     const version = await fetchServerVersion();
     setServerVersion(version);
-    setServerChecked(true);
   }
 
   async function handleServerUpdate() {
