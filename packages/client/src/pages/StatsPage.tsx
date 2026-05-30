@@ -19,8 +19,9 @@ import {
 } from "../lib/stats.ts";
 import { addDays, getDateString } from "../lib/time.ts";
 import {
-  CategoryBarChart,
-  CategoryPieChart,
+  CategoryCompositionBars,
+  CategoryDonut,
+  type CompositionParent,
   TrendChart,
   type TrendChartKind,
   type TrendChartRow,
@@ -139,6 +140,24 @@ export default function StatsPage() {
         name: parent.name,
         value: parent.totalHours,
         color: parent.color,
+      })),
+    [overview],
+  );
+
+  const compositionParents = useMemo<CompositionParent[]>(
+    () =>
+      overview.parents.map((parent) => ({
+        id: parent.parentId,
+        name: parent.name,
+        totalHours: parent.totalHours,
+        sharePct: parent.sharePct,
+        color: parent.color,
+        children: parent.children.map((child) => ({
+          id: child.categoryId,
+          name: child.name,
+          min: child.totalMin,
+          color: child.color,
+        })),
       })),
     [overview],
   );
@@ -313,39 +332,24 @@ export default function StatsPage() {
             {overview.coverageNote && <div className="mt-1 text-xs text-slate-500">{overview.coverageNote}</div>}
           </div>
         </div>
-        {overview.parents.length > 0 && (
+        {compositionParents.length > 0 && (
           <div className="space-y-2">
-            <div className="text-xs text-slate-500">父分类 → 子分类占比</div>
-            {overview.parents.map((parent) => (
-              <div key={parent.parentId} className="space-y-1 rounded-lg bg-slate-800/60 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-200">{parent.name}</span>
-                  <span className="text-slate-400">
-                    {parent.totalHours.toFixed(1)}h · {parent.sharePct}%
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  {parent.children.map((child) => (
-                    <div key={child.categoryId} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate text-slate-400">{child.name}</span>
-                      <span className="shrink-0 text-slate-500">{child.shareOfParentPct}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <div className="text-xs text-slate-500">父分类 → 子分类构成</div>
+            <CategoryCompositionBars parents={compositionParents} />
           </div>
         )}
       </section>
       {pieData.length > 0 && (
         <div className="space-y-3">
           {chartsInView ? (
-            <>
-              <CategoryPieChart data={pieData} />
-              <CategoryBarChart data={pieData} />
-            </>
+            <CategoryDonut
+              data={pieData}
+              totalHours={overview.totalRecordedHours}
+              coveragePct={overview.coverageDisplayPct}
+              coverageNote={overview.coverageNote}
+            />
           ) : (
-            <div className="min-h-[462px]" />
+            <div className="min-h-[250px]" />
           )}
         </div>
       )}

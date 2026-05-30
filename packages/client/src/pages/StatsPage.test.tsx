@@ -313,7 +313,13 @@ describe("StatsPage", () => {
 
     expect(host.textContent).toContain("总览");
     expect(host.textContent).toContain("记录覆盖率");
-    expect(host.textContent).toContain("父分类 → 子分类占比");
+    expect(host.textContent).toContain("父分类 → 子分类构成");
+    const workComposition = [...host.querySelectorAll('button[aria-expanded="false"]')].find((button) =>
+      button.textContent?.includes("工作"),
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      workComposition?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     expect(host.textContent).toContain("编码");
     expect(host.textContent).toContain("作息");
     expect(host.textContent).toContain("平均入睡");

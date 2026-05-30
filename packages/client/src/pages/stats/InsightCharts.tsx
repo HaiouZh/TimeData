@@ -2,8 +2,6 @@ import { memo, useState } from "react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -26,57 +24,6 @@ export type TrendChartKind = "line" | "area";
 export type TrendChartRow = Record<string, number | string>;
 
 const hourFormatter = (value: unknown) => `${value} 小时`;
-
-export interface PieDatum {
-  id: string;
-  name: string;
-  value: number;
-  color: string;
-}
-
-export const CategoryPieChart = memo(function CategoryPieChart({ data }: { data: PieDatum[] }) {
-  return (
-    <div className="min-h-[250px]">
-      <ResponsiveContainer width="100%" height={250}>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            outerRadius={90}
-            label={({ name, value }) => `${name} ${value}h`}
-          >
-            {data.map((item) => (
-              <Cell key={item.id} fill={item.color} />
-            ))}
-          </Pie>
-          <Tooltip formatter={hourFormatter} />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
-  );
-});
-
-export const CategoryBarChart = memo(function CategoryBarChart({ data }: { data: PieDatum[] }) {
-  return (
-    <div className="min-h-[200px]">
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={data} layout="vertical">
-          <XAxis type="number" unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-          <YAxis type="category" dataKey="name" width={60} tick={{ fill: "#94a3b8", fontSize: 12 }} />
-          <Tooltip formatter={hourFormatter} />
-          <Bar dataKey="value">
-            {data.map((item) => (
-              <Cell key={item.id} fill={item.color} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-});
 
 export const TrendChart = memo(function TrendChart({
   chart,
