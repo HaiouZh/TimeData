@@ -8,4 +8,5 @@ export const STORAGE_KEYS = {
   cloudSyncEnabled: "timedata_cloud_sync_enabled",
   mergeOvernight: "timedata_merge_overnight",
   sleepCategoryId: "timedata_sleep_category_id",
+  serverHealthy: "timedata_server_healthy",
 } as const;

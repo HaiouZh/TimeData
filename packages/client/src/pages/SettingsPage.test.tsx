@@ -200,31 +200,25 @@ describe("SettingsPage", () => {
 });
 
 describe("getServerConnectionState", () => {
-  it("uses a green dot when a configured server returns version info", () => {
-    expect(
-      getServerConnectionState(
-        "https://example.com",
-        {
-          ok: true,
-          version: {
-            current: "abc1234",
-            latest: "def5678",
-            hasUpdate: true,
-            checkedAt: "2026-05-08T08:00:00.000Z",
-          },
-        },
-        true,
-      ),
-    ).toEqual({
+  it("apiUrl 为空时灰点未配置", () => {
+    expect(getServerConnectionState("", "checking")).toEqual({ color: "gray", subtitle: "未配置服务器" });
+  });
+  it("health ok 时绿灯已连接", () => {
+    expect(getServerConnectionState("https://example.com", "ok")).toEqual({
       color: "green",
       subtitle: "服务器已连接",
     });
   });
-
-  it("uses the concrete server version error after checking a configured server", () => {
-    expect(getServerConnectionState("https://example.com", { ok: false, error: "请求超时（15000ms）" }, true)).toEqual({
+  it("health fail 时红灯连接失败", () => {
+    expect(getServerConnectionState("https://example.com", "fail")).toEqual({
       color: "red",
-      subtitle: "请求超时（15000ms）",
+      subtitle: "服务器连接失败",
+    });
+  });
+  it("health checking 时灰灯正在检查", () => {
+    expect(getServerConnectionState("https://example.com", "checking")).toEqual({
+      color: "gray",
+      subtitle: "正在检查服务器",
     });
   });
 });
