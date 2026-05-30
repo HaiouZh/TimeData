@@ -253,10 +253,6 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                 } else {
                   fill = "rgb(100 116 139)";
                 }
-                const nextSelection: Selection = slot.entry
-                  ? { type: "entry", entry: slot.entry }
-                  : { type: "gap", startTime: slot.startTime, endTime: slot.endTime };
-
                 return (
                   <path
                     key={key}

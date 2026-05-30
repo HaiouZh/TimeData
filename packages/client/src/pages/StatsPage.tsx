@@ -6,7 +6,7 @@ import { useCategories } from "../hooks/useCategories.ts";
 import { useInView } from "../hooks/useInView.ts";
 import { memoAnomalies, memoOverview, memoRoutine, memoStructure, memoTrend } from "../lib/insights/cache.ts";
 import { INSIGHT_CONSTANTS } from "../lib/insights/constants.ts";
-import { buildRoutineInsights, formatClockFromMinute } from "../lib/insights/routine.ts";
+import { type buildRoutineInsights, formatClockFromMinute } from "../lib/insights/routine.ts";
 import { type ParentTrend, resolveTrendWindow, type TrendWindowSpec } from "../lib/insights/trends.ts";
 import { getSleepCategoryId } from "../lib/sleepCategorySetting.ts";
 import {
