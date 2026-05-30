@@ -260,4 +260,29 @@ describe("StatsPage", () => {
       root.unmount();
     });
   });
+
+  it("结构诊断区：渲染深度时间占比与熵，基线不足时提示占比失衡退化", async () => {
+    const today = getDateString(new Date());
+    categoriesState.categories = [
+      { id: "work", name: "工作", parentId: null, color: "#3b82f6", icon: null, sortOrder: 0, isArchived: false, createdAt: "2026-05-01T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" },
+    ];
+    entriesState.entries = [
+      { id: "s1", categoryId: "work", startTime: `${today}T02:00:00.000Z`, endTime: `${today}T05:00:00.000Z`, note: null, createdAt: `${today}T02:00:00.000Z`, updatedAt: `${today}T02:00:00.000Z` },
+    ];
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(StatsPage));
+    });
+
+    expect(host.textContent).toContain("结构诊断");
+    expect(host.textContent).toContain("深度时间占比");
+    expect(host.textContent).toContain("投入分散度");
+    expect(host.textContent).toContain("基线数据不足");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
