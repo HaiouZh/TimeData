@@ -96,7 +96,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 统计页的数据洞察增强由 `packages/client/src/lib/insights/` 下的纯函数承担：`overview.ts` 负责按统计窗口裁剪后的总时长、父分类到子分类占比、记录覆盖率；`routine.ts` 负责把睡眠分类记录按醒来日期归属，计算入睡、起床、睡眠时长和通常睡眠窗口。`dailyRollup.ts` 会先按本地午夜边界预聚合日桶，`cache.ts` 在 React 外用条目/分类指纹缓存日桶和重型洞察结果，让统计页切换周期、离开后重进、同日刷新时复用未变数据。睡眠分类的正式入口在 `/settings/insights`，设置值来自同步 settings 表；统计页通过 React Router `Link` 进入设置页，Android WebView 内不会触发整页外部跳转。未配置时，覆盖率按全天估算，异常睡眠窗口回退到默认 23:00~07:00。
 
-统计页的 Dexie 查询以近 90 天基线窗口为超集，当前周期和默认趋势窗口优先从该超集内存切片；只有窗口早于基线起点时才回退独立查询。Recharts 图表集中在 `packages/client/src/pages/stats/InsightCharts.tsx`，由 `React.memo` 包裹并固定高度；页面通过 `packages/client/src/hooks/useInView.ts` 等图表区进入视口后再挂载图表，文字洞察保持即时渲染。
+统计页的 Dexie 查询以近 90 天基线窗口为超集，当前周期和默认趋势窗口优先从该超集内存切片；只有窗口早于基线起点时才回退独立查询。图表集中在 `packages/client/src/pages/stats/InsightCharts.tsx`，由 `React.memo` 包裹：环形图 `CategoryDonut`（中央覆盖层叠加总时长与覆盖率）和趋势折线/面积图基于 Recharts、固定高度，页面通过 `packages/client/src/hooks/useInView.ts` 等图表区进入视口后再挂载；父分类→子分类构成条 `CategoryCompositionBars` 是纯 CSS 分段条（点击父分类展开子分类明细），连同文字洞察在总览区即时渲染，不走视口门控。
 
 统计页顶部的「日 / 周 / 月」切换按钮都显式声明 `type="button"`，并通过 `aria-pressed` 暴露当前选中的窗口模式，方便屏幕阅读器和键盘用户感知切换；窗口内没有数据时统一显示「暂无统计数据」占位。相关测试在 `packages/client/src/pages/StatsPage.test.tsx`。
 
