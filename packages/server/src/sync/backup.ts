@@ -135,26 +135,27 @@ export async function createServerBackup(
   writeBackupManifest(manifest);
 
   const result = { ...entry, path: backupPath };
-  setImmediate(() => {
-    try {
-      const removed = cleanupServerBackups();
-      if (removed.length > 0) {
-        console.log("[backup] cleanup removed old backups", {
-          backupId: id,
-          operation,
-          removedCount: removed.length,
-        });
-      }
-    } catch (error) {
-      console.warn("[backup] cleanup failed", { backupId: id, operation, error });
+  try {
+    const removed = cleanupServerBackups();
+    if (removed.length > 0) {
+      console.log("[backup] cleanup removed old backups", {
+        backupId: id,
+        operation,
+        removedCount: removed.length,
+      });
     }
-  });
+  } catch (error) {
+    console.warn("[backup] cleanup failed", { backupId: id, operation, error });
+  }
 
   return result;
 }
 
 function cleanupWindowKey(createdAt: string, now: Date): number {
-  const ageDays = Math.floor((now.getTime() - Date.parse(createdAt)) / (24 * 60 * 60 * 1000));
+  const created = new Date(createdAt);
+  const createdDay = Date.UTC(created.getUTCFullYear(), created.getUTCMonth(), created.getUTCDate());
+  const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const ageDays = Math.floor((nowDay - createdDay) / (24 * 60 * 60 * 1000));
   return Math.floor((ageDays - 16) / 15);
 }
 
