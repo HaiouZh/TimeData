@@ -17,13 +17,6 @@ import {
   YAxis,
 } from "recharts";
 
-export interface PieDatum {
-  id: string;
-  name: string;
-  value: number;
-  color: string;
-}
-
 export interface TrendSeriesItem {
   key: string;
   color: string;
@@ -33,6 +26,13 @@ export type TrendChartKind = "line" | "area";
 export type TrendChartRow = Record<string, number | string>;
 
 const hourFormatter = (value: unknown) => `${value} 小时`;
+
+export interface PieDatum {
+  id: string;
+  name: string;
+  value: number;
+  color: string;
+}
 
 export const CategoryPieChart = memo(function CategoryPieChart({ data }: { data: PieDatum[] }) {
   return (
@@ -189,6 +189,73 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
           </div>
         );
       })}
+    </div>
+  );
+});
+
+export interface DonutDatum {
+  id: string;
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface DonutTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: DonutDatum }>;
+  total: number;
+}
+
+function DonutTooltip({ active, payload, total }: DonutTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const datum = payload[0].payload;
+  const pct = total > 0 ? Math.round((datum.value / total) * 1000) / 10 : 0;
+  return (
+    <div className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 shadow">
+      {datum.name} · {datum.value}h · {pct}%
+    </div>
+  );
+}
+
+export const CategoryDonut = memo(function CategoryDonut({
+  data,
+  totalHours,
+  coveragePct,
+  coverageNote,
+}: {
+  data: DonutDatum[];
+  totalHours: number;
+  coveragePct: number;
+  coverageNote: string | null;
+}) {
+  const total = data.reduce((sum, datum) => sum + datum.value, 0);
+  return (
+    <div className="relative min-h-[250px]">
+      <ResponsiveContainer width="100%" height={250}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius={62}
+            outerRadius={92}
+            paddingAngle={2}
+            cornerRadius={4}
+          >
+            {data.map((item) => (
+              <Cell key={item.id} fill={item.color} />
+            ))}
+          </Pie>
+          <Tooltip content={<DonutTooltip total={total} />} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-2xl font-semibold text-slate-100">{totalHours.toFixed(1)}h</div>
+        <div className="text-xs text-slate-400">覆盖率 {coveragePct.toFixed(1)}%</div>
+        {coverageNote && <div className="text-[10px] text-slate-500">{coverageNote}</div>}
+      </div>
     </div>
   );
 });
