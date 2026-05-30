@@ -44,3 +44,4 @@ scripts/_debug.*
 Thumbs.db
 .vscode/
 .idea/
+.cursor/
