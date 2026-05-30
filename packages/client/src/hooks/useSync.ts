@@ -14,6 +14,7 @@ import { createAutoBackup } from "../backup/autoBackup.ts";
 import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem } from "../lib/safeStorage.js";
+import { fetchServerHealth } from "../lib/serverHealth.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
@@ -55,6 +56,9 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setError(null);
     setConflicts([]);
     try {
+      if (!(await fetchServerHealth())) {
+        throw new Error("无法连接服务器");
+      }
       const result = await regularSync({ beforeMutating: createAutoBackup });
       setLastResult(result);
       if (result.conflicts.length > 0) {
