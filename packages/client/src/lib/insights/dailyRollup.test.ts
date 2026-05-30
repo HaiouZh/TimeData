@@ -109,7 +109,7 @@ describe("buildDailyRollups", () => {
       "2026-05-08",
       "2026-05-08",
     );
-    expect(rollups[0].byParent["unknown"]).toBe(60);
+    expect(rollups[0].byParent.unknown).toBe(60);
     expect(rollups[0].totalMin).toBe(60);
   });
 

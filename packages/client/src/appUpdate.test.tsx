@@ -7,10 +7,6 @@ import { AppUpdateProvider } from "./appUpdate.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Registration = {
-  update: () => void;
-};
-
 describe("AppUpdateProvider PWA update polling", () => {
   beforeEach(() => {
     vi.useFakeTimers();

@@ -24,7 +24,6 @@ describe("useInView", () => {
       class {
         observe = observe;
         disconnect = disconnect;
-        constructor(_callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
       },
     );
     const host = document.createElement("div");
