@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -114,6 +114,81 @@ export const TrendChart = memo(function TrendChart({
           </AreaChart>
         )}
       </ResponsiveContainer>
+    </div>
+  );
+});
+
+export interface CompositionChild {
+  id: string;
+  name: string;
+  min: number;
+  color: string;
+}
+
+export interface CompositionParent {
+  id: string;
+  name: string;
+  totalHours: number;
+  sharePct: number;
+  color: string;
+  children: CompositionChild[];
+}
+
+export const CategoryCompositionBars = memo(function CategoryCompositionBars({
+  parents,
+}: {
+  parents: CompositionParent[];
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  return (
+    <div className="space-y-2">
+      {parents.map((parent) => {
+        const childTotal = parent.children.reduce((sum, child) => sum + child.min, 0) || 1;
+        const expanded = expandedId === parent.id;
+        return (
+          <div key={parent.id} className="rounded-lg bg-slate-800/60 px-3 py-2">
+            <button
+              type="button"
+              aria-expanded={expanded}
+              onClick={() => setExpandedId(expanded ? null : parent.id)}
+              className="flex w-full items-center justify-between gap-2 text-sm"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
+                <span className="truncate text-slate-200">{parent.name}</span>
+              </span>
+              <span className="shrink-0 text-slate-400">
+                {parent.totalHours.toFixed(1)}h · {parent.sharePct}%
+              </span>
+            </button>
+            <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-slate-900">
+              {parent.children.map((child) => (
+                <div
+                  key={child.id}
+                  className="h-full"
+                  style={{ width: `${(child.min / childTotal) * 100}%`, backgroundColor: child.color }}
+                  title={`${child.name} ${(child.min / 60).toFixed(1)}h`}
+                />
+              ))}
+            </div>
+            {expanded && (
+              <ul className="mt-2 space-y-1">
+                {parent.children.map((child) => (
+                  <li key={child.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: child.color }} />
+                      <span className="truncate text-slate-400">{child.name}</span>
+                    </span>
+                    <span className="shrink-0 text-slate-500">
+                      {(child.min / 60).toFixed(1)}h · {Math.round((child.min / childTotal) * 100)}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 });
