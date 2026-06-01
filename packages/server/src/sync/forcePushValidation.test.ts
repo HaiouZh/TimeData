@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateForcePushBusinessRules } from "./forcePushValidation.js";
-import type { Category, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, TimeEntry } from "@timedata/shared";
 
 const baseCategory = (overrides: Partial<Category>): Category => ({
   id: "c1", name: "X", parentId: null, color: "#ffffff", icon: null,
@@ -12,6 +12,15 @@ const baseCategory = (overrides: Partial<Category>): Category => ({
 const baseEntry = (overrides: Partial<TimeEntry>): TimeEntry => ({
   id: "e1", categoryId: "c1", startTime: "2026-05-19T09:00:00.000Z", endTime: "2026-05-19T10:00:00.000Z",
   note: null, createdAt: "2026-05-19T03:00:00.000Z", updatedAt: "2026-05-19T03:00:00.000Z",
+  ...overrides,
+});
+
+const baseQuickNote = (overrides: Partial<QuickNote>): QuickNote => ({
+  id: "note-1",
+  text: "repo",
+  occurredAt: "2026-06-01T04:01:30.123Z",
+  createdAt: "2026-06-01T04:02:00.000Z",
+  updatedAt: "2026-06-01T04:02:00.000Z",
   ...overrides,
 });
 
@@ -81,6 +90,16 @@ describe("validateForcePushBusinessRules", () => {
 
   it("accepts valid payload returning null", () => {
     const result = validateForcePushBusinessRules([baseCategory({})], [baseEntry({})]);
+    expect(result).toBeNull();
+  });
+
+  it("rejects duplicate quick note id without requiring categories", () => {
+    const result = validateForcePushBusinessRules([], [], [baseQuickNote({}), baseQuickNote({})]);
+    expect(result).toMatch(/duplicate quick note/);
+  });
+
+  it("accepts quick notes independently from category validation", () => {
+    const result = validateForcePushBusinessRules([], [], [baseQuickNote({})]);
     expect(result).toBeNull();
   });
 

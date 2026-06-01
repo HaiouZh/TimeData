@@ -80,4 +80,17 @@ describe("analyzePushBaseSeq", () => {
       overlappingRecords: [{ tableName: "categories", recordId: "cat-1", serverSeq }],
     });
   });
+
+  it("includes quick_notes in overlap analysis", () => {
+    const baseSeq = recordSeq("categories", "cat-1", "create");
+    const serverSeq = recordSeq("quick_notes", "note-1", "update");
+
+    const analysis = analyzePushBaseSeq(baseSeq, [{ tableName: "quick_notes", recordId: "note-1" }]);
+
+    expect(analysis).toEqual({
+      strategy: "local_wins_non_fast_forward",
+      cloudAheadCount: 1,
+      overlappingRecords: [{ tableName: "quick_notes", recordId: "note-1", serverSeq }],
+    });
+  });
 });

@@ -83,4 +83,26 @@ describe("syncState", () => {
       value: "1",
     });
   });
+
+  it("quick note 变更改变 commit-hash，避免 note-only 同步被快路径跳过", async () => {
+    const { computeAndPersistCommitHash } = await import("./state.js");
+
+    const before = computeAndPersistCommitHash().hash;
+    db.prepare(`
+      INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      "note-1",
+      "repo",
+      "2026-06-01T04:01:30.123Z",
+      "2026-06-01T04:02:00.000Z",
+      "2026-06-01T04:02:00.000Z",
+    );
+    const after = computeAndPersistCommitHash().hash;
+
+    expect(after).not.toBe(before);
+    expect(db.prepare("SELECT value FROM sync_state WHERE key = 'row_count_quick_notes'").get()).toMatchObject({
+      value: "1",
+    });
+  });
 });

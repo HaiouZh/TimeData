@@ -33,7 +33,7 @@ export function resolveAndroidBackAction(pathname: string): AndroidBackAction {
     return { type: "back", fallbackTo: "/" };
   }
 
-  if (pathname === "/stats" || pathname === "/categories" || pathname === "/settings") {
+  if (pathname === "/quick-notes" || pathname === "/stats" || pathname === "/categories" || pathname === "/settings") {
     return { type: "navigate", to: "/", replace: true };
   }
 

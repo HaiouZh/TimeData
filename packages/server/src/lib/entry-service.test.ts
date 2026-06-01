@@ -42,6 +42,14 @@ function createSchema() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_seq (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name TEXT NOT NULL,
@@ -279,6 +287,13 @@ function makeDb2() {
       id TEXT PRIMARY KEY, category_id TEXT NOT NULL,
       start_time TEXT NOT NULL, end_time TEXT NOT NULL, note TEXT,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
     CREATE TABLE sync_seq (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CategorySchema,
+  QuickNoteSchema,
   SettingSchema,
   SyncChangeSchema,
   SyncForcePushPrepareRequestSchema,
@@ -36,6 +37,14 @@ const timeEntry = {
   updatedAt: "2026-05-13T00:00:00.000Z",
 };
 
+const quickNote = {
+  id: "note-1",
+  text: "突然想到一个词",
+  occurredAt: "2026-06-01T04:01:30.123Z",
+  createdAt: "2026-06-01T04:02:00.000Z",
+  updatedAt: "2026-06-01T04:02:00.000Z",
+};
+
 describe("SyncLogEntrySchema", () => {
   it("only accepts synced as 0 or 1", () => {
     const base = {
@@ -51,6 +60,19 @@ describe("SyncLogEntrySchema", () => {
     expect(SyncLogEntrySchema.safeParse({ ...base, synced: true }).success).toBe(false);
     expect(SyncLogEntrySchema.safeParse({ ...base, synced: false }).success).toBe(false);
   });
+
+  it("accepts quick_notes as a synced table", () => {
+    expect(
+      SyncLogEntrySchema.safeParse({
+        id: "log-note-1",
+        tableName: "quick_notes",
+        recordId: "note-1",
+        action: "create",
+        timestamp: "2026-06-01T04:02:00.000Z",
+        synced: 0,
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("SettingSchema", () => {
@@ -58,6 +80,24 @@ describe("SettingSchema", () => {
     expect(SettingSchema.safeParse({ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" }).success).toBe(true);
     expect(SettingSchema.safeParse({ key: "", value: "x", updatedAt: "2026-05-30T00:00:00.000Z" }).success).toBe(false);
     expect(SettingSchema.safeParse({ key: "k", value: 1, updatedAt: "2026-05-30T00:00:00.000Z" }).success).toBe(false);
+  });
+});
+
+describe("QuickNoteSchema", () => {
+  it("accepts valid quick notes and preserves text whitespace", () => {
+    const parsed = QuickNoteSchema.parse({ ...quickNote, text: "  repo  " });
+
+    expect(parsed.text).toBe("  repo  ");
+  });
+
+  it("rejects empty text", () => {
+    expect(QuickNoteSchema.safeParse({ ...quickNote, text: "   " }).success).toBe(false);
+  });
+
+  it("rejects non-UTC ISO timestamps", () => {
+    expect(QuickNoteSchema.safeParse({ ...quickNote, occurredAt: "2026-06-01T12:01:30" }).success).toBe(false);
+    expect(QuickNoteSchema.safeParse({ ...quickNote, createdAt: "2026-06-01T12:02:00Z" }).success).toBe(false);
+    expect(QuickNoteSchema.safeParse({ ...quickNote, updatedAt: "2026-06-01T12:02:00Z" }).success).toBe(false);
   });
 });
 
@@ -100,24 +140,35 @@ describe("runtime schemas", () => {
     expect(SyncStatusResponseSchema.safeParse({
       categoryCount: -1,
       entryCount: 0,
+      quickNoteCount: 0,
       lastUpdatedAt: null,
       serverTime: "2026-05-13T00:00:00.000Z",
     }).success).toBe(false);
     expect(SyncStatusResponseSchema.safeParse({
       categoryCount: 0,
       entryCount: 1.5,
+      quickNoteCount: 0,
       lastUpdatedAt: null,
       serverTime: "2026-05-13T00:00:00.000Z",
     }).success).toBe(false);
     expect(SyncStatusResponseSchema.safeParse({
       categoryCount: 0,
       entryCount: Number.POSITIVE_INFINITY,
+      quickNoteCount: 0,
       lastUpdatedAt: null,
       serverTime: "2026-05-13T00:00:00.000Z",
     }).success).toBe(false);
     expect(SyncStatusResponseSchema.safeParse({
       categoryCount: 0,
       entryCount: 0,
+      quickNoteCount: -1,
+      lastUpdatedAt: null,
+      serverTime: "2026-05-13T00:00:00.000Z",
+    }).success).toBe(false);
+    expect(SyncStatusResponseSchema.safeParse({
+      categoryCount: 0,
+      entryCount: 0,
+      quickNoteCount: 0,
       lastUpdatedAt: null,
       latestSeq: -1,
       serverTime: "2026-05-13T00:00:00.000Z",
@@ -136,11 +187,17 @@ describe("runtime schemas", () => {
       SyncForcePushPrepareRequestSchema.safeParse({
         categoryCount: 1,
         entryCount: 0,
+        quickNoteCount: 1,
         lastUpdatedAt: "2026-05-13T00:00:00.000Z",
       }).success,
     ).toBe(true);
     expect(
-      SyncForcePushPrepareRequestSchema.safeParse({ categoryCount: -1, entryCount: 0, lastUpdatedAt: null }).success,
+      SyncForcePushPrepareRequestSchema.safeParse({
+        categoryCount: -1,
+        entryCount: 0,
+        quickNoteCount: 0,
+        lastUpdatedAt: null,
+      }).success,
     ).toBe(false);
     expect(
       SyncForcePushRequestSchema.safeParse({
@@ -148,6 +205,7 @@ describe("runtime schemas", () => {
         confirmationPhrase: "WRONG",
         categories: [],
         timeEntries: [],
+        quickNotes: [],
       }).success,
     ).toBe(false);
   });
@@ -220,6 +278,40 @@ describe("SyncChangeSchema", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("accepts quick note upsert and delete changes", () => {
+    expect(
+      SyncChangeSchema.safeParse({
+        tableName: "quick_notes",
+        recordId: "note-1",
+        action: "create",
+        data: quickNote,
+        timestamp: "2026-06-01T04:02:00.000Z",
+      }).success,
+    ).toBe(true);
+
+    expect(
+      SyncChangeSchema.safeParse({
+        tableName: "quick_notes",
+        recordId: "note-1",
+        action: "delete",
+        data: null,
+        timestamp: "2026-06-01T04:03:00.000Z",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects quick note upserts without valid quick note data", () => {
+    expect(
+      SyncChangeSchema.safeParse({
+        tableName: "quick_notes",
+        recordId: "note-1",
+        action: "update",
+        data: { ...quickNote, text: "   " },
+        timestamp: "2026-06-01T04:02:00.000Z",
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("SyncLogEntrySchema.timestamp (收紧前先验证现状)", () => {
@@ -245,7 +337,7 @@ describe("SyncLogEntrySchema.timestamp (收紧前先验证现状)", () => {
 describe("SyncStatusResponseSchema / SyncPullResponseSchema serverTime 收紧", () => {
   it("非 .sssZ 格式应被拒绝", () => {
     expect(SyncStatusResponseSchema.safeParse({
-      categoryCount: 0, entryCount: 0,
+      categoryCount: 0, entryCount: 0, quickNoteCount: 0,
       lastUpdatedAt: "2026-05-19T03:00:00Z",
       serverTime: "2026-05-19T03:00:00Z",
     }).success).toBe(false);
@@ -253,7 +345,7 @@ describe("SyncStatusResponseSchema / SyncPullResponseSchema serverTime 收紧", 
 
   it("合法 .sssZ 格式应通过", () => {
     expect(SyncStatusResponseSchema.safeParse({
-      categoryCount: 0, entryCount: 0,
+      categoryCount: 0, entryCount: 0, quickNoteCount: 0,
       lastUpdatedAt: "2026-05-19T03:00:00.000Z",
       serverTime: "2026-05-19T03:00:00.000Z",
     }).success).toBe(true);

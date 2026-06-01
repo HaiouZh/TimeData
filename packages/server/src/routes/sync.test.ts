@@ -40,6 +40,14 @@ function createSchema() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -161,6 +169,7 @@ describe("sync route", () => {
     expect(body).toMatchObject({
       categoryCount: 2,
       entryCount: 1,
+      quickNoteCount: 0,
       lastUpdatedAt: "2026-05-08T13:00:00.000Z",
       latestSeq: null,
     });
@@ -259,7 +268,7 @@ describe("sync route", () => {
     expect(body.confirmToken.length).toBeGreaterThan(20);
     expect(body.confirmationPhrase).toBe("OVERWRITE_SERVER");
     expect(typeof body.expiresAt).toBe("string");
-    expect(body.serverStatus).toMatchObject({ categoryCount: 1, entryCount: 0 });
+    expect(body.serverStatus).toMatchObject({ categoryCount: 1, entryCount: 0, quickNoteCount: 0 });
   });
 
   it("records expired force-push tokens as rejected", async () => {
@@ -425,6 +434,48 @@ describe("sync route", () => {
     expect(db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").get("sleep.categoryId")).toMatchObject({
       value: "cat-1",
       updated_at: "2026-05-30T00:00:00.000Z",
+    });
+  });
+
+  it("force-push imports quick notes independently from categories and entries", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, quickNoteCount: 1, lastUpdatedAt: "2026-06-01T04:02:00.000Z" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+        quickNotes: [
+          {
+            id: "note-force",
+            text: "repo",
+            occurredAt: "2026-06-01T04:01:30.123Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      importedCategories: 0,
+      importedTimeEntries: 0,
+      importedQuickNotes: 1,
+      latestSeq: 1,
+    });
+    expect(db.prepare("SELECT text, occurred_at FROM quick_notes WHERE id = ?").get("note-force")).toMatchObject({
+      text: "repo",
+      occurred_at: "2026-06-01T04:01:30.123Z",
     });
   });
 
@@ -901,6 +952,83 @@ describe("sync route", () => {
       data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00.000Z" },
       timestamp: "2026-05-30T00:00:00.000Z",
     });
+  });
+
+  it("pushes, pulls, and tombstones quick notes", async () => {
+    const pushRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "quick_notes",
+            recordId: "note-1",
+            action: "create",
+            data: {
+              id: "note-1",
+              text: "repo",
+              occurredAt: "2026-06-01T04:01:30.123Z",
+              createdAt: "2026-06-01T04:02:00.000Z",
+              updatedAt: "2026-06-01T04:02:00.000Z",
+            },
+            timestamp: "2026-06-01T04:02:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(pushRes.status).toBe(200);
+    expect(db.prepare("SELECT text, occurred_at FROM quick_notes WHERE id = ?").get("note-1")).toMatchObject({
+      text: "repo",
+      occurred_at: "2026-06-01T04:01:30.123Z",
+    });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lastSyncedAt: "2026-06-01T04:00:00.000Z" }),
+    });
+
+    expect(pullRes.status).toBe(200);
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toContainEqual({
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "update",
+      data: {
+        id: "note-1",
+        text: "repo",
+        occurredAt: "2026-06-01T04:01:30.123Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+      timestamp: "2026-06-01T04:02:00.000Z",
+    });
+
+    const deleteRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "quick_notes",
+            recordId: "note-1",
+            action: "delete",
+            data: null,
+            timestamp: "2026-06-01T04:03:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(deleteRes.status).toBe(200);
+    expect(db.prepare("SELECT id FROM quick_notes WHERE id = ?").get("note-1")).toBeUndefined();
+    expect(
+      db.prepare("SELECT table_name, record_id FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get(
+        "quick_notes",
+        "note-1",
+      ),
+    ).toMatchObject({ table_name: "quick_notes", record_id: "note-1" });
   });
 
   it("pulls deduplicated changes after a seq cursor and returns latest seq", async () => {

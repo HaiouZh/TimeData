@@ -28,6 +28,8 @@ describe("initializeDatabase", () => {
         "idx_entries_start",
         "idx_entries_end",
         "idx_categories_parent",
+        "idx_quick_notes_occurred_at",
+        "idx_quick_notes_updated_at",
         "idx_sync_logs_timestamp",
         "idx_sync_tombstones_deleted_at",
         "idx_sync_seq_table_record",
@@ -52,6 +54,29 @@ describe("initializeDatabase", () => {
     expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
       ["key", "TEXT", 0, 1],
       ["value", "TEXT", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+  });
+
+  it("creates quick_notes as an independent synced table", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'quick_notes'").get();
+    expect(table).toMatchObject({ name: "quick_notes" });
+
+    const columns = db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["id", "TEXT", 0, 1],
+      ["text", "TEXT", 1, 0],
+      ["occurred_at", "TEXT", 1, 0],
+      ["created_at", "TEXT", 1, 0],
       ["updated_at", "TEXT", 1, 0],
     ]);
   });

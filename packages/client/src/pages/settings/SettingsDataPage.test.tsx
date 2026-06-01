@@ -91,6 +91,11 @@ describe("SettingsDataPage", () => {
     expect(html).toContain("是否开启云同步");
     expect(html).toContain("跨天记录合并展示");
     expect(html).toContain("备份与数据");
+    expect(html).toContain("速记数据");
+    expect(html).toContain("导出速记 JSON");
+    expect(html).toContain("导出速记 Markdown");
+    expect(html).toContain("导入速记 JSON");
+    expect(html).toContain("删除日期范围速记");
     expect(html).toContain("高级 · 数据恢复");
     expect(html).toContain("强制替换");
     expect(html).toContain("导出完整备份");

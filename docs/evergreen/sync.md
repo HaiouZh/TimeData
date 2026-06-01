@@ -10,6 +10,9 @@ covers:
   - packages/client/src/hooks/useSync.ts
   - packages/client/src/contexts/SyncContext.tsx
   - packages/client/src/lib/api.ts
+  - packages/client/src/lib/quickNotes.ts
+  - packages/client/src/quick-notes/importQuickNotes.ts
+  - packages/client/src/quick-notes/deleteQuickNotesRange.ts
   - packages/client/src/lib/settings/**
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/shared/src/types.ts:SyncChange
@@ -26,7 +29,8 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-05-30
+  - packages/shared/src/types.ts:QuickNote
+last-reviewed: 2026-06-01
 ---
 
 # 同步机制
@@ -39,7 +43,7 @@ last-reviewed: 2026-05-30
 客户端入口是 `regularSync()`（`packages/client/src/sync/engine.ts`）。同一 JS context 内如果已有一次 `regularSync()` 尚未结束，新的调用会复用进行中的 promise，不会再次执行 status/push/pull 主流程；这只去重同浏览器上下文里的快速重复触发，不是跨 tab leader election。
 
 ```
-1. getLocalStatus() + GET /api/sync/status  比较本地与云端 meta 摘要（优先用 `contentHash`，否则退回 count + lastUpdatedAt）
+1. getLocalStatus() + GET /api/sync/status  比较本地与云端 meta 摘要（优先用 `contentHash`，否则退回 counts + lastUpdatedAt）
 2. 如果 unsyncedCount=0 且摘要一致：推进 `timedata_last_synced_seq` 到 status.latestSeq，返回 no-op（不 push、不 pull、不创建备份）
 3. 如果不一致：先创建本地自动备份
 4. unsyncedCount=0 时执行 syncPullRecent(7) 做 pull-only repair
@@ -48,11 +52,11 @@ last-reviewed: 2026-05-30
 7. reportToServer()   往服务器写一条 sync_logs 摘要（best-effort）
 ```
 
-普通同步主路径的一致性校验比较业务 meta：优先比较 `contentHash`；如果任一端缺少 `contentHash`，退回比较 `categoryCount`、`entryCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。服务端 `contentHash` 是持久化在 SQLite `sync_state` 表里的同步内容 commit hash，由 `latestSeq`、分类/记录/设置行数与最新 `updated_at` 轻量摘要计算而来；`/api/sync/status` 直接读取这份状态，缺失或被写路径标记为 dirty 时一次性重算并写回，不再为每次 status 请求读取完整 categories/time_entries/settings 后 JSON 序列化。普通 no-op 同步不会为了校验拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
+普通同步主路径的一致性校验比较业务 meta：优先比较 `contentHash`；如果任一端缺少 `contentHash`，退回比较 `categoryCount`、`entryCount`、`quickNoteCount`、`lastUpdatedAt`，并要求本地 `syncLog` 没有未同步记录。服务端 `contentHash` 是持久化在 SQLite `sync_state` 表里的同步内容 commit hash，由 `latestSeq`、分类/记录/设置/速记行数与最新 `updated_at` 轻量摘要计算而来；`/api/sync/status` 直接读取这份状态，缺失或被写路径标记为 dirty 时一次性重算并写回，不再为每次 status 请求读取完整 categories/time_entries/settings/quick_notes 后 JSON 序列化。普通 no-op 同步不会为了校验拉取云端全量快照，也不比较客户端本地自动备份记录或服务端运维日志。no-op 同步不会触发 `/api/sync/push` 或 `/api/sync/pull`，因此也不会产生服务端 `sync_push` 备份；但如果 `/api/sync/status` 返回了更高的 `latestSeq`，客户端会推进本地 `timedata_last_synced_seq`，避免下一次本地 push 使用过旧 `baseSeq`。
 
 客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量替换等可能更慢的同步拉取可在调用处设置 `timeoutMs: 30_000`。调用方传入的 `AbortSignal` 会和内部超时信号合并，组件卸载或路由切换取消请求时不会被误报成超时；成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误。`apiFetch` 会把 204 / 空 body 的成功响应视为 `undefined`，而不是强制解析 JSON。`apiFetch` 抛出的人类可读字符串来自 `packages/client/src/lib/messages.ts` 集中字符串表，方便后续 i18n。
 
-兼容回退开关是 `localStorage.timedata_legacy_snapshot_sync === "1"`（集中定义在 `packages/client/src/lib/storageKeys.ts` 的 `STORAGE_KEYS.legacySnapshotSync`）：打开后 `regularSync()` 会走旧的 `loadLocalSnapshot()` + `loadCloudSnapshot()` 全量快照比较路径，主要用于 D2 上线后的灰度回滚。旧路径仍会在快照不一致时补齐本地有、云端无且缺失 syncLog 的 create 日志；旧快照路径只覆盖 categories/time_entries，不同步 settings。新 meta 主路径不会做全量云端快照比较，因此 `unsyncedCount=0` 但 meta 不一致时只执行 `syncPullRecent(7)` 作为 pull-only repair。
+兼容回退开关是 `localStorage.timedata_legacy_snapshot_sync === "1"`（集中定义在 `packages/client/src/lib/storageKeys.ts` 的 `STORAGE_KEYS.legacySnapshotSync`）：打开后 `regularSync()` 会走旧的 `loadLocalSnapshot()` + `loadCloudSnapshot()` 全量快照比较路径，主要用于 D2 上线后的灰度回滚。旧路径仍会在快照不一致时补齐本地有、云端无且缺失 syncLog 的 create 日志；旧快照路径覆盖 categories/time_entries/quick_notes，不同步 settings。新 meta 主路径不会做全量云端快照比较，因此 `unsyncedCount=0` 但 meta 不一致时只执行 `syncPullRecent(7)` 作为 pull-only repair。
 
 客户端 UI 层的同步状态由 `SyncContext` 统一提供。`SyncProvider` 包裹在 App 顶层，复用 `useSync` 的同步动作和诊断能力；时间轴页、设置首页和数据设置页共享同一个状态来源。同步指示灯会区分 `pending`（本地 Dexie `syncLog.synced=0` 实时计数大于 0，表示仍有待上传记录）和 `success` / `idle`（本地待上传计数为 0）；这个 pending 状态只来自本地实时计数，不做额外网络探测。自动触发入口包括：首次进入时间轴页，以及新增/编辑/删除记录成功写入本地后；这些自动触发走 30 秒节流，设置页手动同步按钮不受节流影响。被节流挡下的自动触发会在当前 30 秒窗口结束时安排一次单次补推，补推执行前会再次检查本地是否仍有未上传记录。
 
@@ -61,7 +65,7 @@ last-reviewed: 2026-05-30
 - `syncPull({mode: 'incremental' | 'repair'})`：手动拉取（设置页"立即拉取"）。`repair` 模式忽略 `lastSyncedAt`，从头拉一遍但不覆盖完整且更新的本地记录。
 - `syncForceReplace()`：清空本地后整库覆盖（设置页"将本地数据替换为云端数据"），同时清空本地 `syncLog`，并用服务端返回的 `latestSeq` 推进 `timedata_last_synced_seq`，避免后续普通同步用旧 baseSeq 重新推送覆盖前的本地变更；这条全量拉取会给 `/api/sync/pull` 设置 `timeoutMs: 30_000`。
 - `getSyncHealth()`：读取本地摘要和 `/api/sync/status`，给出诊断建议。
-- `syncForcePushToServer()`：在用户完成确认后，把本地完整数据和 settings 覆盖到服务器。
+- `syncForcePushToServer()`：在用户完成确认后，把本地完整数据、quick notes 和 settings 覆盖到服务器。
 
 ## 2. Push 流程详解
 
@@ -73,7 +77,7 @@ last-reviewed: 2026-05-30
    - `create + ... + delete` 的轨迹：整组**省略不发送**（远端从未见过这条记录），但本地日志全部标为已同步。
    - `create + update + ...` 的轨迹：动作改成 `create`，用最新数据。
 3. **从业务表读最新数据**填进 `change.data`（除 delete 外）。
-4. **附带分类依赖**（`categoryDependencyChangesForEntry`）：如果 push 一条 entry 引用的分类还没在服务器上，把分类（和它的父分类）一起塞进 changes。
+4. **附带分类依赖**（`categoryDependencyChangesForEntry`）：如果 push 一条 entry 引用的分类还没在服务器上，把分类（和它的父分类）一起塞进 changes。`quick_notes` 没有分类依赖，不进入这一步。
 5. `regularSync()` 只有在 meta 主路径判断 `unsyncedCount > 0` 时才调用 `syncPush()`；没有未同步日志但 meta 不一致时只做 pull-only repair。
 6. `legacy_snapshot_sync` 本地快照修复路径如果发现本地快照里有云端缺失的记录，但本地 `syncLog` 没有对应未同步日志，会先补一条 create 日志，再走同一条 `syncPush()` 路径。这是本地已有数据但 syncLog 丢失时的兜底。
 7. POST `/api/sync/push`，请求体 `{ changes: SyncChange[], baseSeq?: number | null }`。`baseSeq` 来自客户端保存的 `timedata_last_synced_seq`，用于让服务端判断这次 push 相对云端是快进、非重叠合并，还是 non-fast-forward 本地覆盖。服务端入口会先用 `SyncPushRequestSchema` 做运行时校验；不符合 `SyncChange` 判别联合契约的请求返回 400 `invalid_request`，不会进入同步校验或写库。
@@ -84,7 +88,7 @@ last-reviewed: 2026-05-30
 
 ### 2.2 服务端做了什么（`/api/sync/push`）
 
-1. `orderPushChanges`：**先 category create/update，后 time_entries，再 settings，最后 category delete**。这保证 entries 引用的分类总是在同一事务里先到位，同时让 entry delete 先于 category delete 落库，避免外键约束失败；settings 没有外键依赖，按 LWW 写入。
+1. `orderPushChanges`：**先 category create/update，后 time_entries，再 settings，再 quick_notes，最后 category delete**。这保证 entries 引用的分类总是在同一事务里先到位，同时让 entry delete 先于 category delete 落库，避免外键约束失败；settings 和 quick_notes 没有外键依赖，按 LWW 写入。
 2. `validateSyncChanges`：先做基础形状、payload、分类存在性、时间范围和同批次重叠检查；**不再用“服务器更新时间较新”这一条把普通本地写入挡掉**。`server_version_newer_or_same` 现在只作为兼容的保留原因码，不再是主路径的拒绝条件。
 3. **任意一条 invalid 就整体拒绝**：返回 409 + 全部 outcomes，不写库、不备份。
 4. 全部 valid 后，先根据 `baseSeq` 分析服务端在该序列之后的变化：
@@ -94,7 +98,7 @@ last-reviewed: 2026-05-30
    - 云端有更高 seq，且涉及本批 push 的同一记录 → `local_wins_non_fast_forward`。
 5. 写入前创建服务端备份：普通路径用 `createServerBackup('sync_push')`；`unknown_base` 用 `createServerBackup('sync_unknown_base')`；`local_wins_non_fast_forward` 用 `createServerBackup('sync_local_wins')`，并标记受保护，`reason = local_wins_non_fast_forward`，details 记录 `baseSeq`、`cloudAheadCount`、`overlappingRecords` 和 `pushedRecords`。Server backup manifest 不存在时按空 manifest 处理；其他读取失败会记录 `[backup] failed to read manifest` 后继续返回空 manifest，避免 manifest 损坏阻断同步写入前备份。
 6. 在一个 SQLite 事务里逐条 `applyChange` 写入。每条成功写入都会追加 `sync_seq`，客户端下一次 pull 会从响应里的 `latestSeq` 继续。
-7. 对 `time_entries` 来说，服务端仍会先删除与本地记录重叠的旧远端记录，再写入本地版本；被覆盖删除的旧记录会写 `sync_tombstones(table_name='time_entries')` 和 `sync_seq(action='delete')`，让其他设备的 seq cursor pull 能拉到删除消息。如果发生时间段覆盖，返回的 outcome 会带 `overriddenRecordIds` 和 `backupId`，对应备份会被额外标成受保护并写入 `reason = local_override_overlap`。`settings` upsert/delete 只按 key 写入或删除，服务端以 `change.timestamp` 写 `updated_at`，不进入冲突 UI。`sync_tombstones` 没有固定 TTL 清理规则：当前不会按天数自动删墓碑，是否引入保留策略要单独评估。
+7. 对 `time_entries` 来说，服务端仍会先删除与本地记录重叠的旧远端记录，再写入本地版本；被覆盖删除的旧记录会写 `sync_tombstones(table_name='time_entries')` 和 `sync_seq(action='delete')`，让其他设备的 seq cursor pull 能拉到删除消息。如果发生时间段覆盖，返回的 outcome 会带 `overriddenRecordIds` 和 `backupId`，对应备份会被额外标成受保护并写入 `reason = local_override_overlap`。`settings` upsert/delete 只按 key 写入或删除，服务端以 `change.timestamp` 写 `updated_at`，不进入冲突 UI。`quick_notes` upsert/delete 只按 note id 写入或删除，不做分类和重叠校验；本地有 pending quick note 时客户端 pull 会跳过远端版本，等待本地版本先 push。`sync_tombstones` 没有固定 TTL 清理规则：当前不会按天数自动删墓碑，是否引入保留策略要单独评估。
 8. `applyChange` 返回 skipped 时会带结构化 `skipReason`；`outcomeFromApplyResult()` 优先用它作为 `reasonCode`，不会把所有 skipped 都折叠成 `server_version_newer_or_same`。
 9. 写一条 server-side `sync_logs` 摘要（device='server', action='push_received'），并把 `backupId`、`seqAnalysis`、`overriddenRecordIds` 写进去，方便 `/api/admin/sync` 直接读。
 
@@ -109,10 +113,11 @@ last-reviewed: 2026-05-30
 5. **分类层级**：category 不能 `parentId === id`，且 `parentId` 只能指向顶层分类；自引用或第三级都返回 `invalid_shape`。
 6. **时间范围**：entry 的 `endTime` 必须晚于 `startTime`，且不能晚于当前 UTC 时间；未来记录返回 `invalid_time_range`。服务端校验要求 `startTime` / `endTime` 必须通过 `UtcIsoStringSchema`，也就是严格 `YYYY-MM-DDTHH:mm:ss.sssZ`；省略毫秒、offset 形式或非法日历日期都返回 `invalid_shape`。未来时间比较使用 `nowUtcString()` 直接比较 UTC ISO 字符串。
 7. **settings**：upsert 要求 `data.key === recordId`、`value` 是字符串、`updatedAt` 是 UTC ISO；delete 直接接受。
-8. **外键**：
+8. **quick_notes**：upsert 要求 `data.id === recordId`、`text.trim()` 非空、`occurredAt` / `createdAt` / `updatedAt` 都是 UTC ISO；delete 直接接受。不检查分类、不检查时间段重叠，也不拒绝未来 `occurredAt`。
+9. **外键**：
    - category 的 `parentId` 必须存在（除非也在本批 push 里）→ `missing_category`。
    - entry 的 `categoryId` 必须存在 + 不能 archived → `missing_category` / `archived_category`。
-9. **同批 entries 重叠**：只要这一批 push 里的两条 entry 自己重叠，就返回 `conflict / overlap`。
+10. **同批 entries 重叠**：只要这一批 push 里的两条 entry 自己重叠，就返回 `conflict / overlap`。
 
 > 当前校验阶段不再因为“服务器上已有更晚的版本”直接拒绝本地 push；这类本地优先合并改由 `applyChange` 处理。
 
@@ -126,6 +131,8 @@ last-reviewed: 2026-05-30
 - entries.create/update = 先删除与该记录时间段重叠的旧远端记录，并为这些被覆盖记录写 `time_entries` tombstone 与 delete seq，再 INSERT 或 UPDATE，`updated_at` 同上。
 - settings.delete = 真删除 + 写 `sync_tombstones(table_name='settings')`。
 - settings.create/update = INSERT 或 UPDATE，`updated_at` 同样以 `change.timestamp` 为准。
+- quick_notes.delete = 真删除 + 写 `sync_tombstones(table_name='quick_notes')`。
+- quick_notes.create/update = INSERT 或 UPDATE，`text` 和 `occurred_at` 来自 payload，`updated_at` 以 `change.timestamp` 为准；不触碰 time_entries 或 categories。
 
 **所以 `updated_at` 的来源是客户端写日志时记录的 `timestamp`**——也就是客户端本机时钟。
 
@@ -146,8 +153,8 @@ last-reviewed: 2026-05-30
 - 入参 `{ lastSyncedAt?: string | null, since?: string, sinceSeq?: number | null }`。服务端入口先用 `SyncPullRequestSchema` 做运行时校验：时间字段必须是带毫秒和 `Z` 的 UTC ISO 字符串，`sinceSeq` 必须是有限非负整数或 `null`；畸形 JSON、负数、小数、Infinity 或字段类型错误返回 400 `invalid_request`，不会进入拉取逻辑。`sinceSeq` 存在时优先，按 `sync_seq.id > sinceSeq` 拉取；否则走兼容 timestamp cursor：`since` 优先，其次 `lastSyncedAt`，再不济 `1970-01-01`。
 - 客户端收到响应后用 `SyncPullResponseSchema` 做运行时校验；不符合 `SyncChange` 判别联合契约的响应会抛出 `Invalid /api/sync/pull response`，不会写入本地 Dexie。
 - seq cursor 路径会按 `sync_seq` 找出 cursor 后每个 `table_name + record_id` 的最新变更，再读取当前业务表或 tombstone 组成 `SyncChange[]`，并在响应中返回 `latestSeq`。
-- timestamp cursor 路径拉取 `categories.updated_at >= since` + `time_entries.updated_at >= since` + `settings.updated_at >= since`，转成 `SyncChange[]` 返回（非 delete 的 `action` 永远是 `update`，无论实际是新增还是修改）。包含边界是为了重放与 cursor 同时间戳的记录，避免同毫秒/同时间窗口记录被 `> since` 跳过。
-- timestamp cursor 路径也会拉取 `sync_tombstones.deleted_at >= since`，转成 `time_entries/delete` 或 `categories/delete` 变更返回。
+- timestamp cursor 路径拉取 `categories.updated_at >= since` + `time_entries.updated_at >= since` + `settings.updated_at >= since` + `quick_notes.updated_at >= since`，转成 `SyncChange[]` 返回（非 delete 的 `action` 永远是 `update`，无论实际是新增还是修改）。包含边界是为了重放与 cursor 同时间戳的记录，避免同毫秒/同时间窗口记录被 `> since` 跳过。
+- timestamp cursor 路径也会拉取 `sync_tombstones.deleted_at >= since`，转成 `time_entries/delete`、`categories/delete`、`settings/delete` 或 `quick_notes/delete` 变更返回。
 - 客户端应用 `categories/delete` 时会在单个 Dexie 事务中删除本地目标分类、后代分类和这些分类下的 entries；远端拉取应用删除不写本地 `syncLog`。如果删除 entries 后删除 categories 失败，事务会回滚，避免留下半删除状态。
 
 **tombstone 保留约束**：`sync_tombstones` 不能按固定 90 天 TTL 直接删除。长期离线客户端可能仍持有旧 `sinceSeq` 或旧本地记录；如果服务端提前删除 tombstone，客户端上线后会把已删除记录当作本地独有数据重新 push，造成数据回滚。安全清理必须同时满足：服务端知道所有活跃客户端的同步水位、存在全量修复兜底（force-pull/force-push），并且清理任务有人工确认或可审计日志。
@@ -160,11 +167,11 @@ last-reviewed: 2026-05-30
 
 | 接口 | 作用 |
 |---|---|
-| `GET /api/sync/status` | 返回服务端分类数、记录数、最新更新时间、稳定内容哈希、最新 `sync_seq` 和服务器时间 |
+| `GET /api/sync/status` | 返回服务端分类数、时间记录数、速记数、最新更新时间、稳定内容哈希、最新 `sync_seq` 和服务器时间 |
 | `POST /api/sync/force-push/prepare` | 生成短时确认 token，返回当前服务端摘要 |
-| `POST /api/sync/force-push` | 在确认 token + 短语正确时，用客户端提交的完整 categories/timeEntries/settings 覆盖服务器 |
+| `POST /api/sync/force-push` | 在确认 token + 短语正确时，用客户端提交的完整 categories/timeEntries/quickNotes/settings 覆盖服务器 |
 
-`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` 是有限非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` 的完整数据，`settings` 可选且必须符合 `SettingSchema`。畸形 JSON、负数、小数、Infinity 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。形状校验通过后，服务端还会做跨记录业务关系校验：分类 ID 和记录 ID 不能重复，分类不能自引用或形成第三级，父分类和记录分类必须存在，提交的记录时间段不能互相重叠；父分类关系用按 ID 建好的映射表判断，避免全量 force-push 数据量变大时退化成重复线性查找。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories` 并导入请求数据；只有请求显式带 `settings` 时才清空重建 settings，兼容旧客户端。成功后写 `sync_logs.action = 'force_push_applied'`，并刷新 `sync_state` 中的 commit hash。
+`force-push` 是破坏性操作：服务端必须先用 shared runtime schema 校验 `/force-push/prepare` 与 `/force-push` 请求。`prepare` 要求 `categoryCount` / `entryCount` / `quickNoteCount` 是有限非负整数，`lastUpdatedAt` 是 UTC ISO 或 `null`；最终 `force-push` 要求非空 `confirmToken`、确认短语字面量 `OVERWRITE_SERVER`，以及符合 `CategorySchema` / `TimeEntrySchema` / `QuickNoteSchema` 的完整数据，`settings` 可选且必须符合 `SettingSchema`。畸形 JSON、负数、小数、Infinity 或字段类型错误返回 400 `invalid_request`，不会进入确认 token 消费或 `validateForcePushPayload()`。形状校验通过后，服务端还会做跨记录业务关系校验：分类 ID、记录 ID 和速记 ID 不能重复，分类不能自引用或形成第三级，父分类和记录分类必须存在，提交的记录时间段不能互相重叠；父分类关系用按 ID 建好的映射表判断，避免全量 force-push 数据量变大时退化成重复线性查找。校验通过后，服务端必须先调用 `createServerBackup('sync_force_push')`，再在单个 SQLite 事务中清空 `sync_tombstones`、`time_entries`、`categories`、`quick_notes` 并导入请求数据；只有请求显式带 `settings` 时才清空重建 settings，兼容旧客户端。成功后写 `sync_logs.action = 'force_push_applied'`，并刷新 `sync_state` 中的 commit hash。
 
 `force-push/prepare` 生成的确认 token 当前存放在 `packages/server/src/routes/sync.ts` 的进程内 `Map`，TTL 为 5 分钟。token 只能消费一次：成功执行 `/api/sync/force-push` 后立即从内存中删除；过期、缺失或复用都会返回 403，并写入 `sync_logs`（例如 `force_push_expired` 或 `force_push_rejected`）。`prepare` 和最终成功覆盖也分别写入 `force_push_prepare`、`force_push_applied`，用于审计高风险覆盖操作。它只适合单实例部署：进程重启会清空 token，横向扩容时不同实例之间不会共享 token。启动时如果设置了 `SERVER_REPLICAS>1`，服务端会打印告警；真正多实例部署前应改成 SQLite 或 Redis 存储。
 
@@ -176,7 +183,7 @@ last-reviewed: 2026-05-30
 
 1. 服务器先更新到包含本节接口的版本；旧服务器会让新 APK 在 `/api/sync/status` 或 `/api/sync/force-push/*` 上遇到 404。
 2. 用同一 API 地址和 Token 访问 `GET /api/health`，确认基础连接、反向代理和鉴权配置没有问题。
-3. 用带鉴权请求访问 `GET /api/sync/status`，应返回 `categoryCount`、`entryCount`、`lastUpdatedAt`、`contentHash`、`latestSeq`、`serverTime`。
+3. 用带鉴权请求访问 `GET /api/sync/status`，应返回 `categoryCount`、`entryCount`、`quickNoteCount`、`lastUpdatedAt`、`contentHash`、`latestSeq`、`serverTime`。
 4. 客户端进入 `设置 → 数据设置 → 同步健康诊断`，点击"检查本地与云端状态"，应显示本地/云端摘要和建议原因。
 5. 非生产环境可继续点"准备覆盖云端"，确认后应返回短时 token 并展示 `OVERWRITE_SERVER` 输入框；生产数据不要为了验收执行最后的"确认用本地覆盖云端"。
 6. 只在测试库或已确认要恢复的真实事故中执行最终覆盖；成功后服务端 `data/backups/` 必须有 `sync_force_push` 备份，响应里也会返回 `backupId`。
@@ -194,8 +201,9 @@ last-reviewed: 2026-05-30
   - 远端 `categories/delete` 会先计算目标分类、后代分类和关联 entries；如果影响范围内任一 record 有未同步 `syncLog`，同样挂起为 `remoteAction: 'delete'` 冲突，不执行级联删除。
   - 远端 delete + 本地无 pending change → 保持原行为，直接删除本地记录；分类删除仍级联删除后代分类和关联 entries。
   - 远端 settings update/delete + 本地同 key 有未同步 `syncLog` → 跳过远端设置，本地待推送版本获胜；settings 不进入冲突 UI。
+  - 远端 quick_notes update/delete + 本地同 note 有未同步 `syncLog` → 跳过远端速记，本地待推送版本获胜；quick notes 不进入冲突 UI。
 - 写完后，客户端只在本次 pull 返回了变更时更新 `localStorage.timedata_last_synced`，值取返回 `changes` 里的最大 `timestamp`；不再直接用 `response.serverTime` 推进游标，避免查询完成到响应返回之间的新变更被跳过。
-- 因为服务端会 `>= since` 重放边界记录，客户端必须把本地已有且 `updatedAt` 相同的 category / entry 当作幂等重复跳过；重复 tombstone 删除本地已不存在的 entry 时也不计入 applied。当前仍是兼容性的 timestamp cursor 修补，不是最终的 `(updated_at, id)` 复合 cursor 或服务端单调版本号方案。
+- 因为服务端会 `>= since` 重放边界记录，客户端必须把本地已有且 `updatedAt` 相同的 category / entry / quick note 当作幂等重复跳过；重复 tombstone 删除本地已不存在的 entry 或 quick note 时也不计入 applied。当前仍是兼容性的 timestamp cursor 修补，不是最终的 `(updated_at, id)` 复合 cursor 或服务端单调版本号方案。
 
 `syncPull({mode:'repair'})` 是修复模式：从头拉一遍，但**已完整且本地更新的 entry 不覆盖**（防止把好数据替换为残缺数据）。这条手动修复/全量拉取路径返回的是 applied 数量，不返回 `SyncConflict[]`；它按服务器状态直接应用 delete，用于用户明确选择“从云端修复/替换”的场景。A4 的“远端 delete vs 本地 pending”挂起保护只在普通同步使用的 `syncPullRecent()` 路径生效。
 
@@ -222,11 +230,11 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 
 写新逻辑前确认这些不变量：
 
-1. **客户端写业务表必须同时写 `syncLog`**（否则数据丢同步）。
+1. **客户端写业务表必须同时写 `syncLog`**（否则数据丢同步）。这包括 `categories`、`timeEntries`、`settings` 和 `quickNotes`。
 2. **服务端 `sync_push` 是原子事务**：要么整批写入 + 备份，要么完全不动。
-3. **同步变更有依赖顺序**：`orderPushChanges` 必须保持 category create/update → time_entries → settings → category delete，避免 entry 引用缺失分类或 category delete 早于 entry delete 触发外键失败。
+3. **同步变更有依赖顺序**：`orderPushChanges` 必须保持 category create/update → time_entries → settings → quick_notes → category delete，避免 entry 引用缺失分类或 category delete 早于 entry delete 触发外键失败。quick notes 没有外键依赖，只要不挤到 category delete 后面即可。
 4. **`updatedAt` 字典序比较**：所有时间字段必须前缀格式一致（`YYYY-MM-DDTHH:mm:ss...`）。
-5. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeq`、CLI 创建记录会把 `sync_state` 标记为 dirty，由下一次 `/api/sync/status` 惰性重算；force-push 与 reset 类全量替换会立即刷新 `sync_state`。commit hash 必须包含 categories、time_entries 和 settings，否则已对齐快路径可能跳过设置同步。新增服务端写路径时必须同步处理 commit hash，否则 `/api/sync/status` 会返回旧摘要。
+5. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeq`、CLI 创建记录会把 `sync_state` 标记为 dirty，由下一次 `/api/sync/status` 惰性重算；force-push 与 reset 类全量替换会立即刷新 `sync_state`。commit hash 必须包含 categories、time_entries、quick_notes 和 settings，否则已对齐快路径可能跳过设置或速记同步。新增服务端写路径时必须同步处理 commit hash，否则 `/api/sync/status` 会返回旧摘要。
 6. **server 是冲突仲裁者**：普通 push 不再因为服务器时间较新直接拒绝本地写入；服务端用 `baseSeq` 判断是否 fast-forward、非重叠合并或本地覆盖，并用受保护备份记录本地覆盖场景。
 
 ## 6. 错误码处理（客户端侧）

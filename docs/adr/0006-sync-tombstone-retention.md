@@ -1,3 +1,9 @@
+---
+type: adr
+status: accepted
+date: 2026-05-18
+---
+
 # ADR 0006: sync_tombstones retention must be watermark-aware
 
 ## Status

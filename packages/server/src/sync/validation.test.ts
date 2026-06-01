@@ -106,6 +106,23 @@ function settingChange(overrides: Partial<SyncChange> = {}): SyncChange {
   };
 }
 
+function quickNoteChange(overrides: Partial<SyncChange> = {}): SyncChange {
+  return {
+    tableName: "quick_notes",
+    recordId: "note-1",
+    action: "create",
+    data: {
+      id: "note-1",
+      text: "repo",
+      occurredAt: "2026-06-01T04:01:30.123Z",
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    },
+    timestamp: "2026-06-01T04:02:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("validateSyncChanges", () => {
   it("rejects a self-referencing category", () => {
     const result = validateSyncChanges(db, [categoryChange({
@@ -522,6 +539,56 @@ describe("validateSyncChanges", () => {
       {
         change: settingChange({
           data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-30T00:00:00Z" },
+        }),
+        reasonCode: "invalid_shape",
+      },
+    ];
+
+    for (const item of cases) {
+      const result = validateSyncChanges(db, [item.change]);
+      expect(result.valid).toBe(false);
+      expect(result.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: item.reasonCode });
+    }
+  });
+
+  it("accepts quick note upsert and delete without category or overlap validation", () => {
+    const result = validateSyncChanges(db, [
+      quickNoteChange(),
+      quickNoteChange({ action: "delete", data: null, timestamp: "2026-06-01T04:03:00.000Z" }),
+    ]);
+
+    expect(result.valid).toBe(true);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
+      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
+    ]);
+  });
+
+  it("rejects malformed quick note changes", () => {
+    const cases: Array<{ change: SyncChange; reasonCode: string }> = [
+      { change: quickNoteChange({ data: null }), reasonCode: "missing_payload" },
+      { change: quickNoteChange({ recordId: "other-note" }), reasonCode: "id_mismatch" },
+      {
+        change: quickNoteChange({
+          data: {
+            id: "note-1",
+            text: "   ",
+            occurredAt: "2026-06-01T04:01:30.123Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
+        }),
+        reasonCode: "invalid_shape",
+      },
+      {
+        change: quickNoteChange({
+          data: {
+            id: "note-1",
+            text: "repo",
+            occurredAt: "2026-06-01T04:01:30Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
         }),
         reasonCode: "invalid_shape",
       },

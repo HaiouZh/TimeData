@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, SyncLogEntry, TimeEntry } from "@timedata/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type E2EServer, startE2EServer } from "../../../../server/src/__tests__/e2e/helpers.ts";
 import { db } from "../../db/index.ts";
@@ -35,6 +35,17 @@ function entry(overrides: Partial<TimeEntry> = {}): TimeEntry {
     note: "e2e",
     createdAt: "2026-05-13T09:00:00.000Z",
     updatedAt: "2026-05-13T09:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function quickNote(overrides: Partial<QuickNote> = {}): QuickNote {
+  return {
+    id: "note-e2e",
+    text: "repo",
+    occurredAt: "2026-06-01T04:01:30.123Z",
+    createdAt: "2026-06-01T04:02:00.000Z",
+    updatedAt: "2026-06-01T04:02:00.000Z",
     ...overrides,
   };
 }
@@ -187,5 +198,26 @@ describe("e2e: sync round trip", () => {
 
     expect(pulled).toBeGreaterThanOrEqual(1);
     await expect(db.timeEntries.get(localEntry.id)).resolves.toBeUndefined();
+  });
+
+  it("round trips quick notes through push and pull", async () => {
+    const localNote = quickNote();
+    await db.quickNotes.add(localNote);
+    await db.syncLog.add({ ...syncLog(localNote.id, "quick_notes"), timestamp: localNote.updatedAt });
+
+    const push = await syncPush();
+
+    expect(push).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    expect(server?.db.prepare("SELECT text, occurred_at FROM quick_notes WHERE id = ?").get(localNote.id)).toEqual({
+      text: "repo",
+      occurred_at: "2026-06-01T04:01:30.123Z",
+    });
+
+    await db.quickNotes.clear();
+    await db.syncLog.clear();
+    const pulled = await syncPull({ mode: "repair" });
+
+    expect(pulled).toBeGreaterThanOrEqual(1);
+    await expect(db.quickNotes.get(localNote.id)).resolves.toMatchObject({ text: "repo" });
   });
 });

@@ -8,6 +8,7 @@ import {
 } from "@timedata/shared";
 import type {
   Category,
+  QuickNote,
   SyncChange,
   SyncForcePushPrepareRequest,
   SyncForcePushPrepareResponse,
@@ -21,7 +22,19 @@ import type {
   TimeEntry,
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
-import { type CategoryRow, type CountRow, type EntryRow, type MaxRow, type SettingRow, type TombstoneRow, rowToCategory, rowToEntry, rowToSetting } from "../lib/db-rows.js";
+import {
+  type CategoryRow,
+  type CountRow,
+  type EntryRow,
+  type MaxRow,
+  type QuickNoteRow,
+  type SettingRow,
+  type TombstoneRow,
+  rowToCategory,
+  rowToEntry,
+  rowToQuickNote,
+  rowToSetting,
+} from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup, markServerBackupProtected } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
@@ -74,12 +87,19 @@ function consumeForcePushToken(token: string, now = Date.now()): ForcePushTokenL
 }
 
 function validateForcePushPayload(body: SyncForcePushRequest): string | null {
-  return validateForcePushBusinessRules(body.categories, body.timeEntries);
+  return validateForcePushBusinessRules(body.categories, body.timeEntries, body.quickNotes);
 }
 
-function replaceServerData(db: Database, categories: Category[], timeEntries: TimeEntry[], settings?: Setting[]): void {
+function replaceServerData(
+  db: Database,
+  categories: Category[],
+  timeEntries: TimeEntry[],
+  quickNotes: QuickNote[],
+  settings?: Setting[],
+): void {
   db.prepare("DELETE FROM sync_tombstones").run();
   db.prepare("DELETE FROM sync_seq").run();
+  db.prepare("DELETE FROM quick_notes").run();
   db.prepare("DELETE FROM time_entries").run();
   db.prepare("DELETE FROM categories").run();
   if (settings !== undefined) {
@@ -95,6 +115,10 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const insertSetting = db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)");
+  const insertQuickNote = db.prepare(`
+    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
 
   const orderedCategories = [...categories].sort((a, b) => {
     if (a.parentId === null && b.parentId !== null) return -1;
@@ -122,6 +146,11 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
     recordSeqWithDb(db, "time_entries", entry.id, "create");
   }
 
+  for (const note of quickNotes) {
+    insertQuickNote.run(note.id, note.text, note.occurredAt, note.createdAt, note.updatedAt);
+    recordSeqWithDb(db, "quick_notes", note.id, "create");
+  }
+
   if (settings !== undefined) {
     for (const setting of settings) {
       insertSetting.run(setting.key, setting.value, setting.updatedAt);
@@ -135,16 +164,21 @@ function replaceServerData(db: Database, categories: Category[], timeEntries: Ti
 function readServerStatus(db: Database): SyncStatusResponse {
   const categoryCount = (db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow).count;
   const entryCount = (db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as CountRow).count;
+  const quickNoteCount = (db.prepare("SELECT COUNT(*) as count FROM quick_notes").get() as CountRow).count;
   const latestCategory = (db.prepare("SELECT MAX(updated_at) as value FROM categories").get() as MaxRow).value;
   const latestEntry = (db.prepare("SELECT MAX(updated_at) as value FROM time_entries").get() as MaxRow).value;
   const latestSetting = (db.prepare("SELECT MAX(updated_at) as value FROM settings").get() as MaxRow).value;
-  const lastUpdatedAt = [latestCategory, latestEntry, latestSetting].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
+  const latestQuickNote = (db.prepare("SELECT MAX(updated_at) as value FROM quick_notes").get() as MaxRow).value;
+  const lastUpdatedAt =
+    [latestCategory, latestEntry, latestSetting, latestQuickNote].filter((value): value is string => Boolean(value)).sort().at(-1) ??
+    null;
 
   const commitState = getCommitHash(db);
 
   return {
     categoryCount,
     entryCount,
+    quickNoteCount,
     lastUpdatedAt,
     contentHash: commitState.hash,
     latestSeq: commitState.latestSeq,
@@ -242,6 +276,7 @@ sync.post("/force-push/prepare", async (c) => {
   const { token, expiresAt } = createForcePushToken({
     categoryCount: Number(body.categoryCount || 0),
     entryCount: Number(body.entryCount || 0),
+    quickNoteCount: Number(body.quickNoteCount || 0),
     lastUpdatedAt: typeof body.lastUpdatedAt === "string" ? body.lastUpdatedAt : null,
   });
 
@@ -297,7 +332,7 @@ sync.post("/force-push", async (c) => {
 
   const backup = await createServerBackup("sync_force_push");
   const replaceAll = db.transaction(() => {
-    replaceServerData(db, body.categories, body.timeEntries, body.settings);
+    replaceServerData(db, body.categories, body.timeEntries, body.quickNotes, body.settings);
   });
 
   try {
@@ -305,7 +340,12 @@ sync.post("/force-push", async (c) => {
   } catch (err) {
     const message = (err as Error).message;
     console.error("[sync/force-push] apply failed:", message);
-    writeSyncLog(db, "force_push_failed_after_backup", { backupId: backup.id, message }, body.categories.length + body.timeEntries.length);
+    writeSyncLog(
+      db,
+      "force_push_failed_after_backup",
+      { backupId: backup.id, message },
+      body.categories.length + body.timeEntries.length + body.quickNotes.length,
+    );
     const { body: errBody, status } = errorJson(
       ErrorCode.INTERNAL_ERROR,
       500,
@@ -319,6 +359,7 @@ sync.post("/force-push", async (c) => {
     importedCategories: body.categories.length,
     importedTimeEntries: body.timeEntries.length,
     importedSettings: body.settings?.length ?? 0,
+    importedQuickNotes: body.quickNotes.length,
     backupId: backup.id,
     serverTime: new Date().toISOString(),
     latestSeq: getLatestSeq(),
@@ -330,7 +371,8 @@ sync.post("/force-push", async (c) => {
     importedCategories: response.importedCategories,
     importedTimeEntries: response.importedTimeEntries,
     importedSettings: response.importedSettings,
-  }, body.categories.length + body.timeEntries.length + (body.settings?.length ?? 0));
+    importedQuickNotes: response.importedQuickNotes,
+  }, body.categories.length + body.timeEntries.length + body.quickNotes.length + (body.settings?.length ?? 0));
 
   return c.json(response);
 });
@@ -448,6 +490,16 @@ function changeFromSettingRow(r: SettingRow): SyncChange {
   };
 }
 
+function changeFromQuickNoteRow(r: QuickNoteRow): SyncChange {
+  return {
+    tableName: "quick_notes",
+    recordId: r.id,
+    action: "update",
+    data: rowToQuickNote(r),
+    timestamp: r.updated_at,
+  };
+}
+
 function changeFromTombstoneRow(r: TombstoneRow): SyncChange {
   return {
     tableName: r.table_name,
@@ -472,11 +524,13 @@ function readChangesSinceTimestamp(db: Database, since: string): SyncChange[] {
   const categories = db.prepare("SELECT * FROM categories WHERE updated_at >= ?").all(since) as CategoryRow[];
   const entries = db.prepare("SELECT * FROM time_entries WHERE updated_at >= ?").all(since) as EntryRow[];
   const settings = db.prepare("SELECT * FROM settings WHERE updated_at >= ?").all(since) as SettingRow[];
+  const quickNotes = db.prepare("SELECT * FROM quick_notes WHERE updated_at >= ?").all(since) as QuickNoteRow[];
   const tombstones = db.prepare("SELECT * FROM sync_tombstones WHERE deleted_at >= ?").all(since) as TombstoneRow[];
   const changes = [
     ...categories.map(changeFromCategoryRow),
     ...entries.map(changeFromEntryRow),
     ...settings.map(changeFromSettingRow),
+    ...quickNotes.map(changeFromQuickNoteRow),
     ...tombstones.map(changeFromTombstoneRow),
   ];
   sortChanges(changes);
@@ -501,6 +555,12 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[
     if (seq.tableName === "settings") {
       const row = db.prepare("SELECT * FROM settings WHERE key = ?").get(seq.recordId) as SettingRow | undefined;
       if (row) changes.push(changeFromSettingRow(row));
+      continue;
+    }
+
+    if (seq.tableName === "quick_notes") {
+      const row = db.prepare("SELECT * FROM quick_notes WHERE id = ?").get(seq.recordId) as QuickNoteRow | undefined;
+      if (row) changes.push(changeFromQuickNoteRow(row));
       continue;
     }
 
@@ -537,6 +597,7 @@ sync.post("/pull", async (c) => {
     categoryIds: changes.filter((c) => c.tableName === "categories").map((c) => c.recordId),
     entryIds: changes.filter((c) => c.tableName === "time_entries").map((c) => c.recordId),
     settingKeys: changes.filter((c) => c.tableName === "settings").map((c) => c.recordId),
+    quickNoteIds: changes.filter((c) => c.tableName === "quick_notes").map((c) => c.recordId),
   }, changes.length);
 
   return c.json(response);

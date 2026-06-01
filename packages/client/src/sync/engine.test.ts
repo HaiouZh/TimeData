@@ -63,6 +63,7 @@ function log(
 
 beforeEach(async () => {
   await db.timeEntries.clear();
+  await db.quickNotes.clear();
   await db.syncLog.clear();
   await db.categories.clear();
   await db.settings.clear();
@@ -178,6 +179,7 @@ describe("getSyncHealth", () => {
         createdAt: "2026-05-08T09:00:00",
         updatedAt: "2026-05-08T11:00:00",
       }],
+      quickNotes: [],
     });
     const localDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(localPayload));
     const localHash = [...new Uint8Array(localDigest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -185,6 +187,7 @@ describe("getSyncHealth", () => {
     apiFetchMock.mockResolvedValue({
       categoryCount: 1,
       entryCount: 1,
+      quickNoteCount: 0,
       lastUpdatedAt: "2026-05-08T11:00:00",
       contentHash: localHash,
       serverTime: "2026-05-08T12:00:00.000Z",
@@ -223,17 +226,25 @@ describe("syncForcePushToServer", () => {
     });
     await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
     await db.settings.add({ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-08T08:30:00.000Z" });
+    await db.quickNotes.add({
+      id: "note-1",
+      text: "repo",
+      occurredAt: "2026-05-08T08:40:00.000Z",
+      createdAt: "2026-05-08T08:40:00.000Z",
+      updatedAt: "2026-05-08T08:40:00.000Z",
+    });
 
     apiFetchMock
       .mockResolvedValueOnce({
         confirmToken: "token-1",
         expiresAt: "2026-05-08T12:05:00.000Z",
         confirmationPhrase: "OVERWRITE_SERVER",
-        serverStatus: { categoryCount: 0, entryCount: 0, lastUpdatedAt: null, serverTime: "2026-05-08T12:00:00.000Z" },
+        serverStatus: { categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null, serverTime: "2026-05-08T12:00:00.000Z" },
       })
       .mockResolvedValueOnce({
         importedCategories: 1,
         importedTimeEntries: 1,
+        importedQuickNotes: 1,
         backupId: "sync_force_push-1",
         serverTime: "2026-05-08T12:01:00.000Z",
         latestSeq: 42,
@@ -244,14 +255,28 @@ describe("syncForcePushToServer", () => {
 
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/force-push/prepare", {
       method: "POST",
-      body: JSON.stringify({ categoryCount: 1, entryCount: 1, lastUpdatedAt: "2026-05-08T09:00:00" }),
+      body: JSON.stringify({
+        categoryCount: 1,
+        entryCount: 1,
+        quickNoteCount: 1,
+        lastUpdatedAt: "2026-05-08T09:00:00",
+      }),
     });
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/force-push", expect.objectContaining({ method: "POST" }));
     const forcePushBody = JSON.parse(apiFetchMock.mock.calls[1][1].body);
     expect(forcePushBody.categories).toHaveLength(1);
     expect(forcePushBody.timeEntries).toHaveLength(1);
     expect(forcePushBody.settings).toEqual([{ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-08T08:30:00.000Z" }]);
-    expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, backupId: "sync_force_push-1" });
+    expect(forcePushBody.quickNotes).toEqual([
+      {
+        id: "note-1",
+        text: "repo",
+        occurredAt: "2026-05-08T08:40:00.000Z",
+        createdAt: "2026-05-08T08:40:00.000Z",
+        updatedAt: "2026-05-08T08:40:00.000Z",
+      },
+    ]);
+    expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, backupId: "sync_force_push-1" });
     expect(await db.syncLog.count()).toBe(0);
     expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-08T12:01:00.000Z");
     expect(localStorage.getItem("timedata_last_synced_seq")).toBe("42");
@@ -300,6 +325,72 @@ describe("syncPush", () => {
       },
     ]);
     await expect(db.syncLog.get("setting-log-1")).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("pushes quick note changes without category dependency changes", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.quickNotes.add({
+      id: "note-1",
+      text: "repo",
+      occurredAt: "2026-06-01T04:01:30.123Z",
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "note-log-1",
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "create",
+      timestamp: "2026-06-01T04:02:00.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "quick_notes",
+          recordId: "note-1",
+          action: "create",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "applied",
+          incomingTimestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-06-01T04:03:00.000Z",
+    });
+
+    await expect(syncPush()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    expect(pushBody.changes).toEqual([
+      {
+        tableName: "quick_notes",
+        recordId: "note-1",
+        action: "create",
+        data: {
+          id: "note-1",
+          text: "repo",
+          occurredAt: "2026-06-01T04:01:30.123Z",
+          createdAt: "2026-06-01T04:02:00.000Z",
+          updatedAt: "2026-06-01T04:02:00.000Z",
+        },
+        timestamp: "2026-06-01T04:02:00.000Z",
+      },
+    ]);
+    await expect(db.syncLog.get("note-log-1")).resolves.toMatchObject({ synced: 1 });
   });
 
   it("handles 409 push outcomes without losing accepted sync logs", async () => {
@@ -744,6 +835,46 @@ describe("syncPull", () => {
 
     await expect(syncPull()).resolves.toBe(1);
     await expect(db.settings.get("sleep.categoryId")).resolves.toBeUndefined();
+  });
+
+  it("applies quick note upsert and delete changes from pull", async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-01T04:03:00.000Z",
+      changes: [
+        {
+          tableName: "quick_notes",
+          recordId: "note-1",
+          action: "update",
+          data: {
+            id: "note-1",
+            text: "repo",
+            occurredAt: "2026-06-01T04:01:30.123Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
+          timestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "repo" });
+
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-01T04:04:00.000Z",
+      changes: [
+        {
+          tableName: "quick_notes",
+          recordId: "note-1",
+          action: "delete",
+          data: null,
+          timestamp: "2026-06-01T04:04:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.quickNotes.get("note-1")).resolves.toBeUndefined();
   });
 
   it("skips duplicate boundary records during incremental pull", async () => {
@@ -1261,6 +1392,68 @@ describe("syncPullRecent", () => {
     await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "remote-cat" });
   });
 
+  it("applies remote quick notes unless the same note has a pending local change", async () => {
+    await db.quickNotes.add({
+      id: "note-1",
+      text: "local",
+      occurredAt: "2026-06-01T04:01:30.123Z",
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "note-log-1",
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "update",
+      timestamp: "2026-06-01T04:02:30.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-01T04:03:00.000Z",
+      changes: [
+        {
+          tableName: "quick_notes",
+          recordId: "note-1",
+          action: "update",
+          data: {
+            id: "note-1",
+            text: "remote",
+            occurredAt: "2026-06-01T04:01:30.123Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:03:00.000Z",
+          },
+          timestamp: "2026-06-01T04:03:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 0, conflicts: [] });
+    await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "local" });
+
+    await db.syncLog.clear();
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-01T04:04:00.000Z",
+      changes: [
+        {
+          tableName: "quick_notes",
+          recordId: "note-1",
+          action: "update",
+          data: {
+            id: "note-1",
+            text: "remote",
+            occurredAt: "2026-06-01T04:01:30.123Z",
+            createdAt: "2026-06-01T04:02:00.000Z",
+            updatedAt: "2026-06-01T04:04:00.000Z",
+          },
+          timestamp: "2026-06-01T04:04:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 1, conflicts: [] });
+    await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "remote" });
+  });
+
   it("detects conflicts only when local has unsynced changes", async () => {
     await db.timeEntries.add({
       id: "entry-1",
@@ -1741,6 +1934,43 @@ describe("regularSync", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status");
     expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/pull", expect.anything());
     expect(getLastSyncedSeq()).toBe(7);
+  });
+
+  it("does not treat note-only server changes as already aligned", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 0,
+        entryCount: 0,
+        quickNoteCount: 1,
+        lastUpdatedAt: "2026-06-01T04:02:00.000Z",
+        latestSeq: 4,
+        serverTime: "2026-06-01T04:03:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        serverTime: "2026-06-01T04:04:00.000Z",
+        latestSeq: 5,
+        changes: [
+          {
+            tableName: "quick_notes",
+            recordId: "note-remote",
+            action: "update",
+            data: {
+              id: "note-remote",
+              text: "repo",
+              occurredAt: "2026-06-01T04:01:30.123Z",
+              createdAt: "2026-06-01T04:02:00.000Z",
+              updatedAt: "2026-06-01T04:02:00.000Z",
+            },
+            timestamp: "2026-06-01T04:02:00.000Z",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    const result = await regularSync({ beforeMutating: vi.fn().mockResolvedValue(undefined) });
+
+    expect(result).toMatchObject({ identical: false, pulled: 1 });
+    await expect(db.quickNotes.get("note-remote")).resolves.toMatchObject({ text: "repo" });
   });
 
   it("pulls recent changes only when meta diverges without unsynced changes", async () => {
@@ -2228,6 +2458,13 @@ describe("syncForceReplace", () => {
       updatedAt: "2026-05-07T09:00:00.000Z",
     });
     await db.settings.add({ key: "sleep.categoryId", value: "local-cat", updatedAt: "2026-05-07T09:00:00.000Z" });
+    await db.quickNotes.add({
+      id: "note-local",
+      text: "local",
+      occurredAt: "2026-05-07T09:05:00.000Z",
+      createdAt: "2026-05-07T09:05:00.000Z",
+      updatedAt: "2026-05-07T09:05:00.000Z",
+    });
 
     apiFetchMock.mockResolvedValue({
       serverTime: "2026-05-07T13:00:00.000Z",
@@ -2272,13 +2509,27 @@ describe("syncForceReplace", () => {
           data: { key: "sleep.categoryId", value: "server-cat", updatedAt: "2026-05-07T09:00:00.000Z" },
           timestamp: "2026-05-07T09:00:00.000Z",
         },
+        {
+          tableName: "quick_notes",
+          recordId: "note-server",
+          action: "update",
+          data: {
+            id: "note-server",
+            text: "server note",
+            occurredAt: "2026-05-07T09:10:00.000Z",
+            createdAt: "2026-05-07T09:10:00.000Z",
+            updatedAt: "2026-05-07T09:10:00.000Z",
+          },
+          timestamp: "2026-05-07T09:10:00.000Z",
+        },
       ],
     });
 
     const count = await syncForceReplace();
 
-    expect(count).toBe(3);
+    expect(count).toBe(4);
     await expect(db.timeEntries.get("local-only")).resolves.toBeUndefined();
+    await expect(db.quickNotes.get("note-local")).resolves.toBeUndefined();
     await expect(db.timeEntries.get("entry-server")).resolves.toMatchObject({
       note: "from server",
     });
@@ -2286,6 +2537,7 @@ describe("syncForceReplace", () => {
       name: "Server Cat",
     });
     await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "server-cat" });
+    await expect(db.quickNotes.get("note-server")).resolves.toMatchObject({ text: "server note" });
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ timeoutMs: 30_000 }));
     expect(await db.syncLog.count()).toBe(0);
     expect(getLastSyncedSeq()).toBe(42);

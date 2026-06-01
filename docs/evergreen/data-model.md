@@ -8,13 +8,16 @@ covers:
   - packages/server/src/db/schema.ts
   - packages/server/src/db/connection.ts
   - packages/server/src/db/reset.ts
+  - packages/server/src/lib/db-rows.ts
   - packages/client/src/db/index.ts
+  - packages/client/src/lib/quickNotes.ts
+  - packages/client/src/quick-notes/**
   - packages/client/src/lib/settings/**
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-05-30
+last-reviewed: 2026-06-01
 ---
 
 # 数据模型与契约
@@ -28,6 +31,7 @@ last-reviewed: 2026-05-30
 |---|---|---|---|
 | 分类 | `Category` | `categories` | `categories` |
 | 时间记录 | `TimeEntry` | `time_entries` | `timeEntries` |
+| 速记 | `QuickNote` | `quick_notes` | `quickNotes` |
 | 同步设置 | `Setting` | `settings` | `settings` |
 | 同步日志（客户端用） | `SyncLogEntry` | — | `syncLog` |
 
@@ -36,7 +40,7 @@ last-reviewed: 2026-05-30
 | 实体 | SQLite 表 | 作用 |
 |---|---|---|
 | 服务端同步日志 | `sync_logs` | 记录每次 push/pull 的摘要、状态、备份信息和保留的 `reasonCode` 细节，供运维和排障查看 |
-| 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` / `categories.id` 与删除时间，用于按序拉取删除事件重放；不能按固定 TTL 直接清理 |
+| 删除墓碑 | `sync_tombstones` | 记录已删除的 `time_entries.id` / `categories.id` / `quick_notes.id` / `settings.key` 与删除时间，用于按序拉取删除事件重放；不能按固定 TTL 直接清理 |
 | 服务端同步序列 | `sync_seq` | 记录每次成功写入后的单调递增序号，用于 `sinceSeq` 拉取和 `baseSeq` 快进判断 |
 | 服务端同步状态 | `sync_state` | 保存 `/api/sync/status` 的 commit hash、最新 seq、行数和最新更新时间摘要，避免每次 status 全量读取业务表 |
 | 应用元数据 | `app_metadata` | 记录全局一次性迁移/重置标记，例如 `utc_reset_v1` |
@@ -48,6 +52,8 @@ last-reviewed: 2026-05-30
 | 自动备份 | `autoBackups` | 客户端本地的滚动备份，保留最近 7 份（见 `backup.md`） |
 
 `settings` 是同步键值表，当前用于跨设备保存睡眠分类等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`。
+
+`quick_notes` 是聊天式速记表，只表达“时间 + 文本”。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`，独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
 
 服务端后台洞察的 `Admin*Response` 类型也在 `packages/shared/src/types.ts`。这些类型是 `/api/admin/*` 中概览、记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析的只读响应契约，不对应新表，也不增加写入路径。受控维护端点 `/api/admin/sync-logs` 操作既有 `sync_logs` 表，不属于 `Admin*Response` 契约。
 
@@ -104,14 +110,39 @@ last-reviewed: 2026-05-30
 - 同 `id` 之外的任何记录，时间段不能与本记录重叠（半开区间 `[start, end)`），否则 `overlap`。
 - 删除：服务端真删行，并往 `sync_tombstones` 写一条墓碑。
 
-## 4. `SyncLogEntry`（客户端同步日志）
+## 4. `QuickNote`（速记）
+
+```ts
+{
+  id: string;
+  text: string;
+  occurredAt: string; // 业务发生时间
+  createdAt: string;  // 系统创建时间
+  updatedAt: string;  // 编辑/同步时间
+}
+```
+
+约束：
+
+- `text` 保存前 trim，trim 后不能为空；运行时 `QuickNoteSchema` 会拒绝空文本。
+- `occurredAt` / `createdAt` / `updatedAt` 都必须是严格 UTC ISO 字符串（带毫秒和 `Z`）。
+- `occurredAt` 是用户看到、按天查询和导出的业务时间；`createdAt` 只表示系统创建时间，不能拿来做速记的业务排序。
+- `updatedAt` 用于导入合并和同步 LWW 判断；不强制 `updatedAt >= createdAt`，避免历史导入和设备时钟漂移造成额外失败。
+- `QuickNote` 不引用 `Category` 或 `TimeEntry`，不参与分类存在性、archived 分类、时间段重叠、时间环、时长统计或分类统计。
+- SQL 表名是 `quick_notes`，字段是 `occurred_at` / `created_at` / `updated_at`；Dexie 表名是 `quickNotes`，索引是 `id, occurredAt, updatedAt`。
+
+代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`
+
+相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/server/src/db/schema.test.ts`
+
+## 5. `SyncLogEntry`（客户端同步日志）
 
 只存在于客户端 Dexie：
 
 ```ts
 {
   id: string;
-  tableName: "categories" | "time_entries" | "settings";
+  tableName: "categories" | "time_entries" | "settings" | "quick_notes";
   recordId: string;
   action: "create" | "update" | "delete";
   timestamp: string;   // ISO，写日志当时的时间
@@ -121,9 +152,9 @@ last-reviewed: 2026-05-30
 
 客户端 Dexie `syncLog` 使用 `[tableName+synced]` 复合索引。新写入路径（`recordSyncLog`、分类批量写日志等）写 `synced: 0`，标记完成写 `synced: 1`；运行时 `SyncLogEntrySchema` 只接受 `0 | 1`。
 
-每次本地写入同步实体（`categories` / `timeEntries` / `settings`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改同步实体却忘了写 syncLog 是常见 bug**。实体写入与对应 `syncLog` 写入必须在同一个 Dexie transaction 内完成；如果同步日志写入失败，实体变更也要回滚，避免本地数据与待同步队列不一致。
+每次本地写入同步实体（`categories` / `timeEntries` / `settings` / `quickNotes`）都要调 `recordSyncLog()` 或等价批量写入追一条。**修改同步实体却忘了写 syncLog 是常见 bug**。实体写入与对应 `syncLog` 写入必须在同一个 Dexie transaction 内完成；如果同步日志写入失败，实体变更也要回滚，避免本地数据与待同步队列不一致。
 
-## 5. 同步推送：`SyncChange` / `SyncPushOutcome`
+## 6. 同步推送：`SyncChange` / `SyncPushOutcome`
 
 `SyncChange` 是按表和动作区分的联合类型；运行时 schema 在 `packages/shared/src/schemas.ts`，服务端 `/api/sync/push` 入口和客户端 `/api/sync/pull` 响应入口都会校验这个契约。
 
@@ -134,7 +165,9 @@ type SyncChange =
   | { tableName: "time_entries"; action: "create" | "update"; recordId: string; data: TimeEntry; timestamp: string }
   | { tableName: "time_entries"; action: "delete"; recordId: string; data: null; timestamp: string }
   | { tableName: "settings"; action: "create" | "update"; recordId: string; data: Setting; timestamp: string }
-  | { tableName: "settings"; action: "delete"; recordId: string; data: null; timestamp: string };
+  | { tableName: "settings"; action: "delete"; recordId: string; data: null; timestamp: string }
+  | { tableName: "quick_notes"; action: "create" | "update"; recordId: string; data: QuickNote; timestamp: string }
+  | { tableName: "quick_notes"; action: "delete"; recordId: string; data: null; timestamp: string };
 ```
 
 服务端对每条 change 输出一个 `SyncPushOutcome`：
@@ -169,46 +202,46 @@ type SyncChange =
 
 **修改 `SyncPushReasonCode` 等于改公开契约**：客户端 UI、错误提示、CLI 错误码处理都依赖这个枚举。新增枚举值必须同步更新 client 的处理。
 
-### 5.1 全量同步兜底契约
+### 6.1 全量同步兜底契约
 
-全量推送兜底复用完整的 `Category[]`、`TimeEntry[]` 和可选 `Setting[]` 请求体。服务端在导入前校验分类/记录 ID 唯一、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠；`settings` 缺省时按旧客户端兼容路径保留服务端现有设置，只有请求显式带 `settings` 时才清空重建设置表。
+全量推送兜底复用完整的 `Category[]`、`TimeEntry[]`、`QuickNote[]` 和可选 `Setting[]` 请求体。服务端在导入前校验分类/记录 ID 唯一、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠、速记 ID 唯一；`quickNotes` 缺省时按空数组兼容旧客户端，`settings` 缺省时按旧客户端兼容路径保留服务端现有设置，只有请求显式带 `settings` 时才清空重建设置表。
 
 相关共享类型只描述同步摘要和确认流程：
 
-- `SyncDatasetStatus`：分类数、记录数、最新更新时间；`contentHash` 是业务内容稳定哈希，用于识别数量和时间摘要不变但内容不同的状态；可选 `latestSeq` 表示服务端当前最新 `sync_seq`。
+- `SyncDatasetStatus`：分类数、时间记录数、速记数、最新更新时间；`contentHash` 是业务内容稳定哈希，用于识别数量和时间摘要不变但内容不同的状态；可选 `latestSeq` 表示服务端当前最新 `sync_seq`。
 - `SyncStatusResponse`：服务端摘要 + `serverTime`；`/api/sync/status` 当前返回 `contentHash` 与 `latestSeq`。
 - `SyncForcePushPrepareRequest` / `SyncForcePushPrepareResponse`：客户端提交本地摘要，服务端返回短时确认 token、过期时间、确认短语和当前服务端摘要。
-- `SyncForcePushRequest` / `SyncForcePushResponse`：客户端提交完整数据；服务端返回导入数量、服务器备份 ID、服务器时间和最新 `latestSeq`。
+- `SyncForcePushRequest` / `SyncForcePushResponse`：客户端提交完整数据；服务端返回导入数量（含 `importedQuickNotes`）、服务器备份 ID、服务器时间和最新 `latestSeq`。
 - `SyncHealthReport`：客户端比较本地摘要和服务端摘要后的诊断结果，不会自动触发全量拉取或推送。
 
-### 5.1.1 数据重置确认契约
+### 6.1.1 数据重置确认契约
 
 `DataResetPrepareResponse` 描述 `/api/data/reset/prepare` 的响应：服务端返回短时 `confirmToken`、固定确认短语 `RESET_DATA` 和 `expiresAt`。真正执行 `POST /api/data/reset` 时必须同时提交 token 与确认短语；服务端会先创建受保护备份，再重置为默认分类。这个契约只服务人工维护入口，不是 AI/脚本日常写入路径。
 
-### 5.2 增量同步序列契约
+### 6.2 增量同步序列契约
 
-服务端 `sync_seq` 是同步 cursor 的权威来源：每次 `applyChange()` 成功写入同步实体后追加一行；CLI `log` 成功创建记录后也追加 `time_entries/create` 序列；`force-push` 全量覆盖服务器时清空并按导入后的 categories/timeEntries/settings 重建序列。每次序列推进都会刷新 `sync_state` 的 commit hash，供 `/api/sync/status` 轻量读取。
+服务端 `sync_seq` 是同步 cursor 的权威来源：每次 `applyChange()` 成功写入同步实体后追加一行；CLI `log` 成功创建记录后也追加 `time_entries/create` 序列；`force-push` 全量覆盖服务器时清空并按导入后的 categories/timeEntries/quickNotes/settings 重建序列。每次序列推进都会刷新 `sync_state` 的 commit hash，供 `/api/sync/status` 轻量读取。
 
 共享契约：
 
 - `SyncPushRequest.baseSeq?: number | null`：客户端上次观察到的服务端序列，用来判断本次 push 相对云端是否可快进；运行时 schema 只接受有限非负整数、`null` 或缺省。
 - `SyncPullRequest.sinceSeq?: number | null`：客户端请求拉取某个服务端序列之后的变更；存在时优先于 timestamp cursor；运行时 schema 只接受有限非负整数、`null` 或缺省。
 - `SyncPullResponse.latestSeq?: number | null`：服务端当前最新序列；客户端只前进、不回退本地 `timedata_last_synced_seq`；运行时 schema 只接受有限非负整数、`null` 或缺省。
-- `SyncDatasetStatus.latestSeq?: number | null`：服务端状态摘要里的当前最新序列，用于普通同步 meta 预检和诊断展示，避免为了拿序列再多一次 round trip；meta no-op 同步会用它推进本地 `timedata_last_synced_seq`；状态响应里的 `categoryCount` / `entryCount` 同样是有限非负整数。
+- `SyncDatasetStatus.latestSeq?: number | null`：服务端状态摘要里的当前最新序列，用于普通同步 meta 预检和诊断展示，避免为了拿序列再多一次 round trip；meta no-op 同步会用它推进本地 `timedata_last_synced_seq`；状态响应里的 `categoryCount` / `entryCount` / `quickNoteCount` 同样是有限非负整数。
 
-`sync_seq` 不改变 `Category` / `TimeEntry` / `Setting` 字段，也不是用户可见历史记录；它只表示服务端接收并落库的同步顺序。
+`sync_seq` 不改变 `Category` / `TimeEntry` / `QuickNote` / `Setting` 字段，也不是用户可见历史记录；它只表示服务端接收并落库的同步顺序。
 
-## 6. 时间字段约定
+## 7. 时间字段约定
 
-### 6.1 `updated_at` 语义
+### 7.1 `updated_at` 语义
 
-服务端写入 `categories.updated_at` / `time_entries.updated_at` 时使用 `SyncChange.timestamp`，也就是客户端写 `syncLog` 的时刻；不使用 `change.data.updatedAt`，也不使用服务器当前时间。这样同一条记录在多端同步时，服务端落库顺序由同步日志时间决定，避免 payload 内部字段和同步意图时间不一致。
+服务端写入 `categories.updated_at` / `time_entries.updated_at` / `quick_notes.updated_at` / `settings.updated_at` 时使用 `SyncChange.timestamp`，也就是客户端写 `syncLog` 的时刻；不使用 `change.data.updatedAt`，也不使用服务器当前时间。这样同一条记录在多端同步时，服务端落库顺序由同步日志时间决定，避免 payload 内部字段和同步意图时间不一致。
 
-代码入口：`packages/server/src/sync/resolver.ts` 的 `applyCategoryChange` / `applyEntryChange`。
+代码入口：`packages/server/src/sync/resolver.ts` 的 `applyCategoryChange` / `applyEntryChange` / `applyQuickNoteChange` / settings 分支。
 
 相关测试：`packages/server/src/sync/resolver.test.ts` 的 `uses change timestamp instead of payload updatedAt for server updated_at`。
 
-### 6.2 时间格式现状
+### 7.2 时间格式现状
 
 **时间字段已统一为 UTC（2026-05-14 完成）**：所有时间字段一律使用 UTC ISO 字符串（带 `Z`）存储和传输；展示时再转本地时区。
 
@@ -223,13 +256,13 @@ type SyncChange =
 
 迁移方式：数据重置（不转换历史数据）。服务端首次启动检测 `app_metadata.utc_reset_v1` 标记，若不存在则清空旧业务数据并写入默认分类；客户端 Dexie 当前是 v2 schema，v2 新增 `settings` store。Backup 使用当前唯一格式 `timedata.backup`（`timeFormat: "utc"`）。
 
-## 7. 默认分类预设
+## 8. 默认分类预设
 
 定义在 `packages/shared/src/constants.ts` 的 `DEFAULT_CATEGORIES`，五个顶层（睡眠 / 生存 / 投资 / 享乐 / 运转），每个有 1-6 个子分类。详见 [`domain/categories-preset.md`](./domain/categories-preset.md).
 
 `createDefaultCategories(timestamp?)` 同时给客户端和服务端用，确保两端的"出厂状态"一致。
 
-## 8. SQL 字段映射表
+## 9. SQL 字段映射表
 
 写新路由或新同步逻辑时常需要这张表。SQL 列名（snake_case）↔ JS 字段（camelCase）：
 
@@ -239,6 +272,7 @@ type SyncChange =
 | `category_id` | `categoryId` |
 | `start_time` | `startTime` |
 | `end_time` | `endTime` |
+| `occurred_at` | `occurredAt` |
 | `sort_order` | `sortOrder` |
 | `is_archived` | `isArchived`（SQL 0/1，JS boolean） |
 | `created_at` | `createdAt` |
@@ -246,20 +280,22 @@ type SyncChange =
 
 映射代码散落在各路由里（`packages/server/src/routes/*`），没有集中的 mapper。改字段名需要全文搜索。
 
-## 9. Dexie schema
+## 10. Dexie schema
 
-`packages/client/src/db/index.ts` 当前只声明一个 Dexie 版本：
+`packages/client/src/db/index.ts` 当前维护三个 Dexie 版本声明；v3 是当前 schema，新增 `quickNotes`，并保留旧表声明以支持本地升级：
 
 ```ts
-db.version(1).stores({
+db.version(3).stores({
   categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
   autoBackups: "id, createdAt",
+  settings: "key",
 });
 ```
 
-本项目按当前 schema 作为全新本地库处理，不维护历史 Dexie 版本迁移链。
+v1 是初始业务表，v2 增加 `settings`，v3 增加 `quickNotes`。`resetLocalDataToDefaults()` 当前只重置分类、时间记录、settings 与对应非速记 `syncLog`，不会清空 `quickNotes`；速记有独立导入/导出/删除入口。
 
 **SQLite 这边**目前的迁移机制是 `CREATE TABLE IF NOT EXISTS`——只能加表，**不能改已有列定义**。改 schema 时需要：
 1. 加新表 / 加新列（用 `ALTER TABLE ... ADD COLUMN`）— 现有数据自动兼容。
@@ -267,13 +303,14 @@ db.version(1).stores({
 
 🟡 *待优化项：未来引入正式的 SQLite 迁移机制（按版本号执行 up 脚本）*。
 
-## 10. ID 约定
+## 11. ID 约定
 
 - `Category.id`：默认分类用人写的字符串 ID（如 `cat-sleep-sleep`），用户新建用 UUID。
 - `TimeEntry.id`：始终是 UUID。
+- `QuickNote.id`：始终是 UUID。
 - 客户端、服务端、CLI 都不应分配 ID 然后期望另一端"修正"——**ID 是不可变的**。
 
-## 11. 服务端后台洞察响应
+## 12. 服务端后台洞察响应
 
 `Admin*Response` 仍然是只读契约，不引入新表，但字段语义已经扩展到同步保护备份和最近问题列表。
 

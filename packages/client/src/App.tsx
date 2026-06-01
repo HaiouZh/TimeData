@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import EntryPage from "./pages/EntryPage.tsx";
+import QuickNotesPage from "./pages/QuickNotesPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
 import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
@@ -30,6 +31,7 @@ export function AppShell() {
       <main className="flex-1 overflow-y-auto">
         <Routes>
           <Route path="/" element={<TimelinePage refreshKey={resumeRefreshKey} />} />
+          <Route path="/quick-notes" element={<QuickNotesPage />} />
           <Route path="/entries/new" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/entries/:id/edit" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/stats" element={<StatsPage />} />
@@ -46,6 +48,7 @@ export function AppShell() {
       {!hidesBottomNav && (
         <nav className="flex border-t border-slate-800 bg-slate-900">
           {[
+            { to: "/quick-notes", label: "记录" },
             { to: "/", label: "时间轴" },
             { to: "/stats", label: "统计" },
             { to: "/settings", label: "设置" },

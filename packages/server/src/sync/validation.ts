@@ -1,6 +1,6 @@
 import type { Database } from "better-sqlite3";
-import type { Category, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
-import { UtcIsoStringSchema } from "@timedata/shared";
+import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
+import { QuickNoteSchema, UtcIsoStringSchema } from "@timedata/shared";
 
 export interface SyncValidationResult {
   valid: boolean;
@@ -134,6 +134,18 @@ function validateSettingChange(change: SyncChange): SyncPushOutcome {
   return outcome(change, "accepted", "applied", "setting change can be applied");
 }
 
+function validateQuickNoteChange(change: SyncChange): SyncPushOutcome {
+  if (change.action === "delete") return outcome(change, "accepted", "applied", "quick note delete can be applied");
+  if (!change.data) return outcome(change, "rejected", "missing_payload", "quick note upsert requires payload");
+
+  const parsed = QuickNoteSchema.safeParse(change.data);
+  if (!parsed.success) return outcome(change, "rejected", "invalid_shape", "quick note payload is invalid");
+
+  const data: QuickNote = parsed.data;
+  if (data.id !== change.recordId) return outcome(change, "rejected", "id_mismatch", "quick note payload id does not match recordId");
+  return outcome(change, "accepted", "applied", "quick note change can be applied");
+}
+
 function incomingEntryOverlap(change: SyncChange, previousChanges: SyncChange[]): SyncPushOutcome | null {
   if (change.tableName !== "time_entries" || change.action === "delete" || !change.data) return null;
   const data = change.data as TimeEntry;
@@ -163,6 +175,8 @@ export function validateSyncChanges(db: Database, changes: SyncChange[], options
       result = incomingEntryOverlap(change, previousChanges) ?? validateEntryChange(db, batchCategories, change, options);
     } else if (change.tableName === "settings") {
       result = validateSettingChange(change);
+    } else if (change.tableName === "quick_notes") {
+      result = validateQuickNoteChange(change);
     } else {
       result = outcome(change, "rejected", "invalid_shape", "sync tableName is invalid");
     }

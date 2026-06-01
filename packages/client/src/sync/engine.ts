@@ -4,8 +4,29 @@ import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
 import { classifyReasonCode } from "./reason.ts";
-import { CategorySchema, SettingSchema, SyncPullResponseSchema, SYNC_DIAGNOSTIC_FAILURE_THRESHOLD, TimeEntrySchema } from "@timedata/shared";
-import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport, SyncPullResponse, SyncPushResponse, SyncChange, SyncStatusResponse, Category, Setting, TimeEntry, SyncLogEntry, SyncPushOutcome } from "@timedata/shared";
+import {
+  CategorySchema,
+  QuickNoteSchema,
+  SettingSchema,
+  SyncPullResponseSchema,
+  SYNC_DIAGNOSTIC_FAILURE_THRESHOLD,
+  TimeEntrySchema,
+} from "@timedata/shared";
+import type {
+  SyncForcePushPrepareResponse,
+  SyncForcePushResponse,
+  SyncHealthReport,
+  SyncPullResponse,
+  SyncPushResponse,
+  SyncChange,
+  SyncStatusResponse,
+  Category,
+  QuickNote,
+  Setting,
+  TimeEntry,
+  SyncLogEntry,
+  SyncPushOutcome,
+} from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
 const LAST_SYNCED_KEY = STORAGE_KEYS.lastSynced;
@@ -194,9 +215,17 @@ function parseRemoteSetting(data: unknown, recordId: string): Setting | null {
   return null;
 }
 
+function parseRemoteQuickNote(data: unknown, recordId: string): QuickNote | null {
+  const parsed = QuickNoteSchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.warn(`[sync] dropping invalid quick note payload for ${recordId}:`, parsed.error.issues);
+  return null;
+}
+
 async function enqueueLocalOnlyChanges(localSnapshot: Snapshot, cloudSnapshot: Snapshot): Promise<void> {
   const cloudCategoryIds = new Set(cloudSnapshot.categories.map((category) => category.id));
   const cloudEntryIds = new Set(cloudSnapshot.timeEntries.map((entry) => entry.id));
+  const cloudQuickNoteIds = new Set(cloudSnapshot.quickNotes.map((note) => note.id));
   const unsyncedLogs = await db.syncLog.filter((entry) => !entry.synced).toArray();
   const existingLogKeys = new Set(unsyncedLogs.map((entry) => `${entry.tableName}:${entry.recordId}`));
   const logs: SyncLogEntry[] = [];
@@ -212,6 +241,13 @@ async function enqueueLocalOnlyChanges(localSnapshot: Snapshot, cloudSnapshot: S
     const key = `time_entries:${entry.id}`;
     if (!cloudEntryIds.has(entry.id) && !existingLogKeys.has(key)) {
       logs.push({ id: uuid(), tableName: "time_entries", recordId: entry.id, action: "create", timestamp: entry.updatedAt, synced: 0 });
+    }
+  }
+
+  for (const note of localSnapshot.quickNotes) {
+    const key = `quick_notes:${note.id}`;
+    if (!cloudQuickNoteIds.has(note.id) && !existingLogKeys.has(key)) {
+      logs.push({ id: uuid(), tableName: "quick_notes", recordId: note.id, action: "create", timestamp: note.updatedAt, synced: 0 });
     }
   }
 
@@ -333,6 +369,19 @@ export async function syncPush(): Promise<SyncPushResult> {
       continue;
     }
 
+    if (log.tableName === "quick_notes") {
+      const data = await db.quickNotes.get(log.recordId);
+      if (!data) continue;
+      changes.push({
+        tableName: "quick_notes",
+        recordId: log.recordId,
+        action: log.action,
+        data,
+        timestamp: log.timestamp,
+      });
+      continue;
+    }
+
     const data = await db.timeEntries.get(log.recordId);
     if (!data) continue;
     changes.push(...categoryDependencyChangesForEntry(data, categoriesById, log.timestamp, includedCategoryIds));
@@ -445,6 +494,24 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
           }
         }
       }
+    } else if (change.tableName === "quick_notes") {
+      if (change.action === "delete") {
+        const existing = await db.quickNotes.get(change.recordId);
+        if (existing && !locallyModifiedById.has(`quick_notes:${change.recordId}`)) {
+          await db.quickNotes.delete(change.recordId);
+          applied++;
+        }
+      } else if (change.data) {
+        const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
+        if (!remoteNote) continue;
+        if (!locallyModifiedById.has(`quick_notes:${change.recordId}`)) {
+          const existing = await db.quickNotes.get(change.recordId);
+          if (!existing || existing.updatedAt !== remoteNote.updatedAt || existing.text !== remoteNote.text || existing.occurredAt !== remoteNote.occurredAt) {
+            await db.quickNotes.put(remoteNote);
+            applied++;
+          }
+        }
+      }
     } else if (change.tableName === "time_entries") {
       if (change.action === "delete") {
         const existing = await db.timeEntries.get(change.recordId);
@@ -509,8 +576,9 @@ function advanceLastSyncedCursor(changes: SyncChange[]): void {
 export async function syncForceReplace(): Promise<number> {
   const response = await fetchSyncPullResponse({ lastSyncedAt: null }, { timeoutMs: 30000 });
 
-  await db.transaction("rw", db.categories, db.timeEntries, db.syncLog, db.settings, async () => {
+  await db.transaction("rw", [db.categories, db.quickNotes, db.timeEntries, db.syncLog, db.settings], async () => {
     await db.timeEntries.clear();
+    await db.quickNotes.clear();
     await db.syncLog.clear();
     await db.settings.clear();
     await db.categories.clear();
@@ -528,6 +596,10 @@ export async function syncForceReplace(): Promise<number> {
         const remoteSetting = parseRemoteSetting(change.data, change.recordId);
         if (!remoteSetting) continue;
         await db.settings.put(remoteSetting);
+      } else if (change.tableName === "quick_notes" && change.action !== "delete" && change.data) {
+        const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
+        if (!remoteNote) continue;
+        await db.quickNotes.put(remoteNote);
       }
     }
   });
@@ -548,10 +620,11 @@ function latestTimestamp(values: Array<string | null | undefined>): string | nul
   return values.filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 }
 
-async function localContentHash(categories: Category[], timeEntries: TimeEntry[]): Promise<string> {
+async function localContentHash(categories: Category[], timeEntries: TimeEntry[], quickNotes: QuickNote[]): Promise<string> {
   const payload = JSON.stringify({
     categories: [...categories].sort((a, b) => a.id.localeCompare(b.id)),
     timeEntries: [...timeEntries].sort((a, b) => a.id.localeCompare(b.id)),
+    quickNotes: [...quickNotes].sort((a, b) => a.id.localeCompare(b.id)),
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -560,21 +633,31 @@ async function localContentHash(categories: Category[], timeEntries: TimeEntry[]
 async function getLocalStatus(): Promise<SyncHealthReport["local"]> {
   const categories = await db.categories.toArray();
   const timeEntries = await db.timeEntries.toArray();
+  const quickNotes = await db.quickNotes.toArray();
   const unsyncedCount = await db.syncLog.filter((entry) => !entry.synced).count();
-  const contentHash = await localContentHash(categories, timeEntries);
+  const contentHash = await localContentHash(categories, timeEntries, quickNotes);
   return {
     categoryCount: categories.length,
     entryCount: timeEntries.length,
-    lastUpdatedAt: latestTimestamp([...categories.map((item) => item.updatedAt), ...timeEntries.map((item) => item.updatedAt)]),
+    quickNoteCount: quickNotes.length,
+    lastUpdatedAt: latestTimestamp([
+      ...categories.map((item) => item.updatedAt),
+      ...timeEntries.map((item) => item.updatedAt),
+      ...quickNotes.map((item) => item.updatedAt),
+    ]),
     contentHash,
     unsyncedCount,
   };
 }
 
-function syncStatusMatches(local: Pick<SyncHealthReport["local"], "categoryCount" | "entryCount" | "lastUpdatedAt" | "contentHash">, server: SyncStatusResponse): boolean {
+function syncStatusMatches(
+  local: Pick<SyncHealthReport["local"], "categoryCount" | "entryCount" | "quickNoteCount" | "lastUpdatedAt" | "contentHash">,
+  server: SyncStatusResponse,
+): boolean {
   if (local.contentHash && server.contentHash) return local.contentHash === server.contentHash;
   return local.categoryCount === server.categoryCount
     && local.entryCount === server.entryCount
+    && local.quickNoteCount === (server.quickNoteCount ?? 0)
     && local.lastUpdatedAt === server.lastUpdatedAt;
 }
 
@@ -606,16 +689,18 @@ export async function prepareForcePush(): Promise<SyncForcePushPrepareResponse> 
     body: JSON.stringify({
       categoryCount: local.categoryCount,
       entryCount: local.entryCount,
+      quickNoteCount: local.quickNoteCount,
       lastUpdatedAt: local.lastUpdatedAt,
     }),
   });
 }
 
 export async function syncForcePushToServer(confirmToken: string, confirmationPhrase: "OVERWRITE_SERVER"): Promise<SyncForcePushResponse> {
-  const [categories, timeEntries, settings] = await Promise.all([
+  const [categories, timeEntries, settings, quickNotes] = await Promise.all([
     db.categories.toArray(),
     db.timeEntries.toArray(),
     db.settings.toArray(),
+    db.quickNotes.toArray(),
   ]);
 
   const response = await apiFetch<SyncForcePushResponse>("/api/sync/force-push", {
@@ -626,6 +711,7 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
       categories,
       timeEntries,
       settings,
+      quickNotes,
     }),
   });
 
@@ -822,13 +908,19 @@ async function regularSyncLegacy(options: RegularSyncOptions = {}): Promise<Regu
 interface Snapshot {
   categories: Category[];
   timeEntries: TimeEntry[];
+  quickNotes: QuickNote[];
 }
 
 async function loadLocalSnapshot(): Promise<Snapshot> {
-  const [categories, timeEntries] = await Promise.all([db.categories.toArray(), db.timeEntries.toArray()]);
+  const [categories, timeEntries, quickNotes] = await Promise.all([
+    db.categories.toArray(),
+    db.timeEntries.toArray(),
+    db.quickNotes.toArray(),
+  ]);
   return {
     categories: normalizeCategories(categories),
     timeEntries: normalizeTimeEntries(timeEntries),
+    quickNotes: normalizeQuickNotes(quickNotes),
   };
 }
 
@@ -837,6 +929,7 @@ async function loadCloudSnapshot(): Promise<Snapshot> {
 
   const categories: Category[] = [];
   const timeEntries: TimeEntry[] = [];
+  const quickNotes: QuickNote[] = [];
 
   for (const change of response.changes) {
     if (change.tableName === "categories" && change.action !== "delete" && change.data) {
@@ -845,12 +938,16 @@ async function loadCloudSnapshot(): Promise<Snapshot> {
     } else if (change.tableName === "time_entries" && change.action !== "delete" && change.data) {
       const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
       if (remoteEntry) timeEntries.push(remoteEntry);
+    } else if (change.tableName === "quick_notes" && change.action !== "delete" && change.data) {
+      const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
+      if (remoteNote) quickNotes.push(remoteNote);
     }
   }
 
   return {
     categories: normalizeCategories(categories),
     timeEntries: normalizeTimeEntries(timeEntries),
+    quickNotes: normalizeQuickNotes(quickNotes),
   };
 }
 
@@ -860,6 +957,10 @@ function normalizeCategories(categories: Category[]): Category[] {
 
 function normalizeTimeEntries(entries: TimeEntry[]): TimeEntry[] {
   return [...entries].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function normalizeQuickNotes(notes: QuickNote[]): QuickNote[] {
+  return [...notes].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function snapshotsMatch(localSnapshot: Snapshot, cloudSnapshot: Snapshot): boolean {
@@ -902,6 +1003,22 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
           applied++;
         }
       }
+    } else if (change.tableName === "quick_notes") {
+      if (change.action === "delete") {
+        const existing = await db.quickNotes.get(change.recordId);
+        if (existing) {
+          await db.quickNotes.delete(change.recordId);
+          applied++;
+        }
+      } else if (change.data) {
+        const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
+        if (!remoteNote) continue;
+        const existing = await db.quickNotes.get(change.recordId);
+        if (!existing || existing.updatedAt !== remoteNote.updatedAt || existing.text !== remoteNote.text || existing.occurredAt !== remoteNote.occurredAt) {
+          await db.quickNotes.put(remoteNote);
+          applied++;
+        }
+      }
     } else if (change.tableName === "time_entries") {
       if (change.action === "delete") {
         const existing = await db.timeEntries.get(change.recordId);
@@ -933,16 +1050,17 @@ function isCompleteEntry(entry: TimeEntry): boolean {
 }
 
 export async function recordSyncLog(
-  tableName: "categories" | "time_entries" | "settings",
+  tableName: SyncLogEntry["tableName"],
   recordId: string,
-  action: "create" | "update" | "delete"
+  action: "create" | "update" | "delete",
+  timestamp = new Date().toISOString(),
 ): Promise<void> {
   await db.syncLog.add({
     id: uuid(),
     tableName,
     recordId,
     action,
-    timestamp: new Date().toISOString(),
+    timestamp,
     synced: 0,
   });
 }

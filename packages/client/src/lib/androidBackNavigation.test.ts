@@ -13,6 +13,7 @@ describe("resolveAndroidBackAction", () => {
   });
 
   it("returns home from secondary tab pages", () => {
+    expect(resolveAndroidBackAction("/quick-notes")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/stats")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/categories")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/settings")).toEqual({ type: "navigate", to: "/", replace: true });

@@ -20,6 +20,10 @@ vi.mock("./pages/EntryPage.tsx", () => ({
   default: ({ refreshKey }: { refreshKey: number }) => createElement("div", null, `记录页面 ${refreshKey}`),
 }));
 
+vi.mock("./pages/QuickNotesPage.tsx", () => ({
+  default: () => createElement("div", null, "速记页面"),
+}));
+
 vi.mock("./pages/StatsPage.tsx", () => ({
   default: () => createElement("div", null, "统计页面"),
 }));
@@ -103,5 +107,17 @@ describe("AppShell settings routes", () => {
 
     expect(timelineHtml).toContain("时间轴页面 0");
     expect(entryHtml).toContain("记录页面 0");
+  });
+
+  it("renders quick notes route and bottom navigation entry", () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, { initialEntries: ["/quick-notes"] }, createElement(AppShell)),
+    );
+
+    expect(html).toContain("速记页面");
+    expect(html).toContain("记录");
+    expect(html).toContain("时间轴");
+    expect(html).toContain("统计");
+    expect(html).toContain("设置");
   });
 });

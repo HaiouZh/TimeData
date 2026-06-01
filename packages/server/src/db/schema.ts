@@ -36,6 +36,14 @@ export function initializeDatabase(): void {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -75,6 +83,8 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_entries_start ON time_entries(start_time);
     CREATE INDEX IF NOT EXISTS idx_entries_end ON time_entries(end_time);
     CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_quick_notes_occurred_at ON quick_notes(occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_quick_notes_updated_at ON quick_notes(updated_at);
     CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_sync_seq_table_record ON sync_seq(table_name, record_id);

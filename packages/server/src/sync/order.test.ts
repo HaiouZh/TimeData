@@ -41,4 +41,32 @@ describe("orderPushChanges", () => {
 
     expect(orderPushChanges([child, parent]).map((change) => change.recordId)).toEqual(["parent", "child"]);
   });
+
+  it("keeps quick notes independent from category dependency ordering", () => {
+    const quickNote: SyncChange = {
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "create",
+      data: {
+        id: "note-1",
+        text: "repo",
+        occurredAt: "2026-06-01T04:01:30.123Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+      timestamp: "2026-06-01T04:02:00.000Z",
+    };
+    const categoryDelete: SyncChange = {
+      tableName: "categories",
+      recordId: "cat-1",
+      action: "delete",
+      data: null,
+      timestamp: "2026-06-01T04:03:00.000Z",
+    };
+
+    expect(orderPushChanges([categoryDelete, quickNote]).map((change) => change.tableName)).toEqual([
+      "quick_notes",
+      "categories",
+    ]);
+  });
 });

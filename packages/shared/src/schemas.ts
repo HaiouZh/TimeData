@@ -30,6 +30,14 @@ export const SettingSchema = z.object({
   updatedAt: UtcIsoStringSchema,
 });
 
+export const QuickNoteSchema = z.object({
+  id: NonEmptyTrimmedStringSchema,
+  text: NonEmptyTrimmedStringSchema,
+  occurredAt: UtcIsoStringSchema,
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
+});
+
 export const TimeEntrySchema = z
   .object({
     id: NonEmptyTrimmedStringSchema,
@@ -47,7 +55,7 @@ export const TimeEntrySchema = z
 
 export const SyncLogEntrySchema = z.object({
   id: z.string(),
-  tableName: z.enum(["categories", "time_entries", "settings"]),
+  tableName: z.enum(["categories", "time_entries", "settings", "quick_notes"]),
   recordId: z.string(),
   action: z.enum(["create", "update", "delete"]),
   timestamp: UtcIsoStringSchema,
@@ -95,6 +103,18 @@ const SettingDeleteChangeSchema = BaseChangeFields.extend({
   data: z.null(),
 });
 
+const QuickNoteUpsertChangeSchema = BaseChangeFields.extend({
+  tableName: z.literal("quick_notes"),
+  action: z.enum(["create", "update"]),
+  data: QuickNoteSchema,
+});
+
+const QuickNoteDeleteChangeSchema = BaseChangeFields.extend({
+  tableName: z.literal("quick_notes"),
+  action: z.literal("delete"),
+  data: z.null(),
+});
+
 export const SyncChangeSchema = z.union([
   CategoryUpsertChangeSchema,
   CategoryDeleteChangeSchema,
@@ -102,6 +122,8 @@ export const SyncChangeSchema = z.union([
   TimeEntryDeleteChangeSchema,
   SettingUpsertChangeSchema,
   SettingDeleteChangeSchema,
+  QuickNoteUpsertChangeSchema,
+  QuickNoteDeleteChangeSchema,
 ]);
 
 export const SyncPushReasonCodeSchema = z.enum([
@@ -131,6 +153,7 @@ export const SyncPullRequestSchema = z.object({
 export const SyncForcePushPrepareRequestSchema = z.object({
   categoryCount: NonNegativeIntSchema,
   entryCount: NonNegativeIntSchema,
+  quickNoteCount: NonNegativeIntSchema.default(0),
   lastUpdatedAt: UtcIsoStringSchema.nullable(),
 });
 
@@ -140,11 +163,13 @@ export const SyncForcePushRequestSchema = z.object({
   categories: z.array(CategorySchema),
   timeEntries: z.array(TimeEntrySchema),
   settings: z.array(SettingSchema).optional(),
+  quickNotes: z.array(QuickNoteSchema).default([]),
 });
 
 export const SyncStatusResponseSchema = z.object({
   categoryCount: NonNegativeIntSchema,
   entryCount: NonNegativeIntSchema,
+  quickNoteCount: NonNegativeIntSchema,
   lastUpdatedAt: UtcIsoStringSchema.nullable(),
   contentHash: z.string().min(1).optional(),
   latestSeq: SeqSchema.nullable().optional(),

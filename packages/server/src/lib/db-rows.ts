@@ -1,4 +1,4 @@
-import type { Category, Setting, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Setting, TimeEntry } from "@timedata/shared";
 
 export interface CountRow {
   count: number;
@@ -31,9 +31,17 @@ export interface EntryRow {
 }
 
 export interface TombstoneRow {
-  table_name: "categories" | "time_entries" | "settings";
+  table_name: "categories" | "time_entries" | "settings" | "quick_notes";
   record_id: string;
   deleted_at: string;
+}
+
+export interface QuickNoteRow {
+  id: string;
+  text: string;
+  occurred_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SettingRow {
@@ -63,6 +71,16 @@ export function rowToEntry(row: EntryRow): TimeEntry {
     startTime: row.start_time,
     endTime: row.end_time,
     note: row.note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function rowToQuickNote(row: QuickNoteRow): QuickNote {
+  return {
+    id: row.id,
+    text: row.text,
+    occurredAt: row.occurred_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

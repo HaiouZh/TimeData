@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import type {
   CategorySchema,
+  QuickNoteSchema,
   SettingSchema,
   SyncChangeSchema,
   SyncForcePushPrepareRequestSchema,
@@ -16,6 +17,8 @@ import type {
 } from "./schemas.js";
 
 export type Category = z.infer<typeof CategorySchema>;
+
+export type QuickNote = z.infer<typeof QuickNoteSchema>;
 
 export type Setting = z.infer<typeof SettingSchema>;
 
@@ -64,6 +67,7 @@ export type SyncPullResponse = z.infer<typeof SyncPullResponseSchema>;
 export interface SyncDatasetStatus {
   categoryCount: number;
   entryCount: number;
+  quickNoteCount: number;
   lastUpdatedAt: string | null;
   contentHash?: string;
   latestSeq?: number | null;
@@ -82,6 +86,7 @@ export interface SyncForcePushResponse {
   importedCategories: number;
   importedTimeEntries: number;
   importedSettings?: number;
+  importedQuickNotes: number;
   backupId: string;
   serverTime: string;
   latestSeq?: number | null;

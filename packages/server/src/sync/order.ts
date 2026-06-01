@@ -34,7 +34,8 @@ export function orderPushChanges(changes: SyncChange[]): SyncChange[] {
   );
   const entryChanges = changes.filter((change) => change.tableName === "time_entries");
   const settingChanges = changes.filter((change) => change.tableName === "settings");
+  const quickNoteChanges = changes.filter((change) => change.tableName === "quick_notes");
   const categoryDeletes = changes.filter((change) => change.tableName === "categories" && change.action === "delete");
 
-  return [...categoryUpserts, ...entryChanges, ...settingChanges, ...categoryDeletes];
+  return [...categoryUpserts, ...entryChanges, ...settingChanges, ...quickNoteChanges, ...categoryDeletes];
 }

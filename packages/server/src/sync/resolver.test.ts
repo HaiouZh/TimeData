@@ -45,6 +45,14 @@ beforeEach(async () => {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,
@@ -453,6 +461,43 @@ describe("applyChange", () => {
     expect(db.prepare("SELECT key FROM settings WHERE key = ?").get("sleep.categoryId")).toBeUndefined();
     expect(
       db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'settings' AND record_id = ?").get("sleep.categoryId"),
+    ).toBeDefined();
+  });
+
+  it("applies quick note upsert and delete without category dependencies", () => {
+    const up = applyChange({
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "create",
+      data: {
+        id: "note-1",
+        text: "repo",
+        occurredAt: "2026-06-01T04:01:30.123Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+      timestamp: "2026-06-01T04:02:00.000Z",
+    });
+
+    expect(up.status).toBe("applied");
+    expect(db.prepare("SELECT text, occurred_at, updated_at FROM quick_notes WHERE id = ?").get("note-1")).toMatchObject({
+      text: "repo",
+      occurred_at: "2026-06-01T04:01:30.123Z",
+      updated_at: "2026-06-01T04:02:00.000Z",
+    });
+
+    const del = applyChange({
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "delete",
+      data: null,
+      timestamp: "2026-06-01T04:03:00.000Z",
+    });
+
+    expect(del.status).toBe("applied");
+    expect(db.prepare("SELECT id FROM quick_notes WHERE id = ?").get("note-1")).toBeUndefined();
+    expect(
+      db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'quick_notes' AND record_id = ?").get("note-1"),
     ).toBeDefined();
   });
 });

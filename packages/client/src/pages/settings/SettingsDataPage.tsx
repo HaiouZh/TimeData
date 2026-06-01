@@ -12,7 +12,11 @@ import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
 import { getMergeOvernightEnabled, setMergeOvernightEnabled } from "../../lib/overnightDisplaySetting.ts";
 import { safeGetItem } from "../../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
-import { formatAppDateTime } from "../../lib/time.ts";
+import { formatAppDateTime, getDateString } from "../../lib/time.ts";
+import { deleteQuickNotesByRange } from "../../quick-notes/deleteQuickNotesRange.ts";
+import { exportQuickNotesJsonByRange, exportQuickNotesMarkdownByRange } from "../../quick-notes/exportQuickNotes.ts";
+import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../../quick-notes/fileDownload.ts";
+import { importQuickNotes } from "../../quick-notes/importQuickNotes.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
 export default function SettingsDataPage() {
@@ -46,7 +50,11 @@ export default function SettingsDataPage() {
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [forcePushPhrase, setForcePushPhrase] = useState("");
   const [forcePushConfirmation, setForcePushConfirmation] = useState(false);
+  const today = getDateString(new Date());
+  const [quickNotesFromDate, setQuickNotesFromDate] = useState(today);
+  const [quickNotesToDate, setQuickNotesToDate] = useState(today);
   const restoreInputRef = useRef<HTMLInputElement>(null);
+  const quickNotesImportInputRef = useRef<HTMLInputElement>(null);
   const apiUrl = safeGetItem(STORAGE_KEYS.apiUrl) || "";
 
   useEffect(() => {
@@ -129,7 +137,7 @@ export default function SettingsDataPage() {
       setForcePushPhrase("");
       setForcePushConfirmation(false);
       setDataStatus(
-        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录。服务器备份：${result.backupId}。`,
+        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录，${result.importedQuickNotes} 条速记。服务器备份：${result.backupId}。`,
       );
     }
   }
@@ -193,6 +201,79 @@ export default function SettingsDataPage() {
   function handleRestoreInputChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) void handleRestoreFile(file);
+  }
+
+  async function handleQuickNotesImportFile(file: File) {
+    setDataBusy(true);
+    setDataStatus("");
+    try {
+      const result = await importQuickNotes(JSON.parse(await file.text()));
+      setDataStatus(`已导入速记：新增 ${result.inserted} 条，更新 ${result.updated} 条，保留 ${result.kept} 条。`);
+    } catch (e: unknown) {
+      setDataStatus(`速记导入失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setDataBusy(false);
+      if (quickNotesImportInputRef.current) quickNotesImportInputRef.current.value = "";
+    }
+  }
+
+  function handleQuickNotesImportInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) void handleQuickNotesImportFile(file);
+  }
+
+  function quickNotesRangeLabel(): string {
+    return quickNotesFromDate === quickNotesToDate ? quickNotesFromDate : `${quickNotesFromDate}_to_${quickNotesToDate}`;
+  }
+
+  async function handleQuickNotesExportJson() {
+    setDataBusy(true);
+    setDataStatus("");
+    try {
+      const backup = await exportQuickNotesJsonByRange(quickNotesFromDate, quickNotesToDate);
+      await downloadQuickNotesJson(backup);
+      setDataStatus(`速记 JSON 已导出：${backup.notes.length} 条。`);
+    } catch (e: unknown) {
+      setDataStatus(`速记导出失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function handleQuickNotesExportMarkdown() {
+    setDataBusy(true);
+    setDataStatus("");
+    try {
+      const markdown = await exportQuickNotesMarkdownByRange(quickNotesFromDate, quickNotesToDate);
+      await downloadQuickNotesMarkdown(markdown, quickNotesRangeLabel());
+      setDataStatus("速记 Markdown 已导出。");
+    } catch (e: unknown) {
+      setDataStatus(`速记导出失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function handleQuickNotesDeleteRange() {
+    const confirmed = await confirm({
+      title: "确认删除速记",
+      body: `${quickNotesFromDate} 至 ${quickNotesToDate} 的速记会被删除，不影响时间分类和时间段记录。建议先导出需要保留的内容。`,
+      confirmLabel: "删除速记",
+      cancelLabel: "取消",
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setDataBusy(true);
+    setDataStatus("");
+    try {
+      const result = await deleteQuickNotesByRange(quickNotesFromDate, quickNotesToDate);
+      setDataStatus(`已删除 ${result.deleted} 条速记。`);
+    } catch (e: unknown) {
+      setDataStatus(`速记删除失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setDataBusy(false);
+    }
   }
 
   async function handleResetLocalData() {
@@ -320,6 +401,73 @@ export default function SettingsDataPage() {
         </div>
       </section>
 
+      <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <h3 className="text-sm font-medium text-slate-400">速记数据</h3>
+        <div className="text-xs text-slate-500">只处理速记，不影响时间记录。</div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="space-y-1 text-xs text-slate-400">
+            开始日期
+            <input
+              type="date"
+              value={quickNotesFromDate}
+              onChange={(e) => setQuickNotesFromDate(e.target.value)}
+              className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+          <label className="space-y-1 text-xs text-slate-400">
+            结束日期
+            <input
+              type="date"
+              value={quickNotesToDate}
+              onChange={(e) => setQuickNotesToDate(e.target.value)}
+              className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void handleQuickNotesExportJson()}
+            disabled={dataBusy}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+          >
+            导出速记 JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleQuickNotesExportMarkdown()}
+            disabled={dataBusy}
+            className="rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+          >
+            导出速记 Markdown
+          </button>
+          <input
+            ref={quickNotesImportInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleQuickNotesImportInputChange}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => quickNotesImportInputRef.current?.click()}
+            disabled={dataBusy}
+            className="rounded bg-amber-700 px-4 py-2 text-sm text-amber-50 hover:bg-amber-600 disabled:opacity-40"
+          >
+            导入速记 JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleQuickNotesDeleteRange()}
+            disabled={dataBusy}
+            className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900 disabled:opacity-40"
+          >
+            删除日期范围速记
+          </button>
+        </div>
+        <div className="text-xs text-slate-500">删除前请先导出需要保留的内容。</div>
+      </section>
+
       <details
         open={recoveryOpen}
         onToggle={(e) => setRecoveryOpen(e.currentTarget.open)}
@@ -350,10 +498,11 @@ export default function SettingsDataPage() {
               <div className="space-y-1 text-xs text-slate-400">
                 <div>
                   本地：{healthReport.local.categoryCount} 个分类，{healthReport.local.entryCount} 条记录，未同步{" "}
-                  {healthReport.local.unsyncedCount} 条。
+                  {healthReport.local.unsyncedCount} 条，速记 {healthReport.local.quickNoteCount} 条。
                 </div>
                 <div>
-                  云端：{healthReport.server.categoryCount} 个分类，{healthReport.server.entryCount} 条记录。
+                  云端：{healthReport.server.categoryCount} 个分类，{healthReport.server.entryCount} 条记录，
+                  {healthReport.server.quickNoteCount} 条速记。
                 </div>
                 <div className="text-slate-300">建议：{healthReport.reason}</div>
               </div>
@@ -390,7 +539,8 @@ export default function SettingsDataPage() {
               <div className="space-y-2 rounded border border-red-900 bg-slate-950/40 p-3">
                 <div className="text-xs text-slate-400">
                   云端当前：{forcePushPreparation.serverStatus.categoryCount} 个分类，
-                  {forcePushPreparation.serverStatus.entryCount} 条记录。令牌过期时间：
+                  {forcePushPreparation.serverStatus.entryCount} 条记录，
+                  {forcePushPreparation.serverStatus.quickNoteCount} 条速记。令牌过期时间：
                   {formatAppDateTime(forcePushPreparation.expiresAt)}。
                 </div>
                 <label className="block text-xs text-slate-300">

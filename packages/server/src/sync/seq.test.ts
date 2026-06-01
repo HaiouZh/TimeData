@@ -58,6 +58,15 @@ describe("sync_seq", () => {
     expect(changes[1].recordId).toBe("cat-2");
   });
 
+  it("tracks quick_notes records", () => {
+    const seq = recordSeq("quick_notes", "note-1", "create");
+
+    expect(getLatestSeq()).toBe(seq);
+    expect(getChangesSinceSeq(null)).toEqual([
+      { id: seq, tableName: "quick_notes", recordId: "note-1", action: "create" },
+    ]);
+  });
+
   it("getChangesSinceSeq with null returns all records", () => {
     recordSeq("categories", "cat-1", "create");
     recordSeq("time_entries", "entry-1", "create");

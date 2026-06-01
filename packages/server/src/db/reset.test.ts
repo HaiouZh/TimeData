@@ -39,6 +39,14 @@ beforeEach(() => {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -94,10 +102,15 @@ describe("resetDatabaseConnectionToDefaults", () => {
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
       VALUES ('time_entries', 'entry-1', ?)
     `).run(now);
+    db.prepare(`
+      INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at)
+      VALUES ('note-1', '临时想法', ?, ?, ?)
+    `).run(now, now, now);
 
     const result = resetDatabaseConnectionToDefaults(db);
 
     const entries = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
+    const notes = db.prepare("SELECT COUNT(*) as count FROM quick_notes").get() as { count: number };
     const sleep = db.prepare("SELECT id, name FROM categories WHERE id = 'cat-sleep'").get() as {
       id: string;
       name: string;
@@ -109,6 +122,7 @@ describe("resetDatabaseConnectionToDefaults", () => {
     expect(result.entriesDeleted).toBe(1);
     expect(result.categories).toBeGreaterThan(0);
     expect(entries.count).toBe(0);
+    expect(notes.count).toBe(0);
     expect(sleep).toEqual({ id: "cat-sleep", name: "睡眠" });
     expect(custom).toBeUndefined();
     expect(seqCount.count).toBe(0);

@@ -14,6 +14,7 @@ export function runUtcResetIfNeeded(db: Database.Database): UtcResetResult {
   const resetAt = new Date().toISOString();
 
   db.transaction(() => {
+    db.prepare("DELETE FROM quick_notes").run();
     db.prepare("DELETE FROM time_entries").run();
     db.prepare("DELETE FROM settings").run();
     db.prepare("DELETE FROM sync_logs").run();

@@ -1,12 +1,13 @@
-import type { Category, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import { getDb } from "../db/connection.js";
-import type { CategoryRow, EntryRow } from "../lib/db-rows.js";
+import type { CategoryRow, EntryRow, QuickNoteRow } from "../lib/db-rows.js";
 import { recordSeq } from "./seq.js";
 
 type CategoryChange = Extract<SyncChange, { tableName: "categories" }>;
 type EntryChange = Extract<SyncChange, { tableName: "time_entries" }>;
 type SettingChange = Extract<SyncChange, { tableName: "settings" }>;
+type QuickNoteChange = Extract<SyncChange, { tableName: "quick_notes" }>;
 
 export interface ApplyChangeResult {
   recordId: string;
@@ -27,8 +28,10 @@ export function applyChange(change: SyncChange): ApplyChangeResult {
     changeResult = applyCategoryChange(db, change);
   } else if (change.tableName === "time_entries") {
     changeResult = applyEntryChange(db, change);
-  } else {
+  } else if (change.tableName === "settings") {
     changeResult = applySettingChange(db, change);
+  } else {
+    changeResult = applyQuickNoteChange(db, change);
   }
 
   // 只有成功写入才推进 seq cursor，skipped 的变更不占 seq 位置（供上游判断应用顺序）。
@@ -37,6 +40,39 @@ export function applyChange(change: SyncChange): ApplyChangeResult {
   }
 
   return changeResult;
+}
+
+function applyQuickNoteChange(db: Database, change: QuickNoteChange): ApplyChangeResult {
+  if (change.action === "delete") {
+    db.prepare("DELETE FROM quick_notes WHERE id = ?").run(change.recordId);
+    db.prepare(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
+      VALUES ('quick_notes', ?, ?)
+      ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
+    `).run(change.recordId, change.timestamp);
+    return result(change, "applied", "deleted quick note");
+  }
+
+  const data: QuickNote = change.data;
+  const existing = db.prepare("SELECT updated_at FROM quick_notes WHERE id = ?").get(change.recordId) as
+    | Pick<QuickNoteRow, "updated_at">
+    | undefined;
+
+  db.prepare("DELETE FROM sync_tombstones WHERE table_name = 'quick_notes' AND record_id = ?").run(change.recordId);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE quick_notes SET text = ?, occurred_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(data.text, data.occurredAt, change.timestamp, change.recordId);
+    return result(change, "applied", "updated quick note", existing.updated_at);
+  }
+
+  db.prepare(`
+    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(data.id, data.text, data.occurredAt, data.createdAt, change.timestamp);
+  return result(change, "applied", "inserted quick note");
 }
 
 function applySettingChange(db: Database, change: SettingChange): ApplyChangeResult {

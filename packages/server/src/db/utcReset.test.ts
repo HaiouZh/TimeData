@@ -27,6 +27,13 @@ function makeTestDb(): Database.Database {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE quick_notes (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL DEFAULT (datetime('now')),
       device TEXT, action TEXT NOT NULL, detail TEXT, record_count INTEGER DEFAULT 0
@@ -62,6 +69,13 @@ describe("runUtcResetIfNeeded", () => {
       "e1",
       new Date().toISOString(),
     );
+    db.prepare("INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "note-1",
+      "旧速记",
+      new Date().toISOString(),
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
     computeAndPersistCommitHash(db);
 
     const result = runUtcResetIfNeeded(db);
@@ -69,6 +83,7 @@ describe("runUtcResetIfNeeded", () => {
     expect(result.ran).toBe(true);
     expect(result.resetAt).toBeTruthy();
     expect((db.prepare("SELECT COUNT(*) as n FROM time_entries").get() as { n: number }).n).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) as n FROM quick_notes").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM sync_logs").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM sync_tombstones").get() as { n: number }).n).toBe(0);
     // 默认分类已重建
