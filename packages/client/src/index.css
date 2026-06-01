@@ -34,3 +34,27 @@
 .wheel-scroll::-webkit-scrollbar {
   display: none;
 }
+
+/*
+ * iOS Safari 缩放治理（顶层未分层规则，优先级高于 Tailwind utilities，确保 text-sm 等也被覆盖）。
+ * 1) 关闭可交互元素的双击缩放：连点滚轮/槽位/按钮时，两次 tap 落进 ~300ms 双击窗口会触发整页放大。
+ *    manipulation 仅禁用双击与非标准手势，保留滚动与双指捏合缩放（可访问性友好）。
+ */
+button,
+a,
+[role="button"],
+[role="option"],
+label,
+summary,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+/* 2) 聚焦字号 <16px 的输入控件时 iOS 会自动放大视口；统一兜底到 16px 消除聚焦缩放。 */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
