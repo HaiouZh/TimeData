@@ -11,6 +11,8 @@ interface EntryFormProps {
   startTime: string;
   endTime: string;
   existingEntry?: TimeEntry;
+  adjacentPrev?: TimeEntry | null;
+  adjacentNext?: TimeEntry | null;
   onSave: (
     categoryId: string,
     startTime: string,
@@ -18,6 +20,8 @@ interface EntryFormProps {
     note: string,
   ) => Promise<EntrySaveResult | void> | void;
   onDelete?: () => void;
+  onMergeUp?: () => void;
+  onMergeDown?: () => void;
   onCancel: () => void;
 }
 
@@ -33,8 +37,12 @@ export default function EntryForm({
   startTime,
   endTime,
   existingEntry,
+  adjacentPrev,
+  adjacentNext,
   onSave,
   onDelete,
+  onMergeUp,
+  onMergeDown,
   onCancel,
 }: EntryFormProps) {
   const { parentCategories, getChildren } = useCategories();
@@ -138,6 +146,30 @@ export default function EntryForm({
           {saving ? "保存中…" : "保存"}
         </button>
       </div>
+
+      {(adjacentPrev || adjacentNext) && (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500 px-1">合并相邻记录</p>
+          {adjacentPrev && onMergeUp && (
+            <button
+              onClick={onMergeUp}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 flex items-center justify-center gap-2 transition-colors"
+            >
+              <span className="text-base leading-none">↑</span>
+              <span>向上合并（并入上一段）</span>
+            </button>
+          )}
+          {adjacentNext && onMergeDown && (
+            <button
+              onClick={onMergeDown}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 flex items-center justify-center gap-2 transition-colors"
+            >
+              <span className="text-base leading-none">↓</span>
+              <span>向下合并（并入下一段）</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {onDelete && (
         <button

@@ -175,6 +175,55 @@ export async function saveEntryWithOverlapAdjustments(input: SaveEntryWithOverla
   });
 }
 
+export async function findAdjacentEntries(entry: TimeEntry): Promise<{
+  prevEntry: TimeEntry | null;
+  nextEntry: TimeEntry | null;
+}> {
+  const [prevCandidates, nextCandidates] = await Promise.all([
+    db.timeEntries.where("endTime").equals(entry.startTime).toArray(),
+    db.timeEntries.where("startTime").equals(entry.endTime).toArray(),
+  ]);
+  return {
+    prevEntry: prevCandidates.find((e) => e.id !== entry.id) ?? null,
+    nextEntry: nextCandidates.find((e) => e.id !== entry.id) ?? null,
+  };
+}
+
+export function useAdjacentEntries(entry: TimeEntry | undefined | null): {
+  prevEntry: TimeEntry | null;
+  nextEntry: TimeEntry | null;
+} {
+  return (
+    useLiveQuery(
+      async () => {
+        if (!entry) return { prevEntry: null, nextEntry: null };
+        return findAdjacentEntries(entry);
+      },
+      [entry?.id, entry?.startTime, entry?.endTime],
+      { prevEntry: null, nextEntry: null },
+    ) ?? { prevEntry: null, nextEntry: null }
+  );
+}
+
+export async function mergeIntoAdjacentEntry(
+  currentEntry: TimeEntry,
+  direction: "up" | "down",
+  adjacentEntry: TimeEntry,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
+    if (direction === "up") {
+      await db.timeEntries.update(adjacentEntry.id, { endTime: currentEntry.endTime, updatedAt: now });
+      await recordSyncLog("time_entries", adjacentEntry.id, "update");
+    } else {
+      await db.timeEntries.update(adjacentEntry.id, { startTime: currentEntry.startTime, updatedAt: now });
+      await recordSyncLog("time_entries", adjacentEntry.id, "update");
+    }
+    await db.timeEntries.delete(currentEntry.id);
+    await recordSyncLog("time_entries", currentEntry.id, "delete");
+  });
+}
+
 export function useEntry(id?: string) {
   return useLiveQuery(() => (id ? db.timeEntries.get(id) : undefined), [id]);
 }

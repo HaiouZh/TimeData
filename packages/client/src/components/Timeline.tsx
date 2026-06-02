@@ -18,7 +18,9 @@ export default function Timeline({ slots, onGapClick, onEntryClick }: TimelinePr
   }
 
   return (
-    <div className="p-2">
+    <div className="relative px-3 py-2">
+      {/* vertical timeline rail */}
+      <div className="absolute left-[1.6rem] top-0 bottom-0 w-px bg-slate-800" />
       {displaySlots.map((slot, i) => (
         <TimeSlotComponent
           key={`${slot.startTime}-${i}`}

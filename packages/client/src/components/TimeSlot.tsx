@@ -11,31 +11,52 @@ interface TimeSlotProps {
 export default function TimeSlot({ slot, categoryPath, categoryColor, onClick }: TimeSlotProps) {
   const isGap = slot.entry === null;
   const duration = formatDuration(slot.startTime, slot.endTime);
+  const timeRange = formatTimelineTimeRange(slot.startTime, slot.endTime, { mode: slot.displayMode });
+
+  if (isGap) {
+    return (
+      <div className="relative pl-7 mb-1.5">
+        <div
+          className="absolute left-[0.85rem] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-700 ring-2 ring-slate-900"
+        />
+        <button
+          onClick={onClick}
+          className="w-full text-left px-3 py-2 rounded-lg border border-dashed border-slate-700 bg-slate-900/40 hover:bg-slate-800/60 hover:border-slate-600 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-600 font-mono">{timeRange}</span>
+            <div className="flex items-center gap-1.5 text-slate-600 group-hover:text-slate-400 transition-colors">
+              <span className="text-xs">{duration}</span>
+              <span className="text-xs font-medium">＋ 记录</span>
+            </div>
+          </div>
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-l-4 mb-1 rounded-r transition-colors ${
-        isGap ? "border-slate-600 bg-slate-800/50 hover:bg-slate-800" : "hover:brightness-110"
-      }`}
-      style={isGap ? undefined : { borderColor: categoryColor, backgroundColor: `${categoryColor}15` }}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-sm text-slate-400">
-            {formatTimelineTimeRange(slot.startTime, slot.endTime, { mode: slot.displayMode })}
-          </span>
-          <span className="ml-2 text-xs text-slate-500">{duration}</span>
-        </div>
-        {isGap ? (
-          <span className="text-sm text-slate-500">点击记录</span>
-        ) : (
-          <span className="text-sm" style={{ color: categoryColor }}>
+    <div className="relative pl-7 mb-1.5">
+      <div
+        className="absolute left-[0.85rem] top-3 w-1.5 h-1.5 rounded-full ring-2 ring-slate-900"
+        style={{ backgroundColor: categoryColor }}
+      />
+      <button
+        onClick={onClick}
+        className="w-full text-left px-3 py-2.5 rounded-lg border border-transparent hover:border-slate-700 transition-all"
+        style={{ backgroundColor: `${categoryColor}18` }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-medium leading-tight" style={{ color: categoryColor }}>
             {categoryPath}
           </span>
+          <span className="text-xs text-slate-500 shrink-0 mt-0.5">{duration}</span>
+        </div>
+        <div className="mt-0.5 text-xs text-slate-500 font-mono">{timeRange}</div>
+        {slot.entry?.note && (
+          <div className="mt-1 text-xs text-slate-400 line-clamp-1">{slot.entry.note}</div>
         )}
-      </div>
-      {slot.entry?.note && <div className="mt-1 text-xs text-slate-400">{slot.entry.note}</div>}
-    </button>
+      </button>
+    </div>
   );
 }
