@@ -42,6 +42,7 @@ function renderHuman(result: unknown): string {
   if (data.command === "help") return renderHelp(data);
   if (Array.isArray((data as { categories?: unknown }).categories)) return renderCategories(data);
   if (Array.isArray((data as { entries?: unknown }).entries)) return renderEntries(data);
+  if (Array.isArray((data as { quickNotes?: unknown }).quickNotes)) return renderQuickNotes(data);
   if (Array.isArray((data as { checks?: unknown }).checks)) return renderDoctor(data);
   return JSON.stringify(result, null, 2);
 }
@@ -94,6 +95,20 @@ function renderEntries(data: CommandResultLike): string {
       const end = entry.endTime?.slice(11, 16) ?? "?";
       const duration = typeof entry.durationMinutes === "number" ? `${entry.durationMinutes}m` : "";
       return `${start}-${end}  ${entry.category ?? "?"}  ${duration}${entry.note ? `  // ${entry.note}` : ""}`.trim();
+    })
+    .join("\n");
+}
+
+function renderQuickNotes(data: CommandResultLike): string {
+  const list = data.quickNotes as Array<{
+    occurredLocal?: string;
+    text?: string;
+  }>;
+  if (list.length === 0) return "No quick notes.";
+  return list
+    .map((note) => {
+      const time = note.occurredLocal?.replace("T", " ").slice(0, 16) ?? "?";
+      return `${time}  ${note.text ?? ""}`.trim();
     })
     .join("\n");
 }

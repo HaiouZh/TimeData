@@ -7,6 +7,7 @@
 - **写入 TimeData 数据只能通过 `timedata` CLI。**
 - **当前唯一允许 AI/脚本写数据的命令是 `timedata log`。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
+- 读取速记用 `timedata notes`；它是只读命令，不写 quick_notes。
 - CLI 只通过 server HTTP API 工作，服务端做最终校验。
 - 不要直接编辑 SQLite、IndexedDB、sync log、Backup JSON、JSONL/CSV 导出文件。
 - 不支持的写入任务必须停下来说明限制，不要绕过 CLI。
@@ -21,6 +22,7 @@
 | `timedata categories` | 否 | 列出未归档分类和分类路径。 |
 | `timedata list [--date YYYY-MM-DD]` | 否 | 列出某天时间记录。 |
 | `timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note TEXT]` | 是 | 创建一条时间记录。 |
+| `timedata notes [--date YYYY-MM-DD \| --from YYYY-MM-DD --to YYYY-MM-DD \| --recent --limit N]` | 否 | 读取速记。 |
 
 ## 3. AI 任务决策树
 
@@ -37,14 +39,16 @@
 
 - 查看分类：运行 `timedata categories`。
 - 查看某天记录：运行 `timedata list --date YYYY-MM-DD`。
+- 查看某天速记：运行 `timedata notes --date YYYY-MM-DD`。
+- 查看最近速记：运行 `timedata notes --recent --limit 20`。
 - 用户没有给日期时，说明 CLI 默认使用本机今天日期，或先向用户确认日期。
 
-### 3.3 用户要修改、删除、批量导入或从备份回灌
+### 3.3 用户要修改、删除、批量导入、写入速记或从备份回灌
 
 当前 CLI 不支持这些写入能力。AI 必须停止并说明：
 
 - 不能直接改数据库、IndexedDB、sync log、Backup JSON 或导出文件。
-- 如果必须支持该能力，需要先新增受控 server API 和 CLI 白名单命令。
+- 如果必须支持写入速记、修改、删除或导入能力，需要先新增受控 server API 和 CLI 白名单命令。
 - 用户也可以通过现有 UI 完成 CLI 不支持的操作。
 
 ### 3.4 配置或连接失败
@@ -86,6 +90,7 @@ AI 优先使用环境变量或配置文件，不要在可见命令行中暴露 t
 | `MISSING_ARGUMENT` | 补齐缺失参数，必要时询问用户。 |
 | `INVALID_DATE` | 改成 `YYYY-MM-DD`。 |
 | `INVALID_TIME_RANGE` | 修正 `HH:mm` 格式或确认 `end > start`。 |
+| `INVALID_REQUEST` | 检查互斥参数，如 `notes --recent` 不要和 `--date` 混用。 |
 
 ### 5.2 必须问用户或停止
 
@@ -159,11 +164,22 @@ timedata list --date 2026-05-08
 timedata log --date 2026-05-08 --start 09:00 --end 10:30 --category "工作/编程" --note "实现 CLI help"
 ```
 
+### 6.4 读取速记
+
+```bash
+timedata notes --date 2026-06-02
+```
+
+```bash
+timedata notes --recent --limit 20
+```
+
 ## 7. 反例清单
 
 不要做这些事：
 
 - 用 SQLite 客户端直接插入或修改 `time_entries`。
+- 用 SQLite 客户端直接查询或修改 `quick_notes` 来绕过 CLI。
 - 用浏览器脚本修改 IndexedDB。
 - 修改 sync log 制造待同步记录。
 - 修改 Backup JSON 后再导入来补数据。

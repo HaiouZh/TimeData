@@ -2,6 +2,7 @@ import { runCategories } from "./categories.js";
 import { runDoctor } from "./doctor.js";
 import { runList } from "./list.js";
 import { runLog } from "./log.js";
+import { runNotes } from "./notes.js";
 import { runVersion } from "./version.js";
 import type { ApiConfig } from "../lib/api-client.js";
 import type { FileConfigResult } from "../lib/config.js";
@@ -50,6 +51,13 @@ export const commandRegistry: CommandHelp[] = [
     handler: (ctx) => runLog(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
   },
   {
+    name: "notes",
+    writesData: false,
+    summary: "List quick notes by local date, date range, or recent window.",
+    usage: "timedata notes [--date YYYY-MM-DD | --from YYYY-MM-DD --to YYYY-MM-DD | --recent --limit N] [--server URL] [--token TOKEN]",
+    handler: (ctx) => runNotes(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
+  },
+  {
     name: "help",
     writesData: false,
     summary: "Show this JSON help without reading server configuration.",
@@ -77,6 +85,7 @@ const redLines = [
   "Do not edit sync logs directly.",
   "Do not edit Backup JSON or JSONL/CSV export files to write data back.",
   "Use timedata log as the only current AI/script data-writing command.",
+  "Use timedata notes for read-only quick notes access; it does not write data.",
 ];
 
 const docs = ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"];

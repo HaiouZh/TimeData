@@ -13,7 +13,7 @@ describe("runCli", () => {
       .map((command) => command.name);
 
     expect(dispatchCommandNames).toEqual(runtimeCommandNames);
-    expect(runtimeCommandNames).toEqual(expect.arrayContaining(["categories", "list", "log", "doctor"]));
+    expect(runtimeCommandNames).toEqual(expect.arrayContaining(["categories", "list", "log", "notes", "doctor"]));
   });
 
   it("returns help without configuration for an empty command", async () => {
@@ -24,6 +24,7 @@ describe("runCli", () => {
       command: "help",
       commands: expect.arrayContaining([
         expect.objectContaining({ name: "log", writesData: true }),
+        expect.objectContaining({ name: "notes", writesData: false }),
         expect.objectContaining({ name: "doctor", writesData: false }),
       ]),
     });

@@ -4,7 +4,9 @@ title: CLI（受控写入入口）
 covers:
   - packages/cli/**
   - packages/server/src/lib/entry-service.ts
+  - packages/server/src/lib/quick-note-service.ts
   - packages/server/src/routes/entries.ts
+  - packages/server/src/routes/quick-notes.ts
   - docs/TimeData-CLI-AI.md
 last-reviewed: 2026-06-02
 ---
@@ -25,6 +27,7 @@ last-reviewed: 2026-06-02
 | `timedata categories` | 否 | 列分类（带路径，如 `投资/读书`） | `GET /api/categories` |
 | `timedata list [--date YYYY-MM-DD]` | 否 | 列某天的时间记录（带分类路径、时长） | `GET /api/entries?date=...&format=cli` |
 | `timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note ...]` | 是 | 写一条时间记录 | `POST /api/entries` |
+| `timedata notes [--date YYYY-MM-DD \| --from YYYY-MM-DD --to YYYY-MM-DD \| --recent --limit N]` | 否 | 列速记（按本地日期、日期范围或最近 N 条） | `GET /api/quick-notes?...&format=cli` |
 | `timedata version` / `--version` | 否 | 打印构建期烧入的版本号和 git sha（`TIMEDATA_CLI_VERSION` / `TIMEDATA_CLI_SHA` 环境变量） | 无，不读取配置 |
 
 **任何不在这里的功能 = 不存在**。新增命令必须先在本地-only 的 `docs_local/plans/` 下放计划再实现；新增写入命令还必须先补受控 server API，并在落地后更新公开长期文档。扩 `update` / `delete` / `category-add` / `import` 的决定见 [`adr/0005-cli-surface-expansion-deferred.md`](../adr/0005-cli-surface-expansion-deferred.md)。
@@ -42,6 +45,9 @@ last-reviewed: 2026-06-02
 - `--start` / `--end`：`HH:mm`（24 小时）。`end > start` 必须，否则 `INVALID_TIME_RANGE`；解析后的结束时间不能晚于服务端当前本地时间，结束时间等于当前时间允许。
 - `--category`：传分类**路径**，例如 `投资/读书`。也支持单层（`投资`）但服务端会拒绝二级名称冲突的情况。
 - `--note`：可选。
+- `timedata notes --date`：`YYYY-MM-DD`，缺省读取本机今天的速记。
+- `timedata notes --from --to`：两个日期必须同时提供，按本地日期闭区间读取速记。
+- `timedata notes --recent --limit N`：读取最近 N 条速记，`N` 为 1..200，缺省 50；`--recent` 不可与 `--date` / `--from` / `--to` 混用。
 - `--server`、`--token`：可选，覆盖配置。
 - `--format=json|human`：可选，显式指定输出格式；未指定时根据 stdout 是否 TTY 自动判断（管道/脚本默认 JSON，终端默认 human）。
 - 所有 flag 支持 `--key value` 和 `--key=value` 两种长选项格式；不支持短横线 `-k`。
@@ -112,6 +118,7 @@ JSON 格式示例：
 CLI 自身校验产生：
 
 - `MISSING_ARGUMENT`、`INVALID_DATE`、`INVALID_TIME_RANGE`
+- `INVALID_REQUEST`：命令参数组合无效，例如 `notes --recent --date ...` 或 `notes --from` 缺 `--to`
 - `CONFIG_MISSING`、`CONFIG_INVALID`
 - `UNKNOWN_COMMAND`
 
@@ -122,11 +129,15 @@ api-client 包装：
 - `AUTH_FAILED`（HTTP 401）
 - `HTTP_<status>`：非 401 HTTP 错误且响应不是 CLI/服务端标准 `{ ok, error }` 形状
 - `INVALID_RESPONSE`：响应体不是合法 JSON；HTTP 204 / 空响应会明确报 `Server returned no JSON body`
-- `SCHEMA_MISMATCH`：server 响应未通过 CLI 端 schema 校验，常见于客户端/服务端版本不匹配。`list` 命令对 `ok: true` 响应要求 `date`、`entries`、`summary` 都存在，并校验条目字段形状；`ok: false` 响应必须有 `{ error: { code, message } }`。先升级 CLI 到与 server 一致的版本；仍异常时运行 `timedata version` 与 `GET /api/version` 比对版本。
+- `SCHEMA_MISMATCH`：server 响应未通过 CLI 端 schema 校验，常见于客户端/服务端版本不匹配。`list` 命令对 `ok: true` 响应要求 `date`、`entries`、`summary` 都存在；`notes` 命令对 `ok: true` 响应要求 `mode`、`quickNotes`、`summary`、`serverTime` 都存在；`ok: false` 响应必须有 `{ error: { code, message } }`。先升级 CLI 到与 server 一致的版本；仍异常时运行 `timedata version` 与 `GET /api/version` 比对版本。
 
 服务端 `entries` 路由产生（透传给 CLI）：
 
 - `INVALID_DATE`、`INVALID_TIME_RANGE`、`CATEGORY_NOT_FOUND`、`CATEGORY_AMBIGUOUS`、`TIME_OVERLAP`、`INVALID_JSON`
+
+服务端 `quick-notes` 路由产生（透传给 CLI）：
+
+- `INVALID_DATE`、`INVALID_REQUEST`
 
 ## 5. 不允许做的事
 
@@ -152,13 +163,15 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 检查分类不存在（`CATEGORY_NOT_FOUND`）/ 路径多于一条匹配（`CATEGORY_AMBIGUOUS`）
 - 检查同日时间段重叠（`TIME_OVERLAP`）
 - 检查结束时间不能晚于当前 UTC 时间（`INVALID_TIME_RANGE`）
-- 通过受控 `timedata log` 写入唯一数据入口；`help`、`doctor`、`categories`、`list`、`version` 都是只读
+- 通过受控 `timedata log` 写入唯一数据入口；`help`、`doctor`、`categories`、`list`、`notes`、`version` 都是只读
 - 将本地日期+时间转为 UTC ISO（`localDateTimeToUtc()`），写入 `time_entries` 的 `start_time` / `end_time` 为 UTC 格式
 - 写入成功后追加 `sync_seq(table_name='time_entries', action='create')`，刷新服务端 `sync_state` commit hash，让其他设备可通过 seq cursor 拉到 CLI 新增记录，且 `/api/sync/status` 可直接读到新的摘要；如果有前台 Web/PWA 设备连接了 `/api/sync/stream`，服务端会在事务提交后广播一次只含 `latestSeq` 的 bump，促使对端复用普通同步链路拉取这条 CLI 记录
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
 - 分配 UUID
 
 CLI 的 `list` 命令调 `listEntriesForCliDate`，返回带分类路径和时长的视图。这是和 `GET /api/entries`（不带 `format=cli`）不同的输出形状；普通 `GET /api/entries` 仍返回 `TimeEntry` 字段形态，服务端内部通过 row mapper 从 SQLite 的 snake_case 字段转换。CLI 端会对 `format=cli` 响应做 discriminated union 校验：成功响应必须带 `date`、`entries`、`summary`，其中条目的 `startTime` / `endTime` 是服务端转回的本地日期时间字符串（`YYYY-MM-DDTHH:mm:ss`），不是 UTC 存储格式。
+
+CLI 的 `notes` 命令调 `GET /api/quick-notes?...&format=cli`，只读返回 Quick Notes 视图：`quickNotes[*].occurredAt` 是 UTC ISO 存储时间，`occurredLocal` 是按应用时区转换的本地时间字符串（`YYYY-MM-DDTHH:mm:ss`）。支持按本地日期、闭区间日期范围和最近 N 条查询；不提供写入、编辑、删除或导入能力。
 
 ## 7. 包与运行环境
 
@@ -187,7 +200,7 @@ CLI 的 Vitest 配置把 `@timedata/shared` alias 到 `packages/shared/src/index
 
 ## 9. 改这块代码前的清单
 
-- [ ] 跑 `pnpm --filter @timedata/cli test`：覆盖 args、config、validation、help、doctor、categories、list、log 和 dispatcher。
+- [ ] 跑 `pnpm --filter @timedata/cli test`：覆盖 args、config、validation、help、doctor、categories、list、log、notes 和 dispatcher。
 - [ ] 跑 `pnpm check:docs`：确认长期文档命中项已同步处理。
 - [ ] 改输出 JSON 形状：脚本可能在用，**改字段名是 breaking change**。
 - [ ] 改错误码：要加不要删、不要重命名。删/改要明确说明 deprecate 路径。

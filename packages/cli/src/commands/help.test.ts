@@ -5,7 +5,7 @@ describe("runHelp", () => {
   it("exposes the command registry in stable order", () => {
     const names = commandRegistry.map((command) => command.name);
 
-    expect(names).toEqual(["categories", "list", "log", "help", "doctor", "version"]);
+    expect(names).toEqual(["categories", "list", "log", "notes", "help", "doctor", "version"]);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -20,6 +20,7 @@ describe("runHelp", () => {
         "Do not edit sync logs directly.",
         "Do not edit Backup JSON or JSONL/CSV export files to write data back.",
         "Use timedata log as the only current AI/script data-writing command.",
+        "Use timedata notes for read-only quick notes access; it does not write data.",
       ],
       docs: ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"],
     });
@@ -37,6 +38,7 @@ describe("runHelp", () => {
         "Do not edit sync logs directly.",
         "Do not edit Backup JSON or JSONL/CSV export files to write data back.",
         "Use timedata log as the only current AI/script data-writing command.",
+        "Use timedata notes for read-only quick notes access; it does not write data.",
       ],
       docs: ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"],
     });

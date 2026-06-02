@@ -26,8 +26,10 @@ covers:
   - packages/client/src/lib/categoryColors.ts
   - packages/server/src/index.ts
   - packages/server/src/db/schema.ts
+  - packages/server/src/lib/quick-note-service.ts
   - packages/server/src/routes/data.ts
   - packages/server/src/routes/export.ts
+  - packages/server/src/routes/quick-notes.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/sync/**
   - packages/server/src/lib/confirm-token.ts
@@ -141,6 +143,18 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 
 **CLI 不直接碰 SQLite**——它只是 server API 的客户端。这条规则是红线，详见 [`adr/0001-cli-as-only-write-path.md`](../adr/0001-cli-as-only-write-path.md)。
 
+### 3.5 AI/脚本通过 CLI 读速记
+
+```
+timedata notes --date 2026-06-02
+        → CLI 校验日期 / 范围 / limit 参数
+        → GET /api/quick-notes?date=2026-06-02&format=cli
+        → server 按应用时区转 UTC 边界，查询 SQLite quick_notes
+        → 返回 UTC occurredAt + 本地 occurredLocal + text
+```
+
+关键点：这是只读入口，不创建、修改、删除速记，也不复用 `/api/sync/pull` 的设备同步语义。未来如果脚本或 AI 要写速记，仍必须另行新增受控 CLI/API 写入路径。
+
 ## 4. 启动顺序
 
 ### 4.1 服务端（`packages/server/src/index.ts`）
@@ -152,7 +166,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
 6. 装 auth 中间件（之后所有受保护的 `/api/*` 默认需要 Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
-8. 注册业务路由：`categories`/`entries`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）
+8. 注册业务路由：`categories`/`entries`/`quick-notes`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
 10. 调 `initializeDatabase()`：建表、首次启动播种默认分类
 11. 启动时清理一次旧 server backup，并在 `SERVER_REPLICAS>1` 时提示 force-push token 仍是单实例内存存储
@@ -204,16 +218,16 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 7. **分类管理页负责分类排序、重命名、新增、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。新增分类和重命名都会 trim 名称并拒绝空名；同层级未归档分类重名会被拒绝。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，并同步更新本地 `autoBackups` 里同 ID 分类的可见字段。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。
    - 代码入口：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts`、`packages/client/src/lib/categorySort.ts`、`packages/client/src/lib/categoryColors.ts`
    - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`
-8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；气泡单点无编辑效果，长按/右键打开复制、编辑、删除菜单，编辑回填到底部输入框。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。
-   - 代码入口：`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/lib/quickNoteDisplay.ts`、`packages/client/src/quick-notes/`、`packages/server/src/db/schema.ts`、`packages/server/src/routes/sync.ts`、`packages/server/src/sync/validation.ts`、`packages/server/src/sync/resolver.ts`
-   - 相关测试：`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/quick-notes/*.test.ts`、`packages/server/src/routes/sync.test.ts`、`packages/server/src/sync/validation.test.ts`、`packages/server/src/sync/resolver.test.ts`、`packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`
+8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；气泡单点无编辑效果，长按/右键打开复制、编辑、删除菜单，编辑回填到底部输入框。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。AI/脚本可通过只读 `timedata notes` 查询服务端速记；这不等同于新增写入路径。
+   - 代码入口：`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/lib/quickNoteDisplay.ts`、`packages/client/src/quick-notes/`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts`、`packages/server/src/routes/sync.ts`、`packages/server/src/sync/validation.ts`、`packages/server/src/sync/resolver.ts`
+   - 相关测试：`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/quick-notes/*.test.ts`、`packages/server/src/routes/quick-notes.test.ts`、`packages/server/src/routes/sync.test.ts`、`packages/server/src/sync/validation.test.ts`、`packages/server/src/sync/resolver.test.ts`、`packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`
 
 ## 6. 模块速查（结合代码路径）
 
 | 模块 | 关键入口 | 进一步阅读 |
 |---|---|---|
 | 数据模型 | `packages/shared/src/types.ts`、`packages/shared/src/schemas.ts` | [`data-model.md`](./data-model.md) |
-| Quick Notes | `packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/quick-notes/**`、`packages/server/src/db/schema.ts` | [`data-model.md`](./data-model.md)、[`sync.md`](./sync.md)、[`backup.md`](./backup.md) |
+| Quick Notes | `packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/quick-notes/**`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts` | [`data-model.md`](./data-model.md)、[`sync.md`](./sync.md)、[`backup.md`](./backup.md) |
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/`、`packages/client/src/lib/settings/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
 | 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/hooks/useInView.ts`、`packages/client/src/lib/insights/`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx` | `cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率 |

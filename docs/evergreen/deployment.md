@@ -25,7 +25,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-05-20
+last-reviewed: 2026-06-02
 ---
 
 # 部署与自更新
@@ -88,6 +88,8 @@ last-reviewed: 2026-05-20
 | `UPDATE_STATE_DIR` | 否 | 自更新状态文件目录，默认 `/app/data`；一般不需要配置 |
 
 `AUTH_TOKEN` 缺失时：auth 中间件默认对受保护的 `/api/*` 返回 HTTP 500，不再按 `NODE_ENV` 区分开发/生产。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，才会放行所有 `/api/*` 并且每个进程只输出一次警告；这个旁路只用于本地开发，不能用于生产部署。
+
+受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。
 
 `ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。自 2026-05-19 起，未配置时解析为**空数组**，所有跨域 `/api/*` 请求都会被拒绝；生产部署必须显式填写 Web 前端域名，例如 `ALLOWED_ORIGINS=https://timedata.example.com`。多域名用逗号分隔，例如 `ALLOWED_ORIGINS=https://timedata.example.com,https://timedata-staging.example.com`。Android/Capacitor 壳（`androidScheme: "https"`）的 origin 是 `https://localhost`，必须显式加入白名单；兼容旧 scheme 时一并加 `capacitor://localhost`。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
 
