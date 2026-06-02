@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { localDateTimeToUtc } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,12 +21,24 @@ vi.mock("./TimeRangeWheelPicker.js", () => ({
   default: ({ error }: { error: string }) => createElement("div", { "data-testid": "time-error" }, error),
 }));
 
+const adjacentMock = vi.hoisted(() => ({
+  value: {
+    prevEntry: null as null | { id: string; startTime: string; endTime: string },
+    nextEntry: null as null | { id: string; startTime: string; endTime: string },
+  },
+}));
+
+vi.mock("../hooks/useEntries.js", () => ({
+  useAdjacentEntriesForRange: () => adjacentMock.value,
+}));
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("EntryForm", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-20T03:00:00+08:00"));
+    adjacentMock.value = { prevEntry: null, nextEntry: null };
   });
 
   afterEach(() => {
@@ -124,5 +137,79 @@ describe("EntryForm", () => {
 
     expect(saveButton.disabled).toBe(false);
     expect(saveButton.textContent).toBe("保存");
+  });
+
+  it("merge up extends the start time to the previous entry without writing immediately", async () => {
+    adjacentMock.value = {
+      prevEntry: {
+        id: "prev",
+        startTime: localDateTimeToUtc("2026-05-20T09:00:00"),
+        endTime: localDateTimeToUtc("2026-05-20T10:00:00"),
+      },
+      nextEntry: null,
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    await act(async () => {
+      createRoot(container).render(
+        createElement(EntryForm, {
+          startTime: "2026-05-20T10:00:00",
+          endTime: "2026-05-20T11:00:00",
+          onSave,
+          onCancel: vi.fn(),
+        }),
+      );
+    });
+
+    const mergeUp = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("向上合并"),
+    );
+    expect(mergeUp).toBeTruthy();
+
+    await act(async () => {
+      mergeUp!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const categoryButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      ["选择分类", "cat-work"].includes(button.textContent ?? ""),
+    );
+    expect(categoryButton).toBeTruthy();
+    await act(async () => {
+      categoryButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "保存");
+    expect(saveButton).toBeTruthy();
+    await act(async () => {
+      saveButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][1]).toBe("2026-05-20T09:00:00");
+    expect(onSave.mock.calls[0][2]).toBe("2026-05-20T11:00:00");
+  });
+
+  it("hides both merge buttons when there is no adjacent entry", async () => {
+    adjacentMock.value = { prevEntry: null, nextEntry: null };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await act(async () => {
+      createRoot(container).render(
+        createElement(EntryForm, {
+          startTime: "2026-05-20T10:00:00",
+          endTime: "2026-05-20T11:00:00",
+          onSave: vi.fn().mockResolvedValue({ ok: true }),
+          onCancel: vi.fn(),
+        }),
+      );
+    });
+
+    const mergeButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("合并"),
+    );
+    expect(mergeButton).toBeFalsy();
   });
 });

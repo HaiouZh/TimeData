@@ -11,7 +11,7 @@ covers:
   - packages/client/src/hooks/useEntries.ts
   - packages/client/src/lib/stats.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-06-02
+last-reviewed: 2026-06-03
 ---
 
 # 时间轴与记录时间规则
@@ -151,5 +151,13 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 跨午夜场景之外，新增记录页的”逻辑日期”由 URL `date=YYYY-MM-DD` 参数显式决定。TimelinePage 在空挡跳转时把当前 timeline 的 `date` 一起带过去；EntryPage 读取后，作为表单 `end.date` 的锚，并把 `defaults.end` 钉到 `${date}T23:59:00`（非今天）或当前时刻（今天），避免”昨天尾部空挡的 dayEnd 实际是次日 00:00”导致表单悄悄滑到今天。`resolveClockRangeAroundEndDate` 因此只保留”endClock <= startClock 时把 start 日期前移一天”这一条规则，不再根据”endTime 落在未来”自动推一天；用户真要补昨天就应当先切到昨天的 timeline。表单顶部不再有”已识别为…”蓝字提示。点保存时 `EntryPage.handleSave` 走单一流程：`isFutureLocalDateTime` 兜底（手填的未来 endTime 直接红字”不能记录尚未发生的时间”），否则查重叠，按既有”切两段阻断 / 多条裁剪确认”弹窗处理。
 
 `useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，页面调用 `SyncContext.syncAfterWrite()`，在 1.5 秒防抖窗口后把本地待同步日志推到服务器；进入时间轴页的对账兜底仍由 `syncIfStale()` 走较长节流。
+
+## 10. 相邻记录合并
+
+合并是“表单时间边界的快捷调整”，不是立即写库：点“向上合并”把表单开始时间设为上一条记录的开始时间，点“向下合并”把表单结束时间设为下一条记录的结束时间。
+
+相邻关系按严格边界相等判定：上一条 `endTime === 当前开始`，下一条 `startTime === 当前结束`。`EntryForm` 通过 `useAdjacentEntriesForRange` 以表单当前时间范围实时查询，所以新增页从时间轴空档进入、编辑页调整时间后，都能在存在严格相邻记录时显示合并按钮。
+
+真正写入仍只走保存流程：`EntryPage.handleSave()` 经 `findOverlappingEntries` / `planEntryOverlapAdjustments` 弹覆盖确认，再由 `saveEntryWithOverlapAdjustments()` 在单个 Dexie transaction 里把被并入的相邻记录裁剪或删除。编辑态语义是当前记录扩展并存活，相邻记录保存时被并入删除；分类与备注归当前记录。
 
 如果旧版本或设备时钟偏移已经把未来结束记录写进本地 IndexedDB，当前客户端不再提供单条本地未来记录修复入口。用户应先校准设备时间；若异常记录导致同步持续失败，可在 `设置 → 数据设置 → 高级 · 数据恢复` 中运行同步诊断，并在确认云端数据正确时使用“将本地数据替换为云端数据”恢复本地数据。

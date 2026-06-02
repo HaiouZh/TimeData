@@ -6,10 +6,8 @@ import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   findOverlappingEntries,
-  mergeIntoAdjacentEntry,
   planEntryOverlapAdjustments,
   saveEntryWithOverlapAdjustments,
-  useAdjacentEntries,
   useEntry,
   useEntryMutations,
   useLatestEntryEndTimeBefore,
@@ -56,7 +54,6 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   const { deleteEntry } = useEntryMutations();
   const { syncAfterWrite } = useSyncContext();
   const { confirm, dialog: confirmDialog } = useConfirm();
-  const { prevEntry: adjacentPrev, nextEntry: adjacentNext } = useAdjacentEntries(existingEntry);
 
   const isEdit = Boolean(id);
   const now = new Date();
@@ -182,38 +179,6 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     navigate(timelinePathForDate(date), { replace: true });
   }
 
-  async function handleMergeUp() {
-    if (!existingEntry || !adjacentPrev) return;
-    const confirmed = await confirm({
-      title: "向上合并",
-      body: `将当前记录的时间并入上一段记录（${utcToLocalDateTime(adjacentPrev.startTime).slice(11, 16)}–${utcToLocalDateTime(existingEntry.endTime).slice(11, 16)}），当前记录将被删除。`,
-      confirmLabel: "确认合并",
-      cancelLabel: "取消",
-      danger: false,
-    });
-    if (!confirmed) return;
-    const date = utcToLocalDateTime(existingEntry.startTime).slice(0, 10);
-    await mergeIntoAdjacentEntry(existingEntry, "up", adjacentPrev);
-    syncAfterWrite();
-    navigate(timelinePathForDate(date), { replace: true });
-  }
-
-  async function handleMergeDown() {
-    if (!existingEntry || !adjacentNext) return;
-    const confirmed = await confirm({
-      title: "向下合并",
-      body: `将当前记录的时间并入下一段记录（${utcToLocalDateTime(existingEntry.startTime).slice(11, 16)}–${utcToLocalDateTime(adjacentNext.endTime).slice(11, 16)}），当前记录将被删除。`,
-      confirmLabel: "确认合并",
-      cancelLabel: "取消",
-      danger: false,
-    });
-    if (!confirmed) return;
-    const date = utcToLocalDateTime(existingEntry.startTime).slice(0, 10);
-    await mergeIntoAdjacentEntry(existingEntry, "down", adjacentNext);
-    syncAfterWrite();
-    navigate(timelinePathForDate(date), { replace: true });
-  }
-
   return (
     <div className="min-h-full bg-slate-950">
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-3 py-2 backdrop-blur">
@@ -227,12 +192,8 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
           startTime={startTime}
           endTime={endTime}
           existingEntry={existingEntry}
-          adjacentPrev={existingEntry ? adjacentPrev : null}
-          adjacentNext={existingEntry ? adjacentNext : null}
           onSave={handleSave}
           onDelete={existingEntry ? handleDelete : undefined}
-          onMergeUp={existingEntry && adjacentPrev ? handleMergeUp : undefined}
-          onMergeDown={existingEntry && adjacentNext ? handleMergeDown : undefined}
           onCancel={() => navigate(-1)}
         />
       </main>

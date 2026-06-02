@@ -175,53 +175,42 @@ export async function saveEntryWithOverlapAdjustments(input: SaveEntryWithOverla
   });
 }
 
-export async function findAdjacentEntries(entry: TimeEntry): Promise<{
+export async function findAdjacentEntriesForRange(
+  startTime: string,
+  endTime: string,
+  excludeId?: string,
+): Promise<{
   prevEntry: TimeEntry | null;
   nextEntry: TimeEntry | null;
 }> {
   const [prevCandidates, nextCandidates] = await Promise.all([
-    db.timeEntries.where("endTime").equals(entry.startTime).toArray(),
-    db.timeEntries.where("startTime").equals(entry.endTime).toArray(),
+    db.timeEntries.where("endTime").equals(startTime).toArray(),
+    db.timeEntries.where("startTime").equals(endTime).toArray(),
   ]);
   return {
-    prevEntry: prevCandidates.find((e) => e.id !== entry.id) ?? null,
-    nextEntry: nextCandidates.find((e) => e.id !== entry.id) ?? null,
+    prevEntry: prevCandidates.find((entry) => entry.id !== excludeId) ?? null,
+    nextEntry: nextCandidates.find((entry) => entry.id !== excludeId) ?? null,
   };
 }
 
-export function useAdjacentEntries(entry: TimeEntry | undefined | null): {
+export function useAdjacentEntriesForRange(
+  startTime: string | null,
+  endTime: string | null,
+  excludeId?: string,
+): {
   prevEntry: TimeEntry | null;
   nextEntry: TimeEntry | null;
 } {
   return (
     useLiveQuery(
       async () => {
-        if (!entry) return { prevEntry: null, nextEntry: null };
-        return findAdjacentEntries(entry);
+        if (!startTime || !endTime) return { prevEntry: null, nextEntry: null };
+        return findAdjacentEntriesForRange(startTime, endTime, excludeId);
       },
-      [entry?.id, entry?.startTime, entry?.endTime],
+      [startTime, endTime, excludeId],
       { prevEntry: null, nextEntry: null },
     ) ?? { prevEntry: null, nextEntry: null }
   );
-}
-
-export async function mergeIntoAdjacentEntry(
-  currentEntry: TimeEntry,
-  direction: "up" | "down",
-  adjacentEntry: TimeEntry,
-): Promise<void> {
-  const now = new Date().toISOString();
-  await db.transaction("rw", db.timeEntries, db.syncLog, async () => {
-    if (direction === "up") {
-      await db.timeEntries.update(adjacentEntry.id, { endTime: currentEntry.endTime, updatedAt: now });
-      await recordSyncLog("time_entries", adjacentEntry.id, "update");
-    } else {
-      await db.timeEntries.update(adjacentEntry.id, { startTime: currentEntry.startTime, updatedAt: now });
-      await recordSyncLog("time_entries", adjacentEntry.id, "update");
-    }
-    await db.timeEntries.delete(currentEntry.id);
-    await recordSyncLog("time_entries", currentEntry.id, "delete");
-  });
 }
 
 export function useEntry(id?: string) {

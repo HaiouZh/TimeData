@@ -21,14 +21,12 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick }:
         />
         <button
           onClick={onClick}
-          className="w-full text-left px-3 py-2 rounded-lg border border-dashed border-slate-700 bg-slate-900/40 hover:bg-slate-800/60 hover:border-slate-600 transition-colors group"
+          className="w-full text-left px-3 py-3 min-h-[56px] rounded-lg border border-dashed border-slate-700 bg-slate-900/40 hover:bg-slate-800/60 hover:border-slate-600 active:bg-slate-800 transition-colors group flex flex-col justify-center gap-0.5"
         >
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-600 font-mono">{timeRange}</span>
-            <div className="flex items-center gap-1.5 text-slate-600 group-hover:text-slate-400 transition-colors">
-              <span className="text-xs">{duration}</span>
-              <span className="text-xs font-medium">＋ 记录</span>
-            </div>
+          <span className="text-xs text-slate-600 font-mono">{timeRange}</span>
+          <div className="flex items-center gap-1.5 text-slate-500 group-hover:text-slate-300 transition-colors">
+            <span className="text-xs font-medium">＋ 补记这段</span>
+            <span className="text-xs">· {duration}</span>
           </div>
         </button>
       </div>

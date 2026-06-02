@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/index.js";
 import {
   applyEntryOverlapAdjustments,
+  findAdjacentEntriesForRange,
   findLatestEntryEndingBefore,
   findOverlappingEntries,
   findPreviousEntry,
@@ -360,6 +361,54 @@ describe("saveEntryWithOverlapAdjustments", () => {
       expect.objectContaining({ endTime: "2026-05-17T10:00:00.000Z" }),
     );
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
+  });
+});
+
+describe("findAdjacentEntriesForRange", () => {
+  it("finds the strictly-previous and strictly-next entries by boundary equality", async () => {
+    await db.timeEntries.bulkAdd([
+      entry("prev", "2026-05-20T01:00:00.000Z", "2026-05-20T02:00:00.000Z"),
+      entry("next", "2026-05-20T03:00:00.000Z", "2026-05-20T04:00:00.000Z"),
+    ]);
+
+    const result = await findAdjacentEntriesForRange(
+      "2026-05-20T02:00:00.000Z",
+      "2026-05-20T03:00:00.000Z",
+    );
+
+    expect(result.prevEntry?.id).toBe("prev");
+    expect(result.nextEntry?.id).toBe("next");
+  });
+
+  it("returns null when there is a gap (not strictly adjacent)", async () => {
+    await db.timeEntries.bulkAdd([
+      entry("prev", "2026-05-20T01:00:00.000Z", "2026-05-20T01:59:00.000Z"),
+      entry("next", "2026-05-20T03:01:00.000Z", "2026-05-20T04:00:00.000Z"),
+    ]);
+
+    const result = await findAdjacentEntriesForRange(
+      "2026-05-20T02:00:00.000Z",
+      "2026-05-20T03:00:00.000Z",
+    );
+
+    expect(result.prevEntry).toBeNull();
+    expect(result.nextEntry).toBeNull();
+  });
+
+  it("excludes the entry being edited via excludeId", async () => {
+    await db.timeEntries.bulkAdd([
+      entry("self", "2026-05-20T02:00:00.000Z", "2026-05-20T03:00:00.000Z"),
+      entry("prev", "2026-05-20T01:00:00.000Z", "2026-05-20T02:00:00.000Z"),
+    ]);
+
+    const result = await findAdjacentEntriesForRange(
+      "2026-05-20T02:00:00.000Z",
+      "2026-05-20T03:00:00.000Z",
+      "self",
+    );
+
+    expect(result.prevEntry?.id).toBe("prev");
+    expect(result.nextEntry).toBeNull();
   });
 });
 

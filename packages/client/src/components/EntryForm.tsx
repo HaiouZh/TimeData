@@ -1,5 +1,7 @@
 import type { TimeEntry } from "@timedata/shared";
+import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useEffect, useState } from "react";
+import { useAdjacentEntriesForRange } from "../hooks/useEntries.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { resolveClockRangeAroundEndDate } from "../lib/time.ts";
 import CategoryPicker from "./CategoryPicker.tsx";
@@ -11,8 +13,6 @@ interface EntryFormProps {
   startTime: string;
   endTime: string;
   existingEntry?: TimeEntry;
-  adjacentPrev?: TimeEntry | null;
-  adjacentNext?: TimeEntry | null;
   onSave: (
     categoryId: string,
     startTime: string,
@@ -20,8 +20,6 @@ interface EntryFormProps {
     note: string,
   ) => Promise<EntrySaveResult | void> | void;
   onDelete?: () => void;
-  onMergeUp?: () => void;
-  onMergeDown?: () => void;
   onCancel: () => void;
 }
 
@@ -37,12 +35,8 @@ export default function EntryForm({
   startTime,
   endTime,
   existingEntry,
-  adjacentPrev,
-  adjacentNext,
   onSave,
   onDelete,
-  onMergeUp,
-  onMergeDown,
   onCancel,
 }: EntryFormProps) {
   const { parentCategories, getChildren } = useCategories();
@@ -59,6 +53,12 @@ export default function EntryForm({
     start.minute,
     end.hour,
     end.minute,
+  );
+
+  const { prevEntry, nextEntry } = useAdjacentEntriesForRange(
+    localDateTimeToUtc(nextStartTime),
+    localDateTimeToUtc(nextEndTime),
+    existingEntry?.id,
   );
 
   useEffect(() => {
@@ -84,6 +84,18 @@ export default function EntryForm({
 
   function handleEndChange(next: DateTimeValue) {
     setEnd(next);
+    if (error) setError("");
+  }
+
+  function handleMergeUp() {
+    if (!prevEntry) return;
+    setStart(splitDateTime(utcToLocalDateTime(prevEntry.startTime)));
+    if (error) setError("");
+  }
+
+  function handleMergeDown() {
+    if (!nextEntry) return;
+    setEnd(splitDateTime(utcToLocalDateTime(nextEntry.endTime)));
     if (error) setError("");
   }
 
@@ -116,7 +128,31 @@ export default function EntryForm({
       />
 
       <section className="rounded-2xl bg-slate-900 border border-slate-800 p-3 space-y-2">
-        <label className="text-sm text-slate-400 block">分类</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-sm text-slate-400">分类</label>
+          {(prevEntry || nextEntry) && (
+            <div className="flex gap-2">
+              {prevEntry && (
+                <button
+                  type="button"
+                  onClick={handleMergeUp}
+                  className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition-colors"
+                >
+                  ↑ 向上合并
+                </button>
+              )}
+              {nextEntry && (
+                <button
+                  type="button"
+                  onClick={handleMergeDown}
+                  className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition-colors"
+                >
+                  ↓ 向下合并
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <CategoryPicker onSelect={setCategoryId} selectedId={categoryId} />
       </section>
 
@@ -146,30 +182,6 @@ export default function EntryForm({
           {saving ? "保存中…" : "保存"}
         </button>
       </div>
-
-      {(adjacentPrev || adjacentNext) && (
-        <div className="space-y-2">
-          <p className="text-xs text-slate-500 px-1">合并相邻记录</p>
-          {adjacentPrev && onMergeUp && (
-            <button
-              onClick={onMergeUp}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 flex items-center justify-center gap-2 transition-colors"
-            >
-              <span className="text-base leading-none">↑</span>
-              <span>向上合并（并入上一段）</span>
-            </button>
-          )}
-          {adjacentNext && onMergeDown && (
-            <button
-              onClick={onMergeDown}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-300 flex items-center justify-center gap-2 transition-colors"
-            >
-              <span className="text-base leading-none">↓</span>
-              <span>向下合并（并入下一段）</span>
-            </button>
-          )}
-        </div>
-      )}
 
       {onDelete && (
         <button
