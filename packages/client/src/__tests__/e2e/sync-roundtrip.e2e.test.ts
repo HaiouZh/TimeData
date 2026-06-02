@@ -61,6 +61,23 @@ function syncLog(recordId: string, tableName: SyncLogEntry["tableName"]): SyncLo
   };
 }
 
+async function readEventText(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<string> {
+  const decoder = new TextDecoder();
+  let text = "";
+  while (!text.includes("\n\n")) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+  }
+  return text;
+}
+
+function latestSeqFromEvent(text: string): number | null {
+  const match = text.match(/data: (.+)/);
+  if (!match) return null;
+  return (JSON.parse(match[1]) as { latestSeq: number | null }).latestSeq;
+}
+
 function insertServerCategory(item: Category): void {
   server?.db
     .prepare(`
@@ -219,5 +236,55 @@ describe("e2e: sync round trip", () => {
 
     expect(pulled).toBeGreaterThanOrEqual(1);
     await expect(db.quickNotes.get(localNote.id)).resolves.toMatchObject({ text: "repo" });
+  });
+
+  it("delivers a stream bump after push so another client can pull entries and quick notes", async () => {
+    const controller = new AbortController();
+    const streamResponse = await fetch("http://server/api/sync/stream", { signal: controller.signal });
+    expect(streamResponse.status).toBe(200);
+    const reader = streamResponse.body?.getReader();
+    if (!reader) throw new Error("missing stream reader");
+
+    const helloText = await readEventText(reader);
+    expect(helloText).toContain("event: hello");
+    const helloSeq = latestSeqFromEvent(helloText);
+
+    try {
+      const localCategory = category({ id: "cat-stream-e2e" });
+      const localEntry = entry({ id: "entry-stream-e2e", categoryId: localCategory.id });
+      const localNote = quickNote({ id: "note-stream-e2e" });
+      await db.categories.add(localCategory);
+      await db.timeEntries.add(localEntry);
+      await db.quickNotes.add(localNote);
+      await db.syncLog.bulkAdd([
+        syncLog(localCategory.id, "categories"),
+        syncLog(localEntry.id, "time_entries"),
+        { ...syncLog(localNote.id, "quick_notes"), timestamp: localNote.updatedAt },
+      ]);
+
+      const push = await syncPush();
+
+      expect(push).toMatchObject({ accepted: 3, rejected: 0, conflicts: 0 });
+      const bumpText = await readEventText(reader);
+      expect(bumpText).toContain("event: bump");
+      expect(latestSeqFromEvent(bumpText)).toBeGreaterThan(helloSeq ?? 0);
+
+      const pullResponse = await fetch("http://server/api/sync/pull", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: helloSeq }),
+      });
+      const pullBody = await pullResponse.json();
+
+      expect(pullBody.changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ tableName: "time_entries", recordId: localEntry.id }),
+          expect.objectContaining({ tableName: "quick_notes", recordId: localNote.id }),
+        ]),
+      );
+    } finally {
+      controller.abort();
+      await reader.cancel().catch(() => undefined);
+    }
   });
 });

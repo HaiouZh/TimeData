@@ -1,6 +1,7 @@
 import type { QuickNote } from "@timedata/shared";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
@@ -50,6 +51,7 @@ export default function QuickNotesPage() {
   const didInitJumpRef = useRef(false);
 
   const { confirm, dialog } = useConfirm();
+  const { syncAfterWrite } = useSyncContext();
   const timeline = useQuickNoteTimeline();
   const displayItems = useMemo(() => groupQuickNotesForDisplay(timeline.notes), [timeline.notes]);
 
@@ -136,6 +138,7 @@ export default function QuickNotesPage() {
         setDraftText("");
         stickBottomRef.current = true;
       }
+      syncAfterWrite();
       focusInput();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -194,6 +197,7 @@ export default function QuickNotesPage() {
 
     await deleteQuickNote(note.id);
     if (editingId === note.id) cancelEditing();
+    syncAfterWrite();
   }
 
   function handleJumpDateChange(nextDate: string) {
@@ -240,6 +244,7 @@ export default function QuickNotesPage() {
 
     const result = await deleteQuickNotesByRange(jumpDate, jumpDate);
     setStatus(`已删除 ${result.deleted} 条速记。`);
+    if (result.deleted > 0) syncAfterWrite();
   }
 
   return (

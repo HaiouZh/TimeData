@@ -9,6 +9,12 @@ import QuickNotesPage from "./QuickNotesPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const syncAfterWriteMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../contexts/SyncContext.tsx", () => ({
+  useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }),
+}));
+
 async function flush() {
   await act(async () => {
     for (let index = 0; index < 10; index++) {
@@ -76,6 +82,7 @@ function lastButtonByText(host: HTMLElement, text: string): HTMLButtonElement | 
 }
 
 beforeEach(async () => {
+  syncAfterWriteMock.mockClear();
   await db.quickNotes.clear();
   await db.timeEntries.clear();
   await db.syncLog.clear();
@@ -93,6 +100,7 @@ describe("QuickNotesPage", () => {
     expect(input(host).value).toBe("");
     await expect(db.quickNotes.count()).resolves.toBe(1);
     await expect(db.timeEntries.count()).resolves.toBe(0);
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });
@@ -171,6 +179,7 @@ describe("QuickNotesPage", () => {
       text: "新文本",
       occurredAt: "2026-06-01T04:00:00.000Z",
     });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });
@@ -213,6 +222,7 @@ describe("QuickNotesPage", () => {
 
     await expect(db.quickNotes.count()).resolves.toBe(0);
     expect(host.textContent).not.toContain("待删除");
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });

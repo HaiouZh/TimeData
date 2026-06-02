@@ -15,6 +15,7 @@ covers:
   - packages/client/src/hooks/useInView.ts
   - packages/client/src/lib/insights/**
   - packages/client/src/lib/settings/**
+  - packages/client/src/lib/syncStream.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
@@ -162,7 +163,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 1. `seedDefaultCategories()`：本地分类表为空时插入默认两级分类
 2. `<AppUpdateProvider>`：包住 PWA 自更新提示
 3. `ErrorBoundary` 包裹 `BrowserRouter` / `SyncProvider` / `AppShell`，顶层渲染错误会落到统一错误页，避免整屏空白。
-4. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口。
+4. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口；云同步开启、API 地址已配置且页面处于前台时，它还会维护一条 `/api/sync/stream` SSE 连接，用连接态驱动设置页服务器灯，并在远端 `latestSeq` 变大时防抖触发普通同步。
 5. React Router 装主路由：`/`、`/quick-notes`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/admin-insights`、分类设置相关路由）、`/entries/:id/edit`
 6. `<AppShell>` 统一监听 PWA/Android 从后台恢复到前台的事件，并把刷新信号传给时间轴和新增记录页，让这些页面重新读取当前时间。
 7. `useMidnightTick`（`packages/client/src/hooks/useMidnightTick.ts`）在 `TimelinePage` 内独立调度本地午夜定时器，跨午夜后强制重新计算 `now`，避免长时间停留在前一天显示状态。

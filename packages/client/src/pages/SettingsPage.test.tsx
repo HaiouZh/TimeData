@@ -31,6 +31,7 @@ function defaultSyncState() {
     apiUrl: localStorage.getItem("timedata_api_url") || "",
     updateApiUrl: vi.fn(),
     cloudSyncEnabled: true,
+    connection: "connected",
     sync: vi.fn(),
     forceReplace: vi.fn(),
     handleConflictResolution: vi.fn(),
@@ -91,7 +92,7 @@ describe("SettingsPage", () => {
 
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 
-    expect(html).toContain("正在检查服务器");
+    expect(html).toContain("服务器已连接");
     expect(html).not.toContain("未配置服务器");
   });
 
@@ -201,24 +202,24 @@ describe("SettingsPage", () => {
 
 describe("getServerConnectionState", () => {
   it("apiUrl 为空时灰点未配置", () => {
-    expect(getServerConnectionState("", "checking")).toEqual({ color: "gray", subtitle: "未配置服务器" });
+    expect(getServerConnectionState("", "disconnected")).toEqual({ color: "gray", subtitle: "未配置服务器" });
   });
-  it("health ok 时绿灯已连接", () => {
-    expect(getServerConnectionState("https://example.com", "ok")).toEqual({
+  it("connected 时绿灯已连接", () => {
+    expect(getServerConnectionState("https://example.com", "connected")).toEqual({
       color: "green",
       subtitle: "服务器已连接",
     });
   });
-  it("health fail 时红灯连接失败", () => {
-    expect(getServerConnectionState("https://example.com", "fail")).toEqual({
+  it("disconnected 时红灯未连接", () => {
+    expect(getServerConnectionState("https://example.com", "disconnected")).toEqual({
       color: "red",
-      subtitle: "服务器连接失败",
+      subtitle: "服务器未连接",
     });
   });
-  it("health checking 时灰灯正在检查", () => {
-    expect(getServerConnectionState("https://example.com", "checking")).toEqual({
-      color: "gray",
-      subtitle: "正在检查服务器",
+  it("connecting 时黄灯正在连接", () => {
+    expect(getServerConnectionState("https://example.com", "connecting")).toEqual({
+      color: "yellow",
+      subtitle: "正在连接服务器",
     });
   });
 });

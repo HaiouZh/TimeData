@@ -116,6 +116,32 @@ describe("entries route", () => {
     expect(body.entry.category).toBe("工作/编程");
   });
 
+  it("broadcasts a sync bump after creating an entry through POST", async () => {
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+    const seen: Array<number | null> = [];
+    const listener = (seq: number | null) => seen.push(seq);
+    addSyncStreamListener(listener);
+
+    try {
+      const res = await app.request("/api/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: "2026-05-07",
+          start: "14:00",
+          end: "16:00",
+          category: "工作/编程",
+          note: "重构同步模块",
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(seen.at(-1)).toBe(1);
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+
   it("returns 400 for malformed JSON bodies", async () => {
     const res = await app.request("/api/entries", {
       method: "POST",

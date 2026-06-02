@@ -11,7 +11,7 @@ vi.mock("react-router-dom", () => ({
   useSearchParams: () => [searchParamsMock.value, vi.fn()],
 }));
 
-const syncIfStaleMock = vi.hoisted(() => vi.fn());
+const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 const confirmMock = vi.hoisted(() => vi.fn());
 const entryFormPropsMock = vi.hoisted(() => ({
   value: null as null | {
@@ -25,7 +25,7 @@ const entryFormPropsMock = vi.hoisted(() => ({
 }));
 
 vi.mock("../contexts/SyncContext.tsx", () => ({
-  useSyncContext: () => ({ syncIfStale: syncIfStaleMock }),
+  useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }),
 }));
 
 const useLatestEntryEndTimeBeforeMock = vi.hoisted(() => vi.fn<(categoryId: string | null) => string | null>(() => null));
@@ -73,6 +73,7 @@ describe("EntryPage default times", () => {
     findOverlappingEntriesMock.mockReset();
     findOverlappingEntriesMock.mockResolvedValue([]);
     planEntryOverlapAdjustmentsMock.mockReset();
+    syncAfterWriteMock.mockReset();
     saveEntryWithOverlapAdjustmentsMock.mockReset();
     saveEntryWithOverlapAdjustmentsMock.mockResolvedValue({});
     entryFormPropsMock.value = null;
@@ -167,6 +168,7 @@ describe("EntryPage default times", () => {
       note: "new",
       overlapPlan: plan,
     });
+    expect(syncAfterWriteMock).toHaveBeenCalledOnce();
   });
 
   it("blocks save with future error when onSave receives a still-future endTime", async () => {

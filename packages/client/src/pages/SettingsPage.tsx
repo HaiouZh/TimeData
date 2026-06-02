@@ -4,39 +4,36 @@ import { Link } from "react-router-dom";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
-import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
-import { fetchServerHealth } from "../lib/serverHealth.ts";
 import { fetchServerVersion, fetchUpdateStatus, triggerServerUpdate } from "../lib/serverVersion.ts";
-import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
 import type { RegularSyncResult } from "../sync/engine.ts";
 
-type ServerConnectionColor = "green" | "gray" | "red";
+type ServerConnectionColor = "green" | "gray" | "red" | "yellow";
 
 type ServerVersionState = { ok: true; version: VersionInfo } | { ok: false; error: string };
-
-export type ServerHealthState = "checking" | "ok" | "fail";
 
 interface ServerConnectionState {
   color: ServerConnectionColor;
   subtitle: string;
 }
 
-export function getServerConnectionState(apiUrl: string, health: ServerHealthState): ServerConnectionState {
+export function getServerConnectionState(apiUrl: string, connection: SyncStreamState): ServerConnectionState {
   if (!apiUrl) {
     return { color: "gray", subtitle: "未配置服务器" };
   }
-  if (health === "ok") {
+  if (connection === "connected") {
     return { color: "green", subtitle: "服务器已连接" };
   }
-  if (health === "fail") {
-    return { color: "red", subtitle: "服务器连接失败" };
+  if (connection === "connecting") {
+    return { color: "yellow", subtitle: "正在连接服务器" };
   }
-  return { color: "gray", subtitle: "正在检查服务器" };
+  return { color: "red", subtitle: "服务器未连接" };
 }
 
 function statusDotClass(color: ServerConnectionColor): string {
   if (color === "green") return "bg-emerald-400";
+  if (color === "yellow") return "bg-amber-400";
   if (color === "red") return "bg-red-400";
   return "bg-slate-500";
 }
@@ -158,12 +155,9 @@ function CloudSyncSummary() {
 }
 
 export default function SettingsPage() {
-  const { apiUrl, cloudSyncEnabled } = useSyncContext();
+  const { apiUrl, cloudSyncEnabled, connection } = useSyncContext();
   const { confirm, dialog } = useConfirm();
   const [serverVersion, setServerVersion] = useState<ServerVersionState | null>(null);
-  const [serverHealth, setServerHealth] = useState<ServerHealthState>(() =>
-    apiUrl && safeGetItem(STORAGE_KEYS.serverHealthy) === "1" ? "ok" : "checking",
-  );
   const [serverUpdating, setServerUpdating] = useState(false);
   const [serverUpdateStatus, setServerUpdateStatus] = useState("");
   const [apkChecking, setApkChecking] = useState(false);
@@ -184,22 +178,7 @@ export default function SettingsPage() {
     };
   }, [apiUrl]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!apiUrl) return;
-    // 已知 ok 时保持乐观显示，不回退到“正在检查”闪烁
-    setServerHealth((prev) => (prev === "ok" ? prev : "checking"));
-    fetchServerHealth().then((ok) => {
-      if (cancelled) return;
-      setServerHealth(ok ? "ok" : "fail");
-      safeSetItem(STORAGE_KEYS.serverHealthy, ok ? "1" : "0");
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiUrl]);
-
-  const connectionState = getServerConnectionState(apiUrl, serverHealth);
+  const connectionState = getServerConnectionState(apiUrl, connection);
 
   async function handleCheckApkUpdate() {
     setApkChecking(true);

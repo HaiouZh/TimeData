@@ -6,7 +6,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/routes/entries.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-05-21
+last-reviewed: 2026-06-02
 ---
 
 # CLI（受控写入入口）
@@ -154,7 +154,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 检查结束时间不能晚于当前 UTC 时间（`INVALID_TIME_RANGE`）
 - 通过受控 `timedata log` 写入唯一数据入口；`help`、`doctor`、`categories`、`list`、`version` 都是只读
 - 将本地日期+时间转为 UTC ISO（`localDateTimeToUtc()`），写入 `time_entries` 的 `start_time` / `end_time` 为 UTC 格式
-- 写入成功后追加 `sync_seq(table_name='time_entries', action='create')`，刷新服务端 `sync_state` commit hash，让其他设备可通过 seq cursor 拉到 CLI 新增记录，且 `/api/sync/status` 可直接读到新的摘要
+- 写入成功后追加 `sync_seq(table_name='time_entries', action='create')`，刷新服务端 `sync_state` commit hash，让其他设备可通过 seq cursor 拉到 CLI 新增记录，且 `/api/sync/status` 可直接读到新的摘要；如果有前台 Web/PWA 设备连接了 `/api/sync/stream`，服务端会在事务提交后广播一次只含 `latestSeq` 的 bump，促使对端复用普通同步链路拉取这条 CLI 记录
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
 - 分配 UUID
 

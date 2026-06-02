@@ -52,7 +52,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
   const [searchParams] = useSearchParams();
   const existingEntry = useEntry(id);
   const { deleteEntry } = useEntryMutations();
-  const { syncIfStale } = useSyncContext();
+  const { syncAfterWrite } = useSyncContext();
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   const isEdit = Boolean(id);
@@ -166,7 +166,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
       overlapPlan,
     });
 
-    void syncIfStale();
+    syncAfterWrite();
     navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
     return { ok: true };
   }
@@ -175,7 +175,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     if (!existingEntry) return;
     const date = utcToLocalDateTime(existingEntry.startTime).slice(0, 10);
     await deleteEntry(existingEntry.id);
-    void syncIfStale();
+    syncAfterWrite();
     navigate(timelinePathForDate(date), { replace: true });
   }
 

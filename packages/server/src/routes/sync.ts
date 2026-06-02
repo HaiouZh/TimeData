@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import crypto from "node:crypto";
 import {
   SyncForcePushPrepareRequestSchema,
@@ -45,9 +46,11 @@ import { analyzePushBaseSeq } from "../sync/conflict.js";
 import { validateForcePushBusinessRules } from "../sync/forcePushValidation.js";
 import { getChangesSinceSeq, getLatestSeq, recordSeqWithDb } from "../sync/seq.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
+import { addSyncStreamListener, notifySyncChange, removeSyncStreamListener, type SyncStreamListener } from "../sync/notifier.js";
 
 const FORCE_PUSH_CONFIRMATION_PHRASE = "OVERWRITE_SERVER" as const;
 const FORCE_PUSH_TOKEN_TTL_MS = 5 * 60 * 1000;
+const STREAM_HEARTBEAT_MS = 30_000;
 
 interface ForcePushTokenRecord {
   expiresAt: number;
@@ -263,6 +266,27 @@ sync.get("/status", (c) => {
   return c.json(readServerStatus(db));
 });
 
+sync.get("/stream", (c) => {
+  return streamSSE(c, async (stream) => {
+    await stream.writeSSE({ event: "hello", data: JSON.stringify({ latestSeq: getLatestSeq() }) });
+
+    const listener: SyncStreamListener = (latestSeq) => {
+      void stream.writeSSE({ event: "bump", data: JSON.stringify({ latestSeq }) }).catch(() => undefined);
+    };
+    addSyncStreamListener(listener);
+    stream.onAbort(() => removeSyncStreamListener(listener));
+
+    try {
+      while (true) {
+        await stream.sleep(STREAM_HEARTBEAT_MS);
+        await stream.write(": ping\n\n");
+      }
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+});
+
 sync.post("/force-push/prepare", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncForcePushPrepareRequestSchema.safeParse(rawBody);
@@ -374,6 +398,7 @@ sync.post("/force-push", async (c) => {
     importedQuickNotes: response.importedQuickNotes,
   }, body.categories.length + body.timeEntries.length + body.quickNotes.length + (body.settings?.length ?? 0));
 
+  notifySyncChange(getLatestSeq());
   return c.json(response);
 });
 
@@ -457,6 +482,7 @@ sync.post("/push", async (c) => {
     protected: seqAnalysis.strategy === "local_wins_non_fast_forward" || seqAnalysis.strategy === "unknown_base" || Boolean(protectedDetails),
     overriddenRecordIds: protectedOutcomeIds(outcomes),
   }, orderedChanges.length);
+  notifySyncChange(getLatestSeq());
   return c.json(response);
 });
 

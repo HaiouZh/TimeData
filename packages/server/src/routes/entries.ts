@@ -5,6 +5,8 @@ import { type EntryRow, rowToEntry } from "../lib/db-rows.js";
 import { createEntryFromCliInput, listEntriesForCliDate, nextDate } from "../lib/entry-service.js";
 import { localDateTimeToUtc } from "@timedata/shared";
 import { errorJson, ErrorCode } from "../lib/errors.js";
+import { notifySyncChange } from "../sync/notifier.js";
+import { getLatestSeq } from "../sync/seq.js";
 
 const entries = new Hono();
 
@@ -93,6 +95,10 @@ entries.post("/", async (c) => {
     category: parsed.data.category,
     note: parsed.data.note ?? null,
   });
+
+  if (result.ok) {
+    notifySyncChange(getLatestSeq());
+  }
 
   return c.json(result, result.ok ? 200 : 400);
 });

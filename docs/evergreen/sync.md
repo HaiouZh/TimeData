@@ -7,6 +7,7 @@ covers:
   - packages/server/src/routes/sync.ts
   - packages/server/src/routes/syncLog.ts
   - packages/client/src/sync/**
+  - packages/client/src/lib/syncStream.ts
   - packages/client/src/hooks/useSync.ts
   - packages/client/src/contexts/SyncContext.tsx
   - packages/client/src/lib/api.ts
@@ -58,7 +59,7 @@ last-reviewed: 2026-06-02
 
 兼容回退开关是 `localStorage.timedata_legacy_snapshot_sync === "1"`（集中定义在 `packages/client/src/lib/storageKeys.ts` 的 `STORAGE_KEYS.legacySnapshotSync`）：打开后 `regularSync()` 会走旧的 `loadLocalSnapshot()` + `loadCloudSnapshot()` 全量快照比较路径，主要用于 D2 上线后的灰度回滚。旧路径仍会在快照不一致时补齐本地有、云端无且缺失 syncLog 的 create 日志；旧快照路径覆盖 categories/time_entries/quick_notes，不同步 settings。新 meta 主路径不会做全量云端快照比较，因此 `unsyncedCount=0` 但 meta 不一致时只执行 `syncPullRecent(7)` 作为 pull-only repair。
 
-客户端 UI 层的同步状态由 `SyncContext` 统一提供。`SyncProvider` 包裹在 App 顶层，复用 `useSync` 的同步动作和诊断能力；时间轴页、设置首页和数据设置页共享同一个状态来源。同步指示灯会区分 `pending`（本地 Dexie `syncLog.synced=0` 实时计数大于 0，表示仍有待上传记录）和 `success` / `idle`（本地待上传计数为 0）；这个 pending 状态只来自本地实时计数，不做额外网络探测。自动触发入口包括：首次进入时间轴页，以及新增/编辑/删除记录成功写入本地后；这些自动触发走 30 秒节流，设置页手动同步按钮不受节流影响。被节流挡下的自动触发会在当前 30 秒窗口结束时安排一次单次补推，补推执行前会再次检查本地是否仍有未上传记录。
+客户端 UI 层的同步状态由 `SyncContext` 统一提供。`SyncProvider` 包裹在 App 顶层，复用 `useSync` 的同步动作和诊断能力；时间轴页、设置首页和数据设置页共享同一个状态来源。同步指示灯会区分 `pending`（本地 Dexie `syncLog.synced=0` 实时计数大于 0，表示仍有待上传记录）和 `success` / `idle`（本地待上传计数为 0）；这个 pending 状态只来自本地实时计数，不做额外网络探测。自动触发分两类：首次进入时间轴页调用 `syncIfStale()` 做 30 秒节流的对账兜底；新增/编辑/删除时间记录或速记成功写入本地后调用 `syncAfterWrite()`，在 1.5 秒防抖窗口结束后检查本地是否仍有未上传记录，再执行一次普通同步。设置页手动同步按钮不受这些自动节奏限制。
 
 还有几个特殊入口：
 
@@ -66,6 +67,18 @@ last-reviewed: 2026-06-02
 - `syncForceReplace()`：清空本地后整库覆盖（设置页"将本地数据替换为云端数据"），同时清空本地 `syncLog`，并用服务端返回的 `latestSeq` 推进 `timedata_last_synced_seq`，避免后续普通同步用旧 baseSeq 重新推送覆盖前的本地变更；这条全量拉取会给 `/api/sync/pull` 设置 `timeoutMs: 30_000`。
 - `getSyncHealth()`：读取本地摘要和 `/api/sync/status`，给出诊断建议。
 - `syncForcePushToServer()`：在用户完成确认后，把本地完整数据、quick notes 和 settings 覆盖到服务器。
+
+## 1.5 前台 SSE 实时通知通道
+
+服务端提供只读接口 `GET /api/sync/stream`（`packages/server/src/routes/sync.ts`）。它挂在现有 `/api/*` 鉴权之后，客户端通过 fetch 流式读取并在 `Authorization: Bearer <token>` header 中带 token；token 不进入 URL。连接成功后服务端立刻发送 `event: hello`，data 为 `{"latestSeq": <当前 sync_seq 最大值或 null>}`；之后每 30 秒写一条 SSE 注释心跳 `: ping`，只用于防止反代或 NAT 空闲断开。
+
+`packages/server/src/sync/notifier.ts` 维护进程内连接监听集合。`/api/sync/push` 成功提交、`/api/sync/force-push` 成功覆盖、CLI 经 `/api/entries` 创建记录成功后，服务端在事务结束后调用 `notifySyncChange(getLatestSeq())`，向所有在线前台连接广播 `event: bump`，data 只包含 `{latestSeq}`，不包含业务数据。客户端收到 bump 后仍复用 `/api/sync/status`、`/api/sync/push`、`/api/sync/pull` 的普通同步链路；SSE 只负责提示“云端游标变了”。
+
+客户端连接逻辑在 `packages/client/src/lib/syncStream.ts`：前台可见、云同步开启且已配置 API 地址时启动 fetch stream；页面隐藏、关闭云同步、API 地址变化或组件卸载时停止连接并取消重连。连接断开后按 1s、2s、4s 递增退避，封顶 30s，并带随机抖动。`hello` 和 `bump` 都走同一套处理：如果远端 `latestSeq <= localStorage.timedata_last_synced_seq`，视为自己 push 的回声或已同步游标，直接忽略；如果远端游标更高，则 200ms 防抖合并多帧后触发一次 `sync()`。重连后的 hello 帧也会触发这套判断，因此断线期间服务器发生变更时，前台设备重连后会补一次同步。
+
+设置页“服务器配置”连接灯不再被动调用 3 秒 `/api/health` 探测。它读取 `SyncContext.connection`：`connected` 为绿灯，`connecting` 为黄灯，`disconnected` 为红灯，未配置 API 地址为灰灯。`/api/health` 仍可作为手动诊断或基础连通性验收入口，但不再决定设置页常驻连接灯。
+
+这个通知器与 force-push 确认 token 一样是单进程内存状态，只适合当前单人自托管单实例部署。启动时如果设置 `SERVER_REPLICAS>1`，服务端会提示进程内 token 的多实例限制；SSE 连接集合同样不会跨进程广播。真正多实例前需要引入 Redis pub/sub 或等价的跨实例消息转发。
 
 ## 2. Push 流程详解
 

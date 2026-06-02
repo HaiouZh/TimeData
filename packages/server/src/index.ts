@@ -125,7 +125,7 @@ try {
 
 if (process.env.SERVER_REPLICAS && Number(process.env.SERVER_REPLICAS) > 1) {
   console.warn(
-    "[force-push] multi-instance detected (SERVER_REPLICAS>1), but force-push tokens are in-memory. Use SQLite-backed token store instead.",
+    "[server] multi-instance detected (SERVER_REPLICAS>1), but force-push tokens and sync stream listeners are in-memory. Use shared storage/pub-sub before multi-instance deployment.",
   );
 }
 

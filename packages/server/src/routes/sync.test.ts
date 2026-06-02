@@ -251,6 +251,71 @@ describe("sync route", () => {
     expect(body.latestSeq).toBe(2);
   });
 
+  it("opens a sync event stream with a hello frame", async () => {
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+      "categories",
+      "cat-1",
+      "create",
+    );
+    const controller = new AbortController();
+    const res = await app.request("/api/sync/stream", { signal: controller.signal });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+
+    const reader = res.body?.getReader();
+    expect(reader).toBeDefined();
+    const { value } = await reader!.read();
+    const text = new TextDecoder().decode(value);
+
+    expect(text).toContain("event: hello");
+    expect(text).toContain('data: {"latestSeq":1}');
+
+    controller.abort();
+    await reader!.cancel().catch(() => undefined);
+  });
+
+  it("broadcasts a sync bump after a successful push commits", async () => {
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+    const seen: Array<number | null> = [];
+    const listener = (seq: number | null) => seen.push(seq);
+    addSyncStreamListener(listener);
+
+    try {
+      const res = await app.request("/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          changes: [
+            {
+              tableName: "categories",
+              recordId: "cat-stream",
+              action: "create",
+              data: {
+                id: "cat-stream",
+                name: "实时同步",
+                parentId: null,
+                color: "#22c55e",
+                icon: null,
+                sortOrder: 1,
+                isArchived: false,
+                createdAt: "2026-06-02T00:00:00.000Z",
+                updatedAt: "2026-06-02T00:00:00.000Z",
+              },
+              timestamp: "2026-06-02T00:00:00.000Z",
+            },
+          ],
+          baseSeq: null,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(seen.at(-1)).toBe(1);
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+
   it("creates a short-lived force-push confirmation token", async () => {
     const res = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
