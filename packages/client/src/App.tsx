@@ -28,7 +28,7 @@ export function AppShell() {
   return (
     <div className="flex flex-col h-dvh bg-slate-950 text-slate-100">
       <AndroidBackButtonHandler />
-      <main className="flex-1 overflow-y-auto">
+      <main className="min-h-0 flex-1 overflow-y-auto">
         <Routes>
           <Route path="/" element={<TimelinePage refreshKey={resumeRefreshKey} />} />
           <Route path="/quick-notes" element={<QuickNotesPage />} />

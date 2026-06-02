@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
-import { act, createElement } from "react";
+import { createElement } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/index.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 
@@ -14,6 +15,15 @@ const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }),
 }));
+
+async function act(callback: () => Promise<void> | void) {
+  let result: Promise<void> | void;
+  flushSync(() => {
+    result = callback();
+  });
+  await result;
+  flushSync(() => {});
+}
 
 async function flush() {
   await act(async () => {
@@ -89,6 +99,10 @@ beforeEach(async () => {
   document.body.innerHTML = "";
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("QuickNotesPage", () => {
   it("sends a quick note and clears the input", async () => {
     const { host, root } = await renderPage();
@@ -129,7 +143,7 @@ describe("QuickNotesPage", () => {
     await click(host.querySelector('[role="button"][aria-label="速记：只读单击"]'));
 
     expect(input(host).value).toBe("");
-    expect(host.textContent).not.toContain("编辑中");
+    expect(host.textContent).not.toContain("正在编辑");
 
     await act(async () => root.unmount());
   });
@@ -156,6 +170,34 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("reserves bottom space from the measured composer height", async () => {
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this instanceof HTMLFormElement) {
+        return {
+          x: 0,
+          y: 0,
+          width: 390,
+          height: 148,
+          top: 0,
+          right: 390,
+          bottom: 148,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+      return originalGetBoundingClientRect.call(this);
+    });
+
+    const { host, root } = await renderPage();
+    const list = host.querySelector('[aria-label="速记列表"]');
+
+    expect(list).toBeInstanceOf(HTMLElement);
+    expect((list as HTMLElement).style.paddingBottom).toBe("164px");
+
+    await act(async () => root.unmount());
+  });
+
   it("edits a note through the popover menu into the bottom input", async () => {
     await db.quickNotes.add({
       id: "note-1",
@@ -170,7 +212,7 @@ describe("QuickNotesPage", () => {
     await click(menuItem(host, "编辑"));
 
     expect(input(host).value).toBe("旧文本");
-    expect(host.textContent).toContain("编辑中");
+    expect(host.textContent).toContain("正在编辑");
 
     await typeInto(input(host), "新文本");
     await click(host.querySelector('button[type="submit"]'));
