@@ -53,7 +53,9 @@ async function click(element: Element | null) {
 }
 
 async function openMenu(host: HTMLElement, label: string) {
-  const bubble = host.querySelector(`[aria-label="速记：${label}"]`);
+  const bubble = Array.from(host.querySelectorAll('[role="button"]')).find(
+    (element) => element.getAttribute("aria-label") === `速记：${label}`,
+  );
   if (!(bubble instanceof HTMLElement)) throw new Error(`missing bubble ${label}`);
   await act(async () => {
     bubble.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
@@ -116,10 +118,32 @@ describe("QuickNotesPage", () => {
     });
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('[aria-label="速记：只读单击"]'));
+    await click(host.querySelector('[role="button"][aria-label="速记：只读单击"]'));
 
     expect(input(host).value).toBe("");
     expect(host.textContent).not.toContain("编辑中");
+
+    await act(async () => root.unmount());
+  });
+
+  it("expands the bottom input when editing a long note", async () => {
+    const longText = Array.from({ length: 8 }, (_, index) => `第 ${index + 1} 行`).join("\n");
+    await db.quickNotes.add({
+      id: "note-1",
+      text: longText,
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    Object.defineProperty(input(host), "scrollHeight", { value: 180, configurable: true });
+
+    await openMenu(host, longText);
+    await click(menuItem(host, "编辑"));
+
+    expect(input(host).value).toBe(longText);
+    expect(input(host).style.height).toBe("160px");
+    expect(input(host).style.overflowY).toBe("auto");
 
     await act(async () => root.unmount());
   });

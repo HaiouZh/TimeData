@@ -14,6 +14,7 @@ import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-not
 import { useQuickNoteTimeline } from "../quick-notes/useQuickNoteTimeline.ts";
 
 const SCROLL_TRIGGER_PX = 48;
+const INPUT_MAX_HEIGHT_PX = 160;
 
 interface MenuTarget {
   note: QuickNote;
@@ -81,7 +82,17 @@ export default function QuickNotesPage() {
     if (stickBottomRef.current && timeline.atLatest) {
       listEndRef.current?.scrollIntoView?.({ block: "end" });
     }
-  }, [displayItems, timeline.atLatest]);
+  });
+
+  useLayoutEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const nextHeight = Math.min(textarea.scrollHeight, INPUT_MAX_HEIGHT_PX);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
+  });
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -304,6 +315,8 @@ export default function QuickNotesPage() {
           return (
             <article key={item.key} className="flex justify-end">
               <div
+                role="button"
+                tabIndex={0}
                 aria-label={`速记：${note.text}`}
                 onPointerDown={(event) => {
                   pressedNoteRef.current = note;
@@ -368,7 +381,7 @@ export default function QuickNotesPage() {
             onKeyDown={handleKeyDown}
             rows={1}
             placeholder={editingId ? "修改这条速记..." : "记一条..."}
-            className="max-h-28 min-h-11 flex-1 resize-none rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
+            className="max-h-40 min-h-11 flex-1 resize-none rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus:ring-1 focus:ring-blue-500"
           />
           <button
             type="submit"
