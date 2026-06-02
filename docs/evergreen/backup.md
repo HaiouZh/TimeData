@@ -6,7 +6,7 @@ covers:
   - packages/client/src/quick-notes/**
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-06-01
+last-reviewed: 2026-06-02
 ---
 
 # 备份与恢复
@@ -74,6 +74,8 @@ TimeData 现有四种备份/可恢复文件：
 - `packages/client/src/quick-notes/importQuickNotes.ts`：只导入速记，merge 模式。
 - `packages/client/src/quick-notes/deleteQuickNotesRange.ts`：按本地日期闭区间删除速记。
 - `packages/client/src/quick-notes/fileDownload.ts`：Web 下载和 Capacitor Documents + Share 落盘。
+
+`packages/client/src/quick-notes/` 还包含速记页交互组件（如菜单、剪贴板和时间线窗口 Hook）；这些不是备份格式入口，不改变本节 JSON / Markdown 契约。
 
 语义：
 

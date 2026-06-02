@@ -34,7 +34,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-01
+last-reviewed: 2026-06-02
 ---
 
 # 架构总览
@@ -203,7 +203,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 7. **分类管理页负责分类排序、重命名、新增、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。新增分类和重命名都会 trim 名称并拒绝空名；同层级未归档分类重名会被拒绝。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，并同步更新本地 `autoBackups` 里同 ID 分类的可见字段。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。
    - 代码入口：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts`、`packages/client/src/lib/categorySort.ts`、`packages/client/src/lib/categoryColors.ts`
    - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`
-8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。
+8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；气泡单点无编辑效果，长按/右键打开复制、编辑、删除菜单，编辑回填到底部输入框。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。
    - 代码入口：`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/lib/quickNoteDisplay.ts`、`packages/client/src/quick-notes/`、`packages/server/src/db/schema.ts`、`packages/server/src/routes/sync.ts`、`packages/server/src/sync/validation.ts`、`packages/server/src/sync/resolver.ts`
    - 相关测试：`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/quick-notes/*.test.ts`、`packages/server/src/routes/sync.test.ts`、`packages/server/src/sync/validation.test.ts`、`packages/server/src/sync/resolver.test.ts`、`packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`
 

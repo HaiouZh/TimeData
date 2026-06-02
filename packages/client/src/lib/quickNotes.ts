@@ -90,3 +90,31 @@ export async function listQuickNotesByRange(fromDate: string, toDate: string): P
   const notes = await db.quickNotes.where("occurredAt").between(start, end, true, false).toArray();
   return sortQuickNotes(notes);
 }
+
+export async function listQuickNotesLatest(limit: number): Promise<QuickNote[]> {
+  const notes = await db.quickNotes.orderBy("occurredAt").reverse().limit(limit).toArray();
+  return sortQuickNotes(notes);
+}
+
+export async function listQuickNotesOlderThan(beforeUtc: string, limit: number): Promise<QuickNote[]> {
+  const notes = await db.quickNotes.where("occurredAt").below(beforeUtc).reverse().limit(limit).toArray();
+  return sortQuickNotes(notes);
+}
+
+export async function listQuickNotesNewerThan(afterUtc: string, limit: number): Promise<QuickNote[]> {
+  const notes = await db.quickNotes.where("occurredAt").above(afterUtc).limit(limit).toArray();
+  return sortQuickNotes(notes);
+}
+
+export async function listQuickNotesFrom(fromUtc: string, limit: number): Promise<QuickNote[]> {
+  const notes = await db.quickNotes.where("occurredAt").aboveOrEqual(fromUtc).limit(limit).toArray();
+  return sortQuickNotes(notes);
+}
+
+export async function listQuickNotesWindow(oldestUtc: string, newestUtc: string | null): Promise<QuickNote[]> {
+  const collection =
+    newestUtc === null
+      ? db.quickNotes.where("occurredAt").aboveOrEqual(oldestUtc)
+      : db.quickNotes.where("occurredAt").between(oldestUtc, newestUtc, true, true);
+  return sortQuickNotes(await collection.toArray());
+}

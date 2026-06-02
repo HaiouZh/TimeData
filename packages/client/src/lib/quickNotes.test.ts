@@ -7,6 +7,11 @@ import {
   deleteQuickNote,
   listQuickNotesByDate,
   listQuickNotesByRange,
+  listQuickNotesFrom,
+  listQuickNotesLatest,
+  listQuickNotesNewerThan,
+  listQuickNotesOlderThan,
+  listQuickNotesWindow,
   updateQuickNote,
 } from "./quickNotes.js";
 
@@ -149,5 +154,59 @@ describe("quick note local model", () => {
     const notes = await listQuickNotesByRange("2026-06-01", "2026-06-02");
 
     expect(notes.map((note) => note.id)).toEqual([first.id, second.id, third.id]);
+  });
+});
+
+describe("quick note windowed queries", () => {
+  const t1 = "2026-06-01T00:00:00.000Z";
+  const t2 = "2026-06-02T00:00:00.000Z";
+  const t3 = "2026-06-03T00:00:00.000Z";
+  const t4 = "2026-06-04T00:00:00.000Z";
+  const t5 = "2026-06-05T00:00:00.000Z";
+
+  async function seedFive() {
+    for (const t of [t1, t2, t3, t4, t5]) {
+      await addQuickNote(`note-${t}`, { occurredAt: t, now: new Date("2026-06-10T00:00:00.000Z") });
+    }
+  }
+
+  function times(notes: { occurredAt: string }[]): string[] {
+    return notes.map((note) => note.occurredAt);
+  }
+
+  it("listQuickNotesLatest returns the newest N ascending", async () => {
+    await seedFive();
+
+    expect(times(await listQuickNotesLatest(2))).toEqual([t4, t5]);
+  });
+
+  it("listQuickNotesOlderThan returns the newest N strictly older, ascending", async () => {
+    await seedFive();
+
+    expect(times(await listQuickNotesOlderThan(t3, 2))).toEqual([t1, t2]);
+  });
+
+  it("listQuickNotesNewerThan returns the oldest N strictly newer, ascending", async () => {
+    await seedFive();
+
+    expect(times(await listQuickNotesNewerThan(t3, 2))).toEqual([t4, t5]);
+  });
+
+  it("listQuickNotesFrom returns the oldest N from the inclusive bound, ascending", async () => {
+    await seedFive();
+
+    expect(times(await listQuickNotesFrom(t3, 10))).toEqual([t3, t4, t5]);
+  });
+
+  it("listQuickNotesWindow with a closed range is inclusive on both ends", async () => {
+    await seedFive();
+
+    expect(times(await listQuickNotesWindow(t2, t4))).toEqual([t2, t3, t4]);
+  });
+
+  it("listQuickNotesWindow with null upper bound is open to latest", async () => {
+    await seedFive();
+
+    expect(times(await listQuickNotesWindow(t3, null))).toEqual([t3, t4, t5]);
   });
 });

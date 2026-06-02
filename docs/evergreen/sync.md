@@ -30,7 +30,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
   - packages/shared/src/types.ts:QuickNote
-last-reviewed: 2026-06-01
+last-reviewed: 2026-06-02
 ---
 
 # 同步机制
@@ -231,6 +231,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 写新逻辑前确认这些不变量：
 
 1. **客户端写业务表必须同时写 `syncLog`**（否则数据丢同步）。这包括 `categories`、`timeEntries`、`settings` 和 `quickNotes`。
+   - Quick Notes 的窗口查询、复制和菜单打开是纯读/纯 UI 行为，不写 `syncLog`；只有 `addQuickNote` / `updateQuickNote` / `deleteQuickNote` 以及独立导入/范围删除会写 `quick_notes` 同步日志。
 2. **服务端 `sync_push` 是原子事务**：要么整批写入 + 备份，要么完全不动。
 3. **同步变更有依赖顺序**：`orderPushChanges` 必须保持 category create/update → time_entries → settings → quick_notes → category delete，避免 entry 引用缺失分类或 category delete 早于 entry delete 触发外键失败。quick notes 没有外键依赖，只要不挤到 category delete 后面即可。
 4. **`updatedAt` 字典序比较**：所有时间字段必须前缀格式一致（`YYYY-MM-DDTHH:mm:ss...`）。

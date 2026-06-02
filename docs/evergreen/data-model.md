@@ -17,7 +17,7 @@ covers:
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-06-01
+last-reviewed: 2026-06-02
 ---
 
 # 数据模型与契约
@@ -53,7 +53,7 @@ last-reviewed: 2026-06-01
 
 `settings` 是同步键值表，当前用于跨设备保存睡眠分类等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`。
 
-`quick_notes` 是聊天式速记表，只表达“时间 + 文本”。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`，独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
+`quick_notes` 是聊天式速记表，只表达“时间 + 文本”。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`；`quickNotes.ts` 同时提供按日期/范围查询和只读窗口查询（最新、早于、晚于、有界窗口），供连续时间线懒加载使用。独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
 
 服务端后台洞察的 `Admin*Response` 类型也在 `packages/shared/src/types.ts`。这些类型是 `/api/admin/*` 中概览、记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析的只读响应契约，不对应新表，也不增加写入路径。受控维护端点 `/api/admin/sync-logs` 操作既有 `sync_logs` 表，不属于 `Admin*Response` 契约。
 
@@ -127,13 +127,14 @@ last-reviewed: 2026-06-01
 - `text` 保存前 trim，trim 后不能为空；运行时 `QuickNoteSchema` 会拒绝空文本。
 - `occurredAt` / `createdAt` / `updatedAt` 都必须是严格 UTC ISO 字符串（带毫秒和 `Z`）。
 - `occurredAt` 是用户看到、按天查询和导出的业务时间；`createdAt` 只表示系统创建时间，不能拿来做速记的业务排序。
+- 客户端聊天时间线用 `occurredAt` 作为窗口游标，窗口查询只读 Dexie，不写 `syncLog`；新增、编辑、删除仍分别走 `addQuickNote` / `updateQuickNote` / `deleteQuickNote`。
 - `updatedAt` 用于导入合并和同步 LWW 判断；不强制 `updatedAt >= createdAt`，避免历史导入和设备时钟漂移造成额外失败。
 - `QuickNote` 不引用 `Category` 或 `TimeEntry`，不参与分类存在性、archived 分类、时间段重叠、时间环、时长统计或分类统计。
 - SQL 表名是 `quick_notes`，字段是 `occurred_at` / `created_at` / `updated_at`；Dexie 表名是 `quickNotes`，索引是 `id, occurredAt, updatedAt`。
 
-代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`
+代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.ts`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`
 
-相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/server/src/db/schema.test.ts`
+相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.test.tsx`、`packages/server/src/db/schema.test.ts`
 
 ## 5. `SyncLogEntry`（客户端同步日志）
 
