@@ -49,6 +49,18 @@ export function MoonIcon({ className }: IconProps) {
   );
 }
 
+export function ChartIcon({ className }: IconProps) {
+  return (
+    <Svg className={className}>
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="M8 15v-4" />
+      <path d="M12 15V8" />
+      <path d="M16 15v-6" />
+    </Svg>
+  );
+}
+
 export function DatabaseIcon({ className }: IconProps) {
   return (
     <Svg className={className}>

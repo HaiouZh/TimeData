@@ -14,10 +14,13 @@ covers:
   - packages/client/src/pages/stats/**
   - packages/client/src/hooks/useInView.ts
   - packages/client/src/lib/insights/**
+  - packages/client/src/lib/statsLayoutSetting.ts
+  - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/lib/settings/**
   - packages/client/src/lib/syncStream.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
+  - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
   - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
   - packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx
   - packages/client/src/components/SortableCategoryItem.tsx
@@ -178,7 +181,7 @@ timedata notes --date 2026-06-02
 2. `<AppUpdateProvider>`：包住 PWA 自更新提示
 3. `ErrorBoundary` 包裹 `BrowserRouter` / `SyncProvider` / `AppShell`，顶层渲染错误会落到统一错误页，避免整屏空白。
 4. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口；云同步开启、API 地址已配置且页面处于前台时，它还会维护一条 `/api/sync/stream` SSE 连接，用连接态驱动设置页服务器灯，并在远端 `latestSeq` 变大时防抖触发普通同步。
-5. React Router 装主路由：`/`、`/quick-notes`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/admin-insights`、分类设置相关路由）、`/entries/:id/edit`。设置首页汇总服务器连接灯与同步摘要，并按记录数据、服务端更新等入口分组；设置子页统一复用 `SettingsDetailPage` 的返回头与内容容器，`SettingsInsightsPage` 只负责睡眠分类口径设置。
+5. React Router 装主路由：`/`、`/quick-notes`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/stats-layout`、`/settings/admin-insights`、分类设置相关路由）、`/entries/:id/edit`。设置首页汇总服务器连接灯与同步摘要，并按记录数据、服务端更新等入口分组；设置子页统一复用 `SettingsDetailPage` 的返回头与内容容器，`SettingsInsightsPage` 只负责睡眠分类口径设置，`SettingsStatsLayoutPage` 只负责统计页模块显隐、上移/下移和重置。
 6. `<AppShell>` 统一监听 PWA/Android 从后台恢复到前台的事件，并把刷新信号传给时间轴和新增记录页，让这些页面重新读取当前时间。
 7. `useMidnightTick`（`packages/client/src/hooks/useMidnightTick.ts`）在 `TimelinePage` 内独立调度本地午夜定时器，跨午夜后强制重新计算 `now`，避免长时间停留在前一天显示状态。
 8. 重复性 prompt 走 `useConfirm` / `ConfirmDialog`，不直接调 `window.confirm`/`alert`，便于本地化和 Android WebView 体验统一。
@@ -230,7 +233,7 @@ timedata notes --date 2026-06-02
 | Quick Notes | `packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/quick-notes/**`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts` | [`data-model.md`](./data-model.md)、[`sync.md`](./sync.md)、[`backup.md`](./backup.md) |
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/`、`packages/client/src/lib/settings/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
-| 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/hooks/useInView.ts`、`packages/client/src/lib/insights/`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx` | `cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率；当前周/月只统计到今天，异常检测在当前周期产出、用近 90 天基线定阈值 |
+| 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/modules/`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/lib/insights/`、`packages/client/src/lib/statsLayoutSetting.ts`、`packages/client/src/lib/statsModuleTrendSetting.ts`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx`、`packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx` | `StatsPage.tsx` 只保留周期/日期/总时长上下文和共享取数，内容区按 `STATS_MODULES` 注册表渲染可见模块；`stats.layout.v1` 存模块顺序与隐藏列表，读取时按注册表 sanitize，并让隐藏模块不挂载、不计算，baseline 数据只在可见模块声明需要时取；趋势模块用 `stats.module.trend.v1` 记住最后使用的窗口和图表类型；`cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率；当前周/月只统计到今天，异常检测在当前周期产出、用近 90 天基线定阈值 |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |
 | 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts` | [`deployment.md`](./deployment.md) |
 | 审查 / 排期边界 | `AGENT.md` | [`AGENT.md#项目定位边界`](../../AGENT.md#项目定位边界) |

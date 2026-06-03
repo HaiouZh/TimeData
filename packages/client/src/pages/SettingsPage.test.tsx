@@ -103,7 +103,9 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/server"');
     expect(html).toContain("数据设置");
     expect(html).toContain("数据洞察");
+    expect(html).toContain("统计页面布局");
     expect(html).toContain('href="/settings/insights"');
+    expect(html).toContain('href="/settings/stats-layout"');
     expect(html).toContain('href="/settings/data"');
     expect(html).toContain("服务端数据洞察");
     expect(html).toContain('href="/settings/admin-insights"');

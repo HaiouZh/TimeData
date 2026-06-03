@@ -10,6 +10,7 @@ import { formatAppDateTime } from "../lib/time.ts";
 import type { RegularSyncResult } from "../sync/engine.ts";
 import {
   ChevronRightIcon,
+  ChartIcon,
   CloudIcon,
   DatabaseIcon,
   MoonIcon,
@@ -380,6 +381,13 @@ export default function SettingsPage() {
           accent="sky"
           title="数据洞察"
           subtitle="设置睡眠分类，用于作息、覆盖率和异常判定"
+        />
+        <SettingsLinkRow
+          to="/settings/stats-layout"
+          icon={<ChartIcon />}
+          accent="blue"
+          title="统计页面布局"
+          subtitle="调整统计模块显示与顺序"
         />
         <SettingsLinkRow
           to="/settings/data"

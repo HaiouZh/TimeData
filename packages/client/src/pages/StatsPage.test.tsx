@@ -15,12 +15,47 @@ const categoriesState = vi.hoisted(() => ({
 
 const entriesState = vi.hoisted(() => ({ entries: [] as unknown[] }));
 const sleepSettingState = vi.hoisted(() => ({ sleepCategoryId: null as string | null }));
+const layoutState = vi.hoisted(() => ({
+  order: ["overview", "routine", "anomalies", "trend", "structure"] as string[],
+  hidden: [] as string[],
+}));
+const trendConfigState = vi.hoisted(() => ({
+  config: { window: { kind: "preset", days: 7 }, chart: "line" } as {
+    window:
+      | { kind: "preset"; days: number }
+      | { kind: "customDays"; days: number }
+      | { kind: "customRange"; from: string; to: string };
+    chart: "line" | "area";
+  },
+}));
 vi.mock("dexie-react-hooks", () => ({
   useLiveQuery: () => entriesState.entries,
 }));
 
 vi.mock("../lib/sleepCategorySetting.ts", () => ({
   useSleepCategoryId: () => sleepSettingState.sleepCategoryId,
+}));
+
+vi.mock("../lib/statsLayoutSetting.ts", () => ({
+  useStatsLayout: () => {
+    const hidden = new Set(layoutState.hidden);
+    return {
+      order: layoutState.order,
+      hidden,
+      visibleModulesInOrder: layoutState.order.filter((id) => !hidden.has(id)),
+      setLayout: vi.fn(),
+      reset: vi.fn(),
+    };
+  },
+}));
+
+vi.mock("../lib/statsModuleTrendSetting.ts", () => ({
+  useTrendConfig: () => ({
+    config: trendConfigState.config,
+    setConfig: (next: typeof trendConfigState.config) => {
+      trendConfigState.config = next;
+    },
+  }),
 }));
 
 vi.mock("recharts", () => ({
@@ -53,6 +88,9 @@ describe("StatsPage", () => {
     categoriesState.categories = [];
     entriesState.entries = [];
     sleepSettingState.sleepCategoryId = null;
+    layoutState.order = ["overview", "routine", "anomalies", "trend", "structure"];
+    layoutState.hidden = [];
+    trendConfigState.config = { window: { kind: "preset", days: 7 }, chart: "line" };
     localStorage.clear();
   });
 
@@ -65,6 +103,9 @@ describe("StatsPage", () => {
     });
 
     expect(host.textContent).toContain("暂无统计数据");
+    for (const title of ["总览", "作息", "异常与空挡", "趋势变化", "结构诊断"]) {
+      expect(host.textContent).toContain(title);
+    }
 
     const weekButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "周");
     const monthButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "月");
@@ -375,8 +416,7 @@ describe("StatsPage", () => {
     await act(async () => {
       preset30?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(preset30?.getAttribute("aria-pressed")).toBe("true");
-    expect(preset7?.getAttribute("aria-pressed")).toBe("false");
+    expect(trendConfigState.config.window).toEqual({ kind: "preset", days: 30 });
 
     const areaBtn = [...host.querySelectorAll("button")].find((b) => b.textContent === "堆叠面积") as
       | HTMLButtonElement
@@ -388,7 +428,7 @@ describe("StatsPage", () => {
     await act(async () => {
       areaBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(areaBtn?.getAttribute("aria-pressed")).toBe("true");
+    expect(trendConfigState.config.chart).toBe("area");
 
     await act(async () => {
       root.unmount();
@@ -473,6 +513,59 @@ describe("StatsPage", () => {
     expect(host.textContent).toContain("深度时间占比");
     expect(host.textContent).toContain("投入分散度");
     expect(host.textContent).toContain("基线数据不足");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("layout hidden 含 trend 时不渲染趋势模块", async () => {
+    layoutState.hidden = ["trend"];
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
+    });
+
+    expect(host.textContent).not.toContain("趋势变化");
+    expect(host.textContent).toContain("总览");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("layout order 调整后按配置顺序渲染模块", async () => {
+    layoutState.order = ["trend", "overview", "routine", "anomalies", "structure"];
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
+    });
+
+    const trendIndex = host.textContent?.indexOf("趋势变化") ?? -1;
+    const overviewIndex = host.textContent?.indexOf("总览") ?? -1;
+    expect(trendIndex).toBeGreaterThanOrEqual(0);
+    expect(overviewIndex).toBeGreaterThan(trendIndex);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("全部 hidden 时显示空状态", async () => {
+    layoutState.hidden = ["overview", "routine", "anomalies", "trend", "structure"];
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(StatsPage)));
+    });
+
+    expect(host.textContent).toContain("所有统计模块已隐藏。");
+    expect(host.querySelector('a[href="/settings/stats-layout"]')).not.toBeNull();
 
     await act(async () => {
       root.unmount();
