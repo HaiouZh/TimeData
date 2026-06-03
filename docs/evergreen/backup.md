@@ -81,7 +81,7 @@ TimeData 现有四种备份/可恢复文件：
 
 - `format` 必须是 `timedata.quick-notes.backup`，`timeFormat` 必须是 `"utc"`。
 - `notes` 每条必须满足 `QuickNoteSchema`：`text` 非空，`occurredAt` / `createdAt` / `updatedAt` 都是 UTC `.sssZ`。
-- `notes` 可带 `source?: "user" | "agent"` 与 `sourceLabel?: string`；JSON 导出/导入会保留这些展示元数据，Markdown 导出仍只输出时间和正文。
+- `notes` 可带 `source?: "user" | "agent"` 与 `sourceLabel?: string`；JSON 导出/导入会保留这些展示元数据，Markdown 导出仍只输出时间和正文。agent 速记的浅蓝气泡样式是客户端展示逻辑，不额外进入备份格式。
 - 导入只合并 `quickNotes`，不修改 categories、timeEntries、settings、syncLog 以外的业务表，也不要求分类存在。
 - 同 ID 不存在则插入；同 ID 存在且导入记录 `updatedAt` 更新则覆盖；`updatedAt` 相同或本地更新则保留本地。
 - 导入插入会写 `syncLog("quick_notes", id, "create")`，导入覆盖会写 `syncLog("quick_notes", id, "update")`；范围删除逐条写 `syncLog("quick_notes", id, "delete")`。

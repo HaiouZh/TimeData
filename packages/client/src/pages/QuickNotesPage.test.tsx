@@ -156,6 +156,40 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("uses a blue bubble background for agent notes without adding a second border", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "user-note",
+        text: "用户速记",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "agent-note",
+        text: "Agent 速记",
+        occurredAt: "2026-06-01T04:01:00.000Z",
+        createdAt: "2026-06-01T04:01:00.000Z",
+        updatedAt: "2026-06-01T04:01:00.000Z",
+        source: "agent",
+        sourceLabel: "Hermes",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    const userBubble = host.querySelector('[role="button"][aria-label="速记：用户速记"]');
+    const agentBubble = host.querySelector('[role="button"][aria-label="速记：Agent 速记"]');
+
+    expect(userBubble).toBeInstanceOf(HTMLElement);
+    expect(agentBubble).toBeInstanceOf(HTMLElement);
+    expect((userBubble as HTMLElement).className).toContain("bg-slate-900/90");
+    expect((agentBubble as HTMLElement).className).toContain("bg-sky-500/10");
+    expect((agentBubble as HTMLElement).className).toContain("focus:ring-2 focus:ring-emerald-400/40");
+    expect(agentBubble?.innerHTML).not.toContain("border-sky");
+
+    await act(async () => root.unmount());
+  });
+
   it("expands the bottom input when editing a long note", async () => {
     const longText = Array.from({ length: 8 }, (_, index) => `第 ${index + 1} 行`).join("\n");
     await db.quickNotes.add({

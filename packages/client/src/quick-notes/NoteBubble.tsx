@@ -34,9 +34,9 @@ export default function NoteBubble({ note }: { note: QuickNote }) {
   const collapsed = canExpand && !expanded;
 
   return (
-    <div className={isAgent ? "rounded-lg border border-sky-400/20 bg-sky-500/5 p-2" : undefined}>
+    <div>
       {isAgent && (
-        <div className="mb-1 inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-200">
+        <div className="mb-1 text-[11px] font-medium text-sky-100/85">
           {sourceLabel}
         </div>
       )}

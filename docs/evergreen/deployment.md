@@ -144,7 +144,7 @@ packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 
 Capacitor 7 版本的 Android 构建要求：Node 22+、Java 21、Android SDK Platform 35 / Build-tools 35.0.0、Gradle 8.11.1、Android Gradle Plugin 8.7.2。`packages/mobile/android/variables.gradle` 中 `minSdkVersion = 24`，因此 APK 支持 Android 7.0（API 24）及以上设备；`compileSdkVersion` 和 `targetSdkVersion` 均为 35。CI 的 `android-apk.yml` 也按这些版本安装 Java 与 Android SDK。
 
-Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把 APK 下载直链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，否则原生工程拿不到新插件。
+Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把 APK 下载直链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
 
 Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。App 内服务器配置在原生 Android 环境会拒绝保存 `http://` API 地址；自托管服务器需要先通过 Caddy / Nginx / Tunnel 等方式暴露 HTTPS，再在 App 中填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
 

@@ -132,7 +132,7 @@ last-reviewed: 2026-06-03
 - 客户端聊天时间线用 `occurredAt` 作为窗口游标，窗口查询只读 Dexie，不写 `syncLog`；新增、编辑、删除仍分别走 `addQuickNote` / `updateQuickNote` / `deleteQuickNote`。
 - 速记正文的存储契约始终是原始 `text` 字符串；客户端展示层可以按保守启发式安全渲染 Markdown，也可以折叠长文本，但导出、复制、编辑和同步都继续使用原文。
 - `updatedAt` 用于导入合并和同步 LWW 判断；不强制 `updatedAt >= createdAt`，避免历史导入和设备时钟漂移造成额外失败。
-- `source` 是来源标记，缺省等同用户自记；`source="agent"` 表示由授权 agent 经服务端受控 API 投递。`sourceLabel` 是展示标签（最长 64 字符），例如 agent 名称或任务名。它们只影响展示，不参与时长统计、分类统计或客户端本地 content hash 对齐判定。
+- `source` 是来源标记，缺省等同用户自记；`source="agent"` 表示由授权 agent 经服务端受控 API 投递。`sourceLabel` 是展示标签（最长 64 字符），例如 agent 名称或任务名。它们只影响展示：普通速记气泡保持灰底，agent 速记气泡用浅蓝底和来源标签区分，点击/焦点态仍复用同一个绿色外层状态；它们不参与时长统计、分类统计或客户端本地 content hash 对齐判定。
 - `QuickNote` 不引用 `Category` 或 `TimeEntry`，不参与分类存在性、archived 分类、时间段重叠、时间环、时长统计或分类统计。
 - SQL 表名是 `quick_notes`，字段是 `occurred_at` / `created_at` / `updated_at` / `source` / `source_label`；Dexie 表名是 `quickNotes`，索引是 `id, occurredAt, updatedAt`。`source` / `sourceLabel` 不是索引字段，客户端 Dexie 无需升版本；服务端旧库启动时通过幂等 `ALTER TABLE` 补可空列。
 - `POST /api/quick-notes` 是授权 agent 投递速记的服务端写接口：请求只接受 `text`、可选 `sourceLabel` 和可选 `occurredAt`，服务端生成 `id` / `createdAt` / `updatedAt`，强制 `source="agent"`，再构造 `quick_notes/create` 变更走 `applyChange()` 与 `sync_seq`。

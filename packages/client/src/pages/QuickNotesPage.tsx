@@ -472,6 +472,7 @@ export default function QuickNotesPage() {
             }
 
             const note = item.note;
+            const isAgentNote = note.source === "agent";
             return (
               <article key={item.key} className="grid grid-cols-1 gap-3 sm:grid-cols-[4.25rem_minmax(0,1fr)]">
                 <div className="hidden sm:block" />
@@ -491,7 +492,9 @@ export default function QuickNotesPage() {
                     longPress.onContextMenu(event);
                   }}
                   style={{ WebkitTouchCallout: "none" }}
-                  className="relative max-w-full select-none rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 hover:bg-slate-900 focus:ring-2 focus:ring-emerald-400/40"
+                  className={`relative max-w-full select-none rounded-2xl border border-slate-800 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
+                    isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
+                  }`}
                 >
                   <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500 sm:hidden">
                     {formatLocalClock(note.occurredAt)}
