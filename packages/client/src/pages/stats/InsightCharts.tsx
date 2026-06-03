@@ -25,6 +25,14 @@ export type TrendChartRow = Record<string, number | string>;
 
 const hourFormatter = (value: unknown) => `${value} 小时`;
 
+const tooltipStyle = {
+  background: "#0f172a",
+  border: "1px solid rgba(51, 65, 85, 0.9)",
+  borderRadius: 14,
+  color: "#e2e8f0",
+  boxShadow: "0 18px 40px rgba(2, 6, 23, 0.35)",
+};
+
 export const TrendChart = memo(function TrendChart({
   chart,
   data,
@@ -35,28 +43,52 @@ export const TrendChart = memo(function TrendChart({
   series: TrendSeriesItem[];
 }) {
   return (
-    <div className="min-h-[220px]">
+    <div className="min-h-[220px] px-1 py-3">
       <ResponsiveContainer width="100%" height={220}>
         {chart === "line" ? (
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
             <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
             <YAxis unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <Tooltip formatter={hourFormatter} />
-            <Legend />
+            <Tooltip
+              formatter={hourFormatter}
+              contentStyle={tooltipStyle}
+              cursor={{ stroke: "#38bdf8", strokeOpacity: 0.32 }}
+            />
+            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
             {series.map((item) => (
-              <Line key={item.key} type="monotone" dataKey={item.key} stroke={item.color} dot={false} />
+              <Line
+                key={item.key}
+                type="monotone"
+                dataKey={item.key}
+                stroke={item.color}
+                strokeWidth={2.25}
+                dot={false}
+              />
             ))}
           </LineChart>
         ) : (
           <AreaChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
             <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
             <YAxis unit="h" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <Tooltip formatter={hourFormatter} />
-            <Legend />
+            <Tooltip
+              formatter={hourFormatter}
+              contentStyle={tooltipStyle}
+              cursor={{ stroke: "#38bdf8", strokeOpacity: 0.32 }}
+            />
+            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
             {series.map((item) => (
-              <Area key={item.key} type="monotone" dataKey={item.key} stackId="1" stroke={item.color} fill={item.color} />
+              <Area
+                key={item.key}
+                type="monotone"
+                dataKey={item.key}
+                stackId="1"
+                stroke={item.color}
+                strokeWidth={1.75}
+                fill={item.color}
+                fillOpacity={0.48}
+              />
             ))}
           </AreaChart>
         )}
@@ -93,12 +125,12 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
         const childTotal = parent.children.reduce((sum, child) => sum + child.min, 0) || 1;
         const expanded = expandedId === parent.id;
         return (
-          <div key={parent.id} className="rounded-lg bg-slate-800/60 px-3 py-2">
+          <div key={parent.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2">
             <button
               type="button"
               aria-expanded={expanded}
               onClick={() => setExpandedId(expanded ? null : parent.id)}
-              className="flex w-full items-center justify-between gap-2 text-sm"
+              className="flex min-h-10 w-full items-center justify-between gap-2 text-sm"
             >
               <span className="flex min-w-0 items-center gap-2">
                 <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
@@ -108,7 +140,7 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
                 {parent.totalHours.toFixed(1)}h · {parent.sharePct}%
               </span>
             </button>
-            <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-slate-900">
+            <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-slate-950">
               {parent.children.map((child) => (
                 <div
                   key={child.id}
@@ -158,7 +190,7 @@ function DonutTooltip({ active, payload, total }: DonutTooltipProps) {
   const datum = payload[0].payload;
   const pct = total > 0 ? Math.round((datum.value / total) * 1000) / 10 : 0;
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 shadow">
+    <div className="rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200 shadow-xl shadow-slate-950/40">
       {datum.name} · {datum.value}h · {pct}%
     </div>
   );
@@ -177,7 +209,7 @@ export const CategoryDonut = memo(function CategoryDonut({
 }) {
   const total = data.reduce((sum, datum) => sum + datum.value, 0);
   return (
-    <div className="relative min-h-[250px]">
+    <div className="relative min-h-[250px] py-2">
       <ResponsiveContainer width="100%" height={250}>
         <PieChart>
           <Pie
@@ -188,8 +220,8 @@ export const CategoryDonut = memo(function CategoryDonut({
             cy="50%"
             innerRadius={62}
             outerRadius={92}
-            paddingAngle={2}
-            cornerRadius={4}
+            paddingAngle={3}
+            cornerRadius={6}
           >
             {data.map((item) => (
               <Cell key={item.id} fill={item.color} />

@@ -1,6 +1,7 @@
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
@@ -97,6 +98,63 @@ function formatAnomalyTimeRange(anomaly: Anomaly): string | null {
   const endDate = end.slice(0, 10);
   if (startDate === endDate) return `${start.slice(11, 16)} - ${end.slice(11, 16)}`;
   return `${startDate.slice(5)} ${start.slice(11, 16)} - ${endDate.slice(5)} ${end.slice(11, 16)}`;
+}
+
+function metricToneClass(tone: "neutral" | "good" | "warn" | "danger" | "info" = "neutral"): string {
+  return {
+    neutral: "border-slate-800/80 bg-slate-900/70 text-slate-100",
+    good: "border-emerald-400/20 bg-emerald-400/10 text-emerald-100",
+    warn: "border-amber-400/20 bg-amber-400/10 text-amber-100",
+    danger: "border-rose-400/20 bg-rose-400/10 text-rose-100",
+    info: "border-sky-400/20 bg-sky-400/10 text-sky-100",
+  }[tone];
+}
+
+function SectionPanel({
+  title,
+  eyebrow,
+  action,
+  children,
+}: {
+  title: string;
+  eyebrow?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[1.35rem] border border-slate-800/80 bg-slate-950/70 p-4 shadow-[0_18px_48px_rgba(2,6,23,0.28)] ring-1 ring-white/[0.03]">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {eyebrow && (
+            <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">{eyebrow}</div>
+          )}
+          <h3 className="text-base font-semibold text-slate-100">{title}</h3>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: "neutral" | "good" | "warn" | "danger" | "info";
+}) {
+  return (
+    <div className={`rounded-2xl border px-3.5 py-3 ${metricToneClass(tone)}`}>
+      <div className="text-[11px] font-medium text-slate-400">{label}</div>
+      <div className="mt-1 text-xl font-semibold leading-tight tracking-normal">{value}</div>
+      {hint && <div className="mt-1 text-[11px] leading-snug text-slate-500">{hint}</div>}
+    </div>
+  );
 }
 
 export default function StatsPage() {
@@ -249,9 +307,7 @@ export default function StatsPage() {
   const anomalyDateGroups = useMemo(() => groupAnomaliesByDate(anomalies), [anomalies]);
   const longGapAnomalies = useMemo(
     () =>
-      anomalies
-        .filter((anomaly) => anomaly.type === "longGap")
-        .sort((a, b) => (b.valueMin ?? 0) - (a.valueMin ?? 0)),
+      anomalies.filter((anomaly) => anomaly.type === "longGap").sort((a, b) => (b.valueMin ?? 0) - (a.valueMin ?? 0)),
     [anomalies],
   );
   const anomalyStats = useMemo(() => {
@@ -315,7 +371,7 @@ export default function StatsPage() {
       trend.parentTrends.map((t) => ({
         key: parentNameById.get(t.parentId) ?? t.parentId,
         color: parentCategories.find((c) => c.id === t.parentId)?.color ?? "#808080",
-    })),
+      })),
     [trend, parentNameById, parentCategories],
   );
 
@@ -345,105 +401,125 @@ export default function StatsPage() {
   const [chartsRef, chartsInView] = useInView<HTMLDivElement>();
 
   return (
-    <div ref={chartsRef} className="p-4 space-y-6">
-      <div className="flex gap-2">
-        {(["day", "week", "month"] as ViewMode[]).map((m) => (
+    <div
+      ref={chartsRef}
+      className="min-h-full space-y-4 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_34rem),linear-gradient(180deg,#020617_0%,#0f172a_46%,#020617_100%)] px-3.5 pb-6 pt-4 text-slate-100 sm:px-6"
+    >
+      <header className="rounded-[1.6rem] border border-slate-700/70 bg-slate-950/80 p-4 shadow-[0_22px_60px_rgba(2,6,23,0.42)] ring-1 ring-white/[0.04]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-sky-300/80">TimeData</div>
+            <h2 className="mt-1 text-2xl font-semibold tracking-normal text-white">统计</h2>
+          </div>
+          {!atLatest && (
+            <button
+              type="button"
+              onClick={() => setAnchor(today)}
+              className="min-h-11 rounded-full border border-sky-400/20 bg-sky-400/10 px-4 text-sm font-medium text-sky-100"
+            >
+              回到今天
+            </button>
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl border border-slate-800 bg-slate-950 p-1">
+          {(["day", "week", "month"] as ViewMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              aria-pressed={mode === m}
+              className={`min-h-11 rounded-xl text-sm font-medium transition ${
+                mode === m ? "bg-sky-500 text-white shadow-lg shadow-sky-950/40" : "text-slate-400"
+              }`}
+            >
+              {{ day: "日", week: "周", month: "月" }[m]}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
           <button
-            key={m}
             type="button"
-            onClick={() => setMode(m)}
-            aria-pressed={mode === m}
-            className={`px-3 py-1.5 rounded text-sm ${mode === m ? "bg-blue-600" : "bg-slate-800 text-slate-400"}`}
+            aria-label={`上一${periodUnit}`}
+            onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
+            className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200"
           >
-            {{ day: "日", week: "周", month: "月" }[m]}
+            ←
           </button>
-        ))}
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          aria-label={`上一${periodUnit}`}
-          onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
-          className="px-3 py-1.5 rounded text-sm bg-slate-800 text-slate-300"
-        >
-          ←
-        </button>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-200">{rangeLabel}</span>
-          <input
-            type="date"
-            value={statsRange.fromDate}
-            max={today}
-            onChange={(event) => {
-              if (event.target.value) setAnchor(event.target.value);
-            }}
-            className="bg-slate-800 text-slate-300 text-sm rounded px-2 py-1"
+          <label className="min-w-0 flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2">
+            <span className="block truncate text-sm font-medium text-slate-100">{rangeLabel}</span>
+            <input
+              type="date"
+              value={statsRange.fromDate}
+              max={today}
+              onChange={(event) => {
+                if (event.target.value) setAnchor(event.target.value);
+              }}
+              className="mt-1 w-full bg-transparent text-sm text-slate-400 outline-none"
+            />
+          </label>
+          <button
+            type="button"
+            aria-label={`下一${periodUnit}`}
+            disabled={atLatest}
+            onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
+            className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200 disabled:opacity-35"
+          >
+            →
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-3xl border border-sky-400/20 bg-sky-400/10 px-4 py-3">
+          <div className="text-xs font-medium text-sky-200/80">已记录</div>
+          <div className="mt-1 flex items-end gap-2">
+            <span className="text-4xl font-semibold leading-none text-white">{totalHours.toFixed(1)}</span>
+            <span className="pb-1 text-sm text-slate-300">小时</span>
+          </div>
+          {rangeClampedToToday && <div className="mt-2 text-xs text-slate-400">截至 {effectiveRange.toDate}</div>}
+        </div>
+      </header>
+
+      <SectionPanel title="总览" eyebrow="Period">
+        <div className="grid grid-cols-2 gap-2">
+          <MetricCard label="本周期总时长" value={`${overview.totalRecordedHours.toFixed(1)}h`} tone="info" />
+          <MetricCard
+            label="记录覆盖率"
+            value={`${overview.coverageDisplayPct.toFixed(1)}%`}
+            hint={overview.coverageNote}
           />
         </div>
-        <button
-          type="button"
-          aria-label={`下一${periodUnit}`}
-          disabled={atLatest}
-          onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
-          className="px-3 py-1.5 rounded text-sm bg-slate-800 text-slate-300 disabled:opacity-40"
-        >
-          →
-        </button>
-      </div>
-      {!atLatest && (
-        <button
-          type="button"
-          onClick={() => setAnchor(today)}
-          className="mx-auto block px-3 py-1 rounded text-xs bg-slate-800 text-slate-400"
-        >
-          回到今天
-        </button>
-      )}
-      <div className="text-center text-sm text-slate-400">
-        已记录 {totalHours.toFixed(1)} 小时
-        {rangeClampedToToday && <span> · 截至 {effectiveRange.toDate}</span>}
-      </div>
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-200">总览</h3>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-            <div className="text-xs text-slate-500">本周期总时长</div>
-            <div className="mt-1 text-slate-100">{overview.totalRecordedHours.toFixed(1)}h</div>
-          </div>
-          <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-            <div className="text-xs text-slate-500">记录覆盖率</div>
-            <div className="mt-1 text-slate-100">{overview.coverageDisplayPct.toFixed(1)}%</div>
-            {overview.coverageNote && <div className="mt-1 text-xs text-slate-500">{overview.coverageNote}</div>}
-          </div>
-        </div>
         {compositionParents.length > 0 && (
-          <div className="space-y-2">
-            <div className="text-xs text-slate-500">父分类 → 子分类构成</div>
+          <div className="mt-4 space-y-2">
+            <div className="text-xs font-medium text-slate-500">父分类 → 子分类构成</div>
             <CategoryCompositionBars parents={compositionParents} />
           </div>
         )}
-      </section>
-      {pieData.length > 0 && (
-        <div className="space-y-3">
-          {chartsInView ? (
-            <CategoryDonut
-              data={pieData}
-              totalHours={overview.totalRecordedHours}
-              coveragePct={overview.coverageDisplayPct}
-              coverageNote={overview.coverageNote}
-            />
-          ) : (
-            <div className="min-h-[250px]" />
-          )}
-        </div>
-      )}
-      {pieData.length === 0 && <div className="text-center text-slate-500 py-12">暂无统计数据</div>}
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-200">作息</h3>
+        {pieData.length > 0 ? (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
+            {chartsInView ? (
+              <CategoryDonut
+                data={pieData}
+                totalHours={overview.totalRecordedHours}
+                coveragePct={overview.coverageDisplayPct}
+                coverageNote={overview.coverageNote}
+              />
+            ) : (
+              <div className="min-h-[250px]" />
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 py-10 text-center text-sm text-slate-500">
+            暂无统计数据
+          </div>
+        )}
+      </SectionPanel>
+
+      <SectionPanel title="作息" eyebrow="Routine">
         {sleepCategoryId === null ? (
           <Link
             to="/settings/insights"
-            className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200"
+            className="inline-flex min-h-11 items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-4 text-sm text-slate-300"
           >
             设置睡眠分类后可查看作息分析
             <span aria-hidden>›</span>
@@ -453,18 +529,9 @@ export default function StatsPage() {
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-                <div className="text-xs text-slate-500">平均入睡</div>
-                <div className="mt-1 text-slate-100">{formatClockFromMinute(routine.averageBedTimeMin)}</div>
-              </div>
-              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-                <div className="text-xs text-slate-500">平均起床</div>
-                <div className="mt-1 text-slate-100">{formatClockFromMinute(routine.averageWakeTimeMin)}</div>
-              </div>
-              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-                <div className="text-xs text-slate-500">平均睡眠</div>
-                <div className="mt-1 text-slate-100">{formatHoursFromMin(routine.averageDurationMin)}</div>
-              </div>
+              <MetricCard label="平均入睡" value={formatClockFromMinute(routine.averageBedTimeMin)} />
+              <MetricCard label="平均起床" value={formatClockFromMinute(routine.averageWakeTimeMin)} />
+              <MetricCard label="平均睡眠" value={formatHoursFromMin(routine.averageDurationMin)} tone="good" />
             </div>
             <p className="text-xs text-slate-500">
               {routineStateText(routine.regularity.state)} · 样本 {routine.sampleCount} 天
@@ -473,46 +540,52 @@ export default function StatsPage() {
             </p>
           </div>
         )}
-      </section>
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-medium text-slate-200">异常与空挡</h3>
-          {anomalies.length > 0 && (
-            <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{anomalies.length} 项</span>
-          )}
-        </div>
+      </SectionPanel>
+
+      <SectionPanel
+        title="异常与空挡"
+        eyebrow="Attention"
+        action={
+          anomalies.length > 0 ? (
+            <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-100">
+              {anomalies.length} 项
+            </span>
+          ) : null
+        }
+      >
         {anomalies.length === 0 ? (
           <p className="text-sm text-slate-500">本周期未发现明显异常或长空挡。</p>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2 text-sm">
-              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-                <div className="text-xs text-slate-500">长空挡</div>
-                <div className="mt-1 text-slate-100">{anomalyStats.longGapCount}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  最长 {formatDurationFromMin(anomalyStats.longestGapMin)}
-                </div>
-              </div>
-              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-                <div className="text-xs text-slate-500">空挡合计</div>
-                <div className="mt-1 text-slate-100">{formatDurationFromMin(anomalyStats.longGapTotalMin)}</div>
-                <div className="mt-1 text-xs text-slate-500">超过个人阈值</div>
-              </div>
-              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
-                <div className="text-xs text-slate-500">记录异常</div>
-                <div className="mt-1 text-slate-100">{anomalyStats.recordIssueCount}</div>
-                <div className="mt-1 text-xs text-slate-500">未记录日 {anomalyStats.unrecordedDayCount}</div>
-              </div>
+              <MetricCard
+                label="长空挡"
+                value={anomalyStats.longGapCount}
+                hint={`最长 ${formatDurationFromMin(anomalyStats.longestGapMin)}`}
+                tone="warn"
+              />
+              <MetricCard
+                label="空挡合计"
+                value={formatDurationFromMin(anomalyStats.longGapTotalMin)}
+                hint="超过个人阈值"
+                tone="warn"
+              />
+              <MetricCard
+                label="记录异常"
+                value={anomalyStats.recordIssueCount}
+                hint={`未记录日 ${anomalyStats.unrecordedDayCount}`}
+                tone="danger"
+              />
             </div>
 
             {longGapAnomalies.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-xs text-slate-500">长空挡 Top</div>
+              <div className="mt-4 space-y-2">
+                <div className="text-xs font-medium text-slate-500">长空挡 Top</div>
                 <ul className="space-y-1.5">
                   {longGapAnomalies.slice(0, 5).map((anomaly, index) => (
                     <li
                       key={`top:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}:${index}`}
-                      className="flex items-center justify-between gap-3 rounded bg-slate-800/60 px-3 py-1.5 text-sm"
+                      className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm"
                     >
                       <span className="min-w-0 text-slate-300">
                         {anomaly.date}
@@ -527,11 +600,14 @@ export default function StatsPage() {
               </div>
             )}
 
-            <details className="space-y-2" open={mode !== "month"}>
-              <summary className="cursor-pointer text-xs text-slate-500">按日期分布</summary>
+            <details
+              className="mt-4 space-y-2 rounded-2xl border border-slate-800 bg-slate-900/40 px-3 py-2"
+              open={mode !== "month"}
+            >
+              <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-slate-400">按日期分布</summary>
               <div className="mt-2 space-y-2">
                 {anomalyDateGroups.map((group) => (
-                  <div key={group.date} className="rounded-lg bg-slate-800/60 px-3 py-2">
+                  <div key={group.date} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
                     <div className="flex items-center justify-between gap-3 text-sm">
                       <span className="font-medium text-slate-200">{group.date}</span>
                       <span className="text-xs text-slate-500">{group.items.length} 项</span>
@@ -545,7 +621,7 @@ export default function StatsPage() {
                             className="py-2 first:pt-0 last:pb-0"
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
+                              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
                                 {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
                               </span>
                               {timeRange && <span className="text-xs text-slate-500">{timeRange}</span>}
@@ -566,10 +642,9 @@ export default function StatsPage() {
             </details>
           </>
         )}
-      </section>
+      </SectionPanel>
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-200">趋势变化</h3>
+      <SectionPanel title="趋势变化" eyebrow="Trend">
         <div className="flex flex-wrap items-center gap-2">
           {TREND_PRESETS.map((preset) => {
             const active = trendWindowSpec.kind === "preset" && trendWindowSpec.days === preset.days;
@@ -579,7 +654,9 @@ export default function StatsPage() {
                 type="button"
                 aria-pressed={active}
                 onClick={() => setTrendWindowSpec({ kind: "preset", days: preset.days })}
-                className={`px-2.5 py-1 rounded text-xs ${active ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+                className={`min-h-10 rounded-full px-3 text-xs font-medium ${
+                  active ? "bg-sky-500 text-white" : "border border-slate-800 bg-slate-900 text-slate-400"
+                }`}
               >
                 {preset.label}
               </button>
@@ -595,7 +672,7 @@ export default function StatsPage() {
               const days = Number(event.target.value);
               if (Number.isFinite(days) && days >= 1) setTrendWindowSpec({ kind: "customDays", days });
             }}
-            className="w-24 bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+            className="min-h-10 w-28 rounded-full border border-slate-800 bg-slate-900 px-3 text-xs text-slate-300 outline-none"
           />
           <span className="text-xs text-slate-500">或</span>
           <input
@@ -610,7 +687,7 @@ export default function StatsPage() {
                 setTrendWindowSpec({ kind: "customRange", from, to: to < from ? from : to });
               }
             }}
-            className="bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+            className="min-h-10 rounded-full border border-slate-800 bg-slate-900 px-3 text-xs text-slate-300 outline-none"
           />
           <input
             type="date"
@@ -624,7 +701,7 @@ export default function StatsPage() {
                 setTrendWindowSpec({ kind: "customRange", from: from > to ? to : from, to });
               }
             }}
-            className="bg-slate-800 text-slate-300 text-xs rounded px-2 py-1"
+            className="min-h-10 rounded-full border border-slate-800 bg-slate-900 px-3 text-xs text-slate-300 outline-none"
           />
         </div>
 
@@ -641,7 +718,7 @@ export default function StatsPage() {
               {trend.parentTrends.map((t) => (
                 <li
                   key={t.parentId}
-                  className="flex items-center justify-between rounded bg-slate-800/60 px-3 py-1.5 text-sm"
+                  className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm"
                 >
                   <span className="text-slate-200">{parentNameById.get(t.parentId) ?? t.parentId}</span>
                   <span
@@ -661,7 +738,7 @@ export default function StatsPage() {
 
             {(trend.topRising.length > 0 || trend.topFalling.length > 0) && (
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3">
                   <div className="text-slate-400 mb-1">上升最多</div>
                   {trend.topRising.length === 0 ? (
                     <div className="text-slate-600">—</div>
@@ -673,7 +750,7 @@ export default function StatsPage() {
                     ))
                   )}
                 </div>
-                <div>
+                <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-3">
                   <div className="text-slate-400 mb-1">下降最多</div>
                   {trend.topFalling.length === 0 ? (
                     <div className="text-slate-600">—</div>
@@ -693,7 +770,11 @@ export default function StatsPage() {
                 type="button"
                 aria-pressed={trendChart === "line"}
                 onClick={() => setTrendChart("line")}
-                className={`px-2.5 py-1 rounded text-xs ${trendChart === "line" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+                className={`min-h-10 rounded-full px-3 text-xs font-medium ${
+                  trendChart === "line"
+                    ? "bg-sky-500 text-white"
+                    : "border border-slate-800 bg-slate-900 text-slate-400"
+                }`}
               >
                 折线
               </button>
@@ -701,29 +782,33 @@ export default function StatsPage() {
                 type="button"
                 aria-pressed={trendChart === "area"}
                 onClick={() => setTrendChart("area")}
-                className={`px-2.5 py-1 rounded text-xs ${trendChart === "area" ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400"}`}
+                className={`min-h-10 rounded-full px-3 text-xs font-medium ${
+                  trendChart === "area"
+                    ? "bg-sky-500 text-white"
+                    : "border border-slate-800 bg-slate-900 text-slate-400"
+                }`}
               >
                 堆叠面积
               </button>
             </div>
 
             {chartsInView ? (
-              <TrendChart chart={trendChart} data={trendChartData} series={trendSeries} />
+              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
+                <TrendChart chart={trendChart} data={trendChartData} series={trendSeries} />
+              </div>
             ) : (
               <div className="min-h-[220px]" />
             )}
           </>
         )}
-      </section>
+      </SectionPanel>
 
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium text-slate-200">结构诊断</h3>
-
+      <SectionPanel title="结构诊断" eyebrow="Structure">
         {structure.current.sessionCount === 0 ? (
           <p className="text-sm text-slate-500">本周期无足够会话用于结构诊断。</p>
         ) : (
           <>
-            <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200 space-y-1">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 space-y-1">
               <div className="text-slate-400 text-xs">
                 深度 vs 杂项{structure.excludedSleep ? "" : "（含睡眠，指定睡眠分类后更准）"}
               </div>
@@ -738,7 +823,7 @@ export default function StatsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200 space-y-1">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 space-y-1">
               <div className="text-slate-400 text-xs">碎片化（仅供观察，不报警）</div>
               <div className="text-slate-300 text-xs">
                 每活跃小时切换 {structure.fragment.switchesPerActiveHour} 次（基线{" "}
@@ -747,7 +832,7 @@ export default function StatsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200 space-y-1">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 space-y-1">
               <div className="text-slate-400 text-xs">投入分散度（香农熵）</div>
               <div className="text-slate-300 text-xs">
                 {structure.entropy.normalizedPct}%（H={structure.entropy.entropyBits} / {structure.entropy.parentCount}{" "}
@@ -780,7 +865,7 @@ export default function StatsPage() {
             </div>
           </>
         )}
-      </section>
+      </SectionPanel>
     </div>
   );
 }
