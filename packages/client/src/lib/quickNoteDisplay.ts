@@ -31,7 +31,12 @@ function localDate(value: string): string {
 }
 
 function localClock(value: string): string {
-  return utcToLocalDateTime(value).slice(11, 16);
+  return formatLocalClock(value);
+}
+
+/** UTC ISO -> 本地 "HH:mm"，供时间轴与卡片时间小字共用。 */
+export function formatLocalClock(occurredAt: string): string {
+  return utcToLocalDateTime(occurredAt).slice(11, 16);
 }
 
 export function groupQuickNotesForDisplay(

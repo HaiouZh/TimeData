@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
+import { BottomNavProvider } from "./contexts/BottomNavContext.js";
 
 vi.mock("./hooks/useAppResumeRefresh.ts", () => ({
   useAppResumeRefresh: () => {},
@@ -52,11 +53,19 @@ vi.mock("./pages/settings/SettingsInsightsPage.tsx", () => ({
   default: () => createElement("div", null, "数据洞察设置页"),
 }));
 
+function renderAppShell(initialEntry: string) {
+  return renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      { initialEntries: [initialEntry] },
+      createElement(BottomNavProvider, null, createElement(AppShell)),
+    ),
+  );
+}
+
 describe("AppShell settings routes", () => {
   it("renders settings data route without bottom navigation", () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/data"] }, createElement(AppShell)),
-    );
+    const html = renderAppShell("/settings/data");
 
     expect(html).toContain("数据设置页");
     expect(html).not.toContain("时间轴");
@@ -64,9 +73,7 @@ describe("AppShell settings routes", () => {
   });
 
   it("renders settings server route without bottom navigation", () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/server"] }, createElement(AppShell)),
-    );
+    const html = renderAppShell("/settings/server");
 
     expect(html).toContain("服务器配置页");
     expect(html).not.toContain("时间轴");
@@ -74,9 +81,7 @@ describe("AppShell settings routes", () => {
   });
 
   it("renders settings insights route without bottom navigation", () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/insights"] }, createElement(AppShell)),
-    );
+    const html = renderAppShell("/settings/insights");
 
     expect(html).toContain("数据洞察设置页");
     expect(html).not.toContain("时间轴");
@@ -84,12 +89,8 @@ describe("AppShell settings routes", () => {
   });
 
   it("renders category settings routes without bottom navigation", () => {
-    const listHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/categories"] }, createElement(AppShell)),
-    );
-    const detailHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/settings/categories/category-1"] }, createElement(AppShell)),
-    );
+    const listHtml = renderAppShell("/settings/categories");
+    const detailHtml = renderAppShell("/settings/categories/category-1");
 
     expect(listHtml).toContain("分类列表页");
     expect(detailHtml).toContain("分类详情页");
@@ -98,21 +99,15 @@ describe("AppShell settings routes", () => {
   });
 
   it("passes the resume refresh key to time-sensitive pages", () => {
-    const timelineHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(AppShell)),
-    );
-    const entryHtml = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/entries/new"] }, createElement(AppShell)),
-    );
+    const timelineHtml = renderAppShell("/");
+    const entryHtml = renderAppShell("/entries/new");
 
     expect(timelineHtml).toContain("时间轴页面 0");
     expect(entryHtml).toContain("记录页面 0");
   });
 
   it("renders quick notes route and bottom navigation entry", () => {
-    const html = renderToStaticMarkup(
-      createElement(MemoryRouter, { initialEntries: ["/quick-notes"] }, createElement(AppShell)),
-    );
+    const html = renderAppShell("/quick-notes");
 
     expect(html).toContain("速记页面");
     expect(html).toContain("记录");

@@ -30,8 +30,11 @@
     "dexie-react-hooks": "^4.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.5.0",
     "recharts": "^3.8.1",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1",
     "uuid": "^14.0.0",
     "workbox-window": "^7.4.1"
   },

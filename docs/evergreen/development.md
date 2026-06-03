@@ -8,7 +8,7 @@ covers:
   - packages/*/package.json
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-05-20
+last-reviewed: 2026-06-03
 ---
 
 # 本地开发指南
@@ -185,8 +185,9 @@ TimeData/
 
 ## 技术栈
 
-- 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、dnd-kit
+- 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、dnd-kit、react-markdown/remark-gfm/rehype-sanitize
   - dnd-kit 目前用于设置页下的分类管理拖拽排序：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx` 组织一级分类 DnD 作用域，`SettingsCategoryDetailPage.tsx` 组织子分类 DnD 作用域，`SortableCategoryItem.tsx` 封装拖拽手柄，`useCategories.ts` 负责持久化 `sortOrder` 和 `syncLog`。
+  - react-markdown/remark-gfm/rehype-sanitize 只用于 Quick Notes 的安全 Markdown 展示；速记仍保存原始文本，编辑、复制、导出和同步不依赖渲染结果。
 - 后端：Node.js、Hono、better-sqlite3、Zod、TypeScript
 - CLI：Node.js、TypeScript、受控 API 命令
 - Android：Capacitor、Gradle、Android SDK

@@ -5,6 +5,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { db } from "../db/index.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 
@@ -39,7 +40,13 @@ async function renderPage(initialEntry = "/quick-notes"): Promise<{ host: HTMLDi
   const root = createRoot(host);
 
   await act(async () => {
-    root.render(createElement(MemoryRouter, { initialEntries: [initialEntry] }, createElement(QuickNotesPage)));
+    root.render(
+      createElement(
+        MemoryRouter,
+        { initialEntries: [initialEntry] },
+        createElement(BottomNavProvider, null, createElement(QuickNotesPage)),
+      ),
+    );
   });
   await flush();
   return { host, root };

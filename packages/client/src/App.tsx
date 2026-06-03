@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
+import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import EntryPage from "./pages/EntryPage.tsx";
@@ -22,9 +23,14 @@ import TimelinePage from "./pages/TimelinePage.tsx";
 export function AppShell() {
   const location = useLocation();
   const [resumeRefreshKey, setResumeRefreshKey] = useState(0);
+  const { hidden, setHidden } = useBottomNav();
   const hidesBottomNav = location.pathname.startsWith("/entries/") || location.pathname.startsWith("/settings/");
 
   useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
+
+  useEffect(() => {
+    if (location.pathname !== "/quick-notes") setHidden(false);
+  }, [location.pathname, setHidden]);
 
   return (
     <div className="flex flex-col h-dvh bg-slate-950 text-slate-100">
@@ -48,7 +54,12 @@ export function AppShell() {
         </Routes>
       </main>
       {!hidesBottomNav && (
-        <nav className="flex border-t border-slate-800 bg-slate-900">
+        <nav
+          className={`flex shrink-0 border-t border-slate-800 bg-slate-900 transition-transform duration-200 ${
+            hidden ? "translate-y-full" : "translate-y-0"
+          }`}
+          style={{ height: BOTTOM_NAV_HEIGHT_PX }}
+        >
           {[
             { to: "/quick-notes", label: "记录" },
             { to: "/", label: "时间轴" },
@@ -78,7 +89,9 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <SyncProvider>
-          <AppShell />
+          <BottomNavProvider>
+            <AppShell />
+          </BottomNavProvider>
         </SyncProvider>
       </BrowserRouter>
     </ErrorBoundary>

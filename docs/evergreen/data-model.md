@@ -128,13 +128,14 @@ last-reviewed: 2026-06-03
 - `occurredAt` / `createdAt` / `updatedAt` 都必须是严格 UTC ISO 字符串（带毫秒和 `Z`）。
 - `occurredAt` 是用户看到、按天查询和导出的业务时间；`createdAt` 只表示系统创建时间，不能拿来做速记的业务排序。
 - 客户端聊天时间线用 `occurredAt` 作为窗口游标，窗口查询只读 Dexie，不写 `syncLog`；新增、编辑、删除仍分别走 `addQuickNote` / `updateQuickNote` / `deleteQuickNote`。
+- 速记正文的存储契约始终是原始 `text` 字符串；客户端展示层可以按保守启发式安全渲染 Markdown，也可以折叠长文本，但导出、复制、编辑和同步都继续使用原文。
 - `updatedAt` 用于导入合并和同步 LWW 判断；不强制 `updatedAt >= createdAt`，避免历史导入和设备时钟漂移造成额外失败。
 - `QuickNote` 不引用 `Category` 或 `TimeEntry`，不参与分类存在性、archived 分类、时间段重叠、时间环、时长统计或分类统计。
 - SQL 表名是 `quick_notes`，字段是 `occurred_at` / `created_at` / `updated_at`；Dexie 表名是 `quickNotes`，索引是 `id, occurredAt, updatedAt`。
 
-代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.ts`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`
+代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.ts`、`packages/client/src/quick-notes/NoteBubble.tsx`、`packages/client/src/quick-notes/QuickNoteContent.tsx`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`
 
-相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.test.tsx`、`packages/server/src/db/schema.test.ts`
+相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.test.tsx`、`packages/client/src/quick-notes/NoteBubble.test.tsx`、`packages/client/src/quick-notes/QuickNoteContent.test.tsx`、`packages/client/src/quick-notes/looksLikeMarkdown.test.ts`、`packages/server/src/db/schema.test.ts`
 
 ## 5. `SyncLogEntry`（客户端同步日志）
 

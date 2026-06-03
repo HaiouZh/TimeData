@@ -1,16 +1,18 @@
 import type { QuickNote } from "@timedata/shared";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useLongPress } from "../hooks/useLongPress.ts";
-import { groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
+import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
 import { addQuickNote, deleteQuickNote, updateQuickNote } from "../lib/quickNotes.ts";
 import { getDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
 import { exportQuickNotesJsonByDate, exportQuickNotesMarkdownByDate } from "../quick-notes/exportQuickNotes.ts";
 import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-notes/fileDownload.ts";
+import NoteBubble from "../quick-notes/NoteBubble.tsx";
 import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
 import { useQuickNoteTimeline } from "../quick-notes/useQuickNoteTimeline.ts";
 
@@ -18,7 +20,6 @@ const SCROLL_TRIGGER_PX = 48;
 const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
-const BOTTOM_NAV_OFFSET_PX = 49;
 const STATUS_AUTO_DISMISS_MS = 2400;
 
 interface MenuTarget {
@@ -56,10 +57,13 @@ export default function QuickNotesPage() {
   const prevScrollHeightRef = useRef(0);
   const preserveAnchorRef = useRef(false);
   const didInitJumpRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
 
   const { confirm, dialog } = useConfirm();
+  const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
   const { syncAfterWrite } = useSyncContext();
   const timeline = useQuickNoteTimeline();
+  const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
   const displayItems = useMemo(
     () => groupQuickNotesForDisplay(timeline.notes, { today }),
     [timeline.notes, today],
@@ -92,6 +96,8 @@ export default function QuickNotesPage() {
     },
     [],
   );
+
+  useEffect(() => () => setNavHidden(false), [setNavHidden]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -157,6 +163,18 @@ export default function QuickNotesPage() {
     if (!timeline.atLatest && stickBottomRef.current) {
       void timeline.loadNewer();
     }
+
+    const top = el.scrollTop;
+    const SHOW_NEAR_TOP_PX = 24;
+    const DIR_DELTA_PX = 6;
+    if (top <= SHOW_NEAR_TOP_PX) {
+      setNavHidden(false);
+    } else if (top > lastScrollTopRef.current + DIR_DELTA_PX) {
+      setNavHidden(true);
+    } else if (top < lastScrollTopRef.current - DIR_DELTA_PX) {
+      setNavHidden(false);
+    }
+    lastScrollTopRef.current = top;
   }
 
   function focusInput() {
@@ -307,35 +325,36 @@ export default function QuickNotesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950 text-slate-100">
-      <header className="shrink-0 border-b border-slate-800/80 bg-slate-950/95 px-4 pb-3 pt-4 shadow-[0_14px_40px_rgba(2,6,23,0.22)] backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80">QuickNote</p>
-              <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-50">速记</h1>
-              <p className="mt-1 text-xs text-slate-400">{timelineStatus}</p>
-            </div>
-            <label className="rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2 text-right shadow-sm">
-              <span className="block text-[11px] text-slate-500">日期</span>
+      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/80 bg-slate-950/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-[0_14px_40px_rgba(2,6,23,0.22)]">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="hidden text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80 sm:block">
+              QuickNote
+            </p>
+            <h1 className="truncate text-base font-semibold tracking-tight text-slate-50 sm:mt-1 sm:text-xl">
+              {timeline.atLatest ? `速记 · ${timeline.notes.length}` : "速记 · 历史"}
+            </h1>
+            <p className="hidden text-xs text-slate-400 sm:mt-1 sm:block">{timelineStatus}</p>
+          </div>
+          <label className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
+            <span className="hidden text-[11px] text-slate-500 sm:block">日期</span>
               <input
                 type="date"
                 aria-label="跳转日期"
                 value={jumpDate}
                 onChange={(event) => handleJumpDateChange(event.target.value)}
-                className="mt-0.5 w-36 bg-transparent text-sm font-medium text-slate-100 outline-none [color-scheme:dark]"
+                className="w-[7.5rem] bg-transparent text-xs font-medium text-slate-100 outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
               />
-            </label>
-          </div>
+          </label>
 
-          <div className="flex items-center justify-end">
-            <div className="relative">
+          <div className="relative shrink-0">
               <button
                 type="button"
                 aria-label="更多操作"
                 aria-haspopup="menu"
                 aria-expanded={actionsOpen}
                 onClick={() => setActionsOpen((open) => !open)}
-                className="flex size-11 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100"
+              className="flex size-9 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
               >
                 ⋯
               </button>
@@ -388,7 +407,6 @@ export default function QuickNotesPage() {
                   </div>
                 </>
               )}
-            </div>
           </div>
         </div>
       </header>
@@ -440,7 +458,10 @@ export default function QuickNotesPage() {
             }
             if (item.type === "time") {
               return (
-                <div key={item.key} className="grid grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 pt-1">
+                <div
+                  key={item.key}
+                  className="hidden grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 pt-1 sm:grid"
+                >
                   <time className="font-mono text-[11px] tabular-nums text-slate-400">{item.label}</time>
                   <div className="flex items-center gap-2">
                     <span className="size-1.5 rounded-full bg-emerald-300/80" />
@@ -452,8 +473,8 @@ export default function QuickNotesPage() {
 
             const note = item.note;
             return (
-              <article key={item.key} className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-3">
-                <div />
+              <article key={item.key} className="grid grid-cols-1 gap-3 sm:grid-cols-[4.25rem_minmax(0,1fr)]">
+                <div className="hidden sm:block" />
                 <div
                   role="button"
                   tabIndex={0}
@@ -470,9 +491,12 @@ export default function QuickNotesPage() {
                     longPress.onContextMenu(event);
                   }}
                   style={{ WebkitTouchCallout: "none" }}
-                  className="max-w-full select-none whitespace-pre-wrap break-words rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 hover:bg-slate-900 focus:ring-2 focus:ring-emerald-400/40"
+                  className="relative max-w-full select-none rounded-2xl border border-slate-800 bg-slate-900/90 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 hover:bg-slate-900 focus:ring-2 focus:ring-emerald-400/40"
                 >
-                  {note.text}
+                  <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500 sm:hidden">
+                    {formatLocalClock(note.occurredAt)}
+                  </time>
+                  <NoteBubble note={note} />
                 </div>
               </article>
             );
@@ -488,7 +512,7 @@ export default function QuickNotesPage() {
             void timeline.resetToLatest();
           }}
           className="fixed right-4 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 shadow-lg shadow-slate-950/40 transition hover:border-emerald-500/45"
-          style={{ bottom: BOTTOM_NAV_OFFSET_PX + composerInsetPx }}
+          style={{ bottom: navOffsetPx + composerInsetPx }}
         >
           ↓ 最新
         </button>
@@ -497,7 +521,7 @@ export default function QuickNotesPage() {
       {error && (
         <p
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-red-900/60 bg-red-950/90 px-3 py-2 text-sm text-red-200 shadow-lg"
-          style={{ bottom: BOTTOM_NAV_OFFSET_PX + composerInsetPx }}
+          style={{ bottom: navOffsetPx + composerInsetPx }}
         >
           {error}
         </p>
@@ -505,7 +529,7 @@ export default function QuickNotesPage() {
       {status && (
         <p
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/95 px-3 py-2 text-sm text-slate-300 shadow-lg"
-          style={{ bottom: BOTTOM_NAV_OFFSET_PX + composerInsetPx }}
+          style={{ bottom: navOffsetPx + composerInsetPx }}
         >
           {status}
         </p>
@@ -513,7 +537,8 @@ export default function QuickNotesPage() {
 
       <form
         ref={composerRef}
-        className="fixed bottom-[49px] left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-3 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur"
+        className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur transition-[bottom] duration-200 sm:p-3"
+        style={{ bottom: navOffsetPx }}
         onSubmit={(event) => {
           event.preventDefault();
           void handleSubmit();
@@ -528,7 +553,7 @@ export default function QuickNotesPage() {
               </button>
             </div>
           )}
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-2 shadow-sm">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
             <div className="flex items-end gap-2">
               <textarea
                 ref={inputRef}
@@ -544,7 +569,7 @@ export default function QuickNotesPage() {
               <button
                 type="submit"
                 disabled={!draftText.trim() || saving}
-                className="h-11 shrink-0 rounded-2xl bg-emerald-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                className="h-11 shrink-0 rounded-2xl bg-emerald-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 sm:px-4"
               >
                 {editingId ? "保存" : "记录"}
               </button>

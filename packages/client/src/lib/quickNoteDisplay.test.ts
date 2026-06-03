@@ -1,6 +1,6 @@
 import type { QuickNote } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { groupQuickNotesForDisplay } from "./quickNoteDisplay.js";
+import { formatLocalClock, groupQuickNotesForDisplay } from "./quickNoteDisplay.js";
 
 function note(id: string, occurredAt: string): QuickNote {
   return {
@@ -13,6 +13,10 @@ function note(id: string, occurredAt: string): QuickNote {
 }
 
 describe("groupQuickNotesForDisplay", () => {
+  it("formats a UTC timestamp as local HH:mm", () => {
+    expect(formatLocalClock("2026-06-01T04:08:00.000Z")).toBe("12:08");
+  });
+
   it("uses one timestamp for notes in the same local minute", () => {
     const items = groupQuickNotesForDisplay([
       note("a", "2026-06-01T04:01:00.000Z"),
