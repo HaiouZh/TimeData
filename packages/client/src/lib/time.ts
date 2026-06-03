@@ -230,8 +230,15 @@ export interface DaySummary {
   coverageRatio: number;
 }
 
-/** 从已构建的 slots 汇总当日概览；future 段不计入，使占比只反映已流逝时间。 */
-export function summarizeDay(slots: TimeSlot[]): DaySummary {
+/**
+ * 从已构建的 slots 汇总当日概览；future 段不计入，使占比只反映已流逝时间。
+ * 每个 slot 先钳到所选日期 [00:00, 次日00:00)，避免跨夜合并段（如昨晚 22:00 → 今早）
+ * 把昨天那段也算进今天。
+ */
+export function summarizeDay(slots: TimeSlot[], date: string): DaySummary {
+  const dayStartMs = toMs(localDateTimeToUtc(`${date}T00:00:00`));
+  const dayEndMs = toMs(localDateTimeToUtc(`${addDays(date, 1)}T00:00:00`));
+
   let recordedMinutes = 0;
   let gapMinutes = 0;
   let entryCount = 0;
@@ -239,7 +246,9 @@ export function summarizeDay(slots: TimeSlot[]): DaySummary {
 
   for (const slot of slots) {
     if (slot.kind === "future") continue;
-    const minutes = Math.max(0, Math.round((toMs(slot.endTime) - toMs(slot.startTime)) / 60000));
+    const startMs = Math.max(dayStartMs, toMs(slot.startTime));
+    const endMs = Math.min(dayEndMs, toMs(slot.endTime));
+    const minutes = Math.max(0, Math.round((endMs - startMs) / 60000));
     if (slot.kind === "entry") {
       recordedMinutes += minutes;
       entryCount += 1;

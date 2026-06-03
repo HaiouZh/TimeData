@@ -413,12 +413,13 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
             <button
               type="button"
               onClick={handleCenterClick}
-              className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full text-center ring-1 ring-inset ring-white/10 transition hover:ring-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
+              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center ring-1 ring-inset ring-white/10 transition hover:ring-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
+              style={{ containerType: "inline-size" }}
               aria-label={selection?.type === "entry" ? "编辑选中记录" : "新增选中空档记录"}
             >
-              <span className="text-[10px] text-white/85">{centerRange}</span>
-              <span className="max-w-[88px] truncate text-xs font-medium text-white">{centerTitle}</span>
-              <span className="text-base font-semibold text-white">{centerDuration}</span>
+              <span className="text-[8cqw] leading-none text-white/85">{centerRange}</span>
+              <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-white">{centerTitle}</span>
+              <span className="text-[17cqw] font-semibold leading-none text-white">{centerDuration}</span>
             </button>
           </div>
         </div>

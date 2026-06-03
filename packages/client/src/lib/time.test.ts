@@ -430,7 +430,7 @@ describe("summarizeDay", () => {
       slot("gap", "2026-06-03T09:00:00", "2026-06-03T09:30:00"), // 30
       slot("entry", "2026-06-03T09:30:00", "2026-06-03T10:00:00"), // 30
     ];
-    const summary = summarizeDay(slots);
+    const summary = summarizeDay(slots, "2026-06-03");
     expect(summary.recordedMinutes).toBe(90);
     expect(summary.gapMinutes).toBe(30);
     expect(summary.entryCount).toBe(2);
@@ -443,14 +443,25 @@ describe("summarizeDay", () => {
       slot("entry", "2026-06-03T08:00:00", "2026-06-03T09:00:00"),
       slot("future", "2026-06-03T09:00:00", "2026-06-04T00:00:00"),
     ];
-    const summary = summarizeDay(slots);
+    const summary = summarizeDay(slots, "2026-06-03");
     expect(summary.recordedMinutes).toBe(60);
     expect(summary.gapMinutes).toBe(0);
     expect(summary.coverageRatio).toBe(1);
   });
 
+  it("clamps an overnight-merged slot to the selected day", () => {
+    // 跨夜睡眠：昨晚 22:00 → 今早 06:00；今天概览只应计入 00:00–06:00 这 6 小时。
+    const slots: TimeSlot[] = [
+      slot("entry", "2026-06-02T22:00:00", "2026-06-03T06:00:00"),
+      slot("gap", "2026-06-03T06:00:00", "2026-06-03T08:00:00"),
+    ];
+    const summary = summarizeDay(slots, "2026-06-03");
+    expect(summary.recordedMinutes).toBe(360);
+    expect(summary.gapMinutes).toBe(120);
+  });
+
   it("returns zero coverage for an empty day", () => {
-    const summary = summarizeDay([]);
+    const summary = summarizeDay([], "2026-06-03");
     expect(summary.recordedMinutes).toBe(0);
     expect(summary.gapMinutes).toBe(0);
     expect(summary.coverageRatio).toBe(0);

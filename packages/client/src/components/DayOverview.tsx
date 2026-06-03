@@ -2,10 +2,11 @@ import { formatMinutesDuration, summarizeDay, type TimeSlot } from "../lib/time.
 
 interface DayOverviewProps {
   slots: TimeSlot[];
+  date: string;
 }
 
-export default function DayOverview({ slots }: DayOverviewProps) {
-  const { recordedMinutes, gapMinutes, gapCount, coverageRatio } = summarizeDay(slots);
+export default function DayOverview({ slots, date }: DayOverviewProps) {
+  const { recordedMinutes, gapMinutes, gapCount, coverageRatio } = summarizeDay(slots, date);
   if (recordedMinutes === 0 && gapMinutes === 0) return null;
 
   const coveragePct = Math.round(coverageRatio * 100);

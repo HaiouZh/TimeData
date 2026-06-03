@@ -61,7 +61,7 @@ export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
         }
         overlay={<SyncIndicator />}
       />
-      <DayOverview slots={slots} />
+      <DayOverview slots={slots} date={date} />
       <Timeline
         slots={slots}
         onGapClick={(startTime, endTime) =>
