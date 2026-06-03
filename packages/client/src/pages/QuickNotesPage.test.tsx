@@ -100,6 +100,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -246,6 +247,34 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("auto-dismisses the copied status after a delay", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await db.quickNotes.add({
+      id: "note-1",
+      text: "复制我",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    await openMenu(host, "复制我");
+    await click(menuItem(host, "复制"));
+    expect(host.textContent).toContain("已复制");
+
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+    });
+    await flush();
+    expect(host.textContent).not.toContain("已复制");
+
+    vi.useRealTimers();
+    await act(async () => root.unmount());
+  });
+
   it("deletes a note through the popover menu and confirm dialog", async () => {
     await db.quickNotes.add({
       id: "note-1",
@@ -308,7 +337,8 @@ describe("QuickNotesPage", () => {
     ]);
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
 
-    await click(lastButtonByText(host, "清理"));
+    await click(host.querySelector('button[aria-label="更多操作"]'));
+    await click(menuItem(host, "清理当天"));
 
     expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除当天速记");
     await click(lastButtonByText(host, "删除"));

@@ -19,6 +19,7 @@ const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const BOTTOM_NAV_OFFSET_PX = 49;
+const STATUS_AUTO_DISMISS_MS = 2400;
 
 interface MenuTarget {
   note: QuickNote;
@@ -42,12 +43,14 @@ export default function QuickNotesPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composeDraftRef = useRef("");
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressedNoteRef = useRef<QuickNote | null>(null);
   const stickBottomRef = useRef(true);
   const prevScrollHeightRef = useRef(0);
@@ -57,7 +60,10 @@ export default function QuickNotesPage() {
   const { confirm, dialog } = useConfirm();
   const { syncAfterWrite } = useSyncContext();
   const timeline = useQuickNoteTimeline();
-  const displayItems = useMemo(() => groupQuickNotesForDisplay(timeline.notes), [timeline.notes]);
+  const displayItems = useMemo(
+    () => groupQuickNotesForDisplay(timeline.notes, { today }),
+    [timeline.notes, today],
+  );
   const timelineStatus = timeline.loading
     ? "正在读取速记"
     : timeline.atLatest
@@ -79,6 +85,13 @@ export default function QuickNotesPage() {
     if (!queryDate) return;
     setJumpDate(queryDate);
   }, [queryDate]);
+
+  useEffect(
+    () => () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -154,6 +167,16 @@ export default function QuickNotesPage() {
     inputRef.current?.focus();
   }
 
+  // 轻提示（已复制 / 已导出 / 已清理）几秒后自动消失，避免一直挂在底部直到切换页面。
+  function showStatus(message: string) {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    setStatus(message);
+    statusTimerRef.current = setTimeout(() => {
+      statusTimerRef.current = null;
+      setStatus(null);
+    }, STATUS_AUTO_DISMISS_MS);
+  }
+
   async function handleSubmit() {
     if (saving) return;
     const text = draftText.trim();
@@ -214,7 +237,7 @@ export default function QuickNotesPage() {
     setError(null);
     try {
       await copyText(note.text);
-      setStatus("已复制");
+      showStatus("已复制");
     } catch {
       setError("复制失败");
     }
@@ -249,7 +272,7 @@ export default function QuickNotesPage() {
     try {
       const backup = await exportQuickNotesJsonByDate(jumpDate);
       await downloadQuickNotesJson(backup);
-      setStatus(`已导出 ${backup.notes.length} 条速记 JSON。`);
+      showStatus(`已导出 ${backup.notes.length} 条速记 JSON。`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出失败");
     }
@@ -261,7 +284,7 @@ export default function QuickNotesPage() {
     try {
       const markdown = await exportQuickNotesMarkdownByDate(jumpDate);
       await downloadQuickNotesMarkdown(markdown, jumpDate);
-      setStatus("已导出速记 Markdown。");
+      showStatus("已导出速记 Markdown。");
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出失败");
     }
@@ -278,7 +301,7 @@ export default function QuickNotesPage() {
     if (!confirmed) return;
 
     const result = await deleteQuickNotesByRange(jumpDate, jumpDate);
-    setStatus(`已删除 ${result.deleted} 条速记。`);
+    showStatus(`已删除 ${result.deleted} 条速记。`);
     if (result.deleted > 0) syncAfterWrite();
   }
 
@@ -304,28 +327,68 @@ export default function QuickNotesPage() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void handleExportMarkdown()}
-              className="rounded-full border border-slate-800 bg-slate-900/75 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100"
-            >
-              MD
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleExportJson()}
-              className="rounded-full border border-slate-800 bg-slate-900/75 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100"
-            >
-              JSON
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteDate()}
-              className="rounded-full border border-red-900/60 bg-red-950/50 px-3 py-1.5 text-xs font-medium text-red-200 transition hover:border-red-500/60 hover:bg-red-950"
-            >
-              清理
-            </button>
+          <div className="flex items-center justify-end">
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="更多操作"
+                aria-haspopup="menu"
+                aria-expanded={actionsOpen}
+                onClick={() => setActionsOpen((open) => !open)}
+                className="flex size-11 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100"
+              >
+                ⋯
+              </button>
+              {actionsOpen && (
+                <>
+                  <div
+                    role="presentation"
+                    className="fixed inset-0 z-40"
+                    onClick={() => setActionsOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    aria-label="速记导出与清理"
+                    className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 py-1 shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setActionsOpen(false);
+                        void handleExportMarkdown();
+                      }}
+                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-800"
+                    >
+                      导出 Markdown
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setActionsOpen(false);
+                        void handleExportJson();
+                      }}
+                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-800"
+                    >
+                      导出 JSON
+                    </button>
+                    <div className="my-1 h-px bg-slate-800" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setActionsOpen(false);
+                        void handleDeleteDate();
+                      }}
+                      className="block w-full px-4 py-3 text-left text-sm font-medium text-red-300 transition hover:bg-red-950/40"
+                    >
+                      清理当天
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -359,7 +422,7 @@ export default function QuickNotesPage() {
           {!timeline.loading && displayItems.length === 0 && (
             <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center">
               <p className="text-sm font-medium text-slate-200">还没有速记</p>
-              <p className="mt-1 text-xs text-slate-500">写下一个想法、线索或待办，稍后再回来看。</p>
+              <p className="mt-1 text-xs text-slate-400">写下一个想法、线索或待办，稍后再回来看。</p>
             </div>
           )}
 
@@ -378,7 +441,7 @@ export default function QuickNotesPage() {
             if (item.type === "time") {
               return (
                 <div key={item.key} className="grid grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 pt-1">
-                  <time className="font-mono text-[11px] tabular-nums text-slate-500">{item.label}</time>
+                  <time className="font-mono text-[11px] tabular-nums text-slate-400">{item.label}</time>
                   <div className="flex items-center gap-2">
                     <span className="size-1.5 rounded-full bg-emerald-300/80" />
                     <div className="h-px flex-1 bg-slate-800/80" />
@@ -476,7 +539,7 @@ export default function QuickNotesPage() {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 placeholder={editingId ? "修改这条速记..." : "捕捉一个当下想法..."}
-                className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-500 outline-none"
+                className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-400 outline-none"
               />
               <button
                 type="submit"
