@@ -7,7 +7,9 @@
       "!**/node_modules",
       "!**/android",
       "!packages/mobile/android",
+      "!.worktrees",
       "!.claude/worktrees",
+      "!docs_local",
       "!参考代码"
     ]
   },
@@ -27,11 +29,12 @@
       },
       "suspicious": {
         "noExplicitAny": "error",
-        "noArrayIndexKey": "warn"
+        "noArrayIndexKey": "error",
+        "noConfusingVoidType": "error"
       },
       "style": {
         "useImportType": "error",
-        "noNonNullAssertion": "warn"
+        "noNonNullAssertion": "error"
       },
       "correctness": {
         "noUnusedImports": "error",
@@ -45,6 +48,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

@@ -8,7 +8,7 @@ covers:
   - packages/server/src/routes/entries.ts
   - packages/server/src/routes/quick-notes.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-06-02
+last-reviewed: 2026-06-03
 ---
 
 # CLI（受控写入入口）
@@ -193,7 +193,7 @@ CLI 的 Vitest 配置把 `@timedata/shared` alias 到 `packages/shared/src/index
 2. 如果需要新 API，先在 `packages/server/src/routes/` 实现 + 测试。
 3. 在 `packages/cli/src/commands/` 加命令文件，遵守"输入校验在 CLI 这边浅做、最终判定走 server"。
 4. 在 `packages/cli/src/commands/help.ts` 加入命令目录、`writesData` 标记和用法。
-5. 在 `packages/cli/src/index.ts` 路由表里加 `if (command === ...)` 分支。
+5. 在 `packages/cli/src/commands/help.ts` 的 `commandRegistry` 中给命令挂上 `handler`；`packages/cli/src/index.ts` 会用 `commandRegistry.find(...).handler` 分发。
 6. 加测试（参考 `commands/log.test.ts`、`commands/doctor.test.ts`、`index.test.ts`）。
 7. 更新本文档第 1 节"白名单命令"表。
 8. 更新 `docs/TimeData-CLI-AI.md`（给 AI 看的命令清单）。

@@ -64,6 +64,7 @@
 
 - 运行时：Node 22+；包管理器：pnpm（仅用仓库默认值，未经审批不替换）。
 - 安装：`pnpm install`。
+- Lint：`pnpm lint`（推送前必须与测试 / 构建一起跑）。
 - 测试：`pnpm test`（全包），或 `pnpm --filter @timedata/<pkg> test`。
 - 构建：`pnpm build`（不含 mobile）。
 - 开发：`pnpm dev:client` / `pnpm dev:server`。
@@ -136,4 +137,4 @@
 
 ------
 
-*Last reviewed: 2026-05-20（Git 段补全 worktree 合 main 的标准做法与清理步骤）*
+*Last reviewed: 2026-06-03（命令区补充 push 前 lint 门禁要求）*

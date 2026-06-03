@@ -21,6 +21,11 @@ interface WheelProps {
   onChange: (value: string) => void;
 }
 
+interface WheelOption {
+  key: string;
+  value: string;
+}
+
 const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 const REPEAT_COUNT = 11;
@@ -43,7 +48,13 @@ function Wheel({ value, options, onChange }: WheelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollTimerRef = useRef<number | null>(null);
   const normalizedValue = options.includes(value) ? value : options[0];
-  const allOptions = useMemo(() => Array.from({ length: REPEAT_COUNT }, () => options).flat(), [options]);
+  const allOptions = useMemo<WheelOption[]>(
+    () =>
+      Array.from({ length: REPEAT_COUNT }, (_, repeatIndex) =>
+        options.map((option) => ({ key: `${repeatIndex}:${option}`, value: option })),
+      ).flat(),
+    [options],
+  );
   const middleSetStart = Math.floor(REPEAT_COUNT / 2) * options.length;
 
   useEffect(() => {
@@ -102,20 +113,20 @@ function Wheel({ value, options, onChange }: WheelProps) {
         onScroll={handleScroll}
         className="wheel-scroll h-full overflow-y-auto snap-y snap-mandatory py-[34px] overscroll-contain"
       >
-        {allOptions.map((option, index) => {
-          const selected = option === normalizedValue;
+        {allOptions.map((option) => {
+          const selected = option.value === normalizedValue;
           return (
             <button
               type="button"
               role="option"
               aria-selected={selected}
-              key={`${option}-${index}`}
-              onClick={() => onChange(option)}
+              key={option.key}
+              onClick={() => onChange(option.value)}
               className={`block h-[34px] w-full snap-center text-center text-base tabular-nums transition-colors ${
                 selected ? "font-semibold text-slate-50" : "text-slate-500"
               }`}
             >
-              {option}
+              {option.value}
             </button>
           );
         })}

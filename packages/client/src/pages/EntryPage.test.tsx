@@ -20,7 +20,7 @@ const entryFormPropsMock = vi.hoisted(() => ({
       nextStartTime: string,
       nextEndTime: string,
       note: string,
-    ) => Promise<{ ok: boolean; error?: string } | void>;
+    ) => Promise<{ ok: boolean; error?: string } | undefined>;
   },
 }));
 
@@ -56,7 +56,7 @@ vi.mock("../components/EntryForm.js", () => ({
       nextStartTime: string,
       nextEndTime: string,
       note: string,
-    ) => Promise<{ ok: boolean; error?: string } | void>;
+    ) => Promise<{ ok: boolean; error?: string } | undefined>;
   }) => {
     entryFormPropsMock.value = props;
     return createElement("div", null, `${props.startTime} ${props.endTime}`);
@@ -92,7 +92,7 @@ describe("EntryPage default times", () => {
     expect(html).toContain("2026-05-08T06:00:00 2026-05-08T07:00:00");
   });
 
-  it("clamps default end to ${date}T23:59:00 when date param points to a past day", () => {
+  it("clamps default end to the selected date's 23:59 when date param points to a past day", () => {
     vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
     // queryEnd 是次日 00:00（昨天尾部空挡的 dayEnd 转回来）；date=2026-05-15 表示用户在昨天页面点的
     searchParamsMock.value = new URLSearchParams(

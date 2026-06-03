@@ -14,7 +14,12 @@ async function bootstrap(): Promise<void> {
     console.error("[bootstrap] 初始化失败，仍继续渲染:", error);
   }
 
-  createRoot(document.getElementById("root")!).render(
+  const rootElement = document.getElementById("root");
+  if (!rootElement) {
+    throw new Error("Root element #root not found.");
+  }
+
+  createRoot(rootElement).render(
     <StrictMode>
       <AppUpdateProvider>
         <App />

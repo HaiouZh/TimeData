@@ -20,15 +20,20 @@ export default function Timeline({ slots, onGapClick, onEntryClick }: TimelinePr
   return (
     <section className="px-4 pb-2 pt-4">
       <h2 className="mb-1.5 px-0.5 text-xs font-medium text-slate-500">时间流</h2>
-      {displaySlots.map((slot, i) => (
-        <TimeSlotComponent
-          key={`${slot.startTime}-${i}`}
-          slot={slot}
-          categoryPath={slot.entry ? getCategoryPath(slot.entry.categoryId) : ""}
-          categoryColor={slot.entry ? getCategoryColor(slot.entry.categoryId) : ""}
-          onClick={() => (slot.entry ? onEntryClick(slot.entry) : onGapClick(slot.startTime, slot.endTime))}
-        />
-      ))}
+      {displaySlots.map((slot) => {
+        const slotKey = slot.entry
+          ? `entry-${slot.entry.id}-${slot.startTime}-${slot.endTime}`
+          : `gap-${slot.startTime}-${slot.endTime}`;
+        return (
+          <TimeSlotComponent
+            key={slotKey}
+            slot={slot}
+            categoryPath={slot.entry ? getCategoryPath(slot.entry.categoryId) : ""}
+            categoryColor={slot.entry ? getCategoryColor(slot.entry.categoryId) : ""}
+            onClick={() => (slot.entry ? onEntryClick(slot.entry) : onGapClick(slot.startTime, slot.endTime))}
+          />
+        );
+      })}
     </section>
   );
 }

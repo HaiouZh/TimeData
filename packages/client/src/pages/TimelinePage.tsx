@@ -15,11 +15,11 @@ interface TimelinePageProps {
   refreshKey?: number;
 }
 
-export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
+export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [midnightTick, setMidnightTick] = useState(0);
+  const [, setMidnightTick] = useState(0);
   useMidnightTick(() => setMidnightTick((value) => value + 1));
-  const now = useMemo(() => new Date(), [refreshKey, midnightTick]);
+  const now = new Date();
   const today = getDateString(now);
   const queryDate = searchParams.get("date");
   const normalizedQueryDate = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate) ? queryDate : today;

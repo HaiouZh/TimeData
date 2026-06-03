@@ -32,6 +32,13 @@ interface ResolvedCategoryDeleteImpact extends CategoryDeleteImpact {
 
 let pendingDeleteImpact: { id: string; impact: ResolvedCategoryDeleteImpact } | null = null;
 
+function requireResolvedCategoryDeleteImpact(impact: ResolvedCategoryDeleteImpact | null): ResolvedCategoryDeleteImpact {
+  if (!impact) {
+    throw new Error("分类删除失败。");
+  }
+  return impact;
+}
+
 interface SyncLogInsert {
   id: string;
   tableName: "categories" | "time_entries";
@@ -217,7 +224,7 @@ export async function deleteCategory(id: string): Promise<CategoryDeleteImpact> 
     impact = resolved;
   });
 
-  const { entries: _entries, ...publicImpact } = impact!;
+  const { entries: _entries, ...publicImpact } = requireResolvedCategoryDeleteImpact(impact);
   return publicImpact;
 }
 

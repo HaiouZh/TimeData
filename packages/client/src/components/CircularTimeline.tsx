@@ -27,6 +27,7 @@ const ARROW_TIP_RADIUS = INNER_RADIUS + (OUTER_RADIUS - INNER_RADIUS) * 0.25;
 const ARROW_BASE_RADIUS = INNER_RADIUS - 4;
 const ARROW_HALF_WIDTH_DEG = 6;
 const DAY_MINUTES = 24 * 60;
+const TICK_INDICES = Array.from({ length: 144 }, (_, index) => index);
 
 function minutesFromClock(value: string): number {
   const hours = Number(value.slice(11, 13));
@@ -270,10 +271,10 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                   />
                 );
               })}
-              {Array.from({ length: 144 }, (_, index) => {
-                const angle = (index / 144) * 360;
-                const isHour = index % 6 === 0;
-                const isHalf = !isHour && index % 3 === 0;
+              {TICK_INDICES.map((tick) => {
+                const angle = (tick / TICK_INDICES.length) * 360;
+                const isHour = tick % 6 === 0;
+                const isHalf = !isHour && tick % 3 === 0;
                 const tier = isHour ? "hour" : isHalf ? "half" : "micro";
                 const length = isHour ? 8 : isHalf ? 5 : 3;
                 const strokeWidth = isHour ? 1.5 : isHalf ? 1 : 0.6;
@@ -282,7 +283,7 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                 const inner = polarToCartesian(angle, OUTER_RADIUS - 2 - length);
                 return (
                   <line
-                    key={`tick-${index}`}
+                    key={`tick-${tick}`}
                     x1={outer.x}
                     y1={outer.y}
                     x2={inner.x}

@@ -43,7 +43,7 @@ export async function runCli(argv: string[], deps: CliDeps = {}): Promise<unknow
   if (flags.help === "true") return runHelp(command);
 
   const entry = commandRegistry.find((item) => item.name === command);
-  if (!entry || !entry.handler) {
+  if (!entry?.handler) {
     return {
       ok: false,
       error: {

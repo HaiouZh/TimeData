@@ -16,6 +16,7 @@ const SETTINGS_PAGE_REFS = [
   "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
 ];
 const DATA_MODEL_OLD_PAGE_REF = "packages/client/src/pages/CategoriesPage.tsx";
+const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
 
 export class CliUsageError extends Error {
   constructor(message) {
@@ -152,7 +153,7 @@ function patternToRegex(pattern) {
     } else if (c === "?") {
       out += "[^/]";
       i += 1;
-    } else if (".+^${}()|[]\\".includes(c)) {
+    } else if (REGEXP_SPECIAL_CHARS.has(c)) {
       out += `\\${c}`;
       i += 1;
     } else {

@@ -44,6 +44,20 @@ function formatAnomalyTimeRange(anomaly: Anomaly): string | null {
   return `${startDate.slice(5)} ${start.slice(11, 16)} - ${endDate.slice(5)} ${end.slice(11, 16)}`;
 }
 
+function anomalyKey(anomaly: Anomaly, scope: string): string {
+  return [
+    scope,
+    anomaly.type,
+    anomaly.date,
+    anomaly.startTime ?? "",
+    anomaly.endTime ?? "",
+    anomaly.categoryId ?? "",
+    anomaly.valueMin ?? "",
+    anomaly.baselineMin ?? "",
+    anomaly.message,
+  ].join(":");
+}
+
 export default function AnomaliesSection(props: StatsModuleProps) {
   const routine = useMemo(
     () =>
@@ -152,9 +166,9 @@ export default function AnomaliesSection(props: StatsModuleProps) {
             <div className="mt-4 space-y-2">
               <div className="text-xs font-medium text-slate-500">长空挡 Top</div>
               <ul className="space-y-1.5">
-                {longGapAnomalies.slice(0, 5).map((anomaly, index) => (
+                {longGapAnomalies.slice(0, 5).map((anomaly) => (
                   <li
-                    key={`top:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}:${index}`}
+                    key={anomalyKey(anomaly, "top")}
                     className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm"
                   >
                     <span className="min-w-0 text-slate-300">
@@ -183,11 +197,11 @@ export default function AnomaliesSection(props: StatsModuleProps) {
                     <span className="text-xs text-slate-500">{group.items.length} 项</span>
                   </div>
                   <ul className="mt-2 divide-y divide-slate-700/60">
-                    {group.items.map((anomaly, index) => {
+                    {group.items.map((anomaly) => {
                       const timeRange = formatAnomalyTimeRange(anomaly);
                       return (
                         <li
-                          key={`${anomaly.type}:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}:${index}`}
+                          key={anomalyKey(anomaly, "detail")}
                           className="py-2 first:pt-0 last:pb-0"
                         >
                           <div className="flex flex-wrap items-center gap-2">

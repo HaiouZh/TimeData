@@ -17,7 +17,7 @@ covers:
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-06-02
+last-reviewed: 2026-06-03
 ---
 
 # 数据模型与契约
@@ -85,7 +85,7 @@ last-reviewed: 2026-06-02
 - **名称可改、身份不变**：`name` 是当前展示名，`id` 才是分类身份。新增分类和重命名分类都会在客户端 hook 层 trim 名称并拒绝空名；同层级未归档分类重名也会被拒绝。重命名分类只更新 `name` / `updatedAt` 并写 `syncLog` update，不迁移 `TimeEntry.categoryId`，历史记录按当前名称展示。分类管理页会拒绝同层级未归档分类重名，并同步更新本地 `autoBackups` 里同 ID 分类的可见字段。
 - **颜色属于一级分类**：一级分类的 `color` 用 `#RRGGBB` 格式展示和同步；子分类沿用父分类颜色，不单独改色。客户端颜色入口是 `packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/hooks/useCategories.ts` 和 `packages/client/src/lib/categoryColors.ts`；单个改色和一键配色都会更新变化项的 `color` / `updatedAt` 并写 `syncLog` update。一键配色只作用于未归档一级分类，并按当前一级分类排序循环应用预设色板。相关测试是 `packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`。
 - **归档与直接删除不同**：归档保留分类行，只把 `isArchived` 设为 `true`，更新 `updatedAt`，并写入 `syncLog` update 后通过 `categories/update` 同步；客户端分类列表默认隐藏归档分类。归档写入入口是 `packages/client/src/hooks/useCategories.ts` 导出的 `archiveCategory()`，`useCategories()` 仍把同名 mutation 暴露给页面使用。
-- **直接删除是真删除**：分类管理页允许删除一级分类或子分类。删除一级分类会级联删除其子分类和这些分类下的 `TimeEntry`；删除子分类会删除该子分类及其记录。客户端会为被删记录和分类写 `syncLog` delete；服务端收到 `categories/delete` 后真删分类及后代，并写 `categories` tombstone，供其他设备拉取删除事件。客户端入口是 `packages/client/src/hooks/useCategories.ts`，服务端入口是 `packages/server/src/sync/resolver.ts`；相关测试是 `packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/sync/engine.test.ts`、`packages/server/src/routes/sync.test.ts`。
+- **直接删除是真删除**：分类管理页允许删除一级分类或子分类。删除一级分类会级联删除其子分类和这些分类下的 `TimeEntry`；删除子分类会删除该子分类及其记录。客户端会为被删记录和分类写 `syncLog` delete，并在 Dexie transaction 结束后显式确认已解析到删除影响，避免事务回调异常时返回不完整结果；服务端收到 `categories/delete` 后真删分类及后代，并写 `categories` tombstone，供其他设备拉取删除事件。客户端入口是 `packages/client/src/hooks/useCategories.ts`，服务端入口是 `packages/server/src/sync/resolver.ts`；相关测试是 `packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/sync/engine.test.ts`、`packages/server/src/routes/sync.test.ts`。
 - **首次启动播种**：服务端 `initializeDatabase()` 检测到 `categories` 为空时，插入 `createDefaultCategories()` 的默认值；客户端 `seedDefaultCategories()` 同理。两端用同一份 `DEFAULT_CATEGORIES` 常量。
 
 ## 3. `TimeEntry`（时间记录）

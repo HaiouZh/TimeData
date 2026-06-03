@@ -46,6 +46,8 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 就会进入当天时间轴候选集。这保证跨夜记录可以在前一天和后一天都被正确考虑。
 
+`TimelinePage` 每次渲染都会重新读取当前时间；`AppShell` 的恢复刷新信号和 `useMidnightTick` 只负责触发重渲染，随后由 `buildTimeSlots` 用新的 `now` 决定今天的已流逝区间和未来区间。
+
 ## 3. 时间槽生成规则
 
 `buildTimeSlots(entries, date, dayStartHour, options)` 把记录转换成时间轴槽位：

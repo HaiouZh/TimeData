@@ -46,7 +46,7 @@ interface EntryPageProps {
   refreshKey?: number;
 }
 
-export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
+export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProps) {
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -96,7 +96,7 @@ export default function EntryPage({ refreshKey = 0 }: EntryPageProps) {
     if (clampedQueryEnd) return { start: fallbackStart, end };
     if (prevEndLocal && prevEndLocal < end) return { start: prevEndLocal, end };
     return { start: fallbackStart, end };
-  }, [end, clampedQueryStart, clampedQueryEnd, prevEndLocal, refreshKey]);
+  }, [end, clampedQueryStart, clampedQueryEnd, prevEndLocal]);
 
   if (isEdit && existingEntry === undefined) {
     return <div className="p-6 text-center text-slate-500">正在加载记录...</div>;

@@ -18,7 +18,7 @@ interface EntryFormProps {
     startTime: string,
     endTime: string,
     note: string,
-  ) => Promise<EntrySaveResult | void> | void;
+  ) => Promise<EntrySaveResult | undefined> | undefined;
   onDelete?: () => void;
   onCancel: () => void;
 }
