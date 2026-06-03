@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
-import { formatDuration, formatTimelineTimeRange } from "../lib/time.ts";
+import { formatDuration, formatTimelineTimeRange, getDateString, toLocalDateTimeString } from "../lib/time.ts";
 
 interface CircularTimelineProps {
   date: string;
@@ -11,6 +11,7 @@ interface CircularTimelineProps {
   onEntryOpen: (entry: TimeEntry) => void;
   onGapOpen: (startTime: string, endTime: string) => void;
   overlay?: ReactNode;
+  now?: Date;
 }
 
 type Selection = { type: "gap"; startTime: string; endTime: string } | { type: "entry"; entry: TimeEntry };
@@ -20,7 +21,8 @@ const CENTER = SIZE / 2;
 const OUTER_RADIUS = 104;
 const INNER_RADIUS = 62;
 const RADIUS = (OUTER_RADIUS + INNER_RADIUS) / 2;
-const LABEL_RADIUS = RADIUS;
+// 小时数字移到环带之外，落进圆环与方形之间原有的内边距里：环带（含刻度）保持干净。
+const LABEL_RADIUS = 113;
 const ARROW_TIP_RADIUS = INNER_RADIUS + (OUTER_RADIUS - INNER_RADIUS) * 0.25;
 const ARROW_BASE_RADIUS = INNER_RADIUS - 4;
 const ARROW_HALF_WIDTH_DEG = 6;
@@ -159,7 +161,7 @@ function selectionKey(selection: Selection | null): string {
   return `gap:${selection.startTime}:${selection.endTime}`;
 }
 
-export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, overlay }: CircularTimelineProps) {
+export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, overlay, now }: CircularTimelineProps) {
   const { getCategoryColor, getCategoryPath } = useCategories();
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
@@ -217,7 +219,7 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
     <section className="px-4 pt-4">
       <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-3">
         <div className="flex justify-center">
-          <div className="relative w-full max-w-[340px] aspect-square">
+          <div className="relative aspect-square w-full max-w-[372px]">
             {overlay}
             <svg
               viewBox={`0 0 ${SIZE} ${SIZE}`}
@@ -249,10 +251,12 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                 if (slot.kind === "entry" && slot.entry) {
                   fill = getCategoryColor(slot.entry.categoryId);
                 } else if (slot.kind === "future") {
-                  fill = "rgb(30 41 59)";
+                  fill = "rgb(24 32 48)";
                 } else {
                   fill = "rgb(100 116 139)";
                 }
+                // 有选中段时，把其余可选段压暗，让选中段相对提亮；future 自身已足够克制，不再压。
+                const dimmed = selection !== null && !selected && slot.kind !== "future";
                 return (
                   <path
                     key={key}
@@ -260,7 +264,7 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                     data-segment-type={slot.kind}
                     data-segment-selected={selected ? "true" : "false"}
                     fill={fill}
-                    opacity={1}
+                    opacity={dimmed ? 0.45 : 1}
                     className={slot.kind === "future" ? "" : "cursor-pointer"}
                     onClick={undefined}
                   />
@@ -302,10 +306,10 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                     y={label.y}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className={isAnchor ? "fill-slate-100 text-[9px] font-semibold" : "fill-slate-100/85 text-[9px]"}
+                    className={isAnchor ? "fill-slate-100 text-[10px] font-semibold" : "fill-slate-400 text-[9px]"}
                     style={{ paintOrder: "stroke" }}
                     stroke="rgb(15 23 42)"
-                    strokeWidth="2"
+                    strokeWidth="1"
                     strokeLinejoin="round"
                     pointerEvents="none"
                   >
@@ -353,8 +357,8 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                       d={outlinePath}
                       fill="none"
                       stroke={selectedColor}
-                      strokeWidth="1.5"
-                      opacity="0.95"
+                      strokeWidth="2"
+                      opacity="1"
                       pointerEvents="none"
                     />
                   );
@@ -383,11 +387,33 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
                   />
                 );
               })()}
+              {(() => {
+                // 仅在“今天”的视图里，于当前时刻画一根细表针，明确“此刻”落在哪。
+                const localNow = now ?? new Date();
+                if (getDateString(localNow) !== date) return null;
+                const nowMinutes = minutesFromClock(toLocalDateTimeString(localNow));
+                const angle = angleFromMinutes(nowMinutes);
+                const handOuter = polarToCartesian(angle, OUTER_RADIUS + 3);
+                const handInner = polarToCartesian(angle, INNER_RADIUS - 3);
+                return (
+                  <g data-now-indicator="true" pointerEvents="none">
+                    <line
+                      x1={handInner.x}
+                      y1={handInner.y}
+                      x2={handOuter.x}
+                      y2={handOuter.y}
+                      stroke="rgb(248 113 113)"
+                      strokeWidth="1.5"
+                    />
+                    <circle cx={handOuter.x} cy={handOuter.y} r="2.4" fill="rgb(248 113 113)" />
+                  </g>
+                );
+              })()}
             </svg>
             <button
               type="button"
               onClick={handleCenterClick}
-              className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full text-center focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="absolute inset-0 m-auto flex h-[100px] w-[100px] flex-col items-center justify-center rounded-full text-center ring-1 ring-inset ring-white/10 transition hover:ring-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
               aria-label={selection?.type === "entry" ? "编辑选中记录" : "新增选中空档记录"}
             >
               <span className="text-[10px] text-white/85">{centerRange}</span>

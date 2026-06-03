@@ -198,15 +198,60 @@ export function formatTime(isoString: string): string {
   return toLocalDateTimeString(parseAppLocalDateTime(isoString)).slice(11, 16);
 }
 
-export function formatDuration(startTime: string, endTime: string): string {
-  const ms = new Date(endTime).getTime() - new Date(startTime).getTime();
-  const totalMinutes = Math.round(ms / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
+export function formatMinutesDuration(totalMinutes: number): string {
+  const safe = Math.max(0, Math.round(totalMinutes));
+  const hours = Math.floor(safe / 60);
+  const minutes = safe % 60;
 
   if (hours === 0) return `${minutes}分钟`;
   if (minutes === 0) return `${hours}小时`;
   return `${hours}小时${minutes}分钟`;
+}
+
+export function formatDuration(startTime: string, endTime: string): string {
+  const ms = new Date(endTime).getTime() - new Date(startTime).getTime();
+  return formatMinutesDuration(ms / 60000);
+}
+
+/** 把 YYYY-MM-DD 渲染为「6月3日」这类去前导零的人性化标签。 */
+export function formatMonthDay(dateStr: string): string {
+  const [, month, day] = dateStr.split("-");
+  return `${Number(month)}月${Number(day)}日`;
+}
+
+export interface DaySummary {
+  /** 已记录时长（分钟），不含 future。 */
+  recordedMinutes: number;
+  /** 空档时长（分钟），不含 future。 */
+  gapMinutes: number;
+  entryCount: number;
+  gapCount: number;
+  /** 已记录 / 已流逝（记录+空档）的占比，0..1；空白日为 0。 */
+  coverageRatio: number;
+}
+
+/** 从已构建的 slots 汇总当日概览；future 段不计入，使占比只反映已流逝时间。 */
+export function summarizeDay(slots: TimeSlot[]): DaySummary {
+  let recordedMinutes = 0;
+  let gapMinutes = 0;
+  let entryCount = 0;
+  let gapCount = 0;
+
+  for (const slot of slots) {
+    if (slot.kind === "future") continue;
+    const minutes = Math.max(0, Math.round((toMs(slot.endTime) - toMs(slot.startTime)) / 60000));
+    if (slot.kind === "entry") {
+      recordedMinutes += minutes;
+      entryCount += 1;
+    } else if (slot.kind === "gap") {
+      gapMinutes += minutes;
+      gapCount += 1;
+    }
+  }
+
+  const elapsed = recordedMinutes + gapMinutes;
+  const coverageRatio = elapsed > 0 ? recordedMinutes / elapsed : 0;
+  return { recordedMinutes, gapMinutes, entryCount, gapCount, coverageRatio };
 }
 
 export function getDateString(date: Date): string {

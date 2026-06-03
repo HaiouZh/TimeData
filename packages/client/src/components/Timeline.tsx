@@ -14,13 +14,12 @@ export default function Timeline({ slots, onGapClick, onEntryClick }: TimelinePr
   const displaySlots = slots.filter((slot) => slot.kind !== "future").slice().reverse();
 
   if (displaySlots.length === 0) {
-    return <div className="p-8 text-center text-slate-500">今天还没有记录</div>;
+    return <div className="px-4 py-10 text-center text-sm text-slate-400">今天还没有记录</div>;
   }
 
   return (
-    <div className="relative px-3 py-2">
-      {/* vertical timeline rail */}
-      <div className="absolute left-[1.6rem] top-0 bottom-0 w-px bg-slate-800" />
+    <section className="px-4 pb-2 pt-4">
+      <h2 className="mb-1.5 px-0.5 text-xs font-medium text-slate-500">时间流</h2>
       {displaySlots.map((slot, i) => (
         <TimeSlotComponent
           key={`${slot.startTime}-${i}`}
@@ -30,6 +29,6 @@ export default function Timeline({ slots, onGapClick, onEntryClick }: TimelinePr
           onClick={() => (slot.entry ? onEntryClick(slot.entry) : onGapClick(slot.startTime, slot.endTime))}
         />
       ))}
-    </div>
+    </section>
   );
 }

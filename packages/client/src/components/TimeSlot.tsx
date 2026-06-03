@@ -15,16 +15,13 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick }:
 
   if (isGap) {
     return (
-      <div className="relative pl-7 mb-1.5">
-        <div
-          className="absolute left-[0.85rem] top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-700 ring-2 ring-slate-900"
-        />
+      <div className="mb-1.5">
         <button
           onClick={onClick}
-          className="w-full text-left px-3 py-3 min-h-[56px] rounded-lg border border-dashed border-slate-700 bg-slate-900/40 hover:bg-slate-800/60 hover:border-slate-600 active:bg-slate-800 transition-colors group flex flex-col justify-center gap-0.5"
+          className="group flex min-h-[56px] w-full flex-col justify-center gap-0.5 rounded-lg border border-dashed border-slate-700 bg-slate-900/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-slate-600 hover:bg-slate-800/60 active:bg-slate-800"
         >
-          <span className="text-xs text-slate-600 font-mono">{timeRange}</span>
-          <div className="flex items-center gap-1.5 text-slate-500 group-hover:text-slate-300 transition-colors">
+          <span className="font-mono text-xs text-slate-400">{timeRange}</span>
+          <div className="flex items-center gap-1.5 text-slate-400 transition-colors group-hover:text-slate-200">
             <span className="text-xs font-medium">＋ 补记这段</span>
             <span className="text-xs">· {duration}</span>
           </div>
@@ -34,26 +31,18 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick }:
   }
 
   return (
-    <div className="relative pl-7 mb-1.5">
-      <div
-        className="absolute left-[0.85rem] top-3 w-1.5 h-1.5 rounded-full ring-2 ring-slate-900"
-        style={{ backgroundColor: categoryColor }}
-      />
+    <div className="mb-1.5">
       <button
         onClick={onClick}
-        className="w-full text-left px-3 py-2.5 rounded-lg border border-transparent hover:border-slate-700 transition-all"
-        style={{ backgroundColor: `${categoryColor}18` }}
+        className="w-full rounded-lg border border-transparent py-2.5 pl-3.5 pr-3 text-left transition-all hover:border-slate-700"
+        style={{ backgroundColor: `${categoryColor}1a`, boxShadow: `inset 3px 0 0 ${categoryColor}` }}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="text-sm font-medium leading-tight" style={{ color: categoryColor }}>
-            {categoryPath}
-          </span>
-          <span className="text-xs text-slate-500 shrink-0 mt-0.5">{duration}</span>
+          <span className="text-sm font-medium leading-tight text-slate-100">{categoryPath}</span>
+          <span className="mt-0.5 shrink-0 text-xs text-slate-400">{duration}</span>
         </div>
-        <div className="mt-0.5 text-xs text-slate-500 font-mono">{timeRange}</div>
-        {slot.entry?.note && (
-          <div className="mt-1 text-xs text-slate-400 line-clamp-1">{slot.entry.note}</div>
-        )}
+        <div className="mt-0.5 font-mono text-xs text-slate-400">{timeRange}</div>
+        {slot.entry?.note && <div className="mt-1 line-clamp-1 text-xs text-slate-400">{slot.entry.note}</div>}
       </button>
     </div>
   );

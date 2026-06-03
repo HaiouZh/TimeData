@@ -5,11 +5,15 @@ import {
   buildTimeSlots,
   formatAppDateTime,
   formatDateTimeRange,
+  formatMinutesDuration,
+  formatMonthDay,
   formatTime,
   formatTimelineTimeRange,
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
   startOfWeek,
+  summarizeDay,
+  type TimeSlot,
   weekdayIndex,
 } from "./time.js";
 
@@ -384,5 +388,71 @@ describe("resolveClockRangeAroundEndDate", () => {
       startTime: "2026-05-20T09:00:00",
       endTime: "2026-05-20T22:00:00",
     });
+  });
+});
+
+describe("formatMinutesDuration", () => {
+  it("formats minute-only durations", () => {
+    expect(formatMinutesDuration(45)).toBe("45分钟");
+  });
+
+  it("formats whole-hour durations without trailing minutes", () => {
+    expect(formatMinutesDuration(120)).toBe("2小时");
+  });
+
+  it("formats hour-and-minute durations", () => {
+    expect(formatMinutesDuration(95)).toBe("1小时35分钟");
+  });
+
+  it("clamps negative input to zero", () => {
+    expect(formatMinutesDuration(-10)).toBe("0分钟");
+  });
+});
+
+describe("formatMonthDay", () => {
+  it("renders a human month/day label without leading zeros", () => {
+    expect(formatMonthDay("2026-06-03")).toBe("6月3日");
+  });
+
+  it("handles double-digit month and day", () => {
+    expect(formatMonthDay("2026-12-25")).toBe("12月25日");
+  });
+});
+
+describe("summarizeDay", () => {
+  function slot(kind: TimeSlot["kind"], startTime: string, endTime: string): TimeSlot {
+    return { startTime, endTime, entry: null, kind, displayMode: "default" };
+  }
+
+  it("sums recorded and gap minutes and counts segments", () => {
+    const slots: TimeSlot[] = [
+      slot("entry", "2026-06-03T08:00:00", "2026-06-03T09:00:00"), // 60
+      slot("gap", "2026-06-03T09:00:00", "2026-06-03T09:30:00"), // 30
+      slot("entry", "2026-06-03T09:30:00", "2026-06-03T10:00:00"), // 30
+    ];
+    const summary = summarizeDay(slots);
+    expect(summary.recordedMinutes).toBe(90);
+    expect(summary.gapMinutes).toBe(30);
+    expect(summary.entryCount).toBe(2);
+    expect(summary.gapCount).toBe(1);
+    expect(summary.coverageRatio).toBeCloseTo(90 / 120);
+  });
+
+  it("ignores future slots so coverage reflects elapsed time only", () => {
+    const slots: TimeSlot[] = [
+      slot("entry", "2026-06-03T08:00:00", "2026-06-03T09:00:00"),
+      slot("future", "2026-06-03T09:00:00", "2026-06-04T00:00:00"),
+    ];
+    const summary = summarizeDay(slots);
+    expect(summary.recordedMinutes).toBe(60);
+    expect(summary.gapMinutes).toBe(0);
+    expect(summary.coverageRatio).toBe(1);
+  });
+
+  it("returns zero coverage for an empty day", () => {
+    const summary = summarizeDay([]);
+    expect(summary.recordedMinutes).toBe(0);
+    expect(summary.gapMinutes).toBe(0);
+    expect(summary.coverageRatio).toBe(0);
   });
 });

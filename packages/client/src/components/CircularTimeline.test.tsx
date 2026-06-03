@@ -4,7 +4,7 @@ import { act } from "react";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 import type { TimeSlot } from "../lib/time.js";
@@ -196,7 +196,26 @@ describe("CircularTimeline selection", () => {
     );
 
     expect(html).toContain('data-segment-type="future"');
-    expect(html).toMatch(/data-segment-type="future"[^>]*fill="rgb\(30 41 59\)"/);
+    expect(html).toMatch(/data-segment-type="future"[^>]*fill="rgb\(24 32 48\)"/);
+  });
+
+  it("dims non-selected segments while a selection exists", () => {
+    const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-05-08",
+        slots: [
+          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+        ],
+        onEntryOpen: () => {},
+        onGapOpen: () => {},
+      }),
+    );
+
+    // 末尾空档为初始选中（opacity 1），其余段被压暗
+    expect(html).toContain('opacity="0.45"');
   });
 
   it("renders 24 hour numerals 0..23 and three tick tiers", () => {
@@ -284,5 +303,46 @@ describe("CircularTimeline selection", () => {
       root.unmount();
     });
     container.remove();
+  });
+});
+
+describe("CircularTimeline now indicator", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-03T10:00:00+08:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("draws a now indicator on today's view", () => {
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-06-03",
+        slots: [
+          { startTime: "2026-06-03T00:00:00", endTime: "2026-06-03T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+        ],
+        onEntryOpen: () => {},
+        onGapOpen: () => {},
+      }),
+    );
+
+    expect(html).toContain('data-now-indicator="true"');
+  });
+
+  it("hides the now indicator when viewing another day", () => {
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-06-02",
+        slots: [
+          { startTime: "2026-06-02T00:00:00", endTime: "2026-06-02T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+        ],
+        onEntryOpen: () => {},
+        onGapOpen: () => {},
+      }),
+    );
+
+    expect(html).not.toContain('data-now-indicator="true"');
   });
 });

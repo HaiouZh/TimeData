@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CircularTimeline from "../components/CircularTimeline.tsx";
 import DateNav from "../components/DateNav.tsx";
+import DayOverview from "../components/DayOverview.tsx";
 import SyncIndicator from "../components/SyncIndicator.tsx";
 import Timeline from "../components/Timeline.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
@@ -51,6 +52,7 @@ export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
       <CircularTimeline
         date={date}
         slots={slots}
+        now={now}
         onEntryOpen={(entry) => navigate(`/entries/${entry.id}/edit`)}
         onGapOpen={(startTime, endTime) =>
           navigate(
@@ -59,6 +61,7 @@ export default function TimelinePage({ refreshKey = 0 }: TimelinePageProps) {
         }
         overlay={<SyncIndicator />}
       />
+      <DayOverview slots={slots} />
       <Timeline
         slots={slots}
         onGapClick={(startTime, endTime) =>
