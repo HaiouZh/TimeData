@@ -87,9 +87,12 @@ export const memoAnomalies = createInsightMemo<DetectAnomaliesInput, ReturnType<
     const windowKey = sleepWindow
       ? `${sleepWindow.startMin}-${sleepWindow.endMin}-${sleepWindow.source}`
       : "default";
+    const baselineEntries = input.baselineEntries ?? input.entries;
     return (
-      `${input.fromDate}~${input.toDate}|${sleepKey(input.sleepCategoryId)}|sleepWindow:${windowKey}` +
-      `|entries:${fingerprintEntries(input.entries)}|categories:${fingerprintCategories(input.categories)}`
+      `${input.fromDate}~${input.toDate}|baseline:${input.baselineFromDate ?? input.fromDate}~${input.baselineToDate ?? input.toDate}` +
+      `|${sleepKey(input.sleepCategoryId)}|sleepWindow:${windowKey}` +
+      `|entries:${fingerprintEntries(input.entries)}|baselineEntries:${fingerprintEntries(baselineEntries)}` +
+      `|categories:${fingerprintCategories(input.categories)}`
     );
   },
 );

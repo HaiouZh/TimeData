@@ -132,6 +132,32 @@ describe("detectAnomalies", () => {
     expect(anomalies.some((a) => a.type === "longGap")).toBe(true);
   });
 
+  it("长空挡阈值使用独立基线，避免当前周期短空挡被 fallback 放大", () => {
+    const baselineEntries = Array.from({ length: 12 }).flatMap((_, i) => {
+      const day = String(i + 1).padStart(2, "0");
+      return [
+        entry(`base-a-${day}`, "work", `2026-04-${day}T01:00:00.000Z`, `2026-04-${day}T02:00:00.000Z`),
+        entry(`base-b-${day}`, "work", `2026-04-${day}T06:00:00.000Z`, `2026-04-${day}T07:00:00.000Z`),
+      ];
+    });
+    // 当前周期只有 2h 空挡；没有基线时会超过 90min fallback，有充足基线时低于 P90。
+    const entries = [
+      entry("period-a", "work", "2026-05-08T01:00:00.000Z", "2026-05-08T02:00:00.000Z"),
+      entry("period-b", "work", "2026-05-08T04:00:00.000Z", "2026-05-08T05:00:00.000Z"),
+    ];
+    const anomalies = detectAnomalies({
+      entries,
+      baselineEntries,
+      categories,
+      fromDate: "2026-05-08",
+      toDate: "2026-05-08",
+      baselineFromDate: "2026-04-01",
+      baselineToDate: "2026-04-12",
+      sleepCategoryId: "sleep",
+    });
+    expect(anomalies.some((a) => a.type === "longGap")).toBe(false);
+  });
+
   it("sleepCategoryId=null 时不排除睡眠：睡眠超长记录也会报", () => {
     const entries = [
       ...Array.from({ length: 10 }, (_, i) =>

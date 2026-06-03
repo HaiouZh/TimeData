@@ -29,10 +29,10 @@ describe("buildInsightBaseline", () => {
     expect(baseline.overlongThresholdMin).toBe(180);
   });
 
-  it("清醒空档样本充足用 P75；不足回退 fallback", () => {
+  it("清醒空档样本充足用 P90；不足回退 fallback", () => {
     const enough = Array.from({ length: 12 }, (_, i) => (i + 1) * 30); // n=12 >= 10
     const baselineEnough = buildInsightBaseline({ nonSleepSessionDurations: [], awakeGapMins: enough });
-    expect(baselineEnough.longGapThresholdMin).toBe(percentile(enough, 0.75));
+    expect(baselineEnough.longGapThresholdMin).toBe(percentile(enough, 0.9));
     expect(baselineEnough.longGapFromSample).toBe(true);
 
     const few = [30, 311]; // n=2 < 10
@@ -44,7 +44,7 @@ describe("buildInsightBaseline", () => {
   it("恰好 n=10 走分位（边界，>= 非 >）", () => {
     const exactly = Array.from({ length: 10 }, (_, i) => (i + 1) * 30); // n=10
     const baseline = buildInsightBaseline({ nonSleepSessionDurations: [], awakeGapMins: exactly });
-    expect(baseline.longGapThresholdMin).toBe(percentile(exactly, 0.75));
+    expect(baseline.longGapThresholdMin).toBe(percentile(exactly, 0.9));
     expect(baseline.longGapFromSample).toBe(true);
   });
 });

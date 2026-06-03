@@ -1,4 +1,4 @@
-import { localDateTimeToUtc } from "@timedata/shared";
+import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -8,6 +8,7 @@ import { useInView } from "../hooks/useInView.ts";
 import { memoAnomalies, memoOverview, memoRoutine, memoStructure, memoTrend } from "../lib/insights/cache.ts";
 import { INSIGHT_CONSTANTS } from "../lib/insights/constants.ts";
 import { type buildRoutineInsights, formatClockFromMinute } from "../lib/insights/routine.ts";
+import type { Anomaly } from "../lib/insights/types.ts";
 import { type ParentTrend, resolveTrendWindow, type TrendWindowSpec } from "../lib/insights/trends.ts";
 import { useSleepCategoryId } from "../lib/sleepCategorySetting.ts";
 import {
@@ -33,8 +34,8 @@ const ANOMALY_LABEL: Record<string, string> = {
   overlong: "超长记录",
   overnight: "跨午夜",
   sleepTimeActivity: "睡眠时段活动",
-  longGap: "长空白",
-  unrecordedDay: "未记录",
+  longGap: "长空挡",
+  unrecordedDay: "未记录日",
 };
 
 const TREND_PRESETS: { days: number; label: string }[] = [
@@ -59,12 +60,43 @@ function formatHoursFromMin(minutes: number | null): string {
   return `${(minutes / 60).toFixed(1)}h`;
 }
 
+function formatDurationFromMin(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return "--";
+  if (minutes < 60) return `${Math.round(minutes)}min`;
+  return `${(minutes / 60).toFixed(1)}h`;
+}
+
 function routineStateText(state: ReturnType<typeof buildRoutineInsights>["regularity"]["state"]): string {
   if (state === "stable") return "作息较稳定";
   if (state === "variable") return "作息波动较大";
   if (state === "insufficientSamples") return "样本不足，仅展示原始指标";
   if (state === "noSamples") return "暂无睡眠样本";
   return "未配置睡眠分类";
+}
+
+interface AnomalyDateGroup {
+  date: string;
+  items: Anomaly[];
+}
+
+function groupAnomaliesByDate(items: Anomaly[]): AnomalyDateGroup[] {
+  const groups = new Map<string, Anomaly[]>();
+  for (const item of items) {
+    const group = groups.get(item.date) ?? [];
+    group.push(item);
+    groups.set(item.date, group);
+  }
+  return Array.from(groups.entries()).map(([date, groupItems]) => ({ date, items: groupItems }));
+}
+
+function formatAnomalyTimeRange(anomaly: Anomaly): string | null {
+  if (!anomaly.startTime || !anomaly.endTime) return null;
+  const start = utcToLocalDateTime(anomaly.startTime);
+  const end = utcToLocalDateTime(anomaly.endTime);
+  const startDate = start.slice(0, 10);
+  const endDate = end.slice(0, 10);
+  if (startDate === endDate) return `${start.slice(11, 16)} - ${end.slice(11, 16)}`;
+  return `${startDate.slice(5)} ${start.slice(11, 16)} - ${endDate.slice(5)} ${end.slice(11, 16)}`;
 }
 
 export default function StatsPage() {
@@ -93,6 +125,16 @@ export default function StatsPage() {
   const statsRange = useMemo(() => buildStatsRangeForDate(mode, anchor), [mode, anchor]);
   const baselineFrom = useMemo(() => addDays(today, -(INSIGHT_CONSTANTS.baselineWindowDays - 1)), [today]);
   const atLatest = isLatestPeriod(mode, anchor, today);
+  const effectiveToDate = atLatest && statsRange.toDate > today ? today : statsRange.toDate;
+  const effectiveRange = useMemo(
+    () => ({
+      ...statsRange,
+      toDate: effectiveToDate,
+      endUtc: localDateTimeToUtc(`${addDays(effectiveToDate, 1)}T00:00:00`),
+    }),
+    [statsRange, effectiveToDate],
+  );
+  const rangeClampedToToday = effectiveRange.toDate !== statsRange.toDate;
   const rangeLabel = formatStatsRangeLabel(mode, statsRange);
   const periodUnit = { day: "天", week: "周", month: "月" }[mode];
 
@@ -104,18 +146,20 @@ export default function StatsPage() {
       return candidates.filter((entry) => entry.startTime < endUtc);
     }, [baselineFrom, today]) || [];
 
-  const periodWithinBaseline = statsRange.fromDate >= baselineFrom;
+  const periodWithinBaseline = effectiveRange.fromDate >= baselineFrom;
   const periodFallback =
     useLiveQuery(async () => {
       if (periodWithinBaseline) return [];
-      const candidates = await db.timeEntries.where("endTime").above(statsRange.startUtc).toArray();
-      return candidates.filter((entry) => entry.startTime < statsRange.endUtc);
-    }, [periodWithinBaseline, statsRange.startUtc, statsRange.endUtc]) || [];
+      const candidates = await db.timeEntries.where("endTime").above(effectiveRange.startUtc).toArray();
+      return candidates.filter((entry) => entry.startTime < effectiveRange.endUtc);
+    }, [periodWithinBaseline, effectiveRange.startUtc, effectiveRange.endUtc]) || [];
 
   const entries = useMemo(() => {
     if (!periodWithinBaseline) return periodFallback;
-    return baselineEntries.filter((entry) => entry.endTime > statsRange.startUtc && entry.startTime < statsRange.endUtc);
-  }, [periodWithinBaseline, periodFallback, baselineEntries, statsRange.startUtc, statsRange.endUtc]);
+    return baselineEntries.filter(
+      (entry) => entry.endTime > effectiveRange.startUtc && entry.startTime < effectiveRange.endUtc,
+    );
+  }, [periodWithinBaseline, periodFallback, baselineEntries, effectiveRange.startUtc, effectiveRange.endUtc]);
 
   const parentNameById = useMemo(() => new Map(parentCategories.map((c) => [c.id, c.name])), [parentCategories]);
 
@@ -126,11 +170,11 @@ export default function StatsPage() {
       memoOverview({
         entries,
         categories,
-        fromDate: statsRange.fromDate,
-        toDate: statsRange.toDate,
+        fromDate: effectiveRange.fromDate,
+        toDate: effectiveRange.toDate,
         sleepCategoryId,
       }),
-    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
+    [entries, categories, effectiveRange.fromDate, effectiveRange.toDate, sleepCategoryId],
   );
 
   const pieData = useMemo(
@@ -169,25 +213,62 @@ export default function StatsPage() {
       memoRoutine({
         entries,
         categories,
-        fromDate: statsRange.fromDate,
-        toDate: statsRange.toDate,
+        fromDate: effectiveRange.fromDate,
+        toDate: effectiveRange.toDate,
         sleepCategoryId,
       }),
-    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId],
+    [entries, categories, effectiveRange.fromDate, effectiveRange.toDate, sleepCategoryId],
   );
 
   const anomalies = useMemo(
     () =>
       memoAnomalies({
         entries,
+        baselineEntries,
         categories,
-        fromDate: statsRange.fromDate,
-        toDate: statsRange.toDate,
+        fromDate: effectiveRange.fromDate,
+        toDate: effectiveRange.toDate,
+        baselineFromDate: baselineFrom,
+        baselineToDate: today,
         sleepCategoryId,
         sleepWindow: routine.sleepWindow,
       }),
-    [entries, categories, statsRange.fromDate, statsRange.toDate, sleepCategoryId, routine.sleepWindow],
+    [
+      entries,
+      baselineEntries,
+      categories,
+      effectiveRange.fromDate,
+      effectiveRange.toDate,
+      baselineFrom,
+      today,
+      sleepCategoryId,
+      routine.sleepWindow,
+    ],
   );
+
+  const anomalyDateGroups = useMemo(() => groupAnomaliesByDate(anomalies), [anomalies]);
+  const longGapAnomalies = useMemo(
+    () =>
+      anomalies
+        .filter((anomaly) => anomaly.type === "longGap")
+        .sort((a, b) => (b.valueMin ?? 0) - (a.valueMin ?? 0)),
+    [anomalies],
+  );
+  const anomalyStats = useMemo(() => {
+    const longGapCount = longGapAnomalies.length;
+    const longGapTotalMin = longGapAnomalies.reduce((sum, anomaly) => sum + (anomaly.valueMin ?? 0), 0);
+    const unrecordedDayCount = anomalies.filter((anomaly) => anomaly.type === "unrecordedDay").length;
+    const recordIssueCount = anomalies.filter(
+      (anomaly) => anomaly.type === "overlong" || anomaly.type === "overnight" || anomaly.type === "sleepTimeActivity",
+    ).length;
+    return {
+      longGapCount,
+      longGapTotalMin,
+      longestGapMin: longGapAnomalies[0]?.valueMin ?? null,
+      unrecordedDayCount,
+      recordIssueCount,
+    };
+  }, [anomalies, longGapAnomalies]);
 
   const [trendWindowSpec, setTrendWindowSpec] = useState<TrendWindowSpec>({ kind: "preset", days: 7 });
   const [trendChart, setTrendChart] = useState<TrendChartKind>("line");
@@ -244,8 +325,8 @@ export default function StatsPage() {
         periodEntries: entries,
         baselineEntries,
         categories,
-        periodFrom: statsRange.fromDate,
-        periodTo: statsRange.toDate,
+        periodFrom: effectiveRange.fromDate,
+        periodTo: effectiveRange.toDate,
         baselineFrom,
         baselineTo: today,
         sleepCategoryId,
@@ -254,8 +335,8 @@ export default function StatsPage() {
       entries,
       baselineEntries,
       categories,
-      statsRange.fromDate,
-      statsRange.toDate,
+      effectiveRange.fromDate,
+      effectiveRange.toDate,
       baselineFrom,
       today,
       sleepCategoryId,
@@ -318,7 +399,10 @@ export default function StatsPage() {
           回到今天
         </button>
       )}
-      <div className="text-center text-sm text-slate-400">已记录 {totalHours.toFixed(1)} 小时</div>
+      <div className="text-center text-sm text-slate-400">
+        已记录 {totalHours.toFixed(1)} 小时
+        {rangeClampedToToday && <span> · 截至 {effectiveRange.toDate}</span>}
+      </div>
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-slate-200">总览</h3>
         <div className="grid grid-cols-2 gap-2 text-sm">
@@ -390,24 +474,97 @@ export default function StatsPage() {
           </div>
         )}
       </section>
-      <section className="space-y-2">
-        <h3 className="text-sm font-medium text-slate-200">异常与空档</h3>
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium text-slate-200">异常与空挡</h3>
+          {anomalies.length > 0 && (
+            <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">{anomalies.length} 项</span>
+          )}
+        </div>
         {anomalies.length === 0 ? (
-          <p className="text-sm text-slate-500">本周期未发现异常。</p>
+          <p className="text-sm text-slate-500">本周期未发现明显异常或长空挡。</p>
         ) : (
-          <ul className="space-y-2">
-            {anomalies.map((anomaly) => (
-              <li
-                key={`${anomaly.type}:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}`}
-                className="rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-200"
-              >
-                <span className="mr-2 rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
-                  {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
-                </span>
-                {anomaly.message}
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                <div className="text-xs text-slate-500">长空挡</div>
+                <div className="mt-1 text-slate-100">{anomalyStats.longGapCount}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  最长 {formatDurationFromMin(anomalyStats.longestGapMin)}
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                <div className="text-xs text-slate-500">空挡合计</div>
+                <div className="mt-1 text-slate-100">{formatDurationFromMin(anomalyStats.longGapTotalMin)}</div>
+                <div className="mt-1 text-xs text-slate-500">超过个人阈值</div>
+              </div>
+              <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                <div className="text-xs text-slate-500">记录异常</div>
+                <div className="mt-1 text-slate-100">{anomalyStats.recordIssueCount}</div>
+                <div className="mt-1 text-xs text-slate-500">未记录日 {anomalyStats.unrecordedDayCount}</div>
+              </div>
+            </div>
+
+            {longGapAnomalies.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500">长空挡 Top</div>
+                <ul className="space-y-1.5">
+                  {longGapAnomalies.slice(0, 5).map((anomaly, index) => (
+                    <li
+                      key={`top:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}:${index}`}
+                      className="flex items-center justify-between gap-3 rounded bg-slate-800/60 px-3 py-1.5 text-sm"
+                    >
+                      <span className="min-w-0 text-slate-300">
+                        {anomaly.date}
+                        {formatAnomalyTimeRange(anomaly) && (
+                          <span className="ml-2 text-xs text-slate-500">{formatAnomalyTimeRange(anomaly)}</span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-slate-100">{formatDurationFromMin(anomaly.valueMin)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <details className="space-y-2" open={mode !== "month"}>
+              <summary className="cursor-pointer text-xs text-slate-500">按日期分布</summary>
+              <div className="mt-2 space-y-2">
+                {anomalyDateGroups.map((group) => (
+                  <div key={group.date} className="rounded-lg bg-slate-800/60 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium text-slate-200">{group.date}</span>
+                      <span className="text-xs text-slate-500">{group.items.length} 项</span>
+                    </div>
+                    <ul className="mt-2 divide-y divide-slate-700/60">
+                      {group.items.map((anomaly, index) => {
+                        const timeRange = formatAnomalyTimeRange(anomaly);
+                        return (
+                          <li
+                            key={`${anomaly.type}:${anomaly.date}:${anomaly.startTime ?? ""}:${anomaly.endTime ?? ""}:${index}`}
+                            className="py-2 first:pt-0 last:pb-0"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
+                                {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
+                              </span>
+                              {timeRange && <span className="text-xs text-slate-500">{timeRange}</span>}
+                              {anomaly.valueMin !== undefined && (
+                                <span className="text-xs text-slate-400">
+                                  {formatDurationFromMin(anomaly.valueMin)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-slate-300">{anomaly.message}</p>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
+          </>
         )}
       </section>
 

@@ -51,35 +51,22 @@ function sleepWindowLabel(sleepWindow: SleepWindow): string {
 
 export interface DetectAnomaliesInput {
   entries: TimeEntry[];
+  baselineEntries?: TimeEntry[];
   categories: Category[];
   fromDate: string;
   toDate: string;
+  baselineFromDate?: string;
+  baselineToDate?: string;
   sleepCategoryId: string | null; // 用户指定的睡眠父分类 id；null=未指定
   sleepWindow?: SleepWindow;
 }
 
-export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
-  const { entries, categories, fromDate, toDate, sleepCategoryId } = input;
-  const sleepWindow = input.sleepWindow ?? {
-    startMin: INSIGHT_CONSTANTS.sleepWindowStartMin,
-    endMin: INSIGHT_CONSTANTS.sleepWindowEndMin,
-    source: "fallback" as const,
-  };
-  const categoryById = new Map(categories.map((c) => [c.id, c]));
-  const isSleep = (entry: TimeEntry) =>
-    sleepCategoryId !== null && resolveParentId(entry, categoryById) === sleepCategoryId;
-
-  const sessions = buildSessions(entries, categories);
-  const rollups = buildDailyRollups(entries, categories, fromDate, toDate);
-
-  // 基线：排除睡眠的会话时长；清醒空档（由日桶相邻片段间隙、排除睡眠窗与睡眠分类）。
-  const nonSleepSessionDurations = sessions
-    .filter((s) => !(sleepCategoryId !== null && s.parentId === sleepCategoryId))
-    .filter((s) => s.durationMin >= INSIGHT_CONSTANTS.minSessionMin)
-    .map((s) => s.durationMin);
-
-  const awakeGapMins: number[] = [];
-  const gapCandidates: { date: string; start: string; end: string; min: number }[] = [];
+function collectAwakeGaps(
+  rollups: ReturnType<typeof buildDailyRollups>,
+  sleepCategoryId: string | null,
+  sleepWindow: SleepWindow,
+): { date: string; start: string; end: string; min: number }[] {
+  const gaps: { date: string; start: string; end: string; min: number }[] = [];
   for (const rollup of rollups) {
     for (let i = 1; i < rollup.segments.length; i++) {
       const prev = rollup.segments[i - 1];
@@ -90,12 +77,45 @@ export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
       const prevSleep = sleepCategoryId !== null && prev.parentId === sleepCategoryId;
       const nextSleep = sleepCategoryId !== null && next.parentId === sleepCategoryId;
       if (prevSleep || nextSleep || inSleepWindow(prev.end, sleepWindow)) continue;
-      awakeGapMins.push(gapMin);
-      gapCandidates.push({ date: rollup.date, start: prev.end, end: next.start, min: gapMin });
+      gaps.push({ date: rollup.date, start: prev.end, end: next.start, min: gapMin });
     }
   }
+  return gaps;
+}
 
-  const baseline = buildInsightBaseline({ nonSleepSessionDurations, awakeGapMins });
+export function detectAnomalies(input: DetectAnomaliesInput): Anomaly[] {
+  const { entries, categories, fromDate, toDate, sleepCategoryId } = input;
+  const baselineEntries = input.baselineEntries ?? entries;
+  const baselineFromDate = input.baselineFromDate ?? fromDate;
+  const baselineToDate = input.baselineToDate ?? toDate;
+  const sleepWindow = input.sleepWindow ?? {
+    startMin: INSIGHT_CONSTANTS.sleepWindowStartMin,
+    endMin: INSIGHT_CONSTANTS.sleepWindowEndMin,
+    source: "fallback" as const,
+  };
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const isSleep = (entry: TimeEntry) =>
+    sleepCategoryId !== null && resolveParentId(entry, categoryById) === sleepCategoryId;
+
+  const baselineSessions = buildSessions(baselineEntries, categories);
+  const rollups = buildDailyRollups(entries, categories, fromDate, toDate);
+  const baselineRollups =
+    baselineEntries === entries && baselineFromDate === fromDate && baselineToDate === toDate
+      ? rollups
+      : buildDailyRollups(baselineEntries, categories, baselineFromDate, baselineToDate);
+
+  const nonSleepSessionDurations = baselineSessions
+    .filter((s) => !(sleepCategoryId !== null && s.parentId === sleepCategoryId))
+    .filter((s) => s.durationMin >= INSIGHT_CONSTANTS.minSessionMin)
+    .map((s) => s.durationMin);
+
+  const baselineGaps = collectAwakeGaps(baselineRollups, sleepCategoryId, sleepWindow);
+  const gapCandidates = collectAwakeGaps(rollups, sleepCategoryId, sleepWindow);
+
+  const baseline = buildInsightBaseline({
+    nonSleepSessionDurations,
+    awakeGapMins: baselineGaps.map((gap) => gap.min),
+  });
   const anomalies: Anomaly[] = [];
 
   // Dexie 查询会带回跨午夜进入范围的越界条目，按归属日（startTime 的本地日）裁剪到所选周期，避免产出范围外卡片。

@@ -9,8 +9,8 @@ export const INSIGHT_CONSTANTS = {
   // 超长记录：排除睡眠后，时长 >= 个人 P95 且 >= floor 才报。
   overlongPercentile: 0.95,
   overlongFloorMin: 180,
-  // 长空白：清醒空档样本 >= minSample 时用 P75，否则回退固定 fallback。
-  longGapPercentile: 0.75,
+  // 长空白：清醒空档样本 >= minSample 时用 P90，否则回退固定 fallback，避免周/月视图刷出常规空档。
+  longGapPercentile: 0.9,
   longGapMinSample: 10,
   longGapFallbackMin: 90,
   // 通常睡眠时段（本地分钟 of day），用于「异常时段活动」判定与排除睡眠空档。23:00~07:00。

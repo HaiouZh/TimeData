@@ -94,9 +94,9 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 统计页的日/周/月分类汇总使用 `packages/client/src/lib/stats.ts`。它和时间轴使用同样的本地日期边界：先用 `localDateTimeToUtc()` 生成统计窗口，再按 `entry.startTime < rangeEnd && entry.endTime > rangeStart` 找出与窗口有交集的记录，最终只累计落在窗口内的可见时长。对合法且不晚于当前时间的记录，日统计与同一天时间轴使用一致的本地日期交集口径；统计展示会按 0.1 小时取整。跨日记录只统计落在当天或统计窗口内的部分。
 
-统计页的数据洞察增强由 `packages/client/src/lib/insights/` 下的纯函数承担：`overview.ts` 负责按统计窗口裁剪后的总时长、父分类到子分类占比、记录覆盖率；`routine.ts` 负责把睡眠分类记录按醒来日期归属，计算入睡、起床、睡眠时长和通常睡眠窗口。`dailyRollup.ts` 会先按本地午夜边界预聚合日桶，`cache.ts` 在 React 外用条目/分类指纹缓存日桶和重型洞察结果，让统计页切换周期、离开后重进、同日刷新时复用未变数据。睡眠分类的正式入口在 `/settings/insights`，设置值来自同步 settings 表；统计页通过 React Router `Link` 进入设置页，Android WebView 内不会触发整页外部跳转。未配置时，覆盖率按全天估算，异常睡眠窗口回退到默认 23:00~07:00。
+统计页的数据洞察增强由 `packages/client/src/lib/insights/` 下的纯函数承担：`overview.ts` 负责按统计窗口裁剪后的总时长、父分类到子分类占比、记录覆盖率；`routine.ts` 负责把睡眠分类记录按醒来日期归属，计算入睡、起床、睡眠时长和通常睡眠窗口。当前周/月这类未完成周期只分析到今天，避免未来日期拉低覆盖率或生成“未记录日”。`dailyRollup.ts` 会先按本地午夜边界预聚合日桶，`cache.ts` 在 React 外用条目/分类指纹缓存日桶和重型洞察结果，让统计页切换周期、离开后重进、同日刷新时复用未变数据。睡眠分类的正式入口在 `/settings/insights`，设置值来自同步 settings 表；统计页通过 React Router `Link` 进入设置页，Android WebView 内不会触发整页外部跳转。未配置时，覆盖率按全天估算，异常睡眠窗口回退到默认 23:00~07:00。
 
-统计页的 Dexie 查询以近 90 天基线窗口为超集，当前周期和默认趋势窗口优先从该超集内存切片；只有窗口早于基线起点时才回退独立查询。图表集中在 `packages/client/src/pages/stats/InsightCharts.tsx`，由 `React.memo` 包裹：环形图 `CategoryDonut`（中央覆盖层叠加总时长与覆盖率）和趋势折线/面积图基于 Recharts、固定高度，页面通过 `packages/client/src/hooks/useInView.ts` 等图表区进入视口后再挂载；父分类→子分类构成条 `CategoryCompositionBars` 是纯 CSS 分段条（点击父分类展开子分类明细），连同文字洞察在总览区即时渲染，不走视口门控。
+统计页的 Dexie 查询以近 90 天基线窗口为超集，当前周期和默认趋势窗口优先从该超集内存切片；只有窗口早于基线起点时才回退独立查询。异常检测只在当前统计周期内产出条目，但超长记录与长空挡阈值使用近 90 天基线；长空挡样本充足时采用个人 P90，否则回退固定阈值，避免周/月视图把常规空挡刷成列表噪声。异常区只做统计呈现：摘要指标、长空挡 Top 和按日期分布，不承担补录或编辑入口。图表集中在 `packages/client/src/pages/stats/InsightCharts.tsx`，由 `React.memo` 包裹：环形图 `CategoryDonut`（中央覆盖层叠加总时长与覆盖率）和趋势折线/面积图基于 Recharts、固定高度，页面通过 `packages/client/src/hooks/useInView.ts` 等图表区进入视口后再挂载；父分类→子分类构成条 `CategoryCompositionBars` 是纯 CSS 分段条（点击父分类展开子分类明细），连同文字洞察在总览区即时渲染，不走视口门控。
 
 统计页顶部的「日 / 周 / 月」切换按钮都显式声明 `type="button"`，并通过 `aria-pressed` 暴露当前选中的窗口模式，方便屏幕阅读器和键盘用户感知切换；窗口内没有数据时统一显示「暂无统计数据」占位。相关测试在 `packages/client/src/pages/StatsPage.test.tsx`。
 
