@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, it } from "vitest";
 import { db } from "../../../db/index.ts";
 import { getSetting } from "../../../lib/settings/index.ts";
 import TrendSection from "./TrendSection.tsx";
