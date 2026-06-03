@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { useCategories } from "../../hooks/useCategories.ts";
 import { setSleepCategoryId, useSleepCategoryId } from "../../lib/sleepCategorySetting.ts";
+import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 export default function SettingsInsightsPage() {
   const { parentCategories } = useCategories();
@@ -12,15 +12,8 @@ export default function SettingsInsightsPage() {
   );
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-center gap-3">
-        <Link to="/settings" className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-slate-300">
-          返回
-        </Link>
-        <h2 className="text-lg font-medium">数据洞察</h2>
-      </div>
-
-      <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+    <SettingsDetailPage title="数据洞察">
+      <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
         <div>
           <h3 className="text-sm font-medium text-slate-100">睡眠分类</h3>
           <p className="mt-1 text-xs text-slate-500">用于作息、覆盖率、异常时段活动和超长记录的睡眠口径。</p>
@@ -47,6 +40,6 @@ export default function SettingsInsightsPage() {
             : "未指定时，覆盖率按全天估算，睡眠时段使用默认 23:00~07:00。"}
         </p>
       </section>
-    </div>
+    </SettingsDetailPage>
   );
 }
