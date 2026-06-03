@@ -620,11 +620,20 @@ function latestTimestamp(values: Array<string | null | undefined>): string | nul
   return values.filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 }
 
-async function localContentHash(categories: Category[], timeEntries: TimeEntry[], quickNotes: QuickNote[]): Promise<string> {
+export async function localContentHash(categories: Category[], timeEntries: TimeEntry[], quickNotes: QuickNote[]): Promise<string> {
   const payload = JSON.stringify({
     categories: [...categories].sort((a, b) => a.id.localeCompare(b.id)),
     timeEntries: [...timeEntries].sort((a, b) => a.id.localeCompare(b.id)),
-    quickNotes: [...quickNotes].sort((a, b) => a.id.localeCompare(b.id)),
+    // source/sourceLabel 只影响展示，不参与同步对齐判定。
+    quickNotes: [...quickNotes]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((note) => ({
+        id: note.id,
+        text: note.text,
+        occurredAt: note.occurredAt,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt,
+      })),
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");

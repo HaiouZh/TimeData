@@ -117,6 +117,7 @@ timedata.example.com {
 | GET | `/api/categories` | 分类数据 | 是 |
 | GET | `/api/entries` | 时间记录 | 是 |
 | GET | `/api/quick-notes` | 速记查询 | 是 |
+| POST | `/api/quick-notes` | agent 投递速记 | 是 |
 | POST | `/api/sync/push` | 推送本地变更 | 是 |
 | POST | `/api/sync/pull` | 拉取远端变更 | 是 |
 | GET | `/api/export?format=jsonl` | 导出 JSONL | 是 |

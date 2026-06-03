@@ -1,6 +1,6 @@
 ---
 type: evergreen
-title: CLI（受控写入入口）
+title: CLI（受控 API 客户端）
 covers:
   - packages/cli/**
   - packages/server/src/lib/entry-service.ts
@@ -11,14 +11,14 @@ covers:
 last-reviewed: 2026-06-03
 ---
 
-# CLI（受控写入入口）
+# CLI（受控 API 客户端）
 
-> CLI 是给**人 / 脚本 / AI**用的受控数据入口。它**只通过 HTTP API 操作**，不直接读写 SQLite/IndexedDB/备份文件。
-> 这是项目最核心的红线之一，详见 [`adr/0001-cli-as-only-write-path.md`](../adr/0001-cli-as-only-write-path.md)。
+> CLI 是给**人 / 脚本 / AI**用的受控 server API 客户端。它**只通过 HTTP API 操作**，不直接读写 SQLite/IndexedDB/备份文件。
+> 写入边界是服务端受控 API；CLI 是其中一个客户端。详见 [`adr/0001-cli-as-only-write-path.md`](../adr/0001-cli-as-only-write-path.md) 与修订 [`adr/0011-server-api-as-write-boundary.md`](../adr/0011-server-api-as-write-boundary.md)。
 
 ## 1. 白名单命令
 
-当前 CLI 只有以下白名单命令，其中 `log` 是唯一写数据的命令：
+当前 CLI 只有以下白名单命令，其中 `log` 是 CLI 当前唯一写数据的命令：
 
 | 命令 | 是否写数据 | 作用 | API 调用 |
 |---|---:|---|---|
@@ -30,7 +30,7 @@ last-reviewed: 2026-06-03
 | `timedata notes [--date YYYY-MM-DD \| --from YYYY-MM-DD --to YYYY-MM-DD \| --recent --limit N]` | 否 | 列速记（按本地日期、日期范围或最近 N 条） | `GET /api/quick-notes?...&format=cli` |
 | `timedata version` / `--version` | 否 | 打印构建期烧入的版本号和 git sha（`TIMEDATA_CLI_VERSION` / `TIMEDATA_CLI_SHA` 环境变量） | 无，不读取配置 |
 
-**任何不在这里的功能 = 不存在**。新增命令必须先在本地-only 的 `docs_local/plans/` 下放计划再实现；新增写入命令还必须先补受控 server API，并在落地后更新公开长期文档。扩 `update` / `delete` / `category-add` / `import` 的决定见 [`adr/0005-cli-surface-expansion-deferred.md`](../adr/0005-cli-surface-expansion-deferred.md)。
+**任何不在这里的 CLI 功能 = 不存在**。新增命令必须先在本地-only 的 `docs_local/plans/` 下放计划再实现；新增 CLI 写入命令还必须先补受控 server API，并在落地后更新公开长期文档。若新需求本身是授权 agent 集成，也可只新增受控 server API，不强制同步增加 CLI 命令。扩 `update` / `delete` / `category-add` / `import` 的决定见 [`adr/0005-cli-surface-expansion-deferred.md`](../adr/0005-cli-surface-expansion-deferred.md)。
 
 输出格式：`--format=json|human` 显式选择，未指定时根据 stdout 是否 TTY 自动判断（管道默认 JSON、终端默认 human）。所有命令的失败响应仍是 `{ ok: false, error: { code, message } }` JSON。
 
@@ -163,7 +163,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 检查分类不存在（`CATEGORY_NOT_FOUND`）/ 路径多于一条匹配（`CATEGORY_AMBIGUOUS`）
 - 检查同日时间段重叠（`TIME_OVERLAP`）
 - 检查结束时间不能晚于当前 UTC 时间（`INVALID_TIME_RANGE`）
-- 通过受控 `timedata log` 写入唯一数据入口；`help`、`doctor`、`categories`、`list`、`notes`、`version` 都是只读
+- 通过受控 `timedata log` 写入 CLI 当前唯一写入口；`help`、`doctor`、`categories`、`list`、`notes`、`version` 都是只读
 - 将本地日期+时间转为 UTC ISO（`localDateTimeToUtc()`），写入 `time_entries` 的 `start_time` / `end_time` 为 UTC 格式
 - 写入成功后追加 `sync_seq(table_name='time_entries', action='create')`，刷新服务端 `sync_state` commit hash，让其他设备可通过 seq cursor 拉到 CLI 新增记录，且 `/api/sync/status` 可直接读到新的摘要；如果有前台 Web/PWA 设备连接了 `/api/sync/stream`，服务端会在事务提交后广播一次只含 `latestSeq` 的 bump，促使对端复用普通同步链路拉取这条 CLI 记录
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
@@ -171,7 +171,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 
 CLI 的 `list` 命令调 `listEntriesForCliDate`，返回带分类路径和时长的视图。这是和 `GET /api/entries`（不带 `format=cli`）不同的输出形状；普通 `GET /api/entries` 仍返回 `TimeEntry` 字段形态，服务端内部通过 row mapper 从 SQLite 的 snake_case 字段转换。CLI 端会对 `format=cli` 响应做 discriminated union 校验：成功响应必须带 `date`、`entries`、`summary`，其中条目的 `startTime` / `endTime` 是服务端转回的本地日期时间字符串（`YYYY-MM-DDTHH:mm:ss`），不是 UTC 存储格式。
 
-CLI 的 `notes` 命令调 `GET /api/quick-notes?...&format=cli`，只读返回 Quick Notes 视图：`quickNotes[*].occurredAt` 是 UTC ISO 存储时间，`occurredLocal` 是按应用时区转换的本地时间字符串（`YYYY-MM-DDTHH:mm:ss`）。支持按本地日期、闭区间日期范围和最近 N 条查询；不提供写入、编辑、删除或导入能力。
+CLI 的 `notes` 命令调 `GET /api/quick-notes?...&format=cli`，只读返回 Quick Notes 视图：`quickNotes[*].occurredAt` 是 UTC ISO 存储时间，`occurredLocal` 是按应用时区转换的本地时间字符串（`YYYY-MM-DDTHH:mm:ss`）。支持按本地日期、闭区间日期范围和最近 N 条查询；不提供写入、编辑、删除或导入能力。授权 agent 投递 quick note 走服务端受控写接口 `POST /api/quick-notes`，不要求 CLI 增加写命令。
 
 ## 7. 包与运行环境
 

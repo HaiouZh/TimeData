@@ -119,8 +119,8 @@ function replaceServerData(
   `);
   const insertSetting = db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)");
   const insertQuickNote = db.prepare(`
-    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at, source, source_label)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   const orderedCategories = [...categories].sort((a, b) => {
@@ -150,7 +150,7 @@ function replaceServerData(
   }
 
   for (const note of quickNotes) {
-    insertQuickNote.run(note.id, note.text, note.occurredAt, note.createdAt, note.updatedAt);
+    insertQuickNote.run(note.id, note.text, note.occurredAt, note.createdAt, note.updatedAt, note.source ?? null, note.sourceLabel ?? null);
     recordSeqWithDb(db, "quick_notes", note.id, "create");
   }
 

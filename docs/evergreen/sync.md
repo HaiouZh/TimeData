@@ -31,7 +31,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
   - packages/shared/src/types.ts:QuickNote
-last-reviewed: 2026-06-02
+last-reviewed: 2026-06-03
 ---
 
 # 同步机制
@@ -72,7 +72,9 @@ last-reviewed: 2026-06-02
 
 服务端提供只读接口 `GET /api/sync/stream`（`packages/server/src/routes/sync.ts`）。它挂在现有 `/api/*` 鉴权之后，客户端通过 fetch 流式读取并在 `Authorization: Bearer <token>` header 中带 token；token 不进入 URL。连接成功后服务端立刻发送 `event: hello`，data 为 `{"latestSeq": <当前 sync_seq 最大值或 null>}`；之后每 30 秒写一条 SSE 注释心跳 `: ping`，只用于防止反代或 NAT 空闲断开。
 
-`packages/server/src/sync/notifier.ts` 维护进程内连接监听集合。`/api/sync/push` 成功提交、`/api/sync/force-push` 成功覆盖、CLI 经 `/api/entries` 创建记录成功后，服务端在事务结束后调用 `notifySyncChange(getLatestSeq())`，向所有在线前台连接广播 `event: bump`，data 只包含 `{latestSeq}`，不包含业务数据。客户端收到 bump 后仍复用 `/api/sync/status`、`/api/sync/push`、`/api/sync/pull` 的普通同步链路；SSE 只负责提示“云端游标变了”。
+`packages/server/src/sync/notifier.ts` 维护进程内连接监听集合。`/api/sync/push` 成功提交、`/api/sync/force-push` 成功覆盖、CLI 经 `/api/entries` 创建记录成功、授权 agent 经 `POST /api/quick-notes` 投递速记成功后，服务端在事务结束后调用 `notifySyncChange(getLatestSeq())`，向所有在线前台连接广播 `event: bump`，data 只包含 `{latestSeq}`，不包含业务数据。客户端收到 bump 后仍复用 `/api/sync/status`、`/api/sync/push`、`/api/sync/pull` 的普通同步链路；SSE 只负责提示“云端游标变了”。
+
+`POST /api/quick-notes` 是 agent 投递 quick note 的受控写接口，挂在 `/api/*` 鉴权之后。它只接受 `text`、可选 `sourceLabel` 和可选 `occurredAt`，服务端生成 `id` / `createdAt` / `updatedAt`，强制 `source="agent"`，再构造 `quick_notes/create` 的 `SyncChange` 走 `applyChange()`，因此写表、`sync_seq` 和 commit hash dirty 标记仍复用同一个落库漏斗。事务提交后调用 `notifySyncChange(getLatestSeq())`，前台客户端通过既有 SSE bump 秒级拉取，不新增下行通道。
 
 客户端连接逻辑在 `packages/client/src/lib/syncStream.ts`：前台可见、云同步开启且已配置 API 地址时启动 fetch stream；页面隐藏、关闭云同步、API 地址变化或组件卸载时停止连接并取消重连。连接断开后按 1s、2s、4s 递增退避，封顶 30s，并带随机抖动。`hello` 和 `bump` 都走同一套处理：如果远端 `latestSeq <= localStorage.timedata_last_synced_seq`，视为自己 push 的回声或已同步游标，直接忽略；如果远端游标更高，则 200ms 防抖合并多帧后触发一次 `sync()`。重连后的 hello 帧也会触发这套判断，因此断线期间服务器发生变更时，前台设备重连后会补一次同步。
 
@@ -111,7 +113,7 @@ last-reviewed: 2026-06-02
    - 云端有更高 seq，且涉及本批 push 的同一记录 → `local_wins_non_fast_forward`。
 5. 写入前创建服务端备份：普通路径用 `createServerBackup('sync_push')`；`unknown_base` 用 `createServerBackup('sync_unknown_base')`；`local_wins_non_fast_forward` 用 `createServerBackup('sync_local_wins')`，并标记受保护，`reason = local_wins_non_fast_forward`，details 记录 `baseSeq`、`cloudAheadCount`、`overlappingRecords` 和 `pushedRecords`。Server backup manifest 不存在时按空 manifest 处理；其他读取失败会记录 `[backup] failed to read manifest` 后继续返回空 manifest，避免 manifest 损坏阻断同步写入前备份。
 6. 在一个 SQLite 事务里逐条 `applyChange` 写入。每条成功写入都会追加 `sync_seq`，客户端下一次 pull 会从响应里的 `latestSeq` 继续。
-7. 对 `time_entries` 来说，服务端仍会先删除与本地记录重叠的旧远端记录，再写入本地版本；被覆盖删除的旧记录会写 `sync_tombstones(table_name='time_entries')` 和 `sync_seq(action='delete')`，让其他设备的 seq cursor pull 能拉到删除消息。如果发生时间段覆盖，返回的 outcome 会带 `overriddenRecordIds` 和 `backupId`，对应备份会被额外标成受保护并写入 `reason = local_override_overlap`。`settings` upsert/delete 只按 key 写入或删除，服务端以 `change.timestamp` 写 `updated_at`，不进入冲突 UI。`quick_notes` upsert/delete 只按 note id 写入或删除，不做分类和重叠校验；本地有 pending quick note 时客户端 pull 会跳过远端版本，等待本地版本先 push。`sync_tombstones` 没有固定 TTL 清理规则：当前不会按天数自动删墓碑，是否引入保留策略要单独评估。
+7. 对 `time_entries` 来说，服务端仍会先删除与本地记录重叠的旧远端记录，再写入本地版本；被覆盖删除的旧记录会写 `sync_tombstones(table_name='time_entries')` 和 `sync_seq(action='delete')`，让其他设备的 seq cursor pull 能拉到删除消息。如果发生时间段覆盖，返回的 outcome 会带 `overriddenRecordIds` 和 `backupId`，对应备份会被额外标成受保护并写入 `reason = local_override_overlap`。`settings` upsert/delete 只按 key 写入或删除，服务端以 `change.timestamp` 写 `updated_at`，不进入冲突 UI。`quick_notes` upsert/delete 只按 note id 写入或删除，写入 `text`、`occurred_at`、`source`、`source_label` 和 `updated_at`，不做分类和重叠校验；本地有 pending quick note 时客户端 pull 会跳过远端版本，等待本地版本先 push。`sync_tombstones` 没有固定 TTL 清理规则：当前不会按天数自动删墓碑，是否引入保留策略要单独评估。
 8. `applyChange` 返回 skipped 时会带结构化 `skipReason`；`outcomeFromApplyResult()` 优先用它作为 `reasonCode`，不会把所有 skipped 都折叠成 `server_version_newer_or_same`。
 9. 写一条 server-side `sync_logs` 摘要（device='server', action='push_received'），并把 `backupId`、`seqAnalysis`、`overriddenRecordIds` 写进去，方便 `/api/admin/sync` 直接读。
 
@@ -126,7 +128,7 @@ last-reviewed: 2026-06-02
 5. **分类层级**：category 不能 `parentId === id`，且 `parentId` 只能指向顶层分类；自引用或第三级都返回 `invalid_shape`。
 6. **时间范围**：entry 的 `endTime` 必须晚于 `startTime`，且不能晚于当前 UTC 时间；未来记录返回 `invalid_time_range`。服务端校验要求 `startTime` / `endTime` 必须通过 `UtcIsoStringSchema`，也就是严格 `YYYY-MM-DDTHH:mm:ss.sssZ`；省略毫秒、offset 形式或非法日历日期都返回 `invalid_shape`。未来时间比较使用 `nowUtcString()` 直接比较 UTC ISO 字符串。
 7. **settings**：upsert 要求 `data.key === recordId`、`value` 是字符串、`updatedAt` 是 UTC ISO；delete 直接接受。
-8. **quick_notes**：upsert 要求 `data.id === recordId`、`text.trim()` 非空、`occurredAt` / `createdAt` / `updatedAt` 都是 UTC ISO；delete 直接接受。不检查分类、不检查时间段重叠，也不拒绝未来 `occurredAt`。
+8. **quick_notes**：upsert 要求 `data.id === recordId`、`text.trim()` 非空、`occurredAt` / `createdAt` / `updatedAt` 都是 UTC ISO；可带 `source?: "user" | "agent"` 与 `sourceLabel?: string`（最长 64 字符）作为展示元数据；delete 直接接受。不检查分类、不检查时间段重叠，也不拒绝未来 `occurredAt`。
 9. **外键**：
    - category 的 `parentId` 必须存在（除非也在本批 push 里）→ `missing_category`。
    - entry 的 `categoryId` 必须存在 + 不能 archived → `missing_category` / `archived_category`。
@@ -145,7 +147,7 @@ last-reviewed: 2026-06-02
 - settings.delete = 真删除 + 写 `sync_tombstones(table_name='settings')`。
 - settings.create/update = INSERT 或 UPDATE，`updated_at` 同样以 `change.timestamp` 为准。
 - quick_notes.delete = 真删除 + 写 `sync_tombstones(table_name='quick_notes')`。
-- quick_notes.create/update = INSERT 或 UPDATE，`text` 和 `occurred_at` 来自 payload，`updated_at` 以 `change.timestamp` 为准；不触碰 time_entries 或 categories。
+- quick_notes.create/update = INSERT 或 UPDATE，`text`、`occurred_at`、`source`、`source_label` 来自 payload，`updated_at` 以 `change.timestamp` 为准；不触碰 time_entries 或 categories。`source` / `sourceLabel` 是展示元数据，客户端本地 `localContentHash()` 会刻意排除它们，避免来源标签变化影响同步对齐判定。
 
 **所以 `updated_at` 的来源是客户端写日志时记录的 `timestamp`**——也就是客户端本机时钟。
 

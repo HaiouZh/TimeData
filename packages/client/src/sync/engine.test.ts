@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { SyncLogEntry } from "@timedata/shared";
+import type { QuickNote, SyncLogEntry } from "@timedata/shared";
 import { db } from "../db/index.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 
@@ -21,7 +21,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, prepareForcePush, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullRecent, syncForceReplace } from "./engine.js";
+import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullRecent, syncForceReplace } from "./engine.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -102,6 +102,24 @@ describe("sync seq cursor", () => {
     expect(getLastSyncedSeq()).toBe(12);
   });
 });
+
+describe("localContentHash", () => {
+  const quickNote: QuickNote = {
+    id: "note-1",
+    text: "hi",
+    occurredAt: "2026-06-03T00:00:00.000Z",
+    createdAt: "2026-06-03T00:00:00.000Z",
+    updatedAt: "2026-06-03T00:00:00.000Z",
+  };
+
+  it("ignores quick note source metadata", async () => {
+    const withoutSource = await localContentHash([], [], [quickNote]);
+    const withSource = await localContentHash([], [], [{ ...quickNote, source: "agent", sourceLabel: "Hermes" }]);
+
+    expect(withSource).toBe(withoutSource);
+  });
+});
+
 describe("regular sync failure diagnostics", () => {
   it("counts non-network API failures and recommends diagnostics after three failures", () => {
     localStorage.clear();

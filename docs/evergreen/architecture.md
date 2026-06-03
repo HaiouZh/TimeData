@@ -53,8 +53,8 @@ last-reviewed: 2026-06-03
 TimeData 是个人时间记录工具：
 
 - 本地优先：所有读写都先打到本地（浏览器 IndexedDB / SQLite），再异步同步。
-- 两类个人记录：时间段记录 `time_entries` 与聊天式速记 `quick_notes`。速记是“时间 + 文本”，不参与时间段统计。
-- 一份数据，三个入口：Web/PWA、CLI、Android 壳（Capacitor）。
+- 两类个人记录：时间段记录 `time_entries` 与聊天式速记 `quick_notes`。速记是“时间 + 文本 + 可选来源元数据”，不参与时间段统计。
+- 一份数据，三个入口：Web/PWA、CLI、Android 壳（Capacitor）；授权 agent 可直连受控 server API 投递 quick note。
 - 自托管：服务端是单一 Hono + SQLite 进程，可用 Docker 一键部署。
 
 **不做**：多用户、协作、SaaS、复杂权限。
@@ -144,7 +144,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
         → 返回 ok/错误
 ```
 
-**CLI 不直接碰 SQLite**——它只是 server API 的客户端。这条规则是红线，详见 [`adr/0001-cli-as-only-write-path.md`](../adr/0001-cli-as-only-write-path.md)。
+**CLI 不直接碰 SQLite**——它只是 server API 的客户端。这条规则是红线，详见 [`adr/0001-cli-as-only-write-path.md`](../adr/0001-cli-as-only-write-path.md) 与修订 [`adr/0011-server-api-as-write-boundary.md`](../adr/0011-server-api-as-write-boundary.md)。
 
 ### 3.5 AI/脚本通过 CLI 读速记
 
@@ -156,7 +156,22 @@ timedata notes --date 2026-06-02
         → 返回 UTC occurredAt + 本地 occurredLocal + text
 ```
 
-关键点：这是只读入口，不创建、修改、删除速记，也不复用 `/api/sync/pull` 的设备同步语义。未来如果脚本或 AI 要写速记，仍必须另行新增受控 CLI/API 写入路径。
+关键点：这是 CLI 的只读入口，不创建、修改、删除速记，也不复用 `/api/sync/pull` 的设备同步语义。授权 agent 投递速记走服务端受控写接口 `POST /api/quick-notes`，不要求 CLI 增加写命令。
+
+### 3.6 授权 agent 通过 server API 投递速记
+
+```
+云端 agent → POST /api/quick-notes { text, sourceLabel?, occurredAt? }
+        → authMiddleware 校验 Bearer Token
+        → server 校验 body，生成 id / createdAt / updatedAt
+        → 强制 source="agent"
+        → 构造 quick_notes/create SyncChange
+        → applyChange() 写 SQLite quick_notes + sync_seq
+        → notifySyncChange(getLatestSeq())
+        → 前台客户端经 SSE bump 触发普通同步拉取
+```
+
+关键点：这仍属于“服务端受控 API”写入边界，不是第三条底层写入路径。agent 不能提交 `source` 伪造成 user，也不能直接编辑 SQLite、IndexedDB、syncLog、Backup 或导出文件。
 
 ## 4. 启动顺序
 
@@ -211,9 +226,9 @@ timedata notes --date 2026-06-02
 
 ## 5. 关键约定
 
-1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`QuickNote`、`Setting`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间（严格 `YYYY-MM-DDTHH:mm:ss.sssZ`）、`#RRGGBB` 色值、整数排序、非空字符串、`QuickNote.text` 非空、`Setting.value` 字符串值、`SyncLogEntry.synced` 的 `0 | 1` 数字状态、pull / force-push 请求形状等输入。同步 cursor 和计数字段（`baseSeq`、`sinceSeq`、`latestSeq`、`categoryCount`、`entryCount`、`quickNoteCount`）必须是有限非负整数或按契约允许 `null` / 缺省；后台洞察响应里的分页、计数、备份大小和备份 ID / 文件名也由 shared runtime schema 收紧。改这些 = 改公开 API。同步契约还承载本地优先诊断字段（如 `overriddenRecordIds`、`backupId`、`importedQuickNotes`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
+1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`QuickNote`、`Setting`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间（严格 `YYYY-MM-DDTHH:mm:ss.sssZ`）、`#RRGGBB` 色值、整数排序、非空字符串、`QuickNote.text` 非空、`QuickNote.source` 只能是 `"user" | "agent"`、`QuickNote.sourceLabel` 最长 64 字符、`Setting.value` 字符串值、`SyncLogEntry.synced` 的 `0 | 1` 数字状态、pull / force-push 请求形状等输入。同步 cursor 和计数字段（`baseSeq`、`sinceSeq`、`latestSeq`、`categoryCount`、`entryCount`、`quickNoteCount`）必须是有限非负整数或按契约允许 `null` / 缺省；后台洞察响应里的分页、计数、备份大小和备份 ID / 文件名也由 shared runtime schema 收紧。改这些 = 改公开 API。同步契约还承载本地优先诊断字段（如 `overriddenRecordIds`、`backupId`、`importedQuickNotes`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
 2. **时间用 ISO 字符串**：服务端 SQLite 的 `start_time` / `end_time` / `*_at` 都是字符串字段，比较直接靠字典序。Dexie 同样存字符串。
-3. **写入路径只有两条**：用户在 Web 端通过组件 → Dexie；脚本/AI 通过 CLI → HTTP API → SQLite。**不存在第三条**。服务器不再暴露 JSONL/CSV 导入写库接口；`GET /api/export` 只读，CSV 导出会对公式样式单元格（含前导空白后出现 `= + - @`）加单引号防护；`POST /api/data/reset` 是人工维护入口，必须先调用 `/api/data/reset/prepare` 拿短时确认 token 并提交确认短语。未来如果脚本或 AI 要写速记，也必须先新增受控 CLI/API 路径，不能直接编辑 IndexedDB、SQLite、syncLog 或 backup 文件。
+3. **写入边界是服务端受控 API**：用户在 Web 端通过组件 → Dexie；脚本/AI/agent 经 server API → SQLite，CLI 是 server API 的受控客户端之一，授权 agent 也可直连受控写接口。服务器不再暴露 JSONL/CSV 导入写库接口；`GET /api/export` 只读，CSV 导出会对公式样式单元格（含前导空白后出现 `= + - @`）加单引号防护；`POST /api/data/reset` 是人工维护入口，必须先调用 `/api/data/reset/prepare` 拿短时确认 token 并提交确认短语。任何 AI/脚本/agent 都不能直接编辑 IndexedDB、SQLite、syncLog、Backup 或导出文件。
 4. **服务端是权威**：时间段重叠、分类存在、archived、时间格式合法等的最终判定都在 `packages/server/src/sync/validation.ts` 和 `packages/server/src/lib/entry-service.ts`。同步校验里需要按应用时区比较当前时间的逻辑统一走 `packages/server/src/lib/timezone.ts`；client / CLI 的同名校验只是为了体验，不能让 server 跳过。
 5. **SQL 字段名 vs JS 字段名**：服务端 SQLite 用 `snake_case`（`parent_id`、`start_time`），跨边界（路由 / 同步 / 后台洞察）时手工映射成 JS 的 `camelCase`（`parentId`、`startTime`）。这是**手工映射**，没有 ORM。
 6. **后台洞察只读**：`/api/admin/*` 的概览、最近记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析保持只读；受控维护端点（如 `/api/admin/sync-logs`）必须有独立校验和显式确认保护。admin 路由复用现有 Bearer Token 鉴权，不提供任意 SQL。
@@ -222,7 +237,7 @@ timedata notes --date 2026-06-02
 7. **分类管理页负责分类排序、重命名、新增、归档、直接删除和颜色调整**：`Category.sortOrder` 是同一个 `parentId` 作用域内的展示顺序。Web 分类管理页用 dnd-kit 做拖拽手柄，一级分类只能和一级分类重排，子分类只能在同一个父分类下重排；松手后批量更新 Dexie 的 `categories.sortOrder` / `updatedAt`，并为每个变化项写 `syncLog`，后续仍走现有同步推送。新增分类和重命名都会 trim 名称并拒绝空名；同层级未归档分类重名会被拒绝。分类重命名只改 `Category.name` / `updatedAt`，不改 `Category.id`，并同步更新本地 `autoBackups` 里同 ID 分类的可见字段。归档保留分类行，更新 `isArchived` / `updatedAt`，并写 `syncLog` update 后走 `categories/update`；归档 mutation 在 `useCategories.ts` 中以 `archiveCategory()` 单独导出，同时仍由 `useCategories()` 暴露给页面。直接删除会删除目标分类、后代分类和关联记录，并走 `categories/delete` / `time_entries/delete` 同步。颜色只在一级分类上调整，子分类跟随父分类；一键配色按当前未归档一级分类顺序循环应用预设色板。
    - 代码入口：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx`、`packages/client/src/components/SortableCategoryItem.tsx`、`packages/client/src/hooks/useCategories.ts`、`packages/client/src/lib/categorySort.ts`、`packages/client/src/lib/categoryColors.ts`
    - 相关测试：`packages/client/src/lib/categorySort.test.ts`、`packages/client/src/lib/categoryColors.test.ts`、`packages/client/src/hooks/useCategories.test.ts`、`packages/client/src/pages/settings/SettingsCategoriesPage.test.tsx`、`packages/client/src/pages/settings/SettingsCategoryDetailPage.test.tsx`
-8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；气泡单点无编辑效果，长按/右键打开复制、编辑、删除菜单，编辑回填到底部输入框。移动端弱化左侧时间轴，把本地时钟放进气泡右上角，并在向下滚动时临时隐藏底部 Tab；长文本气泡按渲染后高度折叠，展开/收起按钮不会进入长按菜单路径。速记正文保存原始文本，展示层仅在命中保守结构语法时用 `react-markdown` + `remark-gfm` + `rehype-sanitize` 安全渲染 Markdown，未命中时保持纯文本。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。AI/脚本可通过只读 `timedata notes` 查询服务端速记；这不等同于新增写入路径。
+8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间；`source` / `sourceLabel` 是展示元数据，`source="agent"` 表示授权 agent 投递。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；气泡单点无编辑效果，长按/右键打开复制、编辑、删除菜单，编辑回填到底部输入框。移动端弱化左侧时间轴，把本地时钟放进气泡右上角，并在向下滚动时临时隐藏底部 Tab；长文本气泡按渲染后高度折叠，展开/收起按钮不会进入长按菜单路径。速记正文保存原始文本，展示层仅在命中保守结构语法时用 `react-markdown` + `remark-gfm` + `rehype-sanitize` 安全渲染 Markdown，未命中时保持纯文本。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。AI/脚本可通过只读 `timedata notes` 查询服务端速记；授权 agent 可通过 `POST /api/quick-notes` 投递 `source="agent"` 的速记，服务端复用 `applyChange()` + `notifySyncChange()` 下发到前台客户端。
    - 代码入口：`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/lib/quickNoteDisplay.ts`、`packages/client/src/quick-notes/`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts`、`packages/server/src/routes/sync.ts`、`packages/server/src/sync/validation.ts`、`packages/server/src/sync/resolver.ts`
    - 相关测试：`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/quick-notes/*.test.ts`、`packages/server/src/routes/quick-notes.test.ts`、`packages/server/src/routes/sync.test.ts`、`packages/server/src/sync/validation.test.ts`、`packages/server/src/sync/resolver.test.ts`、`packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`
 

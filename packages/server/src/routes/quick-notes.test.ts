@@ -117,3 +117,69 @@ describe("GET /api/quick-notes", () => {
     });
   });
 });
+
+describe("POST /api/quick-notes", () => {
+  it("rejects empty text", async () => {
+    const res = await app.request("/api/quick-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "" }),
+    });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "INVALID_REQUEST" } });
+  });
+
+  it("rejects malformed occurredAt values", async () => {
+    const res = await app.request("/api/quick-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hi", occurredAt: "2026-06-03" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("creates an agent note and notifies sync stream listeners", async () => {
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+    const seen: Array<number | null> = [];
+    const listener = (seq: number | null) => seen.push(seq);
+    addSyncStreamListener(listener);
+
+    try {
+      const res = await app.request("/api/quick-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "周报已生成", sourceLabel: "Hermes" }),
+      });
+
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as {
+        ok: boolean;
+        quickNote: { id: string; text: string; source: string; sourceLabel?: string };
+      };
+      expect(body).toMatchObject({
+        ok: true,
+        quickNote: { text: "周报已生成", source: "agent", sourceLabel: "Hermes" },
+      });
+      expect(db.prepare("SELECT text, source, source_label FROM quick_notes WHERE id = ?").get(body.quickNote.id)).toMatchObject({
+        text: "周报已生成",
+        source: "agent",
+        source_label: "Hermes",
+      });
+      expect(seen).toEqual([1]);
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+
+  it("rejects caller-supplied source values", async () => {
+    const res = await app.request("/api/quick-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "hi", source: "user" }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+});

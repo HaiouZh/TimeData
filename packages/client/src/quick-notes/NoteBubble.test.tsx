@@ -7,13 +7,14 @@ import NoteBubble from "./NoteBubble.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function note(text: string): QuickNote {
+function note(text: string, overrides: Partial<QuickNote> = {}): QuickNote {
   return {
     id: "note-1",
     text,
     occurredAt: "2026-06-01T04:00:00.000Z",
     createdAt: "2026-06-01T04:00:00.000Z",
     updatedAt: "2026-06-01T04:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -43,6 +44,37 @@ afterEach(() => {
 });
 
 describe("NoteBubble", () => {
+  it("shows a source badge for agent notes using sourceLabel", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note("周报已生成", { source: "agent", sourceLabel: "Hermes" }) }));
+
+    expect(host.textContent).toContain("Hermes");
+    expect(host.textContent).toContain("周报已生成");
+
+    await act(async () => root.unmount());
+  });
+
+  it("falls back to a default badge label for agent notes", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note("周报已生成", { source: "agent" }) }));
+
+    expect(host.textContent).toContain("助手");
+
+    await act(async () => root.unmount());
+  });
+
+  it("renders no source badge for user and legacy notes", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note("短文本") }));
+
+    expect(host.textContent).not.toContain("助手");
+
+    await act(async () => root.unmount());
+  });
+
   it("does not show expand controls for short content", async () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
 

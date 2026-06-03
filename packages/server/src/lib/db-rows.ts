@@ -42,6 +42,8 @@ export interface QuickNoteRow {
   occurred_at: string;
   created_at: string;
   updated_at: string;
+  source: string | null;
+  source_label: string | null;
 }
 
 export interface SettingRow {
@@ -83,6 +85,8 @@ export function rowToQuickNote(row: QuickNoteRow): QuickNote {
     occurredAt: row.occurred_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(row.source ? { source: row.source as "user" | "agent" } : {}),
+    ...(row.source_label ? { sourceLabel: row.source_label } : {}),
   };
 }
 

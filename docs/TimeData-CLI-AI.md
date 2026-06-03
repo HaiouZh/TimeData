@@ -1,16 +1,17 @@
 # TimeData CLI — AI 使用说明
 
-> 这份文档写给 Claude/AI 编码助手。目标是让 AI 知道如何安全地通过 `timedata` CLI 使用 TimeData，以及哪些路径绝对不能碰。
+> 这份文档写给 Claude/AI 编码助手。目标是让 AI 知道如何安全地通过 `timedata` CLI 或受控 server API 使用 TimeData，以及哪些路径绝对不能碰。
 
 ## 1. 规则卡片
 
-- **写入 TimeData 数据只能通过 `timedata` CLI。**
-- **当前唯一允许 AI/脚本写数据的命令是 `timedata log`。**
+- **写入 TimeData 数据只能通过服务端受控 API；CLI 是其中一个客户端。**
+- **当前 CLI 唯一允许 AI/脚本写数据的命令是 `timedata log`。**
+- **授权 agent 可直连 `POST /api/quick-notes` 投递速记；CLI `notes` 仍只读。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
 - 读取速记用 `timedata notes`；它是只读命令，不写 quick_notes。
 - CLI 只通过 server HTTP API 工作，服务端做最终校验。
 - 不要直接编辑 SQLite、IndexedDB、sync log、Backup JSON、JSONL/CSV 导出文件。
-- 不支持的写入任务必须停下来说明限制，不要绕过 CLI。
+- 不支持的写入任务必须停下来说明限制，不要绕过 server API / CLI。
 - CLI stdout 永远是 JSON；判断成功看 `ok`，失败看 `error.code` 或 `doctor.checks[*].code`。
 
 ## 2. 当前命令清单
@@ -45,10 +46,16 @@
 
 ### 3.3 用户要修改、删除、批量导入、写入速记或从备份回灌
 
-当前 CLI 不支持这些写入能力。AI 必须停止并说明：
+当前 CLI 不支持这些写入能力。AI 必须先区分任务类型：
+
+- 如果是授权 agent 投递 quick note，可用 `POST /api/quick-notes`，请求必须带 `Authorization: Bearer <AUTH_TOKEN>` header，body 只提交 `text`、可选 `sourceLabel`、可选 `occurredAt`；服务端会强制 `source="agent"`。
+- 如果不是已明确授权的 agent 集成，CLI 不能写入速记；用户可以用 Web UI，或先新增受控 server API / CLI 命令后再使用。
+- 修改、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
+
+无论哪种情况，AI 都必须遵守：
 
 - 不能直接改数据库、IndexedDB、sync log、Backup JSON 或导出文件。
-- 如果必须支持写入速记、修改、删除或导入能力，需要先新增受控 server API 和 CLI 白名单命令。
+- 如果必须支持新的写入能力，需要先新增受控 server API；是否同步新增 CLI 命令按 ADR 0011 与产品入口决定。
 - 用户也可以通过现有 UI 完成 CLI 不支持的操作。
 
 ### 3.4 配置或连接失败
@@ -174,6 +181,15 @@ timedata notes --date 2026-06-02
 timedata notes --recent --limit 20
 ```
 
+### 6.5 授权 agent 投递速记
+
+```bash
+curl -X POST "$TIMEDATA_SERVER_URL/api/quick-notes" \
+  -H "Authorization: Bearer $TIMEDATA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"周报已生成","sourceLabel":"Hermes"}'
+```
+
 ## 7. 反例清单
 
 不要做这些事：
@@ -186,9 +202,11 @@ timedata notes --recent --limit 20
 - 修改 JSONL/CSV 导出文件作为写回通道。
 - 为了绕过 `TIME_OVERLAP` 自动改变用户没有确认过的时间段。
 - 为了绕过 `CATEGORY_NOT_FOUND` 自动创建、重命名或猜测分类。
+- 在没有受控 server API 的情况下伪造“agent 写入”。
 
 ## 8. 相关文档
 
 - 长期 CLI 契约：[`docs/evergreen/cli.md`](evergreen/cli.md)
-- CLI 唯一写入路径决策：[`docs/adr/0001-cli-as-only-write-path.md`](adr/0001-cli-as-only-write-path.md)
+- CLI 原始写入路径决策：[`docs/adr/0001-cli-as-only-write-path.md`](adr/0001-cli-as-only-write-path.md)
+- 写入边界修订：[`docs/adr/0011-server-api-as-write-boundary.md`](adr/0011-server-api-as-write-boundary.md)
 - 项目入口规则：[`../CLAUDE.md`](../CLAUDE.md)

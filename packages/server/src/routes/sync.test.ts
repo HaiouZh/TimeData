@@ -45,7 +45,9 @@ function createSchema() {
       text TEXT NOT NULL,
       occurred_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      source TEXT,
+      source_label TEXT
     );
 
     CREATE TABLE sync_logs (
@@ -525,6 +527,8 @@ describe("sync route", () => {
             occurredAt: "2026-06-01T04:01:30.123Z",
             createdAt: "2026-06-01T04:02:00.000Z",
             updatedAt: "2026-06-01T04:02:00.000Z",
+            source: "agent",
+            sourceLabel: "Hermes",
           },
         ],
       }),
@@ -538,9 +542,11 @@ describe("sync route", () => {
       importedQuickNotes: 1,
       latestSeq: 1,
     });
-    expect(db.prepare("SELECT text, occurred_at FROM quick_notes WHERE id = ?").get("note-force")).toMatchObject({
+    expect(db.prepare("SELECT text, occurred_at, source, source_label FROM quick_notes WHERE id = ?").get("note-force")).toMatchObject({
       text: "repo",
       occurred_at: "2026-06-01T04:01:30.123Z",
+      source: "agent",
+      source_label: "Hermes",
     });
   });
 

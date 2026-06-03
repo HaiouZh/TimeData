@@ -1,7 +1,13 @@
+import { randomUUID } from "node:crypto";
+import { UtcIsoStringSchema, type SyncChange } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
+import { errorJson, ErrorCode } from "../lib/errors.js";
 import { listQuickNotesForCli, type QuickNotesQuery } from "../lib/quick-note-service.js";
+import { notifySyncChange } from "../sync/notifier.js";
+import { applyChange } from "../sync/resolver.js";
+import { getLatestSeq } from "../sync/seq.js";
 
 const quickNotes = new Hono();
 
@@ -14,6 +20,13 @@ const querySchema = z
     recent: z.enum(["1", "true"]).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     format: z.string().optional(),
+  })
+  .strict();
+const createSchema = z
+  .object({
+    text: z.string().trim().min(1).max(5000),
+    sourceLabel: z.string().trim().min(1).max(64).optional(),
+    occurredAt: UtcIsoStringSchema.optional(),
   })
   .strict();
 
@@ -44,6 +57,41 @@ quickNotes.get("/", (c) => {
 
   const result = listQuickNotesForCli(getDb(), query);
   return c.json(result, result.ok ? 200 : 400);
+});
+
+quickNotes.post("/", async (c) => {
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const parsed = createSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, "Invalid quick note", { issues: parsed.error.issues });
+    return c.json(body, status);
+  }
+
+  const now = new Date().toISOString();
+  const quickNote = {
+    id: randomUUID(),
+    text: parsed.data.text,
+    occurredAt: parsed.data.occurredAt ?? now,
+    createdAt: now,
+    updatedAt: now,
+    source: "agent" as const,
+    ...(parsed.data.sourceLabel ? { sourceLabel: parsed.data.sourceLabel } : {}),
+  };
+  const change: SyncChange = {
+    tableName: "quick_notes",
+    action: "create",
+    recordId: quickNote.id,
+    timestamp: now,
+    data: quickNote,
+  };
+  const db = getDb();
+
+  db.transaction(() => {
+    applyChange(change);
+  })();
+  notifySyncChange(getLatestSeq());
+
+  return c.json({ ok: true, quickNote }, 201);
 });
 
 export default quickNotes;

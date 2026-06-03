@@ -50,7 +50,9 @@ beforeEach(async () => {
       text TEXT NOT NULL,
       occurred_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      source TEXT,
+      source_label TEXT
     );
 
     CREATE TABLE sync_tombstones (
@@ -499,5 +501,29 @@ describe("applyChange", () => {
     expect(
       db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'quick_notes' AND record_id = ?").get("note-1"),
     ).toBeDefined();
+  });
+
+  it("persists quick note source metadata on upsert", () => {
+    const result = applyChange({
+      tableName: "quick_notes",
+      recordId: "note-agent",
+      action: "create",
+      data: {
+        id: "note-agent",
+        text: "周报已生成",
+        occurredAt: "2026-06-03T01:00:00.000Z",
+        createdAt: "2026-06-03T01:00:00.000Z",
+        updatedAt: "2026-06-03T01:00:00.000Z",
+        source: "agent",
+        sourceLabel: "Hermes",
+      },
+      timestamp: "2026-06-03T01:00:00.000Z",
+    });
+
+    expect(result.status).toBe("applied");
+    expect(db.prepare("SELECT source, source_label FROM quick_notes WHERE id = ?").get("note-agent")).toMatchObject({
+      source: "agent",
+      source_label: "Hermes",
+    });
   });
 });

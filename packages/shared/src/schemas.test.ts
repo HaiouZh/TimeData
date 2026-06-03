@@ -90,6 +90,24 @@ describe("QuickNoteSchema", () => {
     expect(parsed.text).toBe("  repo  ");
   });
 
+  it("accepts optional source metadata for agent notes", () => {
+    const parsed = QuickNoteSchema.parse({ ...quickNote, source: "agent", sourceLabel: "Hermes" });
+
+    expect(parsed.source).toBe("agent");
+    expect(parsed.sourceLabel).toBe("Hermes");
+  });
+
+  it("keeps source metadata backward compatible for legacy notes", () => {
+    const parsed = QuickNoteSchema.parse(quickNote);
+
+    expect(parsed.source).toBeUndefined();
+    expect(parsed.sourceLabel).toBeUndefined();
+  });
+
+  it("rejects unknown source values", () => {
+    expect(QuickNoteSchema.safeParse({ ...quickNote, source: "robot" }).success).toBe(false);
+  });
+
   it("rejects empty text", () => {
     expect(QuickNoteSchema.safeParse({ ...quickNote, text: "   " }).success).toBe(false);
   });

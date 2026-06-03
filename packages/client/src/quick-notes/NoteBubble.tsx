@@ -12,6 +12,8 @@ export default function NoteBubble({ note }: { note: QuickNote }) {
   const [canExpand, setCanExpand] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const text = note.text;
+  const isAgent = note.source === "agent";
+  const sourceLabel = note.sourceLabel ?? "助手";
 
   useLayoutEffect(() => {
     const el = contentRef.current;
@@ -32,7 +34,12 @@ export default function NoteBubble({ note }: { note: QuickNote }) {
   const collapsed = canExpand && !expanded;
 
   return (
-    <div>
+    <div className={isAgent ? "rounded-lg border border-sky-400/20 bg-sky-500/5 p-2" : undefined}>
+      {isAgent && (
+        <div className="mb-1 inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-500/15 px-2 py-0.5 text-[11px] font-medium text-sky-200">
+          {sourceLabel}
+        </div>
+      )}
       <div
         ref={contentRef}
         className="overflow-hidden transition-[max-height] duration-200"

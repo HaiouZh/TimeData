@@ -17,7 +17,7 @@
 
 ## 一句话定位
 
-- TimeData = 个人时间记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite 服务，AI/脚本通过受控 CLI 写入，Capacitor 套 Android 壳。
+- TimeData = 个人时间记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite 服务，AI/脚本/agent 通过服务端受控 API 写入（CLI 是其中一个客户端），Capacitor 套 Android 壳。
 - pnpm monorepo，TypeScript ESM，全部 Vitest。
 - **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB / 备份文件。
 
@@ -25,7 +25,7 @@
 
 ## 硬红线（违反 = 数据损坏 / 安全风险 / 不可控写入，先停下问用户）
 
-- **写入路径只有两条**：用户在 Web 端 → Dexie；脚本/AI 通过 CLI → HTTP API → SQLite。不存在第三条。AI 不直接编辑 SQLite / IndexedDB / syncLog / Backup JSON / JSONL / CSV 导出文件。详见 [`docs/adr/0001-cli-as-only-write-path.md`](docs/adr/0001-cli-as-only-write-path.md)。
+- **写入边界是服务端受控 API**：用户在 Web 端 → Dexie；脚本/AI/agent 经 server API（CLI 是其中一个客户端，授权 agent 也可直连受控写接口）→ SQLite，服务端做权威校验并分配 id/seq/时间戳。AI 不直接编辑 SQLite / IndexedDB / syncLog / Backup JSON / JSONL / CSV 导出文件。详见 [`ADR 0001`](docs/adr/0001-cli-as-only-write-path.md) 及其修订 [`ADR 0011`](docs/adr/0011-server-api-as-write-boundary.md)。
 - **服务端是最终裁判**：时间合法性、分类存在性、重叠、认证最终判定在 `packages/server/`。client / CLI 校验只为体验，不可让 server 跳过。
 - **SQLite schema 不就地改已有列含义**：新增表 / 列 / 索引可走兼容迁移；改列类型或语义必须写一次性迁移代码。
 - **Backup 格式破坏性变更必须明确改当前格式契约**：当前 `timedata.backup`（`timeFormat: "utc"`）；不维护旧 Backup 格式兼容路径。
@@ -137,4 +137,4 @@
 
 ------
 
-*Last reviewed: 2026-06-03（命令区补充 push 前 lint 门禁要求）*
+*Last reviewed: 2026-06-03（写入边界放宽为服务端受控 API，见 ADR 0011；新增 agent quick note 投递接口）*

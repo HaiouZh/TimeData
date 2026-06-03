@@ -1,6 +1,13 @@
+import type { Database } from "better-sqlite3";
 import type { CountRow } from "../lib/db-rows.js";
 import { getDb } from "./connection.js";
 import { insertDefaultCategories } from "./reset.js";
+
+export function ensureQuickNoteSourceColumns(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("source")) db.exec("ALTER TABLE quick_notes ADD COLUMN source TEXT");
+  if (!names.has("source_label")) db.exec("ALTER TABLE quick_notes ADD COLUMN source_label TEXT");
+}
 
 export function initializeDatabase(): void {
   const db = getDb();
@@ -41,7 +48,9 @@ export function initializeDatabase(): void {
       text TEXT NOT NULL,
       occurred_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      source TEXT,
+      source_label TEXT
     );
 
     CREATE TABLE IF NOT EXISTS sync_logs (
@@ -89,6 +98,8 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_sync_seq_table_record ON sync_seq(table_name, record_id);
   `);
+
+  ensureQuickNoteSourceColumns(db);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {

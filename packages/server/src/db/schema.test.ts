@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let db: Database.Database;
 
+function quickNoteColumnNames(db: Database.Database): Set<string> {
+  return new Set((db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name));
+}
+
 beforeEach(async () => {
   db = new Database(":memory:");
   vi.resetModules();
@@ -78,6 +82,47 @@ describe("initializeDatabase", () => {
       ["occurred_at", "TEXT", 1, 0],
       ["created_at", "TEXT", 1, 0],
       ["updated_at", "TEXT", 1, 0],
+      ["source", "TEXT", 0, 0],
+      ["source_label", "TEXT", 0, 0],
     ]);
+  });
+
+  it("adds source columns to legacy quick_notes tables", async () => {
+    const { ensureQuickNoteSourceColumns } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE quick_notes (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    ensureQuickNoteSourceColumns(db);
+
+    const columns = quickNoteColumnNames(db);
+    expect(columns.has("source")).toBe(true);
+    expect(columns.has("source_label")).toBe(true);
+  });
+
+  it("keeps the source column migration idempotent", async () => {
+    const { ensureQuickNoteSourceColumns } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE quick_notes (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        source TEXT,
+        source_label TEXT
+      );
+    `);
+
+    expect(() => {
+      ensureQuickNoteSourceColumns(db);
+      ensureQuickNoteSourceColumns(db);
+    }).not.toThrow();
   });
 });
