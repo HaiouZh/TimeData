@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
@@ -6,6 +6,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
+import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
 import EntryPage from "./pages/EntryPage.tsx";
 import QuickNotesPage from "./pages/QuickNotesPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
@@ -23,19 +24,16 @@ import TimelinePage from "./pages/TimelinePage.tsx";
 export function AppShell() {
   const location = useLocation();
   const [resumeRefreshKey, setResumeRefreshKey] = useState(0);
-  const { hidden, setHidden } = useBottomNav();
+  const { hidden } = useBottomNav();
+  const onMainScroll = useHideBottomNavOnScroll();
   const hidesBottomNav = location.pathname.startsWith("/entries/") || location.pathname.startsWith("/settings/");
 
   useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
 
-  useEffect(() => {
-    if (location.pathname !== "/quick-notes") setHidden(false);
-  }, [location.pathname, setHidden]);
-
   return (
     <div className="flex flex-col h-dvh bg-slate-950 text-slate-100">
       <AndroidBackButtonHandler />
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 flex-1 overflow-y-auto" onScroll={onMainScroll}>
         <Routes>
           <Route path="/" element={<TimelinePage refreshKey={resumeRefreshKey} />} />
           <Route path="/quick-notes" element={<QuickNotesPage />} />
