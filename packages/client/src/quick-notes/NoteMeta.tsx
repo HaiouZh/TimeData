@@ -41,7 +41,7 @@ function CheckIcon() {
 }
 
 export default function NoteMeta({ occurredAt, pending, agent = false, className = "" }: NoteMetaProps) {
-  const colorClass = agent ? "text-sky-100/70" : "text-slate-500";
+  const colorClass = agent ? "text-sky-100/80" : "text-slate-500";
   return (
     <span
       className={[

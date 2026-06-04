@@ -20,7 +20,7 @@ import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDis
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
 import { getDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
-import { pickCurrentDateLabel } from "../quick-notes/currentDate.ts";
+import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
 import {
@@ -103,7 +103,7 @@ export default function QuickNotesPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [atBottom, setAtBottom] = useState(true);
-  const [bubbleLabel, setBubbleLabel] = useState<string | null>(null);
+  const [bubbleDate, setBubbleDate] = useState<{ label: string; localDate: string } | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -293,12 +293,13 @@ export default function QuickNotesPage() {
 
     const dividers = Array.from(el.querySelectorAll<HTMLElement>("[data-date-label]")).map((node) => ({
       label: node.dataset.dateLabel ?? "",
+      localDate: node.dataset.localDate ?? today,
       offsetTop: node.offsetTop,
     }));
-    const label = pickCurrentDateLabel(dividers, top);
-    if (!label) return;
+    const divider = pickCurrentDateDivider(dividers, top);
+    if (!divider) return;
 
-    setBubbleLabel(label);
+    setBubbleDate({ label: divider.label, localDate: divider.localDate });
     setBubbleVisible(true);
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
     bubbleTimerRef.current = setTimeout(() => {
@@ -834,7 +835,9 @@ export default function QuickNotesPage() {
                     {...noteInteractionProps(note)}
                     style={{ WebkitTouchCallout: "none" }}
                     className={`relative max-w-full select-none rounded-xl border px-3 py-2 text-sm text-slate-100 outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
-                      isAgentNote ? "border-sky-900/70 bg-sky-500/10" : "border-slate-800 bg-slate-950/70"
+                      isAgentNote
+                        ? "border-sky-700/55 bg-sky-950/70 hover:bg-sky-900/65"
+                        : "border-slate-800 bg-slate-950/70"
                     } ${selected ? "ring-2 ring-emerald-400/70" : ""}`}
                   >
                     <NoteBubble note={note} pending={pending} />
@@ -871,15 +874,17 @@ export default function QuickNotesPage() {
                     key={note.id}
                     type="button"
                     onClick={() => handleResultClick(note)}
-                    className={`relative w-full rounded-2xl border border-slate-800 px-4 py-3 text-left text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] transition hover:border-emerald-500/35 ${
-                      isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
+                    className={`relative w-full rounded-2xl border px-4 py-2 text-left text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] transition hover:border-emerald-500/35 ${
+                      isAgentNote
+                        ? "border-sky-700/55 bg-sky-950/70 hover:bg-sky-900/65"
+                        : "border-slate-800 bg-slate-900/90 hover:bg-slate-900"
                     }`}
                   >
                     <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500">
                       {formatLocalClock(note.occurredAt)}
                     </time>
                     {isAgentNote && (
-                      <div className="mb-1 text-[11px] font-medium text-sky-100/85">
+                      <div className="mb-1 text-[11px] font-semibold text-sky-200/95">
                         {note.sourceLabel ?? "助手"}
                       </div>
                     )}
@@ -918,7 +923,7 @@ export default function QuickNotesPage() {
               {displayItems.map((item) => {
                 if (item.type === "date") {
                   return (
-                    <div key={item.key} data-date-label={item.label} className="flex items-center gap-3 pt-1">
+                    <div key={item.key} data-date-label={item.label} data-local-date={item.localDate} className="flex items-center gap-3 pt-1">
                       <div className="h-px flex-1 bg-slate-800" />
                       <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-400">
                         {item.label}
@@ -941,8 +946,10 @@ export default function QuickNotesPage() {
                       aria-pressed={selectionMode ? selected : undefined}
                       {...noteInteractionProps(note)}
                       style={{ WebkitTouchCallout: "none" }}
-                      className={`relative max-w-full select-none rounded-2xl border border-slate-800 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
-                        isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
+                      className={`relative max-w-full select-none rounded-2xl border px-4 py-2 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
+                        isAgentNote
+                          ? "border-sky-700/55 bg-sky-950/70 hover:bg-sky-900/65"
+                          : "border-slate-800 bg-slate-900/90 hover:bg-slate-900"
                       } ${selected ? "ring-2 ring-emerald-400/70" : ""}`}
                     >
                       {selectionMode && (
@@ -967,21 +974,22 @@ export default function QuickNotesPage() {
         </div>
       </section>
 
-      {bubbleLabel && !pinnedOpen && !searchOpen && (
-        <button
-          type="button"
-          aria-label={`当前日期 ${bubbleLabel}，点击选择日期`}
-          onClick={() => {
-            const node = dateInputRef.current;
-            if (node?.showPicker) node.showPicker();
-            else node?.focus();
-          }}
-          className={`pointer-events-auto fixed left-1/2 top-[4.75rem] z-[35] -translate-x-1/2 rounded-full border border-slate-700 bg-slate-900/90 px-3 py-1 text-xs font-medium text-slate-200 shadow-lg backdrop-blur transition-opacity duration-300 sm:top-20 ${
-            bubbleVisible ? "opacity-100" : "opacity-0"
+      {bubbleDate && !pinnedOpen && !searchOpen && (
+        <label
+          aria-label={`当前日期 ${bubbleDate.label}，点击选择日期`}
+          className={`fixed left-1/2 top-[4.75rem] z-[35] -translate-x-1/2 rounded-full border border-slate-700 bg-slate-900/90 px-3 py-1 text-xs font-medium text-slate-200 shadow-lg backdrop-blur transition-opacity duration-300 sm:top-20 ${
+            bubbleVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
           }`}
         >
-          {bubbleLabel}
-        </button>
+          <span aria-hidden="true">{bubbleDate.label}</span>
+          <input
+            type="date"
+            aria-label="选择当前浮层日期"
+            value={bubbleDate.localDate}
+            onChange={(event) => handleJumpDateChange(event.target.value)}
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [color-scheme:dark]"
+          />
+        </label>
       )}
 
       {!searchOpen && shouldShowJumpToLatest({ atBottom, atLatest: timeline.atLatest }) && (

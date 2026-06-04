@@ -40,7 +40,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
   return (
     <div>
       {isAgent && (
-        <div className="mb-1 text-[11px] font-medium text-sky-100/85">
+        <div className="mb-1 text-[11px] font-semibold text-sky-200/95">
           {sourceLabel}
         </div>
       )}

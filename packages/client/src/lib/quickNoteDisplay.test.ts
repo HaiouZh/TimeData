@@ -40,6 +40,12 @@ describe("groupQuickNotesForDisplay", () => {
     expect(items.filter((item) => item.type === "date").map((item) => item.label)).toEqual(["6月1日", "6月2日"]);
   });
 
+  it("keeps the raw local date in date separator items", () => {
+    const items = groupQuickNotesForDisplay([note("a", "2026-06-01T16:01:00.000Z")], { today: "2026-06-10" });
+
+    expect(items.filter((item) => item.type === "date").map((item) => item.localDate)).toEqual(["2026-06-02"]);
+  });
+
   it("keeps the raw local date in the separator key", () => {
     const items = groupQuickNotesForDisplay([note("a", "2026-06-01T16:01:00.000Z")], { today: "2026-06-10" });
 

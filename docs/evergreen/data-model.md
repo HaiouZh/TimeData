@@ -135,7 +135,7 @@ last-reviewed: 2026-06-04
 - 速记正文的存储契约始终是原始 `text` 字符串；客户端展示层可以按保守启发式安全渲染 Markdown，也可以折叠长文本，但导出、复制、编辑和同步都继续使用原文。
 - 单条上传状态不是 `QuickNote` 字段，不落库到速记本身；客户端展示层只读 `syncLog(tableName="quick_notes", synced=0)` 推导待上传 ID，显示为时钟或单勾。
 - `updatedAt` 用于导入合并和同步 LWW 判断；不强制 `updatedAt >= createdAt`，避免历史导入和设备时钟漂移造成额外失败。
-- `source` 是来源标记，缺省等同用户自记；`source="agent"` 表示由授权 agent 经服务端受控 API 投递。`sourceLabel` 是展示标签（最长 64 字符），例如 agent 名称或任务名。它们只影响展示：普通速记气泡保持灰底，agent 速记气泡用浅蓝底和来源标签区分，点击/焦点态仍复用同一个绿色外层状态；它们不参与时长统计、分类统计或客户端本地 content hash 对齐判定。
+- `source` 是来源标记，缺省等同用户自记；`source="agent"` 表示由授权 agent 经服务端受控 API 投递。`sourceLabel` 是展示标签（最长 64 字符），例如 agent 名称或任务名。它们只影响展示：普通速记气泡保持紧凑灰底，agent 速记气泡用深蓝底、弱蓝边框和来源标签区分，点击/焦点态仍复用同一个绿色外层状态；它们不参与时长统计、分类统计或客户端本地 content hash 对齐判定。
 - `pinned` 是跨端同步的置顶状态，缺省或 `false` 都等同未置顶。置顶不改变 `occurredAt`，不影响日期范围查询语义；速记页会把置顶记录挂到顶部 header 的钉子按钮里展开，并从主时间线过滤，避免重复展示。切换置顶会更新 `updatedAt` 并写 `syncLog("quick_notes", id, "update")`。
 - `pinned` 会参与客户端本地 content hash 与服务端同步内容摘要，因为它改变用户看到的时间线分区；`source` / `sourceLabel` 仍按展示元数据处理，不参与客户端本地 content hash。
 - `QuickNote` 不引用 `Category` 或 `TimeEntry`，不参与分类存在性、archived 分类、时间段重叠、时间环、时长统计或分类统计。

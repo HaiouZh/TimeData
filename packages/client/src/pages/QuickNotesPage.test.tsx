@@ -194,7 +194,7 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("uses a blue bubble background for agent notes without adding a second border", async () => {
+  it("uses distinct compact bubble chrome for agent notes without adding an inner border", async () => {
     await db.quickNotes.bulkAdd([
       {
         id: "user-note",
@@ -221,9 +221,55 @@ describe("QuickNotesPage", () => {
     expect(userBubble).toBeInstanceOf(HTMLElement);
     expect(agentBubble).toBeInstanceOf(HTMLElement);
     expect((userBubble as HTMLElement).className).toContain("bg-slate-900/90");
-    expect((agentBubble as HTMLElement).className).toContain("bg-sky-500/10");
+    expect((userBubble as HTMLElement).className).toContain("py-2");
+    expect((agentBubble as HTMLElement).className).toContain("border-sky-700/55");
+    expect((agentBubble as HTMLElement).className).toContain("bg-sky-950/70");
+    expect((agentBubble as HTMLElement).className).toContain("py-2");
     expect((agentBubble as HTMLElement).className).toContain("focus:ring-2 focus:ring-emerald-400/40");
     expect(agentBubble?.innerHTML).not.toContain("border-sky");
+
+    await act(async () => root.unmount());
+  });
+
+  it("exposes a native date input on the floating scroll date chip", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "first-day",
+        text: "第一天",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "second-day",
+        text: "第二天",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector('[aria-label="速记列表"]');
+    if (!(list instanceof HTMLElement)) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    const firstDivider = dividers[0];
+    const secondDivider = dividers[1];
+    if (!firstDivider || !secondDivider) throw new Error("missing date dividers");
+    Object.defineProperty(firstDivider, "offsetTop", { value: 0, configurable: true });
+    Object.defineProperty(secondDivider, "offsetTop", { value: 120, configurable: true });
+
+    await act(async () => {
+      Object.defineProperty(list, "scrollTop", { value: 130, configurable: true });
+      Object.defineProperty(list, "scrollHeight", { value: 1000, configurable: true });
+      Object.defineProperty(list, "clientHeight", { value: 400, configurable: true });
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await flush();
+
+    const floatingDateInput = host.querySelector('input[aria-label="选择当前浮层日期"]');
+    expect(floatingDateInput).toBeInstanceOf(HTMLInputElement);
+    expect((floatingDateInput as HTMLInputElement).type).toBe("date");
+    expect((floatingDateInput as HTMLInputElement).value).toBe("2026-06-02");
 
     await act(async () => root.unmount());
   });

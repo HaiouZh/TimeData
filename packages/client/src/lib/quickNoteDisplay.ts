@@ -3,7 +3,7 @@ import { utcToLocalDateTime } from "@timedata/shared";
 import { addDays, formatMonthDay, getDateString } from "./time.js";
 
 export type QuickNoteDisplayItem =
-  | { type: "date"; key: string; label: string }
+  | { type: "date"; key: string; label: string; localDate: string }
   | { type: "note"; key: string; note: QuickNote };
 
 export interface GroupQuickNotesOptions {
@@ -41,7 +41,7 @@ export function groupQuickNotesForDisplay(
   for (const note of sorted) {
     const noteDate = localDate(note.occurredAt);
     if (noteDate !== previousDate) {
-      items.push({ type: "date", key: `date:${noteDate}`, label: formatDateLabel(noteDate, today) });
+      items.push({ type: "date", key: `date:${noteDate}`, label: formatDateLabel(noteDate, today), localDate: noteDate });
       previousDate = noteDate;
     }
 
