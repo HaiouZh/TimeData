@@ -6,9 +6,12 @@ covers:
   - pnpm-workspace.yaml
   - tsconfig.base.json
   - packages/*/package.json
+  - packages/client/vite.config.ts
+  - packages/client/src/appUpdate.tsx
+  - packages/client/src/lib/frontendUpdate.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-03
+last-reviewed: 2026-06-04
 ---
 
 # 本地开发指南
@@ -158,6 +161,7 @@ GitHub Actions 的 `android-apk` workflow 会使用仓库 Secrets 构建签名 r
 
 - `base` 使用 `./`，保证 Android WebView 能加载相对路径资源。
 - PWA service worker 和 PWA manifest 在 mobile 模式禁用，避免 WebView 缓存和更新提示干扰；Web/PWA 构建会由 `vite-plugin-pwa` 生成 `manifest.webmanifest`，图标来自 `packages/client/public/icons/`，Android 启动图标位于 `packages/mobile/android/app/src/main/res/mipmap-*/`；这两处和 favicon 都由 `pnpm icons:generate` 从根目录 `icon.png` 生成，换图只需替换根目录源图后重跑该命令。
+- Web/PWA 构建会额外注入 `__TIMEDATA_BUILD_ID__` 并输出不进 precache 的 `version.json`；客户端恢复可见或重新聚焦时会用网络 buildId 比对决定是否硬刷新，设置页也提供「刷新到最新前端」手动兜底。mobile 模式不输出这条 PWA 更新链路所需的 service worker 行为，APK 更新仍走 Android release 流程。
 - `packages/mobile/capacitor.config.ts` 固定 `androidScheme: "https"`、`cleartext: false`、`allowMixedContent: false`，正式同步应使用 HTTPS；Android 原生环境的服务器配置会拒绝保存 `http://` API 地址，自托管开发也应先配 HTTPS 反向代理或隧道后填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查生产 Manifest 不允许明文流量，并检查 `packages/client` 与 `packages/mobile` 的 Capacitor 依赖都保持 v7。
 - Android 系统返回键/边缘返回通过 `packages/mobile` 的 `@capacitor/app` 原生插件监听，并交给前端路由处理，二级页应先回应用上一层级，首页才退出 App。
 - APK 更新直链优先走 `@capacitor/app-launcher` 交给系统 URL 处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。

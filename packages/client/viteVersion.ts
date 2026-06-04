@@ -11,3 +11,10 @@ export function readAndroidVersionCode(
   const dd = String(now.getDate()).padStart(2, "0");
   return `${yy}${mm}${dd}01`;
 }
+
+export function readBuildId(env: Record<string, string | undefined> = process.env, now = new Date()): string {
+  if (env.TIMEDATA_BUILD_ID) {
+    return env.TIMEDATA_BUILD_ID;
+  }
+  return String(now.getTime());
+}

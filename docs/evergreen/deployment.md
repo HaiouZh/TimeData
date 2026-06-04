@@ -12,6 +12,10 @@ covers:
   - packages/server/src/index.ts
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/cors.ts
+  - packages/client/vite.config.ts
+  - packages/client/src/appUpdate.tsx
+  - packages/client/src/lib/frontendUpdate.ts
+  - packages/client/src/pages/SettingsPage.tsx
   - packages/mobile/capacitor.config.ts
   - packages/mobile/package.json
   - packages/mobile/scripts/**
@@ -25,7 +29,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-06-02
+last-reviewed: 2026-06-04
 ---
 
 # 部署与自更新
@@ -271,6 +275,8 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 `public/` 里的内容来自 Dockerfile：构建时把 `packages/client/dist/*` 拷过来。所以**部署一次同时更新前端和后端**。
 
 Web PWA 的 Workbox 配置只预缓存静态资源，并把 `/api/**` 配置为 `NetworkOnly`。同步、导出、自更新和管理接口不能被 service worker 返回陈旧缓存；相关入口是 `packages/client/vite.config.ts` 的 `createPwaOptions()`，测试在 `packages/client/src/lib/pwaConfig.test.ts`。
+
+Web/PWA 构建还会通过 Vite `define` 注入 `__TIMEDATA_BUILD_ID__`（优先读 `TIMEDATA_BUILD_ID` 环境变量，否则使用构建时毫秒时间戳），并在 `dist/` 根目录输出同值的 `version.json`。`version.json` 是 JSON 文件，不在 Workbox `globPatterns` 内，因此不会被 precache；客户端用 `fetch("/version.json", { cache: "no-store" })` 做网络版本比对。`AppUpdateProvider` 在页面加载、从后台切回可见和窗口重新聚焦时检查 buildId，发现服务端前端版本更新后会注销已有 service worker、清空 Cache Storage 并 reload，绕开 iOS standalone PWA 偶发不刷新缓存的问题。设置页的「刷新到最新前端」走同一条硬刷新路径，作为手动逃生口。Android mobile 构建不注册 PWA service worker，这套网页前端刷新机制对 APK 壳无副作用。
 
 ## 7. 反向代理（HTTPS）
 

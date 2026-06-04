@@ -5,9 +5,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage, { getServerConnectionState } from "./SettingsPage.js";
 
 const useSyncContextMock = vi.hoisted(() => vi.fn());
+const forceRefreshMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: useSyncContextMock,
+}));
+
+vi.mock("../appUpdate.tsx", () => ({
+  useAppUpdate: () => ({
+    needRefresh: false,
+    updateApp: vi.fn(),
+    dismissUpdate: vi.fn(),
+    currentBuildId: "build-xyz",
+    forceRefresh: forceRefreshMock,
+  }),
 }));
 
 function defaultSyncState() {
@@ -111,6 +122,14 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/admin-insights"');
     expect(html).toContain("APK 更新");
     expect(html).toContain("服务端更新");
+    expect(html).toContain("刷新到最新前端");
+  });
+
+  it("shows the manual frontend refresh row with the current build id", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("刷新到最新前端");
+    expect(html).toContain("build-xyz");
   });
 
   it("shows sync summary between server and data entries when cloud sync is enabled", () => {

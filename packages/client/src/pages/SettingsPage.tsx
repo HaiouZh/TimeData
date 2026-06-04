@@ -1,6 +1,7 @@
 import type { VersionInfo } from "@timedata/shared";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAppUpdate } from "../appUpdate.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
@@ -257,6 +258,7 @@ function ServerStatusCard() {
 
 export default function SettingsPage() {
   const { apiUrl, connection } = useSyncContext();
+  const { currentBuildId, forceRefresh } = useAppUpdate();
   const { confirm, dialog } = useConfirm();
   const [serverVersion, setServerVersion] = useState<ServerVersionState | null>(null);
   const [serverUpdating, setServerUpdating] = useState(false);
@@ -428,6 +430,13 @@ export default function SettingsPage() {
           accessory={serverVersion?.ok && serverVersion.version.hasUpdate ? "有新版本" : undefined}
           disabled={serverUpdating || !apiUrl}
           onClick={handleServerUpdate}
+        />
+        <SettingsActionRow
+          icon={<RefreshIcon />}
+          accent="emerald"
+          title="刷新到最新前端"
+          subtitle={`当前前端版本：${currentBuildId}`}
+          onClick={forceRefresh}
         />
       </SettingsGroup>
     </div>

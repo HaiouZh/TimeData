@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { type PluginOption, defineConfig } from "vite";
 import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
-import { readAndroidVersionCode } from "./viteVersion";
+import { readAndroidVersionCode, readBuildId } from "./viteVersion";
 
 export function createPwaOptions(): Partial<VitePWAOptions> {
   return {
@@ -39,16 +39,29 @@ export function createPwaOptions(): Partial<VitePWAOptions> {
 
 export default defineConfig(({ mode }) => {
   const isMobile = mode === "mobile";
+  const buildId = readBuildId();
   const plugins: PluginOption[] = [react(), tailwindcss()];
 
   if (!isMobile) {
     plugins.push(VitePWA(createPwaOptions()));
+    plugins.push({
+      name: "timedata-version-json",
+      apply: "build",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "version.json",
+          source: JSON.stringify({ buildId }),
+        });
+      },
+    });
   }
 
   return {
     base: isMobile ? "./" : "/",
     define: {
       __TIMEDATA_ANDROID_VERSION_CODE__: JSON.stringify(readAndroidVersionCode()),
+      __TIMEDATA_BUILD_ID__: JSON.stringify(buildId),
     },
     plugins,
     resolve: {

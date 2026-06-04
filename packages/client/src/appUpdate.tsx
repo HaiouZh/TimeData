@@ -1,13 +1,16 @@
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useRef } from "react";
+import { CURRENT_BUILD_ID, hardRefresh, hasFrontendUpdate } from "./lib/frontendUpdate.ts";
 
 type AppUpdateContextValue = {
   needRefresh: boolean;
   updateApp: () => void;
   dismissUpdate: () => void;
+  currentBuildId: string;
+  forceRefresh: () => void;
 };
 
-const AppUpdateContext = createContext<AppUpdateContextValue | null>(null);
+export const AppUpdateContext = createContext<AppUpdateContextValue | null>(null);
 
 export function AppUpdateProvider({ children }: { children: ReactNode }) {
   const updateIntervalRef = useRef<number | null>(null);
@@ -36,6 +39,14 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const forceRefresh = useCallback(() => {
+    void hardRefresh({
+      serviceWorker: typeof navigator !== "undefined" ? navigator.serviceWorker : undefined,
+      cacheStorage: typeof caches !== "undefined" ? caches : undefined,
+      reload: () => window.location.reload(),
+    });
+  }, []);
+
   useEffect(() => {
     disposedRef.current = false;
     return () => {
@@ -43,6 +54,41 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
       clearUpdateInterval();
     };
   }, [clearUpdateInterval]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    let running = false;
+
+    const checkForUpdate = async () => {
+      if (running) return;
+      running = true;
+      try {
+        if (await hasFrontendUpdate()) {
+          forceRefresh();
+        }
+      } finally {
+        running = false;
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void checkForUpdate();
+      }
+    };
+    const onFocus = () => {
+      void checkForUpdate();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+    void checkForUpdate();
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [forceRefresh]);
 
   function updateApp() {
     updateServiceWorker(true);
@@ -53,7 +99,11 @@ export function AppUpdateProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AppUpdateContext.Provider value={{ needRefresh, updateApp, dismissUpdate }}>{children}</AppUpdateContext.Provider>
+    <AppUpdateContext.Provider
+      value={{ needRefresh, updateApp, dismissUpdate, currentBuildId: CURRENT_BUILD_ID, forceRefresh }}
+    >
+      {children}
+    </AppUpdateContext.Provider>
   );
 }
 

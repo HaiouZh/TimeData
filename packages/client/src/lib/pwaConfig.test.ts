@@ -16,4 +16,12 @@ describe("createPwaOptions", () => {
       false,
     );
   });
+
+  it("never precaches json so version.json stays network-fresh", () => {
+    const options = createPwaOptions();
+    const globs = options.workbox?.globPatterns ?? [];
+
+    expect(globs.some((glob) => glob.includes("json"))).toBe(false);
+    expect(globs.length).toBeGreaterThan(0);
+  });
 });
