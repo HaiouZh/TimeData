@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { db } from "../db/index.js";
+import { setQuickNotePinned } from "../lib/quickNotes.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -278,6 +279,36 @@ describe("QuickNotesPage", () => {
 
     expect(pendingBubble?.querySelector('[aria-label="待上传"]')).not.toBeNull();
     expect(uploadedBubble?.querySelector('[aria-label="已上传"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("opens pinned quick notes from the header without repeating them in the timeline", async () => {
+    await db.quickNotes.add({
+      id: "note-pin",
+      text: "钉住我",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    await setQuickNotePinned("note-pin", true, { now: new Date("2026-06-01T05:00:00.000Z") });
+    await db.syncLog.clear();
+
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector('[aria-label="速记：钉住我"]')).toBeNull();
+
+    await click(host.querySelector('button[aria-label="查看置顶速记，1 条"]'));
+
+    const pinnedRegion = host.querySelector('[aria-label="置顶速记"]');
+    expect(pinnedRegion).toBeInstanceOf(HTMLElement);
+    expect(pinnedRegion?.textContent).toContain("钉住我");
+    expect(pinnedRegion?.closest('[aria-label="速记列表"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="关闭置顶速记"]')).toBeNull();
+
+    await click(host.querySelector('button[aria-label="收起置顶速记，1 条"]'));
+
+    expect(host.querySelector('[aria-label="置顶速记"]')).toBeNull();
 
     await act(async () => root.unmount());
   });

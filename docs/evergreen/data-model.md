@@ -53,7 +53,7 @@ last-reviewed: 2026-06-04
 
 `settings` 是同步键值表，当前用于跨设备保存睡眠分类等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`。
 
-`quick_notes` 是聊天式速记表，核心表达“时间 + 文本”，可附带 `source` / `sourceLabel` 作为展示来源元数据。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`；`quickNotes.ts` 同时提供按日期/范围查询和只读窗口查询（最新、早于、晚于、有界窗口），供连续时间线懒加载使用。搜索入口在 `packages/client/src/quick-notes/searchQuickNotes.ts`，只读扫描 Dexie `quickNotes` 并按 `occurredAt` 倒序返回，不写 `syncLog`。独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
+`quick_notes` 是聊天式速记表，核心表达“时间 + 文本”，可附带 `source` / `sourceLabel` 作为展示来源元数据，也可带 `pinned` 表示置顶状态。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`；`quickNotes.ts` 同时提供按日期/范围查询、只读窗口查询（最新、早于、晚于、有界窗口）和置顶列表查询，供连续时间线与置顶区使用。搜索入口在 `packages/client/src/quick-notes/searchQuickNotes.ts`，只读扫描 Dexie `quickNotes` 并按 `occurredAt` 倒序返回，不写 `syncLog`。独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
 
 服务端后台洞察的 `Admin*Response` 类型也在 `packages/shared/src/types.ts`。这些类型是 `/api/admin/*` 中概览、记录、分类汇总、同步诊断、备份元数据、健康检查和基础分析的只读响应契约，不对应新表，也不增加写入路径。受控维护端点 `/api/admin/sync-logs` 操作既有 `sync_logs` 表，不属于 `Admin*Response` 契约。
 
@@ -121,6 +121,7 @@ last-reviewed: 2026-06-04
   updatedAt: string;  // 编辑/同步时间
   source?: "user" | "agent";
   sourceLabel?: string;
+  pinned?: boolean;
 }
 ```
 
@@ -135,13 +136,15 @@ last-reviewed: 2026-06-04
 - 单条上传状态不是 `QuickNote` 字段，不落库到速记本身；客户端展示层只读 `syncLog(tableName="quick_notes", synced=0)` 推导待上传 ID，显示为时钟或单勾。
 - `updatedAt` 用于导入合并和同步 LWW 判断；不强制 `updatedAt >= createdAt`，避免历史导入和设备时钟漂移造成额外失败。
 - `source` 是来源标记，缺省等同用户自记；`source="agent"` 表示由授权 agent 经服务端受控 API 投递。`sourceLabel` 是展示标签（最长 64 字符），例如 agent 名称或任务名。它们只影响展示：普通速记气泡保持灰底，agent 速记气泡用浅蓝底和来源标签区分，点击/焦点态仍复用同一个绿色外层状态；它们不参与时长统计、分类统计或客户端本地 content hash 对齐判定。
+- `pinned` 是跨端同步的置顶状态，缺省或 `false` 都等同未置顶。置顶不改变 `occurredAt`，不影响日期范围查询语义；速记页会把置顶记录挂到顶部 header 的钉子按钮里展开，并从主时间线过滤，避免重复展示。切换置顶会更新 `updatedAt` 并写 `syncLog("quick_notes", id, "update")`。
+- `pinned` 会参与客户端本地 content hash 与服务端同步内容摘要，因为它改变用户看到的时间线分区；`source` / `sourceLabel` 仍按展示元数据处理，不参与客户端本地 content hash。
 - `QuickNote` 不引用 `Category` 或 `TimeEntry`，不参与分类存在性、archived 分类、时间段重叠、时间环、时长统计或分类统计。
-- SQL 表名是 `quick_notes`，字段是 `occurred_at` / `created_at` / `updated_at` / `source` / `source_label`；Dexie 表名是 `quickNotes`，索引是 `id, occurredAt, updatedAt`。`source` / `sourceLabel` 不是索引字段，客户端 Dexie 无需升版本；服务端旧库启动时通过幂等 `ALTER TABLE` 补可空列。
+- SQL 表名是 `quick_notes`，字段是 `occurred_at` / `created_at` / `updated_at` / `source` / `source_label` / `pinned`；`pinned` 是 `INTEGER NOT NULL DEFAULT 0`，映射到 JS 侧可选 boolean。Dexie 表名是 `quickNotes`，索引是 `id, occurredAt, updatedAt`。`source` / `sourceLabel` / `pinned` 都不是索引字段，客户端 Dexie 无需升版本；服务端旧库启动时通过幂等 `ALTER TABLE` 补列。
 - `POST /api/quick-notes` 是授权 agent 投递速记的服务端写接口：请求只接受 `text`、可选 `sourceLabel` 和可选 `occurredAt`，服务端生成 `id` / `createdAt` / `updatedAt`，强制 `source="agent"`，再构造 `quick_notes/create` 变更走 `applyChange()` 与 `sync_seq`。
 
-代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.ts`、`packages/client/src/quick-notes/searchQuickNotes.ts`、`packages/client/src/quick-notes/searchTerms.ts`、`packages/client/src/quick-notes/highlightMatches.ts`、`packages/client/src/quick-notes/NoteBubble.tsx`、`packages/client/src/quick-notes/QuickNoteContent.tsx`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`、`packages/server/src/routes/quick-notes.ts`
+代码入口：`packages/shared/src/schemas.ts`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.ts`、`packages/client/src/quick-notes/searchQuickNotes.ts`、`packages/client/src/quick-notes/searchTerms.ts`、`packages/client/src/quick-notes/highlightMatches.ts`、`packages/client/src/quick-notes/NoteBubble.tsx`、`packages/client/src/quick-notes/QuickNoteContent.tsx`、`packages/client/src/quick-notes/QuickNoteActionMenu.tsx`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`、`packages/server/src/routes/quick-notes.ts`
 
-相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.test.tsx`、`packages/client/src/quick-notes/searchQuickNotes.test.ts`、`packages/client/src/quick-notes/searchTerms.test.ts`、`packages/client/src/quick-notes/highlightMatches.test.ts`、`packages/client/src/quick-notes/NoteBubble.test.tsx`、`packages/client/src/quick-notes/QuickNoteContent.test.tsx`、`packages/client/src/quick-notes/looksLikeMarkdown.test.ts`、`packages/server/src/db/schema.test.ts`、`packages/server/src/routes/quick-notes.test.ts`
+相关测试：`packages/shared/src/schemas.test.ts`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/quick-notes/useQuickNoteTimeline.test.tsx`、`packages/client/src/quick-notes/searchQuickNotes.test.ts`、`packages/client/src/quick-notes/searchTerms.test.ts`、`packages/client/src/quick-notes/highlightMatches.test.ts`、`packages/client/src/quick-notes/NoteBubble.test.tsx`、`packages/client/src/quick-notes/QuickNoteContent.test.tsx`、`packages/client/src/quick-notes/QuickNoteActionMenu.test.tsx`、`packages/client/src/quick-notes/looksLikeMarkdown.test.ts`、`packages/server/src/db/schema.test.ts`、`packages/server/src/lib/db-rows.test.ts`、`packages/server/src/routes/quick-notes.test.ts`
 
 ## 5. `SyncLogEntry`（客户端同步日志）
 
@@ -282,6 +285,7 @@ type SyncChange =
 | `end_time` | `endTime` |
 | `occurred_at` | `occurredAt` |
 | `source_label` | `sourceLabel` |
+| `pinned` | `pinned`（SQL 0/1，JS 可选 boolean） |
 | `sort_order` | `sortOrder` |
 | `is_archived` | `isArchived`（SQL 0/1，JS boolean） |
 | `created_at` | `createdAt` |
@@ -304,7 +308,7 @@ db.version(3).stores({
 });
 ```
 
-v1 是初始业务表，v2 增加 `settings`，v3 增加 `quickNotes`。`resetLocalDataToDefaults()` 当前只重置分类、时间记录、settings 与对应非速记 `syncLog`，不会清空 `quickNotes`；速记有独立导入/导出/删除入口。
+v1 是初始业务表，v2 增加 `settings`，v3 增加 `quickNotes`。`QuickNote.pinned` 不建索引，因此作为普通字段随记录存储，不需要新增 Dexie 版本。`resetLocalDataToDefaults()` 当前只重置分类、时间记录、settings 与对应非速记 `syncLog`，不会清空 `quickNotes`；速记有独立导入/导出/删除入口。
 
 **SQLite 这边**目前的迁移机制是 `CREATE TABLE IF NOT EXISTS`——只能加表，**不能改已有列定义**。改 schema 时需要：
 1. 加新表 / 加新列（用 `ALTER TABLE ... ADD COLUMN`）— 现有数据自动兼容。

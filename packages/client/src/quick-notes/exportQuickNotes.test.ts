@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
 import { addQuickNote } from "../lib/quickNotes.js";
 import {
+  exportQuickNotesJsonForNotes,
   exportQuickNotesJsonByRange,
   exportQuickNotesMarkdownByDate,
   exportQuickNotesMarkdownByRange,
@@ -57,5 +58,34 @@ describe("export quick notes", () => {
     await expect(exportQuickNotesMarkdownByRange("2026-06-01", "2026-06-02")).resolves.toBe(
       "# 速记 2026-06-01 至 2026-06-02\n\n无速记\n",
     );
+  });
+
+  it("exports a selected note array as JSON backup", () => {
+    const backup = exportQuickNotesJsonForNotes(
+      [
+        {
+          id: "note-a",
+          text: "一",
+          occurredAt: "2026-06-01T01:00:00.000Z",
+          createdAt: "2026-06-01T01:00:00.000Z",
+          updatedAt: "2026-06-01T01:00:00.000Z",
+        },
+        {
+          id: "note-b",
+          text: "二",
+          occurredAt: "2026-06-01T02:00:00.000Z",
+          createdAt: "2026-06-01T02:00:00.000Z",
+          updatedAt: "2026-06-01T02:00:00.000Z",
+        },
+      ],
+      { now: () => "2026-06-04T00:00:00.000Z" },
+    );
+
+    expect(backup).toMatchObject({
+      format: "timedata.quick-notes.backup",
+      timeFormat: "utc",
+      exportedAt: "2026-06-04T00:00:00.000Z",
+    });
+    expect(backup.notes.map((note) => note.id)).toEqual(["note-a", "note-b"]);
   });
 });

@@ -70,9 +70,10 @@ TimeData 现有四种备份/可恢复文件：
 实现入口：
 
 - `packages/client/src/quick-notes/schema.ts`：格式常量与运行时校验，复用 shared 的 `QuickNoteSchema`。
-- `packages/client/src/quick-notes/exportQuickNotes.ts`：按 `occurredAt` 日期或范围导出 JSON / Markdown。
+- `packages/client/src/quick-notes/exportQuickNotes.ts`：按 `occurredAt` 日期、范围或当前多选集合导出 JSON / Markdown。
 - `packages/client/src/quick-notes/importQuickNotes.ts`：只导入速记，merge 模式。
 - `packages/client/src/quick-notes/deleteQuickNotesRange.ts`：按本地日期闭区间删除速记。
+- `packages/client/src/quick-notes/deleteQuickNotesByIds.ts`：按多选 ID 批量删除速记。
 - `packages/client/src/quick-notes/fileDownload.ts`：Web 下载和 Capacitor Documents + Share 落盘。
 
 `packages/client/src/quick-notes/` 还包含速记页交互与展示组件（如菜单、剪贴板、时间线窗口 Hook、搜索/高亮、上传状态、长文本折叠和 Markdown 安全渲染）；这些不是备份格式入口，不改变本节 JSON / Markdown 契约。
@@ -80,11 +81,11 @@ TimeData 现有四种备份/可恢复文件：
 语义：
 
 - `format` 必须是 `timedata.quick-notes.backup`，`timeFormat` 必须是 `"utc"`。
-- `notes` 每条必须满足 `QuickNoteSchema`：`text` 非空，`occurredAt` / `createdAt` / `updatedAt` 都是 UTC `.sssZ`。
-- `notes` 可带 `source?: "user" | "agent"` 与 `sourceLabel?: string`；JSON 导出/导入会保留这些展示元数据，Markdown 导出仍只输出时间和正文。agent 速记的浅蓝气泡样式是客户端展示逻辑，不额外进入备份格式。
+- `notes` 每条必须满足 `QuickNoteSchema`：`text` 非空，`occurredAt` / `createdAt` / `updatedAt` 都是 UTC `.sssZ`；可带 `pinned?: boolean`。
+- `notes` 可带 `source?: "user" | "agent"`、`sourceLabel?: string` 与 `pinned?: boolean`；JSON 导出/导入会保留这些展示元数据和置顶状态，Markdown 导出仍只输出时间和正文。agent 速记的浅蓝气泡样式、置顶区和多选态都是客户端展示逻辑，不额外进入备份格式。
 - 导入只合并 `quickNotes`，不修改 categories、timeEntries、settings、syncLog 以外的业务表，也不要求分类存在。
 - 同 ID 不存在则插入；同 ID 存在且导入记录 `updatedAt` 更新则覆盖；`updatedAt` 相同或本地更新则保留本地。
-- 导入插入会写 `syncLog("quick_notes", id, "create")`，导入覆盖会写 `syncLog("quick_notes", id, "update")`；范围删除逐条写 `syncLog("quick_notes", id, "delete")`。
+- 导入插入会写 `syncLog("quick_notes", id, "create")`，导入覆盖会写 `syncLog("quick_notes", id, "update")`；范围删除和按 ID 批量删除都会逐条写 `syncLog("quick_notes", id, "delete")`。
 - 第一版不提供“仅速记破坏性全量覆盖恢复”。如果以后需要，必须新增显式确认短语和单独设计。
 
 ## 2. 导出（`exportBackup`）

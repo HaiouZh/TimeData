@@ -1,21 +1,27 @@
 export interface QuickNoteActionMenuProps {
   x: number;
   y: number;
+  pinned: boolean;
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSelect: () => void;
+  onTogglePin: () => void;
   onClose: () => void;
 }
 
 const MENU_WIDTH = 140;
-const MENU_HEIGHT = 136;
+const MENU_HEIGHT = 216;
 
 export default function QuickNoteActionMenu({
   x,
   y,
+  pinned,
   onCopy,
   onEdit,
   onDelete,
+  onSelect,
+  onTogglePin,
   onClose,
 }: QuickNoteActionMenuProps) {
   const viewportWidth = typeof window === "undefined" ? 360 : window.innerWidth;
@@ -60,6 +66,22 @@ export default function QuickNoteActionMenu({
           className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
         >
           编辑
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => run(onTogglePin)}
+          className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+        >
+          {pinned ? "取消置顶" : "置顶"}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => run(onSelect)}
+          className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+        >
+          选择
         </button>
         <button
           type="button"

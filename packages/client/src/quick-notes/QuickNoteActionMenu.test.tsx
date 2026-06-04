@@ -47,6 +47,9 @@ describe("QuickNoteActionMenu", () => {
       onCopy,
       onEdit: vi.fn(),
       onDelete: vi.fn(),
+      onSelect: vi.fn(),
+      onTogglePin: vi.fn(),
+      pinned: false,
       onClose,
     });
 
@@ -69,6 +72,9 @@ describe("QuickNoteActionMenu", () => {
       onCopy: vi.fn(),
       onEdit: vi.fn(),
       onDelete: vi.fn(),
+      onSelect: vi.fn(),
+      onTogglePin: vi.fn(),
+      pinned: false,
       onClose,
     });
 
@@ -79,6 +85,56 @@ describe("QuickNoteActionMenu", () => {
     await flush();
 
     expect(onClose).toHaveBeenCalledTimes(1);
+
+    await act(async () => root.unmount());
+  });
+
+  it("点击「选择」触发 onSelect 并关闭", async () => {
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+    const { host, root } = await render({
+      x: 10,
+      y: 10,
+      onCopy: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onSelect,
+      onTogglePin: vi.fn(),
+      pinned: false,
+      onClose,
+    });
+
+    await act(async () => {
+      menuItem(host, "选择").click();
+    });
+    await flush();
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await act(async () => root.unmount());
+  });
+
+  it("未置顶显示「置顶」，已置顶显示「取消置顶」", async () => {
+    const onTogglePin = vi.fn();
+    const { host, root } = await render({
+      x: 10,
+      y: 10,
+      onCopy: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onSelect: vi.fn(),
+      onTogglePin,
+      pinned: true,
+      onClose: vi.fn(),
+    });
+
+    await act(async () => {
+      menuItem(host, "取消置顶").click();
+    });
+    await flush();
+
+    expect(onTogglePin).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });

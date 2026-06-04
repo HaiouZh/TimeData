@@ -1,20 +1,37 @@
 import type { QuickNote } from "@timedata/shared";
-import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
-import { addQuickNote, deleteQuickNote, updateQuickNote } from "../lib/quickNotes.ts";
+import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
 import { getDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
+import { pickCurrentDateLabel } from "../quick-notes/currentDate.ts";
+import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
-import { exportQuickNotesJsonByDate, exportQuickNotesMarkdownByDate } from "../quick-notes/exportQuickNotes.ts";
+import {
+  exportQuickNotesJsonByDate,
+  exportQuickNotesJsonForNotes,
+  exportQuickNotesMarkdownByDate,
+  quickNotesMarkdown,
+} from "../quick-notes/exportQuickNotes.ts";
 import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-notes/fileDownload.ts";
 import HighlightedText from "../quick-notes/HighlightedText.tsx";
+import { shouldShowJumpToLatest } from "../quick-notes/jumpToLatest.ts";
 import NoteBubble from "../quick-notes/NoteBubble.tsx";
 import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
 import { searchQuickNotes } from "../quick-notes/searchQuickNotes.ts";
@@ -27,6 +44,7 @@ const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const STATUS_AUTO_DISMISS_MS = 2400;
+const BUBBLE_HIDE_DELAY_MS = 1200;
 
 interface MenuTarget {
   note: QuickNote;
@@ -37,6 +55,26 @@ interface MenuTarget {
 function normalizeDateParam(value: string | null): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   return value;
+}
+
+function PinIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      className="size-4"
+    >
+      <path d="M9 4.5h6" />
+      <path d="M10 4.5c0 3-1.5 4.5-3.5 6.5l6.5 6.5c2-2 3.5-3.5 6.5-3.5" />
+      <path d="M14.5 4.5 19.5 9" />
+      <path d="M4.5 19.5 10 14" />
+    </svg>
+  );
 }
 
 export default function QuickNotesPage() {
@@ -54,13 +92,22 @@ export default function QuickNotesPage() {
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [atBottom, setAtBottom] = useState(true);
+  const [bubbleLabel, setBubbleLabel] = useState<string | null>(null);
+  const [bubbleVisible, setBubbleVisible] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const composeDraftRef = useRef("");
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressedNoteRef = useRef<QuickNote | null>(null);
   const stickBottomRef = useRef(true);
   const prevScrollHeightRef = useRef(0);
@@ -73,11 +120,19 @@ export default function QuickNotesPage() {
   const { syncAfterWrite } = useSyncContext();
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
+  const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
   const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
+  const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   const displayItems = useMemo(
-    () => groupQuickNotesForDisplay(timeline.notes, { today }),
+    () => groupQuickNotesForDisplay(timeline.notes.filter((note) => !note.pinned), { today }),
     [timeline.notes, today],
   );
+  const selectableNotes = useMemo(() => {
+    const byId = new Map<string, QuickNote>();
+    for (const note of timeline.notes) byId.set(note.id, note);
+    for (const note of pinnedNotes) byId.set(note.id, note);
+    return [...byId.values()];
+  }, [timeline.notes, pinnedNotes]);
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
   const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
@@ -107,11 +162,19 @@ export default function QuickNotesPage() {
   useEffect(
     () => () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
     },
     [],
   );
 
   useEffect(() => () => setNavHidden(false), [setNavHidden]);
+
+  useEffect(() => {
+    if (selectionMode) {
+      setPinnedOpen(false);
+      setSearchOpen(false);
+    }
+  }, [selectionMode]);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -169,6 +232,7 @@ export default function QuickNotesPage() {
     if (!el) return;
 
     stickBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_TRIGGER_PX;
+    setAtBottom(stickBottomRef.current);
     if (!searchOpen && el.scrollTop <= SCROLL_TRIGGER_PX && timeline.hasOlder) {
       prevScrollHeightRef.current = el.scrollHeight;
       preserveAnchorRef.current = true;
@@ -189,6 +253,21 @@ export default function QuickNotesPage() {
       setNavHidden(false);
     }
     lastScrollTopRef.current = top;
+
+    const dividers = Array.from(el.querySelectorAll<HTMLElement>("[data-date-label]")).map((node) => ({
+      label: node.dataset.dateLabel ?? "",
+      offsetTop: node.offsetTop,
+    }));
+    const label = pickCurrentDateLabel(dividers, top);
+    if (!label) return;
+
+    setBubbleLabel(label);
+    setBubbleVisible(true);
+    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+    bubbleTimerRef.current = setTimeout(() => {
+      bubbleTimerRef.current = null;
+      setBubbleVisible(false);
+    }, BUBBLE_HIDE_DELAY_MS);
   }
 
   function focusInput() {
@@ -201,6 +280,7 @@ export default function QuickNotesPage() {
 
   function openSearch() {
     setActionsOpen(false);
+    setPinnedOpen(false);
     setSearchOpen(true);
     if (typeof requestAnimationFrame === "function") {
       requestAnimationFrame(() => searchInputRef.current?.focus());
@@ -221,6 +301,7 @@ export default function QuickNotesPage() {
   function handleResultClick(note: QuickNote) {
     const localDate = getDateString(new Date(note.occurredAt));
     closeSearch({ resetTimeline: false });
+    if (note.pinned) setPinnedOpen(true);
     handleJumpDateChange(localDate);
   }
 
@@ -264,6 +345,7 @@ export default function QuickNotesPage() {
 
   function startEditing(note: QuickNote) {
     if (!editingId) composeDraftRef.current = draftText;
+    setPinnedOpen(false);
     setEditingId(note.id);
     setDraftText(note.text);
     setError(null);
@@ -315,6 +397,101 @@ export default function QuickNotesPage() {
     syncAfterWrite();
   }
 
+  async function handleTogglePin(note: QuickNote) {
+    setMenu(null);
+    const nextPinned = !(note.pinned ?? false);
+    await setQuickNotePinned(note.id, nextPinned);
+    if (nextPinned) {
+      setPinnedOpen(true);
+    } else if (pinnedNotes.length <= 1) {
+      setPinnedOpen(false);
+    }
+    syncAfterWrite();
+  }
+
+  function enterSelection(note: QuickNote) {
+    setMenu(null);
+    setActionsOpen(false);
+    setPinnedOpen(false);
+    setSearchOpen(false);
+    setSelectionMode(true);
+    setSelectedIds(new Set([note.id]));
+  }
+
+  function exitSelection() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    setExportMenuOpen(false);
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectedNotes(): QuickNote[] {
+    return selectableNotes
+      .filter((note) => selectedIds.has(note.id))
+      .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
+  }
+
+  async function handleBatchCopy() {
+    const notes = selectedNotes();
+    if (notes.length === 0) return;
+
+    try {
+      await copyText(notes.map((note) => note.text).join("\n\n"));
+      showStatus(`已复制 ${notes.length} 条`);
+      exitSelection();
+    } catch {
+      setError("复制失败");
+    }
+  }
+
+  async function handleBatchExportMarkdown() {
+    const notes = selectedNotes();
+    if (notes.length === 0) return;
+
+    const markdown = quickNotesMarkdown(`速记（${notes.length} 条）`, notes);
+    await downloadQuickNotesMarkdown(markdown, `selection-${notes.length}`);
+    showStatus("已导出 Markdown。");
+    exitSelection();
+  }
+
+  async function handleBatchExportJson() {
+    const notes = selectedNotes();
+    if (notes.length === 0) return;
+
+    const backup = exportQuickNotesJsonForNotes(notes);
+    await downloadQuickNotesJson(backup);
+    showStatus(`已导出 ${notes.length} 条 JSON。`);
+    exitSelection();
+  }
+
+  async function handleBatchDelete() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    const confirmed = await confirm({
+      title: `删除 ${ids.length} 条速记？`,
+      body: "删除后不会影响时间记录。",
+      confirmLabel: "删除",
+      cancelLabel: "取消",
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    const result = await deleteQuickNotesByIds(ids);
+    if (editingId && ids.includes(editingId)) cancelEditing();
+    showStatus(`已删除 ${result.deleted} 条。`);
+    if (result.deleted > 0) syncAfterWrite();
+    exitSelection();
+  }
+
   function handleJumpDateChange(nextDate: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
     setJumpDate(nextDate);
@@ -362,10 +539,104 @@ export default function QuickNotesPage() {
     if (result.deleted > 0) syncAfterWrite();
   }
 
+  function noteInteractionProps(note: QuickNote) {
+    return {
+      onClick: selectionMode ? () => toggleSelected(note.id) : undefined,
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        if (selectionMode) return;
+        pressedNoteRef.current = note;
+        longPress.onPointerDown(event);
+      },
+      onPointerMove: longPress.onPointerMove,
+      onPointerUp: longPress.onPointerUp,
+      onPointerLeave: longPress.onPointerLeave,
+      onContextMenu: (event: MouseEvent<HTMLElement>) => {
+        if (selectionMode) {
+          event.preventDefault();
+          return;
+        }
+        pressedNoteRef.current = note;
+        longPress.onContextMenu(event);
+      },
+    };
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-950 text-slate-100">
+    <div className="relative flex h-full min-h-0 flex-col bg-slate-950 text-slate-100">
       <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/80 bg-slate-950/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-[0_14px_40px_rgba(2,6,23,0.22)]">
-        {searchOpen ? (
+        {selectionMode ? (
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+            <button
+              type="button"
+              aria-label="退出多选"
+              onClick={exitSelection}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-slate-300"
+            >
+              x
+            </button>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-100">已选 {selectedIds.size} 条</span>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0}
+              onClick={() => void handleBatchCopy()}
+              className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-sm text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600"
+            >
+              复制
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+                disabled={selectedIds.size === 0}
+                onClick={() => setExportMenuOpen((open) => !open)}
+                className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-sm text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600"
+              >
+                导出
+              </button>
+              {exportMenuOpen && (
+                <>
+                  <div role="presentation" className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
+                  <div
+                    role="menu"
+                    className="absolute right-0 z-50 mt-2 w-40 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 py-1 shadow-xl"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setExportMenuOpen(false);
+                        void handleBatchExportMarkdown();
+                      }}
+                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800"
+                    >
+                      Markdown
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setExportMenuOpen(false);
+                        void handleBatchExportJson();
+                      }}
+                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800"
+                    >
+                      JSON
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0}
+              onClick={() => void handleBatchDelete()}
+              className="rounded-xl border border-red-900/60 bg-red-950/40 px-3 py-1.5 text-sm font-medium text-red-300 disabled:cursor-not-allowed disabled:text-red-900"
+            >
+              删除
+            </button>
+          </div>
+        ) : searchOpen ? (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <span aria-hidden className="text-slate-400">
               🔍
@@ -402,6 +673,7 @@ export default function QuickNotesPage() {
             <label className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
               <span className="hidden text-[11px] text-slate-500 sm:block">日期</span>
               <input
+                ref={dateInputRef}
                 type="date"
                 aria-label="跳转日期"
                 value={jumpDate}
@@ -409,6 +681,25 @@ export default function QuickNotesPage() {
                 className="w-[7.5rem] bg-transparent text-xs font-medium text-slate-100 outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
               />
             </label>
+
+            {pinnedNotes.length > 0 && (
+              <button
+                type="button"
+                aria-label={`${pinnedOpen ? "收起" : "查看"}置顶速记，${pinnedNotes.length} 条`}
+                aria-haspopup="dialog"
+                aria-expanded={pinnedOpen}
+                onClick={() => {
+                  setActionsOpen(false);
+                  setPinnedOpen((open) => !open);
+                }}
+                className="relative flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+              >
+                <PinIcon />
+                <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-emerald-300 px-1 text-[11px] font-semibold leading-5 text-slate-950">
+                  {pinnedNotes.length}
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -425,8 +716,11 @@ export default function QuickNotesPage() {
                 aria-label="更多操作"
                 aria-haspopup="menu"
                 aria-expanded={actionsOpen}
-                onClick={() => setActionsOpen((open) => !open)}
-              className="flex size-9 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+                onClick={() => {
+                  setPinnedOpen(false);
+                  setActionsOpen((open) => !open);
+                }}
+                className="flex size-9 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
               >
                 ⋯
               </button>
@@ -482,13 +776,44 @@ export default function QuickNotesPage() {
             </div>
           </div>
         )}
+        {!selectionMode && !searchOpen && pinnedOpen && pinnedNotes.length > 0 && (
+          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 px-4">
+            <section
+              aria-label="置顶速记"
+              className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-3 shadow-2xl shadow-slate-950/60"
+            >
+              <p className="px-1 text-xs font-semibold text-slate-400">置顶 · {pinnedNotes.length}</p>
+              {pinnedNotes.map((note) => {
+                const isAgentNote = note.source === "agent";
+                const selected = selectedIds.has(note.id);
+                const pending = unsyncedQuickNoteIds.has(note.id);
+                return (
+                  <div
+                    key={note.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`置顶速记：${note.text}`}
+                    aria-pressed={selectionMode ? selected : undefined}
+                    {...noteInteractionProps(note)}
+                    style={{ WebkitTouchCallout: "none" }}
+                    className={`relative max-w-full select-none rounded-xl border px-3 py-2 text-sm text-slate-100 outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
+                      isAgentNote ? "border-sky-900/70 bg-sky-500/10" : "border-slate-800 bg-slate-950/70"
+                    } ${selected ? "ring-2 ring-emerald-400/70" : ""}`}
+                  >
+                    <NoteBubble note={note} pending={pending} />
+                  </div>
+                );
+              })}
+            </section>
+          </div>
+        )}
       </header>
 
       <section
         ref={scrollRef}
         onScroll={handleScroll}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-5"
-        style={{ paddingBottom: composerInsetPx, scrollPaddingBottom: composerInsetPx }}
+        style={{ paddingBottom: bottomInsetPx, scrollPaddingBottom: bottomInsetPx }}
         aria-label="速记列表"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
@@ -546,7 +871,7 @@ export default function QuickNotesPage() {
                 </div>
               )}
 
-              {!timeline.loading && displayItems.length === 0 && (
+              {!timeline.loading && displayItems.length === 0 && pinnedNotes.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center">
                   <p className="text-sm font-medium text-slate-200">还没有速记</p>
                   <p className="mt-1 text-xs text-slate-400">写下一个想法、线索或待办，稍后再回来看。</p>
@@ -556,7 +881,7 @@ export default function QuickNotesPage() {
               {displayItems.map((item) => {
                 if (item.type === "date") {
                   return (
-                    <div key={item.key} className="flex items-center gap-3 pt-1">
+                    <div key={item.key} data-date-label={item.label} className="flex items-center gap-3 pt-1">
                       <div className="h-px flex-1 bg-slate-800" />
                       <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-400">
                         {item.label}
@@ -565,8 +890,10 @@ export default function QuickNotesPage() {
                     </div>
                   );
                 }
+
                 const note = item.note;
                 const isAgentNote = note.source === "agent";
+                const selected = selectedIds.has(note.id);
                 const pending = unsyncedQuickNoteIds.has(note.id);
                 return (
                   <article key={item.key}>
@@ -574,22 +901,25 @@ export default function QuickNotesPage() {
                       role="button"
                       tabIndex={0}
                       aria-label={`速记：${note.text}`}
-                      onPointerDown={(event) => {
-                        pressedNoteRef.current = note;
-                        longPress.onPointerDown(event);
-                      }}
-                      onPointerMove={longPress.onPointerMove}
-                      onPointerUp={longPress.onPointerUp}
-                      onPointerLeave={longPress.onPointerLeave}
-                      onContextMenu={(event) => {
-                        pressedNoteRef.current = note;
-                        longPress.onContextMenu(event);
-                      }}
+                      aria-pressed={selectionMode ? selected : undefined}
+                      {...noteInteractionProps(note)}
                       style={{ WebkitTouchCallout: "none" }}
                       className={`relative max-w-full select-none rounded-2xl border border-slate-800 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
                         isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
-                      }`}
+                      } ${selected ? "ring-2 ring-emerald-400/70" : ""}`}
                     >
+                      {selectionMode && (
+                        <span
+                          aria-hidden="true"
+                          className={`absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border text-[11px] ${
+                            selected
+                              ? "border-emerald-300 bg-emerald-300 text-slate-950"
+                              : "border-slate-600 bg-slate-950/60 text-transparent"
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      )}
                       <NoteBubble note={note} pending={pending} />
                     </div>
                   </article>
@@ -600,15 +930,38 @@ export default function QuickNotesPage() {
         </div>
       </section>
 
-      {!searchOpen && !timeline.atLatest && (
+      {bubbleLabel && !pinnedOpen && !searchOpen && (
+        <button
+          type="button"
+          aria-label={`当前日期 ${bubbleLabel}，点击选择日期`}
+          onClick={() => {
+            const node = dateInputRef.current;
+            if (node?.showPicker) node.showPicker();
+            else node?.focus();
+          }}
+          className={`pointer-events-auto fixed left-1/2 top-[4.75rem] z-[35] -translate-x-1/2 rounded-full border border-slate-700 bg-slate-900/90 px-3 py-1 text-xs font-medium text-slate-200 shadow-lg backdrop-blur transition-opacity duration-300 sm:top-20 ${
+            bubbleVisible ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {bubbleLabel}
+        </button>
+      )}
+
+      {!searchOpen && shouldShowJumpToLatest({ atBottom, atLatest: timeline.atLatest }) && (
         <button
           type="button"
           onClick={() => {
             stickBottomRef.current = true;
-            void timeline.resetToLatest();
+            setAtBottom(true);
+            if (!timeline.atLatest) {
+              void timeline.resetToLatest();
+              return;
+            }
+            const el = scrollRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
           }}
           className="fixed right-4 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 shadow-lg shadow-slate-950/40 transition hover:border-emerald-500/45"
-          style={{ bottom: navOffsetPx + composerInsetPx }}
+          style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           ↓ 最新
         </button>
@@ -617,7 +970,7 @@ export default function QuickNotesPage() {
       {error && (
         <p
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-red-900/60 bg-red-950/90 px-3 py-2 text-sm text-red-200 shadow-lg"
-          style={{ bottom: navOffsetPx + composerInsetPx }}
+          style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {error}
         </p>
@@ -625,13 +978,13 @@ export default function QuickNotesPage() {
       {status && (
         <p
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/95 px-3 py-2 text-sm text-slate-300 shadow-lg"
-          style={{ bottom: navOffsetPx + composerInsetPx }}
+          style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {status}
         </p>
       )}
 
-      {!searchOpen && (
+      {!searchOpen && !selectionMode && (
         <form
           ref={composerRef}
           className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur transition-[bottom] duration-200 sm:p-3"
@@ -645,12 +998,7 @@ export default function QuickNotesPage() {
             {editingId && (
               <div className="mb-2 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-100">
                 <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
-                <button
-                  type="button"
-                  aria-label="取消编辑"
-                  onClick={cancelEditing}
-                  className="ml-2 text-emerald-200/75"
-                >
+                <button type="button" aria-label="取消编辑" onClick={cancelEditing} className="ml-2 text-emerald-200/75">
                   ✕
                 </button>
               </div>
@@ -685,9 +1033,12 @@ export default function QuickNotesPage() {
         <QuickNoteActionMenu
           x={menu.x}
           y={menu.y}
+          pinned={menu.note.pinned ?? false}
           onCopy={() => void handleCopy(menu.note)}
           onEdit={() => startEditing(menu.note)}
           onDelete={() => void handleDelete(menu.note)}
+          onSelect={() => enterSelection(menu.note)}
+          onTogglePin={() => void handleTogglePin(menu.note)}
           onClose={() => setMenu(null)}
         />
       )}

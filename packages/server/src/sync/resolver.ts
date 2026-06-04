@@ -62,16 +62,16 @@ function applyQuickNoteChange(db: Database, change: QuickNoteChange): ApplyChang
 
   if (existing) {
     db.prepare(`
-      UPDATE quick_notes SET text = ?, occurred_at = ?, source = ?, source_label = ?, updated_at = ?
+      UPDATE quick_notes SET text = ?, occurred_at = ?, source = ?, source_label = ?, pinned = ?, updated_at = ?
       WHERE id = ?
-    `).run(data.text, data.occurredAt, data.source ?? null, data.sourceLabel ?? null, change.timestamp, change.recordId);
+    `).run(data.text, data.occurredAt, data.source ?? null, data.sourceLabel ?? null, data.pinned ? 1 : 0, change.timestamp, change.recordId);
     return result(change, "applied", "updated quick note", existing.updated_at);
   }
 
   db.prepare(`
-    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at, source, source_label)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(data.id, data.text, data.occurredAt, data.createdAt, change.timestamp, data.source ?? null, data.sourceLabel ?? null);
+    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at, source, source_label, pinned)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(data.id, data.text, data.occurredAt, data.createdAt, change.timestamp, data.source ?? null, data.sourceLabel ?? null, data.pinned ? 1 : 0);
   return result(change, "applied", "inserted quick note");
 }
 

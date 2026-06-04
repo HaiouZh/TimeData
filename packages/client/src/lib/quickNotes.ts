@@ -74,6 +74,28 @@ export async function updateQuickNote(id: string, patch: UpdateQuickNotePatch): 
   return next;
 }
 
+export async function setQuickNotePinned(
+  id: string,
+  pinned: boolean,
+  options: { now?: Date } = {},
+): Promise<QuickNote> {
+  const existing = await db.quickNotes.get(id);
+  if (!existing) throw new Error("速记不存在");
+
+  const now = options.now ?? new Date();
+  const next: QuickNote = QuickNoteSchema.parse({
+    ...existing,
+    pinned,
+    updatedAt: now.toISOString(),
+  });
+
+  await db.transaction("rw", db.quickNotes, db.syncLog, async () => {
+    await db.quickNotes.put(next);
+    await recordSyncLog("quick_notes", next.id, "update", next.updatedAt);
+  });
+  return next;
+}
+
 export async function deleteQuickNote(id: string): Promise<void> {
   await db.transaction("rw", db.quickNotes, db.syncLog, async () => {
     await db.quickNotes.delete(id);
@@ -117,4 +139,9 @@ export async function listQuickNotesWindow(oldestUtc: string, newestUtc: string 
       ? db.quickNotes.where("occurredAt").aboveOrEqual(oldestUtc)
       : db.quickNotes.where("occurredAt").between(oldestUtc, newestUtc, true, true);
   return sortQuickNotes(await collection.toArray());
+}
+
+export async function listPinnedQuickNotes(): Promise<QuickNote[]> {
+  const notes = await db.quickNotes.filter((note) => note.pinned === true).toArray();
+  return [...notes].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.id.localeCompare(a.id));
 }

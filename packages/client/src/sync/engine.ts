@@ -222,6 +222,14 @@ function parseRemoteQuickNote(data: unknown, recordId: string): QuickNote | null
   return null;
 }
 
+function quickNoteNeedsApply(existing: QuickNote | undefined, remoteNote: QuickNote): boolean {
+  return !existing
+    || existing.updatedAt !== remoteNote.updatedAt
+    || existing.text !== remoteNote.text
+    || existing.occurredAt !== remoteNote.occurredAt
+    || (existing.pinned ?? false) !== (remoteNote.pinned ?? false);
+}
+
 async function enqueueLocalOnlyChanges(localSnapshot: Snapshot, cloudSnapshot: Snapshot): Promise<void> {
   const cloudCategoryIds = new Set(cloudSnapshot.categories.map((category) => category.id));
   const cloudEntryIds = new Set(cloudSnapshot.timeEntries.map((entry) => entry.id));
@@ -506,7 +514,7 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
         if (!remoteNote) continue;
         if (!locallyModifiedById.has(`quick_notes:${change.recordId}`)) {
           const existing = await db.quickNotes.get(change.recordId);
-          if (!existing || existing.updatedAt !== remoteNote.updatedAt || existing.text !== remoteNote.text || existing.occurredAt !== remoteNote.occurredAt) {
+          if (quickNoteNeedsApply(existing, remoteNote)) {
             await db.quickNotes.put(remoteNote);
             applied++;
           }
@@ -633,6 +641,7 @@ export async function localContentHash(categories: Category[], timeEntries: Time
         occurredAt: note.occurredAt,
         createdAt: note.createdAt,
         updatedAt: note.updatedAt,
+        pinned: note.pinned === true,
       })),
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
@@ -1023,7 +1032,7 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
         const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
         if (!remoteNote) continue;
         const existing = await db.quickNotes.get(change.recordId);
-        if (!existing || existing.updatedAt !== remoteNote.updatedAt || existing.text !== remoteNote.text || existing.occurredAt !== remoteNote.occurredAt) {
+        if (quickNoteNeedsApply(existing, remoteNote)) {
           await db.quickNotes.put(remoteNote);
           applied++;
         }

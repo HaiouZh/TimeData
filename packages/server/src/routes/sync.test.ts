@@ -47,7 +47,8 @@ function createSchema() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       source TEXT,
-      source_label TEXT
+      source_label TEXT,
+      pinned INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE sync_logs (
@@ -529,6 +530,7 @@ describe("sync route", () => {
             updatedAt: "2026-06-01T04:02:00.000Z",
             source: "agent",
             sourceLabel: "Hermes",
+            pinned: true,
           },
         ],
       }),
@@ -542,11 +544,12 @@ describe("sync route", () => {
       importedQuickNotes: 1,
       latestSeq: 1,
     });
-    expect(db.prepare("SELECT text, occurred_at, source, source_label FROM quick_notes WHERE id = ?").get("note-force")).toMatchObject({
+    expect(db.prepare("SELECT text, occurred_at, source, source_label, pinned FROM quick_notes WHERE id = ?").get("note-force")).toMatchObject({
       text: "repo",
       occurred_at: "2026-06-01T04:01:30.123Z",
       source: "agent",
       source_label: "Hermes",
+      pinned: 1,
     });
   });
 

@@ -9,6 +9,7 @@ const baseRow: QuickNoteRow = {
   updated_at: "2026-06-03T00:00:00.000Z",
   source: null,
   source_label: null,
+  pinned: 0,
 };
 
 describe("rowToQuickNote", () => {
@@ -24,5 +25,10 @@ describe("rowToQuickNote", () => {
 
     expect(note.source).toBe("agent");
     expect(note.sourceLabel).toBe("Hermes");
+  });
+
+  it("maps pinned rows and omits false pinned values", () => {
+    expect(rowToQuickNote({ ...baseRow, pinned: 1 }).pinned).toBe(true);
+    expect(rowToQuickNote({ ...baseRow, pinned: 0 }).pinned).toBeUndefined();
   });
 });

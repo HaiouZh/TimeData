@@ -118,6 +118,13 @@ describe("localContentHash", () => {
 
     expect(withSource).toBe(withoutSource);
   });
+
+  it("includes quick note pinned state", async () => {
+    const unpinned = await localContentHash([], [], [quickNote]);
+    const pinned = await localContentHash([], [], [{ ...quickNote, pinned: true }]);
+
+    expect(pinned).not.toBe(unpinned);
+  });
 });
 
 describe("regular sync failure diagnostics", () => {
@@ -869,6 +876,7 @@ describe("syncPull", () => {
             occurredAt: "2026-06-01T04:01:30.123Z",
             createdAt: "2026-06-01T04:02:00.000Z",
             updatedAt: "2026-06-01T04:02:00.000Z",
+            pinned: true,
           },
           timestamp: "2026-06-01T04:02:00.000Z",
         },
@@ -876,7 +884,7 @@ describe("syncPull", () => {
     });
 
     await expect(syncPull()).resolves.toBe(1);
-    await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "repo" });
+    await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "repo", pinned: true });
 
     apiFetchMock.mockResolvedValueOnce({
       serverTime: "2026-06-01T04:04:00.000Z",

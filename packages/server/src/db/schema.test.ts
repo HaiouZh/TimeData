@@ -84,6 +84,7 @@ describe("initializeDatabase", () => {
       ["updated_at", "TEXT", 1, 0],
       ["source", "TEXT", 0, 0],
       ["source_label", "TEXT", 0, 0],
+      ["pinned", "INTEGER", 1, 0],
     ]);
   });
 
@@ -123,6 +124,45 @@ describe("initializeDatabase", () => {
     expect(() => {
       ensureQuickNoteSourceColumns(db);
       ensureQuickNoteSourceColumns(db);
+    }).not.toThrow();
+  });
+
+  it("adds pinned to legacy quick_notes tables", async () => {
+    const { ensureQuickNotePinnedColumn } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE quick_notes (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    ensureQuickNotePinnedColumn(db);
+
+    const columns = quickNoteColumnNames(db);
+    expect(columns.has("pinned")).toBe(true);
+  });
+
+  it("keeps the pinned column migration idempotent", async () => {
+    const { ensureQuickNotePinnedColumn } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE quick_notes (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        occurred_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        source TEXT,
+        source_label TEXT,
+        pinned INTEGER NOT NULL DEFAULT 0
+      );
+    `);
+
+    expect(() => {
+      ensureQuickNotePinnedColumn(db);
+      ensureQuickNotePinnedColumn(db);
     }).not.toThrow();
   });
 });

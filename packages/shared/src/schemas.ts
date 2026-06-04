@@ -38,6 +38,7 @@ export const QuickNoteSchema = z.object({
   updatedAt: UtcIsoStringSchema,
   source: z.enum(["user", "agent"]).optional(),
   sourceLabel: z.string().max(64).optional(),
+  pinned: z.boolean().optional(),
 });
 
 export const TimeEntrySchema = z

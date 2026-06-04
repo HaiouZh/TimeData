@@ -104,6 +104,11 @@ describe("QuickNoteSchema", () => {
     expect(parsed.sourceLabel).toBeUndefined();
   });
 
+  it("解析 pinned 布尔字段，缺省时为 undefined", () => {
+    expect(QuickNoteSchema.parse({ ...quickNote, pinned: true }).pinned).toBe(true);
+    expect(QuickNoteSchema.parse(quickNote).pinned).toBeUndefined();
+  });
+
   it("rejects unknown source values", () => {
     expect(QuickNoteSchema.safeParse({ ...quickNote, source: "robot" }).success).toBe(false);
   });

@@ -12,6 +12,8 @@ import {
   listQuickNotesNewerThan,
   listQuickNotesOlderThan,
   listQuickNotesWindow,
+  listPinnedQuickNotes,
+  setQuickNotePinned,
   updateQuickNote,
 } from "./quickNotes.js";
 
@@ -208,5 +210,40 @@ describe("quick note windowed queries", () => {
     await seedFive();
 
     expect(times(await listQuickNotesWindow(t3, null))).toEqual([t3, t4, t5]);
+  });
+});
+
+describe("quick note pinning", () => {
+  it("setQuickNotePinned 置顶并写 update 同步日志、bump updatedAt", async () => {
+    const note = await addQuickNote("重要", { now: new Date("2026-06-01T00:00:00.000Z") });
+    await db.syncLog.clear();
+
+    const next = await setQuickNotePinned(note.id, true, { now: new Date("2026-06-02T00:00:00.000Z") });
+
+    expect(next.pinned).toBe(true);
+    expect(next.updatedAt).toBe("2026-06-02T00:00:00.000Z");
+    await expect(db.syncLog.toArray()).resolves.toMatchObject([
+      { tableName: "quick_notes", recordId: note.id, action: "update", timestamp: "2026-06-02T00:00:00.000Z" },
+    ]);
+  });
+
+  it("listPinnedQuickNotes 只返回置顶项、按 occurredAt 倒序", async () => {
+    const a = await addQuickNote("a", { occurredAt: "2026-06-01T01:00:00.000Z" });
+    const b = await addQuickNote("b", { occurredAt: "2026-06-01T03:00:00.000Z" });
+    await addQuickNote("c", { occurredAt: "2026-06-01T02:00:00.000Z" });
+    await setQuickNotePinned(a.id, true);
+    await setQuickNotePinned(b.id, true);
+
+    const pinned = await listPinnedQuickNotes();
+
+    expect(pinned.map((note) => note.id)).toEqual([b.id, a.id]);
+  });
+
+  it("取消置顶后不再出现在置顶列表", async () => {
+    const note = await addQuickNote("a");
+    await setQuickNotePinned(note.id, true);
+    await setQuickNotePinned(note.id, false);
+
+    await expect(listPinnedQuickNotes()).resolves.toEqual([]);
   });
 });

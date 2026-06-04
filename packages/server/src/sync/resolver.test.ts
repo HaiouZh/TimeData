@@ -52,7 +52,8 @@ beforeEach(async () => {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       source TEXT,
-      source_label TEXT
+      source_label TEXT,
+      pinned INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE sync_tombstones (
@@ -524,6 +525,47 @@ describe("applyChange", () => {
     expect(db.prepare("SELECT source, source_label FROM quick_notes WHERE id = ?").get("note-agent")).toMatchObject({
       source: "agent",
       source_label: "Hermes",
+    });
+  });
+
+  it("persists quick note pinned state on upsert", () => {
+    const result = applyChange({
+      tableName: "quick_notes",
+      recordId: "note-pin",
+      action: "create",
+      data: {
+        id: "note-pin",
+        text: "重要",
+        occurredAt: "2026-06-03T01:00:00.000Z",
+        createdAt: "2026-06-03T01:00:00.000Z",
+        updatedAt: "2026-06-03T01:00:00.000Z",
+        pinned: true,
+      },
+      timestamp: "2026-06-03T01:00:00.000Z",
+    });
+
+    expect(result.status).toBe("applied");
+    expect(db.prepare("SELECT pinned FROM quick_notes WHERE id = ?").get("note-pin")).toMatchObject({
+      pinned: 1,
+    });
+
+    applyChange({
+      tableName: "quick_notes",
+      recordId: "note-pin",
+      action: "update",
+      data: {
+        id: "note-pin",
+        text: "重要",
+        occurredAt: "2026-06-03T01:00:00.000Z",
+        createdAt: "2026-06-03T01:00:00.000Z",
+        updatedAt: "2026-06-03T02:00:00.000Z",
+        pinned: false,
+      },
+      timestamp: "2026-06-03T02:00:00.000Z",
+    });
+
+    expect(db.prepare("SELECT pinned FROM quick_notes WHERE id = ?").get("note-pin")).toMatchObject({
+      pinned: 0,
     });
   });
 });

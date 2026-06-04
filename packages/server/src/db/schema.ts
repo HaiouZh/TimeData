@@ -9,6 +9,11 @@ export function ensureQuickNoteSourceColumns(db: Database): void {
   if (!names.has("source_label")) db.exec("ALTER TABLE quick_notes ADD COLUMN source_label TEXT");
 }
 
+export function ensureQuickNotePinnedColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("pinned")) db.exec("ALTER TABLE quick_notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+}
+
 export function initializeDatabase(): void {
   const db = getDb();
 
@@ -50,7 +55,8 @@ export function initializeDatabase(): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       source TEXT,
-      source_label TEXT
+      source_label TEXT,
+      pinned INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS sync_logs (
@@ -100,6 +106,7 @@ export function initializeDatabase(): void {
   `);
 
   ensureQuickNoteSourceColumns(db);
+  ensureQuickNotePinnedColumn(db);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {

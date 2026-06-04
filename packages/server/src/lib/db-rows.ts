@@ -44,6 +44,7 @@ export interface QuickNoteRow {
   updated_at: string;
   source: string | null;
   source_label: string | null;
+  pinned?: number | null;
 }
 
 export interface SettingRow {
@@ -87,6 +88,7 @@ export function rowToQuickNote(row: QuickNoteRow): QuickNote {
     updatedAt: row.updated_at,
     ...(row.source ? { source: row.source as "user" | "agent" } : {}),
     ...(row.source_label ? { sourceLabel: row.source_label } : {}),
+    ...(row.pinned ? { pinned: true } : {}),
   };
 }
 

@@ -38,6 +38,18 @@ export async function exportQuickNotesJsonByDate(
   return exportQuickNotesJsonByRange(date, date, options);
 }
 
+export function exportQuickNotesJsonForNotes(
+  notes: QuickNote[],
+  options: ExportQuickNotesOptions = {},
+): QuickNotesFile {
+  return QuickNotesFileSchema.parse({
+    format: QUICK_NOTES_BACKUP_FORMAT,
+    timeFormat: "utc",
+    exportedAt: options.now ? options.now() : new Date().toISOString(),
+    notes,
+  });
+}
+
 export function quickNotesMarkdown(title: string, notes: QuickNote[]): string {
   const lines = [`# ${title}`, ""];
   if (notes.length === 0) {
