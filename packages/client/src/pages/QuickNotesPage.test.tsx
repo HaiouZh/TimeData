@@ -147,6 +147,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("QuickNotesPage", () => {
@@ -258,6 +259,12 @@ describe("QuickNotesPage", () => {
     Object.defineProperty(firstDivider, "offsetTop", { value: 0, configurable: true });
     Object.defineProperty(secondDivider, "offsetTop", { value: 120, configurable: true });
 
+    // 日期气泡扫描经 rAF 节流；用例内把 rAF 同步化，保证断言可确定地观察到结果。
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+
     await act(async () => {
       Object.defineProperty(list, "scrollTop", { value: 130, configurable: true });
       Object.defineProperty(list, "scrollHeight", { value: 1000, configurable: true });
@@ -271,6 +278,7 @@ describe("QuickNotesPage", () => {
     expect((floatingDateInput as HTMLInputElement).type).toBe("date");
     expect((floatingDateInput as HTMLInputElement).value).toBe("2026-06-02");
 
+    vi.unstubAllGlobals();
     await act(async () => root.unmount());
   });
 

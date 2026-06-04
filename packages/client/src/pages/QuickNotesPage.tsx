@@ -120,6 +120,8 @@ export default function QuickNotesPage() {
   const composeDraftRef = useRef("");
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bubbleRafRef = useRef<number | null>(null);
+  const bubbleKeyRef = useRef<string | null>(null);
   const pressedNoteRef = useRef<QuickNote | null>(null);
   const stickBottomRef = useRef(true);
   const prevScrollHeightRef = useRef(0);
@@ -176,6 +178,9 @@ export default function QuickNotesPage() {
     () => () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+      if (bubbleRafRef.current !== null && typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(bubbleRafRef.current);
+      }
     },
     [],
   );
@@ -295,6 +300,17 @@ export default function QuickNotesPage() {
     }
     lastScrollTopRef.current = top;
 
+    scheduleDateBubble();
+  }
+
+  // 日期气泡的「当前分隔」扫描需要 querySelectorAll + 读 offsetTop（强制重排），原本每个
+  // scroll 事件都跑且每次新建对象 setState，滚动期间反复重渲染。这里用 rAF 把扫描合并到每帧
+  // 一次，并对相同日期去抖（key 不变就不 setState），尽量减少滚动时的重排与重渲染。
+  function updateDateBubble() {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const top = el.scrollTop;
     const dividers = Array.from(el.querySelectorAll<HTMLElement>("[data-date-label]")).map((node) => ({
       label: node.dataset.dateLabel ?? "",
       localDate: node.dataset.localDate ?? today,
@@ -303,13 +319,29 @@ export default function QuickNotesPage() {
     const divider = pickCurrentDateDivider(dividers, top);
     if (!divider) return;
 
-    setBubbleDate({ label: divider.label, localDate: divider.localDate });
+    const key = `${divider.localDate}|${divider.label}`;
+    if (bubbleKeyRef.current !== key) {
+      bubbleKeyRef.current = key;
+      setBubbleDate({ label: divider.label, localDate: divider.localDate });
+    }
     setBubbleVisible(true);
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
     bubbleTimerRef.current = setTimeout(() => {
       bubbleTimerRef.current = null;
       setBubbleVisible(false);
     }, BUBBLE_HIDE_DELAY_MS);
+  }
+
+  function scheduleDateBubble() {
+    if (typeof requestAnimationFrame !== "function") {
+      updateDateBubble();
+      return;
+    }
+    if (bubbleRafRef.current !== null) return;
+    bubbleRafRef.current = requestAnimationFrame(() => {
+      bubbleRafRef.current = null;
+      updateDateBubble();
+    });
   }
 
   function focusInput() {
