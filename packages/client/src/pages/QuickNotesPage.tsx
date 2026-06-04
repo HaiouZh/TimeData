@@ -43,6 +43,7 @@ const SCROLL_TRIGGER_PX = 48;
 const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
+const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 const STATUS_AUTO_DISMISS_MS = 2400;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 
@@ -55,6 +56,15 @@ interface MenuTarget {
 function normalizeDateParam(value: string | null): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   return value;
+}
+
+function isSoftKeyboardLikelyOpen(): boolean {
+  if (typeof window === "undefined") return false;
+  const viewport = window.visualViewport;
+  if (!viewport || window.innerHeight <= 0) return false;
+
+  const visualViewportBottomGap = window.innerHeight - viewport.height - viewport.offsetTop;
+  return visualViewportBottomGap > KEYBOARD_BOTTOM_GAP_THRESHOLD_PX;
 }
 
 function PinIcon() {
@@ -99,6 +109,8 @@ export default function QuickNotesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [softKeyboardOpen, setSoftKeyboardOpen] = useState(false);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +133,7 @@ export default function QuickNotesPage() {
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
+  const inputInteractionActive = composerFocused || searchOpen || softKeyboardOpen;
   const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   const displayItems = useMemo(
@@ -168,6 +181,30 @@ export default function QuickNotesPage() {
   );
 
   useEffect(() => () => setNavHidden(false), [setNavHidden]);
+
+  useEffect(() => {
+    if (inputInteractionActive) {
+      setNavHidden(true);
+      return;
+    }
+
+    setNavHidden(false);
+  }, [inputInteractionActive, setNavHidden]);
+
+  useEffect(() => {
+    const viewport = typeof window === "undefined" ? undefined : window.visualViewport;
+    if (!viewport) return;
+
+    const handleViewportChange = () => setSoftKeyboardOpen(isSoftKeyboardLikelyOpen());
+    handleViewportChange();
+    viewport.addEventListener("resize", handleViewportChange);
+    viewport.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      viewport.removeEventListener("resize", handleViewportChange);
+      viewport.removeEventListener("scroll", handleViewportChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (selectionMode) {
@@ -1012,6 +1049,8 @@ export default function QuickNotesPage() {
                   onChange={(event) => setDraftText(event.target.value)}
                   onInput={(event) => setDraftText(event.currentTarget.value)}
                   onKeyDown={handleKeyDown}
+                  onFocus={() => setComposerFocused(true)}
+                  onBlur={() => setComposerFocused(false)}
                   rows={1}
                   placeholder={editingId ? "修改这条速记..." : "捕捉一个当下想法..."}
                   className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-400 outline-none"

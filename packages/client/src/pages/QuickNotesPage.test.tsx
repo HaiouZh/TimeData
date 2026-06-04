@@ -5,7 +5,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BottomNavProvider } from "../contexts/BottomNavContext.js";
+import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { db } from "../db/index.js";
 import { setQuickNotePinned } from "../lib/quickNotes.js";
 import QuickNotesPage from "./QuickNotesPage.js";
@@ -17,6 +17,11 @@ const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }),
 }));
+
+function BottomNavStateProbe() {
+  const { hidden } = useBottomNav();
+  return createElement("span", { "data-testid": "bottom-nav-hidden" }, String(hidden));
+}
 
 async function act(callback: () => Promise<void> | void) {
   let result: Promise<void> | void;
@@ -45,7 +50,7 @@ async function renderPage(initialEntry = "/quick-notes"): Promise<{ host: HTMLDi
       createElement(
         MemoryRouter,
         { initialEntries: [initialEntry] },
-        createElement(BottomNavProvider, null, createElement(QuickNotesPage)),
+        createElement(BottomNavProvider, null, createElement(BottomNavStateProbe), createElement(QuickNotesPage)),
       ),
     );
   });
@@ -63,6 +68,10 @@ function searchInput(host: HTMLElement): HTMLInputElement {
   const element = host.querySelector('input[aria-label="搜索速记"]');
   if (!(element instanceof HTMLInputElement)) throw new Error("missing search input");
   return element;
+}
+
+function bottomNavHidden(host: HTMLElement): string | null {
+  return host.querySelector('[data-testid="bottom-nav-hidden"]')?.textContent ?? null;
 }
 
 async function typeInto(element: HTMLTextAreaElement, value: string) {
@@ -359,6 +368,29 @@ describe("QuickNotesPage", () => {
 
     expect(list).toBeInstanceOf(HTMLElement);
     expect((list as HTMLElement).style.paddingBottom).toBe("164px");
+
+    await act(async () => root.unmount());
+  });
+
+  it("hides the bottom nav while the composer input is focused", async () => {
+    const { host, root } = await renderPage();
+    const composerInput = input(host);
+
+    expect(bottomNavHidden(host)).toBe("false");
+
+    await act(async () => {
+      composerInput.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    });
+    await flush();
+
+    expect(bottomNavHidden(host)).toBe("true");
+
+    await act(async () => {
+      composerInput.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await flush();
+
+    expect(bottomNavHidden(host)).toBe("false");
 
     await act(async () => root.unmount());
   });
