@@ -58,9 +58,24 @@ function input(host: HTMLElement): HTMLTextAreaElement {
   return element;
 }
 
+function searchInput(host: HTMLElement): HTMLInputElement {
+  const element = host.querySelector('input[aria-label="搜索速记"]');
+  if (!(element instanceof HTMLInputElement)) throw new Error("missing search input");
+  return element;
+}
+
 async function typeInto(element: HTMLTextAreaElement, value: string) {
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await flush();
+}
+
+async function typeIntoSearch(element: HTMLInputElement, value: string) {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     setter?.call(element, value);
     element.dispatchEvent(new Event("input", { bubbles: true }));
   });
@@ -96,6 +111,19 @@ function menuItem(host: HTMLElement, text: string): HTMLButtonElement | null {
 function lastButtonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
   const matches = Array.from(host.querySelectorAll("button")).filter((button) => button.textContent === text);
   return matches.at(-1) ?? null;
+}
+
+function markByText(host: HTMLElement, text: string): HTMLElement | null {
+  return (
+    Array.from(host.querySelectorAll("mark")).find((element) => element.textContent === text) as HTMLElement | undefined
+  ) ?? null;
+}
+
+async function waitForSearchDebounce() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 240));
+  });
+  await flush();
 }
 
 beforeEach(async () => {
@@ -386,6 +414,64 @@ describe("QuickNotesPage", () => {
 
     await expect(db.quickNotes.get("today")).resolves.toBeUndefined();
     await expect(db.quickNotes.get("other")).resolves.toMatchObject({ text: "别天" });
+
+    await act(async () => root.unmount());
+  });
+
+  it("opens search mode with an empty-query hint and hides the bottom composer", async () => {
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="搜索速记"]'));
+
+    expect(host.querySelector('input[placeholder="搜索速记…"]')).toBeInstanceOf(HTMLInputElement);
+    expect(host.textContent).toContain("空格分隔多个词");
+    expect(host.querySelector('textarea[aria-label="速记输入"]')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("shows matching search results with highlights and an empty state for misses", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "meeting",
+        text: "和张三开会议",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "milk",
+        text: "买牛奶",
+        occurredAt: "2026-06-01T05:00:00.000Z",
+        createdAt: "2026-06-01T05:00:00.000Z",
+        updatedAt: "2026-06-01T05:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="搜索速记"]'));
+    await typeIntoSearch(searchInput(host), "会议");
+    await waitForSearchDebounce();
+
+    expect(markByText(host, "会议")).toBeInstanceOf(HTMLElement);
+    expect(host.textContent).not.toContain("买牛奶");
+
+    await typeIntoSearch(searchInput(host), "不存在的词");
+    await waitForSearchDebounce();
+
+    expect(host.textContent).toContain("没有匹配的速记");
+
+    await act(async () => root.unmount());
+  });
+
+  it("closes search mode and restores the bottom composer", async () => {
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="搜索速记"]'));
+    await click(host.querySelector('button[aria-label="退出搜索"]'));
+
+    expect(input(host)).toBeInstanceOf(HTMLTextAreaElement);
+    expect(host.querySelector('input[placeholder="搜索速记…"]')).toBeNull();
 
     await act(async () => root.unmount());
   });

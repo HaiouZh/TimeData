@@ -1,9 +1,11 @@
 import type { QuickNote } from "@timedata/shared";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useLiveQuery } from "dexie-react-hooks";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
 import { addQuickNote, deleteQuickNote, updateQuickNote } from "../lib/quickNotes.ts";
@@ -12,8 +14,11 @@ import { copyText } from "../quick-notes/clipboard.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
 import { exportQuickNotesJsonByDate, exportQuickNotesMarkdownByDate } from "../quick-notes/exportQuickNotes.ts";
 import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-notes/fileDownload.ts";
+import HighlightedText from "../quick-notes/HighlightedText.tsx";
 import NoteBubble from "../quick-notes/NoteBubble.tsx";
 import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
+import { searchQuickNotes } from "../quick-notes/searchQuickNotes.ts";
+import { parseSearchTerms } from "../quick-notes/searchTerms.ts";
 import { useQuickNoteTimeline } from "../quick-notes/useQuickNoteTimeline.ts";
 
 const SCROLL_TRIGGER_PX = 48;
@@ -46,8 +51,11 @@ export default function QuickNotesPage() {
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const composeDraftRef = useRef("");
@@ -68,6 +76,10 @@ export default function QuickNotesPage() {
     () => groupQuickNotesForDisplay(timeline.notes, { today }),
     [timeline.notes, today],
   );
+  const debouncedQuery = useDebouncedValue(searchQuery, 200);
+  const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
+  const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
+  const hasQuery = searchTerms.length > 0;
   const timelineStatus = timeline.loading
     ? "正在读取速记"
     : timeline.atLatest
@@ -109,7 +121,7 @@ export default function QuickNotesPage() {
       return;
     }
 
-    if (stickBottomRef.current && timeline.atLatest) {
+    if (!searchOpen && stickBottomRef.current && timeline.atLatest) {
       el.scrollTop = el.scrollHeight;
     }
   });
@@ -155,12 +167,12 @@ export default function QuickNotesPage() {
     if (!el) return;
 
     stickBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_TRIGGER_PX;
-    if (el.scrollTop <= SCROLL_TRIGGER_PX && timeline.hasOlder) {
+    if (!searchOpen && el.scrollTop <= SCROLL_TRIGGER_PX && timeline.hasOlder) {
       prevScrollHeightRef.current = el.scrollHeight;
       preserveAnchorRef.current = true;
       void timeline.loadOlder();
     }
-    if (!timeline.atLatest && stickBottomRef.current) {
+    if (!searchOpen && !timeline.atLatest && stickBottomRef.current) {
       void timeline.loadNewer();
     }
 
@@ -183,6 +195,31 @@ export default function QuickNotesPage() {
       return;
     }
     inputRef.current?.focus();
+  }
+
+  function openSearch() {
+    setActionsOpen(false);
+    setSearchOpen(true);
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+      return;
+    }
+    searchInputRef.current?.focus();
+  }
+
+  function closeSearch(options: { resetTimeline?: boolean } = {}) {
+    setSearchOpen(false);
+    setSearchQuery("");
+    if (options.resetTimeline ?? true) {
+      stickBottomRef.current = true;
+      void timeline.resetToLatest();
+    }
+  }
+
+  function handleResultClick(note: QuickNote) {
+    const localDate = getDateString(new Date(note.occurredAt));
+    closeSearch({ resetTimeline: false });
+    handleJumpDateChange(localDate);
   }
 
   // 轻提示（已复制 / 已导出 / 已清理）几秒后自动消失，避免一直挂在底部直到切换页面。
@@ -326,18 +363,42 @@ export default function QuickNotesPage() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-slate-950 text-slate-100">
       <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/80 bg-slate-950/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-[0_14px_40px_rgba(2,6,23,0.22)]">
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="hidden text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80 sm:block">
-              QuickNote
-            </p>
-            <h1 className="truncate text-base font-semibold tracking-tight text-slate-50 sm:mt-1 sm:text-xl">
-              {timeline.atLatest ? `速记 · ${timeline.notes.length}` : "速记 · 历史"}
-            </h1>
-            <p className="hidden text-xs text-slate-400 sm:mt-1 sm:block">{timelineStatus}</p>
+        {searchOpen ? (
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+            <span aria-hidden className="text-slate-400">
+              🔍
+            </span>
+            <input
+              ref={searchInputRef}
+              type="search"
+              aria-label="搜索速记"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索速记…"
+              className="min-w-0 flex-1 bg-transparent text-base text-slate-100 placeholder-slate-400 outline-none"
+            />
+            <button
+              type="button"
+              aria-label="退出搜索"
+              onClick={() => closeSearch()}
+              className="shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:text-slate-100"
+            >
+              取消
+            </button>
           </div>
-          <label className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
-            <span className="hidden text-[11px] text-slate-500 sm:block">日期</span>
+        ) : (
+          <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="hidden text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80 sm:block">
+                QuickNote
+              </p>
+              <h1 className="truncate text-base font-semibold tracking-tight text-slate-50 sm:mt-1 sm:text-xl">
+                {timeline.atLatest ? `速记 · ${timeline.notes.length}` : "速记 · 历史"}
+              </h1>
+              <p className="hidden text-xs text-slate-400 sm:mt-1 sm:block">{timelineStatus}</p>
+            </div>
+            <label className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
+              <span className="hidden text-[11px] text-slate-500 sm:block">日期</span>
               <input
                 type="date"
                 aria-label="跳转日期"
@@ -345,9 +406,18 @@ export default function QuickNotesPage() {
                 onChange={(event) => handleJumpDateChange(event.target.value)}
                 className="w-[7.5rem] bg-transparent text-xs font-medium text-slate-100 outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
               />
-          </label>
+            </label>
 
-          <div className="relative shrink-0">
+            <button
+              type="button"
+              aria-label="搜索速记"
+              onClick={openSearch}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+            >
+              🔍
+            </button>
+
+            <div className="relative shrink-0">
               <button
                 type="button"
                 aria-label="更多操作"
@@ -407,8 +477,9 @@ export default function QuickNotesPage() {
                   </div>
                 </>
               )}
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
       <section
@@ -419,95 +490,133 @@ export default function QuickNotesPage() {
         aria-label="速记列表"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-          {timeline.hasOlder && (
-            <div className="flex justify-center pb-1">
-              <button
-                type="button"
-                onClick={() => void timeline.loadOlder()}
-                className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-emerald-500/40 hover:text-slate-200"
-              >
-                加载更早
-              </button>
-            </div>
-          )}
-
-          {timeline.loading && (
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-4 py-8 text-center text-sm text-slate-400">
-              正在读取速记...
-            </div>
-          )}
-
-          {!timeline.loading && displayItems.length === 0 && (
-            <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center">
-              <p className="text-sm font-medium text-slate-200">还没有速记</p>
-              <p className="mt-1 text-xs text-slate-400">写下一个想法、线索或待办，稍后再回来看。</p>
-            </div>
-          )}
-
-          {displayItems.map((item) => {
-            if (item.type === "date") {
-              return (
-                <div key={item.key} className="flex items-center gap-3 pt-1">
-                  <div className="h-px flex-1 bg-slate-800" />
-                  <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-400">
-                    {item.label}
-                  </div>
-                  <div className="h-px flex-1 bg-slate-800" />
+          {searchOpen ? (
+            !hasQuery ? (
+              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center text-sm text-slate-400">
+                输入关键词搜索速记，空格分隔多个词表示同时包含。
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center text-sm text-slate-400">
+                没有匹配的速记
+              </div>
+            ) : (
+              searchResults.map((note) => {
+                const isAgentNote = note.source === "agent";
+                return (
+                  <button
+                    key={note.id}
+                    type="button"
+                    onClick={() => handleResultClick(note)}
+                    className={`relative w-full rounded-2xl border border-slate-800 px-4 py-3 text-left text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] transition hover:border-emerald-500/35 ${
+                      isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
+                    }`}
+                  >
+                    <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500">
+                      {formatLocalClock(note.occurredAt)}
+                    </time>
+                    {isAgentNote && (
+                      <div className="mb-1 text-[11px] font-medium text-sky-100/85">
+                        {note.sourceLabel ?? "助手"}
+                      </div>
+                    )}
+                    <HighlightedText text={note.text} terms={searchTerms} />
+                  </button>
+                );
+              })
+            )
+          ) : (
+            <>
+              {timeline.hasOlder && (
+                <div className="flex justify-center pb-1">
+                  <button
+                    type="button"
+                    onClick={() => void timeline.loadOlder()}
+                    className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-emerald-500/40 hover:text-slate-200"
+                  >
+                    加载更早
+                  </button>
                 </div>
-              );
-            }
-            if (item.type === "time") {
-              return (
-                <div
-                  key={item.key}
-                  className="hidden grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 pt-1 sm:grid"
-                >
-                  <time className="font-mono text-[11px] tabular-nums text-slate-400">{item.label}</time>
-                  <div className="flex items-center gap-2">
-                    <span className="size-1.5 rounded-full bg-emerald-300/80" />
-                    <div className="h-px flex-1 bg-slate-800/80" />
-                  </div>
-                </div>
-              );
-            }
+              )}
 
-            const note = item.note;
-            const isAgentNote = note.source === "agent";
-            return (
-              <article key={item.key} className="grid grid-cols-1 gap-3 sm:grid-cols-[4.25rem_minmax(0,1fr)]">
-                <div className="hidden sm:block" />
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`速记：${note.text}`}
-                  onPointerDown={(event) => {
-                    pressedNoteRef.current = note;
-                    longPress.onPointerDown(event);
-                  }}
-                  onPointerMove={longPress.onPointerMove}
-                  onPointerUp={longPress.onPointerUp}
-                  onPointerLeave={longPress.onPointerLeave}
-                  onContextMenu={(event) => {
-                    pressedNoteRef.current = note;
-                    longPress.onContextMenu(event);
-                  }}
-                  style={{ WebkitTouchCallout: "none" }}
-                  className={`relative max-w-full select-none rounded-2xl border border-slate-800 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
-                    isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
-                  }`}
-                >
-                  <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500 sm:hidden">
-                    {formatLocalClock(note.occurredAt)}
-                  </time>
-                  <NoteBubble note={note} />
+              {timeline.loading && (
+                <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-4 py-8 text-center text-sm text-slate-400">
+                  正在读取速记...
                 </div>
-              </article>
-            );
-          })}
+              )}
+
+              {!timeline.loading && displayItems.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center">
+                  <p className="text-sm font-medium text-slate-200">还没有速记</p>
+                  <p className="mt-1 text-xs text-slate-400">写下一个想法、线索或待办，稍后再回来看。</p>
+                </div>
+              )}
+
+              {displayItems.map((item) => {
+                if (item.type === "date") {
+                  return (
+                    <div key={item.key} className="flex items-center gap-3 pt-1">
+                      <div className="h-px flex-1 bg-slate-800" />
+                      <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-400">
+                        {item.label}
+                      </div>
+                      <div className="h-px flex-1 bg-slate-800" />
+                    </div>
+                  );
+                }
+                if (item.type === "time") {
+                  return (
+                    <div
+                      key={item.key}
+                      className="hidden grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 pt-1 sm:grid"
+                    >
+                      <time className="font-mono text-[11px] tabular-nums text-slate-400">{item.label}</time>
+                      <div className="flex items-center gap-2">
+                        <span className="size-1.5 rounded-full bg-emerald-300/80" />
+                        <div className="h-px flex-1 bg-slate-800/80" />
+                      </div>
+                    </div>
+                  );
+                }
+
+                const note = item.note;
+                const isAgentNote = note.source === "agent";
+                return (
+                  <article key={item.key} className="grid grid-cols-1 gap-3 sm:grid-cols-[4.25rem_minmax(0,1fr)]">
+                    <div className="hidden sm:block" />
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`速记：${note.text}`}
+                      onPointerDown={(event) => {
+                        pressedNoteRef.current = note;
+                        longPress.onPointerDown(event);
+                      }}
+                      onPointerMove={longPress.onPointerMove}
+                      onPointerUp={longPress.onPointerUp}
+                      onPointerLeave={longPress.onPointerLeave}
+                      onContextMenu={(event) => {
+                        pressedNoteRef.current = note;
+                        longPress.onContextMenu(event);
+                      }}
+                      style={{ WebkitTouchCallout: "none" }}
+                      className={`relative max-w-full select-none rounded-2xl border border-slate-800 px-4 py-3 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
+                        isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
+                      }`}
+                    >
+                      <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500 sm:hidden">
+                        {formatLocalClock(note.occurredAt)}
+                      </time>
+                      <NoteBubble note={note} />
+                    </div>
+                  </article>
+                );
+              })}
+            </>
+          )}
         </div>
       </section>
 
-      {!timeline.atLatest && (
+      {!searchOpen && !timeline.atLatest && (
         <button
           type="button"
           onClick={() => {
@@ -538,48 +647,55 @@ export default function QuickNotesPage() {
         </p>
       )}
 
-      <form
-        ref={composerRef}
-        className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur transition-[bottom] duration-200 sm:p-3"
-        style={{ bottom: navOffsetPx }}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleSubmit();
-        }}
-      >
-        <div className="mx-auto w-full max-w-3xl">
-          {editingId && (
-            <div className="mb-2 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-100">
-              <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
-              <button type="button" aria-label="取消编辑" onClick={cancelEditing} className="ml-2 text-emerald-200/75">
-                ✕
-              </button>
-            </div>
-          )}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={inputRef}
-                aria-label="速记输入"
-                value={draftText}
-                onChange={(event) => setDraftText(event.target.value)}
-                onInput={(event) => setDraftText(event.currentTarget.value)}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                placeholder={editingId ? "修改这条速记..." : "捕捉一个当下想法..."}
-                className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-400 outline-none"
-              />
-              <button
-                type="submit"
-                disabled={!draftText.trim() || saving}
-                className="h-11 shrink-0 rounded-2xl bg-emerald-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 sm:px-4"
-              >
-                {editingId ? "保存" : "记录"}
-              </button>
+      {!searchOpen && (
+        <form
+          ref={composerRef}
+          className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur transition-[bottom] duration-200 sm:p-3"
+          style={{ bottom: navOffsetPx }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSubmit();
+          }}
+        >
+          <div className="mx-auto w-full max-w-3xl">
+            {editingId && (
+              <div className="mb-2 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-100">
+                <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
+                <button
+                  type="button"
+                  aria-label="取消编辑"
+                  onClick={cancelEditing}
+                  className="ml-2 text-emerald-200/75"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={inputRef}
+                  aria-label="速记输入"
+                  value={draftText}
+                  onChange={(event) => setDraftText(event.target.value)}
+                  onInput={(event) => setDraftText(event.currentTarget.value)}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  placeholder={editingId ? "修改这条速记..." : "捕捉一个当下想法..."}
+                  className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-400 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!draftText.trim() || saving}
+                  className="h-11 shrink-0 rounded-2xl bg-emerald-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 sm:px-4"
+                >
+                  {editingId ? "保存" : "记录"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </form>
+        </form>
+      )}
 
       {menu && (
         <QuickNoteActionMenu
