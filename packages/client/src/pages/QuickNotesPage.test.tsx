@@ -218,6 +218,70 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("renders a unified bubble layout without legacy time separators", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "first-note",
+        text: "第一条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "second-note",
+        text: "第二条",
+        occurredAt: "2026-06-01T04:08:00.000Z",
+        createdAt: "2026-06-01T04:08:00.000Z",
+        updatedAt: "2026-06-01T04:08:00.000Z",
+      },
+    ]);
+
+    const { host, root } = await renderPage();
+
+    expect(host.innerHTML).not.toContain("grid-cols-[4.25rem_minmax");
+    expect(host.innerHTML).not.toContain("float-right");
+    expect(host.querySelector('[role="button"][aria-label="速记：第一条"]')).toBeInstanceOf(HTMLElement);
+    expect(host.querySelector('[role="button"][aria-label="速记：第二条"]')).toBeInstanceOf(HTMLElement);
+
+    await act(async () => root.unmount());
+  });
+
+  it("passes per-note upload state into bubbles", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "pending-note",
+        text: "待上传",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "uploaded-note",
+        text: "已上传",
+        occurredAt: "2026-06-01T04:01:00.000Z",
+        createdAt: "2026-06-01T04:01:00.000Z",
+        updatedAt: "2026-06-01T04:01:00.000Z",
+      },
+    ]);
+    await db.syncLog.add({
+      id: "pending-log",
+      tableName: "quick_notes",
+      recordId: "pending-note",
+      action: "create",
+      timestamp: "2026-06-01T04:00:00.000Z",
+      synced: 0,
+    });
+
+    const { host, root } = await renderPage();
+    const pendingBubble = host.querySelector('[role="button"][aria-label="速记：待上传"]');
+    const uploadedBubble = host.querySelector('[role="button"][aria-label="速记：已上传"]');
+
+    expect(pendingBubble?.querySelector('[aria-label="待上传"]')).not.toBeNull();
+    expect(uploadedBubble?.querySelector('[aria-label="已上传"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it("expands the bottom input when editing a long note", async () => {
     const longText = Array.from({ length: 8 }, (_, index) => `第 ${index + 1} 行`).join("\n");
     await db.quickNotes.add({

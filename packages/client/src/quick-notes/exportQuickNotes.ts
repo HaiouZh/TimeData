@@ -1,10 +1,20 @@
-import type { QuickNote } from "@timedata/shared";
+import { utcToLocalDateTime, type QuickNote } from "@timedata/shared";
 import { listQuickNotesByDate, listQuickNotesByRange } from "../lib/quickNotes.js";
-import { groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.js";
+import { formatLocalClock } from "../lib/quickNoteDisplay.js";
 import { QuickNotesFileSchema, QUICK_NOTES_BACKUP_FORMAT, type QuickNotesFile } from "./schema.js";
 
 export interface ExportQuickNotesOptions {
   now?: () => string;
+}
+
+const MARKDOWN_TIME_GAP_MS = 5 * 60 * 1000;
+
+function localDate(value: string): string {
+  return utcToLocalDateTime(value).slice(0, 10);
+}
+
+function localMinute(value: string): string {
+  return utcToLocalDateTime(value).slice(0, 16);
 }
 
 export async function exportQuickNotesJsonByRange(
@@ -35,13 +45,28 @@ export function quickNotesMarkdown(title: string, notes: QuickNote[]): string {
     return lines.join("\n");
   }
 
-  for (const item of groupQuickNotesForDisplay(notes)) {
-    if (item.type === "date") continue;
-    if (item.type === "time") {
-      lines.push(`## ${item.label}`, "");
-      continue;
+  const sorted = [...notes].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
+  let previousNote: QuickNote | null = null;
+  let previousDate: string | null = null;
+  let previousMinute: string | null = null;
+
+  for (const note of sorted) {
+    const noteDate = localDate(note.occurredAt);
+    const noteMinute = localMinute(note.occurredAt);
+    const isNewDate = noteDate !== previousDate;
+    if (isNewDate) {
+      previousDate = noteDate;
+      previousMinute = null;
     }
-    lines.push(item.note.text, "");
+
+    const gapFromPrevious = previousNote ? Date.parse(note.occurredAt) - Date.parse(previousNote.occurredAt) : 0;
+    if (!previousNote || isNewDate || (noteMinute !== previousMinute && gapFromPrevious > MARKDOWN_TIME_GAP_MS)) {
+      lines.push(`## ${formatLocalClock(note.occurredAt)}`, "");
+    }
+
+    lines.push(note.text, "");
+    previousNote = note;
+    previousMinute = noteMinute;
   }
 
   return lines.join("\n");

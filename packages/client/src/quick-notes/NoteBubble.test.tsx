@@ -44,6 +44,29 @@ afterEach(() => {
 });
 
 describe("NoteBubble", () => {
+  it("renders a pending clock with the local time", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note("待同步"), pending: true }));
+
+    expect(host.textContent).toContain("12:00");
+    expect(host.querySelector('[aria-label="待上传"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="已上传"]')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("renders an uploaded check when the note is not pending", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note("已同步"), pending: false }));
+
+    expect(host.querySelector('[aria-label="已上传"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="待上传"]')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it("shows a source badge for agent notes using sourceLabel", async () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
 
@@ -51,6 +74,16 @@ describe("NoteBubble", () => {
 
     expect(host.textContent).toContain("Hermes");
     expect(host.textContent).toContain("周报已生成");
+
+    await act(async () => root.unmount());
+  });
+
+  it("uses the agent meta color branch for agent notes", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note("Agent", { source: "agent" }) }));
+
+    expect(host.querySelector(".text-sky-100\\/70")).not.toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -94,6 +127,9 @@ describe("NoteBubble", () => {
     const button = host.querySelector("button");
 
     expect(button?.textContent).toBe("展开");
+    expect(button?.parentElement?.className).toContain("justify-between");
+    expect(button?.parentElement?.querySelector('[aria-label="已上传"]')).not.toBeNull();
+    expect(host.querySelectorAll('[aria-label="已上传"]')).toHaveLength(1);
     expect((host.querySelector(".overflow-hidden") as HTMLElement).style.maxHeight).toBe("168px");
 
     await act(async () => {

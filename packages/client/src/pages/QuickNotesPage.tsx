@@ -20,6 +20,7 @@ import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
 import { searchQuickNotes } from "../quick-notes/searchQuickNotes.ts";
 import { parseSearchTerms } from "../quick-notes/searchTerms.ts";
 import { useQuickNoteTimeline } from "../quick-notes/useQuickNoteTimeline.ts";
+import { useUnsyncedQuickNoteIds } from "../quick-notes/useUnsyncedQuickNoteIds.ts";
 
 const SCROLL_TRIGGER_PX = 48;
 const INPUT_MAX_HEIGHT_PX = 160;
@@ -71,6 +72,7 @@ export default function QuickNotesPage() {
   const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
   const { syncAfterWrite } = useSyncContext();
   const timeline = useQuickNoteTimeline();
+  const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
   const displayItems = useMemo(
     () => groupQuickNotesForDisplay(timeline.notes, { today }),
@@ -563,26 +565,11 @@ export default function QuickNotesPage() {
                     </div>
                   );
                 }
-                if (item.type === "time") {
-                  return (
-                    <div
-                      key={item.key}
-                      className="hidden grid-cols-[4.25rem_minmax(0,1fr)] items-center gap-3 pt-1 sm:grid"
-                    >
-                      <time className="font-mono text-[11px] tabular-nums text-slate-400">{item.label}</time>
-                      <div className="flex items-center gap-2">
-                        <span className="size-1.5 rounded-full bg-emerald-300/80" />
-                        <div className="h-px flex-1 bg-slate-800/80" />
-                      </div>
-                    </div>
-                  );
-                }
-
                 const note = item.note;
                 const isAgentNote = note.source === "agent";
+                const pending = unsyncedQuickNoteIds.has(note.id);
                 return (
-                  <article key={item.key} className="grid grid-cols-1 gap-3 sm:grid-cols-[4.25rem_minmax(0,1fr)]">
-                    <div className="hidden sm:block" />
+                  <article key={item.key}>
                     <div
                       role="button"
                       tabIndex={0}
@@ -603,10 +590,7 @@ export default function QuickNotesPage() {
                         isAgentNote ? "bg-sky-500/10 hover:bg-sky-500/15" : "bg-slate-900/90 hover:bg-slate-900"
                       }`}
                     >
-                      <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500 sm:hidden">
-                        {formatLocalClock(note.occurredAt)}
-                      </time>
-                      <NoteBubble note={note} />
+                      <NoteBubble note={note} pending={pending} />
                     </div>
                   </article>
                 );

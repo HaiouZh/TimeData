@@ -34,7 +34,7 @@ describe("export quick notes", () => {
     expect(backup).not.toHaveProperty("settings");
   });
 
-  it("exports Markdown using display grouping", async () => {
+  it("exports Markdown with time headings", async () => {
     await addQuickNote("预算系统两层", {
       occurredAt: "2026-06-01T04:01:00.000Z",
       now: new Date("2026-06-01T04:01:00.000Z"),

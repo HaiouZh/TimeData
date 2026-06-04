@@ -75,7 +75,7 @@ TimeData 现有四种备份/可恢复文件：
 - `packages/client/src/quick-notes/deleteQuickNotesRange.ts`：按本地日期闭区间删除速记。
 - `packages/client/src/quick-notes/fileDownload.ts`：Web 下载和 Capacitor Documents + Share 落盘。
 
-`packages/client/src/quick-notes/` 还包含速记页交互与展示组件（如菜单、剪贴板、时间线窗口 Hook、搜索/高亮、长文本折叠和 Markdown 安全渲染）；这些不是备份格式入口，不改变本节 JSON / Markdown 契约。
+`packages/client/src/quick-notes/` 还包含速记页交互与展示组件（如菜单、剪贴板、时间线窗口 Hook、搜索/高亮、上传状态、长文本折叠和 Markdown 安全渲染）；这些不是备份格式入口，不改变本节 JSON / Markdown 契约。
 
 语义：
 

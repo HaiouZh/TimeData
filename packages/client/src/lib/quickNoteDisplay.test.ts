@@ -17,31 +17,18 @@ describe("groupQuickNotesForDisplay", () => {
     expect(formatLocalClock("2026-06-01T04:08:00.000Z")).toBe("12:08");
   });
 
-  it("uses one timestamp for notes in the same local minute", () => {
-    const items = groupQuickNotesForDisplay([
-      note("a", "2026-06-01T04:01:00.000Z"),
-      note("b", "2026-06-01T04:01:30.000Z"),
-    ]);
-
-    expect(items.filter((item) => item.type === "time")).toHaveLength(1);
-  });
-
-  it("keeps close cross-minute notes under the previous timestamp", () => {
-    const items = groupQuickNotesForDisplay([
-      note("a", "2026-06-01T04:01:00.000Z"),
-      note("b", "2026-06-01T04:04:00.000Z"),
-    ]);
-
-    expect(items.filter((item) => item.type === "time")).toHaveLength(1);
-  });
-
-  it("creates a new timestamp after the gap threshold", () => {
+  it("never emits time items", () => {
     const items = groupQuickNotesForDisplay([
       note("a", "2026-06-01T04:01:00.000Z"),
       note("b", "2026-06-01T04:08:00.000Z"),
     ]);
 
-    expect(items.filter((item) => item.type === "time").map((item) => item.label)).toEqual(["12:01", "12:08"]);
+    expect(items.map((item) => item.type)).not.toContain("time");
+  });
+
+  it("emits only date and note items", () => {
+    const items = groupQuickNotesForDisplay([note("a", "2026-06-01T04:01:00.000Z")], { today: "2026-06-10" });
+    expect(items.map((item) => item.type)).toEqual(["date", "note"]);
   });
 
   it("adds friendly date separators across local dates", () => {

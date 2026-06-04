@@ -60,8 +60,13 @@ const components = {
   td: ({ node: _node, ...props }) => <td {...props} className="border border-slate-700 px-2 py-1" />,
 } satisfies Components;
 
-export default function QuickNoteContent({ text }: { text: string }) {
-  const plain = <span className="whitespace-pre-wrap break-words">{text}</span>;
+export default function QuickNoteContent({ text, trailing }: { text: string; trailing?: ReactNode }) {
+  const plain = (
+    <span className="whitespace-pre-wrap break-words">
+      {text}
+      {trailing}
+    </span>
+  );
   if (!looksLikeMarkdown(text)) return plain;
 
   return (
