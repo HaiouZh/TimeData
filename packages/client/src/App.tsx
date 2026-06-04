@@ -53,10 +53,10 @@ export function AppShell() {
       </main>
       {!hidesBottomNav && (
         <nav
-          className={`flex shrink-0 border-t border-slate-800 bg-slate-900 transition-transform duration-200 ${
-            hidden ? "translate-y-full" : "translate-y-0"
+          className={`flex shrink-0 overflow-hidden bg-slate-900 transition-[height] duration-200 ${
+            hidden ? "" : "border-t border-slate-800"
           }`}
-          style={{ height: BOTTOM_NAV_HEIGHT_PX }}
+          style={{ height: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
         >
           {[
             { to: "/quick-notes", label: "记录" },
