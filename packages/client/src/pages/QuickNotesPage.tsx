@@ -213,6 +213,10 @@ export default function QuickNotesPage() {
     }
   }, [selectionMode]);
 
+  // 只在列表内容（新增 / 加载更多 / 删除）或搜索、最新窗口状态变化时校正滚动位置。
+  // 不能每次 render 都跑：否则滚动驱动的 setState（日期气泡、导航显隐、atBottom）会反复
+  // 把 scrollTop 弹回底部，在安卓 WebView 上表现为缓慢下滑时整体抖动、页面却不动。
+  const listItemCount = displayItems.length;
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -223,10 +227,10 @@ export default function QuickNotesPage() {
       return;
     }
 
-    if (!searchOpen && stickBottomRef.current && timeline.atLatest) {
+    if (listItemCount > 0 && !searchOpen && stickBottomRef.current && timeline.atLatest) {
       el.scrollTop = el.scrollHeight;
     }
-  });
+  }, [listItemCount, searchOpen, timeline.atLatest]);
 
   useLayoutEffect(() => {
     const textarea = inputRef.current;

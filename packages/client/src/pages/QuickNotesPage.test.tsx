@@ -274,6 +274,59 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("近底部的滚动驱动重渲染不把滚动位置弹回底部（安卓抖动回归）", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "n1",
+        text: "第一条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "n2",
+        text: "第二条",
+        occurredAt: "2026-06-01T04:01:00.000Z",
+        createdAt: "2026-06-01T04:01:00.000Z",
+        updatedAt: "2026-06-01T04:01:00.000Z",
+      },
+      {
+        id: "n3",
+        text: "第三条",
+        occurredAt: "2026-06-01T04:02:00.000Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector('[aria-label="速记列表"]');
+    if (!(list instanceof HTMLElement)) throw new Error("missing quick notes list");
+
+    // 用可跟踪的 scrollTop 模拟布局：底部位于 scrollHeight - clientHeight = 600。
+    let scrollTopValue = 580; // 距底 20px，仍在吸底阈值（48px）内
+    Object.defineProperty(list, "scrollTop", {
+      configurable: true,
+      get: () => scrollTopValue,
+      set: (value: number) => {
+        scrollTopValue = value;
+      },
+    });
+    Object.defineProperty(list, "scrollHeight", { configurable: true, get: () => 1000 });
+    Object.defineProperty(list, "clientHeight", { configurable: true, get: () => 400 });
+
+    // 用户在底部附近缓慢上滑，触发一次滚动驱动的重渲染（更新日期气泡等 UI 状态）。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await flush();
+
+    // 修复前：无依赖的吸底 layout effect 会把 scrollTop 弹回 scrollHeight(1000) → 抖动。
+    // 修复后：内容未变 → 不触发吸底 → 停在用户停留的位置 580。
+    expect(scrollTopValue).toBe(580);
+
+    await act(async () => root.unmount());
+  });
+
   it("renders a unified bubble layout without legacy time separators", async () => {
     await db.quickNotes.bulkAdd([
       {
