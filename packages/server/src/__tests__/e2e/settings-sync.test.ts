@@ -34,9 +34,10 @@ describe("settings sync e2e", () => {
       const afterUpsertSeq = latestSeq(server.db);
       const pullUpsertResponse = await server.app.request("/api/sync/pull", {
         method: "POST",
-        body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: 0 }),
+        body: JSON.stringify({ sinceSeq: 0 }),
       });
       expect(pullUpsertResponse.status).toBe(200);
+      // updatedAt/timestamp 由服务器分配，不与客户端提交时间比较。
       await expect(pullUpsertResponse.json()).resolves.toMatchObject({
         changes: [
           {
@@ -46,9 +47,7 @@ describe("settings sync e2e", () => {
             data: {
               key: "sleep.categoryId",
               value: "cat-1",
-              updatedAt: "2026-05-30T01:00:00.000Z",
             },
-            timestamp: "2026-05-30T01:00:00.000Z",
           },
         ],
       });
@@ -74,7 +73,7 @@ describe("settings sync e2e", () => {
       const afterDeleteSeq = latestSeq(server.db);
       const pullDeleteResponse = await server.app.request("/api/sync/pull", {
         method: "POST",
-        body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: afterUpsertSeq }),
+        body: JSON.stringify({ sinceSeq: afterUpsertSeq }),
       });
       expect(pullDeleteResponse.status).toBe(200);
       await expect(pullDeleteResponse.json()).resolves.toMatchObject({
@@ -84,7 +83,6 @@ describe("settings sync e2e", () => {
             recordId: "sleep.categoryId",
             action: "delete",
             data: null,
-            timestamp: "2026-05-30T02:00:00.000Z",
           },
         ],
       });

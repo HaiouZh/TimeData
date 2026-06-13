@@ -868,7 +868,6 @@ describe("sync route", () => {
     ).toMatchObject({
       table_name: "categories",
       record_id: "cat-1",
-      deleted_at: "2026-05-08T10:00:00.000Z",
     });
 
     const pullRes = await app.request("/api/sync/pull", {
@@ -1099,19 +1098,20 @@ describe("sync route", () => {
 
     expect(pullRes.status).toBe(200);
     const pullBody = await pullRes.json();
-    expect(pullBody.changes).toContainEqual({
-      tableName: "quick_notes",
-      recordId: "note-1",
-      action: "update",
-      data: {
-        id: "note-1",
-        text: "repo",
-        occurredAt: "2026-06-01T04:01:30.123Z",
-        createdAt: "2026-06-01T04:02:00.000Z",
-        updatedAt: "2026-06-01T04:02:00.000Z",
-      },
-      timestamp: "2026-06-01T04:02:00.000Z",
-    });
+    // updatedAt/timestamp 由服务器分配，不与客户端提交时间比较。
+    expect(pullBody.changes).toContainEqual(
+      expect.objectContaining({
+        tableName: "quick_notes",
+        recordId: "note-1",
+        action: "update",
+        data: expect.objectContaining({
+          id: "note-1",
+          text: "repo",
+          occurredAt: "2026-06-01T04:01:30.123Z",
+          createdAt: "2026-06-01T04:02:00.000Z",
+        }),
+      }),
+    );
 
     const deleteRes = await app.request("/api/sync/push", {
       method: "POST",
@@ -1316,9 +1316,8 @@ describe("sync route", () => {
         pushedRecords: [{ tableName: "categories", recordId: "cat-overlap", action: "update" }],
       },
     });
-    expect(db.prepare("SELECT name, updated_at FROM categories WHERE id = ?").get("cat-overlap")).toMatchObject({
+    expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-overlap")).toMatchObject({
       name: "local name",
-      updated_at: "2026-05-08T10:00:00.000Z",
     });
   });
 

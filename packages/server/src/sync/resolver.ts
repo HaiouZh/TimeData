@@ -14,7 +14,7 @@ export function applyChange(change: SyncChange): ApplyChangeResult {
   if (!domain.apply && !lww) throw new Error(`Sync domain ${change.tableName} has neither apply hook nor lww mapping`);
   const changeResult = domain.apply
     ? domain.apply(db, change, serverNow)
-    : applyLwwChange(db, change, lww as NonNullable<ServerDomainHooks["lww"]>);
+    : applyLwwChange(db, change, lww as NonNullable<ServerDomainHooks["lww"]>, serverNow);
 
   // 只有成功写入才推进 seq cursor，skipped 的变更不占 seq 位置（供上游判断应用顺序）。
   if (changeResult.status === "applied") {
@@ -25,8 +25,13 @@ export function applyChange(change: SyncChange): ApplyChangeResult {
 }
 
 // 通用 LWW 写入：delete = 真删除 + tombstone；upsert = 删 tombstone + INSERT ... ON CONFLICT DO UPDATE。
-// updated_at 以 change.timestamp 为准；created_at 与主键列只在插入时写入。
-function applyLwwChange(db: Database, change: SyncChange, lww: NonNullable<ServerDomainHooks["lww"]>): ApplyChangeResult {
+// updated_at / deleted_at 由服务器在记账时分配；created_at 与主键列只在插入时写入。
+function applyLwwChange(
+  db: Database,
+  change: SyncChange,
+  lww: NonNullable<ServerDomainHooks["lww"]>,
+  serverNow: string,
+): ApplyChangeResult {
   const table = change.tableName;
 
   if (change.action === "delete") {
@@ -35,7 +40,7 @@ function applyLwwChange(db: Database, change: SyncChange, lww: NonNullable<Serve
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
       VALUES (?, ?, ?)
       ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
-    `).run(table, change.recordId, change.timestamp);
+    `).run(table, change.recordId, serverNow);
     return applyResult(change, "applied", `deleted ${table} record`);
   }
 
@@ -45,7 +50,7 @@ function applyLwwChange(db: Database, change: SyncChange, lww: NonNullable<Serve
     | { updated_at: string }
     | undefined;
 
-  const row: Record<string, string | number | null> = { ...lww.toRow(change.data), updated_at: change.timestamp };
+  const row: Record<string, string | number | null> = { ...lww.toRow(change.data), updated_at: serverNow };
   const columns = Object.keys(row);
   const placeholders = columns.map(() => "?").join(", ");
   const updatable = columns.filter((column) => column !== lww.idColumn && column !== "created_at");

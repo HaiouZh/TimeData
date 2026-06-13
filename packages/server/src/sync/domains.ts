@@ -121,7 +121,7 @@ function validateCategoryChange(db: Database, change: SyncChange, ctx: ValidateC
   return null;
 }
 
-function applyCategoryChange(db: Database, change: SyncChange, _serverNow: string): ApplyChangeResult {
+function applyCategoryChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {
   if (change.action === "delete") {
     const categoryIds = [change.recordId];
     for (let index = 0; index < categoryIds.length; index++) {
@@ -150,12 +150,12 @@ function applyCategoryChange(db: Database, change: SyncChange, _serverNow: strin
         .all(categoryId) as Array<{ id: string }>;
       for (const entry of entries) {
         db.prepare("DELETE FROM time_entries WHERE id = ?").run(entry.id);
-        insertEntryTombstone.run(entry.id, change.timestamp);
+        insertEntryTombstone.run(entry.id, serverNow);
         recordSeq("time_entries", entry.id, "delete");
         cascadedEntryIds.push(entry.id);
       }
       db.prepare("DELETE FROM categories WHERE id = ?").run(categoryId);
-      insertCategoryTombstone.run(categoryId, change.timestamp);
+      insertCategoryTombstone.run(categoryId, serverNow);
       recordSeq("categories", categoryId, "delete");
     }
 
@@ -168,7 +168,7 @@ function applyCategoryChange(db: Database, change: SyncChange, _serverNow: strin
     | Pick<CategoryRow, "updated_at">
     | undefined;
 
-  // 服务端用 syncLog 时间作为 updated_at，避免 payload.updatedAt 受客户端时钟漂移影响。
+  // updated_at 由服务器在记账时分配，客户端时钟（change.timestamp / payload.updatedAt）只作展示参考。
   if (existing) {
     db.prepare(`
       UPDATE categories SET name = ?, parent_id = ?, color = ?, icon = ?, sort_order = ?, is_archived = ?, updated_at = ?
@@ -180,7 +180,7 @@ function applyCategoryChange(db: Database, change: SyncChange, _serverNow: strin
       data.icon,
       data.sortOrder,
       data.isArchived ? 1 : 0,
-      change.timestamp,
+      serverNow,
       change.recordId,
     );
     return applyResult(change, "applied", "updated category", existing.updated_at);
@@ -198,7 +198,7 @@ function applyCategoryChange(db: Database, change: SyncChange, _serverNow: strin
     data.sortOrder,
     data.isArchived ? 1 : 0,
     data.createdAt,
-    change.timestamp,
+    serverNow,
   );
   return applyResult(change, "applied", "inserted category");
 }
@@ -261,14 +261,14 @@ function deleteOverlappingEntries(db: Database, data: TimeEntry, deletedAt: stri
   return rows.map((row) => row.id);
 }
 
-function applyEntryChange(db: Database, change: SyncChange, _serverNow: string): ApplyChangeResult {
+function applyEntryChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {
   if (change.action === "delete") {
     db.prepare("DELETE FROM time_entries WHERE id = ?").run(change.recordId);
     db.prepare(`
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
       VALUES (?, ?, ?)
       ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
-    `).run("time_entries", change.recordId, change.timestamp);
+    `).run("time_entries", change.recordId, serverNow);
     return applyResult(change, "applied", "deleted entry");
   }
 
@@ -278,24 +278,24 @@ function applyEntryChange(db: Database, change: SyncChange, _serverNow: string):
   // 分类不存在时 skip（可能是顺序依赖尚未应用），路由层会将 skipped 映射为 conflict/server_version_newer_or_same。
   if (!category) return applyResult(change, "skipped", "missing category", undefined, undefined, "missing_category");
 
-  const overriddenRecordIds = deleteOverlappingEntries(db, data, change.timestamp);
+  const overriddenRecordIds = deleteOverlappingEntries(db, data, serverNow);
   const existing = db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get(change.recordId) as
     | Pick<EntryRow, "updated_at">
     | undefined;
 
-  // 服务端用 syncLog 时间作为 updated_at，避免 payload.updatedAt 受客户端时钟漂移影响。
+  // updated_at 由服务器在记账时分配，客户端时钟（change.timestamp / payload.updatedAt）只作展示参考。
   if (existing) {
     db.prepare(`
       UPDATE time_entries SET category_id = ?, start_time = ?, end_time = ?, note = ?, updated_at = ?
       WHERE id = ?
-    `).run(data.categoryId, data.startTime, data.endTime, data.note, change.timestamp, change.recordId);
+    `).run(data.categoryId, data.startTime, data.endTime, data.note, serverNow, change.recordId);
     return applyResult(change, "applied", "updated entry", existing.updated_at, overriddenRecordIds);
   }
 
   db.prepare(`
     INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(data.id, data.categoryId, data.startTime, data.endTime, data.note, data.createdAt, change.timestamp);
+  `).run(data.id, data.categoryId, data.startTime, data.endTime, data.note, data.createdAt, serverNow);
   return applyResult(change, "applied", "inserted entry", undefined, overriddenRecordIds);
 }
 

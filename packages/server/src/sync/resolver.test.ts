@@ -153,16 +153,15 @@ describe("applyChange", () => {
     });
 
     expect(result).toMatchObject({ status: "applied", reason: "updated entry" });
-    expect(db.prepare("SELECT note, end_time, updated_at FROM time_entries WHERE id = ?").get("entry-1")).toMatchObject(
+    expect(db.prepare("SELECT note, end_time FROM time_entries WHERE id = ?").get("entry-1")).toMatchObject(
       {
         note: "local wins",
         end_time: "2026-05-08T10:30:00",
-        updated_at: "2026-05-08T10:30:00",
       },
     );
   });
 
-  it("uses change timestamp instead of payload updatedAt for server updated_at", () => {
+  it("assigns server time to updated_at instead of client change timestamp", () => {
     db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
       "cat-1",
       "工作",
@@ -183,7 +182,9 @@ describe("applyChange", () => {
       "2026-05-08T09:00:00",
     );
 
-    const timestamp = "2026-06-01T00:00:00.000Z";
+    // 模拟时钟漂移严重的客户端：change.timestamp 是很久以前。
+    const timestamp = "2020-01-01T00:00:00.000Z";
+    const before = new Date().toISOString();
     applyChange({
       tableName: "time_entries",
       recordId: "entry-1",
@@ -200,9 +201,9 @@ describe("applyChange", () => {
       timestamp,
     });
 
-    expect(db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get("entry-1")).toMatchObject({
-      updated_at: timestamp,
-    });
+    const row = db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get("entry-1") as { updated_at: string };
+    expect(row.updated_at > timestamp).toBe(true);
+    expect(row.updated_at >= before).toBe(true);
   });
 
   it("deletes overlapping remote entries before inserting a local entry", () => {
@@ -298,7 +299,6 @@ describe("applyChange", () => {
     ).toMatchObject({
       table_name: "time_entries",
       record_id: "remote-overlap",
-      deleted_at: "2026-05-08T09:30:00",
     });
     expect(
       db
@@ -364,9 +364,9 @@ describe("applyChange", () => {
           "SELECT table_name, record_id, deleted_at FROM sync_tombstones WHERE table_name = ? ORDER BY record_id",
         )
         .all("time_entries"),
-    ).toEqual([
-      { table_name: "time_entries", record_id: "child-entry", deleted_at: "2026-05-08T12:00:00" },
-      { table_name: "time_entries", record_id: "parent-entry", deleted_at: "2026-05-08T12:00:00" },
+    ).toMatchObject([
+      { table_name: "time_entries", record_id: "child-entry" },
+      { table_name: "time_entries", record_id: "parent-entry" },
     ]);
     expect(
       db
@@ -447,9 +447,8 @@ describe("applyChange", () => {
     });
 
     expect(up.status).toBe("applied");
-    expect(db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").get("sleep.categoryId")).toMatchObject({
+    expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("sleep.categoryId")).toMatchObject({
       value: "cat-1",
-      updated_at: "2026-05-30T01:00:00.000Z",
     });
 
     const del = applyChange({
@@ -486,7 +485,8 @@ describe("applyChange", () => {
     expect(db.prepare("SELECT text, occurred_at, updated_at FROM quick_notes WHERE id = ?").get("note-1")).toMatchObject({
       text: "repo",
       occurred_at: "2026-06-01T04:01:30.123Z",
-      updated_at: "2026-06-01T04:02:00.000Z",
+      // updated_at 由服务器分配，只验证为合法 UTC ISO 格式。
+      updated_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
     });
 
     const del = applyChange({
