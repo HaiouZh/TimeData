@@ -167,7 +167,9 @@ describe("POST /api/quick-notes", () => {
         source: "agent",
         source_label: "Hermes",
       });
-      expect(seen).toEqual([1]);
+      // 默认分类回填 seq 后基线不为 0，只断言广播了一次且 seq 为正（等于当前账本最新编号）。
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toBeGreaterThan(0);
     } finally {
       removeSyncStreamListener(listener);
     }

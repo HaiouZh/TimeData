@@ -23,6 +23,7 @@
 
 - **旧客户端在新服务器上 pull 会得到 400**（`SyncPullRequestSchema` 收紧）。server / Web 客户端 / Android APK 必须同版本一起发布；先升级服务器再让所有设备更新 APK / 刷新 PWA。
 - 设备本地残留的 `timedata_last_synced` / `timedata_legacy_snapshot_sync` key 由 `resetSyncCursors()` 顺手清理。
+- **seq 回填**：seq-only pull 只通过 `sync_seq` 读数据，早于 seq 机制写入的历史行（含首次启动默认播种的分类）在 `sync_seq` 里没有记录，会对新 pull 不可见。`initializeDatabase()` 启动时调用 `backfillMissingSeq()`（`packages/server/src/db/backfillSeq.ts`）给缺 seq 的业务行补一条 `create` seq，幂等、跑一次即齐。范围不含早于 seq 机制的删除（tombstone 无对应 delete seq），那类行业务表里已不存在，属罕见边角。
 
 ## 明确不做（YAGNI，后续按需评估）
 

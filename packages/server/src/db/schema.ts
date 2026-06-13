@@ -1,5 +1,6 @@
 import type { Database } from "better-sqlite3";
 import type { CountRow } from "../lib/db-rows.js";
+import { backfillMissingSeq } from "./backfillSeq.js";
 import { getDb } from "./connection.js";
 import { insertDefaultCategories } from "./reset.js";
 
@@ -112,4 +113,8 @@ export function initializeDatabase(): void {
   if (count.count === 0) {
     insertDefaultCategories(db);
   }
+
+  // 账本模型迁移：给早于 seq 机制写入、以及默认播种的业务行补 seq，否则它们对 seq-only pull 不可见。
+  // 幂等，启动时跑一次即可；已齐全时为 no-op。见 ADR 0012。
+  backfillMissingSeq(db);
 }

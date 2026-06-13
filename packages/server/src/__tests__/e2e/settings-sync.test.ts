@@ -37,20 +37,17 @@ describe("settings sync e2e", () => {
         body: JSON.stringify({ sinceSeq: 0 }),
       });
       expect(pullUpsertResponse.status).toBe(200);
+      // sinceSeq:0 全量也会带上回填了 seq 的默认分类；只断言设置变更在结果里。
       // updatedAt/timestamp 由服务器分配，不与客户端提交时间比较。
-      await expect(pullUpsertResponse.json()).resolves.toMatchObject({
-        changes: [
-          {
-            tableName: "settings",
-            recordId: "sleep.categoryId",
-            action: "update",
-            data: {
-              key: "sleep.categoryId",
-              value: "cat-1",
-            },
-          },
-        ],
-      });
+      const pullUpsertBody = (await pullUpsertResponse.json()) as { changes: unknown[] };
+      expect(pullUpsertBody.changes).toContainEqual(
+        expect.objectContaining({
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          data: expect.objectContaining({ key: "sleep.categoryId", value: "cat-1" }),
+        }),
+      );
 
       const deleteResponse = await server.app.request("/api/sync/push", {
         method: "POST",

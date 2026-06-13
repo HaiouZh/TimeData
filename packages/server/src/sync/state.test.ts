@@ -19,6 +19,8 @@ afterEach(() => {
 describe("syncState", () => {
   it("computeAndPersistCommitHash writes and returns the commit hash", async () => {
     const { computeAndPersistCommitHash } = await import("./state.js");
+    // 清掉初始化时给默认分类回填的 seq，验证空账本时 latestSeq 为 null 的基线行为。
+    db.prepare("DELETE FROM sync_seq").run();
 
     const result = computeAndPersistCommitHash();
 
@@ -57,12 +59,12 @@ describe("syncState", () => {
     const { recordSeq } = await import("./seq.js");
 
     const first = computeAndPersistCommitHash();
-    recordSeq("categories", "cat-1", "create");
+    const created = recordSeq("categories", "cat-1", "create");
 
     expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "1" });
 
     const second = getCommitHash();
-    expect(second.latestSeq).toBe(1);
+    expect(second.latestSeq).toBe(created);
     expect(second.hash).not.toBe(first.hash);
     expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "0" });
   });
