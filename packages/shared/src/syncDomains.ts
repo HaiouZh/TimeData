@@ -55,8 +55,8 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
 
 export const SYNC_TABLE_NAMES = SYNC_DOMAINS.map((domain) => domain.table) as [string, ...string[]];
 
-export function getSyncDomain(table: string): SyncDomainConfig {
-  const domain = SYNC_DOMAINS.find((item) => item.table === table);
+export function getSyncDomain(table: string, registry: readonly SyncDomainConfig[] = SYNC_DOMAINS): SyncDomainConfig {
+  const domain = registry.find((item) => item.table === table);
   if (!domain) throw new Error(`Unknown sync domain: ${table}`);
   return domain;
 }

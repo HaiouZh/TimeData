@@ -1,5 +1,5 @@
 import type { Category, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
-import { type SyncDomainConfig, UtcIsoStringSchema, getSyncDomain } from "@timedata/shared";
+import { SYNC_DOMAINS, type SyncDomainConfig, UtcIsoStringSchema, getSyncDomain } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import { type CategoryParentInfo, SERVER_SYNC_DOMAINS, changeOutcome } from "./domains.js";
 
@@ -71,7 +71,13 @@ function shapeReasonCode(change: SyncChange, issuePath: ReadonlyArray<PropertyKe
   return "invalid_shape";
 }
 
-export function validateSyncChanges(db: Database, changes: SyncChange[], options: SyncValidationOptions = {}): SyncValidationResult {
+// registry 参数仅测试注入用，生产代码用默认登记簿。
+export function validateSyncChanges(
+  db: Database,
+  changes: SyncChange[],
+  options: SyncValidationOptions = {},
+  registry: readonly SyncDomainConfig[] = SYNC_DOMAINS,
+): SyncValidationResult {
   const ctx = {
     batchCategories: collectBatchCategories(changes),
     now: nowUtcString(options.now),
@@ -85,7 +91,7 @@ export function validateSyncChanges(db: Database, changes: SyncChange[], options
     } else if (!hooks) {
       result = changeOutcome(change, "rejected", "invalid_shape", "sync tableName is invalid");
     } else {
-      const domain = getSyncDomain(change.tableName);
+      const domain = getSyncDomain(change.tableName, registry);
       const idField = hooks.lww?.idColumn ?? "id";
       result =
         hooks.crossValidate?.(change, previousChanges) ??
