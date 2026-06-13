@@ -52,7 +52,8 @@ afterEach(() => {
 describe("real data replay through the ledger pipeline", () => {
   it.skipIf(!fixture)("pushes the full backup and pulls it back identically", async () => {
     const backup = fixture as BackupDocument;
-    expect(backup.format).toBe("timedata.backup");
+    // 接受 timedata.backup 及其版本化变体（如 timedata.backup.v2）。
+    expect(backup.format).toMatch(/^timedata\.backup/);
     server = await startE2EServer();
     // 测试库默认播种的分类与真实数据无关，先清掉避免重名校验干扰。
     server.db.prepare("DELETE FROM categories").run();
