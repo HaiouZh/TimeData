@@ -4,7 +4,6 @@ import type {
   CategorySchema,
   QuickNoteSchema,
   SettingSchema,
-  SyncChangeSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
   SyncLogEntrySchema,
@@ -34,7 +33,32 @@ export type SyncForcePushPrepareRequest = z.infer<typeof SyncForcePushPrepareReq
 
 export type SyncForcePushRequest = z.infer<typeof SyncForcePushRequestSchema>;
 
-export type SyncChange = z.infer<typeof SyncChangeSchema>;
+interface SyncUpsertChange<Table extends string, Data> {
+  tableName: Table;
+  recordId: string;
+  timestamp: string;
+  action: "create" | "update";
+  data: Data;
+}
+
+interface SyncDeleteChange<Table extends string> {
+  tableName: Table;
+  recordId: string;
+  timestamp: string;
+  action: "delete";
+  data: null;
+}
+
+// 手工维护的判别联合：运行时校验由登记簿（syncDomains.ts）生成，新增域时两处一起改。
+export type SyncChange =
+  | SyncUpsertChange<"categories", Category>
+  | SyncDeleteChange<"categories">
+  | SyncUpsertChange<"time_entries", TimeEntry>
+  | SyncDeleteChange<"time_entries">
+  | SyncUpsertChange<"settings", Setting>
+  | SyncDeleteChange<"settings">
+  | SyncUpsertChange<"quick_notes", QuickNote>
+  | SyncDeleteChange<"quick_notes">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

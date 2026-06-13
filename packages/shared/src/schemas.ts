@@ -1,133 +1,30 @@
 import { z } from "zod";
+import {
+  CategorySchema,
+  NonNegativeIntSchema,
+  QuickNoteSchema,
+  SettingSchema,
+  TimeEntrySchema,
+  UtcIsoStringSchema,
+} from "./entitySchemas.js";
+import { SYNC_TABLE_NAMES, buildSyncChangeSchema } from "./syncDomains.js";
+import type { SyncChange } from "./types.js";
 
-export const UtcIsoStringSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
-  .refine((value) => {
-    const date = new Date(value);
-    return Number.isFinite(date.getTime()) && date.toISOString() === value;
-  }, "Invalid UTC ISO timestamp");
-const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-const NonNegativeIntSchema = z.number().int().nonnegative().finite();
+export { CategorySchema, QuickNoteSchema, SettingSchema, TimeEntrySchema, UtcIsoStringSchema } from "./entitySchemas.js";
+
 const SeqSchema = NonNegativeIntSchema;
-const NonEmptyTrimmedStringSchema = z.string().refine((value) => value.trim().length > 0, "String must not be empty");
-
-export const CategorySchema = z.object({
-  id: NonEmptyTrimmedStringSchema,
-  name: NonEmptyTrimmedStringSchema,
-  parentId: z.string().min(1).nullable(),
-  color: HexColorSchema,
-  icon: z.string().min(1).nullable(),
-  sortOrder: z.number().int().finite(),
-  isArchived: z.boolean(),
-  createdAt: UtcIsoStringSchema,
-  updatedAt: UtcIsoStringSchema,
-});
-
-export const SettingSchema = z.object({
-  key: NonEmptyTrimmedStringSchema,
-  value: z.string(),
-  updatedAt: UtcIsoStringSchema,
-});
-
-export const QuickNoteSchema = z.object({
-  id: NonEmptyTrimmedStringSchema,
-  text: NonEmptyTrimmedStringSchema,
-  occurredAt: UtcIsoStringSchema,
-  createdAt: UtcIsoStringSchema,
-  updatedAt: UtcIsoStringSchema,
-  source: z.enum(["user", "agent"]).optional(),
-  sourceLabel: z.string().max(64).optional(),
-  pinned: z.boolean().optional(),
-});
-
-export const TimeEntrySchema = z
-  .object({
-    id: NonEmptyTrimmedStringSchema,
-    categoryId: NonEmptyTrimmedStringSchema,
-    startTime: UtcIsoStringSchema,
-    endTime: UtcIsoStringSchema,
-    note: z.string().nullable(),
-    createdAt: UtcIsoStringSchema,
-    updatedAt: UtcIsoStringSchema,
-  })
-  .refine((entry) => entry.endTime > entry.startTime, {
-    path: ["endTime"],
-    message: "endTime must be after startTime",
-  });
 
 export const SyncLogEntrySchema = z.object({
   id: z.string(),
-  tableName: z.enum(["categories", "time_entries", "settings", "quick_notes"]),
+  tableName: z.enum(SYNC_TABLE_NAMES),
   recordId: z.string(),
   action: z.enum(["create", "update", "delete"]),
   timestamp: UtcIsoStringSchema,
   synced: z.union([z.literal(0), z.literal(1)]),
 });
 
-const BaseChangeFields = z.object({
-  recordId: z.string().min(1),
-  timestamp: UtcIsoStringSchema,
-});
-
-const CategoryUpsertChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("categories"),
-  action: z.enum(["create", "update"]),
-  data: CategorySchema,
-});
-
-const CategoryDeleteChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("categories"),
-  action: z.literal("delete"),
-  data: z.null(),
-});
-
-const TimeEntryUpsertChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("time_entries"),
-  action: z.enum(["create", "update"]),
-  data: TimeEntrySchema,
-});
-
-const TimeEntryDeleteChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("time_entries"),
-  action: z.literal("delete"),
-  data: z.null(),
-});
-
-const SettingUpsertChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("settings"),
-  action: z.enum(["create", "update"]),
-  data: SettingSchema,
-});
-
-const SettingDeleteChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("settings"),
-  action: z.literal("delete"),
-  data: z.null(),
-});
-
-const QuickNoteUpsertChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("quick_notes"),
-  action: z.enum(["create", "update"]),
-  data: QuickNoteSchema,
-});
-
-const QuickNoteDeleteChangeSchema = BaseChangeFields.extend({
-  tableName: z.literal("quick_notes"),
-  action: z.literal("delete"),
-  data: z.null(),
-});
-
-export const SyncChangeSchema = z.union([
-  CategoryUpsertChangeSchema,
-  CategoryDeleteChangeSchema,
-  TimeEntryUpsertChangeSchema,
-  TimeEntryDeleteChangeSchema,
-  SettingUpsertChangeSchema,
-  SettingDeleteChangeSchema,
-  QuickNoteUpsertChangeSchema,
-  QuickNoteDeleteChangeSchema,
-]);
+// 运行时成员按登记簿生成；静态类型 SyncChange 在 types.ts 手工维护判别联合，二者由 schemas.test.ts 对齐。
+export const SyncChangeSchema = buildSyncChangeSchema(UtcIsoStringSchema) as z.ZodType<SyncChange>;
 
 export const SyncPushReasonCodeSchema = z.enum([
   "missing_payload",
