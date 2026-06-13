@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import crypto from "node:crypto";
 import {
+  SYNC_DOMAINS,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
   SyncPullRequestSchema,
@@ -23,22 +24,11 @@ import type {
   TimeEntry,
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
-import {
-  type CategoryRow,
-  type CountRow,
-  type EntryRow,
-  type MaxRow,
-  type QuickNoteRow,
-  type SettingRow,
-  type TombstoneRow,
-  rowToCategory,
-  rowToEntry,
-  rowToQuickNote,
-  rowToSetting,
-} from "../lib/db-rows.js";
+import type { CountRow, MaxRow, TombstoneRow } from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup, markServerBackupProtected } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
+import { getServerDomain } from "../sync/domains.js";
 import { applyChange, type ApplyChangeResult } from "../sync/resolver.js";
 import { orderPushChanges } from "../sync/order.js";
 import { validateSyncChanges } from "../sync/validation.js";
@@ -173,24 +163,34 @@ function replaceServerData(
   computeAndPersistCommitHash(db);
 }
 
+// SyncStatusResponse 的字段名是公开契约，登记簿表名经映射输出，本轮不改响应形状。
+const STATUS_COUNT_FIELDS: Record<string, "categoryCount" | "entryCount" | "quickNoteCount"> = {
+  categories: "categoryCount",
+  time_entries: "entryCount",
+  quick_notes: "quickNoteCount",
+};
+
 function readServerStatus(db: Database): SyncStatusResponse {
-  const categoryCount = (db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow).count;
-  const entryCount = (db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as CountRow).count;
-  const quickNoteCount = (db.prepare("SELECT COUNT(*) as count FROM quick_notes").get() as CountRow).count;
-  const latestCategory = (db.prepare("SELECT MAX(updated_at) as value FROM categories").get() as MaxRow).value;
-  const latestEntry = (db.prepare("SELECT MAX(updated_at) as value FROM time_entries").get() as MaxRow).value;
-  const latestSetting = (db.prepare("SELECT MAX(updated_at) as value FROM settings").get() as MaxRow).value;
-  const latestQuickNote = (db.prepare("SELECT MAX(updated_at) as value FROM quick_notes").get() as MaxRow).value;
-  const lastUpdatedAt =
-    [latestCategory, latestEntry, latestSetting, latestQuickNote].filter((value): value is string => Boolean(value)).sort().at(-1) ??
-    null;
+  const counts: Record<"categoryCount" | "entryCount" | "quickNoteCount", number> = {
+    categoryCount: 0,
+    entryCount: 0,
+    quickNoteCount: 0,
+  };
+  const latestValues: Array<string | null> = [];
+  for (const domain of SYNC_DOMAINS) {
+    // 表名来自登记簿常量，不是用户输入。
+    const field = STATUS_COUNT_FIELDS[domain.table];
+    if (domain.countsInStatus && field) {
+      counts[field] = (db.prepare(`SELECT COUNT(*) as count FROM ${domain.table}`).get() as CountRow).count;
+    }
+    latestValues.push((db.prepare(`SELECT MAX(updated_at) as value FROM ${domain.table}`).get() as MaxRow).value);
+  }
+  const lastUpdatedAt = latestValues.filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 
   const commitState = getCommitHash(db);
 
   return {
-    categoryCount,
-    entryCount,
-    quickNoteCount,
+    ...counts,
     lastUpdatedAt,
     contentHash: commitState.hash,
     latestSeq: commitState.latestSeq,
@@ -495,46 +495,6 @@ sync.post("/push", async (c) => {
   return c.json(response);
 });
 
-function changeFromCategoryRow(r: CategoryRow): SyncChange {
-  return {
-    tableName: "categories",
-    recordId: r.id,
-    action: "update",
-    data: rowToCategory(r),
-    timestamp: r.updated_at,
-  };
-}
-
-function changeFromEntryRow(r: EntryRow): SyncChange {
-  return {
-    tableName: "time_entries",
-    recordId: r.id,
-    action: "update",
-    data: rowToEntry(r),
-    timestamp: r.updated_at,
-  };
-}
-
-function changeFromSettingRow(r: SettingRow): SyncChange {
-  return {
-    tableName: "settings",
-    recordId: r.key,
-    action: "update",
-    data: rowToSetting(r),
-    timestamp: r.updated_at,
-  };
-}
-
-function changeFromQuickNoteRow(r: QuickNoteRow): SyncChange {
-  return {
-    tableName: "quick_notes",
-    recordId: r.id,
-    action: "update",
-    data: rowToQuickNote(r),
-    timestamp: r.updated_at,
-  };
-}
-
 function changeFromTombstoneRow(r: TombstoneRow): SyncChange {
   return {
     tableName: r.table_name,
@@ -542,65 +502,23 @@ function changeFromTombstoneRow(r: TombstoneRow): SyncChange {
     action: "delete",
     data: null,
     timestamp: r.deleted_at,
-  };
+  } as SyncChange;
 }
 
-function sortChanges(changes: SyncChange[]): void {
-  changes.sort((a, b) => {
-    const timestampOrder = a.timestamp.localeCompare(b.timestamp);
-    if (timestampOrder !== 0) return timestampOrder;
-    const tableOrder = a.tableName.localeCompare(b.tableName);
-    if (tableOrder !== 0) return tableOrder;
-    return a.recordId.localeCompare(b.recordId);
-  });
-}
-
-function readChangesSinceTimestamp(db: Database, since: string): SyncChange[] {
-  const categories = db.prepare("SELECT * FROM categories WHERE updated_at >= ?").all(since) as CategoryRow[];
-  const entries = db.prepare("SELECT * FROM time_entries WHERE updated_at >= ?").all(since) as EntryRow[];
-  const settings = db.prepare("SELECT * FROM settings WHERE updated_at >= ?").all(since) as SettingRow[];
-  const quickNotes = db.prepare("SELECT * FROM quick_notes WHERE updated_at >= ?").all(since) as QuickNoteRow[];
-  const tombstones = db.prepare("SELECT * FROM sync_tombstones WHERE deleted_at >= ?").all(since) as TombstoneRow[];
-  const changes = [
-    ...categories.map(changeFromCategoryRow),
-    ...entries.map(changeFromEntryRow),
-    ...settings.map(changeFromSettingRow),
-    ...quickNotes.map(changeFromQuickNoteRow),
-    ...tombstones.map(changeFromTombstoneRow),
-  ];
-  sortChanges(changes);
-  return changes;
-}
-
+// 账本补差：按 sinceSeq 之后每个 record 的最新变更，读取当前业务行或 tombstone。
 function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[] {
   const changes: SyncChange[] = [];
   for (const seq of getChangesSinceSeq(sinceSeq)) {
     if (seq.action === "delete") {
-      const tombstone = db.prepare("SELECT * FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get(seq.tableName, seq.recordId) as TombstoneRow | undefined;
+      const tombstone = db
+        .prepare("SELECT * FROM sync_tombstones WHERE table_name = ? AND record_id = ?")
+        .get(seq.tableName, seq.recordId) as TombstoneRow | undefined;
       if (tombstone) changes.push(changeFromTombstoneRow(tombstone));
       continue;
     }
 
-    if (seq.tableName === "categories") {
-      const row = db.prepare("SELECT * FROM categories WHERE id = ?").get(seq.recordId) as CategoryRow | undefined;
-      if (row) changes.push(changeFromCategoryRow(row));
-      continue;
-    }
-
-    if (seq.tableName === "settings") {
-      const row = db.prepare("SELECT * FROM settings WHERE key = ?").get(seq.recordId) as SettingRow | undefined;
-      if (row) changes.push(changeFromSettingRow(row));
-      continue;
-    }
-
-    if (seq.tableName === "quick_notes") {
-      const row = db.prepare("SELECT * FROM quick_notes WHERE id = ?").get(seq.recordId) as QuickNoteRow | undefined;
-      if (row) changes.push(changeFromQuickNoteRow(row));
-      continue;
-    }
-
-    const row = db.prepare("SELECT * FROM time_entries WHERE id = ?").get(seq.recordId) as EntryRow | undefined;
-    if (row) changes.push(changeFromEntryRow(row));
+    const change = getServerDomain(seq.tableName).readRecord(db, seq.recordId);
+    if (change) changes.push(change);
   }
   return changes;
 }
@@ -615,9 +533,9 @@ sync.post("/pull", async (c) => {
 
   const body = parsed.data;
   const db = getDb();
-  const since = body.since || body.lastSyncedAt || "1970-01-01T00:00:00.000Z";
-  const sinceSeq = typeof body.sinceSeq === "number" ? body.sinceSeq : null;
-  const changes = body.sinceSeq != null ? readChangesSinceSeq(db, sinceSeq) : readChangesSinceTimestamp(db, since);
+  // sinceSeq=0 与 null 等价：全量补差。
+  const sinceSeq = body.sinceSeq ? body.sinceSeq : null;
+  const changes = readChangesSinceSeq(db, sinceSeq);
 
   const response: SyncPullResponse = {
     changes,
@@ -626,8 +544,7 @@ sync.post("/pull", async (c) => {
   };
 
   writeSyncLog(db, "pull_returned", {
-    since,
-    sinceSeq: body.sinceSeq ?? null,
+    sinceSeq: body.sinceSeq,
     latestSeq: response.latestSeq,
     categoryIds: changes.filter((c) => c.tableName === "categories").map((c) => c.recordId),
     entryIds: changes.filter((c) => c.tableName === "time_entries").map((c) => c.recordId),

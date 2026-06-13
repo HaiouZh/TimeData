@@ -44,10 +44,9 @@ export const SyncPushRequestSchema = z.object({
   baseSeq: SeqSchema.nullable().optional(),
 });
 
+// 账本模型：pull 只认 seq cursor；sinceSeq=0 或 null 表示全量。timestamp cursor（since/lastSyncedAt）已退役。
 export const SyncPullRequestSchema = z.object({
-  lastSyncedAt: UtcIsoStringSchema.nullable().optional(),
-  since: UtcIsoStringSchema.optional(),
-  sinceSeq: SeqSchema.nullable().optional(),
+  sinceSeq: SeqSchema.nullable(),
 });
 
 export const SyncForcePushPrepareRequestSchema = z.object({

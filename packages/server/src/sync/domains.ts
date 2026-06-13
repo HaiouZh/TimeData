@@ -1,6 +1,15 @@
 import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
-import type { CategoryRow, EntryRow } from "../lib/db-rows.js";
+import {
+  type CategoryRow,
+  type EntryRow,
+  type QuickNoteRow,
+  type SettingRow,
+  rowToCategory,
+  rowToEntry,
+  rowToQuickNote,
+  rowToSetting,
+} from "../lib/db-rows.js";
 import { recordSeq } from "./seq.js";
 
 export interface ApplyChangeResult {
@@ -35,6 +44,8 @@ export interface ServerDomainHooks {
   apply?: (db: Database, change: SyncChange, serverNow: string) => ApplyChangeResult;
   /** 通用 LWW 路径所需的表/主键列映射（apply 缺省时必填） */
   lww?: { idColumn: string; toRow: (data: unknown) => Record<string, string | number | null> };
+  /** 按主键读当前行并转成 update SyncChange；pull seq 补差用，行不存在返回 null */
+  readRecord: (db: Database, recordId: string) => SyncChange | null;
 }
 
 export function changeOutcome(
@@ -308,11 +319,42 @@ function quickNoteToRow(data: unknown): Record<string, string | number | null> {
   };
 }
 
+// ---- pull seq 补差的行读取 ----
+
+function updateChange(tableName: SyncChange["tableName"], recordId: string, data: unknown, timestamp: string): SyncChange {
+  return { tableName, recordId, action: "update", data, timestamp } as SyncChange;
+}
+
+function readCategoryRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM categories WHERE id = ?").get(recordId) as CategoryRow | undefined;
+  return row ? updateChange("categories", row.id, rowToCategory(row), row.updated_at) : null;
+}
+
+function readEntryRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM time_entries WHERE id = ?").get(recordId) as EntryRow | undefined;
+  return row ? updateChange("time_entries", row.id, rowToEntry(row), row.updated_at) : null;
+}
+
+function readSettingRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM settings WHERE key = ?").get(recordId) as SettingRow | undefined;
+  return row ? updateChange("settings", row.key, rowToSetting(row), row.updated_at) : null;
+}
+
+function readQuickNoteRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM quick_notes WHERE id = ?").get(recordId) as QuickNoteRow | undefined;
+  return row ? updateChange("quick_notes", row.id, rowToQuickNote(row), row.updated_at) : null;
+}
+
 export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
-  categories: { validate: validateCategoryChange, apply: applyCategoryChange },
-  time_entries: { validate: validateEntryChange, crossValidate: incomingEntryOverlap, apply: applyEntryChange },
-  settings: { lww: { idColumn: "key", toRow: settingToRow } },
-  quick_notes: { lww: { idColumn: "id", toRow: quickNoteToRow } },
+  categories: { validate: validateCategoryChange, apply: applyCategoryChange, readRecord: readCategoryRecord },
+  time_entries: {
+    validate: validateEntryChange,
+    crossValidate: incomingEntryOverlap,
+    apply: applyEntryChange,
+    readRecord: readEntryRecord,
+  },
+  settings: { lww: { idColumn: "key", toRow: settingToRow }, readRecord: readSettingRecord },
+  quick_notes: { lww: { idColumn: "id", toRow: quickNoteToRow }, readRecord: readQuickNoteRecord },
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

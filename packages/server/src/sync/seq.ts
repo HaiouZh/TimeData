@@ -2,9 +2,10 @@ import type { Database } from "better-sqlite3";
 import { getDb } from "../db/connection.js";
 import { markCommitHashDirty } from "./state.js";
 
+// 账本不关心域：tableName 只是账本上的一列字符串，校验与路由由登记簿负责。
 export interface SeqRecord {
   id: number;
-  tableName: "categories" | "time_entries" | "settings" | "quick_notes";
+  tableName: string;
   recordId: string;
   action: "create" | "update" | "delete";
 }

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { SYNC_DOMAINS } from "@timedata/shared";
 import type Database from "better-sqlite3";
 import { getDb } from "../db/connection.js";
 
@@ -32,37 +33,24 @@ export function markCommitHashDirty(db: Database.Database = getDb()): void {
 
 export function computeAndPersistCommitHash(db: Database.Database = getDb()): SyncCommitHashState {
   const latestSeq = readLatestSeq(db);
-  const entryCount = (db.prepare("SELECT COUNT(*) AS count FROM time_entries").get() as { count: number }).count;
-  const categoryCount = (db.prepare("SELECT COUNT(*) AS count FROM categories").get() as { count: number }).count;
-  const settingsCount = (db.prepare("SELECT COUNT(*) AS count FROM settings").get() as { count: number }).count;
-  const quickNoteCount = (db.prepare("SELECT COUNT(*) AS count FROM quick_notes").get() as { count: number }).count;
+  // 表名来自登记簿常量，不是用户输入。
+  const counts = SYNC_DOMAINS.map((domain) => ({
+    table: domain.table,
+    count: (db.prepare(`SELECT COUNT(*) AS count FROM ${domain.table}`).get() as { count: number }).count,
+  }));
+  const unionSql = SYNC_DOMAINS.map((domain) => `SELECT updated_at FROM ${domain.table}`).join("\n      UNION ALL\n      ");
   const lastUpdatedAt =
-    (
-      db
-        .prepare(`
-    SELECT MAX(updated_at) AS value FROM (
-      SELECT updated_at FROM time_entries
-      UNION ALL
-      SELECT updated_at FROM categories
-      UNION ALL
-      SELECT updated_at FROM settings
-      UNION ALL
-      SELECT updated_at FROM quick_notes
-    )
-  `)
-        .get() as { value: string | null }
-    ).value ?? "";
+    (db.prepare(`SELECT MAX(updated_at) AS value FROM (${unionSql})`).get() as { value: string | null }).value ?? "";
   const hash = createHash("sha256")
-    .update(`${latestSeq ?? ""}|${entryCount}|${categoryCount}|${settingsCount}|${quickNoteCount}|${lastUpdatedAt}`)
+    .update(`${latestSeq ?? ""}|${counts.map((item) => `${item.table}=${item.count}`).join("|")}|${lastUpdatedAt}`)
     .digest("hex");
   const now = new Date().toISOString();
 
   upsertState(db, "commit_hash", hash, now);
   upsertState(db, "latest_seq", latestSeq == null ? "" : String(latestSeq), now);
-  upsertState(db, "row_count_entries", String(entryCount), now);
-  upsertState(db, "row_count_categories", String(categoryCount), now);
-  upsertState(db, "row_count_settings", String(settingsCount), now);
-  upsertState(db, "row_count_quick_notes", String(quickNoteCount), now);
+  for (const item of counts) {
+    upsertState(db, `row_count_${item.table}`, String(item.count), now);
+  }
   upsertState(db, "last_updated_at", lastUpdatedAt, now);
   upsertState(db, "dirty", CLEAN_VALUE, now);
 

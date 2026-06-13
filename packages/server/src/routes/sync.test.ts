@@ -131,6 +131,30 @@ describe("sync route", () => {
     expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
+  it("rejects pull without sinceSeq (timestamp cursor retired)", async () => {
+    const response = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+      body: JSON.stringify({ since: "2026-01-01T00:00:00.000Z" }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("accepts sinceSeq 0 as full pull", async () => {
+    const response = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(Array.isArray(body.changes)).toBe(true);
+  });
+
   it("returns 400 for malformed force-push prepare requests", async () => {
     const response = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
@@ -986,11 +1010,16 @@ describe("sync route", () => {
       "entry-deleted",
       "2026-05-08T11:00:00.000Z",
     );
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+      "time_entries",
+      "entry-deleted",
+      "delete",
+    );
 
     const res = await app.request("/api/sync/pull", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lastSyncedAt: "2026-05-08T10:00:00.000Z" }),
+      body: JSON.stringify({ sinceSeq: 0 }),
     });
 
     expect(res.status).toBe(200);
@@ -1004,17 +1033,22 @@ describe("sync route", () => {
     });
   });
 
-  it("includes settings in pull responses by timestamp", async () => {
+  it("includes settings in full seq pull responses", async () => {
     db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
       "sleep.categoryId",
       "cat-1",
       "2026-05-30T00:00:00.000Z",
     );
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+      "settings",
+      "sleep.categoryId",
+      "update",
+    );
 
     const res = await app.request("/api/sync/pull", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lastSyncedAt: "2026-05-29T00:00:00.000Z" }),
+      body: JSON.stringify({ sinceSeq: 0 }),
     });
 
     expect(res.status).toBe(200);
@@ -1060,7 +1094,7 @@ describe("sync route", () => {
     const pullRes = await app.request("/api/sync/pull", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lastSyncedAt: "2026-06-01T04:00:00.000Z" }),
+      body: JSON.stringify({ sinceSeq: 0 }),
     });
 
     expect(pullRes.status).toBe(200);
