@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const UtcIsoStringSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "must be UTC ISO timestamp format (ending with .sssZ)")
   .refine((value) => {
     const date = new Date(value);
     return Number.isFinite(date.getTime()) && date.toISOString() === value;

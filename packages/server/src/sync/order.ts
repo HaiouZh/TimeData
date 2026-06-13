@@ -1,5 +1,7 @@
 import type { SyncChange } from "@timedata/shared";
+import { getSyncDomain } from "@timedata/shared";
 
+// categories upsert 组内按父子拓扑排序，保证父分类先于子分类落库。
 function orderCategoryUpserts(changes: SyncChange[]): SyncChange[] {
   const byId = new Map(changes.map((change) => [change.recordId, change]));
   const ordered: SyncChange[] = [];
@@ -28,14 +30,23 @@ function orderCategoryUpserts(changes: SyncChange[]): SyncChange[] {
   return ordered;
 }
 
-export function orderPushChanges(changes: SyncChange[]): SyncChange[] {
-  const categoryUpserts = orderCategoryUpserts(
-    changes.filter((change) => change.tableName === "categories" && change.action !== "delete"),
-  );
-  const entryChanges = changes.filter((change) => change.tableName === "time_entries");
-  const settingChanges = changes.filter((change) => change.tableName === "settings");
-  const quickNoteChanges = changes.filter((change) => change.tableName === "quick_notes");
-  const categoryDeletes = changes.filter((change) => change.tableName === "categories" && change.action === "delete");
+function priorityOf(change: SyncChange): number {
+  const domain = getSyncDomain(change.tableName);
+  return change.action === "delete" ? domain.deletePriority : domain.upsertPriority;
+}
 
-  return [...categoryUpserts, ...entryChanges, ...settingChanges, ...quickNoteChanges, ...categoryDeletes];
+// 按登记簿优先级稳定排序：categories upsert → time_entries → settings → quick_notes → categories delete。
+export function orderPushChanges(changes: SyncChange[]): SyncChange[] {
+  const groups = new Map<number, SyncChange[]>();
+  for (const change of changes) {
+    const priority = priorityOf(change);
+    const group = groups.get(priority) ?? [];
+    group.push(change);
+    groups.set(priority, group);
+  }
+
+  const categoryUpsertPriority = getSyncDomain("categories").upsertPriority;
+  return [...groups.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([priority, group]) => (priority === categoryUpsertPriority ? orderCategoryUpserts(group) : group));
 }
