@@ -5,12 +5,13 @@ import { v4 as uuid } from "uuid";
 import { safeGetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 
-export const LAST_SYNCED_KEY = STORAGE_KEYS.lastSynced;
 export const LAST_SYNCED_SEQ_KEY = STORAGE_KEYS.lastSyncedSeq;
 
 export function resetSyncCursors(): void {
-  safeRemoveItem(STORAGE_KEYS.lastSynced);
   safeRemoveItem(STORAGE_KEYS.lastSyncedSeq);
+  // timestamp cursor 与 legacy 快照开关已退役，顺手清理老设备上的残留 key。
+  safeRemoveItem("timedata_last_synced");
+  safeRemoveItem("timedata_legacy_snapshot_sync");
 }
 
 export interface AutoBackupRecord {

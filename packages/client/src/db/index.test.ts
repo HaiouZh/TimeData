@@ -1,7 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  LAST_SYNCED_KEY,
   LAST_SYNCED_SEQ_KEY,
   db,
   migrateLocalSettingsToDexie,
@@ -42,14 +41,16 @@ afterEach(async () => {
 });
 
 describe("resetSyncCursors", () => {
-  it("clears both timestamp and sequence sync cursors", () => {
-    localStorage.setItem(LAST_SYNCED_KEY, "2026-05-07T13:00:00.000Z");
+  it("clears the seq cursor and retired legacy keys", () => {
     localStorage.setItem(LAST_SYNCED_SEQ_KEY, "42");
+    localStorage.setItem("timedata_last_synced", "2026-05-07T13:00:00.000Z");
+    localStorage.setItem("timedata_legacy_snapshot_sync", "1");
 
     resetSyncCursors();
 
-    expect(localStorage.getItem(LAST_SYNCED_KEY)).toBeNull();
     expect(localStorage.getItem(LAST_SYNCED_SEQ_KEY)).toBeNull();
+    expect(localStorage.getItem("timedata_last_synced")).toBeNull();
+    expect(localStorage.getItem("timedata_legacy_snapshot_sync")).toBeNull();
   });
 });
 

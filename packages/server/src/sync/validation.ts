@@ -30,8 +30,10 @@ function collectBatchCategories(changes: SyncChange[]): Map<string, CategoryPare
 // 域无关的通用校验：delete 直接接受；upsert 要求 payload 存在、过域 schema、主键与 recordId 一致。
 function validateGenericChange(change: SyncChange, domain: SyncDomainConfig, idField: string): SyncPushOutcome | null {
   if (change.action === "delete") return null;
+  // 静态类型上 upsert 的 data 非空，但运行时入参可能缺失（schema 之前的形状兜底）。
+  const tableName = change.tableName;
   if (!change.data) {
-    return changeOutcome(change, "rejected", "missing_payload", `${change.tableName} create/update requires payload`);
+    return changeOutcome(change, "rejected", "missing_payload", `${tableName} create/update requires payload`);
   }
 
   const parsed = domain.dataSchema.safeParse(change.data);
@@ -55,7 +57,7 @@ function validateGenericChange(change: SyncChange, domain: SyncDomainConfig, idF
 }
 
 // entry 的时间范围错误历史上用 invalid_time_range 原因码，schema refine 命中 endTime 时映射回去，保持错误码兼容。
-function shapeReasonCode(change: SyncChange, issuePath: ReadonlyArray<string | number>): SyncPushOutcome["reasonCode"] {
+function shapeReasonCode(change: SyncChange, issuePath: ReadonlyArray<PropertyKey>): SyncPushOutcome["reasonCode"] {
   if (change.tableName === "time_entries" && issuePath[0] === "endTime") {
     const data = change.data as TimeEntry;
     if (

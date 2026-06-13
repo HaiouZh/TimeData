@@ -45,7 +45,7 @@ function applyLwwChange(db: Database, change: SyncChange, lww: NonNullable<Serve
     | { updated_at: string }
     | undefined;
 
-  const row = { ...lww.toRow(change.data), updated_at: change.timestamp };
+  const row: Record<string, string | number | null> = { ...lww.toRow(change.data), updated_at: change.timestamp };
   const columns = Object.keys(row);
   const placeholders = columns.map(() => "?").join(", ");
   const updatable = columns.filter((column) => column !== lww.idColumn && column !== "created_at");

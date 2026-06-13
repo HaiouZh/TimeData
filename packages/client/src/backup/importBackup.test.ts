@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { LAST_SYNCED_KEY, LAST_SYNCED_SEQ_KEY, db } from "../db/index.js";
+import { LAST_SYNCED_SEQ_KEY, db } from "../db/index.js";
 import { importBackup } from "./importBackup.js";
 import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 
@@ -106,7 +106,7 @@ describe("importBackup", () => {
     await db.categories.add(oldCategory);
     await db.timeEntries.add(oldEntry);
     await db.syncLog.add(syncLog);
-    localStorage.setItem(LAST_SYNCED_KEY, "2026-05-07T13:00:00.000Z");
+    localStorage.setItem("timedata_last_synced", "2026-05-07T13:00:00.000Z");
     localStorage.setItem(LAST_SYNCED_SEQ_KEY, "42");
 
     const result = await importBackup(backup());
@@ -114,7 +114,7 @@ describe("importBackup", () => {
     await expect(db.categories.toArray()).resolves.toEqual([newCategory]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([newEntry]);
     await expect(db.syncLog.toArray()).resolves.toEqual([]);
-    expect(localStorage.getItem(LAST_SYNCED_KEY)).toBeNull();
+    expect(localStorage.getItem("timedata_last_synced")).toBeNull();
     expect(localStorage.getItem(LAST_SYNCED_SEQ_KEY)).toBeNull();
     expect(result).toEqual({ categoryCount: 1, entryCount: 1 });
   });

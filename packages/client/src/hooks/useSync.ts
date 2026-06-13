@@ -13,7 +13,7 @@ import { resolveConflicts, type ConflictResolution } from "../sync/conflicts.ts"
 import { createAutoBackup } from "../backup/autoBackup.ts";
 import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
-import { safeGetItem } from "../lib/safeStorage.js";
+import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { fetchServerHealth } from "../lib/serverHealth.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
@@ -34,7 +34,7 @@ interface UseSyncOptions {
 export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
   const [syncing, setSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState<string | null>(
-    safeGetItem(STORAGE_KEYS.lastSynced)
+    safeGetItem(STORAGE_KEYS.lastSyncDisplayAt)
   );
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
   const refreshSyncStatus = useCallback(async () => {
     const count = await db.syncLog.filter((entry) => !entry.synced).count();
     setUnsyncedCount(count);
-    setLastSynced(safeGetItem(STORAGE_KEYS.lastSynced));
+    setLastSynced(safeGetItem(STORAGE_KEYS.lastSyncDisplayAt));
   }, []);
 
   const sync = useCallback(async () => {
@@ -64,6 +64,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       if (result.conflicts.length > 0) {
         setConflicts(result.conflicts);
       }
+      safeSetItem(STORAGE_KEYS.lastSyncDisplayAt, new Date().toISOString());
       await refreshSyncStatus();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "同步失败");

@@ -95,6 +95,8 @@ function insertServerCategory(item: Category): void {
       item.createdAt,
       item.updatedAt,
     );
+  // 账本模型不变量：服务端任何业务写入都要在 sync_seq 记账，否则 seq pull 拉不到。
+  server?.db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES ('categories', ?, 'create')").run(item.id);
 }
 
 function insertServerEntry(item: TimeEntry): void {
@@ -104,6 +106,7 @@ function insertServerEntry(item: TimeEntry): void {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
     .run(item.id, item.categoryId, item.startTime, item.endTime, item.note, item.createdAt, item.updatedAt);
+  server?.db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES ('time_entries', ?, 'create')").run(item.id);
 }
 
 beforeEach(async () => {

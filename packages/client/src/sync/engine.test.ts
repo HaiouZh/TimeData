@@ -2,7 +2,6 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { QuickNote, SyncLogEntry } from "@timedata/shared";
 import { db } from "../db/index.js";
-import { STORAGE_KEYS } from "../lib/storageKeys.js";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const ApiErrorMock = vi.hoisted(() => class ApiError extends Error {
@@ -21,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullRecent, syncForceReplace } from "./engine.js";
+import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -303,7 +302,6 @@ describe("syncForcePushToServer", () => {
     ]);
     expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, backupId: "sync_force_push-1" });
     expect(await db.syncLog.count()).toBe(0);
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-08T12:01:00.000Z");
     expect(localStorage.getItem("timedata_last_synced_seq")).toBe("42");
   });
 });
@@ -781,52 +779,12 @@ describe("syncPull", () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
-      body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: 21 }),
+      body: JSON.stringify({ sinceSeq: 21 }),
     });
     expect(getLastSyncedSeq()).toBe(22);
   });
 
-  it("advances incremental cursor to the latest returned change timestamp", async () => {
-    localStorage.setItem("timedata_last_synced", "2026-05-07T08:00:00.000Z");
 
-    apiFetchMock.mockResolvedValue({
-      serverTime: "2026-05-07T13:00:00.000Z",
-      changes: [
-        {
-          tableName: "time_entries",
-          recordId: "entry-1",
-          action: "update",
-          data: {
-            id: "entry-1",
-            categoryId: "cat-1",
-            startTime: "2026-05-07T09:00:00.000Z",
-            endTime: "2026-05-07T10:00:00.000Z",
-            note: "from server",
-            createdAt: "2026-05-07T08:00:00.000Z",
-            updatedAt: "2026-05-07T09:30:00.000Z",
-          },
-          timestamp: "2026-05-07T09:30:00.000Z",
-        },
-      ],
-    });
-
-    await syncPull();
-
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T09:30:00.000Z");
-  });
-
-  it("keeps the existing incremental cursor when pull returns no changes", async () => {
-    localStorage.setItem("timedata_last_synced", "2026-05-07T08:00:00.000Z");
-
-    apiFetchMock.mockResolvedValue({
-      serverTime: "2026-05-07T13:00:00.000Z",
-      changes: [],
-    });
-
-    await syncPull();
-
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T08:00:00.000Z");
-  });
 
   it("applies settings upsert and delete changes from pull", async () => {
     apiFetchMock.mockResolvedValueOnce({
@@ -967,7 +925,6 @@ describe("syncPull", () => {
     const applied = await syncPull();
 
     expect(applied).toBe(0);
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T09:30:00.000Z");
     await expect(db.timeEntries.get("entry-boundary")).resolves.toMatchObject({ note: "already applied" });
   });
 
@@ -981,8 +938,6 @@ describe("syncPull", () => {
       createdAt: "2026-05-07T08:00:00.000Z",
       updatedAt: "2026-05-07T09:30:00.000Z",
     });
-    localStorage.setItem("timedata_last_synced", "2026-05-07T09:30:00.000Z");
-
     apiFetchMock.mockResolvedValue({
       serverTime: "2026-05-07T13:00:00.000Z",
       changes: [
@@ -1022,12 +977,10 @@ describe("syncPull", () => {
     const applied = await syncPull();
 
     expect(applied).toBe(1);
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T11:30:00.000Z");
     await expect(db.timeEntries.get("entry-newer")).resolves.toMatchObject({ note: "newer" });
   });
 
   it("does not count repeated tombstones as applied during incremental pull", async () => {
-    localStorage.setItem("timedata_last_synced", "2026-05-07T09:30:00.000Z");
 
     apiFetchMock.mockResolvedValue({
       serverTime: "2026-05-07T13:00:00.000Z",
@@ -1045,7 +998,6 @@ describe("syncPull", () => {
     const applied = await syncPull();
 
     expect(applied).toBe(0);
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T09:30:00.000Z");
   });
 
   it("applies remote category delete by removing the category tree and affected entries", async () => {
@@ -1286,7 +1238,7 @@ describe("syncPull", () => {
     });
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
-      body: JSON.stringify({ lastSyncedAt: null }),
+      body: JSON.stringify({ sinceSeq: 0 }),
     });
   });
 
@@ -1333,46 +1285,20 @@ describe("syncPull", () => {
   });
 });
 
-describe("syncPullRecent", () => {
+describe("syncPullSinceSeq", () => {
   it("uses seq cursor for recent pulls when available", async () => {
     setLastSyncedSeq(31);
     apiFetchMock.mockResolvedValue({ serverTime: "2026-05-07T13:00:00.000Z", latestSeq: 33, changes: [] });
 
-    await syncPullRecent(2);
+    await syncPullSinceSeq();
 
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
-      body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: 31 }),
+      body: JSON.stringify({ sinceSeq: 31 }),
     });
     expect(getLastSyncedSeq()).toBe(33);
   });
 
-  it("advances recent pull cursor to the latest returned change timestamp", async () => {
-    apiFetchMock.mockResolvedValue({
-      serverTime: "2026-05-07T13:00:00.000Z",
-      changes: [
-        {
-          tableName: "time_entries",
-          recordId: "entry-new",
-          action: "update",
-          data: {
-            id: "entry-new",
-            categoryId: "cat-1",
-            startTime: "2026-05-07T09:00:00.000Z",
-            endTime: "2026-05-07T10:00:00.000Z",
-            note: "from server",
-            createdAt: "2026-05-07T08:00:00.000Z",
-            updatedAt: "2026-05-07T09:30:00.000Z",
-          },
-          timestamp: "2026-05-07T09:30:00.000Z",
-        },
-      ],
-    });
-
-    await syncPullRecent(2);
-
-    expect(localStorage.getItem("timedata_last_synced")).toBe("2026-05-07T09:30:00.000Z");
-  });
 
   it("applies remote settings unless the same key has a pending local change", async () => {
     await db.settings.add({ key: "sleep.categoryId", value: "local-cat", updatedAt: "2026-05-30T00:00:00.000Z" });
@@ -1397,7 +1323,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 0, conflicts: [] });
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 0, conflicts: [] });
     await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "local-cat" });
 
     await db.syncLog.clear();
@@ -1414,7 +1340,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 1, conflicts: [] });
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 1, conflicts: [] });
     await expect(db.settings.get("sleep.categoryId")).resolves.toMatchObject({ value: "remote-cat" });
   });
 
@@ -1453,7 +1379,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 0, conflicts: [] });
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 0, conflicts: [] });
     await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "local" });
 
     await db.syncLog.clear();
@@ -1476,7 +1402,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    await expect(syncPullRecent(2)).resolves.toMatchObject({ applied: 1, conflicts: [] });
+    await expect(syncPullSinceSeq()).resolves.toMatchObject({ applied: 1, conflicts: [] });
     await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "remote" });
   });
 
@@ -1521,7 +1447,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.conflicts).toHaveLength(1);
     expect(result.conflicts[0]).toMatchObject({
@@ -1566,7 +1492,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.applied).toBe(1);
@@ -1598,7 +1524,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.applied).toBe(1);
@@ -1639,7 +1565,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.applied).toBe(0);
@@ -1675,7 +1601,7 @@ describe("syncPullRecent", () => {
       }],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.applied).toBe(0);
     expect(result.conflicts).toHaveLength(1);
@@ -1712,7 +1638,7 @@ describe("syncPullRecent", () => {
       }],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.applied).toBe(1);
     expect(result.conflicts).toHaveLength(0);
@@ -1733,7 +1659,7 @@ describe("syncPullRecent", () => {
       ],
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.applied).toBe(0);
@@ -1808,7 +1734,7 @@ describe("syncPullRecent", () => {
       latestSeq: 9,
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.conflicts).toHaveLength(0);
     expect(result.applied).toBe(3);
@@ -1865,7 +1791,7 @@ describe("syncPullRecent", () => {
       latestSeq: 9,
     });
 
-    const result = await syncPullRecent(2);
+    const result = await syncPullSinceSeq();
 
     expect(result.applied).toBe(0);
     expect(result.conflicts).toHaveLength(1);
@@ -1900,14 +1826,15 @@ describe("regularSync", () => {
   });
 
   it("runs a separate sync when a concurrent call needs beforeMutating", async () => {
+    setLastSyncedSeq(1);
     let releaseStatus: (() => void) | null = null;
     const firstStatus = new Promise((resolve) => {
       releaseStatus = () => resolve({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null, latestSeq: 1, serverTime: "2026-05-17T00:00:00.000Z" });
     });
     apiFetchMock
       .mockReturnValueOnce(firstStatus)
-      .mockResolvedValueOnce({ categoryCount: 0, entryCount: 1, lastUpdatedAt: "2026-05-17T00:00:00.000Z", latestSeq: 1, serverTime: "2026-05-17T00:00:01.000Z" })
-      .mockResolvedValueOnce({ changes: [], serverTime: "2026-05-17T00:00:02.000Z", latestSeq: 1 })
+      .mockResolvedValueOnce({ categoryCount: 0, entryCount: 1, lastUpdatedAt: "2026-05-17T00:00:00.000Z", latestSeq: 2, serverTime: "2026-05-17T00:00:01.000Z" })
+      .mockResolvedValueOnce({ changes: [], serverTime: "2026-05-17T00:00:02.000Z", latestSeq: 2 })
       .mockResolvedValueOnce({ ok: true });
 
     const first = regularSync();
@@ -1941,7 +1868,7 @@ describe("regularSync", () => {
       createdAt: "2026-05-08T09:00:00.000Z",
       updatedAt: "2026-05-08T09:00:00.000Z",
     });
-    setLastSyncedSeq(3);
+    setLastSyncedSeq(7);
 
     apiFetchMock.mockResolvedValue({
       categoryCount: 1,
@@ -2048,17 +1975,16 @@ describe("regularSync", () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status");
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", expect.objectContaining({ method: "POST" }));
     const pullBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
-    expect(pullBody.sinceSeq).toBeUndefined();
-    expect(new Date(pullBody.since).getTime()).toBeLessThanOrEqual(Date.now() - 6 * 24 * 60 * 60 * 1000);
+    expect(pullBody.sinceSeq).toBe(0);
     expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/push", expect.anything());
     expect(apiFetchMock).toHaveBeenNthCalledWith(3, "/api/sync-logs", expect.objectContaining({ method: "POST" }));
     const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
-    expect(logBody[0]).toMatchObject({ action: "pull_meta_repair", record_count: 1 });
+    expect(logBody[0]).toMatchObject({ action: "pull_seq_catchup", record_count: 1 });
     expect(result).toMatchObject({ identical: false, pushed: 0, pulled: 1 });
     await expect(db.timeEntries.get("entry-remote")).resolves.toMatchObject({ note: "remote" });
   });
 
-  it("pushes unsynced changes then pulls a seven day window when meta diverges", async () => {
+  it("pushes unsynced changes then pulls the seq gap when the ledger diverges", async () => {
     await db.categories.add({
       id: "cat-1",
       name: "Work",
@@ -2113,362 +2039,14 @@ describe("regularSync", () => {
     const pullBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
     expect(pullBody.sinceSeq).toBe(3);
     const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
-    expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_recent_7d"]);
+    expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_since_seq"]);
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0, rejected: 0, pushConflicts: 0 });
     await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
   });
 
-  it("legacy_snapshot_sync flag returns identical when local and cloud snapshots match", async () => {
-    localStorage.setItem(STORAGE_KEYS.legacySnapshotSync, "1");
 
-    await db.categories.add({
-      id: "cat-1",
-      name: "Work",
-      parentId: null,
-      color: "#3366ff",
-      icon: null,
-      sortOrder: 1,
-      isArchived: false,
-      createdAt: "2026-05-08T08:00:00.000Z",
-      updatedAt: "2026-05-08T08:00:00.000Z",
-    });
-    await db.timeEntries.add({
-      id: "entry-1",
-      categoryId: "cat-1",
-      startTime: "2026-05-08T09:00:00.000Z",
-      endTime: "2026-05-08T10:00:00.000Z",
-      note: "match",
-      createdAt: "2026-05-08T09:00:00.000Z",
-      updatedAt: "2026-05-08T09:00:00.000Z",
-    });
-    await db.syncLog.add({
-      id: "log-1",
-      tableName: "time_entries",
-      recordId: "entry-1",
-      action: "update",
-      timestamp: "2026-05-08T09:00:00.000Z",
-      synced: 0,
-    });
 
-    apiFetchMock.mockResolvedValue({
-      serverTime: "2026-05-08T10:00:00.000Z",
-      changes: [
-        {
-          tableName: "categories",
-          recordId: "cat-1",
-          action: "update",
-          data: {
-            id: "cat-1",
-            name: "Work",
-            parentId: null,
-            color: "#3366ff",
-            icon: null,
-            sortOrder: 1,
-            isArchived: false,
-            createdAt: "2026-05-08T08:00:00.000Z",
-            updatedAt: "2026-05-08T08:00:00.000Z",
-          },
-          timestamp: "2026-05-08T08:00:00.000Z",
-        },
-        {
-          tableName: "time_entries",
-          recordId: "entry-1",
-          action: "update",
-          data: {
-            id: "entry-1",
-            categoryId: "cat-1",
-            startTime: "2026-05-08T09:00:00.000Z",
-            endTime: "2026-05-08T10:00:00.000Z",
-            note: "match",
-            createdAt: "2026-05-08T09:00:00.000Z",
-            updatedAt: "2026-05-08T09:00:00.000Z",
-          },
-          timestamp: "2026-05-08T09:00:00.000Z",
-        },
-      ],
-    });
 
-    const beforeMutating = vi.fn();
-    const result = await regularSync({ beforeMutating });
-
-    expect(result).toMatchObject({ identical: true, pushed: 0, pulled: 0, rejected: 0, pushConflicts: 0 });
-    expect(beforeMutating).not.toHaveBeenCalled();
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("legacy_snapshot_sync flag ignores ordering differences when comparing snapshots", async () => {
-    localStorage.setItem(STORAGE_KEYS.legacySnapshotSync, "1");
-
-    await db.categories.bulkAdd([
-      {
-        id: "cat-b",
-        name: "B",
-        parentId: null,
-        color: "#3366ff",
-        icon: null,
-        sortOrder: 2,
-        isArchived: false,
-        createdAt: "2026-05-08T08:00:00.000Z",
-        updatedAt: "2026-05-08T08:00:00.000Z",
-      },
-      {
-        id: "cat-a",
-        name: "A",
-        parentId: null,
-        color: "#3366ff",
-        icon: null,
-        sortOrder: 1,
-        isArchived: false,
-        createdAt: "2026-05-08T08:00:00.000Z",
-        updatedAt: "2026-05-08T08:00:00.000Z",
-      },
-    ]);
-    await db.timeEntries.bulkAdd([
-      {
-        id: "entry-b",
-        categoryId: "cat-b",
-        startTime: "2026-05-08T10:00:00.000Z",
-        endTime: "2026-05-08T11:00:00.000Z",
-        note: "B",
-        createdAt: "2026-05-08T10:00:00.000Z",
-        updatedAt: "2026-05-08T10:00:00.000Z",
-      },
-      {
-        id: "entry-a",
-        categoryId: "cat-a",
-        startTime: "2026-05-08T09:00:00.000Z",
-        endTime: "2026-05-08T10:00:00.000Z",
-        note: "A",
-        createdAt: "2026-05-08T09:00:00.000Z",
-        updatedAt: "2026-05-08T09:00:00.000Z",
-      },
-    ]);
-
-    apiFetchMock.mockResolvedValue({
-      serverTime: "2026-05-08T10:00:00.000Z",
-      changes: [
-        {
-          tableName: "time_entries",
-          recordId: "entry-a",
-          action: "update",
-          data: {
-            id: "entry-a",
-            categoryId: "cat-a",
-            startTime: "2026-05-08T09:00:00.000Z",
-            endTime: "2026-05-08T10:00:00.000Z",
-            note: "A",
-            createdAt: "2026-05-08T09:00:00.000Z",
-            updatedAt: "2026-05-08T09:00:00.000Z",
-          },
-          timestamp: "2026-05-08T09:00:00.000Z",
-        },
-        {
-          tableName: "categories",
-          recordId: "cat-a",
-          action: "update",
-          data: {
-            id: "cat-a",
-            name: "A",
-            parentId: null,
-            color: "#3366ff",
-            icon: null,
-            sortOrder: 1,
-            isArchived: false,
-            createdAt: "2026-05-08T08:00:00.000Z",
-            updatedAt: "2026-05-08T08:00:00.000Z",
-          },
-          timestamp: "2026-05-08T08:00:00.000Z",
-        },
-        {
-          tableName: "time_entries",
-          recordId: "entry-b",
-          action: "update",
-          data: {
-            id: "entry-b",
-            categoryId: "cat-b",
-            startTime: "2026-05-08T10:00:00.000Z",
-            endTime: "2026-05-08T11:00:00.000Z",
-            note: "B",
-            createdAt: "2026-05-08T10:00:00.000Z",
-            updatedAt: "2026-05-08T10:00:00.000Z",
-          },
-          timestamp: "2026-05-08T10:00:00.000Z",
-        },
-        {
-          tableName: "categories",
-          recordId: "cat-b",
-          action: "update",
-          data: {
-            id: "cat-b",
-            name: "B",
-            parentId: null,
-            color: "#3366ff",
-            icon: null,
-            sortOrder: 2,
-            isArchived: false,
-            createdAt: "2026-05-08T08:00:00.000Z",
-            updatedAt: "2026-05-08T08:00:00.000Z",
-          },
-          timestamp: "2026-05-08T08:00:00.000Z",
-        },
-      ],
-    });
-
-    const result = await regularSync({ beforeMutating: vi.fn() });
-
-    expect(result.identical).toBe(true);
-  });
-
-  it("legacy_snapshot_sync flag pushes local-only records even when syncLog is empty", async () => {
-    localStorage.setItem(STORAGE_KEYS.legacySnapshotSync, "1");
-
-    await db.categories.add({
-      id: "cat-1",
-      name: "Work",
-      parentId: null,
-      color: "#3366ff",
-      icon: null,
-      sortOrder: 1,
-      isArchived: false,
-      createdAt: "2026-05-08T08:00:00.000Z",
-      updatedAt: "2026-05-08T08:00:00.000Z",
-    });
-    await db.timeEntries.add({
-      id: "entry-local-only",
-      categoryId: "cat-1",
-      startTime: "2026-05-08T09:00:00.000Z",
-      endTime: "2026-05-08T10:00:00.000Z",
-      note: "local only",
-      createdAt: "2026-05-08T09:00:00.000Z",
-      updatedAt: "2026-05-08T09:00:00.000Z",
-    });
-
-    apiFetchMock
-      .mockResolvedValueOnce({
-        serverTime: "2026-05-08T10:00:00.000Z",
-        changes: [
-          {
-            tableName: "categories",
-            recordId: "cat-1",
-            action: "update",
-            data: {
-              id: "cat-1",
-              name: "Work",
-              parentId: null,
-              color: "#3366ff",
-              icon: null,
-              sortOrder: 1,
-              isArchived: false,
-              createdAt: "2026-05-08T08:00:00.000Z",
-              updatedAt: "2026-05-08T08:00:00.000Z",
-            },
-            timestamp: "2026-05-08T08:00:00.000Z",
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        accepted: 1,
-        rejected: 0,
-        conflicts: 0,
-        outcomes: [
-          {
-            tableName: "time_entries",
-            recordId: "entry-local-only",
-            action: "create",
-            status: "accepted",
-            reasonCode: "applied",
-            message: "Applied",
-            incomingTimestamp: "2026-05-08T09:00:00.000Z",
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        serverTime: "2026-05-08T10:01:00.000Z",
-        changes: [],
-      });
-
-    const result = await regularSync({ beforeMutating: vi.fn() });
-
-    const pushBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
-    expect(pushBody.changes).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        tableName: "time_entries",
-        recordId: "entry-local-only",
-        action: "create",
-      }),
-    ]));
-    expect(result).toMatchObject({ identical: false, pushed: 1, rejected: 0, pushConflicts: 0 });
-  });
-
-  it("legacy_snapshot_sync flag runs the backup callback before mutating sync work when snapshots differ", async () => {
-    localStorage.setItem(STORAGE_KEYS.legacySnapshotSync, "1");
-
-    await db.categories.add({
-      id: "cat-1",
-      name: "Work",
-      parentId: null,
-      color: "#3366ff",
-      icon: null,
-      sortOrder: 1,
-      isArchived: false,
-      createdAt: "2026-05-08T08:00:00.000Z",
-      updatedAt: "2026-05-08T08:00:00.000Z",
-    });
-    await db.timeEntries.add({
-      id: "entry-1",
-      categoryId: "cat-1",
-      startTime: "2026-05-08T09:00:00.000Z",
-      endTime: "2026-05-08T10:00:00.000Z",
-      note: "local",
-      createdAt: "2026-05-08T09:00:00.000Z",
-      updatedAt: "2026-05-08T09:00:00.000Z",
-    });
-
-    apiFetchMock.mockResolvedValue({
-      serverTime: "2026-05-08T10:00:00.000Z",
-      changes: [
-        {
-          tableName: "categories",
-          recordId: "cat-1",
-          action: "update",
-          data: {
-            id: "cat-1",
-            name: "Work",
-            parentId: null,
-            color: "#3366ff",
-            icon: null,
-            sortOrder: 1,
-            isArchived: false,
-            createdAt: "2026-05-08T08:00:00.000Z",
-            updatedAt: "2026-05-08T08:00:00.000Z",
-          },
-          timestamp: "2026-05-08T08:00:00.000Z",
-        },
-        {
-          tableName: "time_entries",
-          recordId: "entry-1",
-          action: "update",
-          data: {
-            id: "entry-1",
-            categoryId: "cat-1",
-            startTime: "2026-05-08T09:00:00.000Z",
-            endTime: "2026-05-08T10:30:00.000Z",
-            note: "remote",
-            createdAt: "2026-05-08T09:00:00.000Z",
-            updatedAt: "2026-05-08T09:30:00.000Z",
-          },
-          timestamp: "2026-05-08T09:30:00.000Z",
-        },
-      ],
-    });
-
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
-    const result = await regularSync({ beforeMutating });
-
-    expect(beforeMutating).toHaveBeenCalledTimes(1);
-    expect(result.identical).toBe(false);
-    expect(result.pulled).toBeGreaterThanOrEqual(0);
-  });
 });
 
 

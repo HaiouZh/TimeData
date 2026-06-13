@@ -29,7 +29,6 @@ import type {
 } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
-const LAST_SYNCED_KEY = STORAGE_KEYS.lastSynced;
 const LAST_SYNCED_SEQ_KEY = STORAGE_KEYS.lastSyncedSeq;
 const SYNC_FAILURE_COUNT_KEY = STORAGE_KEYS.syncFailureCount;
 type SyncLog = SyncLogEntry;
@@ -73,12 +72,10 @@ interface CompactedSyncLog extends SyncLog {
   sourceLogIds: string[];
 }
 
-function buildPullCursor(mode: "incremental" | "repair", fallbackSince?: string): { lastSyncedAt: string | null; since?: string; sinceSeq?: number } {
-  if (mode === "repair") return { lastSyncedAt: null };
-  const sinceSeq = getLastSyncedSeq();
-  if (sinceSeq != null) return { lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq };
-  const lastSyncedAt = safeGetItem(LAST_SYNCED_KEY);
-  return fallbackSince ? { lastSyncedAt: null, since: fallbackSince } : { lastSyncedAt };
+// 账本模型：pull 只有一种问法——“#N 之后给我”；repair/全量 = sinceSeq 0。
+function buildPullCursor(mode: "incremental" | "repair"): { sinceSeq: number } {
+  if (mode === "repair") return { sinceSeq: 0 };
+  return { sinceSeq: getLastSyncedSeq() ?? 0 };
 }
 
 export function getLastSyncedSeq(): number | null {
@@ -230,40 +227,6 @@ function quickNoteNeedsApply(existing: QuickNote | undefined, remoteNote: QuickN
     || (existing.pinned ?? false) !== (remoteNote.pinned ?? false);
 }
 
-async function enqueueLocalOnlyChanges(localSnapshot: Snapshot, cloudSnapshot: Snapshot): Promise<void> {
-  const cloudCategoryIds = new Set(cloudSnapshot.categories.map((category) => category.id));
-  const cloudEntryIds = new Set(cloudSnapshot.timeEntries.map((entry) => entry.id));
-  const cloudQuickNoteIds = new Set(cloudSnapshot.quickNotes.map((note) => note.id));
-  const unsyncedLogs = await db.syncLog.filter((entry) => !entry.synced).toArray();
-  const existingLogKeys = new Set(unsyncedLogs.map((entry) => `${entry.tableName}:${entry.recordId}`));
-  const logs: SyncLogEntry[] = [];
-
-  for (const category of localSnapshot.categories) {
-    const key = `categories:${category.id}`;
-    if (!cloudCategoryIds.has(category.id) && !existingLogKeys.has(key)) {
-      logs.push({ id: uuid(), tableName: "categories", recordId: category.id, action: "create", timestamp: category.updatedAt, synced: 0 });
-    }
-  }
-
-  for (const entry of localSnapshot.timeEntries) {
-    const key = `time_entries:${entry.id}`;
-    if (!cloudEntryIds.has(entry.id) && !existingLogKeys.has(key)) {
-      logs.push({ id: uuid(), tableName: "time_entries", recordId: entry.id, action: "create", timestamp: entry.updatedAt, synced: 0 });
-    }
-  }
-
-  for (const note of localSnapshot.quickNotes) {
-    const key = `quick_notes:${note.id}`;
-    if (!cloudQuickNoteIds.has(note.id) && !existingLogKeys.has(key)) {
-      logs.push({ id: uuid(), tableName: "quick_notes", recordId: note.id, action: "create", timestamp: note.updatedAt, synced: 0 });
-    }
-  }
-
-  if (logs.length > 0) {
-    await db.syncLog.bulkAdd(logs);
-  }
-}
-
 async function applyPushResponse(
   response: SyncPushResponse,
   omittedLogIds: string[],
@@ -330,7 +293,7 @@ export async function syncPush(): Promise<SyncPushResult> {
       .map((log) => log.recordId),
   );
 
-  const changeKey = (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => `${tableName}:${recordId}:${action}`;
+  const changeKey = (tableName: string, recordId: string, action: SyncChange["action"]) => `${tableName}:${recordId}:${action}`;
 
   for (const log of compacted) {
     if (log.omitFromPush) {
@@ -347,7 +310,7 @@ export async function syncPush(): Promise<SyncPushResult> {
         action: "delete",
         data: null,
         timestamp: log.timestamp,
-      });
+      } as SyncChange);
       continue;
     }
 
@@ -425,10 +388,8 @@ export async function syncPush(): Promise<SyncPushResult> {
   return applyPushResponse(response, omittedLogIds, sourceLogIdsByChangeKey, changeKey);
 }
 
-export async function syncPullRecent(days: number): Promise<{ applied: number; conflicts: SyncConflict[] }> {
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
-  const response = await fetchSyncPullResponse(buildPullCursor("incremental", since));
+export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
+  const response = await fetchSyncPullResponse(buildPullCursor("incremental"));
 
   const unsyncedLogs = await db.syncLog.filter((entry) => !entry.synced).toArray();
   const locallyModifiedById = new Map(unsyncedLogs.map((l) => [`${l.tableName}:${l.recordId}`, l]));
@@ -566,23 +527,11 @@ export async function syncPullRecent(days: number): Promise<{ applied: number; c
   }
 
   advanceSeqCursor(response);
-  advanceLastSyncedCursor(response.changes);
   return { applied, conflicts };
 }
 
-function latestChangeTimestamp(changes: SyncChange[]): string | null {
-  return changes.map((change) => change.timestamp).filter(Boolean).sort().at(-1) ?? null;
-}
-
-function advanceLastSyncedCursor(changes: SyncChange[]): void {
-  const cursor = latestChangeTimestamp(changes);
-  if (cursor) {
-    safeSetItem(LAST_SYNCED_KEY, cursor);
-  }
-}
-
 export async function syncForceReplace(): Promise<number> {
-  const response = await fetchSyncPullResponse({ lastSyncedAt: null }, { timeoutMs: 30000 });
+  const response = await fetchSyncPullResponse({ sinceSeq: 0 }, { timeoutMs: 30000 });
 
   await db.transaction("rw", [db.categories, db.quickNotes, db.timeEntries, db.syncLog, db.settings], async () => {
     await db.timeEntries.clear();
@@ -612,7 +561,6 @@ export async function syncForceReplace(): Promise<number> {
     }
   });
 
-  safeSetItem(LAST_SYNCED_KEY, response.serverTime);
   advanceSeqCursor(response);
   return response.changes.length;
 }
@@ -734,7 +682,6 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
   });
 
   await db.syncLog.clear();
-  safeSetItem(LAST_SYNCED_KEY, response.serverTime);
   advanceSeqCursor(response);
   return response;
 }
@@ -784,18 +731,17 @@ export async function regularSync(options: RegularSyncOptions = {}): Promise<Reg
 }
 
 async function runRegularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
-  if (safeGetItem(STORAGE_KEYS.legacySnapshotSync) === "1") {
-    return regularSyncLegacy(options);
-  }
-
   try {
-    const [localStatus, serverStatus] = await Promise.all([
-      getLocalStatus(),
+    const [unsyncedCount, serverStatus] = await Promise.all([
+      db.syncLog.filter((entry) => !entry.synced).count(),
       apiFetch<SyncStatusResponse>("/api/sync/status"),
     ]);
 
-    if (localStatus.unsyncedCount === 0 && syncStatusMatches(localStatus, serverStatus)) {
-      advanceSeqCursor({ changes: [], serverTime: serverStatus.serverTime, latestSeq: serverStatus.latestSeq });
+    // 账本读数比较：无待上传且本地读数不落后于云端账本 = 无需同步。
+    // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
+    const serverSeq = serverStatus.latestSeq ?? 0;
+    const localSeq = getLastSyncedSeq() ?? 0;
+    if (unsyncedCount === 0 && serverSeq <= localSeq) {
       resetConsecutiveSyncFailures();
       return {
         checked: true,
@@ -814,9 +760,9 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       await options.beforeMutating();
     }
 
-    if (localStatus.unsyncedCount === 0) {
-      const { applied, conflicts } = await syncPullRecent(7);
-      await reportToServer([{ action: "pull_meta_repair", record_count: applied }]);
+    if (unsyncedCount === 0) {
+      const { applied, conflicts } = await syncPullSinceSeq();
+      await reportToServer([{ action: "pull_seq_catchup", record_count: applied }]);
       resetConsecutiveSyncFailures();
       return {
         checked: true,
@@ -832,10 +778,10 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
     }
 
     const pushResult = await syncPush();
-    const { applied, conflicts } = await syncPullRecent(7);
+    const { applied, conflicts } = await syncPullSinceSeq();
     const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
       { action: "push", record_count: pushResult.accepted },
-      { action: "pull_recent_7d", record_count: applied },
+      { action: "pull_since_seq", record_count: applied },
     ];
 
     if (conflicts.length > 0) {
@@ -867,122 +813,6 @@ function describeConflicts(conflicts: SyncConflict[]): string {
     const remoteUp = c.remote ? ((c.remote as TimeEntry).updatedAt || (c.remote as Category).updatedAt) : "deleted";
     return `${c.tableName}:${c.recordId} local=${localUp} remote=${remoteUp} localLog=${c.localLog?.action || "none"}@${c.localLog?.timestamp || "none"}`;
   }).join("\n");
-}
-
-async function regularSyncLegacy(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
-  try {
-    const [localSnapshot, cloudSnapshot] = await Promise.all([loadLocalSnapshot(), loadCloudSnapshot()]);
-
-    if (snapshotsMatch(localSnapshot, cloudSnapshot)) {
-      resetConsecutiveSyncFailures();
-      return {
-        checked: true,
-        identical: true,
-        backupCreated: false,
-        pushed: 0,
-        rejected: 0,
-        pushConflicts: 0,
-        pushIssues: [],
-        pulled: 0,
-        conflicts: [],
-      };
-    }
-
-    if (options.beforeMutating) {
-      await options.beforeMutating();
-    }
-
-    await enqueueLocalOnlyChanges(localSnapshot, cloudSnapshot);
-    const pushResult = await syncPush();
-    const { applied, conflicts } = await syncPullRecent(2);
-
-    const logs: Array<{ action: string; detail?: string; record_count?: number }> = [];
-    logs.push({ action: "push", record_count: pushResult.accepted });
-    logs.push({ action: "pull_recent_2d", record_count: applied });
-
-    if (conflicts.length > 0) {
-      logs.push({ action: "conflict", detail: describeConflicts(conflicts), record_count: conflicts.length });
-    }
-
-    await reportToServer(logs);
-    resetConsecutiveSyncFailures();
-    return {
-      checked: true,
-      identical: false,
-      backupCreated: Boolean(options.beforeMutating),
-      pushed: pushResult.accepted,
-      rejected: pushResult.rejected,
-      pushConflicts: pushResult.conflicts,
-      pushIssues: pushResult.issues,
-      pulled: applied,
-      conflicts,
-    };
-  } catch (error) {
-    recordRegularSyncFailure(error);
-    throw error;
-  }
-}
-
-interface Snapshot {
-  categories: Category[];
-  timeEntries: TimeEntry[];
-  quickNotes: QuickNote[];
-}
-
-async function loadLocalSnapshot(): Promise<Snapshot> {
-  const [categories, timeEntries, quickNotes] = await Promise.all([
-    db.categories.toArray(),
-    db.timeEntries.toArray(),
-    db.quickNotes.toArray(),
-  ]);
-  return {
-    categories: normalizeCategories(categories),
-    timeEntries: normalizeTimeEntries(timeEntries),
-    quickNotes: normalizeQuickNotes(quickNotes),
-  };
-}
-
-async function loadCloudSnapshot(): Promise<Snapshot> {
-  const response = await fetchSyncPullResponse({ lastSyncedAt: null });
-
-  const categories: Category[] = [];
-  const timeEntries: TimeEntry[] = [];
-  const quickNotes: QuickNote[] = [];
-
-  for (const change of response.changes) {
-    if (change.tableName === "categories" && change.action !== "delete" && change.data) {
-      const remoteCategory = parseRemoteCategory(change.data, change.recordId);
-      if (remoteCategory) categories.push(remoteCategory);
-    } else if (change.tableName === "time_entries" && change.action !== "delete" && change.data) {
-      const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
-      if (remoteEntry) timeEntries.push(remoteEntry);
-    } else if (change.tableName === "quick_notes" && change.action !== "delete" && change.data) {
-      const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
-      if (remoteNote) quickNotes.push(remoteNote);
-    }
-  }
-
-  return {
-    categories: normalizeCategories(categories),
-    timeEntries: normalizeTimeEntries(timeEntries),
-    quickNotes: normalizeQuickNotes(quickNotes),
-  };
-}
-
-function normalizeCategories(categories: Category[]): Category[] {
-  return [...categories].sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function normalizeTimeEntries(entries: TimeEntry[]): TimeEntry[] {
-  return [...entries].sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function normalizeQuickNotes(notes: QuickNote[]): QuickNote[] {
-  return [...notes].sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function snapshotsMatch(localSnapshot: Snapshot, cloudSnapshot: Snapshot): boolean {
-  return JSON.stringify(localSnapshot) === JSON.stringify(cloudSnapshot);
 }
 
 export async function syncPull(options: { mode?: "incremental" | "repair" } = {}): Promise<number> {
@@ -1059,7 +889,6 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
   }
 
   advanceSeqCursor(response);
-  advanceLastSyncedCursor(response.changes);
   return applied;
 }
 
