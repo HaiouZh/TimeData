@@ -40,7 +40,7 @@ covers:
   - packages/server/src/middleware/bodyLimit.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-04
+last-reviewed: 2026-06-13
 ---
 
 # 架构总览
@@ -119,16 +119,18 @@ TimeData 是个人时间记录工具：
 
 关键点：速记是独立数据域，以 `occurredAt + text` 为核心，可带 `source` / `sourceLabel` 展示来源和 `pinned` 置顶状态；它不引用分类，不生成时间段，不进入重叠校验、时间环或分类统计。客户端导出、导入、范围删除和多选批量删除都只操作 `quickNotes`，并在写入本地业务表的同一 Dexie transaction 中追写 `syncLog`。
 
-### 3.3 用户在多设备间同步
+### 3.3 用户在多设备间同步（账本模型）
 
-`regularSync()`（`packages/client/src/sync/engine.ts`）：
+服务器维护只增不减的变更账本（`sync_seq`），每台设备只持有读数 `timedata_last_synced_seq`。`regularSync()`（`packages/client/src/sync/engine.ts`）：
 
-1. **预检**：先读取本地 `categories` / `timeEntries` / `quickNotes` / 未同步 `syncLog` 数量，再通过 `/api/sync/status` 读取云端 meta 摘要。
-2. **No-op**：如果本地无未同步变更，且本地/云端 `categoryCount`、`entryCount`、`quickNoteCount`、`lastUpdatedAt` 或 `contentHash` 一致，直接返回“无需同步”，不 push、不 pull、不创建本地自动备份，也不触发服务端 `sync_push` 备份。
-3. **Pull-only repair**：如果本地无未同步变更但 meta 不一致，先创建本地自动备份，再拉最近 7 天服务器变更 → 本地。
-4. **真实同步**：如果本地有未同步变更，先创建本地自动备份，再 push 未同步的本地变更 → 服务器（合并、压缩、带分类依赖，settings 走同一同步管线），然后拉最近 7 天服务器变更。
-5. 冲突交给用户决定 `keep_local` / `use_remote`。
-6. 每次同步把摘要写到服务器 `sync_logs` 表（best-effort，失败不影响同步）。`localStorage.timedata_legacy_snapshot_sync="1"` 可临时回退到旧的全量快照比较路径。
+1. **预检**：读本地未同步 `syncLog` 计数 + `/api/sync/status` 取云端 `latestSeq`。
+2. **No-op**：本地无未同步变更且读数不落后于云端账本，直接返回"无需同步"，不 push、不 pull、不创建备份。
+3. **Pull-only 补差**：本地无未同步变更但云端账本更新，先创建本地自动备份，再按 `sinceSeq` 补差。
+4. **真实同步**：本地有未同步变更，先创建本地自动备份，再 push（合并、压缩、带分类依赖）→ 按 `sinceSeq` 补差。
+5. 冲突交给用户决定 `keep_local` / `use_remote`（仅 manual 域；lww 域后写赢自动解决）。
+6. 每次同步把摘要写到服务器 `sync_logs` 表（best-effort，失败不影响同步）。
+
+`updated_at` 由服务器在记账时分配，设备时钟漂移不影响同步正确性。数据域（同步认识哪些表、各域校验与冲突策略）由域登记簿驱动，见 [`sync.md`](./sync.md) 第 0 节与 [`ADR 0012`](../adr/0012-sync-ledger-and-domain-registry.md)。
 
 同步记录和备份记录是两套空间：`syncLog` 是客户端待同步队列，服务端 `sync_logs` 是运维审计；自动备份记录只在设置页的数据设置里展示，用于恢复本地数据。
 

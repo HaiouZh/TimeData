@@ -236,7 +236,7 @@ type SyncChange =
 共享契约：
 
 - `SyncPushRequest.baseSeq?: number | null`：客户端上次观察到的服务端序列，用来判断本次 push 相对云端是否可快进；运行时 schema 只接受有限非负整数、`null` 或缺省。
-- `SyncPullRequest.sinceSeq?: number | null`：客户端请求拉取某个服务端序列之后的变更；存在时优先于 timestamp cursor；运行时 schema 只接受有限非负整数、`null` 或缺省。
+- `SyncPullRequest.sinceSeq: number | null`：客户端请求拉取某个服务端账本编号之后的变更，0 或 `null` 表示全量；这是 pull 唯一的 cursor（timestamp cursor 已退役，见 ADR 0012）；运行时 schema 只接受有限非负整数或 `null`，缺字段即 400。
 - `SyncPullResponse.latestSeq?: number | null`：服务端当前最新序列；客户端只前进、不回退本地 `timedata_last_synced_seq`；运行时 schema 只接受有限非负整数、`null` 或缺省。
 - `SyncDatasetStatus.latestSeq?: number | null`：服务端状态摘要里的当前最新序列，用于普通同步 meta 预检和诊断展示，避免为了拿序列再多一次 round trip；meta no-op 同步会用它推进本地 `timedata_last_synced_seq`；状态响应里的 `categoryCount` / `entryCount` / `quickNoteCount` 同样是有限非负整数。
 

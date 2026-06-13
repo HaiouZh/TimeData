@@ -39,6 +39,7 @@
 - **全量同步兜底只能手动触发**：`force-push/prepare` + `force-push` 五重保护（诊断、短时 token、确认短语、最终确认、服务端备份）。
 - **CLI 本质是 server API 的受控简化封装**，不是新写入通道。
 - **`SyncPushReasonCode` 是封闭枚举**：扩展需同步 server validation / client engine / 文档表。
+- **同步域登记簿是封闭的**：新增数据域走 `packages/shared/src/syncDomains.ts` + `packages/server/src/sync/domains.ts` 登记，不在管线里加表名特判；见 ADR 0012。
 
 软约束的违反不是 bug，是产品重选；在 PR 描述里说明并请用户确认，不机械遵守。
 
@@ -137,4 +138,4 @@
 
 ------
 
-*Last reviewed: 2026-06-03（写入边界放宽为服务端受控 API，见 ADR 0011；新增 agent quick note 投递接口）*
+*Last reviewed: 2026-06-13（同步收敛为账本模型 + 域登记簿，见 ADR 0012）*
