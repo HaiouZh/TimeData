@@ -51,6 +51,18 @@ function createSchema() {
       pinned INTEGER NOT NULL DEFAULT 0
     );
 
+    CREATE TABLE tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0,
+      recurrence TEXT,
+      last_done_at TEXT,
+      start_at TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -580,6 +592,58 @@ describe("sync route", () => {
       source: "agent",
       source_label: "Hermes",
       pinned: 1,
+    });
+  });
+
+  it("force-push imports tasks independently from categories and entries", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: "2026-06-14T00:00:00.000Z" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+        tasks: [
+          {
+            id: "task-force",
+            title: "跑步",
+            done: false,
+            recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
+            lastDoneAt: null,
+            startAt: "2026-06-14T00:00:00.000Z",
+            sortOrder: 0,
+            createdAt: "2026-06-14T00:00:00.000Z",
+            updatedAt: "2026-06-14T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      importedCategories: 0,
+      importedTimeEntries: 0,
+      importedQuickNotes: 0,
+      importedTasks: 1,
+      latestSeq: 1,
+    });
+    expect(db.prepare("SELECT title, recurrence, start_at FROM tasks WHERE id = ?").get("task-force")).toMatchObject({
+      title: "跑步",
+      recurrence: JSON.stringify({ freq: "weekly", interval: 1, byWeekday: [1], basis: "due" }),
+      start_at: "2026-06-14T00:00:00.000Z",
+    });
+    expect(db.prepare("SELECT table_name, record_id FROM sync_seq WHERE id = 1").get()).toMatchObject({
+      table_name: "tasks",
+      record_id: "task-force",
     });
   });
 

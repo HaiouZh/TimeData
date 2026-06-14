@@ -1,0 +1,165 @@
+import { RecurrenceSchema, type Recurrence } from "@timedata/shared";
+
+interface RecurrenceEditorProps {
+  value: Recurrence | null;
+  onChange: (next: Recurrence | null) => void;
+}
+
+const WEEKDAYS = [
+  ["周一", 1],
+  ["周二", 2],
+  ["周三", 3],
+  ["周四", 4],
+  ["周五", 5],
+  ["周六", 6],
+  ["周日", 7],
+] as const;
+
+function emit(onChange: (next: Recurrence | null) => void, next: Recurrence): void {
+  const parsed = RecurrenceSchema.safeParse(next);
+  if (parsed.success) onChange(parsed.data);
+}
+
+function setFreq(current: Recurrence, freq: Recurrence["freq"]): Recurrence {
+  const base = { interval: current.interval, basis: current.basis, time: current.time };
+  if (freq === "weekly") return { ...base, freq, byWeekday: [1] };
+  if (freq === "monthly") return { ...base, freq, byMonthday: [1] };
+  return { ...base, freq };
+}
+
+function toggleNumber(values: number[], value: number): number[] {
+  const next = values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+  return next.length > 0 ? next.sort((a, b) => a - b) : [value];
+}
+
+export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
+  const enabled = value !== null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+      <label className="flex min-h-10 items-center justify-between gap-3 text-sm text-slate-100">
+        <span>重复</span>
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => {
+            onChange(event.currentTarget.checked ? { freq: "daily", interval: 1, basis: "due" } : null);
+          }}
+          className="h-5 w-5 accent-sky-500"
+        />
+      </label>
+
+      {value && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
+            <label className="space-y-1 text-xs text-slate-400">
+              <span>频率</span>
+              <select
+                value={value.freq}
+                onChange={(event) => emit(onChange, setFreq(value, event.currentTarget.value as Recurrence["freq"]))}
+                className="min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"
+              >
+                <option value="daily">每天</option>
+                <option value="weekly">每周</option>
+                <option value="monthly">每月</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-xs text-slate-400">
+              <span>间隔</span>
+              <input
+                type="number"
+                min={1}
+                value={value.interval}
+                onChange={(event) => {
+                  const interval = Math.max(1, Number.parseInt(event.currentTarget.value || "1", 10));
+                  emit(onChange, { ...value, interval });
+                }}
+                className="min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"
+              />
+            </label>
+          </div>
+
+          {value.freq === "weekly" && (
+            <div className="grid grid-cols-4 gap-2">
+              {WEEKDAYS.map(([label, weekday]) => (
+                <label key={weekday} className="flex min-h-9 items-center gap-2 rounded-lg bg-slate-950 px-2 text-xs">
+                  <input
+                    type="checkbox"
+                    aria-label={label}
+                    checked={(value.byWeekday ?? []).includes(weekday)}
+                    onChange={() => emit(onChange, { ...value, byWeekday: toggleNumber(value.byWeekday ?? [], weekday) })}
+                    className="h-4 w-4 accent-sky-500"
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {value.freq === "monthly" && (
+            <div className="grid max-h-36 grid-cols-4 gap-2 overflow-y-auto pr-1">
+              {[...Array.from({ length: 31 }, (_, index) => index + 1), -1].map((monthday) => {
+                const label = monthday === -1 ? "最后一天" : `${monthday}号`;
+                return (
+                  <label key={monthday} className="flex min-h-9 items-center gap-2 rounded-lg bg-slate-950 px-2 text-xs">
+                    <input
+                      type="checkbox"
+                      aria-label={label}
+                      checked={(value.byMonthday ?? []).includes(monthday)}
+                      onChange={() =>
+                        emit(onChange, { ...value, byMonthday: toggleNumber(value.byMonthday ?? [], monthday) })
+                      }
+                      className="h-4 w-4 accent-sky-500"
+                    />
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
+            <label className="space-y-1 text-xs text-slate-400">
+              <span>时间</span>
+              <input
+                type="time"
+                value={value.time ?? ""}
+                onChange={(event) => {
+                  const time = event.currentTarget.value;
+                  emit(onChange, time ? { ...value, time } : { ...value, time: undefined });
+                }}
+                className="min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"
+              />
+            </label>
+            <fieldset className="space-y-1 text-xs text-slate-400">
+              <legend>基准</legend>
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-950 p-1">
+                {[
+                  ["due", "到期"],
+                  ["completion", "完成"],
+                ].map(([basis, label]) => (
+                  <label
+                    key={basis}
+                    className={`flex min-h-8 items-center justify-center rounded-md text-xs ${
+                      value.basis === basis ? "bg-sky-500 text-white" : "text-slate-400"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="recurrence-basis"
+                      value={basis}
+                      checked={value.basis === basis}
+                      onChange={() => emit(onChange, { ...value, basis: basis as Recurrence["basis"] })}
+                      className="sr-only"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -4,13 +4,14 @@ import {
   NonNegativeIntSchema,
   QuickNoteSchema,
   SettingSchema,
+  TaskSchema,
   TimeEntrySchema,
   UtcIsoStringSchema,
 } from "./entitySchemas.js";
 import { SYNC_TABLE_NAMES, buildSyncChangeSchema } from "./syncDomains.js";
 import type { SyncChange } from "./types.js";
 
-export { CategorySchema, QuickNoteSchema, SettingSchema, TimeEntrySchema, UtcIsoStringSchema } from "./entitySchemas.js";
+export { CategorySchema, QuickNoteSchema, RecurrenceSchema, SettingSchema, TaskSchema, TimeEntrySchema, UtcIsoStringSchema } from "./entitySchemas.js";
 
 const SeqSchema = NonNegativeIntSchema;
 
@@ -63,6 +64,7 @@ export const SyncForcePushRequestSchema = z.object({
   timeEntries: z.array(TimeEntrySchema),
   settings: z.array(SettingSchema).optional(),
   quickNotes: z.array(QuickNoteSchema).default([]),
+  tasks: z.array(TaskSchema).default([]),
 });
 
 export const SyncStatusResponseSchema = z.object({

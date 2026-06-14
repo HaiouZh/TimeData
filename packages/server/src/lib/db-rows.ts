@@ -1,4 +1,4 @@
-import type { Category, QuickNote, Setting, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
 
 export interface CountRow {
   count: number;
@@ -31,7 +31,7 @@ export interface EntryRow {
 }
 
 export interface TombstoneRow {
-  table_name: "categories" | "time_entries" | "settings" | "quick_notes";
+  table_name: "categories" | "time_entries" | "settings" | "quick_notes" | "tasks";
   record_id: string;
   deleted_at: string;
 }
@@ -96,6 +96,32 @@ export function rowToSetting(row: SettingRow): Setting {
   return {
     key: row.key,
     value: row.value,
+    updatedAt: row.updated_at,
+  };
+}
+
+export interface TaskRow {
+  id: string;
+  title: string;
+  done: number;
+  recurrence: string | null;
+  last_done_at: string | null;
+  start_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function rowToTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    title: row.title,
+    done: Boolean(row.done),
+    recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
+    lastDoneAt: row.last_done_at,
+    startAt: row.start_at,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }

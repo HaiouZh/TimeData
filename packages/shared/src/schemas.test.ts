@@ -45,6 +45,18 @@ const quickNote = {
   updatedAt: "2026-06-01T04:02:00.000Z",
 };
 
+const task = {
+  id: "task-1",
+  title: "跑步",
+  done: false,
+  recurrence: null,
+  lastDoneAt: null,
+  startAt: null,
+  sortOrder: 0,
+  createdAt: "2026-06-14T00:00:00.000Z",
+  updatedAt: "2026-06-14T00:00:00.000Z",
+};
+
 describe("SyncLogEntrySchema", () => {
   it("only accepts synced as 0 or 1", () => {
     const base = {
@@ -69,6 +81,19 @@ describe("SyncLogEntrySchema", () => {
         recordId: "note-1",
         action: "create",
         timestamp: "2026-06-01T04:02:00.000Z",
+        synced: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("accepts tasks as a synced table", () => {
+    expect(
+      SyncLogEntrySchema.safeParse({
+        id: "log-task-1",
+        tableName: "tasks",
+        recordId: "task-1",
+        action: "create",
+        timestamp: "2026-06-14T00:00:00.000Z",
         synced: 0,
       }).success,
     ).toBe(true);
@@ -231,6 +256,23 @@ describe("runtime schemas", () => {
         quickNotes: [],
       }).success,
     ).toBe(false);
+    const parsedForcePush = SyncForcePushRequestSchema.parse({
+      confirmToken: "token",
+      confirmationPhrase: "OVERWRITE_SERVER",
+      categories: [],
+      timeEntries: [],
+      quickNotes: [],
+      tasks: [task],
+    });
+    expect(parsedForcePush.tasks).toEqual([task]);
+    expect(
+      SyncForcePushRequestSchema.parse({
+        confirmToken: "token",
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+      }).tasks,
+    ).toEqual([]);
   });
 });
 

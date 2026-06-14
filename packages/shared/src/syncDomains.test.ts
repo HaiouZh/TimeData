@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SYNC_DOMAINS, SYNC_TABLE_NAMES, getSyncDomain } from "./syncDomains.js";
+import { SYNC_DOMAINS, SYNC_TABLE_NAMES, buildSyncChangeSchema, getSyncDomain } from "./syncDomains.js";
+import { UtcIsoStringSchema } from "./entitySchemas.js";
 
 describe("sync domain registry", () => {
   it("registers the domains in order priority", () => {
@@ -8,6 +9,7 @@ describe("sync domain registry", () => {
       "time_entries",
       "settings",
       "quick_notes",
+      "tasks",
       "health_heart_rate",
       "health_hrv",
       "health_sleep",
@@ -37,5 +39,23 @@ describe("sync domain registry", () => {
     for (const domain of SYNC_DOMAINS) {
       expect(domain.dataSchema.safeParse(null).success).toBe(false);
     }
+  });
+});
+
+describe("tasks domain registration", () => {
+  it("is registered as an lww domain not counted in status", () => {
+    const tasks = SYNC_DOMAINS.find((d) => d.table === "tasks");
+    expect(tasks).toBeDefined();
+    expect(tasks?.conflictPolicy).toBe("lww");
+    expect(tasks?.countsInStatus).toBe(false);
+    expect(SYNC_TABLE_NAMES).toContain("tasks");
+  });
+  it("buildSyncChangeSchema accepts a tasks create", () => {
+    const schema = buildSyncChangeSchema(UtcIsoStringSchema);
+    const ok = schema.safeParse({
+      tableName: "tasks", action: "create", recordId: "t1", timestamp: "2026-06-14T00:00:00.000Z",
+      data: { id: "t1", title: "x", done: false, recurrence: null, lastDoneAt: null, startAt: null, sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z" },
+    });
+    expect(ok.success).toBe(true);
   });
 });

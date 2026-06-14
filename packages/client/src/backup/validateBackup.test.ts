@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Category, TimeEntry } from "@timedata/shared";
+import type { Category, Task, TimeEntry } from "@timedata/shared";
 import { BACKUP_FORMAT } from "./schema.js";
 import { validateBackup } from "./validateBackup.js";
 
@@ -7,7 +7,10 @@ const now = "2026-05-07T12:00:00.000Z";
 
 function category(overrides: Partial<Category> & Pick<Category, "id">): Category;
 function category(id: string, parentId?: string | null): Category;
-function category(value: string | (Partial<Category> & Pick<Category, "id">), parentId: string | null = null): Category {
+function category(
+  value: string | (Partial<Category> & Pick<Category, "id">),
+  parentId: string | null = null,
+): Category {
   const overrides = typeof value === "string" ? { id: value, parentId } : value;
   return {
     id: overrides.id,
@@ -37,6 +40,23 @@ function entry(value: string | (Partial<TimeEntry> & Pick<TimeEntry, "id">), cat
   };
 }
 
+function task(overrides: Partial<Task> & Pick<Task, "id">): Task;
+function task(id: string): Task;
+function task(value: string | (Partial<Task> & Pick<Task, "id">)): Task {
+  const overrides = typeof value === "string" ? { id: value } : value;
+  return {
+    id: overrides.id,
+    title: overrides.title ?? overrides.id,
+    done: overrides.done ?? false,
+    recurrence: overrides.recurrence ?? null,
+    lastDoneAt: overrides.lastDoneAt ?? null,
+    startAt: overrides.startAt ?? null,
+    sortOrder: overrides.sortOrder ?? 0,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
+  };
+}
+
 function validBackup(overrides: Record<string, unknown> = {}) {
   return {
     format: BACKUP_FORMAT,
@@ -46,6 +66,7 @@ function validBackup(overrides: Record<string, unknown> = {}) {
     device: { deviceId: "device-1", deviceName: "Web" },
     categories: [category("cat-1")],
     timeEntries: [entry("entry-1")],
+    tasks: [task("task-1")],
     ...overrides,
   };
 }
@@ -61,6 +82,7 @@ describe("validateBackup", () => {
         exportedAt: now,
         categoryCount: 1,
         entryCount: 1,
+        taskCount: 1,
       },
     });
   });
@@ -80,6 +102,15 @@ describe("validateBackup", () => {
     expect(result).toEqual({
       ok: false,
       error: { code: "DUPLICATE_CATEGORY_ID", message: "备份文件中存在重复分类 ID：cat-1。" },
+    });
+  });
+
+  it("rejects duplicate task ids", () => {
+    const result = validateBackup({ ...validBackup(), tasks: [task("task-1"), task("task-1")] });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { code: "DUPLICATE_TASK_ID", message: "备份文件中存在重复任务 ID：task-1。" },
     });
   });
 
@@ -103,72 +134,114 @@ describe("validateBackup", () => {
 
   it("rejects v2 backups without utc timeFormat", () => {
     const missingTimeFormat = validBackup({ timeFormat: undefined });
-    expect(validateBackup(missingTimeFormat)).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_TIME_FORMAT" }),
-    }));
+    expect(validateBackup(missingTimeFormat)).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_TIME_FORMAT" }),
+      }),
+    );
 
     const localBackup = validBackup({ timeFormat: "local" });
-    expect(validateBackup(localBackup)).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_TIME_FORMAT" }),
-    }));
+    expect(validateBackup(localBackup)).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_TIME_FORMAT" }),
+      }),
+    );
   });
 
   it("rejects categories with non-strict UTC timestamps", () => {
-    const result = validateBackup({ ...validBackup(), categories: [category({ id: "cat-1", createdAt: "2026-05-07T12:00:00Z" })] });
+    const result = validateBackup({
+      ...validBackup(),
+      categories: [category({ id: "cat-1", createdAt: "2026-05-07T12:00:00Z" })],
+    });
 
-    expect(result).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_CATEGORIES" }),
-    }));
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_CATEGORIES" }),
+      }),
+    );
   });
 
   it("rejects entries with non-UTC times or endTime not after startTime", () => {
     const nonUtc = validBackup({
       timeEntries: [entry({ id: "entry-1", startTime: "2026-05-17T09:00:00", endTime: "2026-05-17T10:00:00.000Z" })],
     });
-    expect(validateBackup(nonUtc)).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_TIME_ENTRIES" }),
-    }));
+    expect(validateBackup(nonUtc)).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_TIME_ENTRIES" }),
+      }),
+    );
 
     const reversed = validBackup({
-      timeEntries: [entry({ id: "entry-1", startTime: "2026-05-17T10:00:00.000Z", endTime: "2026-05-17T09:00:00.000Z" })],
+      timeEntries: [
+        entry({ id: "entry-1", startTime: "2026-05-17T10:00:00.000Z", endTime: "2026-05-17T09:00:00.000Z" }),
+      ],
     });
-    expect(validateBackup(reversed)).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_TIME_ENTRIES" }),
-    }));
+    expect(validateBackup(reversed)).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_TIME_ENTRIES" }),
+      }),
+    );
+  });
+
+  it("rejects backups without a valid current tasks array", () => {
+    expect(validateBackup(validBackup({ tasks: undefined }))).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_TASKS" }),
+      }),
+    );
+
+    expect(validateBackup(validBackup({ tasks: [task({ id: "task-1", title: "" })] }))).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_TASKS" }),
+      }),
+    );
   });
 
   it("rejects invalid category parent relationships", () => {
-    expect(validateBackup(validBackup({ categories: [category({ id: "a", parentId: "a" })] }))).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
-    }));
+    expect(validateBackup(validBackup({ categories: [category({ id: "a", parentId: "a" })] }))).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
+      }),
+    );
 
-    expect(validateBackup(validBackup({
-      categories: [
-        category({ id: "a", parentId: null }),
-        category({ id: "b", parentId: "a" }),
-        category({ id: "c", parentId: "b" }),
-      ],
-    }))).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
-    }));
+    expect(
+      validateBackup(
+        validBackup({
+          categories: [
+            category({ id: "a", parentId: null }),
+            category({ id: "b", parentId: "a" }),
+            category({ id: "c", parentId: "b" }),
+          ],
+        }),
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
+      }),
+    );
 
-    expect(validateBackup(validBackup({
-      categories: [
-        category({ id: "a", parentId: "b" }),
-        category({ id: "b", parentId: "a" }),
-      ],
-      timeEntries: [],
-    }))).toEqual(expect.objectContaining({
-      ok: false,
-      error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
-    }));
+    expect(
+      validateBackup(
+        validBackup({
+          categories: [category({ id: "a", parentId: "b" }), category({ id: "b", parentId: "a" })],
+          timeEntries: [],
+        }),
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_CATEGORY_TREE" }),
+      }),
+    );
   });
 });
 
@@ -183,6 +256,7 @@ function makeBackup(overrides: Record<string, unknown> = {}) {
     device: { deviceId: null, deviceName: "Web" },
     categories: [],
     timeEntries: [],
+    tasks: [],
     ...overrides,
   };
 }

@@ -57,3 +57,36 @@ export const TimeEntrySchema = z
     path: ["endTime"],
     message: "endTime must be after startTime",
   });
+
+export const RecurrenceSchema = z
+  .object({
+    freq: z.enum(["daily", "weekly", "monthly"]),
+    interval: z.number().int().positive().max(999),
+    byWeekday: z.array(z.number().int().min(1).max(7)).min(1).optional(), // ISO 8601 weekday: 1=Mon … 7=Sun
+    byMonthday: z
+      .array(z.number().int().refine((n) => n === -1 || (n >= 1 && n <= 31), "monthday must be 1..31 or -1"))
+      .min(1)
+      .optional(),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:mm").optional(),
+    basis: z.enum(["due", "completion"]),
+  })
+  .superRefine((r, ctx) => {
+    if (r.freq === "weekly" && !r.byWeekday) ctx.addIssue({ code: "custom", message: "weekly requires byWeekday" });
+    if (r.freq === "monthly" && !r.byMonthday) ctx.addIssue({ code: "custom", message: "monthly requires byMonthday" });
+    if (r.freq === "daily" && (r.byWeekday || r.byMonthday))
+      ctx.addIssue({ code: "custom", message: "daily must not set byWeekday/byMonthday" });
+    if (r.freq === "weekly" && r.byMonthday) ctx.addIssue({ code: "custom", message: "weekly must not set byMonthday" });
+    if (r.freq === "monthly" && r.byWeekday) ctx.addIssue({ code: "custom", message: "monthly must not set byWeekday" });
+  });
+
+export const TaskSchema = z.object({
+  id: NonEmptyTrimmedStringSchema,
+  title: NonEmptyTrimmedStringSchema,
+  done: z.boolean(),
+  recurrence: RecurrenceSchema.nullable(),
+  lastDoneAt: UtcIsoStringSchema.nullable(),
+  startAt: UtcIsoStringSchema.nullable(),
+  sortOrder: z.number().int().finite(),
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
+});

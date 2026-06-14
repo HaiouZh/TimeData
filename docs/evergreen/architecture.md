@@ -10,6 +10,10 @@ covers:
   - packages/client/src/lib/quickNoteDisplay.ts
   - packages/client/src/pages/QuickNotesPage.tsx
   - packages/client/src/quick-notes/**
+  - packages/client/src/pages/TodoPage.tsx
+  - packages/client/src/components/RecurrenceEditor.tsx
+  - packages/client/src/lib/tasks.ts
+  - packages/client/src/lib/tasks/**
   - packages/client/src/pages/StatsPage.tsx
   - packages/client/src/pages/stats/**
   - packages/client/src/hooks/useInView.ts
@@ -20,6 +24,7 @@ covers:
   - packages/client/src/lib/syncStream.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
+  - packages/client/src/pages/settings/SettingsNavPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
   - packages/client/src/pages/settings/SettingsCategoriesPage.tsx
   - packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx
@@ -33,6 +38,7 @@ covers:
   - packages/server/src/routes/data.ts
   - packages/server/src/routes/export.ts
   - packages/server/src/routes/quick-notes.ts
+  - packages/server/src/routes/tasks.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/sync/**
   - packages/server/src/lib/confirm-token.ts
@@ -61,7 +67,7 @@ last-reviewed: 2026-06-14
 TimeData 是个人时间记录工具：
 
 - 本地优先：所有读写都先打到本地（浏览器 IndexedDB / SQLite），再异步同步。
-- 三类个人记录：时间段记录 `time_entries`、聊天式速记 `quick_notes`、健康数据（心率/HRV/睡眠/压力/跑步，来自 Garmin 自动抓取或手动导入）。速记是"时间 + 文本 + 可选来源 / 置顶元数据"，不参与时间段统计。
+- 四类个人数据：时间段记录 `time_entries`、聊天式速记 `quick_notes`、待办任务 `tasks`、健康数据（心率/HRV/睡眠/压力/跑步，来自 Garmin 自动抓取或手动导入）。速记是“时间 + 文本 + 可选来源 / 置顶元数据”，不参与时间段统计；任务是轻量任务池与重复待办，不参与时长统计。
 - 一份数据，三个入口：Web/PWA、CLI、Android 壳（Capacitor）；授权 agent 可直连受控 server API 投递 quick note。Garmin 健康数据由服务端定时抓取或手动触发，写入服务端后通过同步下发到客户端。
 - 自托管：服务端是单一 Hono + SQLite 进程，可用 Docker 一键部署。
 
@@ -71,7 +77,7 @@ TimeData 是个人时间记录工具：
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  shared       类型与常量（Category / TimeEntry / Sync*）│
+│  shared       类型与常量（Category / TimeEntry / Task / Sync*）│
 └─────────▲────────────▲────────────▲──────────────────┘
           │            │            │
    ┌──────┴───┐  ┌─────┴────┐ ┌─────┴────┐
@@ -91,7 +97,7 @@ TimeData 是个人时间记录工具：
 
 依赖方向单向：`client` / `server` / `cli` 都依赖 `shared`，相互之间**不依赖**——它们靠 HTTP API + 共享类型契约协作。`mobile` 不写业务代码，只负责把 `client` 的 mobile 构建产物装进 Android WebView，并声明需要注册进原生工程的 Capacitor 插件。
 
-## 3. 四种典型数据流
+## 3. 典型数据流
 
 ### 3.1 用户在 Web 端记录一条时间
 
@@ -127,7 +133,23 @@ TimeData 是个人时间记录工具：
 
 关键点：速记是独立数据域，以 `occurredAt + text` 为核心，可带 `source` / `sourceLabel` 展示来源和 `pinned` 置顶状态；它不引用分类，不生成时间段，不进入重叠校验、时间环或分类统计。客户端导出、导入、范围删除和多选批量删除都只操作 `quickNotes`，并在写入本地业务表的同一 Dexie transaction 中追写 `syncLog`。
 
-### 3.3 用户在多设备间同步（账本模型）
+### 3.3 用户在 Web 端管理待办
+
+```
+用户操作 → TodoPage / RecurrenceEditor
+        → Dexie.put(tasks)
+        → 写一条 syncLog(tableName="tasks", synced=0)
+                    │
+              （后续触发同步）
+                    ▼
+        → POST /api/sync/push
+        → server 走 tasks 通用 LWW 域 + sync_seq
+        → 其他设备按 seq 拉取
+```
+
+关键点：`tasks` 是轻量待办域，不引用分类或时间记录。普通任务池条目用 `done` 表示完成；重复任务用 `recurrence` + `lastDoneAt` 计算当前是否到期，勾选只更新 `lastDoneAt`，不把重复任务永久置为 done。服务端只暴露只读 `GET /api/tasks` 供受控客户端查询；Web 端写入仍先落 Dexie，再经同步管线送到服务器。
+
+### 3.4 用户在多设备间同步（账本模型）
 
 服务器维护只增不减的变更账本（`sync_seq`），每台设备只持有读数 `timedata_last_synced_seq`。`regularSync()`（`packages/client/src/sync/engine.ts`）：
 
@@ -142,7 +164,7 @@ TimeData 是个人时间记录工具：
 
 同步记录和备份记录是两套空间：`syncLog` 是客户端待同步队列，服务端 `sync_logs` 是运维审计；自动备份记录只在设置页的数据设置里展示，用于恢复本地数据。
 
-### 3.4 AI/脚本通过 CLI 写一条记录
+### 3.5 AI/脚本通过 CLI 写一条记录
 
 ```
 timedata log --start 09:00 --end 10:00 --category 投资/读书
@@ -156,7 +178,7 @@ timedata log --start 09:00 --end 10:00 --category 投资/读书
 
 **CLI 不直接碰 SQLite**——它只是 server API 的客户端。这条规则是红线，详见 [`adr/0001-cli-as-only-write-path.md`](../adr/0001-cli-as-only-write-path.md) 与修订 [`adr/0011-server-api-as-write-boundary.md`](../adr/0011-server-api-as-write-boundary.md)。
 
-### 3.5 AI/脚本通过 CLI 读速记
+### 3.6 AI/脚本通过 CLI 读速记
 
 ```
 timedata notes --date 2026-06-02
@@ -168,7 +190,7 @@ timedata notes --date 2026-06-02
 
 关键点：这是 CLI 的只读入口，不创建、修改、删除速记，也不复用 `/api/sync/pull` 的设备同步语义。授权 agent 投递速记走服务端受控写接口 `POST /api/quick-notes`，不要求 CLI 增加写命令。
 
-### 3.6 授权 agent 通过 server API 投递速记
+### 3.7 授权 agent 通过 server API 投递速记
 
 ```
 云端 agent → POST /api/quick-notes { text, sourceLabel?, occurredAt? }
@@ -222,7 +244,7 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
 6. 装 auth 中间件（之后所有受保护的 `/api/*` 默认需要 Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
-8. 注册业务路由：`categories`/`entries`/`quick-notes`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）/`health`（ingest）/`admin/garmin`（配置/抓取/状态）
+8. 注册业务路由：`categories`/`entries`/`quick-notes`/`tasks`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）/`health`（ingest）/`admin/garmin`（配置/抓取/状态）
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
 10. 调 `initializeDatabase()`：建表（含 `server_config` 和健康数据表）、首次启动播种默认分类
 11. 启动时清理一次旧 server backup
@@ -236,8 +258,8 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 2. 渲染前确认 DOM 中存在 `#root` 挂载点；缺失时显式抛错，避免挂载点问题被非空断言掩盖。
 3. `<AppUpdateProvider>`：包住 PWA 自更新提示
 4. `ErrorBoundary` 包裹 `BrowserRouter` / `SyncProvider` / `BottomNavProvider` / `AppShell`，顶层渲染错误会落到统一错误页，避免整屏空白。
-5. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口；云同步开启、API 地址已配置且页面处于前台时，它还会维护一条 `/api/sync/stream` SSE 连接，用连接态驱动设置页服务器灯，并在远端 `latestSeq` 变大时防抖触发普通同步。`BottomNavProvider` 只承载底部导航显隐状态，不参与数据同步：时间轴 / 统计 / 设置首页经 `AppShell` 的 `<main>` 滚动容器统一接 `useHideBottomNavOnScroll`（向下滑动隐藏、上滑或接近顶部恢复，带滞回阈值，纯判定逻辑见 `lib/navScroll.ts`），路由切换即重置为显示；速记页因自带内层滚动容器而单独处理，并在输入聚焦或软键盘打开时一并隐藏底部 Tab、让底部 composer 对齐底部导航。
-6. React Router 装主路由：`/`、`/quick-notes`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/stats-layout`、`/settings/admin-insights`、`/settings/garmin`、分类设置相关路由）、`/entries/:id/edit`。设置首页汇总服务器连接灯与同步摘要，并按记录数据、服务端更新等入口分组；设置子页统一复用 `SettingsDetailPage` 的返回头与内容容器，`SettingsInsightsPage` 只负责睡眠分类口径设置，`SettingsStatsLayoutPage` 只负责统计页模块显隐、上移/下移和重置，`SettingsGarminPage` 负责 Garmin 账号配置、定时抓取和手动触发。
+5. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、待办、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口；云同步开启、API 地址已配置且页面处于前台时，它还会维护一条 `/api/sync/stream` SSE 连接，用连接态驱动设置页服务器灯，并在远端 `latestSeq` 变大时防抖触发普通同步。`BottomNavProvider` 只承载底部导航显隐状态，不参与数据同步：时间轴 / 统计 / 待办 / 设置首页经 `AppShell` 的 `<main>` 滚动容器统一接 `useHideBottomNavOnScroll`（向下滑动隐藏、上滑或接近顶部恢复，带滞回阈值，纯判定逻辑见 `lib/navScroll.ts`），路由切换即重置为显示；速记页因自带内层滚动容器而单独处理，并在输入聚焦或软键盘打开时一并隐藏底部 Tab、让底部 composer 对齐底部导航。底部 Tab 的可见主入口由 `nav.visibleTabs.v1` 设置持久化，`/settings` 固定保留。
+6. React Router 装主路由：`/`、`/quick-notes`、`/todo`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/nav`、`/settings/insights`、`/settings/stats-layout`、`/settings/admin-insights`、`/settings/garmin`、分类设置相关路由）、`/entries/:id/edit`。设置首页汇总服务器连接灯与同步摘要，并按记录数据、服务端更新等入口分组；设置子页统一复用 `SettingsDetailPage` 的返回头与内容容器，`SettingsNavPage` 负责底部导航显隐，`SettingsInsightsPage` 只负责睡眠分类口径设置，`SettingsStatsLayoutPage` 只负责统计页模块显隐、上移/下移和重置，`SettingsGarminPage` 负责 Garmin 账号配置、定时抓取和手动触发。
 7. `<AppShell>` 统一监听 PWA/Android 从后台恢复到前台的事件，并把刷新信号传给时间轴和新增记录页，让这些页面重新读取当前时间。
 8. `useMidnightTick`（`packages/client/src/hooks/useMidnightTick.ts`）在 `TimelinePage` 内独立调度本地午夜定时器，跨午夜后强制重新计算 `now`，避免长时间停留在前一天显示状态。
 9. 重复性 prompt 走 `useConfirm` / `ConfirmDialog`，不直接调 `window.confirm`/`alert`，便于本地化和 Android WebView 体验统一。
@@ -266,7 +288,7 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 
 ## 5. 关键约定
 
-1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`QuickNote`、`Setting`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间（严格 `YYYY-MM-DDTHH:mm:ss.sssZ`）、`#RRGGBB` 色值、整数排序、非空字符串、`QuickNote.text` 非空、`QuickNote.source` 只能是 `"user" | "agent"`、`QuickNote.sourceLabel` 最长 64 字符、`QuickNote.pinned` 只能是 boolean、`Setting.value` 字符串值、`SyncLogEntry.synced` 的 `0 | 1` 数字状态、pull / force-push 请求形状等输入。同步 cursor 和计数字段（`baseSeq`、`sinceSeq`、`latestSeq`、`categoryCount`、`entryCount`、`quickNoteCount`）必须是有限非负整数或按契约允许 `null` / 缺省；后台洞察响应里的分页、计数、备份大小和备份 ID / 文件名也由 shared runtime schema 收紧。改这些 = 改公开 API。同步契约还承载本地优先诊断字段（如 `overriddenRecordIds`、`backupId`、`importedQuickNotes`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
+1. **跨端契约只在 `packages/shared`**：`packages/shared/src/types.ts` 导出 `Category`、`TimeEntry`、`QuickNote`、`Task`、`Recurrence`、`Setting`、`SyncChange`、`SyncPushOutcome`、`SyncPushReasonCode` 等静态类型，`packages/shared/src/schemas.ts` 导出对应运行时 schema，并在 server 路由和跨端同步边界收紧 UTC ISO 时间（严格 `YYYY-MM-DDTHH:mm:ss.sssZ`）、`#RRGGBB` 色值、整数排序、非空字符串、`QuickNote.text` 非空、`QuickNote.source` 只能是 `"user" | "agent"`、`QuickNote.sourceLabel` 最长 64 字符、`QuickNote.pinned` 只能是 boolean、`Task.title` 非空、重复规则字段、`Setting.value` 字符串值、`SyncLogEntry.synced` 的 `0 | 1` 数字状态、pull / force-push 请求形状等输入。同步 cursor 和计数字段（`baseSeq`、`sinceSeq`、`latestSeq`、`categoryCount`、`entryCount`、`quickNoteCount`）必须是有限非负整数或按契约允许 `null` / 缺省；后台洞察响应里的分页、计数、备份大小和备份 ID / 文件名也由 shared runtime schema 收紧。改这些 = 改公开 API。同步契约还承载本地优先诊断字段（如 `overriddenRecordIds`、`backupId`、`importedQuickNotes`、`importedTasks`），后台洞察契约承载最近同步问题和受保护备份元数据，三端展示/处理必须一起检查。
 2. **时间用 ISO 字符串**：服务端 SQLite 的 `start_time` / `end_time` / `*_at` 都是字符串字段，比较直接靠字典序。Dexie 同样存字符串。
 3. **写入边界是服务端受控 API**：用户在 Web 端通过组件 → Dexie；脚本/AI/agent 经 server API → SQLite，CLI 是 server API 的受控客户端之一，授权 agent 也可直连受控写接口。服务器不再暴露 JSONL/CSV 导入写库接口；`GET /api/export` 只读，CSV 导出会对公式样式单元格（含前导空白后出现 `= + - @`）加单引号防护；`POST /api/data/reset` 是人工维护入口，必须先调用 `/api/data/reset/prepare` 拿短时确认 token 并提交确认短语。任何 AI/脚本/agent 都不能直接编辑 IndexedDB、SQLite、syncLog、Backup 或导出文件。
 4. **服务端是权威**：时间段重叠、分类存在、archived、时间格式合法等的最终判定都在 `packages/server/src/sync/validation.ts` 和 `packages/server/src/lib/entry-service.ts`。同步校验里需要按应用时区比较当前时间的逻辑统一走 `packages/server/src/lib/timezone.ts`；client / CLI 的同名校验只是为了体验，不能让 server 跳过。
@@ -280,6 +302,9 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间；`source` / `sourceLabel` 是展示元数据，`source="agent"` 表示授权 agent 投递；`pinned` 是跨端同步的置顶状态，缺省等同未置顶。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；滚动时浮层日期胶囊保留当前本地日期并可直接打开日期选择；顶部搜索态用 200ms debounce 后的空格分词 AND 查询直接只读扫描 Dexie `quickNotes`，以扁平结果列表替换时间线，并用 `<mark>` 高亮命中词；置顶速记从顶部 header 的钉子按钮展开，始终不藏在主滚动列表深处，也不在主时间线重复。普通速记气泡是紧凑灰底，agent 速记气泡用深蓝底、弱蓝边框和来源标签区分，点击/焦点态仍只沿用同一个绿色外层状态。气泡单点无编辑效果，长按/右键打开复制、编辑、置顶/取消置顶、选择、删除菜单，编辑回填到底部输入框；选择态支持批量复制、Markdown/JSON 导出和批量删除。速记页统一移动与宽屏为单列气泡，把本地时钟与单条上传状态放进气泡右下角；上传状态从本地 `syncLog(tableName="quick_notes", synced=0)` 推导，待上传显示时钟，已上传或服务端下发的 agent 速记显示单勾。页面在向下滚动、底部输入聚焦或检测到软键盘打开时临时隐藏底部 Tab；长文本气泡按渲染后高度折叠，展开/收起按钮不会进入长按菜单路径。速记正文保存原始文本，展示层仅在命中保守结构语法时用 `react-markdown` + `remark-gfm` + `rehype-sanitize` 安全渲染 Markdown，未命中时保持纯文本；搜索结果始终按纯文本高亮渲染，不参与 Markdown 渲染。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围或按多选 ID 删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。AI/脚本可通过只读 `timedata notes` 查询服务端速记；授权 agent 可通过 `POST /api/quick-notes` 投递 `source="agent"` 的速记，服务端复用 `applyChange()` + `notifySyncChange()` 下发到前台客户端。
    - 代码入口：`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/lib/quickNoteDisplay.ts`、`packages/client/src/quick-notes/`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts`、`packages/server/src/routes/sync.ts`、`packages/server/src/sync/validation.ts`、`packages/server/src/sync/resolver.ts`
    - 相关测试：`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/quick-notes/*.test.ts`、`packages/server/src/routes/quick-notes.test.ts`、`packages/server/src/routes/sync.test.ts`、`packages/server/src/sync/validation.test.ts`、`packages/server/src/sync/resolver.test.ts`、`packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`
+9. **Tasks 是轻量待办域**：`Task` 存在于 Dexie `tasks` 与 SQLite `tasks`，通过 `syncLog(tableName="tasks")` 和 `sync_seq` 同步，冲突策略是 LWW，不进入手动冲突 UI，也不计入 `/api/sync/status` 的业务计数。`TodoPage` 把任务拆成重复任务和任务池；`RecurrenceEditor` 维护 `daily` / `weekly` / `monthly` 规则、间隔、可选本地时间和 `due` / `completion` 基准。任务池勾选翻转 `done`；重复任务勾选更新 `lastDoneAt`，当前是否待做由 `isDueNow()` 按本地日序号计算。server 只提供只读 `GET /api/tasks?kind=pool|recurring&done=0|1` 查询入口；写入仍必须来自 Web 本地优先同步或未来明确设计的受控 API。
+   - 代码入口：`packages/client/src/pages/TodoPage.tsx`、`packages/client/src/components/RecurrenceEditor.tsx`、`packages/client/src/lib/tasks.ts`、`packages/client/src/lib/tasks/recurrence.ts`、`packages/server/src/routes/tasks.ts`、`packages/server/src/sync/domains.ts`
+   - 相关测试：`packages/client/src/pages/TodoPage.test.tsx`、`packages/client/src/components/RecurrenceEditor.test.tsx`、`packages/client/src/lib/tasks.test.ts`、`packages/client/src/lib/tasks/recurrence.test.ts`、`packages/server/src/routes/tasks.test.ts`
 
 ## 6. 模块速查（结合代码路径）
 
@@ -287,6 +312,7 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 |---|---|---|
 | 数据模型 | `packages/shared/src/types.ts`、`packages/shared/src/schemas.ts` | [`data-model.md`](./data-model.md) |
 | Quick Notes | `packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/quick-notes/**`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts` | [`data-model.md`](./data-model.md)、[`sync.md`](./sync.md)、[`backup.md`](./backup.md) |
+| 待办任务 | `packages/client/src/pages/TodoPage.tsx`、`packages/client/src/components/RecurrenceEditor.tsx`、`packages/client/src/lib/tasks.ts`、`packages/client/src/lib/tasks/**`、`packages/server/src/routes/tasks.ts` | [`data-model.md`](./data-model.md)、[`sync.md`](./sync.md)、[`backup.md`](./backup.md) |
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/`、`packages/client/src/lib/settings/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
 | 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/modules/`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/lib/insights/`、`packages/client/src/lib/statsLayoutSetting.ts`、`packages/client/src/lib/statsModuleTrendSetting.ts`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx`、`packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx` | `StatsPage.tsx` 只保留周期/日期/总时长上下文和共享取数，内容区按 `STATS_MODULES` 注册表渲染可见模块；`stats.layout.v1` 存模块顺序与隐藏列表，读取时按注册表 sanitize，并让隐藏模块不挂载、不计算，baseline 数据只在可见模块声明需要时取；趋势模块用 `stats.module.trend.v1` 记住最后使用的窗口和图表类型；`cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率；当前周/月只统计到今天，异常检测在当前周期产出、用近 90 天基线定阈值 |

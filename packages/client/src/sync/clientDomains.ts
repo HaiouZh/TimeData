@@ -3,6 +3,7 @@ import {
   CategorySchema,
   QuickNoteSchema,
   SettingSchema,
+  TaskSchema,
   TimeEntrySchema,
   HealthHeartRateSchema,
   HealthHrvSchema,
@@ -10,7 +11,7 @@ import {
   HealthStressSchema,
   HealthRunSchema,
 } from "@timedata/shared";
-import type { Category, QuickNote, Setting, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.ts";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
 
@@ -48,6 +49,17 @@ function quickNoteNeedsApply(existing: QuickNote | undefined, remoteNote: QuickN
 
 function settingNeedsApply(existing: Setting | undefined, remote: Setting): boolean {
   return !existing || existing.updatedAt !== remote.updatedAt || existing.value !== remote.value;
+}
+
+function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
+  return !existing
+    || existing.updatedAt !== remoteTask.updatedAt
+    || existing.title !== remoteTask.title
+    || existing.done !== remoteTask.done
+    || JSON.stringify(existing.recurrence) !== JSON.stringify(remoteTask.recurrence)
+    || existing.lastDoneAt !== remoteTask.lastDoneAt
+    || existing.startAt !== remoteTask.startAt
+    || existing.sortOrder !== remoteTask.sortOrder;
 }
 
 function isCompleteEntry(entry: TimeEntry): boolean {
@@ -118,6 +130,13 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     schema: QuickNoteSchema,
     needsApply: (existing, remote) =>
       quickNoteNeedsApply(existing as QuickNote | undefined, remote as QuickNote),
+  },
+  tasks: {
+    table: "tasks",
+    storeName: "tasks",
+    schema: TaskSchema,
+    needsApply: (existing, remote) =>
+      taskNeedsApply(existing as Task | undefined, remote as Task),
   },
   health_heart_rate: {
     table: "health_heart_rate",

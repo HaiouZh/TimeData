@@ -1,4 +1,4 @@
-import type { Category, TimeEntry } from "@timedata/shared";
+import type { Category, Task, TimeEntry } from "@timedata/shared";
 
 export const BACKUP_FORMAT = "timedata.backup" as const;
 
@@ -15,12 +15,14 @@ export interface BackupDocument {
   device: BackupDeviceInfo;
   categories: Category[];
   timeEntries: TimeEntry[];
+  tasks: Task[];
 }
 
 export interface BackupSummary {
   exportedAt: string;
   categoryCount: number;
   entryCount: number;
+  taskCount: number;
 }
 
 export type BackupValidationErrorCode =
@@ -31,11 +33,13 @@ export type BackupValidationErrorCode =
   | "INVALID_DEVICE"
   | "INVALID_CATEGORIES"
   | "INVALID_TIME_ENTRIES"
+  | "INVALID_TASKS"
   | "INVALID_TIME_FORMAT"
   | "INVALID_TIME_ENTRY_TIME"
   | "INVALID_CATEGORY_TREE"
   | "DUPLICATE_CATEGORY_ID"
   | "DUPLICATE_ENTRY_ID"
+  | "DUPLICATE_TASK_ID"
   | "ORPHAN_CATEGORY_PARENT"
   | "ORPHAN_ENTRY_CATEGORY";
 

@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type {
   CategorySchema,
   QuickNoteSchema,
+  RecurrenceSchema,
   SettingSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
@@ -12,6 +13,7 @@ import type {
   SyncPushReasonCodeSchema,
   SyncPushRequestSchema,
   SyncStatusResponseSchema,
+  TaskSchema,
   TimeEntrySchema,
 } from "./schemas.js";
 import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
@@ -21,6 +23,10 @@ export type Category = z.infer<typeof CategorySchema>;
 export type QuickNote = z.infer<typeof QuickNoteSchema>;
 
 export type Setting = z.infer<typeof SettingSchema>;
+
+export type Recurrence = z.infer<typeof RecurrenceSchema>;
+
+export type Task = z.infer<typeof TaskSchema>;
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 
@@ -60,6 +66,8 @@ export type SyncChange =
   | SyncDeleteChange<"settings">
   | SyncUpsertChange<"quick_notes", QuickNote>
   | SyncDeleteChange<"quick_notes">
+  | SyncUpsertChange<"tasks", Task>
+  | SyncDeleteChange<"tasks">
   | SyncUpsertChange<"health_heart_rate", HealthHeartRate>
   | SyncDeleteChange<"health_heart_rate">
   | SyncUpsertChange<"health_hrv", HealthHrv>
@@ -122,6 +130,7 @@ export interface SyncForcePushResponse {
   importedTimeEntries: number;
   importedSettings?: number;
   importedQuickNotes: number;
+  importedTasks: number;
   backupId: string;
   serverTime: string;
   latestSeq?: number | null;

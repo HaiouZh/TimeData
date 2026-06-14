@@ -7,27 +7,40 @@ import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "./context
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
+import { useVisibleTabs } from "./lib/settings/navVisibleTabsSetting.ts";
 import EntryPage from "./pages/EntryPage.tsx";
 import QuickNotesPage from "./pages/QuickNotesPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
+import { TodoPage } from "./pages/TodoPage.tsx";
 import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
 import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "./pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "./pages/settings/SettingsCategoryDetailPage.tsx";
 import SettingsDataPage from "./pages/settings/SettingsDataPage.tsx";
 import SettingsInsightsPage from "./pages/settings/SettingsInsightsPage.tsx";
+import { SettingsNavPage } from "./pages/settings/SettingsNavPage.tsx";
 import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
 import SettingsStatsLayoutPage from "./pages/settings/SettingsStatsLayoutPage.tsx";
 import SettingsGarminPage from "./pages/settings/SettingsGarminPage.tsx";
 import TimelinePage from "./pages/TimelinePage.tsx";
 
+const TAB_LABELS: Record<string, string> = {
+  "/quick-notes": "记录",
+  "/": "时间轴",
+  "/todo": "待办",
+  "/stats": "统计",
+  "/settings": "设置",
+};
+
 export function AppShell() {
   const location = useLocation();
   const [resumeRefreshKey, setResumeRefreshKey] = useState(0);
   const { hidden } = useBottomNav();
+  const visibleTabs = useVisibleTabs();
   const onMainScroll = useHideBottomNavOnScroll();
   const hidesBottomNav = location.pathname.startsWith("/entries/") || location.pathname.startsWith("/settings/");
+  const navItems = [...visibleTabs, "/settings"].map((to) => ({ to, label: TAB_LABELS[to] }));
 
   useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
 
@@ -38,6 +51,7 @@ export function AppShell() {
         <Routes>
           <Route path="/" element={<TimelinePage refreshKey={resumeRefreshKey} />} />
           <Route path="/quick-notes" element={<QuickNotesPage />} />
+          <Route path="/todo" element={<TodoPage />} />
           <Route path="/entries/new" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/entries/:id/edit" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/stats" element={<StatsPage />} />
@@ -45,6 +59,7 @@ export function AppShell() {
           <Route path="/settings/categories" element={<SettingsCategoriesPage />} />
           <Route path="/settings/categories/:id" element={<SettingsCategoryDetailPage />} />
           <Route path="/settings/server" element={<SettingsServerPage />} />
+          <Route path="/settings/nav" element={<SettingsNavPage />} />
           <Route path="/settings/insights" element={<SettingsInsightsPage />} />
           <Route path="/settings/stats-layout" element={<SettingsStatsLayoutPage />} />
           <Route path="/settings/data" element={<SettingsDataPage />} />
@@ -60,12 +75,7 @@ export function AppShell() {
           }`}
           style={{ height: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
         >
-          {[
-            { to: "/quick-notes", label: "记录" },
-            { to: "/", label: "时间轴" },
-            { to: "/stats", label: "统计" },
-            { to: "/settings", label: "设置" },
-          ].map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

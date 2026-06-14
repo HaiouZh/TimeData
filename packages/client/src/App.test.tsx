@@ -13,6 +13,10 @@ vi.mock("./components/AppUpdatePrompt.tsx", () => ({
   default: () => null,
 }));
 
+vi.mock("./lib/settings/navVisibleTabsSetting.ts", () => ({
+  useVisibleTabs: () => ["/quick-notes", "/", "/todo", "/stats"],
+}));
+
 vi.mock("./pages/TimelinePage.tsx", () => ({
   default: ({ refreshKey }: { refreshKey: number }) => createElement("div", null, `时间轴页面 ${refreshKey}`),
 }));
@@ -27,6 +31,10 @@ vi.mock("./pages/QuickNotesPage.tsx", () => ({
 
 vi.mock("./pages/StatsPage.tsx", () => ({
   default: () => createElement("div", null, "统计页面"),
+}));
+
+vi.mock("./pages/TodoPage.tsx", () => ({
+  TodoPage: () => createElement("div", null, "待办页面"),
 }));
 
 vi.mock("./pages/settings/SettingsCategoriesPage.tsx", () => ({
@@ -51,6 +59,10 @@ vi.mock("./pages/settings/SettingsDataPage.tsx", () => ({
 
 vi.mock("./pages/settings/SettingsInsightsPage.tsx", () => ({
   default: () => createElement("div", null, "数据洞察设置页"),
+}));
+
+vi.mock("./pages/settings/SettingsNavPage.tsx", () => ({
+  SettingsNavPage: () => createElement("div", null, "底部导航设置页"),
 }));
 
 function renderAppShell(initialEntry: string) {
@@ -88,6 +100,14 @@ describe("AppShell settings routes", () => {
     expect(html).not.toContain("统计");
   });
 
+  it("renders settings nav route without bottom navigation", () => {
+    const html = renderAppShell("/settings/nav");
+
+    expect(html).toContain("底部导航设置页");
+    expect(html).not.toContain("时间轴");
+    expect(html).not.toContain("统计");
+  });
+
   it("renders category settings routes without bottom navigation", () => {
     const listHtml = renderAppShell("/settings/categories");
     const detailHtml = renderAppShell("/settings/categories/category-1");
@@ -112,7 +132,15 @@ describe("AppShell settings routes", () => {
     expect(html).toContain("速记页面");
     expect(html).toContain("记录");
     expect(html).toContain("时间轴");
+    expect(html).toContain("待办");
     expect(html).toContain("统计");
     expect(html).toContain("设置");
+  });
+
+  it("renders todo route and bottom navigation entry", () => {
+    const html = renderAppShell("/todo");
+
+    expect(html).toContain("待办页面");
+    expect(html).toContain("待办");
   });
 });

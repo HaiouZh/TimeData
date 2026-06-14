@@ -21,6 +21,7 @@ import type {
   SyncPushResponse,
   SyncStatusResponse,
   Setting,
+  Task,
   TimeEntry,
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
@@ -80,7 +81,7 @@ function consumeForcePushToken(token: string, now = Date.now()): ForcePushTokenL
 }
 
 function validateForcePushPayload(body: SyncForcePushRequest): string | null {
-  return validateForcePushBusinessRules(body.categories, body.timeEntries, body.quickNotes);
+  return validateForcePushBusinessRules(body.categories, body.timeEntries, body.quickNotes, body.tasks);
 }
 
 function replaceServerData(
@@ -88,10 +89,12 @@ function replaceServerData(
   categories: Category[],
   timeEntries: TimeEntry[],
   quickNotes: QuickNote[],
+  tasks: Task[],
   settings?: Setting[],
 ): void {
   db.prepare("DELETE FROM sync_tombstones").run();
   db.prepare("DELETE FROM sync_seq").run();
+  db.prepare("DELETE FROM tasks").run();
   db.prepare("DELETE FROM quick_notes").run();
   db.prepare("DELETE FROM time_entries").run();
   db.prepare("DELETE FROM categories").run();
@@ -111,6 +114,10 @@ function replaceServerData(
   const insertQuickNote = db.prepare(`
     INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at, source, source_label, pinned)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertTask = db.prepare(`
+    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const orderedCategories = [...categories].sort((a, b) => {
@@ -151,6 +158,21 @@ function replaceServerData(
       note.pinned ? 1 : 0,
     );
     recordSeqWithDb(db, "quick_notes", note.id, "create");
+  }
+
+  for (const task of tasks) {
+    insertTask.run(
+      task.id,
+      task.title,
+      task.done ? 1 : 0,
+      task.recurrence ? JSON.stringify(task.recurrence) : null,
+      task.lastDoneAt,
+      task.startAt,
+      task.sortOrder,
+      task.createdAt,
+      task.updatedAt,
+    );
+    recordSeqWithDb(db, "tasks", task.id, "create");
   }
 
   if (settings !== undefined) {
@@ -365,7 +387,7 @@ sync.post("/force-push", async (c) => {
 
   const backup = await createServerBackup("sync_force_push");
   const replaceAll = db.transaction(() => {
-    replaceServerData(db, body.categories, body.timeEntries, body.quickNotes, body.settings);
+    replaceServerData(db, body.categories, body.timeEntries, body.quickNotes, body.tasks, body.settings);
   });
 
   try {
@@ -377,7 +399,7 @@ sync.post("/force-push", async (c) => {
       db,
       "force_push_failed_after_backup",
       { backupId: backup.id, message },
-      body.categories.length + body.timeEntries.length + body.quickNotes.length,
+      body.categories.length + body.timeEntries.length + body.quickNotes.length + body.tasks.length,
     );
     const { body: errBody, status } = errorJson(
       ErrorCode.INTERNAL_ERROR,
@@ -393,6 +415,7 @@ sync.post("/force-push", async (c) => {
     importedTimeEntries: body.timeEntries.length,
     importedSettings: body.settings?.length ?? 0,
     importedQuickNotes: body.quickNotes.length,
+    importedTasks: body.tasks.length,
     backupId: backup.id,
     serverTime: new Date().toISOString(),
     latestSeq: getLatestSeq(),
@@ -405,7 +428,8 @@ sync.post("/force-push", async (c) => {
     importedTimeEntries: response.importedTimeEntries,
     importedSettings: response.importedSettings,
     importedQuickNotes: response.importedQuickNotes,
-  }, body.categories.length + body.timeEntries.length + body.quickNotes.length + (body.settings?.length ?? 0));
+    importedTasks: response.importedTasks,
+  }, body.categories.length + body.timeEntries.length + body.quickNotes.length + body.tasks.length + (body.settings?.length ?? 0));
 
   notifySyncChange(getLatestSeq());
   return c.json(response);

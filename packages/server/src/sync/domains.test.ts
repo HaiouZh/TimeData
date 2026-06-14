@@ -12,6 +12,7 @@ describe("server sync domains", () => {
       "quick_notes",
       "runs",
       "settings",
+      "tasks",
       "time_entries",
     ]);
   });

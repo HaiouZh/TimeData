@@ -1,15 +1,16 @@
-import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
-
+import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, Task, TimeEntry } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import {
   type CategoryRow,
   type EntryRow,
   type QuickNoteRow,
   type SettingRow,
+  type TaskRow,
   rowToCategory,
   rowToEntry,
   rowToQuickNote,
   rowToSetting,
+  rowToTask,
 } from "../lib/db-rows.js";
 import {
   type HealthHeartRateRow, type HealthHrvRow, type HealthSleepRow,
@@ -328,6 +329,20 @@ function quickNoteToRow(data: unknown): Record<string, string | number | null> {
   };
 }
 
+function taskToRow(data: unknown): Record<string, string | number | null> {
+  const task = data as Task;
+  return {
+    id: task.id,
+    title: task.title,
+    done: task.done ? 1 : 0,
+    recurrence: task.recurrence ? JSON.stringify(task.recurrence) : null,
+    last_done_at: task.lastDoneAt ?? null,
+    start_at: task.startAt ?? null,
+    sort_order: task.sortOrder,
+    created_at: task.createdAt,
+  };
+}
+
 // ---- pull seq 补差的行读取 ----
 
 function updateChange(tableName: SyncChange["tableName"], recordId: string, data: unknown, timestamp: string): SyncChange {
@@ -369,6 +384,11 @@ function simpleLwwDomain<Row extends { id: string; updated_at: string }>(
   };
 }
 
+function readTaskRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(recordId) as TaskRow | undefined;
+  return row ? updateChange("tasks", row.id, rowToTask(row), row.updated_at) : null;
+}
+
 export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   categories: { validate: validateCategoryChange, apply: applyCategoryChange, readRecord: readCategoryRecord },
   time_entries: {
@@ -379,6 +399,7 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   },
   settings: { lww: { idColumn: "key", toRow: settingToRow }, readRecord: readSettingRecord },
   quick_notes: { lww: { idColumn: "id", toRow: quickNoteToRow }, readRecord: readQuickNoteRecord },
+  tasks: { lww: { idColumn: "id", toRow: taskToRow }, readRecord: readTaskRecord },
   health_heart_rate: simpleLwwDomain<HealthHeartRateRow>("health_heart_rate", healthHeartRateToRow, rowToHealthHeartRate),
   health_hrv: simpleLwwDomain<HealthHrvRow>("health_hrv", healthHrvToRow, rowToHealthHrv),
   health_sleep: simpleLwwDomain<HealthSleepRow>("health_sleep", healthSleepToRow, rowToHealthSleep),

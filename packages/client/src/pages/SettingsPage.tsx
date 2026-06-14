@@ -392,6 +392,13 @@ export default function SettingsPage() {
           subtitle="调整统计模块显示与顺序"
         />
         <SettingsLinkRow
+          to="/settings/nav"
+          icon={<SmartphoneIcon />}
+          accent="sky"
+          title="底部导航"
+          subtitle="选择底部显示的入口"
+        />
+        <SettingsLinkRow
           to="/settings/data"
           icon={<DatabaseIcon />}
           accent="emerald"

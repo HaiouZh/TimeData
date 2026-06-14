@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { QuickNote, SyncLogEntry } from "@timedata/shared";
+import type { QuickNote, SyncLogEntry, Task } from "@timedata/shared";
 import { db } from "../db/index.js";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -63,6 +63,7 @@ function log(
 beforeEach(async () => {
   await db.timeEntries.clear();
   await db.quickNotes.clear();
+  await db.tasks.clear();
   await db.syncLog.clear();
   await db.categories.clear();
   await db.settings.clear();
@@ -110,6 +111,17 @@ describe("localContentHash", () => {
     createdAt: "2026-06-03T00:00:00.000Z",
     updatedAt: "2026-06-03T00:00:00.000Z",
   };
+  const task: Task = {
+    id: "task-1",
+    title: "跑步",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    sortOrder: 0,
+    createdAt: "2026-06-03T00:00:00.000Z",
+    updatedAt: "2026-06-03T00:00:00.000Z",
+  };
 
   it("ignores quick note source metadata", async () => {
     const withoutSource = await localContentHash([], [], [quickNote]);
@@ -123,6 +135,13 @@ describe("localContentHash", () => {
     const pinned = await localContentHash([], [], [{ ...quickNote, pinned: true }]);
 
     expect(pinned).not.toBe(unpinned);
+  });
+
+  it("includes task content", async () => {
+    const withoutTask = await localContentHash([], [], []);
+    const withTask = await localContentHash([], [], [], [task]);
+
+    expect(withTask).not.toBe(withoutTask);
   });
 });
 
@@ -204,6 +223,7 @@ describe("getSyncHealth", () => {
         updatedAt: "2026-05-08T11:00:00",
       }],
       quickNotes: [],
+      tasks: [],
     });
     const localDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(localPayload));
     const localHash = [...new Uint8Array(localDigest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -257,6 +277,17 @@ describe("syncForcePushToServer", () => {
       createdAt: "2026-05-08T08:40:00.000Z",
       updatedAt: "2026-05-08T08:40:00.000Z",
     });
+    await db.tasks.add({
+      id: "task-1",
+      title: "跑步",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      lastDoneAt: null,
+      startAt: "2026-05-08T08:45:00.000Z",
+      sortOrder: 0,
+      createdAt: "2026-05-08T08:45:00.000Z",
+      updatedAt: "2026-05-08T08:45:00.000Z",
+    });
 
     apiFetchMock
       .mockResolvedValueOnce({
@@ -269,6 +300,7 @@ describe("syncForcePushToServer", () => {
         importedCategories: 1,
         importedTimeEntries: 1,
         importedQuickNotes: 1,
+        importedTasks: 1,
         backupId: "sync_force_push-1",
         serverTime: "2026-05-08T12:01:00.000Z",
         latestSeq: 42,
@@ -300,7 +332,20 @@ describe("syncForcePushToServer", () => {
         updatedAt: "2026-05-08T08:40:00.000Z",
       },
     ]);
-    expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, backupId: "sync_force_push-1" });
+    expect(forcePushBody.tasks).toEqual([
+      {
+        id: "task-1",
+        title: "跑步",
+        done: false,
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        lastDoneAt: null,
+        startAt: "2026-05-08T08:45:00.000Z",
+        sortOrder: 0,
+        createdAt: "2026-05-08T08:45:00.000Z",
+        updatedAt: "2026-05-08T08:45:00.000Z",
+      },
+    ]);
+    expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, importedTasks: 1, backupId: "sync_force_push-1" });
     expect(await db.syncLog.count()).toBe(0);
     expect(localStorage.getItem("timedata_last_synced_seq")).toBe("42");
   });
@@ -414,6 +459,80 @@ describe("syncPush", () => {
       },
     ]);
     await expect(db.syncLog.get("note-log-1")).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("pushes task changes without category dependency changes", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.tasks.add({
+      id: "task-1",
+      title: "跑步",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      lastDoneAt: null,
+      startAt: "2026-06-01T00:00:00.000Z",
+      sortOrder: 0,
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "task-log-1",
+      tableName: "tasks",
+      recordId: "task-1",
+      action: "create",
+      timestamp: "2026-06-01T00:00:00.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "tasks",
+          recordId: "task-1",
+          action: "create",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "applied",
+          incomingTimestamp: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-06-01T00:01:00.000Z",
+    });
+
+    await expect(syncPush()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    expect(pushBody.changes).toEqual([
+      {
+        tableName: "tasks",
+        recordId: "task-1",
+        action: "create",
+        data: {
+          id: "task-1",
+          title: "跑步",
+          done: false,
+          recurrence: { freq: "daily", interval: 1, basis: "due" },
+          lastDoneAt: null,
+          startAt: "2026-06-01T00:00:00.000Z",
+          sortOrder: 0,
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z",
+        },
+        timestamp: "2026-06-01T00:00:00.000Z",
+      },
+    ]);
+    await expect(db.syncLog.get("task-log-1")).resolves.toMatchObject({ synced: 1 });
   });
 
   it("handles 409 push outcomes without losing accepted sync logs", async () => {
@@ -859,6 +978,50 @@ describe("syncPull", () => {
 
     await expect(syncPull()).resolves.toBe(1);
     await expect(db.quickNotes.get("note-1")).resolves.toBeUndefined();
+  });
+
+  it("applies task upsert and delete changes from pull", async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-01T04:03:00.000Z",
+      changes: [
+        {
+          tableName: "tasks",
+          recordId: "task-1",
+          action: "update",
+          data: {
+            id: "task-1",
+            title: "跑步",
+            done: false,
+            recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
+            lastDoneAt: null,
+            startAt: "2026-06-01T00:00:00.000Z",
+            sortOrder: 0,
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-01T04:02:00.000Z",
+          },
+          timestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.tasks.get("task-1")).resolves.toMatchObject({ title: "跑步", recurrence: { freq: "weekly" } });
+
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-01T04:04:00.000Z",
+      changes: [
+        {
+          tableName: "tasks",
+          recordId: "task-1",
+          action: "delete",
+          data: null,
+          timestamp: "2026-06-01T04:04:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.tasks.get("task-1")).resolves.toBeUndefined();
   });
 
   it("skips duplicate boundary records during incremental pull", async () => {

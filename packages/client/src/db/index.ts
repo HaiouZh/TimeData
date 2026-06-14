@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
-  Category, QuickNote, Setting, TimeEntry, SyncLogEntry,
+  Category, QuickNote, Setting, Task, TimeEntry, SyncLogEntry,
   HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun,
 } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
@@ -22,12 +22,14 @@ export interface AutoBackupRecord {
   createdAt: string;
   categories: Category[];
   timeEntries: TimeEntry[];
+  tasks: Task[];
 }
 
 export const db = new Dexie("timedata") as Dexie & {
   categories: EntityTable<Category, "id">;
   quickNotes: EntityTable<QuickNote, "id">;
   timeEntries: EntityTable<TimeEntry, "id">;
+  tasks: EntityTable<Task, "id">;
   syncLog: EntityTable<SyncLogEntry, "id">;
   autoBackups: EntityTable<AutoBackupRecord, "id">;
   settings: EntityTable<Setting, "key">;
@@ -76,6 +78,21 @@ db.version(4).stores({
   runs: "id, date",
 });
 
+db.version(5).stores({
+  categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
+  timeEntries: "id, categoryId, startTime, endTime",
+  tasks: "id, sortOrder, updatedAt",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+  settings: "key",
+  healthHeartRate: "id, date",
+  healthHrv: "id, date",
+  healthSleep: "id, date",
+  healthStress: "id, date",
+  runs: "id, date",
+});
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;
@@ -105,9 +122,10 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {
-  await db.transaction("rw", db.categories, db.timeEntries, db.syncLog, db.settings, async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.syncLog, db.settings], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
+    await db.tasks.clear();
     await db.syncLog.bulkDelete(nonQuickNoteLogs.map((log) => log.id));
     await db.settings.clear();
     await db.categories.clear();

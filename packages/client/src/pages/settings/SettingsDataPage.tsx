@@ -137,7 +137,7 @@ export default function SettingsDataPage() {
       setForcePushPhrase("");
       setForcePushConfirmation(false);
       setDataStatus(
-        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录，${result.importedQuickNotes} 条速记。服务器备份：${result.backupId}。`,
+        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录，${result.importedQuickNotes} 条速记，${result.importedTasks} 个任务。服务器备份：${result.backupId}。`,
       );
     }
   }
@@ -148,7 +148,9 @@ export default function SettingsDataPage() {
     try {
       const backup = await exportBackup();
       await downloadBackupFile(backup);
-      setDataStatus(`完整备份已生成：${backup.categories.length} 个分类，${backup.timeEntries.length} 条记录。`);
+      setDataStatus(
+        `完整备份已生成：${backup.categories.length} 个分类，${backup.timeEntries.length} 条记录，${backup.tasks.length} 个任务。`,
+      );
     } catch (e: unknown) {
       setDataStatus(`完整备份导出失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
@@ -174,9 +176,9 @@ export default function SettingsDataPage() {
           <>
             <p>导出时间：{formatAppDateTime(summary.exportedAt)}</p>
             <p>
-              分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}
+              分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}，任务数量：{summary.taskCount}
             </p>
-            <p>恢复会替换当前设备上的本地分类、时间记录和同步队列。恢复前会先下载一份当前本地数据的安全备份。</p>
+            <p>恢复会替换当前设备上的本地分类、时间记录、任务和同步队列。恢复前会先下载一份当前本地数据的安全备份。</p>
           </>
         ),
         danger: true,
@@ -188,7 +190,7 @@ export default function SettingsDataPage() {
       const result = await importBackup(validation.backup);
       await refreshSyncStatus();
       setDataStatus(
-        `已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。`,
+        `已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录，${result.taskCount} 个任务。服务器数据可能不同步，请确认后再手动同步。`,
       );
     } catch (e: unknown) {
       setDataStatus(`恢复失败：${e instanceof Error ? e.message : "未知错误"}`);
@@ -223,7 +225,9 @@ export default function SettingsDataPage() {
   }
 
   function quickNotesRangeLabel(): string {
-    return quickNotesFromDate === quickNotesToDate ? quickNotesFromDate : `${quickNotesFromDate}_to_${quickNotesToDate}`;
+    return quickNotesFromDate === quickNotesToDate
+      ? quickNotesFromDate
+      : `${quickNotesFromDate}_to_${quickNotesToDate}`;
   }
 
   async function handleQuickNotesExportJson() {
@@ -280,7 +284,7 @@ export default function SettingsDataPage() {
     if (
       !(await confirm({
         title: "确认清空本地数据",
-        body: "清空本地时间记录、同步队列，并把分类恢复为默认预设。",
+        body: "清空本地时间记录、任务、同步队列，并把分类恢复为默认预设。",
         danger: true,
       }))
     )
@@ -291,7 +295,7 @@ export default function SettingsDataPage() {
     try {
       await resetLocalDataToDefaults();
       await refreshSyncStatus();
-      setDataStatus("本地数据已清空，分类已恢复为默认预设。");
+      setDataStatus("本地时间记录和任务已清空，分类已恢复为默认预设。");
     } catch (e: unknown) {
       setDataStatus(`本地清空失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {

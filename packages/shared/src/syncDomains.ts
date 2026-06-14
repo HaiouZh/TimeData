@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CategorySchema, QuickNoteSchema, SettingSchema, TimeEntrySchema } from "./entitySchemas.js";
+import { CategorySchema, QuickNoteSchema, SettingSchema, TaskSchema, TimeEntrySchema } from "./entitySchemas.js";
 import {
   HealthHeartRateSchema, HealthHrvSchema, HealthSleepSchema,
   HealthStressSchema, HealthRunSchema,
@@ -54,6 +54,14 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
     deletePriority: 40,
     conflictPolicy: "lww",
     countsInStatus: true,
+  },
+  {
+    table: "tasks",
+    dataSchema: TaskSchema,
+    upsertPriority: 45,
+    deletePriority: 45,
+    conflictPolicy: "lww",
+    countsInStatus: false,
   },
   {
     table: "health_heart_rate",
