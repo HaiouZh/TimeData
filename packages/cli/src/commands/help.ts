@@ -3,6 +3,7 @@ import { runDoctor } from "./doctor.js";
 import { runList } from "./list.js";
 import { runLog } from "./log.js";
 import { runNotes } from "./notes.js";
+import { runTasks, runTaskSchedule, runTaskUnschedule } from "./tasks.js";
 import { runVersion } from "./version.js";
 import type { ApiConfig } from "../lib/api-client.js";
 import type { FileConfigResult } from "../lib/config.js";
@@ -77,6 +78,27 @@ export const commandRegistry: CommandHelp[] = [
     usage: "timedata version",
     handler: (ctx) => runVersion(ctx.env),
   },
+  {
+    name: "tasks",
+    writesData: false,
+    summary: "List tasks from the server.",
+    usage: "timedata tasks [--kind pool|recurring] [--done 0|1] [--server URL] [--token TOKEN]",
+    handler: (ctx) => runTasks(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
+  },
+  {
+    name: "task-schedule",
+    writesData: true,
+    summary: "Schedule a task for a specific date through the server API.",
+    usage: "timedata task-schedule --id ID --date YYYY-MM-DD [--server URL] [--token TOKEN]",
+    handler: (ctx) => runTaskSchedule(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
+  },
+  {
+    name: "task-unschedule",
+    writesData: true,
+    summary: "Remove the scheduled date from a task through the server API.",
+    usage: "timedata task-unschedule --id ID [--server URL] [--token TOKEN]",
+    handler: (ctx) => runTaskUnschedule(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
+  },
 ];
 
 const redLines = [
@@ -86,6 +108,7 @@ const redLines = [
   "Do not edit Backup JSON or JSONL/CSV export files to write data back.",
   "Use timedata log as the only current AI/script data-writing command.",
   "Use timedata notes for read-only quick notes access; it does not write data.",
+  "Use timedata task-schedule / task-unschedule to change task schedule; they write only through the server API.",
 ];
 
 const docs = ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"];

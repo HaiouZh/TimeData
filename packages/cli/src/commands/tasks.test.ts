@@ -1,0 +1,52 @@
+import { describe, expect, it, vi } from "vitest";
+import { runTasks, runTaskSchedule, runTaskUnschedule } from "./tasks.js";
+
+const config = { serverUrl: "http://x", token: "t" };
+
+function ok(data: unknown) {
+  return new Response(JSON.stringify({ ok: true, ...data }), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+describe("runTasks", () => {
+  it("查询所有任务", async () => {
+    const fetchImpl = vi.fn(async () => ok({ tasks: [] }));
+    const r = await runTasks(config, {}, fetchImpl);
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining("/api/tasks"), expect.anything());
+    expect(r).toEqual({ ok: true, tasks: [] });
+  });
+});
+
+describe("runTaskSchedule", () => {
+  it("POST /api/tasks/:id/schedule", async () => {
+    const fetchImpl = vi.fn(async () => ok({ task: { id: "1", scheduledAt: "2026-06-20T00:00:00.000Z" } }));
+    await runTaskSchedule(config, { id: "1", date: "2026-06-20" }, fetchImpl);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("/api/tasks/1/schedule"),
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("缺 id → INVALID_REQUEST", async () => {
+    const r = await runTaskSchedule(config, { date: "2026-06-20" }, vi.fn());
+    expect((r as any).error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("缺 date → INVALID_REQUEST", async () => {
+    const r = await runTaskSchedule(config, { id: "1" }, vi.fn());
+    expect((r as any).error.code).toBe("INVALID_REQUEST");
+  });
+});
+
+describe("runTaskUnschedule", () => {
+  it("POST scheduledDate=null", async () => {
+    const fetchImpl = vi.fn(async () => ok({ task: { id: "1", scheduledAt: null } }));
+    await runTaskUnschedule(config, { id: "1" }, fetchImpl);
+    const call = fetchImpl.mock.calls[0];
+    expect(JSON.parse(call[1].body)).toEqual({ scheduledDate: null });
+  });
+
+  it("缺 id → INVALID_REQUEST", async () => {
+    const r = await runTaskUnschedule(config, {}, vi.fn());
+    expect((r as any).error.code).toBe("INVALID_REQUEST");
+  });
+});

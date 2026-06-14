@@ -5,7 +5,7 @@ describe("runHelp", () => {
   it("exposes the command registry in stable order", () => {
     const names = commandRegistry.map((command) => command.name);
 
-    expect(names).toEqual(["categories", "list", "log", "notes", "help", "doctor", "version"]);
+    expect(names).toEqual(["categories", "list", "log", "notes", "help", "doctor", "version", "tasks", "task-schedule", "task-unschedule"]);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -21,6 +21,7 @@ describe("runHelp", () => {
         "Do not edit Backup JSON or JSONL/CSV export files to write data back.",
         "Use timedata log as the only current AI/script data-writing command.",
         "Use timedata notes for read-only quick notes access; it does not write data.",
+        "Use timedata task-schedule / task-unschedule to change task schedule; they write only through the server API.",
       ],
       docs: ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"],
     });
@@ -39,6 +40,7 @@ describe("runHelp", () => {
         "Do not edit Backup JSON or JSONL/CSV export files to write data back.",
         "Use timedata log as the only current AI/script data-writing command.",
         "Use timedata notes for read-only quick notes access; it does not write data.",
+        "Use timedata task-schedule / task-unschedule to change task schedule; they write only through the server API.",
       ],
       docs: ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"],
     });
