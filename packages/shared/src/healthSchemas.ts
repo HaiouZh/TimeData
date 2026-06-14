@@ -31,7 +31,7 @@ export const HealthSleepSchema = z.object({
   date: DateSchema,
   sleepStart: HHMMSchema,
   wakeTime: HHMMSchema,
-  adjustmentHours: z.number().int(),
+  adjustmentHours: z.number().finite(),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,
 });

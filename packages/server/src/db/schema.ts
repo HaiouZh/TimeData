@@ -138,7 +138,7 @@ export function initializeDatabase(): void {
       date TEXT NOT NULL,
       sleep_start TEXT NOT NULL,
       wake_time TEXT NOT NULL,
-      adjustment_hours INTEGER NOT NULL DEFAULT 0,
+      adjustment_hours REAL NOT NULL DEFAULT 0,
       sync_seq INTEGER,
       sync_tombstone INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
