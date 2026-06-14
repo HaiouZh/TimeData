@@ -5,7 +5,8 @@ const TAB_LABELS: Record<ConfigurableTab, string> = {
   "/quick-notes": "记录",
   "/": "时间轴",
   "/todo": "待办",
-  "/stats": "统计",
+  "/stats/time": "时间",
+  "/stats/health": "健康",
 };
 
 export function SettingsNavPage() {

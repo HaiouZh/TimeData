@@ -2,9 +2,14 @@ import { useMemo } from "react";
 import { getSetting, setSetting, useSetting } from "./index.js";
 
 export const NAV_VISIBLE_TABS_KEY = "nav.visibleTabs.v1";
-export const CONFIGURABLE_TABS = ["/quick-notes", "/", "/todo", "/stats"] as const;
+export const CONFIGURABLE_TABS = ["/quick-notes", "/", "/todo", "/stats/time", "/stats/health"] as const;
 
 export type ConfigurableTab = (typeof CONFIGURABLE_TABS)[number];
+
+function normalizeTab(value: string): ConfigurableTab | null {
+  if (value === "/stats") return "/stats/time";
+  return (CONFIGURABLE_TABS as readonly string[]).includes(value) ? (value as ConfigurableTab) : null;
+}
 
 export function sanitizeVisibleTabs(values: unknown): ConfigurableTab[] {
   if (!Array.isArray(values)) return [...CONFIGURABLE_TABS];
@@ -12,9 +17,8 @@ export function sanitizeVisibleTabs(values: unknown): ConfigurableTab[] {
   const seen = new Set<ConfigurableTab>();
   for (const value of values) {
     if (typeof value !== "string") continue;
-    if ((CONFIGURABLE_TABS as readonly string[]).includes(value)) {
-      seen.add(value as ConfigurableTab);
-    }
+    const normalized = normalizeTab(value);
+    if (normalized) seen.add(normalized);
   }
 
   return CONFIGURABLE_TABS.filter((tab) => seen.has(tab));

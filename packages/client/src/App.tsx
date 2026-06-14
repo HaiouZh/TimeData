@@ -10,8 +10,10 @@ import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
 import { useVisibleTabs } from "./lib/settings/navVisibleTabsSetting.ts";
 import EntryPage from "./pages/EntryPage.tsx";
 import QuickNotesPage from "./pages/QuickNotesPage.tsx";
+import HealthStatsPage from "./pages/HealthStatsPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
+import TimeStatsPage from "./pages/TimeStatsPage.tsx";
 import { TodoPage } from "./pages/TodoPage.tsx";
 import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
 import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
@@ -29,7 +31,8 @@ const TAB_LABELS: Record<string, string> = {
   "/quick-notes": "记录",
   "/": "时间轴",
   "/todo": "待办",
-  "/stats": "统计",
+  "/stats/time": "时间",
+  "/stats/health": "健康",
   "/settings": "设置",
 };
 
@@ -55,6 +58,8 @@ export function AppShell() {
           <Route path="/entries/new" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/entries/:id/edit" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/stats" element={<StatsPage />} />
+          <Route path="/stats/time" element={<TimeStatsPage />} />
+          <Route path="/stats/health" element={<HealthStatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/categories" element={<SettingsCategoriesPage />} />
           <Route path="/settings/categories/:id" element={<SettingsCategoryDetailPage />} />

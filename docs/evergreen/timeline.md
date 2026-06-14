@@ -5,6 +5,7 @@ covers:
   - packages/client/src/pages/TimelinePage.tsx
   - packages/client/src/pages/EntryPage.tsx
   - packages/client/src/pages/StatsPage.tsx
+  - packages/client/src/pages/TimeStatsPage.tsx
   - packages/client/src/components/Timeline.tsx
   - packages/client/src/components/CircularTimeline.tsx
   - packages/client/src/components/TimeRangeWheelPicker.tsx
@@ -100,7 +101,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 统计页的 Dexie 查询以近 90 天基线窗口为超集。当前周期记录始终按所选日/周/月窗口独立可得；近 90 天基线只在可见统计模块声明需要时读取，趋势模块隐藏时它自己的独立窗口查询也不会挂载。默认趋势窗口优先从基线超集内存切片，只有窗口早于基线起点时才回退独立查询。异常检测只在当前统计周期内产出条目，但超长记录与长空挡阈值使用近 90 天基线；长空挡样本充足时采用个人 P90，否则回退固定阈值，避免周/月视图把常规空挡刷成列表噪声。异常区只做统计呈现：摘要指标、长空挡 Top 和按日期分布，不承担补录或编辑入口。图表集中在 `packages/client/src/pages/stats/InsightCharts.tsx`，由 `React.memo` 包裹：环形图 `CategoryDonut`（中央覆盖层叠加总时长与覆盖率）和趋势折线/面积图基于 Recharts、固定高度；图表随对应可见模块挂载渲染，隐藏模块不挂载、不计算。父分类→子分类构成条 `CategoryCompositionBars` 是纯 CSS 分段条（点击父分类展开子分类明细），连同文字洞察在总览区即时渲染。
 
-统计页顶部的「日 / 周 / 月」切换按钮都显式声明 `type="button"`，并通过 `aria-pressed` 暴露当前选中的窗口模式，方便屏幕阅读器和键盘用户感知切换；窗口内没有数据时统一显示「暂无统计数据」占位。统计页 UI 面向 Android / iPhone PWA：顶部保留周期切换、日期跳转和“已记录”主指标，下面的总览、作息、异常与空挡、趋势变化、结构诊断由 `stats.layout.v1` 控制显示和顺序；全部隐藏时显示去设置启用模块的空状态。触控按钮保持约 44px 高度，输入框沿用 16px 字号避免 iOS 聚焦放大，异常和趋势状态用琥珀 / 玫红 / 绿色做有限状态色。相关测试在 `packages/client/src/pages/StatsPage.test.tsx`。
+统计页顶部的「日 / 周 / 月」切换按钮都显式声明 `type="button"`，并通过 `aria-pressed` 暴露当前选中的窗口模式，方便屏幕阅读器和键盘用户感知切换；窗口内没有数据时统一显示「暂无统计数据」占位。时间统计 UI 位于 `/stats/time` 的 `TimeStatsPage.tsx`，旧 `/stats` 只重定向到它；页面面向 Android / iPhone PWA：顶部保留周期切换、日期跳转和“已记录”主指标，下面的总览、作息、异常与空挡、趋势变化、结构诊断由 `stats.layout.v1` 控制显示和顺序；全部隐藏时显示去设置启用模块的空状态。触控按钮保持约 44px 高度，输入框沿用 16px 字号避免 iOS 聚焦放大，异常和趋势状态用琥珀 / 玫红 / 绿色做有限状态色。相关测试在 `packages/client/src/pages/TimeStatsPage.test.tsx` 和 `packages/client/src/pages/StatsPage.test.tsx`。
 
 ## 7. 时间轴同步状态指示器
 

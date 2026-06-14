@@ -73,7 +73,7 @@ last-reviewed: 2026-06-14
 |---|---|---|
 | 自动备份 | `autoBackups` | 客户端本地的滚动备份，保留最近 7 份（见 `backup.md`） |
 
-`settings` 是同步键值表，当前用于跨设备保存睡眠分类等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`。
+`settings` 是同步键值表，当前用于跨设备保存睡眠分类、底部导航可见入口等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`；`nav.visibleTabs.v1` 由 `packages/client/src/lib/settings/navVisibleTabsSetting.ts` 维护，读取旧 `/stats` 值时归一化为 `/stats/time`，并允许 `/stats/time` 与 `/stats/health` 作为两个独立底部入口。
 
 `quick_notes` 是聊天式速记表，核心表达“时间 + 文本”，可附带 `source` / `sourceLabel` 作为展示来源元数据，也可带 `pinned` 表示置顶状态。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`；`quickNotes.ts` 同时提供按日期/范围查询、只读窗口查询（最新、早于、晚于、有界窗口）和置顶列表查询，供连续时间线与置顶区使用。搜索入口在 `packages/client/src/quick-notes/searchQuickNotes.ts`，只读扫描 Dexie `quickNotes` 并按 `occurredAt` 倒序返回，不写 `syncLog`。独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
 

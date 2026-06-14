@@ -1,13 +1,15 @@
 import type { HealthSleep } from "@timedata/shared";
+import {
+  computeSleepDurationHours,
+  filterHealthRecordsByRange,
+  formatDuration,
+  formatPace as formatPaceFromSeconds,
+  secondsPerKm,
+} from "./healthMetrics/index.js";
 
 /** Filter health records by date range (last N days or all) */
 export function filterByDateRange<T extends { date: string }>(data: T[], range: "30" | "90" | "all"): T[] {
-  if (range === "all") return data;
-  const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - Number(range));
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  return data.filter((d) => d.date >= cutoffStr);
+  return filterHealthRecordsByRange(data, range);
 }
 
 /** Compute N-day rolling average for a numeric field */
@@ -25,7 +27,10 @@ export function computeRollingAverage(
     const start = Math.max(0, i - windowSize + 1);
     for (let j = start; j <= i; j++) {
       const v = sorted[j][field] as number | null;
-      if (v != null) { sum += v; count++; }
+      if (v != null) {
+        sum += v;
+        count++;
+      }
     }
     result.push({ date: sorted[i].date, value, avg: count > 0 ? Math.round(sum / count) : null });
   }
@@ -34,32 +39,13 @@ export function computeRollingAverage(
 
 /** Calculate sleep duration in hours from HealthSleep record */
 export function computeSleepDuration(sleep: HealthSleep): number {
-  const [sh, sm] = sleep.sleepStart.split(":").map(Number);
-  const [wh, wm] = sleep.wakeTime.split(":").map(Number);
-  const sleepMinutes = sh * 60 + sm;
-  const wakeMinutes = wh * 60 + wm;
-  // sleepStart is usually in the evening, wakeTime in the morning
-  // adjustmentHours handles timezone/cross-day adjustment
-  let diff = wakeMinutes - sleepMinutes + sleep.adjustmentHours * 60;
-  if (diff < 0) diff += 24 * 60; // crossed midnight
-  return diff / 60;
+  return computeSleepDurationHours(sleep);
 }
 
 /** Format pace (seconds per km) to min'sec" */
 export function formatPace(durationSeconds: number | null, distanceKm: number | null): string {
-  if (!durationSeconds || !distanceKm || distanceKm === 0) return "--";
-  const paceSeconds = durationSeconds / distanceKm;
-  const min = Math.floor(paceSeconds / 60);
-  const sec = Math.floor(paceSeconds % 60);
-  return `${min}'${sec.toString().padStart(2, "0")}"`;
+  return formatPaceFromSeconds(secondsPerKm(durationSeconds, distanceKm));
 }
 
 /** Format duration in seconds to "Xh Ym" or "Ym Zs" */
-export function formatDuration(seconds: number | null): string {
-  if (!seconds) return "--";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m ${s}s`;
-}
+export { formatDuration };

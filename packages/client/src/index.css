@@ -344,3 +344,312 @@ textarea {
   color: rgba(255,255,255,0.8);
   border-color: rgba(255,255,255,0.15);
 }
+
+/* Health stats phase 1 */
+.health-stats-page {
+  min-height: 100%;
+  padding: 1rem 0.875rem 1.5rem;
+  color: #e5e7eb;
+  background:
+    linear-gradient(180deg, rgba(2, 6, 23, 0.96) 0%, rgba(15, 23, 42, 0.98) 48%, #020617 100%),
+    #020617;
+}
+
+.health-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(51, 65, 85, 0.72);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.78);
+  padding: 1rem;
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.32);
+}
+
+.health-kicker {
+  color: #5eead4;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.health-page-title {
+  margin: 0.25rem 0 0;
+  color: #f8fafc;
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.health-page-header .health-range-selector {
+  justify-content: flex-start;
+  margin-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.health-page-header .health-range-selector::-webkit-scrollbar {
+  display: none;
+}
+
+.health-range-button {
+  min-width: 4.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.7);
+  color: #cbd5e1;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.health-range-button[aria-pressed="true"] {
+  border-color: rgba(20, 184, 166, 0.68);
+  background: rgba(20, 184, 166, 0.16);
+  color: #99f6e4;
+}
+
+.health-empty-state,
+.health-empty-inline {
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.health-empty-state {
+  padding: 2.5rem 1rem;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.health-empty-inline {
+  padding: 1.25rem 0.75rem;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.health-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.health-summary-card,
+.health-panel {
+  border: 1px solid rgba(51, 65, 85, 0.74);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.76);
+  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.22);
+}
+
+.health-summary-card {
+  padding: 0.875rem;
+}
+
+.health-summary-label,
+.health-summary-detail,
+.health-panel-meta {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.health-summary-value {
+  margin-top: 0.25rem;
+  color: #f8fafc;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.health-summary-detail {
+  margin-top: 0.375rem;
+}
+
+.health-summary-card-sleep {
+  border-color: rgba(34, 197, 94, 0.38);
+}
+
+.health-summary-card-hrv {
+  border-color: rgba(20, 184, 166, 0.38);
+}
+
+.health-summary-card-heart {
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+.health-summary-card-stress {
+  border-color: rgba(245, 158, 11, 0.36);
+}
+
+.health-summary-card-run {
+  border-color: rgba(56, 189, 248, 0.36);
+}
+
+.health-panel {
+  margin-bottom: 1rem;
+  padding: 0.875rem;
+}
+
+.health-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.health-panel-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.health-chart-tooltip {
+  min-width: 11rem;
+  border: 1px solid rgba(71, 85, 105, 0.92);
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.625rem 0.75rem;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.35);
+}
+
+.health-chart-tooltip-title {
+  margin-bottom: 0.35rem;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.health-chart-tooltip-row {
+  display: grid;
+  grid-template-columns: minmax(4rem, 1fr) auto auto;
+  gap: 0.65rem;
+  align-items: baseline;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+}
+
+.health-chart-tooltip-row strong {
+  color: #f8fafc;
+  font-weight: 650;
+}
+
+.health-run-list {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.health-run-row {
+  border: 1px solid rgba(51, 65, 85, 0.62);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.health-run-summary {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(6rem, 1.2fr) minmax(4.5rem, 0.8fr) minmax(4.5rem, 0.8fr);
+  gap: 0.5rem;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #e2e8f0;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.health-run-distance,
+.health-run-pace,
+.health-run-hr {
+  font-weight: 650;
+}
+
+.health-run-distance {
+  color: #86efac;
+}
+
+.health-run-pace {
+  color: #fde68a;
+}
+
+.health-run-hr {
+  color: #fca5a5;
+}
+
+.health-run-city,
+.health-run-toggle {
+  color: #94a3b8;
+  font-size: 0.8125rem;
+}
+
+.health-run-toggle {
+  justify-self: start;
+}
+
+.health-run-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.62);
+  padding: 0.75rem;
+}
+
+.health-run-detail-row {
+  min-width: 0;
+}
+
+.health-run-detail-label {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.health-run-detail-value {
+  display: block;
+  margin-top: 0.125rem;
+  color: #f8fafc;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 480px) {
+  .health-page-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .health-page-header .health-range-selector {
+    justify-content: flex-end;
+  }
+
+  .health-run-summary {
+    grid-template-columns: minmax(5.5rem, 1fr) minmax(4.25rem, 0.7fr) minmax(4.5rem, 0.7fr) minmax(4.25rem, 0.7fr) minmax(4rem, 0.8fr) auto;
+  }
+
+  .health-run-toggle {
+    justify-self: end;
+  }
+}
+
+@media (min-width: 640px) {
+  .health-stats-page {
+    padding: 1.25rem 1.5rem 2rem;
+  }
+
+  .health-summary-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .health-run-detail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

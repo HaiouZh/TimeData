@@ -39,13 +39,22 @@ async function waitForTabs(expected: (tabs: string[]) => boolean): Promise<void>
 describe("SettingsNavPage", () => {
   it("toggles a tab off and persists", async () => {
     const { host, root } = await renderPage();
-    const stats = host.querySelector('input[aria-label="统计"]');
+    const health = host.querySelector('input[aria-label="健康"]');
 
     await act(async () => {
-      stats?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      health?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    await waitForTabs((tabs) => !tabs.includes("/stats"));
+    await waitForTabs((tabs) => tabs.includes("/stats/time") && !tabs.includes("/stats/health"));
+    await act(async () => root.unmount());
+  });
+
+  it("offers time and health as separate toggles", async () => {
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector('input[aria-label="时间"]')).not.toBeNull();
+    expect(host.querySelector('input[aria-label="健康"]')).not.toBeNull();
+    expect(host.querySelector('input[aria-label="统计"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
