@@ -36,6 +36,8 @@ export function healthHeartRateToRow(data: unknown): Record<string, string | num
     max_heart_rate: hr.maxHeartRate,
     avg_heart_rate: hr.avgHeartRate,
     last_7_days_avg_resting_heart_rate: hr.last7DaysAvgRestingHeartRate,
+    created_at: hr.createdAt,
+    updated_at: hr.updatedAt,
   };
 }
 
@@ -53,7 +55,7 @@ export function rowToHealthHrv(row: HealthHrvRow): HealthHrv {
 
 export function healthHrvToRow(data: unknown): Record<string, string | number | null> {
   const hrv = data as HealthHrv;
-  return { id: hrv.id, date: hrv.date, hrv_ms: hrv.hrvMs };
+  return { id: hrv.id, date: hrv.date, hrv_ms: hrv.hrvMs, created_at: hrv.createdAt, updated_at: hrv.updatedAt };
 }
 
 export interface HealthSleepRow {
@@ -80,7 +82,7 @@ export function rowToHealthSleep(row: HealthSleepRow): HealthSleep {
 
 export function healthSleepToRow(data: unknown): Record<string, string | number | null> {
   const s = data as HealthSleep;
-  return { id: s.id, date: s.date, sleep_start: s.sleepStart, wake_time: s.wakeTime, adjustment_hours: s.adjustmentHours };
+  return { id: s.id, date: s.date, sleep_start: s.sleepStart, wake_time: s.wakeTime, adjustment_hours: s.adjustmentHours, created_at: s.createdAt, updated_at: s.updatedAt };
 }
 
 export interface HealthStressRow {
@@ -97,7 +99,7 @@ export function rowToHealthStress(row: HealthStressRow): HealthStress {
 
 export function healthStressToRow(data: unknown): Record<string, string | number | null> {
   const s = data as HealthStress;
-  return { id: s.id, date: s.date, stress: s.stress };
+  return { id: s.id, date: s.date, stress: s.stress, created_at: s.createdAt, updated_at: s.updatedAt };
 }
 
 export interface HealthRunRow {
@@ -154,5 +156,7 @@ export function healthRunToRow(data: unknown): Record<string, string | number | 
     average_ground_contact_ms: r.averageGroundContactMs,
     type: r.type,
     city: r.city,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
   };
 }
