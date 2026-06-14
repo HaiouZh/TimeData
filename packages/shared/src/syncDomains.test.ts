@@ -54,7 +54,7 @@ describe("tasks domain registration", () => {
     const schema = buildSyncChangeSchema(UtcIsoStringSchema);
     const ok = schema.safeParse({
       tableName: "tasks", action: "create", recordId: "t1", timestamp: "2026-06-14T00:00:00.000Z",
-      data: { id: "t1", title: "x", done: false, recurrence: null, lastDoneAt: null, startAt: null, sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z" },
+      data: { id: "t1", title: "x", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: null, sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z" },
     });
     expect(ok.success).toBe(true);
   });
