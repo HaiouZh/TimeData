@@ -10,7 +10,7 @@ describe("isDueNow daily", () => {
     expect(isDueNow(daily(), null, start, new Date("2026-06-10T08:00:00.000Z"))).toBe(true);
   });
   it("not due when already done today (due basis)", () => {
-    expect(isDueNow(daily(), "2026-06-10T07:00:00.000Z", start, new Date("2026-06-10T08:00:00.000Z"))).toBe(false);
+    expect(isDueNow(daily(), "2026-06-10T12:00:00.000Z", start, new Date("2026-06-10T08:00:00.000Z"))).toBe(false);
   });
   it("due again next day", () => {
     expect(isDueNow(daily(), "2026-06-10T07:00:00.000Z", start, new Date("2026-06-11T06:00:00.000Z"))).toBe(true);
@@ -65,6 +65,12 @@ describe("isDueNow monthly", () => {
     // 5/31 未完成 → due
     expect(isDueNow(r, "2026-03-31T00:00:00.000Z", start, new Date("2026-05-31T00:00:00.000Z"))).toBe(true);
   });
+  it("carries an overdue month-end occurrence forward", () => {
+    const r: Recurrence = { freq: "monthly", interval: 1, byMonthday: [-1], basis: "due" };
+    const start = "2026-01-01T00:00:00.000Z";
+    // 1/31(月末)未完成，到 2/10 仍 due（逾期顺延，lastScheduledDay=Jan31）
+    expect(isDueNow(r, null, start, new Date("2026-02-10T12:00:00.000Z"))).toBe(true);
+  });
 });
 
 describe("isDueNow completion basis", () => {
@@ -72,5 +78,27 @@ describe("isDueNow completion basis", () => {
     const r: Recurrence = { freq: "daily", interval: 3, basis: "completion" };
     expect(isDueNow(r, "2026-06-06T00:00:00.000Z", "2026-06-01T00:00:00.000Z", new Date("2026-06-08T00:00:00.000Z"))).toBe(false);
     expect(isDueNow(r, "2026-06-06T00:00:00.000Z", "2026-06-01T00:00:00.000Z", new Date("2026-06-09T00:00:00.000Z"))).toBe(true);
+  });
+  it("completion basis weekly: next from last done", () => {
+    const r: Recurrence = { freq: "weekly", interval: 1, byWeekday: [1, 3, 5], basis: "completion" };
+    const start = "2026-06-01T00:00:00.000Z";
+    // 上次周五(06-05)完成，下一个计划日是周一(06-08)
+    expect(isDueNow(r, "2026-06-05T12:00:00.000Z", start, new Date("2026-06-07T12:00:00.000Z"))).toBe(false);
+    expect(isDueNow(r, "2026-06-05T12:00:00.000Z", start, new Date("2026-06-08T12:00:00.000Z"))).toBe(true);
+  });
+  it("completion basis monthly: next month after completion", () => {
+    const r: Recurrence = { freq: "monthly", interval: 1, byMonthday: [15], basis: "completion" };
+    const start = "2026-01-01T00:00:00.000Z";
+    // 上次 03-15 完成，下次 04-15
+    expect(isDueNow(r, "2026-03-15T12:00:00.000Z", start, new Date("2026-04-14T12:00:00.000Z"))).toBe(false);
+    expect(isDueNow(r, "2026-03-15T12:00:00.000Z", start, new Date("2026-04-15T12:00:00.000Z"))).toBe(true);
+  });
+});
+
+describe("isDueNow before start", () => {
+  it("is not due when now is before startAt", () => {
+    const start = "2026-06-01T00:00:00.000Z";
+    expect(isDueNow({ freq: "daily", interval: 1, basis: "due" }, null, start, new Date("2026-05-20T12:00:00.000Z"))).toBe(false);
+    expect(isDueNow({ freq: "weekly", interval: 1, byWeekday: [1], basis: "due" }, null, start, new Date("2026-05-20T12:00:00.000Z"))).toBe(false);
   });
 });
