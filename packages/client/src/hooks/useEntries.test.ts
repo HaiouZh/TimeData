@@ -308,7 +308,8 @@ describe("saveEntryWithOverlapAdjustments", () => {
     const RealDate = Date;
     const firstNow = new RealDate("2026-05-17T12:00:00.000Z");
     const secondNow = new RealDate("2026-05-17T12:00:01.000Z");
-    const DateMock = vi.fn((value?: string | number | Date) => {
+    // Regular function (not arrow) so `new Date()` in source is constructable under vitest 4.
+    const DateMock = vi.fn(function (this: unknown, value?: string | number | Date) {
       if (value !== undefined) return new RealDate(value);
       return DateMock.mock.calls.length === 1 ? firstNow : secondNow;
     });
