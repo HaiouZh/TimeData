@@ -235,3 +235,58 @@ describe("recordGarminFetchAudit", () => {
     });
   });
 });
+
+describe("ingestGarminDomain", () => {
+  function hrRecord(date: string, avg: number) {
+    const now = `${date}T12:00:00.000Z`;
+    return {
+      id: `det-${date}`,
+      date,
+      restingHeartRate: 55,
+      minHeartRate: 48,
+      maxHeartRate: 120,
+      avgHeartRate: avg,
+      last7DaysAvgRestingHeartRate: 56,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  it("updates in place when a date already has a row under a different id", async () => {
+    const { ingestGarminDomain } = await import("./garminService.js");
+    // Pre-existing row for this date with a non-deterministic id (insertDaily uses `${table}-${date}`).
+    insertDaily("health_heart_rate", "2026-05-25");
+
+    const result = ingestGarminDomain(
+      db,
+      "health_heart_rate",
+      [hrRecord("2026-05-25", 99)],
+      "2026-06-15T00:00:00.000Z",
+    );
+
+    expect(result.applied).toBe(1);
+    expect(result.errors).toEqual([]);
+    const rows = db
+      .prepare("SELECT id, avg_heart_rate FROM health_heart_rate WHERE date = ? AND COALESCE(sync_tombstone,0)=0")
+      .all("2026-05-25") as Array<{ id: string; avg_heart_rate: number }>;
+    expect(rows).toHaveLength(1); // no duplicate / no unique-index throw
+    expect(rows[0].id).toBe("health_heart_rate-2026-05-25"); // existing id reused
+    expect(rows[0].avg_heart_rate).toBe(99); // refreshed with fetched data
+  });
+
+  it("does not abort the whole domain when one date collides", async () => {
+    const { ingestGarminDomain } = await import("./garminService.js");
+    insertDaily("health_heart_rate", "2026-05-25"); // pre-existing different id
+
+    const result = ingestGarminDomain(
+      db,
+      "health_heart_rate",
+      [hrRecord("2026-05-25", 70), hrRecord("2026-05-26", 80)],
+      "2026-06-15T00:00:00.000Z",
+    );
+
+    expect(result.applied).toBe(2);
+    const count = db.prepare("SELECT COUNT(*) AS c FROM health_heart_rate").get() as { c: number };
+    expect(count.c).toBe(2);
+  });
+});

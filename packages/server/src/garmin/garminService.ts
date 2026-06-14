@@ -239,6 +239,79 @@ export function recordGarminFetchAudit(db: Database, input: GarminFetchAuditInpu
   }
 }
 
+export interface GarminIngestResult {
+  applied: number;
+  validationErrors: number;
+  errors: GarminFetchError[];
+}
+
+const DAILY_HEALTH_TABLES = new Set<string>(DAILY_HEALTH_DOMAINS);
+
+/**
+ * Upsert one domain's fetched records into the DB inside a single transaction.
+ *
+ * Daily health tables enforce one row per date (UNIQUE(date) WHERE sync_tombstone = 0).
+ * Garmin assigns deterministic per-date ids, but a date may already hold a row written
+ * under a different id (client app sync or an older import scheme). Inserting our id then
+ * collides on the date index — a conflict the generic ON CONFLICT(id) upsert does not
+ * handle — which throws and rolls back the whole domain. We reconcile by reusing the
+ * existing row's id so the write updates in place instead of colliding.
+ */
+export function ingestGarminDomain(
+  db: Database,
+  domain: IngestDomain,
+  records: unknown[],
+  serverNow: string,
+): GarminIngestResult {
+  const sharedDomain = getSyncDomain(domain);
+  const errors: GarminFetchError[] = [];
+  let applied = 0;
+  let validationErrors = 0;
+
+  db.transaction(() => {
+    for (const record of records) {
+      const parsed = sharedDomain.dataSchema.safeParse(record);
+      if (!parsed.success) {
+        validationErrors += 1;
+        const raw = record as Record<string, unknown>;
+        errors.push(garminError(
+          "validation_failed",
+          parsed.error.issues.map((i) => i.message).join(", "),
+          { domain, date: typeof raw.date === "string" ? raw.date : undefined },
+        ));
+        continue;
+      }
+      const recordData = parsed.data as Record<string, unknown>;
+      let recordId = recordData.id as string;
+      let data: unknown = parsed.data;
+
+      if (DAILY_HEALTH_TABLES.has(domain) && typeof recordData.date === "string") {
+        const byDate = db
+          .prepare(`SELECT id FROM ${domain} WHERE date = ? AND COALESCE(sync_tombstone, 0) = 0`)
+          .get(recordData.date) as { id: string } | undefined;
+        if (byDate && byDate.id !== recordId) {
+          recordId = byDate.id;
+          data = { ...recordData, id: byDate.id };
+        }
+      }
+
+      const existing = db
+        .prepare(`SELECT id FROM ${domain} WHERE id = ?`)
+        .get(recordId) as { id: string } | undefined;
+      const change = {
+        tableName: domain,
+        recordId,
+        action: existing ? "update" : "create",
+        data,
+        timestamp: serverNow,
+      } as SyncChange;
+      if (applyChange(change).status === "applied") applied += 1;
+    }
+  })();
+
+  return { applied, validationErrors, errors };
+}
+
 export async function fetchGarminData(
   config: GarminConfig,
   startDate: string,
@@ -313,40 +386,16 @@ export async function fetchGarminData(
 
     for (const domain of INGEST_DOMAINS) {
       const records = data[domain] ?? [];
-      counts[domain] = 0;
-      const sharedDomain = getSyncDomain(domain);
-      let validationErrors = 0;
-
-      db.transaction(() => {
-        for (const record of records) {
-          const parsed = sharedDomain.dataSchema.safeParse(record);
-          if (!parsed.success) {
-            validationErrors += 1;
-            const raw = record as Record<string, unknown>;
-            errors.push(garminError(
-              "validation_failed",
-              parsed.error.issues.map((i) => i.message).join(", "),
-              { domain, date: typeof raw.date === "string" ? raw.date : undefined },
-            ));
-            continue;
-          }
-          const recordData = parsed.data as Record<string, unknown>;
-          const recordId = recordData.id as string;
-          const existing = db
-            .prepare(`SELECT id FROM ${domain} WHERE id = ?`)
-            .get(recordId) as { id: string } | undefined;
-          const change = {
-            tableName: domain,
-            recordId,
-            action: existing ? "update" : "create",
-            data: parsed.data,
-            timestamp: serverNow,
-          } as SyncChange;
-          const applied = applyChange(change);
-          if (applied.status === "applied") counts[domain] = (counts[domain] ?? 0) + 1;
-        }
-      })();
-      logGarmin("domain_written", { runId, domain, fetched: records.length, applied: counts[domain], validationErrors });
+      const result = ingestGarminDomain(db, domain, records, serverNow);
+      counts[domain] = result.applied;
+      errors.push(...result.errors);
+      logGarmin("domain_written", {
+        runId,
+        domain,
+        fetched: records.length,
+        applied: result.applied,
+        validationErrors: result.validationErrors,
+      });
     }
 
     latestSeqAfter = getLatestSeq();
@@ -386,6 +435,7 @@ export async function fetchGarminData(
     const code = err instanceof Error && err.message.includes("script_not_found")
       ? "script_not_found"
       : "fetch_failed";
+    logGarmin("fetch_error", { runId, code, message: err instanceof Error ? err.message : String(err) });
     const db = getDb();
     latestSeqAfter = getLatestSeq();
     const result: GarminFetchResult = {
