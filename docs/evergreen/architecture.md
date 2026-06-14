@@ -38,9 +38,17 @@ covers:
   - packages/server/src/lib/confirm-token.ts
   - packages/server/src/middleware/rateLimit.ts
   - packages/server/src/middleware/bodyLimit.ts
+  - packages/server/src/routes/ingest.ts
+  - packages/server/src/garmin/**
+  - packages/client/src/pages/stats/health/**
+  - packages/client/src/pages/stats/HealthDashboardContent.tsx
+  - packages/client/src/pages/stats/InsightCharts.tsx
+  - packages/client/src/lib/healthUtils.ts
+  - packages/client/src/pages/settings/SettingsGarminPage.tsx
+  - packages/shared/src/healthSchemas.ts
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-13
+last-reviewed: 2026-06-14
 ---
 
 # 架构总览
@@ -53,8 +61,8 @@ last-reviewed: 2026-06-13
 TimeData 是个人时间记录工具：
 
 - 本地优先：所有读写都先打到本地（浏览器 IndexedDB / SQLite），再异步同步。
-- 两类个人记录：时间段记录 `time_entries` 与聊天式速记 `quick_notes`。速记是“时间 + 文本 + 可选来源 / 置顶元数据”，不参与时间段统计。
-- 一份数据，三个入口：Web/PWA、CLI、Android 壳（Capacitor）；授权 agent 可直连受控 server API 投递 quick note。
+- 三类个人记录：时间段记录 `time_entries`、聊天式速记 `quick_notes`、健康数据（心率/HRV/睡眠/压力/跑步，来自 Garmin 自动抓取或手动导入）。速记是"时间 + 文本 + 可选来源 / 置顶元数据"，不参与时间段统计。
+- 一份数据，三个入口：Web/PWA、CLI、Android 壳（Capacitor）；授权 agent 可直连受控 server API 投递 quick note。Garmin 健康数据由服务端定时抓取或手动触发，写入服务端后通过同步下发到客户端。
 - 自托管：服务端是单一 Hono + SQLite 进程，可用 Docker 一键部署。
 
 **不做**：多用户、协作、SaaS、复杂权限。
@@ -175,6 +183,34 @@ timedata notes --date 2026-06-02
 
 关键点：这仍属于“服务端受控 API”写入边界，不是第三条底层写入路径。agent 不能提交 `source` 伪造成 user，也不能直接编辑 SQLite、IndexedDB、syncLog、Backup 或导出文件。
 
+### 3.7 Garmin 健康数据抓取
+
+```
+Garmin 定时任务 / 手动触发
+        → garminService.ts 启动 Python 子进程 garminFetch.py
+        → garminFetch.py 用 garminconnect 库登录 Garmin Connect
+        → 逐日调 5 个 API（heart_rate / hrv / sleep / stress / activities）
+        → 构建 camelCase 记录，输出 JSON 到 stdout
+        → garminService.ts 解析 JSON
+        → 按域逐条 safeParse + applyChange() 写 SQLite
+        → notifySyncChange() 通知客户端 SSE
+        → 客户端 pull 获取新健康数据
+```
+
+关键点：Garmin 数据走的是与 agent 速记相同的"服务端受控写入"路径（`applyChange()` + `sync_seq`），不是新的底层写入通道。Python 脚本只负责数据抓取和格式化，不直接碰 SQLite。凭证在 `server_config` 表中 AES-256-GCM 加密存储，密钥派生自 `AUTH_TOKEN`。独立模块位于 `packages/server/src/garmin/`，详见其 `README.md`。
+
+### 3.8 健康数据批量导入（ingest API）
+
+```
+POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
+        → authMiddleware 校验 Bearer Token
+        → zod schema 校验每条记录
+        → 按域 applyChange() 写 SQLite
+        → notifySyncChange()
+```
+
+`/api/health/ingest` 是健康数据的通用入口，Garmin 服务内部直接调 `applyChange()` 而非经此 HTTP 端点，但此端点保留用于 CLI 脚本迁移历史数据。
+
 ## 4. 启动顺序
 
 ### 4.1 服务端（`packages/server/src/index.ts`）
@@ -186,11 +222,13 @@ timedata notes --date 2026-06-02
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
 6. 装 auth 中间件（之后所有受保护的 `/api/*` 默认需要 Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
-8. 注册业务路由：`categories`/`entries`/`quick-notes`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）
+8. 注册业务路由：`categories`/`entries`/`quick-notes`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）/`health`（ingest）/`admin/garmin`（配置/抓取/状态）
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
-10. 调 `initializeDatabase()`：建表、首次启动播种默认分类
-11. 启动时清理一次旧 server backup，并在 `SERVER_REPLICAS>1` 时提示 force-push token 仍是单实例内存存储
-12. 监听 `PORT`（默认 3000）
+10. 调 `initializeDatabase()`：建表（含 `server_config` 和健康数据表）、首次启动播种默认分类
+11. 启动时清理一次旧 server backup
+12. 加载 Garmin 配置，若已启用定时抓取则调 `updateSchedule()` 注册 setTimeout 定时器
+13. `SERVER_REPLICAS>1` 时提示 force-push token 和 Garmin 定时器仍是单实例内存存储
+14. 监听 `PORT`（默认 3000）
 
 ### 4.2 Web 客户端（`packages/client/src/main.tsx`）
 
@@ -199,7 +237,7 @@ timedata notes --date 2026-06-02
 3. `<AppUpdateProvider>`：包住 PWA 自更新提示
 4. `ErrorBoundary` 包裹 `BrowserRouter` / `SyncProvider` / `BottomNavProvider` / `AppShell`，顶层渲染错误会落到统一错误页，避免整屏空白。
 5. `SyncProvider` 包裹在 React Router 内、`AppShell` 外，为时间轴、记录编辑页、设置首页和数据设置页提供同一个客户端同步状态与触发入口；云同步开启、API 地址已配置且页面处于前台时，它还会维护一条 `/api/sync/stream` SSE 连接，用连接态驱动设置页服务器灯，并在远端 `latestSeq` 变大时防抖触发普通同步。`BottomNavProvider` 只承载底部导航显隐状态，不参与数据同步：时间轴 / 统计 / 设置首页经 `AppShell` 的 `<main>` 滚动容器统一接 `useHideBottomNavOnScroll`（向下滑动隐藏、上滑或接近顶部恢复，带滞回阈值，纯判定逻辑见 `lib/navScroll.ts`），路由切换即重置为显示；速记页因自带内层滚动容器而单独处理，并在输入聚焦或软键盘打开时一并隐藏底部 Tab、让底部 composer 对齐底部导航。
-6. React Router 装主路由：`/`、`/quick-notes`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/stats-layout`、`/settings/admin-insights`、分类设置相关路由）、`/entries/:id/edit`。设置首页汇总服务器连接灯与同步摘要，并按记录数据、服务端更新等入口分组；设置子页统一复用 `SettingsDetailPage` 的返回头与内容容器，`SettingsInsightsPage` 只负责睡眠分类口径设置，`SettingsStatsLayoutPage` 只负责统计页模块显隐、上移/下移和重置。
+6. React Router 装主路由：`/`、`/quick-notes`、`/stats`、`/settings`（含子页 `/settings/server`、`/settings/data`、`/settings/insights`、`/settings/stats-layout`、`/settings/admin-insights`、`/settings/garmin`、分类设置相关路由）、`/entries/:id/edit`。设置首页汇总服务器连接灯与同步摘要，并按记录数据、服务端更新等入口分组；设置子页统一复用 `SettingsDetailPage` 的返回头与内容容器，`SettingsInsightsPage` 只负责睡眠分类口径设置，`SettingsStatsLayoutPage` 只负责统计页模块显隐、上移/下移和重置，`SettingsGarminPage` 负责 Garmin 账号配置、定时抓取和手动触发。
 7. `<AppShell>` 统一监听 PWA/Android 从后台恢复到前台的事件，并把刷新信号传给时间轴和新增记录页，让这些页面重新读取当前时间。
 8. `useMidnightTick`（`packages/client/src/hooks/useMidnightTick.ts`）在 `TimelinePage` 内独立调度本地午夜定时器，跨午夜后强制重新计算 `now`，避免长时间停留在前一天显示状态。
 9. 重复性 prompt 走 `useConfirm` / `ConfirmDialog`，不直接调 `window.confirm`/`alert`，便于本地化和 Android WebView 体验统一。
@@ -252,8 +290,10 @@ timedata notes --date 2026-06-02
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/`、`packages/client/src/lib/settings/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
 | 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/stats/modules/`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/lib/insights/`、`packages/client/src/lib/statsLayoutSetting.ts`、`packages/client/src/lib/statsModuleTrendSetting.ts`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx`、`packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx` | `StatsPage.tsx` 只保留周期/日期/总时长上下文和共享取数，内容区按 `STATS_MODULES` 注册表渲染可见模块；`stats.layout.v1` 存模块顺序与隐藏列表，读取时按注册表 sanitize，并让隐藏模块不挂载、不计算，baseline 数据只在可见模块声明需要时取；趋势模块用 `stats.module.trend.v1` 记住最后使用的窗口和图表类型；`cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率；当前周/月只统计到今天，异常检测在当前周期产出、用近 90 天基线定阈值 |
+| 健康仪表盘 | `packages/client/src/pages/stats/HealthDashboardContent.tsx`、`packages/client/src/pages/stats/health/`、`packages/client/src/lib/healthUtils.ts`、`packages/shared/src/healthSchemas.ts` | 统计页"健康"Tab：心率/HRV/睡眠（含内联 adjustmentHours 编辑）/压力/跑步（含可展开全字段详情）；`TrendChart` 通用化支持 `yAxisUnit`/`tooltipSuffix`/`yAxisDomain` |
+| Garmin 数据服务 | `packages/server/src/garmin/`、`packages/client/src/pages/settings/SettingsGarminPage.tsx` | Python 子进程抓取 → TS 服务写库 → Admin API → 客户端设置页；凭证 AES-256-GCM 加密存 `server_config` 表；详见 `packages/server/src/garmin/README.md` |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |
-| 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts` | [`deployment.md`](./deployment.md) |
+| 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts`、`packages/server/Dockerfile` | [`deployment.md`](./deployment.md)；Dockerfile 运行时阶段包含 Python 3 + garminconnect + garth |
 | 审查 / 排期边界 | `AGENT.md` | [`AGENT.md#项目定位边界`](../../AGENT.md#项目定位边界) |
 
 ## 7. 不在这份文档里的事

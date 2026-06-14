@@ -17,7 +17,8 @@ covers:
   - packages/client/src/hooks/useCategories.ts
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
-last-reviewed: 2026-06-04
+  - packages/shared/src/healthSchemas.ts
+last-reviewed: 2026-06-14
 ---
 
 # 数据模型与契约
@@ -44,6 +45,19 @@ last-reviewed: 2026-06-04
 | 服务端同步序列 | `sync_seq` | 记录每次成功写入后的单调递增序号，用于 `sinceSeq` 拉取和 `baseSeq` 快进判断 |
 | 服务端同步状态 | `sync_state` | 保存 `/api/sync/status` 的 commit hash、最新 seq、行数和最新更新时间摘要，避免每次 status 全量读取业务表 |
 | 应用元数据 | `app_metadata` | 记录全局一次性迁移/重置标记，例如 `utc_reset_v1` |
+| 服务端配置 | `server_config` | 键值存储，用于 Garmin 凭证（AES-256-GCM 加密）、定时抓取配置等服务端独有设置，不同步到客户端 |
+
+健康数据表（服务端 SQLite + 客户端 Dexie 均有，走同步域登记簿）：
+
+| 实体 | TS Schema | SQLite 表 | Dexie 表 |
+|---|---|---|---|
+| 心率 | `HealthHeartRateSchema` | `health_heart_rate` | `healthHeartRate` |
+| HRV | `HealthHrvSchema` | `health_hrv` | `healthHrv` |
+| 睡眠 | `HealthSleepSchema` | `health_sleep` | `healthSleep` |
+| 压力 | `HealthStressSchema` | `health_stress` | `healthStress` |
+| 跑步 | `HealthRunSchema` | `runs` | `runs` |
+
+健康 schema 定义在 `packages/shared/src/healthSchemas.ts`，各域通过 `packages/shared/src/syncDomains.ts` 注册进同步域登记簿。数据来源：Garmin 自动抓取（`packages/server/src/garmin/`）或 `/api/health/ingest` 批量导入。客户端通过 `useLiveQuery` 从 Dexie 读取展示。
 
 客户端 Dexie 多一张：
 
@@ -295,20 +309,25 @@ type SyncChange =
 
 ## 10. Dexie schema
 
-`packages/client/src/db/index.ts` 当前维护三个 Dexie 版本声明；v3 是当前 schema，新增 `quickNotes`，并保留旧表声明以支持本地升级：
+`packages/client/src/db/index.ts` 当前维护四个 Dexie 版本声明；v4 是当前 schema，新增健康数据表，并保留旧表声明以支持本地升级：
 
 ```ts
-db.version(3).stores({
+db.version(4).stores({
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
   autoBackups: "id, createdAt",
   settings: "key",
+  healthHeartRate: "id, date",
+  healthHrv: "id, date",
+  healthSleep: "id, date",
+  healthStress: "id, date",
+  runs: "id, date",
 });
 ```
 
-v1 是初始业务表，v2 增加 `settings`，v3 增加 `quickNotes`。`QuickNote.pinned` 不建索引，因此作为普通字段随记录存储，不需要新增 Dexie 版本。`resetLocalDataToDefaults()` 当前只重置分类、时间记录、settings 与对应非速记 `syncLog`，不会清空 `quickNotes`；速记有独立导入/导出/删除入口。
+v1 是初始业务表，v2 增加 `settings`，v3 增加 `quickNotes`，v4 增加 5 张健康数据表。`QuickNote.pinned` 不建索引，因此作为普通字段随记录存储，不需要新增 Dexie 版本。`resetLocalDataToDefaults()` 当前只重置分类、时间记录、settings 与对应非速记 `syncLog`，不会清空 `quickNotes` 和健康数据；速记有独立导入/导出/删除入口。
 
 **SQLite 这边**目前的迁移机制是 `CREATE TABLE IF NOT EXISTS`——只能加表，**不能改已有列定义**。改 schema 时需要：
 1. 加新表 / 加新列（用 `ALTER TABLE ... ADD COLUMN`）— 现有数据自动兼容。

@@ -117,7 +117,7 @@ git push main
   → push 到 ghcr.io/haiouzh/timedata:latest（带 GIT_SHA tag）
 ```
 
-Dockerfile 构建镜像时会临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。相关代码入口：`packages/server/Dockerfile` 中的 `apk add --virtual .native-build-deps` 和 `npm rebuild better-sqlite3 --build-from-source` 段落。
+Dockerfile 构建镜像时会临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段另外安装 Python 3 + pip 并通过 pip 安装 `garminconnect` 和 `garth`，供 Garmin 健康数据抓取服务（`packages/server/src/garmin/garminFetch.py`）使用。相关代码入口：`packages/server/Dockerfile`。
 
 具体 workflow yaml 文件名和构建参数详见 `.github/workflows/`。其中：
 
