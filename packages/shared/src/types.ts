@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type {
   CategorySchema,
   QuickNoteSchema,
+  RecurrenceSchema,
   SettingSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
@@ -12,6 +13,7 @@ import type {
   SyncPushReasonCodeSchema,
   SyncPushRequestSchema,
   SyncStatusResponseSchema,
+  TaskSchema,
   TimeEntrySchema,
 } from "./schemas.js";
 
@@ -20,6 +22,10 @@ export type Category = z.infer<typeof CategorySchema>;
 export type QuickNote = z.infer<typeof QuickNoteSchema>;
 
 export type Setting = z.infer<typeof SettingSchema>;
+
+export type Recurrence = z.infer<typeof RecurrenceSchema>;
+
+export type Task = z.infer<typeof TaskSchema>;
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 
@@ -58,7 +64,9 @@ export type SyncChange =
   | SyncUpsertChange<"settings", Setting>
   | SyncDeleteChange<"settings">
   | SyncUpsertChange<"quick_notes", QuickNote>
-  | SyncDeleteChange<"quick_notes">;
+  | SyncDeleteChange<"quick_notes">
+  | SyncUpsertChange<"tasks", Task>
+  | SyncDeleteChange<"tasks">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 
