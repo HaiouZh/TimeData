@@ -17,6 +17,7 @@ import entriesRoute from "./routes/entries.js";
 import exportRoute from "./routes/export.js";
 import quickNotesRoute from "./routes/quick-notes.js";
 import syncRoute from "./routes/sync.js";
+import { ingestRoutes } from "./routes/ingest.js";
 import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
@@ -101,6 +102,7 @@ app.route("/api/export", exportRoute);
 app.route("/api/update", updateRoute);
 app.route("/api/data", dataRoute);
 app.route("/api/admin", adminRoute);
+app.route("/api/health", ingestRoutes);
 
 app.use("/*", serveStatic({ root: "./public" }));
 app.get("*", serveStatic({ root: "./public", path: "index.html" }));

@@ -1,5 +1,8 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Category, QuickNote, Setting, TimeEntry, SyncLogEntry } from "@timedata/shared";
+import type {
+  Category, QuickNote, Setting, TimeEntry, SyncLogEntry,
+  HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun,
+} from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { safeGetItem, safeRemoveItem } from "../lib/safeStorage.js";
@@ -28,6 +31,11 @@ export const db = new Dexie("timedata") as Dexie & {
   syncLog: EntityTable<SyncLogEntry, "id">;
   autoBackups: EntityTable<AutoBackupRecord, "id">;
   settings: EntityTable<Setting, "key">;
+  healthHeartRate: EntityTable<HealthHeartRate, "id">;
+  healthHrv: EntityTable<HealthHrv, "id">;
+  healthSleep: EntityTable<HealthSleep, "id">;
+  healthStress: EntityTable<HealthStress, "id">;
+  runs: EntityTable<HealthRun, "id">;
 };
 
 db.version(1).stores({
@@ -52,6 +60,20 @@ db.version(3).stores({
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
   autoBackups: "id, createdAt",
   settings: "key",
+});
+
+db.version(4).stores({
+  categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
+  timeEntries: "id, categoryId, startTime, endTime",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+  settings: "key",
+  healthHeartRate: "id, date",
+  healthHrv: "id, date",
+  healthSleep: "id, date",
+  healthStress: "id, date",
+  runs: "id, date",
 });
 
 export async function seedDefaultCategories(): Promise<void> {

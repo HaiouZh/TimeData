@@ -16,12 +16,15 @@ import {
 } from "../lib/stats.ts";
 import { useStatsLayout } from "../lib/statsLayoutSetting.ts";
 import { addDays, getDateString } from "../lib/time.ts";
+import { HealthDashboardContent } from "./stats/HealthDashboardContent.tsx";
 import { STATS_MODULE_LIST, STATS_MODULES } from "./stats/modules/statsModules.ts";
 import type { StatsModuleProps } from "./stats/modules/types.ts";
 
 type ViewMode = StatsViewMode;
+type StatsTab = "time" | "health";
 
 export default function StatsPage() {
+  const [tab, setTab] = useState<StatsTab>("time");
   const [mode, setMode] = useState<ViewMode>("week");
   const [today, setToday] = useState(() => getDateString(new Date()));
   const [anchor, setAnchor] = useState(() => getDateString(new Date()));
@@ -150,7 +153,7 @@ export default function StatsPage() {
             <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-sky-300/80">TimeData</div>
             <h2 className="mt-1 text-2xl font-semibold tracking-normal text-white">统计</h2>
           </div>
-          {!atLatest && (
+          {tab === "time" && !atLatest && (
             <button
               type="button"
               onClick={() => setAnchor(today)}
@@ -161,76 +164,101 @@ export default function StatsPage() {
           )}
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-1 rounded-2xl border border-slate-800 bg-slate-950 p-1">
-          {(["day", "week", "month"] as ViewMode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              aria-pressed={mode === m}
-              className={`min-h-11 rounded-xl text-sm font-medium transition ${
-                mode === m ? "bg-sky-500 text-white shadow-lg shadow-sky-950/40" : "text-slate-400"
-              }`}
-            >
-              {{ day: "日", week: "周", month: "月" }[m]}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 flex items-center gap-2">
+        <div className="stats-tab-bar">
           <button
             type="button"
-            aria-label={`上一${periodUnit}`}
-            onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
-            className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200"
+            className={`stats-tab ${tab === "time" ? "active" : ""}`}
+            onClick={() => setTab("time")}
           >
-            ←
+            时间统计
           </button>
-          <label className="min-w-0 flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2">
-            <span className="block truncate text-sm font-medium text-slate-100">{rangeLabel}</span>
-            <input
-              type="date"
-              value={statsRange.fromDate}
-              max={today}
-              onChange={(event) => {
-                if (event.target.value) setAnchor(event.target.value);
-              }}
-              className="mt-1 w-full bg-transparent text-sm text-slate-400 outline-none"
-            />
-          </label>
           <button
             type="button"
-            aria-label={`下一${periodUnit}`}
-            disabled={atLatest}
-            onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
-            className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200 disabled:opacity-35"
+            className={`stats-tab ${tab === "health" ? "active" : ""}`}
+            onClick={() => setTab("health")}
           >
-            →
+            健康看板
           </button>
-        </div>
-
-        <div className="mt-4 rounded-3xl border border-sky-400/20 bg-sky-400/10 px-4 py-3">
-          <div className="text-xs font-medium text-sky-200/80">已记录</div>
-          <div className="mt-1 flex items-end gap-2">
-            <span className="text-4xl font-semibold leading-none text-white">{totalHours.toFixed(1)}</span>
-            <span className="pb-1 text-sm text-slate-300">小时</span>
-          </div>
-          {rangeClampedToToday && <div className="mt-2 text-xs text-slate-400">截至 {effectiveRange.toDate}</div>}
         </div>
       </header>
 
-      {layout.visibleModulesInOrder.length === 0 ? (
-        <div className="rounded-[1.35rem] border border-dashed border-slate-700 bg-slate-950/60 p-8 text-center text-sm text-slate-400">
-          所有统计模块已隐藏。
-          <Link to="/settings/stats-layout" className="ml-1 text-sky-300 underline">
-            去设置启用
-          </Link>
-        </div>
+      {tab === "time" ? (
+        <>
+          <header className="rounded-[1.6rem] border border-slate-700/70 bg-slate-950/80 p-4 shadow-[0_22px_60px_rgba(2,6,23,0.42)] ring-1 ring-white/[0.04]">
+            <div className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-800 bg-slate-950 p-1">
+              {(["day", "week", "month"] as ViewMode[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  aria-pressed={mode === m}
+                  className={`min-h-11 rounded-xl text-sm font-medium transition ${
+                    mode === m ? "bg-sky-500 text-white shadow-lg shadow-sky-950/40" : "text-slate-400"
+                  }`}
+                >
+                  {{ day: "日", week: "周", month: "月" }[m]}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={`上一${periodUnit}`}
+                onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
+                className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200"
+              >
+                ←
+              </button>
+              <label className="min-w-0 flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2">
+                <span className="block truncate text-sm font-medium text-slate-100">{rangeLabel}</span>
+                <input
+                  type="date"
+                  value={statsRange.fromDate}
+                  max={today}
+                  onChange={(event) => {
+                    if (event.target.value) setAnchor(event.target.value);
+                  }}
+                  className="mt-1 w-full bg-transparent text-sm text-slate-400 outline-none"
+                />
+              </label>
+              <button
+                type="button"
+                aria-label={`下一${periodUnit}`}
+                disabled={atLatest}
+                onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
+                className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200 disabled:opacity-35"
+              >
+                →
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-3xl border border-sky-400/20 bg-sky-400/10 px-4 py-3">
+              <div className="text-xs font-medium text-sky-200/80">已记录</div>
+              <div className="mt-1 flex items-end gap-2">
+                <span className="text-4xl font-semibold leading-none text-white">{totalHours.toFixed(1)}</span>
+                <span className="pb-1 text-sm text-slate-300">小时</span>
+              </div>
+              {rangeClampedToToday && <div className="mt-2 text-xs text-slate-400">截至 {effectiveRange.toDate}</div>}
+            </div>
+          </header>
+
+          {layout.visibleModulesInOrder.length === 0 ? (
+            <div className="rounded-[1.35rem] border border-dashed border-slate-700 bg-slate-950/60 p-8 text-center text-sm text-slate-400">
+              所有统计模块已隐藏。
+              <Link to="/settings/stats-layout" className="ml-1 text-sky-300 underline">
+                去设置启用
+              </Link>
+            </div>
+          ) : (
+            layout.visibleModulesInOrder.map((id) => {
+              const Module = STATS_MODULES[id].component;
+              return <Module key={id} {...moduleContext} />;
+            })
+          )}
+        </>
       ) : (
-        layout.visibleModulesInOrder.map((id) => {
-          const Module = STATS_MODULES[id].component;
-          return <Module key={id} {...moduleContext} />;
-        })
+        <HealthDashboardContent />
       )}
     </div>
   );

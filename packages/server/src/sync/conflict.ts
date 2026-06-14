@@ -1,3 +1,4 @@
+import type { SyncChange } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
 
 export type PushSeqStrategy =
@@ -7,7 +8,7 @@ export type PushSeqStrategy =
   | "local_wins_non_fast_forward";
 
 export interface PushSeqRecord {
-  tableName: "categories" | "time_entries" | "settings" | "quick_notes";
+  tableName: SyncChange["tableName"];
   recordId: string;
 }
 

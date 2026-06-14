@@ -31,6 +31,10 @@ docs_local/
 docs/superpowers/
 docs/Achieve/
 
+# Local scratch dir for dev logs / debug output (keep the dir, ignore contents)
+.local/*
+!.local/.gitkeep
+
 # Local scripts/debug artifacts
 scripts/_debug.*
 *.log

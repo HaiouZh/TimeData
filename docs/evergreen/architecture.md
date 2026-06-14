@@ -261,4 +261,3 @@ timedata notes --date 2026-06-02
 - 函数实现（让代码说话）
 - 本地开发过程计划（看本地-only 的 `docs_local/plans/`）
 - 本地设计规格（看本地-only 的 `docs_local/specs/`）
-- 第三方审核材料（看 `docs/TimeData-project-review-brief.md`）

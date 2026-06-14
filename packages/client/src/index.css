@@ -58,3 +58,153 @@ select,
 textarea {
   font-size: 16px;
 }
+
+/* Health Dashboard */
+.stats-tab-bar {
+  display: flex;
+  gap: 0;
+  margin-top: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.05);
+}
+
+.stats-tab {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stats-tab.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.health-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.health-range-selector {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.range-btn {
+  padding: 0.375rem 1rem;
+  font-size: 0.8125rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.range-btn.active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #60a5fa;
+}
+
+.health-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.health-card.empty {
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  padding: 2rem 1rem;
+}
+
+.health-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.health-card-header h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.health-card-icon {
+  font-size: 1.125rem;
+}
+
+.health-card-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.run-item {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.5rem;
+  background: rgba(255,255,255,0.02);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.run-item .run-date {
+  color: rgba(255,255,255,0.5);
+  min-width: 5rem;
+}
+
+.run-item .run-distance {
+  font-weight: 600;
+  color: #4ade80;
+}
+
+.run-item .run-pace {
+  color: #fbbf24;
+}
+
+.run-item .run-hr {
+  color: #ef5350;
+}
+
+.run-summary {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.run-summary-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.run-summary-label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+}
+
+.run-summary-value {
+  font-weight: 600;
+  color: #60a5fa;
+}

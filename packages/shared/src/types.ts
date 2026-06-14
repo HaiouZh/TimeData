@@ -14,6 +14,7 @@ import type {
   SyncStatusResponseSchema,
   TimeEntrySchema,
 } from "./schemas.js";
+import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
 
 export type Category = z.infer<typeof CategorySchema>;
 
@@ -58,7 +59,17 @@ export type SyncChange =
   | SyncUpsertChange<"settings", Setting>
   | SyncDeleteChange<"settings">
   | SyncUpsertChange<"quick_notes", QuickNote>
-  | SyncDeleteChange<"quick_notes">;
+  | SyncDeleteChange<"quick_notes">
+  | SyncUpsertChange<"health_heart_rate", HealthHeartRate>
+  | SyncDeleteChange<"health_heart_rate">
+  | SyncUpsertChange<"health_hrv", HealthHrv>
+  | SyncDeleteChange<"health_hrv">
+  | SyncUpsertChange<"health_sleep", HealthSleep>
+  | SyncDeleteChange<"health_sleep">
+  | SyncUpsertChange<"health_stress", HealthStress>
+  | SyncDeleteChange<"health_stress">
+  | SyncUpsertChange<"runs", HealthRun>
+  | SyncDeleteChange<"runs">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 
@@ -169,3 +180,5 @@ export type SyncReasonCategory =
   | "user_actionable" // archived_category / missing_category / overlap / invalid_time_range — 用户处理
   | "conflict" // server_version_newer_or_same — 进入冲突流程
   | "unknown";
+
+export type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";

@@ -2,15 +2,12 @@ import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
-import { categoryDependencyChangesForEntry } from "./changes.ts";
 import { classifyReasonCode } from "./reason.ts";
+import { CLIENT_SYNC_DOMAINS, parseRemoteRecord } from "./clientDomains.ts";
 import {
-  CategorySchema,
-  QuickNoteSchema,
-  SettingSchema,
+  getSyncDomain,
   SyncPullResponseSchema,
   SYNC_DIAGNOSTIC_FAILURE_THRESHOLD,
-  TimeEntrySchema,
 } from "@timedata/shared";
 import type {
   SyncForcePushPrepareResponse,
@@ -124,17 +121,7 @@ async function getCategoryDeleteImpact(categoryId: string): Promise<CategoryDele
   return { target, categoryIds, entryIds: entries.map((entry) => entry.id) };
 }
 
-async function applyRemoteCategoryDelete(categoryId: string): Promise<number> {
-  return db.transaction("rw", db.categories, db.timeEntries, async () => {
-    const impact = await getCategoryDeleteImpact(categoryId);
-    if (!impact) return 0;
-
-    await db.timeEntries.bulkDelete(impact.entryIds);
-    await db.categories.bulkDelete(impact.categoryIds);
-
-    return impact.categoryIds.length + impact.entryIds.length;
-  });
-}
+// applyRemoteCategoryDelete moved to clientDomains.ts
 
 function compactLogGroup(logs: SyncLog[]): CompactedSyncLog | null {
   const ordered = [...logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
@@ -191,41 +178,7 @@ async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: numbe
   return parsed.data;
 }
 
-function parseRemoteCategory(data: unknown, recordId: string): Category | null {
-  const parsed = CategorySchema.safeParse(data);
-  if (parsed.success) return parsed.data;
-  console.warn(`[sync] dropping invalid category payload for ${recordId}:`, parsed.error.issues);
-  return null;
-}
-
-function parseRemoteTimeEntry(data: unknown, recordId: string): TimeEntry | null {
-  const parsed = TimeEntrySchema.safeParse(data);
-  if (parsed.success) return parsed.data;
-  console.warn(`[sync] dropping invalid time entry payload for ${recordId}:`, parsed.error.issues);
-  return null;
-}
-
-function parseRemoteSetting(data: unknown, recordId: string): Setting | null {
-  const parsed = SettingSchema.safeParse(data);
-  if (parsed.success) return parsed.data;
-  console.warn(`[sync] dropping invalid setting payload for ${recordId}:`, parsed.error.issues);
-  return null;
-}
-
-function parseRemoteQuickNote(data: unknown, recordId: string): QuickNote | null {
-  const parsed = QuickNoteSchema.safeParse(data);
-  if (parsed.success) return parsed.data;
-  console.warn(`[sync] dropping invalid quick note payload for ${recordId}:`, parsed.error.issues);
-  return null;
-}
-
-function quickNoteNeedsApply(existing: QuickNote | undefined, remoteNote: QuickNote): boolean {
-  return !existing
-    || existing.updatedAt !== remoteNote.updatedAt
-    || existing.text !== remoteNote.text
-    || existing.occurredAt !== remoteNote.occurredAt
-    || (existing.pinned ?? false) !== (remoteNote.pinned ?? false);
-}
+// parseRemote* and quickNoteNeedsApply moved to clientDomains.ts
 
 async function applyPushResponse(
   response: SyncPushResponse,
@@ -314,55 +267,22 @@ export async function syncPush(): Promise<SyncPushResult> {
       continue;
     }
 
-    if (log.tableName === "categories") {
-      const data = await db.categories.get(log.recordId);
-      if (!data) continue;
-      changes.push({
-        tableName: "categories",
-        recordId: log.recordId,
-        action: log.action,
-        data,
-        timestamp: log.timestamp,
-      });
-      continue;
-    }
-
-    if (log.tableName === "settings") {
-      const data = await db.settings.get(log.recordId);
-      if (!data) continue;
-      changes.push({
-        tableName: "settings",
-        recordId: log.recordId,
-        action: log.action,
-        data,
-        timestamp: log.timestamp,
-      });
-      continue;
-    }
-
-    if (log.tableName === "quick_notes") {
-      const data = await db.quickNotes.get(log.recordId);
-      if (!data) continue;
-      changes.push({
-        tableName: "quick_notes",
-        recordId: log.recordId,
-        action: log.action,
-        data,
-        timestamp: log.timestamp,
-      });
-      continue;
-    }
-
-    const data = await db.timeEntries.get(log.recordId);
+    const domain = CLIENT_SYNC_DOMAINS[log.tableName];
+    if (!domain) continue;
+    const data = await db.table(domain.storeName).get(log.recordId);
     if (!data) continue;
-    changes.push(...categoryDependencyChangesForEntry(data, categoriesById, log.timestamp, includedCategoryIds));
+
+    if (domain.beforePush) {
+      changes.push(...domain.beforePush(data, categoriesById, log.timestamp, includedCategoryIds));
+    }
+
     changes.push({
-      tableName: "time_entries",
+      tableName: log.tableName,
       recordId: log.recordId,
       action: log.action,
       data,
       timestamp: log.timestamp,
-    });
+    } as SyncChange);
   }
 
   if (changes.length === 0) {
@@ -398,8 +318,15 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
   const conflicts: SyncConflict[] = [];
 
   for (const change of response.changes) {
-    if (change.tableName === "categories") {
-      if (change.action === "delete") {
+    const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+    if (!domain) continue;
+    const sharedDomain = getSyncDomain(change.tableName);
+    const store = db.table(domain.storeName);
+
+    if (change.action === "delete") {
+      if (domain.applyRemoteDelete) {
+        // Special delete handling (categories cascade):
+        // check if any related records have pending sync logs
         const impact = await getCategoryDeleteImpact(change.recordId);
         if (!impact) continue;
         const pendingCategoryLog = impact.categoryIds
@@ -411,116 +338,78 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
         const localLog = pendingCategoryLog ?? pendingEntryLog;
         if (localLog) {
           conflicts.push({
-            tableName: "categories",
+            tableName: change.tableName as SyncConflict["tableName"],
             recordId: change.recordId,
-            local: impact.target,
+            local: impact.target as SyncConflict["local"],
             remote: null,
             remoteAction: "delete",
             localLog,
           });
         } else {
-          applied += await applyRemoteCategoryDelete(change.recordId);
+          applied += await domain.applyRemoteDelete(change.recordId);
         }
-      } else if (change.data) {
-        const remoteCategory = parseRemoteCategory(change.data, change.recordId);
-        if (!remoteCategory) continue;
-        const existing = await db.categories.get(change.recordId);
-        if (existing && existing.updatedAt !== remoteCategory.updatedAt) {
-          if (locallyModifiedById.has(`categories:${change.recordId}`)) {
-            const localLog = locallyModifiedById.get(`categories:${change.recordId}`);
-            conflicts.push({
-              tableName: "categories",
-              recordId: change.recordId,
-              local: existing,
-              remote: remoteCategory,
-              remoteAction: "update",
-              localLog,
-            });
-          } else {
-            await db.categories.put(remoteCategory);
-            applied++;
-          }
-        } else if (!existing) {
-          await db.categories.put(remoteCategory);
-          applied++;
-        }
-      }
-    } else if (change.tableName === "settings") {
-      if (change.action === "delete") {
-        const existing = await db.settings.get(change.recordId);
-        if (existing && !locallyModifiedById.has(`settings:${change.recordId}`)) {
-          await db.settings.delete(change.recordId);
-          applied++;
-        }
-      } else if (change.data) {
-        const remoteSetting = parseRemoteSetting(change.data, change.recordId);
-        if (!remoteSetting) continue;
-        if (!locallyModifiedById.has(`settings:${change.recordId}`)) {
-          const existing = await db.settings.get(change.recordId);
-          if (!existing || existing.updatedAt !== remoteSetting.updatedAt || existing.value !== remoteSetting.value) {
-            await db.settings.put(remoteSetting);
-            applied++;
-          }
-        }
-      }
-    } else if (change.tableName === "quick_notes") {
-      if (change.action === "delete") {
-        const existing = await db.quickNotes.get(change.recordId);
-        if (existing && !locallyModifiedById.has(`quick_notes:${change.recordId}`)) {
-          await db.quickNotes.delete(change.recordId);
-          applied++;
-        }
-      } else if (change.data) {
-        const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
-        if (!remoteNote) continue;
-        if (!locallyModifiedById.has(`quick_notes:${change.recordId}`)) {
-          const existing = await db.quickNotes.get(change.recordId);
-          if (quickNoteNeedsApply(existing, remoteNote)) {
-            await db.quickNotes.put(remoteNote);
-            applied++;
-          }
-        }
-      }
-    } else if (change.tableName === "time_entries") {
-      if (change.action === "delete") {
-        const existing = await db.timeEntries.get(change.recordId);
+      } else {
+        const existing = await store.get(change.recordId);
         if (!existing) continue;
-        const localLog = locallyModifiedById.get(`time_entries:${change.recordId}`);
-        if (localLog) {
-          conflicts.push({
-            tableName: "time_entries",
-            recordId: change.recordId,
-            local: existing,
-            remote: null,
-            remoteAction: "delete",
-            localLog,
-          });
-        } else {
-          await db.timeEntries.delete(change.recordId);
-          applied++;
-        }
-      } else if (change.data) {
-        const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
-        if (!remoteEntry) continue;
-        const existing = await db.timeEntries.get(change.recordId);
-        if (existing && existing.updatedAt !== remoteEntry.updatedAt) {
-          if (locallyModifiedById.has(`time_entries:${change.recordId}`)) {
-            const localLog = locallyModifiedById.get(`time_entries:${change.recordId}`);
+        if (sharedDomain.conflictPolicy === "manual") {
+          const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
+          if (localLog) {
             conflicts.push({
-              tableName: "time_entries",
+              tableName: change.tableName as SyncConflict["tableName"],
               recordId: change.recordId,
-              local: existing,
-              remote: remoteEntry,
+              local: existing as SyncConflict["local"],
+              remote: null,
+              remoteAction: "delete",
+              localLog,
+            });
+          } else {
+            await store.delete(change.recordId);
+            applied++;
+          }
+        } else {
+          // lww: skip if local has pending
+          if (!locallyModifiedById.has(`${change.tableName}:${change.recordId}`)) {
+            await store.delete(change.recordId);
+            applied++;
+          }
+        }
+      }
+    } else if (change.data) {
+      const remote = parseRemoteRecord(domain, change.data, change.recordId);
+      if (!remote) continue;
+      const existing = await store.get(change.recordId);
+      const hasPending = locallyModifiedById.has(`${change.tableName}:${change.recordId}`);
+
+      if (sharedDomain.conflictPolicy === "manual") {
+        if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
+          if (hasPending) {
+            const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
+            conflicts.push({
+              tableName: change.tableName as SyncConflict["tableName"],
+              recordId: change.recordId,
+              local: existing as SyncConflict["local"],
+              remote: remote as SyncConflict["remote"],
               remoteAction: "update",
               localLog,
             });
           } else {
-            await db.timeEntries.put(remoteEntry);
+            await store.put(remote);
             applied++;
           }
         } else if (!existing) {
-          await db.timeEntries.put(remoteEntry);
+          await store.put(remote);
           applied++;
+        }
+      } else {
+        // lww: skip if local has pending
+        if (!hasPending) {
+          const shouldApply = domain.needsApply
+            ? domain.needsApply(existing, remote)
+            : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+          if (shouldApply) {
+            await store.put(remote);
+            applied++;
+          }
         }
       }
     }
@@ -533,33 +422,24 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
 export async function syncForceReplace(): Promise<number> {
   const response = await fetchSyncPullResponse({ sinceSeq: 0 }, { timeoutMs: 30000 });
 
-  await db.transaction("rw", [db.categories, db.quickNotes, db.timeEntries, db.syncLog, db.settings], async () => {
-    await db.timeEntries.clear();
-    await db.quickNotes.clear();
-    await db.syncLog.clear();
-    await db.settings.clear();
-    await db.categories.clear();
-
-    for (const change of response.changes) {
-      if (change.tableName === "categories" && change.data) {
-        const remoteCategory = parseRemoteCategory(change.data, change.recordId);
-        if (!remoteCategory) continue;
-        await db.categories.put(remoteCategory);
-      } else if (change.tableName === "time_entries" && change.data) {
-        const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
-        if (!remoteEntry) continue;
-        await db.timeEntries.put(remoteEntry);
-      } else if (change.tableName === "settings" && change.action !== "delete" && change.data) {
-        const remoteSetting = parseRemoteSetting(change.data, change.recordId);
-        if (!remoteSetting) continue;
-        await db.settings.put(remoteSetting);
-      } else if (change.tableName === "quick_notes" && change.action !== "delete" && change.data) {
-        const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
-        if (!remoteNote) continue;
-        await db.quickNotes.put(remoteNote);
+  await db.transaction(
+    "rw",
+    [...Object.values(CLIENT_SYNC_DOMAINS).map((d) => db.table(d.storeName)), db.syncLog],
+    async () => {
+      for (const domain of Object.values(CLIENT_SYNC_DOMAINS)) {
+        await db.table(domain.storeName).clear();
       }
-    }
-  });
+      await db.syncLog.clear();
+
+      for (const change of response.changes) {
+        if (change.action === "delete" || !change.data) continue;
+        const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+        if (!domain) continue;
+        const parsed = parseRemoteRecord(domain, change.data, change.recordId);
+        if (parsed) await db.table(domain.storeName).put(parsed);
+      }
+    },
+  );
 
   advanceSeqCursor(response);
   return response.changes.length;
@@ -823,77 +703,41 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
   let applied = 0;
 
   for (const change of response.changes) {
-    if (change.tableName === "categories") {
-      if (change.action === "delete") {
-        applied += await applyRemoteCategoryDelete(change.recordId);
-      } else if (change.data) {
-        const remoteCategory = parseRemoteCategory(change.data, change.recordId);
-        if (!remoteCategory) continue;
-        const existing = await db.categories.get(change.recordId);
-        if (!existing || existing.updatedAt !== remoteCategory.updatedAt) {
-          await db.categories.put(remoteCategory);
+    const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+    if (!domain) continue;
+    const store = db.table(domain.storeName);
+
+    if (change.action === "delete") {
+      if (domain.applyRemoteDelete) {
+        applied += await domain.applyRemoteDelete(change.recordId);
+      } else {
+        const existing = await store.get(change.recordId);
+        if (existing) {
+          await store.delete(change.recordId);
           applied++;
         }
       }
-    } else if (change.tableName === "settings") {
-      if (change.action === "delete") {
-        const existing = await db.settings.get(change.recordId);
-        if (existing) {
-          await db.settings.delete(change.recordId);
-          applied++;
-        }
-      } else if (change.data) {
-        const remoteSetting = parseRemoteSetting(change.data, change.recordId);
-        if (!remoteSetting) continue;
-        const existing = await db.settings.get(change.recordId);
-        if (!existing || existing.updatedAt !== remoteSetting.updatedAt || existing.value !== remoteSetting.value) {
-          await db.settings.put(remoteSetting);
-          applied++;
-        }
+    } else if (change.data) {
+      const remote = parseRemoteRecord(domain, change.data, change.recordId);
+      if (!remote) continue;
+      const existing = await store.get(change.recordId);
+
+      if (mode === "repair" && existing && domain.shouldSkipOnRepair?.(existing, remote)) {
+        continue;
       }
-    } else if (change.tableName === "quick_notes") {
-      if (change.action === "delete") {
-        const existing = await db.quickNotes.get(change.recordId);
-        if (existing) {
-          await db.quickNotes.delete(change.recordId);
-          applied++;
-        }
-      } else if (change.data) {
-        const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
-        if (!remoteNote) continue;
-        const existing = await db.quickNotes.get(change.recordId);
-        if (quickNoteNeedsApply(existing, remoteNote)) {
-          await db.quickNotes.put(remoteNote);
-          applied++;
-        }
-      }
-    } else if (change.tableName === "time_entries") {
-      if (change.action === "delete") {
-        const existing = await db.timeEntries.get(change.recordId);
-        if (existing) {
-          await db.timeEntries.delete(change.recordId);
-          applied++;
-        }
-      } else if (change.data) {
-        const remoteEntry = parseRemoteTimeEntry(change.data, change.recordId);
-        if (!remoteEntry) continue;
-        const existing = await db.timeEntries.get(change.recordId);
-        if (mode === "repair" && existing && isCompleteEntry(existing) && existing.updatedAt >= remoteEntry.updatedAt) {
-          // skip — local is complete and newer
-        } else if (!existing || existing.updatedAt !== remoteEntry.updatedAt) {
-          await db.timeEntries.put(remoteEntry);
-          applied++;
-        }
+
+      const shouldApply = domain.needsApply
+        ? domain.needsApply(existing, remote)
+        : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+      if (shouldApply) {
+        await store.put(remote);
+        applied++;
       }
     }
   }
 
   advanceSeqCursor(response);
   return applied;
-}
-
-function isCompleteEntry(entry: TimeEntry): boolean {
-  return Boolean(entry.categoryId && entry.startTime && entry.endTime);
 }
 
 export async function recordSyncLog(

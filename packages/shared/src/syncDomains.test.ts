@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 import { SYNC_DOMAINS, SYNC_TABLE_NAMES, getSyncDomain } from "./syncDomains.js";
 
 describe("sync domain registry", () => {
-  it("registers the four core domains in order priority", () => {
-    expect(SYNC_TABLE_NAMES).toEqual(["categories", "time_entries", "settings", "quick_notes"]);
+  it("registers the domains in order priority", () => {
+    expect(SYNC_TABLE_NAMES).toEqual([
+      "categories",
+      "time_entries",
+      "settings",
+      "quick_notes",
+      "health_heart_rate",
+      "health_hrv",
+      "health_sleep",
+      "health_stress",
+      "runs",
+    ]);
   });
 
   it("declares conflict policy per domain", () => {

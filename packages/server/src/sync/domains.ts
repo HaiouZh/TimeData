@@ -1,4 +1,5 @@
 import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, TimeEntry } from "@timedata/shared";
+
 import type { Database } from "better-sqlite3";
 import {
   type CategoryRow,
@@ -10,6 +11,14 @@ import {
   rowToQuickNote,
   rowToSetting,
 } from "../lib/db-rows.js";
+import {
+  type HealthHeartRateRow, type HealthHrvRow, type HealthSleepRow,
+  type HealthStressRow, type HealthRunRow,
+  rowToHealthHeartRate, rowToHealthHrv, rowToHealthSleep,
+  rowToHealthStress, rowToHealthRun,
+  healthHeartRateToRow, healthHrvToRow, healthSleepToRow,
+  healthStressToRow, healthRunToRow,
+} from "../lib/healthRows.js";
 import { recordSeq } from "./seq.js";
 
 export interface ApplyChangeResult {
@@ -345,6 +354,21 @@ function readQuickNoteRecord(db: Database, recordId: string): SyncChange | null 
   return row ? updateChange("quick_notes", row.id, rowToQuickNote(row), row.updated_at) : null;
 }
 
+function simpleLwwDomain<Row extends { id: string; updated_at: string }>(
+  table: string,
+  toRow: (data: unknown) => Record<string, string | number | null>,
+  rowToData: (row: Row) => unknown,
+): ServerDomainHooks {
+  return {
+    lww: { idColumn: "id", toRow },
+    readRecord: (db: Database, recordId: string): SyncChange | null => {
+      const row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(recordId) as Row | undefined;
+      if (!row) return null;
+      return updateChange(table as SyncChange["tableName"], row.id, rowToData(row), row.updated_at);
+    },
+  };
+}
+
 export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   categories: { validate: validateCategoryChange, apply: applyCategoryChange, readRecord: readCategoryRecord },
   time_entries: {
@@ -355,6 +379,11 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   },
   settings: { lww: { idColumn: "key", toRow: settingToRow }, readRecord: readSettingRecord },
   quick_notes: { lww: { idColumn: "id", toRow: quickNoteToRow }, readRecord: readQuickNoteRecord },
+  health_heart_rate: simpleLwwDomain<HealthHeartRateRow>("health_heart_rate", healthHeartRateToRow, rowToHealthHeartRate),
+  health_hrv: simpleLwwDomain<HealthHrvRow>("health_hrv", healthHrvToRow, rowToHealthHrv),
+  health_sleep: simpleLwwDomain<HealthSleepRow>("health_sleep", healthSleepToRow, rowToHealthSleep),
+  health_stress: simpleLwwDomain<HealthStressRow>("health_stress", healthStressToRow, rowToHealthStress),
+  runs: simpleLwwDomain<HealthRunRow>("runs", healthRunToRow, rowToHealthRun),
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

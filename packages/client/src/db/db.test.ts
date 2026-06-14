@@ -13,7 +13,7 @@ describe("Dexie database", () => {
     await db.open();
     await seedDefaultCategories();
 
-    expect(db.verno).toBe(3);
+    expect(db.verno).toBe(4);
     expect(await db.categories.count()).toBeGreaterThan(0);
     expect(await db.timeEntries.count()).toBe(0);
     expect(await db.settings.count()).toBe(0);
