@@ -17,6 +17,7 @@ import entriesRoute from "./routes/entries.js";
 import exportRoute from "./routes/export.js";
 import quickNotesRoute from "./routes/quick-notes.js";
 import syncRoute from "./routes/sync.js";
+import tasksRoute from "./routes/tasks.js";
 import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
@@ -96,6 +97,7 @@ app.use("/api/admin/*", rateLimit({ windowMs: RATE_WINDOW_MS, max: ADMIN_RATE_MA
 app.route("/api/categories", categoriesRoute);
 app.route("/api/entries", entriesRoute);
 app.route("/api/quick-notes", quickNotesRoute);
+app.route("/api/tasks", tasksRoute);
 app.route("/api/sync", syncRoute);
 app.route("/api/export", exportRoute);
 app.route("/api/update", updateRoute);
