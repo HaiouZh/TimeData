@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Category, QuickNote, Setting, TimeEntry, SyncLogEntry } from "@timedata/shared";
+import type { Category, QuickNote, Setting, SyncLogEntry, Task, TimeEntry } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { safeGetItem, safeRemoveItem } from "../lib/safeStorage.js";
@@ -25,6 +25,7 @@ export const db = new Dexie("timedata") as Dexie & {
   categories: EntityTable<Category, "id">;
   quickNotes: EntityTable<QuickNote, "id">;
   timeEntries: EntityTable<TimeEntry, "id">;
+  tasks: EntityTable<Task, "id">;
   syncLog: EntityTable<SyncLogEntry, "id">;
   autoBackups: EntityTable<AutoBackupRecord, "id">;
   settings: EntityTable<Setting, "key">;
@@ -49,6 +50,16 @@ db.version(3).stores({
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+  settings: "key",
+});
+
+db.version(4).stores({
+  categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
+  timeEntries: "id, categoryId, startTime, endTime",
+  tasks: "id, sortOrder, updatedAt",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
   autoBackups: "id, createdAt",
   settings: "key",
@@ -83,9 +94,10 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {
-  await db.transaction("rw", db.categories, db.timeEntries, db.syncLog, db.settings, async () => {
+  await db.transaction("rw", db.categories, db.timeEntries, db.tasks, db.syncLog, db.settings, async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
+    await db.tasks.clear();
     await db.syncLog.bulkDelete(nonQuickNoteLogs.map((log) => log.id));
     await db.settings.clear();
     await db.categories.clear();

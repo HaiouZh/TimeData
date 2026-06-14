@@ -10,6 +10,7 @@ import {
   SettingSchema,
   SyncPullResponseSchema,
   SYNC_DIAGNOSTIC_FAILURE_THRESHOLD,
+  TaskSchema,
   TimeEntrySchema,
 } from "@timedata/shared";
 import type {
@@ -23,6 +24,7 @@ import type {
   Category,
   QuickNote,
   Setting,
+  Task,
   TimeEntry,
   SyncLogEntry,
   SyncPushOutcome,
@@ -219,12 +221,30 @@ function parseRemoteQuickNote(data: unknown, recordId: string): QuickNote | null
   return null;
 }
 
+function parseRemoteTask(data: unknown, recordId: string): Task | null {
+  const parsed = TaskSchema.safeParse(data);
+  if (parsed.success) return parsed.data;
+  console.warn(`[sync] dropping invalid task payload for ${recordId}:`, parsed.error.issues);
+  return null;
+}
+
 function quickNoteNeedsApply(existing: QuickNote | undefined, remoteNote: QuickNote): boolean {
   return !existing
     || existing.updatedAt !== remoteNote.updatedAt
     || existing.text !== remoteNote.text
     || existing.occurredAt !== remoteNote.occurredAt
     || (existing.pinned ?? false) !== (remoteNote.pinned ?? false);
+}
+
+function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
+  return !existing
+    || existing.updatedAt !== remoteTask.updatedAt
+    || existing.title !== remoteTask.title
+    || existing.done !== remoteTask.done
+    || JSON.stringify(existing.recurrence) !== JSON.stringify(remoteTask.recurrence)
+    || existing.lastDoneAt !== remoteTask.lastDoneAt
+    || existing.startAt !== remoteTask.startAt
+    || existing.sortOrder !== remoteTask.sortOrder;
 }
 
 async function applyPushResponse(
@@ -345,6 +365,19 @@ export async function syncPush(): Promise<SyncPushResult> {
       if (!data) continue;
       changes.push({
         tableName: "quick_notes",
+        recordId: log.recordId,
+        action: log.action,
+        data,
+        timestamp: log.timestamp,
+      });
+      continue;
+    }
+
+    if (log.tableName === "tasks") {
+      const data = await db.tasks.get(log.recordId);
+      if (!data) continue;
+      changes.push({
+        tableName: "tasks",
         recordId: log.recordId,
         action: log.action,
         data,
@@ -481,6 +514,24 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
           }
         }
       }
+    } else if (change.tableName === "tasks") {
+      if (change.action === "delete") {
+        const existing = await db.tasks.get(change.recordId);
+        if (existing && !locallyModifiedById.has(`tasks:${change.recordId}`)) {
+          await db.tasks.delete(change.recordId);
+          applied++;
+        }
+      } else if (change.data) {
+        const remoteTask = parseRemoteTask(change.data, change.recordId);
+        if (!remoteTask) continue;
+        if (!locallyModifiedById.has(`tasks:${change.recordId}`)) {
+          const existing = await db.tasks.get(change.recordId);
+          if (taskNeedsApply(existing, remoteTask)) {
+            await db.tasks.put(remoteTask);
+            applied++;
+          }
+        }
+      }
     } else if (change.tableName === "time_entries") {
       if (change.action === "delete") {
         const existing = await db.timeEntries.get(change.recordId);
@@ -533,9 +584,10 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
 export async function syncForceReplace(): Promise<number> {
   const response = await fetchSyncPullResponse({ sinceSeq: 0 }, { timeoutMs: 30000 });
 
-  await db.transaction("rw", [db.categories, db.quickNotes, db.timeEntries, db.syncLog, db.settings], async () => {
+  await db.transaction("rw", [db.categories, db.quickNotes, db.timeEntries, db.tasks, db.syncLog, db.settings], async () => {
     await db.timeEntries.clear();
     await db.quickNotes.clear();
+    await db.tasks.clear();
     await db.syncLog.clear();
     await db.settings.clear();
     await db.categories.clear();
@@ -557,6 +609,10 @@ export async function syncForceReplace(): Promise<number> {
         const remoteNote = parseRemoteQuickNote(change.data, change.recordId);
         if (!remoteNote) continue;
         await db.quickNotes.put(remoteNote);
+      } else if (change.tableName === "tasks" && change.action !== "delete" && change.data) {
+        const remoteTask = parseRemoteTask(change.data, change.recordId);
+        if (!remoteTask) continue;
+        await db.tasks.put(remoteTask);
       }
     }
   });
@@ -864,6 +920,22 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
         const existing = await db.quickNotes.get(change.recordId);
         if (quickNoteNeedsApply(existing, remoteNote)) {
           await db.quickNotes.put(remoteNote);
+          applied++;
+        }
+      }
+    } else if (change.tableName === "tasks") {
+      if (change.action === "delete") {
+        const existing = await db.tasks.get(change.recordId);
+        if (existing) {
+          await db.tasks.delete(change.recordId);
+          applied++;
+        }
+      } else if (change.data) {
+        const remoteTask = parseRemoteTask(change.data, change.recordId);
+        if (!remoteTask) continue;
+        const existing = await db.tasks.get(change.recordId);
+        if (taskNeedsApply(existing, remoteTask)) {
+          await db.tasks.put(remoteTask);
           applied++;
         }
       }

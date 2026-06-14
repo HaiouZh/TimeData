@@ -55,18 +55,39 @@ describe("resetSyncCursors", () => {
 });
 
 describe("Dexie database", () => {
-  it("creates v3 schema and seeds default categories on a fresh open", async () => {
+  it("creates v4 schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(3);
+    expect(db.verno).toBe(4);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
     expect(db.quickNotes.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.tasks.schema.primKey.keyPath).toBe("id");
+    expect(db.tasks.schema.idxByName.sortOrder).toBeDefined();
+    expect(db.tasks.schema.idxByName.updatedAt).toBeDefined();
+  });
+
+  it("exposes a tasks table keyed by id", async () => {
+    await db.open();
+
+    await db.tasks.put({
+      id: "t1",
+      title: "x",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+
+    await expect(db.tasks.get("t1")).resolves.toMatchObject({ title: "x" });
   });
 
   it("migrates legacy sleep category setting to synced settings once", async () => {
@@ -84,6 +105,17 @@ describe("Dexie database", () => {
 
   it("resets core data without deleting quick notes or their pending sync logs", async () => {
     await db.open();
+    await db.tasks.add({
+      id: "task-1",
+      title: "x",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      sortOrder: 0,
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    });
     await db.quickNotes.add({
       id: "note-1",
       text: "repo",
@@ -101,6 +133,14 @@ describe("Dexie database", () => {
         synced: 0,
       },
       {
+        id: "task-log-1",
+        tableName: "tasks",
+        recordId: "task-1",
+        action: "create",
+        timestamp: "2026-06-01T04:02:00.000Z",
+        synced: 0,
+      },
+      {
         id: "entry-log-1",
         tableName: "time_entries",
         recordId: "entry-1",
@@ -113,6 +153,7 @@ describe("Dexie database", () => {
     await resetLocalDataToDefaults();
 
     await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "repo" });
+    await expect(db.tasks.get("task-1")).resolves.toBeUndefined();
     await expect(db.syncLog.toArray()).resolves.toMatchObject([
       { id: "note-log-1", tableName: "quick_notes", recordId: "note-1" },
     ]);
