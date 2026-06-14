@@ -19,13 +19,38 @@ function lastScheduledDay(r: Recurrence, startAt: Date, now: Date): number | nul
     const k = Math.floor((nowDay - startDay) / r.interval);
     return startDay + k * r.interval;
   }
+  if (r.freq === "weekly") {
+    const days = r.byWeekday ?? [];
+    const startWeek = localWeekIndex(startDay);
+    const weekOk = (localWeekIndex(nowDay) - startWeek) % r.interval === 0;
+    if (weekOk && days.includes(localWeekday(nowDay))) return nowDay;
+    return null;
+  }
   return null;
+}
+
+/** ISO 周几：周一=1 … 周日=7（基于当地日序号）。 */
+function localWeekday(dayIndex: number): number {
+  return ((dayIndex % 7) + 7 + 3) % 7 + 1;
+}
+/** 当地"周序号"（以周一为周首，基于日序号）。 */
+function localWeekIndex(dayIndex: number): number {
+  return Math.floor((dayIndex - (localWeekday(dayIndex) - 1)) / 7);
 }
 
 /** 给定 after（completion 基准用），求严格晚于它的下一发生日序号。 */
 function nextScheduledDayAfter(r: Recurrence, startAt: Date, after: Date): number {
   const afterDay = localDayIndex(after);
   if (r.freq === "daily") return afterDay + r.interval;
+  if (r.freq === "weekly") {
+    const days = r.byWeekday ?? [];
+    const startWeek = localWeekIndex(localDayIndex(startAt));
+    for (let d = afterDay + 1; d < afterDay + 1 + 7 * r.interval + 7; d++) {
+      const weekOk = (localWeekIndex(d) - startWeek) % r.interval === 0;
+      if (weekOk && days.includes(localWeekday(d))) return d;
+    }
+    return afterDay + 7 * r.interval;
+  }
   return afterDay + 1;
 }
 
