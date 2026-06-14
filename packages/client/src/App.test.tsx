@@ -29,6 +29,10 @@ vi.mock("./pages/StatsPage.tsx", () => ({
   default: () => createElement("div", null, "统计页面"),
 }));
 
+vi.mock("./pages/TodoPage.tsx", () => ({
+  TodoPage: () => createElement("div", null, "待办页面"),
+}));
+
 vi.mock("./pages/settings/SettingsCategoriesPage.tsx", () => ({
   default: () => createElement("div", null, "分类列表页"),
 }));
@@ -112,7 +116,15 @@ describe("AppShell settings routes", () => {
     expect(html).toContain("速记页面");
     expect(html).toContain("记录");
     expect(html).toContain("时间轴");
+    expect(html).toContain("待办");
     expect(html).toContain("统计");
     expect(html).toContain("设置");
+  });
+
+  it("renders todo route and bottom navigation entry", () => {
+    const html = renderAppShell("/todo");
+
+    expect(html).toContain("待办页面");
+    expect(html).toContain("待办");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isDueNow } from "./recurrence.js";
+import { isDueNow, recurrenceSummary, weekOfOrigin } from "./recurrence.js";
 import type { Recurrence } from "@timedata/shared";
 
 const daily = (over: Partial<Recurrence> = {}): Recurrence => ({ freq: "daily", interval: 1, basis: "due", ...over });
@@ -100,5 +100,17 @@ describe("isDueNow before start", () => {
     const start = "2026-06-01T00:00:00.000Z";
     expect(isDueNow({ freq: "daily", interval: 1, basis: "due" }, null, start, new Date("2026-05-20T12:00:00.000Z"))).toBe(false);
     expect(isDueNow({ freq: "weekly", interval: 1, byWeekday: [1], basis: "due" }, null, start, new Date("2026-05-20T12:00:00.000Z"))).toBe(false);
+  });
+});
+
+describe("recurrence display helpers", () => {
+  it("summarizes recurrence rules", () => {
+    expect(recurrenceSummary({ freq: "daily", interval: 2, basis: "due", time: "06:30" })).toBe("每2天 06:30");
+    expect(recurrenceSummary({ freq: "weekly", interval: 1, byWeekday: [1, 3], basis: "due" })).toBe("每周周一周三");
+    expect(recurrenceSummary({ freq: "monthly", interval: 1, byMonthday: [1, -1], basis: "due" })).toBe("每月1号、最后一天");
+  });
+
+  it("derives ISO week labels", () => {
+    expect(weekOfOrigin("2026-06-14T00:00:00.000Z")).toBe("w24");
   });
 });

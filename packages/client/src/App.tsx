@@ -11,6 +11,7 @@ import EntryPage from "./pages/EntryPage.tsx";
 import QuickNotesPage from "./pages/QuickNotesPage.tsx";
 import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
+import { TodoPage } from "./pages/TodoPage.tsx";
 import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
 import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "./pages/settings/SettingsCategoriesPage.tsx";
@@ -37,6 +38,7 @@ export function AppShell() {
         <Routes>
           <Route path="/" element={<TimelinePage refreshKey={resumeRefreshKey} />} />
           <Route path="/quick-notes" element={<QuickNotesPage />} />
+          <Route path="/todo" element={<TodoPage />} />
           <Route path="/entries/new" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/entries/:id/edit" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/stats" element={<StatsPage />} />
@@ -61,6 +63,7 @@ export function AppShell() {
           {[
             { to: "/quick-notes", label: "记录" },
             { to: "/", label: "时间轴" },
+            { to: "/todo", label: "待办" },
             { to: "/stats", label: "统计" },
             { to: "/settings", label: "设置" },
           ].map((item) => (

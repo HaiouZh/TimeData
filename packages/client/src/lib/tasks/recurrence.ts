@@ -116,3 +116,27 @@ export function isDueNow(
   if (!lastDoneAt) return true;
   return localDayIndex(toDate(lastDoneAt)) < last;
 }
+
+export function recurrenceSummary(r: Recurrence): string {
+  const time = r.time ? ` ${r.time}` : "";
+  if (r.freq === "daily") return `${r.interval === 1 ? "每天" : `每${r.interval}天`}${time}`;
+  if (r.freq === "weekly") {
+    const labels = ["一", "二", "三", "四", "五", "六", "日"];
+    const days = (r.byWeekday ?? []).map((day) => `周${labels[day - 1]}`).join("");
+    return `${r.interval === 1 ? "每周" : `每${r.interval}周`}${days}${time}`;
+  }
+  const monthdays = (r.byMonthday ?? [])
+    .map((day) => (day === -1 ? "最后一天" : `${day}号`))
+    .join("、");
+  return `${r.interval === 1 ? "每月" : `每${r.interval}月`}${monthdays}${time}`;
+}
+
+export function weekOfOrigin(createdAtIso: string): string {
+  const date = new Date(createdAtIso);
+  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = local.getDay() || 7;
+  local.setDate(local.getDate() + 4 - day);
+  const yearStart = new Date(local.getFullYear(), 0, 1);
+  const week = Math.ceil(((local.getTime() - yearStart.getTime()) / DAY_MS + 1) / 7);
+  return `w${week}`;
+}
