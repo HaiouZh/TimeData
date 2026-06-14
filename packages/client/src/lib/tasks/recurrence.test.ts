@@ -38,3 +38,30 @@ describe("isDueNow weekly", () => {
     expect(isDueNow(r, null, start, new Date("2026-06-15T00:00:00.000Z"))).toBe(true);
   });
 });
+
+describe("isDueNow monthly", () => {
+  const start = "2026-01-01T00:00:00.000Z";
+  it("due on configured day-of-month", () => {
+    const r: Recurrence = { freq: "monthly", interval: 1, byMonthday: [15], basis: "due" };
+    expect(isDueNow(r, null, start, new Date("2026-03-15T00:00:00.000Z"))).toBe(true);
+    expect(isDueNow(r, "2026-03-15T00:00:00.000Z", start, new Date("2026-03-16T00:00:00.000Z"))).toBe(false);
+  });
+  it("-1 resolves to last day of month (Feb leap year = 29)", () => {
+    const r: Recurrence = { freq: "monthly", interval: 1, byMonthday: [-1], basis: "due" };
+    expect(isDueNow(r, null, start, new Date("2028-02-29T00:00:00.000Z"))).toBe(true);
+    expect(isDueNow(r, null, start, new Date("2026-02-28T00:00:00.000Z"))).toBe(true);
+  });
+  it("skips months without the configured day (31)", () => {
+    const r: Recurrence = { freq: "monthly", interval: 1, byMonthday: [31], basis: "due" };
+    expect(isDueNow(r, null, start, new Date("2026-04-30T00:00:00.000Z"))).toBe(false);
+    expect(isDueNow(r, null, start, new Date("2026-05-31T00:00:00.000Z"))).toBe(true);
+  });
+});
+
+describe("isDueNow completion basis", () => {
+  it("next from last done, not calendar", () => {
+    const r: Recurrence = { freq: "daily", interval: 3, basis: "completion" };
+    expect(isDueNow(r, "2026-06-06T00:00:00.000Z", "2026-06-01T00:00:00.000Z", new Date("2026-06-08T00:00:00.000Z"))).toBe(false);
+    expect(isDueNow(r, "2026-06-06T00:00:00.000Z", "2026-06-01T00:00:00.000Z", new Date("2026-06-09T00:00:00.000Z"))).toBe(true);
+  });
+});

@@ -26,6 +26,14 @@ function lastScheduledDay(r: Recurrence, startAt: Date, now: Date): number | nul
     if (weekOk && days.includes(localWeekday(nowDay))) return nowDay;
     return null;
   }
+  if (r.freq === "monthly") {
+    const s = dayToLocalYmd(startDay);
+    const startMonth = monthIndex(s.y, s.m);
+    const ymd = dayToLocalYmd(nowDay);
+    if ((monthIndex(ymd.y, ymd.m) - startMonth) % r.interval !== 0) return null;
+    if (monthlyHitDays(ymd.y, ymd.m, r.byMonthday ?? []).includes(nowDay)) return nowDay;
+    return null;
+  }
   return null;
 }
 
@@ -36,6 +44,28 @@ function localWeekday(dayIndex: number): number {
 /** 当地"周序号"（以周一为周首，基于日序号）。 */
 function localWeekIndex(dayIndex: number): number {
   return Math.floor((dayIndex - (localWeekday(dayIndex) - 1)) / 7);
+}
+
+function dayToLocalYmd(dayIndex: number): { y: number; m: number; d: number } {
+  const ms = dayIndex * DAY_MS + new Date(dayIndex * DAY_MS).getTimezoneOffset() * 60_000;
+  const dt = new Date(ms);
+  return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
+}
+function lastDayOfMonth(y: number, m: number): number {
+  return new Date(y, m, 0).getDate();
+}
+/** 该年月里 byMonthday 命中的当地日序号集合（-1=月末；不存在的号跳过）。 */
+function monthlyHitDays(y: number, m: number, byMonthday: number[]): number[] {
+  const last = lastDayOfMonth(y, m);
+  const out: number[] = [];
+  for (const md of byMonthday) {
+    const day = md === -1 ? last : md;
+    if (day >= 1 && day <= last) out.push(localDayIndex(new Date(y, m - 1, day, 12)));
+  }
+  return out;
+}
+function monthIndex(y: number, m: number): number {
+  return y * 12 + (m - 1);
 }
 
 /** 给定 after（completion 基准用），求严格晚于它的下一发生日序号。 */
@@ -50,6 +80,15 @@ function nextScheduledDayAfter(r: Recurrence, startAt: Date, after: Date): numbe
       if (weekOk && days.includes(localWeekday(d))) return d;
     }
     return afterDay + 7 * r.interval;
+  }
+  if (r.freq === "monthly") {
+    const s = dayToLocalYmd(localDayIndex(startAt));
+    for (let d = afterDay + 1; d < afterDay + 1 + 400; d++) {
+      const ymd = dayToLocalYmd(d);
+      if ((monthIndex(ymd.y, ymd.m) - monthIndex(s.y, s.m)) % r.interval !== 0) continue;
+      if (monthlyHitDays(ymd.y, ymd.m, r.byMonthday ?? []).includes(d)) return d;
+    }
+    return afterDay + 30;
   }
   return afterDay + 1;
 }
