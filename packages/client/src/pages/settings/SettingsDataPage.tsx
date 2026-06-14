@@ -137,7 +137,7 @@ export default function SettingsDataPage() {
       setForcePushPhrase("");
       setForcePushConfirmation(false);
       setDataStatus(
-        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录，${result.importedQuickNotes} 条速记。服务器备份：${result.backupId}。`,
+        `已覆盖服务器：${result.importedCategories} 个分类，${result.importedTimeEntries} 条记录，${result.importedQuickNotes} 条速记，${result.importedTasks} 个任务。服务器备份：${result.backupId}。`,
       );
     }
   }

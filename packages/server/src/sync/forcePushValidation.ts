@@ -1,4 +1,4 @@
-import type { Category, QuickNote, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Task, TimeEntry } from "@timedata/shared";
 
 /**
  * 跨记录业务关系层校验。
@@ -9,6 +9,7 @@ export function validateForcePushBusinessRules(
   categories: Category[],
   timeEntries: TimeEntry[],
   quickNotes: QuickNote[] = [],
+  tasks: Task[] = [],
 ): string | null {
   const categoryIds = new Set<string>();
   const categoriesById = new Map<string, Category>();
@@ -38,6 +39,12 @@ export function validateForcePushBusinessRules(
   for (const note of quickNotes) {
     if (quickNoteIds.has(note.id)) return `duplicate quick note ${note.id}`;
     quickNoteIds.add(note.id);
+  }
+
+  const taskIds = new Set<string>();
+  for (const task of tasks) {
+    if (taskIds.has(task.id)) return `duplicate task ${task.id}`;
+    taskIds.add(task.id);
   }
 
   const sorted = [...timeEntries].sort((a, b) => a.startTime.localeCompare(b.startTime));

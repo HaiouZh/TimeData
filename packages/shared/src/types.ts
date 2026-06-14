@@ -119,6 +119,7 @@ export interface SyncForcePushResponse {
   importedTimeEntries: number;
   importedSettings?: number;
   importedQuickNotes: number;
+  importedTasks: number;
   backupId: string;
   serverTime: string;
   latestSeq?: number | null;

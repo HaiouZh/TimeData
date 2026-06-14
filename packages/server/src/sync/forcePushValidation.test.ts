@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateForcePushBusinessRules } from "./forcePushValidation.js";
-import type { Category, QuickNote, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Task, TimeEntry } from "@timedata/shared";
 
 const baseCategory = (overrides: Partial<Category>): Category => ({
   id: "c1", name: "X", parentId: null, color: "#ffffff", icon: null,
@@ -21,6 +21,19 @@ const baseQuickNote = (overrides: Partial<QuickNote>): QuickNote => ({
   occurredAt: "2026-06-01T04:01:30.123Z",
   createdAt: "2026-06-01T04:02:00.000Z",
   updatedAt: "2026-06-01T04:02:00.000Z",
+  ...overrides,
+});
+
+const baseTask = (overrides: Partial<Task>): Task => ({
+  id: "task-1",
+  title: "跑步",
+  done: false,
+  recurrence: null,
+  lastDoneAt: null,
+  startAt: null,
+  sortOrder: 0,
+  createdAt: "2026-06-14T00:00:00.000Z",
+  updatedAt: "2026-06-14T00:00:00.000Z",
   ...overrides,
 });
 
@@ -100,6 +113,16 @@ describe("validateForcePushBusinessRules", () => {
 
   it("accepts quick notes independently from category validation", () => {
     const result = validateForcePushBusinessRules([], [], [baseQuickNote({})]);
+    expect(result).toBeNull();
+  });
+
+  it("rejects duplicate task id", () => {
+    const result = validateForcePushBusinessRules([], [], [], [baseTask({}), baseTask({})]);
+    expect(result).toMatch(/duplicate task/);
+  });
+
+  it("accepts tasks independently from category validation", () => {
+    const result = validateForcePushBusinessRules([], [], [], [baseTask({})]);
     expect(result).toBeNull();
   });
 

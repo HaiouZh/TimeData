@@ -4,6 +4,7 @@ import {
   NonNegativeIntSchema,
   QuickNoteSchema,
   SettingSchema,
+  TaskSchema,
   TimeEntrySchema,
   UtcIsoStringSchema,
 } from "./entitySchemas.js";
@@ -63,6 +64,7 @@ export const SyncForcePushRequestSchema = z.object({
   timeEntries: z.array(TimeEntrySchema),
   settings: z.array(SettingSchema).optional(),
   quickNotes: z.array(QuickNoteSchema).default([]),
+  tasks: z.array(TaskSchema).default([]),
 });
 
 export const SyncStatusResponseSchema = z.object({

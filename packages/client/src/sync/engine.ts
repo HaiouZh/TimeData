@@ -632,7 +632,12 @@ function latestTimestamp(values: Array<string | null | undefined>): string | nul
   return values.filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
 }
 
-export async function localContentHash(categories: Category[], timeEntries: TimeEntry[], quickNotes: QuickNote[]): Promise<string> {
+export async function localContentHash(
+  categories: Category[],
+  timeEntries: TimeEntry[],
+  quickNotes: QuickNote[],
+  tasks: Task[] = [],
+): Promise<string> {
   const payload = JSON.stringify({
     categories: [...categories].sort((a, b) => a.id.localeCompare(b.id)),
     timeEntries: [...timeEntries].sort((a, b) => a.id.localeCompare(b.id)),
@@ -647,6 +652,7 @@ export async function localContentHash(categories: Category[], timeEntries: Time
         updatedAt: note.updatedAt,
         pinned: note.pinned === true,
       })),
+    tasks: [...tasks].sort((a, b) => a.id.localeCompare(b.id)),
   });
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -656,8 +662,9 @@ async function getLocalStatus(): Promise<SyncHealthReport["local"]> {
   const categories = await db.categories.toArray();
   const timeEntries = await db.timeEntries.toArray();
   const quickNotes = await db.quickNotes.toArray();
+  const tasks = await db.tasks.toArray();
   const unsyncedCount = await db.syncLog.filter((entry) => !entry.synced).count();
-  const contentHash = await localContentHash(categories, timeEntries, quickNotes);
+  const contentHash = await localContentHash(categories, timeEntries, quickNotes, tasks);
   return {
     categoryCount: categories.length,
     entryCount: timeEntries.length,
@@ -666,6 +673,7 @@ async function getLocalStatus(): Promise<SyncHealthReport["local"]> {
       ...categories.map((item) => item.updatedAt),
       ...timeEntries.map((item) => item.updatedAt),
       ...quickNotes.map((item) => item.updatedAt),
+      ...tasks.map((item) => item.updatedAt),
     ]),
     contentHash,
     unsyncedCount,
@@ -718,11 +726,12 @@ export async function prepareForcePush(): Promise<SyncForcePushPrepareResponse> 
 }
 
 export async function syncForcePushToServer(confirmToken: string, confirmationPhrase: "OVERWRITE_SERVER"): Promise<SyncForcePushResponse> {
-  const [categories, timeEntries, settings, quickNotes] = await Promise.all([
+  const [categories, timeEntries, settings, quickNotes, tasks] = await Promise.all([
     db.categories.toArray(),
     db.timeEntries.toArray(),
     db.settings.toArray(),
     db.quickNotes.toArray(),
+    db.tasks.toArray(),
   ]);
 
   const response = await apiFetch<SyncForcePushResponse>("/api/sync/force-push", {
@@ -734,6 +743,7 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
       timeEntries,
       settings,
       quickNotes,
+      tasks,
     }),
   });
 

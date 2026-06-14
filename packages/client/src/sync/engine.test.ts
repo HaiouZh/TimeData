@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { QuickNote, SyncLogEntry } from "@timedata/shared";
+import type { QuickNote, SyncLogEntry, Task } from "@timedata/shared";
 import { db } from "../db/index.js";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -111,6 +111,17 @@ describe("localContentHash", () => {
     createdAt: "2026-06-03T00:00:00.000Z",
     updatedAt: "2026-06-03T00:00:00.000Z",
   };
+  const task: Task = {
+    id: "task-1",
+    title: "跑步",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    sortOrder: 0,
+    createdAt: "2026-06-03T00:00:00.000Z",
+    updatedAt: "2026-06-03T00:00:00.000Z",
+  };
 
   it("ignores quick note source metadata", async () => {
     const withoutSource = await localContentHash([], [], [quickNote]);
@@ -124,6 +135,13 @@ describe("localContentHash", () => {
     const pinned = await localContentHash([], [], [{ ...quickNote, pinned: true }]);
 
     expect(pinned).not.toBe(unpinned);
+  });
+
+  it("includes task content", async () => {
+    const withoutTask = await localContentHash([], [], []);
+    const withTask = await localContentHash([], [], [], [task]);
+
+    expect(withTask).not.toBe(withoutTask);
   });
 });
 
@@ -205,6 +223,7 @@ describe("getSyncHealth", () => {
         updatedAt: "2026-05-08T11:00:00",
       }],
       quickNotes: [],
+      tasks: [],
     });
     const localDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(localPayload));
     const localHash = [...new Uint8Array(localDigest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -258,6 +277,17 @@ describe("syncForcePushToServer", () => {
       createdAt: "2026-05-08T08:40:00.000Z",
       updatedAt: "2026-05-08T08:40:00.000Z",
     });
+    await db.tasks.add({
+      id: "task-1",
+      title: "跑步",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      lastDoneAt: null,
+      startAt: "2026-05-08T08:45:00.000Z",
+      sortOrder: 0,
+      createdAt: "2026-05-08T08:45:00.000Z",
+      updatedAt: "2026-05-08T08:45:00.000Z",
+    });
 
     apiFetchMock
       .mockResolvedValueOnce({
@@ -270,6 +300,7 @@ describe("syncForcePushToServer", () => {
         importedCategories: 1,
         importedTimeEntries: 1,
         importedQuickNotes: 1,
+        importedTasks: 1,
         backupId: "sync_force_push-1",
         serverTime: "2026-05-08T12:01:00.000Z",
         latestSeq: 42,
@@ -301,7 +332,20 @@ describe("syncForcePushToServer", () => {
         updatedAt: "2026-05-08T08:40:00.000Z",
       },
     ]);
-    expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, backupId: "sync_force_push-1" });
+    expect(forcePushBody.tasks).toEqual([
+      {
+        id: "task-1",
+        title: "跑步",
+        done: false,
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        lastDoneAt: null,
+        startAt: "2026-05-08T08:45:00.000Z",
+        sortOrder: 0,
+        createdAt: "2026-05-08T08:45:00.000Z",
+        updatedAt: "2026-05-08T08:45:00.000Z",
+      },
+    ]);
+    expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, importedTasks: 1, backupId: "sync_force_push-1" });
     expect(await db.syncLog.count()).toBe(0);
     expect(localStorage.getItem("timedata_last_synced_seq")).toBe("42");
   });
