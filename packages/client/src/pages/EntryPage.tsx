@@ -42,6 +42,14 @@ function timelinePathForDate(date: string): string {
   return date ? `/?date=${encodeURIComponent(date)}` : "/";
 }
 
+export function resolveTimelineDateAfterSave(startLocal: string, endLocal: string): string {
+  const startDate = startLocal.slice(0, 10);
+  const endDate = endLocal.slice(0, 10);
+  const endClock = endLocal.slice(11, 16);
+  if (endDate !== startDate && endClock !== "00:00") return endDate;
+  return startDate;
+}
+
 interface EntryPageProps {
   refreshKey?: number;
 }
@@ -167,7 +175,7 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
     });
 
     syncAfterWrite();
-    navigate(timelinePathForDate(utcToLocalDateTime(utcStart).slice(0, 10)), { replace: true });
+    navigate(timelinePathForDate(resolveTimelineDateAfterSave(nextStartTime, nextEndTime)), { replace: true });
     return { ok: true };
   }
 

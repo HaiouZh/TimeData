@@ -1,12 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import EntryPage from "./EntryPage.js";
+import EntryPage, { resolveTimelineDateAfterSave } from "./EntryPage.js";
 
 const searchParamsMock = vi.hoisted(() => ({ value: new URLSearchParams("") }));
+const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("react-router-dom", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
   useParams: () => ({}),
   useSearchParams: () => [searchParamsMock.value, vi.fn()],
 }));
@@ -67,6 +68,7 @@ describe("EntryPage default times", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     searchParamsMock.value = new URLSearchParams("");
+    navigateMock.mockReset();
     useLatestEntryEndTimeBeforeMock.mockReturnValue(null);
     confirmMock.mockReset();
     confirmMock.mockResolvedValue(true);
@@ -171,6 +173,29 @@ describe("EntryPage default times", () => {
     expect(syncAfterWriteMock).toHaveBeenCalledOnce();
   });
 
+  it("跨天记录保存后返回结束时间所在日期的时间轴", async () => {
+    vi.setSystemTime(new Date("2026-05-18T06:00:00+08:00"));
+
+    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    await entryFormPropsMock.value?.onSave(
+      "cat-sleep",
+      "2026-05-17T22:00:00",
+      "2026-05-18T05:00:00",
+      "overnight",
+    );
+
+    expect(saveEntryWithOverlapAdjustmentsMock).toHaveBeenCalledWith({
+      existingEntryId: null,
+      categoryId: "cat-sleep",
+      startTime: "2026-05-17T14:00:00.000Z",
+      endTime: "2026-05-17T21:00:00.000Z",
+      note: "overnight",
+      overlapPlan: null,
+    });
+    expect(syncAfterWriteMock).toHaveBeenCalledOnce();
+    expect(navigateMock).toHaveBeenCalledWith("/?date=2026-05-18", { replace: true });
+  });
+
   it("blocks save with future error when onSave receives a still-future endTime", async () => {
     vi.setSystemTime(new Date("2026-05-20T14:00:00+08:00"));
 
@@ -185,5 +210,19 @@ describe("EntryPage default times", () => {
     expect(result).toEqual({ ok: false, error: "不能记录尚未发生的时间" });
     expect(findOverlappingEntriesMock).not.toHaveBeenCalled();
     expect(saveEntryWithOverlapAdjustmentsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveTimelineDateAfterSave", () => {
+  it("同日记录返回开始日期", () => {
+    expect(resolveTimelineDateAfterSave("2026-05-17T09:00:00", "2026-05-17T11:00:00")).toBe("2026-05-17");
+  });
+
+  it("跨天且结束时间有可见时长时返回结束日期", () => {
+    expect(resolveTimelineDateAfterSave("2026-05-17T22:00:00", "2026-05-18T05:00:00")).toBe("2026-05-18");
+  });
+
+  it("跨天但精确结束在 00:00 时返回开始日期", () => {
+    expect(resolveTimelineDateAfterSave("2026-05-17T22:00:00", "2026-05-18T00:00:00")).toBe("2026-05-17");
   });
 });

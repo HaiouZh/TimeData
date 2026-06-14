@@ -25,6 +25,12 @@ export type TrendChartRow = Record<string, number | string>;
 
 
 
+function formatTooltipValue(value: unknown, suffix: string): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return `${String(value)} ${suffix}`;
+  const formatted = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 1 }).format(value);
+  return `${formatted} ${suffix}`;
+}
+
 const tooltipStyle = {
   background: "#0f172a",
   border: "1px solid rgba(51, 65, 85, 0.9)",
@@ -40,6 +46,7 @@ export const TrendChart = memo(function TrendChart({
   yAxisUnit = "h",
   tooltipSuffix = "小时",
   yAxisDomain,
+  yAxisTicks,
 }: {
   chart: TrendChartKind;
   data: TrendChartRow[];
@@ -47,8 +54,9 @@ export const TrendChart = memo(function TrendChart({
   yAxisUnit?: string;
   tooltipSuffix?: string;
   yAxisDomain?: [number | string, number | string];
+  yAxisTicks?: number[];
 }) {
-  const tooltipFormatter = (value: unknown) => `${value} ${tooltipSuffix}`;
+  const tooltipFormatter = (value: unknown) => formatTooltipValue(value, tooltipSuffix);
   return (
     <div className="min-h-[220px] px-1 py-3">
       <ResponsiveContainer width="100%" height={220}>
@@ -56,7 +64,7 @@ export const TrendChart = memo(function TrendChart({
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
             <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <YAxis unit={yAxisUnit} tick={{ fill: "#94a3b8", fontSize: 12 }} domain={yAxisDomain} />
+            <YAxis unit={yAxisUnit} tick={{ fill: "#94a3b8", fontSize: 12 }} domain={yAxisDomain} ticks={yAxisTicks} />
             <Tooltip
               formatter={tooltipFormatter}
               contentStyle={tooltipStyle}
@@ -78,7 +86,7 @@ export const TrendChart = memo(function TrendChart({
           <AreaChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
             <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <YAxis unit={yAxisUnit} tick={{ fill: "#94a3b8", fontSize: 12 }} domain={yAxisDomain} />
+            <YAxis unit={yAxisUnit} tick={{ fill: "#94a3b8", fontSize: 12 }} domain={yAxisDomain} ticks={yAxisTicks} />
             <Tooltip
               formatter={tooltipFormatter}
               contentStyle={tooltipStyle}

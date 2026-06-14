@@ -71,7 +71,6 @@
 - 开发：`pnpm dev:client` / `pnpm dev:server`。需重定向 dev/调试输出时一律写入 `.local/`（已 gitignore，仅保留 `.gitkeep`），如 `pnpm dev:client > .local/client-dev.log 2>&1`；不要把 log 散落到仓库根目录。
 - 文档影响：`pnpm check:docs`（warn）/ `pnpm check:docs:strict`（CI）/ `pnpm check:docs:stale`。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
-- Shell：使用 Bash 或专用工具，**不使用 PowerShell**。
 
 ------
 

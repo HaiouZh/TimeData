@@ -3,7 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
 import { db } from "../../../db/index.ts";
 import { memoTrend } from "../../../lib/insights/cache.ts";
-import { type ParentTrend, resolveTrendWindow } from "../../../lib/insights/trends.ts";
+import { type ParentTrend, type TrendPoint, resolveTrendWindow } from "../../../lib/insights/trends.ts";
 import { useTrendConfig } from "../../../lib/statsModuleTrendSetting.ts";
 import { addDays } from "../../../lib/time.ts";
 import { TrendChart, type TrendChartKind, type TrendChartRow } from "../InsightCharts.tsx";
@@ -16,6 +16,9 @@ const TREND_PRESETS: { days: number; label: string }[] = [
   { days: 90, label: "近90天" },
 ];
 
+const TIME_AREA_Y_AXIS_DOMAIN: [number, number] = [0, 24];
+const TIME_AREA_Y_AXIS_TICKS = [0, 6, 12, 18, 24];
+
 function trendLabel(t: ParentTrend): string {
   const curH = (t.currentMin / 60).toFixed(1);
   if (t.state === "compared" && t.deltaPct !== null) {
@@ -25,6 +28,20 @@ function trendLabel(t: ParentTrend): string {
   if (t.state === "new") return `${curH}h（新增·无对比期数据）`;
   if (t.state === "dropped") return `本期未投入（上期 ${(t.previousMin / 60).toFixed(1)}h）`;
   return `${curH}h（无对比期数据）`;
+}
+
+export function buildTrendChartRows(
+  points: TrendPoint[],
+  parentTrends: ParentTrend[],
+  parentNameById: Map<string, string>,
+): TrendChartRow[] {
+  return points.map((point) => {
+    const row: TrendChartRow = { date: point.date.slice(5) };
+    for (const trend of parentTrends) {
+      row[parentNameById.get(trend.parentId) ?? trend.parentId] = (point.byParent[trend.parentId] ?? 0) / 60;
+    }
+    return row;
+  });
 }
 
 export default function TrendSection(props: StatsModuleProps) {
@@ -56,15 +73,7 @@ export default function TrendSection(props: StatsModuleProps) {
   );
 
   const trendChartData = useMemo(
-    () =>
-      trend.points.map((point) => {
-        const row: TrendChartRow = { date: point.date.slice(5) };
-        for (const t of trend.parentTrends) {
-          row[props.parentNameById.get(t.parentId) ?? t.parentId] =
-            Math.round(((point.byParent[t.parentId] ?? 0) / 60) * 10) / 10;
-        }
-        return row;
-      }),
+    () => buildTrendChartRows(trend.points, trend.parentTrends, props.parentNameById),
     [trend, props.parentNameById],
   );
   const trendSeries = useMemo(
@@ -225,7 +234,13 @@ export default function TrendSection(props: StatsModuleProps) {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
-            <TrendChart chart={trendChart} data={trendChartData} series={trendSeries} />
+            <TrendChart
+              chart={trendChart}
+              data={trendChartData}
+              series={trendSeries}
+              yAxisDomain={trendChart === "area" ? TIME_AREA_Y_AXIS_DOMAIN : undefined}
+              yAxisTicks={trendChart === "area" ? TIME_AREA_Y_AXIS_TICKS : undefined}
+            />
           </div>
         </>
       )}

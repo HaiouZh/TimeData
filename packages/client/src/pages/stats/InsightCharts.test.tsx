@@ -2,18 +2,46 @@
 import { act, createElement } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
-import { CategoryCompositionBars, CategoryDonut, type CompositionParent, type DonutDatum } from "./InsightCharts.tsx";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  CategoryCompositionBars,
+  CategoryDonut,
+  TrendChart,
+  type CompositionParent,
+  type DonutDatum,
+} from "./InsightCharts.tsx";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("recharts", () => ({
-  PieChart: ({ children }: { children?: ReactNode }) => createElement("div", null, children),
-  Pie: ({ children }: { children?: ReactNode }) => createElement("div", null, children),
-  Cell: () => createElement("span"),
-  Tooltip: () => createElement("span"),
-  ResponsiveContainer: ({ children }: { children?: ReactNode }) => createElement("div", null, children),
+const rechartsMockState = vi.hoisted(() => ({
+  yAxisProps: [] as Array<{ domain?: unknown; ticks?: unknown }>,
 }));
+
+vi.mock("recharts", () => {
+  const Wrapper = ({ children }: { children?: ReactNode }) => createElement("div", null, children);
+  return {
+    Area: () => createElement("span"),
+    AreaChart: Wrapper,
+    CartesianGrid: () => createElement("span"),
+    Cell: () => createElement("span"),
+    Legend: () => createElement("span"),
+    Line: () => createElement("span"),
+    LineChart: Wrapper,
+    Pie: Wrapper,
+    PieChart: Wrapper,
+    ResponsiveContainer: Wrapper,
+    Tooltip: () => createElement("span"),
+    XAxis: () => createElement("span"),
+    YAxis: (props: { domain?: unknown; ticks?: unknown }) => {
+      rechartsMockState.yAxisProps.push(props);
+      return createElement("span");
+    },
+  };
+});
+
+beforeEach(() => {
+  rechartsMockState.yAxisProps = [];
+});
 
 const sampleParents: CompositionParent[] = [
   {
@@ -48,6 +76,33 @@ describe("CategoryCompositionBars", () => {
 
     expect(host.textContent).toContain("编码");
     expect(host.textContent).toContain("2.0h");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe("TrendChart", () => {
+  it("把固定 Y 轴 domain 和 ticks 传给 Recharts YAxis", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        createElement(TrendChart, {
+          chart: "area",
+          data: [{ date: "06-01", 工作: 24 }],
+          series: [{ key: "工作", color: "#3b82f6" }],
+          yAxisDomain: [0, 24],
+          yAxisTicks: [0, 6, 12, 18, 24],
+        }),
+      );
+    });
+
+    expect(rechartsMockState.yAxisProps).toHaveLength(1);
+    expect(rechartsMockState.yAxisProps[0]?.domain).toEqual([0, 24]);
+    expect(rechartsMockState.yAxisProps[0]?.ticks).toEqual([0, 6, 12, 18, 24]);
 
     await act(async () => {
       root.unmount();
