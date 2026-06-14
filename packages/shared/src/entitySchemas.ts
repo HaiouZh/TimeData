@@ -61,8 +61,8 @@ export const TimeEntrySchema = z
 export const RecurrenceSchema = z
   .object({
     freq: z.enum(["daily", "weekly", "monthly"]),
-    interval: z.number().int().positive(),
-    byWeekday: z.array(z.number().int().min(1).max(7)).min(1).optional(),
+    interval: z.number().int().positive().max(999),
+    byWeekday: z.array(z.number().int().min(1).max(7)).min(1).optional(), // ISO 8601 weekday: 1=Mon … 7=Sun
     byMonthday: z
       .array(z.number().int().refine((n) => n === -1 || (n >= 1 && n <= 31), "monthday must be 1..31 or -1"))
       .min(1)
@@ -75,6 +75,8 @@ export const RecurrenceSchema = z
     if (r.freq === "monthly" && !r.byMonthday) ctx.addIssue({ code: "custom", message: "monthly requires byMonthday" });
     if (r.freq === "daily" && (r.byWeekday || r.byMonthday))
       ctx.addIssue({ code: "custom", message: "daily must not set byWeekday/byMonthday" });
+    if (r.freq === "weekly" && r.byMonthday) ctx.addIssue({ code: "custom", message: "weekly must not set byMonthday" });
+    if (r.freq === "monthly" && r.byWeekday) ctx.addIssue({ code: "custom", message: "monthly must not set byWeekday" });
   });
 
 export const TaskSchema = z.object({

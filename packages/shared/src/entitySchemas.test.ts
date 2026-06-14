@@ -14,10 +14,22 @@ describe("RecurrenceSchema", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly" }).success).toBe(false);
     expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly", byMonthday: [1, 15, -1] }).success).toBe(true);
   });
-  it("rejects byWeekday on daily and out-of-range values", () => {
+  it("rejects byWeekday on daily", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "daily", byWeekday: [1] }).success).toBe(false);
+  });
+  it("rejects byWeekday out-of-range [8]", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "weekly", byWeekday: [8] }).success).toBe(false);
+  });
+  it("rejects byMonthday out-of-range [0]", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly", byMonthday: [0] }).success).toBe(false);
+  });
+  it("rejects mismatched freq/by-field combinations", () => {
+    expect(RecurrenceSchema.safeParse({ ...base, freq: "weekly", byWeekday: [1], byMonthday: [15] }).success).toBe(false);
+    expect(RecurrenceSchema.safeParse({ ...base, freq: "monthly", byMonthday: [1], byWeekday: [1] }).success).toBe(false);
+  });
+  it("rejects non-positive interval", () => {
+    expect(RecurrenceSchema.safeParse({ ...base, freq: "daily", interval: 0 }).success).toBe(false);
+    expect(RecurrenceSchema.safeParse({ ...base, freq: "daily", interval: -1 }).success).toBe(false);
   });
   it("validates time format", () => {
     expect(RecurrenceSchema.safeParse({ ...base, freq: "daily", time: "06:30" }).success).toBe(true);
