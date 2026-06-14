@@ -11,7 +11,7 @@ import {
 import { SYNC_TABLE_NAMES, buildSyncChangeSchema } from "./syncDomains.js";
 import type { SyncChange } from "./types.js";
 
-export { CategorySchema, QuickNoteSchema, RecurrenceSchema, SettingSchema, TaskSchema, TimeEntrySchema, UtcIsoStringSchema } from "./entitySchemas.js";
+export { CategorySchema, QuickNoteSchema, RecurrenceSchema, SettingSchema, TaskSchema, TaskSubtaskSchema, TimeEntrySchema, UtcIsoStringSchema } from "./entitySchemas.js";
 
 const SeqSchema = NonNegativeIntSchema;
 

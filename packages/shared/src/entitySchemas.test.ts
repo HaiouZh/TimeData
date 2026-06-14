@@ -40,7 +40,8 @@ describe("RecurrenceSchema", () => {
 describe("TaskSchema", () => {
   const t = {
     id: "t1", title: "跑步", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, sortOrder: 0,
+    lastDoneAt: null, startAt: null, scheduledAt: null, subtasks: [],
+    sortOrder: 0,
     createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
   };
   it("accepts a pool task", () => {
@@ -53,5 +54,31 @@ describe("TaskSchema", () => {
     expect(TaskSchema.safeParse({
       ...t, recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due", time: "06:00" },
     }).success).toBe(true);
+  });
+});
+
+describe("TaskSchema scheduledAt/subtasks", () => {
+  const baseTask = {
+    id: "t1", title: "刮胡子", done: false, recurrence: null,
+    lastDoneAt: null, startAt: null, scheduledAt: null, subtasks: [],
+    sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
+  };
+  it("接受 null scheduledAt 与空 subtasks", () => {
+    expect(TaskSchema.parse(baseTask).subtasks).toEqual([]);
+  });
+  it("接受合法未来 scheduledAt 与子任务", () => {
+    const t = TaskSchema.parse({ ...baseTask, scheduledAt: "2026-12-25T00:00:00.000Z",
+      subtasks: [{ id: "s1", title: "买礼物", done: false }] });
+    expect(t.scheduledAt).toBe("2026-12-25T00:00:00.000Z");
+  });
+  it("拒绝空标题子任务", () => {
+    expect(() => TaskSchema.parse({ ...baseTask, subtasks: [{ id: "s1", title: "  ", done: false }] })).toThrow();
+  });
+  it("拒绝超过 200 条子任务", () => {
+    const many = Array.from({ length: 201 }, (_, i) => ({ id: `s${i}`, title: "x", done: false }));
+    expect(() => TaskSchema.parse({ ...baseTask, subtasks: many })).toThrow();
+  });
+  it("scheduledAt 非严格 UTC ISO 报错", () => {
+    expect(() => TaskSchema.parse({ ...baseTask, scheduledAt: "2026-12-25" })).toThrow();
   });
 });

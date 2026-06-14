@@ -79,6 +79,12 @@ export const RecurrenceSchema = z
     if (r.freq === "monthly" && r.byWeekday) ctx.addIssue({ code: "custom", message: "monthly must not set byWeekday" });
   });
 
+export const TaskSubtaskSchema = z.object({
+  id: NonEmptyTrimmedStringSchema,
+  title: NonEmptyTrimmedStringSchema,
+  done: z.boolean(),
+});
+
 export const TaskSchema = z.object({
   id: NonEmptyTrimmedStringSchema,
   title: NonEmptyTrimmedStringSchema,
@@ -86,6 +92,8 @@ export const TaskSchema = z.object({
   recurrence: RecurrenceSchema.nullable(),
   lastDoneAt: UtcIsoStringSchema.nullable(),
   startAt: UtcIsoStringSchema.nullable(),
+  scheduledAt: UtcIsoStringSchema.nullable(),
+  subtasks: z.array(TaskSubtaskSchema).max(200).default([]),
   sortOrder: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,
