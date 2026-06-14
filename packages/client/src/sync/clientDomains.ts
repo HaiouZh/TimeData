@@ -68,6 +68,8 @@ function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
     || JSON.stringify(existing.recurrence) !== JSON.stringify(remoteTask.recurrence)
     || existing.lastDoneAt !== remoteTask.lastDoneAt
     || existing.startAt !== remoteTask.startAt
+    || existing.scheduledAt !== remoteTask.scheduledAt
+    || JSON.stringify(existing.subtasks ?? []) !== JSON.stringify(remoteTask.subtasks ?? [])
     || existing.sortOrder !== remoteTask.sortOrder;
 }
 

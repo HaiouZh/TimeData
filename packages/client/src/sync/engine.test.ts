@@ -995,6 +995,7 @@ describe("syncPull", () => {
             recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
             lastDoneAt: null,
             startAt: "2026-06-01T00:00:00.000Z",
+            scheduledAt: null,
             sortOrder: 0,
             createdAt: "2026-06-01T00:00:00.000Z",
             updatedAt: "2026-06-01T04:02:00.000Z",
