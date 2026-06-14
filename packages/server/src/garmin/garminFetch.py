@@ -20,6 +20,13 @@ def log(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
+def utc_now_iso():
+    """Millisecond-precision UTC ISO timestamp ending in Z, matching
+    TimeData's UtcIsoStringSchema (YYYY-MM-DDTHH:MM:SS.sssZ)."""
+    instant = dt.datetime.now(dt.timezone.utc)
+    return instant.strftime("%Y-%m-%dT%H:%M:%S.") + f"{instant.microsecond // 1000:03d}Z"
+
+
 def round_or_none(value, digits=0):
     if value is None or value == "":
         return None
@@ -271,7 +278,7 @@ def main():
     current = start
     while current <= end:
         ds = current.isoformat()
-        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        now = utc_now_iso()
 
         try:
             rec = build_heart_rate(ds, client.get_heart_rates(ds), now)
