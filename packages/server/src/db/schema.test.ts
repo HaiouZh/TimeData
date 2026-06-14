@@ -145,6 +145,61 @@ describe("initializeDatabase", () => {
     expect(columns.has("pinned")).toBe(true);
   });
 
+  it("upgrades a legacy tasks table without scheduled_at and creates its index", async () => {
+    // Reproduces the production crash: tasks table predates scheduledAt/subtasks.
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        last_done_at TEXT,
+        start_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    const { initializeDatabase } = await import("./schema.js");
+    expect(() => initializeDatabase()).not.toThrow();
+
+    const columns = new Set(
+      (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+    );
+    expect(columns.has("scheduled_at")).toBe(true);
+    expect(columns.has("subtasks")).toBe(true);
+
+    const index = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_tasks_scheduled_at'")
+      .get();
+    expect(index).toMatchObject({ name: "idx_tasks_scheduled_at" });
+  });
+
+  it("keeps the task scheduled-columns migration idempotent", async () => {
+    const { ensureTaskScheduledColumns } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        last_done_at TEXT,
+        start_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        scheduled_at TEXT,
+        subtasks TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    expect(() => {
+      ensureTaskScheduledColumns(db);
+      ensureTaskScheduledColumns(db);
+    }).not.toThrow();
+  });
+
   it("keeps the pinned column migration idempotent", async () => {
     const { ensureQuickNotePinnedColumn } = await import("./schema.js");
     db.exec(`

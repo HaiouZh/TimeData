@@ -19,6 +19,8 @@ export function ensureTaskScheduledColumns(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("scheduled_at")) db.exec("ALTER TABLE tasks ADD COLUMN scheduled_at TEXT");
   if (!names.has("subtasks")) db.exec("ALTER TABLE tasks ADD COLUMN subtasks TEXT NOT NULL DEFAULT '[]'");
+  // Index must be created after the column exists; legacy DBs only get the column here.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_at ON tasks(scheduled_at)");
 }
 
 export function initializeDatabase(): void {
@@ -122,7 +124,6 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_quick_notes_occurred_at ON quick_notes(occurred_at);
     CREATE INDEX IF NOT EXISTS idx_quick_notes_updated_at ON quick_notes(updated_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
-    CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_at ON tasks(scheduled_at);
     CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_sync_seq_table_record ON sync_seq(table_name, record_id);
