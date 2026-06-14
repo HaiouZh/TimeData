@@ -152,7 +152,7 @@ export async function fetchGarminData(
             timestamp: serverNow,
           } as SyncChange;
           applyChange(change);
-          counts[domain]!++;
+          counts[domain] = (counts[domain] ?? 0) + 1;
         }
       })();
     }
