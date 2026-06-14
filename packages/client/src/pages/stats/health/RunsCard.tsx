@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
 import { db } from "../../../db/index.ts";
-import { filterByDateRange, formatDuration } from "../../../lib/healthUtils.ts";
+import { filterByDateRange, formatPace } from "../../../lib/healthUtils.ts";
 
 export function RunsCard({ range }: { range: "30" | "90" | "all" }) {
   const allData = useLiveQuery(() => db.runs.orderBy("date").toArray()) ?? [];
