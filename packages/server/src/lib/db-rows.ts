@@ -108,6 +108,8 @@ export interface TaskRow {
   last_done_at: string | null;
   start_at: string | null;
   sort_order: number;
+  scheduled_at: string | null;
+  subtasks: string;
   created_at: string;
   updated_at: string;
 }
@@ -120,6 +122,8 @@ export function rowToTask(row: TaskRow): Task {
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,
     lastDoneAt: row.last_done_at,
     startAt: row.start_at,
+    scheduledAt: row.scheduled_at ?? null,
+    subtasks: row.subtasks ? JSON.parse(row.subtasks) : [],
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

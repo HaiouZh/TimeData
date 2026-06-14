@@ -11,6 +11,7 @@ function change(action: "create" | "update" | "delete", id: string, title?: stri
     tableName: "tasks", recordId: id, action,
     data: action === "delete" ? null : {
       id, title, done: false, recurrence: null, lastDoneAt: null, startAt: null,
+      scheduledAt: null, subtasks: [],
       sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
     },
     timestamp: "2026-06-14T00:00:00.000Z",
@@ -23,7 +24,9 @@ beforeEach(async () => {
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
       recurrence TEXT, last_done_at TEXT, start_at TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
+      subtasks TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE sync_tombstones (table_name TEXT NOT NULL, record_id TEXT NOT NULL, deleted_at TEXT NOT NULL, PRIMARY KEY (table_name, record_id));
     CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);

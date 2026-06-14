@@ -339,6 +339,8 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     last_done_at: task.lastDoneAt ?? null,
     start_at: task.startAt ?? null,
     sort_order: task.sortOrder,
+    scheduled_at: task.scheduledAt ?? null,
+    subtasks: JSON.stringify(task.subtasks ?? []),
     created_at: task.createdAt,
   };
 }

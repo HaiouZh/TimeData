@@ -619,6 +619,8 @@ describe("sync route", () => {
             recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
             lastDoneAt: null,
             startAt: "2026-06-14T00:00:00.000Z",
+            scheduledAt: null,
+            subtasks: [],
             sortOrder: 0,
             createdAt: "2026-06-14T00:00:00.000Z",
             updatedAt: "2026-06-14T00:00:00.000Z",
