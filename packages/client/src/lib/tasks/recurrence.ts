@@ -22,16 +22,20 @@ function lastScheduledDay(r: Recurrence, startAt: Date, now: Date): number | nul
   if (r.freq === "weekly") {
     const days = r.byWeekday ?? [];
     const startWeek = localWeekIndex(startDay);
-    const weekOk = (localWeekIndex(nowDay) - startWeek) % r.interval === 0;
-    if (weekOk && days.includes(localWeekday(nowDay))) return nowDay;
+    for (let d = nowDay; d >= startDay; d--) {
+      const weekOk = (localWeekIndex(d) - startWeek) % r.interval === 0;
+      if (weekOk && days.includes(localWeekday(d))) return d;
+    }
     return null;
   }
   if (r.freq === "monthly") {
     const s = dayToLocalYmd(startDay);
     const startMonth = monthIndex(s.y, s.m);
-    const ymd = dayToLocalYmd(nowDay);
-    if ((monthIndex(ymd.y, ymd.m) - startMonth) % r.interval !== 0) return null;
-    if (monthlyHitDays(ymd.y, ymd.m, r.byMonthday ?? []).includes(nowDay)) return nowDay;
+    for (let d = nowDay; d >= startDay; d--) {
+      const ymd = dayToLocalYmd(d);
+      if ((monthIndex(ymd.y, ymd.m) - startMonth) % r.interval !== 0) continue;
+      if (monthlyHitDays(ymd.y, ymd.m, r.byMonthday ?? []).includes(d)) return d;
+    }
     return null;
   }
   return null;

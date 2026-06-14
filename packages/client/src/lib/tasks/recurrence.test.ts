@@ -34,8 +34,15 @@ describe("isDueNow weekly", () => {
   });
   it("every 2 weeks respects the off week", () => {
     const r: Recurrence = { freq: "weekly", interval: 2, byWeekday: [1], basis: "due" };
-    expect(isDueNow(r, null, start, new Date("2026-06-08T00:00:00.000Z"))).toBe(false);
-    expect(isDueNow(r, null, start, new Date("2026-06-15T00:00:00.000Z"))).toBe(true);
+    // 第 0 周一已完成 → 第 1 周（off）不再 due
+    expect(isDueNow(r, "2026-06-01T00:00:00.000Z", start, new Date("2026-06-08T00:00:00.000Z"))).toBe(false);
+    // 第 2 周一（on）未完成 → due
+    expect(isDueNow(r, "2026-06-01T00:00:00.000Z", start, new Date("2026-06-15T00:00:00.000Z"))).toBe(true);
+  });
+  it("carries an overdue occurrence forward (due basis)", () => {
+    const r: Recurrence = { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" };
+    // 周一(06-01)未完成，到周三(06-03)仍应 due（逾期顺延）
+    expect(isDueNow(r, null, start, new Date("2026-06-03T00:00:00.000Z"))).toBe(true);
   });
 });
 
@@ -53,8 +60,10 @@ describe("isDueNow monthly", () => {
   });
   it("skips months without the configured day (31)", () => {
     const r: Recurrence = { freq: "monthly", interval: 1, byMonthday: [31], basis: "due" };
-    expect(isDueNow(r, null, start, new Date("2026-04-30T00:00:00.000Z"))).toBe(false);
-    expect(isDueNow(r, null, start, new Date("2026-05-31T00:00:00.000Z"))).toBe(true);
+    // 3/31 已完成；4 月没有 31 号 → 4/30 不是计划日，不 due
+    expect(isDueNow(r, "2026-03-31T00:00:00.000Z", start, new Date("2026-04-30T00:00:00.000Z"))).toBe(false);
+    // 5/31 未完成 → due
+    expect(isDueNow(r, "2026-03-31T00:00:00.000Z", start, new Date("2026-05-31T00:00:00.000Z"))).toBe(true);
   });
 });
 
