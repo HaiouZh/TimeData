@@ -11,6 +11,7 @@ const sampleBackup: BackupDocument = {
   device: { deviceId: "device-1", deviceName: "Web" },
   categories: [],
   timeEntries: [],
+  tasks: [],
 };
 
 const isNativePlatformMock = vi.fn(() => false);

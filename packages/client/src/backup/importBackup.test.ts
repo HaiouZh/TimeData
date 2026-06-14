@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import type { Category, SyncLogEntry, TimeEntry } from "@timedata/shared";
+import type { Category, SyncLogEntry, Task, TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { LAST_SYNCED_SEQ_KEY, db } from "../db/index.js";
 import { importBackup } from "./importBackup.js";
@@ -51,6 +51,18 @@ const oldEntry: TimeEntry = {
   updatedAt: now,
 };
 
+const oldTask: Task = {
+  id: "old-task",
+  title: "旧任务",
+  done: false,
+  recurrence: null,
+  lastDoneAt: null,
+  startAt: null,
+  sortOrder: 0,
+  createdAt: now,
+  updatedAt: now,
+};
+
 const newCategory: Category = {
   id: "new-cat",
   name: "新分类",
@@ -73,6 +85,18 @@ const newEntry: TimeEntry = {
   updatedAt: now,
 };
 
+const newTask: Task = {
+  id: "new-task",
+  title: "新任务",
+  done: true,
+  recurrence: null,
+  lastDoneAt: null,
+  startAt: null,
+  sortOrder: 1,
+  createdAt: now,
+  updatedAt: now,
+};
+
 const syncLog: SyncLogEntry = {
   id: "sync-1",
   tableName: "categories",
@@ -91,20 +115,23 @@ function backup(): BackupDocument {
     device: { deviceId: "device-1", deviceName: "Web" },
     categories: [newCategory],
     timeEntries: [newEntry],
+    tasks: [newTask],
   };
 }
 
 beforeEach(async () => {
   await db.timeEntries.clear();
+  await db.tasks.clear();
   await db.syncLog.clear();
   await db.categories.clear();
   localStorage.clear();
 });
 
 describe("importBackup", () => {
-  it("replaces local categories and entries and clears sync state", async () => {
+  it("replaces local categories, entries and tasks and clears sync state", async () => {
     await db.categories.add(oldCategory);
     await db.timeEntries.add(oldEntry);
+    await db.tasks.add(oldTask);
     await db.syncLog.add(syncLog);
     localStorage.setItem("timedata_last_synced", "2026-05-07T13:00:00.000Z");
     localStorage.setItem(LAST_SYNCED_SEQ_KEY, "42");
@@ -113,15 +140,17 @@ describe("importBackup", () => {
 
     await expect(db.categories.toArray()).resolves.toEqual([newCategory]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([newEntry]);
+    await expect(db.tasks.toArray()).resolves.toEqual([newTask]);
     await expect(db.syncLog.toArray()).resolves.toEqual([]);
     expect(localStorage.getItem("timedata_last_synced")).toBeNull();
     expect(localStorage.getItem(LAST_SYNCED_SEQ_KEY)).toBeNull();
-    expect(result).toEqual({ categoryCount: 1, entryCount: 1 });
+    expect(result).toEqual({ categoryCount: 1, entryCount: 1, taskCount: 1 });
   });
 
   it("does not modify local data when validation fails", async () => {
     await db.categories.add(oldCategory);
     await db.timeEntries.add(oldEntry);
+    await db.tasks.add(oldTask);
 
     await expect(importBackup({ ...backup(), timeEntries: [{ ...newEntry, categoryId: "missing" }] })).rejects.toThrow(
       "记录 new-entry 引用了不存在的分类 missing。",
@@ -129,6 +158,7 @@ describe("importBackup", () => {
 
     await expect(db.categories.toArray()).resolves.toEqual([oldCategory]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([oldEntry]);
+    await expect(db.tasks.toArray()).resolves.toEqual([oldTask]);
   });
 
   it("keeps current category names for matching ids when importing an older external backup", async () => {
@@ -162,6 +192,6 @@ describe("importBackup", () => {
       },
     ]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([externalBackupEntry]);
-    expect(result).toEqual({ categoryCount: 1, entryCount: 1 });
+    expect(result).toEqual({ categoryCount: 1, entryCount: 1, taskCount: 1 });
   });
 });

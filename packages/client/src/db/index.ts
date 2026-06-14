@@ -19,6 +19,7 @@ export interface AutoBackupRecord {
   createdAt: string;
   categories: Category[];
   timeEntries: TimeEntry[];
+  tasks: Task[];
 }
 
 export const db = new Dexie("timedata") as Dexie & {
@@ -94,7 +95,7 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {
-  await db.transaction("rw", db.categories, db.timeEntries, db.tasks, db.syncLog, db.settings, async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.syncLog, db.settings], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
     await db.tasks.clear();

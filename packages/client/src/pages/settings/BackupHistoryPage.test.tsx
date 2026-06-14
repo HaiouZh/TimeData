@@ -44,7 +44,7 @@ describe("BackupHistoryPage", () => {
 
     expect(html).toContain("自动备份");
     expect(html).toContain("2026-05-08 16:00:00 UTC+8");
-    expect(html).toContain("1 个分类，1 条记录");
+    expect(html).toContain("1 个分类，1 条记录，0 个任务");
     expect(html).toContain("恢复");
   });
 });

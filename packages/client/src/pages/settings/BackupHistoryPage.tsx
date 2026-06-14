@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listAutoBackups } from "../../backup/autoBackup.js";
+import { listAutoBackups, normalizeAutoBackupRecord, type AutoBackupRecordInput } from "../../backup/autoBackup.js";
 import { exportBackup } from "../../backup/exportBackup.js";
 import { downloadBackupFile } from "../../backup/fileDownload.js";
 import { importBackup } from "../../backup/importBackup.js";
@@ -11,11 +11,13 @@ import { formatAppDateTime } from "../../lib/time.js";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
 interface BackupHistoryPageProps {
-  initialRecords?: AutoBackupRecord[];
+  initialRecords?: AutoBackupRecordInput[];
 }
 
 export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageProps = {}) {
-  const [records, setRecords] = useState<AutoBackupRecord[]>(initialRecords ?? []);
+  const [records, setRecords] = useState<AutoBackupRecord[]>(() =>
+    (initialRecords ?? []).map(normalizeAutoBackupRecord),
+  );
   const [loading, setLoading] = useState(!initialRecords);
   const [status, setStatus] = useState("");
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -46,14 +48,16 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
   }, []);
 
   async function restoreRecord(record: AutoBackupRecord) {
-    const summary = `${record.categories.length} 个分类，${record.timeEntries.length} 条记录`;
+    const summary = `${record.categories.length} 个分类，${record.timeEntries.length} 条记录，${record.tasks.length} 个任务`;
     const shouldBackupFirst = await confirm({
       title: "确认恢复自动备份",
       body: (
         <>
           <p>备份时间：{formatAppDateTime(record.createdAt)}</p>
           <p>数据内容：{summary}</p>
-          <p>恢复会替换当前设备上的本地分类、时间记录和同步队列。确认后会先下载当前数据的安全备份，再执行恢复。</p>
+          <p>
+            恢复会替换当前设备上的本地分类、时间记录、任务和同步队列。确认后会先下载当前数据的安全备份，再执行恢复。
+          </p>
         </>
       ),
       danger: true,
@@ -73,11 +77,12 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
         device: { deviceId: null, deviceName: "AutoBackup" },
         categories: record.categories,
         timeEntries: record.timeEntries,
+        tasks: record.tasks,
       });
       navigate("/settings/data", {
         replace: true,
         state: {
-          dataStatus: `已恢复自动备份：${result.categoryCount} 个分类，${result.entryCount} 条记录。服务器数据可能不同步，请确认后再手动同步。`,
+          dataStatus: `已恢复自动备份：${result.categoryCount} 个分类，${result.entryCount} 条记录，${result.taskCount} 个任务。服务器数据可能不同步，请确认后再手动同步。`,
         },
       });
     } catch (e: unknown) {
@@ -104,7 +109,7 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-slate-100">{formatAppDateTime(record.createdAt)}</div>
                   <div className="mt-1 text-xs text-slate-500">
-                    {record.categories.length} 个分类，{record.timeEntries.length} 条记录
+                    {record.categories.length} 个分类，{record.timeEntries.length} 条记录，{record.tasks.length} 个任务
                   </div>
                   {restoringId === record.id && <div className="mt-2 text-xs text-blue-300">正在恢复…</div>}
                 </div>

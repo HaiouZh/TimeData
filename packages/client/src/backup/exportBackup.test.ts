@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import type { Category, TimeEntry } from "@timedata/shared";
+import type { Category, Task, TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
 import { exportBackup } from "./exportBackup.js";
@@ -29,16 +29,30 @@ const entry: TimeEntry = {
   updatedAt: now,
 };
 
+const task: Task = {
+  id: "task-1",
+  title: "写备份测试",
+  done: false,
+  recurrence: null,
+  lastDoneAt: null,
+  startAt: null,
+  sortOrder: 1,
+  createdAt: now,
+  updatedAt: now,
+};
+
 beforeEach(async () => {
   await db.timeEntries.clear();
+  await db.tasks.clear();
   await db.syncLog.clear();
   await db.categories.clear();
 });
 
 describe("exportBackup", () => {
-  it("exports all categories and time entries in Backup JSON", async () => {
+  it("exports all categories, time entries and tasks in Backup JSON", async () => {
     await db.categories.add(category);
     await db.timeEntries.add(entry);
+    await db.tasks.add(task);
 
     const backup = await exportBackup({
       now: () => "2026-05-07T12:30:00.000Z",
@@ -54,6 +68,7 @@ describe("exportBackup", () => {
       device: { deviceId: "device-1", deviceName: "Web" },
       categories: [category],
       timeEntries: [entry],
+      tasks: [task],
     });
   });
 });

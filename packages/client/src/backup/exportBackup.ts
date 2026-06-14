@@ -12,7 +12,11 @@ function defaultAppVersion(): string {
 }
 
 export async function exportBackup(options: ExportBackupOptions = {}): Promise<BackupDocument> {
-  const [categories, timeEntries] = await Promise.all([db.categories.toArray(), db.timeEntries.toArray()]);
+  const [categories, timeEntries, tasks] = await Promise.all([
+    db.categories.toArray(),
+    db.timeEntries.toArray(),
+    db.tasks.toArray(),
+  ]);
 
   return {
     format: BACKUP_FORMAT,
@@ -25,5 +29,6 @@ export async function exportBackup(options: ExportBackupOptions = {}): Promise<B
     },
     categories,
     timeEntries,
+    tasks,
   };
 }
