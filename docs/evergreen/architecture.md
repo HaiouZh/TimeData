@@ -219,7 +219,7 @@ Garmin 定时任务 / 手动触发
         → 客户端 pull 获取新健康数据
 ```
 
-关键点：Garmin 数据走的是与 agent 速记相同的"服务端受控写入"路径（`applyChange()` + `sync_seq`），不是新的底层写入通道。Python 脚本只负责数据抓取和格式化，不直接碰 SQLite。凭证在 `server_config` 表中 AES-256-GCM 加密存储，密钥派生自 `AUTH_TOKEN`。独立模块位于 `packages/server/src/garmin/`，详见其 `README.md`。
+关键点：Garmin 数据走的是与 agent 速记相同的"服务端受控写入"路径（`applyChange()` + `sync_seq`），不是新的底层写入通道。Python 脚本只负责数据抓取和格式化，不直接碰 SQLite。自动任务不再用 `lastFetchDate` 判定窗口，而是读取 `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` 的最新日期，从最早缺口补到昨天；完全无健康数据时按 `initialBackfillDays`（默认 7，配置范围 1..30）首次回填。`runs` 不参与缺口判断，手动抓取可显式指定最多 90 天日期范围，或强制重抓最近 N 天到昨天。每次抓取有 `runId`、结构化 `status` / `errors`，输出 `[garmin]` 日志，并 best-effort 写 `sync_logs(device="garmin", action="garmin_fetch")` 便于排查。凭证在 `server_config` 表中 AES-256-GCM 加密存储，密钥派生自 `AUTH_TOKEN`。独立模块位于 `packages/server/src/garmin/`，详见其 `README.md`。
 
 ### 3.8 健康数据批量导入（ingest API）
 
@@ -248,7 +248,7 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
 10. 调 `initializeDatabase()`：建表（含 `server_config` 和健康数据表）、首次启动播种默认分类
 11. 启动时清理一次旧 server backup
-12. 加载 Garmin 配置，若已启用定时抓取则调 `updateSchedule()` 注册 setTimeout 定时器
+12. 加载 Garmin 配置，若已启用定时抓取则调 `updateSchedule()` 注册 setTimeout 定时器；到点后按 SQLite 健康表缺口智能补到昨天，并在抓取成功后把 `lastFetchDate` 更新为本次 `endDate` 供状态展示
 13. `SERVER_REPLICAS>1` 时提示 force-push token 和 Garmin 定时器仍是单实例内存存储
 14. 监听 `PORT`（默认 3000）
 

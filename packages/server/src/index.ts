@@ -20,7 +20,7 @@ import syncRoute from "./routes/sync.js";
 import tasksRoute from "./routes/tasks.js";
 import { ingestRoutes } from "./routes/ingest.js";
 import { garminRoutes } from "./garmin/garminRoutes.js";
-import { loadGarminConfig } from "./garmin/garminRoutes.js";
+import { loadGarminConfig } from "./garmin/garminConfig.js";
 import { updateSchedule } from "./garmin/garminService.js";
 import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
