@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Recurrence, Task, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { SwipeableList, Type as ListType } from "@meauxt/react-swipeable-list";
@@ -10,7 +10,7 @@ import {
   addTask, deleteTask, listTasks, scheduleTask, toggleTaskDone,
   unscheduleTask, updateSubtasks, updateTask, type TodoBuckets,
 } from "../lib/tasks.js";
-import { isDueNow, recurrenceSummary, formatCreatedAt } from "../lib/tasks/recurrence.js";
+import { isDueNow, recurrenceSummary } from "../lib/tasks/recurrence.js";
 import { placementForTask } from "../lib/tasks/placement.js";
 import { trimSubtasks } from "../lib/tasks/subtasks.js";
 import { SubtaskEditor } from "./todo/SubtaskEditor.js";
@@ -28,11 +28,6 @@ export function TodoPage() {
   const [error, setError] = useState<string | null>(null);
   const [showUpcoming, setShowUpcoming] = useState(false);
   const { syncAfterWrite } = useSyncContext();
-
-  const editingTask = useMemo(
-    () => (editingId ? [...buckets.today, ...buckets.inbox, ...buckets.upcoming, ...buckets.recurring].find((t) => t.id === editingId) : null),
-    [editingId, buckets],
-  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -225,7 +220,9 @@ export function TodoPage() {
           ) : (
             <ul className="space-y-2">
               {buckets.recurring.map((task) => {
-                const due = isDueNow(task.recurrence!, task.lastDoneAt, task.startAt);
+                const recurrence = task.recurrence;
+                if (!recurrence) return null;
+                const due = isDueNow(recurrence, task.lastDoneAt, task.startAt);
                 const checked = !due;
                 return (
                   <li key={task.id} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
@@ -239,7 +236,7 @@ export function TodoPage() {
                         onKeyDown={(e) => { if (e.key === "Enter") edit(task); }}>
                         <div className="break-words text-sm font-medium text-slate-100">{task.title}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span>{recurrenceSummary(task.recurrence!)}</span>
+                          <span>{recurrenceSummary(recurrence)}</span>
                           <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
                         </div>
                       </div>

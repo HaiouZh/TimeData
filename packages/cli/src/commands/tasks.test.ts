@@ -28,12 +28,12 @@ describe("runTaskSchedule", () => {
 
   it("缺 id → INVALID_REQUEST", async () => {
     const r = await runTaskSchedule(config, { date: "2026-06-20" }, vi.fn());
-    expect((r as any).error.code).toBe("INVALID_REQUEST");
+    expect((r as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
   });
 
   it("缺 date → INVALID_REQUEST", async () => {
     const r = await runTaskSchedule(config, { id: "1" }, vi.fn());
-    expect((r as any).error.code).toBe("INVALID_REQUEST");
+    expect((r as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
   });
 });
 
@@ -47,6 +47,6 @@ describe("runTaskUnschedule", () => {
 
   it("缺 id → INVALID_REQUEST", async () => {
     const r = await runTaskUnschedule(config, {}, vi.fn());
-    expect((r as any).error.code).toBe("INVALID_REQUEST");
+    expect((r as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
   });
 });

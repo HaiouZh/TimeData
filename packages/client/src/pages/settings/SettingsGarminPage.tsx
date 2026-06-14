@@ -524,8 +524,8 @@ export default function SettingsGarminPage() {
                 </div>
                 {status.lastFetch.errors.length > 0 && (
                   <div className="mt-2 space-y-1 rounded border border-red-900 bg-red-950/30 p-2 text-xs text-red-300">
-                    {status.lastFetch.errors.map((err, index) => (
-                      <p key={`${err.code}-${err.domain ?? ""}-${err.date ?? ""}-${index}`}>
+                    {status.lastFetch.errors.map((err) => (
+                      <p key={`${err.code}-${err.domain ?? ""}-${err.date ?? ""}`}>
                         {formatGarminError(err)}
                       </p>
                     ))}

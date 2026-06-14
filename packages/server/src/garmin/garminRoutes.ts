@@ -17,7 +17,6 @@ import {
   saveGarminConfig,
   setGarminLastFetchDate,
 } from "./garminConfig.js";
-import type { GarminConfig } from "./garminConfig.js";
 
 const garminRoutes = new Hono();
 
@@ -121,7 +120,7 @@ garminRoutes.post("/fetch", async (c) => {
       400,
     );
 
-  let range;
+  let range: ReturnType<typeof resolveGarminFetchRange>;
   try {
     range = resolveGarminFetchRange(
       parsed.data,
