@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { exportBackup } from "../../backup/exportBackup.ts";
+import { describeDomainCounts, domainCountsFromBackup } from "../../backup/domainLabels.ts";
 import { downloadBackupFile } from "../../backup/fileDownload.ts";
 import { importBackup } from "../../backup/importBackup.ts";
 import { validateBackup } from "../../backup/validateBackup.ts";
@@ -148,8 +149,9 @@ export default function SettingsDataPage() {
     try {
       const backup = await exportBackup();
       await downloadBackupFile(backup);
+      const extras = describeDomainCounts(domainCountsFromBackup(backup));
       setDataStatus(
-        `完整备份已生成：${backup.categories.length} 个分类，${backup.timeEntries.length} 条记录，${backup.tasks.length} 个任务。`,
+        `完整备份已生成：${backup.categories.length} 个分类，${backup.timeEntries.length} 条记录${extras ? `，${extras}` : ""}。`,
       );
     } catch (e: unknown) {
       setDataStatus(`完整备份导出失败：${e instanceof Error ? e.message : "未知错误"}`);
@@ -176,9 +178,10 @@ export default function SettingsDataPage() {
           <>
             <p>导出时间：{formatAppDateTime(summary.exportedAt)}</p>
             <p>
-              分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}，任务数量：{summary.taskCount}
+              分类数量：{summary.categoryCount}，记录数量：{summary.entryCount}
+              {describeDomainCounts(summary.domainCounts) ? `，${describeDomainCounts(summary.domainCounts)}` : ""}
             </p>
-            <p>恢复会替换当前设备上的本地分类、时间记录、任务和同步队列。恢复前会先下载一份当前本地数据的安全备份。</p>
+            <p>恢复会替换当前设备上的本地分类、时间记录、任务、速记、健康数据和同步队列。恢复前会先下载一份当前本地数据的安全备份。</p>
           </>
         ),
         danger: true,
@@ -189,8 +192,9 @@ export default function SettingsDataPage() {
       await downloadBackupFile(beforeRestore, "TimeData-before-restore");
       const result = await importBackup(validation.backup);
       await refreshSyncStatus();
+      const restoredExtras = describeDomainCounts(result.domainCounts);
       setDataStatus(
-        `已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录，${result.taskCount} 个任务。服务器数据可能不同步，请确认后再手动同步。`,
+        `已恢复完整备份：${result.categoryCount} 个分类，${result.entryCount} 条记录${restoredExtras ? `，${restoredExtras}` : ""}。服务器数据可能不同步，请确认后再手动同步。`,
       );
     } catch (e: unknown) {
       setDataStatus(`恢复失败：${e instanceof Error ? e.message : "未知错误"}`);

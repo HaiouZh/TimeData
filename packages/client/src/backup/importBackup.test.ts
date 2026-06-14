@@ -115,13 +115,14 @@ function backup(): BackupDocument {
     device: { deviceId: "device-1", deviceName: "Web" },
     categories: [newCategory],
     timeEntries: [newEntry],
-    tasks: [newTask],
+    domains: { tasks: [newTask] },
   };
 }
 
 beforeEach(async () => {
   await db.timeEntries.clear();
   await db.tasks.clear();
+  await db.quickNotes.clear();
   await db.syncLog.clear();
   await db.categories.clear();
   localStorage.clear();
@@ -144,7 +145,21 @@ describe("importBackup", () => {
     await expect(db.syncLog.toArray()).resolves.toEqual([]);
     expect(localStorage.getItem("timedata_last_synced")).toBeNull();
     expect(localStorage.getItem(LAST_SYNCED_SEQ_KEY)).toBeNull();
-    expect(result).toEqual({ categoryCount: 1, entryCount: 1, taskCount: 1 });
+    expect(result).toEqual({ categoryCount: 1, entryCount: 1, domainCounts: { tasks: 1 } });
+  });
+
+  it("leaves domains absent from the backup untouched (auto-backup restore keeps quick notes)", async () => {
+    await db.quickNotes.add({ id: "keep-note", text: "保留我", occurredAt: now, createdAt: now, updatedAt: now });
+    await db.tasks.add(oldTask);
+
+    // backup() 只含 tasks 域，不含 quick_notes —— 恢复后速记应原样保留
+    const result = await importBackup(backup());
+
+    await expect(db.tasks.toArray()).resolves.toEqual([newTask]);
+    await expect(db.quickNotes.toArray()).resolves.toEqual([
+      { id: "keep-note", text: "保留我", occurredAt: now, createdAt: now, updatedAt: now },
+    ]);
+    expect(result.domainCounts).toEqual({ tasks: 1 });
   });
 
   it("does not modify local data when validation fails", async () => {
@@ -192,6 +207,6 @@ describe("importBackup", () => {
       },
     ]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([externalBackupEntry]);
-    expect(result).toEqual({ categoryCount: 1, entryCount: 1, taskCount: 1 });
+    expect(result).toEqual({ categoryCount: 1, entryCount: 1, domainCounts: { tasks: 1 } });
   });
 });

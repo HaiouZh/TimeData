@@ -1,11 +1,13 @@
 import { db, resetSyncCursors } from "../db/index.js";
+import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
 import type { BackupDocument } from "./schema.js";
 import { validateBackup } from "./validateBackup.js";
 
 export interface ImportBackupResult {
   categoryCount: number;
   entryCount: number;
-  taskCount: number;
+  /** 各普通域恢复的记录数，按 table 名键入。 */
+  domainCounts: Record<string, number>;
 }
 
 export async function importBackup(value: unknown): Promise<ImportBackupResult> {
@@ -15,8 +17,10 @@ export async function importBackup(value: unknown): Promise<ImportBackupResult> 
   }
 
   const backup: BackupDocument = validation.backup;
+  const bundledStores = BACKUP_BUNDLED_DOMAINS.map((domain) => db.table(domain.storeName));
+  const domainCounts: Record<string, number> = {};
 
-  await db.transaction("rw", db.categories, db.timeEntries, db.tasks, db.syncLog, async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.syncLog, ...bundledStores], async () => {
     const currentCategories = await db.categories.toArray();
     const currentNameById = new Map(currentCategories.map((category) => [category.id, category.name]));
     const categories = backup.categories.map((category) => {
@@ -25,12 +29,20 @@ export async function importBackup(value: unknown): Promise<ImportBackupResult> 
     });
 
     await db.timeEntries.clear();
-    await db.tasks.clear();
     await db.syncLog.clear();
     await db.categories.clear();
     await db.categories.bulkAdd(categories);
     await db.timeEntries.bulkAdd(backup.timeEntries);
-    await db.tasks.bulkAdd(backup.tasks);
+
+    // 只覆盖备份里“存在”的域；缺省的域原样保留本地数据（见 validateBackup 注释）。
+    for (const domain of BACKUP_BUNDLED_DOMAINS) {
+      const records = backup.domains[domain.table];
+      if (records === undefined) continue;
+      const store = db.table(domain.storeName);
+      await store.clear();
+      await store.bulkAdd(records);
+      domainCounts[domain.table] = records.length;
+    }
   });
 
   resetSyncCursors();
@@ -38,6 +50,6 @@ export async function importBackup(value: unknown): Promise<ImportBackupResult> 
   return {
     categoryCount: backup.categories.length,
     entryCount: backup.timeEntries.length,
-    taskCount: backup.tasks.length,
+    domainCounts,
   };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listAutoBackups, normalizeAutoBackupRecord, type AutoBackupRecordInput } from "../../backup/autoBackup.js";
+import { describeDomainCounts } from "../../backup/domainLabels.js";
 import { exportBackup } from "../../backup/exportBackup.js";
 import { downloadBackupFile } from "../../backup/fileDownload.js";
 import { importBackup } from "../../backup/importBackup.js";
@@ -77,12 +78,14 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
         device: { deviceId: null, deviceName: "AutoBackup" },
         categories: record.categories,
         timeEntries: record.timeEntries,
-        tasks: record.tasks,
+        // 自动备份只快照核心+任务；不写其它域，恢复时保留本地速记/健康数据。
+        domains: { tasks: record.tasks },
       });
+      const restoredExtras = describeDomainCounts(result.domainCounts);
       navigate("/settings/data", {
         replace: true,
         state: {
-          dataStatus: `已恢复自动备份：${result.categoryCount} 个分类，${result.entryCount} 条记录，${result.taskCount} 个任务。服务器数据可能不同步，请确认后再手动同步。`,
+          dataStatus: `已恢复自动备份：${result.categoryCount} 个分类，${result.entryCount} 条记录${restoredExtras ? `，${restoredExtras}` : ""}。服务器数据可能不同步，请确认后再手动同步。`,
         },
       });
     } catch (e: unknown) {

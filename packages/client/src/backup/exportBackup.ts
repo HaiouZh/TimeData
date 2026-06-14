@@ -1,4 +1,5 @@
 import { db } from "../db/index.js";
+import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
 import { BACKUP_FORMAT, type BackupDeviceInfo, type BackupDocument } from "./schema.js";
 
 export interface ExportBackupOptions {
@@ -12,11 +13,18 @@ function defaultAppVersion(): string {
 }
 
 export async function exportBackup(options: ExportBackupOptions = {}): Promise<BackupDocument> {
-  const [categories, timeEntries, tasks] = await Promise.all([
+  const [categories, timeEntries] = await Promise.all([
     db.categories.toArray(),
     db.timeEntries.toArray(),
-    db.tasks.toArray(),
   ]);
+
+  // 普通域靠登记簿白捡：每个 bundled 域读自己的 Dexie store，按 table 名键入 domains。
+  const domains: Record<string, unknown[]> = {};
+  await Promise.all(
+    BACKUP_BUNDLED_DOMAINS.map(async (domain) => {
+      domains[domain.table] = await db.table(domain.storeName).toArray();
+    }),
+  );
 
   return {
     format: BACKUP_FORMAT,
@@ -29,6 +37,6 @@ export async function exportBackup(options: ExportBackupOptions = {}): Promise<B
     },
     categories,
     timeEntries,
-    tasks,
+    domains,
   };
 }

@@ -66,7 +66,7 @@ function validBackup(overrides: Record<string, unknown> = {}) {
     device: { deviceId: "device-1", deviceName: "Web" },
     categories: [category("cat-1")],
     timeEntries: [entry("entry-1")],
-    tasks: [task("task-1")],
+    domains: { tasks: [task("task-1")] },
     ...overrides,
   };
 }
@@ -82,7 +82,7 @@ describe("validateBackup", () => {
         exportedAt: now,
         categoryCount: 1,
         entryCount: 1,
-        taskCount: 1,
+        domainCounts: { tasks: 1 },
       },
     });
   });
@@ -105,12 +105,12 @@ describe("validateBackup", () => {
     });
   });
 
-  it("rejects duplicate task ids", () => {
-    const result = validateBackup({ ...validBackup(), tasks: [task("task-1"), task("task-1")] });
+  it("rejects duplicate ids inside a bundled domain", () => {
+    const result = validateBackup({ ...validBackup(), domains: { tasks: [task("task-1"), task("task-1")] } });
 
     expect(result).toEqual({
       ok: false,
-      error: { code: "DUPLICATE_TASK_ID", message: "备份文件中存在重复任务 ID：task-1。" },
+      error: { code: "DUPLICATE_DOMAIN_ID", message: "备份文件中 tasks 存在重复 ID：task-1。" },
     });
   });
 
@@ -188,18 +188,30 @@ describe("validateBackup", () => {
     );
   });
 
-  it("rejects backups without a valid current tasks array", () => {
-    expect(validateBackup(validBackup({ tasks: undefined }))).toEqual(
+  it("treats an absent bundled domain as empty (not an error)", () => {
+    // domains map 整体缺省 → 合法，所有普通域归一化为缺省（恢复时保留本地）
+    const result = validateBackup(validBackup({ domains: undefined }));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.backup.domains).toEqual({});
+      expect(result.summary.domainCounts).toEqual({});
+    }
+  });
+
+  it("rejects a bundled domain that is present but not an array", () => {
+    expect(validateBackup(validBackup({ domains: { tasks: "nope" } }))).toEqual(
       expect.objectContaining({
         ok: false,
-        error: expect.objectContaining({ code: "INVALID_TASKS" }),
+        error: expect.objectContaining({ code: "INVALID_DOMAIN_RECORDS" }),
       }),
     );
+  });
 
-    expect(validateBackup(validBackup({ tasks: [task({ id: "task-1", title: "" })] }))).toEqual(
+  it("rejects invalid records inside a bundled domain", () => {
+    expect(validateBackup(validBackup({ domains: { tasks: [task({ id: "task-1", title: "" })] } }))).toEqual(
       expect.objectContaining({
         ok: false,
-        error: expect.objectContaining({ code: "INVALID_TASKS" }),
+        error: expect.objectContaining({ code: "INVALID_DOMAIN_RECORDS" }),
       }),
     );
   });
@@ -256,7 +268,7 @@ function makeBackup(overrides: Record<string, unknown> = {}) {
     device: { deviceId: null, deviceName: "Web" },
     categories: [],
     timeEntries: [],
-    tasks: [],
+    domains: {},
     ...overrides,
   };
 }

@@ -1,7 +1,8 @@
 import "fake-indexeddb/auto";
-import type { Category, Task, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Task, TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
+import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
 import { exportBackup } from "./exportBackup.js";
 import { BACKUP_FORMAT } from "./schema.js";
 
@@ -41,18 +42,28 @@ const task: Task = {
   updatedAt: now,
 };
 
+const quickNote: QuickNote = {
+  id: "note-1",
+  text: "备份速记",
+  occurredAt: now,
+  createdAt: now,
+  updatedAt: now,
+};
+
 beforeEach(async () => {
   await db.timeEntries.clear();
   await db.tasks.clear();
+  await db.quickNotes.clear();
   await db.syncLog.clear();
   await db.categories.clear();
 });
 
 describe("exportBackup", () => {
-  it("exports all categories, time entries and tasks in Backup JSON", async () => {
+  it("exports core tables plus every bundled domain (tasks, quick notes, health) keyed by table name", async () => {
     await db.categories.add(category);
     await db.timeEntries.add(entry);
     await db.tasks.add(task);
+    await db.quickNotes.add(quickNote);
 
     const backup = await exportBackup({
       now: () => "2026-05-07T12:30:00.000Z",
@@ -60,15 +71,22 @@ describe("exportBackup", () => {
       device: { deviceId: "device-1", deviceName: "Web" },
     });
 
-    expect(backup).toEqual({
-      format: BACKUP_FORMAT,
-      timeFormat: "utc",
-      exportedAt: "2026-05-07T12:30:00.000Z",
-      appVersion: "0.1.0-test",
-      device: { deviceId: "device-1", deviceName: "Web" },
-      categories: [category],
-      timeEntries: [entry],
-      tasks: [task],
-    });
+    expect(backup.format).toBe(BACKUP_FORMAT);
+    expect(backup.timeFormat).toBe("utc");
+    expect(backup.exportedAt).toBe("2026-05-07T12:30:00.000Z");
+    expect(backup.appVersion).toBe("0.1.0-test");
+    expect(backup.device).toEqual({ deviceId: "device-1", deviceName: "Web" });
+    expect(backup.categories).toEqual([category]);
+    expect(backup.timeEntries).toEqual([entry]);
+
+    // 普通域走通用 domains map，按 table 名键入；速记与任务都在
+    expect(backup.domains.tasks).toEqual([task]);
+    expect(backup.domains.quick_notes).toEqual([quickNote]);
+
+    // 完整导出始终写齐全部 bundled 域（空的也写成 []）
+    for (const domain of BACKUP_BUNDLED_DOMAINS) {
+      expect(backup.domains[domain.table]).toBeDefined();
+    }
+    expect(backup.domains.health_sleep).toEqual([]);
   });
 });

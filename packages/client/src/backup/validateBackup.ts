@@ -1,12 +1,11 @@
 import {
   CategorySchema,
-  TaskSchema,
   TimeEntrySchema,
   UtcIsoStringSchema,
   type Category,
-  type Task,
   type TimeEntry,
 } from "@timedata/shared";
+import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
 import { BACKUP_FORMAT, type BackupDocument, type BackupValidationResult } from "./schema.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -111,17 +110,46 @@ export function validateBackup(value: unknown): BackupValidationResult {
     timeEntries.push(parsed.data);
   }
 
-  if (!Array.isArray(value.tasks)) {
-    return { ok: false, error: { code: "INVALID_TASKS", message: "备份文件任务数据无效。" } };
+  // 普通域：`domains` 必须是对象；每个登记的 bundled 域逐条用其 schema 校验、按 id 去重。缺域归一化为空数组。
+  if (value.domains !== undefined && !isRecord(value.domains)) {
+    return { ok: false, error: { code: "INVALID_DOMAINS", message: "备份文件域数据格式无效。" } };
   }
+  const rawDomains = isRecord(value.domains) ? value.domains : {};
 
-  const tasks: Task[] = [];
-  for (const raw of value.tasks) {
-    const parsed = TaskSchema.safeParse(raw);
-    if (!parsed.success) {
-      return { ok: false, error: { code: "INVALID_TASKS", message: "备份文件任务数据无效。" } };
+  // 只保留备份里“实际存在”的域：缺省的域不进 domains，恢复时原样保留本地该域数据
+  // （自动备份只快照核心+任务，恢复它不应抹掉速记/健康）。完整导出始终写齐全部 bundled 域。
+  const domains: Record<string, unknown[]> = {};
+  const domainCounts: Record<string, number> = {};
+  for (const domain of BACKUP_BUNDLED_DOMAINS) {
+    const rawList = rawDomains[domain.table];
+    if (rawList === undefined) {
+      continue;
     }
-    tasks.push(parsed.data);
+    if (!Array.isArray(rawList)) {
+      return { ok: false, error: { code: "INVALID_DOMAIN_RECORDS", message: `备份文件 ${domain.table} 数据无效。` } };
+    }
+
+    const records: unknown[] = [];
+    const ids = new Set<string>();
+    for (const raw of rawList) {
+      const parsed = domain.schema.safeParse(raw);
+      if (!parsed.success) {
+        return { ok: false, error: { code: "INVALID_DOMAIN_RECORDS", message: `备份文件 ${domain.table} 数据无效。` } };
+      }
+      const id = (parsed.data as { id?: unknown }).id;
+      if (typeof id === "string") {
+        if (ids.has(id)) {
+          return {
+            ok: false,
+            error: { code: "DUPLICATE_DOMAIN_ID", message: `备份文件中 ${domain.table} 存在重复 ID：${id}。` },
+          };
+        }
+        ids.add(id);
+      }
+      records.push(parsed.data);
+    }
+    domains[domain.table] = records;
+    domainCounts[domain.table] = records.length;
   }
 
   const categoryIds = new Set<string>();
@@ -140,15 +168,6 @@ export function validateBackup(value: unknown): BackupValidationResult {
       return { ok: false, error: { code: "DUPLICATE_ENTRY_ID", message: `备份文件中存在重复记录 ID：${id}。` } };
     }
     entryIds.add(id);
-  }
-
-  const taskIds = new Set<string>();
-  for (const task of tasks) {
-    const { id } = task;
-    if (taskIds.has(id)) {
-      return { ok: false, error: { code: "DUPLICATE_TASK_ID", message: `备份文件中存在重复任务 ID：${id}。` } };
-    }
-    taskIds.add(id);
   }
 
   const treeError = validateCategoryTree(categories);
@@ -174,7 +193,7 @@ export function validateBackup(value: unknown): BackupValidationResult {
     device,
     categories,
     timeEntries,
-    tasks,
+    domains,
   };
   return {
     ok: true,
@@ -183,7 +202,7 @@ export function validateBackup(value: unknown): BackupValidationResult {
       exportedAt: backup.exportedAt,
       categoryCount: backup.categories.length,
       entryCount: backup.timeEntries.length,
-      taskCount: backup.tasks.length,
+      domainCounts,
     },
   };
 }

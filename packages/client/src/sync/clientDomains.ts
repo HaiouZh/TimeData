@@ -35,6 +35,15 @@ export interface ClientDomainConfig {
   needsApply?: (existing: unknown | undefined, remote: unknown) => boolean;
   /** Optional: custom check for repair mode skip (e.g. time_entries isCompleteEntry) */
   shouldSkipOnRepair?: (existing: unknown, remote: unknown) => boolean;
+  /**
+   * 完整备份（timedata.backup）里的角色：
+   * - "core"：核心业务表（categories/time_entries），有专属完整性校验，作为命名顶层字段导出
+   * - "bundled"：普通状态域，进备份的通用 `domains` map（按 table 名键入），靠登记簿白捡
+   * - "separate"：有独立导出通道（如速记额外的 quick-notes.backup），不强制混入——当前未使用
+   * - "excluded"：不进备份（如 settings、机密域）
+   * 缺省视为 "excluded"。机密域（未来的密码本）即便想进备份也必须先有加密通道，见 docs_local/ideas 备份加密路线。
+   */
+  backup?: "core" | "bundled" | "separate" | "excluded";
 }
 
 // --- Domain-specific helpers (extracted from engine.ts) ---
@@ -99,6 +108,7 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     storeName: "categories",
     schema: CategorySchema,
     applyRemoteDelete: applyRemoteCategoryDelete,
+    backup: "core",
   },
   time_entries: {
     table: "time_entries",
@@ -116,6 +126,7 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
       const r = remote as TimeEntry;
       return isCompleteEntry(e) && e.updatedAt >= r.updatedAt;
     },
+    backup: "core",
   },
   settings: {
     table: "settings",
@@ -123,6 +134,7 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     schema: SettingSchema,
     needsApply: (existing, remote) =>
       settingNeedsApply(existing as Setting | undefined, remote as Setting),
+    backup: "excluded",
   },
   quick_notes: {
     table: "quick_notes",
@@ -130,6 +142,7 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     schema: QuickNoteSchema,
     needsApply: (existing, remote) =>
       quickNoteNeedsApply(existing as QuickNote | undefined, remote as QuickNote),
+    backup: "bundled",
   },
   tasks: {
     table: "tasks",
@@ -137,31 +150,37 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     schema: TaskSchema,
     needsApply: (existing, remote) =>
       taskNeedsApply(existing as Task | undefined, remote as Task),
+    backup: "bundled",
   },
   health_heart_rate: {
     table: "health_heart_rate",
     storeName: "healthHeartRate",
     schema: HealthHeartRateSchema,
+    backup: "bundled",
   },
   health_hrv: {
     table: "health_hrv",
     storeName: "healthHrv",
     schema: HealthHrvSchema,
+    backup: "bundled",
   },
   health_sleep: {
     table: "health_sleep",
     storeName: "healthSleep",
     schema: HealthSleepSchema,
+    backup: "bundled",
   },
   health_stress: {
     table: "health_stress",
     storeName: "healthStress",
     schema: HealthStressSchema,
+    backup: "bundled",
   },
   runs: {
     table: "runs",
     storeName: "runs",
     schema: HealthRunSchema,
+    backup: "bundled",
   },
 };
 
@@ -170,6 +189,14 @@ export function getClientDomain(table: string): ClientDomainConfig {
   if (!domain) throw new Error(`Unknown client sync domain: ${table}`);
   return domain;
 }
+
+/**
+ * 完整备份里走通用 `domains` map 的普通状态域，按登记顺序排列。
+ * 新增一个普通域只要在 CLIENT_SYNC_DOMAINS 标 `backup: "bundled"`，导出/校验/恢复全部白捡。
+ */
+export const BACKUP_BUNDLED_DOMAINS: ClientDomainConfig[] = Object.values(CLIENT_SYNC_DOMAINS).filter(
+  (domain) => domain.backup === "bundled",
+);
 
 /** Parse remote data using domain schema. Returns null if invalid. */
 export function parseRemoteRecord(domain: ClientDomainConfig, data: unknown, recordId: string): unknown | null {

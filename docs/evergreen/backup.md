@@ -41,23 +41,38 @@ TimeData 现有四种备份/可恢复文件：
   },
   "categories": [/* Category[] */],
   "timeEntries": [/* TimeEntry[] */],
-  "tasks": [/* Task[] */]
+  "domains": {
+    "tasks": [/* Task[] */],
+    "quick_notes": [/* QuickNote[] */],
+    "health_heart_rate": [/* ... */],
+    "health_hrv": [], "health_sleep": [], "health_stress": [], "runs": []
+  }
 }
 ```
 
-`timeFormat` 恢复前必须存在且值只能是 `"utc"`。`timeEntries` 中的 `startTime` / `endTime` 必须是带毫秒和 `Z` 的 UTC ISO 字符串（例如 `2026-05-07T10:00:00.000Z`），且每条记录必须满足 `endTime > startTime`。`tasks` 必须存在且是 `Task[]`；任务时间字段同样必须是 UTC `.sssZ` 或 `null`，重复规则必须满足 shared `RecurrenceSchema`。分类树只支持两级结构：顶层分类 `parentId = null`，子分类只能指向顶层分类，不能自引用、形成环或引用不存在的父分类。
+**备份骑客户端域登记簿（关键设计）**：导出/校验/恢复都从 `packages/client/src/sync/clientDomains.ts` 的 `CLIENT_SYNC_DOMAINS` 派生，不再手写表名。每个域声明 `backup` 角色：
 
-**只包含**：`categories`、`timeEntries` 和 `tasks`。
+- `"core"`：`categories` / `time_entries`，命名顶层字段，带专属完整性校验（两级分类树、记录外键）。
+- `"bundled"`：普通状态域（`tasks`、`quick_notes`、5 个健康域），进通用 `domains` map，按 **table 名（snake_case）** 键入，逐条用各自 schema 校验、按 `id` 去重。**新增普通域只要在登记簿标 `backup:"bundled"`，导出/校验/恢复全部白捡**（派生列表见 `BACKUP_BUNDLED_DOMAINS`）。
+- `"excluded"`：`settings` 等不进备份。
+
+`timeFormat` 恢复前必须存在且值只能是 `"utc"`。`timeEntries` 的 `startTime` / `endTime` 必须是带毫秒和 `Z` 的 UTC ISO 字符串且 `endTime > startTime`。任务时间字段同样 UTC `.sssZ` 或 `null`，重复规则满足 shared `RecurrenceSchema`。分类树只支持两级结构。
+
+**域的"缺省 vs 存在"语义（恢复安全关键）**：`domains` 里**缺省**的域恢复时**原样保留本地数据**，不清空；只有**存在**（哪怕是 `[]`）的域才会被清空+覆盖。完整导出始终写齐全部 bundled 域（空的也写 `[]`），所以完整恢复语义不变；而自动备份只快照 `core + tasks`、`domains` 只含 `{ tasks }`，恢复它**不会**抹掉本地速记/健康数据。
+
+**包含**：`categories`、`timeEntries`，以及 `domains` 下的 `tasks`、`quick_notes` 和 5 个健康域。
 
 **不包含**（明确不导出）：
 
 - `syncLog`（待同步队列，跨设备无意义）
 - API URL、Token（**安全考虑，不可暴露**）
-- `quickNotes`（速记有独立 `timedata.quick-notes.backup` 格式，当前不混入完整 `timedata.backup`）
+- UI 设置 / 同步 settings（例如睡眠分类）/ 临时计时器状态（`backup:"excluded"`）
 - 自动备份 `autoBackups`（避免备份套备份）
-- UI 设置 / 同步 settings（例如睡眠分类）/ 临时计时器状态
+- 机密域（未来的密码本）：在加密备份落地前**绝不进明文备份**，见 [`docs_local/ideas/2026-06-14-备份加密与机密域路线.md`](../../docs_local/ideas/2026-06-14-备份加密与机密域路线.md)（本地，不进 Git）。
 
-外部 Backup JSON 不保留旧格式兼容路径：当前格式要求 `tasks` 字段存在。只有浏览器本地 Dexie 里的历史 `autoBackups` 记录允许缺少 `tasks`，读取时会归一化为 `[]`。
+> 注：速记除了进完整备份，仍保留独立的 `timedata.quick-notes.backup` 格式（按日期/范围导出，见 §1.5），作为"只导速记"的便捷通道；完整备份是它的超集，不是替代。
+
+外部 Backup JSON 不保留旧格式兼容路径：当前格式用 `domains` map 承载普通域，旧的顶层 `tasks` 字段不再读取。浏览器本地 Dexie 的历史 `autoBackups` 记录仍允许缺少 `tasks`，读取时归一化为 `[]`。
 
 ## 1.5 Quick Notes 独立备份格式
 
