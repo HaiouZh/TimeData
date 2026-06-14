@@ -140,3 +140,11 @@ export function weekOfOrigin(createdAtIso: string): string {
   const week = Math.ceil(((local.getTime() - yearStart.getTime()) / DAY_MS + 1) / 7);
   return `w${week}`;
 }
+
+/** 当前到期日序号：无 lastDoneAt → startDay；有 → lastDoneAt 后的下一应发生日。供 overdue 判定。 */
+export function currentDueDayFor(r: Recurrence, lastDoneAt: string | null, startAt: string | Date | null, now: string | Date = new Date()): number {
+  const nowDate = toDate(now);
+  const start = startAt ? toDate(startAt) : nowDate;
+  if (!lastDoneAt) return localDayIndex(start);
+  return nextScheduledDayAfter(r, start, toDate(lastDoneAt));
+}
