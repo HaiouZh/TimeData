@@ -7,8 +7,9 @@ covers:
   - packages/server/src/lib/quick-note-service.ts
   - packages/server/src/routes/entries.ts
   - packages/server/src/routes/quick-notes.ts
+  - packages/server/src/routes/tasks.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-06-03
+last-reviewed: 2026-06-14
 ---
 
 # CLI（受控 API 客户端）
@@ -18,7 +19,7 @@ last-reviewed: 2026-06-03
 
 ## 1. 白名单命令
 
-当前 CLI 只有以下白名单命令，其中 `log` 是 CLI 当前唯一写数据的命令：
+当前 CLI 只有以下白名单命令：
 
 | 命令 | 是否写数据 | 作用 | API 调用 |
 |---|---:|---|---|
@@ -28,7 +29,10 @@ last-reviewed: 2026-06-03
 | `timedata list [--date YYYY-MM-DD]` | 否 | 列某天的时间记录（带分类路径、时长） | `GET /api/entries?date=...&format=cli` |
 | `timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note ...]` | 是 | 写一条时间记录 | `POST /api/entries` |
 | `timedata notes [--date YYYY-MM-DD \| --from YYYY-MM-DD --to YYYY-MM-DD \| --recent --limit N]` | 否 | 列速记（按本地日期、日期范围或最近 N 条） | `GET /api/quick-notes?...&format=cli` |
-| `timedata version` / `--version` | 否 | 打印构建期烧入的版本号和 git sha（`TIMEDATA_CLI_VERSION` / `TIMEDATA_CLI_SHA` 环境变量） | 无，不读取配置 |
+| `timedata tasks [--kind pool\|recurring] [--done 0\|1]` | 否 | 列任务 | `GET /api/tasks` |
+| `timedata task-schedule --id ID --date YYYY-MM-DD` | 是 | 排期任务到指定日期 | `POST /api/tasks/:id/schedule` |
+| `timedata task-unschedule --id ID` | 是 | 取消任务排期（移回 inbox） | `POST /api/tasks/:id/schedule` (scheduledDate=null) |
+| `timedata version` / `--version` | 否 | 打印构建期烧入的版本号和 git sha | 无，不读取配置 |
 
 **任何不在这里的 CLI 功能 = 不存在**。新增命令必须先在本地-only 的 `docs_local/plans/` 下放计划再实现；新增 CLI 写入命令还必须先补受控 server API，并在落地后更新公开长期文档。若新需求本身是授权 agent 集成，也可只新增受控 server API，不强制同步增加 CLI 命令。扩 `update` / `delete` / `category-add` / `import` 的决定见 [`adr/0005-cli-surface-expansion-deferred.md`](../adr/0005-cli-surface-expansion-deferred.md)。
 

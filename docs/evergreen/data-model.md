@@ -182,6 +182,12 @@ type Recurrence = {
   basis: "due" | "completion";
 };
 
+type TaskSubtask = {
+  id: string;
+  title: string;
+  done: boolean;
+};
+
 type Task = {
   id: string;
   title: string;
@@ -189,6 +195,8 @@ type Task = {
   recurrence: Recurrence | null;
   lastDoneAt: string | null;
   startAt: string | null;
+  scheduledAt: string | null;
+  subtasks: TaskSubtask[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -356,6 +364,8 @@ type SyncChange =
 | `pinned` | `pinned`（SQL 0/1，JS 可选 boolean） |
 | `last_done_at` | `lastDoneAt` |
 | `start_at` | `startAt` |
+| `scheduled_at` | `scheduledAt` |
+| `subtasks` | `subtasks` (SQL JSON string, JS `TaskSubtask[]`) |
 | `sort_order` | `sortOrder` |
 | `is_archived` | `isArchived`（SQL 0/1，JS boolean） |
 | `created_at` | `createdAt` |
@@ -365,14 +375,14 @@ type SyncChange =
 
 ## 10. Dexie schema
 
-`packages/client/src/db/index.ts` 当前维护五个 Dexie 版本声明；v5 是当前 schema，在 v4 健康数据表基础上新增 `tasks`，并保留旧表声明以支持本地升级：
+`packages/client/src/db/index.ts` currently maintains six Dexie version declarations; v6 is the current schema, adding `scheduledAt` index to `tasks` on top of v5:
 
 ```ts
-db.version(5).stores({
+db.version(6).stores({
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
-  tasks: "id, sortOrder, updatedAt",
+  tasks: "id, scheduledAt, sortOrder, updatedAt",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
   autoBackups: "id, createdAt",
   settings: "key",
@@ -384,7 +394,7 @@ db.version(5).stores({
 });
 ```
 
-v1 是初始业务表，v2 增加 `settings`，v3 增加 `quickNotes`，v4 增加 5 张健康数据表，v5 增加 `tasks`。`QuickNote.pinned` 不建索引，因此作为普通字段随记录存储，不需要新增 Dexie 版本。`resetLocalDataToDefaults()` 当前重置分类、时间记录、任务、settings 与对应非速记 `syncLog`，不会清空 `quickNotes` 和健康数据；速记有独立导入/导出/删除入口。
+v1-v5 history: v1 initial, v2 `settings`, v3 `quickNotes`, v4 health tables, v5 `tasks`, v6 `tasks.scheduledAt` index.
 
 **SQLite 这边**目前的迁移机制是 `CREATE TABLE IF NOT EXISTS`——只能加表，**不能改已有列定义**。改 schema 时需要：
 1. 加新表 / 加新列（用 `ALTER TABLE ... ADD COLUMN`）— 现有数据自动兼容。
