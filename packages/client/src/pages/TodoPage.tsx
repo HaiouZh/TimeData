@@ -5,7 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { RecurrenceEditor } from "../components/RecurrenceEditor.js";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { addTask, deleteTask, listTasksLegacy, toggleTaskDone, updateTask } from "../lib/tasks.js";
-import { isDueNow, recurrenceSummary, weekOfOrigin } from "../lib/tasks/recurrence.js";
+import { isDueNow, recurrenceSummary, formatCreatedAt } from "../lib/tasks/recurrence.js";
 
 const EMPTY_LISTS: { pool: Task[]; recurring: Task[] } = { pool: [], recurring: [] };
 
@@ -46,7 +46,7 @@ function TaskRow({
                 <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
               </>
             ) : (
-              <span>{weekOfOrigin(task.createdAt)}</span>
+              <span>{formatCreatedAt(task.createdAt)}</span>
             )}
           </div>
         </div>

@@ -131,14 +131,12 @@ export function recurrenceSummary(r: Recurrence): string {
   return `${r.interval === 1 ? "每月" : `每${r.interval}月`}${monthdays}${time}`;
 }
 
-export function weekOfOrigin(createdAtIso: string): string {
-  const date = new Date(createdAtIso);
-  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = local.getDay() || 7;
-  local.setDate(local.getDate() + 4 - day);
-  const yearStart = new Date(local.getFullYear(), 0, 1);
-  const week = Math.ceil(((local.getTime() - yearStart.getTime()) / DAY_MS + 1) / 7);
-  return `w${week}`;
+/** 本地"创建于 MM-DD"。 */
+export function formatCreatedAt(createdAtIso: string): string {
+  const d = new Date(createdAtIso);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `创建于 ${mm}-${dd}`;
 }
 
 /** 当前到期日序号：无 lastDoneAt → startDay；有 → lastDoneAt 后的下一应发生日。供 overdue 判定。 */

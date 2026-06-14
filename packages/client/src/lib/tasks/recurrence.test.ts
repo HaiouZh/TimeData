@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isDueNow, recurrenceSummary, weekOfOrigin } from "./recurrence.js";
+import { isDueNow, recurrenceSummary, formatCreatedAt } from "./recurrence.js";
 import type { Recurrence } from "@timedata/shared";
 
 const daily = (over: Partial<Recurrence> = {}): Recurrence => ({ freq: "daily", interval: 1, basis: "due", ...over });
@@ -110,7 +110,7 @@ describe("recurrence display helpers", () => {
     expect(recurrenceSummary({ freq: "monthly", interval: 1, byMonthday: [1, -1], basis: "due" })).toBe("每月1号、最后一天");
   });
 
-  it("derives ISO week labels", () => {
-    expect(weekOfOrigin("2026-06-14T00:00:00.000Z")).toBe("w24");
+  it("formatCreatedAt 显示本地日期", () => {
+    expect(formatCreatedAt("2026-06-14T00:00:00.000Z")).toMatch(/创建于 \d{2}-\d{2}/);
   });
 });
