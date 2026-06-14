@@ -402,6 +402,13 @@ export default function SettingsPage() {
 
       <SettingsGroup label="服务端与更新">
         <SettingsLinkRow
+          to="/settings/garmin"
+          icon={<RefreshIcon />}
+          accent="emerald"
+          title="Garmin 数据同步"
+          subtitle="配置 Garmin 账号、定时抓取健康数据"
+        />
+        <SettingsLinkRow
           to="/settings/admin-insights"
           icon={<ServerIcon />}
           accent="blue"

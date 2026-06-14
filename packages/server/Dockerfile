@@ -38,12 +38,17 @@ RUN apk add --no-cache --virtual .native-build-deps python3 make g++ \
  && test -f node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/Release/better_sqlite3.node \
  && apk del .native-build-deps
 
+RUN apk add --no-cache python3 py3-pip \
+ && pip3 install --break-system-packages garminconnect garth
+
 ARG GIT_SHA=dev
 ENV GIT_SHA=${GIT_SHA}
 ENV NODE_ENV=production
 
 COPY packages/server/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
+COPY packages/server/src/garmin/garminFetch.py /app/garminFetch.py
+COPY packages/server/src/garmin/requirements.txt /app/requirements.txt
 
 EXPOSE 3000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

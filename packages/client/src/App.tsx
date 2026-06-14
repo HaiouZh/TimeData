@@ -19,6 +19,7 @@ import SettingsDataPage from "./pages/settings/SettingsDataPage.tsx";
 import SettingsInsightsPage from "./pages/settings/SettingsInsightsPage.tsx";
 import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
 import SettingsStatsLayoutPage from "./pages/settings/SettingsStatsLayoutPage.tsx";
+import SettingsGarminPage from "./pages/settings/SettingsGarminPage.tsx";
 import TimelinePage from "./pages/TimelinePage.tsx";
 
 export function AppShell() {
@@ -49,6 +50,7 @@ export function AppShell() {
           <Route path="/settings/data" element={<SettingsDataPage />} />
           <Route path="/settings/data/backup-history" element={<BackupHistoryPage />} />
           <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
+          <Route path="/settings/garmin" element={<SettingsGarminPage />} />
         </Routes>
       </main>
       {!hidesBottomNav && (

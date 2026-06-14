@@ -177,6 +177,12 @@ export function initializeDatabase(): void {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_runs_date ON runs(date) WHERE sync_tombstone = 0;
+
+    CREATE TABLE IF NOT EXISTS server_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   ensureQuickNoteSourceColumns(db);

@@ -18,6 +18,9 @@ import exportRoute from "./routes/export.js";
 import quickNotesRoute from "./routes/quick-notes.js";
 import syncRoute from "./routes/sync.js";
 import { ingestRoutes } from "./routes/ingest.js";
+import { garminRoutes } from "./garmin/garminRoutes.js";
+import { loadGarminConfig } from "./garmin/garminRoutes.js";
+import { updateSchedule } from "./garmin/garminService.js";
 import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
@@ -103,6 +106,7 @@ app.route("/api/update", updateRoute);
 app.route("/api/data", dataRoute);
 app.route("/api/admin", adminRoute);
 app.route("/api/health", ingestRoutes);
+app.route("/api/admin/garmin", garminRoutes);
 
 app.use("/*", serveStatic({ root: "./public" }));
 app.get("*", serveStatic({ root: "./public", path: "index.html" }));
@@ -125,6 +129,15 @@ try {
   if (removed.length > 0) console.log(`[backup] startup cleanup removed ${removed.length} old backups`);
 } catch (error) {
   console.warn("[backup] startup cleanup failed", error);
+}
+
+try {
+  const garminConfig = loadGarminConfig();
+  if (garminConfig.enabled && garminConfig.schedule) {
+    updateSchedule(garminConfig);
+  }
+} catch (error) {
+  console.warn("[garmin] startup schedule init failed", error);
 }
 
 if (process.env.SERVER_REPLICAS && Number(process.env.SERVER_REPLICAS) > 1) {
