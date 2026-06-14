@@ -3,7 +3,7 @@ import { SERVER_SYNC_DOMAINS, getServerDomain } from "./domains.js";
 
 describe("server sync domains", () => {
   it("covers every registered shared domain", () => {
-    expect(Object.keys(SERVER_SYNC_DOMAINS).sort()).toEqual(["categories", "quick_notes", "settings", "time_entries"]);
+    expect(Object.keys(SERVER_SYNC_DOMAINS).sort()).toEqual(["categories", "quick_notes", "settings", "tasks", "time_entries"]);
   });
 
   it("lww domains have no custom apply hook (use generic path)", () => {
