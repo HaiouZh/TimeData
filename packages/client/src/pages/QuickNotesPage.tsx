@@ -128,6 +128,7 @@ export default function QuickNotesPage() {
   const preserveAnchorRef = useRef(false);
   const didInitJumpRef = useRef(false);
   const lastScrollTopRef = useRef(0);
+  const lastClientHeightRef = useRef(0);
 
   const { confirm, dialog } = useConfirm();
   const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
@@ -288,15 +289,24 @@ export default function QuickNotesPage() {
       void timeline.loadNewer();
     }
 
+    // 隐藏 / 显示底部导航会让导航高度动画（49↔0），进而改变本滚动容器的可视高度。
+    // 在底部时，容器变高会被浏览器钳制 / 滚动锚定强行改写 scrollTop 并触发 onScroll，
+    // 若据此判定方向就会把导航反向翻回，形成「导航高度 → scrollTop → 导航高度」的死循环，
+    // 桌面端（真实滚动条 + 滚动锚定）表现为底部持续抖动。因此 clientHeight 发生变化的这一帧
+    // 只重置基线、不参与方向判定，等容器尺寸稳定后再恢复滚动隐藏逻辑。
     const top = el.scrollTop;
+    const viewportResized = el.clientHeight !== lastClientHeightRef.current;
+    lastClientHeightRef.current = el.clientHeight;
     const SHOW_NEAR_TOP_PX = 24;
     const DIR_DELTA_PX = 6;
-    if (top <= SHOW_NEAR_TOP_PX) {
-      setNavHidden(false);
-    } else if (top > lastScrollTopRef.current + DIR_DELTA_PX) {
-      setNavHidden(true);
-    } else if (top < lastScrollTopRef.current - DIR_DELTA_PX) {
-      setNavHidden(false);
+    if (!viewportResized) {
+      if (top <= SHOW_NEAR_TOP_PX) {
+        setNavHidden(false);
+      } else if (top > lastScrollTopRef.current + DIR_DELTA_PX) {
+        setNavHidden(true);
+      } else if (top < lastScrollTopRef.current - DIR_DELTA_PX) {
+        setNavHidden(false);
+      }
     }
     lastScrollTopRef.current = top;
 
