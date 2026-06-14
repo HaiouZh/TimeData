@@ -37,7 +37,7 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
 }
 
 describe("TodoPage", () => {
-  it("renders pool and recurring blocks", async () => {
+  it("renders today and recurring sections", async () => {
     await addTask({ title: "买啤酒" });
     await addTask({ title: "跑步", recurrence: { freq: "daily", interval: 1, basis: "due" } });
     const { host, root } = await renderPage();
@@ -46,11 +46,12 @@ describe("TodoPage", () => {
 
     expect(host.textContent).toContain("跑步");
     expect(host.textContent).toContain("重复任务");
-    expect(host.textContent).toContain("任务池");
+    expect(host.textContent).toContain("今天");
+    expect(host.textContent).toContain("收件箱");
     await act(async () => root.unmount());
   });
 
-  it("adds a pool task via input", async () => {
+  it("adds a task to today via input", async () => {
     const { host, root } = await renderPage();
     const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement | null;
     const form = host.querySelector("form");
@@ -69,6 +70,15 @@ describe("TodoPage", () => {
 
     await waitForText(host, "新任务");
     await expect(db.tasks.toArray()).resolves.toMatchObject([{ title: "新任务", recurrence: null }]);
+    await act(async () => root.unmount());
+  });
+
+  it("inbox task goes to inbox section", async () => {
+    await addTask({ title: "稍后处理", toInbox: true });
+    const { host, root } = await renderPage();
+
+    await waitForText(host, "稍后处理");
+    expect(host.textContent).toContain("收件箱");
     await act(async () => root.unmount());
   });
 });

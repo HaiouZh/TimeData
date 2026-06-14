@@ -1,90 +1,38 @@
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
-import type { Recurrence, Task } from "@timedata/shared";
+import type { Recurrence, Task, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
+import { SwipeableList, Type as ListType } from "@meauxt/react-swipeable-list";
+import "@meauxt/react-swipeable-list/dist/styles.css";
 import { RecurrenceEditor } from "../components/RecurrenceEditor.js";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
-import { addTask, deleteTask, listTasksLegacy, toggleTaskDone, updateTask } from "../lib/tasks.js";
+import {
+  addTask, deleteTask, listTasks, scheduleTask, toggleTaskDone,
+  unscheduleTask, updateSubtasks, updateTask, type TodoBuckets,
+} from "../lib/tasks.js";
 import { isDueNow, recurrenceSummary, formatCreatedAt } from "../lib/tasks/recurrence.js";
+import { placementForTask } from "../lib/tasks/placement.js";
+import { trimSubtasks } from "../lib/tasks/subtasks.js";
+import { SubtaskEditor } from "./todo/SubtaskEditor.js";
+import { SwipeableTaskRow } from "./todo/SwipeableTaskRow.js";
 
-const EMPTY_LISTS: { pool: Task[]; recurring: Task[] } = { pool: [], recurring: [] };
-
-function TaskRow({
-  task,
-  recurring,
-  onToggle,
-  onEdit,
-  onDelete,
-}: {
-  task: Task;
-  recurring: boolean;
-  onToggle: (task: Task) => void;
-  onEdit: (task: Task) => void;
-  onDelete: (task: Task) => void;
-}) {
-  const due = task.recurrence ? isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : !task.done;
-  const checked = recurring ? !due : task.done;
-
-  return (
-    <li className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
-      <div className="flex items-start gap-3">
-        <input
-          type="checkbox"
-          aria-label={`完成 ${task.title}`}
-          checked={checked}
-          onChange={() => onToggle(task)}
-          className="mt-1 h-5 w-5 shrink-0 accent-sky-500"
-        />
-        <div className="min-w-0 flex-1">
-          <div className={`break-words text-sm font-medium ${task.done ? "text-slate-500 line-through" : "text-slate-100"}`}>
-            {task.title}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            {task.recurrence ? (
-              <>
-                <span>{recurrenceSummary(task.recurrence)}</span>
-                <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
-              </>
-            ) : (
-              <span>{formatCreatedAt(task.createdAt)}</span>
-            )}
-          </div>
-        </div>
-        <div className="flex shrink-0 gap-1">
-          <button
-            type="button"
-            onClick={() => onEdit(task)}
-            className="min-h-8 rounded-lg border border-slate-700 px-2 text-xs text-slate-300"
-          >
-            编辑
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(task)}
-            className="min-h-8 rounded-lg border border-rose-900/70 px-2 text-xs text-rose-200"
-          >
-            删除
-          </button>
-        </div>
-      </div>
-    </li>
-  );
-}
+const EMPTY: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
 
 export function TodoPage() {
-  const tasks = useLiveQuery(() => listTasksLegacy(), [], EMPTY_LISTS) ?? EMPTY_LISTS;
+  const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const [draftTitle, setDraftTitle] = useState("");
   const [draftRecurrence, setDraftRecurrence] = useState<Recurrence | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSubtasks, setEditSubtasks] = useState<TaskSubtask[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showUpcoming, setShowUpcoming] = useState(false);
   const { syncAfterWrite } = useSyncContext();
 
-  const pool = useMemo(
-    () => [...tasks.pool].sort((a, b) => Number(a.done) - Number(b.done) || a.sortOrder - b.sortOrder),
-    [tasks.pool],
+  const editingTask = useMemo(
+    () => (editingId ? [...buckets.today, ...buckets.inbox, ...buckets.upcoming, ...buckets.recurring].find((t) => t.id === editingId) : null),
+    [editingId, buckets],
   );
-  const completedPool = useMemo(() => pool.filter((task) => task.done), [pool]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,18 +41,40 @@ export function TodoPage() {
     try {
       if (editingId) {
         await updateTask(editingId, { title: draftTitle, recurrence: draftRecurrence });
+        const trimmed = trimSubtasks(editSubtasks);
+        await updateSubtasks(editingId, trimmed);
       } else {
         await addTask({ title: draftTitle, recurrence: draftRecurrence });
       }
-      setDraftTitle("");
-      setDraftRecurrence(null);
-      setEditingId(null);
+      resetForm();
       syncAfterWrite();
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSaving(false);
     }
+  }
+
+  async function submitToInbox(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await addTask({ title: draftTitle, recurrence: draftRecurrence, toInbox: true });
+      resetForm();
+      syncAfterWrite();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function resetForm() {
+    setDraftTitle("");
+    setDraftRecurrence(null);
+    setEditingId(null);
+    setEditSubtasks([]);
   }
 
   async function toggle(task: Task) {
@@ -114,16 +84,21 @@ export function TodoPage() {
 
   async function remove(task: Task) {
     await deleteTask(task.id);
-    if (editingId === task.id) {
-      setEditingId(null);
-      setDraftTitle("");
-      setDraftRecurrence(null);
-    }
+    if (editingId === task.id) resetForm();
     syncAfterWrite();
   }
 
-  async function clearCompleted() {
-    await Promise.all(completedPool.map((task) => deleteTask(task.id)));
+  async function moveToToday(task: Task) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    await scheduleTask(task.id, `${yyyy}-${mm}-${dd}`);
+    syncAfterWrite();
+  }
+
+  async function moveToInbox(task: Task) {
+    await unscheduleTask(task.id);
     syncAfterWrite();
   }
 
@@ -131,12 +106,44 @@ export function TodoPage() {
     setEditingId(task.id);
     setDraftTitle(task.title);
     setDraftRecurrence(task.recurrence);
+    setEditSubtasks(task.subtasks ?? []);
     setError(null);
+  }
+
+  const isOverdue = (t: Task) => {
+    const p = placementForTask(t, new Date());
+    return p.pool === "today" && p.overdue;
+  };
+
+  function renderSection(title: string, tasks: Task[], pool: "today" | "inbox" | "upcoming", badge?: string) {
+    return (
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-100">{title}</h2>
+          <span className="text-xs text-slate-500">{badge ?? tasks.length}</span>
+        </div>
+        {tasks.length === 0 ? (
+          <p className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-500">
+            {pool === "inbox" ? "收件箱为空" : pool === "today" ? "今天没有任务 🎉" : "暂无即将到来的任务"}
+          </p>
+        ) : (
+          <SwipeableList type={ListType.IOS} fullSwipe={false} className="space-y-2">
+            {tasks.map((task) => (
+              <SwipeableTaskRow key={task.id} task={task} pool={pool}
+                overdue={pool === "today" && isOverdue(task)}
+                onToggle={toggle} onEdit={edit} onDelete={remove}
+                onToToday={moveToToday} onToInbox={moveToInbox} />
+            ))}
+          </SwipeableList>
+        )}
+      </section>
+    );
   }
 
   return (
     <div className="min-h-full bg-slate-950 px-4 py-4 text-slate-100">
       <div className="mx-auto flex max-w-2xl flex-col gap-4">
+        {/* 快速输入 */}
         <form onSubmit={submit} className="space-y-3">
           <div className="flex gap-2">
             <input
@@ -147,19 +154,25 @@ export function TodoPage() {
             />
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !draftTitle.trim()}
               className="min-h-11 rounded-lg bg-sky-600 px-4 text-sm font-medium text-white disabled:opacity-60"
             >
-              {editingId ? "保存" : "添加"}
+              {editingId ? "保存" : "今天"}
             </button>
+            {!editingId && (
+              <button
+                type="button"
+                disabled={saving || !draftTitle.trim()}
+                onClick={(e) => { e.preventDefault(); submitToInbox(e as unknown as FormEvent<HTMLFormElement>); }}
+                className="min-h-11 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 disabled:opacity-60"
+              >
+                收纳
+              </button>
+            )}
             {editingId && (
               <button
                 type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setDraftTitle("");
-                  setDraftRecurrence(null);
-                }}
+                onClick={resetForm}
                 className="min-h-11 rounded-lg border border-slate-700 px-3 text-sm text-slate-300"
               >
                 取消
@@ -167,45 +180,75 @@ export function TodoPage() {
             )}
           </div>
           <RecurrenceEditor value={draftRecurrence} onChange={setDraftRecurrence} />
+          {editingId && (
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+              <p className="mb-2 text-xs font-medium text-slate-400">子任务</p>
+              <SubtaskEditor value={editSubtasks} onChange={setEditSubtasks} />
+            </div>
+          )}
           {error && <p className="text-sm text-rose-300">{error}</p>}
         </form>
 
+        {/* 今天 */}
+        {renderSection("今天", buckets.today, "today")}
+
+        {/* 即将到来 */}
+        {buckets.upcoming.length > 0 && (
+          <details open={showUpcoming} onToggle={(e) => setShowUpcoming((e.target as HTMLDetailsElement).open)}>
+            <summary className="flex cursor-pointer items-center justify-between py-1 text-base font-semibold text-slate-100">
+              <span>即将到来</span>
+              <span className="text-xs text-slate-500">{buckets.upcoming.length}</span>
+            </summary>
+            <div className="mt-2">
+              <SwipeableList type={ListType.IOS} fullSwipe={false} className="space-y-2">
+                {buckets.upcoming.map((task) => (
+                  <SwipeableTaskRow key={task.id} task={task} pool="upcoming"
+                    onToggle={toggle} onEdit={edit} onDelete={remove}
+                    onToToday={moveToToday} onToInbox={moveToInbox} />
+                ))}
+              </SwipeableList>
+            </div>
+          </details>
+        )}
+
+        {/* 收件箱 */}
+        {renderSection("收件箱", buckets.inbox, "inbox")}
+
+        {/* 重复任务 */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-100">重复任务</h2>
-            <span className="text-xs text-slate-500">{tasks.recurring.length}</span>
+            <span className="text-xs text-slate-500">{buckets.recurring.length}</span>
           </div>
-          {tasks.recurring.length === 0 ? (
+          {buckets.recurring.length === 0 ? (
             <p className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-500">暂无重复任务</p>
           ) : (
             <ul className="space-y-2">
-              {tasks.recurring.map((task) => (
-                <TaskRow key={task.id} task={task} recurring onToggle={toggle} onEdit={edit} onDelete={remove} />
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-slate-100">任务池</h2>
-            {completedPool.length > 0 && (
-              <button
-                type="button"
-                onClick={clearCompleted}
-                className="min-h-8 rounded-lg border border-slate-700 px-2 text-xs text-slate-300"
-              >
-                清除已完成
-              </button>
-            )}
-          </div>
-          {pool.length === 0 ? (
-            <p className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 text-sm text-slate-500">暂无池任务</p>
-          ) : (
-            <ul className="space-y-2">
-              {pool.map((task) => (
-                <TaskRow key={task.id} task={task} recurring={false} onToggle={toggle} onEdit={edit} onDelete={remove} />
-              ))}
+              {buckets.recurring.map((task) => {
+                const due = isDueNow(task.recurrence!, task.lastDoneAt, task.startAt);
+                const checked = !due;
+                return (
+                  <li key={task.id} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox" aria-label={`完成 ${task.title}`}
+                        checked={checked} onChange={() => toggle(task)}
+                        className="mt-1 h-5 w-5 shrink-0 accent-sky-500"
+                      />
+                      <div className="min-w-0 flex-1" onClick={() => edit(task)} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter") edit(task); }}>
+                        <div className="break-words text-sm font-medium text-slate-100">{task.title}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{recurrenceSummary(task.recurrence!)}</span>
+                          <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => edit(task)}
+                        className="min-h-8 rounded-lg border border-slate-700 px-2 text-xs text-slate-300">编辑</button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

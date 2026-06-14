@@ -55,14 +55,14 @@ describe("resetSyncCursors", () => {
 });
 
 describe("Dexie database", () => {
-  it("creates v5 schema and seeds default categories on a fresh open", async () => {
+  it("creates v6 schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
