@@ -93,6 +93,21 @@ db.version(5).stores({
   runs: "id, date",
 });
 
+db.version(6).stores({
+  categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
+  timeEntries: "id, categoryId, startTime, endTime",
+  tasks: "id, scheduledAt, sortOrder, updatedAt",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+  settings: "key",
+  healthHeartRate: "id, date",
+  healthHrv: "id, date",
+  healthSleep: "id, date",
+  healthStress: "id, date",
+  runs: "id, date",
+});
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;

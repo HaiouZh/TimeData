@@ -4,7 +4,7 @@ import type { Recurrence, Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { RecurrenceEditor } from "../components/RecurrenceEditor.js";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
-import { addTask, deleteTask, listTasks, toggleTaskDone, updateTask } from "../lib/tasks.js";
+import { addTask, deleteTask, listTasksLegacy, toggleTaskDone, updateTask } from "../lib/tasks.js";
 import { isDueNow, recurrenceSummary, weekOfOrigin } from "../lib/tasks/recurrence.js";
 
 const EMPTY_LISTS: { pool: Task[]; recurring: Task[] } = { pool: [], recurring: [] };
@@ -72,7 +72,7 @@ function TaskRow({
 }
 
 export function TodoPage() {
-  const tasks = useLiveQuery(() => listTasks(), [], EMPTY_LISTS) ?? EMPTY_LISTS;
+  const tasks = useLiveQuery(() => listTasksLegacy(), [], EMPTY_LISTS) ?? EMPTY_LISTS;
   const [draftTitle, setDraftTitle] = useState("");
   const [draftRecurrence, setDraftRecurrence] = useState<Recurrence | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);

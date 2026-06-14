@@ -1,7 +1,8 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
-import { addTask, deleteTask, listTasks, toggleTaskDone, updateTask } from "./tasks.js";
+import { addTask, deleteTask, listTasks, scheduleTask, toggleTaskDone, unscheduleTask, updateTask } from "./tasks.js";
+import { localDateOf } from "./tasks/placement.js";
 
 beforeEach(async () => {
   await db.tasks.clear();
@@ -34,6 +35,26 @@ describe("addTask", () => {
 
   it("rejects empty title", async () => {
     await expect(addTask({ title: "  " })).rejects.toThrow("任务标题不能为空");
+  });
+
+  it("addTask 默认 scheduledAt = 今天本地零点", async () => {
+    const now = new Date("2026-06-14T08:00:00.000Z");
+    const t = await addTask({ title: "今天的事", now });
+    expect(t.scheduledAt).toBe(localDateOf(now));
+    expect(t.subtasks).toEqual([]);
+  });
+
+  it("addTask 放入 inbox 时 scheduledAt=null", async () => {
+    const t = await addTask({ title: "收纳", toInbox: true });
+    expect(t.scheduledAt).toBeNull();
+  });
+
+  it("addTask 重复任务 scheduledAt=null", async () => {
+    const t = await addTask({
+      title: "刮胡子",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+    });
+    expect(t.scheduledAt).toBeNull();
   });
 });
 
@@ -88,14 +109,37 @@ describe("deleteTask", () => {
   });
 });
 
+describe("scheduleTask / unscheduleTask", () => {
+  it("scheduleTask 写未来日期 → upcoming", async () => {
+    const t = await addTask({ title: "圣诞", toInbox: true });
+    const next = await scheduleTask(t.id, "2026-12-25");
+    expect(next.scheduledAt).toBe(localDateOf(new Date(2026, 11, 25)));
+  });
+
+  it("unscheduleTask → scheduledAt=null（普通任务）", async () => {
+    const t = await addTask({ title: "x" });
+    const next = await unscheduleTask(t.id);
+    expect(next.scheduledAt).toBeNull();
+  });
+
+  it("unscheduleTask 重复任务抛错", async () => {
+    const t = await addTask({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await expect(unscheduleTask(t.id)).rejects.toThrow();
+  });
+});
+
 describe("listTasks", () => {
-  it("splits pool and recurring", async () => {
-    await addTask({ title: "池" });
-    await addTask({ title: "重复", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+  it("分区：今天、inbox、重复", async () => {
+    const now = new Date("2026-06-14T08:00:00.000Z");
+    await addTask({ title: "今天", now });
+    await addTask({ title: "inbox", toInbox: true, now });
+    await addTask({ title: "重复", recurrence: { freq: "daily", interval: 1, basis: "due" }, now });
 
-    const { pool, recurring } = await listTasks();
+    const buckets = await listTasks(now);
 
-    expect(pool).toHaveLength(1);
-    expect(recurring).toHaveLength(1);
+    // 重复任务今天到期，同时出现在 today 和 recurring
+    expect(buckets.today).toHaveLength(2); // "今天" + 重复任务今天到期
+    expect(buckets.inbox).toHaveLength(1);
+    expect(buckets.recurring).toHaveLength(1);
   });
 });

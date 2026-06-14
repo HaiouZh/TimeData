@@ -1,12 +1,14 @@
-import { TaskSchema, type Recurrence, type Task } from "@timedata/shared";
+import { TaskSchema, type Recurrence, type Task, type TaskSubtask } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
+import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 
 export interface AddTaskInput {
   title: string;
   recurrence?: Recurrence | null;
   startAt?: string | null;
+  toInbox?: boolean;
   now?: Date;
 }
 
@@ -41,6 +43,7 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
   const now = input.now ?? new Date();
   const createdAt = now.toISOString();
   const recurrence = input.recurrence ?? null;
+  const scheduledAt = recurrence ? null : (input.toInbox ? null : localDateOf(now));
   const task: Task = TaskSchema.parse({
     id: uuid(),
     title: normalizeTitle(input.title),
@@ -48,6 +51,8 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
     recurrence,
     lastDoneAt: null,
     startAt: recurrence ? (input.startAt ?? createdAt) : null,
+    scheduledAt,
+    subtasks: [],
     sortOrder: await nextSortOrder(),
     createdAt,
     updatedAt: createdAt,
@@ -74,6 +79,8 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
     done: recurrence ? false : existing.done,
     lastDoneAt: recurrence ? existing.lastDoneAt : null,
     startAt: recurrence ? (patch.startAt ?? existing.startAt ?? updatedAt) : null,
+    scheduledAt: existing.scheduledAt ?? null,
+    subtasks: existing.subtasks ?? [],
     sortOrder: patch.sortOrder ?? existing.sortOrder,
     updatedAt,
   });
@@ -88,10 +95,40 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
 
   const now = options.now ?? new Date();
   const updatedAt = now.toISOString();
+  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
   const next: Task = existing.recurrence
-    ? TaskSchema.parse({ ...existing, done: false, lastDoneAt: updatedAt, updatedAt })
-    : TaskSchema.parse({ ...existing, done: !existing.done, updatedAt });
+    ? TaskSchema.parse({ ...base, done: false, lastDoneAt: updatedAt, updatedAt })
+    : TaskSchema.parse({ ...base, done: !existing.done, updatedAt });
 
+  return putTask(next);
+}
+
+export async function scheduleTask(id: string, date: string, options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+  if (existing.recurrence) throw new Error("重复任务不通过排期接口修改，请改重复规则");
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
+  const next = TaskSchema.parse({ ...base, scheduledAt: normalizeScheduledDate(date), updatedAt });
+  return putTask(next);
+}
+
+export async function unscheduleTask(id: string, options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+  if (existing.recurrence) throw new Error("重复任务不能删除排期");
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
+  const next = TaskSchema.parse({ ...base, scheduledAt: null, updatedAt });
+  return putTask(next);
+}
+
+export async function updateSubtasks(id: string, subtasks: TaskSubtask[], options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
+  const next = TaskSchema.parse({ ...base, subtasks, updatedAt });
   return putTask(next);
 }
 
@@ -102,7 +139,38 @@ export async function deleteTask(id: string): Promise<void> {
   });
 }
 
-export async function listTasks(): Promise<{ pool: Task[]; recurring: Task[] }> {
+export interface TodoBuckets {
+  today: Task[];        // 含过期，过期排前
+  inbox: Task[];
+  upcoming: Task[];
+  recurring: Task[];    // 重复任务管理列表（全部重复任务，无论落点）
+  completed: Task[];
+}
+
+function isOverdue(t: Task, now: Date): boolean {
+  const p = placementForTask(t, now);
+  return p.pool === "today" && p.overdue;
+}
+
+export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
+  const all = (await db.tasks.orderBy("sortOrder").toArray())
+    .map((t) => ({ ...t, scheduledAt: t.scheduledAt ?? null, subtasks: t.subtasks ?? [] }));
+  const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
+  for (const t of all) {
+    if (t.recurrence) buckets.recurring.push(t);
+    const p = placementForTask(t, now);
+    if (p.pool === "today") buckets.today.push(t);
+    else if (p.pool === "inbox") buckets.inbox.push(t);
+    else if (p.pool === "upcoming") buckets.upcoming.push(t);
+    else buckets.completed.push(t);
+  }
+  buckets.today.sort((a, b) =>
+    Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
+  return buckets;
+}
+
+/** @deprecated 旧签名兼容，Task 8 重写 TodoPage 后删除 */
+export async function listTasksLegacy(): Promise<{ pool: Task[]; recurring: Task[] }> {
   const all = await db.tasks.orderBy("sortOrder").toArray();
   return {
     pool: all.filter((task) => task.recurrence === null),
