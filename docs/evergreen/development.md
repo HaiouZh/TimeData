@@ -11,7 +11,7 @@ covers:
   - packages/client/src/lib/frontendUpdate.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-04
+last-reviewed: 2026-06-15
 ---
 
 # 本地开发指南

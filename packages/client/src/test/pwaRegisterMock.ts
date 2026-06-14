@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { type Mock, vi } from "vitest";
 
 type Registration = {
   update: () => void;
@@ -9,8 +9,8 @@ type RegisterOptions = {
 };
 
 let lastRegisterOptions: RegisterOptions | undefined;
-export const updateServiceWorkerMock = vi.fn();
-export const setNeedRefreshMock = vi.fn();
+export const updateServiceWorkerMock: Mock = vi.fn();
+export const setNeedRefreshMock: Mock = vi.fn();
 
 export function useRegisterSW(options: RegisterOptions = {}) {
   lastRegisterOptions = options;
