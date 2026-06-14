@@ -13,6 +13,10 @@ vi.mock("./components/AppUpdatePrompt.tsx", () => ({
   default: () => null,
 }));
 
+vi.mock("./lib/settings/navVisibleTabsSetting.ts", () => ({
+  useVisibleTabs: () => ["/quick-notes", "/", "/todo", "/stats"],
+}));
+
 vi.mock("./pages/TimelinePage.tsx", () => ({
   default: ({ refreshKey }: { refreshKey: number }) => createElement("div", null, `时间轴页面 ${refreshKey}`),
 }));
@@ -57,6 +61,10 @@ vi.mock("./pages/settings/SettingsInsightsPage.tsx", () => ({
   default: () => createElement("div", null, "数据洞察设置页"),
 }));
 
+vi.mock("./pages/settings/SettingsNavPage.tsx", () => ({
+  SettingsNavPage: () => createElement("div", null, "底部导航设置页"),
+}));
+
 function renderAppShell(initialEntry: string) {
   return renderToStaticMarkup(
     createElement(
@@ -88,6 +96,14 @@ describe("AppShell settings routes", () => {
     const html = renderAppShell("/settings/insights");
 
     expect(html).toContain("数据洞察设置页");
+    expect(html).not.toContain("时间轴");
+    expect(html).not.toContain("统计");
+  });
+
+  it("renders settings nav route without bottom navigation", () => {
+    const html = renderAppShell("/settings/nav");
+
+    expect(html).toContain("底部导航设置页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });
