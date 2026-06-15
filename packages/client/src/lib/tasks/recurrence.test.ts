@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isDueNow, recurrenceSummary, formatCreatedAt } from "./recurrence.js";
+import { isDueNow, recurrenceSummary, formatCreatedAt, isRecurrenceFinishedAfter } from "./recurrence.js";
 import type { Recurrence } from "@timedata/shared";
 
 const daily = (over: Partial<Recurrence> = {}): Recurrence => ({ freq: "daily", interval: 1, basis: "due", ...over });
@@ -112,5 +112,48 @@ describe("recurrence display helpers", () => {
 
   it("formatCreatedAt 显示本地日期", () => {
     expect(formatCreatedAt("2026-06-14T00:00:00.000Z")).toMatch(/创建于 \d{2}-\d{2}/);
+  });
+});
+
+describe("until 截止", () => {
+  const start = "2026-06-01T00:00:00.000Z";
+
+  it("到期日晚于 until → 不再到期", () => {
+    const r = { freq: "daily", interval: 1, basis: "due", until: "2026-06-10T00:00:00.000Z" } as const;
+    expect(isDueNow(r, null, start, new Date("2026-06-15T08:00:00.000Z"))).toBe(false);
+  });
+
+  it("until 之内仍到期", () => {
+    const r = { freq: "daily", interval: 1, basis: "due", until: "2026-06-20T00:00:00.000Z" } as const;
+    expect(isDueNow(r, null, start, new Date("2026-06-15T08:00:00.000Z"))).toBe(true);
+  });
+});
+
+describe("isRecurrenceFinishedAfter", () => {
+  const start = "2026-06-01T00:00:00.000Z";
+
+  it("完成后的下一发生日越过 until → true", () => {
+    const r = { freq: "daily", interval: 1, basis: "due", until: "2026-06-15T00:00:00.000Z" } as const;
+    expect(isRecurrenceFinishedAfter(r, start, new Date("2026-06-15T09:00:00.000Z"))).toBe(true);
+  });
+
+  it("还有后续发生 → false", () => {
+    const r = { freq: "daily", interval: 1, basis: "due", until: "2026-06-20T00:00:00.000Z" } as const;
+    expect(isRecurrenceFinishedAfter(r, start, new Date("2026-06-15T09:00:00.000Z"))).toBe(false);
+  });
+
+  it("无 until → false", () => {
+    const r = { freq: "daily", interval: 1, basis: "due" } as const;
+    expect(isRecurrenceFinishedAfter(r, start, new Date("2026-06-15T09:00:00.000Z"))).toBe(false);
+  });
+});
+
+describe("recurrenceSummary 终止文案", () => {
+  it("count", () => {
+    expect(recurrenceSummary({ freq: "daily", interval: 1, basis: "due", count: 12 })).toBe("每天·共12次");
+  });
+
+  it("until", () => {
+    expect(recurrenceSummary({ freq: "daily", interval: 1, basis: "due", until: "2026-07-31T00:00:00.000Z" })).toBe("每天·至07-31");
   });
 });

@@ -106,29 +106,56 @@ export function isDueNow(
   const nowDate = toDate(now);
   const start = startAt ? toDate(startAt) : nowDate;
   const nowDay = localDayIndex(nowDate);
+  const untilDay = recurrence.until != null ? localDayIndex(toDate(recurrence.until)) : Number.POSITIVE_INFINITY;
 
   if (recurrence.basis === "completion") {
-    if (!lastDoneAt) return localDayIndex(start) <= nowDay;
-    return nextScheduledDayAfter(recurrence, start, toDate(lastDoneAt)) <= nowDay;
+    const candidate = lastDoneAt
+      ? nextScheduledDayAfter(recurrence, start, toDate(lastDoneAt))
+      : localDayIndex(start);
+    if (candidate > untilDay) return false;
+    return candidate <= nowDay;
   }
   const last = lastScheduledDay(recurrence, start, nowDate);
   if (last === null) return false;
+  if (last > untilDay) return false;
   if (!lastDoneAt) return true;
   return localDayIndex(toDate(lastDoneAt)) < last;
 }
 
+/** 完成 completedAt 这次后是否再无发生（仅 until 触发）。供 toggle 的 UNTIL 终止判定。 */
+export function isRecurrenceFinishedAfter(
+  recurrence: Recurrence,
+  startAt: string | Date | null,
+  completedAt: string | Date,
+): boolean {
+  if (recurrence.until == null) return false;
+  const untilDay = localDayIndex(toDate(recurrence.until));
+  const start = startAt ? toDate(startAt) : toDate(completedAt);
+  return nextScheduledDayAfter(recurrence, start, toDate(completedAt)) > untilDay;
+}
+
 export function recurrenceSummary(r: Recurrence): string {
   const time = r.time ? ` ${r.time}` : "";
-  if (r.freq === "daily") return `${r.interval === 1 ? "每天" : `每${r.interval}天`}${time}`;
-  if (r.freq === "weekly") {
+  let base: string;
+  if (r.freq === "daily") base = `${r.interval === 1 ? "每天" : `每${r.interval}天`}${time}`;
+  else if (r.freq === "weekly") {
     const labels = ["一", "二", "三", "四", "五", "六", "日"];
     const days = (r.byWeekday ?? []).map((day) => `周${labels[day - 1]}`).join("");
-    return `${r.interval === 1 ? "每周" : `每${r.interval}周`}${days}${time}`;
+    base = `${r.interval === 1 ? "每周" : `每${r.interval}周`}${days}${time}`;
+  } else {
+    const monthdays = (r.byMonthday ?? [])
+      .map((day) => (day === -1 ? "最后一天" : `${day}号`))
+      .join("、");
+    base = `${r.interval === 1 ? "每月" : `每${r.interval}月`}${monthdays}${time}`;
   }
-  const monthdays = (r.byMonthday ?? [])
-    .map((day) => (day === -1 ? "最后一天" : `${day}号`))
-    .join("、");
-  return `${r.interval === 1 ? "每月" : `每${r.interval}月`}${monthdays}${time}`;
+  if (r.count != null) return `${base}·共${r.count}次`;
+  if (r.until != null) {
+    const d = new Date(r.until);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${base}·至${mm}-${dd}`;
+  }
+  return base;
 }
 
 /** 本地"创建于 MM-DD"。 */
