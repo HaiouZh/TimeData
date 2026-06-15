@@ -51,7 +51,6 @@ covers:
   - packages/server/src/routes/ingest.ts
   - packages/server/src/garmin/**
   - packages/client/src/pages/stats/health/**
-  - packages/client/src/pages/stats/HealthDashboardContent.tsx
   - packages/client/src/pages/stats/InsightCharts.tsx
   - packages/client/src/lib/healthMetrics/**
   - packages/client/src/lib/healthUtils.ts
@@ -321,7 +320,7 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 | 同步推/拉 | `packages/server/src/sync/`、`packages/client/src/sync/`、`packages/client/src/lib/settings/` | [`sync.md`](./sync.md) |
 | Backup | `packages/client/src/backup/` | [`backup.md`](./backup.md) |
 | 客户端统计洞察 | `packages/client/src/pages/StatsPage.tsx`、`packages/client/src/pages/TimeStatsPage.tsx`、`packages/client/src/pages/stats/modules/`、`packages/client/src/pages/stats/InsightCharts.tsx`、`packages/client/src/lib/insights/`、`packages/client/src/lib/statsLayoutSetting.ts`、`packages/client/src/lib/statsModuleTrendSetting.ts`、`packages/client/src/pages/settings/SettingsInsightsPage.tsx`、`packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx` | `StatsPage.tsx` 只负责旧 `/stats` 重定向到 `/stats/time`，`TimeStatsPage.tsx` 承载周期/日期/总时长上下文和共享取数，内容区按 `STATS_MODULES` 注册表渲染可见模块；`stats.layout.v1` 存模块顺序与隐藏列表，读取时按注册表 sanitize，并让隐藏模块不挂载、不计算，baseline 数据只在可见模块声明需要时取；趋势模块用 `stats.module.trend.v1` 记住最后使用的窗口和图表类型，时间投入的堆叠面积图按单日本地日上限固定 0 到 24h Y 轴；`cache.ts` 负责模块级指纹缓存与重计算记忆化，`dailyRollup.ts` 负责本地日桶预聚合，`routine.ts` 负责作息样本和通常睡眠窗口，`overview.ts` 负责总览、父子占比和覆盖率；当前周/月只统计到今天，异常检测在当前周期产出、用近 90 天基线定阈值 |
-| 健康仪表盘 | `packages/client/src/pages/HealthStatsPage.tsx`、`packages/client/src/pages/stats/health/`、`packages/client/src/lib/healthMetrics/`、`packages/client/src/lib/healthUtils.ts`、`packages/shared/src/healthSchemas.ts` | `/stats/health` 独立读取健康 Dexie 表，展示摘要卡、归一化多指标趋势、跑步配速趋势和最近 5 条跑步；`healthMetrics/` 提供只读范围过滤、睡眠时长、配速、rolling pace、摘要和趋势计算，阶段 1 不新增健康写入、schema 或服务端 API。旧 `HealthDashboardContent.tsx` 暂保留兼容但不再作为主路由入口 |
+| 健康仪表盘 | `packages/client/src/pages/HealthStatsPage.tsx`、`packages/client/src/pages/stats/health/`、`packages/client/src/lib/healthMetrics/`、`packages/client/src/lib/healthCharts.ts`、`packages/client/src/lib/settings/healthRangeSetting.ts`、`packages/shared/src/healthSchemas.ts`、`packages/shared/src/chartSchemas.ts` | `/stats/health` 独立读取健康 Dexie 表与 `healthCharts` 块配置，按页面范围渲染摘要块、可配置 `metricChart`、跑步配速块和最近 5 条跑步；右上角搭建器可新增/编辑 `metricChart`，多指标时柱状禁用。`healthMetrics/` 提供指标注册表、series 引擎、归一化、睡眠时长、配速、rolling pace 和摘要计算；`health_charts` 是同步域，默认注入摘要/健康趋势/跑步配速三块，用户可删除或编辑 metricChart。 |
 | Garmin 数据服务 | `packages/server/src/garmin/`、`packages/client/src/pages/settings/SettingsGarminPage.tsx` | Python 子进程抓取 → TS 服务写库 → Admin API → 客户端设置页；凭证 AES-256-GCM 加密存 `server_config` 表；详见 `packages/server/src/garmin/README.md` |
 | CLI 命令 | `packages/cli/src/commands/` | [`cli.md`](./cli.md) |
 | 部署 / 自更新 | `docker-compose.yml`、`packages/server/src/lib/update.ts`、`packages/server/Dockerfile` | [`deployment.md`](./deployment.md)；Dockerfile 运行时阶段包含 Python 3 + garminconnect + garth |

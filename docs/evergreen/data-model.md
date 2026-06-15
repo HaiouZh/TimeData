@@ -24,6 +24,8 @@ covers:
   - packages/client/src/lib/categorySort.ts
   - packages/client/src/lib/categoryColors.ts
   - packages/shared/src/healthSchemas.ts
+  - packages/shared/src/chartSchemas.ts
+  - packages/client/src/lib/healthCharts.ts
   - packages/server/src/routes/tasks.ts
 last-reviewed: 2026-06-15
 ---
@@ -64,8 +66,11 @@ last-reviewed: 2026-06-15
 | 睡眠 | `HealthSleepSchema` | `health_sleep` | `healthSleep` |
 | 压力 | `HealthStressSchema` | `health_stress` | `healthStress` |
 | 跑步 | `HealthRunSchema` | `runs` | `runs` |
+| 健康图表配置 | `HealthChartConfigSchema` | `health_charts` | `healthCharts` |
 
 健康 schema 定义在 `packages/shared/src/healthSchemas.ts`，各域通过 `packages/shared/src/syncDomains.ts` 注册进同步域登记簿。数据来源：Garmin 自动抓取（`packages/server/src/garmin/`）或 `/api/health/ingest` 批量导入。客户端通过 `useLiveQuery` 从 Dexie 读取展示。
+
+`health_charts` 保存健康统计页的块配置，而不是健康原始数据。配置 schema 定义在 `packages/shared/src/chartSchemas.ts`，目前包含 `summary`、`metricChart`、`runTrend` 三种块：`metricChart` 保存标题、指标 ID 列表、图表类型、趋势模式、滚动均线和平均参考线开关；`summary` / `runTrend` 在 v1 作为预置渲染块。客户端入口是 `packages/client/src/lib/healthCharts.ts` 和 `packages/client/src/pages/HealthStatsPage.tsx`，写入 `healthCharts` 与 `syncLog(tableName="health_charts")` 后经同步域登记簿同步。
 
 客户端 Dexie 多一张：
 
@@ -73,7 +78,7 @@ last-reviewed: 2026-06-15
 |---|---|---|
 | 自动备份 | `autoBackups` | 客户端本地的滚动备份，保留最近 7 份（见 `backup.md`） |
 
-`settings` 是同步键值表，当前用于跨设备保存睡眠分类、底部导航可见入口等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`；`nav.visibleTabs.v1` 由 `packages/client/src/lib/settings/navVisibleTabsSetting.ts` 维护，读取旧 `/stats` 值时归一化为 `/stats/time`，并允许 `/stats/time` 与 `/stats/health` 作为两个独立底部入口。
+`settings` 是同步键值表，当前用于跨设备保存睡眠分类、底部导航可见入口、健康范围显示档位等用户设置。它和 categories/time_entries 走同一套 `syncLog → push → sync_seq → pull` 管线；服务端 `settings.key` 是主键，值是字符串，`updated_at` 参与 `/api/sync/status` 的 commit hash。客户端入口是 `packages/client/src/lib/settings/index.ts`，睡眠分类包装入口是 `packages/client/src/lib/sleepCategorySetting.ts`；`nav.visibleTabs.v1` 由 `packages/client/src/lib/settings/navVisibleTabsSetting.ts` 维护，读取旧 `/stats` 值时归一化为 `/stats/time`，并允许 `/stats/time` 与 `/stats/health` 作为两个独立底部入口。`health.range.presets` 由 `packages/client/src/lib/settings/healthRangeSetting.ts` 维护，值是 `7,30,90,180,365,all` 这些档位的逗号串，缺省显示全集。
 
 `quick_notes` 是聊天式速记表，核心表达“时间 + 文本”，可附带 `source` / `sourceLabel` 作为展示来源元数据，也可带 `pinned` 表示置顶状态。它和 `time_entries` 分表，不引用分类，也不产生时间段；查询、展示、导出按 `occurredAt`，同步按 `updatedAt` 与 `syncLog` / `sync_seq`。客户端入口是 `packages/client/src/lib/quickNotes.ts` 和 `packages/client/src/pages/QuickNotesPage.tsx`；`quickNotes.ts` 同时提供按日期/范围查询、只读窗口查询（最新、早于、晚于、有界窗口）和置顶列表查询，供连续时间线与置顶区使用。搜索入口在 `packages/client/src/quick-notes/searchQuickNotes.ts`，只读扫描 Dexie `quickNotes` 并按 `occurredAt` 倒序返回，不写 `syncLog`。独立导出/导入/删除入口在 `packages/client/src/quick-notes/`。
 
@@ -230,7 +235,7 @@ type Task = {
 ```ts
 {
   id: string;
-  tableName: "categories" | "time_entries" | "settings" | "quick_notes" | "tasks";
+  tableName: "categories" | "time_entries" | "settings" | "quick_notes" | "tasks" | "health_charts";
   recordId: string;
   action: "create" | "update" | "delete";
   timestamp: string;   // ISO，写日志当时的时间
@@ -379,10 +384,10 @@ type SyncChange =
 
 ## 10. Dexie schema
 
-`packages/client/src/db/index.ts` currently maintains six Dexie version declarations; v6 is the current schema, adding `scheduledAt` index to `tasks` on top of v5:
+`packages/client/src/db/index.ts` currently maintains seven Dexie version declarations; v7 is the current schema, adding `healthCharts` on top of v6:
 
 ```ts
-db.version(6).stores({
+db.version(7).stores({
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
@@ -395,10 +400,11 @@ db.version(6).stores({
   healthSleep: "id, date",
   healthStress: "id, date",
   runs: "id, date",
+  healthCharts: "id, order, updatedAt",
 });
 ```
 
-v1-v5 history: v1 initial, v2 `settings`, v3 `quickNotes`, v4 health tables, v5 `tasks`, v6 `tasks.scheduledAt` index.
+v1-v6 history: v1 initial, v2 `settings`, v3 `quickNotes`, v4 health tables, v5 `tasks`, v6 `tasks.scheduledAt` index.
 
 **SQLite 这边**目前的迁移机制是 `CREATE TABLE IF NOT EXISTS`——只能加表，**不能改已有列定义**。改 schema 时需要：
 1. 加新表 / 加新列（用 `ALTER TABLE ... ADD COLUMN`）— 现有数据自动兼容。
