@@ -62,6 +62,7 @@ export function SwipeableTaskRow({
             {task.recurrence ? (
               <>
                 <span>{recurrenceSummary(task.recurrence)}</span>
+                {task.recurrence.count != null && <span>完成 {task.completedCount}/{task.recurrence.count}</span>}
                 <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
               </>
             ) : (

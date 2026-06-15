@@ -12,6 +12,7 @@ function change(action: "create" | "update" | "delete", id: string, title?: stri
     data: action === "delete" ? null : {
       id, title, done: false, recurrence: null, lastDoneAt: null, startAt: null,
       scheduledAt: null, subtasks: [],
+      completedCount: 0,
       sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
     },
     timestamp: "2026-06-14T00:00:00.000Z",
@@ -26,6 +27,7 @@ beforeEach(async () => {
       recurrence TEXT, last_done_at TEXT, start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
+      completed_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE sync_tombstones (table_name TEXT NOT NULL, record_id TEXT NOT NULL, deleted_at TEXT NOT NULL, PRIMARY KEY (table_name, record_id));

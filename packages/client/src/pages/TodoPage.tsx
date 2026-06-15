@@ -237,6 +237,7 @@ export function TodoPage() {
                         <div className="break-words text-sm font-medium text-slate-100">{task.title}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <span>{recurrenceSummary(recurrence)}</span>
+                          {recurrence.count != null && <span>完成 {task.completedCount}/{recurrence.count}</span>}
                           <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
                         </div>
                       </div>

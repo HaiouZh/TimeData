@@ -1,4 +1,5 @@
 import { RecurrenceSchema, type Recurrence } from "@timedata/shared";
+import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 
 interface RecurrenceEditorProps {
   value: Recurrence | null;
@@ -25,6 +26,27 @@ function setFreq(current: Recurrence, freq: Recurrence["freq"]): Recurrence {
   if (freq === "weekly") return { ...base, freq, byWeekday: [1] };
   if (freq === "monthly") return { ...base, freq, byMonthday: [1] };
   return { ...base, freq };
+}
+
+type EndMode = "never" | "count" | "until";
+
+function endModeOf(r: Recurrence): EndMode {
+  if (r.count != null) return "count";
+  if (r.until != null) return "until";
+  return "never";
+}
+
+function setEndMode(r: Recurrence, mode: EndMode): Recurrence {
+  const { count: _c, until: _u, ...rest } = r;
+  if (mode === "count") return { ...rest, count: r.count ?? 1 };
+  if (mode === "until") return { ...rest, until: r.until ?? normalizeScheduledDate(new Date().toISOString().slice(0, 10)) };
+  return { ...rest };
+}
+
+/** 把 UtcIso 当地零点转回 input[type=date] 用的 YYYY-MM-DD。 */
+function untilToDateInput(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function toggleNumber(values: number[], value: number): number[] {
@@ -158,6 +180,59 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
               </div>
             </fieldset>
           </div>
+
+          <fieldset className="space-y-2 text-xs text-slate-400">
+            <legend>结束</legend>
+            <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950 p-1">
+              {([
+                ["never", "永不"],
+                ["count", "按次数"],
+                ["until", "按日期"],
+              ] as const).map(([mode, label]) => (
+                <label
+                  key={mode}
+                  className={`flex min-h-8 items-center justify-center rounded-md text-xs ${
+                    endModeOf(value) === mode ? "bg-sky-500 text-white" : "text-slate-400"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="recurrence-end"
+                    aria-label={label}
+                    checked={endModeOf(value) === mode}
+                    onChange={() => emit(onChange, setEndMode(value, mode))}
+                    className="sr-only"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {value.count != null && (
+              <input
+                type="number"
+                min={1}
+                aria-label="重复次数"
+                value={value.count}
+                onChange={(event) => {
+                  const count = Math.max(1, Number.parseInt(event.currentTarget.value || "1", 10));
+                  emit(onChange, { ...value, count });
+                }}
+                className="min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"
+              />
+            )}
+            {value.until != null && (
+              <input
+                type="date"
+                aria-label="截止日期"
+                value={untilToDateInput(value.until)}
+                onChange={(event) => {
+                  const v = event.currentTarget.value;
+                  if (v) emit(onChange, { ...value, until: normalizeScheduledDate(v) });
+                }}
+                className="min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"
+              />
+            )}
+          </fieldset>
         </div>
       )}
     </div>

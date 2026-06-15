@@ -15,6 +15,18 @@ async function renderEditor(props: Parameters<typeof RecurrenceEditor>[0]) {
   return { host, root };
 }
 
+async function rerenderEditor(root: ReturnType<typeof createRoot>, props: Parameters<typeof RecurrenceEditor>[0]) {
+  await act(async () => {
+    root.render(createElement(RecurrenceEditor, props));
+  });
+}
+
+function inputByLabel(host: HTMLElement, label: string): HTMLInputElement {
+  const input = host.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement | null;
+  expect(input).not.toBeNull();
+  return input;
+}
+
 describe("RecurrenceEditor", () => {
   it("emits a daily recurrence when enabled", async () => {
     const onChange = vi.fn();
@@ -54,6 +66,56 @@ describe("RecurrenceEditor", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ freq: "monthly", interval: 2, byMonthday: [1], basis: "completion" }),
     );
+    await act(async () => root.unmount());
+  });
+
+  it("选『按次数』写入 count、清掉 until", async () => {
+    const onChange = vi.fn();
+    const { host, root } = await renderEditor({ value: { freq: "daily", interval: 1, basis: "due" }, onChange });
+
+    await act(async () => {
+      inputByLabel(host, "按次数").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ count: 1 }));
+    expect(onChange.mock.calls.at(-1)?.[0]).not.toHaveProperty("until");
+    await act(async () => root.unmount());
+  });
+
+  it("选『按日期』写入 until、清掉 count", async () => {
+    const onChange = vi.fn();
+    const initial = { freq: "daily", interval: 1, basis: "due", count: 5 } as const;
+    const { host, root } = await renderEditor({ value: initial, onChange });
+
+    await act(async () => {
+      inputByLabel(host, "按日期").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const next = onChange.mock.calls.at(-1)?.[0];
+    await rerenderEditor(root, { value: next, onChange });
+    const dateInput = inputByLabel(host, "截止日期");
+    await act(async () => {
+      dateInput.value = "2026-07-31";
+      dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const last = onChange.mock.calls.at(-1)?.[0];
+    expect(last).toHaveProperty("until");
+    expect(last).not.toHaveProperty("count");
+    await act(async () => root.unmount());
+  });
+
+  it("选『永不』清掉 count 与 until", async () => {
+    const onChange = vi.fn();
+    const { host, root } = await renderEditor({ value: { freq: "daily", interval: 1, basis: "due", count: 5 }, onChange });
+
+    await act(async () => {
+      inputByLabel(host, "永不").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const last = onChange.mock.calls.at(-1)?.[0];
+    expect(last).not.toHaveProperty("count");
+    expect(last).not.toHaveProperty("until");
     await act(async () => root.unmount());
   });
 });

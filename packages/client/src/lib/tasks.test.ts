@@ -81,6 +81,40 @@ describe("toggleTaskDone", () => {
   });
 });
 
+describe("终止式重复 toggle", () => {
+  it("COUNT 满 → done 翻真、计数到位", async () => {
+    const t = await addTask({
+      title: "做三次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
+      now: new Date("2026-06-01T08:00:00.000Z"),
+    });
+    expect(t.completedCount).toBe(0);
+    await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
+    await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
+    const t3 = await toggleTaskDone(t.id, { now: new Date("2026-06-03T09:00:00.000Z") });
+    expect(t3.completedCount).toBe(3);
+    expect(t3.done).toBe(true);
+  });
+
+  it("UNTIL：完成最后一次后无后续 → done 翻真", async () => {
+    const t = await addTask({
+      title: "到月中",
+      recurrence: { freq: "daily", interval: 1, basis: "due", until: "2026-06-02T00:00:00.000Z" },
+      now: new Date("2026-06-01T08:00:00.000Z"),
+    });
+    const done = await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
+    expect(done.done).toBe(true);
+  });
+
+  it("普通池任务 completedCount 恒 0", async () => {
+    const t = await addTask({ title: "买菜", now: new Date("2026-06-01T08:00:00.000Z") });
+    expect(t.completedCount).toBe(0);
+    const toggled = await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
+    expect(toggled.completedCount).toBe(0);
+    expect(toggled.done).toBe(true);
+  });
+});
+
 describe("updateTask", () => {
   it("updates title and can convert pool task to recurring", async () => {
     const task = await addTask({ title: "old", now: new Date("2026-06-14T08:00:00.000Z") });

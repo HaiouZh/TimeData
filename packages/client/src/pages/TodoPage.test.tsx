@@ -81,4 +81,25 @@ describe("TodoPage", () => {
     expect(host.textContent).toContain("收件箱");
     await act(async () => root.unmount());
   });
+
+  it("重复任务显示完成进度", async () => {
+    await db.tasks.add({
+      id: "p1",
+      title: "做三次",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
+      lastDoneAt: null,
+      startAt: "2026-06-01T00:00:00.000Z",
+      scheduledAt: null,
+      subtasks: [],
+      sortOrder: 0,
+      completedCount: 1,
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await waitForText(host, "完成 1/3");
+    await act(async () => root.unmount());
+  });
 });
