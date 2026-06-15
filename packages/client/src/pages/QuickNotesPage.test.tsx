@@ -738,4 +738,17 @@ describe("捕捉中心", () => {
     expect(tasks[0]).toMatchObject({ title: "买牛奶", done: false });
     expect(input(host).value).toBe("");
   });
+
+  it("点「打点」建一条待定时间记录", async () => {
+    const { host } = await renderPage();
+
+    const punchButton = host.querySelector('button[aria-label="打点（记录到现在）"]');
+    await click(punchButton);
+
+    const entries = await db.timeEntries.toArray();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].categoryId).toBe("cat-pending");
+    const pending = await db.categories.get("cat-pending");
+    expect(pending).toMatchObject({ name: "待定" });
+  });
 });

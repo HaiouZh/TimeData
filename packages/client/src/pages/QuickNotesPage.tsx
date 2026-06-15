@@ -15,11 +15,13 @@ import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
+import { useEntryMutations } from "../hooks/useEntries.js";
 import { useLongPress } from "../hooks/useLongPress.ts";
+import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
 import { addTask } from "../lib/tasks.js";
-import { getDateString } from "../lib/time.ts";
+import { formatTime, getDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
@@ -46,12 +48,18 @@ const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 const STATUS_AUTO_DISMISS_MS = 2400;
+const ACTION_TOAST_DISMISS_MS = 6000;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 
 interface MenuTarget {
   note: QuickNote;
   x: number;
   y: number;
+}
+
+interface ActionToast {
+  message: string;
+  actions?: { label: string; onClick: () => void }[];
 }
 
 function normalizeDateParam(value: string | null): string | null {
@@ -98,6 +106,7 @@ export default function QuickNotesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<ActionToast | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
@@ -120,6 +129,7 @@ export default function QuickNotesPage() {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const composeDraftRef = useRef("");
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleRafRef = useRef<number | null>(null);
   const bubbleKeyRef = useRef<string | null>(null);
@@ -134,6 +144,7 @@ export default function QuickNotesPage() {
   const { confirm, dialog } = useConfirm();
   const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
   const { syncAfterWrite } = useSyncContext();
+  const { deleteEntry } = useEntryMutations();
   const navigate = useNavigate();
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
@@ -180,6 +191,7 @@ export default function QuickNotesPage() {
   useEffect(
     () => () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+      if (actionToastTimerRef.current) clearTimeout(actionToastTimerRef.current);
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
       if (bubbleRafRef.current !== null && typeof cancelAnimationFrame === "function") {
         cancelAnimationFrame(bubbleRafRef.current);
@@ -401,6 +413,42 @@ export default function QuickNotesPage() {
     }, STATUS_AUTO_DISMISS_MS);
   }
 
+  function showActionToast(toast: ActionToast) {
+    if (actionToastTimerRef.current) clearTimeout(actionToastTimerRef.current);
+    setActionToast(toast);
+    actionToastTimerRef.current = setTimeout(() => {
+      actionToastTimerRef.current = null;
+      setActionToast(null);
+    }, ACTION_TOAST_DISMISS_MS);
+  }
+
+  async function handlePunch() {
+    setError(null);
+    try {
+      const entry = await punchNow();
+      if (!entry) {
+        showStatus("距上次记录还没有时间");
+        return;
+      }
+      syncAfterWrite();
+      showActionToast({
+        message: `已打点 ${formatTime(entry.startTime)}–${formatTime(entry.endTime)} · 待定`,
+        actions: [
+          { label: "撤销", onClick: () => void handleUndoPunch(entry.id) },
+          { label: "去补录", onClick: () => navigate(`/?date=${getDateString(new Date(entry.startTime))}`) },
+        ],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "打点失败");
+    }
+  }
+
+  async function handleUndoPunch(entryId: string) {
+    await deleteEntry(entryId);
+    syncAfterWrite();
+    setActionToast(null);
+  }
+
   async function handleSubmit() {
     if (saving) return;
     const text = draftText.trim();
@@ -438,7 +486,7 @@ export default function QuickNotesPage() {
       setDraftText("");
       syncAfterWrite();
       focusInput();
-      showStatus("已加入待办");
+      showActionToast({ message: "已加入待办", actions: [{ label: "去待办", onClick: () => navigate("/todo") }] });
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
     }
@@ -804,6 +852,15 @@ export default function QuickNotesPage() {
 
             <button
               type="button"
+              aria-label="打点（记录到现在）"
+              onClick={() => void handlePunch()}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+            >
+              ⏱
+            </button>
+
+            <button
+              type="button"
               aria-label="搜索速记"
               onClick={openSearch}
               className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
@@ -1090,6 +1147,28 @@ export default function QuickNotesPage() {
         >
           {status}
         </p>
+      )}
+      {actionToast && (
+        <div
+          role="status"
+          className="fixed left-4 right-4 mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-sm text-slate-100 shadow-lg"
+          style={{ bottom: navOffsetPx + bottomInsetPx }}
+        >
+          <span className="min-w-0 flex-1 truncate">{actionToast.message}</span>
+          {actionToast.actions?.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={() => {
+                setActionToast(null);
+                action.onClick();
+              }}
+              className="shrink-0 font-semibold text-emerald-300 transition hover:text-emerald-200"
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
       )}
 
       {!searchOpen && !selectionMode && (
