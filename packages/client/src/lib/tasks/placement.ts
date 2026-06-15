@@ -31,14 +31,31 @@ export function currentDueDay(task: Task, now: Date): number {
   return currentDueDayFor(task.recurrence, task.lastDoneAt, task.startAt, now);
 }
 
+/** 重复任务是否已耗尽（count 满 / until 过且无到期），供落点兜底到「完成」。 */
+export function isExhausted(task: Task, now: Date): boolean {
+  const r = task.recurrence;
+  if (!r) return false;
+  if (r.count != null && (task.completedCount ?? 0) >= r.count) return true;
+  if (r.until != null) {
+    const untilDay = localDayIndex(new Date(r.until));
+    const nowDay = localDayIndex(now);
+    const dueDay = currentDueDay(task, now);
+    if (untilDay < nowDay && dueDay > untilDay && !isDueNow(r, task.lastDoneAt, task.startAt, now)) return true;
+  }
+  return false;
+}
+
 /** 计算任务应放置的分区。 */
 export function placementForTask(task: Task, now: Date): TodoPlacement {
   if (task.done) return { pool: "completed" };
 
   if (task.recurrence) {
+    if (isExhausted(task, now)) return { pool: "completed" };
     const due = isDueNow(task.recurrence, task.lastDoneAt, task.startAt, now);
-    if (due) {
-      const dueDay = currentDueDay(task, now);
+    const dueDay = currentDueDay(task, now);
+    const untilDay = task.recurrence.until != null ? localDayIndex(new Date(task.recurrence.until)) : Number.POSITIVE_INFINITY;
+    const hasOutstandingUntilOccurrence = task.recurrence.until != null && dueDay <= untilDay && untilDay < localDayIndex(now);
+    if (due || hasOutstandingUntilOccurrence) {
       return { pool: "today", overdue: dueDay < localDayIndex(now) };
     }
     return { pool: "upcoming" };

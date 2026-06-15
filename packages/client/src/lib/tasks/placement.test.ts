@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@timedata/shared";
-import { placementForTask, normalizeScheduledDate, localDateOf } from "./placement.js";
+import { placementForTask, normalizeScheduledDate, localDateOf, isExhausted } from "./placement.js";
 
 const TODAY = new Date("2026-06-14T08:00:00.000Z");
 function task(p: Partial<Task>): Task {
   return { id: "t", title: "x", done: false, recurrence: null, lastDoneAt: null,
-    startAt: null, scheduledAt: null, subtasks: [], sortOrder: 0,
+    startAt: null, scheduledAt: null, subtasks: [], completedCount: 0, sortOrder: 0,
     createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z", ...p };
 }
 
@@ -50,5 +50,46 @@ describe("placementForTask 重复任务", () => {
 describe("normalizeScheduledDate", () => {
   it("YYYY-MM-DD → 本地零点 UTC ISO", () => {
     expect(normalizeScheduledDate("2026-06-14")).toBe(localDateOf(new Date(2026, 5, 14)));
+  });
+});
+
+describe("isExhausted", () => {
+  const now = new Date("2026-06-15T08:00:00.000Z");
+
+  it("count 已满 → 完成", () => {
+    const t = task({
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
+      completedCount: 3,
+      startAt: "2026-06-01T00:00:00.000Z",
+    });
+    expect(isExhausted(t, now)).toBe(true);
+    expect(placementForTask(t, now)).toEqual({ pool: "completed" });
+  });
+
+  it("until 已过且无到期 → 完成", () => {
+    const t = task({
+      recurrence: { freq: "daily", interval: 1, basis: "due", until: "2026-06-10T00:00:00.000Z" },
+      lastDoneAt: "2026-06-10T09:00:00.000Z",
+      startAt: "2026-06-01T00:00:00.000Z",
+    });
+    expect(isExhausted(t, now)).toBe(true);
+  });
+
+  it("until 已过但有逾期未完成 → 不完成（留在今天）", () => {
+    const t = task({
+      recurrence: { freq: "daily", interval: 1, basis: "due", until: "2026-06-10T00:00:00.000Z" },
+      lastDoneAt: null,
+      startAt: "2026-06-01T00:00:00.000Z",
+    });
+    expect(isExhausted(t, now)).toBe(false);
+    expect(placementForTask(t, now)).toMatchObject({ pool: "today" });
+  });
+
+  it("until 在未来 → 不完成", () => {
+    const t = task({
+      recurrence: { freq: "daily", interval: 1, basis: "due", until: "2026-06-20T00:00:00.000Z" },
+      startAt: "2026-06-01T00:00:00.000Z",
+    });
+    expect(isExhausted(t, now)).toBe(false);
   });
 });
