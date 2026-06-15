@@ -1,5 +1,7 @@
 import type { HealthHeartRate, HealthHrv, HealthRun, HealthSleep, HealthStress } from "@timedata/shared";
 
+export type MetricValueType = "number" | "time" | "pace";
+
 export type HealthMetricRange = "30" | "90" | "all";
 
 export type HealthMetricId = "sleep" | "hrv" | "stress" | "heartRate" | "run";

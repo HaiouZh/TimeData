@@ -64,3 +64,21 @@ export function formatDistanceKm(distanceKm: number | null): string | null {
 export function formatRunSummaryPace(durationSeconds: number | null, distanceKm: number | null): string | null {
   return formatPace(secondsPerKm(durationSeconds, distanceKm));
 }
+
+export function formatClockHours(hours: number | null): string {
+  if (!isFiniteNumber(hours)) return "--";
+  const normalized = ((hours % 24) + 24) % 24;
+  let h = Math.floor(normalized);
+  let m = Math.round((normalized - h) * 60);
+  if (m === 60) {
+    h = (h + 1) % 24;
+    m = 0;
+  }
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function formatNumberUnit(value: number | null, unit: string): string {
+  if (!isFiniteNumber(value)) return "--";
+  const rounded = Number.isInteger(value) ? `${value}` : value.toFixed(1);
+  return unit ? `${rounded} ${unit}` : rounded;
+}
