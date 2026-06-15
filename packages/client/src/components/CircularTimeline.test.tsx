@@ -102,7 +102,7 @@ describe("CircularTimeline selection", () => {
     expect(path.match(/A 62 62/g)?.length).toBe(2);
   });
 
-  it("renders the center as a punch affordance", () => {
+  it("renders the center as range / category / duration while clicking punches", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
@@ -114,9 +114,14 @@ describe("CircularTimeline selection", () => {
       }),
     );
 
+    // 中心点击触发打点，但显示恢复为选段的时间段 / 分类 / 时长
     expect(html).toContain('aria-label="打点（记录到现在）"');
-    expect(html).toContain("打点到现在");
-    expect(html).not.toContain("30分钟");
+    const rangeIdx = html.indexOf("07:30 - 08:00");
+    const titleIdx = html.indexOf("待记录");
+    const durationIdx = html.indexOf("30分钟");
+    expect(rangeIdx).toBeGreaterThanOrEqual(0);
+    expect(titleIdx).toBeGreaterThan(rangeIdx);
+    expect(durationIdx).toBeGreaterThan(titleIdx);
   });
 
   it("calls onPunch when the center is clicked", async () => {
@@ -309,16 +314,21 @@ describe("CircularTimeline selection", () => {
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 205, clientY: 120, pointerId: 1 }));
     });
+    // 选段同时驱动环面高亮与中心显示（分类 / 时长）
+    expect(container.innerHTML).toContain('data-ring-indicator="true"');
+    expect(container.innerHTML).toContain("工作/编程");
+    expect(container.innerHTML).toContain("1小时");
 
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
     });
-    // 拖动只改环面高亮，不再驱动中心文案
-    expect(container.innerHTML).toContain('data-ring-indicator="true"');
+    expect(container.innerHTML).toContain("待记录");
+    expect(container.innerHTML).toContain("00:00 - 06:00");
 
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
     });
+    // 中心点击只打点，拖动选段不再打开编辑（编辑交给下方时间流）
     expect(handleGapOpen).not.toHaveBeenCalled();
     expect(handleEntryOpen).not.toHaveBeenCalled();
 
