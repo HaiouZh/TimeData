@@ -34,6 +34,18 @@ function buttonByText(host: HTMLElement, text: string): HTMLButtonElement {
   return button;
 }
 
+function elBySelector(host: HTMLElement, selector: string): HTMLElement {
+  const el = host.querySelector(selector);
+  if (!(el instanceof HTMLElement)) throw new Error(`element not found: ${selector}`);
+  return el;
+}
+
+function dispatchKey(key: string) {
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+  });
+}
+
 describe("ChartBuilderSheet", () => {
   it("选 2 个指标时禁用柱状", () => {
     const { host, root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose: vi.fn(), onDelete: vi.fn() });
@@ -85,6 +97,36 @@ describe("ChartBuilderSheet", () => {
     click(buttonByText(host, "保存"));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ view: "table", source: "runs", columnIds: expect.arrayContaining(["date", "distanceKm"]) }));
+    act(() => root.unmount());
+  });
+
+  it("点击遮罩背景关闭", () => {
+    const onClose = vi.fn();
+    const { host, root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose, onDelete: vi.fn() });
+
+    click(elBySelector(host, ".chart-builder-overlay"));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+  });
+
+  it("点击手柄关闭", () => {
+    const onClose = vi.fn();
+    const { host, root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose, onDelete: vi.fn() });
+
+    click(host.querySelector('button[aria-label="关闭"]'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+  });
+
+  it("按 Esc 关闭", () => {
+    const onClose = vi.fn();
+    const { root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose, onDelete: vi.fn() });
+
+    dispatchKey("Escape");
+
+    expect(onClose).toHaveBeenCalledTimes(1);
     act(() => root.unmount());
   });
 });

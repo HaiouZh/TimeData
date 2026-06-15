@@ -1,5 +1,5 @@
 import type { HealthBlockRange, HealthChartConfig, HealthChartConfigDraft } from "@timedata/shared";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listMetricDefs } from "../../../lib/healthMetrics/index.ts";
 
 export type BuilderDraft = HealthChartConfigDraft;
@@ -80,6 +80,15 @@ export function ChartBuilderSheet({
   const [hideEmptyRows, setHideEmptyRows] = useState(initial?.view === "table" ? initial.hideEmptyRows : false);
   const [maxRows, setMaxRows] = useState(initial?.view === "table" ? initial.maxRows : 20);
   const [exportEnabled, setExportEnabled] = useState(initial?.presentation.exportEnabled ?? false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -166,177 +175,190 @@ export function ChartBuilderSheet({
   }
 
   return (
-    <div className="chart-builder-sheet" role="dialog" aria-label="视图搭建">
-      <div className="chart-builder-tabs" role="tablist" aria-label="块类型">
-        {(["stat", "chart", "metricTable", "runTable"] as const).map((item) => (
-          <button key={item} type="button" aria-pressed={choice === item} onClick={() => setChoice(item)}>
-            {choiceLabel(item)}
-          </button>
-        ))}
-      </div>
+    <div
+      className="chart-builder-overlay"
+      role="dialog"
+      aria-label="视图搭建"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="chart-builder-sheet">
+        <button type="button" className="chart-builder-handle" aria-label="关闭" onClick={onClose}>
+          <span />
+        </button>
+        <div className="chart-builder-head">{initial ? "编辑视图" : "新建视图"}</div>
 
-      <input className="chart-builder-title" placeholder="标题" value={title} onChange={(event) => setTitle(event.target.value)} />
-
-      {choice !== "runTable" ? (
-        groups.map(([group, items]) => (
-          <fieldset key={group} className="chart-builder-group">
-            <legend>{group}</legend>
-            {items.map((item) => (
-              <label key={item.id}>
-                <input
-                  type="checkbox"
-                  aria-label={item.label}
-                  checked={selectedMetrics.includes(item.id)}
-                  onChange={() => toggleMetric(item.id)}
-                />
-                {item.label}
-              </label>
+        <div className="chart-builder-body">
+          <div className="chart-builder-tabs" role="tablist" aria-label="块类型">
+            {(["stat", "chart", "metricTable", "runTable"] as const).map((item) => (
+              <button key={item} type="button" aria-pressed={choice === item} onClick={() => setChoice(item)}>
+                {choiceLabel(item)}
+              </button>
             ))}
-          </fieldset>
-        ))
-      ) : (
-        <fieldset className="chart-builder-group">
-          <legend>跑步字段</legend>
-          {RUN_COLUMNS.map((item) => (
-            <label key={item.id}>
-              <input
-                type="checkbox"
-                aria-label={item.label}
-                checked={runColumns.includes(item.id)}
-                onChange={() => toggleRunColumn(item.id)}
-              />
-              {item.label}
-            </label>
-          ))}
-        </fieldset>
-      )}
+          </div>
 
-      <fieldset className="chart-builder-kind">
-        <legend>时间范围</legend>
-        <label>
-          <input type="radio" name="rangeMode" aria-label="继承页面范围" checked={rangeMode === "inherit"} onChange={() => setRangeMode("inherit")} />
-          继承页面范围
-        </label>
-        <label>
-          <input type="radio" name="rangeMode" aria-label="最近天数" checked={rangeMode === "recent"} onChange={() => setRangeMode("recent")} />
-          最近
-        </label>
-        <input
-          type="number"
-          aria-label="最近天数值"
-          min={1}
-          value={recentDays}
-          onChange={(event) => setRecentDays(Number(event.target.value) || 30)}
-        />
-      </fieldset>
+          <input className="chart-builder-title" placeholder="标题" value={title} onChange={(event) => setTitle(event.target.value)} />
 
-      {choice === "chart" && (
-        <>
+          {choice !== "runTable" ? (
+            groups.map(([group, items]) => (
+              <fieldset key={group} className="chart-builder-group">
+                <legend>{group}</legend>
+                {items.map((item) => (
+                  <label key={item.id} className="chart-builder-chip">
+                    <input
+                      type="checkbox"
+                      aria-label={item.label}
+                      checked={selectedMetrics.includes(item.id)}
+                      onChange={() => toggleMetric(item.id)}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </fieldset>
+            ))
+          ) : (
+            <fieldset className="chart-builder-group">
+              <legend>跑步字段</legend>
+              {RUN_COLUMNS.map((item) => (
+                <label key={item.id} className="chart-builder-chip">
+                  <input
+                    type="checkbox"
+                    aria-label={item.label}
+                    checked={runColumns.includes(item.id)}
+                    onChange={() => toggleRunColumn(item.id)}
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </fieldset>
+          )}
+
           <fieldset className="chart-builder-kind">
-            <legend>图表类型</legend>
-            {(["line", "area", "bar"] as const).map((kind) => (
-              <label key={kind}>
-                <input
-                  type="radio"
-                  name="chartKind"
-                  aria-label={kind === "line" ? "折线" : kind === "area" ? "面积" : "柱状"}
-                  disabled={kind === "bar" && barDisabled}
-                  checked={effectiveKind === kind}
-                  onChange={() => setChartKind(kind)}
-                />
-                {kind === "line" ? "折线" : kind === "area" ? "面积" : "柱状"}
-              </label>
-            ))}
+            <legend>时间范围</legend>
+            <label className="chart-builder-chip">
+              <input type="radio" name="rangeMode" aria-label="继承页面范围" checked={rangeMode === "inherit"} onChange={() => setRangeMode("inherit")} />
+              继承页面范围
+            </label>
+            <label className="chart-builder-chip">
+              <input type="radio" name="rangeMode" aria-label="最近天数" checked={rangeMode === "recent"} onChange={() => setRangeMode("recent")} />
+              最近
+            </label>
+            <input
+              type="number"
+              className="chart-builder-num"
+              aria-label="最近天数值"
+              min={1}
+              value={recentDays}
+              onChange={(event) => setRecentDays(Number(event.target.value) || 30)}
+            />
           </fieldset>
 
-          <label>
-            趋势模式
-            <select value={trendMode} onChange={(event) => setTrendMode(event.target.value as "auto" | "normalized" | "raw")}>
-              <option value="auto">自动</option>
-              <option value="normalized">归一化</option>
-              <option value="raw">原始值</option>
-            </select>
-          </label>
-
-          <label>
-            <input type="checkbox" aria-label="平均参考线" checked={showAverageLine} onChange={(event) => setShowAverageLine(event.target.checked)} />
-            平均参考线
-          </label>
-        </>
-      )}
-
-      {(choice === "chart" || choice === "metricTable") && (
-        <fieldset className="chart-builder-rolling">
-          <legend>滚动均线</legend>
-          {ROLLING_PRESETS.map((windowSize) => (
-            <label key={windowSize}>
-              <input
-                type="checkbox"
-                aria-label={`${windowSize}日均线`}
-                checked={rollingWindows.includes(windowSize)}
-                onChange={() => toggleRolling(windowSize)}
-              />
-              {windowSize}日
-            </label>
-          ))}
-        </fieldset>
-      )}
-
-      {(choice === "metricTable" || choice === "runTable") && (
-        <fieldset className="chart-builder-rolling">
-          <legend>表格设置</legend>
-          {choice === "metricTable" && (
+          {choice === "chart" && (
             <>
-              <label>
-                <input type="checkbox" aria-label="显示原始列" checked={showRawColumns} onChange={(event) => setShowRawColumns(event.target.checked)} />
-                显示原始列
+              <fieldset className="chart-builder-kind">
+                <legend>图表类型</legend>
+                {(["line", "area", "bar"] as const).map((kind) => (
+                  <label key={kind} className="chart-builder-chip">
+                    <input
+                      type="radio"
+                      name="chartKind"
+                      aria-label={kind === "line" ? "折线" : kind === "area" ? "面积" : "柱状"}
+                      disabled={kind === "bar" && barDisabled}
+                      checked={effectiveKind === kind}
+                      onChange={() => setChartKind(kind)}
+                    />
+                    {kind === "line" ? "折线" : kind === "area" ? "面积" : "柱状"}
+                  </label>
+                ))}
+              </fieldset>
+
+              <label className="chart-builder-field">
+                趋势模式
+                <select value={trendMode} onChange={(event) => setTrendMode(event.target.value as "auto" | "normalized" | "raw")}>
+                  <option value="auto">自动</option>
+                  <option value="normalized">归一化</option>
+                  <option value="raw">原始值</option>
+                </select>
               </label>
-              <label>
-                <input
-                  type="checkbox"
-                  aria-label="显示滚动列"
-                  checked={showRollingColumns}
-                  onChange={(event) => setShowRollingColumns(event.target.checked)}
-                />
-                显示滚动列
-              </label>
-              <label>
-                <input type="checkbox" aria-label="隐藏空行" checked={hideEmptyRows} onChange={(event) => setHideEmptyRows(event.target.checked)} />
-                隐藏空行
+
+              <label className="chart-builder-switch">
+                <input type="checkbox" aria-label="平均参考线" checked={showAverageLine} onChange={(event) => setShowAverageLine(event.target.checked)} />
+                平均参考线
               </label>
             </>
           )}
-          <label>
-            最大行数
-            <input
-              type="number"
-              aria-label="最大行数"
-              min={1}
-              value={maxRows ?? ""}
-              onChange={(event) => setMaxRows(event.target.value === "" ? null : Number(event.target.value) || 20)}
-            />
-          </label>
-          <label>
-            <input type="checkbox" aria-label="导出 CSV" checked={exportEnabled} onChange={(event) => setExportEnabled(event.target.checked)} />
-            导出 CSV
-          </label>
-        </fieldset>
-      )}
 
-      <div className="chart-builder-summary">{summaryText(choice, titleValue, selectedMetrics.length, selectedRunColumns.length, rollingWindows)}</div>
+          {(choice === "chart" || choice === "metricTable") && (
+            <fieldset className="chart-builder-rolling">
+              <legend>滚动均线</legend>
+              {ROLLING_PRESETS.map((windowSize) => (
+                <label key={windowSize} className="chart-builder-chip">
+                  <input
+                    type="checkbox"
+                    aria-label={`${windowSize}日均线`}
+                    checked={rollingWindows.includes(windowSize)}
+                    onChange={() => toggleRolling(windowSize)}
+                  />
+                  {windowSize}日
+                </label>
+              ))}
+            </fieldset>
+          )}
 
-      <div className="chart-builder-actions">
-        <button type="button" onClick={handleSave}>
-          保存
-        </button>
-        <button type="button" onClick={onClose}>
-          取消
-        </button>
-        {initial && (
-          <button type="button" onClick={() => onDelete(initial.id)}>
-            删除
+          {(choice === "metricTable" || choice === "runTable") && (
+            <fieldset className="chart-builder-rolling">
+              <legend>表格设置</legend>
+              {choice === "metricTable" && (
+                <>
+                  <label className="chart-builder-switch">
+                    <input type="checkbox" aria-label="显示原始列" checked={showRawColumns} onChange={(event) => setShowRawColumns(event.target.checked)} />
+                    显示原始列
+                  </label>
+                  <label className="chart-builder-switch">
+                    <input type="checkbox" aria-label="显示滚动列" checked={showRollingColumns} onChange={(event) => setShowRollingColumns(event.target.checked)} />
+                    显示滚动列
+                  </label>
+                  <label className="chart-builder-switch">
+                    <input type="checkbox" aria-label="隐藏空行" checked={hideEmptyRows} onChange={(event) => setHideEmptyRows(event.target.checked)} />
+                    隐藏空行
+                  </label>
+                </>
+              )}
+              <label className="chart-builder-field">
+                最大行数
+                <input
+                  type="number"
+                  aria-label="最大行数"
+                  min={1}
+                  value={maxRows ?? ""}
+                  onChange={(event) => setMaxRows(event.target.value === "" ? null : Number(event.target.value) || 20)}
+                />
+              </label>
+              <label className="chart-builder-switch">
+                <input type="checkbox" aria-label="导出 CSV" checked={exportEnabled} onChange={(event) => setExportEnabled(event.target.checked)} />
+                导出 CSV
+              </label>
+            </fieldset>
+          )}
+
+          <div className="chart-builder-summary">{summaryText(choice, titleValue, selectedMetrics.length, selectedRunColumns.length, rollingWindows)}</div>
+        </div>
+
+        <div className="chart-builder-actions">
+          {initial && (
+            <button type="button" className="cb-delete" onClick={() => onDelete(initial.id)}>
+              删除
+            </button>
+          )}
+          <span className="cb-spacer" />
+          <button type="button" className="cb-cancel" onClick={onClose}>
+            取消
           </button>
-        )}
+          <button type="button" className="cb-save" onClick={handleSave}>
+            保存
+          </button>
+        </div>
       </div>
     </div>
   );
