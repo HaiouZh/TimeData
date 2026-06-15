@@ -69,6 +69,8 @@ export const RecurrenceSchema = z
       .optional(),
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "time must be HH:mm").optional(),
     basis: z.enum(["due", "completion"]),
+    count: z.number().int().min(1).max(999).optional(),
+    until: UtcIsoStringSchema.optional(),
   })
   .superRefine((r, ctx) => {
     if (r.freq === "weekly" && !r.byWeekday) ctx.addIssue({ code: "custom", message: "weekly requires byWeekday" });
@@ -77,6 +79,8 @@ export const RecurrenceSchema = z
       ctx.addIssue({ code: "custom", message: "daily must not set byWeekday/byMonthday" });
     if (r.freq === "weekly" && r.byMonthday) ctx.addIssue({ code: "custom", message: "weekly must not set byMonthday" });
     if (r.freq === "monthly" && r.byWeekday) ctx.addIssue({ code: "custom", message: "monthly must not set byWeekday" });
+    if (r.count !== undefined && r.until !== undefined)
+      ctx.addIssue({ code: "custom", message: "count and until are mutually exclusive" });
   });
 
 export const TaskSubtaskSchema = z.object({
@@ -94,6 +98,7 @@ export const TaskSchema = z.object({
   startAt: UtcIsoStringSchema.nullable(),
   scheduledAt: UtcIsoStringSchema.nullable(),
   subtasks: z.array(TaskSubtaskSchema).max(200).default([]),
+  completedCount: z.number().int().min(0).default(0),
   sortOrder: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,

@@ -82,3 +82,50 @@ describe("TaskSchema scheduledAt/subtasks", () => {
     expect(() => TaskSchema.parse({ ...baseTask, scheduledAt: "2026-12-25" })).toThrow();
   });
 });
+
+describe("RecurrenceSchema 终止条件", () => {
+  it("接受 count", () => {
+    const r = RecurrenceSchema.parse({ freq: "daily", interval: 1, basis: "due", count: 12 });
+    expect(r.count).toBe(12);
+  });
+
+  it("接受 until（当地零点 UtcIso）", () => {
+    const r = RecurrenceSchema.parse({ freq: "daily", interval: 1, basis: "due", until: "2026-07-31T00:00:00.000Z" });
+    expect(r.until).toBe("2026-07-31T00:00:00.000Z");
+  });
+
+  it("count 与 until 互斥", () => {
+    expect(() =>
+      RecurrenceSchema.parse({
+        freq: "daily",
+        interval: 1,
+        basis: "due",
+        count: 3,
+        until: "2026-07-31T00:00:00.000Z",
+      }),
+    ).toThrow();
+  });
+
+  it("count 必须 >= 1", () => {
+    expect(() => RecurrenceSchema.parse({ freq: "daily", interval: 1, basis: "due", count: 0 })).toThrow();
+  });
+});
+
+describe("TaskSchema completedCount", () => {
+  it("缺省为 0", () => {
+    const t = TaskSchema.parse({
+      id: "t1",
+      title: "x",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      subtasks: [],
+      sortOrder: 0,
+      createdAt: "2026-06-15T00:00:00.000Z",
+      updatedAt: "2026-06-15T00:00:00.000Z",
+    });
+    expect(t.completedCount).toBe(0);
+  });
+});
