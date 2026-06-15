@@ -16,6 +16,15 @@ const sleepSettingState = vi.hoisted(() => ({
   sleepCategoryId: null as string | null,
   setSleepCategoryId: vi.fn(),
 }));
+const todoDestState = vi.hoisted(() => ({
+  destination: "today" as "today" | "inbox",
+  setTodoDefaultDestination: vi.fn(),
+}));
+
+vi.mock("../../lib/settings/todoDefaultDestinationSetting.ts", () => ({
+  setTodoDefaultDestination: (value: "today" | "inbox") => todoDestState.setTodoDefaultDestination(value),
+  useTodoDefaultDestination: () => todoDestState.destination,
+}));
 
 vi.mock("../../hooks/useCategories.ts", () => ({
   useCategories: () => ({
@@ -48,12 +57,14 @@ describe("SettingsInsightsPage", () => {
     categoriesState.categories = [cat("work", "工作"), cat("sleep", "睡眠")];
     sleepSettingState.sleepCategoryId = null;
     sleepSettingState.setSleepCategoryId.mockReset();
+    todoDestState.destination = "today";
+    todoDestState.setTodoDefaultDestination.mockReset();
   });
 
   it("renders the sleep category selector", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
-    expect(html).toContain("数据洞察");
+    expect(html).toContain("杂项");
     expect(html).toContain("睡眠分类");
     expect(html).toContain("睡眠");
   });
@@ -87,5 +98,32 @@ describe("SettingsInsightsPage", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("renders todo default destination control", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
+
+    expect(html).toContain("新建待办默认落点");
+    expect(html).toContain("收件箱");
+  });
+
+  it("persists todo default destination selection", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
+    });
+
+    const select = host.querySelector('[aria-label="新建待办默认落点"]') as HTMLSelectElement | null;
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+    await act(async () => {
+      if (select && nativeValueSetter) {
+        nativeValueSetter.call(select, "inbox");
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    expect(todoDestState.setTodoDefaultDestination).toHaveBeenCalledWith("inbox");
+    await act(async () => root.unmount());
   });
 });

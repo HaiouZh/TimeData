@@ -381,8 +381,8 @@ export default function SettingsPage() {
           to="/settings/insights"
           icon={<MoonIcon />}
           accent="sky"
-          title="数据洞察"
-          subtitle="设置睡眠分类，用于作息、覆盖率和异常判定"
+          title="杂项"
+          subtitle="睡眠分类、新建待办默认落点等零碎设置"
         />
         <SettingsLinkRow
           to="/settings/stats-layout"
