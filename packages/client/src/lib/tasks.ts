@@ -3,6 +3,7 @@ import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
+import { isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
 
 export interface AddTaskInput {
   title: string;
@@ -53,6 +54,7 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
     startAt: recurrence ? (input.startAt ?? createdAt) : null,
     scheduledAt,
     subtasks: [],
+    completedCount: 0,
     sortOrder: await nextSortOrder(),
     createdAt,
     updatedAt: createdAt,
@@ -88,17 +90,29 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
   return putTask(next);
 }
 
-/** 重复任务只盖 lastDoneAt；任务池条目才翻转 done。 */
 export async function toggleTaskDone(id: string, options: { now?: Date } = {}): Promise<Task> {
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
 
   const now = options.now ?? new Date();
   const updatedAt = now.toISOString();
-  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
-  const next: Task = existing.recurrence
-    ? TaskSchema.parse({ ...base, done: false, lastDoneAt: updatedAt, updatedAt })
-    : TaskSchema.parse({ ...base, done: !existing.done, updatedAt });
+  const base = {
+    ...existing,
+    scheduledAt: existing.scheduledAt ?? null,
+    subtasks: existing.subtasks ?? [],
+    completedCount: existing.completedCount ?? 0,
+  };
+
+  let next: Task;
+  if (existing.recurrence) {
+    const completedCount = base.completedCount + 1;
+    const r = existing.recurrence;
+    const countDone = r.count != null && completedCount >= r.count;
+    const untilDone = isRecurrenceFinishedAfter(r, existing.startAt, now);
+    next = TaskSchema.parse({ ...base, completedCount, lastDoneAt: updatedAt, done: countDone || untilDone, updatedAt });
+  } else {
+    next = TaskSchema.parse({ ...base, done: !existing.done, updatedAt });
+  }
 
   return putTask(next);
 }
@@ -154,7 +168,7 @@ function isOverdue(t: Task, now: Date): boolean {
 
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const all = (await db.tasks.orderBy("sortOrder").toArray())
-    .map((t) => ({ ...t, scheduledAt: t.scheduledAt ?? null, subtasks: t.subtasks ?? [] }));
+    .map((t) => ({ ...t, scheduledAt: t.scheduledAt ?? null, subtasks: t.subtasks ?? [], completedCount: t.completedCount ?? 0 }));
   const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
   for (const t of all) {
     if (t.recurrence) buckets.recurring.push(t);
