@@ -59,6 +59,9 @@ function createSchema() {
       last_done_at TEXT,
       start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      scheduled_at TEXT,
+      subtasks TEXT NOT NULL DEFAULT '[]',
+      completed_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -622,6 +625,7 @@ describe("sync route", () => {
             scheduledAt: null,
             subtasks: [],
             sortOrder: 0,
+            completedCount: 2,
             createdAt: "2026-06-14T00:00:00.000Z",
             updatedAt: "2026-06-14T00:00:00.000Z",
           },
@@ -638,10 +642,11 @@ describe("sync route", () => {
       importedTasks: 1,
       latestSeq: 1,
     });
-    expect(db.prepare("SELECT title, recurrence, start_at FROM tasks WHERE id = ?").get("task-force")).toMatchObject({
+    expect(db.prepare("SELECT title, recurrence, start_at, completed_count FROM tasks WHERE id = ?").get("task-force")).toMatchObject({
       title: "跑步",
       recurrence: JSON.stringify({ freq: "weekly", interval: 1, byWeekday: [1], basis: "due" }),
       start_at: "2026-06-14T00:00:00.000Z",
+      completed_count: 2,
     });
     expect(db.prepare("SELECT table_name, record_id FROM sync_seq WHERE id = 1").get()).toMatchObject({
       table_name: "tasks",
@@ -884,6 +889,62 @@ describe("sync route", () => {
     const body = await res.json();
     expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
     expect(body.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied", recordId: "entry-1" });
+  });
+
+  it("同步往返保留 completedCount 与 recurrence.count", async () => {
+    const task = {
+      id: "task-count",
+      title: "做三次",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
+      lastDoneAt: null,
+      startAt: "2026-06-14T00:00:00.000Z",
+      scheduledAt: null,
+      subtasks: [],
+      sortOrder: 0,
+      completedCount: 2,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      updatedAt: "2026-06-14T00:00:00.000Z",
+    };
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "tasks",
+            recordId: "task-count",
+            action: "create",
+            data: task,
+            timestamp: "2026-06-14T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const row = db.prepare("SELECT completed_count, recurrence FROM tasks WHERE id = ?").get("task-count") as {
+      completed_count: number;
+      recurrence: string;
+    };
+    expect(row.completed_count).toBe(2);
+    expect(JSON.parse(row.recurrence)).toMatchObject({ count: 3 });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "tasks",
+          recordId: "task-count",
+          data: expect.objectContaining({ completedCount: 2, recurrence: expect.objectContaining({ count: 3 }) }),
+        }),
+      ]),
+    );
   });
 
   it("returns resolver skipReason for skipped push outcomes", async () => {
