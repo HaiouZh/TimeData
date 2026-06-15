@@ -201,6 +201,16 @@ export function initializeDatabase(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_runs_date ON runs(date) WHERE sync_tombstone = 0;
 
+    CREATE TABLE IF NOT EXISTS health_charts (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      config TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_health_charts_sort ON health_charts(sort_order);
+
     CREATE TABLE IF NOT EXISTS server_config (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,

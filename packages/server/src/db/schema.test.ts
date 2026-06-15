@@ -88,6 +88,33 @@ describe("initializeDatabase", () => {
     ]);
   });
 
+  it("creates health_charts as a synced config table", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'health_charts'").get();
+    expect(table).toMatchObject({ name: "health_charts" });
+
+    const columns = db.prepare("PRAGMA table_info(health_charts)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["id", "TEXT", 0, 1],
+      ["type", "TEXT", 1, 0],
+      ["sort_order", "INTEGER", 1, 0],
+      ["config", "TEXT", 1, 0],
+      ["created_at", "TEXT", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+
+    const index = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_health_charts_sort'").get();
+    expect(index).toMatchObject({ name: "idx_health_charts_sort" });
+  });
+
   it("adds source columns to legacy quick_notes tables", async () => {
     const { ensureQuickNoteSourceColumns } = await import("./schema.js");
     db.exec(`
