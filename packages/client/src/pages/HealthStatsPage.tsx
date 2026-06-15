@@ -330,19 +330,21 @@ export default function HealthStatsPage() {
         </>
       )}
 
-      <ChartBuilderSheet
-        open={builderOpen}
-        initial={editing}
-        onSave={(draft) => {
-          void handleSave(draft);
-        }}
-        onClose={handleCloseBuilder}
-        onDelete={(id) => {
-          void handleDelete(id);
-          setBuilderOpen(false);
-          setEditing(null);
-        }}
-      />
+      {builderOpen && (
+        <ChartBuilderSheet
+          open
+          initial={editing}
+          onSave={(draft) => {
+            void handleSave(draft);
+          }}
+          onClose={handleCloseBuilder}
+          onDelete={(id) => {
+            void handleDelete(id);
+            setBuilderOpen(false);
+            setEditing(null);
+          }}
+        />
+      )}
     </div>
   );
 }

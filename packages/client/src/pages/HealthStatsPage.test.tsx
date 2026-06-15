@@ -253,4 +253,35 @@ describe("HealthStatsPage", () => {
     expect(host.querySelector('[role="dialog"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
+
+  it("重新打开搭建器时按当前编辑对象重置表单", async () => {
+    seedHealthData();
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[aria-label="编辑图表"]') != null, "Timed out waiting for metricChart edit button");
+
+    // 打开“新增”，勾一个预置趋势块没有的指标，污染弹窗内部状态
+    await act(async () => {
+      host.querySelector('[aria-label="添加图表"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      host.querySelector('input[aria-label="最高心率"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect((host.querySelector('input[aria-label="最高心率"]') as HTMLInputElement).checked).toBe(true);
+
+    // 取消后转去编辑预置 metricChart 块
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent === "取消")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      host.querySelector('[aria-label="编辑图表"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // 弹窗应反映被编辑块的指标，而不是上一次“新增”的残留
+    expect((host.querySelector('input[aria-label="睡眠时长"]') as HTMLInputElement).checked).toBe(true);
+    expect((host.querySelector('input[aria-label="最高心率"]') as HTMLInputElement).checked).toBe(false);
+
+    await act(async () => root.unmount());
+  });
 });
