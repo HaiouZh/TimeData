@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -18,6 +18,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
+import { addTask } from "../lib/tasks.js";
 import { getDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
@@ -133,6 +134,7 @@ export default function QuickNotesPage() {
   const { confirm, dialog } = useConfirm();
   const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
   const { syncAfterWrite } = useSyncContext();
+  const navigate = useNavigate();
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
@@ -424,6 +426,21 @@ export default function QuickNotesPage() {
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveTodo() {
+    const text = draftText.trim();
+    if (!text || saving) return;
+    setError(null);
+    try {
+      await addTask({ title: text });
+      setDraftText("");
+      syncAfterWrite();
+      focusInput();
+      showStatus("已加入待办");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "保存失败");
     }
   }
 
@@ -750,7 +767,7 @@ export default function QuickNotesPage() {
                 QuickNote
               </p>
               <h1 className="truncate text-base font-semibold tracking-tight text-slate-50 sm:mt-1 sm:text-xl">
-                {timeline.atLatest ? `速记 · ${timeline.notes.length}` : "速记 · 历史"}
+                {timeline.atLatest ? "速记" : "速记 · 历史"}
               </h1>
               <p className="hidden text-xs text-slate-400 sm:mt-1 sm:block">{timelineStatus}</p>
             </div>
@@ -1096,6 +1113,15 @@ export default function QuickNotesPage() {
             )}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
               <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  aria-label="存为待办"
+                  disabled={!draftText.trim() || saving}
+                  onClick={() => void handleSaveTodo()}
+                  className="h-11 shrink-0 rounded-2xl border border-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:border-emerald-500/40 hover:text-slate-50 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600 sm:px-4"
+                >
+                  待办
+                </button>
                 <textarea
                   ref={inputRef}
                   aria-label="速记输入"

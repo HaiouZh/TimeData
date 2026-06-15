@@ -710,3 +710,32 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 });
+
+describe("捕捉中心", () => {
+  beforeEach(async () => {
+    await db.tasks.clear();
+    await db.quickNotes.clear();
+    await db.timeEntries.clear();
+    await db.categories.clear();
+    await db.syncLog.clear();
+  });
+
+  it("header 不再显示速记条数", async () => {
+    const { host } = await renderPage();
+    const heading = host.querySelector("h1");
+    expect(heading?.textContent).toBe("速记");
+  });
+
+  it("点「待办」把输入文本存成池任务并清空输入", async () => {
+    const { host } = await renderPage();
+    await typeInto(input(host), "买牛奶");
+
+    const todoButton = host.querySelector('button[aria-label="存为待办"]');
+    await click(todoButton);
+
+    const tasks = await db.tasks.toArray();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ title: "买牛奶", done: false });
+    expect(input(host).value).toBe("");
+  });
+});
