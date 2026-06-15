@@ -9,6 +9,7 @@ import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useEntries } from "../hooks/useEntries.ts";
 import { useMidnightTick } from "../hooks/useMidnightTick.ts";
 import { getMergeOvernightEnabled } from "../lib/overnightDisplaySetting.ts";
+import { punchNow } from "../lib/punch.ts";
 import { buildTimeSlots, getDateString } from "../lib/time.ts";
 
 interface TimelinePageProps {
@@ -31,7 +32,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
     () => buildTimeSlots(entries, date, 0, { previousEntry, mergeOvernight, now }),
     [date, entries, mergeOvernight, now, previousEntry],
   );
-  const { syncIfStale } = useSyncContext();
+  const { syncIfStale, syncAfterWrite } = useSyncContext();
 
   useEffect(() => {
     void syncIfStale();
@@ -46,6 +47,11 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
     setSearchParams(nextDate === today ? {} : { date: nextDate });
   }
 
+  async function handlePunch() {
+    const entry = await punchNow();
+    if (entry) syncAfterWrite();
+  }
+
   return (
     <>
       <DateNav date={date} onDateChange={handleDateChange} />
@@ -53,12 +59,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
         date={date}
         slots={slots}
         now={now}
-        onEntryOpen={(entry) => navigate(`/entries/${entry.id}/edit`)}
-        onGapOpen={(startTime, endTime) =>
-          navigate(
-            `/entries/new?date=${encodeURIComponent(date)}&start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`,
-          )
-        }
+        onPunch={() => void handlePunch()}
         overlay={<SyncIndicator />}
       />
       <DayOverview slots={slots} date={date} />

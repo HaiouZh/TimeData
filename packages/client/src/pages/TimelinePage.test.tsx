@@ -9,6 +9,7 @@ const syncIfStaleMock = vi.hoisted(() => vi.fn());
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: () => ({
     syncIfStale: syncIfStaleMock,
+    syncAfterWrite: vi.fn(),
     status: "success",
   }),
 }));
@@ -18,7 +19,12 @@ vi.mock("../components/DateNav.tsx", () => ({
 }));
 
 vi.mock("../components/CircularTimeline.tsx", () => ({
-  default: ({ overlay }: { overlay?: React.ReactNode }) => createElement("div", { className: "circle" }, overlay),
+  default: ({ overlay, onPunch }: { overlay?: React.ReactNode; onPunch?: () => void }) =>
+    createElement(
+      "div",
+      { className: "circle", "data-has-punch": typeof onPunch === "function" ? "true" : "false" },
+      overlay,
+    ),
 }));
 
 vi.mock("../components/SyncIndicator.tsx", () => ({
@@ -45,5 +51,12 @@ describe("TimelinePage sync indicator", () => {
 
     expect(html).toContain('data-sync-indicator="true"');
     expect(html).toContain("timeline");
+  });
+
+  it("passes a punch handler into the circular timeline", () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
+    );
+    expect(html).toContain('data-has-punch="true"');
   });
 });
