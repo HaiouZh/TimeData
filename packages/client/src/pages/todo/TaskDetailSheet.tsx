@@ -4,7 +4,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { RecurrenceEditor } from "../../components/RecurrenceEditor.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
-import { deleteTask, updateSubtasks, updateTask } from "../../lib/tasks.js";
+import { deleteTask, toggleTaskDone, updateSubtasks, updateTask } from "../../lib/tasks.js";
+import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { subtasksDifferStructurally, trimSubtasks } from "../../lib/tasks/subtasks.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
 
@@ -26,6 +27,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const [title, setTitle] = useState("");
   const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const touchStartY = useRef<number | null>(null);
   const hadTask = useRef(false);
 
@@ -107,6 +109,12 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
     onClose();
   }
 
+  const subtaskTotal = subtasks.length;
+  const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
+  const nextTimeLabel = task
+    ? (task.recurrence ? recurrenceSummary(task.recurrence) : (task.scheduledAt ?? "设定时间"))
+    : "设定时间";
+
   const closeRef = useRef(handleClose);
   closeRef.current = handleClose;
   useEffect(() => {
@@ -131,7 +139,8 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
       }}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-t-2xl border border-slate-800 bg-slate-900 text-slate-100 shadow-2xl"
+        data-testid="detail-sheet"
+        className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-slate-800 bg-slate-900 text-slate-100 shadow-2xl ${expanded ? "h-[90vh]" : "max-h-[calc(90vh)]"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         onTouchStart={(event) => {
           touchStartY.current = event.touches[0]?.clientY ?? null;
@@ -145,22 +154,47 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
           }
         }}
       >
-        <button type="button" aria-label="关闭" onClick={handleClose} className="flex w-full justify-center py-3">
-          <span className="block h-1 w-10 rounded-full bg-slate-600" />
-        </button>
+        <div className="relative flex items-center justify-center py-3">
+          <button type="button" aria-label="关闭" onClick={handleClose} className="flex justify-center">
+            <span className="block h-1 w-10 rounded-full bg-slate-600" />
+          </button>
+          <button
+            type="button"
+            aria-label={expanded ? "还原" : "放大"}
+            onClick={() => setExpanded((value) => !value)}
+            className="absolute right-3 rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+          >
+            {expanded ? "▢" : "⤢"}
+          </button>
+        </div>
 
         {error && <p className="px-4 pb-2 text-sm text-rose-300">{error}</p>}
 
         {task && (
           <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
-            <input
-              aria-label="任务标题"
-              value={title}
-              onChange={(event) => setTitle(event.currentTarget.value)}
-              onBlur={commitTitle}
-              placeholder="任务标题"
-              className="min-h-11 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 text-base text-slate-100 outline-none focus:border-sky-500"
-            />
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                aria-label={`完成 ${task.title}`}
+                checked={task.done}
+                onChange={() => void run(() => toggleTaskDone(task.id))}
+                className="mt-1 h-5 w-5 shrink-0 accent-sky-500"
+              />
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="text-xs text-slate-400">
+                  {nextTimeLabel}
+                  {subtaskTotal > 0 && <span> / {subtaskDone}/{subtaskTotal} 子任务</span>}
+                </div>
+                <input
+                  aria-label="任务标题"
+                  value={title}
+                  onChange={(event) => setTitle(event.currentTarget.value)}
+                  onBlur={commitTitle}
+                  placeholder="任务标题"
+                  className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-base text-slate-100 outline-none focus:border-sky-500"
+                />
+              </div>
+            </div>
 
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3" onBlur={() => commitSubtasks(subtasks)}>
               <p className="mb-2 text-xs font-medium text-slate-400">子任务</p>

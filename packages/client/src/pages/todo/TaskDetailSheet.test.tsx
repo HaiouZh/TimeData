@@ -104,6 +104,31 @@ describe("TaskDetailSheet 展示与关闭", () => {
     expect(onClose).toHaveBeenCalled();
     await act(async () => root.unmount());
   });
+
+  it("头部显示下一次时间与子任务计数", async () => {
+    const t = await addTask({ title: "父", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await updateSubtasks(t.id, [
+      { id: "s1", title: "甲", done: true },
+      { id: "s2", title: "乙", done: false },
+    ]);
+    const { host, root } = await renderSheet(t.id);
+    expect(host.textContent).toContain("每天");
+    expect(host.textContent).toContain("1/2 子任务");
+    await act(async () => root.unmount());
+  });
+
+  it("点放大按钮切换全屏高度", async () => {
+    const t = await addTask({ title: "x" });
+    const { host, root } = await renderSheet(t.id);
+    const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
+    expect(sheet.className).not.toContain("h-[90vh]");
+    const expand = host.querySelector('button[aria-label="放大"]') as HTMLButtonElement;
+    await act(async () => {
+      expand.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(sheet.className).toContain("h-[90vh]");
+    await act(async () => root.unmount());
+  });
 });
 
 describe("TaskDetailSheet 自动保存", () => {
