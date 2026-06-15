@@ -1,5 +1,7 @@
 import type { HealthHeartRate, HealthHrv, HealthRun, HealthSleep, HealthStress } from "@timedata/shared";
 
+export type MetricValueType = "number" | "time" | "pace";
+
 export type HealthMetricRange = "30" | "90" | "all";
 
 export type HealthMetricId = "sleep" | "hrv" | "stress" | "heartRate" | "run";
@@ -55,4 +57,38 @@ export interface RunPaceTrendPoint {
   rolling5Formatted: string;
   rolling10SecondsPerKm: number | null;
   rolling10Formatted: string;
+}
+
+export type ChartSeriesRange =
+  | { mode: "all" }
+  | { mode: "recent"; days: number }
+  | { mode: "manual"; from: string; to: string };
+
+export interface GetChartSeriesOptions {
+  metricIds: string[];
+  rollingWindows: number[];
+  range: ChartSeriesRange;
+  clampToDataStart?: boolean;
+}
+
+export interface MetricPoint {
+  date: string;
+  value: number | null;
+  formattedValue: string;
+  rolling: Record<string, number | null>;
+  formattedRolling: Record<string, string>;
+}
+
+export interface MetricSeries {
+  metricId: string;
+  label: string;
+  unit: string;
+  valueType: MetricValueType;
+  points: MetricPoint[];
+}
+
+export interface ChartSeriesResult {
+  from: string;
+  to: string;
+  series: MetricSeries[];
 }

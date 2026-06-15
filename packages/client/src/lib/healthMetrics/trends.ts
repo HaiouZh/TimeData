@@ -1,15 +1,9 @@
-import type { HealthHeartRate, HealthHrv, HealthRun, HealthStress } from "@timedata/shared";
-import {
-  computeSleepDurationHours,
-  formatDecimalHours,
-  formatIntegerUnit,
-  formatPace,
-  secondsPerKm,
-} from "./format.js";
+import type { HealthRun } from "@timedata/shared";
+import { formatDecimalHours, formatPace, secondsPerKm } from "./format.js";
+import { getChartSeries } from "./chartSeries.js";
 import type {
   HealthMetricCollections,
   NormalizedHealthTrendPoint,
-  NormalizedMetricPoint,
   RunPaceTrendPoint,
 } from "./types.js";
 
@@ -19,16 +13,8 @@ function hasRunPaceData(run: HealthRun): run is RunWithPaceData {
   return run.distanceKm != null && run.distanceKm > 0 && run.durationSeconds != null && run.durationSeconds > 0;
 }
 
-function compareDates(a: { date: string; id: string }, b: { date: string; id: string }): number {
-  return a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
-}
-
 function compareRuns(a: RunWithPaceData, b: RunWithPaceData): number {
   return a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id);
-}
-
-function valuePoint(raw: number | null, normalized: number | null, formatted: string | null): NormalizedMetricPoint {
-  return { raw, normalized, formatted };
 }
 
 function normalizeSeries(values: Array<number | null>): Array<number | null> {
@@ -42,34 +28,6 @@ function normalizeSeries(values: Array<number | null>): Array<number | null> {
     if (value == null) return null;
     return Math.round(((value - min) / (max - min)) * 100);
   });
-}
-
-function latestValueByDate<T extends { date: string; id: string }>(
-  records: readonly T[] | undefined,
-  project: (record: T) => number | null,
-): Map<string, number | null> {
-  const map = new Map<string, number | null>();
-  for (const record of [...(records ?? [])].sort(compareDates)) {
-    map.set(record.date, project(record));
-  }
-  return map;
-}
-
-function formatMetricValue(metric: "sleep" | "hrv" | "stress" | "heartRate", raw: number | null): string | null {
-  if (raw == null) return null;
-  if (metric === "sleep") return formatDecimalHours(raw);
-  if (metric === "hrv") return formatIntegerUnit(raw, "ms");
-  if (metric === "stress") return formatIntegerUnit(raw);
-  return formatIntegerUnit(raw, "bpm");
-}
-
-function uniqueSortedDates(input: HealthMetricCollections): string[] {
-  const dates = new Set<string>();
-  for (const record of input.sleeps ?? []) dates.add(record.date);
-  for (const record of input.hrvs ?? []) dates.add(record.date);
-  for (const record of input.stresses ?? []) dates.add(record.date);
-  for (const record of input.heartRates ?? []) dates.add(record.date);
-  return [...dates].sort();
 }
 
 function rollingPace(records: readonly RunWithPaceData[], endIndex: number, windowSize: number): number | null {
@@ -105,32 +63,48 @@ export function buildRunPaceTrend(runs: readonly HealthRun[]): RunPaceTrendPoint
   });
 }
 
+const TREND_METRIC_IDS = ["sleep.duration", "hrv.value", "stress.value", "heart_rate.resting"] as const;
+const TREND_KEY_BY_ID: Record<string, keyof Omit<NormalizedHealthTrendPoint, "date">> = {
+  "sleep.duration": "sleep",
+  "hrv.value": "hrv",
+  "stress.value": "stress",
+  "heart_rate.resting": "heartRate",
+};
+
+function formatTrendValue(metricId: string, raw: number | null, formatted: string | null): string | null {
+  if (raw == null || formatted === "--") return null;
+  if (metricId === "sleep.duration") return formatDecimalHours(raw);
+  return formatted;
+}
+
 export function buildNormalizedHealthTrend(input: HealthMetricCollections): NormalizedHealthTrendPoint[] {
-  const dates = uniqueSortedDates(input);
-  const sleepByDate = latestValueByDate(input.sleeps, computeSleepDurationHours);
-  const hrvByDate = latestValueByDate(input.hrvs, (record: HealthHrv) => record.hrvMs);
-  const stressByDate = latestValueByDate(input.stresses, (record: HealthStress) => record.stress);
-  const heartRateByDate = latestValueByDate(
-    input.heartRates,
-    (record: HealthHeartRate) => record.restingHeartRate ?? record.avgHeartRate ?? null,
+  const result = getChartSeries(
+    { metricIds: [...TREND_METRIC_IDS], rollingWindows: [], range: { mode: "all" } },
+    input,
   );
 
-  const sleepValues = normalizeSeries(dates.map((date) => sleepByDate.get(date) ?? null));
-  const hrvValues = normalizeSeries(dates.map((date) => hrvByDate.get(date) ?? null));
-  const stressValues = normalizeSeries(dates.map((date) => stressByDate.get(date) ?? null));
-  const heartRateValues = normalizeSeries(dates.map((date) => heartRateByDate.get(date) ?? null));
+  const seriesByKey = new Map<string, (typeof result.series)[number]>();
+  for (const series of result.series) seriesByKey.set(series.metricId, series);
 
+  const normalizedByKey = new Map<string, Array<number | null>>();
+  for (const [metricId, series] of seriesByKey) {
+    normalizedByKey.set(
+      metricId,
+      normalizeSeries(series.points.map((point) => point.value)),
+    );
+  }
+
+  const dates = result.series[0]?.points.map((point) => point.date) ?? [];
   return dates.map((date, index) => {
-    const sleepRaw = sleepByDate.get(date) ?? null;
-    const hrvRaw = hrvByDate.get(date) ?? null;
-    const stressRaw = stressByDate.get(date) ?? null;
-    const heartRateRaw = heartRateByDate.get(date) ?? null;
-    return {
-      date,
-      sleep: valuePoint(sleepRaw, sleepValues[index], formatMetricValue("sleep", sleepRaw)),
-      hrv: valuePoint(hrvRaw, hrvValues[index], formatMetricValue("hrv", hrvRaw)),
-      stress: valuePoint(stressRaw, stressValues[index], formatMetricValue("stress", stressRaw)),
-      heartRate: valuePoint(heartRateRaw, heartRateValues[index], formatMetricValue("heartRate", heartRateRaw)),
-    };
+    const point = { date } as NormalizedHealthTrendPoint;
+    for (const metricId of TREND_METRIC_IDS) {
+      const key = TREND_KEY_BY_ID[metricId];
+      const series = seriesByKey.get(metricId);
+      const raw = series?.points[index]?.value ?? null;
+      const normalized = normalizedByKey.get(metricId)?.[index] ?? null;
+      const formatted = series?.points[index]?.formattedValue ?? null;
+      point[key] = { raw, normalized, formatted: formatTrendValue(metricId, raw, formatted) };
+    }
+    return point;
   });
 }
