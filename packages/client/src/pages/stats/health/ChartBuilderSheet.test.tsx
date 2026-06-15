@@ -45,14 +45,46 @@ describe("ChartBuilderSheet", () => {
     act(() => root.unmount());
   });
 
-  it("保存回传含所选指标的配置", () => {
+  it("保存回传含所选指标的图表配置", () => {
     const onSave = vi.fn();
     const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
 
     click(inputByLabel(host, "HRV"));
     click(buttonByText(host, "保存"));
 
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ metricIds: ["hrv.value"], type: "metricChart" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ metricIds: ["hrv.value"], view: "chart", source: "healthMetricDaily" }));
+    act(() => root.unmount());
+  });
+
+  it("creates a metric table draft with CSV enabled", () => {
+    const onSave = vi.fn();
+    const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
+
+    click(buttonByText(host, "指标表"));
+    click(inputByLabel(host, "HRV"));
+    click(inputByLabel(host, "导出 CSV"));
+    click(buttonByText(host, "保存"));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        view: "table",
+        source: "healthMetricDaily",
+        columnIds: expect.arrayContaining(["date", "hrv.value"]),
+        presentation: expect.objectContaining({ exportEnabled: true }),
+      }),
+    );
+    act(() => root.unmount());
+  });
+
+  it("creates a run table draft", () => {
+    const onSave = vi.fn();
+    const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
+
+    click(buttonByText(host, "跑步表"));
+    click(inputByLabel(host, "距离"));
+    click(buttonByText(host, "保存"));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ view: "table", source: "runs", columnIds: expect.arrayContaining(["date", "distanceKm"]) }));
     act(() => root.unmount());
   });
 });

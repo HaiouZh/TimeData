@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { MetricChartBlock as MetricChartBlockConfig } from "@timedata/shared";
+import type { ChartBlock as MetricChartBlockConfig } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
@@ -17,7 +17,8 @@ vi.mock("recharts", () => ({
   Line: () => createElement("span"),
   LineChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
   ReferenceLine: () => createElement("span"),
-  ResponsiveContainer: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
+  ResponsiveContainer: ({ children, height }: { children?: React.ReactNode; height?: number }) =>
+    createElement("div", { "data-height": String(height ?? "") }, children),
   Tooltip: () => createElement("span"),
   XAxis: () => createElement("span"),
   YAxis: () => createElement("span"),
@@ -25,14 +26,17 @@ vi.mock("recharts", () => ({
 
 const cfg: MetricChartBlockConfig = {
   id: "c1",
-  type: "metricChart",
-  order: 0,
   title: "我的趋势",
+  order: 0,
+  view: "chart",
+  source: "healthMetricDaily",
   metricIds: ["hrv.value"],
   chartKind: "line",
   trendMode: "raw",
   rollingWindows: [],
   showAverageLine: false,
+  range: { mode: "inherit" },
+  presentation: { exportEnabled: false, colorRules: [], height: 320, yAxis: "auto" },
   createdAt: "2026-06-15T00:00:00.000Z",
   updatedAt: "2026-06-15T00:00:00.000Z",
 };
@@ -62,6 +66,7 @@ describe("MetricChartBlock", () => {
     );
 
     expect(host.textContent).toContain("我的趋势");
+    expect(host.querySelector("[data-height]")?.getAttribute("data-height")).toBe("320");
     act(() => root.unmount());
   });
 

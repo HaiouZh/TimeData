@@ -20,7 +20,8 @@ let domains: typeof import("./domains.js");
 function metricChart(): HealthChartConfig {
   return {
     id: "chart-1",
-    type: "metricChart",
+    view: "chart",
+    source: "healthMetricDaily",
     order: 2,
     title: "健康趋势",
     metricIds: ["hrv.value"],
@@ -28,6 +29,8 @@ function metricChart(): HealthChartConfig {
     trendMode: "auto",
     rollingWindows: [7],
     showAverageLine: false,
+    range: { mode: "inherit" },
+    presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
     createdAt: "2026-06-14T00:00:00.000Z",
     updatedAt: "2026-06-14T00:00:00.000Z",
   };
@@ -109,7 +112,7 @@ describe("health_charts sync roundtrip", () => {
       updated_at: string;
       config: string;
     };
-    expect(row).toMatchObject({ type: "metricChart", sort_order: 2, updated_at: CREATE_NOW });
+    expect(row).toMatchObject({ type: "chart", sort_order: 2, updated_at: CREATE_NOW });
     expect(JSON.parse(row.config).metricIds).toEqual(["hrv.value"]);
 
     const afterCreate = getChangesSinceSeq(null);
@@ -122,10 +125,10 @@ describe("health_charts sync roundtrip", () => {
       recordId: "chart-1",
       action: "update",
       timestamp: CREATE_NOW,
-      data: { type: "metricChart", metricIds: ["hrv.value"], updatedAt: CREATE_NOW },
+      data: { view: "chart", source: "healthMetricDaily", metricIds: ["hrv.value"], updatedAt: CREATE_NOW },
     });
     const pulledConfig = HealthChartConfigSchema.parse(pulled?.data);
-    expect(pulledConfig.type).toBe("metricChart");
+    expect(pulledConfig.view).toBe("chart");
 
     vi.setSystemTime(new Date(DELETE_NOW));
     const deleteChange = chartChange("delete", null);

@@ -13,7 +13,7 @@ export function healthChartToRow(data: unknown): Record<string, string | number 
   const block = HealthChartConfigSchema.parse(data);
   return {
     id: block.id,
-    type: block.type,
+    type: block.view,
     sort_order: block.order,
     config: JSON.stringify(block),
     created_at: block.createdAt,
@@ -25,7 +25,6 @@ export function rowToHealthChart(row: HealthChartRow): HealthChartConfig {
   return HealthChartConfigSchema.parse({
     ...block,
     id: row.id,
-    type: row.type,
     order: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -79,10 +79,22 @@ vi.mock("../lib/healthCharts.ts", () => ({
     if (chartState.seeded) return;
     chartState.seeded = true;
     chartState.blocks = [
-      { id: "summary", type: "summary", order: 0, title: "健康摘要", createdAt: now, updatedAt: now },
+      {
+        id: "summary",
+        view: "stat",
+        source: "derived",
+        order: 0,
+        title: "健康摘要",
+        metricIds: ["sleep.duration", "hrv.value", "heart_rate.resting", "stress.value", "run.distance"],
+        range: { mode: "inherit" },
+        presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
+        createdAt: now,
+        updatedAt: now,
+      },
       {
         id: "trend",
-        type: "metricChart",
+        view: "chart",
+        source: "healthMetricDaily",
         order: 1,
         title: "健康趋势",
         metricIds: ["sleep.duration", "hrv.value", "stress.value", "heart_rate.resting"],
@@ -90,10 +102,11 @@ vi.mock("../lib/healthCharts.ts", () => ({
         trendMode: "auto",
         rollingWindows: [7],
         showAverageLine: false,
+        range: { mode: "inherit" },
+        presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
         createdAt: now,
         updatedAt: now,
       },
-      { id: "run", type: "runTrend", order: 2, title: "跑步配速", createdAt: now, updatedAt: now },
     ];
     notifyLiveQueries();
   },
@@ -195,7 +208,7 @@ describe("HealthStatsPage", () => {
     liveQuery.listeners.clear();
   });
 
-  it("renders health summary, trend panels, and recent runs", async () => {
+  it("renders health summary and trend panels without fixed recent runs", async () => {
     seedHealthData();
     const { host, root } = await renderPage();
 
@@ -204,10 +217,9 @@ describe("HealthStatsPage", () => {
     expect(host.textContent).toContain("健康统计");
     expect(host.querySelector('[aria-label="健康摘要"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="健康趋势"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="跑步配速趋势"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="最近跑步"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="跑步配速趋势"]')).toBeNull();
+    expect(host.querySelector('[aria-label="最近跑步"]')).toBeNull();
     expect(host.textContent).toContain("7.0h");
-    expect(host.textContent).toContain("赣州");
 
     await act(async () => root.unmount());
   });
@@ -233,18 +245,30 @@ describe("HealthStatsPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("expands recent run details", async () => {
-    seedHealthData();
+  it("renders block-level all-range summary even when page range has no data", async () => {
+    healthState.healthHrv = [{ id: "old-hrv", date: "2000-01-01", hrvMs: 45, createdAt: now, updatedAt: now }];
+    chartState.seeded = true;
+    chartState.blocks = [
+      {
+        id: "hrv-summary",
+        view: "stat",
+        source: "derived",
+        order: 0,
+        title: "HRV 摘要",
+        metricIds: ["hrv.value"],
+        range: { mode: "all" },
+        presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector(".health-run-summary") != null, "Timed out waiting for recent run");
 
-    await act(async () => {
-      host.querySelector(".health-run-summary")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await waitForCondition(() => host.textContent?.includes("HRV 摘要") ?? false, "Timed out waiting for block-level summary");
 
-    expect(host.textContent).toContain("开始时间");
-    expect(host.textContent).toContain("步频");
-    expect(host.textContent).toContain("running");
+    expect(host.textContent).not.toContain("暂无健康数据");
+    expect(host.textContent).toContain("45ms");
+    expect(host.textContent).not.toContain("睡眠时长");
     await act(async () => root.unmount());
   });
 
@@ -256,7 +280,8 @@ describe("HealthStatsPage", () => {
 
     expect(host.textContent).toContain("健康摘要");
     expect(host.textContent).toContain("健康趋势");
-    expect(host.textContent).toContain("跑步配速");
+    expect(host.textContent).not.toContain("跑步配速");
+    expect(chartState.blocks.map((block) => `${block.view}:${block.source}`)).toEqual(["stat:derived", "chart:healthMetricDaily"]);
 
     await act(async () => root.unmount());
   });

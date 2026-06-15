@@ -18,13 +18,16 @@ beforeEach(async () => {
 describe("healthCharts repo", () => {
   it("put 写表并产生 syncLog", async () => {
     const block = await putHealthChartBlock({
-      type: "metricChart",
+      view: "chart",
+      source: "healthMetricDaily",
       title: "趋势",
       metricIds: ["hrv.value"],
       chartKind: "line",
       trendMode: "auto",
       rollingWindows: [7],
       showAverageLine: false,
+      range: { mode: "inherit" },
+      presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
       order: 0,
     });
 
@@ -36,8 +39,12 @@ describe("healthCharts repo", () => {
 
   it("delete 写表并产生 delete syncLog", async () => {
     const block = await putHealthChartBlock({
-      type: "summary",
+      view: "stat",
+      source: "derived",
       title: "摘要",
+      metricIds: ["sleep.duration"],
+      range: { mode: "inherit" },
+      presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
       order: 0,
     });
 
@@ -48,12 +55,13 @@ describe("healthCharts repo", () => {
     expect(logs.some((l) => l.action === "delete")).toBe(true);
   });
 
-  it("首次注入三块默认并置标志", async () => {
+  it("首次注入两块默认并置标志", async () => {
     await seedDefaultHealthChartsOnce();
 
     const blocks = await listHealthChartBlocks();
-    expect(blocks.map((b) => b.type)).toEqual(["summary", "metricChart", "runTrend"]);
-    expect(await getSetting("health.charts.seededV1")).toBe("1");
+    expect(blocks.map((block) => `${block.view}:${block.source}`)).toEqual(["stat:derived", "chart:healthMetricDaily"]);
+    expect(blocks.some((block) => block.source === "runs")).toBe(false);
+    expect(await getSetting("health.charts.seededV2")).toBe("1");
   });
 
   it("标志已置时不重复注入", async () => {

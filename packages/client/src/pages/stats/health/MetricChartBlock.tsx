@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { MetricChartBlock as MetricChartBlockConfig } from "@timedata/shared";
+import type { ChartBlock as MetricChartBlockConfig } from "@timedata/shared";
 import {
   getChartSeries,
   normalizeTo100,
@@ -97,7 +97,7 @@ export function MetricChartBlock({
       {!hasData ? (
         <div className="health-empty-inline">暂无数据</div>
       ) : (
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={config.presentation.height ?? 250}>
           {renderChart(config, result.series, rows, normalized, onlyPace, renderTooltip)}
         </ResponsiveContainer>
       )}

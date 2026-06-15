@@ -1,12 +1,6 @@
-export type HealthSummaryTone = "sleep" | "hrv" | "heart" | "stress" | "run";
+import type { HealthSummaryCardItem, HealthSummaryTone } from "../../../lib/healthBlocks/index.ts";
 
-export interface HealthSummaryCardItem {
-  id: string;
-  label: string;
-  value: string;
-  detail: string;
-  tone: HealthSummaryTone;
-}
+export type { HealthSummaryCardItem, HealthSummaryTone };
 
 export function HealthSummaryCards({ items }: { items: HealthSummaryCardItem[] }) {
   return (

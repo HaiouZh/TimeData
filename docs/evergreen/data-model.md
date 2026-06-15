@@ -70,7 +70,7 @@ last-reviewed: 2026-06-15
 
 健康 schema 定义在 `packages/shared/src/healthSchemas.ts`，各域通过 `packages/shared/src/syncDomains.ts` 注册进同步域登记簿。数据来源：Garmin 自动抓取（`packages/server/src/garmin/`）或 `/api/health/ingest` 批量导入。客户端通过 `useLiveQuery` 从 Dexie 读取展示。
 
-`health_charts` 保存健康统计页的块配置，而不是健康原始数据。配置 schema 定义在 `packages/shared/src/chartSchemas.ts`，目前包含 `summary`、`metricChart`、`runTrend` 三种块：`metricChart` 保存标题、指标 ID 列表、图表类型、趋势模式、滚动均线和平均参考线开关；`summary` / `runTrend` 在 v1 作为预置渲染块。客户端入口是 `packages/client/src/lib/healthCharts.ts` 和 `packages/client/src/pages/HealthStatsPage.tsx`，写入 `healthCharts` 与 `syncLog(tableName="health_charts")` 后经同步域登记簿同步。
+`health_charts` 保存健康统计页的视图块配置，而不是健康原始数据。配置 schema 定义在 `packages/shared/src/chartSchemas.ts`，块以 `view/source/range/presentation` 组合表达统计卡、趋势图和表格；当前数据源包括 `derived`、`healthMetricDaily` 和 `runs`。客户端入口是 `packages/client/src/lib/healthCharts.ts` 和 `packages/client/src/pages/HealthStatsPage.tsx`，写入 `healthCharts` 与 `syncLog(tableName="health_charts")` 后经同步域登记簿同步。默认只注入健康摘要和健康趋势，跑步表通过创建器手动添加。
 
 客户端 Dexie 多一张：
 

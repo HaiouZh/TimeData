@@ -4,7 +4,8 @@ import { healthChartToRow, rowToHealthChart, type HealthChartRow } from "./chart
 
 const block: HealthChartConfig = {
   id: "c1",
-  type: "metricChart",
+  view: "chart",
+  source: "healthMetricDaily",
   order: 2,
   title: "趋势",
   metricIds: ["hrv.value"],
@@ -12,6 +13,8 @@ const block: HealthChartConfig = {
   trendMode: "auto",
   rollingWindows: [7],
   showAverageLine: false,
+  range: { mode: "inherit" },
+  presentation: { exportEnabled: false, colorRules: [], yAxis: "auto" },
   createdAt: "2026-06-15T00:00:00.000Z",
   updatedAt: "2026-06-15T00:00:00.000Z",
 };
@@ -19,7 +22,7 @@ const block: HealthChartConfig = {
 describe("chartRows", () => {
   it("toRow 摊平 + config JSON", () => {
     const row = healthChartToRow(block);
-    expect(row).toMatchObject({ id: "c1", type: "metricChart", sort_order: 2, created_at: block.createdAt });
+    expect(row).toMatchObject({ id: "c1", type: "chart", sort_order: 2, created_at: block.createdAt });
     expect(JSON.parse(String(row.config)).metricIds).toEqual(["hrv.value"]);
   });
 
