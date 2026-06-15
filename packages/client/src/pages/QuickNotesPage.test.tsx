@@ -720,10 +720,21 @@ describe("捕捉中心", () => {
     await db.syncLog.clear();
   });
 
-  it("header 不再显示速记条数", async () => {
-    const { host } = await renderPage();
-    const heading = host.querySelector("h1");
-    expect(heading?.textContent).toBe("速记");
+  it("header 不再显示速记标题块", async () => {
+    const { host, root } = await renderPage();
+    expect(host.querySelector("h1")).toBeNull();
+    expect(host.textContent).not.toContain("QuickNote");
+    await act(async () => root.unmount());
+  });
+
+  it("头部只有一个打点钮，且不再显示窗口计数标题", async () => {
+    const { host, root } = await renderPage();
+
+    const punchButtons = host.querySelectorAll('button[aria-label="打点（记录到现在）"]');
+    expect(punchButtons).toHaveLength(1);
+    expect(host.textContent).not.toContain("当前窗口");
+
+    await act(async () => root.unmount());
   });
 
   it("点「待办」把输入文本存成池任务并清空输入", async () => {

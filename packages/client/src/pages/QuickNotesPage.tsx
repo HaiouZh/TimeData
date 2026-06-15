@@ -166,11 +166,6 @@ export default function QuickNotesPage() {
   const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
   const hasQuery = searchTerms.length > 0;
-  const timelineStatus = timeline.loading
-    ? "正在读取速记"
-    : timeline.atLatest
-      ? `当前窗口 ${timeline.notes.length} 条`
-      : "正在查看历史窗口";
 
   const longPress = useLongPress(({ x, y }) => {
     const note = pressedNoteRef.current;
@@ -810,14 +805,20 @@ export default function QuickNotesPage() {
           </div>
         ) : (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
+            <button
+              type="button"
+              aria-label="打点（记录到现在）"
+              onClick={() => void handlePunch()}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+            >
+              ⏱
+            </button>
             <div className="min-w-0 flex-1">
-              <p className="hidden text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-300/80 sm:block">
-                QuickNote
-              </p>
-              <h1 className="truncate text-base font-semibold tracking-tight text-slate-50 sm:mt-1 sm:text-xl">
-                {timeline.atLatest ? "速记" : "速记 · 历史"}
-              </h1>
-              <p className="hidden text-xs text-slate-400 sm:mt-1 sm:block">{timelineStatus}</p>
+              {!timeline.atLatest && (
+                <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[11px] font-medium text-slate-400">
+                  历史
+                </span>
+              )}
             </div>
             <label className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
               <span className="hidden text-[11px] text-slate-500 sm:block">日期</span>
@@ -849,15 +850,6 @@ export default function QuickNotesPage() {
                 </span>
               </button>
             )}
-
-            <button
-              type="button"
-              aria-label="打点（记录到现在）"
-              onClick={() => void handlePunch()}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
-            >
-              ⏱
-            </button>
 
             <button
               type="button"
