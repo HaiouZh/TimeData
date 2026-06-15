@@ -25,7 +25,7 @@ describe("chartRows", () => {
 
   it("rowToHealthChart 还原配置", () => {
     const row = healthChartToRow(block) as unknown as HealthChartRow;
-    const restored = rowToHealthChart({ ...row, updated_at: block.updatedAt });
-    expect(restored).toEqual(block);
+    const restored = rowToHealthChart({ ...row, updated_at: "2026-06-15T00:00:00.000Z" });
+    expect(restored).toEqual({ ...block, updatedAt: "2026-06-15T00:00:00.000Z" });
   });
 });

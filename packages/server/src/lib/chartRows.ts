@@ -21,5 +21,13 @@ export function healthChartToRow(data: unknown): Record<string, string | number 
 }
 
 export function rowToHealthChart(row: HealthChartRow): HealthChartConfig {
-  return HealthChartConfigSchema.parse(JSON.parse(row.config));
+  const block = HealthChartConfigSchema.parse(JSON.parse(row.config));
+  return HealthChartConfigSchema.parse({
+    ...block,
+    id: row.id,
+    type: row.type,
+    order: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
 }
