@@ -34,7 +34,9 @@ function HoverAction({ label, onClick, children, danger }: {
 
 export function TaskRow({ task, pool, overdue, onToggle, onEdit, onDelete, onToToday, onToInbox }: TaskRowProps) {
   const isRecurring = task.recurrence !== null;
-  const checked = isRecurring ? !isDueNow(task.recurrence!, task.lastDoneAt, task.startAt) : task.done;
+  const checked = task.recurrence
+    ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt)
+    : task.done;
   const canMove = !isRecurring && pool !== "recurring";
 
   return (
