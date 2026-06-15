@@ -3,13 +3,14 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
-import { formatDuration, formatTimelineTimeRange, getDateString, toLocalDateTimeString } from "../lib/time.ts";
+import { getDateString, toLocalDateTimeString } from "../lib/time.ts";
 
 interface CircularTimelineProps {
   date: string;
   slots: TimeSlot[];
-  onEntryOpen: (entry: TimeEntry) => void;
-  onGapOpen: (startTime: string, endTime: string) => void;
+  onEntryOpen?: (entry: TimeEntry) => void;
+  onGapOpen?: (startTime: string, endTime: string) => void;
+  onPunch?: () => void;
   overlay?: ReactNode;
   now?: Date;
 }
@@ -162,8 +163,8 @@ function selectionKey(selection: Selection | null): string {
   return `gap:${selection.startTime}:${selection.endTime}`;
 }
 
-export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, overlay, now }: CircularTimelineProps) {
-  const { getCategoryColor, getCategoryPath } = useCategories();
+export default function CircularTimeline({ date, slots, onPunch, overlay, now }: CircularTimelineProps) {
+  const { getCategoryColor } = useCategories();
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
@@ -196,23 +197,6 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
     ? clampSlotToDayMinutes(date, selectedRange.startTime, selectedRange.endTime)
     : null;
   const selectedColor = selection?.type === "entry" ? getCategoryColor(selection.entry.categoryId) : "rgb(100 116 139)";
-  const centerTitle =
-    selection?.type === "entry"
-      ? getCategoryPath(selection.entry.categoryId)
-      : selection?.type === "gap"
-        ? "待记录"
-        : "没有时间段";
-  const centerDuration = selectedRange ? formatDuration(selectedRange.startTime, selectedRange.endTime) : "";
-  const centerRange = selectedRange ? formatTimelineTimeRange(selectedRange.startTime, selectedRange.endTime) : "";
-
-  function handleCenterClick() {
-    if (!selection) return;
-    if (selection.type === "entry") {
-      onEntryOpen(selection.entry);
-    } else {
-      onGapOpen(selection.startTime, selection.endTime);
-    }
-  }
 
   const currentSelectionKey = selectionKey(selection);
 
@@ -413,14 +397,13 @@ export default function CircularTimeline({ date, slots, onEntryOpen, onGapOpen, 
             </svg>
             <button
               type="button"
-              onClick={handleCenterClick}
-              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center ring-1 ring-inset ring-white/10 transition hover:ring-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
+              onClick={() => onPunch?.()}
+              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-1 rounded-full px-3 text-center ring-1 ring-inset ring-white/10 transition hover:ring-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
               style={{ containerType: "inline-size" }}
-              aria-label={selection?.type === "entry" ? "编辑选中记录" : "新增选中空档记录"}
+              aria-label="打点（记录到现在）"
             >
-              <span className="text-[8cqw] leading-none text-white/85">{centerRange}</span>
-              <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-white">{centerTitle}</span>
-              <span className="text-[17cqw] font-semibold leading-none text-white">{centerDuration}</span>
+              <span className="text-[26cqw] leading-none">⏱</span>
+              <span className="text-[12cqw] font-medium leading-tight text-white">打点到现在</span>
             </button>
           </div>
         </div>

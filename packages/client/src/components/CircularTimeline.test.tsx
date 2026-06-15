@@ -102,7 +102,7 @@ describe("CircularTimeline selection", () => {
     expect(path.match(/A 62 62/g)?.length).toBe(2);
   });
 
-  it("renders the center as range / category / duration in order", () => {
+  it("renders the center as a punch affordance", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
@@ -111,20 +111,45 @@ describe("CircularTimeline selection", () => {
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
           { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
-    const rangeIdx = html.indexOf("07:30 - 08:00");
-    const titleIdx = html.indexOf("待记录");
-    const durationIdx = html.indexOf("30分钟");
+    expect(html).toContain('aria-label="打点（记录到现在）"');
+    expect(html).toContain("打点到现在");
+    expect(html).not.toContain("30分钟");
+  });
 
-    expect(rangeIdx).toBeGreaterThan(-1);
-    expect(titleIdx).toBeGreaterThan(-1);
-    expect(durationIdx).toBeGreaterThan(-1);
-    expect(rangeIdx).toBeLessThan(titleIdx);
-    expect(titleIdx).toBeLessThan(durationIdx);
+  it("calls onPunch when the center is clicked", async () => {
+    const onPunch = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(CircularTimeline, {
+          date: "2026-05-08",
+          slots: [
+            {
+              startTime: "2026-05-08T00:00:00",
+              endTime: "2026-05-08T07:00:00",
+              entry: null,
+              kind: "gap",
+              displayMode: "default",
+            },
+          ],
+          onPunch,
+        }),
+      );
+    });
+
+    const center = container.querySelector('button[aria-label="打点（记录到现在）"]') as HTMLButtonElement;
+    await act(async () => {
+      center.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onPunch).toHaveBeenCalledTimes(1);
+
+    await act(async () => root.unmount());
+    container.remove();
   });
 
   it("renders selectable entry/gap ring blocks and indicator", () => {
@@ -284,14 +309,12 @@ describe("CircularTimeline selection", () => {
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 205, clientY: 120, pointerId: 1 }));
     });
-    expect(container.innerHTML).toContain("工作/编程");
-    expect(container.innerHTML).toContain("1小时");
 
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
     });
-    expect(container.innerHTML).toContain("待记录");
-    expect(container.innerHTML).toContain("00:00 - 06:00");
+    // 拖动只改环面高亮，不再驱动中心文案
+    expect(container.innerHTML).toContain('data-ring-indicator="true"');
 
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
