@@ -1,6 +1,6 @@
 import { SwipeableListItem, SwipeAction, LeadingActions, TrailingActions } from "@meauxt/react-swipeable-list";
 import type { Task } from "@timedata/shared";
-import { isDueNow, recurrenceSummary, formatCreatedAt } from "../../lib/tasks/recurrence.js";
+import { isDueNow } from "../../lib/tasks/recurrence.js";
 
 export function SwipeableTaskRow({
   task, pool, overdue, onToggle, onEdit, onDelete, onToToday, onToInbox,
@@ -11,10 +11,7 @@ export function SwipeableTaskRow({
   onToToday: (t: Task) => void; onToInbox: (t: Task) => void;
 }) {
   const canSwap = task.recurrence === null; // 重复任务不参与换池
-  const due = task.recurrence ? isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : !task.done;
-  const checked = task.recurrence ? !due : task.done;
-  const subtaskCount = task.subtasks?.length ?? 0;
-  const subtaskDone = task.subtasks?.filter((s) => s.done).length ?? 0;
+  const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
 
   const leading = canSwap && pool === "inbox" ? (
     <LeadingActions>
@@ -57,19 +54,6 @@ export function SwipeableTaskRow({
           onKeyDown={(e) => { if (e.key === "Enter") onEdit(task); }}>
           <div className={`break-words text-sm font-medium ${task.done || checked ? "text-slate-500 line-through" : "text-slate-100"}`}>
             {task.title}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            {task.recurrence ? (
-              <>
-                <span>{recurrenceSummary(task.recurrence)}</span>
-                {task.recurrence.count != null && <span>完成 {task.completedCount}/{task.recurrence.count}</span>}
-                <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
-              </>
-            ) : (
-              <span>{formatCreatedAt(task.createdAt)}</span>
-            )}
-            {overdue && <span className="text-amber-400">已过期</span>}
-            {subtaskCount > 0 && <span className="text-slate-400">{subtaskDone}/{subtaskCount}</span>}
           </div>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
-import { addTask } from "../lib/tasks.js";
+import { addTask, updateSubtasks } from "../lib/tasks.js";
 import { TodoPage } from "./TodoPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -82,7 +82,7 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("重复任务显示完成进度", async () => {
+  it("重复任务行不显示完成进度", async () => {
     await db.tasks.add({
       id: "p1",
       title: "做三次",
@@ -99,7 +99,9 @@ describe("TodoPage", () => {
     });
     const { host, root } = await renderPage();
 
-    await waitForText(host, "完成 1/3");
+    await waitForText(host, "做三次");
+    expect(host.textContent).not.toContain("完成 1/3");
+    expect(host.querySelector('input[aria-label="完成 做三次"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -144,6 +146,19 @@ describe("TodoPage", () => {
     const buttons = Array.from(host.querySelectorAll("form button")).map((b) => b.textContent);
     expect(buttons).not.toContain("保存");
     expect(buttons).not.toContain("取消");
+    await act(async () => root.unmount());
+  });
+
+  it("列表行只显示复选框与名称，不显示时间/计数", async () => {
+    const t = await addTask({ title: "今天任务" });
+    await updateSubtasks(t.id, [{ id: "s1", title: "子", done: false }]);
+    const { host, root } = await renderPage();
+    await waitForText(host, "今天任务");
+    const row = [...host.querySelectorAll('[role="button"]')].find((el) => el.textContent?.includes("今天任务"))!;
+    expect(row.textContent).toContain("今天任务");
+    expect(row.textContent).not.toContain("创建于");
+    expect(row.textContent).not.toContain("0/1");
+    expect(host.querySelector('input[aria-label="完成 今天任务"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 });

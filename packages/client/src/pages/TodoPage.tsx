@@ -10,7 +10,7 @@ import {
   addTask, deleteTask, listTasks, scheduleTask, toggleTaskDone,
   unscheduleTask, type TodoBuckets,
 } from "../lib/tasks.js";
-import { isDueNow, recurrenceSummary } from "../lib/tasks/recurrence.js";
+import { isDueNow } from "../lib/tasks/recurrence.js";
 import { placementForTask } from "../lib/tasks/placement.js";
 import { SwipeableTaskRow } from "./todo/SwipeableTaskRow.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
@@ -205,14 +205,7 @@ export function TodoPage() {
                       <div className="min-w-0 flex-1" onClick={() => openDetail(task)} role="button" tabIndex={0}
                         onKeyDown={(e) => { if (e.key === "Enter") openDetail(task); }}>
                         <div className="break-words text-sm font-medium text-slate-100">{task.title}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span>{recurrenceSummary(recurrence)}</span>
-                          {recurrence.count != null && <span>完成 {task.completedCount}/{recurrence.count}</span>}
-                          <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
-                        </div>
                       </div>
-                      <button type="button" onClick={() => openDetail(task)}
-                        className="min-h-8 rounded-lg border border-slate-700 px-2 text-xs text-slate-300">编辑</button>
                     </div>
                   </li>
                 );
