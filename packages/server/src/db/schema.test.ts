@@ -200,6 +200,33 @@ describe("initializeDatabase", () => {
     }).not.toThrow();
   });
 
+  it("给缺 completed_count 的旧 tasks 表补列", async () => {
+    const { ensureTaskCompletedCountColumn } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        last_done_at TEXT,
+        start_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        scheduled_at TEXT,
+        subtasks TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    ensureTaskCompletedCountColumn(db);
+    ensureTaskCompletedCountColumn(db);
+
+    const columns = new Set(
+      (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
+    );
+    expect(columns.has("completed_count")).toBe(true);
+  });
+
   it("keeps the pinned column migration idempotent", async () => {
     const { ensureQuickNotePinnedColumn } = await import("./schema.js");
     db.exec(`

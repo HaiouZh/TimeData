@@ -23,6 +23,11 @@ export function ensureTaskScheduledColumns(db: Database): void {
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_at ON tasks(scheduled_at)");
 }
 
+export function ensureTaskCompletedCountColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
+}
+
 export function initializeDatabase(): void {
   const db = getDb();
 
@@ -78,6 +83,7 @@ export function initializeDatabase(): void {
       sort_order INTEGER NOT NULL DEFAULT 0,
       scheduled_at TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
+      completed_count INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -211,6 +217,7 @@ export function initializeDatabase(): void {
   ensureQuickNoteSourceColumns(db);
   ensureQuickNotePinnedColumn(db);
   ensureTaskScheduledColumns(db);
+  ensureTaskCompletedCountColumn(db);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {
