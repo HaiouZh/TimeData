@@ -6,6 +6,7 @@ import {
   resolveBlockRange,
 } from "../../../lib/healthBlocks/index.ts";
 import type { ChartSeriesRange, HealthMetricCollections } from "../../../lib/healthMetrics/index.ts";
+import { PencilIcon, TrashIcon } from "../../settings/SettingsIcons.tsx";
 import { HealthSummaryCards, type HealthSummaryCardItem } from "./HealthSummaryCards.tsx";
 import { MetricChartBlock } from "./MetricChartBlock.tsx";
 import { MetricTableBlock } from "./MetricTableBlock.tsx";
@@ -32,10 +33,10 @@ export function HealthBlockList({
         <div key={block.id} className="health-block">
           <div className="health-block-actions">
             <button type="button" className="health-block-edit" aria-label="编辑图表" onClick={() => onEdit(block)}>
-              编辑
+              <PencilIcon className="h-4 w-4" />
             </button>
             <button type="button" className="health-block-delete" aria-label="删除图表" onClick={() => onDelete(block.id)}>
-              删除
+              <TrashIcon className="h-4 w-4" />
             </button>
           </div>
           {block.view === "chart" && block.source === "healthMetricDaily" && (
