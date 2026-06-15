@@ -53,6 +53,7 @@ function task(value: string | (Partial<Task> & Pick<Task, "id">)): Task {
     startAt: overrides.startAt ?? null,
     scheduledAt: overrides.scheduledAt ?? null,
     subtasks: overrides.subtasks ?? [],
+    completedCount: overrides.completedCount ?? 0,
     sortOrder: overrides.sortOrder ?? 0,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
