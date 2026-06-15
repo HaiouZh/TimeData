@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
-import type { Recurrence, Task, TaskSubtask } from "@timedata/shared";
+import type { Recurrence, Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { SwipeableList, Type as ListType } from "@meauxt/react-swipeable-list";
 import "@meauxt/react-swipeable-list/dist/styles.css";
@@ -8,13 +8,12 @@ import { RecurrenceEditor } from "../components/RecurrenceEditor.js";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import {
   addTask, deleteTask, listTasks, scheduleTask, toggleTaskDone,
-  unscheduleTask, updateSubtasks, updateTask, type TodoBuckets,
+  unscheduleTask, type TodoBuckets,
 } from "../lib/tasks.js";
 import { isDueNow, recurrenceSummary } from "../lib/tasks/recurrence.js";
 import { placementForTask } from "../lib/tasks/placement.js";
-import { trimSubtasks } from "../lib/tasks/subtasks.js";
-import { SubtaskEditor } from "./todo/SubtaskEditor.js";
 import { SwipeableTaskRow } from "./todo/SwipeableTaskRow.js";
+import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
 
@@ -22,8 +21,7 @@ export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const [draftTitle, setDraftTitle] = useState("");
   const [draftRecurrence, setDraftRecurrence] = useState<Recurrence | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editSubtasks, setEditSubtasks] = useState<TaskSubtask[]>([]);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUpcoming, setShowUpcoming] = useState(false);
@@ -34,13 +32,7 @@ export function TodoPage() {
     setSaving(true);
     setError(null);
     try {
-      if (editingId) {
-        await updateTask(editingId, { title: draftTitle, recurrence: draftRecurrence });
-        const trimmed = trimSubtasks(editSubtasks);
-        await updateSubtasks(editingId, trimmed);
-      } else {
-        await addTask({ title: draftTitle, recurrence: draftRecurrence });
-      }
+      await addTask({ title: draftTitle, recurrence: draftRecurrence });
       resetForm();
       syncAfterWrite();
     } catch (err) {
@@ -68,8 +60,6 @@ export function TodoPage() {
   function resetForm() {
     setDraftTitle("");
     setDraftRecurrence(null);
-    setEditingId(null);
-    setEditSubtasks([]);
   }
 
   async function toggle(task: Task) {
@@ -79,7 +69,7 @@ export function TodoPage() {
 
   async function remove(task: Task) {
     await deleteTask(task.id);
-    if (editingId === task.id) resetForm();
+    if (detailId === task.id) setDetailId(null);
     syncAfterWrite();
   }
 
@@ -97,11 +87,8 @@ export function TodoPage() {
     syncAfterWrite();
   }
 
-  function edit(task: Task) {
-    setEditingId(task.id);
-    setDraftTitle(task.title);
-    setDraftRecurrence(task.recurrence);
-    setEditSubtasks(task.subtasks ?? []);
+  function openDetail(task: Task) {
+    setDetailId(task.id);
     setError(null);
   }
 
@@ -126,7 +113,7 @@ export function TodoPage() {
             {tasks.map((task) => (
               <SwipeableTaskRow key={task.id} task={task} pool={pool}
                 overdue={pool === "today" && isOverdue(task)}
-                onToggle={toggle} onEdit={edit} onDelete={remove}
+                onToggle={toggle} onEdit={openDetail} onDelete={remove}
                 onToToday={moveToToday} onToInbox={moveToInbox} />
             ))}
           </SwipeableList>
@@ -152,35 +139,18 @@ export function TodoPage() {
               disabled={saving || !draftTitle.trim()}
               className="min-h-11 rounded-lg bg-sky-600 px-4 text-sm font-medium text-white disabled:opacity-60"
             >
-              {editingId ? "保存" : "今天"}
+              今天
             </button>
-            {!editingId && (
-              <button
-                type="button"
-                disabled={saving || !draftTitle.trim()}
-                onClick={(e) => { e.preventDefault(); submitToInbox(e as unknown as FormEvent<HTMLFormElement>); }}
-                className="min-h-11 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 disabled:opacity-60"
-              >
-                收纳
-              </button>
-            )}
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="min-h-11 rounded-lg border border-slate-700 px-3 text-sm text-slate-300"
-              >
-                取消
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={saving || !draftTitle.trim()}
+              onClick={(e) => { e.preventDefault(); submitToInbox(e as unknown as FormEvent<HTMLFormElement>); }}
+              className="min-h-11 rounded-lg border border-slate-700 px-3 text-sm text-slate-300 disabled:opacity-60"
+            >
+              收纳
+            </button>
           </div>
           <RecurrenceEditor value={draftRecurrence} onChange={setDraftRecurrence} />
-          {editingId && (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
-              <p className="mb-2 text-xs font-medium text-slate-400">子任务</p>
-              <SubtaskEditor value={editSubtasks} onChange={setEditSubtasks} />
-            </div>
-          )}
           {error && <p className="text-sm text-rose-300">{error}</p>}
         </form>
 
@@ -198,7 +168,7 @@ export function TodoPage() {
               <SwipeableList type={ListType.IOS} fullSwipe={false} className="space-y-2">
                 {buckets.upcoming.map((task) => (
                   <SwipeableTaskRow key={task.id} task={task} pool="upcoming"
-                    onToggle={toggle} onEdit={edit} onDelete={remove}
+                    onToggle={toggle} onEdit={openDetail} onDelete={remove}
                     onToToday={moveToToday} onToInbox={moveToInbox} />
                 ))}
               </SwipeableList>
@@ -232,8 +202,8 @@ export function TodoPage() {
                         checked={checked} onChange={() => toggle(task)}
                         className="mt-1 h-5 w-5 shrink-0 accent-sky-500"
                       />
-                      <div className="min-w-0 flex-1" onClick={() => edit(task)} role="button" tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === "Enter") edit(task); }}>
+                      <div className="min-w-0 flex-1" onClick={() => openDetail(task)} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter") openDetail(task); }}>
                         <div className="break-words text-sm font-medium text-slate-100">{task.title}</div>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                           <span>{recurrenceSummary(recurrence)}</span>
@@ -241,7 +211,7 @@ export function TodoPage() {
                           <span className={due ? "text-amber-300" : "text-emerald-300"}>{due ? "待做" : "已完成"}</span>
                         </div>
                       </div>
-                      <button type="button" onClick={() => edit(task)}
+                      <button type="button" onClick={() => openDetail(task)}
                         className="min-h-8 rounded-lg border border-slate-700 px-2 text-xs text-slate-300">编辑</button>
                     </div>
                   </li>
@@ -251,6 +221,7 @@ export function TodoPage() {
           )}
         </section>
       </div>
+      {detailId && <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} />}
     </div>
   );
 }

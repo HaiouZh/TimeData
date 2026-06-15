@@ -102,4 +102,48 @@ describe("TodoPage", () => {
     await waitForText(host, "完成 1/3");
     await act(async () => root.unmount());
   });
+
+  it("点任务行打开详情抽屉", async () => {
+    await addTask({ title: "点我打开" });
+    const { host, root } = await renderPage();
+    await waitForText(host, "点我打开");
+
+    const row = Array.from(host.querySelectorAll('[role="button"]')).find((el) =>
+      el.textContent?.includes("点我打开"),
+    ) as HTMLElement;
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    const sheet = host.querySelector('[role="dialog"][aria-label="任务详情"]');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.querySelector('input[aria-label="任务标题"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("顶部表单不再进入编辑态（无保存/取消按钮）", async () => {
+    await addTask({ title: "某任务" });
+    const { host, root } = await renderPage();
+    await waitForText(host, "某任务");
+
+    const row = Array.from(host.querySelectorAll('[role="button"]')).find((el) =>
+      el.textContent?.includes("某任务"),
+    ) as HTMLElement;
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    const addInput = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    expect(addInput.value).toBe("");
+    const buttons = Array.from(host.querySelectorAll("form button")).map((b) => b.textContent);
+    expect(buttons).not.toContain("保存");
+    expect(buttons).not.toContain("取消");
+    await act(async () => root.unmount());
+  });
 });
