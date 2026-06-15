@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { addTask, updateSubtasks } from "../../lib/tasks.js";
-import { placementForTask } from "../../lib/tasks/placement.js";
+import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { TaskDetailSheet, isSwipeDownClose } from "./TaskDetailSheet.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -191,9 +191,30 @@ describe("TaskDetailSheet 自动保存", () => {
     await act(async () => root.unmount());
   });
 
+  it("点下一次时间出面板并可设置日期", async () => {
+    const t = await addTask({ title: "池任务" });
+    const { host, root } = await renderSheet(t.id);
+    const trigger = host.querySelector('button[aria-label="编辑下一次时间"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dateInput = host.querySelector('input[aria-label="计划日期"]') as HTMLInputElement;
+    expect(dateInput).not.toBeNull();
+    await act(async () => {
+      setInputValue(dateInput, "2026-07-01");
+    });
+    await settle();
+    expect((await db.tasks.get(t.id))?.scheduledAt).toBe(normalizeScheduledDate("2026-07-01"));
+    await act(async () => root.unmount());
+  });
+
   it("设上重复规则 -> 池任务变重复任务（落点改变）", async () => {
     const t = await addTask({ title: "池任务" });
     const { host, root } = await renderSheet(t.id);
+    const trigger = host.querySelector('button[aria-label="编辑下一次时间"]') as HTMLButtonElement;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     const enable = host.querySelector('input[type="checkbox"]:not([aria-label])') as HTMLInputElement;
     await act(async () => {
       enable.dispatchEvent(new MouseEvent("click", { bubbles: true }));

@@ -4,7 +4,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { RecurrenceEditor } from "../../components/RecurrenceEditor.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
-import { deleteTask, toggleTaskDone, updateSubtasks, updateTask } from "../../lib/tasks.js";
+import { getDateString } from "../../lib/time.js";
+import { deleteTask, scheduleTask, toggleTaskDone, unscheduleTask, updateSubtasks, updateTask } from "../../lib/tasks.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { subtasksDifferStructurally, trimSubtasks } from "../../lib/tasks/subtasks.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
@@ -28,6 +29,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   const touchStartY = useRef<number | null>(null);
   const hadTask = useRef(false);
 
@@ -38,6 +40,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
     setTitle(task.title);
     setSubtasks(task.subtasks ?? []);
     setError(null);
+    setTimeOpen(false);
   }, [task?.id]);
 
   useEffect(() => {
@@ -112,8 +115,9 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
   const nextTimeLabel = task
-    ? (task.recurrence ? recurrenceSummary(task.recurrence) : (task.scheduledAt ?? "设定时间"))
+    ? (task.recurrence ? recurrenceSummary(task.recurrence) : (task.scheduledAt ? getDateString(new Date(task.scheduledAt)) : "设定时间"))
     : "设定时间";
+  const scheduledDate = task?.scheduledAt ? getDateString(new Date(task.scheduledAt)) : "";
 
   const closeRef = useRef(handleClose);
   closeRef.current = handleClose;
@@ -181,9 +185,16 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                 className="mt-1 h-5 w-5 shrink-0 accent-sky-500"
               />
               <div className="min-w-0 flex-1 space-y-1">
-                <div className="text-xs text-slate-400">
-                  {nextTimeLabel}
-                  {subtaskTotal > 0 && <span> / {subtaskDone}/{subtaskTotal} 子任务</span>}
+                <div>
+                  <button
+                    type="button"
+                    aria-label="编辑下一次时间"
+                    onClick={() => setTimeOpen((value) => !value)}
+                    className="text-xs text-sky-300 hover:underline"
+                  >
+                    {nextTimeLabel}
+                  </button>
+                  {subtaskTotal > 0 && <span className="text-xs text-slate-400"> / {subtaskDone}/{subtaskTotal} 子任务</span>}
                 </div>
                 <input
                   aria-label="任务标题"
@@ -193,6 +204,26 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                   placeholder="任务标题"
                   className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-base text-slate-100 outline-none focus:border-sky-500"
                 />
+                {timeOpen && (
+                  <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    {!task.recurrence && (
+                      <label className="flex items-center gap-2 text-xs text-slate-400">
+                        计划日期
+                        <input
+                          type="date"
+                          aria-label="计划日期"
+                          value={scheduledDate}
+                          onChange={(event) => {
+                            const value = event.currentTarget.value;
+                            void run(() => (value ? scheduleTask(task.id, value) : unscheduleTask(task.id)));
+                          }}
+                          className="rounded border border-slate-800 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                        />
+                      </label>
+                    )}
+                    <RecurrenceEditor value={task.recurrence} onChange={handleRecurrenceChange} />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -200,8 +231,6 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
               <p className="mb-2 text-xs font-medium text-slate-400">子任务</p>
               <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} />
             </div>
-
-            <RecurrenceEditor value={task.recurrence} onChange={handleRecurrenceChange} />
 
             <button
               type="button"
