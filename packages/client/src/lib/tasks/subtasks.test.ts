@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { TaskSubtask } from "@timedata/shared";
-import { insertSubtaskAfter, removeSubtaskAt, toggleSubtask, applyParentToggle, trimSubtasks } from "./subtasks.js";
+import {
+  insertSubtaskAfter,
+  removeSubtaskAt,
+  toggleSubtask,
+  applyParentToggle,
+  trimSubtasks,
+  subtasksDifferStructurally,
+} from "./subtasks.js";
 
 const subs = (): TaskSubtask[] => [
   { id: "a", title: "一", done: false },
@@ -29,5 +36,31 @@ describe("subtasks 行操作", () => {
   it("trim 丢弃空标题子任务并 trim", () => {
     const t = trimSubtasks([{ id: "a", title: "  保留 ", done: false }, { id: "b", title: "   ", done: false }]);
     expect(t).toEqual([{ id: "a", title: "保留", done: false }]);
+  });
+});
+
+describe("subtasksDifferStructurally", () => {
+  const a = { id: "1", title: "a", done: false };
+  const b = { id: "2", title: "b", done: false };
+
+  it("长度变化 -> true（新增/删除）", () => {
+    expect(subtasksDifferStructurally([a], [a, b])).toBe(true);
+    expect(subtasksDifferStructurally([a, b], [a])).toBe(true);
+  });
+
+  it("done 翻转 -> true（勾选）", () => {
+    expect(subtasksDifferStructurally([a], [{ ...a, done: true }])).toBe(true);
+  });
+
+  it("id 顺序变化 -> true", () => {
+    expect(subtasksDifferStructurally([a, b], [b, a])).toBe(true);
+  });
+
+  it("只改 title -> false（仅文字编辑）", () => {
+    expect(subtasksDifferStructurally([a], [{ ...a, title: "改了" }])).toBe(false);
+  });
+
+  it("完全相同 -> false", () => {
+    expect(subtasksDifferStructurally([a, b], [a, b])).toBe(false);
   });
 });

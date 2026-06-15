@@ -36,3 +36,13 @@ export function trimSubtasks(items: TaskSubtask[]): TaskSubtask[] {
     .map((s) => ({ ...s, title: s.title.trim() }))
     .filter((s) => s.title.length > 0);
 }
+
+/** 子任务是否发生结构性变更（增删/勾选/重排），纯改文字返回 false。 */
+export function subtasksDifferStructurally(prev: TaskSubtask[], next: TaskSubtask[]): boolean {
+  if (prev.length !== next.length) return true;
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i].id !== next[i].id) return true;
+    if (prev[i].done !== next[i].done) return true;
+  }
+  return false;
+}
