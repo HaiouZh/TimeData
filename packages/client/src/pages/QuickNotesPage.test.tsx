@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { db } from "../db/index.js";
 import { setQuickNotePinned } from "../lib/quickNotes.js";
+import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -761,5 +762,22 @@ describe("捕捉中心", () => {
     expect(entries[0].categoryId).toBe("cat-pending");
     const pending = await db.categories.get("cat-pending");
     expect(pending).toMatchObject({ name: "待定" });
+  });
+
+  it("速记「待办」按钮按默认落点：inbox 时新任务无排期", async () => {
+    await db.settings.clear();
+    await setTodoDefaultDestination("inbox");
+
+    const { host, root } = await renderPage();
+    await typeInto(input(host), "丢进收件箱");
+
+    const todoBtn = host.querySelector('button[aria-label="存为待办"]');
+    await click(todoBtn);
+
+    const tasks = await db.tasks.toArray();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].scheduledAt).toBeNull();
+
+    await act(async () => root.unmount());
   });
 });

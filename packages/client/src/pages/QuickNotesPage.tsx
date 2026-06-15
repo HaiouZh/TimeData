@@ -20,6 +20,7 @@ import { useLongPress } from "../hooks/useLongPress.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
+import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../lib/tasks.js";
 import { formatTime, getDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
@@ -477,11 +478,15 @@ export default function QuickNotesPage() {
     if (!text || saving) return;
     setError(null);
     try {
-      await addTask({ title: text });
+      const dest = await readTodoDefaultDestination();
+      await addTask({ title: text, toInbox: dest === "inbox" });
       setDraftText("");
       syncAfterWrite();
       focusInput();
-      showActionToast({ message: "已加入待办", actions: [{ label: "去待办", onClick: () => navigate("/todo") }] });
+      showActionToast({
+        message: dest === "inbox" ? "已放入收件箱" : "已加入今天",
+        actions: [{ label: "去待办", onClick: () => navigate("/todo") }],
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
     }
