@@ -182,12 +182,3 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
   return buckets;
 }
-
-/** @deprecated 旧签名兼容，Task 8 重写 TodoPage 后删除 */
-export async function listTasksLegacy(): Promise<{ pool: Task[]; recurring: Task[] }> {
-  const all = await db.tasks.orderBy("sortOrder").toArray();
-  return {
-    pool: all.filter((task) => task.recurrence === null),
-    recurring: all.filter((task) => task.recurrence !== null),
-  };
-}
