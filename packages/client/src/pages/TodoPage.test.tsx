@@ -36,18 +36,24 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   throw new Error(`Timed out waiting for ${text}`);
 }
 
+function clickRepeatToggle(host: HTMLElement): Promise<void> {
+  const toggle = Array.from(host.querySelectorAll("button")).find((b) =>
+    b.getAttribute("aria-label")?.startsWith("Repeat"),
+  ) as HTMLButtonElement;
+  return act(async () => toggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+}
+
 describe("TodoPage", () => {
-  it("renders today and recurring sections", async () => {
+  it("renders today and Repeat/InBox bar", async () => {
     await addTask({ title: "买啤酒" });
     await addTask({ title: "跑步", recurrence: { freq: "daily", interval: 1, basis: "due" } });
     const { host, root } = await renderPage();
 
     await waitForText(host, "买啤酒");
 
-    expect(host.textContent).toContain("跑步");
-    expect(host.textContent).toContain("重复任务");
     expect(host.textContent).toContain("今天");
-    expect(host.textContent).toContain("收件箱");
+    expect(host.textContent).toContain("Repeat");
+    expect(host.textContent).toContain("InBox");
     await act(async () => root.unmount());
   });
 
@@ -73,12 +79,70 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("inbox task goes to inbox section", async () => {
+  it("移除收纳按钮，默认提交进今天", async () => {
+    const { host, root } = await renderPage();
+    const buttons = Array.from(host.querySelectorAll("form button")).map((b) => b.textContent);
+    expect(buttons).not.toContain("收纳");
+
+    const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    const form = host.querySelector("form");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "默认今天");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await waitForText(host, "默认今天");
+
+    const tasks = await db.tasks.toArray();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0].recurrence).toBeNull();
+    expect(tasks[0].scheduledAt).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("勾选重复后展开重复配置行", async () => {
+    const { host, root } = await renderPage();
+    expect(host.textContent).not.toContain("频率");
+
+    const repeat = host.querySelector('input[aria-label="重复"]') as HTMLInputElement;
+    await act(async () => {
+      repeat.click();
+    });
+    expect(host.textContent).toContain("频率");
+    expect(host.textContent).toContain("每天");
+    await act(async () => root.unmount());
+  });
+
+  it("默认展开 InBox，点击 Repeat 在 InBox 上方展开", async () => {
+    await addTask({ title: "收件箱项", toInbox: true });
+    await addTask({ title: "每日重复", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const { host, root } = await renderPage();
+    await waitForText(host, "收件箱项");
+
+    expect(host.textContent).toContain("收件箱项");
+    const repeatList = () =>
+      Array.from(host.querySelectorAll('[data-panel="repeat"]')).some((el) => el.textContent?.includes("每日重复"));
+    expect(repeatList()).toBe(false);
+
+    await clickRepeatToggle(host);
+    expect(repeatList()).toBe(true);
+
+    const repeatNode = host.querySelector('[data-panel="repeat"]');
+    const inboxNode = host.querySelector('[data-panel="inbox"]');
+    expect(repeatNode && inboxNode && (repeatNode.compareDocumentPosition(inboxNode) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
+  it("inbox task goes to InBox panel", async () => {
     await addTask({ title: "稍后处理", toInbox: true });
     const { host, root } = await renderPage();
 
     await waitForText(host, "稍后处理");
-    expect(host.textContent).toContain("收件箱");
+    expect(host.textContent).toContain("InBox");
     await act(async () => root.unmount());
   });
 
@@ -98,6 +162,7 @@ describe("TodoPage", () => {
       updatedAt: "2026-06-01T00:00:00.000Z",
     });
     const { host, root } = await renderPage();
+    await clickRepeatToggle(host);
 
     await waitForText(host, "做三次");
     expect(host.textContent).not.toContain("完成 1/3");
@@ -126,7 +191,7 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("顶部表单不再进入编辑态（无保存/取消按钮）", async () => {
+  it("composer 不进入编辑态（无保存/取消按钮）", async () => {
     await addTask({ title: "某任务" });
     const { host, root } = await renderPage();
     await waitForText(host, "某任务");
