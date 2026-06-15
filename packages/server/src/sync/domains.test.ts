@@ -5,6 +5,7 @@ describe("server sync domains", () => {
   it("covers every registered shared domain", () => {
     expect(Object.keys(SERVER_SYNC_DOMAINS).sort()).toEqual([
       "categories",
+      "health_charts",
       "health_heart_rate",
       "health_hrv",
       "health_sleep",
@@ -22,6 +23,11 @@ describe("server sync domains", () => {
     expect(getServerDomain("quick_notes").apply).toBeUndefined();
     expect(getServerDomain("settings").lww).toBeDefined();
     expect(getServerDomain("quick_notes").lww).toBeDefined();
+  });
+
+  it("registers health_charts on the generic lww path", () => {
+    expect(getServerDomain("health_charts").apply).toBeUndefined();
+    expect(getServerDomain("health_charts").lww).toBeDefined();
   });
 
   it("complex domains keep custom hooks", () => {

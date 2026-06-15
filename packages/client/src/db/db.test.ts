@@ -7,17 +7,18 @@ afterEach(async () => {
 });
 
 describe("Dexie database", () => {
-  it("opens the current database as a v6 schema", async () => {
+  it("opens the current database as a v7 schema", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await db.categories.count()).toBeGreaterThan(0);
     expect(await db.timeEntries.count()).toBe(0);
     expect(await db.settings.count()).toBe(0);
     expect(await db.quickNotes.count()).toBe(0);
     expect(await db.tasks.count()).toBe(0);
+    expect(await db.healthCharts.count()).toBe(0);
   });
 });

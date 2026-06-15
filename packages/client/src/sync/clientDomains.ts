@@ -10,6 +10,7 @@ import {
   HealthSleepSchema,
   HealthStressSchema,
   HealthRunSchema,
+  HealthChartConfigSchema,
 } from "@timedata/shared";
 import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.ts";
@@ -182,6 +183,12 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     table: "runs",
     storeName: "runs",
     schema: HealthRunSchema,
+    backup: "bundled",
+  },
+  health_charts: {
+    table: "health_charts",
+    storeName: "healthCharts",
+    schema: HealthChartConfigSchema,
     backup: "bundled",
   },
 };

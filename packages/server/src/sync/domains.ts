@@ -20,6 +20,7 @@ import {
   healthHeartRateToRow, healthHrvToRow, healthSleepToRow,
   healthStressToRow, healthRunToRow,
 } from "../lib/healthRows.js";
+import { type HealthChartRow, rowToHealthChart, healthChartToRow } from "../lib/chartRows.js";
 import { recordSeq } from "./seq.js";
 
 export interface ApplyChangeResult {
@@ -407,6 +408,7 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   health_sleep: simpleLwwDomain<HealthSleepRow>("health_sleep", healthSleepToRow, rowToHealthSleep),
   health_stress: simpleLwwDomain<HealthStressRow>("health_stress", healthStressToRow, rowToHealthStress),
   runs: simpleLwwDomain<HealthRunRow>("runs", healthRunToRow, rowToHealthRun),
+  health_charts: simpleLwwDomain<HealthChartRow>("health_charts", healthChartToRow, rowToHealthChart),
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

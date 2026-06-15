@@ -15,6 +15,7 @@ describe("sync domain registry", () => {
       "health_sleep",
       "health_stress",
       "runs",
+      "health_charts",
     ]);
   });
 
@@ -39,6 +40,12 @@ describe("sync domain registry", () => {
     for (const domain of SYNC_DOMAINS) {
       expect(domain.dataSchema.safeParse(null).success).toBe(false);
     }
+  });
+
+  it("registers health_charts as lww domain", () => {
+    const domain = SYNC_DOMAINS.find((d) => d.table === "health_charts");
+    expect(domain).toBeDefined();
+    expect(domain?.conflictPolicy).toBe("lww");
   });
 });
 

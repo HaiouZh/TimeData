@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
   Category, QuickNote, Setting, Task, TimeEntry, SyncLogEntry,
-  HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun,
+  HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun, HealthChartConfig,
 } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -38,6 +38,7 @@ export const db = new Dexie("timedata") as Dexie & {
   healthSleep: EntityTable<HealthSleep, "id">;
   healthStress: EntityTable<HealthStress, "id">;
   runs: EntityTable<HealthRun, "id">;
+  healthCharts: EntityTable<HealthChartConfig, "id">;
 };
 
 db.version(1).stores({
@@ -106,6 +107,22 @@ db.version(6).stores({
   healthSleep: "id, date",
   healthStress: "id, date",
   runs: "id, date",
+});
+
+db.version(7).stores({
+  categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
+  timeEntries: "id, categoryId, startTime, endTime",
+  tasks: "id, scheduledAt, sortOrder, updatedAt",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+  settings: "key",
+  healthHeartRate: "id, date",
+  healthHrv: "id, date",
+  healthSleep: "id, date",
+  healthStress: "id, date",
+  runs: "id, date",
+  healthCharts: "id, order, updatedAt",
 });
 
 export async function seedDefaultCategories(): Promise<void> {
