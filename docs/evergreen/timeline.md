@@ -12,7 +12,7 @@ covers:
   - packages/client/src/hooks/useEntries.ts
   - packages/client/src/lib/stats.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-06-14
+last-reviewed: 2026-06-15
 ---
 
 # 时间轴与记录时间规则
@@ -91,7 +91,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 **刻度**：三层刻度——144 个 10 分钟微刻度（弱、短），每隔 3 个升级为半点刻度，每隔 6 个升级为整点刻度（最长、最亮）；在 RADIUS 中线位置标 0–23 全部整点数字，0/6/12/18 加粗作为锚点。文字以深色描边压在分段之上避免被分类色淹没。
 
-**中心三行**：顺序为 `HH:mm - HH:mm` / 分类路径或“待记录” / 时长，直接绘在卡片底色之上（不再有内圈填色圆）。点击中心按钮才执行跳转——记录进入编辑页，空档进入新增页并通过 URL query 带上 `start` / `end`、`date`。当槽位变化时默认选中最后一个空档；若没有空档则退选最后一条记录；`future` 段永远不会进入默认选中。
+**中心打点**：中心大圆是固定的打点入口（⏱ + “打点到现在”），点击调用 `punchNow`（规则同速记页 header 打点：起点=今天最后一条记录 end，否则今天 0 点，建一条分类=「待定」的 `time_entry`），成功后 `syncAfterWrite`。中心不再展示选中段信息、也不再承担编辑/补录跳转——查看、编辑记录与补录空档全部交给下方的 `Timeline` 列表（点记录进编辑页、点空档进新增页并带 `start` / `end` / `date`）。环面仍保留选中态：当槽位变化时默认选中最后一个空档、否则退选最后一条记录、`future` 段永不进入默认选中，用于高亮与指针箭头，但不驱动中心。`onEntryOpen` / `onGapOpen` 降为可选 prop、保留兼容但中心已不使用。
 
 **指针交互**：圆环 `<svg>` 监听 `pointerDown` / `pointerMove` / `pointerUp`，按指针位置反算角度（atan2 + 12 点钟为 0 顺时针递增）→ 当日分钟数（0–1440）→ 落在哪段就把 selection 切到哪段。`future` 段在拖拽过程中不切 selection。pointerDown 后调用 `setPointerCapture`，touch-action 设为 none，避免与垂直滚动竞争。指针箭头以 `ARROW_TIP_RADIUS`（环带靠内 25% 处）为尖、`ARROW_BASE_RADIUS`（内半径再向内 4px）为底，由内指向外；箭头位置由 `dragMinutes ?? selectedMidpoint` 驱动——任意 pointer 交互后箭头停在用户拖到的分钟数（无极、不吸附），只在 `initialSelection` 重算（切日期、记录变化等）时回到默认选中段中点。
 

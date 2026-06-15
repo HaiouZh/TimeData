@@ -219,7 +219,7 @@ type Task = {
 - `Recurrence.freq="weekly"` 必须带 `byWeekday`，`freq="monthly"` 必须带 `byMonthday`，`freq="daily"` 不允许带 weekday/monthday；`interval` 是正整数，当前 schema 上限 999。`count` 是 1..999 的整数；`until` 是严格 UTC ISO 字符串，语义上表示本地日期零点。`count` 与 `until` 互斥。
 - `byWeekday` 用 ISO 周几（周一=1，周日=7）；`byMonthday` 支持 1..31 和 `-1`（月末），不存在的月份日期会跳过。
 - `basis="due"` 按计划发生日判断是否有未完成实例；`basis="completion"` 从上次完成日往后推下一次。客户端 `isDueNow()` 用本地日序号计算，因此重复任务的“今天是否待做”跟用户本地日历一致，不受 UTC 日期切换影响；`until` 只限制后续发生，不会自动吞掉已经逾期未完成的最后一次。
-- `sortOrder` 是客户端展示排序字段。当前 TodoPage 基础实现按 `sortOrder` 展示任务池，并把已完成池任务排到后面；重复任务按当前列表顺序展示。
+- `sortOrder` 是客户端展示排序字段。TodoPage 按 `sortOrder` 展示，落点（今天 / InBox / 即将到来 / 完成）由 `lib/tasks/placement.ts` 按 `scheduledAt` 决定；UI 的「今天 / InBox / Repeat」分组只是这些落点的展示折叠，不改变数据模型，换池仍走 `scheduleTask` / `unscheduleTask`。
 - `tasks` 不引用 `Category`、`TimeEntry` 或 `QuickNote`，不参与分类校验、时间段重叠、统计或速记导入导出。
 - SQL 表名是 `tasks`，字段是 `title` / `done` / `recurrence` / `last_done_at` / `start_at` / `scheduled_at` / `subtasks` / `completed_count` / `sort_order` / `created_at` / `updated_at`；`recurrence` 在 SQLite 中存 JSON 字符串或 `NULL`，`subtasks` 存 JSON 字符串，`done` 是 0/1，映射到 JS boolean。Dexie 表名也是 `tasks`，索引是 `id, scheduledAt, sortOrder, updatedAt`；`completedCount` 不建索引。
 - 客户端新增、编辑、勾选、删除都必须在同一个 Dexie transaction 内写 `tasks` 和 `syncLog(tableName="tasks")`。server 端 `tasks` 走通用 LWW 同步域，delete 写 tombstone；`GET /api/tasks` 是只读查询，不是写入入口。

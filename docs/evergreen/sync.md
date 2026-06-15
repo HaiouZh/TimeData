@@ -38,7 +38,7 @@ covers:
   - packages/shared/src/types.ts:QuickNote
   - packages/shared/src/types.ts:Task
   - packages/shared/src/types.ts:Recurrence
-last-reviewed: 2026-06-14
+last-reviewed: 2026-06-15
 ---
 
 # 同步机制
