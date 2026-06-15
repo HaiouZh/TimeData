@@ -27,7 +27,7 @@ import {
 } from "../lib/settings/healthRangeSetting.ts";
 import { ChartBuilderSheet, type BuilderDraft } from "./stats/health/ChartBuilderSheet.tsx";
 import { HealthBlockList } from "./stats/health/HealthBlockList.tsx";
-import { type HealthSummaryCardItem } from "./stats/health/HealthSummaryCards.tsx";
+import type { HealthSummaryCardItem } from "./stats/health/HealthSummaryCards.tsx";
 
 function isValidRun(run: HealthRun): run is HealthRun & { distanceKm: number; durationSeconds: number } {
   return (
