@@ -20,6 +20,7 @@ import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPag
 import SettingsCategoriesPage from "./pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "./pages/settings/SettingsCategoryDetailPage.tsx";
 import SettingsDataPage from "./pages/settings/SettingsDataPage.tsx";
+import SettingsHealthRangePage from "./pages/settings/SettingsHealthRangePage.tsx";
 import SettingsInsightsPage from "./pages/settings/SettingsInsightsPage.tsx";
 import { SettingsNavPage } from "./pages/settings/SettingsNavPage.tsx";
 import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
@@ -66,6 +67,7 @@ export function AppShell() {
           <Route path="/settings/server" element={<SettingsServerPage />} />
           <Route path="/settings/nav" element={<SettingsNavPage />} />
           <Route path="/settings/insights" element={<SettingsInsightsPage />} />
+          <Route path="/settings/health-range" element={<SettingsHealthRangePage />} />
           <Route path="/settings/stats-layout" element={<SettingsStatsLayoutPage />} />
           <Route path="/settings/data" element={<SettingsDataPage />} />
           <Route path="/settings/data/backup-history" element={<BackupHistoryPage />} />

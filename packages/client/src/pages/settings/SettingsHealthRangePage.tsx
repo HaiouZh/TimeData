@@ -1,0 +1,47 @@
+import { useMemo } from "react";
+import { useSetting, setSetting } from "../../lib/settings/index.ts";
+import {
+  HEALTH_RANGE_PRESETS,
+  HEALTH_RANGE_PRESETS_KEY,
+  parseHealthRangePresets,
+  rangeLabel,
+  type HealthRangePreset,
+} from "../../lib/settings/healthRangeSetting.ts";
+import SettingsDetailPage from "./SettingsDetailPage.tsx";
+
+export default function SettingsHealthRangePage() {
+  const raw = useSetting(HEALTH_RANGE_PRESETS_KEY);
+  const selected = useMemo(() => new Set(parseHealthRangePresets(raw)), [raw]);
+
+  async function toggle(preset: HealthRangePreset) {
+    const next = new Set(selected);
+    if (next.has(preset)) next.delete(preset);
+    else next.add(preset);
+    const ordered = HEALTH_RANGE_PRESETS.filter((item) => next.has(item));
+    await setSetting(HEALTH_RANGE_PRESETS_KEY, ordered.length > 0 ? ordered.join(",") : null);
+  }
+
+  return (
+    <SettingsDetailPage title="健康范围">
+      <section className="space-y-3">
+        <p className="px-1 text-xs leading-relaxed text-slate-500">选择健康统计页顶部显示哪些时间范围。</p>
+        <ul className="space-y-2">
+          {HEALTH_RANGE_PRESETS.map((preset) => (
+            <li key={preset} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-slate-100">{rangeLabel(preset)}</span>
+                <input
+                  type="checkbox"
+                  aria-label={rangeLabel(preset)}
+                  checked={selected.has(preset)}
+                  onChange={() => toggle(preset)}
+                  className="h-5 w-5"
+                />
+              </label>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </SettingsDetailPage>
+  );
+}

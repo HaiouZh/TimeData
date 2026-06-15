@@ -392,6 +392,13 @@ export default function SettingsPage() {
           subtitle="调整统计模块显示与顺序"
         />
         <SettingsLinkRow
+          to="/settings/health-range"
+          icon={<ChartIcon />}
+          accent="emerald"
+          title="健康范围"
+          subtitle="选择健康统计页显示的时间范围"
+        />
+        <SettingsLinkRow
           to="/settings/nav"
           icon={<SmartphoneIcon />}
           accent="sky"
