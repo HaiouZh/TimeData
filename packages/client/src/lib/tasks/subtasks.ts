@@ -1,3 +1,4 @@
+import { arrayMove } from "@dnd-kit/sortable";
 import type { TaskSubtask } from "@timedata/shared";
 
 export function insertSubtaskAfter(
@@ -45,4 +46,12 @@ export function subtasksDifferStructurally(prev: TaskSubtask[], next: TaskSubtas
     if (prev[i].done !== next[i].done) return true;
   }
   return false;
+}
+
+export function reorderSubtasks(items: TaskSubtask[], activeId: string, overId: string): TaskSubtask[] {
+  if (activeId === overId) return items;
+  const oldIndex = items.findIndex((s) => s.id === activeId);
+  const newIndex = items.findIndex((s) => s.id === overId);
+  if (oldIndex === -1 || newIndex === -1) return items;
+  return arrayMove(items, oldIndex, newIndex);
 }

@@ -7,6 +7,7 @@ import {
   applyParentToggle,
   trimSubtasks,
   subtasksDifferStructurally,
+  reorderSubtasks,
 } from "./subtasks.js";
 
 const subs = (): TaskSubtask[] => [
@@ -62,5 +63,30 @@ describe("subtasksDifferStructurally", () => {
 
   it("完全相同 -> false", () => {
     expect(subtasksDifferStructurally([a, b], [a, b])).toBe(false);
+  });
+});
+
+describe("reorderSubtasks", () => {
+  const r = (): TaskSubtask[] => [
+    { id: "a", title: "一", done: false },
+    { id: "b", title: "二", done: false },
+    { id: "c", title: "三", done: false },
+  ];
+
+  it("把 a 移到 c 后面", () => {
+    expect(reorderSubtasks(r(), "a", "c").map((s) => s.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("把 c 移到最前", () => {
+    expect(reorderSubtasks(r(), "c", "a").map((s) => s.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("activeId === overId -> 原数组不变", () => {
+    expect(reorderSubtasks(r(), "b", "b").map((s) => s.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("未知 id -> 原数组不变", () => {
+    expect(reorderSubtasks(r(), "x", "a").map((s) => s.id)).toEqual(["a", "b", "c"]);
+    expect(reorderSubtasks(r(), "a", "x").map((s) => s.id)).toEqual(["a", "b", "c"]);
   });
 });
