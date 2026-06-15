@@ -38,7 +38,14 @@ export function HealthBlockList({
           </div>
           {block.type === "metricChart" && <MetricChartBlock config={block} collections={collections} range={range} />}
           {block.type === "runTrend" && <RunPaceTrendChart data={runPace} />}
-          {block.type === "summary" && <HealthSummaryCards items={summaryItems} />}
+          {block.type === "summary" && (
+            <section className="health-summary-block" aria-label={block.title}>
+              <div className="health-panel-header">
+                <h3 className="health-panel-title">{block.title}</h3>
+              </div>
+              <HealthSummaryCards items={summaryItems} />
+            </section>
+          )}
         </div>
       ))}
     </div>

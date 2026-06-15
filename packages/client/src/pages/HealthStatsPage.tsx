@@ -1,22 +1,33 @@
-import type { HealthRun } from "@timedata/shared";
+import type { HealthChartConfig, HealthRun, MetricChartBlock } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { db } from "../db/index.ts";
 import {
   buildHealthSummary,
-  buildNormalizedHealthTrend,
   buildRunPaceTrend,
   computeSleepDurationHours,
-  filterHealthRecordsByRange,
   formatDuration,
   formatPace,
   secondsPerKm,
   type HealthMetricCollections,
-  type HealthMetricRange,
 } from "../lib/healthMetrics/index.ts";
-import { HealthMetricTrendChart } from "./stats/health/HealthMetricTrendChart.tsx";
-import { HealthSummaryCards, type HealthSummaryCardItem } from "./stats/health/HealthSummaryCards.tsx";
-import { RunPaceTrendChart } from "./stats/health/RunPaceTrendChart.tsx";
+import {
+  deleteHealthChartBlock,
+  listHealthChartBlocks,
+  putHealthChartBlock,
+  seedDefaultHealthChartsOnce,
+} from "../lib/healthCharts.ts";
+import { useSetting } from "../lib/settings/index.ts";
+import {
+  HEALTH_RANGE_PRESETS_KEY,
+  parseHealthRangePresets,
+  rangeLabel,
+  rangeToChartSeriesRange,
+  type HealthRangePreset,
+} from "../lib/settings/healthRangeSetting.ts";
+import { ChartBuilderSheet, type BuilderDraft } from "./stats/health/ChartBuilderSheet.tsx";
+import { HealthBlockList } from "./stats/health/HealthBlockList.tsx";
+import { type HealthSummaryCardItem } from "./stats/health/HealthSummaryCards.tsx";
 
 function isValidRun(run: HealthRun): run is HealthRun & { distanceKm: number; durationSeconds: number } {
   return (
@@ -112,24 +123,60 @@ function buildSummaryCards(
   ];
 }
 
+function filterByPreset<T extends { date: string }>(records: readonly T[], preset: HealthRangePreset): T[] {
+  if (preset === "all") return [...records];
+  const days = Number(preset);
+  const today = new Date().toISOString().slice(0, 10);
+  const fromDate = new Date(`${today}T00:00:00.000Z`);
+  fromDate.setUTCDate(fromDate.getUTCDate() - (days - 1));
+  const from = fromDate.toISOString().slice(0, 10);
+  return records.filter((record) => record.date >= from && record.date <= today);
+}
+
+function defaultPreset(presets: HealthRangePreset[]): HealthRangePreset {
+  return presets.includes("30") ? "30" : (presets[0] ?? "30");
+}
+
 export default function HealthStatsPage() {
-  const [range, setRange] = useState<HealthMetricRange>("30");
+  const presetsRaw = useSetting(HEALTH_RANGE_PRESETS_KEY);
+  const presets = useMemo(() => parseHealthRangePresets(presetsRaw), [presetsRaw]);
+  const [preset, setPreset] = useState<HealthRangePreset>(() => defaultPreset(presets));
+  const activePreset = presets.includes(preset) ? preset : defaultPreset(presets);
   const heartRates = useLiveQuery(() => db.healthHeartRate.orderBy("date").toArray()) ?? [];
   const hrvs = useLiveQuery(() => db.healthHrv.orderBy("date").toArray()) ?? [];
   const sleeps = useLiveQuery(() => db.healthSleep.orderBy("date").toArray()) ?? [];
   const stresses = useLiveQuery(() => db.healthStress.orderBy("date").toArray()) ?? [];
   const runs = useLiveQuery(() => db.runs.orderBy("date").toArray()) ?? [];
+  const [chartsRevision, setChartsRevision] = useState(0);
+  const blocks = useLiveQuery(() => listHealthChartBlocks(), [chartsRevision]) ?? [];
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [editing, setEditing] = useState<MetricChartBlock | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void seedDefaultHealthChartsOnce().finally(() => {
+      if (!cancelled) setChartsRevision((value) => value + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fullCollections = useMemo(
+    () => ({ heartRates, hrvs, sleeps, stresses, runs }),
+    [heartRates, hrvs, sleeps, stresses, runs],
+  );
 
   const scoped = useMemo(
     () => ({
-      heartRates: filterHealthRecordsByRange(heartRates, range),
-      hrvs: filterHealthRecordsByRange(hrvs, range),
-      sleeps: filterHealthRecordsByRange(sleeps, range),
-      stresses: filterHealthRecordsByRange(stresses, range),
-      runs: filterHealthRecordsByRange(runs, range),
+      heartRates: filterByPreset(heartRates, activePreset),
+      hrvs: filterByPreset(hrvs, activePreset),
+      sleeps: filterByPreset(sleeps, activePreset),
+      stresses: filterByPreset(stresses, activePreset),
+      runs: filterByPreset(runs, activePreset),
     }),
-    [heartRates, hrvs, sleeps, stresses, runs, range],
+    [heartRates, hrvs, sleeps, stresses, runs, activePreset],
   );
 
   const hasAnyData =
@@ -139,32 +186,71 @@ export default function HealthStatsPage() {
     scoped.stresses.length > 0 ||
     scoped.runs.length > 0;
 
+  const seriesRange = rangeToChartSeriesRange(activePreset);
   const summary = useMemo(() => buildHealthSummary(scoped), [scoped]);
   const summaryCards = useMemo(() => buildSummaryCards(summary, scoped), [summary, scoped]);
-  const normalizedTrend = useMemo(() => buildNormalizedHealthTrend(scoped), [scoped]);
-  const paceTrend = useMemo(() => buildRunPaceTrend(scoped.runs ?? []), [scoped.runs]);
+  const paceTrend = useMemo(() => buildRunPaceTrend(scoped.runs), [scoped.runs]);
   const recentRuns = useMemo(
-    () => [...(scoped.runs ?? [])].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)).slice(0, 5),
+    () => [...scoped.runs].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime)).slice(0, 5),
     [scoped.runs],
   );
+
+  function handleAddChart() {
+    setEditing(null);
+    setBuilderOpen(true);
+  }
+
+  function handleEdit(block: HealthChartConfig) {
+    if (block.type !== "metricChart") return;
+    setEditing(block);
+    setBuilderOpen(true);
+  }
+
+  async function handleDelete(id: string) {
+    await deleteHealthChartBlock(id);
+    setChartsRevision((value) => value + 1);
+    setEditing((current) => (current?.id === id ? null : current));
+  }
+
+  async function handleSave(draft: BuilderDraft) {
+    await putHealthChartBlock(draft);
+    setChartsRevision((value) => value + 1);
+    setBuilderOpen(false);
+    setEditing(null);
+  }
+
+  function handleCloseBuilder() {
+    setBuilderOpen(false);
+    setEditing(null);
+  }
 
   return (
     <div className="health-stats-page">
       <header className="health-page-header">
-        <div className="min-w-0">
-          <div className="health-kicker">TimeData</div>
-          <h2 className="health-page-title">健康统计</h2>
+        <div className="flex w-full items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="health-kicker">TimeData</div>
+            <h2 className="health-page-title">健康统计</h2>
+          </div>
+          <button
+            type="button"
+            aria-label="添加图表"
+            onClick={handleAddChart}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xl leading-none text-slate-100 shadow-sm transition hover:border-slate-500 hover:bg-slate-800"
+          >
+            ＋
+          </button>
         </div>
         <div className="health-range-selector" role="tablist" aria-label="健康范围">
-          {(["30", "90", "all"] as const).map((item) => (
+          {presets.map((item) => (
             <button
               key={item}
               type="button"
               className="health-range-button"
-              aria-pressed={range === item}
-              onClick={() => setRange(item)}
+              aria-pressed={activePreset === item}
+              onClick={() => setPreset(item)}
             >
-              {item === "all" ? "全部" : `${item}天`}
+              {rangeLabel(item)}
             </button>
           ))}
         </div>
@@ -174,9 +260,17 @@ export default function HealthStatsPage() {
         <div className="health-empty-state">暂无健康数据</div>
       ) : (
         <>
-          <HealthSummaryCards items={summaryCards} />
-          <HealthMetricTrendChart data={normalizedTrend} />
-          <RunPaceTrendChart data={paceTrend} />
+          <HealthBlockList
+            blocks={blocks}
+            collections={fullCollections}
+            range={seriesRange}
+            summaryItems={summaryCards}
+            runPace={paceTrend}
+            onEdit={handleEdit}
+            onDelete={(id) => {
+              void handleDelete(id);
+            }}
+          />
           <section className="health-panel" aria-label="最近跑步">
             <div className="health-panel-header">
               <h3 className="health-panel-title">最近跑步</h3>
@@ -235,6 +329,20 @@ export default function HealthStatsPage() {
           </section>
         </>
       )}
+
+      <ChartBuilderSheet
+        open={builderOpen}
+        initial={editing}
+        onSave={(draft) => {
+          void handleSave(draft);
+        }}
+        onClose={handleCloseBuilder}
+        onDelete={(id) => {
+          void handleDelete(id);
+          setBuilderOpen(false);
+          setEditing(null);
+        }}
+      />
     </div>
   );
 }
