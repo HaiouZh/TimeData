@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { HealthChartConfig, HealthHeartRate, HealthHrv, HealthRun, HealthSleep, HealthStress } from "@timedata/shared";
-import { act, createElement } from "react";
+import { act, createElement, useEffect, useReducer } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HealthStatsPage from "./HealthStatsPage.js";
@@ -24,8 +24,24 @@ const chartState = vi.hoisted(() => ({
   seeded: false,
 }));
 
+// 模拟 Dexie useLiveQuery 的响应式：数据变了通知订阅者重渲染，对齐生产行为
+const liveQuery = vi.hoisted(() => ({ listeners: new Set<() => void>() }));
+
+function notifyLiveQueries() {
+  for (const listener of liveQuery.listeners) listener();
+}
+
 vi.mock("dexie-react-hooks", () => ({
-  useLiveQuery: (query: () => unknown) => query(),
+  useLiveQuery: (query: () => unknown) => {
+    const [, bump] = useReducer((value: number) => value + 1, 0);
+    useEffect(() => {
+      liveQuery.listeners.add(bump);
+      return () => {
+        liveQuery.listeners.delete(bump);
+      };
+    }, []);
+    return query();
+  },
 }));
 
 vi.mock("../db/index.ts", () => ({
@@ -52,10 +68,12 @@ vi.mock("../lib/healthCharts.ts", () => ({
       updatedAt: now,
     } as HealthChartConfig;
     chartState.blocks = [...chartState.blocks.filter((item) => item.id !== block.id), block];
+    notifyLiveQueries();
     return block;
   },
   deleteHealthChartBlock: async (id: string) => {
     chartState.blocks = chartState.blocks.filter((item) => item.id !== id);
+    notifyLiveQueries();
   },
   seedDefaultHealthChartsOnce: async () => {
     if (chartState.seeded) return;
@@ -77,6 +95,7 @@ vi.mock("../lib/healthCharts.ts", () => ({
       },
       { id: "run", type: "runTrend", order: 2, title: "跑步配速", createdAt: now, updatedAt: now },
     ];
+    notifyLiveQueries();
   },
 }));
 
@@ -173,6 +192,7 @@ describe("HealthStatsPage", () => {
     healthState.runs = [];
     chartState.blocks = [];
     chartState.seeded = false;
+    liveQuery.listeners.clear();
   });
 
   it("renders health summary, trend panels, and recent runs", async () => {

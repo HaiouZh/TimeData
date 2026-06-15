@@ -123,14 +123,22 @@ function buildSummaryCards(
   ];
 }
 
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function filterByPreset<T extends { date: string }>(records: readonly T[], preset: HealthRangePreset): T[] {
   if (preset === "all") return [...records];
   const days = Number(preset);
-  const today = new Date().toISOString().slice(0, 10);
-  const fromDate = new Date(`${today}T00:00:00.000Z`);
-  fromDate.setUTCDate(fromDate.getUTCDate() - (days - 1));
-  const from = fromDate.toISOString().slice(0, 10);
-  return records.filter((record) => record.date >= from && record.date <= today);
+  const today = new Date();
+  const fromDate = new Date(today);
+  fromDate.setDate(fromDate.getDate() - (days - 1));
+  const from = formatLocalDate(fromDate);
+  const to = formatLocalDate(today);
+  return records.filter((record) => record.date >= from && record.date <= to);
 }
 
 function defaultPreset(presets: HealthRangePreset[]): HealthRangePreset {
@@ -147,20 +155,13 @@ export default function HealthStatsPage() {
   const sleeps = useLiveQuery(() => db.healthSleep.orderBy("date").toArray()) ?? [];
   const stresses = useLiveQuery(() => db.healthStress.orderBy("date").toArray()) ?? [];
   const runs = useLiveQuery(() => db.runs.orderBy("date").toArray()) ?? [];
-  const [chartsRevision, setChartsRevision] = useState(0);
-  const blocks = useLiveQuery(() => listHealthChartBlocks(), [chartsRevision]) ?? [];
+  const blocks = useLiveQuery(() => listHealthChartBlocks()) ?? [];
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editing, setEditing] = useState<MetricChartBlock | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void seedDefaultHealthChartsOnce().finally(() => {
-      if (!cancelled) setChartsRevision((value) => value + 1);
-    });
-    return () => {
-      cancelled = true;
-    };
+    void seedDefaultHealthChartsOnce();
   }, []);
 
   const fullCollections = useMemo(
@@ -208,13 +209,11 @@ export default function HealthStatsPage() {
 
   async function handleDelete(id: string) {
     await deleteHealthChartBlock(id);
-    setChartsRevision((value) => value + 1);
     setEditing((current) => (current?.id === id ? null : current));
   }
 
   async function handleSave(draft: BuilderDraft) {
     await putHealthChartBlock(draft);
-    setChartsRevision((value) => value + 1);
     setBuilderOpen(false);
     setEditing(null);
   }
