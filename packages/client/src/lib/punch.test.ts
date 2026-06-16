@@ -1,16 +1,42 @@
 import "fake-indexeddb/auto";
+import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
-import { PENDING_CATEGORY_ID } from "./pendingCategory.js";
+import { setPunchCategoryId } from "./settings/punchCategorySetting.js";
 import { punchNow, resolvePunchRange } from "./punch.js";
 
 // 全部用 UTC ISO 字符串；APP 时区 +08:00，今天 0 点 = 前一日 16:00Z。
 const TODAY_START = "2026-06-14T16:00:00.000Z"; // 2026-06-15 00:00 (+08:00)
 const NOW = "2026-06-15T04:00:00.000Z"; // 2026-06-15 12:00 (+08:00)
+const PUNCH_CATEGORY_ID = "cat-work-deep";
+
+function category(id: string, name: string, parentId: string | null): Category {
+  return {
+    id,
+    name,
+    parentId,
+    color: "#94A3B8",
+    icon: null,
+    sortOrder: 0,
+    isArchived: false,
+    createdAt: "2026-06-15T00:00:00.000Z",
+    updatedAt: "2026-06-15T00:00:00.000Z",
+  };
+}
+
+async function configurePunchCategory() {
+  await db.categories.bulkAdd([
+    category("cat-work", "工作", null),
+    category(PUNCH_CATEGORY_ID, "深度", "cat-work"),
+  ]);
+  await setPunchCategoryId(PUNCH_CATEGORY_ID);
+  await db.syncLog.clear();
+}
 
 beforeEach(async () => {
   await db.timeEntries.clear();
   await db.categories.clear();
+  await db.settings.clear();
   await db.syncLog.clear();
 });
 
@@ -36,19 +62,21 @@ describe("resolvePunchRange", () => {
 });
 
 describe("punchNow", () => {
-  it("今天无记录：建一条 [今天0点 → now]、分类=待定 的记录，并自动播种待定分类", async () => {
+  it("今天无记录：建一条 [今天0点 → now]、分类=已配置打点分类 的记录", async () => {
+    await configurePunchCategory();
     const now = new Date("2026-06-15T04:00:00.000Z"); // 12:00 (+08:00)
-    const entry = await punchNow(now);
+    const result = await punchNow(now);
 
-    expect(entry).not.toBeNull();
-    expect(entry?.categoryId).toBe(PENDING_CATEGORY_ID);
+    expect(result).toMatchObject({ ok: true });
+    const entry = result.ok ? result.entry : null;
+    expect(entry?.categoryId).toBe(PUNCH_CATEGORY_ID);
     expect(entry?.startTime).toBe("2026-06-14T16:00:00.000Z"); // 今天 0 点
     expect(entry?.endTime).toBe("2026-06-15T04:00:00.000Z");
-    await expect(db.categories.get(PENDING_CATEGORY_ID)).resolves.toMatchObject({ name: "待定" });
     await expect(db.syncLog.where({ tableName: "time_entries" }).count()).resolves.toBe(1);
   });
 
   it("今天已有记录：起点接上最后一条 end", async () => {
+    await configurePunchCategory();
     await db.timeEntries.add({
       id: "e1",
       categoryId: "cat-invest-read",
@@ -59,13 +87,17 @@ describe("punchNow", () => {
       updatedAt: "2026-06-15T02:00:00.000Z",
     });
 
-    const entry = await punchNow(new Date("2026-06-15T04:00:00.000Z"));
+    const result = await punchNow(new Date("2026-06-15T04:00:00.000Z"));
 
+    expect(result).toMatchObject({ ok: true });
+    const entry = result.ok ? result.entry : null;
+    expect(entry?.categoryId).toBe(PUNCH_CATEGORY_ID);
     expect(entry?.startTime).toBe("2026-06-15T02:00:00.000Z");
     expect(entry?.endTime).toBe("2026-06-15T04:00:00.000Z");
   });
 
-  it("无时间可记时（最后一条结束于 now）返回 null，不写记录", async () => {
+  it("无时间可记时（最后一条结束于 now）返回 no_range，不写记录", async () => {
+    await configurePunchCategory();
     await db.timeEntries.add({
       id: "e2",
       categoryId: "cat-invest-read",
@@ -76,9 +108,31 @@ describe("punchNow", () => {
       updatedAt: "2026-06-15T04:00:00.000Z",
     });
 
-    const entry = await punchNow(new Date("2026-06-15T04:00:00.000Z"));
+    const result = await punchNow(new Date("2026-06-15T04:00:00.000Z"));
 
-    expect(entry).toBeNull();
+    expect(result).toEqual({ ok: false, reason: "no_range" });
     await expect(db.timeEntries.count()).resolves.toBe(1);
+  });
+
+  it("未配置打点分类时不写记录", async () => {
+    const result = await punchNow(new Date("2026-06-15T04:00:00.000Z"));
+
+    expect(result).toEqual({ ok: false, reason: "missing_category" });
+    await expect(db.timeEntries.count()).resolves.toBe(0);
+    await expect(db.syncLog.where({ tableName: "time_entries" }).count()).resolves.toBe(0);
+  });
+
+  it("配置的分类不是可用子分类时不写记录", async () => {
+    await db.categories.bulkAdd([
+      category("cat-work", "工作", null),
+      { ...category(PUNCH_CATEGORY_ID, "深度", "cat-work"), isArchived: true },
+    ]);
+    await setPunchCategoryId(PUNCH_CATEGORY_ID);
+    await db.syncLog.clear();
+
+    const result = await punchNow(new Date("2026-06-15T04:00:00.000Z"));
+
+    expect(result).toEqual({ ok: false, reason: "missing_category" });
+    await expect(db.timeEntries.count()).resolves.toBe(0);
   });
 });

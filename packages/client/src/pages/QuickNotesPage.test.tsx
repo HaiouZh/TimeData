@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import type { Category } from "@timedata/shared";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -8,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { db } from "../db/index.js";
 import { setQuickNotePinned } from "../lib/quickNotes.js";
+import { setPunchCategoryId } from "../lib/settings/punchCategorySetting.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 
@@ -130,6 +132,29 @@ function markByText(host: HTMLElement, text: string): HTMLElement | null {
   ) ?? null;
 }
 
+function category(id: string, name: string, parentId: string | null): Category {
+  return {
+    id,
+    name,
+    parentId,
+    color: "#94A3B8",
+    icon: null,
+    sortOrder: 0,
+    isArchived: false,
+    createdAt: "2026-06-15T00:00:00.000Z",
+    updatedAt: "2026-06-15T00:00:00.000Z",
+  };
+}
+
+async function configurePunchCategory() {
+  await db.categories.bulkAdd([
+    category("cat-work", "工作", null),
+    category("cat-work-deep", "深度", "cat-work"),
+  ]);
+  await setPunchCategoryId("cat-work-deep");
+  await db.syncLog.clear();
+}
+
 async function waitForSearchDebounce() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 240));
@@ -141,6 +166,8 @@ beforeEach(async () => {
   syncAfterWriteMock.mockClear();
   await db.quickNotes.clear();
   await db.timeEntries.clear();
+  await db.categories.clear();
+  await db.settings.clear();
   await db.syncLog.clear();
   document.body.innerHTML = "";
 });
@@ -751,7 +778,8 @@ describe("捕捉中心", () => {
     expect(input(host).value).toBe("");
   });
 
-  it("点「打点」建一条待定时间记录", async () => {
+  it("点「打点」建一条已配置分类的时间记录", async () => {
+    await configurePunchCategory();
     const { host } = await renderPage();
 
     const punchButton = host.querySelector('button[aria-label="打点（记录到现在）"]');
@@ -759,9 +787,7 @@ describe("捕捉中心", () => {
 
     const entries = await db.timeEntries.toArray();
     expect(entries).toHaveLength(1);
-    expect(entries[0].categoryId).toBe("cat-pending");
-    const pending = await db.categories.get("cat-pending");
-    expect(pending).toMatchObject({ name: "待定" });
+    expect(entries[0].categoryId).toBe("cat-work-deep");
   });
 
   it("速记「待办」按钮按默认落点：inbox 时新任务无排期", async () => {

@@ -33,6 +33,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
     [date, entries, mergeOvernight, now, previousEntry],
   );
   const { syncIfStale, syncAfterWrite } = useSyncContext();
+  const [punchMessage, setPunchMessage] = useState<string | null>(null);
 
   useEffect(() => {
     void syncIfStale();
@@ -48,8 +49,13 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
   }
 
   async function handlePunch() {
-    const entry = await punchNow();
-    if (entry) syncAfterWrite();
+    const result = await punchNow();
+    if (!result.ok) {
+      setPunchMessage(result.reason === "no_range" ? "距上次记录还没有时间" : "请先在设置 · 杂项选择打点分类");
+      return;
+    }
+    setPunchMessage(null);
+    syncAfterWrite();
   }
 
   return (
@@ -62,6 +68,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
         onPunch={() => void handlePunch()}
         overlay={<SyncIndicator />}
       />
+      {punchMessage && <p className="px-4 pt-2 text-center text-xs text-amber-300">{punchMessage}</p>}
       <DayOverview slots={slots} date={date} />
       <Timeline
         slots={slots}

@@ -421,17 +421,18 @@ export default function QuickNotesPage() {
   async function handlePunch() {
     setError(null);
     try {
-      const entry = await punchNow();
-      if (!entry) {
-        showStatus("距上次记录还没有时间");
+      const result = await punchNow();
+      if (!result.ok) {
+        showStatus(result.reason === "no_range" ? "距上次记录还没有时间" : "请先在设置 · 杂项选择打点分类");
         return;
       }
+      const { entry } = result;
       syncAfterWrite();
       showActionToast({
-        message: `已打点 ${formatTime(entry.startTime)}–${formatTime(entry.endTime)} · 待定`,
+        message: `已打点 ${formatTime(entry.startTime)}–${formatTime(entry.endTime)}`,
         actions: [
           { label: "撤销", onClick: () => void handleUndoPunch(entry.id) },
-          { label: "去补录", onClick: () => navigate(`/?date=${getDateString(new Date(entry.startTime))}`) },
+          { label: "去时间轴", onClick: () => navigate(`/?date=${getDateString(new Date(entry.startTime))}`) },
         ],
       });
     } catch (err) {

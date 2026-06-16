@@ -38,7 +38,7 @@ covers:
   - packages/shared/src/types.ts:QuickNote
   - packages/shared/src/types.ts:Task
   - packages/shared/src/types.ts:Recurrence
-last-reviewed: 2026-06-15
+last-reviewed: 2026-06-16
 ---
 
 # 同步机制
@@ -61,7 +61,7 @@ last-reviewed: 2026-06-15
 | shared | `packages/shared/src/syncDomains.ts` | `SYNC_DOMAINS`：每域的 `table`、`dataSchema`（zod）、`upsertPriority` / `deletePriority`、`conflictPolicy`（`lww` / `manual`）、`countsInStatus`。`SyncChangeSchema` 运行时校验由它生成。 |
 | server | `packages/server/src/sync/domains.ts` | `SERVER_SYNC_DOMAINS`：每域可选钩子 `validate` / `crossValidate` / `apply` + 必选 `readRecord`；无 `apply` 钩子的域走通用 LWW 路径（`lww: { idColumn, toRow }`）。 |
 
-当前十一个域：`categories`（manual，钩子承载层级校验与级联删除）、`time_entries`（manual，钩子承载未来时间拒绝、重叠覆盖）、`settings`（lww，零钩子，`countsInStatus=false`，承载睡眠分类、底部导航可见入口等 UI 偏好）、`quick_notes`（lww，零钩子）、`tasks`（lww，零钩子，`countsInStatus=false`）、`health_charts`（lww，健康统计页视图块配置），以及 5 个健康数据域 `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs`（均 lww、零钩子、`countsInStatus=false`，走通用 LWW 路径）。
+当前十一个域：`categories`（manual，钩子承载层级校验与级联删除）、`time_entries`（manual，钩子承载未来时间拒绝、重叠覆盖）、`settings`（lww，零钩子，`countsInStatus=false`，承载睡眠分类、打点分类、底部导航可见入口等 UI 偏好）、`quick_notes`（lww，零钩子）、`tasks`（lww，零钩子，`countsInStatus=false`）、`health_charts`（lww，健康统计页视图块配置），以及 5 个健康数据域 `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs`（均 lww、零钩子、`countsInStatus=false`，走通用 LWW 路径）。
 
 > 客户端登记簿 `CLIENT_SYNC_DOMAINS`（`packages/client/src/sync/clientDomains.ts`）在 `table`/`storeName`/`schema` 之外，还给每域声明一个 **`backup` 角色**（`core`/`bundled`/`excluded`），驱动完整备份的导出/校验/恢复——那是 Backup 的关注点，详见 [`backup.md`](./backup.md)，不影响同步语义。
 
