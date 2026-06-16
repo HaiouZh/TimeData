@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useState } from "react";
-import ConfirmDialog from "../components/ConfirmDialog.tsx";
+import { ConfirmSheet } from "../components/ui/ConfirmSheet.js";
 
 interface ConfirmRequest {
   title: string;
@@ -54,7 +54,7 @@ export function useConfirm() {
   }, [pending]);
 
   const dialog = pending ? (
-    <ConfirmDialog
+    <ConfirmSheet
       open
       title={pending.title}
       body={pending.body}
