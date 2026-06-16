@@ -27,11 +27,20 @@ function inputByLabel(host: HTMLElement, label: string): HTMLInputElement {
   return input;
 }
 
+function radioByLabel(host: HTMLElement, group: string, label: string): HTMLElement {
+  const radiogroup = host.querySelector(`[role="radiogroup"][aria-label="${group}"]`);
+  const radio = [...(radiogroup?.querySelectorAll('[role="radio"]') ?? [])].find((r) =>
+    r.textContent?.includes(label),
+  ) as HTMLElement | undefined;
+  expect(radio).not.toBeUndefined();
+  return radio as HTMLElement;
+}
+
 describe("RecurrenceEditor", () => {
   it("emits a daily recurrence when enabled", async () => {
     const onChange = vi.fn();
     const { host, root } = await renderEditor({ value: null, onChange });
-    const toggle = host.querySelector('input[type="checkbox"]');
+    const toggle = host.querySelector('[role="switch"][aria-label="重复"]');
 
     await act(async () => {
       toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -54,13 +63,10 @@ describe("RecurrenceEditor", () => {
   it("resets monthday when switching to monthly", async () => {
     const onChange = vi.fn();
     const { host, root } = await renderEditor({ value: { freq: "daily", interval: 2, basis: "completion" }, onChange });
-    const select = host.querySelector("select") as HTMLSelectElement | null;
+    const monthlyRadio = radioByLabel(host, "频率", "每月");
 
     await act(async () => {
-      if (select) {
-        select.value = "monthly";
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      monthlyRadio.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(onChange).toHaveBeenCalledWith(
@@ -74,7 +80,7 @@ describe("RecurrenceEditor", () => {
     const { host, root } = await renderEditor({ value: { freq: "daily", interval: 1, basis: "due" }, onChange });
 
     await act(async () => {
-      inputByLabel(host, "按次数").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      radioByLabel(host, "结束", "按次数").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ count: 1 }));
@@ -88,7 +94,7 @@ describe("RecurrenceEditor", () => {
     const { host, root } = await renderEditor({ value: initial, onChange });
 
     await act(async () => {
-      inputByLabel(host, "按日期").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      radioByLabel(host, "结束", "按日期").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const next = onChange.mock.calls.at(-1)?.[0];
@@ -110,7 +116,7 @@ describe("RecurrenceEditor", () => {
     const { host, root } = await renderEditor({ value: { freq: "daily", interval: 1, basis: "due", count: 5 }, onChange });
 
     await act(async () => {
-      inputByLabel(host, "永不").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      radioByLabel(host, "结束", "永不").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const last = onChange.mock.calls.at(-1)?.[0];

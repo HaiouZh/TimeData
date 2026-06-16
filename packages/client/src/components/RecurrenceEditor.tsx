@@ -1,5 +1,8 @@
 import { RecurrenceSchema, type Recurrence } from "@timedata/shared";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
+import { Checkbox } from "./ui/Checkbox.js";
+import { SegmentedControl } from "./ui/SegmentedControl.js";
+import { Switch } from "./ui/Switch.js";
 
 interface RecurrenceEditorProps {
   value: Recurrence | null;
@@ -59,33 +62,31 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-      <label className="flex min-h-10 items-center justify-between gap-3 text-sm text-slate-100">
+      <div className="flex min-h-10 items-center justify-between gap-3 text-sm text-slate-100">
         <span>重复</span>
-        <input
-          type="checkbox"
+        <Switch
+          ariaLabel="重复"
           checked={enabled}
-          onChange={(event) => {
-            onChange(event.currentTarget.checked ? { freq: "daily", interval: 1, basis: "due" } : null);
-          }}
-          className="h-5 w-5 accent-sky-500"
+          onChange={(on) => onChange(on ? { freq: "daily", interval: 1, basis: "due" } : null)}
         />
-      </label>
+      </div>
 
       {value && (
         <div className="space-y-3">
           <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
-            <label className="space-y-1 text-xs text-slate-400">
+            <div className="space-y-1 text-xs text-slate-400">
               <span>频率</span>
-              <select
+              <SegmentedControl
+                ariaLabel="频率"
                 value={value.freq}
-                onChange={(event) => emit(onChange, setFreq(value, event.currentTarget.value as Recurrence["freq"]))}
-                className="min-h-10 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"
-              >
-                <option value="daily">每天</option>
-                <option value="weekly">每周</option>
-                <option value="monthly">每月</option>
-              </select>
-            </label>
+                onChange={(freq) => emit(onChange, setFreq(value, freq as Recurrence["freq"]))}
+                options={[
+                  { value: "daily", label: "每天" },
+                  { value: "weekly", label: "每周" },
+                  { value: "monthly", label: "每月" },
+                ]}
+              />
+            </div>
             <label className="space-y-1 text-xs text-slate-400">
               <span>间隔</span>
               <input
@@ -104,16 +105,14 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
           {value.freq === "weekly" && (
             <div className="grid grid-cols-4 gap-2">
               {WEEKDAYS.map(([label, weekday]) => (
-                <label key={weekday} className="flex min-h-9 items-center gap-2 rounded-lg bg-slate-950 px-2 text-xs">
-                  <input
-                    type="checkbox"
-                    aria-label={label}
-                    checked={(value.byWeekday ?? []).includes(weekday)}
-                    onChange={() => emit(onChange, { ...value, byWeekday: toggleNumber(value.byWeekday ?? [], weekday) })}
-                    className="h-4 w-4 accent-sky-500"
-                  />
-                  <span>{label}</span>
-                </label>
+                <Checkbox
+                  key={weekday}
+                  ariaLabel={label}
+                  label={label}
+                  checked={(value.byWeekday ?? []).includes(weekday)}
+                  onChange={() => emit(onChange, { ...value, byWeekday: toggleNumber(value.byWeekday ?? [], weekday) })}
+                  className="min-h-9 rounded-lg bg-slate-950 px-2 text-xs"
+                />
               ))}
             </div>
           )}
@@ -123,18 +122,16 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
               {[...Array.from({ length: 31 }, (_, index) => index + 1), -1].map((monthday) => {
                 const label = monthday === -1 ? "最后一天" : `${monthday}号`;
                 return (
-                  <label key={monthday} className="flex min-h-9 items-center gap-2 rounded-lg bg-slate-950 px-2 text-xs">
-                    <input
-                      type="checkbox"
-                      aria-label={label}
-                      checked={(value.byMonthday ?? []).includes(monthday)}
-                      onChange={() =>
-                        emit(onChange, { ...value, byMonthday: toggleNumber(value.byMonthday ?? [], monthday) })
-                      }
-                      className="h-4 w-4 accent-sky-500"
-                    />
-                    <span>{label}</span>
-                  </label>
+                  <Checkbox
+                    key={monthday}
+                    ariaLabel={label}
+                    label={label}
+                    checked={(value.byMonthday ?? []).includes(monthday)}
+                    onChange={() =>
+                      emit(onChange, { ...value, byMonthday: toggleNumber(value.byMonthday ?? [], monthday) })
+                    }
+                    className="min-h-9 rounded-lg bg-slate-950 px-2 text-xs"
+                  />
                 );
               })}
             </div>
@@ -155,58 +152,30 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
             </label>
             <fieldset className="space-y-1 text-xs text-slate-400">
               <legend>基准</legend>
-              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-950 p-1">
-                {[
-                  ["due", "到期"],
-                  ["completion", "完成"],
-                ].map(([basis, label]) => (
-                  <label
-                    key={basis}
-                    className={`flex min-h-8 items-center justify-center rounded-md text-xs ${
-                      value.basis === basis ? "bg-sky-500 text-white" : "text-slate-400"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="recurrence-basis"
-                      value={basis}
-                      checked={value.basis === basis}
-                      onChange={() => emit(onChange, { ...value, basis: basis as Recurrence["basis"] })}
-                      className="sr-only"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
+              <SegmentedControl
+                ariaLabel="基准"
+                value={value.basis}
+                onChange={(basis) => emit(onChange, { ...value, basis: basis as Recurrence["basis"] })}
+                options={[
+                  { value: "due", label: "到期" },
+                  { value: "completion", label: "完成" },
+                ]}
+              />
             </fieldset>
           </div>
 
           <fieldset className="space-y-2 text-xs text-slate-400">
             <legend>结束</legend>
-            <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-950 p-1">
-              {([
-                ["never", "永不"],
-                ["count", "按次数"],
-                ["until", "按日期"],
-              ] as const).map(([mode, label]) => (
-                <label
-                  key={mode}
-                  className={`flex min-h-8 items-center justify-center rounded-md text-xs ${
-                    endModeOf(value) === mode ? "bg-sky-500 text-white" : "text-slate-400"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="recurrence-end"
-                    aria-label={label}
-                    checked={endModeOf(value) === mode}
-                    onChange={() => emit(onChange, setEndMode(value, mode))}
-                    className="sr-only"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
+            <SegmentedControl
+              ariaLabel="结束"
+              value={endModeOf(value)}
+              onChange={(mode) => emit(onChange, setEndMode(value, mode as EndMode))}
+              options={[
+                { value: "never", label: "永不" },
+                { value: "count", label: "按次数" },
+                { value: "until", label: "按日期" },
+              ]}
+            />
             {value.count != null && (
               <input
                 type="number"
