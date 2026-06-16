@@ -102,12 +102,12 @@ describe("TodoPage", () => {
 
   it("点重复按钮打开预设门", async () => {
     const { host, root } = await renderPage();
-    expect(host.querySelector('[aria-label="重复预设"]')).toBeNull();
+    expect(host.querySelector('[aria-label="重复与时间"]')).toBeNull();
     const repeat = host.querySelector('button[aria-label="重复"]') as HTMLButtonElement;
     await act(async () => {
       repeat.click();
     });
-    expect(host.querySelector('[aria-label="重复预设"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="重复与时间"]')).not.toBeNull();
     expect(host.textContent).toContain("每天");
     await act(async () => root.unmount());
   });
