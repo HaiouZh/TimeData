@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runTasks, runTaskDone, runTaskSchedule, runTaskTurn, runTaskUnschedule } from "./tasks.js";
+import { runTasks, runTaskDone, runTaskSchedule, runTaskTag, runTaskTurn, runTaskUnschedule } from "./tasks.js";
 
 const config = { serverUrl: "http://x", token: "t" };
 
@@ -86,5 +86,17 @@ describe("agent task turn commands", () => {
 
     expect((turnResult as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
     expect((doneResult as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("runTaskTag posts tags array", async () => {
+    let body: unknown;
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return ok({ task: { id: "task-1" } });
+    }) as unknown as typeof fetch;
+
+    await runTaskTag(config, { id: "task-1", tags: "agent,idea" }, fetchImpl);
+
+    expect(body).toEqual({ tags: ["agent", "idea"] });
   });
 });

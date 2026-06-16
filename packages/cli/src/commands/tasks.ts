@@ -59,3 +59,19 @@ export async function runTaskDone(
     fetchImpl,
   });
 }
+
+export async function runTaskTag(
+  config: ApiConfig,
+  flags: Record<string, string | undefined>,
+  fetchImpl?: typeof fetch,
+): Promise<unknown> {
+  if (!flags.id) return invalid("--id is required");
+  if (!flags.tags) return invalid("--tags is required (comma-separated)");
+  const tags = flags.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+  if (tags.length === 0) return invalid("--tags must include at least one tag");
+  return requestJson(config, `/api/agent/tasks/${encodeURIComponent(flags.id)}/status`, {
+    method: "POST",
+    body: { tags },
+    fetchImpl,
+  });
+}

@@ -3,7 +3,7 @@ import { runDoctor } from "./doctor.js";
 import { runList } from "./list.js";
 import { runLog } from "./log.js";
 import { runNotes } from "./notes.js";
-import { runTasks, runTaskDone, runTaskSchedule, runTaskTurn, runTaskUnschedule } from "./tasks.js";
+import { runTasks, runTaskDone, runTaskSchedule, runTaskTag, runTaskTurn, runTaskUnschedule } from "./tasks.js";
 import { runVersion } from "./version.js";
 import type { ApiConfig } from "../lib/api-client.js";
 import type { FileConfigResult } from "../lib/config.js";
@@ -127,6 +127,13 @@ export const commandRegistry: CommandHelp[] = [
     usage: "timedata task-done --id ID [--server URL] [--token TOKEN]",
     handler: (ctx) => runTaskDone(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
   },
+  {
+    name: "task-tag",
+    writesData: true,
+    summary: "Set a task's tags through the scoped agent API.",
+    usage: "timedata task-tag --id ID --tags agent,idea [--server URL] [--token TOKEN]",
+    handler: (ctx) => runTaskTag(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
+  },
 ];
 
 const redLines = [
@@ -137,7 +144,7 @@ const redLines = [
   "Use timedata log as the only current AI/script data-writing command.",
   "Use timedata notes for read-only quick notes access; it does not write data.",
   "Use timedata task-schedule / task-unschedule to change task schedule; they write only through the server API.",
-  "Use timedata task-running / task-handback / task-park / task-done for agent task status write-back through the scoped server API.",
+  "Use timedata task-running / task-handback / task-park / task-done / task-tag for agent task status write-back through the scoped server API.",
 ];
 
 const docs = ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"];

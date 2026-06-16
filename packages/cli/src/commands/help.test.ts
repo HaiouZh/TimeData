@@ -9,7 +9,7 @@ const expectedRedLines = [
   "Use timedata log as the only current AI/script data-writing command.",
   "Use timedata notes for read-only quick notes access; it does not write data.",
   "Use timedata task-schedule / task-unschedule to change task schedule; they write only through the server API.",
-  "Use timedata task-running / task-handback / task-park / task-done for agent task status write-back through the scoped server API.",
+  "Use timedata task-running / task-handback / task-park / task-done / task-tag for agent task status write-back through the scoped server API.",
 ];
 
 describe("runHelp", () => {
@@ -31,6 +31,7 @@ describe("runHelp", () => {
       "task-handback",
       "task-park",
       "task-done",
+      "task-tag",
     ]);
     expect(new Set(names).size).toBe(names.length);
   });
