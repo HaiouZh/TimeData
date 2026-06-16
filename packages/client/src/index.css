@@ -1,5 +1,70 @@
 @import "tailwindcss";
 
+@theme static {
+  /* —— 第 1 层 中性底盘 —— */
+  --color-page: #0e1320;
+  --color-surface: #161d30;
+  --color-surface-elevated: #1b2336;
+  --color-surface-hover: #1e273d;
+
+  /* 文字（均 ≥ WCAG AA） */
+  --color-ink: #e8edf6;
+  --color-ink-2: #aab4c8;
+  --color-ink-3: #8b94a8;
+
+  /* —— 第 2 层 单一动作色（蓝） —— */
+  --color-accent: #4f9bf5;
+  --color-accent-strong: #3b82f6;
+  --color-accent-soft: #1b2740;
+  --color-accent-ink: #8fbdf8;
+
+  /* —— 第 4 层 状态色 —— */
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+  --color-warn-soft: #2a210a;
+  --color-danger-soft: #2a1414;
+
+  /* 圆角阶梯 */
+  --radius-ctl: 8px;
+  --radius-row: 12px;
+  --radius-card: 16px;
+
+  /* 柔和高度（仅大表面用） */
+  --shadow-elev1: 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.16);
+  --shadow-elev2: 0 8px 30px rgba(0,0,0,.4);
+
+  /* 字体（霞鹭文楷+Times；西文在前、中文在后，逐字回退） */
+  --font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* —— 第 3 层 模块署名色（低饱和小面积：仅图标/署名点/选中态，绝不上按钮） —— */
+  --color-mod-note: #2dd4bf;       /* 速记 青 */
+  --color-mod-timeline: #a78bfa;   /* 时间轴 紫 */
+  --color-mod-todo: #4f9bf5;       /* 待办 蓝（与动作色同色） */
+  --color-mod-health: #34d399;     /* 健康 绿 */
+  --color-mod-settings: #8b94a8;   /* 设置 灰 */
+
+  /* —— 第 5 层 数据色板（仅图表/健康，固定 6 色，不外溢到 UI chrome） —— */
+  --color-data-blue: #4f9bf5;
+  --color-data-teal: #2dd4bf;
+  --color-data-green: #34d399;
+  --color-data-amber: #fbbf24;
+  --color-data-red: #f87171;
+  --color-data-purple: #a78bfa;
+}
+
+/* 全站正文用书卷体（霞鹭文楷+Times）；markdown 代码块保留等宽。 */
+body {
+  font-family: var(--font-body);
+}
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+}
+
 @keyframes sync-pulse {
   0%,
   100% {
