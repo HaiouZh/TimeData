@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
+import { SelectSheet } from "../../components/ui/SelectSheet.js";
 import { useCategories } from "../../hooks/useCategories.ts";
 import { setSleepCategoryId, useSleepCategoryId } from "../../lib/sleepCategorySetting.ts";
 import { setPunchCategoryId, usePunchCategoryId } from "../../lib/settings/punchCategorySetting.ts";
@@ -39,17 +41,15 @@ export default function SettingsInsightsPage() {
             待办页底部添加、速记页「待办」按钮新建任务时默认进哪个池。
           </p>
         </div>
-        <select
-          aria-label="新建待办默认落点"
+        <SegmentedControl
+          ariaLabel="新建待办默认落点"
           value={todoDestination}
-          onChange={(event) => {
-            void setTodoDefaultDestination(event.target.value === "inbox" ? "inbox" : "today");
-          }}
-          className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-200"
-        >
-          <option value="today">今天</option>
-          <option value="inbox">收件箱</option>
-        </select>
+          onChange={(v) => void setTodoDefaultDestination(v)}
+          options={[
+            { value: "today", label: "今天" },
+            { value: "inbox", label: "收件箱" },
+          ]}
+        />
       </section>
 
       <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
@@ -57,22 +57,16 @@ export default function SettingsInsightsPage() {
           <h3 className="text-sm font-medium text-slate-100">打点分类</h3>
           <p className="mt-1 text-xs text-slate-500">速记页和时间轴打点时，直接记录到这个子分类。</p>
         </div>
-        <select
-          aria-label="打点分类"
+        <SelectSheet
+          label="打点分类"
+          placeholder="未指定"
           value={punchCategoryId ?? ""}
-          onChange={(event) => {
-            const value = event.target.value || null;
-            void setPunchCategoryId(value);
-          }}
-          className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-200"
-        >
-          <option value="">未指定</option>
-          {punchCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {getCategoryPath(category.id)}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => void setPunchCategoryId(v || null)}
+          options={[
+            { value: "", label: "未指定" },
+            ...punchCategories.map((c) => ({ value: c.id, label: getCategoryPath(c.id) })),
+          ]}
+        />
         <p className="text-xs text-slate-500">
           {selectedPunchName ? `当前打点会记录到「${selectedPunchName}」。` : "未指定时，打点不会写入时间记录。"}
         </p>
@@ -83,22 +77,13 @@ export default function SettingsInsightsPage() {
           <h3 className="text-sm font-medium text-slate-100">睡眠分类</h3>
           <p className="mt-1 text-xs text-slate-500">用于作息、覆盖率、异常时段活动和超长记录的睡眠口径。</p>
         </div>
-        <select
-          aria-label="睡眠分类"
+        <SelectSheet
+          label="睡眠分类"
+          placeholder="未指定"
           value={sleepCategoryId ?? ""}
-          onChange={(event) => {
-            const value = event.target.value || null;
-            void setSleepCategoryId(value);
-          }}
-          className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-200"
-        >
-          <option value="">未指定</option>
-          {parentCategories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => void setSleepCategoryId(v || null)}
+          options={[{ value: "", label: "未指定" }, ...parentCategories.map((c) => ({ value: c.id, label: c.name }))]}
+        />
         <p className="text-xs text-slate-500">
           {selectedName
             ? `当前使用「${selectedName}」作为睡眠父分类。`

@@ -101,13 +101,15 @@ describe("SettingsInsightsPage", () => {
       root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
     });
 
-    const select = host.querySelector('[aria-label="睡眠分类"]') as HTMLSelectElement | null;
-    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+    const trigger = host.querySelector('[aria-label="睡眠分类"]') as HTMLButtonElement | null;
     await act(async () => {
-      if (select && nativeValueSetter) {
-        nativeValueSetter.call(select, "sleep");
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const optionBtn = [...host.querySelectorAll('[role="dialog"] button')].find((b) =>
+      b.textContent?.includes("睡眠"),
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      optionBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(sleepSettingState.setSleepCategoryId).toHaveBeenCalledWith("sleep");
@@ -138,13 +140,12 @@ describe("SettingsInsightsPage", () => {
       root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
     });
 
-    const select = host.querySelector('[aria-label="新建待办默认落点"]') as HTMLSelectElement | null;
-    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+    const radiogroup = host.querySelector('[role="radiogroup"][aria-label="新建待办默认落点"]');
+    const inboxRadio = [...(radiogroup?.querySelectorAll('[role="radio"]') ?? [])].find((r) =>
+      r.textContent?.includes("收件箱"),
+    ) as HTMLButtonElement | undefined;
     await act(async () => {
-      if (select && nativeValueSetter) {
-        nativeValueSetter.call(select, "inbox");
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      inboxRadio?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(todoDestState.setTodoDefaultDestination).toHaveBeenCalledWith("inbox");
@@ -159,14 +160,16 @@ describe("SettingsInsightsPage", () => {
     });
 
     expect(host.textContent).toContain("打点分类");
-    expect(host.textContent).toContain("工作 · 深度");
-    const select = host.querySelector('[aria-label="打点分类"]') as HTMLSelectElement | null;
-    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+    const trigger = host.querySelector('[aria-label="打点分类"]') as HTMLButtonElement | null;
     await act(async () => {
-      if (select && nativeValueSetter) {
-        nativeValueSetter.call(select, "cat-work-deep");
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
+      trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(host.textContent).toContain("工作 · 深度");
+    const optionBtn = [...host.querySelectorAll('[role="dialog"] button')].find((b) =>
+      b.textContent?.includes("工作 · 深度"),
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      optionBtn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(punchCategoryState.setPunchCategoryId).toHaveBeenCalledWith("cat-work-deep");
