@@ -46,9 +46,18 @@ export function RecurrencePresetSheet({
   const rows = buildPresetRows(anchor, current, scheduledAt);
 
   function chooseRow(key: PresetActionKey): void {
-    if (key === "none") return onChoose({ kind: "none" });
-    if (key === "scheduled") return setCalendarOpen((open) => !open);
-    if (key === "custom") return onCustom();
+    if (key === "none") {
+      onChoose({ kind: "none" });
+      return;
+    }
+    if (key === "scheduled") {
+      setCalendarOpen((open) => !open);
+      return;
+    }
+    if (key === "custom") {
+      onCustom();
+      return;
+    }
     if (presetKeys.has(key)) {
       onChoose({
         kind: "recurrence",
