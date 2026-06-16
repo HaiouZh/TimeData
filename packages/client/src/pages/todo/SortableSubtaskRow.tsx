@@ -2,7 +2,6 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties, KeyboardEvent } from "react";
 import type { TaskSubtask } from "@timedata/shared";
-import { Checkbox } from "../../components/ui/Checkbox.js";
 
 export function SortableSubtaskRow({
   subtask,
@@ -40,12 +39,17 @@ export function SortableSubtaskRow({
   }
 
   return (
-    <li ref={setNodeRef} style={style} className="flex items-center gap-2">
-      <Checkbox
-        ariaLabel={`完成子任务 ${subtask.title}`}
+    <li
+      ref={setNodeRef}
+      style={style}
+      className="group flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-800/40"
+    >
+      <input
+        type="checkbox"
+        aria-label={`完成子任务 ${subtask.title}`}
         checked={subtask.done}
-        onChange={() => onToggle()}
-        className="shrink-0"
+        onChange={onToggle}
+        className="h-4 w-4 rounded-full accent-sky-500"
       />
       <input
         ref={(el) => registerRef(subtask.id, el)}
@@ -53,13 +57,13 @@ export function SortableSubtaskRow({
         aria-label="子任务标题"
         onChange={(e) => onTitleChange(e.currentTarget.value)}
         onKeyDown={handleKeyDown}
-        className={`min-h-8 flex-1 rounded-md border border-slate-800 bg-slate-900 px-2 text-sm ${subtask.done ? "text-slate-500 line-through" : "text-slate-100"}`}
+        className={`min-h-8 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none focus:bg-slate-800/50 ${subtask.done ? "text-slate-500 line-through" : "text-slate-100"}`}
       />
       <button
         ref={setActivatorNodeRef}
         type="button"
         aria-label={`拖动子任务 ${subtask.title}`}
-        className="shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-slate-500 hover:bg-slate-800 hover:text-slate-200 active:cursor-grabbing"
+        className="shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-slate-600 opacity-80 hover:bg-slate-800 hover:text-slate-200 group-hover:opacity-100 active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >

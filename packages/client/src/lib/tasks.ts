@@ -4,11 +4,13 @@ import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
+import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
 
 export interface AddTaskInput {
   title: string;
   recurrence?: Recurrence | null;
   startAt?: string | null;
+  scheduledAt?: string | null;
   toInbox?: boolean;
   now?: Date;
 }
@@ -44,7 +46,13 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
   const now = input.now ?? new Date();
   const createdAt = now.toISOString();
   const recurrence = input.recurrence ?? null;
-  const scheduledAt = recurrence ? null : (input.toInbox ? null : localDateOf(now));
+  const scheduledAt = recurrence
+    ? null
+    : input.scheduledAt !== undefined
+      ? input.scheduledAt
+      : input.toInbox
+        ? null
+        : localDateOf(now);
   const task: Task = TaskSchema.parse({
     id: uuid(),
     title: normalizeTitle(input.title),
@@ -83,10 +91,41 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
     startAt: recurrence ? (patch.startAt ?? existing.startAt ?? updatedAt) : null,
     scheduledAt: existing.scheduledAt ?? null,
     subtasks: existing.subtasks ?? [],
+    completedCount: recurrence ? (existing.completedCount ?? 0) : 0,
     sortOrder: patch.sortOrder ?? existing.sortOrder,
     updatedAt,
   });
 
+  return putTask(next);
+}
+
+export async function applyRecurrenceChoice(
+  id: string,
+  choice: RecurrenceChoice,
+  options: { now?: Date } = {},
+): Promise<Task> {
+  if (choice.kind === "none") {
+    return updateTask(id, { recurrence: null, startAt: null, now: options.now });
+  }
+
+  if (choice.kind === "recurrence") {
+    return updateTask(id, { recurrence: choice.recurrence, startAt: choice.startAt, now: options.now });
+  }
+
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const next = TaskSchema.parse({
+    ...existing,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: normalizeScheduledDate(choice.date),
+    subtasks: existing.subtasks ?? [],
+    completedCount: 0,
+    updatedAt,
+  });
   return putTask(next);
 }
 
@@ -109,7 +148,13 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     const r = existing.recurrence;
     const countDone = r.count != null && completedCount >= r.count;
     const untilDone = isRecurrenceFinishedAfter(r, existing.startAt, now);
-    next = TaskSchema.parse({ ...base, completedCount, lastDoneAt: updatedAt, done: countDone || untilDone, updatedAt });
+    next = TaskSchema.parse({
+      ...base,
+      completedCount,
+      lastDoneAt: updatedAt,
+      done: countDone || untilDone,
+      updatedAt,
+    });
   } else {
     next = TaskSchema.parse({ ...base, done: !existing.done, updatedAt });
   }
@@ -154,10 +199,10 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 export interface TodoBuckets {
-  today: Task[];        // 含过期，过期排前
+  today: Task[]; // 含过期，过期排前
   inbox: Task[];
   upcoming: Task[];
-  recurring: Task[];    // 重复任务管理列表（全部重复任务，无论落点）
+  recurring: Task[]; // 重复任务管理列表（全部重复任务，无论落点）
   completed: Task[];
 }
 
@@ -167,8 +212,12 @@ function isOverdue(t: Task, now: Date): boolean {
 }
 
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
-  const all = (await db.tasks.orderBy("sortOrder").toArray())
-    .map((t) => ({ ...t, scheduledAt: t.scheduledAt ?? null, subtasks: t.subtasks ?? [], completedCount: t.completedCount ?? 0 }));
+  const all = (await db.tasks.orderBy("sortOrder").toArray()).map((t) => ({
+    ...t,
+    scheduledAt: t.scheduledAt ?? null,
+    subtasks: t.subtasks ?? [],
+    completedCount: t.completedCount ?? 0,
+  }));
   const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
   for (const t of all) {
     if (t.recurrence) buckets.recurring.push(t);
@@ -178,7 +227,6 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     else if (p.pool === "upcoming") buckets.upcoming.push(t);
     else buckets.completed.push(t);
   }
-  buckets.today.sort((a, b) =>
-    Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
+  buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
   return buckets;
 }

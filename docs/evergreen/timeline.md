@@ -154,6 +154,8 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 跨午夜场景之外，新增记录页的”逻辑日期”由 URL `date=YYYY-MM-DD` 参数显式决定。TimelinePage 在空挡跳转时把当前 timeline 的 `date` 一起带过去；EntryPage 读取后，作为表单 `end.date` 的锚，并把 `defaults.end` 钉到 `${date}T23:59:00`（非今天）或当前时刻（今天），避免”昨天尾部空挡的 dayEnd 实际是次日 00:00”导致表单悄悄滑到今天。`resolveClockRangeAroundEndDate` 因此只保留”endClock <= startClock 时把 start 日期前移一天”这一条规则，不再根据”endTime 落在未来”自动推一天；用户真要补昨天就应当先切到昨天的 timeline。表单顶部不再有”已识别为…”蓝字提示。点保存时 `EntryPage.handleSave` 走单一流程：`isFutureLocalDateTime` 兜底（手填的未来 endTime 直接红字”不能记录尚未发生的时间”），否则查重叠，按既有”切两段阻断 / 多条裁剪确认”弹窗处理。新增或编辑记录保存成功后，返回的时间轴日期按表单本地时间决定：同日记录回到开始日期；跨天且结束时间不是 `00:00` 的记录回到结束日期，便于保存 `22:00 -> 05:00` 后直接看到完成日的跨夜合并段；跨天但精确结束在 `00:00` 的记录仍回到开始日期，因为 TimeData 的时间段按 `[start, end)` 处理，下一天没有可见时长。
 
+`TimeRangeWheelPicker` 的滚轮选择行为已抽到共享 `packages/client/src/components/Wheel.tsx`；时间记录页面仍通过 `TimeRangeWheelPicker` 组合时、分两列并保留原有解析规则，共享组件只复用滚动索引、吸附与无框滚轮交互，不改变新增/编辑记录的时间语义。
+
 `useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，页面调用 `SyncContext.syncAfterWrite()`，在 1.5 秒防抖窗口后把本地待同步日志推到服务器；进入时间轴页的对账兜底仍由 `syncIfStale()` 走较长节流。
 
 ## 10. 相邻记录合并

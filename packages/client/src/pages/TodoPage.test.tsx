@@ -32,7 +32,9 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 1000) {
     if (host.textContent?.includes(text)) return;
-    await act(async () => { await new Promise((r) => window.setTimeout(r, 10)); });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 10));
+    });
   }
   throw new Error(`Timed out waiting for ${text}`);
 }
@@ -40,10 +42,13 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
 async function waitForDetailsWithText(host: HTMLElement, text: string): Promise<HTMLDetailsElement> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 1000) {
-    const details = [...host.querySelectorAll("details")]
-      .find((d) => d.textContent?.includes(text)) as HTMLDetailsElement | undefined;
+    const details = [...host.querySelectorAll("details")].find((d) => d.textContent?.includes(text)) as
+      | HTMLDetailsElement
+      | undefined;
     if (details) return details;
-    await act(async () => { await new Promise((r) => window.setTimeout(r, 10)); });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 10));
+    });
   }
   throw new Error(`Timed out waiting for details ${text}`);
 }
@@ -57,7 +62,9 @@ async function typeAndAdd(host: HTMLElement, title: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  await act(async () => { form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  await act(async () => {
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
 }
 
 describe("TodoPage", () => {
@@ -93,17 +100,21 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("勾选重复后展开频率配置", async () => {
+  it("点重复按钮打开预设门", async () => {
     const { host, root } = await renderPage();
-    expect(host.textContent).not.toContain("频率");
-    const repeat = host.querySelector('[role="switch"][aria-label="重复"]') as HTMLButtonElement;
-    await act(async () => { repeat.click(); });
-    expect(host.textContent).toContain("频率");
+    expect(host.querySelector('[aria-label="重复预设"]')).toBeNull();
+    const repeat = host.querySelector('button[aria-label="重复"]') as HTMLButtonElement;
+    await act(async () => {
+      repeat.click();
+    });
+    expect(host.querySelector('[aria-label="重复预设"]')).not.toBeNull();
+    expect(host.textContent).toContain("每天");
     await act(async () => root.unmount());
   });
 
   it("即将到来默认折叠收起", async () => {
-    const future = new Date(); future.setDate(future.getDate() + 3);
+    const future = new Date();
+    future.setDate(future.getDate() + 3);
     const yyyy = future.getFullYear();
     const mm = String(future.getMonth() + 1).padStart(2, "0");
     const dd = String(future.getDate()).padStart(2, "0");
@@ -112,7 +123,9 @@ describe("TodoPage", () => {
     await scheduleTask(t.id, `${yyyy}-${mm}-${dd}`);
     const { host, root } = await renderPage();
     await waitForText(host, "即将到来");
-    const details = [...host.querySelectorAll("details")].find((d) => d.textContent?.includes("即将到来")) as HTMLDetailsElement;
+    const details = [...host.querySelectorAll("details")].find((d) =>
+      d.textContent?.includes("即将到来"),
+    ) as HTMLDetailsElement;
     expect(details.open).toBe(false);
     await act(async () => root.unmount());
   });
@@ -132,23 +145,37 @@ describe("TodoPage", () => {
     const { host, root } = await renderPage();
     await waitForText(host, "点我打开");
     const row = [...host.querySelectorAll('[role="button"]')].find((el) => el.textContent?.includes("点我打开"))!;
-    await act(async () => { row.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-    await act(async () => { await new Promise((r) => window.setTimeout(r, 0)); });
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
     expect(host.querySelector('[role="dialog"][aria-label="任务详情"]')).not.toBeNull();
     await act(async () => root.unmount());
   });
 
   it("重复任务出现在重复折叠区且无完成计数", async () => {
     await db.tasks.add({
-      id: "p1", title: "做三次", done: false,
+      id: "p1",
+      title: "做三次",
+      done: false,
       recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
-      lastDoneAt: null, startAt: "2026-06-01T00:00:00.000Z", scheduledAt: null,
-      subtasks: [], sortOrder: 0, completedCount: 1,
-      createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z",
+      lastDoneAt: null,
+      startAt: "2026-06-01T00:00:00.000Z",
+      scheduledAt: null,
+      subtasks: [],
+      sortOrder: 0,
+      completedCount: 1,
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z",
     });
     const { host, root } = await renderPage();
     const details = await waitForDetailsWithText(host, "重复 / 提醒");
-    await act(async () => { (details as HTMLDetailsElement).open = true; details.dispatchEvent(new Event("toggle")); });
+    await act(async () => {
+      (details as HTMLDetailsElement).open = true;
+      details.dispatchEvent(new Event("toggle"));
+    });
     await waitForText(host, "做三次");
     expect(host.textContent).not.toContain("1/3");
     await act(async () => root.unmount());

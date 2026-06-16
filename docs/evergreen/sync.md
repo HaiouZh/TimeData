@@ -206,6 +206,8 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 6. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeq` 标 dirty，`/api/sync/status` 惰性重算；force-push / reset 立即刷新。它现在只服务诊断，但仍要保持正确。
 7. **server 是冲突仲裁者**：用 `baseSeq` 判断快进 / 非重叠合并 / 本地覆盖，并用受保护备份记录本地覆盖场景。
 
+待办重复设置的客户端 helper（`packages/client/src/lib/tasks/recurrencePresets.ts` 与 `packages/client/src/lib/tasks.ts` 的 `applyRecurrenceChoice()`）只负责把 UI 选择组装成 `Task` 的 `recurrence` / `startAt` / `scheduledAt` 字段，并通过既有 Dexie 事务为 `tasks` 写一条本地 `syncLog`。它不新增同步域、不改变 `tasks` 仍为通用 LWW 域的服务端契约；从重复任务切换为"仅某天"时也必须一次落库成普通排期任务，避免同一选择产生两条待同步日志。
+
 ## 6. 错误码处理（客户端侧）
 
 `SyncPushOutcome.reasonCode` 由 `packages/client/src/sync/reason.ts` 的 `classifyReasonCode()` 统一分类：

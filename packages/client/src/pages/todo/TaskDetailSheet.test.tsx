@@ -7,6 +7,7 @@ import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { addTask, updateSubtasks } from "../../lib/tasks.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
+import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { TaskDetailSheet, isSwipeDownClose } from "./TaskDetailSheet.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -35,6 +36,13 @@ const settle = () =>
   act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
+
+const click = (el: Element | null) =>
+  act(async () => {
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+
+const badgeOf = (host: HTMLElement) => host.querySelector('button[aria-label="编辑重复与时间"]') as HTMLButtonElement;
 
 function setInputValue(input: HTMLInputElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -191,39 +199,65 @@ describe("TaskDetailSheet 自动保存", () => {
     await act(async () => root.unmount());
   });
 
-  it("点下一次时间出面板并可设置日期", async () => {
+  it("点徽章开预设门，选『每天』→ 池任务变重复任务", async () => {
     const t = await addTask({ title: "池任务" });
     const { host, root } = await renderSheet(t.id);
-    const trigger = host.querySelector('button[aria-label="编辑下一次时间"]') as HTMLButtonElement;
-    await act(async () => {
-      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    const dateInput = host.querySelector('input[aria-label="计划日期"]') as HTMLInputElement;
-    expect(dateInput).not.toBeNull();
-    await act(async () => {
-      setInputValue(dateInput, "2026-07-01");
-    });
-    await settle();
-    expect((await db.tasks.get(t.id))?.scheduledAt).toBe(normalizeScheduledDate("2026-07-01"));
-    await act(async () => root.unmount());
-  });
-
-  it("设上重复规则 -> 池任务变重复任务（落点改变）", async () => {
-    const t = await addTask({ title: "池任务" });
-    const { host, root } = await renderSheet(t.id);
-    const trigger = host.querySelector('button[aria-label="编辑下一次时间"]') as HTMLButtonElement;
-    await act(async () => {
-      trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    const enable = host.querySelector('[role="switch"][aria-label="重复"]') as HTMLButtonElement;
-    await act(async () => {
-      enable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await click(badgeOf(host));
+    await click(host.querySelector('button[aria-label="每天"]'));
     await settle();
     const saved = await db.tasks.get(t.id);
     expect(saved?.recurrence).not.toBeNull();
     expect(placementForTask(saved!, new Date()).pool).toBe("today");
     await act(async () => root.unmount());
+  });
+
+  it("点徽章 → 仅某天 → 月历选日后为普通排期", async () => {
+    const t = await addTask({ title: "池任务" });
+    const { host, root } = await renderSheet(t.id);
+    await click(badgeOf(host));
+    await click(host.querySelector('button[aria-label="仅某天…"]'));
+    await click(host.querySelector('button[aria-label="2026-06-20"]'));
+    await settle();
+    expect((await db.tasks.get(t.id))?.scheduledAt).toBe(normalizeScheduledDate("2026-06-20"));
+    await act(async () => root.unmount());
+  });
+
+  it("预设门按 Esc 只关闭预设门，不关闭任务抽屉", async () => {
+    const t = await addTask({ title: "池任务" });
+    const { host, root, onClose } = await renderSheet(t.id);
+    await click(badgeOf(host));
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    await settle();
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(host.textContent).not.toContain("重复与时间");
+    expect(host.querySelector('input[aria-label="任务标题"]')).toBeTruthy();
+    await act(async () => root.unmount());
+  });
+
+  it("徽章三态：重复→摘要 / 仅排期→M月D日 / 都无→设定时间", async () => {
+    const plain = await addTask({ title: "无", toInbox: true });
+    let rendered = await renderSheet(plain.id);
+    expect(badgeOf(rendered.host).textContent).toContain("设定时间");
+    await act(async () => rendered.root.unmount());
+
+    const scheduled = await addTask({
+      title: "排期",
+      scheduledAt: normalizeScheduledDate("2026-07-01"),
+      toInbox: true,
+    });
+    rendered = await renderSheet(scheduled.id);
+    expect(badgeOf(rendered.host).textContent).toContain("7月1日");
+    await act(async () => rendered.root.unmount());
+
+    const recurrence = { freq: "daily", interval: 1, basis: "due" } as const;
+    const recurring = await addTask({ title: "重复", recurrence });
+    rendered = await renderSheet(recurring.id);
+    expect(badgeOf(rendered.host).textContent).toContain(recurrenceSummary(recurrence));
+    await act(async () => rendered.root.unmount());
   });
 
   it("标题未失焦直接关闭 -> flush 仍落库", async () => {
@@ -253,6 +287,15 @@ describe("TaskDetailSheet 删除", () => {
     await settle();
     expect(await db.tasks.get(t.id)).toBeUndefined();
     expect(onClose).toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("删除是轻量按钮（非整条 w-full 红框）", async () => {
+    const t = await addTask({ title: "x" });
+    const { host, root } = await renderSheet(t.id);
+    const del = host.querySelector('button[aria-label="删除任务"]') as HTMLButtonElement;
+    expect(del).toBeTruthy();
+    expect(del.className).not.toContain("w-full");
     await act(async () => root.unmount());
   });
 });

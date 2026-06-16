@@ -43,4 +43,12 @@ describe("SubtaskEditor 拖拽与手感", () => {
     ]);
     await act(async () => root.unmount());
   });
+
+  it("子任务标题输入无边框且不截断长文本", async () => {
+    const { host, root } = await render([{ id: "a", title: "一段很长很长的子任务标题", done: false }]);
+    const input = host.querySelector('input[aria-label="子任务标题"]') as HTMLInputElement;
+    expect(input.className).not.toContain("border");
+    expect(input.className).not.toContain("truncate");
+    await act(async () => root.unmount());
+  });
 });
