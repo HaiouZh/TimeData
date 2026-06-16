@@ -9,9 +9,10 @@ export interface SheetProps {
   ariaLabel?: string;
   children: ReactNode;
   className?: string;
+  z?: number;
 }
 
-export function Sheet({ open, onClose, title, ariaLabel, children, className }: SheetProps) {
+export function Sheet({ open, onClose, title, ariaLabel, children, className, z }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -36,7 +37,8 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className }: 
 
   return (
     <div
-      className="sheet-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+      className="sheet-overlay fixed inset-0 flex items-end justify-center bg-black/60"
+      style={{ zIndex: z ?? 50 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

@@ -39,4 +39,14 @@ describe("Sheet", () => {
       await unmount(root);
     }
   });
+
+  it("z 设置遮罩层级；不传默认 50", async () => {
+    const a = await renderDom(createElement(Sheet, { open: true, onClose: () => {}, title: "T", z: 65 }, "x"));
+    expect((a.host.firstElementChild as HTMLElement).style.zIndex).toBe("65");
+    await unmount(a.root);
+
+    const b = await renderDom(createElement(Sheet, { open: true, onClose: () => {}, title: "T" }, "x"));
+    expect((b.host.firstElementChild as HTMLElement).style.zIndex).toBe("50");
+    await unmount(b.root);
+  });
 });
