@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { AppUpdateProvider } from "./appUpdate.tsx";
 import { migrateLocalSettingsToDexie, seedDefaultCategories } from "./db/index.ts";
+import "lxgw-wenkai-screen-webfont/style.css";
+import "@fontsource/tinos/400.css";
+import "@fontsource/tinos/400-italic.css";
+import "@fontsource/tinos/700.css";
 import "./index.css";
 
 async function bootstrap(): Promise<void> {

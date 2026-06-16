@@ -15,6 +15,15 @@ export function createPwaOptions(): Partial<VitePWAOptions> {
           urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
           handler: "NetworkOnly",
         },
+        {
+          urlPattern: ({ request }) => request.destination === "font",
+          handler: "CacheFirst",
+          options: {
+            cacheName: "timedata-fonts",
+            expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            cacheableResponse: { statuses: [0, 200] },
+          },
+        },
       ],
     },
     manifest: {
