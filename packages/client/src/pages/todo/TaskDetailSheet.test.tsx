@@ -222,10 +222,11 @@ describe("TaskDetailSheet 自动保存", () => {
     await act(async () => root.unmount());
   });
 
-  it("预设门按 Esc 只关闭预设门，不关闭任务抽屉", async () => {
+  it("preset 打开时按 Esc 只关 preset，抽屉仍在", async () => {
     const t = await addTask({ title: "池任务" });
     const { host, root, onClose } = await renderSheet(t.id);
     await click(badgeOf(host));
+    expect(host.querySelector('[aria-label="重复与时间"]')).toBeTruthy();
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
@@ -233,8 +234,8 @@ describe("TaskDetailSheet 自动保存", () => {
     await settle();
 
     expect(onClose).not.toHaveBeenCalled();
-    expect(host.textContent).not.toContain("重复与时间");
-    expect(host.querySelector('input[aria-label="任务标题"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="重复与时间"]')).toBeNull();
+    expect(host.querySelector('[data-testid="detail-sheet"]')).toBeTruthy();
     await act(async () => root.unmount());
   });
 
