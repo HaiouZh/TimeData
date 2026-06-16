@@ -5,6 +5,7 @@ import { recordSyncLog } from "../sync/engine.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
+import { reorderedTaskSortOrders } from "./tasks/taskSort.js";
 
 export interface AddTaskInput {
   title: string;
@@ -73,6 +74,31 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
     await recordSyncLog("tasks", task.id, "create", task.updatedAt);
   });
   return task;
+}
+
+export async function persistTaskOrder(orderedIds: string[]): Promise<void> {
+  const now = new Date().toISOString();
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const found = await db.tasks.bulkGet(orderedIds);
+    const tasks = found.filter((task): task is Task => task != null);
+    if (tasks.length !== orderedIds.length) return;
+
+    const changes = reorderedTaskSortOrders(
+      tasks.map((task) => ({ id: task.id, sortOrder: task.sortOrder })),
+      orderedIds,
+    );
+    if (changes.length === 0) return;
+
+    await db.tasks.bulkUpdate(
+      changes.map((change) => ({
+        key: change.id,
+        changes: { sortOrder: change.sortOrder, updatedAt: now },
+      })),
+    );
+    for (const change of changes) {
+      await recordSyncLog("tasks", change.id, "update", now);
+    }
+  });
 }
 
 export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Task> {

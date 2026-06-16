@@ -12,6 +12,7 @@ export function reorderedTaskSortOrders(poolTasks: TaskSortSlot[], orderedIds: s
   if (orderedIds.length !== poolTasks.length) return [];
   const byId = new Map(poolTasks.map((task) => [task.id, task]));
   if (orderedIds.some((id) => !byId.has(id))) return [];
+  if (new Set(orderedIds).size !== orderedIds.length) return [];
 
   const slots = poolTasks.map((task) => task.sortOrder).sort((a, b) => a - b);
   const changes: TaskSortChange[] = [];

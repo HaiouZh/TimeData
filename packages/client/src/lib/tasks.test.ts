@@ -6,6 +6,7 @@ import {
   addTask,
   deleteTask,
   listTasks,
+  persistTaskOrder,
   scheduleTask,
   setTaskTags,
   setTaskTurn,
@@ -271,5 +272,35 @@ describe("listTasks", () => {
     const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
 
     expect(buckets.completed.map((task) => task.id)).toEqual([newer.id, older.id]);
+  });
+});
+
+describe("persistTaskOrder", () => {
+  it("按新顺序回填槽位并写 syncLog", async () => {
+    const t0 = new Date("2026-06-14T08:00:00.000Z");
+    const a = await addTask({ title: "A", now: t0 });
+    const b = await addTask({ title: "B", now: t0 });
+    const c = await addTask({ title: "C", now: t0 });
+    await db.syncLog.clear();
+
+    await persistTaskOrder([c.id, a.id, b.id]);
+
+    const after = await db.tasks.orderBy("sortOrder").toArray();
+    expect(after.map((t) => t.id)).toEqual([c.id, a.id, b.id]);
+    const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
+    expect(logs.every((log) => log.action === "update")).toBe(true);
+    expect(logs.length).toBe(3);
+  });
+
+  it("顺序不变则不写", async () => {
+    const t0 = new Date("2026-06-14T08:00:00.000Z");
+    const a = await addTask({ title: "A", now: t0 });
+    const b = await addTask({ title: "B", now: t0 });
+    await db.syncLog.clear();
+
+    await persistTaskOrder([a.id, b.id]);
+
+    const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
+    expect(logs.length).toBe(0);
   });
 });
