@@ -25,20 +25,22 @@ export function TaskColumn(props: TaskColumnProps) {
   return (
     <section data-section={pool}>
       <div className="mb-2 flex items-baseline justify-between px-2">
-        <h2 className={`font-medium text-slate-100 ${hero ? "text-base" : "text-sm"}`}>{title}</h2>
-        <span className="text-xs text-slate-500">{tasks.length}</span>
+        <h2 className={`font-medium text-ink ${hero ? "text-base" : "text-sm"}`}>{title}</h2>
+        <span className="text-xs text-ink-3">{tasks.length}</span>
       </div>
       {tasks.length === 0 ? (
-        <p className="rounded-xl bg-slate-900/40 px-3 py-6 text-center text-sm text-slate-500">{emptyText}</p>
+        <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">{emptyText}</p>
       ) : (
-        <div className="rounded-xl bg-slate-900/40 p-1.5">
+        <div className="rounded-card bg-surface p-1.5">
           <SwipeableList type={ListType.IOS} fullSwipe={false}>
             {tasks.map((task) => {
               const canSwap = task.recurrence === null;
               const leading = canSwap && (pool === "inbox" || pool === "upcoming") ? (
                 <LeadingActions>
                   <SwipeAction onClick={() => props.onToToday(task)}>
-                    <div className="flex h-full items-center bg-sky-700 px-4 text-sm font-medium text-white">排进今天</div>
+                    <div className="flex h-full items-center bg-accent-strong px-4 text-sm font-medium text-page">
+                      排进今天
+                    </div>
                   </SwipeAction>
                 </LeadingActions>
               ) : undefined;
@@ -46,11 +48,13 @@ export function TaskColumn(props: TaskColumnProps) {
                 <TrailingActions>
                   {canSwap && pool === "today" && (
                     <SwipeAction onClick={() => props.onToInbox(task)}>
-                      <div className="flex h-full items-center bg-slate-700 px-4 text-sm font-medium text-white">回收件箱</div>
+                      <div className="flex h-full items-center bg-surface-elevated px-4 text-sm font-medium text-ink">
+                        回收件箱
+                      </div>
                     </SwipeAction>
                   )}
                   <SwipeAction destructive onClick={() => props.onDelete(task)}>
-                    <div className="flex h-full items-center bg-rose-700 px-4 text-sm font-medium text-white">删除</div>
+                    <div className="flex h-full items-center bg-danger px-4 text-sm font-medium text-page">删除</div>
                   </SwipeAction>
                 </TrailingActions>
               );
