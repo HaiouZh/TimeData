@@ -38,6 +38,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: UI controls guard
+        run: pnpm check:ui
+
       - name: Typecheck
         run: pnpm -r typecheck
 

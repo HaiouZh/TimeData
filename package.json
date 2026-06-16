@@ -24,7 +24,8 @@
     "icons:generate": "node scripts/generate-icons.mjs",
     "check:docs": "node scripts/check-evergreen-docs.mjs",
     "check:docs:strict": "node scripts/check-evergreen-docs.mjs --mode=strict",
-    "check:docs:stale": "node scripts/check-evergreen-docs.mjs --mode=stale"
+    "check:docs:stale": "node scripts/check-evergreen-docs.mjs --mode=stale",
+    "check:ui": "node scripts/check-no-native-controls.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
