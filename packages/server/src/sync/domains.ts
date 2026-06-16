@@ -345,6 +345,8 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     completed_count: task.completedCount ?? 0,
     turn: task.turn ?? null,
     turn_at: task.turnAt ?? null,
+    completed_at: task.completedAt ?? null,
+    tags: JSON.stringify(task.tags ?? []),
     created_at: task.createdAt,
   };
 }

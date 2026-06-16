@@ -7,6 +7,10 @@ function quickNoteColumnNames(db: Database.Database): Set<string> {
   return new Set((db.prepare("PRAGMA table_info(quick_notes)").all() as Array<{ name: string }>).map((column) => column.name));
 }
 
+function taskColumnNames(db: Database.Database): Set<string> {
+  return new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+}
+
 beforeEach(async () => {
   db = new Database(":memory:");
   vi.resetModules();
@@ -252,6 +256,54 @@ describe("initializeDatabase", () => {
       (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
     );
     expect(columns.has("completed_count")).toBe(true);
+  });
+
+  it("creates tasks with completed_at and tags columns", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+    }>;
+    expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining(["completed_at", "tags"]));
+    expect(columns.find((column) => column.name === "tags")).toMatchObject({
+      type: "TEXT",
+      notnull: 1,
+      dflt_value: "'[]'",
+    });
+  });
+
+  it("给缺 completed_at/tags 的旧 tasks 表补列", async () => {
+    const { ensureTaskCompletionMetadataColumns } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        last_done_at TEXT,
+        start_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        scheduled_at TEXT,
+        subtasks TEXT NOT NULL DEFAULT '[]',
+        completed_count INTEGER NOT NULL DEFAULT 0,
+        turn TEXT,
+        turn_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    ensureTaskCompletionMetadataColumns(db);
+    ensureTaskCompletionMetadataColumns(db);
+
+    const columns = taskColumnNames(db);
+    expect(columns.has("completed_at")).toBe(true);
+    expect(columns.has("tags")).toBe(true);
   });
 
   it("keeps the pinned column migration idempotent", async () => {

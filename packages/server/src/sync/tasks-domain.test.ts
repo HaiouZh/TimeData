@@ -28,6 +28,8 @@ beforeEach(async () => {
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
       turn TEXT, turn_at TEXT,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
@@ -76,5 +78,19 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
     });
     const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "t3");
     expect(pulled).toMatchObject({ data: { turn: "running", turnAt: "2026-06-16T01:00:00.000Z" } });
+  });
+
+  it("persists completedAt and tags and round-trips them", () => {
+    const c = change("create", "t4", "标签任务");
+    (c as unknown as { data: Record<string, unknown> }).data.completedAt = "2026-06-16T02:00:00.000Z";
+    (c as unknown as { data: Record<string, unknown> }).data.tags = ["agent", "idea"];
+
+    expect(applyChange(c).status).toBe("applied");
+    expect(db.prepare("SELECT completed_at, tags FROM tasks WHERE id='t4'").get()).toEqual({
+      completed_at: "2026-06-16T02:00:00.000Z",
+      tags: JSON.stringify(["agent", "idea"]),
+    });
+    const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "t4");
+    expect(pulled).toMatchObject({ data: { completedAt: "2026-06-16T02:00:00.000Z", tags: ["agent", "idea"] } });
   });
 });

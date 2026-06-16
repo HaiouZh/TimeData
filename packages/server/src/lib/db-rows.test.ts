@@ -64,4 +64,25 @@ describe("rowToTask", () => {
     expect(task.turn).toBeNull();
     expect(task.turnAt).toBeNull();
   });
+
+  it("maps completedAt and tags", () => {
+    const task = rowToTask({
+      ...taskRow,
+      completed_at: "2026-06-16T02:00:00.000Z",
+      tags: JSON.stringify(["agent", "idea"]),
+    } as TaskRow);
+
+    expect(task.completedAt).toBe("2026-06-16T02:00:00.000Z");
+    expect(task.tags).toEqual(["agent", "idea"]);
+  });
+
+  it("defaults tags to [] when the column is null", () => {
+    const task = rowToTask({
+      ...taskRow,
+      completed_at: null,
+      tags: null,
+    } as unknown as TaskRow);
+
+    expect(task.tags).toEqual([]);
+  });
 });

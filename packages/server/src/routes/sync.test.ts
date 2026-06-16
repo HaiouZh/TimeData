@@ -64,6 +64,8 @@ function createSchema() {
       completed_count INTEGER NOT NULL DEFAULT 0,
       turn TEXT,
       turn_at TEXT,
+      completed_at TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -631,6 +633,8 @@ describe("sync route", () => {
             completedCount: 2,
             turn: "running",
             turnAt: "2026-06-16T01:00:00.000Z",
+            completedAt: "2026-06-16T02:00:00.000Z",
+            tags: ["agent", "idea"],
             createdAt: "2026-06-14T00:00:00.000Z",
             updatedAt: "2026-06-14T00:00:00.000Z",
           },
@@ -649,7 +653,7 @@ describe("sync route", () => {
     });
     expect(
       db
-        .prepare("SELECT title, recurrence, start_at, scheduled_at, subtasks, completed_count, turn, turn_at FROM tasks WHERE id = ?")
+        .prepare("SELECT title, recurrence, start_at, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags FROM tasks WHERE id = ?")
         .get("task-force"),
     ).toMatchObject({
       title: "跑步",
@@ -660,6 +664,8 @@ describe("sync route", () => {
       completed_count: 2,
       turn: "running",
       turn_at: "2026-06-16T01:00:00.000Z",
+      completed_at: "2026-06-16T02:00:00.000Z",
+      tags: JSON.stringify(["agent", "idea"]),
     });
     expect(db.prepare("SELECT table_name, record_id FROM sync_seq WHERE id = 1").get()).toMatchObject({
       table_name: "tasks",

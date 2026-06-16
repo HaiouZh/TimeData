@@ -34,6 +34,12 @@ export function ensureTaskTurnColumns(db: Database): void {
   if (!names.has("turn_at")) db.exec("ALTER TABLE tasks ADD COLUMN turn_at TEXT");
 }
 
+export function ensureTaskCompletionMetadataColumns(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("completed_at")) db.exec("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
+  if (!names.has("tags")) db.exec("ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
+}
+
 export function initializeDatabase(): void {
   const db = getDb();
 
@@ -92,6 +98,8 @@ export function initializeDatabase(): void {
       completed_count INTEGER NOT NULL DEFAULT 0,
       turn TEXT,
       turn_at TEXT,
+      completed_at TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -237,6 +245,7 @@ export function initializeDatabase(): void {
   ensureTaskScheduledColumns(db);
   ensureTaskCompletedCountColumn(db);
   ensureTaskTurnColumns(db);
+  ensureTaskCompletionMetadataColumns(db);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {
