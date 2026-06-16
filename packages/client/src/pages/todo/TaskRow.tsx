@@ -92,6 +92,7 @@ export function TaskRow({
     <div className="group rounded-row transition hover:bg-surface-hover">
       <div
         className="flex items-center gap-3 px-2 py-2"
+        role="link"
         tabIndex={0}
         aria-label={`打开 ${task.title}`}
         onClick={handleRowClick}
