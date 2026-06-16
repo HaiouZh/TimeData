@@ -61,6 +61,8 @@ const oldTask: Task = {
   scheduledAt: null,
   subtasks: [],
   completedCount: 0,
+  completedAt: null,
+  tags: [],
   turn: null,
   turnAt: null,
   sortOrder: 0,
@@ -90,7 +92,7 @@ const newEntry: TimeEntry = {
   updatedAt: now,
 };
 
-const newTask: Task = {
+const newTask = {
   id: "new-task",
   title: "新任务",
   done: true,
@@ -105,7 +107,9 @@ const newTask: Task = {
   sortOrder: 1,
   createdAt: now,
   updatedAt: now,
-};
+} satisfies Omit<Task, "completedAt" | "tags">;
+
+const normalizedNewTask: Task = { ...newTask, completedAt: null, tags: [] };
 
 const syncLog: SyncLogEntry = {
   id: "sync-1",
@@ -151,7 +155,7 @@ describe("importBackup", () => {
 
     await expect(db.categories.toArray()).resolves.toEqual([newCategory]);
     await expect(db.timeEntries.toArray()).resolves.toEqual([newEntry]);
-    await expect(db.tasks.toArray()).resolves.toEqual([newTask]);
+    await expect(db.tasks.toArray()).resolves.toEqual([normalizedNewTask]);
     await expect(db.syncLog.toArray()).resolves.toEqual([]);
     expect(localStorage.getItem("timedata_last_synced")).toBeNull();
     expect(localStorage.getItem(LAST_SYNCED_SEQ_KEY)).toBeNull();
@@ -165,7 +169,7 @@ describe("importBackup", () => {
     // backup() 只含 tasks 域，不含 quick_notes —— 恢复后速记应原样保留
     const result = await importBackup(backup());
 
-    await expect(db.tasks.toArray()).resolves.toEqual([newTask]);
+    await expect(db.tasks.toArray()).resolves.toEqual([normalizedNewTask]);
     await expect(db.quickNotes.toArray()).resolves.toEqual([
       { id: "keep-note", text: "保留我", occurredAt: now, createdAt: now, updatedAt: now },
     ]);
