@@ -6,7 +6,9 @@ const viteConfigSource = readFileSync(new URL("../vite.config.ts", import.meta.u
 
 describe("font loading setup", () => {
   it("imports webfont CSS before app styles", () => {
-    const lxgwImport = mainSource.indexOf('import "lxgw-wenkai-screen-webfont/style.css";');
+    // 只引 GB 屏显字族（lxgwwenkaigbscreen.css），不引 style.css——后者会拉入 R 变体与非 GB 重复字族，
+    // 把 4 套字族（~18.8MB）全打进 APK。单 import 后只剩这一套（~4.7MB）。
+    const lxgwImport = mainSource.indexOf('import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";');
     const tinosRegularImport = mainSource.indexOf('import "@fontsource/tinos/400.css";');
     const tinosItalicImport = mainSource.indexOf('import "@fontsource/tinos/400-italic.css";');
     const tinosBoldImport = mainSource.indexOf('import "@fontsource/tinos/700.css";');
