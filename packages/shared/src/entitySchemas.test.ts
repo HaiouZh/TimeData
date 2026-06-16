@@ -171,3 +171,42 @@ describe("TaskSchema turn", () => {
     ).toThrow();
   });
 });
+
+describe("TaskSchema completedAt/tags", () => {
+  const baseTask = {
+    id: "t1",
+    title: "标签任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    subtasks: [],
+    completedCount: 0,
+    turn: null,
+    turnAt: null,
+    sortOrder: 0,
+    createdAt: "2026-06-16T00:00:00.000Z",
+    updatedAt: "2026-06-16T00:00:00.000Z",
+  };
+
+  it("completedAt/tags 缺省", () => {
+    const task = TaskSchema.parse(baseTask);
+    expect(task.completedAt).toBeNull();
+    expect(task.tags).toEqual([]);
+  });
+
+  it("接受 completedAt 与 tags", () => {
+    const task = TaskSchema.parse({
+      ...baseTask,
+      completedAt: "2026-06-16T02:00:00.000Z",
+      tags: ["agent", "idea"],
+    });
+    expect(task.completedAt).toBe("2026-06-16T02:00:00.000Z");
+    expect(task.tags).toEqual(["agent", "idea"]);
+  });
+
+  it("拒绝空字符串 tag", () => {
+    expect(() => TaskSchema.parse({ ...baseTask, tags: [" "] })).toThrow();
+  });
+});

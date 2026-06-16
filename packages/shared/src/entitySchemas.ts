@@ -101,6 +101,11 @@ export const TaskSchema = z.object({
   completedCount: z.number().int().min(0).default(0),
   turn: z.enum(["me", "running", "parked"]).nullable().default(null),
   turnAt: UtcIsoStringSchema.nullable().default(null),
+  completedAt: UtcIsoStringSchema.nullable().default(null),
+  tags: z
+    .array(NonEmptyTrimmedStringSchema.refine((value) => value.length <= 64, "tag must be at most 64 characters"))
+    .max(50)
+    .default([]),
   sortOrder: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,
