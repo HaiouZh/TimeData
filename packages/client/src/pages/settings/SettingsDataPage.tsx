@@ -6,6 +6,8 @@ import { describeDomainCounts, domainCountsFromBackup } from "../../backup/domai
 import { downloadBackupFile } from "../../backup/fileDownload.ts";
 import { importBackup } from "../../backup/importBackup.ts";
 import { validateBackup } from "../../backup/validateBackup.ts";
+import { Checkbox } from "../../components/ui/Checkbox.js";
+import { Switch } from "../../components/ui/Switch.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { resetLocalDataToDefaults } from "../../db/index.ts";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
@@ -62,16 +64,14 @@ export default function SettingsDataPage() {
     if (needsSyncDiagnostics) setRecoveryOpen(true);
   }, [needsSyncDiagnostics]);
 
-  function handleCloudSyncChange(e: ChangeEvent<HTMLInputElement>) {
-    const enabled = e.target.checked;
-    setCloudSyncEnabledInContext(enabled);
-    setCloudSyncEnabledState(enabled);
+  function handleCloudSyncChange(checked: boolean) {
+    setCloudSyncEnabledInContext(checked);
+    setCloudSyncEnabledState(checked);
   }
 
-  function handleMergeOvernightChange(e: ChangeEvent<HTMLInputElement>) {
-    const enabled = e.target.checked;
-    setMergeOvernightEnabled(enabled);
-    setMergeOvernightEnabledState(enabled);
+  function handleMergeOvernightChange(checked: boolean) {
+    setMergeOvernightEnabled(checked);
+    setMergeOvernightEnabledState(checked);
   }
 
   async function handleForceReplace() {
@@ -341,7 +341,7 @@ export default function SettingsDataPage() {
             <span className="block text-sm font-medium text-slate-100">是否开启云同步</span>
             <span className="mt-1 block text-xs text-slate-500">关闭后不会自动同步，也不会强制替换云端数据。</span>
           </span>
-          <input type="checkbox" checked={cloudSyncEnabled} onChange={handleCloudSyncChange} className="h-5 w-5" />
+          <Switch ariaLabel="是否开启云同步" checked={cloudSyncEnabled} onChange={(on) => handleCloudSyncChange(on)} />
         </label>
       </section>
 
@@ -353,11 +353,10 @@ export default function SettingsDataPage() {
               开启后，结束于当天的跨天记录会显示完整时间段，例如 23:57 - 06:00。统计仍按自然日计算。
             </span>
           </span>
-          <input
-            type="checkbox"
+          <Switch
+            ariaLabel="跨天记录合并展示"
             checked={mergeOvernightEnabled}
-            onChange={handleMergeOvernightChange}
-            className="h-5 w-5"
+            onChange={(on) => handleMergeOvernightChange(on)}
           />
         </label>
       </section>
@@ -560,15 +559,12 @@ export default function SettingsDataPage() {
                     className="mt-1 w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100"
                   />
                 </label>
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={forcePushConfirmation}
-                    onChange={(e) => setForcePushConfirmation(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  我已确认当前设备数据是正确版本
-                </label>
+                <Checkbox
+                  ariaLabel="我已确认当前设备数据是正确版本"
+                  label="我已确认当前设备数据是正确版本"
+                  checked={forcePushConfirmation}
+                  onChange={setForcePushConfirmation}
+                />
                 <button
                   type="button"
                   onClick={handleForcePushToServer}

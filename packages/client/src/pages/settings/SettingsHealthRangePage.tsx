@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Checkbox } from "../../components/ui/Checkbox.js";
 import { useSetting, setSetting } from "../../lib/settings/index.ts";
 import {
   HEALTH_RANGE_PRESETS,
@@ -28,16 +29,13 @@ export default function SettingsHealthRangePage() {
         <ul className="space-y-2">
           {HEALTH_RANGE_PRESETS.map((preset) => (
             <li key={preset} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-slate-100">{rangeLabel(preset)}</span>
-                <input
-                  type="checkbox"
-                  aria-label={rangeLabel(preset)}
-                  checked={selected.has(preset)}
-                  onChange={() => toggle(preset)}
-                  className="h-5 w-5"
-                />
-              </label>
+              <Checkbox
+                ariaLabel={rangeLabel(preset)}
+                label={rangeLabel(preset)}
+                checked={selected.has(preset)}
+                onChange={() => toggle(preset)}
+                className="w-full justify-between"
+              />
             </li>
           ))}
         </ul>

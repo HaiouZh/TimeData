@@ -39,7 +39,7 @@ async function waitForTabs(expected: (tabs: string[]) => boolean): Promise<void>
 describe("SettingsNavPage", () => {
   it("toggles a tab off and persists", async () => {
     const { host, root } = await renderPage();
-    const health = host.querySelector('input[aria-label="健康"]');
+    const health = host.querySelector('[role="switch"][aria-label="健康"]');
 
     await act(async () => {
       health?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -52,16 +52,16 @@ describe("SettingsNavPage", () => {
   it("offers time and health as separate toggles", async () => {
     const { host, root } = await renderPage();
 
-    expect(host.querySelector('input[aria-label="时间"]')).not.toBeNull();
-    expect(host.querySelector('input[aria-label="健康"]')).not.toBeNull();
-    expect(host.querySelector('input[aria-label="统计"]')).toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="时间"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="健康"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="统计"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
   it("does not offer 设置 as toggleable", async () => {
     const { host, root } = await renderPage();
 
-    expect(host.querySelector('input[aria-label="设置"]')).toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="设置"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });

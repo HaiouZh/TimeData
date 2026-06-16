@@ -26,7 +26,9 @@ async function renderPage() {
 }
 
 function inputByLabel(host: HTMLElement, label: string): HTMLInputElement {
-  const input = host.querySelector(`input[aria-label="${label}"]`);
+  const labels = [...host.querySelectorAll("label")];
+  const match = labels.find((el) => el.textContent === label);
+  const input = match?.querySelector('input[type="checkbox"]');
   if (!(input instanceof HTMLInputElement)) throw new Error(`input not found: ${label}`);
   return input;
 }

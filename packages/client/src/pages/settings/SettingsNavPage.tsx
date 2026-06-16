@@ -1,3 +1,4 @@
+import { Switch } from "../../components/ui/Switch.js";
 import { CONFIGURABLE_TABS, setVisibleTabs, useVisibleTabs, type ConfigurableTab } from "../../lib/settings/navVisibleTabsSetting.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
@@ -29,13 +30,7 @@ export function SettingsNavPage() {
             className="flex min-h-12 items-center justify-between rounded-lg border border-slate-800 bg-slate-900/70 px-4 text-sm text-slate-100"
           >
             <span>{TAB_LABELS[tab]}</span>
-            <input
-              type="checkbox"
-              aria-label={TAB_LABELS[tab]}
-              checked={visibleSet.has(tab)}
-              onChange={() => toggle(tab)}
-              className="h-5 w-5 accent-sky-500"
-            />
+            <Switch ariaLabel={TAB_LABELS[tab]} checked={visibleSet.has(tab)} onChange={() => toggle(tab)} />
           </label>
         ))}
       </section>

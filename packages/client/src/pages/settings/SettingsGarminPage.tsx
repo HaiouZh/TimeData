@@ -1,4 +1,6 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { Checkbox } from "../../components/ui/Checkbox.js";
+import { Switch } from "../../components/ui/Switch.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
@@ -366,29 +368,16 @@ export default function SettingsGarminPage() {
                   placeholder="••••••••"
                 />
               </label>
-              <label className="flex items-center gap-3 py-1">
-                <input
-                  type="checkbox"
-                  checked={isCn}
-                  onChange={(e) => setIsCn(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-blue-500"
-                />
-                <span className="text-sm text-slate-200">中国区 (Garmin CN)</span>
-              </label>
+              <Checkbox ariaLabel="中国区 (Garmin CN)" label="中国区 (Garmin CN)" checked={isCn} onChange={setIsCn} />
             </div>
 
             <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
               定时抓取
             </h3>
             <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <label className="flex items-center gap-3 py-1">
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={(e) => setEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-blue-500"
-                />
+              <label className="flex min-h-11 items-center justify-between gap-3 py-1">
                 <span className="text-sm text-slate-200">启用每日定时抓取</span>
+                <Switch ariaLabel="启用每日定时抓取" checked={enabled} onChange={setEnabled} />
               </label>
               {enabled && (
                 <label className="block">
