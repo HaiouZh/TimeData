@@ -1,4 +1,5 @@
-import { type ButtonHTMLAttributes, type MouseEvent as ReactMouseEvent, type ReactNode, useState } from "react";
+import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useState } from "react";
 import type { Task } from "@timedata/shared";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { isDueNow } from "../../lib/tasks/recurrence.js";
@@ -8,8 +9,8 @@ export type TaskPool = "today" | "inbox" | "upcoming" | "recurring";
 
 export interface RowDragHandle {
   setActivatorNodeRef: (el: HTMLElement | null) => void;
-  attributes: Record<string, unknown>;
-  listeners: Record<string, unknown> | undefined;
+  attributes: DraggableAttributes;
+  listeners: DraggableSyntheticListeners;
 }
 
 export interface TaskRowProps {
@@ -77,13 +78,6 @@ export function TaskRow({
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
   const overdueDate = overdue && task.scheduledAt ? task.scheduledAt : null;
   const hasMeta = isRecurring || subtaskTotal > 0 || overdueDate !== null;
-  const dragHandleProps = dragHandle
-    ? ({
-        ...dragHandle.attributes,
-        ...(dragHandle.listeners ?? {}),
-      } as ButtonHTMLAttributes<HTMLButtonElement>)
-    : null;
-
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -164,14 +158,15 @@ export function TaskRow({
             ✕
           </HoverAction>
         )}
-        {dragHandle && dragHandleProps && (
+        {dragHandle && (
           <button
             ref={dragHandle.setActivatorNodeRef}
             type="button"
             aria-label={`拖动 ${task.title}`}
             onClick={(event) => event.stopPropagation()}
             className="shrink-0 cursor-grab touch-none select-none rounded-ctl px-1 text-ink-3 hover:text-ink-2 active:cursor-grabbing"
-            {...dragHandleProps}
+            {...dragHandle.attributes}
+            {...dragHandle.listeners}
           >
             ⠿
           </button>

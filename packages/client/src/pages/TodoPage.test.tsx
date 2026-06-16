@@ -144,7 +144,7 @@ describe("TodoPage", () => {
     await addTask({ title: "点我打开" });
     const { host, root } = await renderPage();
     await waitForText(host, "点我打开");
-    const row = [...host.querySelectorAll('[role="button"]')].find((el) => el.textContent?.includes("点我打开"))!;
+    const row = host.querySelector('[aria-label="打开 点我打开"]')!;
     await act(async () => {
       row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -178,6 +178,27 @@ describe("TodoPage", () => {
     });
     await waitForText(host, "做三次");
     expect(host.textContent).not.toContain("1/3");
+    await act(async () => root.unmount());
+  });
+
+  it("即将到来与重复区有拖拽手柄，收件箱没有", async () => {
+    await addTask({ title: "收件箱任务", toInbox: true });
+    const future = await addTask({ title: "未来任务", toInbox: true });
+    const { scheduleTask } = await import("../lib/tasks.js");
+    await scheduleTask(future.id, "2026-12-25");
+    await addTask({
+      title: "重复任务",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-12-01T00:00:00.000Z",
+    });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "即将到来");
+    await waitForText(host, "重复 / 提醒");
+
+    expect(host.querySelector('[aria-label="拖动 未来任务"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 重复任务"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 收件箱任务"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });
