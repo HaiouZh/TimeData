@@ -29,6 +29,12 @@
   --radius-ctl: 8px;
   --radius-row: 12px;
   --radius-card: 16px;
+  --radius-pill: 999px;
+
+  /* 边框（spec §1 L1） */
+  --color-border: #2b344e;
+  --color-border-strong: #3a4668;
+  --color-border-hairline: rgba(255, 255, 255, 0.08);
 
   /* 柔和高度（仅大表面用） */
   --shadow-elev1: 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.16);
@@ -52,6 +58,14 @@
   --color-data-amber: #fbbf24;
   --color-data-red: #f87171;
   --color-data-purple: #a78bfa;
+}
+
+@keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-rise { from { transform: translateY(6%); opacity: 0.5; } to { transform: none; opacity: 1; } }
+.sheet-overlay { animation: overlay-fade 150ms ease-out; }
+.sheet-panel { animation: sheet-rise 200ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay, .sheet-panel { animation: none; }
 }
 
 /* 全站正文用书卷体（霞鹭文楷+Times）；markdown 代码块保留等宽。 */
