@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Recurrence } from "@timedata/shared";
+import { CaretRight, Check } from "@phosphor-icons/react";
+import { Icon } from "../../components/Icon.js";
 import MonthCalendar from "../../components/MonthCalendar.js";
+import { Sheet } from "../../components/ui/Sheet.js";
 import { getDateString } from "../../lib/time.js";
 import {
   buildPresetRows,
@@ -42,31 +45,10 @@ export function RecurrencePresetSheet({
   const [calendarOpen, setCalendarOpen] = useState(false);
   const rows = buildPresetRows(anchor, current, scheduledAt);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   function chooseRow(key: PresetActionKey): void {
-    if (key === "none") {
-      onChoose({ kind: "none" });
-      return;
-    }
-    if (key === "scheduled") {
-      setCalendarOpen((open) => !open);
-      return;
-    }
-    if (key === "custom") {
-      onCustom();
-      return;
-    }
+    if (key === "none") return onChoose({ kind: "none" });
+    if (key === "scheduled") return setCalendarOpen((open) => !open);
+    if (key === "custom") return onCustom();
     if (presetKeys.has(key)) {
       onChoose({
         kind: "recurrence",
@@ -77,46 +59,36 @@ export function RecurrencePresetSheet({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="重复预设"
-      className="fixed inset-0 z-[65] flex items-end justify-center bg-black/50"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-2xl rounded-t-2xl border border-slate-800 bg-slate-900 text-slate-100 shadow-2xl">
-        <div className="flex justify-center py-3">
-          <span className="block h-1 w-10 rounded-full bg-slate-600" />
-        </div>
-        <div className="px-4 pb-4">
-          <div className="pb-2 text-xs font-medium text-slate-500">重复与时间</div>
-          <div className="divide-y divide-slate-800/80">
-            {rows.map((row) => (
-              <div key={row.key}>
-                <button
-                  type="button"
-                  aria-label={ariaLabelFor(row.key, row.label)}
-                  onClick={() => chooseRow(row.key)}
-                  className="flex min-h-12 w-full items-center justify-between gap-3 text-left text-sm text-slate-100 transition-colors hover:bg-slate-800/70"
-                >
-                  <span>{row.label}</span>
-                  <span className="text-xs text-sky-200">{row.key === "custom" ? "›" : row.checked ? "✓" : ""}</span>
-                </button>
-                {row.key === "scheduled" && calendarOpen && (
-                  <div className="pb-3">
-                    <MonthCalendar
-                      value={scheduledDateInput(scheduledAt, anchor)}
-                      onChange={(date) => onChoose({ kind: "scheduled", date })}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+    <Sheet open title="重复与时间" onClose={onClose} z={65}>
+      <div className="px-2 pb-2">
+        <div className="divide-y divide-border-hairline">
+          {rows.map((row) => (
+            <div key={row.key}>
+              <button
+                type="button"
+                aria-label={ariaLabelFor(row.key, row.label)}
+                onClick={() => chooseRow(row.key)}
+                className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left text-sm text-ink transition-colors hover:bg-surface-hover"
+              >
+                <span>{row.label}</span>
+                {row.key === "custom" ? (
+                  <Icon icon={CaretRight} size={16} className="text-ink-3" />
+                ) : row.checked ? (
+                  <Icon icon={Check} size={18} className="text-accent" />
+                ) : null}
+              </button>
+              {row.key === "scheduled" && calendarOpen && (
+                <div className="pb-3">
+                  <MonthCalendar
+                    value={scheduledDateInput(scheduledAt, anchor)}
+                    onChange={(date) => onChoose({ kind: "scheduled", date })}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
-    </div>
+    </Sheet>
   );
 }

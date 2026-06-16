@@ -26,6 +26,16 @@ const base = {
 const click = (el: Element | null) => act(async () => el?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
 describe("RecurrencePresetSheet", () => {
+  it("渲染通用 Sheet 标题与关闭按钮", async () => {
+    const onClose = vi.fn();
+    const { host, root } = await render({ ...base, onClose });
+
+    expect(host.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("重复与时间");
+    await click(host.querySelector('button[aria-label="关闭"]'));
+    expect(onClose).toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
   it("点『每天』→ onChoose daily", async () => {
     const onChoose = vi.fn();
     const { host, root } = await render({ ...base, onChoose });
