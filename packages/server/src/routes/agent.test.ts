@@ -79,6 +79,21 @@ describe("POST /api/agent/tasks/:id/status", () => {
     expect(body.task.turnAt).toBeNull();
   });
 
+  it("sets tags", async () => {
+    const res = await app.request("/api/agent/tasks/task-1/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags: ["agent", "idea"] }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { task: { tags: string[] } };
+    expect(body.task.tags).toEqual(["agent", "idea"]);
+    expect(db.prepare("SELECT tags FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
+      tags: JSON.stringify(["agent", "idea"]),
+    });
+  });
+
   it("returns 404 for missing tasks", async () => {
     const res = await app.request("/api/agent/tasks/missing/status", {
       method: "POST",
