@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Recurrence, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { RecurrenceEditor } from "../../components/RecurrenceEditor.js";
+import { Checkbox } from "../../components/ui/Checkbox.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { getDateString } from "../../lib/time.js";
@@ -177,12 +178,11 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
         {task && (
           <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
             <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                aria-label={`完成 ${task.title}`}
+              <Checkbox
+                ariaLabel={`完成 ${task.title}`}
                 checked={task.done}
                 onChange={() => void run(() => toggleTaskDone(task.id))}
-                className="mt-1 h-5 w-5 shrink-0 accent-sky-500"
+                className="mt-1 shrink-0"
               />
               <div className="min-w-0 flex-1 space-y-1">
                 <div>

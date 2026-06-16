@@ -96,7 +96,7 @@ describe("TodoPage", () => {
   it("勾选重复后展开频率配置", async () => {
     const { host, root } = await renderPage();
     expect(host.textContent).not.toContain("频率");
-    const repeat = host.querySelector('input[aria-label="重复"]') as HTMLInputElement;
+    const repeat = host.querySelector('[role="switch"][aria-label="重复"]') as HTMLButtonElement;
     await act(async () => { repeat.click(); });
     expect(host.textContent).toContain("频率");
     await act(async () => root.unmount());

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Task } from "@timedata/shared";
+import { Checkbox } from "../../components/ui/Checkbox.js";
 import { isDueNow } from "../../lib/tasks/recurrence.js";
 
 export type TaskPool = "today" | "inbox" | "upcoming" | "recurring";
@@ -41,13 +42,7 @@ export function TaskRow({ task, pool, overdue, onToggle, onEdit, onDelete, onToT
 
   return (
     <div className="group flex items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-slate-800/70">
-      <input
-        type="checkbox"
-        aria-label={`完成 ${task.title}`}
-        checked={checked}
-        onChange={() => onToggle(task)}
-        className="h-5 w-5 shrink-0 accent-sky-500"
-      />
+      <Checkbox ariaLabel={`完成 ${task.title}`} checked={checked} onChange={() => onToggle(task)} className="shrink-0" />
       <div
         className="min-w-0 flex-1"
         role="button"

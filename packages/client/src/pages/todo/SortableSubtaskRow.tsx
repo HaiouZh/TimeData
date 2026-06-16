@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties, KeyboardEvent } from "react";
 import type { TaskSubtask } from "@timedata/shared";
+import { Checkbox } from "../../components/ui/Checkbox.js";
 
 export function SortableSubtaskRow({
   subtask,
@@ -40,12 +41,11 @@ export function SortableSubtaskRow({
 
   return (
     <li ref={setNodeRef} style={style} className="flex items-center gap-2">
-      <input
-        type="checkbox"
-        aria-label={`完成子任务 ${subtask.title}`}
+      <Checkbox
+        ariaLabel={`完成子任务 ${subtask.title}`}
         checked={subtask.done}
-        onChange={onToggle}
-        className="h-4 w-4 accent-sky-500"
+        onChange={() => onToggle()}
+        className="shrink-0"
       />
       <input
         ref={(el) => registerRef(subtask.id, el)}

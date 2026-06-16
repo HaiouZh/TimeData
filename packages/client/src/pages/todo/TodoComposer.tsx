@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import type { Recurrence } from "@timedata/shared";
 import { RecurrenceEditor } from "../../components/RecurrenceEditor.js";
+import { Switch } from "../../components/ui/Switch.js";
 import { BOTTOM_NAV_HEIGHT_PX } from "../../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { addTask } from "../../lib/tasks.js";
@@ -45,14 +46,10 @@ export function TodoComposer() {
             className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100 outline-none focus:border-sky-500"
           />
           <label className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-slate-700 px-3 text-sm text-slate-300">
-            <input
-              type="checkbox"
-              aria-label="重复"
+            <Switch
+              ariaLabel="重复"
               checked={recurrence !== null}
-              onChange={(event) =>
-                setRecurrence(event.currentTarget.checked ? { freq: "daily", interval: 1, basis: "due" } : null)
-              }
-              className="h-4 w-4 accent-sky-500"
+              onChange={(on) => setRecurrence(on ? { freq: "daily", interval: 1, basis: "due" } : null)}
             />
             重复
           </label>

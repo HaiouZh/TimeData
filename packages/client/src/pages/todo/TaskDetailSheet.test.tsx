@@ -215,7 +215,7 @@ describe("TaskDetailSheet 自动保存", () => {
     await act(async () => {
       trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    const enable = host.querySelector('input[type="checkbox"]:not([aria-label])') as HTMLInputElement;
+    const enable = host.querySelector('[role="switch"][aria-label="重复"]') as HTMLButtonElement;
     await act(async () => {
       enable.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
