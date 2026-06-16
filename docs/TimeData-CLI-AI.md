@@ -5,7 +5,7 @@
 ## 1. 规则卡片
 
 - **写入 TimeData 数据只能通过服务端受控 API；CLI 是其中一个客户端。**
-- **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）和 `task-running/handback/park/done`（任务状态回写）。**
+- **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）和 `task-running/handback/park/done/tag`（任务状态与 tags 回写）。**
 - **授权 agent 可直连 `POST /api/quick-notes` 投递速记；CLI `notes` 仍只读。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
 - 读取速记用 `timedata notes`；它是只读命令，不写 quick_notes。
@@ -29,6 +29,7 @@
 | `timedata task-handback --id ID [--note TEXT]` | 是 | agent 跑完后交回人工验收，可附结果备注。 |
 | `timedata task-park --id ID` | 是 | 搁置任务。 |
 | `timedata task-done --id ID` | 是 | 标记任务完成。 |
+| `timedata task-tag --id ID --tags agent,idea` | 是 | 覆盖任务自由 tags。 |
 
 ## 3. AI 任务决策树
 
@@ -54,7 +55,7 @@
 当前 CLI 不支持这些写入能力。AI 必须先区分任务类型：
 
 - 如果是授权 agent 投递 quick note，可用 `POST /api/quick-notes`，请求必须带 `Authorization: Bearer <AUTH_TOKEN>` header，body 只提交 `text`、可选 `sourceLabel`、可选 `occurredAt`；服务端会强制 `source="agent"`。
-- 如果是授权 agent 回写任务状态，优先使用 `AGENT_TOKEN` 调 `timedata task-running` / `task-handback` / `task-park` / `task-done`；这些命令只命中 `/api/agent/*` 的封闭动作集合。
+- 如果是授权 agent 回写任务状态或 tags，优先使用 `AGENT_TOKEN` 调 `timedata task-running` / `task-handback` / `task-park` / `task-done` / `task-tag`；这些命令只命中 `/api/agent/*` 的封闭动作集合。
 - 如果不是已明确授权的 agent 集成，CLI 不能写入速记；用户可以用 Web UI，或先新增受控 server API / CLI 命令后再使用。
 - 修改、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
 
@@ -202,6 +203,12 @@ curl -X POST "$TIMEDATA_SERVER_URL/api/quick-notes" \
 
 ```bash
 TIMEDATA_TOKEN="$AGENT_TOKEN" timedata task-handback --id <taskId> --note "done PR#123 tests green"
+```
+
+### 6.7 agent 给任务打 tags
+
+```bash
+TIMEDATA_TOKEN="$AGENT_TOKEN" timedata task-tag --id <taskId> --tags "agent,idea"
 ```
 
 ## 7. 反例清单
