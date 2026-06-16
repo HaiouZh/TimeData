@@ -75,4 +75,25 @@ describe("TaskColumn swipe 接线", () => {
     expect(host.innerHTML).not.toMatch(/(?:slate|rose|sky|amber)-/);
     await act(async () => root.unmount());
   });
+
+  it("sortable today 列渲染拖拽手柄，非 sortable 不渲染", async () => {
+    const plain = await render(
+      createElement(TaskColumn, { title: "今天", pool: "today", tasks: [task({ title: "A" })], emptyText: "空", ...handlers }),
+    );
+    expect(plain.host.querySelector('[aria-label="拖动 A"]')).toBeNull();
+    await act(async () => plain.root.unmount());
+
+    const sortable = await render(
+      createElement(TaskColumn, {
+        title: "今天",
+        pool: "today",
+        tasks: [task({ title: "A" })],
+        emptyText: "空",
+        sortable: true,
+        ...handlers,
+      }),
+    );
+    expect(sortable.host.querySelector('[aria-label="拖动 A"]')).not.toBeNull();
+    await act(async () => sortable.root.unmount());
+  });
 });

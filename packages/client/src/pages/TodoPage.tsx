@@ -84,7 +84,9 @@ export function TodoPage() {
           {/* 今天：移动端 order-1 / 桌面左上 */}
           <div className="order-1 lg:col-start-1 lg:row-start-1">
             <TaskColumn title="今天" pool="today" tasks={buckets.today} emptyText="今天没有任务 🎉"
-              hero isOverdue={isOverdue} {...rowHandlers} />
+              hero isOverdue={isOverdue} sortable
+              onReorder={async (ids) => { await persistTaskOrder(ids); syncAfterWrite(); }}
+              {...rowHandlers} />
           </div>
 
           {/* 收件箱：移动端 order-2 / 桌面右上 */}
