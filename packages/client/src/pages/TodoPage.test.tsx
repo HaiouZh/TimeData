@@ -37,6 +37,17 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   throw new Error(`Timed out waiting for ${text}`);
 }
 
+async function waitForDetailsWithText(host: HTMLElement, text: string): Promise<HTMLDetailsElement> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    const details = [...host.querySelectorAll("details")]
+      .find((d) => d.textContent?.includes(text)) as HTMLDetailsElement | undefined;
+    if (details) return details;
+    await act(async () => { await new Promise((r) => window.setTimeout(r, 10)); });
+  }
+  throw new Error(`Timed out waiting for details ${text}`);
+}
+
 async function typeAndAdd(host: HTMLElement, title: string) {
   const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
   const form = host.querySelector("form");
@@ -136,8 +147,7 @@ describe("TodoPage", () => {
       createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z",
     });
     const { host, root } = await renderPage();
-    await waitForText(host, "重复");
-    const details = [...host.querySelectorAll("details")].find((d) => d.textContent?.includes("重复"))!;
+    const details = await waitForDetailsWithText(host, "重复 / 提醒");
     await act(async () => { (details as HTMLDetailsElement).open = true; details.dispatchEvent(new Event("toggle")); });
     await waitForText(host, "做三次");
     expect(host.textContent).not.toContain("1/3");
