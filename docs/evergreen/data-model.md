@@ -28,6 +28,7 @@ covers:
   - packages/shared/src/healthSchemas.ts
   - packages/shared/src/chartSchemas.ts
   - packages/client/src/lib/healthCharts.ts
+  - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
 last-reviewed: 2026-06-16
 ---
@@ -207,6 +208,8 @@ type Task = {
   scheduledAt: string | null;
   subtasks: TaskSubtask[];
   completedCount: number;
+  turn: "me" | "running" | "parked" | null;
+  turnAt: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -217,14 +220,15 @@ type Task = {
 
 - `title` 保存前 trim，trim 后不能为空；运行时 `TaskSchema` 会拒绝空标题。
 - `createdAt` / `updatedAt`、`lastDoneAt`、`startAt` 都是严格 UTC ISO 字符串（带毫秒和 `Z`），后两者可为 `null`。
+- `turn` 是可选回合轴：`null` 表示未纳入流程，`"me"` 表示等我处理，`"running"` 表示 agent/脚本执行中，`"parked"` 表示搁置；`turnAt` 是进入当前回合的 UTC ISO 时间，用于排序和计时。完成仍以 `done=true` 为唯一完成真相，完成时清空 `turn/turnAt`。
 - `recurrence = null` 表示任务池条目，勾选会翻转 `done`，`completedCount` 恒为 0；`recurrence != null` 表示重复任务，勾选会更新 `lastDoneAt` 并递增 `completedCount`。无终止条件的重复任务保持 `done=false`；`count` 满或 `until` 完成最后一次后会把 `done` 置为 `true`，落入完成区。
 - `Recurrence.freq="weekly"` 必须带 `byWeekday`，`freq="monthly"` 必须带 `byMonthday`，`freq="daily"` 不允许带 weekday/monthday；`interval` 是正整数，当前 schema 上限 999。`count` 是 1..999 的整数；`until` 是严格 UTC ISO 字符串，语义上表示本地日期零点。`count` 与 `until` 互斥。
 - `byWeekday` 用 ISO 周几（周一=1，周日=7）；`byMonthday` 支持 1..31 和 `-1`（月末），不存在的月份日期会跳过。新建或显式改锚点时，周/月命中日由 `startAt` 对应的本地日期推导；已有复杂命中日（多周几、多月号、混合月末）在未显式改锚点/单位时由预设/自定义映射保留。
 - `basis="due"` 按计划发生日判断是否有未完成实例；`basis="completion"` 从上次完成日往后推下一次。客户端 `isDueNow()` 用本地日序号计算，因此重复任务的“今天是否待做”跟用户本地日历一致，不受 UTC 日期切换影响；`until` 只限制后续发生，不会自动吞掉已经逾期未完成的最后一次。
 - `sortOrder` 是客户端展示排序字段。TodoPage 按 `sortOrder` 展示，落点（今天 / InBox / 即将到来 / 完成）由 `lib/tasks/placement.ts` 按 `scheduledAt` 或重复规则的 `startAt` 决定；UI 的「今天 / InBox / Repeat」分组只是这些落点的展示折叠，不改变数据模型，换池仍走 `scheduleTask` / `unscheduleTask`。详情抽屉和 composer 的“仅某天”预设通过 `applyRecurrenceChoice()` / `addTask({ scheduledAt })` 一次写成普通排期任务，避免重复写 `syncLog`。
 - `tasks` 不引用 `Category`、`TimeEntry` 或 `QuickNote`，不参与分类校验、时间段重叠、统计或速记导入导出。
-- SQL 表名是 `tasks`，字段是 `title` / `done` / `recurrence` / `last_done_at` / `start_at` / `scheduled_at` / `subtasks` / `completed_count` / `sort_order` / `created_at` / `updated_at`；`recurrence` 在 SQLite 中存 JSON 字符串或 `NULL`，`subtasks` 存 JSON 字符串，`done` 是 0/1，映射到 JS boolean。Dexie 表名也是 `tasks`，索引是 `id, scheduledAt, sortOrder, updatedAt`；`completedCount` 不建索引。
-- 客户端新增、编辑、勾选、删除都必须在同一个 Dexie transaction 内写 `tasks` 和 `syncLog(tableName="tasks")`。server 端 `tasks` 走通用 LWW 同步域，delete 写 tombstone；`GET /api/tasks` 是只读查询，不是写入入口。
+- SQL 表名是 `tasks`，字段是 `title` / `done` / `recurrence` / `last_done_at` / `start_at` / `scheduled_at` / `subtasks` / `completed_count` / `turn` / `turn_at` / `sort_order` / `created_at` / `updated_at`；`recurrence` 在 SQLite 中存 JSON 字符串或 `NULL`，`subtasks` 存 JSON 字符串，`done` 是 0/1，映射到 JS boolean。Dexie 表名也是 `tasks`，索引是 `id, scheduledAt, sortOrder, updatedAt`；`completedCount` 与 `turn` 不建索引。
+- 客户端新增、编辑、勾选、删除和 `setTaskTurn()` 都必须在同一个 Dexie transaction 内写 `tasks` 和 `syncLog(tableName="tasks")`。server 端 `tasks` 走通用 LWW 同步域，delete 写 tombstone；`GET /api/tasks` 是只读查询，授权 agent 的任务状态回写走受控 `POST /api/agent/tasks/:id/status`，该端点只接受回合状态 / 完成 / 备注这些封闭动作。
 
 代码入口：`packages/shared/src/entitySchemas.ts`、`packages/shared/src/types.ts`、`packages/client/src/lib/tasks.ts`、`packages/client/src/lib/tasks/recurrence.ts`、`packages/client/src/lib/tasks/recurrencePresets.ts`、`packages/client/src/pages/TodoPage.tsx`、`packages/client/src/pages/todo/TaskDetailSheet.tsx`、`packages/client/src/pages/todo/RecurrencePresetSheet.tsx`、`packages/client/src/pages/todo/CustomRecurrencePage.tsx`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/db-rows.ts`、`packages/server/src/routes/tasks.ts`、`packages/server/src/sync/domains.ts`
 
@@ -377,6 +381,8 @@ type SyncChange =
 | `scheduled_at` | `scheduledAt` |
 | `subtasks` | `subtasks` (SQL JSON string, JS `TaskSubtask[]`) |
 | `completed_count` | `completedCount` |
+| `turn` | `turn` |
+| `turn_at` | `turnAt` |
 | `sort_order` | `sortOrder` |
 | `is_archived` | `isArchived`（SQL 0/1，JS boolean） |
 | `created_at` | `createdAt` |

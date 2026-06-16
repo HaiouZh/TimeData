@@ -5,7 +5,7 @@
 ## 1. 规则卡片
 
 - **写入 TimeData 数据只能通过服务端受控 API；CLI 是其中一个客户端。**
-- **当前 CLI 唯一允许 AI/脚本写数据的命令是 `timedata log`。**
+- **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）和 `task-running/handback/park/done`（任务状态回写）。**
 - **授权 agent 可直连 `POST /api/quick-notes` 投递速记；CLI `notes` 仍只读。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
 - 读取速记用 `timedata notes`；它是只读命令，不写 quick_notes。
@@ -24,6 +24,11 @@
 | `timedata list [--date YYYY-MM-DD]` | 否 | 列出某天时间记录。 |
 | `timedata log --start HH:mm --end HH:mm --category <path> [--date YYYY-MM-DD] [--note TEXT]` | 是 | 创建一条时间记录。 |
 | `timedata notes [--date YYYY-MM-DD \| --from YYYY-MM-DD --to YYYY-MM-DD \| --recent --limit N]` | 否 | 读取速记。 |
+| `timedata tasks [--kind pool\|recurring] [--done 0\|1]` | 否 | 读取任务。 |
+| `timedata task-running --id ID` | 是 | 标记任务进入外部执行中。 |
+| `timedata task-handback --id ID [--note TEXT]` | 是 | agent 跑完后交回人工验收，可附结果备注。 |
+| `timedata task-park --id ID` | 是 | 搁置任务。 |
+| `timedata task-done --id ID` | 是 | 标记任务完成。 |
 
 ## 3. AI 任务决策树
 
@@ -49,6 +54,7 @@
 当前 CLI 不支持这些写入能力。AI 必须先区分任务类型：
 
 - 如果是授权 agent 投递 quick note，可用 `POST /api/quick-notes`，请求必须带 `Authorization: Bearer <AUTH_TOKEN>` header，body 只提交 `text`、可选 `sourceLabel`、可选 `occurredAt`；服务端会强制 `source="agent"`。
+- 如果是授权 agent 回写任务状态，优先使用 `AGENT_TOKEN` 调 `timedata task-running` / `task-handback` / `task-park` / `task-done`；这些命令只命中 `/api/agent/*` 的封闭动作集合。
 - 如果不是已明确授权的 agent 集成，CLI 不能写入速记；用户可以用 Web UI，或先新增受控 server API / CLI 命令后再使用。
 - 修改、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
 
@@ -87,6 +93,8 @@ CLI 配置优先级由高到低：
 ```
 
 AI 优先使用环境变量或配置文件，不要在可见命令行中暴露 token。只有用户明确提供临时 token 时，才使用 `--token`。
+
+外部 agent 回写任务时可把 `TIMEDATA_TOKEN` 设置为 `AGENT_TOKEN`；该 token 只能调用 `/api/agent/*`，不能 sync、admin、export 或 force-push。
 
 ## 5. 错误处理
 
@@ -188,6 +196,12 @@ curl -X POST "$TIMEDATA_SERVER_URL/api/quick-notes" \
   -H "Authorization: Bearer $TIMEDATA_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text":"周报已生成","sourceLabel":"Hermes"}'
+```
+
+### 6.6 agent 交回任务
+
+```bash
+TIMEDATA_TOKEN="$AGENT_TOKEN" timedata task-handback --id <taskId> --note "done PR#123 tests green"
 ```
 
 ## 7. 反例清单

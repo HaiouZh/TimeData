@@ -30,3 +30,32 @@ export async function runTaskUnschedule(config: ApiConfig, flags: Record<string,
     method: "POST", body: { scheduledDate: null }, fetchImpl,
   });
 }
+
+export async function runTaskTurn(
+  turn: "me" | "running" | "parked",
+  config: ApiConfig,
+  flags: Record<string, string | undefined>,
+  fetchImpl?: typeof fetch,
+): Promise<unknown> {
+  if (!flags.id) return invalid("--id is required");
+  const body: Record<string, unknown> = { turn };
+  if (turn === "me" && flags.note) body.note = flags.note;
+  return requestJson(config, `/api/agent/tasks/${encodeURIComponent(flags.id)}/status`, {
+    method: "POST",
+    body,
+    fetchImpl,
+  });
+}
+
+export async function runTaskDone(
+  config: ApiConfig,
+  flags: Record<string, string | undefined>,
+  fetchImpl?: typeof fetch,
+): Promise<unknown> {
+  if (!flags.id) return invalid("--id is required");
+  return requestJson(config, `/api/agent/tasks/${encodeURIComponent(flags.id)}/status`, {
+    method: "POST",
+    body: { done: true },
+    fetchImpl,
+  });
+}

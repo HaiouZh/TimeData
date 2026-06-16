@@ -1,7 +1,17 @@
 import "fake-indexeddb/auto";
+import type { Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
-import { addTask, deleteTask, listTasks, scheduleTask, toggleTaskDone, unscheduleTask, updateTask } from "./tasks.js";
+import {
+  addTask,
+  deleteTask,
+  listTasks,
+  scheduleTask,
+  setTaskTurn,
+  toggleTaskDone,
+  unscheduleTask,
+  updateTask,
+} from "./tasks.js";
 import { localDateOf } from "./tasks/placement.js";
 
 beforeEach(async () => {
@@ -127,6 +137,59 @@ describe("updateTask", () => {
 
     expect(next).toMatchObject({ title: "new", recurrence: { freq: "weekly", byWeekday: [1] } });
     expect(next.startAt).toBe("2026-06-14T09:00:00.000Z");
+  });
+});
+
+describe("setTaskTurn", () => {
+  it("sets running turn and stamps turnAt/updatedAt while normalizing legacy task defaults", async () => {
+    type LegacyTask = Omit<Task, "scheduledAt" | "subtasks" | "completedCount" | "turn" | "turnAt">;
+    const legacyTask: LegacyTask = {
+      id: "legacy-task",
+      title: "接手旧任务",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      sortOrder: 0,
+      createdAt: "2026-06-14T08:00:00.000Z",
+      updatedAt: "2026-06-14T08:00:00.000Z",
+    };
+    await db.tasks.put(legacyTask as Task);
+
+    const next = await setTaskTurn("legacy-task", "running", { now: new Date("2026-06-14T09:00:00.000Z") });
+
+    expect(next).toMatchObject({
+      id: "legacy-task",
+      turn: "running",
+      turnAt: "2026-06-14T09:00:00.000Z",
+      updatedAt: "2026-06-14T09:00:00.000Z",
+      scheduledAt: null,
+      subtasks: [],
+      completedCount: 0,
+    });
+    await expect(db.tasks.get("legacy-task")).resolves.toMatchObject({
+      turn: "running",
+      turnAt: "2026-06-14T09:00:00.000Z",
+      updatedAt: "2026-06-14T09:00:00.000Z",
+    });
+    await expect(db.syncLog.where("recordId").equals("legacy-task").toArray()).resolves.toMatchObject([
+      { tableName: "tasks", action: "update", timestamp: "2026-06-14T09:00:00.000Z", synced: 0 },
+    ]);
+  });
+
+  it("clears turnAt when turn is null", async () => {
+    const task = await addTask({ title: "轮到我", now: new Date("2026-06-14T08:00:00.000Z") });
+    await setTaskTurn(task.id, "me", { now: new Date("2026-06-14T09:00:00.000Z") });
+
+    const cleared = await setTaskTurn(task.id, null, { now: new Date("2026-06-14T10:00:00.000Z") });
+
+    expect(cleared.turn).toBeNull();
+    expect(cleared.turnAt).toBeNull();
+    expect(cleared.updatedAt).toBe("2026-06-14T10:00:00.000Z");
+  });
+
+  it("throws when the task does not exist", async () => {
+    await expect(setTaskTurn("missing-task", "parked")).rejects.toThrow("任务不存在");
   });
 });
 

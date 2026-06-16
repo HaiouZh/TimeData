@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runTasks, runTaskSchedule, runTaskUnschedule } from "./tasks.js";
+import { runTasks, runTaskDone, runTaskSchedule, runTaskTurn, runTaskUnschedule } from "./tasks.js";
 
 const config = { serverUrl: "http://x", token: "t" };
 
@@ -48,5 +48,43 @@ describe("runTaskUnschedule", () => {
   it("缺 id → INVALID_REQUEST", async () => {
     const r = await runTaskUnschedule(config, {}, vi.fn());
     expect((r as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+  });
+});
+
+describe("agent task turn commands", () => {
+  it("runTaskTurn handback posts turn=me and note to agent endpoint", async () => {
+    const fetchImpl = vi.fn(async () => ok({ task: { id: "task-1" } }));
+
+    await runTaskTurn("me", config, { id: "task-1", note: "done PR#123" }, fetchImpl);
+
+    const call = fetchImpl.mock.calls[0];
+    expect(call[0]).toContain("/api/agent/tasks/task-1/status");
+    expect(call[1]).toMatchObject({ method: "POST" });
+    expect(JSON.parse(String(call[1].body))).toEqual({ turn: "me", note: "done PR#123" });
+  });
+
+  it("runTaskTurn running posts only turn", async () => {
+    const fetchImpl = vi.fn(async () => ok({ task: { id: "task-1" } }));
+
+    await runTaskTurn("running", config, { id: "task-1", note: "ignored" }, fetchImpl);
+
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1].body))).toEqual({ turn: "running" });
+  });
+
+  it("runTaskDone posts done=true", async () => {
+    const fetchImpl = vi.fn(async () => ok({ task: { id: "task-1" } }));
+
+    await runTaskDone(config, { id: "task-1" }, fetchImpl);
+
+    expect(fetchImpl.mock.calls[0][0]).toContain("/api/agent/tasks/task-1/status");
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1].body))).toEqual({ done: true });
+  });
+
+  it("requires id for agent task writes", async () => {
+    const turnResult = await runTaskTurn("parked", config, {}, vi.fn());
+    const doneResult = await runTaskDone(config, {}, vi.fn());
+
+    expect((turnResult as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+    expect((doneResult as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
   });
 });

@@ -129,3 +129,45 @@ describe("TaskSchema completedCount", () => {
     expect(t.completedCount).toBe(0);
   });
 });
+
+describe("TaskSchema turn", () => {
+  const baseTask = {
+    id: "t1",
+    title: "回合任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    subtasks: [],
+    completedCount: 0,
+    sortOrder: 0,
+    createdAt: "2026-06-16T00:00:00.000Z",
+    updatedAt: "2026-06-16T00:00:00.000Z",
+  };
+
+  it("缺省时 turn/turnAt 为 null", () => {
+    const task = TaskSchema.parse(baseTask);
+    expect(task.turn).toBeNull();
+    expect(task.turnAt).toBeNull();
+  });
+
+  it("接受 me/running/parked 与 turnAt", () => {
+    const task = TaskSchema.parse({
+      ...baseTask,
+      turn: "running",
+      turnAt: "2026-06-16T01:00:00.000Z",
+    });
+    expect(task.turn).toBe("running");
+    expect(task.turnAt).toBe("2026-06-16T01:00:00.000Z");
+  });
+
+  it("拒绝非法 turn", () => {
+    expect(() =>
+      TaskSchema.parse({
+        ...baseTask,
+        turn: "done",
+      }),
+    ).toThrow();
+  });
+});

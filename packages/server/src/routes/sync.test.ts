@@ -62,6 +62,8 @@ function createSchema() {
       scheduled_at TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
+      turn TEXT,
+      turn_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -623,10 +625,12 @@ describe("sync route", () => {
             recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
             lastDoneAt: null,
             startAt: "2026-06-14T00:00:00.000Z",
-            scheduledAt: null,
-            subtasks: [],
+            scheduledAt: "2026-06-16T00:00:00.000Z",
+            subtasks: [{ id: "sub-1", title: "验收", done: false }],
             sortOrder: 0,
             completedCount: 2,
+            turn: "running",
+            turnAt: "2026-06-16T01:00:00.000Z",
             createdAt: "2026-06-14T00:00:00.000Z",
             updatedAt: "2026-06-14T00:00:00.000Z",
           },
@@ -643,11 +647,19 @@ describe("sync route", () => {
       importedTasks: 1,
       latestSeq: 1,
     });
-    expect(db.prepare("SELECT title, recurrence, start_at, completed_count FROM tasks WHERE id = ?").get("task-force")).toMatchObject({
+    expect(
+      db
+        .prepare("SELECT title, recurrence, start_at, scheduled_at, subtasks, completed_count, turn, turn_at FROM tasks WHERE id = ?")
+        .get("task-force"),
+    ).toMatchObject({
       title: "跑步",
       recurrence: JSON.stringify({ freq: "weekly", interval: 1, byWeekday: [1], basis: "due" }),
       start_at: "2026-06-14T00:00:00.000Z",
+      scheduled_at: "2026-06-16T00:00:00.000Z",
+      subtasks: JSON.stringify([{ id: "sub-1", title: "验收", done: false }]),
       completed_count: 2,
+      turn: "running",
+      turn_at: "2026-06-16T01:00:00.000Z",
     });
     expect(db.prepare("SELECT table_name, record_id FROM sync_seq WHERE id = 1").get()).toMatchObject({
       table_name: "tasks",

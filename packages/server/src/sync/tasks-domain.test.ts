@@ -28,6 +28,7 @@ beforeEach(async () => {
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
+      turn TEXT, turn_at TEXT,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE sync_tombstones (table_name TEXT NOT NULL, record_id TEXT NOT NULL, deleted_at TEXT NOT NULL, PRIMARY KEY (table_name, record_id));
@@ -61,5 +62,19 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
     expect(applyChange(c).status).toBe("applied");
     const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "t2");
     expect(pulled).toMatchObject({ data: { recurrence: { freq: "weekly", byWeekday: [1] } } });
+  });
+
+  it("persists turn fields and round-trips them", () => {
+    const c = change("create", "t3", "agent 跑");
+    (c as unknown as { data: Record<string, unknown> }).data.turn = "running";
+    (c as unknown as { data: Record<string, unknown> }).data.turnAt = "2026-06-16T01:00:00.000Z";
+
+    expect(applyChange(c).status).toBe("applied");
+    expect(db.prepare("SELECT turn, turn_at FROM tasks WHERE id='t3'").get()).toEqual({
+      turn: "running",
+      turn_at: "2026-06-16T01:00:00.000Z",
+    });
+    const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "t3");
+    expect(pulled).toMatchObject({ data: { turn: "running", turnAt: "2026-06-16T01:00:00.000Z" } });
   });
 });

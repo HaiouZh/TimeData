@@ -45,6 +45,7 @@ covers:
   - packages/server/src/routes/data.ts
   - packages/server/src/routes/export.ts
   - packages/server/src/routes/quick-notes.ts
+  - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
   - packages/server/src/routes/sync.ts
   - packages/server/src/sync/**
@@ -154,7 +155,7 @@ TimeData 是个人时间记录工具：
         → 其他设备按 seq 拉取
 ```
 
-关键点：`tasks` 是轻量待办域，不引用分类或时间记录。普通任务池条目用 `done` 表示完成；重复任务用 `recurrence` + `startAt` + `lastDoneAt` + `completedCount` 计算当前是否到期和是否已耗尽。无终止条件的重复任务勾选后继续循环；带 `count` 或 `until` 的重复任务在做满/无后续发生后置为 `done=true` 并沉入完成区。待办首页列表只展示复选框与根任务名；任务的下一次时间、子任务进度、标题编辑、日期/重复编辑和子任务编辑都下沉到详情抽屉。重复设置走“徽章 → 预设门 → 自定义整页”：常用的每天、工作日、每周、每月和月末一击写入，复杂规则进入自定义页；已有多周几、多月号和 `byMonthday: [-1]` 月末规则不会因打开/完成而静默降级。服务端只暴露只读 `GET /api/tasks` 供受控客户端查询；Web 端写入仍先落 Dexie，再经同步管线送到服务器。
+关键点：`tasks` 是轻量待办域，不引用分类或时间记录。普通任务池条目用 `done` 表示完成；重复任务用 `recurrence` + `startAt` + `lastDoneAt` + `completedCount` 计算当前是否到期和是否已耗尽。`turn/turnAt` 是可选回合轴，表达“等我 / 在跑 / 搁置”的当前状态和进入时间；完成仍以 `done=true` 为唯一真相。无终止条件的重复任务勾选后继续循环；带 `count` 或 `until` 的重复任务在做满/无后续发生后置为 `done=true` 并沉入完成区。待办首页列表只展示复选框与根任务名；任务的下一次时间、子任务进度、标题编辑、日期/重复编辑和子任务编辑都下沉到详情抽屉。重复设置走“徽章 → 预设门 → 自定义整页”：常用的每天、工作日、每周、每月和月末一击写入，复杂规则进入自定义页；已有多周几、多月号和 `byMonthday: [-1]` 月末规则不会因打开/完成而静默降级。服务端暴露只读 `GET /api/tasks` 供受控客户端查询；Web 端写入仍先落 Dexie，再经同步管线送到服务器；授权 agent 的状态回写走 `/api/agent/tasks/:id/status` 的封闭动作集合。
 
 ### 3.4 用户在多设备间同步（账本模型）
 
@@ -212,7 +213,22 @@ timedata notes --date 2026-06-02
 
 关键点：这仍属于“服务端受控 API”写入边界，不是第三条底层写入路径。agent 不能提交 `source` 伪造成 user，也不能直接编辑 SQLite、IndexedDB、syncLog、Backup 或导出文件。
 
-### 3.7 Garmin 健康数据抓取
+### 3.8 授权 agent 回写任务状态
+
+```
+外部 agent / CLI task-handback
+        → POST /api/agent/tasks/:id/status { turn?, done?, note? }
+        → scopedAuthMiddleware 校验 AUTH_TOKEN 或 AGENT_TOKEN
+        → server 读当前 task，按封闭动作更新 turn/turnAt/done/subtasks
+        → 构造 tasks/update SyncChange
+        → applyChange() 写 SQLite tasks + sync_seq
+        → notifySyncChange(getLatestSeq())
+        → 前台客户端经 SSE bump 触发普通同步拉取
+```
+
+关键点：`AGENT_TOKEN` 只在 `/api/agent/*` 生效；泄露影响面限制在任务回合状态、完成标记和备注子任务，不授予 sync、force-push、admin、export 或 reset 权限。CLI 的 `task-running` / `task-handback` / `task-park` / `task-done` 只是这个受控 API 的简化封装。
+
+### 3.9 Garmin 健康数据抓取
 
 ```
 Garmin 定时任务 / 手动触发
@@ -228,7 +244,7 @@ Garmin 定时任务 / 手动触发
 
 关键点：Garmin 数据走的是与 agent 速记相同的"服务端受控写入"路径（`applyChange()` + `sync_seq`），不是新的底层写入通道。Python 脚本只负责数据抓取和格式化，不直接碰 SQLite。自动任务不再用 `lastFetchDate` 判定窗口，而是读取 `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` 的最新日期，从最早缺口补到昨天；完全无健康数据时按 `initialBackfillDays`（默认 7，配置范围 1..30）首次回填。`runs` 不参与缺口判断，手动抓取可显式指定最多 90 天日期范围，或强制重抓最近 N 天到昨天。每次抓取有 `runId`、结构化 `status` / `errors`，输出 `[garmin]` 日志，并 best-effort 写 `sync_logs(device="garmin", action="garmin_fetch")` 便于排查。凭证在 `server_config` 表中 AES-256-GCM 加密存储，密钥派生自 `AUTH_TOKEN`。独立模块位于 `packages/server/src/garmin/`，详见其 `README.md`。
 
-### 3.8 健康数据批量导入（ingest API）
+### 3.10 健康数据批量导入（ingest API）
 
 ```
 POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
@@ -249,9 +265,9 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 3. 装 CORS 中间件（`/api/*`，来源由 `ALLOWED_ORIGINS` 白名单控制，默认空数组 fail-closed）
 4. 装 `bodyLimit` 中间件（`/api/*`，上限由 `MAX_BODY_BYTES` 控制，默认 5 MB；`Content-Length` 超限会快速拒绝，无/未知长度 body 会先读取 cloned request 计数，超出返回 HTTP 413 且不消费原始 body）
 5. 暴露不需要鉴权的两个路由：`/api/health`、`/api/version`
-6. 装 auth 中间件（之后所有受保护的 `/api/*` 默认需要 Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）
+6. 在全局 auth 前挂 `/api/agent/*` scoped auth（接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`），随后装普通 auth 中间件（之后所有受保护的 `/api/*` 默认需要 master Bearer Token；未设 `AUTH_TOKEN` 时 fail-closed，仅 `ALLOW_UNAUTHENTICATED_DEV=1` 显式开发旁路会放行）
 7. 装 `rateLimit` 中间件（`/api/sync/*`，60s 窗口，上限 `SYNC_RATE_MAX` 次，默认 60；`/api/admin/*`，同窗口，上限 `ADMIN_RATE_MAX` 次，默认 120；超出返回 HTTP 429）
-8. 注册业务路由：`categories`/`entries`/`quick-notes`/`tasks`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）/`health`（ingest）/`admin/garmin`（配置/抓取/状态）
+8. 注册业务路由：`agent`/`categories`/`entries`/`quick-notes`/`tasks`/`sync`/`export`/`update`/`data`/`admin`（含 `sync-logs`）/`health`（ingest）/`admin/garmin`（配置/抓取/状态）
 9. 静态文件兜底：`public/` 服务客户端打包产物 + index.html SPA fallback
 10. 调 `initializeDatabase()`：建表（含 `server_config` 和健康数据表）、首次启动播种默认分类
 11. 启动时清理一次旧 server backup
@@ -309,7 +325,7 @@ POST /api/health/ingest { domain: "health_heart_rate", records: [...] }
 8. **Quick Notes 是独立速记域**：`QuickNote.occurredAt` 是业务发生时间，`createdAt` 是系统创建时间，`updatedAt` 是编辑/同步时间；`source` / `sourceLabel` 是展示元数据，`source="agent"` 表示授权 agent 投递；`pinned` 是跨端同步的置顶状态，缺省等同未置顶。`quick_notes` 不引用 `categories` 或 `time_entries`，不参与分类校验、归档校验、时间段重叠、时间环、时长统计或分类统计。Web 速记页按聊天式连续时间线展示：初始加载最新窗口，向上懒加载更早内容，日期控件只跳到有界窗口；滚动时浮层日期胶囊保留当前本地日期并可直接打开日期选择；顶部搜索态用 200ms debounce 后的空格分词 AND 查询直接只读扫描 Dexie `quickNotes`，以扁平结果列表替换时间线，并用 `<mark>` 高亮命中词；置顶速记从顶部 header 的钉子按钮展开，始终不藏在主滚动列表深处，也不在主时间线重复。普通速记气泡是紧凑灰底，agent 速记气泡用深蓝底、弱蓝边框和来源标签区分，点击/焦点态仍只沿用同一个绿色外层状态。气泡单点无编辑效果，长按/右键打开复制、编辑、置顶/取消置顶、选择、删除菜单，编辑回填到底部输入框；选择态支持批量复制、Markdown/JSON 导出和批量删除。速记页统一移动与宽屏为单列气泡，把本地时钟与单条上传状态放进气泡右下角；上传状态从本地 `syncLog(tableName="quick_notes", synced=0)` 推导，待上传显示时钟，已上传或服务端下发的 agent 速记显示单勾。页面在向下滚动、底部输入聚焦或检测到软键盘打开时临时隐藏底部 Tab；长文本气泡按渲染后高度折叠，展开/收起按钮不会进入长按菜单路径。速记正文保存原始文本，展示层仅在命中保守结构语法时用 `react-markdown` + `remark-gfm` + `rehype-sanitize` 安全渲染 Markdown，未命中时保持纯文本；搜索结果始终按纯文本高亮渲染，不参与 Markdown 渲染。它可以独立 JSON/Markdown 导出、独立 JSON 合并导入、按日期范围或按多选 ID 删除；这些本地 mutation 都要和 `syncLog(tableName="quick_notes")` 同事务。AI/脚本可通过只读 `timedata notes` 查询服务端速记；授权 agent 可通过 `POST /api/quick-notes` 投递 `source="agent"` 的速记，服务端复用 `applyChange()` + `notifySyncChange()` 下发到前台客户端。速记页同时承担"捕捉中心"角色：composer 左「待办」把输入文本存为 `tasks` 池任务，header 左上角图标「打点」（替换原 QuickNote 标题块、与右侧重复入口合一，非最新窗口时仅以「历史」小标记提示）按规则 2（起点=今天最后一条记录 end，否则今天 0 点）建一条普通 `time_entry`，分类来自 `设置 → 杂项 → 打点分类` 的全局子分类设置；未配置或分类失效时不写记录。打点/存待办仅是现有域的现有写入路径，不新增写入通道。
    - 代码入口：`packages/client/src/pages/QuickNotesPage.tsx`、`packages/client/src/lib/quickNotes.ts`、`packages/client/src/lib/quickNoteDisplay.ts`、`packages/client/src/lib/punch.ts`、`packages/client/src/lib/settings/punchCategorySetting.ts`、`packages/client/src/quick-notes/`、`packages/server/src/db/schema.ts`、`packages/server/src/lib/quick-note-service.ts`、`packages/server/src/routes/quick-notes.ts`、`packages/server/src/routes/sync.ts`、`packages/server/src/sync/validation.ts`、`packages/server/src/sync/resolver.ts`
    - 相关测试：`packages/client/src/pages/QuickNotesPage.test.tsx`、`packages/client/src/lib/quickNotes.test.ts`、`packages/client/src/quick-notes/*.test.ts`、`packages/server/src/routes/quick-notes.test.ts`、`packages/server/src/routes/sync.test.ts`、`packages/server/src/sync/validation.test.ts`、`packages/server/src/sync/resolver.test.ts`、`packages/client/src/__tests__/e2e/sync-roundtrip.e2e.test.ts`
-9. **Tasks 是轻量待办域**：`Task` 存在于 Dexie `tasks` 与 SQLite `tasks`，通过 `syncLog(tableName="tasks")` 和 `sync_seq` 同步，冲突策略是 LWW，不进入手动冲突 UI，也不计入 `/api/sync/status` 的业务计数。`TodoPage` 输入用底部固定 composer：默认提交进「今天」，「重复」按钮打开同一套预设门；列表分「今天 / 即将到来」与合并的 `Repeat / InBox` 横栏（默认展开 InBox，点 Repeat 在其上方展开），列表行保持极简，只渲染复选框与根任务名；行内不展示创建时间、重复摘要、完成计数或子任务进度。今天↔InBox 换池仍走 `scheduleTask()` / `unscheduleTask()`；详情抽屉内日期/重复编辑改为点击时间徽章打开 `RecurrencePresetSheet`，常用预设一击写入，预设门复用通用 `Sheet` 外壳以保持标题栏、关闭按钮、遮罩、焦点回归与层级规则一致；`CustomRecurrencePage` 维护 `daily` / `weekly` / `monthly` 规则、间隔、可选本地时间、`due` / `completion` 基准、起始日期 `startAt` 和结束条件 `never` / `count` / `until`。月末规则用 `byMonthday: [-1]` 表达；已有多周几、多月号和混合月末规则在未显式改锚点/单位时保留，不静默塌成单日规则。任务池勾选翻转 `done`；重复任务勾选更新 `lastDoneAt` 并递增 `completedCount`，当前是否待做由 `isDueNow()` 按本地日序号计算。`count` 满或 `until` 完成最后一次后任务沉入完成区；`until` 已过但仍有逾期未完成发生时留在今天。点任务行或重复任务行从底部弹出 `TaskDetailSheet` 详情抽屉，头部显示完成复选框、重复/日期徽章与子任务计数，并自动保存标题、日期/重复规则和子任务。子任务顺序即 `task.subtasks` 数组顺序，`SubtaskEditor` 用 dnd-kit 拖柄重排并经现有 `tasks` 同步域保存，不新增字段或同步域。server 只提供只读 `GET /api/tasks?kind=pool|recurring&done=0|1` 查询入口；写入仍必须来自 Web 本地优先同步或未来明确设计的受控 API。
+9. **Tasks 是轻量待办域**：`Task` 存在于 Dexie `tasks` 与 SQLite `tasks`，通过 `syncLog(tableName="tasks")` 和 `sync_seq` 同步，冲突策略是 LWW，不进入手动冲突 UI，也不计入 `/api/sync/status` 的业务计数。`turn/turnAt` 是 opt-in 回合轴，表达等我处理、agent/脚本在跑、搁置；完成仍复用 `done`，不另设完成回合态。`TodoPage` 输入用底部固定 composer：默认提交进「今天」，「重复」按钮打开同一套预设门；列表分「今天 / 即将到来」与合并的 `Repeat / InBox` 横栏（默认展开 InBox，点 Repeat 在其上方展开），列表行保持极简，只渲染复选框与根任务名；行内不展示创建时间、重复摘要、完成计数或子任务进度。今天↔InBox 换池仍走 `scheduleTask()` / `unscheduleTask()`；详情抽屉内日期/重复编辑改为点击时间徽章打开 `RecurrencePresetSheet`，常用预设一击写入，预设门复用通用 `Sheet` 外壳以保持标题栏、关闭按钮、遮罩、焦点回归与层级规则一致；`CustomRecurrencePage` 维护 `daily` / `weekly` / `monthly` 规则、间隔、可选本地时间、`due` / `completion` 基准、起始日期 `startAt` 和结束条件 `never` / `count` / `until`。月末规则用 `byMonthday: [-1]` 表达；已有多周几、多月号和混合月末规则在未显式改锚点/单位时保留，不静默塌成单日规则。任务池勾选翻转 `done`；重复任务勾选更新 `lastDoneAt` 并递增 `completedCount`，当前是否待做由 `isDueNow()` 按本地日序号计算。`count` 满或 `until` 完成最后一次后任务沉入完成区；`until` 已过但仍有逾期未完成发生时留在今天。点任务行或重复任务行从底部弹出 `TaskDetailSheet` 详情抽屉，头部显示完成复选框、重复/日期徽章与子任务计数，并自动保存标题、日期/重复规则和子任务。子任务顺序即 `task.subtasks` 数组顺序，`SubtaskEditor` 用 dnd-kit 拖柄重排并经现有 `tasks` 同步域保存，不新增同步域。server 提供只读 `GET /api/tasks?kind=pool|recurring&done=0|1` 查询入口；授权 agent 回写状态走 `POST /api/agent/tasks/:id/status`，只允许封闭动作并通过 `sync_seq` 下发。
    - 代码入口：`packages/client/src/pages/TodoPage.tsx`、`packages/client/src/pages/todo/TaskDetailSheet.tsx`、`packages/client/src/pages/todo/RecurrencePresetSheet.tsx`、`packages/client/src/pages/todo/CustomRecurrencePage.tsx`、`packages/client/src/components/MonthCalendar.tsx`、`packages/client/src/components/Wheel.tsx`、`packages/client/src/components/ui/Sheet.tsx`、`packages/client/src/lib/tasks.ts`、`packages/client/src/lib/tasks/recurrence.ts`、`packages/client/src/lib/tasks/recurrencePresets.ts`、`packages/server/src/routes/tasks.ts`、`packages/server/src/sync/domains.ts`
    - 相关测试：`packages/client/src/pages/TodoPage.test.tsx`、`packages/client/src/pages/todo/TaskDetailSheet.test.tsx`、`packages/client/src/pages/todo/RecurrencePresetSheet.test.tsx`、`packages/client/src/pages/todo/CustomRecurrencePage.test.tsx`、`packages/client/src/pages/todo/TodoComposer.test.tsx`、`packages/client/src/pages/todo/SubtaskEditor.test.tsx`、`packages/client/src/components/MonthCalendar.test.tsx`、`packages/client/src/components/TimeRangeWheelPicker.test.ts`、`packages/client/src/components/ui/Sheet.test.tsx`、`packages/client/src/lib/tasks.test.ts`、`packages/client/src/lib/tasks.recurrenceChoice.test.ts`、`packages/client/src/lib/tasks/recurrence.test.ts`、`packages/client/src/lib/tasks/recurrencePresets.test.ts`、`packages/client/src/lib/tasks/placement.test.ts`、`packages/server/src/routes/tasks.test.ts`、`packages/server/src/routes/sync.test.ts`
 

@@ -28,6 +28,12 @@ export function ensureTaskCompletedCountColumn(db: Database): void {
   if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
 }
 
+export function ensureTaskTurnColumns(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("turn")) db.exec("ALTER TABLE tasks ADD COLUMN turn TEXT");
+  if (!names.has("turn_at")) db.exec("ALTER TABLE tasks ADD COLUMN turn_at TEXT");
+}
+
 export function initializeDatabase(): void {
   const db = getDb();
 
@@ -84,6 +90,8 @@ export function initializeDatabase(): void {
       scheduled_at TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
+      turn TEXT,
+      turn_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -228,6 +236,7 @@ export function initializeDatabase(): void {
   ensureQuickNotePinnedColumn(db);
   ensureTaskScheduledColumns(db);
   ensureTaskCompletedCountColumn(db);
+  ensureTaskTurnColumns(db);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {

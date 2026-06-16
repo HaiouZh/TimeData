@@ -99,6 +99,8 @@ export const TaskSchema = z.object({
   scheduledAt: UtcIsoStringSchema.nullable(),
   subtasks: z.array(TaskSubtaskSchema).max(200).default([]),
   completedCount: z.number().int().min(0).default(0),
+  turn: z.enum(["me", "running", "parked"]).nullable().default(null),
+  turnAt: UtcIsoStringSchema.nullable().default(null),
   sortOrder: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,

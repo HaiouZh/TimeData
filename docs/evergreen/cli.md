@@ -7,9 +7,10 @@ covers:
   - packages/server/src/lib/quick-note-service.ts
   - packages/server/src/routes/entries.ts
   - packages/server/src/routes/quick-notes.ts
+  - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-06-14
+last-reviewed: 2026-06-16
 ---
 
 # CLI（受控 API 客户端）
@@ -32,6 +33,10 @@ last-reviewed: 2026-06-14
 | `timedata tasks [--kind pool\|recurring] [--done 0\|1]` | 否 | 列任务 | `GET /api/tasks` |
 | `timedata task-schedule --id ID --date YYYY-MM-DD` | 是 | 排期任务到指定日期 | `POST /api/tasks/:id/schedule` |
 | `timedata task-unschedule --id ID` | 是 | 取消任务排期（移回 inbox） | `POST /api/tasks/:id/schedule` (scheduledDate=null) |
+| `timedata task-running --id ID` | 是 | 标记任务进入 agent/脚本执行中 | `POST /api/agent/tasks/:id/status` |
+| `timedata task-handback --id ID [--note TEXT]` | 是 | agent 跑完后交回“等我验收”，可附结果备注 | `POST /api/agent/tasks/:id/status` |
+| `timedata task-park --id ID` | 是 | 搁置任务 | `POST /api/agent/tasks/:id/status` |
+| `timedata task-done --id ID` | 是 | 标记任务完成并清空回合状态 | `POST /api/agent/tasks/:id/status` |
 | `timedata version` / `--version` | 否 | 打印构建期烧入的版本号和 git sha | 无，不读取配置 |
 
 **任何不在这里的 CLI 功能 = 不存在**。新增命令必须先在本地-only 的 `docs_local/plans/` 下放计划再实现；新增 CLI 写入命令还必须先补受控 server API，并在落地后更新公开长期文档。若新需求本身是授权 agent 集成，也可只新增受控 server API，不强制同步增加 CLI 命令。扩 `update` / `delete` / `category-add` / `import` 的决定见 [`adr/0005-cli-surface-expansion-deferred.md`](../adr/0005-cli-surface-expansion-deferred.md)。
@@ -53,6 +58,8 @@ last-reviewed: 2026-06-14
 - `timedata notes --from --to`：两个日期必须同时提供，按本地日期闭区间读取速记。
 - `timedata notes --recent --limit N`：读取最近 N 条速记，`N` 为 1..200，缺省 50；`--recent` 不可与 `--date` / `--from` / `--to` 混用。
 - `--server`、`--token`：可选，覆盖配置。
+- `task-running` / `task-handback` / `task-park` / `task-done` 的 `--token` 可传 master `AUTH_TOKEN`，也可传窄域 `AGENT_TOKEN`；后者只能调用 `/api/agent/*`。
+- `task-handback --note`：可选结果备注，会追加为该任务的一条未完成子任务，供人工验收。
 - `--format=json|human`：可选，显式指定输出格式；未指定时根据 stdout 是否 TTY 自动判断（管道/脚本默认 JSON，终端默认 human）。
 - 所有 flag 支持 `--key value` 和 `--key=value` 两种长选项格式；不支持短横线 `-k`。
 
@@ -167,7 +174,7 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 - 检查分类不存在（`CATEGORY_NOT_FOUND`）/ 路径多于一条匹配（`CATEGORY_AMBIGUOUS`）
 - 检查同日时间段重叠（`TIME_OVERLAP`）
 - 检查结束时间不能晚于当前 UTC 时间（`INVALID_TIME_RANGE`）
-- 通过受控 `timedata log` 写入 CLI 当前唯一写入口；`help`、`doctor`、`categories`、`list`、`notes`、`version` 都是只读
+- 通过受控 `timedata log` 写入时间记录；`help`、`doctor`、`categories`、`list`、`notes`、`tasks`、`version` 都是只读
 - 将本地日期+时间转为 UTC ISO（`localDateTimeToUtc()`），写入 `time_entries` 的 `start_time` / `end_time` 为 UTC 格式
 - 写入成功后追加 `sync_seq(table_name='time_entries', action='create')`，刷新服务端 `sync_state` commit hash，让其他设备可通过 seq cursor 拉到 CLI 新增记录，且 `/api/sync/status` 可直接读到新的摘要；如果有前台 Web/PWA 设备连接了 `/api/sync/stream`，服务端会在事务提交后广播一次只含 `latestSeq` 的 bump，促使对端复用普通同步链路拉取这条 CLI 记录
 - 返回结果中的 `startTime` / `endTime` 转回本地时间（`utcToLocalDateTime()`）供 CLI 展示
@@ -176,6 +183,8 @@ CLI 的 `log` 命令最终落到 `packages/server/src/lib/entry-service.ts` 的 
 CLI 的 `list` 命令调 `listEntriesForCliDate`，返回带分类路径和时长的视图。这是和 `GET /api/entries`（不带 `format=cli`）不同的输出形状；普通 `GET /api/entries` 仍返回 `TimeEntry` 字段形态，服务端内部通过 row mapper 从 SQLite 的 snake_case 字段转换。CLI 端会对 `format=cli` 响应做 discriminated union 校验：成功响应必须带 `date`、`entries`、`summary`，其中条目的 `startTime` / `endTime` 是服务端转回的本地日期时间字符串（`YYYY-MM-DDTHH:mm:ss`），不是 UTC 存储格式。
 
 CLI 的 `notes` 命令调 `GET /api/quick-notes?...&format=cli`，只读返回 Quick Notes 视图：`quickNotes[*].occurredAt` 是 UTC ISO 存储时间，`occurredLocal` 是按应用时区转换的本地时间字符串（`YYYY-MM-DDTHH:mm:ss`）。支持按本地日期、闭区间日期范围和最近 N 条查询；不提供写入、编辑、删除或导入能力。授权 agent 投递 quick note 走服务端受控写接口 `POST /api/quick-notes`，不要求 CLI 增加写命令。
+
+CLI 的 `task-running` / `task-handback` / `task-park` / `task-done` 调 `/api/agent/tasks/:id/status`，只做任务回合状态回写：`running` 表示外部执行中，`handback` 写 `turn="me"` 并可用 `--note` 追加结果备注，`park` 写 `turn="parked"`，`done` 写 `done=true` 并清空回合状态。该 API 接受 master `AUTH_TOKEN` 或窄域 `AGENT_TOKEN`，服务端仍通过 `applyChange()` + `sync_seq` + `notifySyncChange()` 下发到前台客户端。
 
 ## 7. 包与运行环境
 

@@ -6,11 +6,12 @@ import { secureHeaders } from "hono/secure-headers";
 import { getDb } from "./db/connection.js";
 import { initializeDatabase } from "./db/schema.js";
 import { runUtcResetIfNeeded } from "./db/utcReset.js";
-import { authMiddleware } from "./middleware/auth.js";
+import { authMiddleware, scopedAuthMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
 import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import adminRoute from "./routes/admin/index.js";
+import agentRoute from "./routes/agent.js";
 import categoriesRoute from "./routes/categories.js";
 import dataRoute from "./routes/data.js";
 import entriesRoute from "./routes/entries.js";
@@ -92,6 +93,9 @@ app.get("/api/health", (c) => {
   }
 });
 app.route("/api/version", versionRoute);
+
+app.use("/api/agent/*", scopedAuthMiddleware);
+app.route("/api/agent", agentRoute);
 
 app.use("/api/*", authMiddleware);
 

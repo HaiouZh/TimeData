@@ -29,7 +29,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-06-14
+last-reviewed: 2026-06-16
 ---
 
 # 部署与自更新
@@ -77,6 +77,7 @@ last-reviewed: 2026-06-14
 | 变量 | 必填 | 用途 |
 |---|---|---|
 | `AUTH_TOKEN` | 生产必填 | API 鉴权。所有 `/api/*` 请求都要带 `Authorization: Bearer <TOKEN>`，除了 `/api/health` 和 `/api/version` |
+| `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写；未设置时该作用域仍可用 `AUTH_TOKEN` |
 | `ALLOW_UNAUTHENTICATED_DEV` | 否 | 仅本地开发旁路。设为 `1` 且 `AUTH_TOKEN` 缺失时，放行所有 `/api/*` 并打印一次 warning；生产不要设置 |
 | `ALLOWED_ORIGINS` | 生产必填 | CORS 允许来源白名单，逗号分隔；未配置时所有跨域 `/api/*` 请求会被拒绝（fail-closed） |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
@@ -93,7 +94,7 @@ last-reviewed: 2026-06-14
 
 `AUTH_TOKEN` 缺失时：auth 中间件默认对受保护的 `/api/*` 返回 HTTP 500，不再按 `NODE_ENV` 区分开发/生产。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，才会放行所有 `/api/*` 并且每个进程只输出一次警告；这个旁路只用于本地开发，不能用于生产部署。
 
-受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。
+受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。`/api/agent/*` 在全局 auth 前单独挂 scoped auth，接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`，但只暴露封闭的 agent 动作集合。
 
 `ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。自 2026-05-19 起，未配置时解析为**空数组**，所有跨域 `/api/*` 请求都会被拒绝；生产部署必须显式填写 Web 前端域名，例如 `ALLOWED_ORIGINS=https://timedata.example.com`。多域名用逗号分隔，例如 `ALLOWED_ORIGINS=https://timedata.example.com,https://timedata-staging.example.com`。Android/Capacitor 壳（`androidScheme: "https"`）的 origin 是 `https://localhost`，必须显式加入白名单；兼容旧 scheme 时一并加 `capacitor://localhost`。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
 

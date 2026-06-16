@@ -343,6 +343,8 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     scheduled_at: task.scheduledAt ?? null,
     subtasks: JSON.stringify(task.subtasks ?? []),
     completed_count: task.completedCount ?? 0,
+    turn: task.turn ?? null,
+    turn_at: task.turnAt ?? null,
     created_at: task.createdAt,
   };
 }

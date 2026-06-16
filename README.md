@@ -37,6 +37,7 @@ docker compose up -d
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `AUTH_TOKEN` | 生产必填 | — | API 鉴权密钥，所有 API 请求需携带 `Authorization: Bearer <TOKEN>`；Docker 部署会以 `NODE_ENV=production` 运行，未设置时服务端会拒绝启动 |
+| `AGENT_TOKEN` | 否 | — | 窄域 agent 令牌，仅允许调用 `/api/agent/*` 任务状态回写；未设置时该作用域仍可用 `AUTH_TOKEN` |
 | `ALLOWED_ORIGINS` | 生产必填 | 空数组（拒绝跨域） | CORS 允许来源白名单，多个来源用英文逗号分隔；Web 部署填网页域名，移动壳按实际来源追加 `https://localhost,capacitor://localhost` |
 | `DB_PATH` | 否 | `/app/data/timedata.db` | SQLite 数据库路径 |
 | `PORT` | 否 | `3000` | 服务监听端口 |
@@ -118,6 +119,7 @@ timedata.example.com {
 | GET | `/api/entries` | 时间记录 | 是 |
 | GET | `/api/quick-notes` | 速记查询 | 是 |
 | POST | `/api/quick-notes` | agent 投递速记 | 是 |
+| POST | `/api/agent/tasks/:id/status` | agent 回写任务状态/备注 | 是（`AUTH_TOKEN` 或 `AGENT_TOKEN`） |
 | POST | `/api/sync/push` | 推送本地变更 | 是 |
 | POST | `/api/sync/pull` | 拉取远端变更 | 是 |
 | GET | `/api/export?format=jsonl` | 导出 JSONL | 是 |
@@ -147,5 +149,6 @@ GitHub Actions 发布的是稳定 release keystore 签名的 APK。首次从旧 
 
 - 部署后浏览器无法访问：检查云服务器安全组/防火墙是否放行端口，`docker compose ps` 确认容器健康。
 - 同步失败：确认设置页 API 地址包含协议（`http://` 或 `https://`），Token 与服务器 `AUTH_TOKEN` 一致。
+- agent 任务回写失败：确认外部 agent 使用的是 `AGENT_TOKEN`（或 master `AUTH_TOKEN`），并只调用 `/api/agent/*` 作用域。
 - 一键更新无反应：确认 `.env` 已设置 `WATCHTOWER_TOKEN`，compose 中存在 `watchtower` 服务，且 `timedata` 容器内 `WATCHTOWER_URL` 为 `http://watchtower:8080`；如果返回 409，说明已有更新任务或残留 `data/update.lock`，先看 `data/update.log` 和 `docker compose ps`。
 - Ubuntu 防火墙：`sudo ufw allow 3000/tcp`。

@@ -99,6 +99,23 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
   return putTask(next);
 }
 
+export async function setTaskTurn(id: string, turn: Task["turn"], options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const next = TaskSchema.parse({
+    ...existing,
+    scheduledAt: existing.scheduledAt ?? null,
+    subtasks: existing.subtasks ?? [],
+    completedCount: existing.completedCount ?? 0,
+    turn,
+    turnAt: turn === null ? null : updatedAt,
+    updatedAt,
+  });
+  return putTask(next);
+}
+
 export async function applyRecurrenceChoice(
   id: string,
   choice: RecurrenceChoice,

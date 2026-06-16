@@ -55,6 +55,8 @@ const task = {
   scheduledAt: null,
   subtasks: [],
   completedCount: 0,
+  turn: null,
+  turnAt: null,
   sortOrder: 0,
   createdAt: "2026-06-14T00:00:00.000Z",
   updatedAt: "2026-06-14T00:00:00.000Z",
