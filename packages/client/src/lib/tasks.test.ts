@@ -7,6 +7,7 @@ import {
   deleteTask,
   listTasks,
   scheduleTask,
+  setTaskTags,
   setTaskTurn,
   toggleTaskDone,
   unscheduleTask,
@@ -76,6 +77,12 @@ describe("toggleTaskDone", () => {
 
     expect(done.done).toBe(true);
     expect(done.lastDoneAt).toBeNull();
+    expect(done.completedAt).toBe("2026-06-14T08:00:00.000Z");
+
+    const undone = await toggleTaskDone(task.id, { now: new Date("2026-06-14T09:00:00.000Z") });
+
+    expect(undone.done).toBe(false);
+    expect(undone.completedAt).toBeNull();
     await expect(db.syncLog.where("recordId").equals(task.id).toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
     );
@@ -122,6 +129,21 @@ describe("终止式重复 toggle", () => {
     const toggled = await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
     expect(toggled.completedCount).toBe(0);
     expect(toggled.done).toBe(true);
+  });
+});
+
+describe("setTaskTags", () => {
+  it("writes task tags", async () => {
+    const task = await addTask({ title: "想法", toInbox: true });
+    const updated = await setTaskTags(task.id, ["agent", "idea"], { now: new Date("2026-06-14T09:00:00.000Z") });
+
+    expect(updated.tags).toEqual(["agent", "idea"]);
+    await expect(db.tasks.get(task.id)).resolves.toMatchObject({ tags: ["agent", "idea"] });
+    await expect(db.syncLog.where("recordId").equals(task.id).toArray()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: "tasks", action: "update", timestamp: "2026-06-14T09:00:00.000Z" }),
+      ]),
+    );
   });
 });
 
@@ -238,5 +260,16 @@ describe("listTasks", () => {
     expect(buckets.today).toHaveLength(2); // "今天" + 重复任务今天到期
     expect(buckets.inbox).toHaveLength(1);
     expect(buckets.recurring).toHaveLength(1);
+  });
+
+  it("完成区按 completedAt 倒序", async () => {
+    const older = await addTask({ title: "旧完成", toInbox: true });
+    const newer = await addTask({ title: "新完成", toInbox: true });
+    await toggleTaskDone(older.id, { now: new Date("2026-06-14T08:00:00.000Z") });
+    await toggleTaskDone(newer.id, { now: new Date("2026-06-14T09:00:00.000Z") });
+
+    const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
+
+    expect(buckets.completed.map((task) => task.id)).toEqual([newer.id, older.id]);
   });
 });

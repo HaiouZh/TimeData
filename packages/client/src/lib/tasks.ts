@@ -116,6 +116,23 @@ export async function setTaskTurn(id: string, turn: Task["turn"], options: { now
   return putTask(next);
 }
 
+export async function setTaskTags(id: string, tags: string[], options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const next = TaskSchema.parse({
+    ...existing,
+    scheduledAt: existing.scheduledAt ?? null,
+    subtasks: existing.subtasks ?? [],
+    completedCount: existing.completedCount ?? 0,
+    completedAt: existing.completedAt ?? null,
+    tags,
+    updatedAt,
+  });
+  return putTask(next);
+}
+
 export async function applyRecurrenceChoice(
   id: string,
   choice: RecurrenceChoice,
@@ -157,6 +174,8 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     scheduledAt: existing.scheduledAt ?? null,
     subtasks: existing.subtasks ?? [],
     completedCount: existing.completedCount ?? 0,
+    completedAt: existing.completedAt ?? null,
+    tags: existing.tags ?? [],
   };
 
   let next: Task;
@@ -173,7 +192,8 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
       updatedAt,
     });
   } else {
-    next = TaskSchema.parse({ ...base, done: !existing.done, updatedAt });
+    const done = !existing.done;
+    next = TaskSchema.parse({ ...base, done, completedAt: done ? updatedAt : null, updatedAt });
   }
 
   return putTask(next);
@@ -234,6 +254,8 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     scheduledAt: t.scheduledAt ?? null,
     subtasks: t.subtasks ?? [],
     completedCount: t.completedCount ?? 0,
+    completedAt: t.completedAt ?? null,
+    tags: t.tags ?? [],
   }));
   const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
   for (const t of all) {
@@ -245,5 +267,6 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     else buckets.completed.push(t);
   }
   buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
+  buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   return buckets;
 }
