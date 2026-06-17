@@ -82,3 +82,14 @@ export function formatNumberUnit(value: number | null, unit: string): string {
   const rounded = Number.isInteger(value) ? `${value}` : value.toFixed(1);
   return unit ? `${rounded} ${unit}` : rounded;
 }
+
+export function formatAxisPace(value: number | string): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "--";
+  let minutes = Math.floor(value / 60);
+  let seconds = Math.round(value % 60);
+  if (seconds === 60) {
+    minutes += 1;
+    seconds = 0;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}/km`;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClockHours, formatNumberUnit } from "./format.js";
+import { formatAxisPace, formatClockHours, formatNumberUnit } from "./format.js";
 
 describe("formatClockHours", () => {
   it("整点与半点渲染成 HH:MM", () => {
@@ -32,5 +32,21 @@ describe("formatNumberUnit", () => {
 
   it("null 返回占位", () => {
     expect(formatNumberUnit(null, "bpm")).toBe("--");
+  });
+});
+
+describe("formatAxisPace", () => {
+  it("秒/公里渲染成 m:ss/km", () => {
+    expect(formatAxisPace(360)).toBe("6:00/km");
+    expect(formatAxisPace(366)).toBe("6:06/km");
+  });
+
+  it("四舍五入到 60 秒时进位到下一分钟", () => {
+    expect(formatAxisPace(359.6)).toBe("6:00/km");
+  });
+
+  it("非有限值返回占位", () => {
+    expect(formatAxisPace(Number.NaN)).toBe("--");
+    expect(formatAxisPace("x")).toBe("--");
   });
 });
