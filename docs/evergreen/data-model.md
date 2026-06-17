@@ -225,7 +225,7 @@ type Task = {
 - `turn` 是可选回合轴：`null` 表示未纳入流程，`"me"` 表示等我处理，`"running"` 表示 agent/脚本执行中，`"parked"` 表示搁置；`turnAt` 是进入当前回合的 UTC ISO 时间，用于排序和计时。完成仍以 `done=true` 为唯一完成真相，完成时清空 `turn/turnAt`。
 - `recurrence = null` 表示任务池条目，勾选会翻转 `done`，完成时写 `completedAt=updatedAt`，取消完成时清空 `completedAt`，`completedCount` 恒为 0；`recurrence != null` 表示重复任务，勾选会更新 `lastDoneAt` 并递增 `completedCount`，不写 `completedAt`。无终止条件的重复任务保持 `done=false`；`count` 满或 `until` 完成最后一次后会把 `done` 置为 `true`，落入完成区。
 - `tags` 是自由字符串数组，缺省 `[]`，单个 tag trim 后非空且最长 64 字符，最多 50 个。它用于人/agent 语义标记和展示筛选，不驱动排期、完成、回合状态、同步冲突或权限判断；需要代码可靠动作的维度应毕业为结构化字段。
-- `subtasks` 是内嵌单层数组，只保存 `{ id, title, done }`，不升格为独立任务，也不嵌套。列表内联大纲和详情抽屉共用同一套草稿/提交语义：结构性变化即时写回 `subtasks`，文字变化在 blur/卸载时写回；子任务勾选只更新 `subtasks`，不联动父任务 `done` / `completedAt`。
+- `subtasks` 是内嵌单层数组，只保存 `{ id, title, done }`，不升格为独立任务，也不嵌套。列表内联大纲和详情抽屉共用同一套草稿/提交语义：结构性变化即时写回 `subtasks`，文字变化在 blur/卸载时写回；子任务勾选只更新 `subtasks`，不联动父任务 `done` / `completedAt`。子任务计数和完成进度都由该数组派生展示，不新增持久化字段。
 - `Recurrence.freq="weekly"` 必须带 `byWeekday`，`freq="monthly"` 必须带 `byMonthday`，`freq="daily"` 不允许带 weekday/monthday；`interval` 是正整数，当前 schema 上限 999。`count` 是 1..999 的整数；`until` 是严格 UTC ISO 字符串，语义上表示本地日期零点。`count` 与 `until` 互斥。
 - `byWeekday` 用 ISO 周几（周一=1，周日=7）；`byMonthday` 支持 1..31 和 `-1`（月末），不存在的月份日期会跳过。新建或显式改锚点时，周/月命中日由 `startAt` 对应的本地日期推导；已有复杂命中日（多周几、多月号、混合月末）在未显式改锚点/单位时由预设/自定义映射保留。
 - `basis="due"` 按计划发生日判断是否有未完成实例；`basis="completion"` 从上次完成日往后推下一次。客户端 `isDueNow()` 用本地日序号计算，因此重复任务的“今天是否待做”跟用户本地日历一致，不受 UTC 日期切换影响；`until` 只限制后续发生，不会自动吞掉已经逾期未完成的最后一次。

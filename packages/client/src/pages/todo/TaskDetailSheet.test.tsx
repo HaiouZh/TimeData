@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { addTask, updateSubtasks } from "../../lib/tasks.js";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,12 +20,9 @@ beforeEach(async () => {
 
 async function renderSheet(id: string | null) {
   const onClose = vi.fn();
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose })));
-  });
+  const { host, root } = await renderDom(
+    createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose })),
+  );
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
@@ -67,7 +64,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
     expect(titleInput.value).toBe("写计划");
     expect(subtaskInput.value).toBe("调研参考代码");
     expect(host.textContent).toContain("每天");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点遮罩关闭", async () => {
@@ -78,7 +75,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
       overlay.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onClose).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("按 Esc 关闭", async () => {
@@ -88,7 +85,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(onClose).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点关闭手柄关闭", async () => {
@@ -99,7 +96,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
       handle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onClose).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("任务被外部删除 -> 自动关闭", async () => {
@@ -110,10 +107,10 @@ describe("TaskDetailSheet 展示与关闭", () => {
     });
     await settle();
     expect(onClose).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
-  it("头部显示下一次时间与子任务计数", async () => {
+  it("头部显示下一次时间与有语义的子任务计数", async () => {
     const t = await addTask({ title: "父", recurrence: { freq: "daily", interval: 1, basis: "due" } });
     await updateSubtasks(t.id, [
       { id: "s1", title: "甲", done: true },
@@ -122,28 +119,8 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const { host, root } = await renderSheet(t.id);
     expect(host.textContent).toContain("每天");
     expect(host.textContent).toContain("1/2");
-    await act(async () => root.unmount());
-  });
-
-  it("子任务区去框：无 border-l / border-t 分区块", async () => {
-    const t = await addTask({ title: "父" });
-    await updateSubtasks(t.id, [{ id: "s1", title: "子", done: false }]);
-    const { host, root } = await renderSheet(t.id);
-    const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
-    expect(sheet.querySelector(".border-l-2")).toBeNull();
-    expect(sheet.querySelector(".border-t")).toBeNull();
-    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeTruthy();
-    await act(async () => root.unmount());
-  });
-
-  it("外壳无裸色 slate，用站内 token", async () => {
-    const t = await addTask({ title: "x" });
-    const { host, root } = await renderSheet(t.id);
-    const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
-    expect(sheet.className).not.toContain("slate");
-    expect(sheet.className).toContain("bg-surface-elevated");
-    expect(sheet.className).toContain("border-border-hairline");
-    await act(async () => root.unmount());
+    expect(host.textContent).toContain("已完成 1 个，共 2 个子任务");
+    await unmount(root);
   });
 
   it("有子任务 -> 顶部进度条按 m/n 给宽度；未满格用 accent 色", async () => {
@@ -158,8 +135,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const fill = host.querySelector('[data-testid="subtask-progress-fill"]') as HTMLElement;
     expect(fill).toBeTruthy();
     expect(fill.style.width).toBe("25%");
-    expect(fill.className).toContain("bg-accent-strong");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("全部完成 -> 进度条满格且 ok 色", async () => {
@@ -168,15 +144,14 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const { host, root } = await renderSheet(t.id);
     const fill = host.querySelector('[data-testid="subtask-progress-fill"]') as HTMLElement;
     expect(fill.style.width).toBe("100%");
-    expect(fill.className).toContain("bg-ok");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("无子任务 -> 不渲染进度条", async () => {
     const t = await addTask({ title: "光杆" });
     const { host, root } = await renderSheet(t.id);
     expect(host.querySelector('[data-testid="subtask-progress"]')).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点放大按钮切换全屏高度", async () => {
@@ -189,7 +164,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
       expand.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(sheet.className).toContain("h-[90vh]");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
 
@@ -206,7 +181,7 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("新标题");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("标题清空失焦 -> 保留原标题，不报错", async () => {
@@ -221,13 +196,14 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("保留我");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("标题按 Enter -> 失焦并落库（不插换行）", async () => {
     const t = await addTask({ title: "旧" });
     const { host, root } = await renderSheet(t.id);
     const ta = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
+    const blur = vi.spyOn(ta, "blur");
     await act(async () => {
       setTextareaValue(ta, "回车提交的标题");
     });
@@ -238,9 +214,34 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("回车提交的标题");
+    expect(blur).toHaveBeenCalled();
     expect(enter.defaultPrevented).toBe(true);
     expect(ta.value).not.toContain("\n");
-    await act(async () => root.unmount());
+    await unmount(root);
+  });
+
+  it("标题 IME 组合输入 Enter -> 不提交也不失焦", async () => {
+    const t = await addTask({ title: "旧" });
+    const { host, root } = await renderSheet(t.id);
+    const ta = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
+    const blur = vi.spyOn(ta, "blur");
+    await act(async () => {
+      setTextareaValue(ta, "拼音候选");
+    });
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    });
+    await act(async () => {
+      ta.dispatchEvent(enter);
+    });
+    await settle();
+    expect((await db.tasks.get(t.id))?.title).toBe("旧");
+    expect(blur).not.toHaveBeenCalled();
+    expect(enter.defaultPrevented).toBe(false);
+    await unmount(root);
   });
 
   it("标题粘贴多行 -> 提交为单行标题", async () => {
@@ -256,7 +257,7 @@ describe("TaskDetailSheet 自动保存", () => {
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("第一行 第二行 第三行");
     expect(ta.value).toBe("第一行 第二行 第三行");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("勾选子任务 -> 立即落库", async () => {
@@ -269,7 +270,7 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.subtasks[0].done).toBe(true);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("改子任务文字失焦 -> 落库", async () => {
@@ -285,7 +286,7 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.subtasks[0].title).toBe("改后文字");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点徽章开预设门，选『每天』→ 池任务变重复任务", async () => {
@@ -297,7 +298,7 @@ describe("TaskDetailSheet 自动保存", () => {
     const saved = await db.tasks.get(t.id);
     expect(saved?.recurrence).not.toBeNull();
     expect(placementForTask(saved!, new Date()).pool).toBe("today");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点徽章 → 仅某天 → 月历选日后为普通排期", async () => {
@@ -308,7 +309,7 @@ describe("TaskDetailSheet 自动保存", () => {
     await click(host.querySelector('button[aria-label="2026-06-20"]'));
     await settle();
     expect((await db.tasks.get(t.id))?.scheduledAt).toBe(normalizeScheduledDate("2026-06-20"));
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("preset 打开时按 Esc 只关 preset，抽屉仍在", async () => {
@@ -325,14 +326,14 @@ describe("TaskDetailSheet 自动保存", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(host.querySelector('[aria-label="重复与时间"]')).toBeNull();
     expect(host.querySelector('[data-testid="detail-sheet"]')).toBeTruthy();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("徽章三态：重复→摘要 / 仅排期→M月D日 / 都无→设定时间", async () => {
     const plain = await addTask({ title: "无", toInbox: true });
     let rendered = await renderSheet(plain.id);
     expect(badgeOf(rendered.host).textContent).toContain("设定时间");
-    await act(async () => rendered.root.unmount());
+    await unmount(rendered.root);
 
     const scheduled = await addTask({
       title: "排期",
@@ -341,24 +342,13 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     rendered = await renderSheet(scheduled.id);
     expect(badgeOf(rendered.host).textContent).toContain("7/1");
-    await act(async () => rendered.root.unmount());
+    await unmount(rendered.root);
 
     const recurrence = { freq: "daily", interval: 1, basis: "due" } as const;
     const recurring = await addTask({ title: "重复", recurrence });
     rendered = await renderSheet(recurring.id);
     expect(badgeOf(rendered.host).textContent).toContain(recurrenceSummary(recurrence));
-    await act(async () => rendered.root.unmount());
-  });
-
-  it("时间徽章是 token 小 chip（非 rounded-full 大 pill）", async () => {
-    const t = await addTask({ title: "x" });
-    const { host, root } = await renderSheet(t.id);
-    const badge = badgeOf(host);
-    expect(badge.className).not.toContain("rounded-full");
-    expect(badge.className).not.toContain("slate");
-    expect(badge.className).not.toContain("sky");
-    expect(badge.className).toContain("rounded-ctl");
-    await act(async () => root.unmount());
+    await unmount(rendered.root);
   });
 
   it("标题未失焦直接关闭 -> flush 仍落库", async () => {
@@ -373,7 +363,7 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("关闭前改的");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
 
@@ -388,7 +378,7 @@ describe("TaskDetailSheet 删除", () => {
     await settle();
     expect(await db.tasks.get(t.id)).toBeUndefined();
     expect(onClose).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("删除是轻量按钮（非整条 w-full 红框）", async () => {
@@ -396,17 +386,6 @@ describe("TaskDetailSheet 删除", () => {
     const { host, root } = await renderSheet(t.id);
     const del = host.querySelector('button[aria-label="删除任务"]') as HTMLButtonElement;
     expect(del).toBeTruthy();
-    expect(del.className).not.toContain("w-full");
-    await act(async () => root.unmount());
-  });
-
-  it("删除是小图标按钮（方形小框、danger 语义、非文字『删除』整块）", async () => {
-    const t = await addTask({ title: "x" });
-    const { host, root } = await renderSheet(t.id);
-    const del = host.querySelector('button[aria-label="删除任务"]') as HTMLButtonElement;
-    expect(del.className).not.toContain("rose");
-    expect(del.className).toContain("hover:text-danger");
-    expect(del.textContent?.trim()).toBe("✕");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

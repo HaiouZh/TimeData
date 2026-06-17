@@ -1,6 +1,8 @@
 import type { Recurrence } from "@timedata/shared";
+import { Trash } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
@@ -219,13 +221,18 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                     type="button"
                     aria-label="编辑重复与时间"
                     onClick={() => setOverlay("preset")}
-                    className="rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
+                    className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
                   >
                     {nextTimeLabel}
                   </button>
                   {subtaskTotal > 0 && (
                     <span className="text-xs text-ink-3">
-                      {subtaskDone}/{subtaskTotal}
+                      <span aria-hidden="true">
+                        {subtaskDone}/{subtaskTotal}
+                      </span>
+                      <span className="sr-only">
+                        已完成 {subtaskDone} 个，共 {subtaskTotal} 个子任务
+                      </span>
                     </span>
                   )}
                 </div>
@@ -240,7 +247,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                   }}
                   onBlur={commitTitle}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") {
+                    if (event.key === "Enter" && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
                       event.preventDefault();
                       event.currentTarget.blur();
                     }
@@ -260,9 +267,9 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                 type="button"
                 aria-label="删除任务"
                 onClick={handleDelete}
-                className="flex h-9 w-9 items-center justify-center rounded-ctl text-ink-3 hover:bg-danger-soft hover:text-danger"
+                className="flex h-11 w-11 items-center justify-center rounded-ctl text-ink-3 hover:bg-danger-soft hover:text-danger"
               >
-                ✕
+                <Icon icon={Trash} size={18} />
               </button>
             </div>
           </div>
