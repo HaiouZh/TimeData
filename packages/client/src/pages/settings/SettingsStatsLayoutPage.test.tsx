@@ -21,7 +21,8 @@ async function waitForLayout(expected: (layout: { order?: string[]; hidden?: str
     const raw = await getSetting("stats.layout.v1");
     const layout = raw ? (JSON.parse(raw) as { order?: string[]; hidden?: string[] }) : {};
     if (expected(layout)) return;
-    await new Promise((resolve) => window.setTimeout(resolve, 10));
+    // setTimeout(0)：让位给 Dexie 持久化的宏任务边界，非真实计时等待。
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
   throw new Error("Timed out waiting for stats.layout.v1");
 }

@@ -149,8 +149,9 @@ async function waitForCondition(assertion: () => boolean, message: string): Prom
   const startedAt = Date.now();
   while (Date.now() - startedAt < 1000) {
     if (assertion()) return;
+    // setTimeout(0)：让位给 liveQuery 通知与 React 重渲染的宏任务边界，非真实计时等待。
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 10));
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
   }
   throw new Error(message);

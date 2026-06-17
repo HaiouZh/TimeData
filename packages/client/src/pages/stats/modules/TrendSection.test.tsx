@@ -40,7 +40,8 @@ async function waitForSetting(key: string, expected: (raw: string | null) => boo
   while (Date.now() - startedAt < 1000) {
     const raw = await getSetting(key);
     if (expected(raw)) return;
-    await new Promise((resolve) => window.setTimeout(resolve, 10));
+    // setTimeout(0)：让位给 Dexie 持久化的宏任务边界，非真实计时等待。
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
   throw new Error(`Timed out waiting for ${key}`);
 }
@@ -170,8 +171,9 @@ describe("TrendSection", () => {
       Date.now() - startedAt < 1000 &&
       !trendChartMockState.props.some((props) => props.chart === "area")
     ) {
+      // setTimeout(0)：让位给 setting 加载与 React 重渲染的宏任务边界，非真实计时等待。
       await act(async () => {
-        await new Promise((resolve) => window.setTimeout(resolve, 10));
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
       });
     }
 

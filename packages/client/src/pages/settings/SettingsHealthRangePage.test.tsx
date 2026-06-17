@@ -38,7 +38,8 @@ async function waitForSetting(expected: (value: string | null) => boolean): Prom
   while (Date.now() - startedAt < 1000) {
     const value = await getSetting(HEALTH_RANGE_PRESETS_KEY);
     if (expected(value)) return;
-    await new Promise((resolve) => window.setTimeout(resolve, 10));
+    // setTimeout(0)：让位给 Dexie 持久化的宏任务边界，非真实计时等待。
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
   throw new Error(`Timed out waiting for ${HEALTH_RANGE_PRESETS_KEY}`);
 }

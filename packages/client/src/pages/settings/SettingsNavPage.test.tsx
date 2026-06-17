@@ -29,8 +29,9 @@ async function waitForTabs(expected: (tabs: string[]) => boolean): Promise<void>
   while (Date.now() - startedAt < 1000) {
     const tabs = await readVisibleTabs();
     if (expected(tabs)) return;
+    // setTimeout(0)：让位给 Dexie 持久化的宏任务边界，非真实计时等待。
     await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 10));
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
   }
   throw new Error("Timed out waiting for nav.visibleTabs.v1");
