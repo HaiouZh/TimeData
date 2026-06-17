@@ -19,7 +19,7 @@ function task(overrides: Partial<Task> = {}): Task {
 
 const noop = () => {};
 const handlers = {
-  onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop,
+  onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop, onSubtasksChange: noop,
 };
 
 async function render(node: ReturnType<typeof createElement>) {
@@ -101,7 +101,7 @@ describe("TaskRow", () => {
     }
   });
 
-  it("点展开箭头切换只读子任务 preview，不开抽屉", async () => {
+  it("点展开箭头显示可编辑子任务（textarea），不开抽屉", async () => {
     const onEdit = vi.fn();
     const { host, root } = await render(
       createElement(TaskRow, {
@@ -113,8 +113,52 @@ describe("TaskRow", () => {
     );
     const caret = host.querySelector('[aria-label="展开子任务"]')!;
     await act(async () => caret.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(host.textContent).toContain("子任务甲");
+    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    expect(field.value).toBe("子任务甲");
     expect(onEdit).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("勾选内联子任务调 onSubtasksChange、不调 onToggle", async () => {
+    const onSubtasksChange = vi.fn();
+    const onToggle = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ subtasks: [{ id: "s1", title: "子甲", done: false }] }),
+        pool: "inbox",
+        ...handlers,
+        onSubtasksChange,
+        onToggle,
+      }),
+    );
+
+    await act(async () =>
+      host.querySelector('[aria-label="展开子任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+    await act(async () =>
+      host.querySelector('input[aria-label="完成子任务 子甲"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+
+    expect(onSubtasksChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "t1" }),
+      [{ id: "s1", title: "子甲", done: true }],
+    );
+    expect(onToggle).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("零子任务：有添加子任务按钮；点它展开出可编辑空行", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ title: "空任务", subtasks: [] }), pool: "inbox", ...handlers }),
+    );
+
+    const add = host.querySelector('[aria-label="添加子任务"]') as HTMLButtonElement;
+    expect(add).not.toBeNull();
+    await act(async () => add.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    expect(field).not.toBeNull();
+    expect(field.value).toBe("");
     await act(async () => root.unmount());
   });
 
