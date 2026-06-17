@@ -8,7 +8,7 @@ import type {
   MetricSeries,
 } from "./types.js";
 
-function formatByType(def: DailyMetricDef, value: number | null): string {
+export function formatMetricValue(def: DailyMetricDef, value: number | null): string {
   if (def.valueType === "time") return formatClockHours(value);
   if (def.valueType === "pace") return value == null ? "--" : `${formatPace(value)}/km`;
   return formatNumberUnit(value, def.unit);
@@ -96,9 +96,9 @@ function buildSeries(
           ? paceRolling(paceComponents, dates, index, window)
           : numberRolling(values, index, window);
       rolling[key] = rolled;
-      formattedRolling[key] = formatByType(def, rolled);
+      formattedRolling[key] = formatMetricValue(def, rolled);
     }
-    return { date, value, formattedValue: formatByType(def, value), rolling, formattedRolling };
+    return { date, value, formattedValue: formatMetricValue(def, value), rolling, formattedRolling };
   });
 
   return { metricId: def.id, label: def.label, unit: def.unit, valueType: def.valueType, points };

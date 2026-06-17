@@ -29,7 +29,7 @@ export {
   formatRunSummaryPace,
   secondsPerKm,
 } from "./format.js";
-export { getChartSeries } from "./chartSeries.js";
+export { formatMetricValue, getChartSeries } from "./chartSeries.js";
 export { findMetricDef, getMetricDef, listMetricDefs, type DailyMetricDef } from "./registry.js";
 export { buildHealthSummary } from "./summary.js";
 export { buildNormalizedHealthTrend, buildRunPaceTrend } from "./trends.js";
