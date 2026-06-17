@@ -36,9 +36,10 @@ export function resolvePunchRange(
  * 无时间可记或打点分类不可用时不写任何记录，由调用方提示。
  */
 export async function punchNow(now: Date = new Date()): Promise<PunchNowResult> {
-  const nowUtc = now.toISOString();
-  const todayStartUtc = localDateTimeToUtc(`${getDateString(now)}T00:00:00`);
-  const lastEntry = await findLatestEntryEndingBefore(new Date(now.getTime() + 1).toISOString());
+  const flooredNow = new Date(Math.floor(now.getTime() / 60000) * 60000);
+  const nowUtc = flooredNow.toISOString();
+  const todayStartUtc = localDateTimeToUtc(`${getDateString(flooredNow)}T00:00:00`);
+  const lastEntry = await findLatestEntryEndingBefore(new Date(flooredNow.getTime() + 1).toISOString());
   const range = resolvePunchRange(nowUtc, todayStartUtc, lastEntry?.endTime ?? null);
   if (!range) return { ok: false, reason: "no_range" };
 
@@ -52,7 +53,7 @@ export async function punchNow(now: Date = new Date()): Promise<PunchNowResult> 
     endTime: range.endTime,
     note: null,
     overlapPlan: null,
-    now,
+    now: flooredNow,
   });
   return { ok: true, entry };
 }

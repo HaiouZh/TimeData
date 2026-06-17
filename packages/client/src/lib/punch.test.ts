@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
+import { findOverlappingEntries } from "../hooks/useEntries.js";
 import { setPunchCategoryId } from "./settings/punchCategorySetting.js";
 import { punchNow, resolvePunchRange } from "./punch.js";
 
@@ -62,6 +63,24 @@ describe("resolvePunchRange", () => {
 });
 
 describe("punchNow", () => {
+  it("打点终点向下取整到分钟，丢弃秒/毫秒", async () => {
+    await configurePunchCategory();
+    const result = await punchNow(new Date("2026-06-15T04:00:37.456Z")); // 12:00:37.456 (+08:00)
+
+    expect(result).toMatchObject({ ok: true });
+    const entry = result.ok ? result.entry : null;
+    expect(entry?.endTime).toBe("2026-06-15T04:00:00.000Z"); // 取整到 12:00:00
+  });
+
+  it("打点后紧接同一分钟起点手动记一笔不应重叠", async () => {
+    await configurePunchCategory();
+    await punchNow(new Date("2026-06-15T04:00:37.456Z"));
+
+    const overlaps = await findOverlappingEntries("2026-06-15T04:00:00.000Z", "2026-06-15T04:30:00.000Z");
+
+    expect(overlaps).toEqual([]);
+  });
+
   it("今天无记录：建一条 [今天0点 → now]、分类=已配置打点分类 的记录", async () => {
     await configurePunchCategory();
     const now = new Date("2026-06-15T04:00:00.000Z"); // 12:00 (+08:00)
