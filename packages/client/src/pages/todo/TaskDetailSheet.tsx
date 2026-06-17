@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import type { Recurrence } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
-import { formatMonthDay, getDateString } from "../../lib/time.js";
-import { applyRecurrenceChoice, deleteTask, toggleTaskDone, updateSubtasks, updateTask } from "../../lib/tasks.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
-import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
+import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
+import { applyRecurrenceChoice, deleteTask, toggleTaskDone, updateSubtasks, updateTask } from "../../lib/tasks.js";
+import { getDateString } from "../../lib/time.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
@@ -111,13 +111,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
   const todayDate = getDateString(new Date());
   const anchorDate = task?.startAt ? getDateString(new Date(task.startAt)) : todayDate;
-  const nextTimeLabel = task
-    ? task.recurrence
-      ? recurrenceSummary(task.recurrence)
-      : task.scheduledAt
-        ? formatMonthDay(getDateString(new Date(task.scheduledAt)))
-        : "设定时间"
-    : "设定时间";
+  const nextTimeLabel = task ? taskTimeLabel(task) : "设定时间";
   const customInitial = useMemo(
     () =>
       task

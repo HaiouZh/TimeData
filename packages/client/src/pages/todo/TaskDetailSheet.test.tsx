@@ -5,10 +5,10 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
-import { addTask, updateSubtasks } from "../../lib/tasks.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
-import { TaskDetailSheet, isSwipeDownClose } from "./TaskDetailSheet.js";
+import { addTask, updateSubtasks } from "../../lib/tasks.js";
+import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -258,7 +258,7 @@ describe("TaskDetailSheet 自动保存", () => {
       toInbox: true,
     });
     rendered = await renderSheet(scheduled.id);
-    expect(badgeOf(rendered.host).textContent).toContain("7月1日");
+    expect(badgeOf(rendered.host).textContent).toContain("7/1");
     await act(async () => rendered.root.unmount());
 
     const recurrence = { freq: "daily", interval: 1, basis: "due" } as const;

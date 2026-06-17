@@ -1,9 +1,11 @@
 import type { Recurrence } from "@timedata/shared";
-import { Sheet } from "../../components/ui/Sheet.js";
+import { useMemo } from "react";
+import { AnchoredPopover } from "../../components/ui/AnchoredPopover.js";
 import type { RecurrenceChoice } from "../../lib/tasks/recurrencePresets.js";
 import { RecurrencePresetList } from "./RecurrencePresetList.js";
 
-interface RecurrencePresetSheetProps {
+interface RecurrencePopoverProps {
+  anchorEl: HTMLElement;
   current: Recurrence | null;
   scheduledAt: string | null;
   anchor: string;
@@ -12,16 +14,25 @@ interface RecurrencePresetSheetProps {
   onClose: () => void;
 }
 
-export function RecurrencePresetSheet({
+export function RecurrencePopover({
+  anchorEl,
   current,
   scheduledAt,
   anchor,
   onChoose,
   onCustom,
   onClose,
-}: RecurrencePresetSheetProps) {
+}: RecurrencePopoverProps) {
+  const anchorRef = useMemo(() => ({ current: anchorEl }), [anchorEl]);
   return (
-    <Sheet open title="重复与时间" onClose={onClose} z={65}>
+    <AnchoredPopover
+      open
+      anchorRef={anchorRef}
+      onClose={onClose}
+      ariaLabel="重复与时间"
+      z={65}
+      className="max-h-[calc(100vh-1rem)] w-60 overflow-y-auto overflow-x-hidden"
+    >
       <RecurrencePresetList
         current={current}
         scheduledAt={scheduledAt}
@@ -29,6 +40,6 @@ export function RecurrencePresetSheet({
         onChoose={onChoose}
         onCustom={onCustom}
       />
-    </Sheet>
+    </AnchoredPopover>
   );
 }

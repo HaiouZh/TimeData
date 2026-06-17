@@ -3,24 +3,57 @@ import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
-import { addTask } from "../lib/tasks.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
+import { addTask } from "../lib/tasks.js";
 import { TodoPage } from "./TodoPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(async () => {
   localStorage.clear();
+  vi.unstubAllGlobals();
   await db.tasks.clear();
   await db.settings.clear();
   await db.syncLog.clear();
 });
 
+function stubMatchMedia(initialMatches: boolean) {
+  let matches = initialMatches;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const mql = {
+    media: "(min-width: 1024px)",
+    get matches() {
+      return matches;
+    },
+    onchange: null,
+    addEventListener: vi.fn((type: string, listener: EventListener) => {
+      if (type === "change") listeners.add(listener as (event: MediaQueryListEvent) => void);
+    }),
+    removeEventListener: vi.fn((type: string, listener: EventListener) => {
+      if (type === "change") listeners.delete(listener as (event: MediaQueryListEvent) => void);
+    }),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  } as unknown as MediaQueryList;
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => mql),
+  );
+  return {
+    setMatches(next: boolean) {
+      matches = next;
+      for (const listener of listeners) listener({ matches: next, media: mql.media } as MediaQueryListEvent);
+    },
+  };
+}
+
 async function renderPage() {
   const host = document.createElement("div");
+  document.body.appendChild(host);
   const root = createRoot(host);
   await act(async () => {
     root.render(createElement(MemoryRouter, null, createElement(SyncProvider, null, createElement(TodoPage))));
@@ -199,6 +232,23 @@ describe("TodoPage", () => {
     expect(host.querySelector('[aria-label="拖动 未来任务"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="拖动 重复任务"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="拖动 收件箱任务"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("宽屏 schedule popover 在切到窄屏时清理，不会切回宽屏后复现旧锚点", async () => {
+    const media = stubMatchMedia(true);
+    await addTask({ title: "有日期", scheduledAt: "2026-06-20T00:00:00.000Z" });
+    const { host, root } = await renderPage();
+    await waitForText(host, "有日期");
+    const chip = host.querySelector('[aria-label="编辑重复与时间"]') as HTMLButtonElement;
+
+    await act(async () => chip.click());
+    expect(document.body.querySelector('[role="dialog"][aria-label="重复与时间"]')).not.toBeNull();
+
+    await act(async () => media.setMatches(false));
+    await act(async () => media.setMatches(true));
+
+    expect(document.body.querySelector('[role="dialog"][aria-label="重复与时间"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });

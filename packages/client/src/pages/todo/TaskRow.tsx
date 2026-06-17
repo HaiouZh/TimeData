@@ -1,10 +1,11 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useState } from "react";
 import type { Task, TaskSubtask } from "@timedata/shared";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useState } from "react";
 import { v4 as uuid } from "uuid";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { isDueNow } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
+import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
 import { useSubtaskDraft } from "./useSubtaskDraft.js";
 
@@ -21,8 +22,11 @@ export interface TaskRowProps {
   pool: TaskPool;
   overdue?: boolean;
   dragHandle?: RowDragHandle;
+  wide?: boolean;
+  showActions?: boolean;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
+  onEditSchedule?: (t: Task, el: HTMLElement) => void;
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
@@ -96,8 +100,11 @@ export function TaskRow({
   pool,
   overdue,
   dragHandle,
+  wide,
+  showActions = true,
   onToggle,
   onEdit,
+  onEditSchedule,
   onDelete,
   onToToday,
   onToInbox,
@@ -107,7 +114,7 @@ export function TaskRow({
   const [seedEmpty, setSeedEmpty] = useState(false);
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
-  const canMove = !isRecurring && pool !== "recurring";
+  const canMove = showActions && !isRecurring && pool !== "recurring";
   const subtasks = task.subtasks ?? [];
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
@@ -222,6 +229,37 @@ export function TaskRow({
             ✕
           </HoverAction>
         )}
+        {showActions &&
+          wide &&
+          (task.recurrence !== null || task.scheduledAt !== null ? (
+            <button
+              type="button"
+              aria-label="编辑重复与时间"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEditSchedule?.(task, event.currentTarget);
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+              className="shrink-0 rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
+            >
+              {taskTimeLabel(task)}
+            </button>
+          ) : (
+            !isRecurring && (
+              <button
+                type="button"
+                aria-label="计划到某天"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEditSchedule?.(task, event.currentTarget);
+                }}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="hidden shrink-0 rounded-ctl px-2 py-0.5 text-xs text-ink-3 opacity-0 transition hover:bg-surface-hover group-hover:inline group-hover:opacity-100"
+              >
+                设定
+              </button>
+            )
+          ))}
         {dragHandle && (
           <button
             ref={dragHandle.setActivatorNodeRef}
@@ -237,11 +275,7 @@ export function TaskRow({
         )}
       </div>
       {expanded && (
-        <InlineSubtasks
-          task={task}
-          seedEmpty={seedEmpty}
-          onCommit={(next) => onSubtasksChange(task, next)}
-        />
+        <InlineSubtasks task={task} seedEmpty={seedEmpty} onCommit={(next) => onSubtasksChange(task, next)} />
       )}
     </div>
   );

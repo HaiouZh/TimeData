@@ -1,4 +1,4 @@
-import { TaskSchema, type Recurrence, type Task, type TaskSubtask } from "@timedata/shared";
+import { type Recurrence, type Task, TaskSchema, type TaskSubtask } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
@@ -6,6 +6,7 @@ import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/p
 import { isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
 import { reorderedTaskSortOrders } from "./tasks/taskSort.js";
+import { getDateString } from "./time.js";
 
 export interface AddTaskInput {
   title: string;
@@ -266,6 +267,7 @@ export interface TodoBuckets {
   inbox: Task[];
   upcoming: Task[];
   recurring: Task[]; // 重复任务管理列表（全部重复任务，无论落点）
+  todayDone: Task[];
   completed: Task[];
 }
 
@@ -275,6 +277,7 @@ function isOverdue(t: Task, now: Date): boolean {
 }
 
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
+  const todayStr = getDateString(now);
   const all = (await db.tasks.orderBy("sortOrder").toArray()).map((t) => ({
     ...t,
     scheduledAt: t.scheduledAt ?? null,
@@ -283,16 +286,19 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     completedAt: t.completedAt ?? null,
     tags: t.tags ?? [],
   }));
-  const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
+  const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], todayDone: [], completed: [] };
   for (const t of all) {
     if (t.recurrence) buckets.recurring.push(t);
     const p = placementForTask(t, now);
     if (p.pool === "today") buckets.today.push(t);
     else if (p.pool === "inbox") buckets.inbox.push(t);
     else if (p.pool === "upcoming") buckets.upcoming.push(t);
+    else if (!t.recurrence && t.done && t.completedAt && getDateString(new Date(t.completedAt)) === todayStr)
+      buckets.todayDone.push(t);
     else buckets.completed.push(t);
   }
   buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
+  buckets.todayDone.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   return buckets;
 }

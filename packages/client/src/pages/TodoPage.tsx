@@ -8,41 +8,82 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { useState } from "react";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import type { Task, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
+import { useEffect, useState } from "react";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
+import { groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
+import { normalizeScheduledDate, placementForTask } from "../lib/tasks/placement.js";
+import { recurrenceToCustomInput } from "../lib/tasks/recurrencePresets.js";
+import { getDoneCollapsed, setDoneCollapsed } from "../lib/tasks/workbenchPrefs.js";
 import {
+  applyRecurrenceChoice,
   deleteTask,
   listTasks,
   persistTaskOrder,
   scheduleTask,
+  type TodoBuckets,
   toggleTaskDone,
   unscheduleTask,
   updateSubtasks,
-  type TodoBuckets,
+  updateTask,
 } from "../lib/tasks.js";
-import { placementForTask } from "../lib/tasks/placement.js";
-import { TaskColumn } from "./todo/TaskColumn.js";
+import { getDateString } from "../lib/time.js";
+import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
+import { CustomRecurrencePage } from "./todo/CustomRecurrencePage.js";
+import { RecurrencePopover } from "./todo/RecurrencePopover.js";
+import { ResizableSplit } from "./todo/ResizableSplit.js";
+import { SortableTaskRow } from "./todo/SortableTaskRow.js";
+import { TaskColumn } from "./todo/TaskColumn.js";
+import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
+import { TaskList } from "./todo/TaskList.js";
 import { TaskRow } from "./todo/TaskRow.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
-import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
-import { SortableTaskRow } from "./todo/SortableTaskRow.js";
 
-const EMPTY: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [] };
+const EMPTY: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], completed: [], todayDone: [] };
+const DEFAULT_RECURRENCE = { freq: "daily" as const, interval: 1, basis: "due" as const };
 
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<{ task: Task; anchorEl: HTMLElement } | null>(null);
+  const [scheduleOverlay, setScheduleOverlay] = useState<"popover" | "custom">("popover");
   const { syncAfterWrite } = useSyncContext();
+  const wide = useIsWideScreen();
 
-  const toggle = async (t: Task) => { await toggleTaskDone(t.id); syncAfterWrite(); };
-  const remove = async (t: Task) => { await deleteTask(t.id); if (detailId === t.id) setDetailId(null); syncAfterWrite(); };
+  useEffect(() => {
+    if (!wide) setSchedule(null);
+  }, [wide]);
+
+  const toggle = async (t: Task) => {
+    await toggleTaskDone(t.id);
+    syncAfterWrite();
+  };
+  const remove = async (t: Task) => {
+    await deleteTask(t.id);
+    if (detailId === t.id) setDetailId(null);
+    syncAfterWrite();
+  };
   const openDetail = (t: Task) => setDetailId(t.id);
-  const moveToInbox = async (t: Task) => { await unscheduleTask(t.id); syncAfterWrite(); };
-  const changeSubtasks = async (t: Task, next: TaskSubtask[]) => { await updateSubtasks(t.id, next); syncAfterWrite(); };
+  const openSchedule = (task: Task, anchorEl: HTMLElement) => {
+    setSchedule({ task, anchorEl });
+    setScheduleOverlay("popover");
+  };
+  const moveToInbox = async (t: Task) => {
+    await unscheduleTask(t.id);
+    syncAfterWrite();
+  };
+  const changeSubtasks = async (t: Task, next: TaskSubtask[]) => {
+    await updateSubtasks(t.id, next);
+    syncAfterWrite();
+  };
   const moveToToday = async (t: Task) => {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -57,9 +98,16 @@ export function TodoPage() {
   };
 
   const rowHandlers = {
-    onToggle: toggle, onEdit: openDetail, onDelete: remove, onToToday: moveToToday, onToInbox: moveToInbox,
+    onToggle: toggle,
+    onEdit: openDetail,
+    onDelete: remove,
+    onToToday: moveToToday,
+    onToInbox: moveToInbox,
     onSubtasksChange: changeSubtasks,
   };
+  const wideRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule } : {};
+  const todayRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule, showActions: true as const } : {};
+  const doneRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule, showActions: false as const } : {};
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -80,74 +128,199 @@ export function TodoPage() {
     };
   }
 
+  const todayBlock = (
+    <TaskColumn
+      title="今天"
+      pool="today"
+      tasks={buckets.today}
+      emptyText="今天没有任务 🎉"
+      hero
+      isOverdue={isOverdue}
+      sortable
+      onReorder={async (ids) => {
+        await persistTaskOrder(ids);
+        syncAfterWrite();
+      }}
+      {...rowHandlers}
+      {...todayRowProps}
+    />
+  );
+
+  const wideTodayBlock = (
+    <div data-col="today">
+      <TaskColumn
+        title="今天"
+        pool="today"
+        tasks={buckets.today}
+        emptyText="今天没有任务 🎉"
+        hero
+        isOverdue={isOverdue}
+        sortable
+        onReorder={async (ids) => {
+          await persistTaskOrder(ids);
+          syncAfterWrite();
+        }}
+        {...rowHandlers}
+        {...wideRowProps}
+      />
+      {buckets.todayDone.length > 0 && (
+        <div className="mt-2">
+          <CollapsibleSection
+            title="已完成"
+            count={buckets.todayDone.length}
+            defaultOpen={!getDoneCollapsed()}
+            onToggle={(open) => setDoneCollapsed(!open)}
+          >
+            <div className="rounded-card bg-surface p-1.5">
+              {buckets.todayDone.map((task) => (
+                <TaskRow key={task.id} task={task} pool="today" {...rowHandlers} {...doneRowProps} />
+              ))}
+            </div>
+          </CollapsibleSection>
+        </div>
+      )}
+    </div>
+  );
+
+  const wideInboxBlock = (
+    <section data-section="inbox" data-col="inbox">
+      <div className="mb-2 flex items-baseline justify-between px-2">
+        <h2 className="text-sm font-medium text-ink">收件箱</h2>
+        <span className="text-xs text-ink-3">{buckets.inbox.length}</span>
+      </div>
+      {buckets.inbox.length === 0 ? (
+        <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
+      ) : (
+        groupInboxByDay(buckets.inbox).map((segment) => (
+          <div key={segment.key} className="mb-3">
+            <p className="px-2 pb-1 text-xs text-ink-3">{segment.label}</p>
+            <div className="rounded-card bg-surface p-1.5">
+              <TaskList pool="inbox" tasks={segment.tasks} {...rowHandlers} {...wideRowProps} />
+            </div>
+          </div>
+        ))
+      )}
+    </section>
+  );
+
+  const upcomingBlock = (
+    <div>
+      {buckets.upcoming.length > 0 && (
+        <CollapsibleSection title="即将到来" count={buckets.upcoming.length}>
+          <div className="rounded-card bg-surface p-1.5">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={reorderHandler(buckets.upcoming)}
+            >
+              <SortableContext items={buckets.upcoming.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+                {buckets.upcoming.map((task) => (
+                  <SortableTaskRow key={task.id} id={task.id}>
+                    {(handle) => (
+                      <TaskRow task={task} pool="upcoming" dragHandle={handle} {...rowHandlers} {...wideRowProps} />
+                    )}
+                  </SortableTaskRow>
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        </CollapsibleSection>
+      )}
+    </div>
+  );
+
+  const recurringBlock = (
+    <div>
+      {buckets.recurring.length > 0 && (
+        <CollapsibleSection title="重复 / 提醒" count={buckets.recurring.length}>
+          <div className="rounded-card bg-surface p-1.5">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={reorderHandler(buckets.recurring)}
+            >
+              <SortableContext items={buckets.recurring.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+                {buckets.recurring.map((task) => (
+                  <SortableTaskRow key={task.id} id={task.id}>
+                    {(handle) => (
+                      <TaskRow task={task} pool="recurring" dragHandle={handle} {...rowHandlers} {...wideRowProps} />
+                    )}
+                  </SortableTaskRow>
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        </CollapsibleSection>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-5xl">
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1.6fr_1fr] lg:items-start lg:gap-x-6 lg:gap-y-4">
-          {/* 今天：移动端 order-1 / 桌面左上 */}
-          <div className="order-1 lg:col-start-1 lg:row-start-1">
-            <TaskColumn title="今天" pool="today" tasks={buckets.today} emptyText="今天没有任务 🎉"
-              hero isOverdue={isOverdue} sortable
-              onReorder={async (ids) => { await persistTaskOrder(ids); syncAfterWrite(); }}
-              {...rowHandlers} />
+        {wide ? (
+          <ResizableSplit
+            className="items-start gap-y-4"
+            left={
+              <>
+                {wideTodayBlock}
+                {upcomingBlock}
+              </>
+            }
+            right={
+              <>
+                {wideInboxBlock}
+                {recurringBlock}
+              </>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1.6fr_1fr] lg:items-start lg:gap-x-6 lg:gap-y-4">
+            <div className="order-1 lg:col-start-1 lg:row-start-1">{todayBlock}</div>
+            <div className="order-2 lg:col-start-2 lg:row-start-1">
+              <TaskColumn title="收件箱" pool="inbox" tasks={buckets.inbox} emptyText="收件箱为空" {...rowHandlers} />
+            </div>
+            <div className="order-3 lg:col-start-1 lg:row-start-2">{upcomingBlock}</div>
+            <div className="order-4 lg:col-start-2 lg:row-start-2">{recurringBlock}</div>
           </div>
-
-          {/* 收件箱：移动端 order-2 / 桌面右上 */}
-          <div className="order-2 lg:col-start-2 lg:row-start-1">
-            <TaskColumn title="收件箱" pool="inbox" tasks={buckets.inbox} emptyText="收件箱为空" {...rowHandlers} />
-          </div>
-
-          {/* 即将到来：移动端 order-3 / 桌面左下 */}
-          <div className="order-3 lg:col-start-1 lg:row-start-2">
-            {buckets.upcoming.length > 0 && (
-              <CollapsibleSection title="即将到来" count={buckets.upcoming.length}>
-                <div className="rounded-card bg-surface p-1.5">
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={reorderHandler(buckets.upcoming)}
-                  >
-                    <SortableContext items={buckets.upcoming.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-                      {buckets.upcoming.map((task) => (
-                        <SortableTaskRow key={task.id} id={task.id}>
-                          {(handle) => <TaskRow task={task} pool="upcoming" dragHandle={handle} {...rowHandlers} />}
-                        </SortableTaskRow>
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                </div>
-              </CollapsibleSection>
-            )}
-          </div>
-
-          {/* 重复/提醒：移动端 order-4 / 桌面右下 */}
-          <div className="order-4 lg:col-start-2 lg:row-start-2">
-            {buckets.recurring.length > 0 && (
-              <CollapsibleSection title="重复 / 提醒" count={buckets.recurring.length}>
-                <div className="rounded-card bg-surface p-1.5">
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={reorderHandler(buckets.recurring)}
-                  >
-                    <SortableContext items={buckets.recurring.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-                      {buckets.recurring.map((task) => (
-                        <SortableTaskRow key={task.id} id={task.id}>
-                          {(handle) => <TaskRow task={task} pool="recurring" dragHandle={handle} {...rowHandlers} />}
-                        </SortableTaskRow>
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                </div>
-              </CollapsibleSection>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
       <TodoComposer />
 
       {detailId && <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} />}
+      {wide && schedule && scheduleOverlay === "popover" && (
+        <RecurrencePopover
+          anchorEl={schedule.anchorEl}
+          current={schedule.task.recurrence}
+          scheduledAt={schedule.task.scheduledAt ?? null}
+          anchor={schedule.task.startAt ? getDateString(new Date(schedule.task.startAt)) : getDateString(new Date())}
+          onChoose={async (choice) => {
+            const id = schedule.task.id;
+            setSchedule(null);
+            await applyRecurrenceChoice(id, choice);
+            syncAfterWrite();
+          }}
+          onCustom={() => setScheduleOverlay("custom")}
+          onClose={() => setSchedule(null)}
+        />
+      )}
+      {wide && schedule && scheduleOverlay === "custom" && (
+        <CustomRecurrencePage
+          initial={recurrenceToCustomInput(
+            schedule.task.recurrence ?? DEFAULT_RECURRENCE,
+            schedule.task.startAt,
+            schedule.task.startAt ? getDateString(new Date(schedule.task.startAt)) : getDateString(new Date()),
+          )}
+          onBack={() => setScheduleOverlay("popover")}
+          onComplete={async (recurrence, startDate) => {
+            const id = schedule.task.id;
+            setSchedule(null);
+            await updateTask(id, { recurrence, startAt: normalizeScheduledDate(startDate) });
+            syncAfterWrite();
+          }}
+        />
+      )}
     </div>
   );
 }

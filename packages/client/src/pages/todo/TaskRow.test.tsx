@@ -1,25 +1,39 @@
 // @vitest-environment jsdom
+
+import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import type { Task } from "@timedata/shared";
 import { TaskRow } from "./TaskRow.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
-    id: "t1", title: "示例任务", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null, subtasks: [],
-    completedCount: 0, sortOrder: 0,
-    createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z",
+    id: "t1",
+    title: "示例任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    subtasks: [],
+    completedCount: 0,
+    sortOrder: 0,
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-01T00:00:00.000Z",
     ...overrides,
   };
 }
 
 const noop = () => {};
 const handlers = {
-  onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop, onSubtasksChange: noop,
+  onToggle: noop,
+  onEdit: noop,
+  onDelete: noop,
+  onToToday: noop,
+  onToInbox: noop,
+  onSubtasksChange: noop,
 };
 
 async function render(node: ReturnType<typeof createElement>) {
@@ -136,13 +150,14 @@ describe("TaskRow", () => {
       host.querySelector('[aria-label="展开子任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
     await act(async () =>
-      host.querySelector('input[aria-label="完成子任务 子甲"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+      host
+        .querySelector('input[aria-label="完成子任务 子甲"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
 
-    expect(onSubtasksChange).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "t1" }),
-      [{ id: "s1", title: "子甲", done: true }],
-    );
+    expect(onSubtasksChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), [
+      { id: "s1", title: "子甲", done: true },
+    ]);
     expect(onToggle).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
@@ -185,6 +200,94 @@ describe("TaskRow", () => {
     expect(host.querySelector('[data-icon="repeat"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="排进今天"]')).toBeNull();
     expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("窄屏不渲染日期 chip", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
+        pool: "today",
+        ...handlers,
+      }),
+    );
+    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("宽屏点日期 chip 调 onEditSchedule 并传锚点", async () => {
+    const onEditSchedule = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
+        pool: "today",
+        wide: true,
+        onEditSchedule,
+        ...handlers,
+      }),
+    );
+    const chip = host.querySelector('[aria-label="编辑重复与时间"]') as HTMLElement;
+
+    await act(async () => chip.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(onEditSchedule).toHaveBeenCalledTimes(1);
+    expect(onEditSchedule.mock.calls[0]?.[1]).toBe(chip);
+    await act(async () => root.unmount());
+  });
+
+  it("宽屏日期 chip 的 Enter 不冒泡打开详情", async () => {
+    const onEdit = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
+        pool: "today",
+        wide: true,
+        ...handlers,
+        onEdit,
+      }),
+    );
+    const chip = host.querySelector('[aria-label="编辑重复与时间"]') as HTMLElement;
+
+    await act(async () => chip.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+
+    expect(onEdit).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("宽屏无日期非重复任务给计划入口", async () => {
+    const onEditSchedule = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task(),
+        pool: "inbox",
+        wide: true,
+        onEditSchedule,
+        ...handlers,
+      }),
+    );
+    const chip = host.querySelector('[aria-label="计划到某天"]') as HTMLElement;
+
+    await act(async () => chip.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(onEditSchedule).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
+  it("可隐藏池移动、删除与计划入口，用于已完成尾巴", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ done: true, scheduledAt: "2026-06-20T00:00:00.000Z" }),
+        pool: "today",
+        wide: true,
+        showActions: false,
+        ...handlers,
+      }),
+    );
+
+    expect(host.querySelector('input[aria-label="完成 示例任务"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
+    expect(host.querySelector('[aria-label="删除"]')).toBeNull();
+    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });
