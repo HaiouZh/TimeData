@@ -231,13 +231,31 @@ describe("TaskDetailSheet 自动保存", () => {
     await act(async () => {
       setTextareaValue(ta, "回车提交的标题");
     });
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
     await act(async () => {
-      ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      ta.dispatchEvent(enter);
       ta.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("回车提交的标题");
+    expect(enter.defaultPrevented).toBe(true);
     expect(ta.value).not.toContain("\n");
+    await act(async () => root.unmount());
+  });
+
+  it("标题粘贴多行 -> 提交为单行标题", async () => {
+    const t = await addTask({ title: "旧" });
+    const { host, root } = await renderSheet(t.id);
+    const ta = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
+    await act(async () => {
+      setTextareaValue(ta, "第一行\n第二行\r\n第三行");
+    });
+    await act(async () => {
+      ta.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await settle();
+    expect((await db.tasks.get(t.id))?.title).toBe("第一行 第二行 第三行");
+    expect(ta.value).toBe("第一行 第二行 第三行");
     await act(async () => root.unmount());
   });
 

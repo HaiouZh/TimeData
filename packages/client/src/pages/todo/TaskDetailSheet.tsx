@@ -34,6 +34,10 @@ function autoGrowTitle(el: HTMLTextAreaElement | null): void {
   el.style.height = `${el.scrollHeight}px`;
 }
 
+function normalizeTitle(value: string): string {
+  return value.replace(/\s*[\r\n]+\s*/g, " ").trim();
+}
+
 export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const { syncAfterWrite } = useSyncContext();
@@ -73,9 +77,10 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
 
   function commitTitle(): void {
     if (!id) return;
-    const trimmed = title.trim();
-    if (!trimmed || trimmed === task?.title) return;
-    void run(() => updateTask(id, { title: trimmed }));
+    const normalized = normalizeTitle(title);
+    if (normalized !== title) setTitle(normalized || (task?.title ?? ""));
+    if (!normalized || normalized === task?.title) return;
+    void run(() => updateTask(id, { title: normalized }));
   }
 
   const {
@@ -106,9 +111,10 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
 
   function handleClose(): void {
     if (id && task) {
-      const trimmed = title.trim();
-      if (trimmed && trimmed !== task.title) {
-        void run(() => updateTask(id, { title: trimmed }));
+      const normalized = normalizeTitle(title);
+      if (normalized !== title) setTitle(normalized || task.title);
+      if (normalized && normalized !== task.title) {
+        void run(() => updateTask(id, { title: normalized }));
       }
     }
     onClose();
