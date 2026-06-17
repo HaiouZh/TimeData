@@ -371,4 +371,14 @@ describe("TaskDetailSheet 删除", () => {
     expect(del.className).not.toContain("w-full");
     await act(async () => root.unmount());
   });
+
+  it("删除是小图标按钮（方形小框、danger 语义、非文字『删除』整块）", async () => {
+    const t = await addTask({ title: "x" });
+    const { host, root } = await renderSheet(t.id);
+    const del = host.querySelector('button[aria-label="删除任务"]') as HTMLButtonElement;
+    expect(del.className).not.toContain("rose");
+    expect(del.className).toContain("hover:text-danger");
+    expect(del.textContent?.trim()).toBe("✕");
+    await act(async () => root.unmount());
+  });
 });

@@ -254,9 +254,9 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                 type="button"
                 aria-label="删除任务"
                 onClick={handleDelete}
-                className="min-h-9 rounded-lg px-3 text-sm text-rose-300 hover:bg-rose-950/40"
+                className="flex h-9 w-9 items-center justify-center rounded-ctl text-ink-3 hover:bg-danger-soft hover:text-danger"
               >
-                删除
+                ✕
               </button>
             </div>
           </div>
