@@ -155,13 +155,17 @@ export function TodoPage() {
   }
 
   // AttentionQueue + TagFilterBar 用未筛选的全量；下方各池用 filterByTags 过滤后再渲染。
-  const allTasks: Task[] = [
-    ...buckets.today,
-    ...buckets.inbox,
-    ...buckets.upcoming,
-    ...buckets.recurring,
-    ...buckets.todayDone,
-  ];
+  // 注意去重：listTasks 把到期重复任务同时放进 buckets.recurring 与 buckets.today（行为故意保留，
+  // 让到期重复在「今天」可见），但拼成 allTasks 时必须按 id 去重，否则 AttentionQueue 渲染重复 key、
+  // TagFilterBar 频次翻倍。
+  const allTasks: Task[] = Array.from(
+    new Map(
+      [...buckets.today, ...buckets.inbox, ...buckets.upcoming, ...buckets.recurring, ...buckets.todayDone].map((t) => [
+        t.id,
+        t,
+      ]),
+    ).values(),
+  );
   const f = (list: Task[]) => filterByTags(list, selectedTags);
 
   const doneTail = buckets.todayDone.length > 0 && (

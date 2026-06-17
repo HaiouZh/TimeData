@@ -59,6 +59,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
   const [tags, setTags] = useState<string[]>([]);
   const touchStartY = useRef<number | null>(null);
   const hadTask = useRef(false);
+  const lastSeenRemoteTags = useRef<string[] | null>(null);
 
   // 只在切换任务时初始化 draft，避免同步刷新覆盖用户正在编辑的内容。
   // biome-ignore lint/correctness/useExhaustiveDependencies: 仅按 task.id 重置是有意的
@@ -68,7 +69,23 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
     setError(null);
     setOverlay("none");
     setTags(task.tags ?? []);
+    setTagDraft("");
+    lastSeenRemoteTags.current = task.tags ?? [];
   }, [task?.id]);
+
+  // 远端推送 task.tags 时同步本地——但只在「远端值真的变了」时（不是本地 commit 后 LiveQuery 回流），
+  // 否则会反复把本地 state 刷回旧值。lastSeenRemoteTags 记上次见过的远端值，对比后再决定。
+  useEffect(() => {
+    if (!task) return;
+    const remote = task.tags ?? [];
+    const last = lastSeenRemoteTags.current;
+    const same = last !== null && last.length === remote.length && last.every((t, i) => t === remote[i]);
+    if (same) return;
+    lastSeenRemoteTags.current = remote;
+    // 用户在敲（draft 非空）时不打断输入；本地 state 留给用户提交后下一轮同步。
+    if (tagDraft !== "") return;
+    setTags(remote);
+  }, [task?.tags, tagDraft]);
 
   useEffect(() => {
     if (task) {

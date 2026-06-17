@@ -1,5 +1,7 @@
 import type { Task } from "@timedata/shared";
+import { Bell, Circle } from "@phosphor-icons/react";
 import { type ComponentProps, useEffect, useState } from "react";
+import { Icon } from "../../components/Icon.js";
 import { turnBuckets } from "../../lib/tasks/turnTags.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TaskRow } from "./TaskRow.js";
@@ -40,7 +42,10 @@ export function AttentionQueue({ tasks, rowHandlers, onTurnChange, now }: Attent
     <section className="mb-4 space-y-3" data-testid="attention-queue">
       {buckets.me.length > 0 && (
         <div>
-          <div className="mb-1 px-1 text-xs font-medium text-ink-2">🔔 等我处理 ({buckets.me.length})</div>
+          <div className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-ink-2">
+            <Icon icon={Bell} size={14} />
+            <span>等我处理 ({buckets.me.length})</span>
+          </div>
           <div className="rounded-card bg-surface p-1.5">
             {buckets.me.map((t) => (
               <TaskRow
@@ -57,7 +62,10 @@ export function AttentionQueue({ tasks, rowHandlers, onTurnChange, now }: Attent
       )}
       {buckets.running.length > 0 && (
         <div>
-          <div className="mb-1 px-1 text-xs font-medium text-ink-3">🟡 在跑 ({buckets.running.length})</div>
+          <div className="mb-1 flex items-center gap-1.5 px-1 text-xs font-medium text-ink-3">
+            <Icon icon={Circle} size={10} weight="fill" className="text-warn" />
+            <span>在跑 ({buckets.running.length})</span>
+          </div>
           <div className="rounded-card bg-surface p-1.5 opacity-70">
             {buckets.running.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-2 px-2 py-1 text-sm text-ink-2">

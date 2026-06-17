@@ -130,6 +130,13 @@ export async function setTaskTurn(id: string, turn: Task["turn"], options: { now
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
 
+  // 同值短路：避免「点徽章传当前 turn」时刷新 turnAt + 写一条 syncLog。
+  // turn=null 与 turnAt=null 同时已为目标态时也跳过。
+  if (existing.turn === turn) {
+    if (turn === null && existing.turnAt === null) return existing as Task;
+    if (turn !== null && existing.turnAt !== null) return existing as Task;
+  }
+
   const updatedAt = (options.now ?? new Date()).toISOString();
   const next = TaskSchema.parse({
     ...existing,
