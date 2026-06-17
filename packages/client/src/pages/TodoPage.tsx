@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useState } from "react";
-import type { Task } from "@timedata/shared";
+import type { Task, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import {
@@ -20,6 +20,7 @@ import {
   scheduleTask,
   toggleTaskDone,
   unscheduleTask,
+  updateSubtasks,
   type TodoBuckets,
 } from "../lib/tasks.js";
 import { placementForTask } from "../lib/tasks/placement.js";
@@ -41,6 +42,7 @@ export function TodoPage() {
   const remove = async (t: Task) => { await deleteTask(t.id); if (detailId === t.id) setDetailId(null); syncAfterWrite(); };
   const openDetail = (t: Task) => setDetailId(t.id);
   const moveToInbox = async (t: Task) => { await unscheduleTask(t.id); syncAfterWrite(); };
+  const changeSubtasks = async (t: Task, next: TaskSubtask[]) => { await updateSubtasks(t.id, next); syncAfterWrite(); };
   const moveToToday = async (t: Task) => {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -56,6 +58,7 @@ export function TodoPage() {
 
   const rowHandlers = {
     onToggle: toggle, onEdit: openDetail, onDelete: remove, onToToday: moveToToday, onToInbox: moveToInbox,
+    onSubtasksChange: changeSubtasks,
   };
 
   const sensors = useSensors(
