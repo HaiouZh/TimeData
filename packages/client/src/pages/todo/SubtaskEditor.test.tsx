@@ -32,7 +32,7 @@ describe("SubtaskEditor 拖拽与手感", () => {
 
   it("回车在当前行后插入新子任务", async () => {
     const { host, root, onChange } = await render(subs);
-    const input = host.querySelectorAll('input[aria-label="子任务标题"]')[0] as HTMLInputElement;
+    const input = host.querySelectorAll('textarea[aria-label="子任务标题"]')[0] as HTMLTextAreaElement;
     await act(async () => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
@@ -46,9 +46,9 @@ describe("SubtaskEditor 拖拽与手感", () => {
 
   it("子任务标题输入无边框且不截断长文本", async () => {
     const { host, root } = await render([{ id: "a", title: "一段很长很长的子任务标题", done: false }]);
-    const input = host.querySelector('input[aria-label="子任务标题"]') as HTMLInputElement;
-    expect(input.className).not.toContain("border");
-    expect(input.className).not.toContain("truncate");
+    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    expect(field.className).not.toContain("border");
+    expect(field.className).not.toContain("truncate");
     await act(async () => root.unmount());
   });
 });

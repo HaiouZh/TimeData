@@ -26,8 +26,8 @@ export function SubtaskEditor({
   onChange,
   genId = uuid,
 }: { value: TaskSubtask[]; onChange: (next: TaskSubtask[]) => void; genId?: () => string }) {
-  const refs = useRef(new Map<string, HTMLInputElement>());
-  const registerRef = (id: string, el: HTMLInputElement | null) => {
+  const refs = useRef(new Map<string, HTMLTextAreaElement>());
+  const registerRef = (id: string, el: HTMLTextAreaElement | null) => {
     if (el) refs.current.set(id, el);
     else refs.current.delete(id);
   };

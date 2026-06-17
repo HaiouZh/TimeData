@@ -51,6 +51,13 @@ function setInputValue(input: HTMLInputElement, value: string): void {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function setTextareaValue(input: HTMLTextAreaElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 describe("isSwipeDownClose", () => {
   it("下滑超过阈值 -> true", () => expect(isSwipeDownClose(80)).toBe(true));
   it("下滑不足阈值 -> false", () => expect(isSwipeDownClose(20)).toBe(false));
@@ -63,7 +70,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
     await updateSubtasks(t.id, [{ id: "s1", title: "调研参考代码", done: false }]);
     const { host, root } = await renderSheet(t.id);
     const titleInput = host.querySelector('input[aria-label="任务标题"]') as HTMLInputElement;
-    const subtaskInput = host.querySelector('input[aria-label="子任务标题"]') as HTMLInputElement;
+    const subtaskInput = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
     expect(titleInput.value).toBe("写计划");
     expect(subtaskInput.value).toBe("调研参考代码");
     expect(host.textContent).toContain("每天");
@@ -187,9 +194,9 @@ describe("TaskDetailSheet 自动保存", () => {
     const t = await addTask({ title: "父" });
     await updateSubtasks(t.id, [{ id: "s1", title: "原文字", done: false }]);
     const { host, root } = await renderSheet(t.id);
-    const input = host.querySelector('input[aria-label="子任务标题"]') as HTMLInputElement;
+    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
     await act(async () => {
-      setInputValue(input, "改后文字");
+      setTextareaValue(input, "改后文字");
     });
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));

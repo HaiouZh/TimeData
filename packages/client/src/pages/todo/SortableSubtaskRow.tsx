@@ -1,8 +1,8 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { CSSProperties } from "react";
 import type { TaskSubtask } from "@timedata/shared";
-import { Checkbox } from "../../components/ui/Checkbox.js";
+import { SubtaskRow } from "./SubtaskRow.js";
 
 export function SortableSubtaskRow({
   subtask,
@@ -13,7 +13,7 @@ export function SortableSubtaskRow({
   onBackspaceEmpty,
 }: {
   subtask: TaskSubtask;
-  registerRef: (id: string, el: HTMLInputElement | null) => void;
+  registerRef: (id: string, el: HTMLTextAreaElement | null) => void;
   onToggle: () => void;
   onTitleChange: (value: string) => void;
   onEnter: () => void;
@@ -29,41 +29,25 @@ export function SortableSubtaskRow({
     zIndex: isDragging ? 10 : undefined,
   };
 
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>): void {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onEnter();
-    } else if (e.key === "Backspace" && e.currentTarget.value.length === 0) {
-      e.preventDefault();
-      onBackspaceEmpty();
-    }
-  }
-
   return (
     <li
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-800/40"
+      className="group flex items-start gap-2 rounded-lg px-1 py-0.5 hover:bg-surface-hover"
     >
-      <Checkbox
-        ariaLabel={`完成子任务 ${subtask.title}`}
-        checked={subtask.done}
-        onChange={() => onToggle()}
-        className="shrink-0"
-      />
-      <input
-        ref={(el) => registerRef(subtask.id, el)}
-        value={subtask.title}
-        aria-label="子任务标题"
-        onChange={(e) => onTitleChange(e.currentTarget.value)}
-        onKeyDown={handleKeyDown}
-        className={`min-h-8 min-w-0 flex-1 bg-transparent px-1 text-sm outline-none focus:bg-slate-800/50 ${subtask.done ? "text-slate-500 line-through" : "text-slate-100"}`}
+      <SubtaskRow
+        subtask={subtask}
+        registerRef={registerRef}
+        onToggle={onToggle}
+        onTitleChange={onTitleChange}
+        onEnter={onEnter}
+        onBackspaceEmpty={onBackspaceEmpty}
       />
       <button
         ref={setActivatorNodeRef}
         type="button"
         aria-label={`拖动子任务 ${subtask.title}`}
-        className="shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-slate-600 opacity-80 hover:bg-slate-800 hover:text-slate-200 group-hover:opacity-100 active:cursor-grabbing"
+        className="shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-ink-3 opacity-80 hover:bg-surface-hover hover:text-ink-2 group-hover:opacity-100 active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >
