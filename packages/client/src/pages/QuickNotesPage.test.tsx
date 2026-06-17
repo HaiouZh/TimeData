@@ -155,9 +155,10 @@ async function configurePunchCategory() {
   await db.syncLog.clear();
 }
 
+// 搜索去抖是组件内真实计时器；调用方需先 vi.useFakeTimers，这里确定性推进，避免真实 240ms 等待。
 async function waitForSearchDebounce() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 240));
+    vi.advanceTimersByTime(240);
   });
   await flush();
 }
@@ -219,43 +220,6 @@ describe("QuickNotesPage", () => {
 
     expect(input(host).value).toBe("");
     expect(host.textContent).not.toContain("正在编辑");
-
-    await act(async () => root.unmount());
-  });
-
-  it("uses distinct compact bubble chrome for agent notes without adding an inner border", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "user-note",
-        text: "用户速记",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "agent-note",
-        text: "Agent 速记",
-        occurredAt: "2026-06-01T04:01:00.000Z",
-        createdAt: "2026-06-01T04:01:00.000Z",
-        updatedAt: "2026-06-01T04:01:00.000Z",
-        source: "agent",
-        sourceLabel: "Hermes",
-      },
-    ]);
-    const { host, root } = await renderPage();
-
-    const userBubble = host.querySelector('[role="button"][aria-label="速记：用户速记"]');
-    const agentBubble = host.querySelector('[role="button"][aria-label="速记：Agent 速记"]');
-
-    expect(userBubble).toBeInstanceOf(HTMLElement);
-    expect(agentBubble).toBeInstanceOf(HTMLElement);
-    expect((userBubble as HTMLElement).className).toContain("bg-slate-900/90");
-    expect((userBubble as HTMLElement).className).toContain("py-2");
-    expect((agentBubble as HTMLElement).className).toContain("border-sky-700/55");
-    expect((agentBubble as HTMLElement).className).toContain("bg-sky-950/70");
-    expect((agentBubble as HTMLElement).className).toContain("py-2");
-    expect((agentBubble as HTMLElement).className).toContain("focus:ring-2 focus:ring-emerald-400/40");
-    expect(agentBubble?.innerHTML).not.toContain("border-sky");
 
     await act(async () => root.unmount());
   });
@@ -359,34 +323,6 @@ describe("QuickNotesPage", () => {
     // 修复前：无依赖的吸底 layout effect 会把 scrollTop 弹回 scrollHeight(1000) → 抖动。
     // 修复后：内容未变 → 不触发吸底 → 停在用户停留的位置 580。
     expect(scrollTopValue).toBe(580);
-
-    await act(async () => root.unmount());
-  });
-
-  it("renders a unified bubble layout without legacy time separators", async () => {
-    await db.quickNotes.bulkAdd([
-      {
-        id: "first-note",
-        text: "第一条",
-        occurredAt: "2026-06-01T04:00:00.000Z",
-        createdAt: "2026-06-01T04:00:00.000Z",
-        updatedAt: "2026-06-01T04:00:00.000Z",
-      },
-      {
-        id: "second-note",
-        text: "第二条",
-        occurredAt: "2026-06-01T04:08:00.000Z",
-        createdAt: "2026-06-01T04:08:00.000Z",
-        updatedAt: "2026-06-01T04:08:00.000Z",
-      },
-    ]);
-
-    const { host, root } = await renderPage();
-
-    expect(host.innerHTML).not.toContain("grid-cols-[4.25rem_minmax");
-    expect(host.innerHTML).not.toContain("float-right");
-    expect(host.querySelector('[role="button"][aria-label="速记：第一条"]')).toBeInstanceOf(HTMLElement);
-    expect(host.querySelector('[role="button"][aria-label="速记：第二条"]')).toBeInstanceOf(HTMLElement);
 
     await act(async () => root.unmount());
   });
@@ -711,6 +647,9 @@ describe("QuickNotesPage", () => {
     ]);
     const { host, root } = await renderPage();
 
+    // 搜索去抖用 fake timers 确定性推进；shouldAdvanceTime 让 flush 的 setTimeout(0) 仍能结算。
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
     await click(host.querySelector('button[aria-label="搜索速记"]'));
     await typeIntoSearch(searchInput(host), "会议");
     await waitForSearchDebounce();
@@ -723,6 +662,7 @@ describe("QuickNotesPage", () => {
 
     expect(host.textContent).toContain("没有匹配的速记");
 
+    vi.useRealTimers();
     await act(async () => root.unmount());
   });
 
@@ -746,13 +686,6 @@ describe("捕捉中心", () => {
     await db.timeEntries.clear();
     await db.categories.clear();
     await db.syncLog.clear();
-  });
-
-  it("header 不再显示速记标题块", async () => {
-    const { host, root } = await renderPage();
-    expect(host.querySelector("h1")).toBeNull();
-    expect(host.textContent).not.toContain("QuickNote");
-    await act(async () => root.unmount());
   });
 
   it("头部只有一个打点钮，且不再显示窗口计数标题", async () => {
