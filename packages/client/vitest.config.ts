@@ -23,6 +23,7 @@ export default defineConfig({
           name: "unit",
           include: ["*.test.ts", "src/**/*.test.{ts,tsx}"],
           exclude: ["src/**/__tests__/e2e/**"],
+          setupFiles: ["./src/test/setup.ts"],
         },
       },
       {
