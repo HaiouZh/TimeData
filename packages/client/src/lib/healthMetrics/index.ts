@@ -34,7 +34,6 @@ export { getChartSeries } from "./chartSeries.js";
 export { findMetricDef, getMetricDef, listMetricDefs, type DailyMetricDef } from "./registry.js";
 export { buildHealthSummary } from "./summary.js";
 export { buildNormalizedHealthTrend, buildRunPaceTrend } from "./trends.js";
-export { normalizeTo100 } from "./normalize.js";
 export { buildChartRows, computeYDomain, resolveChartLayout, rollingKey } from "./chartDisplay.js";
 export type { ChartLayout, ChartMode, ChartRow, ChartRowsResult } from "./chartDisplay.js";
 
