@@ -1,9 +1,10 @@
-import type { Recurrence } from "@timedata/shared";
+import type { Recurrence, Task } from "@timedata/shared";
 import { Trash } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
+import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
@@ -20,10 +21,17 @@ import { useSubtaskDraft } from "./useSubtaskDraft.js";
 interface TaskDetailSheetProps {
   id: string | null;
   onClose: () => void;
+  onTagsChange?: (task: Task, tags: string[]) => void;
+  onTurnChange?: (task: Task, turn: Task["turn"]) => void;
 }
 
 const SWIPE_CLOSE_THRESHOLD = 60;
 const DEFAULT_RECURRENCE: Recurrence = { freq: "daily", interval: 1, basis: "due" };
+const TURN_OPTIONS = [
+  { value: "me" as const, label: "等我" },
+  { value: "running" as const, label: "在跑" },
+  { value: "parked" as const, label: "搁置" },
+];
 
 /** 下滑位移（px，向下为正）是否达到关闭阈值。 */
 export function isSwipeDownClose(deltaY: number): boolean {
@@ -40,13 +48,15 @@ function normalizeTitle(value: string): string {
   return value.replace(/\s*[\r\n]+\s*/g, " ").trim();
 }
 
-export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
+export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const { syncAfterWrite } = useSyncContext();
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [overlay, setOverlay] = useState<"none" | "preset" | "custom">("none");
+  const [tagDraft, setTagDraft] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const touchStartY = useRef<number | null>(null);
   const hadTask = useRef(false);
 
@@ -57,6 +67,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
     setTitle(task.title);
     setError(null);
     setOverlay("none");
+    setTags(task.tags ?? []);
   }, [task?.id]);
 
   useEffect(() => {
@@ -97,6 +108,34 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
       void run(() => updateSubtasks(id, next));
     },
   });
+
+  function commitTagAdd(): void {
+    if (!task || !onTagsChange) return;
+    const next = (tagDraft || "").trim();
+    if (!next || next.length > 64) {
+      setTagDraft("");
+      return;
+    }
+    if (tags.includes(next)) {
+      setTagDraft("");
+      return;
+    }
+    if (tags.length >= 50) {
+      setTagDraft("");
+      return;
+    }
+    const updated = [...tags, next];
+    setTags(updated);
+    onTagsChange(task, updated);
+    setTagDraft("");
+  }
+
+  function removeTag(tag: string): void {
+    if (!task || !onTagsChange) return;
+    const updated = tags.filter((t) => t !== tag);
+    setTags(updated);
+    onTagsChange(task, updated);
+  }
 
   function handleDelete(): void {
     if (!id) return;
@@ -261,6 +300,64 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
             <div onBlur={blurSubtasks}>
               <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} density="full" />
             </div>
+
+            {onTagsChange && task && (
+              <div data-testid="tag-editor" className="space-y-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      data-testid="tag-edit-chip"
+                      className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 text-xs text-ink-2"
+                    >
+                      #{tag}
+                      <button
+                        type="button"
+                        aria-label={`删除标签 ${tag}`}
+                        onClick={() => removeTag(tag)}
+                        className="text-ink-3 hover:text-danger"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <input
+                  aria-label="添加标签"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitTagAdd();
+                    }
+                  }}
+                  onBlur={commitTagAdd}
+                  placeholder="加标签，回车确认"
+                  className="w-full rounded-ctl border border-border-hairline bg-surface px-2 py-1 text-sm text-ink outline-none"
+                />
+              </div>
+            )}
+
+            {onTurnChange && task && (
+              <div className="space-y-1.5">
+                <div className="text-xs text-ink-3">回合</div>
+                <SegmentedControl
+                  ariaLabel="回合"
+                  options={TURN_OPTIONS}
+                  value={task.turn ?? "me"}
+                  onChange={(value) => onTurnChange(task, value)}
+                />
+                <button
+                  type="button"
+                  aria-label="退出流程"
+                  onClick={() => onTurnChange(task, null)}
+                  className="text-xs text-ink-3 hover:text-ink-2"
+                >
+                  {task.turn ? "退出流程（移出回合）" : "未纳入回合"}
+                </button>
+              </div>
+            )}
 
             <div className="flex justify-end">
               <button
