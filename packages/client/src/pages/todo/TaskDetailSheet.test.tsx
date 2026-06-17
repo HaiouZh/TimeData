@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
@@ -17,6 +17,11 @@ beforeEach(async () => {
   localStorage.clear();
   await db.tasks.clear();
   await db.syncLog.clear();
+});
+
+// 兜底清理：sheet 与各种 popover 都走 createPortal 到 document.body，异常路径未 unmount 会留垃圾。
+afterEach(() => {
+  document.body.innerHTML = "";
 });
 
 async function renderSheet(id: string | null) {

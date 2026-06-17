@@ -3,10 +3,16 @@
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskRow } from "./TaskRow.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// 兜底清理：AnchoredPopover 用 createPortal 挂到 document.body；测试用例若异常路径未 unmount，
+// 残留 portal 会污染下一条 document.body.querySelector 查询。
+afterEach(() => {
+  document.body.innerHTML = "";
+});
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
