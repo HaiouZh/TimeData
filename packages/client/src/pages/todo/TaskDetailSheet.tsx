@@ -27,6 +27,12 @@ export function isSwipeDownClose(deltaY: number): boolean {
   return deltaY > SWIPE_CLOSE_THRESHOLD;
 }
 
+function autoGrowTitle(el: HTMLTextAreaElement | null): void {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const { syncAfterWrite } = useSyncContext();
@@ -206,13 +212,24 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                     </span>
                   )}
                 </div>
-                <input
+                <textarea
                   aria-label="任务标题"
                   value={title}
-                  onChange={(event) => setTitle(event.currentTarget.value)}
+                  rows={1}
+                  ref={(el) => autoGrowTitle(el)}
+                  onChange={(event) => {
+                    setTitle(event.currentTarget.value);
+                    autoGrowTitle(event.currentTarget);
+                  }}
                   onBlur={commitTitle}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
                   placeholder="任务标题"
-                  className="w-full resize-none bg-transparent py-2 text-xl font-medium leading-relaxed text-slate-100 outline-none placeholder:text-slate-600"
+                  className="w-full resize-none break-words bg-transparent py-2 text-xl font-medium leading-relaxed text-ink outline-none placeholder:text-ink-3"
                 />
               </div>
             </div>

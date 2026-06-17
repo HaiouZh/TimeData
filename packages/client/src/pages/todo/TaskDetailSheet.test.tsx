@@ -44,13 +44,6 @@ const click = (el: Element | null) =>
 
 const badgeOf = (host: HTMLElement) => host.querySelector('button[aria-label="编辑重复与时间"]') as HTMLButtonElement;
 
-function setInputValue(input: HTMLInputElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-  setter?.call(input, value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
 function setTextareaValue(input: HTMLTextAreaElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
   setter?.call(input, value);
@@ -69,7 +62,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const t = await addTask({ title: "写计划", recurrence: { freq: "daily", interval: 1, basis: "due" } });
     await updateSubtasks(t.id, [{ id: "s1", title: "调研参考代码", done: false }]);
     const { host, root } = await renderSheet(t.id);
-    const titleInput = host.querySelector('input[aria-label="任务标题"]') as HTMLInputElement;
+    const titleInput = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
     const subtaskInput = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
     expect(titleInput.value).toBe("写计划");
     expect(subtaskInput.value).toBe("调研参考代码");
@@ -150,9 +143,9 @@ describe("TaskDetailSheet 自动保存", () => {
   it("改标题失焦 -> 库 title 更新", async () => {
     const t = await addTask({ title: "旧标题" });
     const { host, root } = await renderSheet(t.id);
-    const input = host.querySelector('input[aria-label="任务标题"]') as HTMLInputElement;
+    const input = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
     await act(async () => {
-      setInputValue(input, "新标题");
+      setTextareaValue(input, "新标题");
     });
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
@@ -165,15 +158,32 @@ describe("TaskDetailSheet 自动保存", () => {
   it("标题清空失焦 -> 保留原标题，不报错", async () => {
     const t = await addTask({ title: "保留我" });
     const { host, root } = await renderSheet(t.id);
-    const input = host.querySelector('input[aria-label="任务标题"]') as HTMLInputElement;
+    const input = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
     await act(async () => {
-      setInputValue(input, "");
+      setTextareaValue(input, "");
     });
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("保留我");
+    await act(async () => root.unmount());
+  });
+
+  it("标题按 Enter -> 失焦并落库（不插换行）", async () => {
+    const t = await addTask({ title: "旧" });
+    const { host, root } = await renderSheet(t.id);
+    const ta = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
+    await act(async () => {
+      setTextareaValue(ta, "回车提交的标题");
+    });
+    await act(async () => {
+      ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      ta.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await settle();
+    expect((await db.tasks.get(t.id))?.title).toBe("回车提交的标题");
+    expect(ta.value).not.toContain("\n");
     await act(async () => root.unmount());
   });
 
@@ -271,9 +281,9 @@ describe("TaskDetailSheet 自动保存", () => {
   it("标题未失焦直接关闭 -> flush 仍落库", async () => {
     const t = await addTask({ title: "旧" });
     const { host, root } = await renderSheet(t.id);
-    const input = host.querySelector('input[aria-label="任务标题"]') as HTMLInputElement;
+    const input = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
     await act(async () => {
-      setInputValue(input, "关闭前改的");
+      setTextareaValue(input, "关闭前改的");
     });
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
