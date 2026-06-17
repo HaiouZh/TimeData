@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Recurrence, TaskSubtask } from "@timedata/shared";
+import type { Recurrence } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
@@ -9,10 +9,10 @@ import { applyRecurrenceChoice, deleteTask, toggleTaskDone, updateSubtasks, upda
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
-import { subtasksDifferStructurally, trimSubtasks } from "../../lib/tasks/subtasks.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
+import { useSubtaskDraft } from "./useSubtaskDraft.js";
 
 interface TaskDetailSheetProps {
   id: string | null;
@@ -31,7 +31,6 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const { syncAfterWrite } = useSyncContext();
   const [title, setTitle] = useState("");
-  const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [overlay, setOverlay] = useState<"none" | "preset" | "custom">("none");
@@ -43,7 +42,6 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
   useEffect(() => {
     if (!task) return;
     setTitle(task.title);
-    setSubtasks(task.subtasks ?? []);
     setError(null);
     setOverlay("none");
   }, [task?.id]);
@@ -73,16 +71,18 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
     void run(() => updateTask(id, { title: trimmed }));
   }
 
-  function commitSubtasks(list: TaskSubtask[]): void {
-    if (!id) return;
-    void run(() => updateSubtasks(id, trimSubtasks(list)));
-  }
-
-  function handleSubtasksChange(next: TaskSubtask[]): void {
-    const structural = subtasksDifferStructurally(subtasks, next);
-    setSubtasks(next);
-    if (structural) commitSubtasks(next);
-  }
+  const {
+    subtasks,
+    onChange: handleSubtasksChange,
+    onBlur: blurSubtasks,
+  } = useSubtaskDraft({
+    taskId: task?.id ?? "",
+    externalSubtasks: task?.subtasks ?? [],
+    onCommit: (next) => {
+      if (!id) return;
+      void run(() => updateSubtasks(id, next));
+    },
+  });
 
   function handleDelete(): void {
     if (!id) return;
@@ -102,11 +102,6 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
       const trimmed = title.trim();
       if (trimmed && trimmed !== task.title) {
         void run(() => updateTask(id, { title: trimmed }));
-      }
-
-      const trimmedSubtasks = trimSubtasks(subtasks);
-      if (JSON.stringify(trimmedSubtasks) !== JSON.stringify(task.subtasks ?? [])) {
-        commitSubtasks(subtasks);
       }
     }
     onClose();
@@ -228,10 +223,10 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
               </div>
             </div>
 
-            <div className="border-t border-slate-800/80 pt-4" onBlur={() => commitSubtasks(subtasks)}>
+            <div className="border-t border-slate-800/80 pt-4" onBlur={blurSubtasks}>
               <div className="border-l-2 border-slate-700/80 pl-3">
                 <p className="mb-2 text-xs font-medium text-slate-500">子任务</p>
-                <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} />
+                <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} density="full" />
               </div>
             </div>
 
