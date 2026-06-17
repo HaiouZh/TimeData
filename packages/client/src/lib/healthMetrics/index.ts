@@ -34,6 +34,7 @@ export { findMetricDef, getMetricDef, listMetricDefs, type DailyMetricDef } from
 export { buildHealthSummary } from "./summary.js";
 export { buildNormalizedHealthTrend, buildRunPaceTrend } from "./trends.js";
 export { normalizeTo100 } from "./normalize.js";
+export { aggregateMetricPoints, type MetricAggregateResult } from "./aggregate.js";
 
 export { filterHealthRecordsByRange as filterByDateRange } from "./range.js";
 export { computeSleepDurationHours as computeSleepDuration } from "./format.js";
