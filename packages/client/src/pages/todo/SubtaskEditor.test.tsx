@@ -51,4 +51,50 @@ describe("SubtaskEditor 拖拽与手感", () => {
     expect(field.className).not.toContain("truncate");
     await act(async () => root.unmount());
   });
+
+  it("compact 密度：无拖柄、显示轻量添加按钮", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        createElement(SubtaskEditor, { value: subs, onChange: vi.fn(), genId: () => "new", density: "compact" }),
+      );
+    });
+
+    expect(host.querySelectorAll('[aria-label^="拖动子任务"]').length).toBe(0);
+    expect(host.textContent).toContain("+ 子任务");
+    expect(host.textContent).not.toContain("+ 添加子任务");
+
+    await act(async () => root.unmount());
+    host.remove();
+  });
+
+  it("autoFocusId 聚焦对应子任务输入框", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        createElement(SubtaskEditor, {
+          value: subs,
+          onChange: vi.fn(),
+          genId: () => "new",
+          density: "compact",
+          autoFocusId: "b",
+        }),
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const fields = host.querySelectorAll('textarea[aria-label="子任务标题"]');
+    expect(document.activeElement).toBe(fields[1]);
+
+    await act(async () => root.unmount());
+    host.remove();
+  });
 });
