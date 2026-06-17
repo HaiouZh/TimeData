@@ -93,6 +93,11 @@
 - 优先行为测试，不靠 grep 文档字符串。
 - 未经明确批准不改基线 / 快照 / 忽略来消除失败。
 - 交付前本地通过 `pnpm test` 与 `pnpm check:docs`。无法运行时（环境受限）显式说明跳过的检查。
+- **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页测只留烟测 + 真正跨组件协作的流程，别把单组件/单函数行为又在整页重测一遍。
+- **去冗余分级举证**：删任何测试前须先确认"同一行为已在更低层覆盖"（看的是同一行为，不是同一函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）blast radius 大，须**正面贴出低层覆盖证据**且优先 merge 不 delete；其余域低层确证覆盖即可删。
+- **无效测试定义（可删）**：只测实现细节非行为（如断言具体 className 串）、永远绿（断言已删除代码"不存在"）、grep 文档字符串、无人看的快照。
+- **禁真实定时等待**：测试不写 `setTimeout(fn, n>0)` 等待。组件真实计时器用 `vi.useFakeTimers` + `advanceTimersByTime`（`shouldAdvanceTime` 可保留 `setTimeout(0)` 让位）；只为让位 Dexie / 渲染异步用 `setTimeout(0)` 的宏任务边界。CI `check:test` 棘轮闸守，存量在 `scripts/test-hygiene-baseline.json`。
+- **DOM 测试走 `src/test/domHarness`**，不裸 `createRoot`（统一清理 + 收口 unmount，CI `check:test` 守存量棘轮）。
 
 ------
 
@@ -137,4 +142,4 @@
 
 ------
 
-*Last reviewed: 2026-06-13（同步收敛为账本模型 + 域登记簿，见 ADR 0012）*
+*Last reviewed: 2026-06-17（测试章加分层归位 / 去冗余分级举证 / 禁真实等待与裸 createRoot 准则，配套 check:test 棘轮闸）*
