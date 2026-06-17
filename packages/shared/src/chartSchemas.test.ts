@@ -48,6 +48,30 @@ describe("HealthChartConfigSchema", () => {
     ).toBe("table");
   });
 
+  it("stat block aggregation 可选且只接受合法枚举", () => {
+    expect(
+      HealthChartConfigSchema.parse({ ...base, view: "stat", source: "derived", metricIds: ["sleep.duration"] }).view,
+    ).toBe("stat");
+    expect(
+      HealthChartConfigSchema.parse({
+        ...base,
+        view: "stat",
+        source: "derived",
+        metricIds: ["sleep.duration"],
+        aggregation: "avg",
+      }),
+    ).toMatchObject({ aggregation: "avg" });
+    expect(
+      HealthChartConfigSchema.safeParse({
+        ...base,
+        view: "stat",
+        source: "derived",
+        metricIds: ["sleep.duration"],
+        aggregation: "median",
+      }).success,
+    ).toBe(false);
+  });
+
   it("validates ranges and presentation compatibility fields", () => {
     expect(
       HealthChartConfigSchema.safeParse({

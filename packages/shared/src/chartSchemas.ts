@@ -14,6 +14,9 @@ export const HealthBlockRangeSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("all") }),
 ]);
 
+export const HealthAggregationSchema = z.enum(["latest", "avg", "max", "min", "sum"]);
+export type HealthAggregation = z.infer<typeof HealthAggregationSchema>;
+
 export const ColorRuleSchema = z
   .object({
     fieldId: NonEmptyTrimmedStringSchema,
@@ -56,6 +59,7 @@ export const StatBlockSchema = z.object({
   view: z.literal("stat"),
   source: z.literal("derived"),
   metricIds: z.array(z.string().min(1)).min(1),
+  aggregation: HealthAggregationSchema.optional(),
 });
 
 export const ChartBlockSchema = z.object({

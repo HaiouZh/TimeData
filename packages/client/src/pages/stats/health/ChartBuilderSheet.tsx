@@ -1,5 +1,8 @@
-import type { HealthBlockRange, HealthChartConfig, HealthChartConfigDraft } from "@timedata/shared";
+import type { HealthAggregation, HealthBlockRange, HealthChartConfig, HealthChartConfigDraft } from "@timedata/shared";
 import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "../../../components/ui/Checkbox.tsx";
+import { SegmentedControl } from "../../../components/ui/SegmentedControl.tsx";
+import { Switch } from "../../../components/ui/Switch.tsx";
 import { listMetricDefs } from "../../../lib/healthMetrics/index.ts";
 
 export type BuilderDraft = HealthChartConfigDraft;
@@ -15,6 +18,32 @@ const RUN_COLUMNS = [
 ];
 
 type BuilderChoice = "stat" | "chart" | "metricTable" | "runTable";
+
+const CHOICE_OPTIONS: { value: BuilderChoice; label: string }[] = [
+  { value: "stat", label: "统计卡" },
+  { value: "chart", label: "趋势图" },
+  { value: "metricTable", label: "指标表" },
+  { value: "runTable", label: "跑步表" },
+];
+
+const AGGREGATION_OPTIONS: { value: HealthAggregation; label: string }[] = [
+  { value: "latest", label: "最新" },
+  { value: "avg", label: "均值" },
+  { value: "max", label: "最大" },
+  { value: "min", label: "最小" },
+  { value: "sum", label: "合计" },
+];
+
+const RANGE_OPTIONS: { value: "inherit" | "recent"; label: string }[] = [
+  { value: "inherit", label: "继承页面范围" },
+  { value: "recent", label: "最近" },
+];
+
+const TREND_MODE_OPTIONS: { value: "auto" | "normalized" | "raw"; label: string }[] = [
+  { value: "auto", label: "自动" },
+  { value: "normalized", label: "指数化" },
+  { value: "raw", label: "真实值" },
+];
 
 function choiceFromInitial(initial: HealthChartConfig | null): BuilderChoice {
   if (!initial) return "chart";
@@ -67,6 +96,9 @@ export function ChartBuilderSheet({
   const [title, setTitle] = useState(initial?.title ?? "");
   const [metricIds, setMetricIds] = useState<string[]>(() => metricIdsFromInitial(initial));
   const [runColumns, setRunColumns] = useState<string[]>(() => runColumnsFromInitial(initial));
+  const [aggregation, setAggregation] = useState<HealthAggregation>(
+    initial?.view === "stat" ? (initial.aggregation ?? "latest") : "latest",
+  );
   const [rangeMode, setRangeMode] = useState<"inherit" | "recent">(initial?.range.mode === "recent" ? "recent" : "inherit");
   const [recentDays, setRecentDays] = useState(initial?.range.mode === "recent" ? initial.range.days : 30);
   const [chartKind, setChartKind] = useState(initial?.view === "chart" ? initial.chartKind : "line");
@@ -125,10 +157,17 @@ export function ChartBuilderSheet({
 
   function handleSave() {
     const range = blockRange(rangeMode, recentDays);
-    const base = { id: initial?.id, createdAt: initial?.createdAt, title: titleValue, order: initial?.order ?? Number.MAX_SAFE_INTEGER, range, presentation: presentation() };
+    const base = {
+      id: initial?.id,
+      createdAt: initial?.createdAt,
+      title: titleValue,
+      order: initial?.order ?? Number.MAX_SAFE_INTEGER,
+      range,
+      presentation: presentation(),
+    };
     if (choice === "stat") {
       if (selectedMetrics.length === 0) return;
-      onSave({ ...base, view: "stat", source: "derived", metricIds: selectedMetrics });
+      onSave({ ...base, view: "stat", source: "derived", metricIds: selectedMetrics, aggregation });
       return;
     }
     if (choice === "chart") {
@@ -190,13 +229,7 @@ export function ChartBuilderSheet({
         <div className="chart-builder-head">{initial ? "编辑视图" : "新建视图"}</div>
 
         <div className="chart-builder-body">
-          <div className="chart-builder-tabs" role="tablist" aria-label="块类型">
-            {(["stat", "chart", "metricTable", "runTable"] as const).map((item) => (
-              <button key={item} type="button" aria-pressed={choice === item} onClick={() => setChoice(item)}>
-                {choiceLabel(item)}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl ariaLabel="块类型" value={choice} onChange={setChoice} options={CHOICE_OPTIONS} />
 
           <input className="chart-builder-title" placeholder="标题" value={title} onChange={(event) => setTitle(event.target.value)} />
 
@@ -205,15 +238,13 @@ export function ChartBuilderSheet({
               <fieldset key={group} className="chart-builder-group">
                 <legend>{group}</legend>
                 {items.map((item) => (
-                  <label key={item.id} className="chart-builder-chip">
-                    <input
-                      type="checkbox"
-                      aria-label={item.label}
-                      checked={selectedMetrics.includes(item.id)}
-                      onChange={() => toggleMetric(item.id)}
-                    />
-                    {item.label}
-                  </label>
+                  <Checkbox
+                    key={item.id}
+                    className="chart-builder-chip"
+                    label={item.label}
+                    checked={selectedMetrics.includes(item.id)}
+                    onChange={() => toggleMetric(item.id)}
+                  />
                 ))}
               </fieldset>
             ))
@@ -221,29 +252,28 @@ export function ChartBuilderSheet({
             <fieldset className="chart-builder-group">
               <legend>跑步字段</legend>
               {RUN_COLUMNS.map((item) => (
-                <label key={item.id} className="chart-builder-chip">
-                  <input
-                    type="checkbox"
-                    aria-label={item.label}
-                    checked={runColumns.includes(item.id)}
-                    onChange={() => toggleRunColumn(item.id)}
-                  />
-                  {item.label}
-                </label>
+                <Checkbox
+                  key={item.id}
+                  className="chart-builder-chip"
+                  label={item.label}
+                  checked={runColumns.includes(item.id)}
+                  onChange={() => toggleRunColumn(item.id)}
+                />
               ))}
+            </fieldset>
+          )}
+
+          {choice === "stat" && (
+            <fieldset className="chart-builder-kind">
+              <legend>聚合方式</legend>
+              <SegmentedControl ariaLabel="聚合方式" value={aggregation} onChange={setAggregation} options={AGGREGATION_OPTIONS} />
+              <p className="chart-builder-hint">作用于本块全部指标</p>
             </fieldset>
           )}
 
           <fieldset className="chart-builder-kind">
             <legend>时间范围</legend>
-            <label className="chart-builder-chip">
-              <input type="radio" name="rangeMode" aria-label="继承页面范围" checked={rangeMode === "inherit"} onChange={() => setRangeMode("inherit")} />
-              继承页面范围
-            </label>
-            <label className="chart-builder-chip">
-              <input type="radio" name="rangeMode" aria-label="最近天数" checked={rangeMode === "recent"} onChange={() => setRangeMode("recent")} />
-              最近
-            </label>
+            <SegmentedControl ariaLabel="时间范围" value={rangeMode} onChange={setRangeMode} options={RANGE_OPTIONS} />
             <input
               type="number"
               className="chart-builder-num"
@@ -258,34 +288,27 @@ export function ChartBuilderSheet({
             <>
               <fieldset className="chart-builder-kind">
                 <legend>图表类型</legend>
-                {(["line", "area", "bar"] as const).map((kind) => (
-                  <label key={kind} className="chart-builder-chip">
-                    <input
-                      type="radio"
-                      name="chartKind"
-                      aria-label={kind === "line" ? "折线" : kind === "area" ? "面积" : "柱状"}
-                      disabled={kind === "bar" && barDisabled}
-                      checked={effectiveKind === kind}
-                      onChange={() => setChartKind(kind)}
-                    />
-                    {kind === "line" ? "折线" : kind === "area" ? "面积" : "柱状"}
-                  </label>
-                ))}
+                <SegmentedControl
+                  ariaLabel="图表类型"
+                  value={effectiveKind}
+                  onChange={setChartKind}
+                  options={[
+                    { value: "line", label: "折线" },
+                    { value: "area", label: "面积" },
+                    { value: "bar", label: "柱状", disabled: barDisabled },
+                  ]}
+                />
               </fieldset>
 
-              <label className="chart-builder-field">
-                趋势模式
-                <select value={trendMode} onChange={(event) => setTrendMode(event.target.value as "auto" | "normalized" | "raw")}>
-                  <option value="auto">自动</option>
-                  <option value="normalized">归一化</option>
-                  <option value="raw">原始值</option>
-                </select>
-              </label>
+              <fieldset className="chart-builder-kind">
+                <legend>趋势模式</legend>
+                <SegmentedControl ariaLabel="趋势模式" value={trendMode} onChange={setTrendMode} options={TREND_MODE_OPTIONS} />
+              </fieldset>
 
-              <label className="chart-builder-switch">
-                <input type="checkbox" aria-label="平均参考线" checked={showAverageLine} onChange={(event) => setShowAverageLine(event.target.checked)} />
-                平均参考线
-              </label>
+              <div className="chart-builder-switch">
+                <span>平均参考线</span>
+                <Switch ariaLabel="平均参考线" checked={showAverageLine} onChange={setShowAverageLine} />
+              </div>
             </>
           )}
 
@@ -293,15 +316,13 @@ export function ChartBuilderSheet({
             <fieldset className="chart-builder-rolling">
               <legend>滚动均线</legend>
               {ROLLING_PRESETS.map((windowSize) => (
-                <label key={windowSize} className="chart-builder-chip">
-                  <input
-                    type="checkbox"
-                    aria-label={`${windowSize}日均线`}
-                    checked={rollingWindows.includes(windowSize)}
-                    onChange={() => toggleRolling(windowSize)}
-                  />
-                  {windowSize}日
-                </label>
+                <Checkbox
+                  key={windowSize}
+                  className="chart-builder-chip"
+                  label={`${windowSize}日`}
+                  checked={rollingWindows.includes(windowSize)}
+                  onChange={() => toggleRolling(windowSize)}
+                />
               ))}
             </fieldset>
           )}
@@ -311,18 +332,18 @@ export function ChartBuilderSheet({
               <legend>表格设置</legend>
               {choice === "metricTable" && (
                 <>
-                  <label className="chart-builder-switch">
-                    <input type="checkbox" aria-label="显示原始列" checked={showRawColumns} onChange={(event) => setShowRawColumns(event.target.checked)} />
-                    显示原始列
-                  </label>
-                  <label className="chart-builder-switch">
-                    <input type="checkbox" aria-label="显示滚动列" checked={showRollingColumns} onChange={(event) => setShowRollingColumns(event.target.checked)} />
-                    显示滚动列
-                  </label>
-                  <label className="chart-builder-switch">
-                    <input type="checkbox" aria-label="隐藏空行" checked={hideEmptyRows} onChange={(event) => setHideEmptyRows(event.target.checked)} />
-                    隐藏空行
-                  </label>
+                  <div className="chart-builder-switch">
+                    <span>显示原始列</span>
+                    <Switch ariaLabel="显示原始列" checked={showRawColumns} onChange={setShowRawColumns} />
+                  </div>
+                  <div className="chart-builder-switch">
+                    <span>显示滚动列</span>
+                    <Switch ariaLabel="显示滚动列" checked={showRollingColumns} onChange={setShowRollingColumns} />
+                  </div>
+                  <div className="chart-builder-switch">
+                    <span>隐藏空行</span>
+                    <Switch ariaLabel="隐藏空行" checked={hideEmptyRows} onChange={setHideEmptyRows} />
+                  </div>
                 </>
               )}
               <label className="chart-builder-field">
@@ -335,10 +356,10 @@ export function ChartBuilderSheet({
                   onChange={(event) => setMaxRows(event.target.value === "" ? null : Number(event.target.value) || 20)}
                 />
               </label>
-              <label className="chart-builder-switch">
-                <input type="checkbox" aria-label="导出 CSV" checked={exportEnabled} onChange={(event) => setExportEnabled(event.target.checked)} />
-                导出 CSV
-              </label>
+              <div className="chart-builder-switch">
+                <span>导出 CSV</span>
+                <Switch ariaLabel="导出 CSV" checked={exportEnabled} onChange={setExportEnabled} />
+              </div>
             </fieldset>
           )}
 

@@ -1,13 +1,8 @@
 import type { HealthChartConfig } from "@timedata/shared";
-import {
-  buildHealthSummaryCardItems,
-  filterCollectionsByRange,
-  filterSummaryCardItems,
-  resolveBlockRange,
-} from "../../../lib/healthBlocks/index.ts";
+import { buildMetricCardItems, resolveBlockRange } from "../../../lib/healthBlocks/index.ts";
 import type { ChartSeriesRange, HealthMetricCollections } from "../../../lib/healthMetrics/index.ts";
 import { PencilIcon, TrashIcon } from "../../settings/SettingsIcons.tsx";
-import { HealthSummaryCards, type HealthSummaryCardItem } from "./HealthSummaryCards.tsx";
+import { HealthSummaryCards } from "./HealthSummaryCards.tsx";
 import { MetricChartBlock } from "./MetricChartBlock.tsx";
 import { MetricTableBlock } from "./MetricTableBlock.tsx";
 import { RunTableBlock } from "./RunTableBlock.tsx";
@@ -16,14 +11,12 @@ export function HealthBlockList({
   blocks,
   collections,
   range,
-  summaryItems,
   onEdit,
   onDelete,
 }: {
   blocks: HealthChartConfig[];
   collections: HealthMetricCollections;
   range: ChartSeriesRange;
-  summaryItems: HealthSummaryCardItem[];
   onEdit: (block: HealthChartConfig) => void;
   onDelete: (id: string) => void;
 }) {
@@ -54,11 +47,12 @@ export function HealthBlockList({
                 <h3 className="health-panel-title">{block.title}</h3>
               </div>
               <HealthSummaryCards
-                items={
-                  block.range.mode === "inherit"
-                    ? filterSummaryCardItems(summaryItems, block.metricIds)
-                    : buildHealthSummaryCardItems(filterCollectionsByRange(collections, resolveBlockRange(block.range, range)), block.metricIds)
-                }
+                items={buildMetricCardItems(
+                  collections,
+                  block.metricIds,
+                  resolveBlockRange(block.range, range),
+                  block.aggregation ?? "latest",
+                )}
               />
             </section>
           )}

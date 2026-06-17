@@ -1,6 +1,7 @@
 import type { HealthHrv, HealthRun } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { getChartSeries } from "./chartSeries.js";
+import { formatMetricValue, getChartSeries } from "./chartSeries.js";
+import { getMetricDef } from "./registry.js";
 
 function hrv(date: string, value: number): HealthHrv {
   return {
@@ -31,6 +32,15 @@ function run(date: string, distanceKm: number, durationSeconds: number): HealthR
     updatedAt: "2026-06-01T00:00:00.000Z",
   };
 }
+
+describe("formatMetricValue", () => {
+  it("覆盖 number / time / pace 三型与 null", () => {
+    expect(formatMetricValue(getMetricDef("hrv.value"), 45)).toBe("45 ms");
+    expect(formatMetricValue(getMetricDef("sleep.wake"), 7.5)).toBe("07:30");
+    expect(formatMetricValue(getMetricDef("run.pace"), 330)).toBe("5'30\"/km");
+    expect(formatMetricValue(getMetricDef("hrv.value"), null)).toBe("--");
+  });
+});
 
 describe("getChartSeries", () => {
   it("单指标产出按日期排序的点与 from/to", () => {
