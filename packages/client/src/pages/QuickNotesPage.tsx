@@ -1146,32 +1146,10 @@ export default function QuickNotesPage() {
           {status}
         </p>
       )}
-      {actionToast && (
-        <div
-          role="status"
-          className="fixed left-4 right-4 mx-auto flex max-w-3xl items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-sm text-slate-100 shadow-lg"
-          style={{ bottom: navOffsetPx + bottomInsetPx }}
-        >
-          <span className="min-w-0 flex-1 truncate">{actionToast.message}</span>
-          {actionToast.actions?.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              onClick={() => {
-                setActionToast(null);
-                action.onClick();
-              }}
-              className="shrink-0 font-semibold text-emerald-300 transition hover:text-emerald-200"
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
-
       {!searchOpen && !selectionMode && (
         <form
           ref={composerRef}
+          aria-label="速记输入区"
           className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur transition-[bottom] duration-200 sm:p-3"
           style={{ bottom: navOffsetPx }}
           onSubmit={(event) => {
@@ -1180,6 +1158,28 @@ export default function QuickNotesPage() {
           }}
         >
           <div className="mx-auto w-full max-w-3xl">
+            {actionToast && (
+              <div
+                role="status"
+                aria-label="捕捉操作反馈"
+                className="mb-2 flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-sm text-slate-100 shadow-lg"
+              >
+                <span className="min-w-0 flex-1 truncate">{actionToast.message}</span>
+                {actionToast.actions?.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={() => {
+                      setActionToast(null);
+                      action.onClick();
+                    }}
+                    className="shrink-0 font-semibold text-emerald-300 transition hover:text-emerald-200"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {editingId && (
               <div className="mb-2 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-100">
                 <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>

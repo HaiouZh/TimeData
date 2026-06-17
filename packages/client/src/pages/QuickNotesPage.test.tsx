@@ -778,6 +778,22 @@ describe("捕捉中心", () => {
     expect(input(host).value).toBe("");
   });
 
+  it("存为待办成功反馈内嵌在 composer 内", async () => {
+    const { host, root } = await renderPage();
+    await typeInto(input(host), "买牛奶");
+    await click(host.querySelector('button[aria-label="存为待办"]'));
+
+    const feedback = host.querySelector('[aria-label="捕捉操作反馈"]');
+    const composer = host.querySelector('form[aria-label="速记输入区"]');
+
+    expect(composer?.contains(feedback)).toBe(true);
+    expect(host.querySelector('[data-action-toast-overlay="true"]')).toBeNull();
+    expect(feedback?.textContent).toContain("已加入今天");
+    expect(feedback?.textContent).toContain("去待办");
+
+    await act(async () => root.unmount());
+  });
+
   it("点「打点」建一条已配置分类的时间记录", async () => {
     await configurePunchCategory();
     const { host } = await renderPage();
@@ -788,6 +804,22 @@ describe("捕捉中心", () => {
     const entries = await db.timeEntries.toArray();
     expect(entries).toHaveLength(1);
     expect(entries[0].categoryId).toBe("cat-work-deep");
+  });
+
+  it("打点成功反馈内嵌在 composer 内，不再底部浮层覆盖列表", async () => {
+    await configurePunchCategory();
+    const { host, root } = await renderPage();
+    await click(host.querySelector('button[aria-label="打点（记录到现在）"]'));
+
+    const feedback = host.querySelector('[aria-label="捕捉操作反馈"]');
+    const composer = host.querySelector('form[aria-label="速记输入区"]');
+
+    expect(composer?.contains(feedback)).toBe(true);
+    expect(host.querySelector('[data-action-toast-overlay="true"]')).toBeNull();
+    expect(feedback?.textContent).toContain("已打点");
+    expect(feedback?.textContent).toContain("撤销");
+
+    await act(async () => root.unmount());
   });
 
   it("速记「待办」按钮按默认落点：inbox 时新任务无排期", async () => {
