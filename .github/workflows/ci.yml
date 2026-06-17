@@ -47,6 +47,10 @@ jobs:
       - name: Test
         run: pnpm -r --parallel test
 
+      # 默认 test 只跑 unit；e2e（forks 池、30s timeout）单独跑，避免拖慢日常 test 又不丢覆盖。
+      - name: E2E tests
+        run: pnpm --filter @timedata/client test:e2e
+
       - name: Docs consistency (strict)
         if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         run: pnpm check:docs:strict --since=${{ github.event.pull_request.base.sha }}
