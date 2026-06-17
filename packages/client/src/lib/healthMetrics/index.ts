@@ -35,8 +35,8 @@ export { findMetricDef, getMetricDef, listMetricDefs, type DailyMetricDef } from
 export { buildHealthSummary } from "./summary.js";
 export { buildNormalizedHealthTrend, buildRunPaceTrend } from "./trends.js";
 export { normalizeTo100 } from "./normalize.js";
-export { buildChartRows, computeYDomain, rollingKey } from "./chartDisplay.js";
-export type { ChartRow, ChartRowsResult } from "./chartDisplay.js";
+export { buildChartRows, computeYDomain, resolveChartLayout, rollingKey } from "./chartDisplay.js";
+export type { ChartLayout, ChartMode, ChartRow, ChartRowsResult } from "./chartDisplay.js";
 
 export { filterHealthRecordsByRange as filterByDateRange } from "./range.js";
 export { computeSleepDurationHours as computeSleepDuration } from "./format.js";
