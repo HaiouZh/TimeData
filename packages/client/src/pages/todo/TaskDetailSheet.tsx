@@ -158,7 +158,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
     >
       <div
         data-testid="detail-sheet"
-        className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-slate-800 bg-slate-900 text-slate-100 shadow-2xl ${expanded ? "h-[90vh]" : "max-h-[calc(90vh)]"}`}
+        className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? "h-[90vh]" : "max-h-[calc(90vh)]"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         onTouchStart={(event) => {
           touchStartY.current = event.touches[0]?.clientY ?? null;
@@ -174,13 +174,13 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
       >
         <div className="relative flex items-center justify-center py-3">
           <button type="button" aria-label="关闭" onClick={handleClose} className="flex justify-center">
-            <span className="block h-1 w-10 rounded-full bg-slate-600" />
+            <span className="block h-1 w-10 rounded-full bg-ink-3" />
           </button>
           <button
             type="button"
             aria-label={expanded ? "还原" : "放大"}
             onClick={() => setExpanded((value) => !value)}
-            className="absolute right-3 rounded px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+            className="absolute right-3 rounded-ctl px-2 py-1 text-xs text-ink-3 hover:bg-surface-hover"
           >
             {expanded ? "▢" : "⤢"}
           </button>
@@ -196,7 +196,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
           </div>
         )}
 
-        {error && <p className="px-4 pb-2 text-sm text-rose-300">{error}</p>}
+        {error && <p className="px-4 pb-2 text-sm text-danger">{error}</p>}
 
         {task && (
           <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">

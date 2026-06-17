@@ -136,6 +136,16 @@ describe("TaskDetailSheet 展示与关闭", () => {
     await act(async () => root.unmount());
   });
 
+  it("外壳无裸色 slate，用站内 token", async () => {
+    const t = await addTask({ title: "x" });
+    const { host, root } = await renderSheet(t.id);
+    const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
+    expect(sheet.className).not.toContain("slate");
+    expect(sheet.className).toContain("bg-surface-elevated");
+    expect(sheet.className).toContain("border-border-hairline");
+    await act(async () => root.unmount());
+  });
+
   it("有子任务 -> 顶部进度条按 m/n 给宽度；未满格用 accent 色", async () => {
     const t = await addTask({ title: "父" });
     await updateSubtasks(t.id, [
