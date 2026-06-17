@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@timedata/shared";
 import { TaskColumn } from "./TaskColumn.js";
 
@@ -26,7 +26,7 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 const noop = () => {};
-const handlers = { onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop };
+const handlers = { onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop, onSubtasksChange: noop };
 
 async function render(node: ReturnType<typeof createElement>) {
   const host = document.createElement("div");
@@ -95,5 +95,33 @@ describe("TaskColumn swipe 接线", () => {
     );
     expect(sortable.host.querySelector('[aria-label="拖动 A"]')).not.toBeNull();
     await act(async () => sortable.root.unmount());
+  });
+
+  it("透传 onSubtasksChange 给行（展开勾选子任务时触发）", async () => {
+    const onSubtasksChange = vi.fn();
+    const tasks = [task({ id: "t1", title: "父", subtasks: [{ id: "s1", title: "子", done: false }] })];
+    const { host, root } = await render(
+      createElement(TaskColumn, {
+        title: "收件箱",
+        pool: "inbox",
+        tasks,
+        emptyText: "空",
+        ...handlers,
+        onSubtasksChange,
+      }),
+    );
+
+    await act(async () =>
+      host.querySelector('[aria-label="展开子任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+    await act(async () =>
+      host.querySelector('input[aria-label="完成子任务 子"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+
+    expect(onSubtasksChange).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "t1" }),
+      [{ id: "s1", title: "子", done: true }],
+    );
+    await act(async () => root.unmount());
   });
 });

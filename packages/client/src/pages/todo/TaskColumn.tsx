@@ -18,7 +18,7 @@ import {
   Type as ListType,
 } from "@meauxt/react-swipeable-list";
 import "@meauxt/react-swipeable-list/dist/styles.css";
-import type { Task } from "@timedata/shared";
+import type { Task, TaskSubtask } from "@timedata/shared";
 import { TaskRow, type RowDragHandle, type TaskPool } from "./TaskRow.js";
 import { SortableTaskRow } from "./SortableTaskRow.js";
 
@@ -36,6 +36,7 @@ export interface TaskColumnProps {
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
+  onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
 }
 
 export function TaskColumn(props: TaskColumnProps) {
@@ -68,6 +69,7 @@ export function TaskColumn(props: TaskColumnProps) {
         onDelete={props.onDelete}
         onToToday={props.onToToday}
         onToInbox={props.onToInbox}
+        onSubtasksChange={props.onSubtasksChange}
       />
     );
   }
