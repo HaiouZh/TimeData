@@ -21,6 +21,7 @@ import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { normalizeScheduledDate, placementForTask } from "../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../lib/tasks/recurrencePresets.js";
+import { filterByTags } from "../lib/tasks/turnTags.js";
 import {
   getDoneCollapsed,
   getInboxCollapsed,
@@ -33,6 +34,8 @@ import {
   listTasks,
   persistTaskOrder,
   scheduleTask,
+  setTaskTags,
+  setTaskTurn,
   type TodoBuckets,
   toggleTaskDone,
   unscheduleTask,
@@ -41,11 +44,13 @@ import {
 } from "../lib/tasks.js";
 import { getDateString } from "../lib/time.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
+import { AttentionQueue } from "./todo/AttentionQueue.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { CustomRecurrencePage } from "./todo/CustomRecurrencePage.js";
 import { RecurrencePopover } from "./todo/RecurrencePopover.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 import { SortableTaskRow } from "./todo/SortableTaskRow.js";
+import { TagFilterBar } from "./todo/TagFilterBar.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
@@ -60,6 +65,7 @@ export function TodoPage() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<{ task: Task; anchorEl: HTMLElement } | null>(null);
   const [scheduleOverlay, setScheduleOverlay] = useState<"popover" | "custom">("popover");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const { syncAfterWrite } = useSyncContext();
   const wide = useIsWideScreen();
 
@@ -97,6 +103,17 @@ export function TodoPage() {
     await scheduleTask(t.id, `${yyyy}-${mm}-${dd}`);
     syncAfterWrite();
   };
+  const changeTurn = async (t: Task, turn: Task["turn"]) => {
+    await setTaskTurn(t.id, turn);
+    syncAfterWrite();
+  };
+  const changeTags = async (t: Task, tags: string[]) => {
+    await setTaskTags(t.id, tags);
+    syncAfterWrite();
+  };
+  const toggleTag = (tag: string) =>
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
+  const clearTags = () => setSelectedTags([]);
   const isOverdue = (t: Task) => {
     const p = placementForTask(t, new Date());
     return p.pool === "today" && p.overdue;
@@ -109,6 +126,8 @@ export function TodoPage() {
     onToToday: moveToToday,
     onToInbox: moveToInbox,
     onSubtasksChange: changeSubtasks,
+    onTurnChange: changeTurn,
+    onTagsChange: changeTags,
   };
   const wideRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule } : {};
   const todayRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule, showActions: true as const } : {};
@@ -135,6 +154,16 @@ export function TodoPage() {
     };
   }
 
+  // AttentionQueue + TagFilterBar 用未筛选的全量；下方各池用 filterByTags 过滤后再渲染。
+  const allTasks: Task[] = [
+    ...buckets.today,
+    ...buckets.inbox,
+    ...buckets.upcoming,
+    ...buckets.recurring,
+    ...buckets.todayDone,
+  ];
+  const f = (list: Task[]) => filterByTags(list, selectedTags);
+
   const doneTail = buckets.todayDone.length > 0 && (
     <div className="mt-2">
       <CollapsibleSection
@@ -144,7 +173,7 @@ export function TodoPage() {
         onToggle={(open) => setDoneCollapsed(!open)}
       >
         <div className="rounded-card bg-surface p-1.5">
-          {buckets.todayDone.map((task) => (
+          {f(buckets.todayDone).map((task) => (
             <TaskRow key={task.id} task={task} pool="today" {...rowHandlers} {...doneRowProps} />
           ))}
         </div>
@@ -157,7 +186,7 @@ export function TodoPage() {
       <TaskColumn
         title="今天"
         pool="today"
-        tasks={buckets.today}
+        tasks={f(buckets.today)}
         emptyText="今天没有任务 🎉"
         hero
         isOverdue={isOverdue}
@@ -184,7 +213,7 @@ export function TodoPage() {
         <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
       ) : (
         <div className="rounded-card bg-surface p-1.5">
-          <TaskList pool="inbox" tasks={buckets.inbox} {...rowHandlers} />
+          <TaskList pool="inbox" tasks={f(buckets.inbox)} {...rowHandlers} />
         </div>
       )}
     </CollapsibleSection>
@@ -195,7 +224,7 @@ export function TodoPage() {
       <TaskColumn
         title="今天"
         pool="today"
-        tasks={buckets.today}
+        tasks={f(buckets.today)}
         emptyText="今天没有任务 🎉"
         hero
         isOverdue={isOverdue}
@@ -222,31 +251,36 @@ export function TodoPage() {
         {buckets.inbox.length === 0 ? (
           <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
         ) : (
-          groupInboxByDay(buckets.inbox).map((segment) => (
-            <div key={segment.key} className="mb-3">
-              <p className="px-2 pb-1 text-xs text-ink-3">{segment.label}</p>
-              <div className="rounded-card bg-surface p-1.5">
-                <TaskList pool="inbox" tasks={segment.tasks} {...rowHandlers} {...wideRowProps} />
+          groupInboxByDay(buckets.inbox).map((segment) => {
+            const filtered = f(segment.tasks);
+            if (filtered.length === 0) return null;
+            return (
+              <div key={segment.key} className="mb-3">
+                <p className="px-2 pb-1 text-xs text-ink-3">{segment.label}</p>
+                <div className="rounded-card bg-surface p-1.5">
+                  <TaskList pool="inbox" tasks={filtered} {...rowHandlers} {...wideRowProps} />
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </CollapsibleSection>
     </section>
   );
 
+  const upcomingFiltered = f(buckets.upcoming);
   const upcomingBlock = (
     <div>
-      {buckets.upcoming.length > 0 && (
-        <CollapsibleSection title="即将到来" count={buckets.upcoming.length}>
+      {upcomingFiltered.length > 0 && (
+        <CollapsibleSection title="即将到来" count={upcomingFiltered.length}>
           <div className="rounded-card bg-surface p-1.5">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
-              onDragEnd={reorderHandler(buckets.upcoming)}
+              onDragEnd={reorderHandler(upcomingFiltered)}
             >
-              <SortableContext items={buckets.upcoming.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-                {buckets.upcoming.map((task) => (
+              <SortableContext items={upcomingFiltered.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+                {upcomingFiltered.map((task) => (
                   <SortableTaskRow key={task.id} id={task.id}>
                     {(handle) => (
                       <TaskRow task={task} pool="upcoming" dragHandle={handle} {...rowHandlers} {...wideRowProps} />
@@ -261,18 +295,19 @@ export function TodoPage() {
     </div>
   );
 
+  const recurringFiltered = f(buckets.recurring);
   const recurringBlock = (
     <div>
-      {buckets.recurring.length > 0 && (
-        <CollapsibleSection title="重复 / 提醒" count={buckets.recurring.length}>
+      {recurringFiltered.length > 0 && (
+        <CollapsibleSection title="重复 / 提醒" count={recurringFiltered.length}>
           <div className="rounded-card bg-surface p-1.5">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
-              onDragEnd={reorderHandler(buckets.recurring)}
+              onDragEnd={reorderHandler(recurringFiltered)}
             >
-              <SortableContext items={buckets.recurring.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-                {buckets.recurring.map((task) => (
+              <SortableContext items={recurringFiltered.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+                {recurringFiltered.map((task) => (
                   <SortableTaskRow key={task.id} id={task.id}>
                     {(handle) => (
                       <TaskRow task={task} pool="recurring" dragHandle={handle} {...rowHandlers} {...wideRowProps} />
@@ -290,6 +325,8 @@ export function TodoPage() {
   return (
     <div className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
+        <AttentionQueue tasks={allTasks} rowHandlers={rowHandlers} onTurnChange={changeTurn} />
+        <TagFilterBar tasks={allTasks} selected={selectedTags} onToggle={toggleTag} onClear={clearTags} />
         {wide ? (
           <ResizableSplit
             className="items-start gap-y-4"
@@ -320,7 +357,14 @@ export function TodoPage() {
 
       <TodoComposer />
 
-      {detailId && <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} />}
+      {detailId && (
+        <TaskDetailSheet
+          id={detailId}
+          onClose={() => setDetailId(null)}
+          onTurnChange={changeTurn}
+          onTagsChange={changeTags}
+        />
+      )}
       {wide && schedule && scheduleOverlay === "popover" && (
         <RecurrencePopover
           anchorEl={schedule.anchorEl}
