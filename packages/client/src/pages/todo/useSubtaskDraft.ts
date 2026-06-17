@@ -59,6 +59,7 @@ export function useSubtaskDraft({
     committedSnapshotRef.current = serializeSubtasks(externalRef.current);
   }, [taskId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 仅在卸载时 flush 当前 ref 中的 draft
   useEffect(() => () => flush(), []);
 
   function onChange(next: TaskSubtask[]): void {

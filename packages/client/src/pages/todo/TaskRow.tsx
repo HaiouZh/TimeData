@@ -85,7 +85,6 @@ function InlineSubtasks({
   const autoFocusId = seedEmpty && initial.length === 1 ? initial[0].id : undefined;
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: onBlur 仅用于提交子任务草稿
     <div className="ml-9 pb-1" onBlur={onBlur}>
       <SubtaskEditor value={subtasks} onChange={onChange} density="compact" autoFocusId={autoFocusId} />
     </div>

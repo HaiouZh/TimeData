@@ -223,9 +223,9 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
               </div>
             </div>
 
-            <div className="border-t border-slate-800/80 pt-4" onBlur={blurSubtasks}>
-              <div className="border-l-2 border-slate-700/80 pl-3">
-                <p className="mb-2 text-xs font-medium text-slate-500">子任务</p>
+            <div className="border-t border-border-hairline pt-4" onBlur={blurSubtasks}>
+              <div className="border-l-2 border-border-hairline pl-3">
+                <p className="mb-2 text-xs font-medium text-ink-3">子任务</p>
                 <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} density="full" />
               </div>
             </div>
