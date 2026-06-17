@@ -26,6 +26,7 @@ interface BuildTimeSlotsOptions {
 }
 
 const PREVIOUS_DAY_GAP_CONTINUATION_HOURS = 4;
+const OVERNIGHT_ROLLBACK_THRESHOLD_MS = 12 * 60 * 60 * 1000;
 
 function parseAppLocalDateTime(value: string): Date {
   if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(value)) {
@@ -351,6 +352,22 @@ export function addMonths(dateStr: string, months: number): string {
 export interface ResolvedClockRange {
   startTime: string;
   endTime: string;
+}
+
+/**
+ * 时:分轮选器锚定到今天时，凌晨补记昨晚会被解析成今天深夜的未来。
+ * end 比 now 超前超过 12 小时视为昨晚同一时钟时间；更近的未来保留给上层拦截。
+ */
+export function rollBackOvernightRange(
+  startTime: string,
+  endTime: string,
+  now: Date = new Date(),
+): ResolvedClockRange {
+  const aheadMs = parseAppLocalDateTime(endTime).getTime() - now.getTime();
+  if (aheadMs <= OVERNIGHT_ROLLBACK_THRESHOLD_MS) return { startTime, endTime };
+
+  const shift = (local: string) => `${addDays(local.slice(0, 10), -1)}${local.slice(10)}`;
+  return { startTime: shift(startTime), endTime: shift(endTime) };
 }
 
 export function resolveClockRangeAroundEndDate(

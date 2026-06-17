@@ -196,6 +196,35 @@ describe("EntryPage default times", () => {
     expect(navigateMock).toHaveBeenCalledWith("/?date=2026-05-18", { replace: true });
   });
 
+  it("凌晨补记昨晚时段时整段回退一天再保存", async () => {
+    vi.setSystemTime(new Date("2026-06-17T00:14:00+08:00"));
+
+    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const result = await entryFormPropsMock.value?.onSave(
+      "cat-work",
+      "2026-06-17T23:41:00",
+      "2026-06-17T23:50:00",
+      "",
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(findOverlappingEntriesMock).toHaveBeenCalledWith(
+      "2026-06-16T15:41:00.000Z",
+      "2026-06-16T15:50:00.000Z",
+      undefined,
+    );
+    expect(saveEntryWithOverlapAdjustmentsMock).toHaveBeenCalledWith({
+      existingEntryId: null,
+      categoryId: "cat-work",
+      startTime: "2026-06-16T15:41:00.000Z",
+      endTime: "2026-06-16T15:50:00.000Z",
+      note: null,
+      overlapPlan: null,
+    });
+    expect(syncAfterWriteMock).toHaveBeenCalledOnce();
+    expect(navigateMock).toHaveBeenCalledWith("/?date=2026-06-16", { replace: true });
+  });
+
   it("blocks save with future error when onSave receives a still-future endTime", async () => {
     vi.setSystemTime(new Date("2026-05-20T14:00:00+08:00"));
 

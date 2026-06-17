@@ -11,6 +11,7 @@ import {
   formatTimelineTimeRange,
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
+  rollBackOvernightRange,
   startOfWeek,
   summarizeDay,
   type TimeSlot,
@@ -60,6 +61,32 @@ describe("isFutureLocalDateTime", () => {
     expect(isFutureLocalDateTime("2026-05-08T08:01:00", now)).toBe(true);
     expect(isFutureLocalDateTime("2026-05-08T08:00:00", now)).toBe(false);
     expect(isFutureLocalDateTime("2026-05-08T07:59:00", now)).toBe(false);
+  });
+});
+
+describe("rollBackOvernightRange", () => {
+  const now = new Date("2026-06-17T00:14:00+08:00");
+
+  it("解析后 end 比 now 超前 >12h，整段回退一天", () => {
+    expect(rollBackOvernightRange("2026-06-17T23:41:00", "2026-06-17T23:50:00", now)).toEqual({
+      startTime: "2026-06-16T23:41:00",
+      endTime: "2026-06-16T23:50:00",
+    });
+  });
+
+  it("end 在过去（不晚于 now），不回退", () => {
+    expect(rollBackOvernightRange("2026-06-16T23:41:00", "2026-06-17T00:10:00", now)).toEqual({
+      startTime: "2026-06-16T23:41:00",
+      endTime: "2026-06-17T00:10:00",
+    });
+  });
+
+  it("end 超前 <=12h 时不回退，保留给上层未来校验拦截", () => {
+    const afternoon = new Date("2026-06-20T14:00:00+08:00");
+    expect(rollBackOvernightRange("2026-06-20T17:00:00", "2026-06-20T22:00:00", afternoon)).toEqual({
+      startTime: "2026-06-20T17:00:00",
+      endTime: "2026-06-20T22:00:00",
+    });
   });
 });
 

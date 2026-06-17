@@ -13,7 +13,7 @@ import {
   useLatestEntryEndTimeBefore,
 } from "../hooks/useEntries.ts";
 import { messages } from "../lib/messages.ts";
-import { getDateString, isFutureLocalDateTime, toLocalDateTimeString } from "../lib/time.ts";
+import { getDateString, isFutureLocalDateTime, rollBackOvernightRange, toLocalDateTimeString } from "../lib/time.ts";
 
 function addMinutes(value: string, minutes: number): string {
   const date = new Date(value);
@@ -130,12 +130,14 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
     nextEndTime: string,
     note: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    if (isFutureLocalDateTime(nextEndTime)) {
+    const { startTime: startLocal, endTime: endLocal } = rollBackOvernightRange(nextStartTime, nextEndTime);
+
+    if (isFutureLocalDateTime(endLocal)) {
       return { ok: false, error: "不能记录尚未发生的时间" };
     }
 
-    const utcStart = localDateTimeToUtc(nextStartTime);
-    const utcEnd = localDateTimeToUtc(nextEndTime);
+    const utcStart = localDateTimeToUtc(startLocal);
+    const utcEnd = localDateTimeToUtc(endLocal);
 
     const overlaps = await findOverlappingEntries(utcStart, utcEnd, existingEntry?.id);
     let overlapPlan: Extract<ReturnType<typeof planEntryOverlapAdjustments>, { ok: true }> | null = null;
@@ -175,7 +177,7 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
     });
 
     syncAfterWrite();
-    navigate(timelinePathForDate(resolveTimelineDateAfterSave(nextStartTime, nextEndTime)), { replace: true });
+    navigate(timelinePathForDate(resolveTimelineDateAfterSave(startLocal, endLocal)), { replace: true });
     return { ok: true };
   }
 
