@@ -22,12 +22,6 @@ function click(element: Element | null) {
   });
 }
 
-function inputByLabel(host: HTMLElement, label: string): HTMLInputElement {
-  const input = host.querySelector(`input[aria-label="${label}"]`);
-  if (!(input instanceof HTMLInputElement)) throw new Error(`input not found: ${label}`);
-  return input;
-}
-
 function buttonByText(host: HTMLElement, text: string): HTMLButtonElement {
   const button = [...host.querySelectorAll("button")].find((item) => item.textContent === text);
   if (!(button instanceof HTMLButtonElement)) throw new Error(`button not found: ${text}`);
@@ -40,6 +34,25 @@ function elBySelector(host: HTMLElement, selector: string): HTMLElement {
   return el;
 }
 
+function checkboxByLabel(host: HTMLElement, text: string): HTMLInputElement {
+  const label = [...host.querySelectorAll("label")].find((item) => item.textContent?.trim() === text);
+  const input = label?.querySelector('input[type="checkbox"]');
+  if (!(input instanceof HTMLInputElement)) throw new Error(`checkbox not found: ${text}`);
+  return input;
+}
+
+function radioByText(host: HTMLElement, text: string): HTMLButtonElement {
+  const button = [...host.querySelectorAll('button[role="radio"]')].find((item) => item.textContent === text);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`radio not found: ${text}`);
+  return button;
+}
+
+function switchByLabel(host: HTMLElement, label: string): HTMLButtonElement {
+  const sw = host.querySelector(`button[role="switch"][aria-label="${label}"]`);
+  if (!(sw instanceof HTMLButtonElement)) throw new Error(`switch not found: ${label}`);
+  return sw;
+}
+
 function dispatchKey(key: string) {
   act(() => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key }));
@@ -50,10 +63,10 @@ describe("ChartBuilderSheet", () => {
   it("选 2 个指标时禁用柱状", () => {
     const { host, root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose: vi.fn(), onDelete: vi.fn() });
 
-    click(inputByLabel(host, "睡眠时长"));
-    click(inputByLabel(host, "HRV"));
+    click(checkboxByLabel(host, "睡眠时长"));
+    click(checkboxByLabel(host, "HRV"));
 
-    expect(inputByLabel(host, "柱状").disabled).toBe(true);
+    expect(radioByText(host, "柱状").disabled).toBe(true);
     act(() => root.unmount());
   });
 
@@ -61,7 +74,7 @@ describe("ChartBuilderSheet", () => {
     const onSave = vi.fn();
     const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
 
-    click(inputByLabel(host, "HRV"));
+    click(checkboxByLabel(host, "HRV"));
     click(buttonByText(host, "保存"));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ metricIds: ["hrv.value"], view: "chart", source: "healthMetricDaily" }));
@@ -72,9 +85,9 @@ describe("ChartBuilderSheet", () => {
     const onSave = vi.fn();
     const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
 
-    click(buttonByText(host, "指标表"));
-    click(inputByLabel(host, "HRV"));
-    click(inputByLabel(host, "导出 CSV"));
+    click(radioByText(host, "指标表"));
+    click(checkboxByLabel(host, "HRV"));
+    click(switchByLabel(host, "导出 CSV"));
     click(buttonByText(host, "保存"));
 
     expect(onSave).toHaveBeenCalledWith(
@@ -92,11 +105,47 @@ describe("ChartBuilderSheet", () => {
     const onSave = vi.fn();
     const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
 
-    click(buttonByText(host, "跑步表"));
-    click(inputByLabel(host, "距离"));
+    click(radioByText(host, "跑步表"));
+    click(checkboxByLabel(host, "距离"));
     click(buttonByText(host, "保存"));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ view: "table", source: "runs", columnIds: expect.arrayContaining(["date", "distanceKm"]) }));
+    act(() => root.unmount());
+  });
+
+  it("聚合方式仅统计卡视图出现", () => {
+    const { host, root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose: vi.fn(), onDelete: vi.fn() });
+
+    expect(host.querySelector('[role="radiogroup"][aria-label="聚合方式"]')).toBeNull();
+    click(radioByText(host, "统计卡"));
+    expect(host.querySelector('[role="radiogroup"][aria-label="聚合方式"]')).not.toBeNull();
+    act(() => root.unmount());
+  });
+
+  it("统计卡保存写入所选聚合方式", () => {
+    const onSave = vi.fn();
+    const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
+
+    click(radioByText(host, "统计卡"));
+    click(checkboxByLabel(host, "HRV"));
+    click(radioByText(host, "均值"));
+    click(buttonByText(host, "保存"));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ view: "stat", source: "derived", metricIds: ["hrv.value"], aggregation: "avg" }),
+    );
+    act(() => root.unmount());
+  });
+
+  it("统计卡缺省聚合为 latest", () => {
+    const onSave = vi.fn();
+    const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
+
+    click(radioByText(host, "统计卡"));
+    click(checkboxByLabel(host, "HRV"));
+    click(buttonByText(host, "保存"));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ view: "stat", aggregation: "latest" }));
     act(() => root.unmount());
   });
 

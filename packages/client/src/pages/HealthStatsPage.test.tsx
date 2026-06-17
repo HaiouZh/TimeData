@@ -157,6 +157,12 @@ async function waitForCondition(assertion: () => boolean, message: string): Prom
   throw new Error(message);
 }
 
+function metricCheckbox(host: HTMLElement, label: string): HTMLInputElement | null {
+  const lbl = [...host.querySelectorAll("label")].find((item) => item.textContent?.trim() === label);
+  const input = lbl?.querySelector('input[type="checkbox"]');
+  return input instanceof HTMLInputElement ? input : null;
+}
+
 function seedHealthData() {
   healthState.healthSleep = [
     { id: "s1", date: "2026-06-13", sleepStart: "23:00", wakeTime: "06:00", adjustmentHours: 0, createdAt: now, updatedAt: now },
@@ -310,9 +316,9 @@ describe("HealthStatsPage", () => {
       host.querySelector('[aria-label="添加图表"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await act(async () => {
-      host.querySelector('input[aria-label="最高心率"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      metricCheckbox(host, "最高心率")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect((host.querySelector('input[aria-label="最高心率"]') as HTMLInputElement).checked).toBe(true);
+    expect(metricCheckbox(host, "最高心率")?.checked).toBe(true);
 
     // 取消后转去编辑预置 metricChart 块
     await act(async () => {
@@ -325,8 +331,8 @@ describe("HealthStatsPage", () => {
     });
 
     // 弹窗应反映被编辑块的指标，而不是上一次“新增”的残留
-    expect((host.querySelector('input[aria-label="睡眠时长"]') as HTMLInputElement).checked).toBe(true);
-    expect((host.querySelector('input[aria-label="最高心率"]') as HTMLInputElement).checked).toBe(false);
+    expect(metricCheckbox(host, "睡眠时长")?.checked).toBe(true);
+    expect(metricCheckbox(host, "最高心率")?.checked).toBe(false);
 
     await act(async () => root.unmount());
   });
