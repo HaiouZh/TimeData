@@ -6,9 +6,31 @@ export interface TurnBuckets {
   parked: Task[];
 }
 
-type Turn = NonNullable<Task["turn"]>;
+export type Turn = NonNullable<Task["turn"]>;
 
 const TURN_ORDER: Turn[] = ["me", "running", "parked"];
+
+/** turn 三态显示文案。唯一事实源——TaskRow 徽章、TaskDetailSheet 段控、AttentionQueue 都从这里取。 */
+export const TURN_LABELS: Record<Turn, string> = {
+  me: "等我",
+  running: "在跑",
+  parked: "搁置",
+};
+
+/** turn 三态徽章圆点的 Tailwind 背景色 class。
+ *  TODO(visual-language v2)：等模块语义层 token 落地后，me 改用 --color-mod-todo，
+ *  running 找一个非 warn 的中性 token（warn 语义是「告警」，与「在跑」不匹配）。 */
+export const TURN_DOT_BG: Record<Turn, string> = {
+  me: "bg-accent",
+  running: "bg-warn",
+  parked: "bg-ink-3",
+};
+
+/** SegmentedControl 的 options 数组，按 me → running → parked 顺序，复用给 TaskRow popover 与 detail sheet。 */
+export const TURN_SEGMENTED_OPTIONS = TURN_ORDER.map((value) => ({
+  value,
+  label: TURN_LABELS[value],
+}));
 
 function byTurnAtAsc(now: Date): (a: Task, b: Task) => number {
   // turnAt 为 null 视为最远未来（排末尾），避免 null 与 ISO 字符串比较出错。

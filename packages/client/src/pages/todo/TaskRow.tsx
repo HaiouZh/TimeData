@@ -8,6 +8,7 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { isDueNow } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
+import { TURN_DOT_BG, TURN_LABELS, TURN_SEGMENTED_OPTIONS } from "../../lib/tasks/turnTags.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
 import { useSubtaskDraft } from "./useSubtaskDraft.js";
 
@@ -70,12 +71,6 @@ function formatMonthDay(date: string): string {
   return `${Number(month)}/${Number(day)}`;
 }
 
-const TURN_BADGE: Record<NonNullable<Task["turn"]>, { dot: string; label: string }> = {
-  me: { dot: "bg-accent", label: "等我" },
-  running: { dot: "bg-warn", label: "在跑" },
-  parked: { dot: "bg-ink-3", label: "搁置" },
-};
-
 function InlineSubtasks({
   task,
   seedEmpty,
@@ -126,11 +121,6 @@ export function TaskRow({
   const [seedEmpty, setSeedEmpty] = useState(false);
   const [turnMenuOpen, setTurnMenuOpen] = useState(false);
   const turnAnchorRef = useRef<HTMLButtonElement>(null);
-  const turnOptions = [
-    { value: "me" as const, label: "等我" },
-    { value: "running" as const, label: "在跑" },
-    { value: "parked" as const, label: "搁置" },
-  ];
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
   const canMove = showActions && !isRecurring && pool !== "recurring";
@@ -250,12 +240,12 @@ export function TaskRow({
                       : undefined
                   }
                 >
-                  <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-pill ${TURN_BADGE[task.turn].dot}`} />
-                  {TURN_BADGE[task.turn].label}
+                  <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-pill ${TURN_DOT_BG[task.turn]}`} />
+                  {TURN_LABELS[task.turn]}
                 </span>
               )}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
-                <span key={tag} data-testid="tag-chip" className="rounded-pill bg-surface-hover px-1.5 py-0.5">
+                <span key={tag} data-testid="tag-chip" className="rounded-pill bg-surface-hover px-1.5 py-0.5 text-ink-2">
                   #{tag}
                 </span>
               ))}
@@ -355,7 +345,7 @@ export function TaskRow({
         <div className="space-y-2">
           <SegmentedControl
             ariaLabel="回合"
-            options={turnOptions}
+            options={TURN_SEGMENTED_OPTIONS}
             value={task.turn ?? "me"}
             onChange={(value) => {
               onTurnChange?.(task, value);
