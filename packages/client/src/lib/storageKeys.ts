@@ -9,4 +9,6 @@ export const STORAGE_KEYS = {
   mergeOvernight: "timedata_merge_overnight",
   sleepCategoryId: "timedata_sleep_category_id",
   serverHealthy: "timedata_server_healthy",
+  todoWorkbenchSplit: "timedata_todo_workbench_split",
+  todoDoneCollapsed: "timedata_todo_done_collapsed",
 } as const;
