@@ -14,7 +14,8 @@ vi.mock("recharts", () => ({
   BarChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
   CartesianGrid: () => createElement("span"),
   Legend: () => createElement("span"),
-  Line: () => createElement("span"),
+  Line: ({ dataKey, name }: { dataKey?: string; name?: string }) =>
+    createElement("span", { "data-line": String(dataKey ?? ""), "data-name": String(name ?? "") }),
   LineChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
   ReferenceLine: () => createElement("span"),
   ResponsiveContainer: ({ children, height }: { children?: React.ReactNode; height?: number }) =>
@@ -74,6 +75,27 @@ describe("MetricChartBlock", () => {
     const { host, root } = renderBlock(<MetricChartBlock config={cfg} collections={{}} range={{ mode: "all" }} />);
 
     expect(host.textContent).toContain("暂无数据");
+    act(() => root.unmount());
+  });
+
+  it("勾选滚动窗时渲染滚动均线", () => {
+    const rollingCfg: MetricChartBlockConfig = { ...cfg, rollingWindows: [7] };
+    const { host, root } = renderBlock(
+      <MetricChartBlock
+        config={rollingCfg}
+        collections={{
+          hrvs: [
+            { id: "h1", date: "2026-06-01", hrvMs: 40, createdAt: "x", updatedAt: "x" },
+            { id: "h2", date: "2026-06-02", hrvMs: 60, createdAt: "x", updatedAt: "x" },
+          ],
+        }}
+        range={{ mode: "all" }}
+      />,
+    );
+
+    const lineKeys = [...host.querySelectorAll("[data-line]")].map((el) => el.getAttribute("data-line"));
+    expect(lineKeys).toContain("hrv.value");
+    expect(lineKeys).toContain("hrv.value:rolling:7");
     act(() => root.unmount());
   });
 });
