@@ -20,19 +20,15 @@ import {
   computeYDomain,
   formatAxisPace,
   getChartSeries,
+  resolveChartLayout,
   rollingKey,
+  type ChartLayout,
   type ChartSeriesRange,
   type HealthMetricCollections,
   type MetricSeries,
 } from "../../../lib/healthMetrics/index.ts";
 
 const COLORS = ["#22c55e", "#14b8a6", "#f59e0b", "#ef4444", "#38bdf8", "#a855f7"];
-
-function isNormalized(config: MetricChartBlockConfig): boolean {
-  if (config.trendMode === "normalized") return true;
-  if (config.trendMode === "raw") return false;
-  return config.metricIds.length > 1;
-}
 
 function average(values: Array<number | null>): number | null {
   const present = values.filter((value): value is number => value != null && Number.isFinite(value));
@@ -53,11 +49,11 @@ export function MetricChartBlock({
     { metricIds: config.metricIds, rollingWindows: config.rollingWindows, range, clampToDataStart: true },
     collections,
   );
-  const normalized = isNormalized(config);
-  const { dates, rows } = buildChartRows(result.series, { normalized, rollingWindows: config.rollingWindows });
+  const layout = resolveChartLayout(result.series, config.trendMode);
+  const { dates, rows } = buildChartRows(result.series, layout, config.rollingWindows);
 
   const hasData = result.series.some((series) => series.points.some((point) => point.value != null));
-  const onlyPace = result.series.length === 1 && result.series[0]?.valueType === "pace" && !normalized;
+  const metaText = layout.mode === "index" ? "指数化 · 基期=100" : layout.mode === "dual-axis" ? "双轴" : "";
 
   function renderTooltip({
     active,
@@ -76,7 +72,9 @@ export function MetricChartBlock({
         <div className="health-chart-tooltip-title">{String(label)}</div>
         {payload.map((entry) => {
           const dataKey = entry.dataKey ?? "";
-          const series = result.series.find((item) => dataKey === item.metricId || dataKey.startsWith(`${item.metricId}:rolling:`));
+          const series = result.series.find(
+            (item) => dataKey === item.metricId || dataKey.startsWith(`${item.metricId}:rolling:`),
+          );
           if (!series) return null;
           return (
             <div key={dataKey || series.metricId} className="health-chart-tooltip-row">
@@ -93,38 +91,118 @@ export function MetricChartBlock({
     <section className="health-panel" aria-label={config.title}>
       <div className="health-panel-header">
         <h3 className="health-panel-title">{config.title}</h3>
-        <span className="health-panel-meta">{normalized ? "归一化 0-100" : ""}</span>
+        <span className="health-panel-meta">{metaText}</span>
       </div>
 
       {!hasData ? (
         <div className="health-empty-inline">暂无数据</div>
       ) : (
         <ResponsiveContainer width="100%" height={config.presentation.height ?? 250}>
-          {renderChart(config, result.series, rows, normalized, onlyPace, renderTooltip)}
+          {renderChart(config, result.series, rows, layout, renderTooltip)}
         </ResponsiveContainer>
       )}
     </section>
   );
 }
 
+function axisKeys(series: MetricSeries[], rollingWindows: number[]): string[] {
+  return series.flatMap((item) => [item.metricId, ...rollingWindows.map((window) => rollingKey(item.metricId, window))]);
+}
+
+function applyManualDomain(
+  auto: [number, number] | null,
+  manual: MetricChartBlockConfig["presentation"]["yAxis"],
+): [number, number] | null {
+  if (!manual || typeof manual !== "object") return auto;
+  const lo = manual.min ?? auto?.[0];
+  const hi = manual.max ?? auto?.[1];
+  return lo != null && hi != null ? [lo, hi] : auto;
+}
+
+function dualSeriesAxisProps(
+  item: MetricSeries | undefined,
+  config: MetricChartBlockConfig,
+  rows: Array<Record<string, number | string | null>>,
+): { domain?: [number, number]; reversed?: boolean; tickFormatter?: (value: number | string) => string } {
+  if (!item) return {};
+  const domain = computeYDomain(rows, axisKeys([item], config.rollingWindows));
+  const isPace = item.valueType === "pace";
+  return { ...(domain ? { domain } : {}), ...(isPace ? { reversed: true, tickFormatter: formatAxisPace } : {}) };
+}
+
+function renderYAxes(
+  config: MetricChartBlockConfig,
+  rows: Array<Record<string, number | string | null>>,
+  series: MetricSeries[],
+  layout: ChartLayout,
+): ReactElement[] {
+  const neutralTick = { fill: "#94a3b8", fontSize: 12 };
+  if (layout.mode === "dual-axis") {
+    return [
+      <YAxis key="y" yAxisId="y" tick={{ fill: COLORS[0], fontSize: 12 }} {...dualSeriesAxisProps(series[0], config, rows)} />,
+      <YAxis
+        key="y1"
+        yAxisId="y1"
+        orientation="right"
+        tick={{ fill: COLORS[1 % COLORS.length], fontSize: 12 }}
+        {...dualSeriesAxisProps(series[1], config, rows)}
+      />,
+    ];
+  }
+  const auto = computeYDomain(rows, axisKeys(series, config.rollingWindows));
+  if (layout.mode === "index") {
+    const domain = auto ? ([Math.min(100, auto[0]), Math.max(100, auto[1])] as [number, number]) : undefined;
+    return [
+      <YAxis
+        key="y"
+        yAxisId="y"
+        tick={neutralTick}
+        {...(domain ? { domain } : {})}
+        tickFormatter={(value: number | string) => `${value}%`}
+      />,
+    ];
+  }
+  const domain = applyManualDomain(auto, config.presentation.yAxis);
+  const onlyPace = series.length === 1 && series[0]?.valueType === "pace";
+  return [
+    <YAxis
+      key="y"
+      yAxisId="y"
+      tick={neutralTick}
+      {...(domain ? { domain } : {})}
+      {...(onlyPace ? { reversed: true, tickFormatter: formatAxisPace } : {})}
+    />,
+  ];
+}
+
 function renderChart(
   config: MetricChartBlockConfig,
   series: MetricSeries[],
   rows: Array<Record<string, number | string | null>>,
-  normalized: boolean,
-  onlyPace: boolean,
+  layout: ChartLayout,
   tooltip: (props: { active?: boolean; label?: unknown }) => ReactElement | null,
 ) {
-  const yProps = resolveYProps(config, rows, series, normalized, onlyPace);
   const grid = <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />;
   const x = <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />;
-  const y = <YAxis {...yProps} tick={{ fill: "#94a3b8", fontSize: 12 }} />;
+  const yAxes = renderYAxes(config, rows, series, layout);
   const legend = <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />;
   const tip = <Tooltip content={tooltip} />;
+  const baseline =
+    layout.mode === "index" ? <ReferenceLine yAxisId="y" y={100} stroke="#64748b" strokeDasharray="2 4" /> : null;
+  const referenceLine =
+    config.showAverageLine && series.length === 1 ? (
+      <ReferenceLine
+        yAxisId="y"
+        y={avgOf(rows, series[0]?.metricId ?? "") ?? undefined}
+        stroke="#94a3b8"
+        strokeDasharray="4 4"
+      />
+    ) : null;
   const rollingLines = config.rollingWindows.flatMap((window) =>
     series.map((item, index) => (
       <Line
         key={rollingKey(item.metricId, window)}
+        yAxisId={layout.axisOf(item.metricId)}
         type="monotone"
         dataKey={rollingKey(item.metricId, window)}
         name={rollingDisplayName(item, window)}
@@ -136,21 +214,23 @@ function renderChart(
       />
     )),
   );
-  const referenceLine =
-    config.showAverageLine && series.length === 1 ? (
-      <ReferenceLine y={avgOf(rows, series[0]?.metricId ?? "") ?? undefined} stroke="#94a3b8" strokeDasharray="4 4" />
-    ) : null;
 
   if (config.chartKind === "bar" && series.length === 1) {
     return (
       <BarChart data={rows}>
         {grid}
         {x}
-        {y}
+        {yAxes}
         {tip}
         {legend}
+        {baseline}
         {referenceLine}
-        <Bar dataKey={series[0].metricId} name={seriesDisplayName(series[0])} fill={COLORS[0]} />
+        <Bar
+          yAxisId={layout.axisOf(series[0].metricId)}
+          dataKey={series[0].metricId}
+          name={seriesDisplayName(series[0])}
+          fill={COLORS[0]}
+        />
         {rollingLines}
       </BarChart>
     );
@@ -160,13 +240,15 @@ function renderChart(
       <AreaChart data={rows}>
         {grid}
         {x}
-        {y}
+        {yAxes}
         {tip}
         {legend}
+        {baseline}
         {referenceLine}
         {series.map((item, index) => (
           <Area
             key={item.metricId}
+            yAxisId={layout.axisOf(item.metricId)}
             type="monotone"
             dataKey={item.metricId}
             name={seriesDisplayName(item)}
@@ -184,13 +266,15 @@ function renderChart(
     <LineChart data={rows}>
       {grid}
       {x}
-      {y}
+      {yAxes}
       {tip}
       {legend}
+      {baseline}
       {referenceLine}
       {series.map((item, index) => (
         <Line
           key={item.metricId}
+          yAxisId={layout.axisOf(item.metricId)}
           type="monotone"
           dataKey={item.metricId}
           name={seriesDisplayName(item)}
@@ -207,46 +291,6 @@ function renderChart(
 
 function avgOf(rows: Array<Record<string, number | string | null>>, key: string): number | null {
   return average(rows.map((row) => (typeof row[key] === "number" ? (row[key] as number) : null)));
-}
-
-function resolveYProps(
-  config: MetricChartBlockConfig,
-  rows: Array<Record<string, number | string | null>>,
-  series: MetricSeries[],
-  normalized: boolean,
-  onlyPace: boolean,
-): {
-  domain?: [number, number];
-  ticks?: number[];
-  reversed?: boolean;
-  tickFormatter?: (value: number | string) => string;
-} {
-  if (normalized) return { domain: [0, 100], ticks: [0, 25, 50, 75, 100] };
-
-  const keys = series.flatMap((item) => [
-    item.metricId,
-    ...config.rollingWindows.map((window) => rollingKey(item.metricId, window)),
-  ]);
-  const auto = computeYDomain(rows, keys);
-  const manual = config.presentation.yAxis;
-  let domain = auto;
-  if (manual && typeof manual === "object") {
-    const lo = manual.min ?? auto?.[0];
-    const hi = manual.max ?? auto?.[1];
-    if (lo != null && hi != null) domain = [lo, hi];
-  }
-
-  const props: {
-    domain?: [number, number];
-    reversed?: boolean;
-    tickFormatter?: (value: number | string) => string;
-  } = {};
-  if (domain) props.domain = domain;
-  if (onlyPace) {
-    props.reversed = true;
-    props.tickFormatter = formatAxisPace;
-  }
-  return props;
 }
 
 function seriesDisplayName(series: MetricSeries): string {
