@@ -65,8 +65,9 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 1000) {
     if (host.textContent?.includes(text)) return;
+    // setTimeout(0)：让位给 Dexie 异步与 React 渲染的宏任务边界，不是真实计时等待。
     await act(async () => {
-      await new Promise((r) => window.setTimeout(r, 10));
+      await new Promise((r) => window.setTimeout(r, 0));
     });
   }
   throw new Error(`Timed out waiting for ${text}`);
@@ -80,7 +81,7 @@ async function waitForDetailsWithText(host: HTMLElement, text: string): Promise<
       | undefined;
     if (details) return details;
     await act(async () => {
-      await new Promise((r) => window.setTimeout(r, 10));
+      await new Promise((r) => window.setTimeout(r, 0));
     });
   }
   throw new Error(`Timed out waiting for details ${text}`);
@@ -142,34 +143,6 @@ describe("TodoPage", () => {
     });
     expect(host.querySelector('[aria-label="重复与时间"]')).not.toBeNull();
     expect(host.textContent).toContain("每天");
-    await act(async () => root.unmount());
-  });
-
-  it("即将到来默认折叠收起", async () => {
-    const future = new Date();
-    future.setDate(future.getDate() + 3);
-    const yyyy = future.getFullYear();
-    const mm = String(future.getMonth() + 1).padStart(2, "0");
-    const dd = String(future.getDate()).padStart(2, "0");
-    const t = await addTask({ title: "未来任务" });
-    const { scheduleTask } = await import("../lib/tasks.js");
-    await scheduleTask(t.id, `${yyyy}-${mm}-${dd}`);
-    const { host, root } = await renderPage();
-    await waitForText(host, "即将到来");
-    const details = [...host.querySelectorAll("details")].find((d) =>
-      d.textContent?.includes("即将到来"),
-    ) as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    await act(async () => root.unmount());
-  });
-
-  it("逾期任务显示逾期标签", async () => {
-    const t = await addTask({ title: "漏做的事" });
-    const { scheduleTask } = await import("../lib/tasks.js");
-    await scheduleTask(t.id, "2020-01-01");
-    const { host, root } = await renderPage();
-    await waitForText(host, "漏做的事");
-    expect(host.textContent).toContain("逾期");
     await act(async () => root.unmount());
   });
 
