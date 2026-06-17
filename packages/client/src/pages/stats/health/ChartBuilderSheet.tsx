@@ -41,8 +41,8 @@ const RANGE_OPTIONS: { value: "inherit" | "recent"; label: string }[] = [
 
 const TREND_MODE_OPTIONS: { value: "auto" | "normalized" | "raw"; label: string }[] = [
   { value: "auto", label: "自动" },
-  { value: "normalized", label: "归一化" },
-  { value: "raw", label: "原始值" },
+  { value: "normalized", label: "指数化" },
+  { value: "raw", label: "真实值" },
 ];
 
 function choiceFromInitial(initial: HealthChartConfig | null): BuilderChoice {

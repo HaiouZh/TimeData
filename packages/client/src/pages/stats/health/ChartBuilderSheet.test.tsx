@@ -81,6 +81,18 @@ describe("ChartBuilderSheet", () => {
     act(() => root.unmount());
   });
 
+  it("趋势模式标签对齐 H2 语义但保留枚举值", () => {
+    const { host, root } = renderSheet({ open: true, initial: null, onSave: vi.fn(), onClose: vi.fn(), onDelete: vi.fn() });
+
+    const group = host.querySelector('[role="radiogroup"][aria-label="趋势模式"]');
+    expect(group?.textContent).toContain("自动");
+    expect(group?.textContent).toContain("指数化");
+    expect(group?.textContent).toContain("真实值");
+    expect(group?.textContent).not.toContain("归一化");
+    expect(group?.textContent).not.toContain("原始值");
+    act(() => root.unmount());
+  });
+
   it("creates a metric table draft with CSV enabled", () => {
     const onSave = vi.fn();
     const { host, root } = renderSheet({ open: true, initial: null, onSave, onClose: vi.fn(), onDelete: vi.fn() });
