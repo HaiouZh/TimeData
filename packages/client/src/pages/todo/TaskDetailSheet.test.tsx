@@ -121,7 +121,18 @@ describe("TaskDetailSheet 展示与关闭", () => {
     ]);
     const { host, root } = await renderSheet(t.id);
     expect(host.textContent).toContain("每天");
-    expect(host.textContent).toContain("1/2 子任务");
+    expect(host.textContent).toContain("1/2");
+    await act(async () => root.unmount());
+  });
+
+  it("子任务区去框：无 border-l / border-t 分区块", async () => {
+    const t = await addTask({ title: "父" });
+    await updateSubtasks(t.id, [{ id: "s1", title: "子", done: false }]);
+    const { host, root } = await renderSheet(t.id);
+    const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
+    expect(sheet.querySelector(".border-l-2")).toBeNull();
+    expect(sheet.querySelector(".border-t")).toBeNull();
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeTruthy();
     await act(async () => root.unmount());
   });
 

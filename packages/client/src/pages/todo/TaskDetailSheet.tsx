@@ -207,8 +207,8 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                     {nextTimeLabel}
                   </button>
                   {subtaskTotal > 0 && (
-                    <span className="min-h-8 rounded-full bg-slate-800/60 px-3 py-1.5 text-xs text-slate-400">
-                      {subtaskDone}/{subtaskTotal} 子任务
+                    <span className="text-xs text-ink-3">
+                      {subtaskDone}/{subtaskTotal}
                     </span>
                   )}
                 </div>
@@ -234,11 +234,8 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
               </div>
             </div>
 
-            <div className="border-t border-border-hairline pt-4" onBlur={blurSubtasks}>
-              <div className="border-l-2 border-border-hairline pl-3">
-                <p className="mb-2 text-xs font-medium text-ink-3">子任务</p>
-                <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} density="full" />
-              </div>
+            <div onBlur={blurSubtasks}>
+              <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} density="full" />
             </div>
 
             <div className="flex justify-end">
