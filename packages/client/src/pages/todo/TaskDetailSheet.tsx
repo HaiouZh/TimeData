@@ -213,7 +213,7 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
                     type="button"
                     aria-label="编辑重复与时间"
                     onClick={() => setOverlay("preset")}
-                    className="min-h-8 rounded-full bg-slate-800/80 px-3 text-xs text-sky-100 hover:bg-slate-700"
+                    className="rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
                   >
                     {nextTimeLabel}
                   </button>

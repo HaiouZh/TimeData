@@ -322,6 +322,17 @@ describe("TaskDetailSheet 自动保存", () => {
     await act(async () => rendered.root.unmount());
   });
 
+  it("时间徽章是 token 小 chip（非 rounded-full 大 pill）", async () => {
+    const t = await addTask({ title: "x" });
+    const { host, root } = await renderSheet(t.id);
+    const badge = badgeOf(host);
+    expect(badge.className).not.toContain("rounded-full");
+    expect(badge.className).not.toContain("slate");
+    expect(badge.className).not.toContain("sky");
+    expect(badge.className).toContain("rounded-ctl");
+    await act(async () => root.unmount());
+  });
+
   it("标题未失焦直接关闭 -> flush 仍落库", async () => {
     const t = await addTask({ title: "旧" });
     const { host, root } = await renderSheet(t.id);
