@@ -1,8 +1,10 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import type { Task, TaskSubtask } from "@timedata/shared";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
+import { AnchoredPopover } from "../../components/ui/AnchoredPopover.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
+import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { isDueNow } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
@@ -31,6 +33,8 @@ export interface TaskRowProps {
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
   onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
+  onTurnChange?: (task: Task, turn: Task["turn"]) => void;
+  turnBadgeInteractive?: boolean;
 }
 
 function HoverAction({
@@ -65,6 +69,12 @@ function formatMonthDay(date: string): string {
   const [, month, day] = date.split("-");
   return `${Number(month)}/${Number(day)}`;
 }
+
+const TURN_BADGE: Record<NonNullable<Task["turn"]>, { dot: string; label: string }> = {
+  me: { dot: "bg-accent", label: "等我" },
+  running: { dot: "bg-warn", label: "在跑" },
+  parked: { dot: "bg-ink-3", label: "搁置" },
+};
 
 function InlineSubtasks({
   task,
@@ -109,9 +119,18 @@ export function TaskRow({
   onToToday,
   onToInbox,
   onSubtasksChange,
+  onTurnChange,
+  turnBadgeInteractive,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [seedEmpty, setSeedEmpty] = useState(false);
+  const [turnMenuOpen, setTurnMenuOpen] = useState(false);
+  const turnAnchorRef = useRef<HTMLButtonElement>(null);
+  const turnOptions = [
+    { value: "me" as const, label: "等我" },
+    { value: "running" as const, label: "在跑" },
+    { value: "parked" as const, label: "搁置" },
+  ];
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
   const canMove = showActions && !isRecurring && pool !== "recurring";
@@ -121,7 +140,8 @@ export function TaskRow({
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
   const overdueDate = overdue && task.scheduledAt ? task.scheduledAt : null;
-  const hasMeta = isRecurring || subtaskTotal > 0 || overdueDate !== null;
+  const hasMeta =
+    isRecurring || subtaskTotal > 0 || overdueDate !== null || task.turn !== null || (task.tags ?? []).length > 0;
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -216,6 +236,30 @@ export function TaskRow({
                 </span>
               )}
               {overdueDate && <span className="text-danger">逾期 {formatMonthDay(overdueDate)}</span>}
+              {task.turn && (
+                <span
+                  data-testid="turn-badge"
+                  data-turn={task.turn}
+                  className="inline-flex items-center gap-1"
+                  onClick={
+                    turnBadgeInteractive
+                      ? (event) => {
+                          event.stopPropagation();
+                          onTurnChange?.(task, task.turn);
+                        }
+                      : undefined
+                  }
+                >
+                  <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-pill ${TURN_BADGE[task.turn].dot}`} />
+                  {TURN_BADGE[task.turn].label}
+                </span>
+              )}
+              {(task.tags ?? []).slice(0, 3).map((tag) => (
+                <span key={tag} data-testid="tag-chip" className="rounded-pill bg-surface-hover px-1.5 py-0.5">
+                  #{tag}
+                </span>
+              ))}
+              {(task.tags ?? []).length > 3 && <span>…</span>}
             </div>
           )}
         </div>
@@ -233,6 +277,25 @@ export function TaskRow({
           <HoverAction label="删除" danger onClick={() => onDelete(task)}>
             ✕
           </HoverAction>
+        )}
+        {showActions && wide && task.turn === null && (
+          <HoverAction label="纳入回合" onClick={() => onTurnChange?.(task, "me")}>
+            纳
+          </HoverAction>
+        )}
+        {showActions && wide && task.turn !== null && (
+          <button
+            ref={turnAnchorRef}
+            type="button"
+            aria-label="切换回合"
+            onClick={(event) => {
+              event.stopPropagation();
+              setTurnMenuOpen((v) => !v);
+            }}
+            className="hidden h-8 w-8 items-center justify-center rounded-ctl text-sm opacity-0 transition group-hover:opacity-100 sm:flex text-ink-3 hover:bg-surface-hover"
+          >
+            转
+          </button>
         )}
         {showActions &&
           wide &&
@@ -282,6 +345,36 @@ export function TaskRow({
       {expanded && (
         <InlineSubtasks task={task} seedEmpty={seedEmpty} onCommit={(next) => onSubtasksChange(task, next)} />
       )}
+      <AnchoredPopover
+        open={turnMenuOpen}
+        anchorRef={turnAnchorRef}
+        ariaLabel="回合切换"
+        onClose={() => setTurnMenuOpen(false)}
+        className="w-64 rounded-card border border-border-hairline bg-surface-elevated p-2"
+      >
+        <div className="space-y-2">
+          <SegmentedControl
+            ariaLabel="回合"
+            options={turnOptions}
+            value={task.turn ?? "me"}
+            onChange={(value) => {
+              onTurnChange?.(task, value);
+              setTurnMenuOpen(false);
+            }}
+          />
+          <button
+            type="button"
+            aria-label="退出流程"
+            onClick={() => {
+              onTurnChange?.(task, null);
+              setTurnMenuOpen(false);
+            }}
+            className="w-full rounded-ctl px-2 py-1 text-xs text-ink-3 hover:bg-surface-hover"
+          >
+            退出流程
+          </button>
+        </div>
+      </AnchoredPopover>
     </div>
   );
 }

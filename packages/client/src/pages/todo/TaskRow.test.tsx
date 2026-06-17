@@ -19,6 +19,10 @@ function task(overrides: Partial<Task> = {}): Task {
     scheduledAt: null,
     subtasks: [],
     completedCount: 0,
+    turn: null,
+    turnAt: null,
+    completedAt: null,
+    tags: [],
     sortOrder: 0,
     createdAt: "2026-06-01T00:00:00.000Z",
     updatedAt: "2026-06-01T00:00:00.000Z",
@@ -34,6 +38,7 @@ const handlers = {
   onToToday: noop,
   onToInbox: noop,
   onSubtasksChange: noop,
+  onTurnChange: noop,
 };
 
 async function render(node: ReturnType<typeof createElement>) {
@@ -304,6 +309,97 @@ describe("TaskRow", () => {
     expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
     expect(host.querySelector('[aria-label="删除"]')).toBeNull();
     expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("turn 徽章按 turn 取色取字，turn=null 不显示", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ turn: "me" }), pool: "today", ...handlers }),
+    );
+    const badge = host.querySelector('[data-testid="turn-badge"]');
+    expect(badge).not.toBeNull();
+    expect(badge?.getAttribute("data-turn")).toBe("me");
+    expect(badge?.textContent).toContain("等我");
+    await act(async () => root.unmount());
+  });
+
+  it("tag chip 展示在 meta 带，无 tag 不显示", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ tags: ["重构", "bug"] }), pool: "today", ...handlers }),
+    );
+    const chips = host.querySelectorAll('[data-testid="tag-chip"]');
+    expect(chips.length).toBe(2);
+    expect(chips[0].textContent).toContain("重构");
+    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull(); // null turn 不渲染徽章
+    await act(async () => root.unmount());
+  });
+
+  it("普通池行徽章不可点（无 onClick 触发 onTurnChange）", async () => {
+    const onTurnChange = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ turn: "me" }), pool: "today", ...handlers, onTurnChange }),
+    );
+    const badge = host.querySelector('[data-testid="turn-badge"]') as HTMLElement;
+    await act(async () => badge.click());
+    expect(onTurnChange).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+  });
+
+  it("turn=null 宽屏显示纳入按钮，点击调 onTurnChange(task, me)", async () => {
+    const onTurnChange = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ turn: null }),
+        pool: "today",
+        wide: true,
+        ...handlers,
+        onTurnChange,
+      }),
+    );
+    const btn = host.querySelector('[aria-label="纳入回合"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    await act(async () => btn.click());
+    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "me");
+    await act(async () => root.unmount());
+  });
+
+  it("turn=me 宽屏显示回合按钮，点开弹段控并切到 running", async () => {
+    const onTurnChange = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ turn: "me", turnAt: "2026-06-17T08:00:00.000Z" }),
+        pool: "today",
+        wide: true,
+        ...handlers,
+        onTurnChange,
+      }),
+    );
+    const trigger = host.querySelector('[aria-label="切换回合"]') as HTMLButtonElement;
+    await act(async () => trigger.click());
+    // AnchoredPopover 把段控 portal 到 document.body，故从 body 查询；SegmentedControl 选项以文本内容作可访问名（无 aria-label 属性）。
+    const running = Array.from(document.body.querySelectorAll('[role="radio"]')).find((b) =>
+      (b.textContent ?? "").includes("在跑"),
+    ) as HTMLButtonElement;
+    expect(running).toBeTruthy();
+    await act(async () => running.click());
+    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "running");
+    await act(async () => root.unmount());
+  });
+
+  it("回合段控退出流程回 null", async () => {
+    const onTurnChange = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ turn: "parked", turnAt: "2026-06-17T08:00:00.000Z" }),
+        pool: "today",
+        wide: true,
+        ...handlers,
+        onTurnChange,
+      }),
+    );
+    await act(async () => (host.querySelector('[aria-label="切换回合"]') as HTMLButtonElement).click());
+    await act(async () => (document.body.querySelector('[aria-label="退出流程"]') as HTMLButtonElement).click());
+    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), null);
     await act(async () => root.unmount());
   });
 });
