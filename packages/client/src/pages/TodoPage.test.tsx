@@ -8,7 +8,7 @@ import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
-import { addTask } from "../lib/tasks.js";
+import { addTask, setTaskTags, setTaskTurn } from "../lib/tasks.js";
 import { TodoPage } from "./TodoPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -217,6 +217,53 @@ describe("TodoPage", () => {
     await act(async () => media.setMatches(true));
 
     expect(document.body.querySelector('[role="dialog"][aria-label="重复与时间"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  // spec §4.3 硬约束零覆盖回归点：tag 筛选作用于下方各池，但**不**作用于顶部注意力区。
+  // 构造场景：A 进注意力区（turn=me，tag=x），B 进普通池（tag=y）。点选筛 y → A 仍可见。
+  it("tag 筛选不作用于注意力置顶区", async () => {
+    const a = await addTask({ title: "等我处理 A", toInbox: true });
+    await setTaskTurn(a.id, "me");
+    await setTaskTags(a.id, ["x"]);
+    const b = await addTask({ title: "普通任务 B", toInbox: true });
+    await setTaskTags(b.id, ["y"]);
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "等我处理 A");
+    await waitForText(host, "普通任务 B");
+
+    const queue = host.querySelector('[data-testid="attention-queue"]') as HTMLElement | null;
+    expect(queue).not.toBeNull();
+    expect(queue?.textContent).toContain("等我处理 A");
+
+    // 点 #y 筛选——B 应被过滤、A 应仍在置顶区。
+    const filterY = host.querySelector('[aria-label="筛选 y"]') as HTMLButtonElement;
+    expect(filterY).not.toBeNull();
+    await act(async () => filterY.click());
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    // 注意力区不被 tag 筛影响：A 仍可见。
+    const queueAfter = host.querySelector('[data-testid="attention-queue"]') as HTMLElement | null;
+    expect(queueAfter?.textContent).toContain("等我处理 A");
+
+    // 下方收件箱 B 仍在（因为它带 tag=y，命中筛选）；
+    // 但若我们筛的是 #x，B 会被过滤——验证下方池确实受筛选影响。
+    await act(async () => filterY.click()); // 取消 y 选中
+    const filterX = host.querySelector('[aria-label="筛选 x"]') as HTMLButtonElement;
+    await act(async () => filterX.click());
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+    // 注意力区里的 A 仍在（tag=x 命中筛选反而让下方有 A，注意力区本来就有 A）。
+    expect(host.querySelector('[data-testid="attention-queue"]')?.textContent).toContain("等我处理 A");
+    // 下方池中 B（tag=y）应被筛掉。注意：A 因 turn=me 也会同时出现在下方某池中，且也带 tag=x，
+    // 所以下方"普通任务 B"的标题应不再可见。
+    const inboxSection = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
+    expect(inboxSection?.textContent ?? "").not.toContain("普通任务 B");
+
     await act(async () => root.unmount());
   });
 });

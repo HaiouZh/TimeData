@@ -402,4 +402,70 @@ describe("TaskRow", () => {
     expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), null);
     await act(async () => root.unmount());
   });
+
+  // spec §3.5 已决项：纳入按钮对所有任务（含重复任务）开放——zero-coverage 回归点。
+  it("重复任务 turn=null 也显示纳入按钮，点击调 onTurnChange(_, me)", async () => {
+    const onTurnChange = vi.fn();
+    const recurringTask = task({
+      turn: null,
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+    });
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: recurringTask,
+        pool: "recurring",
+        wide: true,
+        ...handlers,
+        onTurnChange,
+      }),
+    );
+    const btn = host.querySelector('[aria-label="纳入回合"]') as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    await act(async () => btn?.click());
+    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "me");
+    await act(async () => root.unmount());
+  });
+
+  // spec §4.1：tag chip 最多 3 个，超出截尾 …。
+  it("tag chip 超过 3 个截断显示 …", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ tags: ["a", "b", "c", "d", "e"] }),
+        pool: "today",
+        ...handlers,
+      }),
+    );
+    const chips = host.querySelectorAll('[data-testid="tag-chip"]');
+    expect(chips.length).toBe(3);
+    expect(host.textContent).toContain("…");
+    await act(async () => root.unmount());
+  });
+
+  it("tag 数量正好 3 个不显示 …", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ tags: ["a", "b", "c"] }),
+        pool: "today",
+        ...handlers,
+      }),
+    );
+    expect(host.querySelectorAll('[data-testid="tag-chip"]').length).toBe(3);
+    expect(host.textContent).not.toContain("…");
+    await act(async () => root.unmount());
+  });
+
+  // spec §3.2 三态映射：plan 仅测了 me，参数化补 running/parked。
+  it.each([
+    ["me", "等我"],
+    ["running", "在跑"],
+    ["parked", "搁置"],
+  ] as const)("turn=%s 徽章 data-turn=%s 文案=%s", async (turn, label) => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ turn }), pool: "today", ...handlers }),
+    );
+    const badge = host.querySelector('[data-testid="turn-badge"]');
+    expect(badge?.getAttribute("data-turn")).toBe(turn);
+    expect(badge?.textContent).toContain(label);
+    await act(async () => root.unmount());
+  });
 });
