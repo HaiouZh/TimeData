@@ -18,6 +18,7 @@ export type {
 export { filterHealthRecordsByRange } from "./range.js";
 export {
   computeSleepDurationHours,
+  formatAxisPace,
   formatClockHours,
   formatDecimalHours,
   formatDistanceKm,

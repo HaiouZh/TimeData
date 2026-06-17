@@ -1,12 +1,5 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { RunPaceTrendPoint } from "../../../lib/healthMetrics/index.ts";
-
-function formatAxisPace(value: number | string): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "--";
-  const minutes = Math.floor(value / 60);
-  const seconds = Math.round(value % 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")}/km`;
-}
+import { formatAxisPace, type RunPaceTrendPoint } from "../../../lib/healthMetrics/index.ts";
 
 export function RunPaceTrendChart({ data }: { data: RunPaceTrendPoint[] }) {
   return (
