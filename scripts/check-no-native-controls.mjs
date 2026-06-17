@@ -5,8 +5,8 @@ import { dirname, join, relative } from "node:path";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "packages", "client", "src");
 
-// 豁免：ui 原子件（原生控件的受控封装）、测试文件、健康模块（Phase 2 整体迁）
-const EXEMPT_DIRS = [join("components", "ui"), join("pages", "stats", "health")];
+// 豁免：ui 原子件（原生控件的受控封装）、测试文件
+const EXEMPT_DIRS = [join("components", "ui")];
 const isExempt = (rel) => EXEMPT_DIRS.some((e) => rel.includes(e)) || /\.test\.[jt]sx?$/.test(rel);
 
 const PATTERNS = [
