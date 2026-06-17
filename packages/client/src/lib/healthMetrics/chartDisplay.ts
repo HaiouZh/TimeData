@@ -50,3 +50,22 @@ export function buildChartRows(
   });
   return { dates, rows };
 }
+
+export function computeYDomain(rows: ChartRow[], keys: string[]): [number, number] | null {
+  const values: number[] = [];
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = row[key];
+      if (typeof value === "number" && Number.isFinite(value)) values.push(value);
+    }
+  }
+  if (values.length === 0) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) {
+    const pad = Math.abs(min) > 0 ? Math.abs(min) * 0.05 : 1;
+    return [min - pad, max + pad];
+  }
+  const pad = (max - min) * 0.08;
+  return [min - pad, max + pad];
+}

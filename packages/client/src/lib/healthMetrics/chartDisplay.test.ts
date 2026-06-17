@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChartRows, rollingKey } from "./chartDisplay.js";
+import { buildChartRows, computeYDomain, rollingKey } from "./chartDisplay.js";
 import type { MetricSeries } from "./types.js";
 
 function series(
@@ -55,5 +55,33 @@ describe("buildChartRows", () => {
     const s = series("hrv.value", [{ date: "2026-06-01", value: 40 }]);
     const { rows } = buildChartRows([s], { normalized: false, rollingWindows: [] });
     expect(rows[0]).toEqual({ date: "2026-06-01", "hrv.value": 40 });
+  });
+});
+
+describe("computeYDomain", () => {
+  it("贴合数据范围并留 padding，不从 0 起", () => {
+    const rows = [
+      { date: "d1", v: 55 },
+      { date: "d2", v: 62 },
+    ];
+    const domain = computeYDomain(rows, ["v"]);
+    expect(domain).not.toBeNull();
+    const [lo, hi] = domain as [number, number];
+    expect(lo).toBeGreaterThan(0);
+    expect(lo).toBeLessThan(55);
+    expect(hi).toBeGreaterThan(62);
+  });
+
+  it("全等值时给对称 padding", () => {
+    const rows = [
+      { date: "d1", v: 60 },
+      { date: "d2", v: 60 },
+    ];
+    expect(computeYDomain(rows, ["v"])).toEqual([57, 63]);
+  });
+
+  it("无数值返回 null（交回 recharts 自动）", () => {
+    const rows = [{ date: "d1", v: null }];
+    expect(computeYDomain(rows, ["v"])).toBeNull();
   });
 });
