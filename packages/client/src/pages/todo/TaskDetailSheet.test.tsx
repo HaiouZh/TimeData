@@ -136,6 +136,39 @@ describe("TaskDetailSheet 展示与关闭", () => {
     await act(async () => root.unmount());
   });
 
+  it("有子任务 -> 顶部进度条按 m/n 给宽度；未满格用 accent 色", async () => {
+    const t = await addTask({ title: "父" });
+    await updateSubtasks(t.id, [
+      { id: "s1", title: "甲", done: true },
+      { id: "s2", title: "乙", done: false },
+      { id: "s3", title: "丙", done: false },
+      { id: "s4", title: "丁", done: false },
+    ]);
+    const { host, root } = await renderSheet(t.id);
+    const fill = host.querySelector('[data-testid="subtask-progress-fill"]') as HTMLElement;
+    expect(fill).toBeTruthy();
+    expect(fill.style.width).toBe("25%");
+    expect(fill.className).toContain("bg-accent-strong");
+    await act(async () => root.unmount());
+  });
+
+  it("全部完成 -> 进度条满格且 ok 色", async () => {
+    const t = await addTask({ title: "父" });
+    await updateSubtasks(t.id, [{ id: "s1", title: "甲", done: true }]);
+    const { host, root } = await renderSheet(t.id);
+    const fill = host.querySelector('[data-testid="subtask-progress-fill"]') as HTMLElement;
+    expect(fill.style.width).toBe("100%");
+    expect(fill.className).toContain("bg-ok");
+    await act(async () => root.unmount());
+  });
+
+  it("无子任务 -> 不渲染进度条", async () => {
+    const t = await addTask({ title: "光杆" });
+    const { host, root } = await renderSheet(t.id);
+    expect(host.querySelector('[data-testid="subtask-progress"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it("点放大按钮切换全屏高度", async () => {
     const t = await addTask({ title: "x" });
     const { host, root } = await renderSheet(t.id);

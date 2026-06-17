@@ -6,6 +6,7 @@ import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
+import { subtaskProgress } from "../../lib/tasks/subtasks.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { applyRecurrenceChoice, deleteTask, toggleTaskDone, updateSubtasks, updateTask } from "../../lib/tasks.js";
 import { getDateString } from "../../lib/time.js";
@@ -184,6 +185,16 @@ export function TaskDetailSheet({ id, onClose }: TaskDetailSheetProps) {
             {expanded ? "▢" : "⤢"}
           </button>
         </div>
+
+        {task && subtaskTotal > 0 && (
+          <div data-testid="subtask-progress" className="h-[3px] w-full bg-surface-hover" aria-hidden="true">
+            <div
+              data-testid="subtask-progress-fill"
+              className={`h-full transition-all ${subtaskDone === subtaskTotal ? "bg-ok" : "bg-accent-strong"}`}
+              style={{ width: `${(subtaskProgress(subtaskDone, subtaskTotal) ?? 0) * 100}%` }}
+            />
+          </div>
+        )}
 
         {error && <p className="px-4 pb-2 text-sm text-rose-300">{error}</p>}
 
