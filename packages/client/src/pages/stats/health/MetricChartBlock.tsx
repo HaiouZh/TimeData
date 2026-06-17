@@ -27,8 +27,7 @@ import {
   type HealthMetricCollections,
   type MetricSeries,
 } from "../../../lib/healthMetrics/index.ts";
-
-const COLORS = ["#22c55e", "#14b8a6", "#f59e0b", "#ef4444", "#38bdf8", "#a855f7"];
+import { CHART_CHROME, metricColor } from "./chartColors.js";
 
 function average(values: Array<number | null>): number | null {
   const present = values.filter((value): value is number => value != null && Number.isFinite(value));
@@ -135,16 +134,24 @@ function renderYAxes(
   rows: Array<Record<string, number | string | null>>,
   series: MetricSeries[],
   layout: ChartLayout,
+  seriesColors: string[],
 ): ReactElement[] {
-  const neutralTick = { fill: "#94a3b8", fontSize: 12 };
+  const neutralTick = { fill: CHART_CHROME.tick, fontSize: 12 };
   if (layout.mode === "dual-axis") {
     return [
-      <YAxis key="y" yAxisId="y" tick={{ fill: COLORS[0], fontSize: 12 }} {...dualSeriesAxisProps(series[0], config, rows)} />,
+      <YAxis
+        key="y"
+        yAxisId="y"
+        width={40}
+        tick={{ fill: seriesColors[0] ?? CHART_CHROME.tick, fontSize: 12 }}
+        {...dualSeriesAxisProps(series[0], config, rows)}
+      />,
       <YAxis
         key="y1"
         yAxisId="y1"
         orientation="right"
-        tick={{ fill: COLORS[1 % COLORS.length], fontSize: 12 }}
+        width={40}
+        tick={{ fill: seriesColors[1] ?? CHART_CHROME.tick, fontSize: 12 }}
         {...dualSeriesAxisProps(series[1], config, rows)}
       />,
     ];
@@ -156,6 +163,7 @@ function renderYAxes(
       <YAxis
         key="y"
         yAxisId="y"
+        width={40}
         tick={neutralTick}
         {...(domain ? { domain } : {})}
         tickFormatter={(value: number | string) => `${value}%`}
@@ -168,6 +176,7 @@ function renderYAxes(
     <YAxis
       key="y"
       yAxisId="y"
+      width={onlyPace ? 48 : 40}
       tick={neutralTick}
       {...(domain ? { domain } : {})}
       {...(onlyPace ? { reversed: true, tickFormatter: formatAxisPace } : {})}
@@ -182,19 +191,21 @@ function renderChart(
   layout: ChartLayout,
   tooltip: (props: { active?: boolean; label?: unknown }) => ReactElement | null,
 ) {
-  const grid = <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />;
-  const x = <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />;
-  const yAxes = renderYAxes(config, rows, series, layout);
-  const legend = <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />;
+  const claimed = new Set<string>();
+  const seriesColors = series.map((item) => metricColor(item.metricId, claimed));
+  const grid = <CartesianGrid strokeDasharray="3 3" stroke={CHART_CHROME.grid} />;
+  const x = <XAxis dataKey="date" tick={{ fill: CHART_CHROME.tick, fontSize: 12 }} />;
+  const yAxes = renderYAxes(config, rows, series, layout, seriesColors);
+  const legend = <Legend wrapperStyle={{ color: CHART_CHROME.legend, fontSize: 12 }} />;
   const tip = <Tooltip content={tooltip} />;
   const baseline =
-    layout.mode === "index" ? <ReferenceLine yAxisId="y" y={100} stroke="#64748b" strokeDasharray="2 4" /> : null;
+    layout.mode === "index" ? <ReferenceLine yAxisId="y" y={100} stroke={CHART_CHROME.reference} strokeDasharray="2 4" /> : null;
   const referenceLine =
     config.showAverageLine && series.length === 1 ? (
       <ReferenceLine
         yAxisId="y"
         y={avgOf(rows, series[0]?.metricId ?? "") ?? undefined}
-        stroke="#94a3b8"
+        stroke={CHART_CHROME.reference}
         strokeDasharray="4 4"
       />
     ) : null;
@@ -206,7 +217,7 @@ function renderChart(
         type="monotone"
         dataKey={rollingKey(item.metricId, window)}
         name={rollingDisplayName(item, window)}
-        stroke={COLORS[index % COLORS.length]}
+        stroke={seriesColors[index]}
         strokeWidth={1.4}
         strokeDasharray="5 4"
         dot={false}
@@ -229,7 +240,7 @@ function renderChart(
           yAxisId={layout.axisOf(series[0].metricId)}
           dataKey={series[0].metricId}
           name={seriesDisplayName(series[0])}
-          fill={COLORS[0]}
+          fill={seriesColors[0]}
         />
         {rollingLines}
       </BarChart>
@@ -252,8 +263,8 @@ function renderChart(
             type="monotone"
             dataKey={item.metricId}
             name={seriesDisplayName(item)}
-            stroke={COLORS[index % COLORS.length]}
-            fill={COLORS[index % COLORS.length]}
+            stroke={seriesColors[index]}
+            fill={seriesColors[index]}
             fillOpacity={0.35}
             connectNulls
           />
@@ -278,7 +289,7 @@ function renderChart(
           type="monotone"
           dataKey={item.metricId}
           name={seriesDisplayName(item)}
-          stroke={COLORS[index % COLORS.length]}
+          stroke={seriesColors[index]}
           strokeWidth={2.2}
           dot={false}
           connectNulls
