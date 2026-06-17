@@ -28,32 +28,38 @@ describe("rollingKey", () => {
 });
 
 describe("buildChartRows", () => {
-  it("原始模式：原值与滚动键都进 row", () => {
+  it("raw-single：原值与滚动键都进 row（恒等）", () => {
     const s = series("hrv.value", [
       { date: "2026-06-01", value: 40, rolling: { "7": 40 } },
       { date: "2026-06-02", value: 60, rolling: { "7": 50 } },
     ]);
-    const { dates, rows } = buildChartRows([s], { normalized: false, rollingWindows: [7] });
+    const layout = resolveChartLayout([s], "raw");
+    const { dates, rows } = buildChartRows([s], layout, [7]);
     expect(dates).toEqual(["2026-06-01", "2026-06-02"]);
     expect(rows[0]).toEqual({ date: "2026-06-01", "hrv.value": 40, "hrv.value:rolling:7": 40 });
     expect(rows[1]).toEqual({ date: "2026-06-02", "hrv.value": 60, "hrv.value:rolling:7": 50 });
   });
 
-  it("归一化模式：原值与滚动用同一 min/max 基准映射 0-100", () => {
-    const s = series("hrv.value", [
-      { date: "2026-06-01", value: 40, rolling: { "7": 40 } },
-      { date: "2026-06-02", value: 60, rolling: { "7": 50 } },
+  it("index：原值与滚动用同一基期映射", () => {
+    const a = series("a", [
+      { date: "d1", value: 50, rolling: { "7": 50 } },
+      { date: "d2", value: 100, rolling: { "7": 75 } },
     ]);
-    const { rows } = buildChartRows([s], { normalized: true, rollingWindows: [7] });
-    expect(rows[0]["hrv.value"]).toBe(0);
-    expect(rows[1]["hrv.value"]).toBe(100);
-    expect(rows[0]["hrv.value:rolling:7"]).toBe(0);
-    expect(rows[1]["hrv.value:rolling:7"]).toBe(50);
+    const b: MetricSeries = { metricId: "b", label: "b", unit: "bpm", valueType: "number", points: a.points.map((p) => ({ ...p })) };
+    const c: MetricSeries = { metricId: "c", label: "c", unit: "h", valueType: "number", points: a.points.map((p) => ({ ...p })) };
+    const layout = resolveChartLayout([a, b, c], "auto");
+    expect(layout.mode).toBe("index");
+    const { rows } = buildChartRows([a, b, c], layout, [7]);
+    expect(rows[0].a).toBe(100);
+    expect(rows[1].a).toBe(200);
+    expect(rows[0]["a:rolling:7"]).toBe(100);
+    expect(rows[1]["a:rolling:7"]).toBe(150);
   });
 
   it("无滚动窗时不产生滚动键", () => {
     const s = series("hrv.value", [{ date: "2026-06-01", value: 40 }]);
-    const { rows } = buildChartRows([s], { normalized: false, rollingWindows: [] });
+    const layout = resolveChartLayout([s], "raw");
+    const { rows } = buildChartRows([s], layout, []);
     expect(rows[0]).toEqual({ date: "2026-06-01", "hrv.value": 40 });
   });
 });
