@@ -220,7 +220,7 @@ describe("HealthStatsPage", () => {
     expect(host.querySelector('[aria-label="健康趋势"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="跑步配速趋势"]')).toBeNull();
     expect(host.querySelector('[aria-label="最近跑步"]')).toBeNull();
-    expect(host.textContent).toContain("7.0h");
+    expect(host.textContent).toContain("7 h");
 
     await act(async () => root.unmount());
   });
@@ -268,7 +268,7 @@ describe("HealthStatsPage", () => {
     await waitForCondition(() => host.textContent?.includes("HRV 摘要") ?? false, "Timed out waiting for block-level summary");
 
     expect(host.textContent).not.toContain("暂无健康数据");
-    expect(host.textContent).toContain("45ms");
+    expect(host.textContent).toContain("45 ms");
     expect(host.textContent).not.toContain("睡眠时长");
     await act(async () => root.unmount());
   });
