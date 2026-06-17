@@ -24,6 +24,7 @@ import {
 } from "@meauxt/react-swipeable-list";
 import "@meauxt/react-swipeable-list/dist/styles.css";
 import type { Task, TaskSubtask } from "@timedata/shared";
+import { useState } from "react";
 import { SortableTaskRow } from "./SortableTaskRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
 
@@ -45,6 +46,7 @@ export interface TaskListProps {
 
 export function TaskList(props: TaskListProps) {
   const { pool, tasks, isOverdue, sortable, wide } = props;
+  const [dragging, setDragging] = useState(false);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
@@ -52,6 +54,7 @@ export function TaskList(props: TaskListProps) {
   );
 
   function handleDragEnd(event: DragEndEvent): void {
+    setDragging(false);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const ids = tasks.map((task) => task.id);
@@ -125,9 +128,15 @@ export function TaskList(props: TaskListProps) {
   if (!sortable) return list;
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={() => setDragging(true)}
+      onDragCancel={() => setDragging(false)}
+      onDragEnd={handleDragEnd}
+    >
       <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-        {list}
+        <div className={dragging ? "todo-dnd-dragging" : undefined}>{list}</div>
       </SortableContext>
     </DndContext>
   );

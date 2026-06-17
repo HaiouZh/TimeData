@@ -60,7 +60,7 @@ export function ResizableSplit({
     <div
       ref={containerRef}
       className={`grid min-h-0 gap-0 ${className ?? ""}`}
-      style={{ gridTemplateColumns: `minmax(0, ${leftRatio}fr) 10px minmax(0, ${rightRatio}fr)` }}
+      style={{ gridTemplateColumns: `minmax(0, ${leftRatio}fr) 16px minmax(0, ${rightRatio}fr)` }}
     >
       <section className={`min-w-0 space-y-4 ${leftClassName ?? ""}`}>{left}</section>
       <div
@@ -71,7 +71,7 @@ export function ResizableSplit({
         aria-valuemax={70}
         aria-valuenow={Math.round(ratio * 100)}
         tabIndex={0}
-        className="group flex cursor-col-resize touch-none items-stretch justify-center px-1"
+        className="group flex cursor-col-resize touch-none items-stretch justify-center self-stretch px-1"
         onPointerDown={(event) => {
           event.preventDefault();
           activePointerId.current = event.pointerId;

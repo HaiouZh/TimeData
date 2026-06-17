@@ -69,7 +69,7 @@ describe("applyRecurrenceChoice", () => {
     expect(await db.syncLog.count()).toBe(1);
   });
 
-  it("placement：设 startAt 的每 N 天，未到落 upcoming、到日进 today", async () => {
+  it("placement：设 startAt 的每 N 天，未到落 recurring（重复区）、到日进 today", async () => {
     const task = await addTask({ title: "x" });
 
     await applyRecurrenceChoice(task.id, {
@@ -79,7 +79,7 @@ describe("applyRecurrenceChoice", () => {
     });
 
     const saved = await db.tasks.get(task.id);
-    expect(placementForTask(saved!, new Date("2026-06-18T12:00:00"))?.pool).toBe("upcoming");
+    expect(placementForTask(saved!, new Date("2026-06-18T12:00:00"))?.pool).toBe("recurring");
     expect(placementForTask(saved!, new Date("2026-06-20T12:00:00"))?.pool).toBe("today");
   });
 });

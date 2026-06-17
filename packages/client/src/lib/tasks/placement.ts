@@ -5,6 +5,7 @@ export type TodoPlacement =
   | { pool: "today"; overdue: boolean }
   | { pool: "inbox" }
   | { pool: "upcoming" }
+  | { pool: "recurring" }
   | { pool: "completed" };
 
 const DAY_MS = 86_400_000;
@@ -58,12 +59,14 @@ export function placementForTask(task: Task, now: Date): TodoPlacement {
     if (due || hasOutstandingUntilOccurrence) {
       return { pool: "today", overdue: dueDay < localDayIndex(now) };
     }
-    return { pool: "upcoming" };
+    // 未到期的重复任务只在「重复 / 提醒」区管理，不再与「即将到来」重复显示。
+    return { pool: "recurring" };
   }
 
   if (task.scheduledAt === null) return { pool: "inbox" };
   const schedDay = localDayIndex(new Date(task.scheduledAt));
   const nowDay = localDayIndex(now);
   if (schedDay > nowDay) return { pool: "upcoming" };
-  return { pool: "today", overdue: schedDay < nowDay };
+  if (schedDay < nowDay) return { pool: "inbox" }; // 非重复待办过期不堆在今天，回归收件箱
+  return { pool: "today", overdue: false };
 }

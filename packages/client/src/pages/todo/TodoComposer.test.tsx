@@ -3,9 +3,9 @@ import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
+import { BottomNavProvider, useBottomNav } from "../../contexts/BottomNavContext.js";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
-import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { TodoComposer } from "./TodoComposer.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,11 +21,25 @@ function setValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function Harness() {
+  const { setHidden } = useBottomNav();
+  return createElement(
+    "div",
+    null,
+    createElement("button", { type: "button", "data-testid": "hide-nav", onClick: () => setHidden(true) }, "hide"),
+    createElement(TodoComposer, null),
+  );
+}
+
 async function renderComposer() {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  await act(async () => root.render(createElement(SyncProvider, null, createElement(TodoComposer, null))));
+  await act(async () =>
+    root.render(
+      createElement(BottomNavProvider, null, createElement(SyncProvider, null, createElement(Harness, null))),
+    ),
+  );
   return { host, root };
 }
 
@@ -47,35 +61,34 @@ async function waitForInputValue(host: HTMLElement, expected: string) {
 }
 
 describe("TodoComposer", () => {
-  it("选『每天』后添加 → 任务带 daily recurrence，提交后清空 title", async () => {
+  it("输入标题后添加 → 创建普通任务并清空 title", async () => {
     const { host, root } = await renderComposer();
     await act(async () => setValue(host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement, "喝水"));
 
-    await click(host.querySelector('button[aria-label="重复"]'));
-    await click(host.querySelector('button[aria-label="每天"]'));
     await click(host.querySelector('button[type="submit"]'));
     await flush();
 
     const tasks = await db.tasks.toArray();
     expect(tasks).toHaveLength(1);
-    expect(tasks[0].recurrence).toMatchObject({ freq: "daily" });
+    expect(tasks[0].title).toBe("喝水");
+    expect(tasks[0].recurrence).toBeNull();
     await waitForInputValue(host, "");
     await act(async () => root.unmount());
   });
 
-  it("选『仅某天』后添加 → 普通排期任务", async () => {
+  it("三件套不再有【重复】按钮", async () => {
     const { host, root } = await renderComposer();
-    await act(async () => setValue(host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement, "买菜"));
+    expect(host.querySelector('button[aria-label="重复"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
 
-    await click(host.querySelector('button[aria-label="重复"]'));
-    await click(host.querySelector('button[aria-label="仅某天…"]'));
-    await click(host.querySelector('button[aria-label="2026-06-20"]'));
-    await click(host.querySelector('button[type="submit"]'));
-    await flush();
+  it("底栏 tab 收起时 composer 跟随贴底（bottom=0）", async () => {
+    const { host, root } = await renderComposer();
+    const form = host.querySelector("form") as HTMLFormElement;
+    expect(Number.parseInt(form.style.bottom, 10)).toBe(49);
 
-    const tasks = await db.tasks.toArray();
-    expect(tasks[0].recurrence).toBeNull();
-    expect(tasks[0].scheduledAt).toBe(normalizeScheduledDate("2026-06-20"));
+    await click(host.querySelector('[data-testid="hide-nav"]'));
+    expect(Number.parseInt(form.style.bottom, 10)).toBe(0);
     await act(async () => root.unmount());
   });
 });

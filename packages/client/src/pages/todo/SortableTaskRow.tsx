@@ -21,7 +21,7 @@ export function SortableTaskRow({
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="w-full">
       {children({
         setActivatorNodeRef,
         attributes,

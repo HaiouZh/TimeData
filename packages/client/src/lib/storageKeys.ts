@@ -11,4 +11,5 @@ export const STORAGE_KEYS = {
   serverHealthy: "timedata_server_healthy",
   todoWorkbenchSplit: "timedata_todo_workbench_split",
   todoDoneCollapsed: "timedata_todo_done_collapsed",
+  todoInboxCollapsed: "timedata_todo_inbox_collapsed",
 } as const;

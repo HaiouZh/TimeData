@@ -21,7 +21,12 @@ import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { normalizeScheduledDate, placementForTask } from "../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../lib/tasks/recurrencePresets.js";
-import { getDoneCollapsed, setDoneCollapsed } from "../lib/tasks/workbenchPrefs.js";
+import {
+  getDoneCollapsed,
+  getInboxCollapsed,
+  setDoneCollapsed,
+  setInboxCollapsed,
+} from "../lib/tasks/workbenchPrefs.js";
 import {
   applyRecurrenceChoice,
   deleteTask,
@@ -107,7 +112,9 @@ export function TodoPage() {
   };
   const wideRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule } : {};
   const todayRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule, showActions: true as const } : {};
-  const doneRowProps = wide ? { wide: true as const, onEditSchedule: openSchedule, showActions: false as const } : {};
+  const doneRowProps = wide
+    ? { wide: true as const, onEditSchedule: openSchedule, showActions: false as const }
+    : { showActions: false as const };
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -128,22 +135,59 @@ export function TodoPage() {
     };
   }
 
+  const doneTail = buckets.todayDone.length > 0 && (
+    <div className="mt-2">
+      <CollapsibleSection
+        title="已完成"
+        count={buckets.todayDone.length}
+        defaultOpen={!getDoneCollapsed()}
+        onToggle={(open) => setDoneCollapsed(!open)}
+      >
+        <div className="rounded-card bg-surface p-1.5">
+          {buckets.todayDone.map((task) => (
+            <TaskRow key={task.id} task={task} pool="today" {...rowHandlers} {...doneRowProps} />
+          ))}
+        </div>
+      </CollapsibleSection>
+    </div>
+  );
+
   const todayBlock = (
-    <TaskColumn
-      title="今天"
-      pool="today"
-      tasks={buckets.today}
-      emptyText="今天没有任务 🎉"
-      hero
-      isOverdue={isOverdue}
-      sortable
-      onReorder={async (ids) => {
-        await persistTaskOrder(ids);
-        syncAfterWrite();
-      }}
-      {...rowHandlers}
-      {...todayRowProps}
-    />
+    <>
+      <TaskColumn
+        title="今天"
+        pool="today"
+        tasks={buckets.today}
+        emptyText="今天没有任务 🎉"
+        hero
+        isOverdue={isOverdue}
+        sortable
+        onReorder={async (ids) => {
+          await persistTaskOrder(ids);
+          syncAfterWrite();
+        }}
+        {...rowHandlers}
+        {...todayRowProps}
+      />
+      {doneTail}
+    </>
+  );
+
+  const inboxCollapsible = (
+    <CollapsibleSection
+      title="收件箱"
+      count={buckets.inbox.length}
+      defaultOpen={!getInboxCollapsed()}
+      onToggle={(open) => setInboxCollapsed(!open)}
+    >
+      {buckets.inbox.length === 0 ? (
+        <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
+      ) : (
+        <div className="rounded-card bg-surface p-1.5">
+          <TaskList pool="inbox" tasks={buckets.inbox} {...rowHandlers} />
+        </div>
+      )}
+    </CollapsibleSection>
   );
 
   const wideTodayBlock = (
@@ -163,43 +207,31 @@ export function TodoPage() {
         {...rowHandlers}
         {...wideRowProps}
       />
-      {buckets.todayDone.length > 0 && (
-        <div className="mt-2">
-          <CollapsibleSection
-            title="已完成"
-            count={buckets.todayDone.length}
-            defaultOpen={!getDoneCollapsed()}
-            onToggle={(open) => setDoneCollapsed(!open)}
-          >
-            <div className="rounded-card bg-surface p-1.5">
-              {buckets.todayDone.map((task) => (
-                <TaskRow key={task.id} task={task} pool="today" {...rowHandlers} {...doneRowProps} />
-              ))}
-            </div>
-          </CollapsibleSection>
-        </div>
-      )}
+      {doneTail}
     </div>
   );
 
   const wideInboxBlock = (
     <section data-section="inbox" data-col="inbox">
-      <div className="mb-2 flex items-baseline justify-between px-2">
-        <h2 className="text-sm font-medium text-ink">收件箱</h2>
-        <span className="text-xs text-ink-3">{buckets.inbox.length}</span>
-      </div>
-      {buckets.inbox.length === 0 ? (
-        <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
-      ) : (
-        groupInboxByDay(buckets.inbox).map((segment) => (
-          <div key={segment.key} className="mb-3">
-            <p className="px-2 pb-1 text-xs text-ink-3">{segment.label}</p>
-            <div className="rounded-card bg-surface p-1.5">
-              <TaskList pool="inbox" tasks={segment.tasks} {...rowHandlers} {...wideRowProps} />
+      <CollapsibleSection
+        title="收件箱"
+        count={buckets.inbox.length}
+        defaultOpen={!getInboxCollapsed()}
+        onToggle={(open) => setInboxCollapsed(!open)}
+      >
+        {buckets.inbox.length === 0 ? (
+          <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
+        ) : (
+          groupInboxByDay(buckets.inbox).map((segment) => (
+            <div key={segment.key} className="mb-3">
+              <p className="px-2 pb-1 text-xs text-ink-3">{segment.label}</p>
+              <div className="rounded-card bg-surface p-1.5">
+                <TaskList pool="inbox" tasks={segment.tasks} {...rowHandlers} {...wideRowProps} />
+              </div>
             </div>
-          </div>
-        ))
-      )}
+          ))
+        )}
+      </CollapsibleSection>
     </section>
   );
 
@@ -257,7 +289,7 @@ export function TodoPage() {
 
   return (
     <div className="min-h-full bg-page text-ink">
-      <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-5xl">
+      <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
         {wide ? (
           <ResizableSplit
             className="items-start gap-y-4"
@@ -277,9 +309,9 @@ export function TodoPage() {
         ) : (
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1.6fr_1fr] lg:items-start lg:gap-x-6 lg:gap-y-4">
             <div className="order-1 lg:col-start-1 lg:row-start-1">{todayBlock}</div>
-            <div className="order-2 lg:col-start-2 lg:row-start-1">
-              <TaskColumn title="收件箱" pool="inbox" tasks={buckets.inbox} emptyText="收件箱为空" {...rowHandlers} />
-            </div>
+            <section data-section="inbox" className="order-2 lg:col-start-2 lg:row-start-1">
+              {inboxCollapsible}
+            </section>
             <div className="order-3 lg:col-start-1 lg:row-start-2">{upcomingBlock}</div>
             <div className="order-4 lg:col-start-2 lg:row-start-2">{recurringBlock}</div>
           </div>

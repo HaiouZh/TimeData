@@ -22,9 +22,20 @@ export function saveSplitRatio(ratio: number): void {
 }
 
 export function getDoneCollapsed(): boolean {
-  return safeGetItem(STORAGE_KEYS.todoDoneCollapsed) === "true";
+  // 未设偏好时默认折叠：已完成只作回看，不抢今天列表的注意力。
+  const raw = safeGetItem(STORAGE_KEYS.todoDoneCollapsed);
+  return raw === null ? true : raw === "true";
 }
 
 export function setDoneCollapsed(collapsed: boolean): void {
   safeSetItem(STORAGE_KEYS.todoDoneCollapsed, collapsed ? "true" : "false");
+}
+
+export function getInboxCollapsed(): boolean {
+  // 未设偏好时默认展开：收件箱是常用入口。
+  return safeGetItem(STORAGE_KEYS.todoInboxCollapsed) === "true";
+}
+
+export function setInboxCollapsed(collapsed: boolean): void {
+  safeSetItem(STORAGE_KEYS.todoInboxCollapsed, collapsed ? "true" : "false");
 }

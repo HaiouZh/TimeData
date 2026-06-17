@@ -17,9 +17,9 @@ describe("placementForTask 普通任务", () => {
     const r = placementForTask(task({ scheduledAt: "2026-06-14T00:00:00.000Z" }), TODAY);
     expect(r).toEqual({ pool: "today", overdue: false });
   });
-  it("scheduledAt=过去 → today, overdue", () => {
+  it("scheduledAt=过去 → inbox（非重复待办过期回归收件箱）", () => {
     const r = placementForTask(task({ scheduledAt: "2026-06-10T00:00:00.000Z" }), TODAY);
-    expect(r).toEqual({ pool: "today", overdue: true });
+    expect(r).toEqual({ pool: "inbox" });
   });
   it("scheduledAt=未来 → upcoming", () => {
     expect(placementForTask(task({ scheduledAt: "2026-12-25T00:00:00.000Z" }), TODAY).pool).toBe("upcoming");
@@ -39,11 +39,16 @@ describe("placementForTask 重复任务", () => {
     const r = placementForTask(task({ recurrence: daily, startAt: "2026-06-10T00:00:00.000Z" }), TODAY);
     expect(r).toEqual({ pool: "today", overdue: true });
   });
-  it("下次实例在未来 → upcoming", () => {
+  it("下次实例在未来 → recurring（重复区管理，不进 upcoming）", () => {
     const yearly = { freq: "monthly" as const, interval: 12, byMonthday: [25], basis: "due" as const };
     const r = placementForTask(task({ recurrence: yearly, startAt: "2025-12-25T00:00:00.000Z",
       lastDoneAt: "2025-12-25T01:00:00.000Z" }), TODAY);
-    expect(r.pool).toBe("upcoming");
+    expect(r.pool).toBe("recurring");
+  });
+  it("每日任务今天已完成 → recurring（不再与即将到来重复显示）", () => {
+    const r = placementForTask(task({ recurrence: daily, startAt: "2026-06-01T00:00:00.000Z",
+      lastDoneAt: "2026-06-14T06:00:00.000Z" }), TODAY);
+    expect(r.pool).toBe("recurring");
   });
 });
 

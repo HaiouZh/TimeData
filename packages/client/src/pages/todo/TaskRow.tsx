@@ -115,6 +115,8 @@ export function TaskRow({
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
   const canMove = showActions && !isRecurring && pool !== "recurring";
+  // 收件箱里的任务视为「无生效排期」：过期回库后残留的 scheduledAt 不当作日期 chip 显示。
+  const hasActiveSchedule = isRecurring || (task.scheduledAt !== null && pool !== "inbox");
   const subtasks = task.subtasks ?? [];
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
@@ -132,7 +134,7 @@ export function TaskRow({
   }
 
   return (
-    <div className="group rounded-row transition hover:bg-surface-hover">
+    <div className="group w-full rounded-row transition hover:bg-surface-hover">
       <div
         className="flex items-center gap-3 px-2 py-2"
         role="link"
@@ -146,54 +148,57 @@ export function TaskRow({
           }
         }}
       >
-        <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
-          <Checkbox
-            ariaLabel={`完成 ${task.title}`}
-            checked={checked}
-            onChange={() => onToggle(task)}
-            className="shrink-0"
-          />
+        {/* 复选框 + 展开箭头紧贴成一簇；箭头只作指示，展开命中靠行左 2/5 区域。 */}
+        <div className="flex shrink-0 items-center gap-1">
+          <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
+            <Checkbox
+              ariaLabel={`完成 ${task.title}`}
+              checked={checked}
+              onChange={() => onToggle(task)}
+              className="shrink-0"
+            />
+          </div>
+          {subtaskTotal > 0 ? (
+            <button
+              type="button"
+              aria-label={expanded ? "收起子任务" : "展开子任务"}
+              onClick={(event) => {
+                event.stopPropagation();
+                setSeedEmpty(false);
+                setExpanded((value) => !value);
+              }}
+              className="w-4 shrink-0 rounded-ctl px-0 text-center text-xs text-ink-3 hover:bg-surface-hover hover:text-ink-2"
+            >
+              {expanded ? "▾" : "▸"}
+            </button>
+          ) : expanded ? (
+            <button
+              type="button"
+              aria-label="收起子任务"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSeedEmpty(false);
+                setExpanded(false);
+              }}
+              className="w-4 shrink-0 rounded-ctl px-0 text-center text-xs text-ink-3 hover:bg-surface-hover hover:text-ink-2"
+            >
+              ▾
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="添加子任务"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSeedEmpty(true);
+                setExpanded(true);
+              }}
+              className="w-4 shrink-0 rounded-ctl px-0 text-center text-xs text-ink-3 opacity-0 transition hover:bg-surface-hover hover:text-ink-2 group-hover:opacity-100"
+            >
+              +
+            </button>
+          )}
         </div>
-        {subtaskTotal > 0 ? (
-          <button
-            type="button"
-            aria-label={expanded ? "收起子任务" : "展开子任务"}
-            onClick={(event) => {
-              event.stopPropagation();
-              setSeedEmpty(false);
-              setExpanded((value) => !value);
-            }}
-            className="shrink-0 rounded-ctl px-1 text-xs text-ink-3 hover:bg-surface-hover hover:text-ink-2"
-          >
-            {expanded ? "▾" : "▸"}
-          </button>
-        ) : expanded ? (
-          <button
-            type="button"
-            aria-label="收起子任务"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSeedEmpty(false);
-              setExpanded(false);
-            }}
-            className="shrink-0 rounded-ctl px-1 text-xs text-ink-3 hover:bg-surface-hover hover:text-ink-2"
-          >
-            ▾
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-label="添加子任务"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSeedEmpty(true);
-              setExpanded(true);
-            }}
-            className="shrink-0 rounded-ctl px-1 text-xs text-ink-3 opacity-0 transition hover:bg-surface-hover hover:text-ink-2 group-hover:opacity-100"
-          >
-            +
-          </button>
-        )}
         <div className="min-w-0 flex-1">
           <span className={`select-text break-words text-sm ${checked ? "text-ink-3 line-through" : "text-ink"}`}>
             {task.title}
@@ -231,7 +236,7 @@ export function TaskRow({
         )}
         {showActions &&
           wide &&
-          (task.recurrence !== null || task.scheduledAt !== null ? (
+          (hasActiveSchedule ? (
             <button
               type="button"
               aria-label="编辑重复与时间"

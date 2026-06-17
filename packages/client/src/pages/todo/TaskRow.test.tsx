@@ -273,6 +273,22 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
+  it("收件箱里残留过去 scheduledAt 的任务，宽屏给『计划到某天』而非过去日期 chip", async () => {
+    const onEditSchedule = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ scheduledAt: "2026-06-10T00:00:00.000Z" }),
+        pool: "inbox",
+        wide: true,
+        onEditSchedule,
+        ...handlers,
+      }),
+    );
+    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
+    expect(host.querySelector('[aria-label="计划到某天"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it("可隐藏池移动、删除与计划入口，用于已完成尾巴", async () => {
     const { host, root } = await render(
       createElement(TaskRow, {

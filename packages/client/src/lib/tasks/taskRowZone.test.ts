@@ -7,13 +7,15 @@ describe("rowClickZone", () => {
     expect(rowClickZone(10, 300, false)).toBe("open");
   });
 
-  it("有子任务：窄行左 1/3 内展开、之外开抽屉", () => {
+  it("有子任务：窄行左 2/5 内展开、之外开抽屉", () => {
+    // 300px 行 → 2/5 = 120px 边界
     expect(rowClickZone(50, 300, true)).toBe("expand");
-    expect(rowClickZone(150, 300, true)).toBe("open");
+    expect(rowClickZone(110, 300, true)).toBe("expand"); // 1/3=100 之外、2/5=120 之内
+    expect(rowClickZone(130, 300, true)).toBe("open");
   });
 
-  it("有子任务：宽行展开区封顶 140px", () => {
-    expect(rowClickZone(130, 900, true)).toBe("expand");
-    expect(rowClickZone(150, 900, true)).toBe("open");
+  it("有子任务：宽行展开区封顶 240px", () => {
+    expect(rowClickZone(230, 900, true)).toBe("expand");
+    expect(rowClickZone(250, 900, true)).toBe("open");
   });
 });

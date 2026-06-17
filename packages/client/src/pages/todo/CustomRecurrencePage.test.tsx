@@ -25,6 +25,8 @@ async function render(props: Parameters<typeof CustomRecurrencePage>[0]) {
 
 const click = (el: Element | null) => act(async () => el?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 const byLabel = (host: HTMLElement, label: string) => host.querySelector(`[aria-label="${label}"]`);
+const clickOption = (host: HTMLElement, text: string) =>
+  click([...host.querySelectorAll('[role="option"]')].find((el) => el.textContent === text) ?? null);
 
 describe("CustomRecurrencePage", () => {
   it("完成回传 recurrence + startAt", async () => {
@@ -37,11 +39,23 @@ describe("CustomRecurrencePage", () => {
     await act(async () => root.unmount());
   });
 
+  it("单位是可滚动转盘（天/周/月）", async () => {
+    const { host, root } = await render({ initial, onComplete: vi.fn(), onBack: vi.fn() });
+
+    const wheel = byLabel(host, "重复单位");
+    expect(wheel?.getAttribute("role")).toBe("listbox");
+    const labels = [...host.querySelectorAll('[aria-label="重复单位"] [role="option"]')].map((el) => el.textContent);
+    expect(labels).toContain("天");
+    expect(labels).toContain("周");
+    expect(labels).toContain("月");
+    await act(async () => root.unmount());
+  });
+
   it("切到周单位后按起始日推 byWeekday", async () => {
     const onComplete = vi.fn();
     const { host, root } = await render({ initial, onComplete, onBack: vi.fn() });
 
-    await click(byLabel(host, "周"));
+    await clickOption(host, "周");
     await click(byLabel(host, "完成"));
 
     expect(onComplete.mock.calls.at(-1)?.[0]).toMatchObject({ freq: "weekly", byWeekday: [2] });
@@ -88,7 +102,7 @@ describe("CustomRecurrencePage", () => {
     const onBack = vi.fn();
     const { host, root } = await render({ initial, onComplete, onBack });
 
-    await click(byLabel(host, "周"));
+    await clickOption(host, "周");
     await act(async () => {
       root.render(createElement(CustomRecurrencePage, { initial: { ...initial }, onComplete, onBack }));
     });

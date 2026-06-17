@@ -293,7 +293,9 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     if (p.pool === "today") buckets.today.push(t);
     else if (p.pool === "inbox") buckets.inbox.push(t);
     else if (p.pool === "upcoming") buckets.upcoming.push(t);
-    else if (!t.recurrence && t.done && t.completedAt && getDateString(new Date(t.completedAt)) === todayStr)
+    else if (p.pool === "recurring") {
+      // 未到期的重复任务已在 recurring 桶，不再进可见的今天/即将/完成桶。
+    } else if (!t.recurrence && t.done && t.completedAt && getDateString(new Date(t.completedAt)) === todayStr)
       buckets.todayDone.push(t);
     else buckets.completed.push(t);
   }

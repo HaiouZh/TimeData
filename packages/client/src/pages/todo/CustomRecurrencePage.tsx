@@ -22,6 +22,13 @@ const unitOptions: Array<{ value: Recurrence["freq"]; label: string }> = [
   { value: "weekly", label: "周" },
   { value: "monthly", label: "月" },
 ];
+const unitLabels = unitOptions.map((option) => option.label);
+function labelToUnit(label: string): Recurrence["freq"] {
+  return unitOptions.find((option) => option.label === label)?.value ?? "daily";
+}
+function unitToLabel(unit: Recurrence["freq"]): string {
+  return unitOptions.find((option) => option.value === unit)?.label ?? "天";
+}
 
 const endModes: Array<{ value: CustomRecurrenceEndMode; label: string }> = [
   { value: "never", label: "永不" },
@@ -115,19 +122,12 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
             </div>
             <div>
               <div className="mb-1 text-center text-xs text-slate-500">单位</div>
-              <div className="grid h-[102px] grid-rows-3 rounded-lg bg-slate-900/70 p-1">
-                {unitOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-label={option.label}
-                    onClick={() => setUnit(option.value)}
-                    className={segmentedClass(draft.unit === option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+              <Wheel
+                ariaLabel="重复单位"
+                value={unitToLabel(draft.unit)}
+                options={unitLabels}
+                onChange={(label) => setUnit(labelToUnit(label))}
+              />
             </div>
           </div>
         </section>

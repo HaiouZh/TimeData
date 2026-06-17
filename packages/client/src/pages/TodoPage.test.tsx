@@ -4,6 +4,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
@@ -56,7 +57,13 @@ async function renderPage() {
   document.body.appendChild(host);
   const root = createRoot(host);
   await act(async () => {
-    root.render(createElement(MemoryRouter, null, createElement(SyncProvider, null, createElement(TodoPage))));
+    root.render(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(BottomNavProvider, null, createElement(SyncProvider, null, createElement(TodoPage))),
+      ),
+    );
   });
   return { host, root };
 }
@@ -131,18 +138,6 @@ describe("TodoPage", () => {
     await waitForText(host, "丢收件箱");
     const tasks = await db.tasks.toArray();
     expect(tasks[0].scheduledAt).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it("点重复按钮打开预设门", async () => {
-    const { host, root } = await renderPage();
-    expect(host.querySelector('[aria-label="重复与时间"]')).toBeNull();
-    const repeat = host.querySelector('button[aria-label="重复"]') as HTMLButtonElement;
-    await act(async () => {
-      repeat.click();
-    });
-    expect(host.querySelector('[aria-label="重复与时间"]')).not.toBeNull();
-    expect(host.textContent).toContain("每天");
     await act(async () => root.unmount());
   });
 

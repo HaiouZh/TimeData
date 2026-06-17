@@ -5,9 +5,11 @@ import {
   SPLIT_MIN,
   clampSplitRatio,
   getDoneCollapsed,
+  getInboxCollapsed,
   loadSplitRatio,
   saveSplitRatio,
   setDoneCollapsed,
+  setInboxCollapsed,
 } from "./workbenchPrefs.js";
 
 const localStorageMock = (() => {
@@ -58,12 +60,28 @@ describe("split ratio 存取", () => {
 });
 
 describe("done collapsed 存取", () => {
-  it("默认展开（未折叠）", () => {
+  it("默认折叠（未设偏好时收起已完成）", () => {
+    expect(getDoneCollapsed()).toBe(true);
+  });
+
+  it("可显式展开后读出", () => {
+    setDoneCollapsed(false);
     expect(getDoneCollapsed()).toBe(false);
   });
 
   it("可置为折叠", () => {
     setDoneCollapsed(true);
     expect(getDoneCollapsed()).toBe(true);
+  });
+});
+
+describe("inbox collapsed 存取", () => {
+  it("默认展开（未折叠）", () => {
+    expect(getInboxCollapsed()).toBe(false);
+  });
+
+  it("可置为折叠并读出", () => {
+    setInboxCollapsed(true);
+    expect(getInboxCollapsed()).toBe(true);
   });
 });
