@@ -64,7 +64,11 @@
     "covers": 15
   },
   "docs/evergreen/todo.md": {
-    "chars": 6039,
-    "covers": 16
+    "chars": 10743,
+    "covers": 23
+  },
+  "docs/evergreen/todo/recurrence.md": {
+    "chars": 3719,
+    "covers": 4
   }
 }

@@ -10,8 +10,15 @@ covers:
   - packages/client/src/pages/TodoPage.tsx
   - packages/client/src/pages/todo/**
   - packages/client/src/lib/tasks.ts
-  - packages/client/src/lib/tasks/**
-  - packages/client/src/components/MonthCalendar.tsx
+  - packages/client/src/lib/tasks/placement.ts
+  - packages/client/src/lib/tasks/taskSort.ts
+  - packages/client/src/lib/tasks/taskRowZone.ts
+  - packages/client/src/lib/tasks/workbenchPrefs.ts
+  - packages/client/src/lib/tasks/inboxGrouping.ts
+  - packages/client/src/lib/tasks/turnTags.ts
+  - packages/client/src/lib/tasks/subtasks.ts
+  - packages/client/src/lib/tasks/taskTimeLabel.ts
+  - packages/client/src/lib/settings/todoDefaultDestinationSetting.ts
   - packages/server/src/db/schema.ts
   - packages/server/src/lib/db-rows.ts
   - packages/server/src/routes/tasks.ts
@@ -23,134 +30,161 @@ last-reviewed: 2026-06-18
 
 # 待办任务
 
-> 待办域覆盖 `tasks` 表、重复规则、子任务、四分区任务池和受控 agent 状态回写。
-> 它不讲同步账本机制本身；LWW、seq、force-push 见 [sync](sync.md)。
+> 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
+> 本文讲：Task/TaskSubtask 字段契约、四分区落点、三条写入通道、turn 回合轴、tags、agent/CLI 回写、关键不变量。
+> 重复规则引擎（Recurrence schema、spawn、终止条件、预设门）见子文档 [todo/recurrence](todo/recurrence.md)。
+> 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
 ## 承上启下
 
-- 上游：用户在 Web 待办页新增/编辑/勾选/排序任务；速记页 composer 可把文本存为普通任务；授权 agent / CLI 可通过受控 API 回写状态。
-- 下游：本地 Dexie `tasks` 与 `syncLog(tableName="tasks")` 同事务写入，随后经 [sync](sync.md) 推到 server，再按 `sync_seq` 下发其他设备。
-- 契约：字段 schema 见本文 §2；跨域时间、ID、SQL/Dexie 映射约定见 [data-model](data-model.md)。
-- 邻居：[quick-notes](quick-notes.md) 是另一个捕捉入口；[categories-settings](categories-settings.md) 管设置页中的待办默认落点外的分类设置；[backup](backup.md) 管备份格式。
+- **上游**：用户在 Web `TodoPage` 新增/编辑/勾选/排序；速记页 composer 「存待办」调 `addTask`；授权 agent / CLI 经 `POST /api/agent/tasks/:id/status` 回写状态；CLI 经 `POST /api/tasks/:id/schedule` 排期。
+- **下游**：本地 Dexie `tasks` 与 `syncLog(tableName="tasks")` 同事务写 → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备按 seq 拉取。force-push 里 `tasks` 是核心同步表之一（见 [backup](backup.md)）。
+- **契约**：`Task` / `TaskSubtask` 字段 schema 见本文 §2；`Recurrence` 见 [todo/recurrence](todo/recurrence.md)；跨域约定见 [data-model](data-model.md)；`tags` 不驱动自动逻辑（见 [ADR 0014](../adr/0014-task-tags-vs-fields.md)）。
+- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
 
-## 1. 数据流
+## 1. 数据流（本域端到端，跨包）
 
-### 1.1 Web 本地写入
-
-`TodoPage` 读取 `listTasks()` 的分桶视图，所有 mutation 落到 `packages/client/src/lib/tasks.ts`。`addTask` / `putTask` / `persistTaskOrder` / `deleteTask` 都必须在同一个 Dexie transaction 里写业务表 `tasks` 和待同步队列 `syncLog`；同步日志失败时业务写入也回滚。
-
-客户端写入只负责体验侧校验与本地排序，不是最终裁判。服务端收到同步变更后仍用登记簿 schema 解析并按 LWW 域写入 SQLite。
-
-### 1.2 同步与服务端查询
-
-客户端 push `tasks/create|update|delete`。服务端 `SERVER_SYNC_DOMAINS.tasks` 是通用 LWW 域：upsert 时把 `recurrence` / `subtasks` / `tags` 序列化为 JSON 字符串，`done` 映射为 0/1；delete 真删当前行并写 tombstone，供其他设备 pull 重放。
-
-`GET /api/tasks` 是只读查询入口，支持 `kind=pool|recurring` 与 `done=0|1`，按 `sort_order, created_at, id` 排序。`POST /api/tasks/:id/schedule` 是受控排期写入口，会更新 task 并追加 `sync_seq`；它不是绕过同步账本的新底层写入路径。
-
-### 1.3 Agent 状态回写
-
-外部 agent / CLI 封装通过：
+### 1.1 Web 端写入
 
 ```text
-POST /api/agent/tasks/:id/status { turn?, done?, note?, tags? }
+用户操作 → TodoPage / TaskDetailSheet
+        → lib/tasks.ts: addTask/updateTask/toggleTaskDone/scheduleTask/
+           unscheduleTask/setTaskTurn/setTaskTags/updateSubtasks/deleteTask/persistTaskOrder
+        → putTask(): db.transaction("rw", db.tasks, db.syncLog) 内
+           db.tasks.put(next) + recordSyncLog("tasks", id, action, ts)
+        → syncAfterWrite() 触发常规同步
+        → POST /api/sync/push → server 通用 LWW 域（无自定义 apply）
+           → taskToRow 写 SQLite tasks + 服务器分配 updated_at + recordSeq
+        → sync_seq 记账 → notifySyncChange → 其他设备 SSE pull
 ```
 
-`/api/agent/*` 使用 scoped auth，可接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`。body 至少带一个字段，只允许回合状态、完成、备注子任务和 tags 这些封闭动作。服务端读取当前 task，`TaskSchema.parse` 合成下一版，构造 `tasks/update` 的 `SyncChange`，走 `applyChange()` 写 SQLite + `sync_seq`，再 `notifySyncChange(getLatestSeq())` 让前台客户端普通同步拉取。
+所有本地写入（含 `persistTaskOrder` 批量重排）都在同一个 Dexie transaction 内同时写 `tasks` 与 `syncLog`；同步日志失败时业务写入回滚。`updated_at` 由服务器记账时分配，设备时钟漂移不影响同步正确性。客户端校验只为体验，服务端用登记簿 schema 重新解析并按 LWW 写入。
 
-`AGENT_TOKEN` 不授予 sync、admin、export、reset 或 force-push 权限；泄露影响面限制在任务状态回写。
+### 1.2 agent / CLI 回写任务状态（封闭动作集合）
 
-## 2. Schema / 契约
-
-### 2.1 Recurrence
-
-```ts
-type Recurrence = {
-  freq: "daily" | "weekly" | "monthly";
-  interval: number;
-  byWeekday?: number[];
-  byMonthday?: number[];
-  time?: string;
-  basis: "due" | "completion";
-  count?: number;
-  until?: string;
-};
+```text
+agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
+        → POST /api/agent/tasks/:id/status { turn?, done?, note?, tags? }
+        → scopedAuthMiddleware（AUTH_TOKEN 或 AGENT_TOKEN，仅 /api/agent/* 生效）
+        → routes/agent.ts: statusSchema 严格校验（至少一个字段）
+        → 读当前 task，按封闭动作构造 next：
+            · turn        → turn + turnAt(now 或 null)
+            · done=true   → done=true, turn=null, turnAt=null 【清空回合】
+            · done=false  → done=false 【不清 completedAt】
+            · note        → subtasks 追加 { id, title, done:false }
+            · tags        → 整体替换 tags
+        → TaskSchema.parse(next) 再校验 → db.transaction(applyChange(change))
+        → notifySyncChange(getLatestSeq()) → 前台 SSE pull
 ```
 
-- `interval` 是 1..999 的正整数。
-- `byWeekday` 用 ISO 周几，1=周一、7=周日；weekly 必填。
-- `byMonthday` 支持 1..31 和 `-1`（月末）；monthly 必填。
-- daily 不能带 weekday/monthday；weekly 不能带 monthday；monthly 不能带 weekday。
-- `count` 与 `until` 互斥；`until` 是 UTC ISO，用来表达本地某天为止。
-- `basis="due"` 按计划日判断下一次；`basis="completion"` 从上次完成日往后推。
+`AGENT_TOKEN` 只在 `/api/agent/*` 生效，泄露影响面限于任务回合/完成/备注/tags，不授予 sync、force-push、admin、export、reset。CLI 的 `task-*` 是该受控 API 的简化封装。
 
-### 2.2 TaskSubtask
+### 1.3 只读查询 + 排期写端点（第三条写入通道）
+
+- `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
+- `POST /api/tasks/:id/schedule { scheduledDate: "YYYY-MM-DD" | null }`（`routes/tasks.ts`）：CLI `task-schedule`/`task-unschedule` 调用，受 `AUTH_TOKEN` 保护；重复任务 409 `TASK_RECURRING_USE_RULE`。
+  - **红线**：这条端点**直接 `UPDATE tasks SET scheduled_at, updated_at` + `recordSeq`，不走 `applyChange`/LWW 域**——即它**绕过了 LWW 的 schema 校验/冲突路径**。对比 agent 端点反而走 `applyChange`。这是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），改 tasks 写入逻辑时三条通道都要照顾。
+
+## 2. Schema / 契约（字段级）
+
+### 2.1 `Task`（`entitySchemas.ts:TaskSchema`）
 
 ```ts
-type TaskSubtask = {
-  id: string;
-  title: string;
+{
+  id: string;                   // NonEmptyTrimmed
+  title: string;                // 保存前 trim，拒空
   done: boolean;
-};
-```
-
-`id` 与 `title` 都是 trim 后非空字符串。子任务没有独立表，顺序就是 `Task.subtasks` 数组顺序。
-
-### 2.3 Task
-
-```ts
-type Task = {
-  id: string;
-  title: string;
-  done: boolean;
-  recurrence: Recurrence | null;
-  lastDoneAt: string | null;
+  recurrence: Recurrence | null; // 见 todo/recurrence
+  lastDoneAt: string | null;    // UTC ISO 或 null
   startAt: string | null;
   scheduledAt: string | null;
-  subtasks: TaskSubtask[];
-  completedCount: number;
-  turn: "me" | "running" | "parked" | null;
-  turnAt: string | null;
-  completedAt: string | null;
-  tags: string[];
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-};
+  subtasks: TaskSubtask[];      // 默认 []，max 200
+  completedCount: number;       // 默认 0，int ≥0
+  turn: "me" | "running" | "parked" | null;  // 默认 null
+  turnAt: string | null;        // 进入当前回合的 UTC ISO
+  completedAt: string | null;   // UTC ISO 或 null
+  tags: string[];               // 默认 []，每项 NonEmptyTrimmed ≤64，max 50
+  sortOrder: number;            // int finite
+  createdAt: string;            // 严格 UTC ISO（带毫秒+Z）
+  updatedAt: string;            // 严格 UTC ISO（服务器分配）
+}
 ```
 
-- `subtasks` 默认 `[]`，最多 200 个。
-- `completedCount` 默认 0。
-- `turn` 默认 `null`，只表达当前回合；完成真相仍是 `done`。
-- `tags` 默认 `[]`，最多 50 个，每个非空且最长 64 字符。
-- 所有时间字段都是 UTC ISO 字符串或 `null`。
-- SQLite 表名是 `tasks`；`recurrence` / `subtasks` / `tags` 存 JSON 字符串；`done` 存 0/1。
-- Dexie 表名也是 `tasks`，索引是 `id, scheduledAt, sortOrder, updatedAt`。
+时间字段一律 `UtcIsoStringSchema`：正则 `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$` 且 `new Date(v).toISOString()===v`。
+
+### 2.2 `TaskSubtask`（`entitySchemas.ts:TaskSubtaskSchema`）
+
+```ts
+{ id: string; title: string; done: boolean }  // 单层不嵌套，id/title 均 NonEmptyTrimmed
+```
+
+子任务没有独立表，顺序就是 `Task.subtasks` 数组顺序，最多 200 个。
+
+### 2.3 SQL `tasks` ↔ JS 映射（`server/src/db/schema.ts`）
+
+| SQL 列 | JS 字段 | 存储 |
+|---|---|---|
+| done | done | 0/1 ↔ boolean |
+| recurrence / subtasks / tags | 同名 | JSON 字符串（recurrence 可 NULL） |
+| last_done_at / start_at / scheduled_at / turn_at / completed_at | lastDoneAt / startAt / scheduledAt / turnAt / completedAt | UTC ISO 或 NULL |
+| completed_count / sort_order | completedCount / sortOrder | 整数 |
+| turn | turn | "me"/"running"/"parked" 或 NULL |
+| created_at / updated_at | createdAt / updatedAt | UTC ISO（updated_at 服务器分配） |
+
+映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列。Dexie `tasks` 索引 `"id, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`）。
+
+### 2.4 同步域登记（`syncDomains.ts`）
+
+`tasks` 域：`conflictPolicy:"lww"`、`countsInStatus:false`、upsert/deletePriority 45。服务端走通用 LWW（`sync/domains.ts`），无自定义 `validate`/`apply`/`crossValidate`，delete 写 tombstone。
 
 ## 3. 关键不变量 / 坑 / 红线
 
-- `turn` 不是完成态。同值设置会短路；非 `null` 时刷新 `turnAt`，清空时同步清空 `turnAt`。
-- `tags` 是自由语义标签，只用于人工/agent 表达和 OR 过滤，不驱动自动逻辑。字段选择背景见 [ADR 0014](../adr/0014-task-tags-vs-fields.md)。
-- 普通任务完成时客户端写 `done=true` 并设置 `completedAt`；取消完成会清空 `completedAt`。agent `done=true` 会把任务置完成并清空 `turn/turnAt`，但当前不补 `completedAt`，不要把所有完成路径写成等价。
-- 重复任务勾选时递增 `completedCount`、写 `lastDoneAt`。未终结时会把 `subtasks[].done` 重置为 `false` 让下一轮就绪；终结性完成（count 满或 until 过）保留子任务勾选并进完成区。
-- `scheduleTask` / `unscheduleTask` 拒绝重复任务。重复任务是否“今天待做”由 `isDueNow()` 按本地日序号计算。
-- 四分区是读时视图：`today`、`inbox`、`scheduled`、`completed`，另有全量去重桶 `recurring` 供 AttentionQueue / TagFilterBar 使用。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 按 `completedAt` 倒序。
-- 只有“今天”列允许同池拖拽重排。`persistTaskOrder()` 回填 `sortOrder/updatedAt`，并为每个变化项写 `syncLog`。
-- `tasks` 不引用 `Category`、`TimeEntry` 或 `QuickNote`，不参与分类校验、时间段重叠、时长统计或速记导入导出。
+1. **完成真相是 `done=true`**：普通任务完成时 `toggleTaskDone` 写 `completedAt=updatedAt`，取消完成清 `completedAt=null`；重复任务完成时 `completedCount+1` + `lastDoneAt=updatedAt`，**不写 `completedAt`**。落点唯一判据是 `done`（`placement.ts`）。
+2. **`turn/turnAt` 完成语义两条写路径不一致**：客户端 `toggleTaskDone`（`tasks.ts`）**不清空** turn/turnAt；agent `done=true`（`agent.ts`）**清空** turn/turnAt。`AttentionQueue` 用 `if (t.done) continue` 过滤 done，残留 turn 不进注意力栈，但 `TaskDetailSheet` 的回合 SegmentedControl 仍会显示残留回合。改前先确认产品意图。
+3. **agent `done` 与 `completedAt` 不对称**：agent `done=true` 不设 `completedAt`，`done=false` 不清 `completedAt`（`agent.ts`）。后果：agent 完成的池任务 `completedAt=null`，在 `listTasks.completed` 排序里靠 `completedAt ?? updatedAt` 兜底分组、排末尾。
+4. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。
+5. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供 `AttentionQueue`/`TagFilterBar`。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 按 `completedAt` 倒序、**无日期过滤**（“最近 N 天”是 `DayGroupedList` 显示侧渐进展示）。
+6. **只有“今天”列允许同池拖拽重排**：`persistTaskOrder`（`tasks.ts`）在 Dexie transaction 内回填现有 `sortOrder` 槽位、更新 `updatedAt`、为每个变化项写 `syncLog`。`reorderedTaskSortOrders`（`taskSort.ts`）取池内现有 sortOrder 作槽位，长度/成员不一致时安全返回 `[]`。
+7. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + OR 过滤（`TagFilterBar`，`TaskRow` 最多 3 chip）。需要代码可靠动作的维度应毕业为结构化字段。
+8. **`subtasks` 单层内嵌**：不升格为独立任务、不嵌套，子任务勾选不联动父 `done`/`completedAt`。`useSubtaskDraft`：结构性变化即时 commit，纯文字变化 blur/卸载时 flush。
+9. **`tasks` 不引用其他域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出。
+10. **`AttentionQueue` running 段计时器**：me/running/parked 三段；running 段渲染简化行 + “已跑 X 分”（60s interval），**不**用 `TaskRow`；me/parked 段用 `TaskRow`。
 
 ## 4. 模块速查
 
-| 关注点 | 入口 |
+### 4.1 客户端
+
+| 入口 | 职责 |
 |---|---|
-| 类型 / schema | `packages/shared/src/entitySchemas.ts`、`packages/shared/src/types.ts` |
-| 客户端本地模型 | `packages/client/src/lib/tasks.ts`、`packages/client/src/lib/tasks/**` |
-| 页面 | `packages/client/src/pages/TodoPage.tsx`、`packages/client/src/pages/todo/**` |
-| 重复规则 UI | `RecurrencePresetSheet.tsx`、`RecurrencePresetList.tsx`、`CustomRecurrencePage.tsx`、`MonthCalendar.tsx`；其中 `Wheel.tsx` 是共享滚轮组件，只是被待办重复规则使用 |
-| 子任务 / 行交互 | `TaskRow.tsx`、`TaskDetailSheet.tsx`、`SubtaskEditor.tsx`、`taskRowZone.ts`；`components/ui/Sheet.tsx` 和 `useIsWideScreen.ts` 是共享 UI/响应式工具 |
-| 任务池与偏好 | `placement.ts`、`taskSort.ts`、`workbenchPrefs.ts`、`TaskColumn.tsx`、`DayGroupedList.tsx`、`ResizableSplit.tsx` |
-| agent / CLI | `packages/server/src/routes/agent.ts`、`packages/cli/src/commands/tasks.ts` |
-| 服务端查询 / 同步域 | `packages/server/src/routes/tasks.ts`、`packages/server/src/sync/domains.ts` |
-| 代表测试 | `packages/client/src/lib/tasks*.test.ts`、`packages/client/src/pages/todo/*.test.tsx`、`packages/server/src/routes/tasks.test.ts`、`packages/server/src/routes/agent.test.ts`、`packages/server/src/sync/tasks-domain.test.ts` |
+| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、窄屏堆叠/宽屏 `ResizableSplit`、挂 `AttentionQueue`/`TagFilterBar`/`TodoComposer`/`TaskDetailSheet` |
+| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、`rowClickZone` 派发 expand/open、meta 第二行、dnd 拖柄、内联子任务 |
+| `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器 / `SwipeableList`+可选 `DndContext` / dnd-kit 包装 |
+| `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：子任务、标题、tag、turn SegmentedControl、删除、重复预设 overlay |
+| `pages/todo/{SubtaskEditor,SubtaskRow,SortableSubtaskRow,useSubtaskDraft}.*` | 子任务编辑器 + 草稿 hook |
+| `pages/todo/{DayGroupedList,AttentionQueue,TagFilterBar,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表 / 注意力栈 / tag 筛选 / 新增 / 双栏 / 折叠 |
+| `lib/tasks.ts` | 核心 CRUD + `listTasks`/`putTask` |
+| `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / turn+tag / 子任务工具 |
+| `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |
+| 重复规则 | → [todo/recurrence](todo/recurrence.md) |
+
+### 4.2 服务端 / CLI
+
+| 入口 | 职责 |
+|---|---|
+| `routes/tasks.ts` | `GET /`（只读查询）+ `POST /:id/schedule`（排期直写，重复 409，**不走 applyChange**） |
+| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`） |
+| `sync/domains.ts` | `tasks` 通用 LWW 注册 + `taskToRow`/`readTaskRecord` |
+| `db/schema.ts` / `lib/db-rows.ts` | 建表/列迁移 + `rowToTask` |
+| `cli/src/commands/tasks.ts` | `tasks` / `task-*` 命令（server API 封装） |
+
+### 4.3 测试
+
+**client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskColumn,TaskDetailSheet,DayGroupedList,AttentionQueue,TagFilterBar,ResizableSplit,TodoComposer,SubtaskEditor,SubtaskRow,useSubtaskDraft,TodoListSections}.test.{ts,tsx}`、`lib/tasks.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks,turnQueue}.test.ts`
+**server**：`routes/tasks.test.ts`（GET + POST schedule）、`routes/agent.test.ts`（POST status，含“done=true 清 turn”）、`sync/tasks-domain.test.ts`、`sync/domains.test.ts`、`db/schema.test.ts`、`lib/db-rows.test.ts`
+**shared**：`entitySchemas.test.ts`、`schemas.test.ts` ｜ **cli**：`commands/tasks.test.ts`
 
 ## 深水细节
 
-待办 UI 的“窄屏/宽屏”、“swipe + 详情抽屉”、“四区折叠状态”和“重复预设门”属于产品交互细节，若后续继续增长并形成独立 covers 簇，可按 [_docs-guide](_docs-guide.md) 的毕业阈值外提。
+- **`lib/tasks/turnQueue.ts`（`selectWaitingOnMe`/`selectRunning`）是孤儿**：仅自身测试引用，生产路径用 `turnTags.turnBuckets`。**不进 covers**，待清理。
+- **`subtasks.applyParentToggle`/`deriveParentDone` 未接入生产**：父完成不自动全选子任务、反之亦然，只在测试用。
+- **非重复排期任务过期后回到收件箱**不堆进今天；重复任务过期在“今天”区以红色“逾期 M月D日”标签呈现。
