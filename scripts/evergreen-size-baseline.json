@@ -12,8 +12,12 @@
     "covers": 6
   },
   "docs/evergreen/categories-settings.md": {
-    "chars": 4091,
-    "covers": 13
+    "chars": 8313,
+    "covers": 12
+  },
+  "docs/evergreen/categories-settings/settings-catalog.md": {
+    "chars": 4058,
+    "covers": 5
   },
   "docs/evergreen/cli.md": {
     "chars": 10756,
