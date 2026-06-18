@@ -6,7 +6,6 @@ import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/p
 import { currentDueDateString, isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
 import { reorderedTaskSortOrders } from "./tasks/taskSort.js";
-import { getDateString } from "./time.js";
 
 export interface AddTaskInput {
   title: string;
@@ -285,10 +284,16 @@ function isOverdue(t: Task, now: Date): boolean {
   return p.pool === "today" && p.overdue;
 }
 
-/** 已排期排序键：重复用当前到期日，一次性用 scheduledAt 当天，统一为 "YYYY-MM-DD"。 */
+/**
+ * 已排期排序键：统一基于"系统本地日历"，与 placement.ts 的 localDayIndex 同口径，
+ * 避免一次性任务用 APP_TIME_ZONE（getDateString）与重复任务用 dayToLocalYmd（系统本地）
+ * 混排时在跨夜边界出现非确定性顺序。一次性任务进 pool==="upcoming" 时 scheduledAt 必非空，
+ * 这里不做 `?? now` 兜底（placement 已保证）。
+ */
 function scheduledDateKey(t: Task, now: Date): string {
   if (t.recurrence) return currentDueDateString(t.recurrence, t.lastDoneAt, t.startAt, now);
-  return getDateString(new Date(t.scheduledAt ?? now));
+  const d = new Date(t.scheduledAt as string);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
