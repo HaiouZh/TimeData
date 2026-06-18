@@ -127,7 +127,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 ## 6. 文档登记簿
 
-文档组织规则、域/横切判定树、骨架模板和体量阈值见 [_docs-guide](_docs-guide.md)。
+文档组织规则、主题轴（域/模块/设计语言/横切）判定树、单轴 covers 归属、骨架模板和体量阈值见 [_docs-guide](_docs-guide.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复（当前有子文档的主题：health、todo、categories-settings、design-language）。
 
 | 文档 | 类型 | 职责 |
 |---|---|---|
@@ -146,6 +146,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 | [health](health.md) | 域 | Garmin、ingest、健康 schema、健康图表配置、健康页 |
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |
+| [design-language](design-language.md) | 设计 | 五层颜色 token、字体栈、圆角/边框/阴影、自绘控件库、Phosphor 图标、视觉红线 |
 
 ## 7. 不在这份文档里的事
 
