@@ -2,7 +2,7 @@ import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/
 import type { Task, TaskSubtask } from "@timedata/shared";
 import { type MouseEvent as ReactMouseEvent, useMemo, useState } from "react";
 import { Checkbox } from "../../components/ui/Checkbox.js";
-import { currentDueDateString, isDueNow } from "../../lib/tasks/recurrence.js";
+import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TURN_DOT_BG, TURN_LABELS } from "../../lib/tasks/turnTags.js";
@@ -65,7 +65,7 @@ export function TaskRow({
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isRecurring = task.recurrence !== null;
-  const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
+  const checked = task.recurrence ? false : task.done;
   const subtasks = task.subtasks ?? [];
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;

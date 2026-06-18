@@ -148,6 +148,20 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
+  it("已排期重复任务行：复选框不勾选、标题不划线", async () => {
+    const r = task({
+      title: "刮胡子",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      lastDoneAt: null,
+      startAt: "2099-12-31T00:00:00.000Z",
+    });
+    const { host, root } = await render(createElement(TaskRow, { task: r, pool: "upcoming", ...handlers }));
+    const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
+    expect(cb?.checked).toBe(false);
+    expect(host.querySelector(".line-through")).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it("点行（无子任务）触发 onEdit", async () => {
     const onEdit = vi.fn();
     const { host, root } = await render(
