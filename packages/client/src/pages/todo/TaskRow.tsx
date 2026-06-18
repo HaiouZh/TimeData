@@ -10,7 +10,7 @@ import { formatMonthDay } from "../../lib/time.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
 import { useSubtaskDraft } from "./useSubtaskDraft.js";
 
-export type TaskPool = "today" | "inbox" | "upcoming" | "recurring";
+export type TaskPool = "today" | "inbox" | "upcoming" | "recurring" | "completed";
 
 export interface RowDragHandle {
   setActivatorNodeRef: (el: HTMLElement | null) => void;
@@ -23,10 +23,8 @@ export interface TaskRowProps {
   pool: TaskPool;
   overdue?: boolean;
   dragHandle?: RowDragHandle;
-  showActions?: boolean;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
-  onDelete: (t: Task) => void;
   onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
   onTurnChange?: (task: Task, turn: Task["turn"]) => void;
   turnBadgeInteractive?: boolean;
@@ -59,15 +57,12 @@ export function TaskRow({
   pool,
   overdue,
   dragHandle,
-  showActions = true,
   onToggle,
   onEdit,
-  onDelete: _onDelete,
   onSubtasksChange,
   onTurnChange,
   turnBadgeInteractive,
 }: TaskRowProps) {
-  void _onDelete; // 滑动删除走 TaskList，行内不再渲染 ✕；保留 prop 兼容父级签名。
   const [expanded, setExpanded] = useState(false);
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
@@ -76,7 +71,7 @@ export function TaskRow({
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
   const overdueDate =
     overdue && task.recurrence ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt) : null;
-  const passiveScheduled = showActions && pool === "upcoming" && !overdue;
+  const passiveScheduled = pool === "upcoming" && !overdue;
   const hasMeta =
     isRecurring ||
     subtaskTotal > 0 ||

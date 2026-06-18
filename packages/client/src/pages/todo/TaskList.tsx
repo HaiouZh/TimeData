@@ -29,7 +29,7 @@ import { SortableTaskRow } from "./SortableTaskRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
 
 export interface TaskListProps {
-  pool: Extract<TaskPool, "today" | "inbox" | "upcoming">;
+  pool: Extract<TaskPool, "today" | "inbox" | "upcoming" | "completed">;
   tasks: Task[];
   isOverdue?: (t: Task) => boolean;
   sortable?: boolean;
@@ -44,6 +44,8 @@ export interface TaskListProps {
 
 export function TaskList(props: TaskListProps) {
   const { pool, tasks, isOverdue, sortable } = props;
+  // pool="completed" 是只读已完成列表：行不可拖、不可换池，只允许 swipe 删除。
+  const readOnly = pool === "completed";
   const [dragging, setDragging] = useState(false);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -71,7 +73,6 @@ export function TaskList(props: TaskListProps) {
         dragHandle={dragHandle}
         onToggle={props.onToggle}
         onEdit={props.onEdit}
-        onDelete={props.onDelete}
         onSubtasksChange={props.onSubtasksChange}
       />
     );
@@ -79,7 +80,8 @@ export function TaskList(props: TaskListProps) {
 
   function renderItem(task: Task) {
     // 重复任务仅得删除滑动；一次性任务在收件箱/已排期得「排进今天」、在今天得「回收件箱」。
-    const canSwap = task.recurrence === null;
+    // 已完成行（readOnly）只剩 destructive 删除，无任何换池入口。
+    const canSwap = !readOnly && task.recurrence === null;
     const leading =
       canSwap && (pool === "inbox" || pool === "upcoming") ? (
         <LeadingActions>
@@ -105,7 +107,7 @@ export function TaskList(props: TaskListProps) {
 
     return (
       <SwipeableListItem key={task.id} leadingActions={leading} trailingActions={trailing}>
-        {sortable ? (
+        {sortable && !readOnly ? (
           <SortableTaskRow id={task.id}>{(handle) => renderTaskRow(task, handle)}</SortableTaskRow>
         ) : (
           renderTaskRow(task)
@@ -120,7 +122,7 @@ export function TaskList(props: TaskListProps) {
     </SwipeableList>
   );
 
-  if (!sortable) return list;
+  if (!sortable || readOnly) return list;
 
   return (
     <DndContext

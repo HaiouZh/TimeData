@@ -1,6 +1,6 @@
 import type { Task, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { placementForTask } from "../lib/tasks/placement.js";
@@ -34,7 +34,6 @@ import { TagFilterBar } from "./todo/TagFilterBar.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
-import { TaskRow } from "./todo/TaskRow.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
@@ -88,8 +87,8 @@ export function TodoPage() {
     return p.pool === "today" && p.overdue;
   };
 
-  // 阶段三会进一步删掉 wide/onEditSchedule 等行内入口；阶段二仅保留布局骨架，
-  // 不再渲染宽屏行内 RecurrencePopover（弃了 G4 §3.5）。详细日期/重复编辑全走抽屉。
+  // 行级回调统一来源：toggle/edit/delete + 换池 + 子任务 + 回合 + 标签。
+  // 删除走 TaskList 的 swipe destructive；TaskRow 自身不再渲染 ✕。
   const rowHandlers = {
     onToggle: toggle,
     onEdit: openDetail,
@@ -102,6 +101,7 @@ export function TodoPage() {
   };
 
   // listTasks 故意把到期重复同时放进 today 和 recurring，allTasks 须按 id 去重。
+  // completed 故意不并入 AttentionQueue / TagFilterBar 频次源——已完成不再贡献注意力。
   const allTasks: Task[] = Array.from(
     new Map(
       [...buckets.today, ...buckets.inbox, ...buckets.scheduled, ...buckets.recurring].map((t) => [t.id, t]),
@@ -136,11 +136,7 @@ export function TodoPage() {
     >
       <DayGroupedList
         segments={groupCompletedByDay(completedFiltered)}
-        renderTasks={(tasks) =>
-          tasks.map((task) => (
-            <TaskRow key={task.id} task={task} pool="today" {...rowHandlers} showActions={false} />
-          ))
-        }
+        renderTasks={(tasks) => <TaskList pool="completed" tasks={tasks} {...rowHandlers} />}
       />
     </CollapsibleSection>
   );
@@ -186,11 +182,6 @@ export function TodoPage() {
       )}
     </CollapsibleSection>
   );
-
-  // 阻止未使用警告：useEffect 仅做 wide 切换时的清理钩子（保持与既有行为兼容）。
-  useEffect(() => {
-    /* no-op：宽屏 schedule popover 已下沉到详情抽屉，无需在此清理状态。 */
-  }, [wide]);
 
   return (
     <div className="min-h-full bg-page text-ink">

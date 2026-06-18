@@ -52,7 +52,20 @@ async function render(node: ReturnType<typeof createElement>) {
 }
 
 describe("TaskRow", () => {
-  it("普通任务：复选框 + 标题，无 role=button，无行内移动/删除按钮", async () => {
+  // 88bc8ed 起统一靠 swipe + 详情抽屉操作，TaskRow 行内不再渲染任何 hover-action 按钮。
+  // 用一条聚合 sanity 钉住这件事，避免下次有人误回归；其它分散 toBeNull 不重复列。
+  const NO_INLINE_ACTION_LABELS = [
+    "排进今天",
+    "回收件箱",
+    "删除",
+    "纳入回合",
+    "切换回合",
+    "编辑重复与时间",
+    "计划到某天",
+    "添加子任务",
+  ];
+
+  it("普通任务：复选框 + 标题 + 文本可选区；无行内 hover-action 按钮", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task({ title: "买啤酒" }), pool: "today", ...handlers }),
     );
@@ -60,14 +73,9 @@ describe("TaskRow", () => {
     expect(host.textContent).toContain("买啤酒");
     expect(host.querySelector('[role="button"]')).toBeNull();
     expect(host.querySelector(".select-text")).not.toBeNull();
-    expect(host.querySelector('[aria-label="排进今天"]')).toBeNull();
-    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
-    expect(host.querySelector('[aria-label="删除"]')).toBeNull();
-    expect(host.querySelector('[aria-label="纳入回合"]')).toBeNull();
-    expect(host.querySelector('[aria-label="切换回合"]')).toBeNull();
-    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
-    expect(host.querySelector('[aria-label="计划到某天"]')).toBeNull();
-    expect(host.querySelector('[aria-label="添加子任务"]')).toBeNull();
+    for (const label of NO_INLINE_ACTION_LABELS) {
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeNull();
+    }
     await act(async () => root.unmount());
   });
 
@@ -86,10 +94,8 @@ describe("TaskRow", () => {
     );
     const caret = withSub.host.querySelector('[data-testid="subtask-caret"]') as HTMLElement | null;
     expect(caret).not.toBeNull();
+    // caret 是 <span> 而非 <button>，即覆盖"无展开/收起子任务按钮"语义，不再单独列 toBeNull。
     expect(caret?.tagName.toLowerCase()).toBe("span");
-    // 折叠 caret 已降级：不应再有可点的展开/收起按钮。
-    expect(withSub.host.querySelector('[aria-label="展开子任务"]')).toBeNull();
-    expect(withSub.host.querySelector('[aria-label="收起子任务"]')).toBeNull();
     expect(withSub.host.textContent).toContain("1/2");
     await act(async () => withSub.root.unmount());
 
@@ -124,7 +130,6 @@ describe("TaskRow", () => {
       }),
     );
     expect(host.textContent).toContain("6/20");
-    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -235,7 +240,7 @@ describe("TaskRow", () => {
     await act(async () => withHandle.root.unmount());
   });
 
-  it("重复任务：第二行显示重复图标，无移动按钮", async () => {
+  it("重复任务：第二行显示重复图标", async () => {
     const r = task({
       title: "刮胡子",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
@@ -243,8 +248,6 @@ describe("TaskRow", () => {
     });
     const { host, root } = await render(createElement(TaskRow, { task: r, pool: "recurring", ...handlers }));
     expect(host.querySelector('[data-icon="repeat"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="排进今天"]')).toBeNull();
-    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -336,22 +339,6 @@ describe("TaskRow", () => {
     const badge = host.querySelector('[data-testid="turn-badge"]');
     expect(badge?.getAttribute("data-turn")).toBe(turn);
     expect(badge?.textContent).toContain(label);
-    await act(async () => root.unmount());
-  });
-
-  it("已完成尾巴：showActions=false 仅渲染基础行（兼容父级保留）", async () => {
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ done: true, scheduledAt: "2026-06-20T00:00:00.000Z" }),
-        pool: "today",
-        showActions: false,
-        ...handlers,
-      }),
-    );
-    expect(host.querySelector('input[aria-label="完成 示例任务"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="排进今天"]')).toBeNull();
-    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
-    expect(host.querySelector('[aria-label="删除"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });
