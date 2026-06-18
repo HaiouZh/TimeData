@@ -173,3 +173,15 @@ export function currentDueDayFor(r: Recurrence, lastDoneAt: string | null, start
   if (!lastDoneAt) return localDayIndex(start);
   return nextScheduledDayAfter(r, start, toDate(lastDoneAt));
 }
+
+/** 当前到期日的本地 "YYYY-MM-DD"，供逾期标签复用 time.ts 的 formatMonthDay。 */
+export function currentDueDateString(
+  r: Recurrence,
+  lastDoneAt: string | null,
+  startAt: string | Date | null,
+  now: string | Date = new Date(),
+): string {
+  const dayIndex = currentDueDayFor(r, lastDoneAt, startAt, now);
+  const { y, m, d } = dayToLocalYmd(dayIndex);
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}

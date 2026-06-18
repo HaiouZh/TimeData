@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { isDueNow, recurrenceSummary, formatCreatedAt, isRecurrenceFinishedAfter } from "./recurrence.js";
+import {
+  currentDueDateString,
+  formatCreatedAt,
+  isDueNow,
+  isRecurrenceFinishedAfter,
+  recurrenceSummary,
+} from "./recurrence.js";
 import type { Recurrence } from "@timedata/shared";
 
 const daily = (over: Partial<Recurrence> = {}): Recurrence => ({ freq: "daily", interval: 1, basis: "due", ...over });
@@ -155,5 +161,19 @@ describe("recurrenceSummary 终止文案", () => {
 
   it("until", () => {
     expect(recurrenceSummary({ freq: "daily", interval: 1, basis: "due", until: "2026-07-31T00:00:00.000Z" })).toBe("每天·至07-31");
+  });
+});
+
+describe("currentDueDateString", () => {
+  it("每日重复：lastDone 次日为当前到期日", () => {
+    const r = { freq: "daily", interval: 1, basis: "due" } as const;
+    expect(
+      currentDueDateString(r, "2026-06-15T12:00:00.000Z", "2026-06-01T12:00:00.000Z"),
+    ).toBe("2026-06-16");
+  });
+
+  it("无 lastDone：当前到期日 = startAt 当天", () => {
+    const r = { freq: "daily", interval: 1, basis: "due" } as const;
+    expect(currentDueDateString(r, null, "2026-06-10T12:00:00.000Z")).toBe("2026-06-10");
   });
 });
