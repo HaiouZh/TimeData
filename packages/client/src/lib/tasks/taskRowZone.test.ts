@@ -14,8 +14,10 @@ describe("rowClickZone", () => {
     expect(rowClickZone(130, 300, true)).toBe("open");
   });
 
-  it("有子任务：宽行展开区封顶 240px", () => {
-    expect(rowClickZone(230, 900, true)).toBe("expand");
-    expect(rowClickZone(250, 900, true)).toBe("open");
+  it("有子任务：宽行无 240 上限，按真 2/5 判定", () => {
+    // 1000px 行 → 2/5 = 400px 边界（旧实现会被 240 封顶）
+    expect(rowClickZone(399, 1000, true)).toBe("expand");
+    expect(rowClickZone(300, 1000, true)).toBe("expand"); // 旧实现这里会因 >240 误判 open
+    expect(rowClickZone(401, 1000, true)).toBe("open");
   });
 });
