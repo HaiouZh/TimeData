@@ -5,10 +5,11 @@ import { v4 as uuid } from "uuid";
 import { AnchoredPopover } from "../../components/ui/AnchoredPopover.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
-import { isDueNow } from "../../lib/tasks/recurrence.js";
+import { currentDueDateString, isDueNow } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TURN_DOT_BG, TURN_LABELS, TURN_SEGMENTED_OPTIONS } from "../../lib/tasks/turnTags.js";
+import { formatMonthDay } from "../../lib/time.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
 import { useSubtaskDraft } from "./useSubtaskDraft.js";
 
@@ -64,11 +65,6 @@ function HoverAction({
       {children}
     </button>
   );
-}
-
-function formatMonthDay(date: string): string {
-  const [, month, day] = date.split("-");
-  return `${Number(month)}/${Number(day)}`;
 }
 
 function InlineSubtasks({
@@ -129,7 +125,10 @@ export function TaskRow({
   const subtasks = task.subtasks ?? [];
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
-  const overdueDate = overdue && task.scheduledAt ? task.scheduledAt : null;
+  const overdueDate =
+    overdue && task.recurrence
+      ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt)
+      : null;
   const hasMeta =
     isRecurring || subtaskTotal > 0 || overdueDate !== null || task.turn !== null || (task.tags ?? []).length > 0;
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {

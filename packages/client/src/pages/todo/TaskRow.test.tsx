@@ -90,11 +90,20 @@ describe("TaskRow", () => {
     await act(async () => withSub.root.unmount());
   });
 
-  it("逾期任务在第二行显示红色逾期日期", async () => {
+  it("逾期重复任务在第二行显示红色逾期日期（M月D日）", async () => {
     const { host, root } = await render(
-      createElement(TaskRow, { task: task({ scheduledAt: "2026-06-14" }), pool: "today", overdue: true, ...handlers }),
+      createElement(TaskRow, {
+        task: task({
+          recurrence: { freq: "daily", interval: 1, basis: "due" },
+          lastDoneAt: "2026-06-15T12:00:00.000Z",
+          startAt: "2026-06-01T12:00:00.000Z",
+        }),
+        pool: "today",
+        overdue: true,
+        ...handlers,
+      }),
     );
-    expect(host.textContent).toContain("逾期 6/14");
+    expect(host.textContent).toContain("逾期 6月16日");
     await act(async () => root.unmount());
   });
 
