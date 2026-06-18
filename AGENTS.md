@@ -115,6 +115,7 @@
 - 长期文档头部 `covers:` 字段声明管辖代码路径。改代码后回头看 `covers` 是否命中，命中即改对应段落，并更新 `last-reviewed`。
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` 第 6 节"模块速查"或各文档 frontmatter 查**，不在本文件维护。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
+- 文档怎么组织、新增文档放哪、单文档多大该外提，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)。
 
 ------
 
@@ -142,4 +143,4 @@
 
 ------
 
-*Last reviewed: 2026-06-17（测试章加分层归位 / 去冗余分级举证 / 禁真实等待与裸 createRoot 准则，配套 check:test 棘轮闸）*
+*Last reviewed: 2026-06-18（新增文档组织规则入口 _docs-guide）*
