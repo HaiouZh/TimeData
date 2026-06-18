@@ -1,6 +1,6 @@
 import type { Task } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { groupInboxByDay } from "./inboxGrouping.js";
+import { groupCompletedByDay, groupInboxByDay } from "./inboxGrouping.js";
 
 const NOW = new Date("2026-06-17T08:00:00.000Z");
 function task(id: string, createdAt: string): Task {
@@ -61,5 +61,36 @@ describe("groupInboxByDay", () => {
       NOW,
     );
     expect(segs.map((s) => s.label)).toEqual(["6月10日", "6月9日"]);
+  });
+});
+
+describe("groupCompletedByDay", () => {
+  function done(id: string, completedAt: string): Task {
+    return {
+      ...task(id, completedAt),
+      completedAt,
+    };
+  }
+
+  it("按 completedAt 分天，段内按完成时间倒序", () => {
+    const now = new Date("2026-06-14T10:00:00.000Z");
+    const segs = groupCompletedByDay(
+      [
+        done("a", "2026-06-14T08:00:00.000Z"),
+        done("b", "2026-06-14T09:00:00.000Z"),
+        done("c", "2026-06-12T08:00:00.000Z"),
+      ],
+      now,
+    );
+    expect(segs[0]?.label).toBe("今天");
+    expect(segs[0]?.tasks.map((t) => t.id)).toEqual(["b", "a"]);
+    expect(segs.at(-1)?.tasks.map((t) => t.id)).toEqual(["c"]);
+  });
+
+  it("无 completedAt 退化用 updatedAt", () => {
+    const now = new Date("2026-06-14T10:00:00.000Z");
+    const t: Task = { ...task("legacy", "2026-06-14T05:00:00.000Z"), completedAt: null };
+    const segs = groupCompletedByDay([t], now);
+    expect(segs[0]?.tasks.map((t) => t.id)).toEqual(["legacy"]);
   });
 });
