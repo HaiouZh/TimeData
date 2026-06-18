@@ -6,7 +6,7 @@ import {
   isRecurrenceFinishedAfter,
   recurrenceSummary,
 } from "./recurrence.js";
-import type { Recurrence } from "@timedata/shared";
+import type { Recurrence } from "./types.js";
 
 const daily = (over: Partial<Recurrence> = {}): Recurrence => ({ freq: "daily", interval: 1, basis: "due", ...over });
 

@@ -1,6 +1,8 @@
 import type { Task } from "@timedata/shared";
 import { isDueNow, currentDueDayFor } from "./recurrence.js";
 
+export { localDateOf, normalizeScheduledDate } from "@timedata/shared";
+
 export type TodoPlacement =
   | { pool: "today"; overdue: boolean }
   | { pool: "inbox" }
@@ -12,18 +14,6 @@ const DAY_MS = 86_400_000;
 
 function localDayIndex(d: Date): number {
   return Math.floor((d.getTime() - d.getTimezoneOffset() * 60_000) / DAY_MS);
-}
-
-/** 把 Date 转为本地零点对应的 UTC ISO 字符串。 */
-export function localDateOf(d: Date): string {
-  const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  return new Date(local.getTime() - local.getTimezoneOffset() * 60_000).toISOString();
-}
-
-/** 把 "YYYY-MM-DD" 格式字符串转为本地零点 UTC ISO。 */
-export function normalizeScheduledDate(date: string): string {
-  const [y, m, d] = date.split("-").map(Number);
-  return localDateOf(new Date(y, m - 1, d));
 }
 
 /** 获取重复任务当前到期日序号。 */
