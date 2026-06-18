@@ -11,7 +11,7 @@ covers:
   - packages/client/src/lib/frontendUpdate.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-15
+last-reviewed: 2026-06-18
 ---
 
 # 本地开发指南
@@ -107,6 +107,8 @@ pnpm --filter @timedata/server test middleware/auth
 pnpm --filter @timedata/client test:e2e
 pnpm check:docs        # 检查本次改动是否命中需要同步的 evergreen 文档
 pnpm check:docs:strict # CI 使用的严格文档检查
+pnpm check:docs:stale  # 检查 evergreen 文档是否长期未审阅
+pnpm check:docs:size   # evergreen 文档体量棘轮，拦新增膨胀
 pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon 全套图标
 ```
 

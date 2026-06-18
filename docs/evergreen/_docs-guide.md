@@ -44,7 +44,7 @@ last-reviewed: YYYY-MM-DD
 - 上游：什么数据/事件流进来
 - 下游：流向谁
 - 契约：本域表 schema 见本文 §Schema；跨域约定见 [data-model](data-model.md)
-- 邻居：[相关域](xxx.md)
+- 邻居：相关域文档链接
 
 ## 1. 数据流
 ## 2. Schema / 契约

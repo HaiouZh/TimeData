@@ -4,16 +4,13 @@ title: 时间轴与记录时间规则
 covers:
   - packages/client/src/pages/TimelinePage.tsx
   - packages/client/src/pages/EntryPage.tsx
-  - packages/client/src/pages/StatsPage.tsx
-  - packages/client/src/pages/TimeStatsPage.tsx
   - packages/client/src/components/Timeline.tsx
   - packages/client/src/components/CircularTimeline.tsx
   - packages/client/src/components/TimeRangeWheelPicker.tsx
   - packages/client/src/hooks/useEntries.ts
-  - packages/client/src/lib/settings/punchCategorySetting.ts
-  - packages/client/src/lib/stats.ts
+  - packages/client/src/lib/punch.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-06-16
+last-reviewed: 2026-06-18
 ---
 
 # 时间轴与记录时间规则
@@ -96,13 +93,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 **指针交互**：圆环 `<svg>` 监听 `pointerDown` / `pointerMove` / `pointerUp`，按指针位置反算角度（atan2 + 12 点钟为 0 顺时针递增）→ 当日分钟数（0–1440）→ 落在哪段就把 selection 切到哪段。`future` 段在拖拽过程中不切 selection。pointerDown 后调用 `setPointerCapture`，touch-action 设为 none，避免与垂直滚动竞争。指针箭头以 `ARROW_TIP_RADIUS`（环带靠内 25% 处）为尖、`ARROW_BASE_RADIUS`（内半径再向内 4px）为底，由内指向外；箭头位置由 `dragMinutes ?? selectedMidpoint` 驱动——任意 pointer 交互后箭头停在用户拖到的分钟数（无极、不吸附），只在 `initialSelection` 重算（切日期、记录变化等）时回到默认选中段中点。
 
-统计页的日/周/月分类汇总使用 `packages/client/src/lib/stats.ts`。它和时间轴使用同样的本地日期边界：先用 `localDateTimeToUtc()` 生成统计窗口，再按 `entry.startTime < rangeEnd && entry.endTime > rangeStart` 找出与窗口有交集的记录，最终只累计落在窗口内的可见时长。对合法且不晚于当前时间的记录，日统计与同一天时间轴使用一致的本地日期交集口径；统计展示会按 0.1 小时取整。跨日记录只统计落在当天或统计窗口内的部分。
-
-统计页的数据洞察增强由 `packages/client/src/lib/insights/` 下的纯函数承担：`overview.ts` 负责按统计窗口裁剪后的总时长、父分类到子分类占比、记录覆盖率；`routine.ts` 负责把睡眠分类记录按醒来日期归属，计算入睡、起床、睡眠时长和通常睡眠窗口。当前周/月这类未完成周期只分析到今天，避免未来日期拉低覆盖率或生成“未记录日”。`dailyRollup.ts` 会先按本地午夜边界预聚合日桶，`cache.ts` 在 React 外用条目/分类指纹缓存日桶和重型洞察结果，让统计页切换周期、离开后重进、同日刷新时复用未变数据。睡眠分类的正式入口在 `/settings/insights`，设置值来自同步 settings 表；统计页通过 React Router `Link` 进入设置页，Android WebView 内不会触发整页外部跳转。未配置时，覆盖率按全天估算，异常睡眠窗口回退到默认 23:00~07:00。
-
-统计页的 Dexie 查询以近 90 天基线窗口为超集。当前周期记录始终按所选日/周/月窗口独立可得；近 90 天基线只在可见统计模块声明需要时读取，趋势模块隐藏时它自己的独立窗口查询也不会挂载。默认趋势窗口优先从基线超集内存切片，只有窗口早于基线起点时才回退独立查询。异常检测只在当前统计周期内产出条目，但超长记录与长空挡阈值使用近 90 天基线；长空挡样本充足时采用个人 P90，否则回退固定阈值，避免周/月视图把常规空挡刷成列表噪声。异常区只做统计呈现：摘要指标、长空挡 Top 和按日期分布，不承担补录或编辑入口。图表集中在 `packages/client/src/pages/stats/InsightCharts.tsx`，由 `React.memo` 包裹：环形图 `CategoryDonut`（中央覆盖层叠加总时长与覆盖率）和趋势折线/面积图基于 Recharts、固定高度；图表随对应可见模块挂载渲染，隐藏模块不挂载、不计算。父分类→子分类构成条 `CategoryCompositionBars` 是纯 CSS 分段条（点击父分类展开子分类明细），连同文字洞察在总览区即时渲染。
-
-统计页顶部的「日 / 周 / 月」切换按钮都显式声明 `type="button"`，并通过 `aria-pressed` 暴露当前选中的窗口模式，方便屏幕阅读器和键盘用户感知切换；窗口内没有数据时统一显示「暂无统计数据」占位。时间统计 UI 位于 `/stats/time` 的 `TimeStatsPage.tsx`，旧 `/stats` 只重定向到它；页面面向 Android / iPhone PWA：顶部保留周期切换、日期跳转和“已记录”主指标，下面的总览、作息、异常与空挡、趋势变化、结构诊断由 `stats.layout.v1` 控制显示和顺序；全部隐藏时显示去设置启用模块的空状态。触控按钮保持约 44px 高度，输入框沿用 16px 字号避免 iOS 聚焦放大，异常和趋势状态用琥珀 / 玫红 / 绿色做有限状态色。相关测试在 `packages/client/src/pages/TimeStatsPage.test.tsx` 和 `packages/client/src/pages/StatsPage.test.tsx`。
+统计页的日/周/月分类汇总与时间轴使用同样的本地日期边界和 `[start, end)` 交集口径；具体模块、基线、异常、布局和图表行为见 [stats-insights](stats-insights.md)。本文只保留时间轴如何生成和展示时间槽。
 
 ## 7. 时间轴同步状态指示器
 

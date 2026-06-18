@@ -1,42 +1,62 @@
 {
   "docs/evergreen/_docs-guide.md": {
-    "chars": 1480,
+    "chars": 1474,
     "covers": 0
   },
   "docs/evergreen/architecture.md": {
-    "chars": 30205,
-    "covers": 61
+    "chars": 5132,
+    "covers": 12
   },
   "docs/evergreen/backup.md": {
     "chars": 11489,
     "covers": 6
+  },
+  "docs/evergreen/categories-settings.md": {
+    "chars": 4091,
+    "covers": 13
   },
   "docs/evergreen/cli.md": {
     "chars": 10756,
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 29543,
-    "covers": 28
+    "chars": 8429,
+    "covers": 10
   },
   "docs/evergreen/deployment.md": {
-    "chars": 16975,
+    "chars": 16979,
     "covers": 27
   },
   "docs/evergreen/development.md": {
-    "chars": 8509,
+    "chars": 8605,
     "covers": 9
+  },
+  "docs/evergreen/health.md": {
+    "chars": 5757,
+    "covers": 21
+  },
+  "docs/evergreen/quick-notes.md": {
+    "chars": 5270,
+    "covers": 16
   },
   "docs/evergreen/security.md": {
     "chars": 3253,
     "covers": 7
   },
+  "docs/evergreen/stats-insights.md": {
+    "chars": 4090,
+    "covers": 12
+  },
   "docs/evergreen/sync.md": {
-    "chars": 15529,
-    "covers": 36
+    "chars": 15036,
+    "covers": 25
   },
   "docs/evergreen/timeline.md": {
-    "chars": 9350,
-    "covers": 11
+    "chars": 7636,
+    "covers": 8
+  },
+  "docs/evergreen/todo.md": {
+    "chars": 6094,
+    "covers": 19
   }
 }

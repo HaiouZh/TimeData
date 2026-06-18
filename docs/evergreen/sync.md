@@ -13,14 +13,6 @@ covers:
   - packages/client/src/hooks/useSync.ts
   - packages/client/src/contexts/SyncContext.tsx
   - packages/client/src/lib/api.ts
-  - packages/client/src/lib/quickNotes.ts
-  - packages/client/src/quick-notes/importQuickNotes.ts
-  - packages/client/src/quick-notes/deleteQuickNotesRange.ts
-  - packages/client/src/lib/tasks.ts
-  - packages/client/src/lib/tasks/**
-  - packages/client/src/pages/TodoPage.tsx
-  - packages/client/src/lib/settings/**
-  - packages/client/src/lib/sleepCategorySetting.ts
   - packages/shared/src/types.ts:SyncChange
   - packages/shared/src/schemas.ts
   - packages/shared/src/types.ts:SyncPushOutcome
@@ -35,9 +27,6 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-  - packages/shared/src/types.ts:QuickNote
-  - packages/shared/src/types.ts:Task
-  - packages/shared/src/types.ts:Recurrence
 last-reviewed: 2026-06-18
 ---
 
