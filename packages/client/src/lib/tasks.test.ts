@@ -314,6 +314,30 @@ describe("listTasks", () => {
     expect(buckets.completed.map((t) => t.id)).not.toContain(task.id);
   });
 
+  it("耗尽重复（count 满）完成后进 completed，且无 completedAt 排末", async () => {
+    const t0 = new Date("2026-06-14T06:00:00.000Z");
+    // 一次普通完成（有 completedAt）
+    const regular = await addTask({ title: "普通", toInbox: true, now: t0 });
+    await toggleTaskDone(regular.id, { now: new Date("2026-06-14T08:00:00.000Z") });
+    // 耗尽性重复（count:1，完成一次即终结）
+    const oneShot = await addTask({
+      title: "做一次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
+      now: t0,
+    });
+    await toggleTaskDone(oneShot.id, { now: new Date("2026-06-14T09:00:00.000Z") });
+
+    const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
+
+    // 耗尽重复进 completed
+    expect(buckets.completed.map((t) => t.id)).toContain(oneShot.id);
+    // 重复任务不写 completedAt，按 listTasks 排序键 (b.completedAt ?? "") 应排末
+    const oneShotAfter = buckets.completed.find((t) => t.id === oneShot.id);
+    expect(oneShotAfter?.completedAt).toBeNull();
+    expect(buckets.completed.at(-1)?.id).toBe(oneShot.id);
+    expect(buckets.completed[0]?.id).toBe(regular.id);
+  });
+
   it("一次性未来排期 + 未到期重复都进 scheduled，按到期日升序", async () => {
     const seedNow = new Date("2026-06-14T06:00:00.000Z");
     const far = await addTask({ title: "远", toInbox: true, now: seedNow });

@@ -24,7 +24,7 @@ describe("DayGroupedList", () => {
     );
     expect(host.textContent).toContain("今天");
     expect(host.textContent).toContain("昨天");
-    expect(host.querySelector('[aria-label="显示更多"]')).toBeNull();
+    expect(host.querySelector('[aria-label^="显示更多"]')).toBeNull();
     await unmount(root);
   });
 
@@ -33,7 +33,9 @@ describe("DayGroupedList", () => {
     const { host, root } = await renderDom(<DayGroupedList segments={segs} renderTasks={renderTasks} />);
     expect(host.textContent).toContain("6月10日");
     expect(host.textContent).not.toContain("6月9日");
-    const more = host.querySelector('[aria-label="显示更多"]') as HTMLButtonElement | null;
+    const more = host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement | null;
+    // aria-label 自带数量，方便屏幕阅读器单点听到「还剩几组」
+    expect(more?.getAttribute("aria-label")).toBe("显示更多（2）");
     expect(more?.textContent).toContain("2");
     await click(more);
     expect(host.textContent).toContain("6月9日");
@@ -41,9 +43,11 @@ describe("DayGroupedList", () => {
     await unmount(root);
   });
 
-  it("空段输入返回空容器，无错也无按钮", async () => {
+  it("空段输入：不渲染卡片也不渲染按钮", async () => {
     const { host, root } = await renderDom(<DayGroupedList segments={[]} renderTasks={renderTasks} />);
-    expect(host.querySelector('[aria-label="显示更多"]')).toBeNull();
+    expect(host.querySelector('[aria-label^="显示更多"]')).toBeNull();
+    // 组件应返回 null（空状态留给上层文案），host 内不应有任何子元素
+    expect(host.children.length).toBe(0);
     await unmount(root);
   });
 });

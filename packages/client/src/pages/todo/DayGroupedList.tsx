@@ -18,7 +18,7 @@ export function DayGroupedList({ segments, renderTasks, initialGroups = 3 }: Day
   const hidden = segments.length - visible.length;
 
   if (segments.length === 0) {
-    return <div className="rounded-card bg-surface p-1.5" />;
+    return null;
   }
 
   return (
@@ -35,7 +35,7 @@ export function DayGroupedList({ segments, renderTasks, initialGroups = 3 }: Day
       {hidden > 0 && (
         <button
           type="button"
-          aria-label="显示更多"
+          aria-label={`显示更多（${hidden}）`}
           onClick={() => setExpanded(true)}
           className="mt-1 w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover"
         >
