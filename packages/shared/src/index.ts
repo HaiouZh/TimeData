@@ -8,3 +8,4 @@ export * from "./time.js";
 export * from "./chartSchemas.js";
 export * from "./recurrence.js";
 export * from "./taskDates.js";
+export * from "./taskCompletion.js";
