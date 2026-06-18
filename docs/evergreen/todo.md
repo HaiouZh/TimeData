@@ -12,9 +12,6 @@ covers:
   - packages/client/src/lib/tasks.ts
   - packages/client/src/lib/tasks/**
   - packages/client/src/components/MonthCalendar.tsx
-  - packages/client/src/components/Wheel.tsx
-  - packages/client/src/components/ui/Sheet.tsx
-  - packages/client/src/lib/useIsWideScreen.ts
   - packages/server/src/db/schema.ts
   - packages/server/src/lib/db-rows.ts
   - packages/server/src/routes/tasks.ts
@@ -147,8 +144,8 @@ type Task = {
 | 类型 / schema | `packages/shared/src/entitySchemas.ts`、`packages/shared/src/types.ts` |
 | 客户端本地模型 | `packages/client/src/lib/tasks.ts`、`packages/client/src/lib/tasks/**` |
 | 页面 | `packages/client/src/pages/TodoPage.tsx`、`packages/client/src/pages/todo/**` |
-| 重复规则 UI | `RecurrencePresetSheet.tsx`、`RecurrencePresetList.tsx`、`CustomRecurrencePage.tsx`、`MonthCalendar.tsx`、`Wheel.tsx` |
-| 子任务 / 行交互 | `TaskRow.tsx`、`TaskDetailSheet.tsx`、`SubtaskEditor.tsx`、`taskRowZone.ts` |
+| 重复规则 UI | `RecurrencePresetSheet.tsx`、`RecurrencePresetList.tsx`、`CustomRecurrencePage.tsx`、`MonthCalendar.tsx`；其中 `Wheel.tsx` 是共享滚轮组件，只是被待办重复规则使用 |
+| 子任务 / 行交互 | `TaskRow.tsx`、`TaskDetailSheet.tsx`、`SubtaskEditor.tsx`、`taskRowZone.ts`；`components/ui/Sheet.tsx` 和 `useIsWideScreen.ts` 是共享 UI/响应式工具 |
 | 任务池与偏好 | `placement.ts`、`taskSort.ts`、`workbenchPrefs.ts`、`TaskColumn.tsx`、`DayGroupedList.tsx`、`ResizableSplit.tsx` |
 | agent / CLI | `packages/server/src/routes/agent.ts`、`packages/cli/src/commands/tasks.ts` |
 | 服务端查询 / 同步域 | `packages/server/src/routes/tasks.ts`、`packages/server/src/sync/domains.ts` |

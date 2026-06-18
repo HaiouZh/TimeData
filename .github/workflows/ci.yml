@@ -50,6 +50,9 @@ jobs:
       - name: Test
         run: pnpm -r --parallel test
 
+      - name: Script tests
+        run: pnpm test:scripts
+
       # 默认 test 只跑 unit；e2e（forks 池、30s timeout）单独跑，避免拖慢日常 test 又不丢覆盖。
       - name: E2E tests
         run: pnpm --filter @timedata/client test:e2e

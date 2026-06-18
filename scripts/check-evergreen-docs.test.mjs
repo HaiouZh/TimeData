@@ -82,11 +82,61 @@ test("evaluateSizes allows a doc that shrank below baseline", () => {
   assert.equal(res.ok, true);
 });
 
-test("evaluateSizes fails a NEW doc over hard cap", () => {
+test("evaluateSizes fails a doc missing from an empty baseline", () => {
+  const docs = [{ filePath: "docs/evergreen/new.md", covers: ["x"], chars: 1000 }];
+
+  const res = evaluateSizes(docs, {}, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.deepEqual(res.violations[0], {
+    filePath: "docs/evergreen/new.md",
+    kind: "missing-baseline",
+    current: 1000,
+    limit: 0,
+  });
+});
+
+test("evaluateSizes fails a doc missing from baseline even when over hard cap", () => {
   const docs = [{ filePath: "docs/evergreen/new.md", covers: ["x"], chars: 26000 }];
 
   const res = evaluateSizes(docs, {}, { softChars: 15000, hardChars: 25000 });
 
   assert.equal(res.ok, false);
-  assert.equal(res.violations[0].kind, "new-over-hard");
+  assert.equal(res.violations[0].kind, "missing-baseline");
+});
+
+test("evaluateSizes fails when an evergreen doc is missing from a non-empty baseline", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 },
+    { filePath: "docs/evergreen/new.md", covers: ["x"], chars: 1000 },
+  ];
+  const baseline = { "docs/evergreen/a.md": { chars: 9000, covers: 1 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.deepEqual(res.violations[0], {
+    filePath: "docs/evergreen/new.md",
+    kind: "missing-baseline",
+    current: 1000,
+    limit: 0,
+  });
+});
+
+test("evaluateSizes fails when baseline contains a removed evergreen doc", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 }];
+  const baseline = {
+    "docs/evergreen/a.md": { chars: 9000, covers: 1 },
+    "docs/evergreen/removed.md": { chars: 1000, covers: 0 },
+  };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.deepEqual(res.violations[0], {
+    filePath: "docs/evergreen/removed.md",
+    kind: "stale-baseline",
+    current: 0,
+    limit: 1000,
+  });
 });

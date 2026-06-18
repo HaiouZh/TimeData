@@ -47,6 +47,8 @@ mobile   Capacitor Android 壳，webDir 指向 client/dist
 
 依赖方向单向：`client` / `server` / `cli` 都依赖 `shared`，彼此不 import。它们靠 HTTP API、同步账本和共享类型契约协作。`mobile` 不写业务逻辑，只包装前端构建产物与原生配置。
 
+根 `package.json` 只做 workspace 脚本编排；本地命令细节见 [development](development.md)，CI 顺序见 [deployment](deployment.md)。
+
 ## 3. 总体数据流
 
 ### 3.1 本地优先写入

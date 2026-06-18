@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Check that long-lived (evergreen / ADR) docs stay in sync with the code they cover.
-// Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale] [--since=<rev>]
+// Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale|size] [--since=<rev>] [--write-size-baseline]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
 import { execFileSync } from "node:child_process";
@@ -287,6 +287,7 @@ function isEvergreenDoc(d) {
 
 export function evaluateSizes(docs, baseline, caps) {
   const violations = [];
+  const currentEvergreenPaths = new Set(docs.filter(isEvergreenDoc).map((d) => d.filePath));
   for (const d of docs) {
     if (!isEvergreenDoc(d)) continue;
     const base = baseline[d.filePath];
@@ -299,15 +300,16 @@ export function evaluateSizes(docs, baseline, caps) {
       }
       continue;
     }
-    if (d.chars > caps.hardChars) {
-      violations.push({ filePath: d.filePath, kind: "new-over-hard", current: d.chars, limit: caps.hardChars });
-    } else if (d.chars > caps.softChars) {
-      violations.push({ filePath: d.filePath, kind: "new-over-soft", current: d.chars, limit: caps.softChars });
+    violations.push({ filePath: d.filePath, kind: "missing-baseline", current: d.chars, limit: 0 });
+  }
+  for (const [filePath, base] of Object.entries(baseline)) {
+    if (!currentEvergreenPaths.has(filePath)) {
+      violations.push({ filePath, kind: "stale-baseline", current: 0, limit: base.chars });
     }
   }
   return {
     violations,
-    ok: violations.every((v) => v.kind === "new-over-soft"),
+    ok: violations.length === 0,
   };
 }
 
@@ -322,7 +324,7 @@ function buildSizeBaseline(docs) {
 
 function readSizeBaseline() {
   const baselinePath = path.join(REPO_ROOT, SIZE_BASELINE_PATH);
-  if (!fs.existsSync(baselinePath)) return {};
+  if (!fs.existsSync(baselinePath)) return null;
   return JSON.parse(fs.readFileSync(baselinePath, "utf8"));
 }
 
@@ -340,10 +342,10 @@ function formatSizeViolationKind(kind) {
       return "字符数超过基线";
     case "grew-covers":
       return "covers 数超过基线";
-    case "new-over-soft":
-      return "新文档超过 soft cap";
-    case "new-over-hard":
-      return "新文档超过 hard cap";
+    case "missing-baseline":
+      return "文档缺少体量基线";
+    case "stale-baseline":
+      return "基线包含已移除文档";
     default:
       return kind;
   }
@@ -351,6 +353,11 @@ function formatSizeViolationKind(kind) {
 
 function modeSize(docs) {
   const baseline = readSizeBaseline();
+  if (!baseline) {
+    console.error(`✗ 缺少 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
+    console.error("  请运行 node scripts/check-evergreen-docs.mjs --write-size-baseline 后提交基线。");
+    return 1;
+  }
   const res = evaluateSizes(docs, baseline, SIZE_CAPS);
   if (res.violations.length === 0) {
     console.log(`✓ evergreen 文档体量未超过基线（soft ${SIZE_CAPS.softChars} / hard ${SIZE_CAPS.hardChars} 字符）。`);
@@ -360,12 +367,7 @@ function modeSize(docs) {
   console.log("| 文档 | 类型 | 当前 | 限制 |");
   console.log("|---|---|---:|---:|");
   for (const v of res.violations) {
-    const marker = v.kind === "new-over-soft" ? "⚠️" : "✗";
-    console.log(`| \`${v.filePath}\` | ${marker} ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
-  }
-  if (res.ok) {
-    console.log("\n⚠️ 仅有 soft cap 提示；如新文档职责合理，可继续。");
-    return 0;
+    console.log(`| \`${v.filePath}\` | ✗ ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
   }
   console.error("\n✗ 文档体量超过棘轮。请下沉/拆分内容，或确认合理增长后重写基线。");
   return 1;

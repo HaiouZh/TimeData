@@ -2,6 +2,9 @@
 type: evergreen
 title: 时间轴与记录时间规则
 covers:
+  - packages/shared/src/types.ts:TimeEntry
+  - packages/shared/src/entitySchemas.ts
+  - packages/shared/src/schemas.ts
   - packages/client/src/pages/TimelinePage.tsx
   - packages/client/src/pages/EntryPage.tsx
   - packages/client/src/components/Timeline.tsx
@@ -10,15 +13,46 @@ covers:
   - packages/client/src/hooks/useEntries.ts
   - packages/client/src/lib/punch.ts
   - packages/client/src/lib/time.ts
+  - packages/server/src/routes/entries.ts
+  - packages/server/src/lib/entry-service.ts
+  - packages/server/src/sync/domains.ts
+  - packages/cli/src/commands/log.ts
 last-reviewed: 2026-06-18
 ---
 
 # 时间轴与记录时间规则
 
-> 这份文档说明客户端如何把 `TimeEntry` 渲染成时间轴、如何处理跨夜记录，以及新增记录页面如何解析开始/结束时间。
-> 同步、备份和服务端校验规则见对应 evergreen 文档；这里只记录用户可见的客户端时间表现。
+> 这份文档说明 `TimeEntry` 字段契约、客户端如何把记录渲染成时间轴、如何处理跨夜记录，以及新增记录页面如何解析开始/结束时间。
+> 同步账本和备份机制见对应 evergreen 文档；这里只记录时间记录域本身的规则。
 
-## 1. 时间字段约定
+## 承上启下
+
+- 上游：用户在时间轴/新增记录页写入；速记页和圆环中心可触发“打点到现在”；CLI `timedata log` 可经服务端受控 API 创建记录。
+- 下游：客户端本地写 `timeEntries` 与 `syncLog(tableName="time_entries")`；CLI/server 写 SQLite 后追加 `sync_seq`；统计页按同一 `[start, end)` 交集口径读取。
+- 契约：`TimeEntry` 字段 schema 见本文 §1；跨域时间、ID、SQL/Dexie 映射见 [data-model](data-model.md)。
+- 邻居：[categories-settings](categories-settings.md) 管分类与打点分类设置；[stats-insights](stats-insights.md) 管统计聚合；[sync](sync.md) 管账本和冲突。
+
+## 1. Schema / 契约
+
+```ts
+type TimeEntry = {
+  id: string;
+  categoryId: string;
+  startTime: string;
+  endTime: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+- `id` / `categoryId` 是 trim 后非空字符串；`categoryId` 必须引用存在且未归档的分类，同批 push 新增的分类也算存在。
+- `startTime` / `endTime` / `createdAt` / `updatedAt` 都是严格 UTC ISO 字符串。
+- `endTime > startTime`。客户端 mutation 会先拦截，服务端同步校验会把 schema 的 `endTime` refine 映射成 `invalid_time_range`。
+- `endTime` 不能晚于服务端当前 UTC；客户端也会拒绝本地未来结束时间，避免待同步队列反复失败。
+- 记录区间按半开 `[start, end)` 判断。客户端保存前查重叠并可在单事务内裁剪/删除旧记录；CLI `/api/entries` 创建会拒绝重叠；同步 apply 会删除与 incoming 记录重叠的旧远端记录并写 tombstone + seq。
+- `note` 是字符串或 `null`，空白备注在 UI 层归一为空值；备注不参与统计口径。
+- SQLite 表名是 `time_entries`，字段是 `category_id/start_time/end_time/note/created_at/updated_at`；Dexie 表名是 `timeEntries`，索引是 `id, categoryId, startTime, endTime`。
 
 `TimeEntry.startTime` 和 `TimeEntry.endTime` 存储为 UTC ISO 字符串（带 `Z`），例如：
 
@@ -124,7 +158,9 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 时间轴页还使用 `useMidnightTick`（`packages/client/src/hooks/useMidnightTick.ts`）调度本地午夜定时器：长时间停留在前台、跨过 00:00 时，会主动把 `now` 推进到新的一天，避免今天的末尾空档卡在昨天的结束时间。
 
-当所选日期当天没有更早记录，但前一天最后一条记录在当天开始前结束，例如 `23:30`，当天首个空档可以从前一天最后结束时间开始，而不是固定从 `00:00` 开始。这样点击首个空档新增记录时，会自然接上昨天最后一条记录。客户端查找这条记录时使用 Dexie `endTime` 索引按倒序取第一条，仅取当天 UTC 边界之前结束的最近记录，不把所有候选记录拉到内存排序。
+当所选日期当天没有更早记录，而前一天最后一条记录在当天开始前结束，首个空档可从前一天最后结束时间开始，不固定从 `00:00` 开始。点击首个空档新增记录时，会接上昨天最后一条。时间轴页 `findPreviousEntry()` 先按 `startTime < dayStart` 取候选，优先返回 `endTime > dayStart` 的跨日记录；否则过滤 `endTime >= previousDayStart` 并按 `endTime` 倒序取最近记录。
+
+直接打开新增页且没有 URL `start/end` 参数时，默认开始时间才用 `findLatestEntryEndingBefore()`：它通过 Dexie `endTime` 索引倒序取当天 UTC 边界前结束的最近记录，避免把所有候选拉到内存排序。
 
 这个接续只允许来自所选日期的前一天，并且上一条记录结束时间必须距离当天 `00:00` 不超过 4 小时。结束时间早于前一天 `20:00` 时，当天首个空档从当天 `00:00` 开始，避免很久以前的记录制造跨日长空档。
 
@@ -158,3 +194,17 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 真正写入仍只走保存流程：`EntryPage.handleSave()` 经 `findOverlappingEntries` / `planEntryOverlapAdjustments` 弹覆盖确认，再由 `saveEntryWithOverlapAdjustments()` 在单个 Dexie transaction 里把被并入的相邻记录裁剪或删除。编辑态语义是当前记录扩展并存活，相邻记录保存时被并入删除；分类与备注归当前记录。
 
 如果旧版本或设备时钟偏移已经把未来结束记录写进本地 IndexedDB，当前客户端不再提供单条本地未来记录修复入口。用户应先校准设备时间；若异常记录导致同步持续失败，可在 `设置 → 数据设置 → 高级 · 数据恢复` 中运行同步诊断，并在确认云端数据正确时使用“将本地数据替换为云端数据”恢复本地数据。
+
+## 11. 模块速查
+
+| 关注点 | 入口 |
+|---|---|
+| 类型 / schema | `packages/shared/src/entitySchemas.ts`、`packages/shared/src/types.ts` |
+| 客户端查询与写入 | `packages/client/src/hooks/useEntries.ts` |
+| 页面 | `packages/client/src/pages/TimelinePage.tsx`、`packages/client/src/pages/EntryPage.tsx` |
+| 时间轴组件 | `packages/client/src/components/Timeline.tsx`、`packages/client/src/components/CircularTimeline.tsx`、`packages/client/src/components/TimeRangeWheelPicker.tsx` |
+| 时间工具 | `packages/client/src/lib/time.ts`、`packages/client/src/lib/punch.ts` |
+| 服务端受控写入 | `packages/server/src/routes/entries.ts`、`packages/server/src/lib/entry-service.ts` |
+| 同步域钩子 | `packages/server/src/sync/domains.ts` 的 `time_entries` |
+| CLI | `packages/cli/src/commands/log.ts` |
+| 代表测试 | `useEntries.test.ts`、`TimelinePage.test.tsx`、`EntryPage.test.tsx`、`time.test.ts`、`entry-service.test.ts`、`routes/entries.test.ts`、`commands/log.test.ts` |

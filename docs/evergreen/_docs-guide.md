@@ -1,7 +1,9 @@
 ---
 type: evergreen
 title: 文档组织规则
-covers: []
+covers:
+  - scripts/check-evergreen-docs.mjs
+  - scripts/check-evergreen-docs.test.mjs
 last-reviewed: 2026-06-18
 ---
 
@@ -70,8 +72,9 @@ last-reviewed: YYYY-MM-DD
 `pnpm check:docs:size` 负责长期文档体量棘轮：
 
 - 现有文档先写入 `scripts/evergreen-size-baseline.json` 作为基线。
-- 已在基线里的文档只拦新增膨胀：字符数或 `covers:` 数量超过基线会报错。
-- 新文档超过 soft cap 会提示，超过 hard cap 会失败。
+- 已在基线里的文档若字符数或 `covers:` 数量超过基线会报错。
+- 基线必须覆盖当前全部 evergreen 文档；新增、删除或重命名 evergreen 文档后不更新基线会失败。
+- 新文档必须先写入基线；soft / hard cap 只作为是否继续拆分的人工判断线。
 - ADR 不参与体量棘轮；ADR 是决策记录，只追加，不在这里做拆分治理。
 
 需要接受一次合理增长时，先确认增长来自真实职责扩展，再重写基线并在 PR 里说明原因。

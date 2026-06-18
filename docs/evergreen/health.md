@@ -105,6 +105,8 @@ Garmin 服务内部直接调用 `applyChange()`，不经 HTTP 端点；`/api/hea
 - 健康数据不参与时间段重叠校验、分类统计、时长统计或 `/api/sync/status` 业务计数。
 - `runs` 不参与自动抓取缺口判断。
 - `health_charts` 的 `sortOrder/config` 变更要和 `syncLog(tableName="health_charts")` 同事务写入。
+- `health_charts` 已在运行时登记簿和 client/server 同步路径中注册，但 `packages/shared/src/types.ts` 的手工 `SyncChange` 联合当前还缺对应分支；补齐时按公开 API 变更处理，见 [data-model](data-model.md) 与 [sync](sync.md) 的已知风险。
+- force-push 当前只覆盖核心同步表（分类、时间记录、设置、速记、待办），不会清空或导入健康原始数据与 `health_charts`。
 - `routes/admin/health.ts` 是后台系统健康检查，不属于本文健康数据域；不要因为文件名相同把它归入 Garmin/健康数据契约。
 
 ## 4. 模块速查
