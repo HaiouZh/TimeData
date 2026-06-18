@@ -1,6 +1,6 @@
 {
   "docs/evergreen/_docs-guide.md": {
-    "chars": 1611,
+    "chars": 2652,
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
@@ -32,8 +32,16 @@
     "covers": 9
   },
   "docs/evergreen/health.md": {
-    "chars": 6013,
-    "covers": 21
+    "chars": 5112,
+    "covers": 9
+  },
+  "docs/evergreen/health/charts.md": {
+    "chars": 5291,
+    "covers": 8
+  },
+  "docs/evergreen/health/garmin-ingest.md": {
+    "chars": 6164,
+    "covers": 3
   },
   "docs/evergreen/quick-notes.md": {
     "chars": 5270,
