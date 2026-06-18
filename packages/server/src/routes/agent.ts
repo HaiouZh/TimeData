@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { TaskSchema, type SyncChange, type Task } from "@timedata/shared";
+import { completeTask, TaskSchema, type SyncChange, type Task } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
@@ -40,25 +40,55 @@ agent.post("/tasks/:id/status", async (c) => {
   }
 
   const task = rowToTask(row);
-  const now = new Date().toISOString();
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
   const { turn, done, note, tags } = parsed.data;
-  const next: Task = TaskSchema.parse({
-    ...task,
-    ...(turn !== undefined ? { turn, turnAt: turn === null ? null : now } : {}),
-    ...(done === true ? { done: true, turn: null, turnAt: null } : done === false ? { done: false } : {}),
-    ...(note ? { subtasks: [...task.subtasks, { id: randomUUID(), title: note, done: false }] } : {}),
-    ...(tags !== undefined ? { tags } : {}),
-    updatedAt: now,
-  });
-  const change: SyncChange = {
-    tableName: "tasks",
-    action: "update",
-    recordId: id,
-    timestamp: now,
-    data: next,
-  };
+
+  let occurrence: Task | null = null;
+  let next: Task;
+  if (done === true) {
+    const sortRow = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks").get() as { next: number };
+    const completed = completeTask(task, {
+      now: nowDate,
+      genId: () => randomUUID(),
+      occurrenceSortOrder: sortRow.next,
+    });
+    occurrence = completed.occurrence;
+    next = TaskSchema.parse({
+      ...completed.next,
+      ...(note ? { subtasks: [...completed.next.subtasks, { id: randomUUID(), title: note, done: false }] } : {}),
+      ...(tags !== undefined ? { tags } : {}),
+      updatedAt: now,
+    });
+  } else {
+    next = TaskSchema.parse({
+      ...task,
+      ...(turn !== undefined ? { turn, turnAt: turn === null ? null : now } : {}),
+      ...(done === false ? { done: false } : {}),
+      ...(note ? { subtasks: [...task.subtasks, { id: randomUUID(), title: note, done: false }] } : {}),
+      ...(tags !== undefined ? { tags } : {}),
+      updatedAt: now,
+    });
+  }
 
   db.transaction(() => {
+    if (occurrence) {
+      const occChange: SyncChange = {
+        tableName: "tasks",
+        action: "create",
+        recordId: occurrence.id,
+        timestamp: now,
+        data: occurrence,
+      };
+      applyChange(occChange);
+    }
+    const change: SyncChange = {
+      tableName: "tasks",
+      action: "update",
+      recordId: id,
+      timestamp: now,
+      data: next,
+    };
     applyChange(change);
   })();
   notifySyncChange(getLatestSeq());
