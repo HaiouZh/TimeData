@@ -38,7 +38,7 @@ covers:
   - packages/shared/src/types.ts:QuickNote
   - packages/shared/src/types.ts:Task
   - packages/shared/src/types.ts:Recurrence
-last-reviewed: 2026-06-17
+last-reviewed: 2026-06-18
 ---
 
 # 同步机制
@@ -206,7 +206,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 6. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeq` 标 dirty，`/api/sync/status` 惰性重算；force-push / reset 立即刷新。它现在只服务诊断，但仍要保持正确。
 7. **server 是冲突仲裁者**：用 `baseSeq` 判断快进 / 非重叠合并 / 本地覆盖，并用受保护备份记录本地覆盖场景。
 
-待办重复设置的客户端 helper（`packages/client/src/lib/tasks/recurrencePresets.ts` 与 `packages/client/src/lib/tasks.ts` 的 `applyRecurrenceChoice()`）只负责把 UI 选择组装成 `Task` 的 `recurrence` / `startAt` / `scheduledAt` 字段，并通过既有 Dexie 事务为 `tasks` 写一条本地 `syncLog`。`setTaskTurn()` 只改 `turn/turnAt/updatedAt` 并写本地 `syncLog`；`setTaskTags()` 只改 `tags/updatedAt` 并写本地 `syncLog`；`persistTaskOrder()` 只在同池拖拽排序后批量更新变化任务的 `sortOrder/updatedAt`，并为每个变化项写 `tasks/update` 本地 `syncLog`；普通任务勾选完成会写 `completedAt`，重复任务仍只写 `lastDoneAt/completedCount`。`listTasks()` 的 `todayDone`、收件箱日期分段、过期非重复任务回收件箱、未到期重复任务进重复区和时间标签都是读时派生视图，不写 `syncLog`、不新增同步域。授权 agent 的服务端回写入口则构造 `tasks/update` 变更走 `applyChange()`、`sync_seq` 和 SSE 通知。它们都不新增同步域、不改变 `tasks` 仍为通用 LWW 域的服务端契约；从重复任务切换为"仅某天"时也必须一次落库成普通排期任务，避免同一选择产生两条待同步日志。
+待办重复设置的客户端 helper（`packages/client/src/lib/tasks/recurrencePresets.ts` 与 `packages/client/src/lib/tasks.ts` 的 `applyRecurrenceChoice()`）只负责把 UI 选择组装成 `Task` 的 `recurrence` / `startAt` / `scheduledAt` 字段，并通过既有 Dexie 事务为 `tasks` 写一条本地 `syncLog`。`setTaskTurn()` 只改 `turn/turnAt/updatedAt` 并写本地 `syncLog`；`setTaskTags()` 只改 `tags/updatedAt` 并写本地 `syncLog`；`persistTaskOrder()` 只在同池拖拽排序后批量更新变化任务的 `sortOrder/updatedAt`，并为每个变化项写 `tasks/update` 本地 `syncLog`；普通任务勾选完成会写 `completedAt`，重复任务仍只写 `lastDoneAt/completedCount`，并把 `subtasks[].done` 在未终结时一并重置为 `false`（终结性完成保留勾选）——这些子任务字段的更新随同 `tasks/update` 走同一个 `syncLog`，跨设备共享下一轮就绪状态。`listTasks()` 派生的展示桶（`today` / `inbox` / `scheduled`：合并一次性未来排期与未到期重复、`completed`：合并所有已完成与耗尽重复、`recurring`：全量去重）、收件箱与已完成的日期分段、过期非重复任务回收件箱都是读时派生视图，不写 `syncLog`、不新增同步域。授权 agent 的服务端回写入口则构造 `tasks/update` 变更走 `applyChange()`、`sync_seq` 和 SSE 通知。它们都不新增同步域、不改变 `tasks` 仍为通用 LWW 域的服务端契约；从重复任务切换为"仅某天"时也必须一次落库成普通排期任务，避免同一选择产生两条待同步日志。
 
 ## 6. 错误码处理（客户端侧）
 

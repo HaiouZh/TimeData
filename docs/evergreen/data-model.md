@@ -30,7 +30,7 @@ covers:
   - packages/client/src/lib/healthCharts.ts
   - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
-last-reviewed: 2026-06-17
+last-reviewed: 2026-06-18
 ---
 
 # 数据模型与契约
@@ -229,7 +229,7 @@ type Task = {
 - `Recurrence.freq="weekly"` 必须带 `byWeekday`，`freq="monthly"` 必须带 `byMonthday`，`freq="daily"` 不允许带 weekday/monthday；`interval` 是正整数，当前 schema 上限 999。`count` 是 1..999 的整数；`until` 是严格 UTC ISO 字符串，语义上表示本地日期零点。`count` 与 `until` 互斥。
 - `byWeekday` 用 ISO 周几（周一=1，周日=7）；`byMonthday` 支持 1..31 和 `-1`（月末），不存在的月份日期会跳过。新建或显式改锚点时，周/月命中日由 `startAt` 对应的本地日期推导；已有复杂命中日（多周几、多月号、混合月末）在未显式改锚点/单位时由预设/自定义映射保留。
 - `basis="due"` 按计划发生日判断是否有未完成实例；`basis="completion"` 从上次完成日往后推下一次。客户端 `isDueNow()` 用本地日序号计算，因此重复任务的“今天是否待做”跟用户本地日历一致，不受 UTC 日期切换影响；`until` 只限制后续发生，不会自动吞掉已经逾期未完成的最后一次。
-- `sortOrder` 是客户端展示排序字段。TodoPage 按 `sortOrder` 展示，落点（今天 / InBox / 即将到来 / 重复 / 完成）由 `lib/tasks/placement.ts` 按 `scheduledAt` 或重复规则的 `startAt` 决定；未到期的重复任务只进重复区，非重复排期任务过期后回到 InBox；`listTasks()` 额外把今天完成的非重复任务派生到 `todayDone` 展示桶，并按 `completedAt` 倒序，隔日完成任务仍留在 `completed`。这些桶都是读时视图，不新增字段、不改变数据模型，换池仍走 `scheduleTask` / `unscheduleTask`。今天、即将到来和重复列表允许同池拖拽重排，收件箱不手动排序；`lib/tasks/taskSort.ts` 先按该池现有 `sortOrder` 取槽位，再按新 ID 顺序回填变化项，`persistTaskOrder()` 在一个 Dexie transaction 内更新 `sortOrder/updatedAt` 并为每个变化项写 `syncLog(tableName="tasks", action="update")`。详情抽屉与宽屏行内 popover 的“仅某天”预设通过 `applyRecurrenceChoice()` 一次写成普通排期任务，避免重复写 `syncLog`。
+- `sortOrder` 是客户端展示排序字段。TodoPage 按 `sortOrder` 展示，落点（今天 / InBox / 即将到来 / 重复 / 完成）由 `lib/tasks/placement.ts` 按 `scheduledAt` 或重复规则的 `startAt` 决定；未到期的重复任务进未到期重复池，非重复排期任务过期后回到 InBox。`listTasks()` 在 placement 之上做一次渲染层重组：派生四个展示桶 `today / inbox / scheduled / completed` + 全量去重桶 `recurring`——其中 `scheduled` 把一次性未来排期与未到期重复合在一起按"下一发生日"升序（重复用 `currentDueDateString`、一次性用 `scheduledAt` 当天，统一基于系统本地日历与 `placement.ts` 同口径），`completed` 把今天 + 隔日的所有完成任务和耗尽重复（`count` 满 / `until` 过）合在一起按 `completedAt` 倒序（重复无 `completedAt` 排末）；`recurring` 仍是全部重复任务，供 AttentionQueue / TagFilterBar 全量去重。这些桶都是读时视图，不新增字段、不改变数据模型，换池仍走 `scheduleTask` / `unscheduleTask`。仅"今天"列允许同池拖拽重排，已排期与收件箱不手动排序；`lib/tasks/taskSort.ts` 先按该池现有 `sortOrder` 取槽位，再按新 ID 顺序回填变化项，`persistTaskOrder()` 在一个 Dexie transaction 内更新 `sortOrder/updatedAt` 并为每个变化项写 `syncLog(tableName="tasks", action="update")`。详情抽屉里的"仅某天"预设通过 `applyRecurrenceChoice()` 一次写成普通排期任务，避免重复写 `syncLog`（早期宽屏行内 `RecurrencePopover` 已下线，编辑统一进抽屉）。
 - `tasks` 不引用 `Category`、`TimeEntry` 或 `QuickNote`，不参与分类校验、时间段重叠、统计或速记导入导出。
 - SQL 表名是 `tasks`，字段是 `title` / `done` / `recurrence` / `last_done_at` / `start_at` / `scheduled_at` / `subtasks` / `completed_count` / `turn` / `turn_at` / `completed_at` / `tags` / `sort_order` / `created_at` / `updated_at`；`recurrence` 在 SQLite 中存 JSON 字符串或 `NULL`，`subtasks` 和 `tags` 存 JSON 字符串，`done` 是 0/1，映射到 JS boolean。Dexie 表名也是 `tasks`，索引是 `id, scheduledAt, sortOrder, updatedAt`；`completedCount`、`turn`、`completedAt` 与 `tags` 不建索引。
 - 客户端新增、编辑、勾选、删除、`setTaskTurn()` 和 `setTaskTags()` 都必须在同一个 Dexie transaction 内写 `tasks` 和 `syncLog(tableName="tasks")`。server 端 `tasks` 走通用 LWW 同步域，delete 写 tombstone；`GET /api/tasks` 是只读查询，授权 agent 的任务状态回写走受控 `POST /api/agent/tasks/:id/status`，该端点只接受回合状态 / 完成 / 备注 / tags 这些封闭动作。
