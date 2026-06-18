@@ -218,11 +218,14 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     const r = existing.recurrence;
     const countDone = r.count != null && completedCount >= r.count;
     const untilDone = isRecurrenceFinishedAfter(r, existing.startAt, now);
+    const finished = countDone || untilDone;
     next = TaskSchema.parse({
       ...base,
       completedCount,
       lastDoneAt: updatedAt,
-      done: countDone || untilDone,
+      done: finished,
+      // 继续循环 → 子任务回到未勾选（下一轮就绪）；终结性完成 → 保留勾选作为最终状态。
+      subtasks: finished ? base.subtasks : base.subtasks.map((s) => ({ ...s, done: false })),
       updatedAt,
     });
   } else {

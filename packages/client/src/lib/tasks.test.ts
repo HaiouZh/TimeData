@@ -13,6 +13,7 @@ import {
   setTaskTurn,
   toggleTaskDone,
   unscheduleTask,
+  updateSubtasks,
   updateTask,
 } from "./tasks.js";
 
@@ -96,6 +97,30 @@ describe("toggleTaskDone", () => {
 
     expect(after.lastDoneAt).toBe("2026-06-14T08:00:00.000Z");
     expect(after.done).toBe(false);
+  });
+
+  it("重复任务未终结完成：子任务重置为未完成", async () => {
+    const t = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await updateSubtasks(t.id, [
+      { id: "s1", title: "倒水", done: true },
+      { id: "s2", title: "喝完", done: true },
+    ]);
+    const done = await toggleTaskDone(t.id, { now: new Date("2026-06-14T08:00:00.000Z") });
+    expect(done.subtasks.every((s) => s.done === false)).toBe(true);
+    expect(done.lastDoneAt).toBe("2026-06-14T08:00:00.000Z");
+    expect(done.done).toBe(false);
+  });
+
+  it("重复任务终结性完成（count 满）：子任务保留勾选", async () => {
+    const t = await addTask({
+      title: "做一次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
+      now: new Date("2026-06-01T08:00:00.000Z"),
+    });
+    await updateSubtasks(t.id, [{ id: "s1", title: "x", done: true }]);
+    const done = await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
+    expect(done.done).toBe(true);
+    expect(done.subtasks[0].done).toBe(true);
   });
 });
 
