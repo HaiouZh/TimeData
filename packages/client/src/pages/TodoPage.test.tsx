@@ -8,7 +8,7 @@ import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
-import { addTask, setTaskTags, setTaskTurn } from "../lib/tasks.js";
+import { addTask, scheduleTask, setTaskTags, setTaskTurn, toggleTaskDone } from "../lib/tasks.js";
 import { TodoPage } from "./TodoPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,37 +20,6 @@ beforeEach(async () => {
   await db.settings.clear();
   await db.syncLog.clear();
 });
-
-function stubMatchMedia(initialMatches: boolean) {
-  let matches = initialMatches;
-  const listeners = new Set<(event: MediaQueryListEvent) => void>();
-  const mql = {
-    media: "(min-width: 1024px)",
-    get matches() {
-      return matches;
-    },
-    onchange: null,
-    addEventListener: vi.fn((type: string, listener: EventListener) => {
-      if (type === "change") listeners.add(listener as (event: MediaQueryListEvent) => void);
-    }),
-    removeEventListener: vi.fn((type: string, listener: EventListener) => {
-      if (type === "change") listeners.delete(listener as (event: MediaQueryListEvent) => void);
-    }),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  } as unknown as MediaQueryList;
-  vi.stubGlobal(
-    "matchMedia",
-    vi.fn(() => mql),
-  );
-  return {
-    setMatches(next: boolean) {
-      matches = next;
-      for (const listener of listeners) listener({ matches: next, media: mql.media } as MediaQueryListEvent);
-    },
-  };
-}
 
 async function renderPage() {
   const host = document.createElement("div");
@@ -80,20 +49,6 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   throw new Error(`Timed out waiting for ${text}`);
 }
 
-async function waitForDetailsWithText(host: HTMLElement, text: string): Promise<HTMLDetailsElement> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
-    const details = [...host.querySelectorAll("details")].find((d) => d.textContent?.includes(text)) as
-      | HTMLDetailsElement
-      | undefined;
-    if (details) return details;
-    await act(async () => {
-      await new Promise((r) => window.setTimeout(r, 0));
-    });
-  }
-  throw new Error(`Timed out waiting for details ${text}`);
-}
-
 async function typeAndAdd(host: HTMLElement, title: string) {
   const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
   const form = host.querySelector("form");
@@ -109,14 +64,28 @@ async function typeAndAdd(host: HTMLElement, title: string) {
 }
 
 describe("TodoPage", () => {
-  it("渲染今天与收件箱分区", async () => {
-    await addTask({ title: "买啤酒" });
+  it("渲染四分区：今天 / 已完成 / 收件箱 / 已排期，且不再出现旧分区名", async () => {
+    const today = await addTask({ title: "今天事" });
     await addTask({ title: "稍后处理", toInbox: true });
+    const future = await addTask({ title: "未来任务", toInbox: true });
+    await scheduleTask(future.id, "2099-12-25");
+    const doneOne = await addTask({ title: "完事了", toInbox: true });
+    await toggleTaskDone(doneOne.id);
+
     const { host, root } = await renderPage();
-    await waitForText(host, "买啤酒");
+    await waitForText(host, "今天事");
+
+    expect(host.textContent).toContain("今天");
+    expect(host.textContent).toContain("已完成");
+    expect(host.textContent).toContain("收件箱");
+    expect(host.textContent).toContain("已排期");
+    // 旧分区名不应再出现。
+    expect(host.textContent ?? "").not.toContain("即将到来");
+    expect(host.textContent ?? "").not.toContain("重复 / 提醒");
+
     expect(host.querySelector('[data-section="today"]')).not.toBeNull();
     expect(host.querySelector('[data-section="inbox"]')).not.toBeNull();
-    expect(host.textContent).toContain("稍后处理");
+    expect(today).toBeTruthy();
     await act(async () => root.unmount());
   });
 
@@ -156,70 +125,6 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("重复任务出现在重复折叠区且无完成计数", async () => {
-    await db.tasks.add({
-      id: "p1",
-      title: "做三次",
-      done: false,
-      recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
-      lastDoneAt: null,
-      startAt: "2026-06-01T00:00:00.000Z",
-      scheduledAt: null,
-      subtasks: [],
-      sortOrder: 0,
-      completedCount: 1,
-      createdAt: "2026-06-01T00:00:00.000Z",
-      updatedAt: "2026-06-01T00:00:00.000Z",
-    });
-    const { host, root } = await renderPage();
-    const details = await waitForDetailsWithText(host, "重复 / 提醒");
-    await act(async () => {
-      (details as HTMLDetailsElement).open = true;
-      details.dispatchEvent(new Event("toggle"));
-    });
-    await waitForText(host, "做三次");
-    expect(host.textContent).not.toContain("1/3");
-    await act(async () => root.unmount());
-  });
-
-  it("即将到来与重复区有拖拽手柄，收件箱没有", async () => {
-    await addTask({ title: "收件箱任务", toInbox: true });
-    const future = await addTask({ title: "未来任务", toInbox: true });
-    const { scheduleTask } = await import("../lib/tasks.js");
-    await scheduleTask(future.id, "2026-12-25");
-    await addTask({
-      title: "重复任务",
-      recurrence: { freq: "daily", interval: 1, basis: "due" },
-      startAt: "2026-12-01T00:00:00.000Z",
-    });
-
-    const { host, root } = await renderPage();
-    await waitForText(host, "即将到来");
-    await waitForText(host, "重复 / 提醒");
-
-    expect(host.querySelector('[aria-label="拖动 未来任务"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="拖动 重复任务"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="拖动 收件箱任务"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it("宽屏 schedule popover 在切到窄屏时清理，不会切回宽屏后复现旧锚点", async () => {
-    const media = stubMatchMedia(true);
-    await addTask({ title: "有日期", scheduledAt: "2026-06-20T00:00:00.000Z" });
-    const { host, root } = await renderPage();
-    await waitForText(host, "有日期");
-    const chip = host.querySelector('[aria-label="编辑重复与时间"]') as HTMLButtonElement;
-
-    await act(async () => chip.click());
-    expect(document.body.querySelector('[role="dialog"][aria-label="重复与时间"]')).not.toBeNull();
-
-    await act(async () => media.setMatches(false));
-    await act(async () => media.setMatches(true));
-
-    expect(document.body.querySelector('[role="dialog"][aria-label="重复与时间"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
   // spec §4.3 硬约束零覆盖回归点：tag 筛选作用于下方各池，但**不**作用于顶部注意力区。
   // 构造场景：A 进注意力区（turn=me，tag=x），B 进普通池（tag=y）。点选筛 y → A 仍可见。
   it("tag 筛选不作用于注意力置顶区", async () => {
@@ -237,30 +142,21 @@ describe("TodoPage", () => {
     expect(queue).not.toBeNull();
     expect(queue?.textContent).toContain("等我处理 A");
 
-    // 点 #y 筛选——B 应被过滤、A 应仍在置顶区。
     const filterY = host.querySelector('[aria-label="筛选 y"]') as HTMLButtonElement;
     expect(filterY).not.toBeNull();
     await act(async () => filterY.click());
     await act(async () => {
       await new Promise((r) => window.setTimeout(r, 0));
     });
+    expect(host.querySelector('[data-testid="attention-queue"]')?.textContent).toContain("等我处理 A");
 
-    // 注意力区不被 tag 筛影响：A 仍可见。
-    const queueAfter = host.querySelector('[data-testid="attention-queue"]') as HTMLElement | null;
-    expect(queueAfter?.textContent).toContain("等我处理 A");
-
-    // 下方收件箱 B 仍在（因为它带 tag=y，命中筛选）；
-    // 但若我们筛的是 #x，B 会被过滤——验证下方池确实受筛选影响。
-    await act(async () => filterY.click()); // 取消 y 选中
+    await act(async () => filterY.click());
     const filterX = host.querySelector('[aria-label="筛选 x"]') as HTMLButtonElement;
     await act(async () => filterX.click());
     await act(async () => {
       await new Promise((r) => window.setTimeout(r, 0));
     });
-    // 注意力区里的 A 仍在（tag=x 命中筛选反而让下方有 A，注意力区本来就有 A）。
     expect(host.querySelector('[data-testid="attention-queue"]')?.textContent).toContain("等我处理 A");
-    // 下方池中 B（tag=y）应被筛掉。注意：A 因 turn=me 也会同时出现在下方某池中，且也带 tag=x，
-    // 所以下方"普通任务 B"的标题应不再可见。
     const inboxSection = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
     expect(inboxSection?.textContent ?? "").not.toContain("普通任务 B");
 
