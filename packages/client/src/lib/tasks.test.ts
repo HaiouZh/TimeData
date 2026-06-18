@@ -288,49 +288,49 @@ describe("listTasks", () => {
     expect(buckets.recurring).toHaveLength(1);
   });
 
-  it("今天完成的任务进 todayDone 并按 completedAt 倒序", async () => {
-    const older = await addTask({ title: "旧完成", toInbox: true });
-    const newer = await addTask({ title: "新完成", toInbox: true });
+  it("今天完成 + 隔日完成都进 completed，按 completedAt 倒序", async () => {
+    const older = await addTask({ title: "老", toInbox: true });
+    const newer = await addTask({ title: "新", toInbox: true });
+    const prev = await addTask({ title: "昨", toInbox: true });
     await toggleTaskDone(older.id, { now: new Date("2026-06-14T08:00:00.000Z") });
     await toggleTaskDone(newer.id, { now: new Date("2026-06-14T09:00:00.000Z") });
+    await toggleTaskDone(prev.id, { now: new Date("2026-06-13T10:00:00.000Z") });
 
     const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
 
-    expect(buckets.todayDone.map((task) => task.id)).toEqual([newer.id, older.id]);
-    expect(buckets.completed).toHaveLength(0);
+    expect(buckets.completed.map((t) => t.id)).toEqual([newer.id, older.id, prev.id]);
   });
 
-  it("todayDone 使用应用本地日界判断完成日", async () => {
-    const task = await addTask({ title: "本地凌晨完成", toInbox: true });
-    await toggleTaskDone(task.id, { now: new Date("2026-06-13T16:30:00.000Z") });
-
-    const buckets = await listTasks(new Date("2026-06-14T01:00:00.000Z"));
-
-    expect(buckets.todayDone.map((item) => item.id)).toEqual([task.id]);
-    expect(buckets.completed).toHaveLength(0);
-  });
-
-  it("隔日完成进 completed、不进 todayDone", async () => {
-    const task = await addTask({ title: "昨天完成", toInbox: true });
-    await toggleTaskDone(task.id, { now: new Date("2026-06-13T10:00:00.000Z") });
-
-    const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
-
-    expect(buckets.completed.map((item) => item.id)).toEqual([task.id]);
-    expect(buckets.todayDone.map((item) => item.id)).not.toContain(task.id);
-  });
-
-  it("重复任务完成不进 todayDone", async () => {
+  it("重复任务完成不进 completed", async () => {
     const task = await addTask({
-      title: "只重复一次",
-      recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
-      now: new Date("2026-06-14T07:00:00.000Z"),
+      title: "跑步",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      now: new Date("2026-06-14T06:00:00.000Z"),
     });
     await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
 
     const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
 
-    expect(buckets.todayDone.map((item) => item.id)).not.toContain(task.id);
+    expect(buckets.completed.map((t) => t.id)).not.toContain(task.id);
+  });
+
+  it("一次性未来排期 + 未到期重复都进 scheduled，按到期日升序", async () => {
+    const seedNow = new Date("2026-06-14T06:00:00.000Z");
+    const far = await addTask({ title: "远", toInbox: true, now: seedNow });
+    await scheduleTask(far.id, "2026-06-20", { now: seedNow });
+    const near = await addTask({ title: "近", toInbox: true, now: seedNow });
+    await scheduleTask(near.id, "2026-06-16", { now: seedNow });
+    // 未到期重复（startAt 在未来）
+    await addTask({
+      title: "周计划",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-06-18T00:00:00.000Z",
+      now: seedNow,
+    });
+
+    const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
+
+    expect(buckets.scheduled.map((t) => t.title)).toEqual(["近", "周计划", "远"]);
   });
 });
 

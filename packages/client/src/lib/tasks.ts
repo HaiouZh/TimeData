@@ -3,7 +3,7 @@ import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
-import { isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
+import { currentDueDateString, isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
 import { reorderedTaskSortOrders } from "./tasks/taskSort.js";
 import { getDateString } from "./time.js";
@@ -275,10 +275,9 @@ export async function deleteTask(id: string): Promise<void> {
 export interface TodoBuckets {
   today: Task[]; // 含过期，过期排前
   inbox: Task[];
-  upcoming: Task[];
-  recurring: Task[]; // 重复任务管理列表（全部重复任务，无论落点）
-  todayDone: Task[];
-  completed: Task[];
+  scheduled: Task[]; // 一次性未来排期 + 未到期重复，按当前到期日升序
+  recurring: Task[]; // 全部重复任务（去重 / AttentionQueue 用）
+  completed: Task[]; // 全部已完成（今天 + 隔日）+ 耗尽重复，按 completedAt 倒序
 }
 
 function isOverdue(t: Task, now: Date): boolean {
@@ -286,8 +285,13 @@ function isOverdue(t: Task, now: Date): boolean {
   return p.pool === "today" && p.overdue;
 }
 
+/** 已排期排序键：重复用当前到期日，一次性用 scheduledAt 当天，统一为 "YYYY-MM-DD"。 */
+function scheduledDateKey(t: Task, now: Date): string {
+  if (t.recurrence) return currentDueDateString(t.recurrence, t.lastDoneAt, t.startAt, now);
+  return getDateString(new Date(t.scheduledAt ?? now));
+}
+
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
-  const todayStr = getDateString(now);
   const all = (await db.tasks.orderBy("sortOrder").toArray()).map((t) => ({
     ...t,
     scheduledAt: t.scheduledAt ?? null,
@@ -296,21 +300,18 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     completedAt: t.completedAt ?? null,
     tags: t.tags ?? [],
   }));
-  const buckets: TodoBuckets = { today: [], inbox: [], upcoming: [], recurring: [], todayDone: [], completed: [] };
+  const buckets: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
   for (const t of all) {
     if (t.recurrence) buckets.recurring.push(t);
     const p = placementForTask(t, now);
     if (p.pool === "today") buckets.today.push(t);
     else if (p.pool === "inbox") buckets.inbox.push(t);
-    else if (p.pool === "upcoming") buckets.upcoming.push(t);
-    else if (p.pool === "recurring") {
-      // 未到期的重复任务已在 recurring 桶，不再进可见的今天/即将/完成桶。
-    } else if (!t.recurrence && t.done && t.completedAt && getDateString(new Date(t.completedAt)) === todayStr)
-      buckets.todayDone.push(t);
-    else buckets.completed.push(t);
+    else if (p.pool === "upcoming") buckets.scheduled.push(t);
+    else if (p.pool === "recurring") buckets.scheduled.push(t); // 未到期重复
+    else buckets.completed.push(t); // pool === "completed"：所有已完成 + 耗尽重复
   }
   buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
-  buckets.todayDone.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+  buckets.scheduled.sort((a, b) => scheduledDateKey(a, now).localeCompare(scheduledDateKey(b, now)));
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   return buckets;
 }
