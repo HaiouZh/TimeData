@@ -1,6 +1,6 @@
 {
   "docs/evergreen/_docs-guide.md": {
-    "chars": 4166,
+    "chars": 4217,
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
@@ -24,7 +24,7 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 8228,
+    "chars": 8314,
     "covers": 10
   },
   "docs/evergreen/deployment.md": {
@@ -60,8 +60,8 @@
     "covers": 16
   },
   "docs/evergreen/security.md": {
-    "chars": 3308,
-    "covers": 7
+    "chars": 3841,
+    "covers": 9
   },
   "docs/evergreen/stats-insights.md": {
     "chars": 9329,

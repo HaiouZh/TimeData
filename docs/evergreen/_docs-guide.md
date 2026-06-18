@@ -121,7 +121,7 @@ last-reviewed: YYYY-MM-DD
 | `check:docs:strict --since=<base>` | **改了被覆盖的代码 → 同步对应文档** | 改动命中某文档 covers 但该文档没一起改 |
 | `check:docs:coverage --since=<base>` | **加了源码 → 必须有文档认领** | 新增 `packages/*/src/**` 文件不匹配任何 covers，且非豁免（测试/`.d.ts`/mock/夹具/story） |
 | `check:docs:size` | **文档别再膨胀** | 字符/`covers` 超基线，或基线漏项/含已删文档 |
-| `check:docs:links` | **互链别指向消失的文档** | evergreen 内 `[..](x.md)` 指向不存在的 .md |
+| `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 `[..](x.md)` 指向不存在的 .md |
 | `check:docs:stale` | **last-reviewed 别过期** | 超 180 天或缺字段 |
 
 闭环含义：**新代码必有主人（coverage）→ 改代码点名文档（strict）→ 文档不膨胀（size）→ 三层互链不断（links）**。新增源码若暂不值得专门文档，要么归进最贴近主题的 covers，要么确属测试/类型/夹具时加进脚本的 `COVERAGE_EXEMPTS`。

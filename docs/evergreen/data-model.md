@@ -155,6 +155,7 @@ type SyncChange =
 
 所有时间字段一律使用 UTC ISO 字符串（带 `Z`）存储和传输，展示时再转本地时区。
 
+- **存字符串、比较靠字典序**：固定宽度的 UTC ISO 串其字典序等同时间先后，所以 SQLite/Dexie 直接对字符串字段排序/范围查询即可，无需时间类型。
 - Dexie / SQLite 的 `*_at` 字段使用 `new Date().toISOString()`。
 - `TimeEntry.startTime` / `endTime` 也是 UTC ISO。
 - 客户端表单输入本地时间，保存前转 UTC；加载已有记录再转本地展示。

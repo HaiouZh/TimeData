@@ -494,7 +494,12 @@ export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
   if (args.writeSizeBaseline) return writeSizeBaseline(docs);
   if (args.mode === "stale") return modeStale(docs);
   if (args.mode === "size") return modeSize(docs);
-  if (args.mode === "links") return modeLinks(docs);
+  if (args.mode === "links") {
+    const rootSources = ["AGENTS.md", "README.md"]
+      .filter((f) => fs.existsSync(path.join(REPO_ROOT, f)))
+      .map(readDoc);
+    return modeLinks([...docs, ...rootSources]);
+  }
   if (args.mode === "coverage") return modeCoverage(docs, args.since);
   const changed = getChangedFiles(args.since);
   return modeWarnOrStrict(docs, changed, args.mode === "strict");

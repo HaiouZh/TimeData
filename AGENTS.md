@@ -35,8 +35,8 @@
 
 ## 软约束（产品定位选择，AI 可在 PR 里提出取舍）
 
-- **Sync ≠ Backup**：Sync 是多设备同步，Backup 是防误删。状态一致时是 no-op，恢复 Backup 不自动覆盖服务器。
-- **全量同步兜底只能手动触发**：`force-push/prepare` + `force-push` 五重保护（诊断、短时 token、确认短语、最终确认、服务端备份）。
+- **Sync ≠ Backup**：两者别混用——Sync 是多设备同步、Backup 是防误删。no-op 与"恢复不覆盖服务器"等语义见 [`sync`](docs/evergreen/sync.md) / [`backup`](docs/evergreen/backup.md)。
+- **全量同步兜底只能手动触发**：`force-push/prepare` + `force-push`，不可自动化。多重保护机制见 [`security`](docs/evergreen/security.md) 与 [`sync`](docs/evergreen/sync.md)。
 - **CLI 本质是 server API 的受控简化封装**，不是新写入通道。
 - **`SyncPushReasonCode` 是封闭枚举**：扩展需同步 server validation / client engine / 文档表。
 - **同步域登记簿是封闭的**：新增数据域走 `packages/shared/src/syncDomains.ts` + `packages/server/src/sync/domains.ts` 登记，不在管线里加表名特判；见 ADR 0012。
@@ -83,7 +83,7 @@
 - 外部边界用 `zod` 或现有 schema 助手。
 - **改 `packages/shared/src/types.ts` = 改公开 API**：必须跨 client / server / cli 三端检查。
 - 不发明新写入路径。需要 AI 写入就走 CLI 或 server API；缺命令先在 plan 加，再实现。
-- 时间一律 UTC ISO 字符串；SQLite 存字符串字段，比较靠字典序；Dexie 同样存字符串。
+- 时间一律 UTC ISO 字符串（SQLite / Dexie 均存字符串）；存储与字典序比较细节见 [`data-model`](docs/evergreen/data-model.md)。
 - SQL 字段 `snake_case`，JS `camelCase`，手工映射，没有 ORM。
 - 注释：仅给非显而易见、易出错或曾有 bug 的逻辑写简短说明。
 - 命名：产品 / 文档用 **TimeData**；包 / 路径 / 配置用 `timedata`。
@@ -138,9 +138,9 @@
 ## 安全 / 发布
 
 - 不提交真实凭证 / token / API 地址 / SQLite 文件 / 备份文件 / `.env`。
-- 服务端鉴权：单一 Bearer Token；缺 `AUTH_TOKEN` 时受保护 `/api/*` 默认 fail-closed，只有显式 `ALLOW_UNAUTHENTICATED_DEV=1` 才允许本地开发无 token 放行。
-- 速率限制：`/api/sync/*` 60s 窗口 `SYNC_RATE_MAX` 次（默认 60）；`/api/admin/*` 同窗口 `ADMIN_RATE_MAX` 次（默认 120）。
-- 后台洞察 `/api/admin/*` 不暴露任意 SQL；除受控维护端点（如 `/api/admin/sync-logs`）外保持只读。
+- 服务端鉴权：单一 Bearer Token，默认 fail-closed，不可削弱。token / 环境变量 / 开发旁路机制见 [`security`](docs/evergreen/security.md)。
+- 敏感端点（sync / admin）有速率限制与请求体上限，不可移除。边界见 [`security`](docs/evergreen/security.md)，参数默认值见 [`deployment`](docs/evergreen/deployment.md)。
+- 后台洞察 `/api/admin/*` 不暴露任意 SQL，除受控维护端点外保持只读（机制见 [`security`](docs/evergreen/security.md)）。
 - 升级 / 发布 / 版本变更必须明确批准。
 - 依赖补丁 / 覆盖 / vendor 变更需要明确批准。
 
