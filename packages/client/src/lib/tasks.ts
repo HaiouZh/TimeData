@@ -1,9 +1,9 @@
-import { type Recurrence, type Task, TaskSchema, type TaskSubtask } from "@timedata/shared";
+import { completeTask, type Recurrence, type Task, TaskSchema, type TaskSubtask } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
-import { currentDueDateString, isRecurrenceFinishedAfter } from "./tasks/recurrence.js";
+import { currentDueDateString } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
 import { reorderedTaskSortOrders } from "./tasks/taskSort.js";
 
@@ -211,28 +211,27 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     tags: existing.tags ?? [],
   };
 
-  let next: Task;
-  if (existing.recurrence) {
-    const completedCount = base.completedCount + 1;
-    const r = existing.recurrence;
-    const countDone = r.count != null && completedCount >= r.count;
-    const untilDone = isRecurrenceFinishedAfter(r, existing.startAt, now);
-    const finished = countDone || untilDone;
-    next = TaskSchema.parse({
-      ...base,
-      completedCount,
-      lastDoneAt: updatedAt,
-      done: finished,
-      // 继续循环 → 子任务回到未勾选（下一轮就绪）；终结性完成 → 保留勾选作为最终状态。
-      subtasks: finished ? base.subtasks : base.subtasks.map((s) => ({ ...s, done: false })),
-      updatedAt,
-    });
-  } else {
-    const done = !existing.done;
-    next = TaskSchema.parse({ ...base, done, completedAt: done ? updatedAt : null, updatedAt });
+  // 非重复且当前已完成 → 翻回未完成；重复任务的勾选只表示“完成一次”，不走撤销。
+  if (!base.recurrence && base.done) {
+    const reopened = TaskSchema.parse({ ...base, done: false, completedAt: null, updatedAt });
+    return putTask(reopened);
   }
 
-  return putTask(next);
+  const { next, occurrence } = completeTask(base as Task, {
+    now,
+    genId: uuid,
+    occurrenceSortOrder: await nextSortOrder(),
+  });
+
+  if (!occurrence) return putTask(next);
+
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    await db.tasks.add(occurrence);
+    await recordSyncLog("tasks", occurrence.id, "create", occurrence.updatedAt);
+    await db.tasks.put(next);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+  });
+  return next;
 }
 
 export async function scheduleTask(id: string, date: string, options: { now?: Date } = {}): Promise<Task> {

@@ -91,7 +91,11 @@ describe("toggleTaskDone", () => {
   });
 
   it("recurring task: stamps lastDoneAt instead of done", async () => {
-    const task = await addTask({ title: "跑步", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const task = await addTask({
+      title: "跑步",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      now: new Date("2026-06-14T06:00:00.000Z"),
+    });
 
     const after = await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
 
@@ -99,8 +103,36 @@ describe("toggleTaskDone", () => {
     expect(after.done).toBe(false);
   });
 
+  it("重复任务非终结完成：衍生一条已完成快照 + 写 create syncLog", async () => {
+    const task = await addTask({
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      now: new Date("2026-06-14T06:00:00.000Z"),
+    });
+    const before = await db.tasks.count();
+
+    const advanced = await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
+
+    expect(advanced).toMatchObject({
+      id: task.id,
+      done: false,
+      completedCount: 1,
+      lastDoneAt: "2026-06-14T08:00:00.000Z",
+    });
+    expect(await db.tasks.count()).toBe(before + 1);
+    const occ = (await db.tasks.toArray()).find((t) => t.id !== task.id && t.title === "喝水");
+    expect(occ).toMatchObject({ done: true, recurrence: null, completedAt: "2026-06-14T08:00:00.000Z" });
+    await expect(db.syncLog.where("recordId").equals(occ!.id).toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "create" })]),
+    );
+  });
+
   it("重复任务未终结完成：子任务重置为未完成", async () => {
-    const t = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const t = await addTask({
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      now: new Date("2026-06-14T06:00:00.000Z"),
+    });
     await updateSubtasks(t.id, [
       { id: "s1", title: "倒水", done: true },
       { id: "s2", title: "喝完", done: true },
@@ -301,7 +333,7 @@ describe("listTasks", () => {
     expect(buckets.completed.map((t) => t.id)).toEqual([newer.id, older.id, prev.id]);
   });
 
-  it("重复任务完成不进 completed", async () => {
+  it("重复任务完成：模板留在循环、衍生条进 completed", async () => {
     const task = await addTask({
       title: "跑步",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
@@ -311,15 +343,18 @@ describe("listTasks", () => {
 
     const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
 
+    // 模板本身不在 completed（仍是重复，落 today/scheduled）
     expect(buckets.completed.map((t) => t.id)).not.toContain(task.id);
+    // 衍生出一条独立完成记录（新 id、标题快照），进 completed
+    const occ = buckets.completed.find((t) => t.title === "跑步" && t.id !== task.id);
+    expect(occ).toBeDefined();
+    expect(occ).toMatchObject({ done: true, recurrence: null, completedAt: "2026-06-14T08:00:00.000Z" });
   });
 
-  it("耗尽重复（count 满）完成后进 completed，且无 completedAt 排末", async () => {
+  it("耗尽重复（count 满）就地转化进 completed，写 completedAt 并按时间排序", async () => {
     const t0 = new Date("2026-06-14T06:00:00.000Z");
-    // 一次普通完成（有 completedAt）
     const regular = await addTask({ title: "普通", toInbox: true, now: t0 });
     await toggleTaskDone(regular.id, { now: new Date("2026-06-14T08:00:00.000Z") });
-    // 耗尽性重复（count:1，完成一次即终结）
     const oneShot = await addTask({
       title: "做一次",
       recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
@@ -329,13 +364,12 @@ describe("listTasks", () => {
 
     const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
 
-    // 耗尽重复进 completed
-    expect(buckets.completed.map((t) => t.id)).toContain(oneShot.id);
-    // 重复任务不写 completedAt，按 listTasks 排序键 (b.completedAt ?? "") 应排末
+    // 就地转化：原 id 进 completed、写了 completedAt
     const oneShotAfter = buckets.completed.find((t) => t.id === oneShot.id);
-    expect(oneShotAfter?.completedAt).toBeNull();
-    expect(buckets.completed.at(-1)?.id).toBe(oneShot.id);
-    expect(buckets.completed[0]?.id).toBe(regular.id);
+    expect(oneShotAfter?.completedAt).toBe("2026-06-14T09:00:00.000Z");
+    // 按 completedAt 倒序：oneShot(09:00) 在 regular(08:00) 之前
+    expect(buckets.completed[0]?.id).toBe(oneShot.id);
+    expect(buckets.completed.map((t) => t.id)).toContain(regular.id);
   });
 
   it("一次性未来排期 + 未到期重复都进 scheduled，按到期日升序", async () => {
