@@ -17,8 +17,7 @@
 
 ## 一句话定位
 
-- TimeData = 个人时间记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite 服务，AI/脚本/agent 通过服务端受控 API 写入（CLI 是其中一个客户端），Capacitor 套 Android 壳。
-- pnpm monorepo，TypeScript ESM，全部 Vitest。
+- TimeData = 个人时间记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite，多入口（Web / CLI / 授权 agent 经服务端受控 API 写入），Capacitor 套 Android 壳。完整定位与五包关系见 [`architecture`](docs/evergreen/architecture.md) §1。
 - **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB / 备份文件。
 
 ------
@@ -35,11 +34,8 @@
 
 ## 软约束（产品定位选择，AI 可在 PR 里提出取舍）
 
-- **Sync ≠ Backup**：两者别混用——Sync 是多设备同步、Backup 是防误删。no-op 与"恢复不覆盖服务器"等语义见 [`sync`](docs/evergreen/sync.md) / [`backup`](docs/evergreen/backup.md)。
-- **全量同步兜底只能手动触发**：`force-push/prepare` + `force-push`，不可自动化。多重保护机制见 [`security`](docs/evergreen/security.md) 与 [`sync`](docs/evergreen/sync.md)。
 - **CLI 本质是 server API 的受控简化封装**，不是新写入通道。
-- **`SyncPushReasonCode` 是封闭枚举**：扩展需同步 server validation / client engine / 文档表。
-- **同步域登记簿是封闭的**：新增数据域走 `packages/shared/src/syncDomains.ts` + `packages/server/src/sync/domains.ts` 登记，不在管线里加表名特判；见 ADR 0012。
+- **sync 的 `SyncPushReasonCode` 与同步域登记簿都是封闭契约**：扩展前先停下，扩展步骤与影响面见 [`sync`](docs/evergreen/sync.md) 与 [`ADR 0012`](docs/adr/0012-sync-ledger-and-domain-registry.md)。
 
 软约束的违反不是 bug，是产品重选；在 PR 描述里说明并请用户确认，不机械遵守。
 
@@ -138,7 +134,6 @@
 ## 安全 / 发布
 
 - 不提交真实凭证 / token / API 地址 / SQLite 文件 / 备份文件 / `.env`。
-- 服务端鉴权：单一 Bearer Token，默认 fail-closed，不可削弱。token / 环境变量 / 开发旁路机制见 [`security`](docs/evergreen/security.md)。
 - 敏感端点（sync / admin）有速率限制与请求体上限，不可移除。边界见 [`security`](docs/evergreen/security.md)，参数默认值见 [`deployment`](docs/evergreen/deployment.md)。
 - 后台洞察 `/api/admin/*` 不暴露任意 SQL，除受控维护端点外保持只读（机制见 [`security`](docs/evergreen/security.md)）。
 - 升级 / 发布 / 版本变更必须明确批准。
@@ -146,4 +141,4 @@
 
 ------
 
-*Last reviewed: 2026-06-18（新增文档组织规则入口 _docs-guide 与 evergreen 体量棘轮命令）*
+*Last reviewed: 2026-06-18（按"仓库操作 + agent 授权边界"口径再瘦身：定位精简留指针、sync 封闭契约两条并为一行护栏、删 force-push 手动触发与认证机制描述——产品/领域知识归 docs）*
