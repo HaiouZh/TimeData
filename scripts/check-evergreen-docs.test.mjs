@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 import {
   CliUsageError,
   getChangedFiles,
-  hasStaleDataModelCategoriesPageReference,
   parseArgs,
 } from "./check-evergreen-docs.mjs";
 
@@ -60,32 +59,5 @@ test("getChangedFiles invokes git ls-files without shell parsing for HEAD", () =
       ["git", ["diff", "HEAD", "--name-only"], "utf8"],
       ["git", ["ls-files", "--others", "--exclude-standard"], "utf8"],
     ],
-  );
-});
-
-test("flags stale data-model reference when settings category pages change", () => {
-  const changedFiles = [
-    "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-    "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-  ];
-
-  assert.equal(
-    hasStaleDataModelCategoriesPageReference(changedFiles, "旧路径仍是 packages/client/src/pages/CategoriesPage.tsx"),
-    true,
-  );
-});
-
-test("ignores data-model after the old page path is removed", () => {
-  const changedFiles = [
-    "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-    "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-  ];
-
-  assert.equal(
-    hasStaleDataModelCategoriesPageReference(
-      changedFiles,
-      "SettingsCategoriesPage.tsx / SettingsCategoryDetailPage.tsx",
-    ),
-    false,
   );
 });

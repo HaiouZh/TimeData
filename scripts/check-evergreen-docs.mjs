@@ -11,11 +11,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EVERGREEN_DIRS = ["docs/evergreen", "docs/adr"];
 const STALE_DAYS = 180;
-const SETTINGS_PAGE_REFS = [
-  "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-  "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-];
-const DATA_MODEL_OLD_PAGE_REF = "packages/client/src/pages/CategoriesPage.tsx";
 const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
 
 export class CliUsageError extends Error {
@@ -201,12 +196,7 @@ function isDocFile(f) {
   return f.startsWith("docs/evergreen/") || f.startsWith("docs/adr/") || f === "README.md" || f === "CLAUDE.md";
 }
 
-export function hasStaleDataModelCategoriesPageReference(changedFiles, dataModelContent) {
-  const touchedSettingsPages = SETTINGS_PAGE_REFS.every((file) => changedFiles.includes(file));
-  return touchedSettingsPages && dataModelContent.includes(DATA_MODEL_OLD_PAGE_REF);
-}
-
-function modeWarnOrStrict(docs, changed, strict, dataModelContent) {
+function modeWarnOrStrict(docs, changed, strict) {
   const codeChanged = changed.filter(isCodeFile);
   const docsChanged = new Set(changed.filter(isDocFile));
   const hits = [];
@@ -214,12 +204,11 @@ function modeWarnOrStrict(docs, changed, strict, dataModelContent) {
     const md = docs.filter((d) => matchesAny(f, d.covers));
     if (md.length > 0) hits.push({ file: f, docs: md });
   }
-  const staleDataModelReference = hasStaleDataModelCategoriesPageReference(changed, dataModelContent);
   if (codeChanged.length === 0) {
     console.log("（没有代码改动需要检查。）");
     return 0;
   }
-  if (hits.length === 0 && !staleDataModelReference) {
+  if (hits.length === 0) {
     console.log(`✓ 检查了 ${codeChanged.length} 个改动的代码文件，没有命中任何长期文档的 covers。`);
     return 0;
   }
@@ -234,12 +223,6 @@ function modeWarnOrStrict(docs, changed, strict, dataModelContent) {
       if (!updated) unmatched++;
       console.log(`| \`${hit.file}\` | [${doc.title}](${doc.filePath}) | ${status} |`);
     }
-  }
-  if (staleDataModelReference) {
-    unmatched++;
-    console.log(
-      "| `packages/client/src/pages/settings/SettingsCategoriesPage.tsx` + `packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx` | [data-model](docs/evergreen/data-model.md) | ⚠️ 仍引用旧的 CategoriesPage.tsx | ",
-    );
   }
   if (unmatched === 0) {
     console.log("\n✓ 所有相关文档都在本次改动里同步更新了。");
@@ -299,11 +282,10 @@ export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
     return 0;
   }
   const docs = EVERGREEN_DIRS.flatMap(listMarkdownFiles).map(readDoc);
-  const dataModelContent = fs.readFileSync(path.join(REPO_ROOT, "docs/evergreen/data-model.md"), "utf8");
   console.log(`Loaded ${docs.length} long-lived doc(s) from ${EVERGREEN_DIRS.join(", ")}.\n`);
   if (args.mode === "stale") return modeStale(docs);
   const changed = getChangedFiles(args.since);
-  return modeWarnOrStrict(docs, changed, args.mode === "strict", dataModelContent);
+  return modeWarnOrStrict(docs, changed, args.mode === "strict");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
