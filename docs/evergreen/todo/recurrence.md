@@ -2,6 +2,7 @@
 type: evergreen
 title: 待办 · 重复规则引擎
 covers:
+  - packages/shared/src/recurrence.ts
   - packages/client/src/lib/tasks/recurrence.ts
   - packages/client/src/lib/tasks/recurrencePresets.ts
   - packages/client/src/components/MonthCalendar.tsx
@@ -11,7 +12,7 @@ last-reviewed: 2026-06-18
 
 # 待办 · 重复规则引擎
 
-> [todo](../todo.md) 的重复规则**子文档**：`Recurrence` 字段契约、判定“今天是否待做”、终止条件、spawn 行为、预设门 UI。
+> [todo](../todo.md) 的重复规则**子文档**：`Recurrence` 字段契约、判定“今天是否待做”、终止条件、衍生式完成（spawn）、预设门 UI。
 > 不讲：Task 主体 schema/四分区/写入通道（见 [todo](../todo.md)）。
 
 ## 承上启下
@@ -43,18 +44,22 @@ last-reviewed: 2026-06-18
 - `count` 与 `until` 互斥。
 - `basis="due"` 按计划日判断下一次；`basis="completion"` 从上次完成日往后推。
 
-## 2. 判定“今天是否待做”（`lib/tasks/recurrence.ts`）
+## 2. 判定“今天是否待做”（`shared/src/recurrence.ts`）
 
-- **`isDueNow` 用系统本地日序号**（`recurrence.ts` / `placement.ts`），基于系统本地时区，**不是 `APP_TIME_ZONE`**——让“今天待做”跟用户本地日历一致，不受 UTC 日期切换影响。
+- **`isDueNow` 用系统本地日序号**（`shared/src/recurrence.ts` / `placement.ts`），基于系统本地时区，**不是 `APP_TIME_ZONE`**——让“今天待做”跟用户本地日历一致，不受 UTC 日期切换影响。
 - 一次性任务的 `scheduledAt` 也用系统本地 `getFullYear/Month/Date` 解析（`tasks.ts`），刻意不用 `APP_TIME_ZONE` 的 `getDateString`，避免跨夜边界非确定性顺序。
-- 工具：`isDueNow` / `currentDueDateString` / `recurrenceSummary` / `nextScheduledDayAfter`。
+- 工具：`isDueNow` / `currentDueDateString` / `currentDueDayFor` / `recurrenceSummary` / `isRecurrenceFinishedAfter`（均在 `shared/src/recurrence.ts`）。
 
-## 3. 终止条件与 spawn（`lib/tasks/placement.ts`）
+## 3. 终止条件与衍生式完成（`shared/src/taskCompletion.ts` + `lib/tasks/placement.ts`）
 
-- **终止**：`count` 满（`completedCount >= count`）或 `until` 过且无未完成发生 → `done=true` 沉入完成区。
+完成统一经 shared 纯函数 `completeTask`（文件 covers 归 [todo](../todo.md)，本文只描述重复分支行为）：
+
+- **非终结完成 = 衍生 + 推进**：完成一轮**不**把模板 `done` 置 true，而是衍生一条独立的已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=now`/标题·tags·完成时子任务快照/新 id，进完成区），模板自身推进：`completedCount+1`、`lastDoneAt=max(now, 应发生日)`、`subtasks[].done` 全部重置为 false（下一轮就绪）、清 `turn/turnAt`。
+- **终结完成**：`count` 满（`completedCount+1 >= count`）或 `until` 过且无未完成发生 → 模板**就地转化**为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt`/保留原 id），沉入完成区，**不**再衍生 occurrence。
+- **提前完成**：完成日取 `effectiveDoneIso = max(now, 当前应发生日)`——到期前完成会把 `lastDoneAt` 推进到应发生日，下一次顺延，不因提前点击而连跳。
 - **逾期保留**：`until` 已过但仍有逾期未完成发生时，留在“今天”区（`placement.ts` 的 `hasOutstandingUntilOccurrence`）。
-- **滚动 spawn**：无终止条件的重复任务勾选后 `done` **不**置 true，同时把 `subtasks[].done` 重置为 false 让下一轮就绪；终结性完成（count/until 耗尽）保留子任务勾选。
-- **完成计数**：重复任务完成写 `completedCount+1` + `lastDoneAt`，**不写 `completedAt`**（见 [todo](../todo.md) §3.1）。
+- **模板不写 `completedAt`**：活动模板始终 `completedAt=null`，完成事件由衍生快照承载；仅终结转化时模板才写 `completedAt`（见 [todo](../todo.md) §3.1）。
+- **复选框恒不勾选/不划线**：重复模板（含已排期未到期）复选框点击表示“完成一轮”、可提前推进，不进入“撤销完成”路径。
 - `scheduleTask`/`unscheduleTask` 拒绝重复任务（重复任务的排期由重复规则管理；server 端 schedule 端点对重复任务回 409 `TASK_RECURRING_USE_RULE`）。
 
 ## 4. 预设门 UI（行为）
@@ -70,12 +75,13 @@ last-reviewed: 2026-06-18
 
 | 入口 | 职责 |
 |---|---|
-| `lib/tasks/recurrence.ts` | `isDueNow`/`currentDueDateString`/`recurrenceSummary`/`nextScheduledDayAfter` |
+| `shared/src/recurrence.ts` | `isDueNow`/`currentDueDateString`/`currentDueDayFor`/`recurrenceSummary`/`isRecurrenceFinishedAfter`（client `lib/tasks/recurrence.ts` 为 re-export 垫片） |
+| `shared/src/taskCompletion.ts` | `completeTask`：非终结衍生+推进 / 终结转化（covers 归 [todo](../todo.md)） |
 | `lib/tasks/recurrencePresets.ts` | 预设↔Recurrence 映射 + `preserveHitDays` |
 | `components/MonthCalendar.tsx` | 月号选择日历 |
 | `components/Wheel.tsx` | 共享时间滚轮（被重复规则等复用） |
 | 预设门 UI | `pages/todo/{RecurrencePresetSheet,RecurrencePresetList,CustomRecurrencePage}.tsx`（covers 归 [todo](../todo.md)） |
 
-**测试**：`lib/tasks/recurrence.test.ts`、`lib/tasks/recurrencePresets.test.ts`、`lib/tasks.recurrenceChoice.test.ts`（点号文件，在 `lib/` 下不在 `lib/tasks/`）、`pages/todo/{RecurrencePresetSheet,CustomRecurrencePage}.test.tsx`、`components/{MonthCalendar,TimeRangeWheelPicker}.test.tsx`。
+**测试**：`shared/src/recurrence.test.ts`（由 client 迁入）、`lib/tasks/recurrencePresets.test.ts`、`lib/tasks.recurrenceChoice.test.ts`（点号文件，在 `lib/` 下不在 `lib/tasks/`）、`pages/todo/{RecurrencePresetSheet,CustomRecurrencePage}.test.tsx`、`components/{MonthCalendar,TimeRangeWheelPicker}.test.tsx`。
 
 > `TimeRangeWheelPicker.test.ts` 指向的组件已改名为 `Wheel.tsx`（历史遗留），两组件名都可能在测试里出现。

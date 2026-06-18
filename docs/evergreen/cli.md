@@ -36,7 +36,7 @@ last-reviewed: 2026-06-16
 | `timedata task-running --id ID` | 是 | 标记任务进入 agent/脚本执行中 | `POST /api/agent/tasks/:id/status` |
 | `timedata task-handback --id ID [--note TEXT]` | 是 | agent 跑完后交回“等我验收”，可附结果备注 | `POST /api/agent/tasks/:id/status` |
 | `timedata task-park --id ID` | 是 | 搁置任务 | `POST /api/agent/tasks/:id/status` |
-| `timedata task-done --id ID` | 是 | 标记任务完成并清空回合状态 | `POST /api/agent/tasks/:id/status` |
+| `timedata task-done --id ID` | 是 | 标记任务完成并清空回合状态（重复任务衍生已完成记录并推进模板） | `POST /api/agent/tasks/:id/status` |
 | `timedata task-tag --id ID --tags agent,idea` | 是 | 覆盖任务自由 tags | `POST /api/agent/tasks/:id/status` |
 | `timedata version` / `--version` | 否 | 打印构建期烧入的版本号和 git sha | 无，不读取配置 |
 
@@ -61,6 +61,7 @@ last-reviewed: 2026-06-16
 - `--server`、`--token`：可选，覆盖配置。
 - `task-running` / `task-handback` / `task-park` / `task-done` / `task-tag` 的 `--token` 可传 master `AUTH_TOKEN`，也可传窄域 `AGENT_TOKEN`；后者只能调用 `/api/agent/*`。
 - `task-handback --note`：可选结果备注，会追加为该任务的一条未完成子任务，供人工验收。
+- `task-done`：完成语义统一走 server `completeTask`——非重复任务就地完成、重复任务衍生一条已完成快照并推进模板（count/until 终结时模板就地转化）；详见 [todo](todo.md) §3.1。
 - `task-tag --tags`：逗号分隔、trim 后非空的自由标签列表，会覆盖任务当前 `tags`。tags 不驱动自动逻辑；需要代码可靠动作的维度应走结构化字段，见 [`ADR 0014`](../adr/0014-task-tags-vs-fields.md)。
 - `--format=json|human`：可选，显式指定输出格式；未指定时根据 stdout 是否 TTY 自动判断（管道/脚本默认 JSON，终端默认 human）。
 - 所有 flag 支持 `--key value` 和 `--key=value` 两种长选项格式；不支持短横线 `-k`。

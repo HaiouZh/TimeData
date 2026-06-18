@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 5474,
+    "chars": 5508,
     "covers": 12
   },
   "docs/evergreen/backup.md": {
@@ -20,7 +20,7 @@
     "covers": 5
   },
   "docs/evergreen/cli.md": {
-    "chars": 10756,
+    "chars": 10896,
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
@@ -76,11 +76,11 @@
     "covers": 15
   },
   "docs/evergreen/todo.md": {
-    "chars": 10743,
-    "covers": 23
+    "chars": 11775,
+    "covers": 25
   },
   "docs/evergreen/todo/recurrence.md": {
-    "chars": 3719,
-    "covers": 4
+    "chars": 4524,
+    "covers": 5
   }
 }

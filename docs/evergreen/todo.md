@@ -5,6 +5,8 @@ covers:
   - packages/shared/src/types.ts:Task
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/schemas.ts
+  - packages/shared/src/taskCompletion.ts
+  - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/client/src/db/index.ts
   - packages/client/src/pages/TodoPage.tsx
@@ -69,11 +71,12 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
         → routes/agent.ts: statusSchema 严格校验（至少一个字段）
         → 读当前 task，按封闭动作构造 next：
             · turn        → turn + turnAt(now 或 null)
-            · done=true   → done=true, turn=null, turnAt=null 【清空回合】
+            · done=true   → 经 shared completeTask：非重复就地完成(done+completedAt+清回合)；
+                            重复非终结衍生已完成 occurrence + 推进模板；重复终结就地转化模板
             · done=false  → done=false 【不清 completedAt】
             · note        → subtasks 追加 { id, title, done:false }
             · tags        → 整体替换 tags
-        → TaskSchema.parse(next) 再校验 → db.transaction(applyChange(change))
+        → TaskSchema.parse(next) 再校验 → db.transaction([applyChange(occurrence) 若有] + applyChange(next))
         → notifySyncChange(getLatestSeq()) → 前台 SSE pull
 ```
 
@@ -139,11 +142,11 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 
 ## 3. 关键不变量 / 坑 / 红线
 
-1. **完成真相是 `done=true`**：普通任务完成时 `toggleTaskDone` 写 `completedAt=updatedAt`，取消完成清 `completedAt=null`；重复任务完成时 `completedCount+1` + `lastDoneAt=updatedAt`，**不写 `completedAt`**。落点唯一判据是 `done`（`placement.ts`）。
-2. **`turn/turnAt` 完成语义两条写路径不一致**：客户端 `toggleTaskDone`（`tasks.ts`）**不清空** turn/turnAt；agent `done=true`（`agent.ts`）**清空** turn/turnAt。`AttentionQueue` 用 `if (t.done) continue` 过滤 done，残留 turn 不进注意力栈，但 `TaskDetailSheet` 的回合 SegmentedControl 仍会显示残留回合。改前先确认产品意图。
-3. **agent `done` 与 `completedAt` 不对称**：agent `done=true` 不设 `completedAt`，`done=false` 不清 `completedAt`（`agent.ts`）。后果：agent 完成的池任务 `completedAt=null`，在 `listTasks.completed` 排序里靠 `completedAt ?? updatedAt` 兜底分组、排末尾。
+1. **完成统一走 shared 纯函数 `completeTask`（`shared/src/taskCompletion.ts`）**：非重复任务就地完成（`done=true` + `completedAt=now` + 清 `turn/turnAt`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复任务**非终结**完成衍生一条独立已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=now`/标题·tags·完成时子任务快照/新 id），模板自身 `done` 保持 `false` 并推进（`completedCount+1`、`lastDoneAt=max(now, 应发生日)`、`subtasks[].done` 全部重置、清 `turn/turnAt`）；**终结**完成（count 满 / until 过）模板就地转化为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt`，保留原 id）。落点唯一判据仍是 `done`（`placement.ts`）。重复分支细节见 [todo/recurrence](todo/recurrence.md) §3。
+2. **完成统一清 `turn/turnAt`**：`completeTask` 在所有完成分支（非重复 / 重复推进 / 重复终结）都把 `turn/turnAt` 置空，客户端 `toggleTaskDone` 与 agent `done=true` 共用它而一致（旧版客户端完成不清回合的不对称已消除）。注意"取消完成"（客户端 reopen）与 agent `done=false` 不经过 `completeTask`，不触碰 `turn`。
+3. **"取消完成"两端仍不对称**：agent `done=true` 现在经 `completeTask` 写 `completedAt`（与客户端一致，旧版 agent 不写的问题已修）；但 agent `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 reopen 会清 `completedAt=null`。撤销完成的语义两端不一致，改前先确认。
 4. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。
-5. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供 `AttentionQueue`/`TagFilterBar`。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 按 `completedAt` 倒序、**无日期过滤**（“最近 N 天”是 `DayGroupedList` 显示侧渐进展示）。
+5. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供 `AttentionQueue`/`TagFilterBar`。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 收纳普通完成任务、重复衍生的已完成快照与终结模板（均带 `completedAt`），按 `completedAt` 倒序、**无日期过滤**（“最近 N 天”是 `DayGroupedList` 显示侧渐进展示）。
 6. **只有“今天”列允许同池拖拽重排**：`persistTaskOrder`（`tasks.ts`）在 Dexie transaction 内回填现有 `sortOrder` 槽位、更新 `updatedAt`、为每个变化项写 `syncLog`。`reorderedTaskSortOrders`（`taskSort.ts`）取池内现有 sortOrder 作槽位，长度/成员不一致时安全返回 `[]`。
 7. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + OR 过滤（`TagFilterBar`，`TaskRow` 最多 3 chip）。需要代码可靠动作的维度应毕业为结构化字段。
 8. **`subtasks` 单层内嵌**：不升格为独立任务、不嵌套，子任务勾选不联动父 `done`/`completedAt`。`useSubtaskDraft`：结构性变化即时 commit，纯文字变化 blur/卸载时 flush。
@@ -162,17 +165,19 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：子任务、标题、tag、turn SegmentedControl、删除、重复预设 overlay |
 | `pages/todo/{SubtaskEditor,SubtaskRow,SortableSubtaskRow,useSubtaskDraft}.*` | 子任务编辑器 + 草稿 hook |
 | `pages/todo/{DayGroupedList,AttentionQueue,TagFilterBar,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表 / 注意力栈 / tag 筛选 / 新增 / 双栏 / 折叠 |
-| `lib/tasks.ts` | 核心 CRUD + `listTasks`/`putTask` |
+| `lib/tasks.ts` | 核心 CRUD + `listTasks`/`putTask`；`toggleTaskDone` 委托 shared `completeTask`，衍生 occurrence 时同事务写 occurrence + 模板 |
 | `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / turn+tag / 子任务工具 |
 | `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |
 | 重复规则 | → [todo/recurrence](todo/recurrence.md) |
+
+> 跨包：完成纯计算 `shared/src/taskCompletion.ts`（`completeTask`，client `toggleTaskDone`、server agent `done=true`、CLI `task-done` 共用）+ 日期助手 `shared/src/taskDates.ts`（`localDateOf`/`normalizeScheduledDate`）；重复引擎 `shared/src/recurrence.ts` 见 [recurrence](todo/recurrence.md)。
 
 ### 4.2 服务端 / CLI
 
 | 入口 | 职责 |
 |---|---|
 | `routes/tasks.ts` | `GET /`（只读查询）+ `POST /:id/schedule`（排期直写，重复 409，**不走 applyChange**） |
-| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`） |
+| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`；`done=true` 经 `completeTask` 衍生/转化，occurrence 与模板各一条 `applyChange`） |
 | `sync/domains.ts` | `tasks` 通用 LWW 注册 + `taskToRow`/`readTaskRecord` |
 | `db/schema.ts` / `lib/db-rows.ts` | 建表/列迁移 + `rowToTask` |
 | `cli/src/commands/tasks.ts` | `tasks` / `task-*` 命令（server API 封装） |
@@ -181,7 +186,7 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 
 **client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskColumn,TaskDetailSheet,DayGroupedList,AttentionQueue,TagFilterBar,ResizableSplit,TodoComposer,SubtaskEditor,SubtaskRow,useSubtaskDraft,TodoListSections}.test.{ts,tsx}`、`lib/tasks.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks,turnQueue}.test.ts`
 **server**：`routes/tasks.test.ts`（GET + POST schedule）、`routes/agent.test.ts`（POST status，含“done=true 清 turn”）、`sync/tasks-domain.test.ts`、`sync/domains.test.ts`、`db/schema.test.ts`、`lib/db-rows.test.ts`
-**shared**：`entitySchemas.test.ts`、`schemas.test.ts` ｜ **cli**：`commands/tasks.test.ts`
+**shared**：`entitySchemas.test.ts`、`schemas.test.ts`、`taskCompletion.test.ts`、`recurrence.test.ts`（由 client 迁入）｜ **cli**：`commands/tasks.test.ts`
 
 ## 深水细节
 
