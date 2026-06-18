@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   CliUsageError,
+  evaluateLinks,
   evaluateSizes,
+  getAddedFiles,
   getChangedFiles,
   parseArgs,
+  selectUncovered,
 } from "./check-evergreen-docs.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -139,4 +142,107 @@ test("evaluateSizes fails when baseline contains a removed evergreen doc", () =>
     current: 0,
     limit: 1000,
   });
+});
+
+test("getAddedFiles invokes git diff --diff-filter=A plus untracked", () => {
+  const calls = [];
+  const execFileSync = (_file, args) => {
+    calls.push(args);
+    if (args[0] === "diff") return "packages/client/src/lib/new.ts\n";
+    return "packages/server/src/routes/new.ts\n";
+  };
+
+  assert.deepEqual(getAddedFiles("origin/main", { execFileSync }), [
+    "packages/client/src/lib/new.ts",
+    "packages/server/src/routes/new.ts",
+  ]);
+  assert.deepEqual(calls, [
+    ["diff", "--diff-filter=A", "--name-only", "origin/main"],
+    ["ls-files", "--others", "--exclude-standard"],
+  ]);
+});
+
+test("selectUncovered flags an added source file matching no covers", () => {
+  const files = ["packages/client/src/lib/newThing.ts"];
+  const docs = [{ covers: ["packages/client/src/lib/tasks.ts"] }];
+
+  const res = selectUncovered(files, docs, {
+    roots: ["packages/client/src/"],
+    exempts: [/\.test\.[jt]sx?$/],
+  });
+
+  assert.deepEqual(res, ["packages/client/src/lib/newThing.ts"]);
+});
+
+test("selectUncovered ignores test files via exempt patterns", () => {
+  const files = ["packages/client/src/lib/newThing.test.ts"];
+
+  const res = selectUncovered(files, [], {
+    roots: ["packages/client/src/"],
+    exempts: [/\.test\.[jt]sx?$/],
+  });
+
+  assert.deepEqual(res, []);
+});
+
+test("selectUncovered ignores files already covered (exact and glob)", () => {
+  const files = ["packages/client/src/lib/tasks.ts", "packages/client/src/pages/todo/New.tsx"];
+  const docs = [
+    { covers: ["packages/client/src/lib/tasks.ts"] },
+    { covers: ["packages/client/src/pages/todo/**"] },
+  ];
+
+  const res = selectUncovered(files, docs, {
+    roots: ["packages/client/src/"],
+    exempts: [/\.test\.[jt]sx?$/],
+  });
+
+  assert.deepEqual(res, []);
+});
+
+test("selectUncovered ignores files outside code roots", () => {
+  const files = ["packages/mobile/android/app/Foo.java", "scripts/x.mjs"];
+
+  const res = selectUncovered(files, [], {
+    roots: ["packages/client/src/"],
+    exempts: [],
+  });
+
+  assert.deepEqual(res, []);
+});
+
+test("evaluateLinks flags a link to a missing doc", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", links: [{ target: "missing.md", anchor: null }] }];
+
+  const res = evaluateLinks(docs);
+
+  assert.equal(res.ok, false);
+  assert.equal(res.broken[0].from, "docs/evergreen/a.md");
+  assert.equal(res.broken[0].target, "missing.md");
+});
+
+test("evaluateLinks passes when all links resolve", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", links: [{ target: "b.md", anchor: null }] },
+    { filePath: "docs/evergreen/b.md", links: [] },
+  ];
+
+  assert.equal(evaluateLinks(docs).ok, true);
+});
+
+test("evaluateLinks resolves ../ relative links across subdirs", () => {
+  const docs = [
+    { filePath: "docs/evergreen/health/charts.md", links: [{ target: "../health.md", anchor: null }] },
+    { filePath: "docs/evergreen/health.md", links: [] },
+  ];
+
+  assert.equal(evaluateLinks(docs).ok, true);
+});
+
+test("evaluateLinks ignores links outside the docs tree", () => {
+  const docs = [
+    { filePath: "docs/evergreen/a.md", links: [{ target: "../../docs_local/x.md", anchor: null }] },
+  ];
+
+  assert.equal(evaluateLinks(docs).ok, true);
 });

@@ -13,6 +13,24 @@ const EVERGREEN_DIRS = ["docs/evergreen", "docs/adr"];
 const STALE_DAYS = 180;
 const SIZE_CAPS = { softChars: 15000, hardChars: 25000 };
 const SIZE_BASELINE_PATH = "scripts/evergreen-size-baseline.json";
+// 覆盖率检查：这些源根下的新增文件必须被某份 evergreen 文档的 covers 认领。
+const COVERAGE_ROOTS = [
+  "packages/client/src/",
+  "packages/server/src/",
+  "packages/shared/src/",
+  "packages/cli/src/",
+];
+// 豁免：测试 / 类型声明 / mock / 夹具 / story 不要求文档归属。
+const COVERAGE_EXEMPTS = [
+  /\.test\.[jt]sx?$/,
+  /\.test-d\.ts$/,
+  /\.d\.ts$/,
+  /(^|\/)__tests__\//,
+  /(^|\/)__mocks__\//,
+  /(^|\/)fixtures?\//,
+  /(^|\/)test-utils?\//,
+  /\.stories\.[jt]sx?$/,
+];
 const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
 
 export class CliUsageError extends Error {
@@ -34,8 +52,8 @@ export function parseArgs(argv) {
       throw new CliUsageError(`Unknown argument: ${arg}`);
     }
   }
-  if (!["warn", "strict", "stale", "size"].includes(opts.mode)) {
-    throw new CliUsageError(`--mode must be warn|strict|stale|size, got: ${opts.mode}`);
+  if (!["warn", "strict", "stale", "size", "coverage", "links"].includes(opts.mode)) {
+    throw new CliUsageError(`--mode must be warn|strict|stale|size|coverage|links, got: ${opts.mode}`);
   }
   return opts;
 }
@@ -50,6 +68,8 @@ function printHelp() {
       "  --mode=strict    exit 1 if any covered doc was not updated",
       `  --mode=stale     warn about docs whose last-reviewed is older than ${STALE_DAYS} days`,
       "  --mode=size      enforce evergreen docs size ratchet",
+      "  --mode=coverage  fail if newly-added source files have no owning doc (uses --since)",
+      "  --mode=links     fail if any internal .md link points to a missing doc",
       "  --since=<rev>    compare against <rev> (default: HEAD; e.g. origin/main for CI)",
       "  --write-size-baseline  rewrite scripts/evergreen-size-baseline.json",
       "  --help, -h       show this message",
@@ -118,6 +138,25 @@ function parseFrontmatter(content) {
   return data;
 }
 
+function stripCode(content) {
+  return content.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+}
+
+function parseMarkdownLinks(content) {
+  const links = [];
+  const re = /\[[^\]]*\]\(([^)]+)\)/g;
+  let m = re.exec(content);
+  while (m !== null) {
+    const raw = m[1].trim();
+    const hashIdx = raw.indexOf("#");
+    const target = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw;
+    const anchor = hashIdx >= 0 ? raw.slice(hashIdx + 1) : null;
+    if (target.endsWith(".md")) links.push({ target, anchor });
+    m = re.exec(content);
+  }
+  return links;
+}
+
 function readDoc(rel) {
   const content = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
   const fm = parseFrontmatter(content);
@@ -128,6 +167,7 @@ function readDoc(rel) {
     covers: Array.isArray(fm.covers) ? fm.covers : [],
     lastReviewed: fm["last-reviewed"] ?? null,
     chars: content.length,
+    links: parseMarkdownLinks(stripCode(content)),
   };
 }
 
@@ -190,6 +230,51 @@ export function getChangedFiles(since, { execFileSync: runExecFileSync = execFil
     return [];
   }
   return [...new Set(out)];
+}
+
+export function getAddedFiles(since, { execFileSync: runExecFileSync = execFileSync } = {}) {
+  const out = [];
+  const gitOptions = { cwd: REPO_ROOT, encoding: "utf8" };
+  try {
+    const diff = runExecFileSync("git", ["diff", "--diff-filter=A", "--name-only", since], gitOptions);
+    for (const line of diff.split("\n")) {
+      const f = line.trim();
+      if (f) out.push(f);
+    }
+    const untracked = runExecFileSync("git", ["ls-files", "--others", "--exclude-standard"], gitOptions);
+    for (const line of untracked.split("\n")) {
+      const f = line.trim();
+      if (f) out.push(f);
+    }
+  } catch (err) {
+    console.error("git diff failed:", err.message);
+    return [];
+  }
+  return [...new Set(out)];
+}
+
+export function selectUncovered(files, docs, { roots, exempts }) {
+  const allCovers = docs.flatMap((d) => d.covers ?? []);
+  return files.filter((f) => {
+    if (!roots.some((r) => f.startsWith(r))) return false;
+    if (exempts.some((re) => re.test(f))) return false;
+    return !matchesAny(f, allCovers);
+  });
+}
+
+export function evaluateLinks(docs) {
+  const known = new Set(docs.map((d) => d.filePath));
+  const broken = [];
+  for (const d of docs) {
+    for (const link of d.links ?? []) {
+      const target = link.target;
+      if (/^https?:/.test(target)) continue;
+      const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(d.filePath), target));
+      if (!(resolved.startsWith("docs/evergreen/") || resolved.startsWith("docs/adr/"))) continue;
+      if (!known.has(resolved)) broken.push({ from: d.filePath, target });
+    }
+  }
+  return { broken, ok: broken.length === 0 };
 }
 
 function isCodeFile(f) {
@@ -373,6 +458,31 @@ function modeSize(docs) {
   return 1;
 }
 
+function modeCoverage(docs, since) {
+  const added = getAddedFiles(since);
+  const uncovered = selectUncovered(added, docs, { roots: COVERAGE_ROOTS, exempts: COVERAGE_EXEMPTS });
+  if (uncovered.length === 0) {
+    console.log("✓ 新增源文件都有归属 evergreen 文档（或属豁免）。");
+    return 0;
+  }
+  console.error("✗ 以下新增源文件没有任何 evergreen 文档的 covers 认领：\n");
+  for (const f of uncovered) console.error(`  ${f}`);
+  console.error("\n请把它归入某个主题文档的 covers，或确属测试/类型/夹具时加入 COVERAGE_EXEMPTS。");
+  return 1;
+}
+
+function modeLinks(docs) {
+  const res = evaluateLinks(docs);
+  if (res.ok) {
+    console.log(`✓ evergreen 文档内部 .md 链接全部解析通过（${docs.length} 份）。`);
+    return 0;
+  }
+  console.error("✗ 发现指向不存在文档的内部链接：\n");
+  for (const b of res.broken) console.error(`  ${b.from} → ${b.target}`);
+  console.error("\n文档重命名/移动后请更新引用方的链接。");
+  return 1;
+}
+
 export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (args.help) {
@@ -384,6 +494,8 @@ export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
   if (args.writeSizeBaseline) return writeSizeBaseline(docs);
   if (args.mode === "stale") return modeStale(docs);
   if (args.mode === "size") return modeSize(docs);
+  if (args.mode === "links") return modeLinks(docs);
+  if (args.mode === "coverage") return modeCoverage(docs, args.since);
   const changed = getChangedFiles(args.since);
   return modeWarnOrStrict(docs, changed, args.mode === "strict");
 }

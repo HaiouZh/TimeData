@@ -68,5 +68,12 @@ jobs:
       - name: Docs size ratchet
         run: pnpm check:docs:size
 
+      - name: Docs coverage ratchet
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        run: pnpm check:docs:coverage --since=${{ github.event.pull_request.base.sha }}
+
+      - name: Docs link integrity
+        run: pnpm check:docs:links
+
       - name: Build
         run: pnpm build
