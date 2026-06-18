@@ -12,4 +12,5 @@ export const STORAGE_KEYS = {
   todoWorkbenchSplit: "timedata_todo_workbench_split",
   todoDoneCollapsed: "timedata_todo_done_collapsed",
   todoInboxCollapsed: "timedata_todo_inbox_collapsed",
+  todoScheduledCollapsed: "timedata_todo_scheduled_collapsed",
 } as const;

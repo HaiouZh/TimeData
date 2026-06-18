@@ -22,9 +22,8 @@ export function saveSplitRatio(ratio: number): void {
 }
 
 export function getDoneCollapsed(): boolean {
-  // 未设偏好时默认折叠：已完成只作回看，不抢今天列表的注意力。
-  const raw = safeGetItem(STORAGE_KEYS.todoDoneCollapsed);
-  return raw === null ? true : raw === "true";
+  // 已完成升级为顶级分区后默认展开（一级展开，内部渐进式 3 组承担节流）。
+  return safeGetItem(STORAGE_KEYS.todoDoneCollapsed) === "true";
 }
 
 export function setDoneCollapsed(collapsed: boolean): void {
@@ -38,4 +37,14 @@ export function getInboxCollapsed(): boolean {
 
 export function setInboxCollapsed(collapsed: boolean): void {
   safeSetItem(STORAGE_KEYS.todoInboxCollapsed, collapsed ? "true" : "false");
+}
+
+export function getScheduledCollapsed(): boolean {
+  // 已排期默认折叠：未到期 / 未来任务作管理列表，不抢注意力。
+  const raw = safeGetItem(STORAGE_KEYS.todoScheduledCollapsed);
+  return raw === null ? true : raw === "true";
+}
+
+export function setScheduledCollapsed(collapsed: boolean): void {
+  safeSetItem(STORAGE_KEYS.todoScheduledCollapsed, collapsed ? "true" : "false");
 }

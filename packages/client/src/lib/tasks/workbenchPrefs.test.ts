@@ -6,10 +6,12 @@ import {
   clampSplitRatio,
   getDoneCollapsed,
   getInboxCollapsed,
+  getScheduledCollapsed,
   loadSplitRatio,
   saveSplitRatio,
   setDoneCollapsed,
   setInboxCollapsed,
+  setScheduledCollapsed,
 } from "./workbenchPrefs.js";
 
 const localStorageMock = (() => {
@@ -60,18 +62,18 @@ describe("split ratio 存取", () => {
 });
 
 describe("done collapsed 存取", () => {
-  it("默认折叠（未设偏好时收起已完成）", () => {
-    expect(getDoneCollapsed()).toBe(true);
-  });
-
-  it("可显式展开后读出", () => {
-    setDoneCollapsed(false);
+  it("默认展开（已完成升级为顶级分区，作回看但不抢注意力时仍显展开）", () => {
     expect(getDoneCollapsed()).toBe(false);
   });
 
-  it("可置为折叠", () => {
+  it("可显式折叠后读出", () => {
     setDoneCollapsed(true);
     expect(getDoneCollapsed()).toBe(true);
+  });
+
+  it("可置为展开", () => {
+    setDoneCollapsed(false);
+    expect(getDoneCollapsed()).toBe(false);
   });
 });
 
@@ -83,5 +85,18 @@ describe("inbox collapsed 存取", () => {
   it("可置为折叠并读出", () => {
     setInboxCollapsed(true);
     expect(getInboxCollapsed()).toBe(true);
+  });
+});
+
+describe("scheduled collapsed 存取", () => {
+  it("未设偏好默认折叠（true）", () => {
+    expect(getScheduledCollapsed()).toBe(true);
+  });
+
+  it("可往返存取", () => {
+    setScheduledCollapsed(false);
+    expect(getScheduledCollapsed()).toBe(false);
+    setScheduledCollapsed(true);
+    expect(getScheduledCollapsed()).toBe(true);
   });
 });
