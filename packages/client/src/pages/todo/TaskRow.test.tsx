@@ -8,8 +8,7 @@ import { TaskRow } from "./TaskRow.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// 兜底清理：AnchoredPopover 用 createPortal 挂到 document.body；测试用例若异常路径未 unmount，
-// 残留 portal 会污染下一条 document.body.querySelector 查询。
+// 兜底清理：portal/popover 测试若异常路径未 unmount 会污染下一条 document.body 查询。
 afterEach(() => {
   document.body.innerHTML = "";
 });
@@ -41,8 +40,6 @@ const handlers = {
   onToggle: noop,
   onEdit: noop,
   onDelete: noop,
-  onToToday: noop,
-  onToInbox: noop,
   onSubtasksChange: noop,
   onTurnChange: noop,
 };
@@ -55,7 +52,7 @@ async function render(node: ReturnType<typeof createElement>) {
 }
 
 describe("TaskRow", () => {
-  it("普通任务：复选框 + 标题，无 role=button，标题可选中", async () => {
+  it("普通任务：复选框 + 标题，无 role=button，无行内移动/删除按钮", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task({ title: "买啤酒" }), pool: "today", ...handlers }),
     );
@@ -63,16 +60,18 @@ describe("TaskRow", () => {
     expect(host.textContent).toContain("买啤酒");
     expect(host.querySelector('[role="button"]')).toBeNull();
     expect(host.querySelector(".select-text")).not.toBeNull();
-    expect(host.querySelector('[aria-label="回收件箱"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="删除"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="排进今天"]')).toBeNull();
+    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
+    expect(host.querySelector('[aria-label="删除"]')).toBeNull();
+    expect(host.querySelector('[aria-label="纳入回合"]')).toBeNull();
+    expect(host.querySelector('[aria-label="切换回合"]')).toBeNull();
+    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
+    expect(host.querySelector('[aria-label="计划到某天"]')).toBeNull();
+    expect(host.querySelector('[aria-label="添加子任务"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
-  it("无子任务不渲染展开箭头；有子任务渲染箭头与 m/n", async () => {
-    const noSub = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
-    expect(noSub.host.querySelector('[aria-label="展开子任务"]')).toBeNull();
-    await act(async () => noSub.root.unmount());
-
+  it("有子任务渲染非交互折叠指示器与 m/n；无子任务不渲染槽位", async () => {
     const withSub = await render(
       createElement(TaskRow, {
         task: task({
@@ -85,9 +84,18 @@ describe("TaskRow", () => {
         ...handlers,
       }),
     );
-    expect(withSub.host.querySelector('[aria-label="展开子任务"]')).not.toBeNull();
+    const caret = withSub.host.querySelector('[data-testid="subtask-caret"]') as HTMLElement | null;
+    expect(caret).not.toBeNull();
+    expect(caret?.tagName.toLowerCase()).toBe("span");
+    // 折叠 caret 已降级：不应再有可点的展开/收起按钮。
+    expect(withSub.host.querySelector('[aria-label="展开子任务"]')).toBeNull();
+    expect(withSub.host.querySelector('[aria-label="收起子任务"]')).toBeNull();
     expect(withSub.host.textContent).toContain("1/2");
     await act(async () => withSub.root.unmount());
+
+    const noSub = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
+    expect(noSub.host.querySelector('[data-testid="subtask-caret"]')).toBeNull();
+    await act(async () => noSub.root.unmount());
   });
 
   it("逾期重复任务在第二行显示红色逾期日期（M月D日）", async () => {
@@ -107,6 +115,34 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
+  it("已排期一次性任务行显示被动日期摘要", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
+        pool: "upcoming",
+        ...handlers,
+      }),
+    );
+    expect(host.textContent).toContain("6/20");
+    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("已排期重复任务行显示重复摘要而非日期", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({
+          recurrence: { freq: "daily", interval: 1, basis: "due" },
+          startAt: "2099-12-31T00:00:00.000Z",
+        }),
+        pool: "upcoming",
+        ...handlers,
+      }),
+    );
+    expect(host.textContent).toContain("每天");
+    await act(async () => root.unmount());
+  });
+
   it("点行（无子任务）触发 onEdit", async () => {
     const onEdit = vi.fn();
     const { host, root } = await render(
@@ -115,6 +151,27 @@ describe("TaskRow", () => {
     const row = host.querySelector('[aria-label="打开 点我"]')!;
     await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(onEdit).toHaveBeenCalledTimes(1);
+    await act(async () => root.unmount());
+  });
+
+  it("点 caret（在行左 2/5 命中区）经行 onClick 仍展开，不调 onEdit", async () => {
+    const onEdit = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ subtasks: [{ id: "s1", title: "子任务甲", done: false }] }),
+        pool: "inbox",
+        ...handlers,
+        onEdit,
+      }),
+    );
+    const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
+    // jsdom 下 getBoundingClientRect 默认返回全 0，rowClickZone 会因 width=0 退化成 open。
+    row.getBoundingClientRect = () =>
+      ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+    await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
+    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    expect(field?.value).toBe("子任务甲");
+    expect(onEdit).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
 
@@ -135,24 +192,6 @@ describe("TaskRow", () => {
     }
   });
 
-  it("点展开箭头显示可编辑子任务（textarea），不开抽屉", async () => {
-    const onEdit = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ subtasks: [{ id: "s1", title: "子任务甲", done: false }] }),
-        pool: "inbox",
-        ...handlers,
-        onEdit,
-      }),
-    );
-    const caret = host.querySelector('[aria-label="展开子任务"]')!;
-    await act(async () => caret.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
-    expect(field.value).toBe("子任务甲");
-    expect(onEdit).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
-  });
-
   it("勾选内联子任务调 onSubtasksChange、不调 onToggle", async () => {
     const onSubtasksChange = vi.fn();
     const onToggle = vi.fn();
@@ -166,9 +205,10 @@ describe("TaskRow", () => {
       }),
     );
 
-    await act(async () =>
-      host.querySelector('[aria-label="展开子任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
-    );
+    const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
+    row.getBoundingClientRect = () =>
+      ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+    await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
     await act(async () =>
       host
         .querySelector('input[aria-label="完成子任务 子甲"]')
@@ -179,21 +219,6 @@ describe("TaskRow", () => {
       { id: "s1", title: "子甲", done: true },
     ]);
     expect(onToggle).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
-  });
-
-  it("零子任务：有添加子任务按钮；点它展开出可编辑空行", async () => {
-    const { host, root } = await render(
-      createElement(TaskRow, { task: task({ title: "空任务", subtasks: [] }), pool: "inbox", ...handlers }),
-    );
-
-    const add = host.querySelector('[aria-label="添加子任务"]') as HTMLButtonElement;
-    expect(add).not.toBeNull();
-    await act(async () => add.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-
-    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
-    expect(field).not.toBeNull();
-    expect(field.value).toBe("");
     await act(async () => root.unmount());
   });
 
@@ -223,110 +248,6 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
-  it("窄屏不渲染日期 chip", async () => {
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
-        pool: "today",
-        ...handlers,
-      }),
-    );
-    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it("宽屏点日期 chip 调 onEditSchedule 并传锚点", async () => {
-    const onEditSchedule = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
-        pool: "today",
-        wide: true,
-        onEditSchedule,
-        ...handlers,
-      }),
-    );
-    const chip = host.querySelector('[aria-label="编辑重复与时间"]') as HTMLElement;
-
-    await act(async () => chip.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-
-    expect(onEditSchedule).toHaveBeenCalledTimes(1);
-    expect(onEditSchedule.mock.calls[0]?.[1]).toBe(chip);
-    await act(async () => root.unmount());
-  });
-
-  it("宽屏日期 chip 的 Enter 不冒泡打开详情", async () => {
-    const onEdit = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ scheduledAt: "2026-06-20T00:00:00.000Z" }),
-        pool: "today",
-        wide: true,
-        ...handlers,
-        onEdit,
-      }),
-    );
-    const chip = host.querySelector('[aria-label="编辑重复与时间"]') as HTMLElement;
-
-    await act(async () => chip.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-
-    expect(onEdit).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
-  });
-
-  it("宽屏无日期非重复任务给计划入口", async () => {
-    const onEditSchedule = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task(),
-        pool: "inbox",
-        wide: true,
-        onEditSchedule,
-        ...handlers,
-      }),
-    );
-    const chip = host.querySelector('[aria-label="计划到某天"]') as HTMLElement;
-
-    await act(async () => chip.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-
-    expect(onEditSchedule).toHaveBeenCalledTimes(1);
-    await act(async () => root.unmount());
-  });
-
-  it("收件箱里残留过去 scheduledAt 的任务，宽屏给『计划到某天』而非过去日期 chip", async () => {
-    const onEditSchedule = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ scheduledAt: "2026-06-10T00:00:00.000Z" }),
-        pool: "inbox",
-        wide: true,
-        onEditSchedule,
-        ...handlers,
-      }),
-    );
-    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
-    expect(host.querySelector('[aria-label="计划到某天"]')).not.toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it("可隐藏池移动、删除与计划入口，用于已完成尾巴", async () => {
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ done: true, scheduledAt: "2026-06-20T00:00:00.000Z" }),
-        pool: "today",
-        wide: true,
-        showActions: false,
-        ...handlers,
-      }),
-    );
-
-    expect(host.querySelector('input[aria-label="完成 示例任务"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
-    expect(host.querySelector('[aria-label="删除"]')).toBeNull();
-    expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
   it("turn 徽章按 turn 取色取字，turn=null 不显示", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task({ turn: "me" }), pool: "today", ...handlers }),
@@ -345,7 +266,7 @@ describe("TaskRow", () => {
     const chips = host.querySelectorAll('[data-testid="tag-chip"]');
     expect(chips.length).toBe(2);
     expect(chips[0].textContent).toContain("重构");
-    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull(); // null turn 不渲染徽章
+    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull();
     await act(async () => root.unmount());
   });
 
@@ -360,88 +281,23 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
-  it("turn=null 宽屏显示纳入按钮，点击调 onTurnChange(task, me)", async () => {
+  it("turnBadgeInteractive=true 行徽章点击调 onTurnChange", async () => {
     const onTurnChange = vi.fn();
     const { host, root } = await render(
       createElement(TaskRow, {
-        task: task({ turn: null }),
+        task: task({ turn: "me" }),
         pool: "today",
-        wide: true,
+        turnBadgeInteractive: true,
         ...handlers,
         onTurnChange,
       }),
     );
-    const btn = host.querySelector('[aria-label="纳入回合"]') as HTMLButtonElement;
-    expect(btn).not.toBeNull();
-    await act(async () => btn.click());
+    const badge = host.querySelector('[data-testid="turn-badge"]') as HTMLElement;
+    await act(async () => badge.click());
     expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "me");
     await act(async () => root.unmount());
   });
 
-  it("turn=me 宽屏显示回合按钮，点开弹段控并切到 running", async () => {
-    const onTurnChange = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ turn: "me", turnAt: "2026-06-17T08:00:00.000Z" }),
-        pool: "today",
-        wide: true,
-        ...handlers,
-        onTurnChange,
-      }),
-    );
-    const trigger = host.querySelector('[aria-label="切换回合"]') as HTMLButtonElement;
-    await act(async () => trigger.click());
-    // AnchoredPopover 把段控 portal 到 document.body，故从 body 查询；SegmentedControl 选项以文本内容作可访问名（无 aria-label 属性）。
-    const running = Array.from(document.body.querySelectorAll('[role="radio"]')).find((b) =>
-      (b.textContent ?? "").includes("在跑"),
-    ) as HTMLButtonElement;
-    expect(running).toBeTruthy();
-    await act(async () => running.click());
-    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "running");
-    await act(async () => root.unmount());
-  });
-
-  it("回合段控退出流程回 null", async () => {
-    const onTurnChange = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ turn: "parked", turnAt: "2026-06-17T08:00:00.000Z" }),
-        pool: "today",
-        wide: true,
-        ...handlers,
-        onTurnChange,
-      }),
-    );
-    await act(async () => (host.querySelector('[aria-label="切换回合"]') as HTMLButtonElement).click());
-    await act(async () => (document.body.querySelector('[aria-label="退出流程"]') as HTMLButtonElement).click());
-    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), null);
-    await act(async () => root.unmount());
-  });
-
-  // spec §3.5 已决项：纳入按钮对所有任务（含重复任务）开放——zero-coverage 回归点。
-  it("重复任务 turn=null 也显示纳入按钮，点击调 onTurnChange(_, me)", async () => {
-    const onTurnChange = vi.fn();
-    const recurringTask = task({
-      turn: null,
-      recurrence: { freq: "daily", interval: 1, basis: "due" },
-    });
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: recurringTask,
-        pool: "recurring",
-        wide: true,
-        ...handlers,
-        onTurnChange,
-      }),
-    );
-    const btn = host.querySelector('[aria-label="纳入回合"]') as HTMLButtonElement | null;
-    expect(btn).not.toBeNull();
-    await act(async () => btn?.click());
-    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "me");
-    await act(async () => root.unmount());
-  });
-
-  // spec §4.1：tag chip 最多 3 个，超出截尾 …。
   it("tag chip 超过 3 个截断显示 …", async () => {
     const { host, root } = await render(
       createElement(TaskRow, {
@@ -469,7 +325,6 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
-  // spec §3.2 三态映射：plan 仅测了 me，参数化补 running/parked。
   it.each([
     ["me", "等我"],
     ["running", "在跑"],
@@ -481,6 +336,22 @@ describe("TaskRow", () => {
     const badge = host.querySelector('[data-testid="turn-badge"]');
     expect(badge?.getAttribute("data-turn")).toBe(turn);
     expect(badge?.textContent).toContain(label);
+    await act(async () => root.unmount());
+  });
+
+  it("已完成尾巴：showActions=false 仅渲染基础行（兼容父级保留）", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ done: true, scheduledAt: "2026-06-20T00:00:00.000Z" }),
+        pool: "today",
+        showActions: false,
+        ...handlers,
+      }),
+    );
+    expect(host.querySelector('input[aria-label="完成 示例任务"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="排进今天"]')).toBeNull();
+    expect(host.querySelector('[aria-label="回收件箱"]')).toBeNull();
+    expect(host.querySelector('[aria-label="删除"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });

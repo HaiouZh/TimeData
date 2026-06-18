@@ -111,9 +111,11 @@ describe("TaskColumn swipe 接线", () => {
       }),
     );
 
-    await act(async () =>
-      host.querySelector('[aria-label="展开子任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
-    );
+    const row = host.querySelector('[aria-label="打开 父"]') as HTMLElement;
+    // jsdom 下 BCR 默认全 0，需要给一个非零宽度才能让行 onClick + rowClickZone 进入 expand 分支。
+    row.getBoundingClientRect = () =>
+      ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+    await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
     await act(async () =>
       host.querySelector('input[aria-label="完成子任务 子"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );

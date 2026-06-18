@@ -1,14 +1,11 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import type { Task, TaskSubtask } from "@timedata/shared";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useMemo, useRef, useState } from "react";
-import { v4 as uuid } from "uuid";
-import { AnchoredPopover } from "../../components/ui/AnchoredPopover.js";
+import { type MouseEvent as ReactMouseEvent, useMemo, useState } from "react";
 import { Checkbox } from "../../components/ui/Checkbox.js";
-import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { currentDueDateString, isDueNow } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
-import { TURN_DOT_BG, TURN_LABELS, TURN_SEGMENTED_OPTIONS } from "../../lib/tasks/turnTags.js";
+import { TURN_DOT_BG, TURN_LABELS } from "../../lib/tasks/turnTags.js";
 import { formatMonthDay } from "../../lib/time.js";
 import { SubtaskEditor } from "./SubtaskEditor.js";
 import { useSubtaskDraft } from "./useSubtaskDraft.js";
@@ -26,72 +23,33 @@ export interface TaskRowProps {
   pool: TaskPool;
   overdue?: boolean;
   dragHandle?: RowDragHandle;
-  wide?: boolean;
   showActions?: boolean;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
-  onEditSchedule?: (t: Task, el: HTMLElement) => void;
   onDelete: (t: Task) => void;
-  onToToday: (t: Task) => void;
-  onToInbox: (t: Task) => void;
   onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
   onTurnChange?: (task: Task, turn: Task["turn"]) => void;
   turnBadgeInteractive?: boolean;
 }
 
-function HoverAction({
-  label,
-  onClick,
-  children,
-  danger,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-      className={`hidden h-8 w-8 items-center justify-center rounded-ctl text-sm opacity-0 transition group-hover:opacity-100 sm:flex ${
-        danger ? "text-danger hover:bg-danger-soft" : "text-ink-3 hover:bg-surface-hover"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function InlineSubtasks({
   task,
-  seedEmpty,
   onCommit,
 }: {
   task: Task;
-  seedEmpty: boolean;
   onCommit: (next: TaskSubtask[]) => void;
 }) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 每次展开都会重新挂载，这里只播种一次
-  const initial = useMemo<TaskSubtask[]>(() => {
-    const current = task.subtasks ?? [];
-    if (seedEmpty && current.length === 0) return [{ id: uuid(), title: "", done: false }];
-    return current;
-  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 每次展开都会重新挂载，这里只读取一次
+  const initial = useMemo<TaskSubtask[]>(() => task.subtasks ?? [], []);
   const { subtasks, onChange, onBlur } = useSubtaskDraft({
     taskId: task.id,
     externalSubtasks: initial,
     onCommit,
   });
-  const autoFocusId = seedEmpty && initial.length === 1 ? initial[0].id : undefined;
 
   return (
     <div className="ml-9 pb-1" onBlur={onBlur}>
-      <SubtaskEditor value={subtasks} onChange={onChange} density="compact" autoFocusId={autoFocusId} />
+      <SubtaskEditor value={subtasks} onChange={onChange} density="compact" />
     </div>
   );
 }
@@ -101,41 +59,37 @@ export function TaskRow({
   pool,
   overdue,
   dragHandle,
-  wide,
   showActions = true,
   onToggle,
   onEdit,
-  onEditSchedule,
-  onDelete,
-  onToToday,
-  onToInbox,
+  onDelete: _onDelete,
   onSubtasksChange,
   onTurnChange,
   turnBadgeInteractive,
 }: TaskRowProps) {
+  void _onDelete; // 滑动删除走 TaskList，行内不再渲染 ✕；保留 prop 兼容父级签名。
   const [expanded, setExpanded] = useState(false);
-  const [seedEmpty, setSeedEmpty] = useState(false);
-  const [turnMenuOpen, setTurnMenuOpen] = useState(false);
-  const turnAnchorRef = useRef<HTMLButtonElement>(null);
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? !isDueNow(task.recurrence, task.lastDoneAt, task.startAt) : task.done;
-  const canMove = showActions && !isRecurring && pool !== "recurring";
-  // 收件箱里的任务视为「无生效排期」：过期回库后残留的 scheduledAt 不当作日期 chip 显示。
-  const hasActiveSchedule = isRecurring || (task.scheduledAt !== null && pool !== "inbox");
   const subtasks = task.subtasks ?? [];
   const subtaskTotal = subtasks.length;
   const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
   const overdueDate =
-    overdue && task.recurrence
-      ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt)
-      : null;
+    overdue && task.recurrence ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt) : null;
+  const passiveScheduled = showActions && pool === "upcoming" && !overdue;
   const hasMeta =
-    isRecurring || subtaskTotal > 0 || overdueDate !== null || task.turn !== null || (task.tags ?? []).length > 0;
+    isRecurring ||
+    subtaskTotal > 0 ||
+    overdueDate !== null ||
+    passiveScheduled ||
+    task.turn !== null ||
+    (task.tags ?? []).length > 0;
+
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
+    // 有子任务时左 2/5 命中区展开，其余打开抽屉；无子任务整行恒打开抽屉（加子任务也走抽屉）。
     const rect = event.currentTarget.getBoundingClientRect();
     if (rowClickZone(event.clientX - rect.left, rect.width, subtaskTotal > 0) === "expand") {
-      setSeedEmpty(false);
       setExpanded((value) => !value);
       return;
     }
@@ -157,7 +111,8 @@ export function TaskRow({
           }
         }}
       >
-        {/* 复选框 + 展开箭头紧贴成一簇；箭头只作指示，展开命中靠行左 2/5 区域。 */}
+        {/* 复选框 + 折叠指示器：caret 是纯展示 <span>，落在行左 2/5 命中区内，
+            点它经行 onClick + rowClickZone 仍展开；不再有独立 onClick / stopPropagation。 */}
         <div className="flex shrink-0 items-center gap-1">
           <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
             <Checkbox
@@ -167,45 +122,14 @@ export function TaskRow({
               className="shrink-0"
             />
           </div>
-          {subtaskTotal > 0 ? (
-            <button
-              type="button"
-              aria-label={expanded ? "收起子任务" : "展开子任务"}
-              onClick={(event) => {
-                event.stopPropagation();
-                setSeedEmpty(false);
-                setExpanded((value) => !value);
-              }}
-              className="w-4 shrink-0 rounded-ctl px-0 text-center text-xs text-ink-3 hover:bg-surface-hover hover:text-ink-2"
+          {subtaskTotal > 0 && (
+            <span
+              data-testid="subtask-caret"
+              aria-hidden="true"
+              className="w-3 shrink-0 text-center text-[10px] text-ink-3"
             >
               {expanded ? "▾" : "▸"}
-            </button>
-          ) : expanded ? (
-            <button
-              type="button"
-              aria-label="收起子任务"
-              onClick={(event) => {
-                event.stopPropagation();
-                setSeedEmpty(false);
-                setExpanded(false);
-              }}
-              className="w-4 shrink-0 rounded-ctl px-0 text-center text-xs text-ink-3 hover:bg-surface-hover hover:text-ink-2"
-            >
-              ▾
-            </button>
-          ) : (
-            <button
-              type="button"
-              aria-label="添加子任务"
-              onClick={(event) => {
-                event.stopPropagation();
-                setSeedEmpty(true);
-                setExpanded(true);
-              }}
-              className="w-4 shrink-0 rounded-ctl px-0 text-center text-xs text-ink-3 opacity-0 transition hover:bg-surface-hover hover:text-ink-2 group-hover:opacity-100"
-            >
-              +
-            </button>
+            </span>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -225,6 +149,7 @@ export function TaskRow({
                 </span>
               )}
               {overdueDate && <span className="text-danger">逾期 {formatMonthDay(overdueDate)}</span>}
+              {passiveScheduled && <span>{taskTimeLabel(task)}</span>}
               {task.turn && (
                 <span
                   data-testid="turn-badge"
@@ -252,71 +177,6 @@ export function TaskRow({
             </div>
           )}
         </div>
-        {canMove && (pool === "inbox" || pool === "upcoming") && (
-          <HoverAction label="排进今天" onClick={() => onToToday(task)}>
-            ↑
-          </HoverAction>
-        )}
-        {canMove && pool === "today" && (
-          <HoverAction label="回收件箱" onClick={() => onToInbox(task)}>
-            ↩
-          </HoverAction>
-        )}
-        {canMove && (
-          <HoverAction label="删除" danger onClick={() => onDelete(task)}>
-            ✕
-          </HoverAction>
-        )}
-        {showActions && wide && task.turn === null && (
-          <HoverAction label="纳入回合" onClick={() => onTurnChange?.(task, "me")}>
-            纳
-          </HoverAction>
-        )}
-        {showActions && wide && task.turn !== null && (
-          <button
-            ref={turnAnchorRef}
-            type="button"
-            aria-label="切换回合"
-            onClick={(event) => {
-              event.stopPropagation();
-              setTurnMenuOpen((v) => !v);
-            }}
-            className="hidden h-8 w-8 items-center justify-center rounded-ctl text-sm opacity-0 transition group-hover:opacity-100 sm:flex text-ink-3 hover:bg-surface-hover"
-          >
-            转
-          </button>
-        )}
-        {showActions &&
-          wide &&
-          (hasActiveSchedule ? (
-            <button
-              type="button"
-              aria-label="编辑重复与时间"
-              onClick={(event) => {
-                event.stopPropagation();
-                onEditSchedule?.(task, event.currentTarget);
-              }}
-              onKeyDown={(event) => event.stopPropagation()}
-              className="shrink-0 rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
-            >
-              {taskTimeLabel(task)}
-            </button>
-          ) : (
-            !isRecurring && (
-              <button
-                type="button"
-                aria-label="计划到某天"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onEditSchedule?.(task, event.currentTarget);
-                }}
-                onKeyDown={(event) => event.stopPropagation()}
-                className="hidden shrink-0 rounded-ctl px-2 py-0.5 text-xs text-ink-3 opacity-0 transition hover:bg-surface-hover group-hover:inline group-hover:opacity-100"
-              >
-                设定
-              </button>
-            )
-          ))}
         {dragHandle && (
           <button
             ref={dragHandle.setActivatorNodeRef}
@@ -331,39 +191,9 @@ export function TaskRow({
           </button>
         )}
       </div>
-      {expanded && (
-        <InlineSubtasks task={task} seedEmpty={seedEmpty} onCommit={(next) => onSubtasksChange(task, next)} />
+      {expanded && subtaskTotal > 0 && (
+        <InlineSubtasks task={task} onCommit={(next) => onSubtasksChange(task, next)} />
       )}
-      <AnchoredPopover
-        open={turnMenuOpen}
-        anchorRef={turnAnchorRef}
-        ariaLabel="回合切换"
-        onClose={() => setTurnMenuOpen(false)}
-        className="w-64 rounded-card border border-border-hairline bg-surface-elevated p-2"
-      >
-        <div className="space-y-2">
-          <SegmentedControl
-            ariaLabel="回合"
-            options={TURN_SEGMENTED_OPTIONS}
-            value={task.turn ?? "me"}
-            onChange={(value) => {
-              onTurnChange?.(task, value);
-              setTurnMenuOpen(false);
-            }}
-          />
-          <button
-            type="button"
-            aria-label="退出流程"
-            onClick={() => {
-              onTurnChange?.(task, null);
-              setTurnMenuOpen(false);
-            }}
-            className="w-full rounded-ctl px-2 py-1 text-xs text-ink-3 hover:bg-surface-hover"
-          >
-            退出流程
-          </button>
-        </div>
-      </AnchoredPopover>
     </div>
   );
 }

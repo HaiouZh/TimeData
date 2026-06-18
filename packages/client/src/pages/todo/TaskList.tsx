@@ -33,11 +33,9 @@ export interface TaskListProps {
   tasks: Task[];
   isOverdue?: (t: Task) => boolean;
   sortable?: boolean;
-  wide?: boolean;
   onReorder?: (orderedIds: string[]) => void;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
-  onEditSchedule?: (t: Task, el: HTMLElement) => void;
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
@@ -45,7 +43,7 @@ export interface TaskListProps {
 }
 
 export function TaskList(props: TaskListProps) {
-  const { pool, tasks, isOverdue, sortable, wide } = props;
+  const { pool, tasks, isOverdue, sortable } = props;
   const [dragging, setDragging] = useState(false);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -71,19 +69,16 @@ export function TaskList(props: TaskListProps) {
         pool={pool}
         overdue={pool === "today" && (isOverdue?.(task) ?? false)}
         dragHandle={dragHandle}
-        wide={wide}
         onToggle={props.onToggle}
         onEdit={props.onEdit}
-        onEditSchedule={props.onEditSchedule}
         onDelete={props.onDelete}
-        onToToday={props.onToToday}
-        onToInbox={props.onToInbox}
         onSubtasksChange={props.onSubtasksChange}
       />
     );
   }
 
   function renderItem(task: Task) {
+    // 重复任务仅得删除滑动；一次性任务在收件箱/已排期得「排进今天」、在今天得「回收件箱」。
     const canSwap = task.recurrence === null;
     const leading =
       canSwap && (pool === "inbox" || pool === "upcoming") ? (
