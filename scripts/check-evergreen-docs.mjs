@@ -11,6 +11,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EVERGREEN_DIRS = ["docs/evergreen", "docs/adr"];
 const STALE_DAYS = 180;
+const SIZE_CAPS = { softChars: 15000, hardChars: 25000 };
+const SIZE_BASELINE_PATH = "scripts/evergreen-size-baseline.json";
 const REGEXP_SPECIAL_CHARS = new Set([".", "+", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\"]);
 
 export class CliUsageError extends Error {
@@ -22,17 +24,18 @@ export class CliUsageError extends Error {
 }
 
 export function parseArgs(argv) {
-  const opts = { mode: "warn", since: "HEAD", help: false };
+  const opts = { mode: "warn", since: "HEAD", help: false, writeSizeBaseline: false };
   for (const arg of argv) {
     if (arg === "--help" || arg === "-h") opts.help = true;
+    else if (arg === "--write-size-baseline") opts.writeSizeBaseline = true;
     else if (arg.startsWith("--mode=")) opts.mode = arg.slice(7);
     else if (arg.startsWith("--since=")) opts.since = arg.slice(8);
     else {
       throw new CliUsageError(`Unknown argument: ${arg}`);
     }
   }
-  if (!["warn", "strict", "stale"].includes(opts.mode)) {
-    throw new CliUsageError(`--mode must be warn|strict|stale, got: ${opts.mode}`);
+  if (!["warn", "strict", "stale", "size"].includes(opts.mode)) {
+    throw new CliUsageError(`--mode must be warn|strict|stale|size, got: ${opts.mode}`);
   }
   return opts;
 }
@@ -46,7 +49,9 @@ function printHelp() {
       "  --mode=warn      (default) print impacted docs, exit 0",
       "  --mode=strict    exit 1 if any covered doc was not updated",
       `  --mode=stale     warn about docs whose last-reviewed is older than ${STALE_DAYS} days`,
+      "  --mode=size      enforce evergreen docs size ratchet",
       "  --since=<rev>    compare against <rev> (default: HEAD; e.g. origin/main for CI)",
+      "  --write-size-baseline  rewrite scripts/evergreen-size-baseline.json",
       "  --help, -h       show this message",
     ].join("\n"),
   );
@@ -122,6 +127,7 @@ function readDoc(rel) {
     title: fm.title ?? path.basename(rel, ".md"),
     covers: Array.isArray(fm.covers) ? fm.covers : [],
     lastReviewed: fm["last-reviewed"] ?? null,
+    chars: content.length,
   };
 }
 
@@ -275,6 +281,96 @@ function modeStale(docs) {
   return 0;
 }
 
+function isEvergreenDoc(d) {
+  return d.filePath.startsWith("docs/evergreen/") && d.type !== "adr";
+}
+
+export function evaluateSizes(docs, baseline, caps) {
+  const violations = [];
+  for (const d of docs) {
+    if (!isEvergreenDoc(d)) continue;
+    const base = baseline[d.filePath];
+    if (base) {
+      if (d.chars > base.chars) {
+        violations.push({ filePath: d.filePath, kind: "grew-chars", current: d.chars, limit: base.chars });
+      }
+      if (d.covers.length > base.covers) {
+        violations.push({ filePath: d.filePath, kind: "grew-covers", current: d.covers.length, limit: base.covers });
+      }
+      continue;
+    }
+    if (d.chars > caps.hardChars) {
+      violations.push({ filePath: d.filePath, kind: "new-over-hard", current: d.chars, limit: caps.hardChars });
+    } else if (d.chars > caps.softChars) {
+      violations.push({ filePath: d.filePath, kind: "new-over-soft", current: d.chars, limit: caps.softChars });
+    }
+  }
+  return {
+    violations,
+    ok: violations.every((v) => v.kind === "new-over-soft"),
+  };
+}
+
+function buildSizeBaseline(docs) {
+  return Object.fromEntries(
+    docs
+      .filter(isEvergreenDoc)
+      .sort((a, b) => a.filePath.localeCompare(b.filePath))
+      .map((d) => [d.filePath, { chars: d.chars, covers: d.covers.length }]),
+  );
+}
+
+function readSizeBaseline() {
+  const baselinePath = path.join(REPO_ROOT, SIZE_BASELINE_PATH);
+  if (!fs.existsSync(baselinePath)) return {};
+  return JSON.parse(fs.readFileSync(baselinePath, "utf8"));
+}
+
+function writeSizeBaseline(docs) {
+  const baseline = buildSizeBaseline(docs);
+  const baselinePath = path.join(REPO_ROOT, SIZE_BASELINE_PATH);
+  fs.writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+  console.log(`✓ 写入 ${Object.keys(baseline).length} 份 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
+  return 0;
+}
+
+function formatSizeViolationKind(kind) {
+  switch (kind) {
+    case "grew-chars":
+      return "字符数超过基线";
+    case "grew-covers":
+      return "covers 数超过基线";
+    case "new-over-soft":
+      return "新文档超过 soft cap";
+    case "new-over-hard":
+      return "新文档超过 hard cap";
+    default:
+      return kind;
+  }
+}
+
+function modeSize(docs) {
+  const baseline = readSizeBaseline();
+  const res = evaluateSizes(docs, baseline, SIZE_CAPS);
+  if (res.violations.length === 0) {
+    console.log(`✓ evergreen 文档体量未超过基线（soft ${SIZE_CAPS.softChars} / hard ${SIZE_CAPS.hardChars} 字符）。`);
+    return 0;
+  }
+  console.log("📏 evergreen 文档体量棘轮检查：\n");
+  console.log("| 文档 | 类型 | 当前 | 限制 |");
+  console.log("|---|---|---:|---:|");
+  for (const v of res.violations) {
+    const marker = v.kind === "new-over-soft" ? "⚠️" : "✗";
+    console.log(`| \`${v.filePath}\` | ${marker} ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
+  }
+  if (res.ok) {
+    console.log("\n⚠️ 仅有 soft cap 提示；如新文档职责合理，可继续。");
+    return 0;
+  }
+  console.error("\n✗ 文档体量超过棘轮。请下沉/拆分内容，或确认合理增长后重写基线。");
+  return 1;
+}
+
 export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   if (args.help) {
@@ -283,7 +379,9 @@ export function runEvergreenDocCheck(argv = process.argv.slice(2)) {
   }
   const docs = EVERGREEN_DIRS.flatMap(listMarkdownFiles).map(readDoc);
   console.log(`Loaded ${docs.length} long-lived doc(s) from ${EVERGREEN_DIRS.join(", ")}.\n`);
+  if (args.writeSizeBaseline) return writeSizeBaseline(docs);
   if (args.mode === "stale") return modeStale(docs);
+  if (args.mode === "size") return modeSize(docs);
   const changed = getChangedFiles(args.since);
   return modeWarnOrStrict(docs, changed, args.mode === "strict");
 }

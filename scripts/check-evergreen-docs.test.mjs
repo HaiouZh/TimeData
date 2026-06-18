@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   CliUsageError,
+  evaluateSizes,
   getChangedFiles,
   parseArgs,
 } from "./check-evergreen-docs.mjs";
@@ -60,4 +61,32 @@ test("getChangedFiles invokes git ls-files without shell parsing for HEAD", () =
       ["git", ["ls-files", "--others", "--exclude-standard"], "utf8"],
     ],
   );
+});
+
+test("evaluateSizes flags a doc that grew beyond baseline chars", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 16000 }];
+  const baseline = { "docs/evergreen/a.md": { chars: 15000, covers: 1 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.equal(res.violations[0].kind, "grew-chars");
+});
+
+test("evaluateSizes allows a doc that shrank below baseline", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 }];
+  const baseline = { "docs/evergreen/a.md": { chars: 15000, covers: 1 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, true);
+});
+
+test("evaluateSizes fails a NEW doc over hard cap", () => {
+  const docs = [{ filePath: "docs/evergreen/new.md", covers: ["x"], chars: 26000 }];
+
+  const res = evaluateSizes(docs, {}, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.equal(res.violations[0].kind, "new-over-hard");
 });

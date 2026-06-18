@@ -25,6 +25,7 @@
     "check:docs": "node scripts/check-evergreen-docs.mjs",
     "check:docs:strict": "node scripts/check-evergreen-docs.mjs --mode=strict",
     "check:docs:stale": "node scripts/check-evergreen-docs.mjs --mode=stale",
+    "check:docs:size": "node scripts/check-evergreen-docs.mjs --mode=size",
     "check:ui": "node scripts/check-no-native-controls.mjs",
     "check:test": "node scripts/check-test-hygiene.mjs"
   },

@@ -62,6 +62,8 @@ jobs:
         if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
         run: pnpm check:docs --since=${{ github.event.pull_request.base.sha }}
 
+      - name: Docs size ratchet
+        run: pnpm check:docs:size
+
       - name: Build
         run: pnpm build
-

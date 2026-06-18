@@ -1,0 +1,42 @@
+{
+  "docs/evergreen/_docs-guide.md": {
+    "chars": 1480,
+    "covers": 0
+  },
+  "docs/evergreen/architecture.md": {
+    "chars": 30205,
+    "covers": 61
+  },
+  "docs/evergreen/backup.md": {
+    "chars": 11489,
+    "covers": 6
+  },
+  "docs/evergreen/cli.md": {
+    "chars": 10756,
+    "covers": 8
+  },
+  "docs/evergreen/data-model.md": {
+    "chars": 29543,
+    "covers": 28
+  },
+  "docs/evergreen/deployment.md": {
+    "chars": 16975,
+    "covers": 27
+  },
+  "docs/evergreen/development.md": {
+    "chars": 8509,
+    "covers": 9
+  },
+  "docs/evergreen/security.md": {
+    "chars": 3253,
+    "covers": 7
+  },
+  "docs/evergreen/sync.md": {
+    "chars": 15529,
+    "covers": 36
+  },
+  "docs/evergreen/timeline.md": {
+    "chars": 9350,
+    "covers": 11
+  }
+}
