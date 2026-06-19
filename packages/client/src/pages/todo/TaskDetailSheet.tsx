@@ -12,12 +12,12 @@ import { TURN_SEGMENTED_OPTIONS } from "../../lib/tasks/turnTags.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
 import { subtaskProgress } from "../../lib/tasks/subtasks.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
-import { applyRecurrenceChoice, deleteTask, toggleTaskDone, updateSubtasks, updateTask } from "../../lib/tasks.js";
+import { applyRecurrenceChoice, deleteTaskCascade, toggleTaskDone, updateTask } from "../../lib/tasks.js";
 import { getDateString } from "../../lib/time.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
+import { InlineChildren } from "./InlineChildren.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
-import { SubtaskEditor } from "./SubtaskEditor.js";
-import { useSubtaskDraft } from "./useSubtaskDraft.js";
+import { useTaskChildren } from "./useTaskChildren.js";
 
 interface TaskDetailSheetProps {
   id: string | null;
@@ -109,18 +109,9 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
     void run(() => updateTask(id, { title: normalized }));
   }
 
-  const {
-    subtasks,
-    onChange: handleSubtasksChange,
-    onBlur: blurSubtasks,
-  } = useSubtaskDraft({
-    taskId: task?.id ?? "",
-    externalSubtasks: task?.subtasks ?? [],
-    onCommit: (next) => {
-      if (!id) return;
-      void run(() => updateSubtasks(id, next));
-    },
-  });
+  const childRows = useTaskChildren(task?.id ?? null);
+  // child 模式下隐藏高级控件入口（recurrence/tags/turn/scheduledAt）。
+  const isChild = task ? task.parentId !== null : false;
 
   function commitTagAdd(): void {
     if (!task || !onTagsChange) return;
@@ -154,7 +145,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
     if (!id) return;
     void (async () => {
       try {
-        await deleteTask(id);
+        await deleteTaskCascade(id);
         syncAfterWrite();
         onClose();
       } catch (err) {
@@ -174,8 +165,8 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
     onClose();
   }
 
-  const subtaskTotal = subtasks.length;
-  const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
+  const subtaskTotal = childRows.length;
+  const subtaskDone = childRows.filter((c) => c.done).length;
   const todayDate = getDateString(new Date());
   const anchorDate = task?.startAt ? getDateString(new Date(task.startAt)) : todayDate;
   const nextTimeLabel = task ? taskTimeLabel(task) : "设定时间";
@@ -269,14 +260,20 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
               />
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    aria-label="编辑重复与时间"
-                    onClick={() => setOverlay("preset")}
-                    className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
-                  >
-                    {nextTimeLabel}
-                  </button>
+                  {isChild ? (
+                    <span className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-3">
+                      作为子任务
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label="编辑重复与时间"
+                      onClick={() => setOverlay("preset")}
+                      className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
+                    >
+                      {nextTimeLabel}
+                    </button>
+                  )}
                   {subtaskTotal > 0 && (
                     <span className="text-xs text-ink-3">
                       <span aria-hidden="true">
@@ -310,11 +307,11 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
               </div>
             </div>
 
-            <div onBlur={blurSubtasks}>
-              <SubtaskEditor value={subtasks} onChange={handleSubtasksChange} density="full" />
-            </div>
+            {!isChild && task && (
+              <InlineChildren parentId={task.id} mode="draggable" onAfterWrite={syncAfterWrite} />
+            )}
 
-            {onTagsChange && task && (
+            {!isChild && onTagsChange && task && (
               <div data-testid="tag-editor" className="space-y-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {tags.map((tag) => (
@@ -352,7 +349,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
               </div>
             )}
 
-            {onTurnChange && task && (
+            {!isChild && onTurnChange && task && (
               <div className="space-y-1.5">
                 <div className="text-xs text-ink-3">回合</div>
                 <SegmentedControl

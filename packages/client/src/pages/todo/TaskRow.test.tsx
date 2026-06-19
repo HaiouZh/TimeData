@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 
+import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../../db/index.js";
+import { addTask, createChildTask, toggleTaskDone } from "../../lib/tasks.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
 
@@ -13,6 +16,16 @@ import { TaskRow } from "./TaskRow.js";
 afterEach(() => {
   document.body.innerHTML = "";
 });
+
+beforeEach(async () => {
+  await db.tasks.clear();
+  await db.syncLog.clear();
+});
+
+const settle = () =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -41,7 +54,6 @@ const handlers = {
   onToggle: noop,
   onEdit: noop,
   onDelete: noop,
-  onSubtasksChange: noop,
   onTurnChange: noop,
 };
 
@@ -81,26 +93,23 @@ describe("TaskRow", () => {
   });
 
   it("有子任务渲染非交互折叠指示器与 m/n；无子任务不渲染槽位", async () => {
-    const withSub = await render(
-      createElement(TaskRow, {
-        task: task({
-          subtasks: [
-            { id: "s1", title: "子1", done: true },
-            { id: "s2", title: "子2", done: false },
-          ],
-        }),
-        pool: "inbox",
-        ...handlers,
-      }),
-    );
+    const parent = await addTask({ title: "父" });
+    await createChildTask(parent.id, "子1");
+    const c2 = await createChildTask(parent.id, "子2");
+    await toggleTaskDone(c2.id);
+    const fresh = (await db.tasks.get(parent.id))!;
+
+    const withSub = await render(createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers }));
+    await settle();
     const caret = withSub.host.querySelector('[data-testid="subtask-caret"]') as HTMLElement | null;
     expect(caret).not.toBeNull();
-    // caret 是 <span> 而非 <button>，即覆盖"无展开/收起子任务按钮"语义，不再单独列 toBeNull。
+    // caret 是 <span> 而非 <button>，覆盖"无展开/收起子任务按钮"语义。
     expect(caret?.tagName.toLowerCase()).toBe("span");
     expect(withSub.host.textContent).toContain("1/2");
     await act(async () => withSub.root.unmount());
 
     const noSub = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
+    await settle();
     expect(noSub.host.querySelector('[data-testid="subtask-caret"]')).toBeNull();
     await act(async () => noSub.root.unmount());
   });
@@ -176,19 +185,19 @@ describe("TaskRow", () => {
 
   it("点 caret（在行左 2/5 命中区）经行 onClick 仍展开，不调 onEdit", async () => {
     const onEdit = vi.fn();
+    const parent = await addTask({ title: "父" });
+    await createChildTask(parent.id, "子任务甲");
+    const fresh = (await db.tasks.get(parent.id))!;
+
     const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ subtasks: [{ id: "s1", title: "子任务甲", done: false }] }),
-        pool: "inbox",
-        ...handlers,
-        onEdit,
-      }),
+      createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, onEdit }),
     );
+    await settle();
     const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
-    // jsdom 下 getBoundingClientRect 默认返回全 0，rowClickZone 会因 width=0 退化成 open。
     row.getBoundingClientRect = () =>
       ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
     await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
+    await settle();
     const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
     expect(field?.value).toBe("子任务甲");
     expect(onEdit).not.toHaveBeenCalled();
@@ -212,32 +221,31 @@ describe("TaskRow", () => {
     }
   });
 
-  it("勾选内联子任务调 onSubtasksChange、不调 onToggle", async () => {
-    const onSubtasksChange = vi.fn();
+  it("勾选子任务直接落库（child 走非重复 toggleTaskDone 路径），不调父行 onToggle", async () => {
     const onToggle = vi.fn();
+    const parent = await addTask({ title: "父" });
+    const child = await createChildTask(parent.id, "子甲");
+    const fresh = (await db.tasks.get(parent.id))!;
+
     const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ subtasks: [{ id: "s1", title: "子甲", done: false }] }),
-        pool: "inbox",
-        ...handlers,
-        onSubtasksChange,
-        onToggle,
-      }),
+      createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, onToggle }),
     );
+    await settle();
 
     const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
     row.getBoundingClientRect = () =>
       ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
     await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
+    await settle();
     await act(async () =>
       host
         .querySelector('input[aria-label="完成子任务 子甲"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
+    await settle();
 
-    expect(onSubtasksChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), [
-      { id: "s1", title: "子甲", done: true },
-    ]);
+    const after = await db.tasks.get(child.id);
+    expect(after?.done).toBe(true);
     expect(onToggle).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
@@ -366,7 +374,6 @@ describe("TaskRow", () => {
           coarsePointer={false}
           onToggle={noop}
           onEdit={noop}
-          onSubtasksChange={noop}
           onDelete={onDelete}
           onToInbox={onToInbox}
         />,
@@ -393,7 +400,6 @@ describe("TaskRow", () => {
           coarsePointer={false}
           onToggle={noop}
           onEdit={noop}
-          onSubtasksChange={noop}
           onDelete={noop}
           onToToday={noop}
         />,
@@ -413,7 +419,6 @@ describe("TaskRow", () => {
           coarsePointer={false}
           onToggle={noop}
           onEdit={noop}
-          onSubtasksChange={noop}
           onDelete={noop}
         />,
       );
@@ -433,7 +438,6 @@ describe("TaskRow", () => {
           coarsePointer={true}
           onToggle={noop}
           onEdit={noop}
-          onSubtasksChange={noop}
           onDelete={noop}
           onToInbox={noop}
         />,
@@ -455,7 +459,6 @@ describe("TaskRow", () => {
           coarsePointer={false}
           onToggle={noop}
           onEdit={onEdit}
-          onSubtasksChange={noop}
           onDelete={onDelete}
           onToInbox={noop}
         />,

@@ -7,7 +7,7 @@ import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
-import { addTask, setTaskTags, setTaskTurn, updateSubtasks } from "../../lib/tasks.js";
+import { addTask, createChildTask, setTaskTags, setTaskTurn, toggleTaskDone } from "../../lib/tasks.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
@@ -96,8 +96,9 @@ describe("isSwipeDownClose", () => {
 describe("TaskDetailSheet 展示与关闭", () => {
   it("打开显示标题、子任务、当前重复规则", async () => {
     const t = await addTask({ title: "写计划", recurrence: { freq: "daily", interval: 1, basis: "due" } });
-    await updateSubtasks(t.id, [{ id: "s1", title: "调研参考代码", done: false }]);
+    await createChildTask(t.id, "调研参考代码");
     const { host, root } = await renderSheet(t.id);
+    await settle();
     const titleInput = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
     const subtaskInput = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
     expect(titleInput.value).toBe("写计划");
@@ -151,11 +152,11 @@ describe("TaskDetailSheet 展示与关闭", () => {
 
   it("头部显示下一次时间与有语义的子任务计数", async () => {
     const t = await addTask({ title: "父", recurrence: { freq: "daily", interval: 1, basis: "due" } });
-    await updateSubtasks(t.id, [
-      { id: "s1", title: "甲", done: true },
-      { id: "s2", title: "乙", done: false },
-    ]);
+    const c1 = await createChildTask(t.id, "甲");
+    await createChildTask(t.id, "乙");
+    await toggleTaskDone(c1.id);
     const { host, root } = await renderSheet(t.id);
+    await settle();
     expect(host.textContent).toContain("每天");
     expect(host.textContent).toContain("1/2");
     expect(host.textContent).toContain("已完成 1 个，共 2 个子任务");
@@ -164,13 +165,13 @@ describe("TaskDetailSheet 展示与关闭", () => {
 
   it("有子任务 -> 顶部进度条按 m/n 给宽度；未满格用 accent 色", async () => {
     const t = await addTask({ title: "父" });
-    await updateSubtasks(t.id, [
-      { id: "s1", title: "甲", done: true },
-      { id: "s2", title: "乙", done: false },
-      { id: "s3", title: "丙", done: false },
-      { id: "s4", title: "丁", done: false },
-    ]);
+    const c1 = await createChildTask(t.id, "甲");
+    await createChildTask(t.id, "乙");
+    await createChildTask(t.id, "丙");
+    await createChildTask(t.id, "丁");
+    await toggleTaskDone(c1.id);
     const { host, root } = await renderSheet(t.id);
+    await settle();
     const fill = host.querySelector('[data-testid="subtask-progress-fill"]') as HTMLElement;
     expect(fill).toBeTruthy();
     expect(fill.style.width).toBe("25%");
@@ -179,8 +180,10 @@ describe("TaskDetailSheet 展示与关闭", () => {
 
   it("全部完成 -> 进度条满格且 ok 色", async () => {
     const t = await addTask({ title: "父" });
-    await updateSubtasks(t.id, [{ id: "s1", title: "甲", done: true }]);
+    const c1 = await createChildTask(t.id, "甲");
+    await toggleTaskDone(c1.id);
     const { host, root } = await renderSheet(t.id);
+    await settle();
     const fill = host.querySelector('[data-testid="subtask-progress-fill"]') as HTMLElement;
     expect(fill.style.width).toBe("100%");
     await unmount(root);
@@ -301,21 +304,23 @@ describe("TaskDetailSheet 自动保存", () => {
 
   it("勾选子任务 -> 立即落库", async () => {
     const t = await addTask({ title: "父" });
-    await updateSubtasks(t.id, [{ id: "s1", title: "子", done: false }]);
+    const child = await createChildTask(t.id, "子");
     const { host, root } = await renderSheet(t.id);
+    await settle();
     const cb = host.querySelector('input[aria-label="完成子任务 子"]') as HTMLInputElement;
     await act(async () => {
       cb.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await settle();
-    expect((await db.tasks.get(t.id))?.subtasks[0].done).toBe(true);
+    expect((await db.tasks.get(child.id))?.done).toBe(true);
     await unmount(root);
   });
 
   it("改子任务文字失焦 -> 落库", async () => {
     const t = await addTask({ title: "父" });
-    await updateSubtasks(t.id, [{ id: "s1", title: "原文字", done: false }]);
+    const child = await createChildTask(t.id, "原文字");
     const { host, root } = await renderSheet(t.id);
+    await settle();
     const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
     await act(async () => {
       setTextareaValue(input, "改后文字");
@@ -324,7 +329,7 @@ describe("TaskDetailSheet 自动保存", () => {
       input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     await settle();
-    expect((await db.tasks.get(t.id))?.subtasks[0].title).toBe("改后文字");
+    expect((await db.tasks.get(child.id))?.title).toBe("改后文字");
     await unmount(root);
   });
 

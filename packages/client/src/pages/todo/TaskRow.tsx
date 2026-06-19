@@ -1,7 +1,7 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { ArrowLeft, ArrowRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
-import type { Task, TaskSubtask } from "@timedata/shared";
-import { type MouseEvent as ReactMouseEvent, useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, CaretDown, CaretRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
+import type { Task } from "@timedata/shared";
+import { type MouseEvent as ReactMouseEvent, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
@@ -9,8 +9,8 @@ import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TURN_DOT_BG, TURN_LABELS } from "../../lib/tasks/turnTags.js";
 import { formatMonthDay } from "../../lib/time.js";
-import { SubtaskEditor } from "./SubtaskEditor.js";
-import { useSubtaskDraft } from "./useSubtaskDraft.js";
+import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
+import { useTaskChildren } from "./useTaskChildren.js";
 
 export type TaskPool = "today" | "inbox" | "upcoming" | "recurring" | "completed";
 
@@ -31,25 +31,18 @@ export interface TaskRowProps {
   onDelete?: (t: Task) => void;
   onToToday?: (t: Task) => void;
   onToInbox?: (t: Task) => void;
-  onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
   onTurnChange?: (task: Task, turn: Task["turn"]) => void;
   turnBadgeInteractive?: boolean;
+  /** 行写入后回调（InlineChildren 内部触发，宿主可在此调 syncAfterWrite）。 */
+  onAfterChildWrite?: () => void;
+  /** AttentionQueue 等场景强制只读，覆盖按 pool 推断的 mode。 */
+  childrenModeOverride?: InlineChildrenMode;
 }
 
-function InlineSubtasks({ task, onCommit }: { task: Task; onCommit: (next: TaskSubtask[]) => void }) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 每次展开都会重新挂载，这里只读取一次
-  const initial = useMemo<TaskSubtask[]>(() => task.subtasks ?? [], []);
-  const { subtasks, onChange, onBlur } = useSubtaskDraft({
-    taskId: task.id,
-    externalSubtasks: initial,
-    onCommit,
-  });
-
-  return (
-    <div className="ml-9 pb-1" onBlur={onBlur}>
-      <SubtaskEditor value={subtasks} onChange={onChange} density="compact" />
-    </div>
-  );
+function childModeForPool(pool: TaskPool): InlineChildrenMode {
+  if (pool === "completed") return "readonly";
+  if (pool === "upcoming") return "static";
+  return "draggable";
 }
 
 export function TaskRow({
@@ -63,34 +56,36 @@ export function TaskRow({
   onDelete,
   onToToday,
   onToInbox,
-  onSubtasksChange,
   onTurnChange,
   turnBadgeInteractive,
+  onAfterChildWrite,
+  childrenModeOverride,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const children = useTaskChildren(task.id);
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? false : task.done;
-  const subtasks = task.subtasks ?? [];
-  const subtaskTotal = subtasks.length;
-  const subtaskDone = subtasks.filter((subtask) => subtask.done).length;
+  const childTotal = children.length;
+  const childDone = children.filter((c) => c.done).length;
   const overdueDate =
     overdue && task.recurrence ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt) : null;
   const passiveScheduled = pool === "upcoming" && !overdue;
   const hasMeta =
     isRecurring ||
-    subtaskTotal > 0 ||
+    childTotal > 0 ||
     overdueDate !== null ||
     passiveScheduled ||
     task.turn !== null ||
     (task.tags ?? []).length > 0;
   const canSwapPool = task.recurrence === null && pool !== "completed";
   const overlayRightClass = dragHandle ? "right-8" : "right-2";
+  const childrenMode = childrenModeOverride ?? childModeForPool(pool);
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
     // 有子任务时左 2/5 命中区展开，其余打开抽屉；无子任务整行恒打开抽屉（加子任务也走抽屉）。
     const rect = event.currentTarget.getBoundingClientRect();
-    if (rowClickZone(event.clientX - rect.left, rect.width, subtaskTotal > 0) === "expand") {
+    if (rowClickZone(event.clientX - rect.left, rect.width, childTotal > 0) === "expand") {
       setExpanded((value) => !value);
       return;
     }
@@ -112,8 +107,8 @@ export function TaskRow({
           }
         }}
       >
-        {/* 复选框 + 折叠指示器：caret 是纯展示 <span>，落在行左 2/5 命中区内，
-            点它经行 onClick + rowClickZone 仍展开；不再有独立 onClick / stopPropagation。 */}
+        {/* 复选框 + caret：caret 紧贴 title，落在行左 2/5 命中区内，
+            点它经行 onClick + rowClickZone 仍展开。 */}
         <div className="flex shrink-0 items-center gap-1">
           <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
             <Checkbox
@@ -123,13 +118,9 @@ export function TaskRow({
               className="shrink-0"
             />
           </div>
-          {subtaskTotal > 0 && (
-            <span
-              data-testid="subtask-caret"
-              aria-hidden="true"
-              className="w-3 shrink-0 text-center text-[10px] text-ink-3"
-            >
-              {expanded ? "▾" : "▸"}
+          {childTotal > 0 && (
+            <span data-testid="subtask-caret" aria-hidden="true" className="shrink-0 text-ink-3">
+              <Icon icon={expanded ? CaretDown : CaretRight} size={12} />
             </span>
           )}
         </div>
@@ -144,9 +135,9 @@ export function TaskRow({
                   <Icon icon={Repeat} size={14} />
                 </span>
               )}
-              {subtaskTotal > 0 && (
+              {childTotal > 0 && (
                 <span>
-                  {subtaskDone}/{subtaskTotal}
+                  {childDone}/{childTotal}
                 </span>
               )}
               {overdueDate && <span className="text-danger">逾期 {formatMonthDay(overdueDate)}</span>}
@@ -245,7 +236,11 @@ export function TaskRow({
           </button>
         )}
       </div>
-      {expanded && subtaskTotal > 0 && <InlineSubtasks task={task} onCommit={(next) => onSubtasksChange(task, next)} />}
+      {expanded && childTotal > 0 && (
+        <div className="ml-9 pb-1" onClick={(event) => event.stopPropagation()}>
+          <InlineChildren parentId={task.id} mode={childrenMode} onAfterWrite={onAfterChildWrite} />
+        </div>
+      )}
     </div>
   );
 }

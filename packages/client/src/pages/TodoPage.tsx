@@ -10,7 +10,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import type { Task, TaskSubtask } from "@timedata/shared";
+import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
@@ -37,7 +37,6 @@ import {
   type TodoBuckets,
   toggleTaskDone,
   unscheduleTask,
-  updateSubtasks,
 } from "../lib/tasks.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AttentionQueue } from "./todo/AttentionQueue.js";
@@ -74,10 +73,6 @@ export function TodoPage() {
     await unscheduleTask(t.id);
     syncAfterWrite();
   };
-  const changeSubtasks = async (t: Task, next: TaskSubtask[]) => {
-    await updateSubtasks(t.id, next);
-    syncAfterWrite();
-  };
   const moveToToday = async (t: Task) => {
     await scheduleTask(t.id, localDateOf(new Date()));
     syncAfterWrite();
@@ -104,7 +99,7 @@ export function TodoPage() {
     onDelete: remove,
     onToToday: moveToToday,
     onToInbox: moveToInbox,
-    onSubtasksChange: changeSubtasks,
+    onAfterChildWrite: syncAfterWrite,
     onTurnChange: changeTurn,
     onTagsChange: changeTags,
   };

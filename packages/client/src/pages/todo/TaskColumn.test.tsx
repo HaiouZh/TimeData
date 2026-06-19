@@ -1,11 +1,28 @@
 // @vitest-environment jsdom
+import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@timedata/shared";
+import { db } from "../../db/index.js";
+import { addTask, createChildTask } from "../../lib/tasks.js";
 import { TaskColumn } from "./TaskColumn.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(async () => {
+  await db.tasks.clear();
+  await db.syncLog.clear();
+});
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+const settle = () =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -26,7 +43,7 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 const noop = () => {};
-const handlers = { onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop, onSubtasksChange: noop };
+const handlers = { onToggle: noop, onEdit: noop, onDelete: noop, onToToday: noop, onToInbox: noop };
 
 async function render(node: ReturnType<typeof createElement>) {
   const host = document.createElement("div");
@@ -98,33 +115,35 @@ describe("TaskColumn swipe 接线", () => {
     await act(async () => sortable.root.unmount());
   });
 
-  it("透传 onSubtasksChange 给行（展开勾选子任务时触发）", async () => {
-    const onSubtasksChange = vi.fn();
-    const tasks = [task({ id: "t1", title: "父", subtasks: [{ id: "s1", title: "子", done: false }] })];
+  it("展开 root 行后 children 可勾选（child 直接落库）", async () => {
+    const parent = await addTask({ title: "父", toInbox: true });
+    const child = await createChildTask(parent.id, "子");
+    const fresh = (await db.tasks.get(parent.id))!;
+
     const { host, root } = await render(
       createElement(TaskColumn, {
         title: "收件箱",
         pool: "inbox",
-        tasks,
+        tasks: [fresh],
         emptyText: "空",
         ...handlers,
-        onSubtasksChange,
       }),
     );
+    await settle();
 
     const row = host.querySelector('[aria-label="打开 父"]') as HTMLElement;
-    // jsdom 下 BCR 默认全 0，需要给一个非零宽度才能让行 onClick + rowClickZone 进入 expand 分支。
     row.getBoundingClientRect = () =>
       ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
     await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
+    await settle();
+    await settle();
     await act(async () =>
       host.querySelector('input[aria-label="完成子任务 子"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
+    await settle();
 
-    expect(onSubtasksChange).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "t1" }),
-      [{ id: "s1", title: "子", done: true }],
-    );
+    const after = await db.tasks.get(child.id);
+    expect(after?.done).toBe(true);
     await act(async () => root.unmount());
   });
 });

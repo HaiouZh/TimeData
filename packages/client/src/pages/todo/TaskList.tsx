@@ -12,7 +12,7 @@ import {
   TrailingActions,
 } from "@meauxt/react-swipeable-list";
 import "@meauxt/react-swipeable-list/dist/styles.css";
-import type { Task, TaskSubtask } from "@timedata/shared";
+import type { Task } from "@timedata/shared";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { SortableTaskRow } from "./SortableTaskRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
@@ -33,7 +33,8 @@ export interface TaskListProps {
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
-  onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
+  /** 行内 children 写入后回调，宿主可在此触发同步。 */
+  onAfterChildWrite?: () => void;
 }
 
 export function TaskList(props: TaskListProps) {
@@ -55,7 +56,7 @@ export function TaskList(props: TaskListProps) {
         onDelete={props.onDelete}
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
-        onSubtasksChange={props.onSubtasksChange}
+        onAfterChildWrite={props.onAfterChildWrite}
       />
     );
   }
