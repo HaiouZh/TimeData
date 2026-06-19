@@ -10,16 +10,17 @@ import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
 import type { RegularSyncResult } from "../sync/engine.ts";
 import {
-  ChevronRightIcon,
-  ChartIcon,
-  CloudIcon,
-  DatabaseIcon,
-  MoonIcon,
-  RefreshIcon,
-  ServerIcon,
-  SmartphoneIcon,
-  TagIcon,
-} from "./settings/SettingsIcons.tsx";
+  ArrowsClockwise,
+  CaretRight,
+  ChartBar,
+  Cloud,
+  Database,
+  DeviceMobile,
+  HardDrives,
+  Moon,
+  Tag,
+} from "@phosphor-icons/react";
+import { Icon } from "../components/Icon.js";
 
 type ServerConnectionColor = "green" | "gray" | "red" | "yellow";
 
@@ -100,7 +101,7 @@ function RowBody({
             {accessory}
           </span>
         )}
-        <ChevronRightIcon className="h-4 w-4 text-slate-600" />
+        <Icon icon={CaretRight} size={16} className="text-slate-600" />
       </div>
     </>
   );
@@ -206,7 +207,7 @@ function ServerStatusCard() {
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-900/30">
       <Link to="/settings/server" className="flex items-center gap-3 p-4 transition-colors hover:bg-slate-800/40">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-800/70 text-slate-200">
-          <CloudIcon className="h-6 w-6" />
+          <Icon icon={Cloud} size={24} />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -215,7 +216,7 @@ function ServerStatusCard() {
           </div>
           <div className="mt-0.5 truncate text-xs text-slate-400">{connectionState.subtitle}</div>
         </div>
-        <ChevronRightIcon className="h-5 w-5 text-slate-500" />
+        <Icon icon={CaretRight} size={20} className="text-slate-500" />
       </Link>
 
       {cloudSyncEnabled && (
@@ -372,42 +373,42 @@ export default function SettingsPage() {
       <SettingsGroup label="记录与数据">
         <SettingsLinkRow
           to="/settings/categories"
-          icon={<TagIcon />}
+          icon={<Icon icon={Tag} size={20} />}
           accent="violet"
           title="分类管理"
           subtitle="新增、排序、改色、子分类与删除"
         />
         <SettingsLinkRow
           to="/settings/insights"
-          icon={<MoonIcon />}
+          icon={<Icon icon={Moon} size={20} />}
           accent="sky"
           title="杂项"
           subtitle="睡眠分类、新建待办默认落点等零碎设置"
         />
         <SettingsLinkRow
           to="/settings/stats-layout"
-          icon={<ChartIcon />}
+          icon={<Icon icon={ChartBar} size={20} />}
           accent="blue"
           title="统计页面布局"
           subtitle="调整统计模块显示与顺序"
         />
         <SettingsLinkRow
           to="/settings/health-range"
-          icon={<ChartIcon />}
+          icon={<Icon icon={ChartBar} size={20} />}
           accent="emerald"
           title="健康范围"
           subtitle="选择健康统计页显示的时间范围"
         />
         <SettingsLinkRow
           to="/settings/nav"
-          icon={<SmartphoneIcon />}
+          icon={<Icon icon={DeviceMobile} size={20} />}
           accent="sky"
           title="底部导航"
           subtitle="选择底部显示的入口"
         />
         <SettingsLinkRow
           to="/settings/data"
-          icon={<DatabaseIcon />}
+          icon={<Icon icon={Database} size={20} />}
           accent="emerald"
           title="数据设置"
           subtitle="云同步、显示、备份与高级数据恢复"
@@ -417,20 +418,20 @@ export default function SettingsPage() {
       <SettingsGroup label="服务端与更新">
         <SettingsLinkRow
           to="/settings/garmin"
-          icon={<RefreshIcon />}
+          icon={<Icon icon={ArrowsClockwise} size={20} />}
           accent="emerald"
           title="Garmin 数据同步"
           subtitle="配置 Garmin 账号、定时抓取健康数据"
         />
         <SettingsLinkRow
           to="/settings/admin-insights"
-          icon={<ServerIcon />}
+          icon={<Icon icon={HardDrives} size={20} />}
           accent="blue"
           title="服务端数据洞察"
           subtitle="只读查看服务器数据、同步、备份和健康检查"
         />
         <SettingsActionRow
-          icon={<SmartphoneIcon />}
+          icon={<Icon icon={DeviceMobile} size={20} />}
           accent="amber"
           title="APK 更新"
           subtitle={apkStatus || `当前版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`}
@@ -439,7 +440,7 @@ export default function SettingsPage() {
           onClick={handleCheckApkUpdate}
         />
         <SettingsActionRow
-          icon={<RefreshIcon />}
+          icon={<Icon icon={ArrowsClockwise} size={20} />}
           accent="rose"
           title="服务端更新"
           subtitle={
@@ -453,7 +454,7 @@ export default function SettingsPage() {
           onClick={handleServerUpdate}
         />
         <SettingsActionRow
-          icon={<RefreshIcon />}
+          icon={<Icon icon={ArrowsClockwise} size={20} />}
           accent="emerald"
           title="刷新到最新前端"
           subtitle={`当前前端版本：${currentBuildId}`}

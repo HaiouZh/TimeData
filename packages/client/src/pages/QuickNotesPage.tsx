@@ -1,3 +1,4 @@
+import { PushPin } from "@phosphor-icons/react";
 import type { QuickNote } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -11,6 +12,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { Icon } from "../components/Icon.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -75,26 +77,6 @@ function isSoftKeyboardLikelyOpen(): boolean {
 
   const visualViewportBottomGap = window.innerHeight - viewport.height - viewport.offsetTop;
   return visualViewportBottomGap > KEYBOARD_BOTTOM_GAP_THRESHOLD_PX;
-}
-
-function PinIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-      className="size-4"
-    >
-      <path d="M9 4.5h6" />
-      <path d="M10 4.5c0 3-1.5 4.5-3.5 6.5l6.5 6.5c2-2 3.5-3.5 6.5-3.5" />
-      <path d="M14.5 4.5 19.5 9" />
-      <path d="M4.5 19.5 10 14" />
-    </svg>
-  );
 }
 
 export default function QuickNotesPage() {
@@ -850,7 +832,7 @@ export default function QuickNotesPage() {
                 }}
                 className="relative flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
               >
-                <PinIcon />
+                <Icon icon={PushPin} size={16} />
                 <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-emerald-300 px-1 text-[11px] font-semibold leading-5 text-slate-950">
                   {pinnedNotes.length}
                 </span>

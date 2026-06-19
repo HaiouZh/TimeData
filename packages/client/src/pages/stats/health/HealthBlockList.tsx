@@ -1,7 +1,8 @@
 import type { HealthChartConfig } from "@timedata/shared";
 import { buildMetricCardItems, resolveBlockRange } from "../../../lib/healthBlocks/index.ts";
 import type { ChartSeriesRange, HealthMetricCollections } from "../../../lib/healthMetrics/index.ts";
-import { PencilIcon, TrashIcon } from "../../settings/SettingsIcons.tsx";
+import { PencilSimple, Trash } from "@phosphor-icons/react";
+import { Icon } from "../../../components/Icon.js";
 import { HealthSummaryCards } from "./HealthSummaryCards.tsx";
 import { MetricChartBlock } from "./MetricChartBlock.tsx";
 import { MetricTableBlock } from "./MetricTableBlock.tsx";
@@ -26,10 +27,10 @@ export function HealthBlockList({
         <div key={block.id} className="health-block">
           <div className="health-block-actions">
             <button type="button" className="health-block-edit" aria-label="编辑图表" onClick={() => onEdit(block)}>
-              <PencilIcon className="h-4 w-4" />
+              <Icon icon={PencilSimple} size={16} />
             </button>
             <button type="button" className="health-block-delete" aria-label="删除图表" onClick={() => onDelete(block.id)}>
-              <TrashIcon className="h-4 w-4" />
+              <Icon icon={Trash} size={16} />
             </button>
           </div>
           {block.view === "chart" && block.source === "healthMetricDaily" && (

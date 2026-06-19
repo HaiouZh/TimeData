@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeftIcon } from "./SettingsIcons.tsx";
+import { ArrowLeft } from "@phosphor-icons/react";
+import { Icon } from "../../components/Icon.js";
 
 interface SettingsDetailPageProps {
   title: string;
@@ -22,7 +23,7 @@ export default function SettingsDetailPage({
           to={backTo}
           className="inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-slate-200"
         >
-          <ArrowLeftIcon className="h-4 w-4" />
+          <Icon icon={ArrowLeft} size={16} />
           {backLabel}
         </Link>
         <h2 className="mt-1.5 text-xl font-semibold text-slate-100">{title}</h2>

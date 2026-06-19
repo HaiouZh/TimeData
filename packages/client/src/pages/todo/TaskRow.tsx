@@ -1,6 +1,8 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import type { Task, TaskSubtask } from "@timedata/shared";
+import { DotsSixVertical, Repeat } from "@phosphor-icons/react";
 import { type MouseEvent as ReactMouseEvent, useMemo, useState } from "react";
+import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
@@ -135,7 +137,7 @@ export function TaskRow({
             <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-3">
               {isRecurring && (
                 <span data-icon="repeat" aria-hidden="true">
-                  ↻
+                  <Icon icon={Repeat} size={14} />
                 </span>
               )}
               {subtaskTotal > 0 && (
@@ -182,7 +184,7 @@ export function TaskRow({
             {...dragHandle.attributes}
             {...dragHandle.listeners}
           >
-            ⠿
+            <Icon icon={DotsSixVertical} size={18} />
           </button>
         )}
       </div>
