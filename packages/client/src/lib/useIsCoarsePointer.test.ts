@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { useIsCoarsePointer } from "./useIsCoarsePointer.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function installMatchMedia(initialMatches: boolean) {
   let matches = initialMatches;
@@ -40,18 +38,13 @@ function installMatchMedia(initialMatches: boolean) {
   };
 }
 
-async function renderHook(): Promise<{ host: HTMLElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-
+function renderHook(): Promise<{ host: HTMLElement; root: Awaited<ReturnType<typeof renderDom>>["root"] }> {
   function Probe() {
     const coarse = useIsCoarsePointer();
     return createElement("span", { "data-coarse": String(coarse) });
   }
 
-  await act(async () => root.render(createElement(Probe)));
-  return { host, root };
+  return renderDom(createElement(Probe));
 }
 
 afterEach(() => {
@@ -67,7 +60,7 @@ describe("useIsCoarsePointer", () => {
     expect(media.matchMedia).toHaveBeenCalledWith("(pointer: coarse)");
     expect(host.firstElementChild?.getAttribute("data-coarse")).toBe("true");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("订阅 change 并在卸载时清理", async () => {
@@ -80,7 +73,7 @@ describe("useIsCoarsePointer", () => {
     await act(async () => media.setMatches(true));
     expect(host.firstElementChild?.getAttribute("data-coarse")).toBe("true");
 
-    await act(async () => root.unmount());
+    await unmount(root);
     expect(media.mql.removeEventListener).toHaveBeenCalledWith("change", expect.any(Function));
   });
 
@@ -90,6 +83,6 @@ describe("useIsCoarsePointer", () => {
 
     expect(host.firstElementChild?.getAttribute("data-coarse")).toBe("false");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
