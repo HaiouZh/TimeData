@@ -20,6 +20,7 @@ covers:
   - packages/client/src/lib/tasks/turnTags.ts
   - packages/client/src/lib/tasks/subtasks.ts
   - packages/client/src/lib/tasks/taskTimeLabel.ts
+  - packages/client/src/lib/useIsCoarsePointer.ts
   - packages/client/src/lib/settings/todoDefaultDestinationSetting.ts
   - packages/server/src/db/schema.ts
   - packages/server/src/lib/db-rows.ts
@@ -27,7 +28,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-19
 ---
 
 # 待办任务
@@ -160,8 +161,8 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 | 入口 | 职责 |
 |---|---|
 | `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、窄屏堆叠/宽屏 `ResizableSplit`、挂 `AttentionQueue`/`TagFilterBar`/`TodoComposer`/`TaskDetailSheet` |
-| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、`rowClickZone` 派发 expand/open、meta 第二行、dnd 拖柄、内联子任务 |
-| `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器 / `SwipeableList`+可选 `DndContext` / dnd-kit 包装 |
+| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、`rowClickZone` 派发 expand/open、meta 第二行、dnd 拖柄、内联子任务、桌面（细指针）行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控） |
+| `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器 / `SwipeableList`+可选 `DndContext`（`threshold=0.3` / `maxSwipe=0.5` IOS 半程，桌面 `blockSwipe`）/ dnd-kit 包装 |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：子任务、标题、tag、turn SegmentedControl、删除、重复预设 overlay |
 | `pages/todo/{SubtaskEditor,SubtaskRow,SortableSubtaskRow,useSubtaskDraft}.*` | 子任务编辑器 + 草稿 hook |
 | `pages/todo/{DayGroupedList,AttentionQueue,TagFilterBar,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表 / 注意力栈 / tag 筛选 / 新增 / 双栏 / 折叠 |

@@ -4,6 +4,7 @@ import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -52,8 +53,8 @@ async function render(node: ReturnType<typeof createElement>) {
 }
 
 describe("TaskRow", () => {
-  // 88bc8ed 起统一靠 swipe + 详情抽屉操作，TaskRow 行内不再渲染任何 hover-action 按钮。
-  // 用一条聚合 sanity 钉住这件事，避免下次有人误回归；其它分散 toBeNull 不重复列。
+  // 默认不渲染桌面 overlay：只有 TaskList 明确传 coarsePointer=false 时才开启桌面入口。
+  // 用一条聚合 sanity 钉住兼容性；其它分散 toBeNull 不重复列。
   const NO_INLINE_ACTION_LABELS = [
     "排进今天",
     "回收件箱",
@@ -74,7 +75,7 @@ describe("TaskRow", () => {
     expect(host.querySelector('[role="button"]')).toBeNull();
     expect(host.querySelector(".select-text")).not.toBeNull();
     for (const label of NO_INLINE_ACTION_LABELS) {
-      expect(host.querySelector(`[aria-label="${label}"]`)).toBeNull();
+      expect(host.querySelector(`[aria-label^="${label}"]`)).toBeNull();
     }
     await act(async () => root.unmount());
   });
@@ -347,12 +348,124 @@ describe("TaskRow", () => {
     ["running", "在跑"],
     ["parked", "搁置"],
   ] as const)("turn=%s 徽章 data-turn=%s 文案=%s", async (turn, label) => {
-    const { host, root } = await render(
-      createElement(TaskRow, { task: task({ turn }), pool: "today", ...handlers }),
-    );
+    const { host, root } = await render(createElement(TaskRow, { task: task({ turn }), pool: "today", ...handlers }));
     const badge = host.querySelector('[data-testid="turn-badge"]');
     expect(badge?.getAttribute("data-turn")).toBe(turn);
     expect(badge?.textContent).toContain(label);
     await act(async () => root.unmount());
+  });
+
+  describe("桌面 overlay 动作", () => {
+    it("桌面（细指针）+ today 池：显示「回收件箱」「删除」按钮并触发回调", async () => {
+      const onToInbox = vi.fn();
+      const onDelete = vi.fn();
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task()}
+          pool="today"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={noop}
+          onSubtasksChange={noop}
+          onDelete={onDelete}
+          onToInbox={onToInbox}
+        />,
+      );
+
+      const inboxButton = host.querySelector('[aria-label^="回收件箱"]');
+      const deleteButton = host.querySelector('[aria-label^="删除"]');
+      expect(inboxButton).not.toBeNull();
+      expect(deleteButton).not.toBeNull();
+
+      await click(inboxButton);
+      await click(deleteButton);
+      expect(onToInbox).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }));
+      expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }));
+
+      await unmount(root);
+    });
+
+    it("桌面 + inbox 池：显示「排进今天」「删除」按钮", async () => {
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task()}
+          pool="inbox"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={noop}
+          onSubtasksChange={noop}
+          onDelete={noop}
+          onToToday={noop}
+        />,
+      );
+
+      expect(host.querySelector('[aria-label^="排进今天"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label^="删除"]')).not.toBeNull();
+
+      await unmount(root);
+    });
+
+    it("桌面 + completed 池：只显示「删除」按钮", async () => {
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task({ done: true })}
+          pool="completed"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={noop}
+          onSubtasksChange={noop}
+          onDelete={noop}
+        />,
+      );
+
+      expect(host.querySelector('[aria-label^="排进今天"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="回收件箱"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="删除"]')).not.toBeNull();
+
+      await unmount(root);
+    });
+
+    it("移动端（粗指针）：overlay 按钮组完全不渲染", async () => {
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task()}
+          pool="today"
+          coarsePointer={true}
+          onToggle={noop}
+          onEdit={noop}
+          onSubtasksChange={noop}
+          onDelete={noop}
+          onToInbox={noop}
+        />,
+      );
+
+      expect(host.querySelector('[aria-label^="回收件箱"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="删除"]')).toBeNull();
+
+      await unmount(root);
+    });
+
+    it("点 overlay 按钮不触发行 onEdit", async () => {
+      const onEdit = vi.fn();
+      const onDelete = vi.fn();
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task()}
+          pool="today"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={onEdit}
+          onSubtasksChange={noop}
+          onDelete={onDelete}
+          onToInbox={noop}
+        />,
+      );
+
+      await click(host.querySelector('[aria-label^="删除"]'));
+      expect(onDelete).toHaveBeenCalledTimes(1);
+      expect(onEdit).not.toHaveBeenCalled();
+
+      await unmount(root);
+    });
   });
 });
