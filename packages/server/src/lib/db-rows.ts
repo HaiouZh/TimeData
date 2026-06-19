@@ -102,6 +102,7 @@ export function rowToSetting(row: SettingRow): Setting {
 
 export interface TaskRow {
   id: string;
+  parent_id: string | null;
   title: string;
   done: number;
   recurrence: string | null;
@@ -122,6 +123,7 @@ export interface TaskRow {
 export function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
+    parentId: row.parent_id ?? null,
     title: row.title,
     done: Boolean(row.done),
     recurrence: row.recurrence ? JSON.parse(row.recurrence) : null,

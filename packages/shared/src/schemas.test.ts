@@ -269,7 +269,7 @@ describe("runtime schemas", () => {
       quickNotes: [],
       tasks: [task],
     });
-    expect(parsedForcePush.tasks).toEqual([{ ...task, completedAt: null, tags: [] }]);
+    expect(parsedForcePush.tasks).toEqual([{ ...task, parentId: null, completedAt: null, tags: [] }]);
     expect(
       SyncForcePushRequestSchema.parse({
         confirmToken: "token",

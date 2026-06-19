@@ -91,6 +91,7 @@ export const TaskSubtaskSchema = z.object({
 
 export const TaskSchema = z.object({
   id: NonEmptyTrimmedStringSchema,
+  parentId: z.string().min(1).nullable().default(null),
   title: NonEmptyTrimmedStringSchema,
   done: z.boolean(),
   recurrence: RecurrenceSchema.nullable(),

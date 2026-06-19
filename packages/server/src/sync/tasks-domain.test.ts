@@ -25,7 +25,7 @@ beforeEach(async () => {
     CREATE TABLE tasks (
       id TEXT PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
       recurrence TEXT, last_done_at TEXT, start_at TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT, parent_id TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
@@ -92,5 +92,17 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
     });
     const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "t4");
     expect(pulled).toMatchObject({ data: { completedAt: "2026-06-16T02:00:00.000Z", tags: ["agent", "idea"] } });
+  });
+
+  it("persists parentId and round-trips it", () => {
+    expect(applyChange(change("create", "root-1", "父任务")).status).toBe("applied");
+    const child = change("create", "child-1", "子任务");
+    (child as unknown as { data: Record<string, unknown> }).data.parentId = "root-1";
+
+    expect(applyChange(child).status).toBe("applied");
+    expect(db.prepare("SELECT parent_id FROM tasks WHERE id='child-1'").get()).toEqual({ parent_id: "root-1" });
+
+    const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "child-1");
+    expect(pulled).toMatchObject({ data: { parentId: "root-1" } });
   });
 });

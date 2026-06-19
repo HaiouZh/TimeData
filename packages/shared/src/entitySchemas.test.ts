@@ -210,3 +210,38 @@ describe("TaskSchema completedAt/tags", () => {
     expect(() => TaskSchema.parse({ ...baseTask, tags: [" "] })).toThrow();
   });
 });
+
+describe("TaskSchema parentId", () => {
+  const baseTask = {
+    id: "t1",
+    title: "父任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    subtasks: [],
+    completedCount: 0,
+    turn: null,
+    turnAt: null,
+    completedAt: null,
+    tags: [],
+    sortOrder: 0,
+    createdAt: "2026-06-19T00:00:00.000Z",
+    updatedAt: "2026-06-19T00:00:00.000Z",
+  };
+
+  it("defaults parentId to null", () => {
+    expect(TaskSchema.parse(baseTask).parentId).toBeNull();
+  });
+
+  it("accepts non-empty parentId and rejects empty string", () => {
+    expect(TaskSchema.parse({ ...baseTask, parentId: "root-1" }).parentId).toBe("root-1");
+    expect(() => TaskSchema.parse({ ...baseTask, parentId: "" })).toThrow();
+  });
+
+  it("[Phase A 哨兵] legacy subtasks 字段仍暂时保留", () => {
+    const parsed = TaskSchema.parse({ ...baseTask, subtasks: [{ id: "s1", title: "旧子项", done: false }] });
+    expect(parsed.subtasks).toHaveLength(1);
+  });
+});

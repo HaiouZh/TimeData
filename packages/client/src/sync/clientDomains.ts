@@ -70,6 +70,7 @@ function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
     || existing.lastDoneAt !== remoteTask.lastDoneAt
     || existing.startAt !== remoteTask.startAt
     || existing.scheduledAt !== remoteTask.scheduledAt
+    || existing.parentId !== remoteTask.parentId
     || JSON.stringify(existing.subtasks ?? []) !== JSON.stringify(remoteTask.subtasks ?? [])
     || existing.sortOrder !== remoteTask.sortOrder;
 }
@@ -214,3 +215,5 @@ export function parseRemoteRecord(domain: ClientDomainConfig, data: unknown, rec
   console.warn(`[sync] dropping invalid ${domain.table} payload for ${recordId}:`, parsed.error.issues);
   return null;
 }
+
+export const __test = { taskNeedsApply };

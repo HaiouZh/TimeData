@@ -231,6 +231,20 @@ describe("initializeDatabase", () => {
     }).not.toThrow();
   });
 
+  it("ensureTaskParentIdColumn adds parent_id and index", async () => {
+    const { ensureTaskParentIdColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+
+    ensureTaskParentIdColumn(db);
+    ensureTaskParentIdColumn(db);
+
+    const columns = taskColumnNames(db);
+    expect(columns.has("parent_id")).toBe(true);
+
+    const indexes = (db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(indexes).toContain("idx_tasks_parent_id");
+  });
+
   it("给缺 completed_count 的旧 tasks 表补列", async () => {
     const { ensureTaskCompletedCountColumn } = await import("./schema.js");
     db.exec(`

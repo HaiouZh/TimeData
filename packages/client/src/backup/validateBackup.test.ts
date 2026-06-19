@@ -46,6 +46,7 @@ function task(value: string | (Partial<Task> & Pick<Task, "id">)): Task {
   const overrides = typeof value === "string" ? { id: value } : value;
   return {
     id: overrides.id,
+    parentId: overrides.parentId ?? null,
     title: overrides.title ?? overrides.id,
     done: overrides.done ?? false,
     recurrence: overrides.recurrence ?? null,

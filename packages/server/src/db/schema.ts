@@ -23,6 +23,12 @@ export function ensureTaskScheduledColumns(db: Database): void {
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_at ON tasks(scheduled_at)");
 }
 
+export function ensureTaskParentIdColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("parent_id")) db.exec("ALTER TABLE tasks ADD COLUMN parent_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)");
+}
+
 export function ensureTaskCompletedCountColumn(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
@@ -94,6 +100,7 @@ export function initializeDatabase(): void {
       start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       scheduled_at TEXT,
+      parent_id TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
       turn TEXT,
@@ -246,6 +253,7 @@ export function initializeDatabase(): void {
   ensureTaskCompletedCountColumn(db);
   ensureTaskTurnColumns(db);
   ensureTaskCompletionMetadataColumns(db);
+  ensureTaskParentIdColumn(db);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {

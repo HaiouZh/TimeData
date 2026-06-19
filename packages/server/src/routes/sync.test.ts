@@ -60,6 +60,7 @@ function createSchema() {
       start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
       scheduled_at TEXT,
+      parent_id TEXT,
       subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
       turn TEXT,
@@ -622,6 +623,7 @@ describe("sync route", () => {
         tasks: [
           {
             id: "task-force",
+            parentId: null,
             title: "跑步",
             done: false,
             recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
@@ -638,6 +640,25 @@ describe("sync route", () => {
             createdAt: "2026-06-14T00:00:00.000Z",
             updatedAt: "2026-06-14T00:00:00.000Z",
           },
+          {
+            id: "task-force-child",
+            parentId: "task-force",
+            title: "验收子任务",
+            done: false,
+            recurrence: null,
+            lastDoneAt: null,
+            startAt: null,
+            scheduledAt: null,
+            subtasks: [],
+            sortOrder: 0,
+            completedCount: 0,
+            turn: null,
+            turnAt: null,
+            completedAt: null,
+            tags: [],
+            createdAt: "2026-06-14T00:00:00.000Z",
+            updatedAt: "2026-06-14T00:00:00.000Z",
+          },
         ],
       }),
     });
@@ -648,24 +669,28 @@ describe("sync route", () => {
       importedCategories: 0,
       importedTimeEntries: 0,
       importedQuickNotes: 0,
-      importedTasks: 1,
-      latestSeq: 1,
+      importedTasks: 2,
+      latestSeq: 2,
     });
     expect(
       db
-        .prepare("SELECT title, recurrence, start_at, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags FROM tasks WHERE id = ?")
+        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, subtasks, completed_count, turn, turn_at, completed_at, tags FROM tasks WHERE id = ?")
         .get("task-force"),
     ).toMatchObject({
       title: "跑步",
       recurrence: JSON.stringify({ freq: "weekly", interval: 1, byWeekday: [1], basis: "due" }),
       start_at: "2026-06-14T00:00:00.000Z",
       scheduled_at: "2026-06-16T00:00:00.000Z",
+      parent_id: null,
       subtasks: JSON.stringify([{ id: "sub-1", title: "验收", done: false }]),
       completed_count: 2,
       turn: "running",
       turn_at: "2026-06-16T01:00:00.000Z",
       completed_at: "2026-06-16T02:00:00.000Z",
       tags: JSON.stringify(["agent", "idea"]),
+    });
+    expect(db.prepare("SELECT parent_id FROM tasks WHERE id = ?").get("task-force-child")).toMatchObject({
+      parent_id: "task-force",
     });
     expect(db.prepare("SELECT table_name, record_id FROM sync_seq WHERE id = 1").get()).toMatchObject({
       table_name: "tasks",

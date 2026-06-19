@@ -53,6 +53,7 @@ const oldEntry: TimeEntry = {
 
 const oldTask: Task = {
   id: "old-task",
+  parentId: null,
   title: "旧任务",
   done: false,
   recurrence: null,
@@ -107,9 +108,9 @@ const newTask = {
   sortOrder: 1,
   createdAt: now,
   updatedAt: now,
-} satisfies Omit<Task, "completedAt" | "tags">;
+} satisfies Omit<Task, "parentId" | "completedAt" | "tags">;
 
-const normalizedNewTask: Task = { ...newTask, completedAt: null, tags: [] };
+const normalizedNewTask: Task = { ...newTask, parentId: null, completedAt: null, tags: [] };
 
 const syncLog: SyncLogEntry = {
   id: "sync-1",

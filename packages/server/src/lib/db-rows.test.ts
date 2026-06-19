@@ -35,6 +35,7 @@ describe("rowToQuickNote", () => {
 
 const taskRow: TaskRow = {
   id: "t1",
+  parent_id: null,
   title: "想法",
   done: 0,
   recurrence: null,
@@ -84,5 +85,10 @@ describe("rowToTask", () => {
     } as unknown as TaskRow);
 
     expect(task.tags).toEqual([]);
+  });
+
+  it("maps parent_id to parentId", () => {
+    expect(rowToTask({ ...taskRow, parent_id: "root-1" }).parentId).toBe("root-1");
+    expect(rowToTask({ ...taskRow, parent_id: null }).parentId).toBeNull();
   });
 });
