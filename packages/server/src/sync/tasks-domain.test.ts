@@ -11,7 +11,7 @@ function change(action: "create" | "update" | "delete", id: string, title?: stri
     tableName: "tasks", recordId: id, action,
     data: action === "delete" ? null : {
       id, title, done: false, recurrence: null, lastDoneAt: null, startAt: null,
-      scheduledAt: null, subtasks: [],
+      scheduledAt: null,
       completedCount: 0,
       sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
     },
@@ -26,7 +26,6 @@ beforeEach(async () => {
       id TEXT PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
       recurrence TEXT, last_done_at TEXT, start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT, parent_id TEXT,
-      subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',

@@ -14,7 +14,6 @@ function seedTask(overrides: Partial<{
   lastDoneAt: string | null;
   startAt: string | null;
   scheduledAt: string | null;
-  subtasks: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -22,8 +21,8 @@ function seedTask(overrides: Partial<{
   const id = overrides.id ?? `t-${Math.random().toString(36).slice(2)}`;
   const timestamp = overrides.createdAt ?? "2026-06-14T00:00:00.000Z";
   db.prepare(`
-    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, scheduled_at, subtasks, sort_order, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, scheduled_at, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     overrides.title ?? id,
@@ -32,7 +31,6 @@ function seedTask(overrides: Partial<{
     overrides.lastDoneAt ?? null,
     overrides.startAt ?? null,
     overrides.scheduledAt ?? null,
-    overrides.subtasks ?? "[]",
     overrides.sortOrder ?? 0,
     timestamp,
     overrides.updatedAt ?? timestamp,

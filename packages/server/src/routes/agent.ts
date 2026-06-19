@@ -91,7 +91,6 @@ agent.post("/tasks/:id/status", async (c) => {
       lastDoneAt: null,
       startAt: null,
       scheduledAt: null,
-      subtasks: [],
       completedCount: 0,
       turn: null,
       turnAt: null,

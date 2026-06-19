@@ -43,7 +43,6 @@ const taskRow: TaskRow = {
   start_at: null,
   sort_order: 0,
   scheduled_at: null,
-  subtasks: "[]",
   completed_count: 0,
   turn: "me",
   turn_at: "2026-06-16T01:00:00.000Z",

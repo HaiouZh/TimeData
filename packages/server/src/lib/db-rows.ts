@@ -110,7 +110,6 @@ export interface TaskRow {
   start_at: string | null;
   sort_order: number;
   scheduled_at: string | null;
-  subtasks: string;
   completed_count: number;
   turn: string | null;
   turn_at: string | null;
@@ -130,7 +129,6 @@ export function rowToTask(row: TaskRow): Task {
     lastDoneAt: row.last_done_at,
     startAt: row.start_at,
     scheduledAt: row.scheduled_at ?? null,
-    subtasks: row.subtasks ? JSON.parse(row.subtasks) : [],
     completedCount: row.completed_count ?? 0,
     turn: (row.turn as Task["turn"]) ?? null,
     turnAt: row.turn_at ?? null,

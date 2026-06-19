@@ -8,15 +8,15 @@ let db: Database.Database;
 
 function seedTask(id = "task-1"): void {
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
-    VALUES (?, NULL, ?, 0, NULL, NULL, NULL, 0, NULL, '[]', 0, NULL, NULL, NULL, '[]', ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 0, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, '[]', ?, ?)
   `).run(id, "想法", "2026-06-16T00:00:00.000Z", "2026-06-16T00:00:00.000Z");
 }
 
 function seedRecurring(id = "rec-1", recurrence = '{"freq":"daily","interval":1,"basis":"due"}'): void {
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
-    VALUES (?, NULL, ?, 0, ?, NULL, ?, 0, NULL, '[]', 0, NULL, NULL, NULL, '[]', ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 0, ?, NULL, ?, 0, NULL, 0, NULL, NULL, NULL, '[]', ?, ?)
   `).run(
     id,
     "跑步",
@@ -36,8 +36,8 @@ function seedChild(overrides: {
   sortOrder?: number;
 }): void {
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
-    VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, '[]', 0, NULL, NULL, ?, '[]', ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 0, NULL, NULL, ?, '[]', ?, ?)
   `).run(
     overrides.id,
     overrides.parentId,
@@ -79,12 +79,11 @@ describe("POST /api/agent/tasks/:id/status", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         ok: boolean;
-        task: { turn: string; turnAt: string; subtasks: Array<{ title: string; done: boolean }> };
+        task: { turn: string; turnAt: string };
       };
       expect(body.ok).toBe(true);
       expect(body.task.turn).toBe("me");
       expect(body.task.turnAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-      expect(body.task.subtasks).toEqual([]);
       const child = db.prepare("SELECT id, parent_id, title, done FROM tasks WHERE parent_id = ?").get("task-1") as {
         id: string;
         parent_id: string;

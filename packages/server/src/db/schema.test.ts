@@ -177,7 +177,7 @@ describe("initializeDatabase", () => {
   });
 
   it("upgrades a legacy tasks table without scheduled_at and creates its index", async () => {
-    // Reproduces the production crash: tasks table predates scheduledAt/subtasks.
+    // Reproduces the production crash: tasks table predates scheduled_at.
     db.exec(`
       CREATE TABLE tasks (
         id TEXT PRIMARY KEY,
@@ -199,7 +199,6 @@ describe("initializeDatabase", () => {
       (db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name),
     );
     expect(columns.has("scheduled_at")).toBe(true);
-    expect(columns.has("subtasks")).toBe(true);
 
     const index = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_tasks_scheduled_at'")
@@ -219,7 +218,6 @@ describe("initializeDatabase", () => {
         start_at TEXT,
         sort_order INTEGER NOT NULL DEFAULT 0,
         scheduled_at TEXT,
-        subtasks TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -257,7 +255,6 @@ describe("initializeDatabase", () => {
         start_at TEXT,
         sort_order INTEGER NOT NULL DEFAULT 0,
         scheduled_at TEXT,
-        subtasks TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -303,7 +300,6 @@ describe("initializeDatabase", () => {
         start_at TEXT,
         sort_order INTEGER NOT NULL DEFAULT 0,
         scheduled_at TEXT,
-        subtasks TEXT NOT NULL DEFAULT '[]',
         completed_count INTEGER NOT NULL DEFAULT 0,
         turn TEXT,
         turn_at TEXT,

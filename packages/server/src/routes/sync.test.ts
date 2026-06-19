@@ -61,7 +61,6 @@ function createSchema() {
       sort_order INTEGER NOT NULL DEFAULT 0,
       scheduled_at TEXT,
       parent_id TEXT,
-      subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
       turn TEXT,
       turn_at TEXT,
@@ -630,7 +629,6 @@ describe("sync route", () => {
             lastDoneAt: null,
             startAt: "2026-06-14T00:00:00.000Z",
             scheduledAt: "2026-06-16T00:00:00.000Z",
-            subtasks: [{ id: "sub-1", title: "验收", done: false }],
             sortOrder: 0,
             completedCount: 2,
             turn: "running",
@@ -649,7 +647,6 @@ describe("sync route", () => {
             lastDoneAt: null,
             startAt: null,
             scheduledAt: null,
-            subtasks: [],
             sortOrder: 0,
             completedCount: 0,
             turn: null,
@@ -674,7 +671,7 @@ describe("sync route", () => {
     });
     expect(
       db
-        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, subtasks, completed_count, turn, turn_at, completed_at, tags FROM tasks WHERE id = ?")
+        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, completed_count, turn, turn_at, completed_at, tags FROM tasks WHERE id = ?")
         .get("task-force"),
     ).toMatchObject({
       title: "跑步",
@@ -682,7 +679,6 @@ describe("sync route", () => {
       start_at: "2026-06-14T00:00:00.000Z",
       scheduled_at: "2026-06-16T00:00:00.000Z",
       parent_id: null,
-      subtasks: JSON.stringify([{ id: "sub-1", title: "验收", done: false }]),
       completed_count: 2,
       turn: "running",
       turn_at: "2026-06-16T01:00:00.000Z",
@@ -944,7 +940,6 @@ describe("sync route", () => {
       lastDoneAt: null,
       startAt: "2026-06-14T00:00:00.000Z",
       scheduledAt: null,
-      subtasks: [],
       sortOrder: 0,
       completedCount: 2,
       createdAt: "2026-06-14T00:00:00.000Z",

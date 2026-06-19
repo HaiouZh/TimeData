@@ -342,7 +342,6 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     sort_order: task.sortOrder,
     scheduled_at: task.scheduledAt ?? null,
     parent_id: task.parentId ?? null,
-    subtasks: JSON.stringify(task.subtasks ?? []),
     completed_count: task.completedCount ?? 0,
     turn: task.turn ?? null,
     turn_at: task.turnAt ?? null,

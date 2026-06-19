@@ -18,7 +18,6 @@ export function ensureQuickNotePinnedColumn(db: Database): void {
 export function ensureTaskScheduledColumns(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("scheduled_at")) db.exec("ALTER TABLE tasks ADD COLUMN scheduled_at TEXT");
-  if (!names.has("subtasks")) db.exec("ALTER TABLE tasks ADD COLUMN subtasks TEXT NOT NULL DEFAULT '[]'");
   // Index must be created after the column exists; legacy DBs only get the column here.
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_at ON tasks(scheduled_at)");
 }
@@ -101,7 +100,6 @@ export function initializeDatabase(): void {
       sort_order INTEGER NOT NULL DEFAULT 0,
       scheduled_at TEXT,
       parent_id TEXT,
-      subtasks TEXT NOT NULL DEFAULT '[]',
       completed_count INTEGER NOT NULL DEFAULT 0,
       turn TEXT,
       turn_at TEXT,
