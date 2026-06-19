@@ -10,14 +10,14 @@
 
 - 仓库：`https://github.com/HaiouZh/TimeData`
 - **任何深入修改前先读** [`docs/evergreen/architecture.md`](docs/evergreen/architecture.md)。它讲清楚五个包的关系、数据流、启动顺序、关键约定，并按主题链向各 evergreen 子文档。
-- 本文件不再充当文档地图；不要在这里查"backup / sync / cli 看哪份"。
-- 子目录如有 `AGENTS.md` / `AGENT.md`，处理对应范围前先读。
+- 冷启动/初次了解项目可查看文档地图：docs/evergreen/architecture.md；可以查到大部分功能该看看哪份代码。
 
 ------
 
-## 一句话定位
+## 定位
 
-- TimeData = 个人时间记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite，多入口（Web / CLI / 授权 agent 经服务端受控 API 写入），Capacitor 套 Android 壳。完整定位与五包关系见 [`architecture`](docs/evergreen/architecture.md) §1。
+- TimeData = 个人记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite，多入口（Web / CLI / 授权 agent 经服务端受控 API 写入），Capacitor 套 Android 壳。完整定位与五包关系见 [`architecture`](docs/evergreen/architecture.md) §1。
+- 速记、时间记录、待办任务、健康数据看板、设置
 - **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB / 备份文件。
 
 ------
