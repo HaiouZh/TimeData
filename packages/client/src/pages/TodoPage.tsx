@@ -1,9 +1,21 @@
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  type DragStartEvent,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task, TaskSubtask } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
-import { placementForTask } from "../lib/tasks/placement.js";
+import { localDateOf, placementForTask } from "../lib/tasks/placement.js";
 import { filterByTags } from "../lib/tasks/turnTags.js";
 import {
   getDoneCollapsed,
@@ -16,7 +28,9 @@ import {
 import {
   deleteTask,
   listTasks,
+  moveTaskToParent,
   persistTaskOrder,
+  promoteToRoot,
   scheduleTask,
   setTaskTags,
   setTaskTurn,
@@ -35,6 +49,7 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
+import { resolveTodoDragOperation } from "./todo/todoDnd.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
 
@@ -64,11 +79,7 @@ export function TodoPage() {
     syncAfterWrite();
   };
   const moveToToday = async (t: Task) => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    await scheduleTask(t.id, `${yyyy}-${mm}-${dd}`);
+    await scheduleTask(t.id, localDateOf(new Date()));
     syncAfterWrite();
   };
   const changeTurn = async (t: Task, turn: Task["turn"]) => {
@@ -87,8 +98,6 @@ export function TodoPage() {
     return p.pool === "today" && p.overdue;
   };
 
-  // 行级回调统一来源：toggle/edit/delete + 换池 + 子任务 + 回合 + 标签。
-  // 删除走 TaskList 的 swipe destructive；TaskRow 自身不再渲染 ✕。
   const rowHandlers = {
     onToggle: toggle,
     onEdit: openDetail,
@@ -100,14 +109,94 @@ export function TodoPage() {
     onTagsChange: changeTags,
   };
 
-  // listTasks 故意把到期重复同时放进 today 和 recurring，allTasks 须按 id 去重。
-  // completed 故意不并入 AttentionQueue / TagFilterBar 频次源——已完成不再贡献注意力。
   const allTasks: Task[] = Array.from(
     new Map(
       [...buckets.today, ...buckets.inbox, ...buckets.scheduled, ...buckets.recurring].map((t) => [t.id, t]),
     ).values(),
   );
   const f = (list: Task[]) => filterByTags(list, selectedTags);
+
+  // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragStart(event: DragStartEvent): void {
+    void event;
+  }
+
+  async function handleDragEnd(event: DragEndEvent): Promise<void> {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const activeData = active.data.current as { containerId?: string } | undefined;
+    const overData = over.data.current as { containerId?: string } | undefined;
+    const activeContainerId = activeData?.containerId ?? "";
+    const overContainerId = overData?.containerId ?? "";
+
+    let activeParentId: string | null = null;
+    const activeTask = [...buckets.today, ...buckets.inbox].find((t) => t.id === activeId);
+    if (activeTask) {
+      activeParentId = activeTask.parentId ?? null;
+    } else {
+      const found = allTasks.find((t) => t.id === activeId);
+      activeParentId = found?.parentId ?? null;
+    }
+
+    const op = resolveTodoDragOperation({
+      activeContainerId,
+      targetContainerId: overContainerId || activeContainerId,
+      activeParentId,
+    });
+
+    if (!op) return;
+
+    try {
+      switch (op.kind) {
+        case "reorder": {
+          const containerTasks =
+            op.containerId === "pool:today" ? f(buckets.today) : op.containerId === "pool:inbox" ? f(buckets.inbox) : [];
+          if (containerTasks.length === 0) return;
+          const ids = containerTasks.map((t) => t.id);
+          const oldIndex = ids.indexOf(activeId);
+          const newIndex = ids.indexOf(overId);
+          if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+          const ordered = arrayMove(ids, oldIndex, newIndex);
+          await persistTaskOrder(ordered);
+          syncAfterWrite();
+          break;
+        }
+        case "move-to-parent": {
+          await moveTaskToParent(activeId, op.parentId, 0);
+          syncAfterWrite();
+          break;
+        }
+        case "promote-to-root": {
+          const targetTasks = op.pool === "today" ? f(buckets.today) : f(buckets.inbox);
+          const sortOrder = targetTasks.length > 0 ? Math.max(...targetTasks.map((t) => t.sortOrder)) + 1 : 0;
+          await promoteToRoot(activeId, op.pool, sortOrder);
+          syncAfterWrite();
+          break;
+        }
+        case "schedule-root": {
+          if (op.pool === "today") {
+            await scheduleTask(activeId, localDateOf(new Date()));
+          } else {
+            await unscheduleTask(activeId);
+          }
+          syncAfterWrite();
+          break;
+        }
+      }
+    } catch (err) {
+      void err;
+    }
+  }
 
   const todayBlock = (
     <TaskColumn
@@ -118,10 +207,7 @@ export function TodoPage() {
       hero
       isOverdue={isOverdue}
       sortable
-      onReorder={async (ids) => {
-        await persistTaskOrder(ids);
-        syncAfterWrite();
-      }}
+      containerId="pool:today"
       {...rowHandlers}
     />
   );
@@ -155,16 +241,15 @@ export function TodoPage() {
         ) : (
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
-            renderTasks={(tasks) => <TaskList pool="inbox" tasks={tasks} {...rowHandlers} />}
+            renderTasks={(tasks) => (
+              <TaskList pool="inbox" tasks={tasks} sortable containerId="pool:inbox" {...rowHandlers} />
+            )}
           />
         )}
       </CollapsibleSection>
     </section>
   );
 
-  // 已排期 = 一次性未来排期 + 未到期重复，扁平排序。
-  // pool="upcoming" 让 TaskList 给一次性任务出「排进今天 + 删除」滑动；
-  // 重复任务靠 canSwap=task.recurrence===null 自动只剩删除滑动，不需要新 pool 类型。
   const scheduledFiltered = f(buckets.scheduled);
   const scheduledBlock = (
     <CollapsibleSection
@@ -184,46 +269,53 @@ export function TodoPage() {
   );
 
   return (
-    <div className="min-h-full bg-page text-ink">
-      <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
-        <AttentionQueue tasks={allTasks} rowHandlers={rowHandlers} onTurnChange={changeTurn} />
-        <TagFilterBar tasks={allTasks} selected={selectedTags} onToggle={toggleTag} onClear={clearTags} />
-        {wide ? (
-          <ResizableSplit
-            className="items-start gap-y-4"
-            left={
-              <>
-                {todayBlock}
-                {completedBlock}
-              </>
-            }
-            right={
-              <>
-                {scheduledBlock}
-                {inboxBlock}
-              </>
-            }
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={(event) => void handleDragEnd(event)}
+    >
+      <div className="min-h-full bg-page text-ink">
+        <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
+          <AttentionQueue tasks={allTasks} rowHandlers={rowHandlers} onTurnChange={changeTurn} />
+          <TagFilterBar tasks={allTasks} selected={selectedTags} onToggle={toggleTag} onClear={clearTags} />
+          {wide ? (
+            <ResizableSplit
+              className="items-start gap-y-4"
+              left={
+                <>
+                  {todayBlock}
+                  {completedBlock}
+                </>
+              }
+              right={
+                <>
+                  {scheduledBlock}
+                  {inboxBlock}
+                </>
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-4">
+              {todayBlock}
+              {completedBlock}
+              {scheduledBlock}
+              {inboxBlock}
+            </div>
+          )}
+        </div>
+
+        <TodoComposer />
+
+        {detailId && (
+          <TaskDetailSheet
+            id={detailId}
+            onClose={() => setDetailId(null)}
+            onTurnChange={changeTurn}
+            onTagsChange={changeTags}
           />
-        ) : (
-          <div className="flex flex-col gap-4">
-            {todayBlock}
-            {completedBlock}
-            {scheduledBlock}
-            {inboxBlock}
-          </div>
         )}
       </div>
-
-      <TodoComposer />
-
-      {detailId && (
-        <TaskDetailSheet
-          id={detailId}
-          onClose={() => setDetailId(null)}
-          onTurnChange={changeTurn}
-          onTagsChange={changeTags}
-        />
-      )}
-    </div>
+    </DndContext>
   );
 }

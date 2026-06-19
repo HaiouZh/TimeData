@@ -90,6 +90,7 @@ describe("TaskColumn swipe 接线", () => {
         tasks: [task({ title: "A" })],
         emptyText: "空",
         sortable: true,
+        containerId: "pool:today",
         ...handlers,
       }),
     );

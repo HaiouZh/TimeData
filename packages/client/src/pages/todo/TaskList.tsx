@@ -1,15 +1,4 @@
 import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
@@ -24,7 +13,6 @@ import {
 } from "@meauxt/react-swipeable-list";
 import "@meauxt/react-swipeable-list/dist/styles.css";
 import type { Task, TaskSubtask } from "@timedata/shared";
-import { useState } from "react";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { SortableTaskRow } from "./SortableTaskRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
@@ -33,8 +21,13 @@ export interface TaskListProps {
   pool: Extract<TaskPool, "today" | "inbox" | "upcoming" | "completed">;
   tasks: Task[];
   isOverdue?: (t: Task) => boolean;
+  /**
+   * 是否渲染拖柄。仅当外层 `TodoPage` 顶层 `DndContext` 已挂上才有效。
+   * `containerId` 指明这一行属于哪个池容器（pool:today / pool:inbox）。
+   * TaskList 会在 sortable+containerId 时自行渲染 SortableContext（不再挂 DndContext）。
+   */
   sortable?: boolean;
-  onReorder?: (orderedIds: string[]) => void;
+  containerId?: "pool:today" | "pool:inbox";
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
   onDelete: (t: Task) => void;
@@ -44,27 +37,10 @@ export interface TaskListProps {
 }
 
 export function TaskList(props: TaskListProps) {
-  const { pool, tasks, isOverdue, sortable } = props;
-  // pool="completed" 是只读已完成列表：行不可拖、不可换池，只允许 swipe 删除。
+  const { pool, tasks, isOverdue, sortable, containerId } = props;
   const readOnly = pool === "completed";
+  const canSort = Boolean(sortable && containerId && !readOnly);
   const isCoarsePointer = useIsCoarsePointer();
-  const [dragging, setDragging] = useState(false);
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  function handleDragEnd(event: DragEndEvent): void {
-    setDragging(false);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const ids = tasks.map((task) => task.id);
-    const oldIndex = ids.indexOf(String(active.id));
-    const newIndex = ids.indexOf(String(over.id));
-    if (oldIndex === -1 || newIndex === -1) return;
-    props.onReorder?.(arrayMove(ids, oldIndex, newIndex));
-  }
 
   function renderTaskRow(task: Task, dragHandle?: RowDragHandle) {
     return (
@@ -85,8 +61,6 @@ export function TaskList(props: TaskListProps) {
   }
 
   function renderItem(task: Task) {
-    // 重复任务仅得删除滑动；一次性任务在收件箱/已排期得「排进今天」、在今天得「回收件箱」。
-    // 已完成行（readOnly）只剩 destructive 删除，无任何换池入口。
     const canSwap = !readOnly && task.recurrence === null;
     const leading =
       canSwap && (pool === "inbox" || pool === "upcoming") ? (
@@ -119,8 +93,10 @@ export function TaskList(props: TaskListProps) {
         blockSwipe={!isCoarsePointer}
         maxSwipe={0.5}
       >
-        {sortable && !readOnly ? (
-          <SortableTaskRow id={task.id}>{(handle) => renderTaskRow(task, handle)}</SortableTaskRow>
+        {canSort && containerId ? (
+          <SortableTaskRow id={task.id} containerId={containerId}>
+            {(handle) => renderTaskRow(task, handle)}
+          </SortableTaskRow>
         ) : (
           renderTaskRow(task)
         )}
@@ -134,19 +110,11 @@ export function TaskList(props: TaskListProps) {
     </SwipeableList>
   );
 
-  if (!sortable || readOnly) return list;
+  if (!canSort || !containerId) return list;
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={() => setDragging(true)}
-      onDragCancel={() => setDragging(false)}
-      onDragEnd={handleDragEnd}
-    >
-      <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-        <div className={dragging ? "todo-dnd-dragging" : undefined}>{list}</div>
-      </SortableContext>
-    </DndContext>
+    <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      {list}
+    </SortableContext>
   );
 }
