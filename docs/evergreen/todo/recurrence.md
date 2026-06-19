@@ -54,7 +54,7 @@ last-reviewed: 2026-06-19
 
 完成统一经 shared 纯函数 `completeTask`（文件 covers 归 [todo](../todo.md)，本文只描述重复分支行为）：
 
-- **非终结完成 = 衍生 + 推进**：完成一轮**不**把模板 `done` 置 true，而是衍生一条独立的已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=nowIso`/标题·tags·完成时子任务快照/新 id，进完成区），模板自身推进：`completedCount+1`、`lastDoneAt=dueIso`（当前应发生日，本地零点）、`subtasks[].done` 全部重置为 false（下一轮就绪）、清 `turn/turnAt`。
+- **非终结完成 = 衍生 + 推进**：完成一轮**不**把模板 `done` 置 true，而是衍生一条独立的已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=nowIso`/标题·tags/新 id，进完成区），模板自身推进：`completedCount+1`、`lastDoneAt=dueIso`（当前应发生日，本地零点）、清 `turn/turnAt`。root 的子任务（独立 child `Task`）由同一次 `completeTask` 一并处理——occurrence children 保留完成态快照、模板 children 重置为 `done=false`（见 [todo](../todo.md) §3 不变量 8）。
 - **终结完成**：`count` 满（`completedCount+1 >= count`）或 `until` 过且无未完成发生 → 模板**就地转化**为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt`/保留原 id），沉入完成区，**不**再衍生 occurrence。
 - **完成基准日**：`effectiveDoneIso = dueIso`（当前应发生日，本地零点）。提前完成（`now < due`）把 `lastDoneAt` 推进到应发生日、下次顺延，不因提前点击连跳；过期完成（`now > due`）也只推进到应发生日，所以下次 due = 应发生日 + 1 格，若仍 ≤ 今天则今日继续以 overdue 再现（逐次追平）。daily/weekly/monthly 共用同一公式。
 - **occurrence vs 模板分离**：衍生 occurrence 的 `completedAt=nowIso`（实际点击时刻，进已完成区/统计），活动模板的 `lastDoneAt=effectiveDoneIso`（应发生日，决定下次 due）。两个字段语义分离。

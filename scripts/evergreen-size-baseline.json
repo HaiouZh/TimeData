@@ -20,11 +20,11 @@
     "covers": 5
   },
   "docs/evergreen/cli.md": {
-    "chars": 10896,
+    "chars": 10922,
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 8314,
+    "chars": 8409,
     "covers": 10
   },
   "docs/evergreen/deployment.md": {
@@ -60,7 +60,7 @@
     "covers": 16
   },
   "docs/evergreen/security.md": {
-    "chars": 3841,
+    "chars": 3860,
     "covers": 9
   },
   "docs/evergreen/stats-insights.md": {
@@ -68,7 +68,7 @@
     "covers": 10
   },
   "docs/evergreen/sync.md": {
-    "chars": 14737,
+    "chars": 15085,
     "covers": 25
   },
   "docs/evergreen/timeline.md": {
@@ -76,11 +76,11 @@
     "covers": 15
   },
   "docs/evergreen/todo.md": {
-    "chars": 11955,
+    "chars": 14539,
     "covers": 26
   },
   "docs/evergreen/todo/recurrence.md": {
-    "chars": 4787,
+    "chars": 4881,
     "covers": 5
   }
 }

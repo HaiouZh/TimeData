@@ -8,7 +8,7 @@ covers:
   - packages/client/src/pages/settings/BackupHistoryPage.tsx
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-19
 ---
 
 # 备份与恢复

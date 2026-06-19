@@ -10,7 +10,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-06-16
+last-reviewed: 2026-06-19
 ---
 
 # CLI（受控 API 客户端）
@@ -60,7 +60,7 @@ last-reviewed: 2026-06-16
 - `timedata notes --recent --limit N`：读取最近 N 条速记，`N` 为 1..200，缺省 50；`--recent` 不可与 `--date` / `--from` / `--to` 混用。
 - `--server`、`--token`：可选，覆盖配置。
 - `task-running` / `task-handback` / `task-park` / `task-done` / `task-tag` 的 `--token` 可传 master `AUTH_TOKEN`，也可传窄域 `AGENT_TOKEN`；后者只能调用 `/api/agent/*`。
-- `task-handback --note`：可选结果备注，会追加为该任务的一条未完成子任务，供人工验收。
+- `task-handback --note`：可选结果备注，会创建一条独立的子任务（child `Task`，`parentId` 指向该任务），供人工验收。
 - `task-done`：完成语义统一走 server `completeTask`——非重复任务就地完成、重复任务衍生一条已完成快照并推进模板（count/until 终结时模板就地转化）；详见 [todo](todo.md) §3.1。
 - `task-tag --tags`：逗号分隔、trim 后非空的自由标签列表，会覆盖任务当前 `tags`。tags 不驱动自动逻辑；需要代码可靠动作的维度应走结构化字段，见 [`ADR 0014`](../adr/0014-task-tags-vs-fields.md)。
 - `--format=json|human`：可选，显式指定输出格式；未指定时根据 stdout 是否 TTY 自动判断（管道/脚本默认 JSON，终端默认 human）。

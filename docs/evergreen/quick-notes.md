@@ -18,7 +18,7 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/notes.ts
   - packages/cli/src/lib/format.ts
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-19
 ---
 
 # 速记

@@ -11,7 +11,7 @@ covers:
   - packages/client/src/db/index.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/pages/HealthStatsPage.tsx
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-19
 ---
 
 # 健康数据
