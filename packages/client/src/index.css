@@ -72,6 +72,11 @@
 body {
   font-family: var(--font-body);
 }
+/* 禁掉移动端 / PWA 滚到极点的橡皮筋回弹；根滚动容器 <main> 另加 overscroll-y-none 收口。 */
+html,
+body {
+  overscroll-behavior: none;
+}
 code,
 pre,
 kbd,
