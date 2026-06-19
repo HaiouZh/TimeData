@@ -699,7 +699,7 @@ describe("捕捉中心", () => {
   });
 
   it("点「待办」把输入文本存成池任务并清空输入", async () => {
-    const { host } = await renderPage();
+    const { host, root } = await renderPage();
     await typeInto(input(host), "买牛奶");
 
     const todoButton = host.querySelector('button[aria-label="存为待办"]');
@@ -709,6 +709,8 @@ describe("捕捉中心", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toMatchObject({ title: "买牛奶", done: false });
     expect(input(host).value).toBe("");
+
+    await act(async () => root.unmount());
   });
 
   it("存为待办成功反馈内嵌在 composer 内", async () => {
@@ -729,7 +731,7 @@ describe("捕捉中心", () => {
 
   it("点「打点」建一条已配置分类的时间记录", async () => {
     await configurePunchCategory();
-    const { host } = await renderPage();
+    const { host, root } = await renderPage();
 
     const punchButton = host.querySelector('button[aria-label="打点（记录到现在）"]');
     await click(punchButton);
@@ -737,6 +739,8 @@ describe("捕捉中心", () => {
     const entries = await db.timeEntries.toArray();
     expect(entries).toHaveLength(1);
     expect(entries[0].categoryId).toBe("cat-work-deep");
+
+    await act(async () => root.unmount());
   });
 
   it("打点成功反馈内嵌在 composer 内，不再底部浮层覆盖列表", async () => {
