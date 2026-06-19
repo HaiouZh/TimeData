@@ -71,7 +71,6 @@ function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
     || existing.startAt !== remoteTask.startAt
     || existing.scheduledAt !== remoteTask.scheduledAt
     || existing.parentId !== remoteTask.parentId
-    || JSON.stringify(existing.subtasks ?? []) !== JSON.stringify(remoteTask.subtasks ?? [])
     || existing.sortOrder !== remoteTask.sortOrder;
 }
 

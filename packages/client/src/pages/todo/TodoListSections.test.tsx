@@ -11,7 +11,7 @@ import { CollapsibleSection } from "./CollapsibleSection.js";
 function task(id: string, title: string): Task {
   return {
     id, title, done: false, recurrence: null, lastDoneAt: null, startAt: null,
-    scheduledAt: null, subtasks: [], completedCount: 0, sortOrder: 0,
+    scheduledAt: null, completedCount: 0, sortOrder: 0,
     createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z",
   };
 }

@@ -12,7 +12,6 @@ function task(id: string, createdAt: string): Task {
     lastDoneAt: null,
     startAt: null,
     scheduledAt: null,
-    subtasks: [],
     completedCount: 0,
     completedAt: null,
     tags: [],

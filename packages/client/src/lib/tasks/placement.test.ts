@@ -5,7 +5,7 @@ import { placementForTask, normalizeScheduledDate, localDateOf, isExhausted } fr
 const TODAY = new Date("2026-06-14T08:00:00.000Z");
 function task(p: Partial<Task>): Task {
   return { id: "t", title: "x", done: false, recurrence: null, lastDoneAt: null,
-    startAt: null, scheduledAt: null, subtasks: [], completedCount: 0, sortOrder: 0,
+    startAt: null, scheduledAt: null, completedCount: 0, sortOrder: 0,
     createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z", ...p };
 }
 

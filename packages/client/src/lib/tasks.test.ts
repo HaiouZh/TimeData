@@ -17,7 +17,6 @@ import {
   setTaskTurn,
   toggleTaskDone,
   unscheduleTask,
-  updateSubtasks,
   updateTask,
 } from "./tasks.js";
 
@@ -58,7 +57,6 @@ describe("addTask", () => {
     const now = new Date("2026-06-14T08:00:00.000Z");
     const t = await addTask({ title: "今天的事", now });
     expect(t.scheduledAt).toBe(localDateOf(now));
-    expect(t.subtasks).toEqual([]);
   });
 
   it("addTask 放入 inbox 时 scheduledAt=null", async () => {
@@ -129,34 +127,6 @@ describe("toggleTaskDone", () => {
     await expect(db.syncLog.where("recordId").equals(occ!.id).toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "create" })]),
     );
-  });
-
-  it("重复任务未终结完成：子任务重置为未完成", async () => {
-    const t = await addTask({
-      title: "喝水",
-      recurrence: { freq: "daily", interval: 1, basis: "due" },
-      now: new Date("2026-06-14T06:00:00.000Z"),
-    });
-    await updateSubtasks(t.id, [
-      { id: "s1", title: "倒水", done: true },
-      { id: "s2", title: "喝完", done: true },
-    ]);
-    const done = await toggleTaskDone(t.id, { now: new Date("2026-06-14T08:00:00.000Z") });
-    expect(done.subtasks.every((s) => s.done === false)).toBe(true);
-    expect(done.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 14)));
-    expect(done.done).toBe(false);
-  });
-
-  it("重复任务终结性完成（count 满）：子任务保留勾选", async () => {
-    const t = await addTask({
-      title: "做一次",
-      recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
-      now: new Date("2026-06-01T08:00:00.000Z"),
-    });
-    await updateSubtasks(t.id, [{ id: "s1", title: "x", done: true }]);
-    const done = await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
-    expect(done.done).toBe(true);
-    expect(done.subtasks[0].done).toBe(true);
   });
 
   it("child task toggle ignores dormant recurrence and does not create occurrence", async () => {
@@ -396,7 +366,7 @@ describe("updateTask", () => {
 
 describe("setTaskTurn", () => {
   it("sets running turn and stamps turnAt/updatedAt while normalizing legacy task defaults", async () => {
-    type LegacyTask = Omit<Task, "scheduledAt" | "subtasks" | "completedCount" | "turn" | "turnAt">;
+    type LegacyTask = Omit<Task, "scheduledAt" | "completedCount" | "turn" | "turnAt">;
     const legacyTask: LegacyTask = {
       id: "legacy-task",
       title: "接手旧任务",
@@ -418,7 +388,6 @@ describe("setTaskTurn", () => {
       turnAt: "2026-06-14T09:00:00.000Z",
       updatedAt: "2026-06-14T09:00:00.000Z",
       scheduledAt: null,
-      subtasks: [],
       completedCount: 0,
     });
     await expect(db.tasks.get("legacy-task")).resolves.toMatchObject({

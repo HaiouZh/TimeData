@@ -1,4 +1,4 @@
-import { completeTask, type Recurrence, type Task, TaskSchema, type TaskSubtask } from "@timedata/shared";
+import { completeTask, type Recurrence, type Task, TaskSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
@@ -67,9 +67,7 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
     recurrence,
     lastDoneAt: null,
     startAt: recurrence ? (input.startAt ?? createdAt) : null,
-    scheduledAt,
-    subtasks: [],
-    completedCount: 0,
+    scheduledAt,    completedCount: 0,
     sortOrder: await nextSortOrder(),
     createdAt,
     updatedAt: createdAt,
@@ -121,9 +119,7 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
     done: recurrence ? false : existing.done,
     lastDoneAt: recurrence ? existing.lastDoneAt : null,
     startAt: recurrence ? (patch.startAt ?? existing.startAt ?? updatedAt) : null,
-    scheduledAt: existing.scheduledAt ?? null,
-    subtasks: existing.subtasks ?? [],
-    completedCount: recurrence ? (existing.completedCount ?? 0) : 0,
+    scheduledAt: existing.scheduledAt ?? null,    completedCount: recurrence ? (existing.completedCount ?? 0) : 0,
     sortOrder: patch.sortOrder ?? existing.sortOrder,
     updatedAt,
   });
@@ -145,9 +141,7 @@ export async function setTaskTurn(id: string, turn: Task["turn"], options: { now
   const updatedAt = (options.now ?? new Date()).toISOString();
   const next = TaskSchema.parse({
     ...existing,
-    scheduledAt: existing.scheduledAt ?? null,
-    subtasks: existing.subtasks ?? [],
-    completedCount: existing.completedCount ?? 0,
+    scheduledAt: existing.scheduledAt ?? null,    completedCount: existing.completedCount ?? 0,
     turn,
     turnAt: turn === null ? null : updatedAt,
     updatedAt,
@@ -162,9 +156,7 @@ export async function setTaskTags(id: string, tags: string[], options: { now?: D
   const updatedAt = (options.now ?? new Date()).toISOString();
   const next = TaskSchema.parse({
     ...existing,
-    scheduledAt: existing.scheduledAt ?? null,
-    subtasks: existing.subtasks ?? [],
-    completedCount: existing.completedCount ?? 0,
+    scheduledAt: existing.scheduledAt ?? null,    completedCount: existing.completedCount ?? 0,
     completedAt: existing.completedAt ?? null,
     tags,
     updatedAt,
@@ -194,9 +186,7 @@ export async function applyRecurrenceChoice(
     recurrence: null,
     lastDoneAt: null,
     startAt: null,
-    scheduledAt: normalizeScheduledDate(choice.date),
-    subtasks: existing.subtasks ?? [],
-    completedCount: 0,
+    scheduledAt: normalizeScheduledDate(choice.date),    completedCount: 0,
     updatedAt,
   });
   return putTask(next);
@@ -211,9 +201,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   const base = {
     ...existing,
     parentId: existing.parentId ?? null,
-    scheduledAt: existing.scheduledAt ?? null,
-    subtasks: existing.subtasks ?? [],
-    completedCount: existing.completedCount ?? 0,
+    scheduledAt: existing.scheduledAt ?? null,    completedCount: existing.completedCount ?? 0,
     completedAt: existing.completedAt ?? null,
     tags: existing.tags ?? [],
   };
@@ -262,7 +250,7 @@ export async function scheduleTask(id: string, date: string, options: { now?: Da
   if (!existing) throw new Error("任务不存在");
   if (existing.recurrence) throw new Error("重复任务不通过排期接口修改，请改重复规则");
   const updatedAt = (options.now ?? new Date()).toISOString();
-  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
+  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null };
   const next = TaskSchema.parse({ ...base, scheduledAt: normalizeScheduledDate(date), updatedAt });
   return putTask(next);
 }
@@ -272,17 +260,8 @@ export async function unscheduleTask(id: string, options: { now?: Date } = {}): 
   if (!existing) throw new Error("任务不存在");
   if (existing.recurrence) throw new Error("重复任务不能删除排期");
   const updatedAt = (options.now ?? new Date()).toISOString();
-  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
+  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null };
   const next = TaskSchema.parse({ ...base, scheduledAt: null, updatedAt });
-  return putTask(next);
-}
-
-export async function updateSubtasks(id: string, subtasks: TaskSubtask[], options: { now?: Date } = {}): Promise<Task> {
-  const existing = await db.tasks.get(id);
-  if (!existing) throw new Error("任务不存在");
-  const updatedAt = (options.now ?? new Date()).toISOString();
-  const base = { ...existing, scheduledAt: existing.scheduledAt ?? null, subtasks: existing.subtasks ?? [] };
-  const next = TaskSchema.parse({ ...base, subtasks, updatedAt });
   return putTask(next);
 }
 
@@ -304,7 +283,6 @@ export async function createChildTask(parentId: string, title: string, now: Date
       lastDoneAt: null,
       startAt: null,
       scheduledAt: null,
-      subtasks: [],
       completedCount: 0,
       turn: null,
       turnAt: null,
@@ -338,9 +316,7 @@ export async function promoteToRoot(
   const next = TaskSchema.parse({
     ...existing,
     parentId: null,
-    scheduledAt,
-    subtasks: existing.subtasks ?? [],
-    completedCount: existing.completedCount ?? 0,
+    scheduledAt,    completedCount: existing.completedCount ?? 0,
     completedAt: existing.completedAt ?? null,
     tags: existing.tags ?? [],
     sortOrder,
@@ -373,7 +349,6 @@ export async function moveTaskToParent(
     const next = TaskSchema.parse({
       ...task,
       parentId: newParentId,
-      subtasks: task.subtasks ?? [],
       completedCount: task.completedCount ?? 0,
       completedAt: task.completedAt ?? null,
       tags: task.tags ?? [],
@@ -437,7 +412,6 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const all = (await db.tasks.orderBy("sortOrder").toArray()).map((t) => ({
     ...t,
     scheduledAt: t.scheduledAt ?? null,
-    subtasks: t.subtasks ?? [],
     completedCount: t.completedCount ?? 0,
     completedAt: t.completedAt ?? null,
     tags: t.tags ?? [],

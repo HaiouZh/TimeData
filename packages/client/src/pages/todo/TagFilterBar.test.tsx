@@ -7,7 +7,7 @@ import { TagFilterBar } from "./TagFilterBar.js";
 function task(tags: string[]): Task {
   return {
     id: "t", title: "x", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: null,
-    subtasks: [], completedCount: 0, turn: null, turnAt: null, completedAt: null, tags, sortOrder: 0,
+    completedCount: 0, turn: null, turnAt: null, completedAt: null, tags, sortOrder: 0,
     createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-01T00:00:00.000Z",
   };
 }
