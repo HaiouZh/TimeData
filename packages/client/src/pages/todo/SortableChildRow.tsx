@@ -56,7 +56,6 @@ function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, 
       )}
       {readonly ? (
         <span
-          aria-label={`子任务 ${child.title}`}
           className={`min-h-8 min-w-0 flex-1 break-words px-1 py-1 text-sm ${child.done ? "text-ink-3 line-through" : "text-ink"}`}
         >
           {child.title}

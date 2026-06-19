@@ -90,7 +90,7 @@ export function resolveTodoDragOperation({
 /** 给一个 task 计算它在拖拽系统中所属的容器 id。 */
 export function containerIdForTask(task: Pick<Task, "parentId" | "scheduledAt">, todayDate: string): string {
   if (task.parentId) return `parent:${task.parentId}`;
-  if (task.scheduledAt && task.scheduledAt.startsWith(todayDate)) return "pool:today";
+  if (task.scheduledAt?.startsWith(todayDate)) return "pool:today";
   if (!task.scheduledAt) return "pool:inbox";
   // 已排期到非今天：upcoming，不参与拖拽，调用方应跳过。
   return "";

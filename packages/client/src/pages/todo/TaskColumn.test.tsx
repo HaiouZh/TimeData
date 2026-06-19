@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Task } from "@timedata/shared";
 import { db } from "../../db/index.js";
 import { addTask, createChildTask } from "../../lib/tasks.js";

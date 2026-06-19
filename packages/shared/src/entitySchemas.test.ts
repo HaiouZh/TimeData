@@ -232,6 +232,6 @@ describe("TaskSchema parentId", () => {
     // 旧数据（含已废弃字段）经 TaskSchema.parse 后未知键被 zod 剥离，老备份回灌无害。
     const legacyKey = "sub" + "tasks";
     const parsed = TaskSchema.parse({ ...baseTask, [legacyKey]: [{ id: "s1", title: "旧子项", done: false }] });
-    expect(Object.prototype.hasOwnProperty.call(parsed, legacyKey)).toBe(false);
+    expect(Object.hasOwn(parsed, legacyKey)).toBe(false);
   });
 });
