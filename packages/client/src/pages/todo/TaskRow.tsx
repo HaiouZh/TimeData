@@ -10,6 +10,7 @@ import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TURN_DOT_BG, TURN_LABELS } from "../../lib/tasks/turnTags.js";
 import { formatMonthDay } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
+import { ParentDropZone } from "./ParentDropZone.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
 export type TaskPool = "today" | "inbox" | "upcoming" | "recurring" | "completed";
@@ -37,6 +38,11 @@ export interface TaskRowProps {
   onAfterChildWrite?: () => void;
   /** AttentionQueue 等场景强制只读，覆盖按 pool 推断的 mode。 */
   childrenModeOverride?: InlineChildrenMode;
+  /**
+   * 拖拽悬停意图激活：强制展开子任务区并渲染 parent 落点区（即便无子任务）。
+   * 由顶层 TodoPage 的 hover-intent 状态驱动，仅拖拽期短暂为真。
+   */
+  dropActive?: boolean;
 }
 
 function childModeForPool(pool: TaskPool): InlineChildrenMode {
@@ -60,6 +66,7 @@ export function TaskRow({
   turnBadgeInteractive,
   onAfterChildWrite,
   childrenModeOverride,
+  dropActive,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const children = useTaskChildren(task.id);
@@ -80,6 +87,9 @@ export function TaskRow({
   const canSwapPool = task.recurrence === null && pool !== "completed";
   const overlayRightClass = dragHandle ? "right-8" : "right-2";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
+  // dropActive（拖拽悬停激活）强制展开；既有子任务照常列出，并额外渲染空 parent 落点区。
+  const showInlineChildren = (expanded || dropActive === true) && childTotal > 0;
+  const showDropZone = dropActive === true;
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
@@ -236,9 +246,12 @@ export function TaskRow({
           </button>
         )}
       </div>
-      {expanded && childTotal > 0 && (
+      {(showInlineChildren || showDropZone) && (
         <div className="ml-9 pb-1" onClick={(event) => event.stopPropagation()}>
-          <InlineChildren parentId={task.id} mode={childrenMode} onAfterWrite={onAfterChildWrite} />
+          {showInlineChildren && (
+            <InlineChildren parentId={task.id} mode={childrenMode} onAfterWrite={onAfterChildWrite} />
+          )}
+          {showDropZone && <ParentDropZone parentId={task.id} />}
         </div>
       )}
     </div>

@@ -87,6 +87,78 @@ export function resolveTodoDragOperation({
   return null;
 }
 
+/**
+ * 由一次 drag-over 的目标，反查它归属的 root 任务 id（用于 hover-intent 判定）。
+ * - 池容器（pool:today/inbox）：over 自身就是根行，root = overId。
+ * - parent 容器（parent:<X>）：root = X（无论 over 是子任务行还是落点区）。
+ * 无法归属（非法/缺失容器、upcoming 等）返回 null。
+ */
+export function hoveredRootIdFromOver(overContainerId: string, overId: string): string | null {
+  const container = parseTodoContainerId(overContainerId);
+  if (!container) return null;
+  if (container.kind === "pool") return overId;
+  return container.parentId;
+}
+
+export interface ArmTargetInput {
+  overContainerId: string;
+  overId: string;
+  activeId: string;
+  /** 当前被拖项的 parentId（root 为 null）。 */
+  activeParentId: string | null;
+}
+
+/**
+ * 由 drag-over 计算"可激活展开"的目标 root id；无合法目标返回 null。
+ * 排除：归属失败、悬停自身、悬停被拖子任务自己的父（已展开、无意义）。
+ */
+export function armTargetFromDragOver({
+  overContainerId,
+  overId,
+  activeId,
+  activeParentId,
+}: ArmTargetInput): string | null {
+  const root = hoveredRootIdFromOver(overContainerId, overId);
+  if (!root) return null;
+  if (root === activeId) return null;
+  if (root === activeParentId) return null;
+  return root;
+}
+
+export interface ResolveTodoDragWithArmInput {
+  activeContainerId: string;
+  overContainerId: string;
+  overId: string;
+  activeId: string;
+  activeParentId: string | null;
+  /** hover-intent 当前激活展开的目标 root id（无则 null）。 */
+  armedParentId: string | null;
+}
+
+/**
+ * drag end 的语义解析，叠加 hover-intent 激活态：
+ * 若存在已激活目标 A，且松手时 over 仍落在 A 上（A 的行或 A 的落点区），
+ * 则把目标容器视为 `parent:A`，交由 {@link resolveTodoDragOperation} 得到 move-to-parent；
+ * 否则退化为常规 over→over 判定（reorder / schedule-root / promote 等不变）。
+ */
+export function resolveTodoDragWithArm({
+  activeContainerId,
+  overContainerId,
+  overId,
+  activeId,
+  activeParentId,
+  armedParentId,
+}: ResolveTodoDragWithArmInput): TodoDragOperation | null {
+  let targetContainerId = overContainerId || activeContainerId;
+  if (armedParentId && armedParentId !== activeId) {
+    const overRoot = hoveredRootIdFromOver(overContainerId, overId);
+    if (overRoot === armedParentId) {
+      targetContainerId = `parent:${armedParentId}`;
+    }
+  }
+  return resolveTodoDragOperation({ activeContainerId, targetContainerId, activeParentId });
+}
+
 /** 给一个 task 计算它在拖拽系统中所属的容器 id。 */
 export function containerIdForTask(task: Pick<Task, "parentId" | "scheduledAt">, todayDate: string): string {
   if (task.parentId) return `parent:${task.parentId}`;

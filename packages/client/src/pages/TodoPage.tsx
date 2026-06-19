@@ -2,6 +2,7 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
   KeyboardSensor,
   MouseSensor,
@@ -49,7 +50,8 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
-import { resolveTodoDragOperation } from "./todo/todoDnd.js";
+import { armTargetFromDragOver, parseTodoContainerId, resolveTodoDragWithArm } from "./todo/todoDnd.js";
+import { useHoverIntent } from "./todo/useHoverIntent.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
 
@@ -60,6 +62,8 @@ export function TodoPage() {
   // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
+  // 悬停意图：拖一个根任务停在另一根任务行上达阈值，自动展开它作为可落入的 parent。
+  const hover = useHoverIntent();
   const { syncAfterWrite } = useSyncContext();
   const wide = useIsWideScreen();
 
@@ -127,8 +131,30 @@ export function TodoPage() {
     setDragging(true);
   }
 
+  function handleDragOver(event: DragOverEvent): void {
+    const { active, over } = event;
+    if (!over) {
+      hover.point(null);
+      return;
+    }
+    const activeContainerId = (active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
+    const overContainerId = (over.data.current as { containerId?: string } | undefined)?.containerId ?? "";
+    const activeContainer = parseTodoContainerId(activeContainerId);
+    const activeParentId = activeContainer?.kind === "parent" ? activeContainer.parentId : null;
+    hover.point(
+      armTargetFromDragOver({
+        overContainerId,
+        overId: String(over.id),
+        activeId: String(active.id),
+        activeParentId,
+      }),
+    );
+  }
+
   async function handleDragEnd(event: DragEndEvent): Promise<void> {
     setDragging(false);
+    const armedParentId = hover.armedId;
+    hover.reset();
     const { active, over } = event;
     if (!over) return;
 
@@ -149,10 +175,13 @@ export function TodoPage() {
       activeParentId = found?.parentId ?? null;
     }
 
-    const op = resolveTodoDragOperation({
+    const op = resolveTodoDragWithArm({
       activeContainerId,
-      targetContainerId: overContainerId || activeContainerId,
+      overContainerId,
+      overId,
+      activeId,
       activeParentId,
+      armedParentId,
     });
 
     if (!op) return;
@@ -215,6 +244,7 @@ export function TodoPage() {
       isOverdue={isOverdue}
       sortable
       containerId="pool:today"
+      dropActiveId={hover.armedId}
       {...rowHandlers}
     />
   );
@@ -249,7 +279,14 @@ export function TodoPage() {
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
             renderTasks={(tasks) => (
-              <TaskList pool="inbox" tasks={tasks} sortable containerId="pool:inbox" {...rowHandlers} />
+              <TaskList
+                pool="inbox"
+                tasks={tasks}
+                sortable
+                containerId="pool:inbox"
+                dropActiveId={hover.armedId}
+                {...rowHandlers}
+              />
             )}
           />
         )}
@@ -280,8 +317,12 @@ export function TodoPage() {
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={(event) => void handleDragEnd(event)}
-      onDragCancel={() => setDragging(false)}
+      onDragCancel={() => {
+        setDragging(false);
+        hover.reset();
+      }}
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">

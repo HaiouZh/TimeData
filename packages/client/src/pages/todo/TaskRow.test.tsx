@@ -112,6 +112,37 @@ describe("TaskRow", () => {
     await act(async () => noSub.root.unmount());
   });
 
+  it("dropActive（拖拽悬停激活）：无子任务也渲染 parent 落点区", async () => {
+    const noSub = await render(
+      createElement(TaskRow, { task: task(), pool: "today", dropActive: true, ...handlers }),
+    );
+    await settle();
+    expect(noSub.host.querySelector('[data-testid="parent-drop-zone"]')).not.toBeNull();
+    await act(async () => noSub.root.unmount());
+
+    // 未激活时不渲染落点区。
+    const idle = await render(createElement(TaskRow, { task: task(), pool: "today", ...handlers }));
+    await settle();
+    expect(idle.host.querySelector('[data-testid="parent-drop-zone"]')).toBeNull();
+    await act(async () => idle.root.unmount());
+  });
+
+  it("dropActive：有子任务时同时展开既有子任务列表与落点区", async () => {
+    const parent = await addTask({ title: "父" });
+    await createChildTask(parent.id, "子甲");
+    const fresh = (await db.tasks.get(parent.id))!;
+
+    const { host, root } = await render(
+      createElement(TaskRow, { task: fresh, pool: "today", dropActive: true, ...handlers }),
+    );
+    // 两段 live query 链：TaskRow 取 children 计数 → InlineChildren 再取一次。
+    await settle();
+    await settle();
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="parent-drop-zone"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it("逾期重复任务在第二行显示红色逾期日期（M月D日）", async () => {
     const { host, root } = await render(
       createElement(TaskRow, {
