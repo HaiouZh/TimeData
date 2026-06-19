@@ -33,6 +33,84 @@ function baseTask(over: Partial<Task> = {}): Task {
 }
 
 describe("completeTask", () => {
+  it("重复非终结 root 完成时派生 occurrence children 快照并 reset template children", () => {
+    seq = 0;
+    const task = baseTask({
+      id: "root-1",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 19)),
+    });
+    const children = [
+      baseTask({
+        id: "child-1",
+        parentId: "root-1",
+        title: "已完成子项",
+        done: true,
+        completedAt: "2026-06-19T07:00:00.000Z",
+        tags: ["snapshot"],
+        sortOrder: 0,
+      }),
+      baseTask({
+        id: "child-2",
+        parentId: "root-1",
+        title: "未完成子项",
+        done: false,
+        completedAt: null,
+        tags: ["later"],
+        sortOrder: 1,
+      }),
+    ];
+
+    const out = completeTask(task, {
+      now: new Date("2026-06-19T08:00:00.000Z"),
+      genId: () => `occ-${++seq}`,
+      occurrenceSortOrder: 99,
+      children,
+    });
+
+    expect(out.occurrence?.id).toBe("occ-1");
+    expect(out.occurrenceChildren?.map((child) => [child.parentId, child.done, child.completedAt, child.recurrence, child.turn])).toEqual([
+      ["occ-1", true, "2026-06-19T07:00:00.000Z", null, null],
+      ["occ-1", false, null, null, null],
+    ]);
+    expect(out.occurrenceChildren?.map((child) => [child.id, child.title, child.tags, child.sortOrder])).toEqual([
+      ["occ-2", "已完成子项", ["snapshot"], 0],
+      ["occ-3", "未完成子项", ["later"], 1],
+    ]);
+    expect(out.templateChildren?.map((child) => [child.id, child.parentId, child.done, child.completedAt])).toEqual([
+      ["child-1", "root-1", false, null],
+      ["child-2", "root-1", false, null],
+    ]);
+  });
+
+  it("非重复或终结路径不返回 child batches", () => {
+    const child = baseTask({ id: "child-1", parentId: "root-1" });
+
+    const nonRecurring = completeTask(baseTask({ id: "root-1" }), {
+      ...opts("2026-06-19T08:00:00.000Z"),
+      children: [child],
+    });
+    expect(nonRecurring.occurrenceChildren).toBeUndefined();
+    expect(nonRecurring.templateChildren).toBeUndefined();
+
+    const finished = completeTask(
+      baseTask({
+        id: "root-1",
+        recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
+        startAt: "2026-06-19T00:00:00.000Z",
+      }),
+      { ...opts("2026-06-19T08:00:00.000Z"), children: [child] },
+    );
+    expect(finished.occurrenceChildren).toBeUndefined();
+    expect(finished.templateChildren).toBeUndefined();
+  });
+
+  it("拒绝直接完成 child task", () => {
+    expect(() => completeTask(baseTask({ parentId: "root-1" }), opts("2026-06-19T08:00:00.000Z"))).toThrow(
+      "completeTask requires a root task",
+    );
+  });
+
   it("非重复任务：就地完成、补 completedAt、清 turn，无 occurrence", () => {
     const task = baseTask({ turn: "running", turnAt: "2026-06-01T00:00:00.000Z" });
     const { next, occurrence } = completeTask(task, opts("2026-06-14T08:00:00.000Z"));

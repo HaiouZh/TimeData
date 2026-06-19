@@ -7,11 +7,14 @@ export interface CompleteTaskOptions {
   now: Date;
   genId: () => string;
   occurrenceSortOrder: number;
+  children?: Task[];
 }
 
 export interface CompleteTaskResult {
   next: Task;
   occurrence: Task | null;
+  occurrenceChildren?: Task[];
+  templateChildren?: Task[];
 }
 
 /**
@@ -19,7 +22,9 @@ export interface CompleteTaskResult {
  * 非重复=就地完成；重复非终结=衍生 occurrence + 推进模板；重复终结=就地转化模板。
  */
 export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTaskResult {
-  const { now, genId, occurrenceSortOrder } = opts;
+  if (task.parentId !== null) throw new Error("completeTask requires a root task");
+
+  const { now, genId, occurrenceSortOrder, children = [] } = opts;
   const nowIso = now.toISOString();
 
   if (!task.recurrence) {
@@ -60,6 +65,7 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
 
   const occurrence = TaskSchema.parse({
     id: genId(),
+    parentId: null,
     title: task.title,
     done: true,
     recurrence: null,
@@ -77,6 +83,32 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
     updatedAt: nowIso,
   });
 
+  const occurrenceChildren = children.map((child, index) =>
+    TaskSchema.parse({
+      id: genId(),
+      parentId: occurrence.id,
+      title: child.title,
+      done: child.done,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      subtasks: [],
+      completedCount: 0,
+      turn: null,
+      turnAt: null,
+      completedAt: child.completedAt ?? null,
+      tags: child.tags ?? [],
+      sortOrder: index,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    }),
+  );
+
+  const templateChildren = children.map((child) =>
+    TaskSchema.parse({ ...child, done: false, completedAt: null, updatedAt: nowIso }),
+  );
+
   const next = TaskSchema.parse({
     ...task,
     done: false,
@@ -88,5 +120,5 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
     updatedAt: nowIso,
   });
 
-  return { next, occurrence };
+  return { next, occurrence, occurrenceChildren, templateChildren };
 }
