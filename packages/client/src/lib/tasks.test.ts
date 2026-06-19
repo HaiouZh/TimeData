@@ -99,7 +99,7 @@ describe("toggleTaskDone", () => {
 
     const after = await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
 
-    expect(after.lastDoneAt).toBe("2026-06-14T08:00:00.000Z");
+    expect(after.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 14)));
     expect(after.done).toBe(false);
   });
 
@@ -117,7 +117,7 @@ describe("toggleTaskDone", () => {
       id: task.id,
       done: false,
       completedCount: 1,
-      lastDoneAt: "2026-06-14T08:00:00.000Z",
+      lastDoneAt: localDateOf(new Date(2026, 5, 14)),
     });
     expect(await db.tasks.count()).toBe(before + 1);
     const occ = (await db.tasks.toArray()).find((t) => t.id !== task.id && t.title === "喝水");
@@ -139,7 +139,7 @@ describe("toggleTaskDone", () => {
     ]);
     const done = await toggleTaskDone(t.id, { now: new Date("2026-06-14T08:00:00.000Z") });
     expect(done.subtasks.every((s) => s.done === false)).toBe(true);
-    expect(done.lastDoneAt).toBe("2026-06-14T08:00:00.000Z");
+    expect(done.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 14)));
     expect(done.done).toBe(false);
   });
 
@@ -171,14 +171,21 @@ describe("终止式重复 toggle", () => {
     expect(t3.done).toBe(true);
   });
 
-  it("UNTIL：完成最后一次后无后续 → done 翻真", async () => {
+  it("UNTIL：过期时逐次追平，到 until 当天才 done 翻真", async () => {
     const t = await addTask({
       title: "到月中",
       recurrence: { freq: "daily", interval: 1, basis: "due", until: "2026-06-02T00:00:00.000Z" },
       now: new Date("2026-06-01T08:00:00.000Z"),
     });
+    const first = await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
+    expect(first.done).toBe(false);
+    expect(first.recurrence).not.toBeNull();
+    expect(first.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 1)));
+
     const done = await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
     expect(done.done).toBe(true);
+    expect(done.recurrence).toBeNull();
+    expect(done.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 2)));
   });
 
   it("普通池任务 completedCount 恒 0", async () => {

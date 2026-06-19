@@ -36,7 +36,8 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
 
   const recurrence = task.recurrence;
   const dueIso = normalizeScheduledDate(currentDueDateString(recurrence, task.lastDoneAt, task.startAt, now));
-  const effectiveDoneIso = nowIso >= dueIso ? nowIso : dueIso;
+  // 完成基准日始终取当前应发生日：提前完成顺延一格，过期完成逐次追平；实际点击时刻仍写入 occurrence/completedAt。
+  const effectiveDoneIso = dueIso;
   const completedCount = (task.completedCount ?? 0) + 1;
   const countDone = recurrence.count != null && completedCount >= recurrence.count;
   const untilDone = isRecurrenceFinishedAfter(recurrence, task.startAt, effectiveDoneIso);
