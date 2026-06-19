@@ -8,15 +8,15 @@ let db: Database.Database;
 
 function seedTask(id = "task-1"): void {
   db.prepare(`
-    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, created_at, updated_at)
-    VALUES (?, ?, 0, NULL, NULL, NULL, 0, NULL, '[]', 0, NULL, NULL, ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 0, NULL, NULL, NULL, 0, NULL, '[]', 0, NULL, NULL, NULL, '[]', ?, ?)
   `).run(id, "想法", "2026-06-16T00:00:00.000Z", "2026-06-16T00:00:00.000Z");
 }
 
 function seedRecurring(id = "rec-1", recurrence = '{"freq":"daily","interval":1,"basis":"due"}'): void {
   db.prepare(`
-    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, created_at, updated_at)
-    VALUES (?, ?, 0, ?, NULL, ?, 0, NULL, '[]', 0, NULL, NULL, ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 0, ?, NULL, ?, 0, NULL, '[]', 0, NULL, NULL, NULL, '[]', ?, ?)
   `).run(
     id,
     "跑步",
@@ -24,6 +24,29 @@ function seedRecurring(id = "rec-1", recurrence = '{"freq":"daily","interval":1,
     "2026-06-01T00:00:00.000Z",
     "2026-06-01T00:00:00.000Z",
     "2026-06-01T00:00:00.000Z",
+  );
+}
+
+function seedChild(overrides: {
+  id: string;
+  parentId: string;
+  title: string;
+  done?: boolean;
+  completedAt?: string | null;
+  sortOrder?: number;
+}): void {
+  db.prepare(`
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, subtasks, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, '[]', 0, NULL, NULL, ?, '[]', ?, ?)
+  `).run(
+    overrides.id,
+    overrides.parentId,
+    overrides.title,
+    overrides.done ? 1 : 0,
+    overrides.sortOrder ?? 0,
+    overrides.completedAt ?? null,
+    "2026-06-16T00:00:00.000Z",
+    "2026-06-16T00:00:00.000Z",
   );
 }
 
@@ -40,7 +63,7 @@ afterEach(() => {
 });
 
 describe("POST /api/agent/tasks/:id/status", () => {
-  it("sets turn, stamps turnAt, appends note, records seq and notifies listeners", async () => {
+  it("sets turn, stamps turnAt, creates note child, records seq and notifies listeners", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
     const listener = (seq: number | null) => seen.push(seq);
@@ -61,16 +84,24 @@ describe("POST /api/agent/tasks/:id/status", () => {
       expect(body.ok).toBe(true);
       expect(body.task.turn).toBe("me");
       expect(body.task.turnAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-      expect(body.task.subtasks.at(-1)).toMatchObject({ title: "done PR#123", done: false });
+      expect(body.task.subtasks).toEqual([]);
+      const child = db.prepare("SELECT id, parent_id, title, done FROM tasks WHERE parent_id = ?").get("task-1") as {
+        id: string;
+        parent_id: string;
+        title: string;
+        done: number;
+      };
+      expect(child).toMatchObject({ parent_id: "task-1", title: "done PR#123", done: 0 });
       expect(db.prepare("SELECT turn, turn_at FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
         turn: "me",
         turn_at: body.task.turnAt,
       });
-      expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq ORDER BY id DESC LIMIT 1").get()).toMatchObject({
-        table_name: "tasks",
-        record_id: "task-1",
-        action: "update",
-      });
+      expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq ORDER BY id").all()).toEqual(
+        expect.arrayContaining([
+          { table_name: "tasks", record_id: child.id, action: "create" },
+          { table_name: "tasks", record_id: "task-1", action: "update" },
+        ]),
+      );
       expect(seen.at(-1)).toBeGreaterThan(0);
     } finally {
       removeSyncStreamListener(listener);
@@ -142,6 +173,55 @@ describe("POST /api/agent/tasks/:id/status", () => {
     };
     expect(occ).toMatchObject({ done: 1, recurrence: null });
     expect(occ.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("done=true 重复任务带 children：occurrence children 快照保留，模板 children reset", async () => {
+    seedRecurring("rec-with-children");
+    seedChild({
+      id: "child-done",
+      parentId: "rec-with-children",
+      title: "已完成子项",
+      done: true,
+      completedAt: "2026-06-16T01:00:00.000Z",
+      sortOrder: 0,
+    });
+    seedChild({ id: "child-open", parentId: "rec-with-children", title: "未完成子项", sortOrder: 1 });
+
+    const res = await app.request("/api/agent/tasks/rec-with-children/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: true }),
+    });
+
+    expect(res.status).toBe(200);
+    const occurrence = db.prepare("SELECT id FROM tasks WHERE id != ? AND title = ? AND parent_id IS NULL").get(
+      "rec-with-children",
+      "跑步",
+    ) as { id: string };
+    expect(occurrence.id).toBeDefined();
+
+    const occurrenceChildren = db
+      .prepare("SELECT parent_id, title, done, completed_at FROM tasks WHERE parent_id = ? ORDER BY sort_order")
+      .all(occurrence.id);
+    expect(occurrenceChildren).toEqual([
+      { parent_id: occurrence.id, title: "已完成子项", done: 1, completed_at: "2026-06-16T01:00:00.000Z" },
+      { parent_id: occurrence.id, title: "未完成子项", done: 0, completed_at: null },
+    ]);
+
+    const templateChildren = db
+      .prepare("SELECT id, parent_id, done, completed_at FROM tasks WHERE parent_id = ? ORDER BY sort_order")
+      .all("rec-with-children");
+    expect(templateChildren).toEqual([
+      { id: "child-done", parent_id: "rec-with-children", done: 0, completed_at: null },
+      { id: "child-open", parent_id: "rec-with-children", done: 0, completed_at: null },
+    ]);
+    expect(db.prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'tasks' ORDER BY id").all()).toEqual(
+      expect.arrayContaining([
+        { record_id: occurrence.id, action: "create" },
+        { record_id: "child-done", action: "update" },
+        { record_id: "child-open", action: "update" },
+      ]),
+    );
   });
 
   it("done=true 重复终结(count:1)：就地转化、不新增行", async () => {

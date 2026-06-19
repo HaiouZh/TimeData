@@ -45,18 +45,26 @@ agent.post("/tasks/:id/status", async (c) => {
   const { turn, done, note, tags } = parsed.data;
 
   let occurrence: Task | null = null;
+  let occurrenceChildren: Task[] = [];
+  let templateChildren: Task[] = [];
+  let noteChild: Task | null = null;
   let next: Task;
   if (done === true) {
     const sortRow = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks").get() as { next: number };
+    const children = (db
+      .prepare("SELECT * FROM tasks WHERE parent_id = ? ORDER BY sort_order, id")
+      .all(id) as TaskRow[]).map(rowToTask);
     const completed = completeTask(task, {
       now: nowDate,
       genId: () => randomUUID(),
       occurrenceSortOrder: sortRow.next,
+      children,
     });
     occurrence = completed.occurrence;
+    occurrenceChildren = completed.occurrenceChildren ?? [];
+    templateChildren = completed.templateChildren ?? [];
     next = TaskSchema.parse({
       ...completed.next,
-      ...(note ? { subtasks: [...completed.next.subtasks, { id: randomUUID(), title: note, done: false }] } : {}),
       ...(tags !== undefined ? { tags } : {}),
       updatedAt: now,
     });
@@ -65,31 +73,65 @@ agent.post("/tasks/:id/status", async (c) => {
       ...task,
       ...(turn !== undefined ? { turn, turnAt: turn === null ? null : now } : {}),
       ...(done === false ? { done: false } : {}),
-      ...(note ? { subtasks: [...task.subtasks, { id: randomUUID(), title: note, done: false }] } : {}),
       ...(tags !== undefined ? { tags } : {}),
       updatedAt: now,
     });
   }
 
+  if (note) {
+    const childSortRow = db
+      .prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks WHERE parent_id = ?")
+      .get(next.id) as { next: number };
+    noteChild = TaskSchema.parse({
+      id: randomUUID(),
+      parentId: next.id,
+      title: note,
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      subtasks: [],
+      completedCount: 0,
+      turn: null,
+      turnAt: null,
+      completedAt: null,
+      tags: [],
+      sortOrder: childSortRow.next,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const taskCreate = (task: Task): SyncChange => ({
+    tableName: "tasks",
+    action: "create",
+    recordId: task.id,
+    timestamp: now,
+    data: task,
+  });
+  const taskUpdate = (task: Task): SyncChange => ({
+    tableName: "tasks",
+    action: "update",
+    recordId: task.id,
+    timestamp: now,
+    data: task,
+  });
+
   db.transaction(() => {
     if (occurrence) {
-      const occChange: SyncChange = {
-        tableName: "tasks",
-        action: "create",
-        recordId: occurrence.id,
-        timestamp: now,
-        data: occurrence,
-      };
-      applyChange(occChange);
+      applyChange(taskCreate(occurrence));
     }
-    const change: SyncChange = {
-      tableName: "tasks",
-      action: "update",
-      recordId: id,
-      timestamp: now,
-      data: next,
-    };
-    applyChange(change);
+    for (const child of occurrenceChildren) {
+      applyChange(taskCreate(child));
+    }
+    for (const child of templateChildren) {
+      applyChange(taskUpdate(child));
+    }
+    if (noteChild) {
+      applyChange(taskCreate(noteChild));
+    }
+    applyChange(taskUpdate(next));
   })();
   notifySyncChange(getLatestSeq());
 
