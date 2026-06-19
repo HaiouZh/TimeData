@@ -26,11 +26,19 @@ const baseQuickNote = (overrides: Partial<QuickNote>): QuickNote => ({
 
 const baseTask = (overrides: Partial<Task>): Task => ({
   id: "task-1",
+  parentId: null,
   title: "跑步",
   done: false,
   recurrence: null,
   lastDoneAt: null,
   startAt: null,
+  scheduledAt: null,
+  subtasks: [],
+  completedCount: 0,
+  turn: null,
+  turnAt: null,
+  completedAt: null,
+  tags: [],
   sortOrder: 0,
   createdAt: "2026-06-14T00:00:00.000Z",
   updatedAt: "2026-06-14T00:00:00.000Z",
@@ -119,6 +127,25 @@ describe("validateForcePushBusinessRules", () => {
   it("rejects duplicate task id", () => {
     const result = validateForcePushBusinessRules([], [], [], [baseTask({}), baseTask({})]);
     expect(result).toMatch(/duplicate task/);
+  });
+
+  it("rejects self-referencing task parentId", () => {
+    const result = validateForcePushBusinessRules([], [], [], [baseTask({ id: "a", parentId: "a" })]);
+    expect(result).toMatch(/references itself/);
+  });
+
+  it("rejects task with missing parent", () => {
+    const result = validateForcePushBusinessRules([], [], [], [baseTask({ id: "child", parentId: "missing" })]);
+    expect(result).toMatch(/missing parent task/);
+  });
+
+  it("rejects third-level task parent structure", () => {
+    const result = validateForcePushBusinessRules([], [], [], [
+      baseTask({ id: "root", parentId: null }),
+      baseTask({ id: "child", parentId: "root" }),
+      baseTask({ id: "grandchild", parentId: "child" }),
+    ]);
+    expect(result).toMatch(/third level/);
   });
 
   it("accepts tasks independently from category validation", () => {

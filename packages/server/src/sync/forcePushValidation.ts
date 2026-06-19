@@ -42,9 +42,20 @@ export function validateForcePushBusinessRules(
   }
 
   const taskIds = new Set<string>();
+  const tasksById = new Map<string, Task>();
   for (const task of tasks) {
     if (taskIds.has(task.id)) return `duplicate task ${task.id}`;
     taskIds.add(task.id);
+    tasksById.set(task.id, task);
+  }
+
+  for (const task of tasks) {
+    if (task.parentId === task.id) return `task ${task.id} references itself`;
+    if (task.parentId && !taskIds.has(task.parentId)) return `missing parent task ${task.parentId}`;
+    if (task.parentId) {
+      const parent = tasksById.get(task.parentId);
+      if (parent && parent.parentId !== null) return `task ${task.id} would create a third level`;
+    }
   }
 
   const sorted = [...timeEntries].sort((a, b) => a.startTime.localeCompare(b.startTime));
