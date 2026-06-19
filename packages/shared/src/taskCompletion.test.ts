@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { currentDueDayFor } from "./recurrence.js";
 import { TaskSchema } from "./schemas.js";
 import { completeTask } from "./taskCompletion.js";
+import { localDateOf } from "./taskDates.js";
 import type { Task } from "./types.js";
 
 let seq = 0;
 const genId = () => `occ-${++seq}`;
 const opts = (now: string) => ({ now: new Date(now), genId, occurrenceSortOrder: 99 });
+const daily0 = () => ({ freq: "daily" as const, interval: 1, basis: "due" as const });
 
 function baseTask(over: Partial<Task> = {}): Task {
   return TaskSchema.parse({
@@ -44,10 +47,11 @@ describe("completeTask", () => {
     });
   });
 
-  it("重复·非终结·准时：衍生完成记录 + 推进模板", () => {
+  it("重复·非终结·准时：lastDoneAt 推进到当日应发生日（本地零点）", () => {
+    const start = localDateOf(new Date(2026, 5, 14));
     const task = baseTask({
       recurrence: { freq: "daily", interval: 1, basis: "due" },
-      startAt: "2026-06-01T00:00:00.000Z",
+      startAt: start,
       tags: ["健身"],
       subtasks: [{ id: "s1", title: "热身", done: true }],
       turn: "me",
@@ -70,7 +74,7 @@ describe("completeTask", () => {
       id: "t1",
       done: false,
       completedCount: 1,
-      lastDoneAt: "2026-06-14T08:00:00.000Z",
+      lastDoneAt: localDateOf(new Date(2026, 5, 14)),
       turn: null,
       turnAt: null,
     });
@@ -107,6 +111,143 @@ describe("completeTask", () => {
       done: true,
       completedCount: 1,
       completedAt: "2026-06-14T08:00:00.000Z",
+    });
+  });
+
+  describe("过期重复任务逐次追平（条⑧⑨）", () => {
+    it("daily 错 1 天：lastDoneAt = 应发生日（startDay）；下次 due ≤ today，仍可再做", () => {
+      const start = localDateOf(new Date(2026, 5, 13));
+      const task = baseTask({
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        startAt: start,
+      });
+      const now = new Date("2026-06-14T08:00:00.000Z");
+      const { next, occurrence } = completeTask(task, { now, genId, occurrenceSortOrder: 0 });
+
+      expect(occurrence?.completedAt).toBe(now.toISOString());
+      expect(next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 13)));
+
+      const nextDueDay = currentDueDayFor(next.recurrence!, next.lastDoneAt, next.startAt, now);
+      const todayDay = currentDueDayFor(daily0(), null, localDateOf(now), now);
+      expect(nextDueDay).toBeLessThanOrEqual(todayDay);
+    });
+
+    it("daily 错 3 天连勾 4 次：每次推一格，第 4 次 lastDoneAt=今天、下次 > today 清空", () => {
+      const start = localDateOf(new Date(2026, 5, 11));
+      let task = baseTask({
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        startAt: start,
+      });
+      const now = new Date("2026-06-14T08:00:00.000Z");
+
+      const expected = [
+        localDateOf(new Date(2026, 5, 11)),
+        localDateOf(new Date(2026, 5, 12)),
+        localDateOf(new Date(2026, 5, 13)),
+        localDateOf(new Date(2026, 5, 14)),
+      ];
+      for (let k = 0; k < 4; k++) {
+        const { next } = completeTask(task, { now, genId, occurrenceSortOrder: k });
+        expect(next.lastDoneAt).toBe(expected[k]);
+        task = next;
+      }
+      const finalNextDue = currentDueDayFor(task.recurrence!, task.lastDoneAt, task.startAt, now);
+      const todayDay = currentDueDayFor(daily0(), null, localDateOf(now), now);
+      expect(finalNextDue).toBeGreaterThan(todayDay);
+    });
+
+    it("daily 提前完成（now < due）：lastDoneAt = 应发生日，下次顺延（提前不连跳保住）", () => {
+      const start = localDateOf(new Date(2026, 5, 1));
+      const task = baseTask({
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        startAt: start,
+        lastDoneAt: localDateOf(new Date(2026, 5, 13)),
+      });
+      const now = new Date("2026-06-13T20:00:00.000Z");
+      const { next } = completeTask(task, { now, genId, occurrenceSortOrder: 0 });
+      expect(next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 14)));
+    });
+
+    it("weekly·周一 错 2 周：第 1 次 lastDoneAt=startDay，第 2 次推到下一周一", () => {
+      const start = localDateOf(new Date(2026, 5, 1));
+      let task = baseTask({
+        recurrence: { freq: "weekly", interval: 1, basis: "due", byWeekday: [1] },
+        startAt: start,
+      });
+      const now = new Date("2026-06-14T08:00:00.000Z");
+
+      const r1 = completeTask(task, { now, genId, occurrenceSortOrder: 0 });
+      expect(r1.next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 1)));
+      task = r1.next;
+
+      const r2 = completeTask(task, { now, genId, occurrenceSortOrder: 1 });
+      expect(r2.next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 8)));
+    });
+
+    it("monthly·1号 错 2 月：3 次连勾依次推到 04-01 / 05-01 / 06-01", () => {
+      const start = localDateOf(new Date(2026, 3, 1));
+      let task = baseTask({
+        recurrence: { freq: "monthly", interval: 1, basis: "due", byMonthday: [1] },
+        startAt: start,
+      });
+      const now = new Date("2026-06-14T08:00:00.000Z");
+
+      const expected = [
+        localDateOf(new Date(2026, 3, 1)),
+        localDateOf(new Date(2026, 4, 1)),
+        localDateOf(new Date(2026, 5, 1)),
+      ];
+      for (let k = 0; k < 3; k++) {
+        const { next } = completeTask(task, { now, genId, occurrenceSortOrder: k });
+        expect(next.lastDoneAt).toBe(expected[k]);
+        task = next;
+      }
+    });
+
+    it("until 边界：dueIso 推下次 ≤ until 不终结；再勾一次到 until 当天才终结", () => {
+      const start = localDateOf(new Date(2026, 5, 13));
+      const until = localDateOf(new Date(2026, 5, 14));
+      const task = baseTask({
+        recurrence: { freq: "daily", interval: 1, basis: "due", until },
+        startAt: start,
+      });
+      const now1 = new Date("2026-06-14T08:00:00.000Z");
+      const r1 = completeTask(task, { now: now1, genId, occurrenceSortOrder: 0 });
+      expect(r1.next.recurrence).not.toBeNull();
+      expect(r1.next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 13)));
+
+      const r2 = completeTask(r1.next, { now: now1, genId, occurrenceSortOrder: 1 });
+      expect(r2.next.recurrence).toBeNull();
+      expect(r2.next.done).toBe(true);
+      expect(r2.next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 14)));
+    });
+
+    it("过期场景下 occurrence.completedAt = 实际点击时刻（与 lastDoneAt 分离）", () => {
+      const start = localDateOf(new Date(2026, 5, 13));
+      const task = baseTask({
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        startAt: start,
+      });
+      const now = new Date("2026-06-14T08:00:00.000Z");
+      const { next, occurrence } = completeTask(task, { now, genId, occurrenceSortOrder: 0 });
+      expect(occurrence?.completedAt).toBe(now.toISOString());
+      expect(next.lastDoneAt).not.toBe(now.toISOString());
+      expect(next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 13)));
+    });
+
+    it("count=1 终结：completedAt=nowIso，lastDoneAt=dueIso（应发生日）", () => {
+      const start = localDateOf(new Date(2026, 5, 13));
+      const task = baseTask({
+        recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
+        startAt: start,
+      });
+      const now = new Date("2026-06-14T08:00:00.000Z");
+      const { next, occurrence } = completeTask(task, { now, genId, occurrenceSortOrder: 0 });
+      expect(occurrence).toBeNull();
+      expect(next.recurrence).toBeNull();
+      expect(next.done).toBe(true);
+      expect(next.completedAt).toBe(now.toISOString());
+      expect(next.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 13)));
     });
   });
 });
