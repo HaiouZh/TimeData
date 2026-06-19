@@ -1,3 +1,5 @@
+import type { Modifier } from "@dnd-kit/core";
+import type { Transform } from "@dnd-kit/utilities";
 import { describe, expect, it } from "vitest";
 import {
   armTargetFromDragOver,
@@ -6,8 +8,14 @@ import {
   parseTodoContainerId,
   resolveTodoDragOperation,
   resolveTodoDragWithArm,
+  restrictToVerticalAxis,
   type TodoContainer,
 } from "./todoDnd.js";
+
+/** 只喂 transform 调用 modifier（其余 ModifierArguments 字段本实现用不到）。 */
+function applyModifier(modifier: Modifier, transform: Transform): Transform {
+  return modifier({ transform } as Parameters<Modifier>[0]);
+}
 
 describe("parseTodoContainerId", () => {
   it.each<[string, TodoContainer]>([
@@ -312,5 +320,25 @@ describe("containerIdForTask", () => {
     expect(
       containerIdForTask({ parentId: null, scheduledAt: "2026-07-01T00:00:00.000Z" }, "2026-06-19"),
     ).toBe("");
+  });
+});
+
+describe("restrictToVerticalAxis", () => {
+  it("把横向位移归零（向右拉不再顶出横向滚动条）", () => {
+    expect(applyModifier(restrictToVerticalAxis, { x: 120, y: 40, scaleX: 1, scaleY: 1 })).toEqual({
+      x: 0,
+      y: 40,
+      scaleX: 1,
+      scaleY: 1,
+    });
+  });
+
+  it("保留纵向位移与缩放（纵向重排照常）", () => {
+    expect(applyModifier(restrictToVerticalAxis, { x: -80, y: -12, scaleX: 1, scaleY: 1.5 })).toEqual({
+      x: 0,
+      y: -12,
+      scaleX: 1,
+      scaleY: 1.5,
+    });
   });
 });

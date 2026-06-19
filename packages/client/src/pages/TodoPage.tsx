@@ -50,7 +50,12 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
-import { armTargetFromDragOver, parseTodoContainerId, resolveTodoDragWithArm } from "./todo/todoDnd.js";
+import {
+  armTargetFromDragOver,
+  parseTodoContainerId,
+  resolveTodoDragWithArm,
+  restrictToVerticalAxis,
+} from "./todo/todoDnd.js";
 import { useHoverIntent } from "./todo/useHoverIntent.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
@@ -316,6 +321,7 @@ export function TodoPage() {
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      modifiers={[restrictToVerticalAxis]}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={(event) => void handleDragEnd(event)}

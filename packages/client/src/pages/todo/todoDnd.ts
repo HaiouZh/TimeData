@@ -1,6 +1,17 @@
+import type { Modifier } from "@dnd-kit/core";
 import type { Task } from "@timedata/shared";
 
 export type TodoPool = "today" | "inbox";
+
+/**
+ * 把拖拽 transform 的横向分量归零，限制被拖行只在纵向移动。
+ *
+ * 纵向列表里横向位移没有语义（嵌套成子任务靠"悬停在哪行"=纵向位置，与横向偏移无关）。
+ * 而拖拽期 `.swipeable-list-item` 临时 `overflow:visible`（解纵向裁剪防隐身）会连横向裁剪一起放开，
+ * 于是向右拉时被拖行顶出右边缘、页面冒出一条多余的横向滚动条。归零 x 即可根除。
+ * 作用于渲染与碰撞矩形，故重排/悬停判定不受影响。
+ */
+export const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 /** dnd-kit container id 域：池容器或父任务容器。 */
 export type TodoContainer =
