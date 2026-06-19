@@ -12,6 +12,7 @@ import {
   moveTaskToParent,
   persistTaskOrder,
   promoteToRoot,
+  reorderChildren,
   scheduleTask,
   setTaskTags,
   setTaskTurn,
@@ -580,6 +581,38 @@ describe("persistTaskOrder", () => {
     await db.syncLog.clear();
 
     await persistTaskOrder([a.id, b.id]);
+
+    const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
+    expect(logs.length).toBe(0);
+  });
+});
+
+describe("reorderChildren", () => {
+  it("把子任务移到新位置并持久化 sortOrder", async () => {
+    const t0 = new Date("2026-06-14T08:00:00.000Z");
+    const parent = await addTask({ title: "父", now: t0 });
+    const a = await createChildTask(parent.id, "a", t0);
+    const b = await createChildTask(parent.id, "b", t0);
+    const c = await createChildTask(parent.id, "c", t0);
+    await db.syncLog.clear();
+
+    // 把 c（末位）拖到 a（首位）的位置
+    await reorderChildren(parent.id, c.id, a.id);
+
+    const after = await db.tasks.where("parentId").equals(parent.id).sortBy("sortOrder");
+    expect(after.map((t) => t.id)).toEqual([c.id, a.id, b.id]);
+    const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
+    expect(logs.length).toBeGreaterThan(0);
+    expect(logs.every((log) => log.action === "update")).toBe(true);
+  });
+
+  it("拖到原位置不写库", async () => {
+    const parent = await addTask({ title: "父" });
+    const a = await createChildTask(parent.id, "a");
+    await createChildTask(parent.id, "b");
+    await db.syncLog.clear();
+
+    await reorderChildren(parent.id, a.id, a.id);
 
     const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
     expect(logs.length).toBe(0);

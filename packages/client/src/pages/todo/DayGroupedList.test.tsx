@@ -43,6 +43,23 @@ describe("DayGroupedList", () => {
     await unmount(root);
   });
 
+  it("展开后出现『收起』，点击收起回到前 3 组", async () => {
+    const segs = ["今天", "昨天", "6月10日", "6月9日", "6月8日"].map(seg);
+    const { host, root } = await renderDom(<DayGroupedList segments={segs} renderTasks={renderTasks} />);
+    await click(host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement);
+    expect(host.textContent).toContain("6月9日");
+
+    const collapse = host.querySelector('[aria-label="收起"]') as HTMLButtonElement | null;
+    expect(collapse).not.toBeNull();
+    await click(collapse);
+
+    expect(host.textContent).not.toContain("6月9日");
+    expect(host.textContent).not.toContain("6月8日");
+    // 收起后『显示更多』重新出现
+    expect(host.querySelector('[aria-label^="显示更多"]')).not.toBeNull();
+    await unmount(root);
+  });
+
   it("空段输入：不渲染卡片也不渲染按钮", async () => {
     const { host, root } = await renderDom(<DayGroupedList segments={[]} renderTasks={renderTasks} />);
     expect(host.querySelector('[aria-label^="显示更多"]')).toBeNull();

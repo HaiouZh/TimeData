@@ -31,6 +31,7 @@ import {
   moveTaskToParent,
   persistTaskOrder,
   promoteToRoot,
+  reorderChildren,
   scheduleTask,
   setTaskTags,
   setTaskTurn,
@@ -56,6 +57,9 @@ export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const [detailId, setDetailId] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
+  // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
+  const [dragging, setDragging] = useState(false);
   const { syncAfterWrite } = useSyncContext();
   const wide = useIsWideScreen();
 
@@ -120,9 +124,11 @@ export function TodoPage() {
 
   function handleDragStart(event: DragStartEvent): void {
     void event;
+    setDragging(true);
   }
 
   async function handleDragEnd(event: DragEndEvent): Promise<void> {
+    setDragging(false);
     const { active, over } = event;
     if (!over) return;
 
@@ -154,6 +160,12 @@ export function TodoPage() {
     try {
       switch (op.kind) {
         case "reorder": {
+          // 父任务容器内重排子任务：children 不在 buckets 里，交给数据层按 parentId 取后回填。
+          if (op.containerId.startsWith("parent:")) {
+            await reorderChildren(op.containerId.slice("parent:".length), activeId, overId);
+            syncAfterWrite();
+            break;
+          }
           const containerTasks =
             op.containerId === "pool:today" ? f(buckets.today) : op.containerId === "pool:inbox" ? f(buckets.inbox) : [];
           if (containerTasks.length === 0) return;
@@ -269,8 +281,9 @@ export function TodoPage() {
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={(event) => void handleDragEnd(event)}
+      onDragCancel={() => setDragging(false)}
     >
-      <div className="min-h-full bg-page text-ink">
+      <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
           <AttentionQueue tasks={allTasks} rowHandlers={rowHandlers} onTurnChange={changeTurn} />
           <TagFilterBar tasks={allTasks} selected={selectedTags} onToggle={toggleTag} onClear={clearTags} />

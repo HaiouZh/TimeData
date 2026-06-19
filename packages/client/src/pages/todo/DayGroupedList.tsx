@@ -42,6 +42,16 @@ export function DayGroupedList({ segments, renderTasks, initialGroups = 3 }: Day
           显示更多（{hidden}）
         </button>
       )}
+      {expanded && segments.length > initialGroups && (
+        <button
+          type="button"
+          aria-label="收起"
+          onClick={() => setExpanded(false)}
+          className="mt-1 w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover"
+        >
+          收起
+        </button>
+      )}
     </div>
   );
 }

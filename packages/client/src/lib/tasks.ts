@@ -105,6 +105,23 @@ export async function persistTaskOrder(orderedIds: string[]): Promise<void> {
   });
 }
 
+/**
+ * 在同一父任务下重排子任务：读出当前 children（按 sortOrder），把 activeId 移到 overId 处，
+ * 再走 persistTaskOrder 回填槽位。只传子任务自己的 id，故仅在它们自身的 sortOrder 槽位内重排，
+ * 不影响根任务排序；顺序未变时 persistTaskOrder 自身短路不写库。
+ */
+export async function reorderChildren(parentId: string, activeId: string, overId: string): Promise<void> {
+  const children = await db.tasks.where("parentId").equals(parentId).sortBy("sortOrder");
+  const ids = children.map((child) => child.id);
+  const oldIndex = ids.indexOf(activeId);
+  const newIndex = ids.indexOf(overId);
+  if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+  const ordered = ids.slice();
+  const [moved] = ordered.splice(oldIndex, 1);
+  ordered.splice(newIndex, 0, moved);
+  await persistTaskOrder(ordered);
+}
+
 export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Task> {
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
