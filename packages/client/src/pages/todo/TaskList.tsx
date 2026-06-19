@@ -25,6 +25,7 @@ import {
 import "@meauxt/react-swipeable-list/dist/styles.css";
 import type { Task, TaskSubtask } from "@timedata/shared";
 import { useState } from "react";
+import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { SortableTaskRow } from "./SortableTaskRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
 
@@ -46,6 +47,7 @@ export function TaskList(props: TaskListProps) {
   const { pool, tasks, isOverdue, sortable } = props;
   // pool="completed" 是只读已完成列表：行不可拖、不可换池，只允许 swipe 删除。
   const readOnly = pool === "completed";
+  const isCoarsePointer = useIsCoarsePointer();
   const [dragging, setDragging] = useState(false);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -71,8 +73,12 @@ export function TaskList(props: TaskListProps) {
         pool={pool}
         overdue={pool === "today" && (isOverdue?.(task) ?? false)}
         dragHandle={dragHandle}
+        coarsePointer={isCoarsePointer}
         onToggle={props.onToggle}
         onEdit={props.onEdit}
+        onDelete={props.onDelete}
+        onToToday={readOnly ? undefined : props.onToToday}
+        onToInbox={readOnly ? undefined : props.onToInbox}
         onSubtasksChange={props.onSubtasksChange}
       />
     );
@@ -106,7 +112,13 @@ export function TaskList(props: TaskListProps) {
     );
 
     return (
-      <SwipeableListItem key={task.id} leadingActions={leading} trailingActions={trailing}>
+      <SwipeableListItem
+        key={task.id}
+        leadingActions={leading}
+        trailingActions={trailing}
+        blockSwipe={!isCoarsePointer}
+        maxSwipe={0.5}
+      >
         {sortable && !readOnly ? (
           <SortableTaskRow id={task.id}>{(handle) => renderTaskRow(task, handle)}</SortableTaskRow>
         ) : (
@@ -117,7 +129,7 @@ export function TaskList(props: TaskListProps) {
   }
 
   const list = (
-    <SwipeableList type={ListType.IOS} fullSwipe={false}>
+    <SwipeableList type={ListType.IOS} fullSwipe={false} threshold={0.3}>
       {tasks.map((task) => renderItem(task))}
     </SwipeableList>
   );

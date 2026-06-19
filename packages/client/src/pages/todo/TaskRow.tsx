@@ -1,6 +1,6 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
+import { ArrowLeft, ArrowRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
 import type { Task, TaskSubtask } from "@timedata/shared";
-import { DotsSixVertical, Repeat } from "@phosphor-icons/react";
 import { type MouseEvent as ReactMouseEvent, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
@@ -25,20 +25,18 @@ export interface TaskRowProps {
   pool: TaskPool;
   overdue?: boolean;
   dragHandle?: RowDragHandle;
+  coarsePointer?: boolean;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
+  onDelete?: (t: Task) => void;
+  onToToday?: (t: Task) => void;
+  onToInbox?: (t: Task) => void;
   onSubtasksChange: (task: Task, next: TaskSubtask[]) => void;
   onTurnChange?: (task: Task, turn: Task["turn"]) => void;
   turnBadgeInteractive?: boolean;
 }
 
-function InlineSubtasks({
-  task,
-  onCommit,
-}: {
-  task: Task;
-  onCommit: (next: TaskSubtask[]) => void;
-}) {
+function InlineSubtasks({ task, onCommit }: { task: Task; onCommit: (next: TaskSubtask[]) => void }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: 每次展开都会重新挂载，这里只读取一次
   const initial = useMemo<TaskSubtask[]>(() => task.subtasks ?? [], []);
   const { subtasks, onChange, onBlur } = useSubtaskDraft({
@@ -59,8 +57,12 @@ export function TaskRow({
   pool,
   overdue,
   dragHandle,
+  coarsePointer,
   onToggle,
   onEdit,
+  onDelete,
+  onToToday,
+  onToInbox,
   onSubtasksChange,
   onTurnChange,
   turnBadgeInteractive,
@@ -81,6 +83,8 @@ export function TaskRow({
     passiveScheduled ||
     task.turn !== null ||
     (task.tags ?? []).length > 0;
+  const canSwapPool = task.recurrence === null && pool !== "completed";
+  const overlayRightClass = dragHandle ? "right-8" : "right-2";
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
@@ -96,7 +100,7 @@ export function TaskRow({
   return (
     <div className="group w-full rounded-row transition hover:bg-surface-hover">
       <div
-        className="flex items-center gap-3 px-2 py-2"
+        className="relative flex items-center gap-3 px-2 py-2"
         role="link"
         tabIndex={0}
         aria-label={`打开 ${task.title}`}
@@ -166,7 +170,11 @@ export function TaskRow({
                 </span>
               )}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
-                <span key={tag} data-testid="tag-chip" className="rounded-pill bg-surface-hover px-1.5 py-0.5 text-ink-2">
+                <span
+                  key={tag}
+                  data-testid="tag-chip"
+                  className="rounded-pill bg-surface-hover px-1.5 py-0.5 text-ink-2"
+                >
                   #{tag}
                 </span>
               ))}
@@ -174,6 +182,55 @@ export function TaskRow({
             </div>
           )}
         </div>
+        {coarsePointer === false && (
+          <div
+            className={`pointer-events-none absolute ${overlayRightClass} inset-y-0 z-10 my-auto flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100`}
+          >
+            <span
+              aria-hidden="true"
+              className="pointer-events-none -mr-2 h-6 w-6 bg-gradient-to-r from-transparent to-surface-hover"
+            />
+            {canSwapPool && pool === "today" && onToInbox && (
+              <button
+                type="button"
+                aria-label={`回收件箱 ${task.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToInbox(task);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+              >
+                <Icon icon={ArrowLeft} size={16} />
+              </button>
+            )}
+            {canSwapPool && (pool === "inbox" || pool === "upcoming") && onToToday && (
+              <button
+                type="button"
+                aria-label={`排进今天 ${task.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToToday(task);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+              >
+                <Icon icon={ArrowRight} size={16} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                aria-label={`删除 ${task.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(task);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-danger"
+              >
+                <Icon icon={Trash} size={16} />
+              </button>
+            )}
+          </div>
+        )}
         {dragHandle && (
           <button
             ref={dragHandle.setActivatorNodeRef}
@@ -188,9 +245,7 @@ export function TaskRow({
           </button>
         )}
       </div>
-      {expanded && subtaskTotal > 0 && (
-        <InlineSubtasks task={task} onCommit={(next) => onSubtasksChange(task, next)} />
-      )}
+      {expanded && subtaskTotal > 0 && <InlineSubtasks task={task} onCommit={(next) => onSubtasksChange(task, next)} />}
     </div>
   );
 }
