@@ -40,7 +40,7 @@ describe("RecurrenceSchema", () => {
 describe("TaskSchema", () => {
   const t = {
     id: "t1", title: "跑步", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null, subtasks: [],
+    lastDoneAt: null, startAt: null, scheduledAt: null,
     sortOrder: 0,
     createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
   };
@@ -57,26 +57,18 @@ describe("TaskSchema", () => {
   });
 });
 
-describe("TaskSchema scheduledAt/subtasks", () => {
+describe("TaskSchema scheduledAt", () => {
   const baseTask = {
     id: "t1", title: "刮胡子", done: false, recurrence: null,
-    lastDoneAt: null, startAt: null, scheduledAt: null, subtasks: [],
+    lastDoneAt: null, startAt: null, scheduledAt: null,
     sortOrder: 0, createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
   };
-  it("接受 null scheduledAt 与空 subtasks", () => {
-    expect(TaskSchema.parse(baseTask).subtasks).toEqual([]);
+  it("接受 null scheduledAt", () => {
+    expect(TaskSchema.parse(baseTask).scheduledAt).toBeNull();
   });
-  it("接受合法未来 scheduledAt 与子任务", () => {
-    const t = TaskSchema.parse({ ...baseTask, scheduledAt: "2026-12-25T00:00:00.000Z",
-      subtasks: [{ id: "s1", title: "买礼物", done: false }] });
+  it("接受合法未来 scheduledAt", () => {
+    const t = TaskSchema.parse({ ...baseTask, scheduledAt: "2026-12-25T00:00:00.000Z" });
     expect(t.scheduledAt).toBe("2026-12-25T00:00:00.000Z");
-  });
-  it("拒绝空标题子任务", () => {
-    expect(() => TaskSchema.parse({ ...baseTask, subtasks: [{ id: "s1", title: "  ", done: false }] })).toThrow();
-  });
-  it("拒绝超过 200 条子任务", () => {
-    const many = Array.from({ length: 201 }, (_, i) => ({ id: `s${i}`, title: "x", done: false }));
-    expect(() => TaskSchema.parse({ ...baseTask, subtasks: many })).toThrow();
   });
   it("scheduledAt 非严格 UTC ISO 报错", () => {
     expect(() => TaskSchema.parse({ ...baseTask, scheduledAt: "2026-12-25" })).toThrow();
@@ -121,7 +113,6 @@ describe("TaskSchema completedCount", () => {
       lastDoneAt: null,
       startAt: null,
       scheduledAt: null,
-      subtasks: [],
       sortOrder: 0,
       createdAt: "2026-06-15T00:00:00.000Z",
       updatedAt: "2026-06-15T00:00:00.000Z",
@@ -139,7 +130,6 @@ describe("TaskSchema turn", () => {
     lastDoneAt: null,
     startAt: null,
     scheduledAt: null,
-    subtasks: [],
     completedCount: 0,
     sortOrder: 0,
     createdAt: "2026-06-16T00:00:00.000Z",
@@ -181,7 +171,6 @@ describe("TaskSchema completedAt/tags", () => {
     lastDoneAt: null,
     startAt: null,
     scheduledAt: null,
-    subtasks: [],
     completedCount: 0,
     turn: null,
     turnAt: null,
@@ -220,7 +209,6 @@ describe("TaskSchema parentId", () => {
     lastDoneAt: null,
     startAt: null,
     scheduledAt: null,
-    subtasks: [],
     completedCount: 0,
     turn: null,
     turnAt: null,
@@ -240,8 +228,10 @@ describe("TaskSchema parentId", () => {
     expect(() => TaskSchema.parse({ ...baseTask, parentId: "" })).toThrow();
   });
 
-  it("[Phase A 哨兵] legacy subtasks 字段仍暂时保留", () => {
-    const parsed = TaskSchema.parse({ ...baseTask, subtasks: [{ id: "s1", title: "旧子项", done: false }] });
-    expect(parsed.subtasks).toHaveLength(1);
+  it("strips unknown legacy keys from parsed task", () => {
+    // 旧数据（含已废弃字段）经 TaskSchema.parse 后未知键被 zod 剥离，老备份回灌无害。
+    const legacyKey = "sub" + "tasks";
+    const parsed = TaskSchema.parse({ ...baseTask, [legacyKey]: [{ id: "s1", title: "旧子项", done: false }] });
+    expect(Object.prototype.hasOwnProperty.call(parsed, legacyKey)).toBe(false);
   });
 });

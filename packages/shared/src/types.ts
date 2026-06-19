@@ -14,7 +14,6 @@ import type {
   SyncPushRequestSchema,
   SyncStatusResponseSchema,
   TaskSchema,
-  TaskSubtaskSchema,
   TimeEntrySchema,
 } from "./schemas.js";
 import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
@@ -28,8 +27,6 @@ export type Setting = z.infer<typeof SettingSchema>;
 export type Recurrence = z.infer<typeof RecurrenceSchema>;
 
 export type Task = z.infer<typeof TaskSchema>;
-
-export type TaskSubtask = z.infer<typeof TaskSubtaskSchema>;
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 

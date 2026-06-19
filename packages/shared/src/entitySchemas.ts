@@ -83,12 +83,6 @@ export const RecurrenceSchema = z
       ctx.addIssue({ code: "custom", message: "count and until are mutually exclusive" });
   });
 
-export const TaskSubtaskSchema = z.object({
-  id: NonEmptyTrimmedStringSchema,
-  title: NonEmptyTrimmedStringSchema,
-  done: z.boolean(),
-});
-
 export const TaskSchema = z.object({
   id: NonEmptyTrimmedStringSchema,
   parentId: z.string().min(1).nullable().default(null),
@@ -98,7 +92,6 @@ export const TaskSchema = z.object({
   lastDoneAt: UtcIsoStringSchema.nullable(),
   startAt: UtcIsoStringSchema.nullable(),
   scheduledAt: UtcIsoStringSchema.nullable(),
-  subtasks: z.array(TaskSubtaskSchema).max(200).default([]),
   completedCount: z.number().int().min(0).default(0),
   turn: z.enum(["me", "running", "parked"]).nullable().default(null),
   turnAt: UtcIsoStringSchema.nullable().default(null),

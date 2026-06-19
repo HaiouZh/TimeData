@@ -53,7 +53,6 @@ const task = {
   lastDoneAt: null,
   startAt: null,
   scheduledAt: null,
-  subtasks: [],
   completedCount: 0,
   turn: null,
   turnAt: null,

@@ -19,7 +19,6 @@ function baseTask(over: Partial<Task> = {}): Task {
     lastDoneAt: null,
     startAt: null,
     scheduledAt: null,
-    subtasks: [],
     completedCount: 0,
     turn: null,
     turnAt: null,
@@ -131,7 +130,6 @@ describe("completeTask", () => {
       recurrence: { freq: "daily", interval: 1, basis: "due" },
       startAt: start,
       tags: ["健身"],
-      subtasks: [{ id: "s1", title: "热身", done: true }],
       turn: "me",
       turnAt: "2026-06-01T00:00:00.000Z",
     });
@@ -147,7 +145,6 @@ describe("completeTask", () => {
       turn: null,
     });
     expect(occurrence?.id).not.toBe("t1");
-    expect(occurrence?.subtasks).toEqual([{ id: "s1", title: "热身", done: true }]);
     expect(next).toMatchObject({
       id: "t1",
       done: false,
@@ -156,7 +153,6 @@ describe("completeTask", () => {
       turn: null,
       turnAt: null,
     });
-    expect(next.subtasks).toEqual([{ id: "s1", title: "热身", done: false }]);
     expect(next.recurrence).not.toBeNull();
   });
 
