@@ -35,6 +35,11 @@ async function nextSortOrder(): Promise<number> {
   return last ? last.sortOrder + 1 : 0;
 }
 
+async function nextChildSortOrder(parentId: string): Promise<number> {
+  const children = await db.tasks.where("parentId").equals(parentId).toArray();
+  return children.length === 0 ? 0 : Math.max(...children.map((child) => child.sortOrder)) + 1;
+}
+
 async function putTask(next: Task): Promise<Task> {
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await db.tasks.put(next);
@@ -56,6 +61,7 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
         : localDateOf(now);
   const task: Task = TaskSchema.parse({
     id: uuid(),
+    parentId: null,
     title: normalizeTitle(input.title),
     done: false,
     recurrence,
@@ -204,6 +210,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   const updatedAt = now.toISOString();
   const base = {
     ...existing,
+    parentId: existing.parentId ?? null,
     scheduledAt: existing.scheduledAt ?? null,
     subtasks: existing.subtasks ?? [],
     completedCount: existing.completedCount ?? 0,
@@ -211,16 +218,24 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     tags: existing.tags ?? [],
   };
 
+  if ((base.parentId ?? null) !== null) {
+    const completedAt = base.done ? null : updatedAt;
+    const next = TaskSchema.parse({ ...base, done: !base.done, completedAt, updatedAt });
+    return putTask(next);
+  }
+
   // 非重复且当前已完成 → 翻回未完成；重复任务的勾选只表示“完成一次”，不走撤销。
   if (!base.recurrence && base.done) {
     const reopened = TaskSchema.parse({ ...base, done: false, completedAt: null, updatedAt });
     return putTask(reopened);
   }
 
-  const { next, occurrence } = completeTask(base as Task, {
+  const children = base.recurrence ? await db.tasks.where("parentId").equals(id).sortBy("sortOrder") : [];
+  const { next, occurrence, occurrenceChildren = [], templateChildren = [] } = completeTask(base as Task, {
     now,
     genId: uuid,
     occurrenceSortOrder: await nextSortOrder(),
+    children,
   });
 
   if (!occurrence) return putTask(next);
@@ -228,6 +243,14 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await db.tasks.add(occurrence);
     await recordSyncLog("tasks", occurrence.id, "create", occurrence.updatedAt);
+    for (const child of occurrenceChildren) {
+      await db.tasks.add(child);
+      await recordSyncLog("tasks", child.id, "create", child.updatedAt);
+    }
+    for (const child of templateChildren) {
+      await db.tasks.put(child);
+      await recordSyncLog("tasks", child.id, "update", child.updatedAt);
+    }
     await db.tasks.put(next);
     await recordSyncLog("tasks", next.id, "update", next.updatedAt);
   });
@@ -263,10 +286,125 @@ export async function updateSubtasks(id: string, subtasks: TaskSubtask[], option
   return putTask(next);
 }
 
+export async function createChildTask(parentId: string, title: string, now: Date = new Date()): Promise<Task> {
+  const createdAt = now.toISOString();
+  let created: Task | null = null;
+
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const parent = await db.tasks.get(parentId);
+    if (!parent) throw new Error("PARENT_NOT_FOUND");
+    if ((parent.parentId ?? null) !== null) throw new Error("CANNOT_NEST_BEYOND_ONE_LEVEL");
+
+    const task = TaskSchema.parse({
+      id: uuid(),
+      parentId,
+      title: normalizeTitle(title),
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      subtasks: [],
+      completedCount: 0,
+      turn: null,
+      turnAt: null,
+      completedAt: null,
+      tags: [],
+      sortOrder: await nextChildSortOrder(parentId),
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    await db.tasks.add(task);
+    await recordSyncLog("tasks", task.id, "create", task.updatedAt);
+    created = task;
+  });
+
+  if (!created) throw new Error("PARENT_NOT_FOUND");
+  return created;
+}
+
+export async function promoteToRoot(
+  taskId: string,
+  targetPool: "today" | "inbox",
+  sortOrder: number,
+  now: Date = new Date(),
+): Promise<Task> {
+  const existing = await db.tasks.get(taskId);
+  if (!existing) throw new Error("任务不存在");
+
+  const updatedAt = now.toISOString();
+  const scheduledAt = targetPool === "today" ? localDateOf(now) : null;
+  const next = TaskSchema.parse({
+    ...existing,
+    parentId: null,
+    scheduledAt,
+    subtasks: existing.subtasks ?? [],
+    completedCount: existing.completedCount ?? 0,
+    completedAt: existing.completedAt ?? null,
+    tags: existing.tags ?? [],
+    sortOrder,
+    updatedAt,
+  });
+  return putTask(next);
+}
+
+export async function moveTaskToParent(
+  taskId: string,
+  newParentId: string,
+  sortOrder: number,
+  now: Date = new Date(),
+): Promise<Task> {
+  const updatedAt = now.toISOString();
+  let moved: Task | null = null;
+
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const [task, parent] = await Promise.all([db.tasks.get(taskId), db.tasks.get(newParentId)]);
+    if (!task) throw new Error("任务不存在");
+    if (!parent || taskId === newParentId || (parent.parentId ?? null) !== null) {
+      throw new Error("CANNOT_NEST_BEYOND_ONE_LEVEL");
+    }
+
+    if ((task.parentId ?? null) === null) {
+      const childCount = await db.tasks.where("parentId").equals(taskId).count();
+      if (childCount > 0) throw new Error("CANNOT_DEMOTE_ROOT_WITH_CHILDREN");
+    }
+
+    const next = TaskSchema.parse({
+      ...task,
+      parentId: newParentId,
+      subtasks: task.subtasks ?? [],
+      completedCount: task.completedCount ?? 0,
+      completedAt: task.completedAt ?? null,
+      tags: task.tags ?? [],
+      sortOrder,
+      updatedAt,
+    });
+
+    await db.tasks.put(next);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    moved = next;
+  });
+
+  if (!moved) throw new Error("任务不存在");
+  return moved;
+}
+
 export async function deleteTask(id: string): Promise<void> {
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await db.tasks.delete(id);
     await recordSyncLog("tasks", id, "delete");
+  });
+}
+
+export async function deleteTaskCascade(taskId: string): Promise<void> {
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const children = await db.tasks.where("parentId").equals(taskId).toArray();
+    const ids = [taskId, ...children.map((child) => child.id)];
+    await db.tasks.bulkDelete(ids);
+    for (const id of ids) {
+      await recordSyncLog("tasks", id, "delete");
+    }
   });
 }
 
@@ -306,6 +444,7 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   }));
   const buckets: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
   for (const t of all) {
+    if ((t.parentId ?? null) !== null) continue;
     if (t.recurrence) buckets.recurring.push(t);
     const p = placementForTask(t, now);
     if (p.pool === "today") buckets.today.push(t);

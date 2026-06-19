@@ -5,9 +5,13 @@ import { db } from "../db/index.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
   addTask,
+  createChildTask,
   deleteTask,
+  deleteTaskCascade,
   listTasks,
+  moveTaskToParent,
   persistTaskOrder,
+  promoteToRoot,
   scheduleTask,
   setTaskTags,
   setTaskTurn,
@@ -153,6 +157,169 @@ describe("toggleTaskDone", () => {
     const done = await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
     expect(done.done).toBe(true);
     expect(done.subtasks[0].done).toBe(true);
+  });
+
+  it("child task toggle ignores dormant recurrence and does not create occurrence", async () => {
+    const parent = await addTask({ title: "父任务", now: new Date("2026-06-19T08:00:00.000Z") });
+    const child = await createChildTask(parent.id, "子任务", new Date("2026-06-19T08:30:00.000Z"));
+    await db.tasks.update(child.id, {
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-06-19T00:00:00.000Z",
+    } satisfies Partial<Task>);
+    const beforeCount = await db.tasks.count();
+
+    const done = await toggleTaskDone(child.id, { now: new Date("2026-06-19T09:00:00.000Z") });
+
+    expect(done).toMatchObject({
+      id: child.id,
+      parentId: parent.id,
+      done: true,
+      completedAt: "2026-06-19T09:00:00.000Z",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+    });
+    expect(await db.tasks.count()).toBe(beforeCount);
+    expect(await db.tasks.where("parentId").equals(child.id).count()).toBe(0);
+  });
+
+  it("root recurring completion snapshots children and resets template children", async () => {
+    const root = await addTask({
+      title: "重复父任务",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      now: new Date("2026-06-19T06:00:00.000Z"),
+    });
+    const doneChild = await createChildTask(root.id, "已完成子项", new Date("2026-06-19T06:30:00.000Z"));
+    await toggleTaskDone(doneChild.id, { now: new Date("2026-06-19T07:00:00.000Z") });
+    const todoChild = await createChildTask(root.id, "未完成子项", new Date("2026-06-19T07:30:00.000Z"));
+
+    const next = await toggleTaskDone(root.id, { now: new Date("2026-06-19T08:00:00.000Z") });
+
+    const occurrence = (await db.tasks.toArray()).find((task) => task.id !== root.id && task.title === "重复父任务");
+    expect(occurrence).toMatchObject({ done: true, parentId: null, completedAt: "2026-06-19T08:00:00.000Z" });
+
+    const occurrenceChildren = await db.tasks.where("parentId").equals(occurrence!.id).sortBy("sortOrder");
+    expect(occurrenceChildren.map((child) => [child.title, child.done, child.completedAt])).toEqual([
+      ["已完成子项", true, "2026-06-19T07:00:00.000Z"],
+      ["未完成子项", false, null],
+    ]);
+
+    const templateChildren = await db.tasks.where("parentId").equals(root.id).sortBy("sortOrder");
+    expect(templateChildren.map((child) => [child.id, child.done, child.completedAt])).toEqual([
+      [doneChild.id, false, null],
+      [todoChild.id, false, null],
+    ]);
+    expect(next.done).toBe(false);
+    expect(next.completedCount).toBe(1);
+  });
+});
+
+describe("independent child task helpers", () => {
+  it("createChildTask validates parent and creates a normalized child", async () => {
+    await expect(createChildTask("missing", "子任务")).rejects.toThrow("PARENT_NOT_FOUND");
+
+    const parent = await addTask({ title: "父任务", now: new Date("2026-06-19T08:00:00.000Z") });
+    const child = await createChildTask(parent.id, "  子任务  ", new Date("2026-06-19T09:00:00.000Z"));
+
+    expect(child).toMatchObject({
+      parentId: parent.id,
+      title: "子任务",
+      scheduledAt: null,
+      recurrence: null,
+      tags: [],
+      sortOrder: 0,
+      createdAt: "2026-06-19T09:00:00.000Z",
+      updatedAt: "2026-06-19T09:00:00.000Z",
+    });
+    await expect(db.syncLog.where("recordId").equals(child.id).toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "create" })]),
+    );
+
+    await expect(createChildTask(child.id, "孙任务")).rejects.toThrow("CANNOT_NEST_BEYOND_ONE_LEVEL");
+  });
+
+  it("promoteToRoot moves a child to inbox or today while preserving dormant fields", async () => {
+    const parent = await addTask({ title: "父任务", now: new Date("2026-06-19T08:00:00.000Z") });
+    const child = await createChildTask(parent.id, "子任务", new Date("2026-06-19T09:00:00.000Z"));
+    await db.tasks.update(child.id, {
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      tags: ["keep"],
+      turn: "parked",
+      turnAt: "2026-06-19T09:30:00.000Z",
+      completedAt: "2026-06-19T09:45:00.000Z",
+    } satisfies Partial<Task>);
+
+    const inbox = await promoteToRoot(child.id, "inbox", 7, new Date("2026-06-19T10:00:00.000Z"));
+    expect(inbox).toMatchObject({
+      parentId: null,
+      scheduledAt: null,
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      tags: ["keep"],
+      turn: "parked",
+      completedAt: "2026-06-19T09:45:00.000Z",
+      sortOrder: 7,
+      updatedAt: "2026-06-19T10:00:00.000Z",
+    });
+
+    await moveTaskToParent(child.id, parent.id, 0, new Date("2026-06-19T10:30:00.000Z"));
+    const todayNow = new Date("2026-06-20T11:00:00.000Z");
+    const today = await promoteToRoot(child.id, "today", 3, todayNow);
+    expect(today.parentId).toBeNull();
+    expect(today.scheduledAt).toBe(localDateOf(todayNow));
+    expect(today.sortOrder).toBe(3);
+  });
+
+  it("moveTaskToParent enforces one level, rejects roots with children, and preserves dormant fields", async () => {
+    const parent = await addTask({ title: "父任务", now: new Date("2026-06-19T08:00:00.000Z") });
+    const otherRoot = await addTask({ title: "另一个父任务", now: new Date("2026-06-19T08:01:00.000Z") });
+    const child = await createChildTask(parent.id, "子任务", new Date("2026-06-19T09:00:00.000Z"));
+
+    await expect(moveTaskToParent(otherRoot.id, child.id, 0)).rejects.toThrow("CANNOT_NEST_BEYOND_ONE_LEVEL");
+    await expect(moveTaskToParent(parent.id, otherRoot.id, 0)).rejects.toThrow("CANNOT_DEMOTE_ROOT_WITH_CHILDREN");
+
+    await db.tasks.update(child.id, {
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
+      scheduledAt: "2026-06-22T00:00:00.000Z",
+      lastDoneAt: "2026-06-15T00:00:00.000Z",
+      startAt: "2026-06-01T00:00:00.000Z",
+      completedCount: 2,
+      tags: ["keep"],
+      turn: "running",
+      turnAt: "2026-06-19T09:30:00.000Z",
+      completedAt: "2026-06-19T09:45:00.000Z",
+    } satisfies Partial<Task>);
+
+    const moved = await moveTaskToParent(child.id, otherRoot.id, 5, new Date("2026-06-19T10:00:00.000Z"));
+    expect(moved).toMatchObject({
+      parentId: otherRoot.id,
+      sortOrder: 5,
+      recurrence: { freq: "weekly", byWeekday: [1] },
+      scheduledAt: "2026-06-22T00:00:00.000Z",
+      lastDoneAt: "2026-06-15T00:00:00.000Z",
+      startAt: "2026-06-01T00:00:00.000Z",
+      completedCount: 2,
+      tags: ["keep"],
+      turn: "running",
+      turnAt: "2026-06-19T09:30:00.000Z",
+      completedAt: "2026-06-19T09:45:00.000Z",
+    });
+  });
+
+  it("deleteTaskCascade deletes a parent and direct children with sync logs", async () => {
+    const parent = await addTask({ title: "父任务" });
+    const childA = await createChildTask(parent.id, "A");
+    const childB = await createChildTask(parent.id, "B");
+    await db.syncLog.clear();
+
+    await deleteTaskCascade(parent.id);
+
+    await expect(db.tasks.bulkGet([parent.id, childA.id, childB.id])).resolves.toEqual([undefined, undefined, undefined]);
+    const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
+    expect(logs.map((log) => [log.recordId, log.action])).toEqual(
+      expect.arrayContaining([
+        [parent.id, "delete"],
+        [childA.id, "delete"],
+        [childB.id, "delete"],
+      ]),
+    );
   });
 });
 
@@ -325,6 +492,27 @@ describe("listTasks", () => {
     expect(buckets.today).toHaveLength(2); // "今天" + 重复任务今天到期
     expect(buckets.inbox).toHaveLength(1);
     expect(buckets.recurring).toHaveLength(1);
+  });
+
+  it("带休眠 recurrence 的 child 不进入任何 listTasks bucket", async () => {
+    const now = new Date("2026-06-19T08:00:00.000Z");
+    const root = await addTask({ title: "父任务", now });
+    const child = await createChildTask(root.id, "休眠重复子项", now);
+    await db.tasks.update(child.id, {
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-06-19T00:00:00.000Z",
+    } satisfies Partial<Task>);
+
+    const buckets = await listTasks(now);
+    const bucketIds = [
+      ...buckets.today,
+      ...buckets.inbox,
+      ...buckets.scheduled,
+      ...buckets.recurring,
+      ...buckets.completed,
+    ].map((task) => task.id);
+
+    expect(bucketIds).not.toContain(child.id);
   });
 
   it("今天完成 + 隔日完成都进 completed，按 completedAt 倒序", async () => {
