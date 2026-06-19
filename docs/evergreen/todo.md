@@ -27,7 +27,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-19
 ---
 
 # 待办任务
@@ -142,7 +142,7 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 
 ## 3. 关键不变量 / 坑 / 红线
 
-1. **完成统一走 shared 纯函数 `completeTask`（`shared/src/taskCompletion.ts`）**：非重复任务就地完成（`done=true` + `completedAt=now` + 清 `turn/turnAt`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复任务**非终结**完成衍生一条独立已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=now`/标题·tags·完成时子任务快照/新 id），模板自身 `done` 保持 `false` 并推进（`completedCount+1`、`lastDoneAt=max(now, 应发生日)`、`subtasks[].done` 全部重置、清 `turn/turnAt`）；**终结**完成（count 满 / until 过）模板就地转化为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt`，保留原 id）。落点唯一判据仍是 `done`（`placement.ts`）。重复分支细节见 [todo/recurrence](todo/recurrence.md) §3。
+1. **完成统一走 shared 纯函数 `completeTask`（`shared/src/taskCompletion.ts`）**：非重复任务就地完成（`done=true` + `completedAt=now` + 清 `turn/turnAt`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复任务**非终结**完成衍生一条独立已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=nowIso`/标题·tags·完成时子任务快照/新 id），模板自身 `done` 保持 `false` 并推进（`completedCount+1`、`lastDoneAt=dueIso` 当前应发生日、`subtasks[].done` 全部重置、清 `turn/turnAt`）；**终结**完成（count 满 / until 过）模板就地转化为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt=nowIso`，保留原 id）。落点唯一判据仍是 `done`（`placement.ts`）。重复分支细节见 [todo/recurrence](todo/recurrence.md) §3。
 2. **完成统一清 `turn/turnAt`**：`completeTask` 在所有完成分支（非重复 / 重复推进 / 重复终结）都把 `turn/turnAt` 置空，客户端 `toggleTaskDone` 与 agent `done=true` 共用它而一致（旧版客户端完成不清回合的不对称已消除）。注意"取消完成"（客户端 reopen）与 agent `done=false` 不经过 `completeTask`，不触碰 `turn`。
 3. **"取消完成"两端仍不对称**：agent `done=true` 现在经 `completeTask` 写 `completedAt`（与客户端一致，旧版 agent 不写的问题已修）；但 agent `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 reopen 会清 `completedAt=null`。撤销完成的语义两端不一致，改前先确认。
 4. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。

@@ -7,7 +7,7 @@ covers:
   - packages/client/src/lib/tasks/recurrencePresets.ts
   - packages/client/src/components/MonthCalendar.tsx
   - packages/client/src/components/Wheel.tsx
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-19
 ---
 
 # 待办 · 重复规则引擎
@@ -54,9 +54,10 @@ last-reviewed: 2026-06-18
 
 完成统一经 shared 纯函数 `completeTask`（文件 covers 归 [todo](../todo.md)，本文只描述重复分支行为）：
 
-- **非终结完成 = 衍生 + 推进**：完成一轮**不**把模板 `done` 置 true，而是衍生一条独立的已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=now`/标题·tags·完成时子任务快照/新 id，进完成区），模板自身推进：`completedCount+1`、`lastDoneAt=max(now, 应发生日)`、`subtasks[].done` 全部重置为 false（下一轮就绪）、清 `turn/turnAt`。
+- **非终结完成 = 衍生 + 推进**：完成一轮**不**把模板 `done` 置 true，而是衍生一条独立的已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=nowIso`/标题·tags·完成时子任务快照/新 id，进完成区），模板自身推进：`completedCount+1`、`lastDoneAt=dueIso`（当前应发生日，本地零点）、`subtasks[].done` 全部重置为 false（下一轮就绪）、清 `turn/turnAt`。
 - **终结完成**：`count` 满（`completedCount+1 >= count`）或 `until` 过且无未完成发生 → 模板**就地转化**为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt`/保留原 id），沉入完成区，**不**再衍生 occurrence。
-- **提前完成**：完成日取 `effectiveDoneIso = max(now, 当前应发生日)`——到期前完成会把 `lastDoneAt` 推进到应发生日，下一次顺延，不因提前点击而连跳。
+- **完成基准日**：`effectiveDoneIso = dueIso`（当前应发生日，本地零点）。提前完成（`now < due`）把 `lastDoneAt` 推进到应发生日、下次顺延，不因提前点击连跳；过期完成（`now > due`）也只推进到应发生日，所以下次 due = 应发生日 + 1 格，若仍 ≤ 今天则今日继续以 overdue 再现（逐次追平）。daily/weekly/monthly 共用同一公式。
+- **occurrence vs 模板分离**：衍生 occurrence 的 `completedAt=nowIso`（实际点击时刻，进已完成区/统计），活动模板的 `lastDoneAt=effectiveDoneIso`（应发生日，决定下次 due）。两个字段语义分离。
 - **逾期保留**：`until` 已过但仍有逾期未完成发生时，留在“今天”区（`placement.ts` 的 `hasOutstandingUntilOccurrence`）。
 - **模板不写 `completedAt`**：活动模板始终 `completedAt=null`，完成事件由衍生快照承载；仅终结转化时模板才写 `completedAt`（见 [todo](../todo.md) §3.1）。
 - **复选框恒不勾选/不划线**：重复模板（含已排期未到期）复选框点击表示“完成一轮”、可提前推进，不进入“撤销完成”路径。
