@@ -110,6 +110,39 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
+  // 回归：收件箱行的「排进今天」(→) 把任务排进今天。曾因 moveToToday 传 localDateOf(ISO)
+  // 给 scheduleTask（期望 "YYYY-MM-DD"），normalizeScheduledDate 解析出 NaN → Invalid time value
+  // 抛错且未捕获，任务原地不动（用户报「点了没反应」）。
+  it("点收件箱行「排进今天」→ 任务移入今天且 scheduledAt 落库", async () => {
+    await addTask({ title: "收件箱条目", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "收件箱条目");
+
+    const btn = host.querySelector('[aria-label="排进今天 收件箱条目"]') as HTMLButtonElement | null;
+    expect(btn).not.toBeNull();
+    await act(async () => {
+      btn?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // 等 dexie liveQuery → 重渲染把任务从收件箱挪到今天分区。
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 1000) {
+      const today = host.querySelector('[data-section="today"]') as HTMLElement | null;
+      if (today?.textContent?.includes("收件箱条目")) break;
+      await act(async () => {
+        await new Promise((r) => window.setTimeout(r, 0));
+      });
+    }
+
+    const tasks = await db.tasks.toArray();
+    expect(tasks[0]?.scheduledAt).not.toBeNull();
+    const todaySection = host.querySelector('[data-section="today"]') as HTMLElement | null;
+    expect(todaySection?.textContent ?? "").toContain("收件箱条目");
+    const inboxSection = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
+    expect(inboxSection?.textContent ?? "").not.toContain("收件箱条目");
+    await act(async () => root.unmount());
+  });
+
   it("点任务行打开详情抽屉", async () => {
     await addTask({ title: "点我打开" });
     const { host, root } = await renderPage();

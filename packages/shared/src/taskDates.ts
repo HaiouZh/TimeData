@@ -4,6 +4,11 @@ export function localDateOf(d: Date): string {
   return new Date(local.getTime() - local.getTimezoneOffset() * 60_000).toISOString();
 }
 
+/** 设备本地日历日的 "YYYY-MM-DD"（与 normalizeScheduledDate / placement 同一时区口径）。 */
+export function localDateString(d: Date): string {
+  return localDateOf(d).slice(0, 10);
+}
+
 /** 把 "YYYY-MM-DD" 格式字符串转为本地零点 UTC ISO。 */
 export function normalizeScheduledDate(date: string): string {
   const [y = NaN, m = NaN, d = NaN] = date.split("-").map(Number);

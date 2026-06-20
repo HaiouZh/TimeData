@@ -16,7 +16,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
-import { localDateOf, placementForTask } from "../lib/tasks/placement.js";
+import { localDateString, placementForTask } from "../lib/tasks/placement.js";
 import { filterByTags } from "../lib/tasks/turnTags.js";
 import {
   getDoneCollapsed,
@@ -87,7 +87,7 @@ export function TodoPage() {
     syncAfterWrite();
   };
   const moveToToday = async (t: Task) => {
-    await scheduleTask(t.id, localDateOf(new Date()));
+    await scheduleTask(t.id, localDateString(new Date()));
     syncAfterWrite();
   };
   const changeTurn = async (t: Task, turn: Task["turn"]) => {
@@ -226,7 +226,7 @@ export function TodoPage() {
         }
         case "schedule-root": {
           if (op.pool === "today") {
-            await scheduleTask(activeId, localDateOf(new Date()));
+            await scheduleTask(activeId, localDateString(new Date()));
           } else {
             await unscheduleTask(activeId);
           }

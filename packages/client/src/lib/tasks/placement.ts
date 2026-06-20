@@ -1,7 +1,7 @@
 import type { Task } from "@timedata/shared";
 import { isDueNow, currentDueDayFor } from "./recurrence.js";
 
-export { localDateOf, normalizeScheduledDate } from "@timedata/shared";
+export { localDateOf, localDateString, normalizeScheduledDate } from "@timedata/shared";
 
 export type TodoPlacement =
   | { pool: "today"; overdue: boolean }
