@@ -3,7 +3,7 @@ import { runDoctor } from "./doctor.js";
 import { runList } from "./list.js";
 import { runLog } from "./log.js";
 import { runNotes } from "./notes.js";
-import { runTasks, runTaskDone, runTaskSchedule, runTaskTag, runTaskTurn, runTaskUnschedule } from "./tasks.js";
+import { runTasks, runTaskDone, runTaskSchedule, runTaskTag, runTaskUnschedule } from "./tasks.js";
 import { runVersion } from "./version.js";
 import type { ApiConfig } from "../lib/api-client.js";
 import type { FileConfigResult } from "../lib/config.js";
@@ -100,27 +100,6 @@ export const commandRegistry: CommandHelp[] = [
     handler: (ctx) => runTaskUnschedule(requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
   },
   {
-    name: "task-running",
-    writesData: true,
-    summary: "Mark a task as running through the scoped agent API.",
-    usage: "timedata task-running --id ID [--server URL] [--token TOKEN]",
-    handler: (ctx) => runTaskTurn("running", requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
-  },
-  {
-    name: "task-handback",
-    writesData: true,
-    summary: "Hand a task back for review through the scoped agent API.",
-    usage: "timedata task-handback --id ID [--note TEXT] [--server URL] [--token TOKEN]",
-    handler: (ctx) => runTaskTurn("me", requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
-  },
-  {
-    name: "task-park",
-    writesData: true,
-    summary: "Park a task through the scoped agent API.",
-    usage: "timedata task-park --id ID [--server URL] [--token TOKEN]",
-    handler: (ctx) => runTaskTurn("parked", requireConfig(ctx.config), ctx.flags, ctx.fetchImpl),
-  },
-  {
     name: "task-done",
     writesData: true,
     summary: "Complete a task through the scoped agent API.",
@@ -144,7 +123,7 @@ const redLines = [
   "Use timedata log as the only current AI/script data-writing command.",
   "Use timedata notes for read-only quick notes access; it does not write data.",
   "Use timedata task-schedule / task-unschedule to change task schedule; they write only through the server API.",
-  "Use timedata task-running / task-handback / task-park / task-done / task-tag for agent task status write-back through the scoped server API.",
+  "Use timedata task-done / task-tag for agent task status write-back through the scoped server API.",
 ];
 
 const docs = ["docs/TimeData-CLI-AI.md", "docs/evergreen/cli.md", "docs/adr/0001-cli-as-only-write-path.md"];
