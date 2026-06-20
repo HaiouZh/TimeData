@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/index.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
@@ -450,6 +450,44 @@ describe("scheduleTask / unscheduleTask", () => {
 });
 
 describe("listTasks", () => {
+  it("读取剥掉孤儿字段", async () => {
+    await db.tasks.put({
+      id: "task-ghost",
+      parentId: null,
+      title: "旧任务",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: localDateOf(new Date("2026-06-20T08:00:00.000Z")),
+      completedCount: 0,
+      turn: null,
+      turnAt: null,
+      completedAt: null,
+      tags: [],
+      sortOrder: 0,
+      createdAt: "2026-06-20T00:00:00.000Z",
+      updatedAt: "2026-06-20T00:00:00.000Z",
+      ghostField: "strip-me",
+    } as never);
+
+    const buckets = await listTasks(new Date("2026-06-20T08:00:00.000Z"));
+
+    expect(buckets.today).toHaveLength(1);
+    expect(buckets.today[0]).not.toHaveProperty("ghostField");
+  });
+
+  it("遇不可解析行 -> warn + 跳过，不抛", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    // 带 sortOrder 才会被 orderBy("sortOrder") 索引遍历到（IndexedDB 稀疏索引跳过缺该键的行）。
+    await db.tasks.put({ id: "bad-task", sortOrder: 0 } as never);
+
+    const buckets = await listTasks(new Date("2026-06-20T08:00:00.000Z"));
+
+    expect([...buckets.today, ...buckets.inbox, ...buckets.scheduled, ...buckets.completed]).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+  });
+
   it("分区：今天、inbox、重复", async () => {
     const now = new Date("2026-06-14T08:00:00.000Z");
     await addTask({ title: "今天", now });

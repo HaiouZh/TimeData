@@ -426,13 +426,16 @@ function scheduledDateKey(t: Task, now: Date): string {
 }
 
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
-  const all = (await db.tasks.orderBy("sortOrder").toArray()).map((t) => ({
-    ...t,
-    scheduledAt: t.scheduledAt ?? null,
-    completedCount: t.completedCount ?? 0,
-    completedAt: t.completedAt ?? null,
-    tags: t.tags ?? [],
-  }));
+  const rows = await db.tasks.orderBy("sortOrder").toArray();
+  const all: Task[] = [];
+  for (const row of rows) {
+    const parsed = TaskSchema.safeParse(row);
+    if (!parsed.success) {
+      console.warn(`[tasks] dropping invalid local task ${(row as { id?: string }).id ?? "?"}:`, parsed.error.issues);
+      continue;
+    }
+    all.push(parsed.data);
+  }
   const buckets: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
   for (const t of all) {
     if ((t.parentId ?? null) !== null) continue;
