@@ -279,8 +279,6 @@ export async function createChildTask(parentId: string, title: string, now: Date
       startAt: null,
       scheduledAt: null,
       completedCount: 0,
-      turn: null,
-      turnAt: null,
       completedAt: null,
       tags: [],
       sortOrder: await nextChildSortOrder(parentId),

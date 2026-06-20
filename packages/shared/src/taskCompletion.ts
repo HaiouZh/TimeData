@@ -17,6 +17,11 @@ export interface CompleteTaskResult {
   templateChildren?: Task[];
 }
 
+function withoutTurnState(task: Task): Omit<Task, "turn" | "turnAt"> {
+  const { turn: _turn, turnAt: _turnAt, ...rest } = task;
+  return rest;
+}
+
 /**
  * 把一个任务"完成一次"的纯计算。
  * 非重复=就地完成；重复非终结=衍生 occurrence + 推进模板；重复终结=就地转化模板。
@@ -29,11 +34,9 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
 
   if (!task.recurrence) {
     const next = TaskSchema.parse({
-      ...task,
+      ...withoutTurnState(task),
       done: true,
       completedAt: nowIso,
-      turn: null,
-      turnAt: null,
       updatedAt: nowIso,
     });
     return { next, occurrence: null };
@@ -50,14 +53,12 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
 
   if (finished) {
     const next = TaskSchema.parse({
-      ...task,
+      ...withoutTurnState(task),
       recurrence: null,
       done: true,
       completedAt: nowIso,
       completedCount,
       lastDoneAt: effectiveDoneIso,
-      turn: null,
-      turnAt: null,
       updatedAt: nowIso,
     });
     return { next, occurrence: null };
@@ -90,8 +91,6 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
       startAt: null,
       scheduledAt: null,
       completedCount: 0,
-      turn: null,
-      turnAt: null,
       completedAt: child.completedAt ?? null,
       tags: child.tags ?? [],
       sortOrder: index,
@@ -105,12 +104,10 @@ export function completeTask(task: Task, opts: CompleteTaskOptions): CompleteTas
   );
 
   const next = TaskSchema.parse({
-    ...task,
+    ...withoutTurnState(task),
     done: false,
     completedCount,
     lastDoneAt: effectiveDoneIso,
-    turn: null,
-    turnAt: null,
     updatedAt: nowIso,
   });
 
