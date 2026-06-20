@@ -15,7 +15,11 @@ import type {
   SyncStatusResponseSchema,
   TaskSchema,
   TimeEntrySchema,
+  TrackSchema,
+  TrackStepSchema,
+  RefSchema,
 } from "./schemas.js";
+import type { HealthChartConfig } from "./chartSchemas.js";
 import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
 
 export type Category = z.infer<typeof CategorySchema>;
@@ -29,6 +33,12 @@ export type Recurrence = z.infer<typeof RecurrenceSchema>;
 export type Task = z.infer<typeof TaskSchema>;
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
+
+export type Ref = z.infer<typeof RefSchema>;
+
+export type Track = z.infer<typeof TrackSchema>;
+
+export type TrackStep = z.infer<typeof TrackStepSchema>;
 
 export type SyncLogEntry = z.infer<typeof SyncLogEntrySchema>;
 
@@ -77,7 +87,13 @@ export type SyncChange =
   | SyncUpsertChange<"health_stress", HealthStress>
   | SyncDeleteChange<"health_stress">
   | SyncUpsertChange<"runs", HealthRun>
-  | SyncDeleteChange<"runs">;
+  | SyncDeleteChange<"runs">
+  | SyncUpsertChange<"health_charts", HealthChartConfig>
+  | SyncDeleteChange<"health_charts">
+  | SyncUpsertChange<"tracks", Track>
+  | SyncDeleteChange<"tracks">
+  | SyncUpsertChange<"track_steps", TrackStep>
+  | SyncDeleteChange<"track_steps">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

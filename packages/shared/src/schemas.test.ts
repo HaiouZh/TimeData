@@ -102,6 +102,29 @@ describe("SyncLogEntrySchema", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("accepts tracks and track_steps as synced tables", () => {
+    expect(
+      SyncLogEntrySchema.safeParse({
+        id: "log-track-1",
+        tableName: "tracks",
+        recordId: "track-1",
+        action: "create",
+        timestamp: "2026-06-21T00:00:00.000Z",
+        synced: 0,
+      }).success,
+    ).toBe(true);
+    expect(
+      SyncLogEntrySchema.safeParse({
+        id: "log-step-1",
+        tableName: "track_steps",
+        recordId: "step-1",
+        action: "create",
+        timestamp: "2026-06-21T00:00:00.000Z",
+        synced: 0,
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("SettingSchema", () => {
