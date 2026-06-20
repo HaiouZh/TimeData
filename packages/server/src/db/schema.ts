@@ -45,6 +45,35 @@ export function ensureTaskCompletionMetadataColumns(db: Database): void {
   if (!names.has("tags")) db.exec("ALTER TABLE tasks ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
 }
 
+function quoteIdentifier(identifier: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
+    throw new Error(`Invalid SQLite identifier: ${identifier}`);
+  }
+  return `"${identifier}"`;
+}
+
+/**
+ * 对称于 ensureXxxColumns 的幂等删列：列不存在则跳过（SQLite 无原生 DROP COLUMN IF EXISTS）。
+ * SQLite 拒删带索引的列，故先按 indexNames DROP INDEX。不支持删 PK/UNIQUE 约束内的列。
+ */
+export function dropColumnsIfExist(
+  db: Database,
+  table: string,
+  columns: string[],
+  indexNames: string[] = [],
+): void {
+  for (const indexName of indexNames) db.exec(`DROP INDEX IF EXISTS ${quoteIdentifier(indexName)}`);
+  const tableName = quoteIdentifier(table);
+  const present = new Set(
+    (db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>).map((column) => column.name),
+  );
+  for (const column of columns) {
+    if (!present.has(column)) continue;
+    db.exec(`ALTER TABLE ${tableName} DROP COLUMN ${quoteIdentifier(column)}`);
+    present.delete(column);
+  }
+}
+
 export function initializeDatabase(): void {
   const db = getDb();
 

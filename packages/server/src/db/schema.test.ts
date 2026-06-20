@@ -337,3 +337,40 @@ describe("initializeDatabase", () => {
     }).not.toThrow();
   });
 });
+
+describe("dropColumnsIfExist", () => {
+  it("删存在列且幂等", async () => {
+    const { dropColumnsIfExist } = await import("./schema.js");
+    db.exec("CREATE TABLE demo (id TEXT PRIMARY KEY, keep_me TEXT, drop_me TEXT)");
+
+    dropColumnsIfExist(db, "demo", ["drop_me"]);
+    dropColumnsIfExist(db, "demo", ["drop_me"]);
+
+    const cols = new Set((db.prepare("PRAGMA table_info(demo)").all() as Array<{ name: string }>).map((c) => c.name));
+    expect(cols.has("keep_me")).toBe(true);
+    expect(cols.has("drop_me")).toBe(false);
+  });
+
+  it("列不存在 -> no-op 不抛", async () => {
+    const { dropColumnsIfExist } = await import("./schema.js");
+    db.exec("CREATE TABLE demo (id TEXT PRIMARY KEY, keep_me TEXT)");
+
+    expect(() => dropColumnsIfExist(db, "demo", ["missing"])).not.toThrow();
+
+    const cols = new Set((db.prepare("PRAGMA table_info(demo)").all() as Array<{ name: string }>).map((c) => c.name));
+    expect(cols.has("keep_me")).toBe(true);
+  });
+
+  it("带索引列：先删索引再删列", async () => {
+    const { dropColumnsIfExist } = await import("./schema.js");
+    db.exec("CREATE TABLE demo (id TEXT PRIMARY KEY, indexed_value TEXT, keep_me TEXT)");
+    db.exec("CREATE INDEX idx_demo_indexed ON demo(indexed_value)");
+
+    dropColumnsIfExist(db, "demo", ["indexed_value"], ["idx_demo_indexed"]);
+
+    const cols = new Set((db.prepare("PRAGMA table_info(demo)").all() as Array<{ name: string }>).map((c) => c.name));
+    expect(cols.has("indexed_value")).toBe(false);
+    const idx = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_demo_indexed'").get();
+    expect(idx).toBeUndefined();
+  });
+});
