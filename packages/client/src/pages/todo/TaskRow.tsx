@@ -7,7 +7,6 @@ import { Checkbox } from "../../components/ui/Checkbox.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
-import { TURN_DOT_BG, TURN_LABELS } from "../../lib/tasks/turnTags.js";
 import { formatMonthDay } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
 import { useTaskChildren } from "./useTaskChildren.js";
@@ -19,6 +18,18 @@ export interface RowDragHandle {
   attributes: DraggableAttributes;
   listeners: DraggableSyntheticListeners;
 }
+
+const TURN_LABELS: Record<NonNullable<Task["turn"]>, string> = {
+  me: "等我",
+  running: "在跑",
+  parked: "搁置",
+};
+
+const TURN_DOT_BG: Record<NonNullable<Task["turn"]>, string> = {
+  me: "bg-accent",
+  running: "bg-warn",
+  parked: "bg-ink-3",
+};
 
 export interface TaskRowProps {
   task: Task;
@@ -35,7 +46,7 @@ export interface TaskRowProps {
   turnBadgeInteractive?: boolean;
   /** 行写入后回调（InlineChildren 内部触发，宿主可在此调 syncAfterWrite）。 */
   onAfterChildWrite?: () => void;
-  /** AttentionQueue 等场景强制只读，覆盖按 pool 推断的 mode。 */
+  /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
   indentTargetActive?: boolean;
   revealChildren?: { id: string; nonce: number } | null;

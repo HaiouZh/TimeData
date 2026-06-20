@@ -144,28 +144,6 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
   return putTask(next);
 }
 
-export async function setTaskTurn(id: string, turn: Task["turn"], options: { now?: Date } = {}): Promise<Task> {
-  const existing = await db.tasks.get(id);
-  if (!existing) throw new Error("任务不存在");
-
-  // 同值短路：避免「点徽章传当前 turn」时刷新 turnAt + 写一条 syncLog。
-  // turn=null 与 turnAt=null 同时已为目标态时也跳过。
-  if (existing.turn === turn) {
-    if (turn === null && existing.turnAt === null) return existing as Task;
-    if (turn !== null && existing.turnAt !== null) return existing as Task;
-  }
-
-  const updatedAt = (options.now ?? new Date()).toISOString();
-  const next = TaskSchema.parse({
-    ...existing,
-    scheduledAt: existing.scheduledAt ?? null,    completedCount: existing.completedCount ?? 0,
-    turn,
-    turnAt: turn === null ? null : updatedAt,
-    updatedAt,
-  });
-  return putTask(next);
-}
-
 export async function setTaskTags(id: string, tags: string[], options: { now?: Date } = {}): Promise<Task> {
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
@@ -404,7 +382,7 @@ export interface TodoBuckets {
   today: Task[]; // 含过期，过期排前
   inbox: Task[];
   scheduled: Task[]; // 一次性未来排期 + 未到期重复，按当前到期日升序
-  recurring: Task[]; // 全部重复任务（去重 / AttentionQueue 用）
+  recurring: Task[]; // 全部重复任务（去重桶）
   completed: Task[]; // 全部已完成（今天 + 隔日）+ 耗尽重复，按 completedAt 倒序
 }
 

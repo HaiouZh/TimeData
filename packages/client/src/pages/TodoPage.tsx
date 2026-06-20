@@ -37,13 +37,11 @@ import {
   reorderChildren,
   scheduleTask,
   setTaskTags,
-  setTaskTurn,
   type TodoBuckets,
   toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
-import { AttentionQueue } from "./todo/AttentionQueue.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
@@ -102,10 +100,6 @@ export function TodoPage() {
     await scheduleTask(t.id, localDateString(new Date()));
     syncAfterWrite();
   };
-  const changeTurn = async (t: Task, turn: Task["turn"]) => {
-    await setTaskTurn(t.id, turn);
-    syncAfterWrite();
-  };
   const changeTags = async (t: Task, tags: string[]) => {
     await setTaskTags(t.id, tags);
     syncAfterWrite();
@@ -125,7 +119,6 @@ export function TodoPage() {
     onToToday: moveToToday,
     onToInbox: moveToInbox,
     onAfterChildWrite: syncAfterWrite,
-    onTurnChange: changeTurn,
     onTagsChange: changeTags,
   };
 
@@ -365,7 +358,6 @@ export function TodoPage() {
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
-          <AttentionQueue tasks={allTasks} rowHandlers={rowHandlers} onTurnChange={changeTurn} />
           <TagFilterBar tasks={allTasks} selected={selectedTags} onToggle={toggleTag} onClear={clearTags} />
           {wide ? (
             <ResizableSplit
@@ -396,12 +388,7 @@ export function TodoPage() {
         <TodoComposer />
 
         {detailId && (
-          <TaskDetailSheet
-            id={detailId}
-            onClose={() => setDetailId(null)}
-            onTurnChange={changeTurn}
-            onTagsChange={changeTags}
-          />
+          <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} onTagsChange={changeTags} />
         )}
       </div>
     </DndContext>

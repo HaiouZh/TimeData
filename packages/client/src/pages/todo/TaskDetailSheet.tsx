@@ -8,7 +8,6 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
-import { TURN_SEGMENTED_OPTIONS } from "../../lib/tasks/turnTags.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
 import { subtaskProgress } from "../../lib/tasks/subtasks.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
@@ -28,6 +27,11 @@ interface TaskDetailSheetProps {
 
 const SWIPE_CLOSE_THRESHOLD = 60;
 const DEFAULT_RECURRENCE: Recurrence = { freq: "daily", interval: 1, basis: "due" };
+const TURN_SEGMENTED_OPTIONS: Array<{ value: NonNullable<Task["turn"]>; label: string }> = [
+  { value: "me", label: "等我" },
+  { value: "running", label: "在跑" },
+  { value: "parked", label: "搁置" },
+];
 
 /** 下滑位移（px，向下为正）是否达到关闭阈值。 */
 export function isSwipeDownClose(deltaY: number): boolean {
@@ -110,7 +114,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
   }
 
   const childRows = useTaskChildren(task?.id ?? null);
-  // child 模式下隐藏高级控件入口（recurrence/tags/turn/scheduledAt）。
+  // child 模式下隐藏高级控件入口（recurrence/tags/scheduledAt 等）。
   const isChild = task ? task.parentId !== null : false;
 
   function commitTagAdd(): void {

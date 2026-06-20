@@ -15,7 +15,6 @@ import {
   reorderChildren,
   scheduleTask,
   setTaskTags,
-  setTaskTurn,
   toggleTaskDone,
   unscheduleTask,
   updateTask,
@@ -213,8 +212,6 @@ describe("independent child task helpers", () => {
     await db.tasks.update(child.id, {
       recurrence: { freq: "daily", interval: 1, basis: "due" },
       tags: ["keep"],
-      turn: "parked",
-      turnAt: "2026-06-19T09:30:00.000Z",
       completedAt: "2026-06-19T09:45:00.000Z",
     } satisfies Partial<Task>);
 
@@ -224,7 +221,6 @@ describe("independent child task helpers", () => {
       scheduledAt: null,
       recurrence: { freq: "daily", interval: 1, basis: "due" },
       tags: ["keep"],
-      turn: "parked",
       completedAt: "2026-06-19T09:45:00.000Z",
       sortOrder: 7,
       updatedAt: "2026-06-19T10:00:00.000Z",
@@ -253,8 +249,6 @@ describe("independent child task helpers", () => {
       startAt: "2026-06-01T00:00:00.000Z",
       completedCount: 2,
       tags: ["keep"],
-      turn: "running",
-      turnAt: "2026-06-19T09:30:00.000Z",
       completedAt: "2026-06-19T09:45:00.000Z",
     } satisfies Partial<Task>);
 
@@ -268,8 +262,6 @@ describe("independent child task helpers", () => {
       startAt: "2026-06-01T00:00:00.000Z",
       completedCount: 2,
       tags: ["keep"],
-      turn: "running",
-      turnAt: "2026-06-19T09:30:00.000Z",
       completedAt: "2026-06-19T09:45:00.000Z",
     });
   });
@@ -365,58 +357,6 @@ describe("updateTask", () => {
   });
 });
 
-describe("setTaskTurn", () => {
-  it("sets running turn and stamps turnAt/updatedAt while normalizing legacy task defaults", async () => {
-    type LegacyTask = Omit<Task, "scheduledAt" | "completedCount" | "turn" | "turnAt">;
-    const legacyTask: LegacyTask = {
-      id: "legacy-task",
-      title: "接手旧任务",
-      done: false,
-      recurrence: null,
-      lastDoneAt: null,
-      startAt: null,
-      sortOrder: 0,
-      createdAt: "2026-06-14T08:00:00.000Z",
-      updatedAt: "2026-06-14T08:00:00.000Z",
-    };
-    await db.tasks.put(legacyTask as Task);
-
-    const next = await setTaskTurn("legacy-task", "running", { now: new Date("2026-06-14T09:00:00.000Z") });
-
-    expect(next).toMatchObject({
-      id: "legacy-task",
-      turn: "running",
-      turnAt: "2026-06-14T09:00:00.000Z",
-      updatedAt: "2026-06-14T09:00:00.000Z",
-      scheduledAt: null,
-      completedCount: 0,
-    });
-    await expect(db.tasks.get("legacy-task")).resolves.toMatchObject({
-      turn: "running",
-      turnAt: "2026-06-14T09:00:00.000Z",
-      updatedAt: "2026-06-14T09:00:00.000Z",
-    });
-    await expect(db.syncLog.where("recordId").equals("legacy-task").toArray()).resolves.toMatchObject([
-      { tableName: "tasks", action: "update", timestamp: "2026-06-14T09:00:00.000Z", synced: 0 },
-    ]);
-  });
-
-  it("clears turnAt when turn is null", async () => {
-    const task = await addTask({ title: "轮到我", now: new Date("2026-06-14T08:00:00.000Z") });
-    await setTaskTurn(task.id, "me", { now: new Date("2026-06-14T09:00:00.000Z") });
-
-    const cleared = await setTaskTurn(task.id, null, { now: new Date("2026-06-14T10:00:00.000Z") });
-
-    expect(cleared.turn).toBeNull();
-    expect(cleared.turnAt).toBeNull();
-    expect(cleared.updatedAt).toBe("2026-06-14T10:00:00.000Z");
-  });
-
-  it("throws when the task does not exist", async () => {
-    await expect(setTaskTurn("missing-task", "parked")).rejects.toThrow("任务不存在");
-  });
-});
-
 describe("deleteTask", () => {
   it("deletes the task and writes a delete syncLog", async () => {
     const task = await addTask({ title: "bye" });
@@ -461,8 +401,6 @@ describe("listTasks", () => {
       startAt: null,
       scheduledAt: localDateOf(new Date("2026-06-20T08:00:00.000Z")),
       completedCount: 0,
-      turn: null,
-      turnAt: null,
       completedAt: null,
       tags: [],
       sortOrder: 0,
