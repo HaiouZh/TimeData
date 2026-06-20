@@ -9,6 +9,8 @@ const DOMAIN_LABELS: Record<string, string> = {
   health_sleep: "睡眠",
   health_stress: "压力",
   runs: "跑步",
+  tracks: "轨道",
+  track_steps: "轨道步骤",
 };
 
 function labelFor(table: string): string {

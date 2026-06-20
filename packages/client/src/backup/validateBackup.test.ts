@@ -121,6 +121,24 @@ describe("validateBackup", () => {
     });
   });
 
+  it("rejects duplicate ids inside the tracks bundled domain", () => {
+    const track = {
+      id: "track-1",
+      title: "T1",
+      status: "active",
+      refs: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = validateBackup({ ...validBackup(), domains: { tracks: [track, track] } });
+
+    expect(result).toEqual({
+      ok: false,
+      error: { code: "DUPLICATE_DOMAIN_ID", message: "备份文件中 tracks 存在重复 ID：track-1。" },
+    });
+  });
+
   it("rejects orphan category parents", () => {
     const result = validateBackup({ ...validBackup(), categories: [category("cat-1", "missing-parent")] });
 
@@ -216,6 +234,37 @@ describe("validateBackup", () => {
 
   it("rejects invalid records inside a bundled domain", () => {
     expect(validateBackup(validBackup({ domains: { tasks: [task({ id: "task-1", title: "" })] } }))).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "INVALID_DOMAIN_RECORDS" }),
+      }),
+    );
+  });
+
+  it("rejects invalid records inside the track_steps bundled domain", () => {
+    expect(
+      validateBackup(
+        validBackup({
+          domains: {
+            track_steps: [
+              {
+                id: "step-1",
+                trackId: "track-1",
+                source: "agent",
+                content: "",
+                startedAt: "2026-06-21T01:00:00.000Z",
+                endedAt: "2026-06-21T00:59:59.000Z",
+                refs: [],
+                tags: [],
+                seq: 0,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+          },
+        }),
+      ),
+    ).toEqual(
       expect.objectContaining({
         ok: false,
         error: expect.objectContaining({ code: "INVALID_DOMAIN_RECORDS" }),

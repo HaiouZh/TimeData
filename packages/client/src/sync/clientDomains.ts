@@ -11,6 +11,8 @@ import {
   HealthStressSchema,
   HealthRunSchema,
   HealthChartConfigSchema,
+  TrackSchema,
+  TrackStepSchema,
 } from "@timedata/shared";
 import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.ts";
@@ -189,6 +191,18 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     table: "health_charts",
     storeName: "healthCharts",
     schema: HealthChartConfigSchema,
+    backup: "bundled",
+  },
+  tracks: {
+    table: "tracks",
+    storeName: "tracks",
+    schema: TrackSchema,
+    backup: "bundled",
+  },
+  track_steps: {
+    table: "track_steps",
+    storeName: "trackSteps",
+    schema: TrackStepSchema,
     backup: "bundled",
   },
 };
