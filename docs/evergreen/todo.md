@@ -168,7 +168,7 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 | 入口 | 职责 |
 |---|---|
 | `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、窄屏堆叠/宽屏 `ResizableSplit`、挂 `AttentionQueue`/`TagFilterBar`/`TodoComposer`/`TaskDetailSheet` |
-| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、`CaretDown`/`CaretRight`（有 children 才显示）、`rowClickZone` 派发 expand/open、meta 第二行、dnd 拖柄、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、`dropActive`（hover-intent 激活）时强制展开并挂 `ParentDropZone`、桌面（细指针）行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控） |
+| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、`CaretDown`/`CaretRight`（有 children 才显示）、`rowClickZone` 派发 expand/open、meta 第二行、dnd 拖柄、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、`dropActive`（hover-intent 激活）时强制展开并挂 `ParentDropZone`、桌面（细指针）行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列——今天在左用 `←`、收件箱在右用 `→`） |
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList` / dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不再各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、turn SegmentedControl、删除（`deleteTaskCascade`）、重复预设 overlay；`parentId!==null`（child）隐藏 recurrence/tags/turn/scheduledAt 高级控件，显示「作为子任务」提示 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（含 `resolveTodoDragWithArm`/`armTargetFromDragOver`/`hoveredRootIdFromOver`） |

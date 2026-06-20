@@ -201,7 +201,7 @@ export function TaskRow({
                 }}
                 className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
               >
-                <Icon icon={ArrowLeft} size={16} />
+                <Icon icon={ArrowRight} size={16} />
               </button>
             )}
             {canSwapPool && (pool === "inbox" || pool === "upcoming") && onToToday && (
@@ -214,7 +214,7 @@ export function TaskRow({
                 }}
                 className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
               >
-                <Icon icon={ArrowRight} size={16} />
+                <Icon icon={ArrowLeft} size={16} />
               </button>
             )}
             {onDelete && (
