@@ -8,15 +8,15 @@ let db: Database.Database;
 
 function seedTask(id = "task-1"): void {
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
-    VALUES (?, NULL, ?, 0, NULL, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, '[]', ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 0, NULL, NULL, NULL, 0, NULL, 0, NULL, '[]', ?, ?)
   `).run(id, "想法", "2026-06-16T00:00:00.000Z", "2026-06-16T00:00:00.000Z");
 }
 
 function seedRecurring(id = "rec-1", recurrence = '{"freq":"daily","interval":1,"basis":"due"}'): void {
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
-    VALUES (?, NULL, ?, 0, ?, NULL, ?, 0, NULL, 0, NULL, NULL, NULL, '[]', ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, completed_at, tags, created_at, updated_at)
+    VALUES (?, NULL, ?, 0, ?, NULL, ?, 0, NULL, 0, NULL, '[]', ?, ?)
   `).run(
     id,
     "跑步",
@@ -36,8 +36,8 @@ function seedChild(overrides: {
   sortOrder?: number;
 }): void {
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, turn, turn_at, completed_at, tags, created_at, updated_at)
-    VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 0, NULL, NULL, ?, '[]', ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, completed_count, completed_at, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, NULL, 0, ?, '[]', ?, ?)
   `).run(
     overrides.id,
     overrides.parentId,
@@ -63,7 +63,7 @@ afterEach(() => {
 });
 
 describe("POST /api/agent/tasks/:id/status", () => {
-  it("sets turn, stamps turnAt, creates note child, records seq and notifies listeners", async () => {
+  it("creates note child, records seq and notifies listeners", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
     const listener = (seq: number | null) => seen.push(seq);
@@ -73,17 +73,15 @@ describe("POST /api/agent/tasks/:id/status", () => {
       const res = await app.request("/api/agent/tasks/task-1/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turn: "me", note: "done PR#123" }),
+        body: JSON.stringify({ note: "done PR#123" }),
       });
 
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         ok: boolean;
-        task: { turn: string; turnAt: string };
+        task: { id: string };
       };
       expect(body.ok).toBe(true);
-      expect(body.task.turn).toBe("me");
-      expect(body.task.turnAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
       const child = db.prepare("SELECT id, parent_id, title, done FROM tasks WHERE parent_id = ?").get("task-1") as {
         id: string;
         parent_id: string;
@@ -91,10 +89,6 @@ describe("POST /api/agent/tasks/:id/status", () => {
         done: number;
       };
       expect(child).toMatchObject({ parent_id: "task-1", title: "done PR#123", done: 0 });
-      expect(db.prepare("SELECT turn, turn_at FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
-        turn: "me",
-        turn_at: body.task.turnAt,
-      });
       expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq ORDER BY id").all()).toEqual(
         expect.arrayContaining([
           { table_name: "tasks", record_id: child.id, action: "create" },
@@ -107,9 +101,7 @@ describe("POST /api/agent/tasks/:id/status", () => {
     }
   });
 
-  it("sets done=true and clears turn state", async () => {
-    db.prepare("UPDATE tasks SET turn = ?, turn_at = ? WHERE id = ?").run("running", "2026-06-16T01:00:00.000Z", "task-1");
-
+  it("done=true 普通任务：写 completedAt", async () => {
     const res = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -117,29 +109,12 @@ describe("POST /api/agent/tasks/:id/status", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { task: { done: boolean; turn: string | null; turnAt: string | null } };
-    expect(body.task.done).toBe(true);
-    expect(body.task.turn).toBeNull();
-    expect(body.task.turnAt).toBeNull();
-  });
-
-  it("done=true 普通任务：写 completedAt 并清 turn", async () => {
-    db.prepare("UPDATE tasks SET turn = ?, turn_at = ? WHERE id = ?").run("running", "2026-06-16T01:00:00.000Z", "task-1");
-    const res = await app.request("/api/agent/tasks/task-1/status", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: true }),
-    });
-
-    expect(res.status).toBe(200);
-    const row = db.prepare("SELECT done, completed_at, turn FROM tasks WHERE id = ?").get("task-1") as {
+    const row = db.prepare("SELECT done, completed_at FROM tasks WHERE id = ?").get("task-1") as {
       done: number;
       completed_at: string | null;
-      turn: string | null;
     };
     expect(row.done).toBe(1);
     expect(row.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(row.turn).toBeNull();
   });
 
   it("done=true 重复非终结：衍生一条已完成行 + 模板推进", async () => {
@@ -263,13 +238,13 @@ describe("POST /api/agent/tasks/:id/status", () => {
     const res = await app.request("/api/agent/tasks/missing/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ turn: "me" }),
+      body: JSON.stringify({ done: true }),
     });
 
     expect(res.status).toBe(404);
   });
 
-  it("returns 400 for empty bodies and invalid turn values", async () => {
+  it("returns 400 for empty bodies and turn input", async () => {
     const empty = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -278,7 +253,7 @@ describe("POST /api/agent/tasks/:id/status", () => {
     const invalidTurn = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ turn: "done" }),
+      body: JSON.stringify({ turn: "me" }),
     });
 
     expect(empty.status).toBe(400);

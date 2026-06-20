@@ -12,14 +12,13 @@ const agent = new Hono();
 
 const statusSchema = z
   .object({
-    turn: z.enum(["me", "running", "parked"]).nullable().optional(),
     done: z.boolean().optional(),
     note: z.string().trim().min(1).max(5000).optional(),
     tags: z.array(z.string().trim().min(1).max(64)).max(50).optional(),
   })
   .strict()
-  .refine((body) => body.turn !== undefined || body.done !== undefined || body.note !== undefined || body.tags !== undefined, {
-    message: "at least one of turn/done/note/tags is required",
+  .refine((body) => body.done !== undefined || body.note !== undefined || body.tags !== undefined, {
+    message: "at least one of done/note/tags is required",
   });
 
 agent.post("/tasks/:id/status", async (c) => {
@@ -42,7 +41,7 @@ agent.post("/tasks/:id/status", async (c) => {
   const task = rowToTask(row);
   const nowDate = new Date();
   const now = nowDate.toISOString();
-  const { turn, done, note, tags } = parsed.data;
+  const { done, note, tags } = parsed.data;
 
   let occurrence: Task | null = null;
   let occurrenceChildren: Task[] = [];
@@ -71,7 +70,6 @@ agent.post("/tasks/:id/status", async (c) => {
   } else {
     next = TaskSchema.parse({
       ...task,
-      ...(turn !== undefined ? { turn, turnAt: turn === null ? null : now } : {}),
       ...(done === false ? { done: false } : {}),
       ...(tags !== undefined ? { tags } : {}),
       updatedAt: now,
@@ -92,8 +90,6 @@ agent.post("/tasks/:id/status", async (c) => {
       startAt: null,
       scheduledAt: null,
       completedCount: 0,
-      turn: null,
-      turnAt: null,
       completedAt: null,
       tags: [],
       sortOrder: childSortRow.next,
