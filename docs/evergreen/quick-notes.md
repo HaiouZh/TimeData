@@ -18,7 +18,7 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/notes.ts
   - packages/cli/src/lib/format.ts
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-20
 ---
 
 # 速记
@@ -122,7 +122,7 @@ last-reviewed: 2026-06-19
 
 | 入口 | 职责 |
 |---|---|
-| `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、日期跳转/浮层、底部 Tab 隐藏、actionToast |
+| `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、日期跳转/浮层、底部 Tab 隐藏、actionToast。composer 回车按屏宽分流（`useIsWideScreen`）：宽屏(≥1024px)发送、窄屏（手机）换行交给 textarea 默认行为、靠「记录」按钮发送 |
 | `lib/quickNotes.ts` | 域 CRUD + 按日期/范围/窗口/置顶列表查询，全部同事务 syncLog |
 | `lib/quickNoteDisplay.ts` | 展示分组 `groupQuickNotesForDisplay` + `formatLocalClock` |
 | `quick-notes/useQuickNoteTimeline.ts` | 时间线 hook：最新窗口 + 向上懒加载 + 向下补差 + 日期跳转 |

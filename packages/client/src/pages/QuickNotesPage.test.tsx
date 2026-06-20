@@ -95,6 +95,21 @@ async function typeIntoSearch(element: HTMLInputElement, value: string) {
   await flush();
 }
 
+// 控制 useIsWideScreen 的判定：宽屏回车发送，窄屏回车换行。afterEach 的 unstubAllGlobals 自动清理。
+function stubScreenWidth(wide: boolean) {
+  const mql = {
+    matches: wide,
+    media: "(min-width: 1024px)",
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  } as unknown as MediaQueryList;
+  vi.stubGlobal("matchMedia", vi.fn(() => mql));
+}
+
 async function click(element: Element | null) {
   if (!(element instanceof HTMLElement)) throw new Error("missing clickable element");
   await act(async () => {
@@ -565,7 +580,8 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("sends on Enter and keeps Shift+Enter from submitting", async () => {
+  it("宽屏：回车发送，Shift+回车不发送", async () => {
+    stubScreenWidth(true);
     const { host, root } = await renderPage();
 
     await typeInto(input(host), "回车发送");
@@ -581,6 +597,22 @@ describe("QuickNotesPage", () => {
     });
     await flush();
     await expect(db.quickNotes.count()).resolves.toBe(1);
+
+    await act(async () => root.unmount());
+  });
+
+  it("窄屏：回车换行不发送（移动端交给 textarea 默认换行）", async () => {
+    stubScreenWidth(false);
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "手机端回车");
+    await act(async () => {
+      input(host).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await flush();
+    // 窄屏回车不提交，草稿保留，由用户点「记录」按钮发送
+    await expect(db.quickNotes.count()).resolves.toBe(0);
+    expect(input(host).value).toBe("手机端回车");
 
     await act(async () => root.unmount());
   });

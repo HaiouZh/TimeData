@@ -48,6 +48,27 @@ async function seedParentWithChildren(doneCount = 0): Promise<Task> {
   return parent;
 }
 
+async function clickAdd(host: HTMLElement) {
+  const addBtn = host.querySelector('button[aria-label="添加子任务"]') as HTMLButtonElement;
+  await act(async () => {
+    addBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+}
+
+function draftInput(host: HTMLElement): HTMLTextAreaElement | null {
+  return host.querySelector('textarea[aria-label="新子任务标题"]');
+}
+
+async function typeIntoTextarea(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  await act(async () => {
+    setter?.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
+}
+
 describe("InlineChildren mode 行为矩阵", () => {
   it("draggable：有复选框、标题编辑、拖柄、新增按钮", async () => {
     const parent = await seedParentWithChildren();
@@ -104,19 +125,90 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
-  it("draggable 点新增按钮 → 创建 child 并落库", async () => {
+  it("点 +子任务 → 出现空白草稿输入框，不预填充也不立即落库", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+    await clickAdd(host);
+
+    expect(draftInput(host)).not.toBeNull();
+    expect(draftInput(host)?.value).toBe("");
+    const children = await db.tasks.where("parentId").equals(parent.id).toArray();
+    expect(children.length).toBe(2); // 未输入不落库
+
+    await unmount(root);
+  });
+
+  it("草稿行输入后失焦 → 落库新子任务并触发 onAfterWrite", async () => {
     const parent = await seedParentWithChildren();
     const { host, root, onAfterWrite } = await renderChildren(parent.id, "draggable");
+    await clickAdd(host);
 
-    const addBtn = host.querySelector('button[aria-label="添加子任务"]') as HTMLButtonElement;
+    const draft = draftInput(host) as HTMLTextAreaElement;
+    await typeIntoTextarea(draft, "新建的子任务");
     await act(async () => {
-      addBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      draft.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     await settle();
 
     const children = await db.tasks.where("parentId").equals(parent.id).toArray();
     expect(children.length).toBe(3);
+    expect(children.some((c) => c.title === "新建的子任务")).toBe(true);
     expect(onAfterWrite).toHaveBeenCalled();
+
+    await unmount(root);
+  });
+
+  it("草稿行空内容失焦 → 不落库且收起草稿", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+    await clickAdd(host);
+
+    const draft = draftInput(host) as HTMLTextAreaElement;
+    await act(async () => {
+      draft.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await settle();
+
+    expect(draftInput(host)).toBeNull();
+    const children = await db.tasks.where("parentId").equals(parent.id).toArray();
+    expect(children.length).toBe(2);
+
+    await unmount(root);
+  });
+
+  it("草稿行回车提交后保持录入，可连续添加", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+    await clickAdd(host);
+
+    const draft = draftInput(host) as HTMLTextAreaElement;
+    await typeIntoTextarea(draft, "甲");
+    await act(async () => {
+      draft.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+
+    const children = await db.tasks.where("parentId").equals(parent.id).toArray();
+    expect(children.length).toBe(3);
+    expect(children.some((c) => c.title === "甲")).toBe(true);
+    // 回车后草稿行仍在且已清空，便于继续录入下一条
+    expect(draftInput(host)).not.toBeNull();
+    expect(draftInput(host)?.value).toBe("");
+
+    await unmount(root);
+  });
+
+  it("在已有子任务上回车 → 末尾出现空白草稿行", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    const firstChild = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    await act(async () => {
+      firstChild.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+
+    expect(draftInput(host)).not.toBeNull();
 
     await unmount(root);
   });

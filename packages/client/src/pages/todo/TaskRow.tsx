@@ -105,7 +105,7 @@ export function TaskRow({
   return (
     <div className="group w-full rounded-row transition hover:bg-surface-hover">
       <div
-        className="relative flex items-center gap-3 px-2 py-2"
+        className="relative flex items-center gap-1.5 px-2 py-2"
         role="link"
         tabIndex={0}
         aria-label={`打开 ${task.title}`}

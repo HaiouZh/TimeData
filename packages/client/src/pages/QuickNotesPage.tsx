@@ -21,6 +21,7 @@ import { useEntryMutations } from "../hooks/useEntries.js";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
+import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
 import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../lib/tasks.js";
@@ -104,6 +105,8 @@ export default function QuickNotesPage() {
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [softKeyboardOpen, setSoftKeyboardOpen] = useState(false);
+  // 宽屏（≥1024px）回车发送；窄屏（手机）回车交给 textarea 默认换行，靠「记录」按钮发送。
+  const isWideScreen = useIsWideScreen();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -493,7 +496,7 @@ export default function QuickNotesPage() {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && isWideScreen) {
       event.preventDefault();
       void handleSubmit();
       return;

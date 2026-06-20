@@ -43,11 +43,12 @@ export function DayGroupedList({ segments, renderTasks, initialGroups = 3 }: Day
         </button>
       )}
       {expanded && segments.length > initialGroups && (
+        // sticky 贴底：展开后浏览到中途也能随手收起，不必拉到列表最末或回到顶部分区标题。
         <button
           type="button"
           aria-label="收起"
           onClick={() => setExpanded(false)}
-          className="mt-1 w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover"
+          className="sticky bottom-1 z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 text-xs text-ink-3 shadow-sm hover:bg-surface-hover"
         >
           收起
         </button>

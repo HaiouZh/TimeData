@@ -28,7 +28,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-20
 ---
 
 # 待办任务
@@ -171,7 +171,7 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 | `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、`CaretDown`/`CaretRight`（有 children 才显示）、`rowClickZone` 派发 expand/open、meta 第二行、dnd 拖柄、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、`dropActive`（hover-intent 激活）时强制展开并挂 `ParentDropZone`、桌面（细指针）行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列——今天在左用 `←`、收件箱在右用 `→`） |
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList` / dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不再各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、turn SegmentedControl、删除（`deleteTaskCascade`）、重复预设 overlay；`parentId!==null`（child）隐藏 recurrence/tags/turn/scheduledAt 高级控件，显示「作为子任务」提示 |
-| `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（含 `resolveTodoDragWithArm`/`armTargetFromDragOver`/`hoveredRootIdFromOver`） |
+| `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 上回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（含 `resolveTodoDragWithArm`/`armTargetFromDragOver`/`hoveredRootIdFromOver`） |
 | `pages/todo/{hoverIntent,useHoverIntent,ParentDropZone}.*` | 悬停意图纯 reducer（候选切换+600ms 阈值）/ 包 reducer 的 hook（timer 复查）/ 拖拽悬停激活时目标行下的空 `parent:<id>` 落点区 |
 | `pages/todo/{DayGroupedList,AttentionQueue,TagFilterBar,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表 / 注意力栈 / tag 筛选 / 新增 / 双栏 / 折叠 |
 | `lib/tasks.ts` | 核心 CRUD + `listTasks`（顶部过滤 `parentId!==null`）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对 child 走非重复路径、对 root 取 reset-前 children 委托 `completeTask`，同事务写 occurrence + occurrence/template children + 模板 |
