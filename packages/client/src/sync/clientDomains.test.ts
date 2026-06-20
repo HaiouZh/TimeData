@@ -24,6 +24,26 @@ function task(overrides: Partial<Task> = {}): Task {
 }
 
 describe("taskNeedsApply", () => {
+  it("existing 为空 -> 应用", () => {
+    expect(__test.taskNeedsApply(undefined, task())).toBe(true);
+  });
+
+  it("schema 投影相等 -> 不应用（本地孤儿不触发）", () => {
+    const existing = { ...task(), ghostField: "local-only" } as Task;
+
+    expect(__test.taskNeedsApply(existing, task())).toBe(false);
+  });
+
+  it("任一字段差异 -> 应用（无需手列字段）", () => {
+    expect(__test.taskNeedsApply(task({ tags: [] }), task({ tags: ["agent"] }))).toBe(true);
+  });
+
+  it("任一侧无法解析 -> 保守应用", () => {
+    const existing = { ...task(), title: "" } as Task;
+
+    expect(__test.taskNeedsApply(existing, task())).toBe(true);
+  });
+
   it("detects parentId changes", () => {
     const existing = task({ id: "child-1", parentId: "root-a" });
     const remote = task({ id: "child-1", parentId: "root-b" });

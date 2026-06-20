@@ -14,6 +14,7 @@ import {
 } from "@timedata/shared";
 import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.ts";
+import { isDeepEqual } from "../db/schemaNormalization.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
 
 export interface ClientDomainConfig {
@@ -62,16 +63,11 @@ function settingNeedsApply(existing: Setting | undefined, remote: Setting): bool
 }
 
 function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
-  return !existing
-    || existing.updatedAt !== remoteTask.updatedAt
-    || existing.title !== remoteTask.title
-    || existing.done !== remoteTask.done
-    || JSON.stringify(existing.recurrence) !== JSON.stringify(remoteTask.recurrence)
-    || existing.lastDoneAt !== remoteTask.lastDoneAt
-    || existing.startAt !== remoteTask.startAt
-    || existing.scheduledAt !== remoteTask.scheduledAt
-    || existing.parentId !== remoteTask.parentId
-    || existing.sortOrder !== remoteTask.sortOrder;
+  if (!existing) return true;
+  const existingParsed = TaskSchema.safeParse(existing);
+  const remoteParsed = TaskSchema.safeParse(remoteTask);
+  if (!existingParsed.success || !remoteParsed.success) return true;
+  return !isDeepEqual(existingParsed.data, remoteParsed.data);
 }
 
 function isCompleteEntry(entry: TimeEntry): boolean {
