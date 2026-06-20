@@ -272,8 +272,9 @@ export function initializeDatabase(): void {
   ensureTaskCompletedCountColumn(db);
   ensureTaskCompletionMetadataColumns(db);
   ensureTaskParentIdColumn(db);
-  const legacyTaskStateColumn = "tu" + "rn";
-  dropColumnsIfExist(db, "tasks", [legacyTaskStateColumn, `${legacyTaskStateColumn}_at`]);
+  // 退役 turn（M2，2026-06-20）：摘掉 tasks 表的 turn/turn_at 列。明文列名是合法墓碑，
+  // 复用 M1 的幂等删列 helper；旧列不存在时 no-op。见 docs_local/specs/2026-06-20-退役turn-design.md。
+  dropColumnsIfExist(db, "tasks", ["turn", "turn_at"]);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {

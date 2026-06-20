@@ -17,7 +17,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-20
 ---
 
 # 时间轴与记录时间规则

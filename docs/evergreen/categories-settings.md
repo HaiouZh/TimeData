@@ -14,7 +14,7 @@ covers:
   - packages/client/src/lib/categoryTree.ts
   - packages/server/src/routes/categories.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-20
 ---
 
 # 分类与设置

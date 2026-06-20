@@ -14,6 +14,8 @@ covers:
 last-reviewed: 2026-06-20
 ---
 
+<!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
+
 # 健康数据
 
 > 健康域的**主题文档**：5 张指标表 + 1 张视图块配置表（`health_charts`），由 Garmin 抓取或 HTTP ingest 写入，经同步下发到 `/stats/health` 渲染。健康数据**不参与时长统计**。
