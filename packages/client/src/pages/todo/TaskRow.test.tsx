@@ -35,9 +35,8 @@ function task(overrides: Partial<Task> = {}): Task {
     recurrence: null,
     lastDoneAt: null,
     startAt: null,
-    scheduledAt: null,    completedCount: 0,
-    turn: null,
-    turnAt: null,
+    scheduledAt: null,
+    completedCount: 0,
     completedAt: null,
     tags: [],
     sortOrder: 0,
@@ -52,7 +51,6 @@ const handlers = {
   onToggle: noop,
   onEdit: noop,
   onDelete: noop,
-  onTurnChange: noop,
 };
 
 async function render(node: ReturnType<typeof createElement>) {
@@ -69,8 +67,6 @@ describe("TaskRow", () => {
     "排进今天",
     "回收件箱",
     "删除",
-    "纳入回合",
-    "切换回合",
     "编辑重复与时间",
     "计划到某天",
     "添加子任务",
@@ -330,14 +326,13 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
-  it("turn 徽章按 turn 取色取字，turn=null 不显示", async () => {
+  it("不渲染旧 turn 徽章", async () => {
     const { host, root } = await render(
-      createElement(TaskRow, { task: task({ turn: "me" }), pool: "today", ...handlers }),
+      createElement(TaskRow, { task: task({ turn: "me" } as Partial<Task>), pool: "today", ...handlers }),
     );
-    const badge = host.querySelector('[data-testid="turn-badge"]');
-    expect(badge).not.toBeNull();
-    expect(badge?.getAttribute("data-turn")).toBe("me");
-    expect(badge?.textContent).toContain("等我");
+
+    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull();
+    expect(host.textContent).not.toContain("等我");
     await act(async () => root.unmount());
   });
 
@@ -349,34 +344,6 @@ describe("TaskRow", () => {
     expect(chips.length).toBe(2);
     expect(chips[0].textContent).toContain("重构");
     expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull();
-    await act(async () => root.unmount());
-  });
-
-  it("普通池行徽章不可点（无 onClick 触发 onTurnChange）", async () => {
-    const onTurnChange = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, { task: task({ turn: "me" }), pool: "today", ...handlers, onTurnChange }),
-    );
-    const badge = host.querySelector('[data-testid="turn-badge"]') as HTMLElement;
-    await act(async () => badge.click());
-    expect(onTurnChange).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
-  });
-
-  it("turnBadgeInteractive=true 行徽章点击调 onTurnChange", async () => {
-    const onTurnChange = vi.fn();
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({ turn: "me" }),
-        pool: "today",
-        turnBadgeInteractive: true,
-        ...handlers,
-        onTurnChange,
-      }),
-    );
-    const badge = host.querySelector('[data-testid="turn-badge"]') as HTMLElement;
-    await act(async () => badge.click());
-    expect(onTurnChange).toHaveBeenCalledWith(expect.objectContaining({ id: "t1" }), "me");
     await act(async () => root.unmount());
   });
 
@@ -404,18 +371,6 @@ describe("TaskRow", () => {
     );
     expect(host.querySelectorAll('[data-testid="tag-chip"]').length).toBe(3);
     expect(host.textContent).not.toContain("…");
-    await act(async () => root.unmount());
-  });
-
-  it.each([
-    ["me", "等我"],
-    ["running", "在跑"],
-    ["parked", "搁置"],
-  ] as const)("turn=%s 徽章 data-turn=%s 文案=%s", async (turn, label) => {
-    const { host, root } = await render(createElement(TaskRow, { task: task({ turn }), pool: "today", ...handlers }));
-    const badge = host.querySelector('[data-testid="turn-badge"]');
-    expect(badge?.getAttribute("data-turn")).toBe(turn);
-    expect(badge?.textContent).toContain(label);
     await act(async () => root.unmount());
   });
 

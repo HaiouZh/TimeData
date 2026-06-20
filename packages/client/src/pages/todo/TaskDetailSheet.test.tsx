@@ -7,7 +7,7 @@ import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
-import { addTask, createChildTask, setTaskTags, setTaskTurn, toggleTaskDone } from "../../lib/tasks.js";
+import { addTask, createChildTask, setTaskTags, toggleTaskDone } from "../../lib/tasks.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
@@ -58,7 +58,6 @@ async function renderSheetWithCallbacks(
   id: string,
   callbacks: {
     onTagsChange?: (t: Task, tags: string[]) => void;
-    onTurnChange?: (t: Task, turn: Task["turn"]) => void;
   },
 ) {
   const { host, root } = await renderDom(
@@ -80,12 +79,6 @@ const pressEnter = (input: HTMLInputElement) =>
   act(async () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
-
-// SegmentedControl 的 radio 按钮无 aria-label，仅有可见文本，按 label 文本定位。
-const radioByLabel = (host: HTMLElement, label: string): Element | undefined =>
-  Array.from(host.querySelectorAll('[role="radio"]')).find((b) =>
-    (b as HTMLElement).textContent?.includes(label),
-  );
 
 describe("isSwipeDownClose", () => {
   it("下滑超过阈值 -> true", () => expect(isSwipeDownClose(80)).toBe(true));
@@ -395,6 +388,16 @@ describe("TaskDetailSheet 自动保存", () => {
     await unmount(rendered.root);
   });
 
+  it("不渲染旧回合段控", async () => {
+    const t = await addTask({ title: "旧回合任务" });
+    await db.tasks.update(t.id, { turn: "me" } as Partial<Task>);
+    const { host, root } = await renderSheet(t.id);
+
+    expect(host.querySelector('[role="radiogroup"][aria-label="回合"]')).toBeNull();
+    expect(host.querySelector('[aria-label="退出流程"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("标题未失焦直接关闭 -> flush 仍落库", async () => {
     const t = await addTask({ title: "旧" });
     const { host, root } = await renderSheet(t.id);
@@ -467,25 +470,6 @@ describe("TaskDetailSheet tag 编辑", () => {
     setInputValue(input, "   ");
     await pressEnter(input);
     expect(onTagsChange).not.toHaveBeenCalled();
-    await unmount(root);
-  });
-});
-
-describe("TaskDetailSheet 回合段控", () => {
-  it("切换 me/running/parked 与退出流程调 onTurnChange", async () => {
-    const onTurnChange = vi.fn();
-    const t = await addTask({ title: "回合任务" });
-    await setTaskTurn(t.id, "me");
-    const { host, root } = await renderSheetWithCallbacks(t.id, { onTurnChange });
-
-    const seg = host.querySelector('[role="radiogroup"][aria-label="回合"]');
-    expect(seg).not.toBeNull();
-
-    await click(radioByLabel(host, "在跑") ?? null);
-    expect(onTurnChange).toHaveBeenLastCalledWith(expect.anything(), "running");
-
-    await click(host.querySelector('[aria-label="退出流程"]'));
-    expect(onTurnChange).toHaveBeenLastCalledWith(expect.anything(), null);
     await unmount(root);
   });
 });

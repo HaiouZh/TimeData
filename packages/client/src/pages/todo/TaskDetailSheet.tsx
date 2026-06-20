@@ -4,7 +4,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
-import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
@@ -22,16 +21,10 @@ interface TaskDetailSheetProps {
   id: string | null;
   onClose: () => void;
   onTagsChange?: (task: Task, tags: string[]) => void;
-  onTurnChange?: (task: Task, turn: Task["turn"]) => void;
 }
 
 const SWIPE_CLOSE_THRESHOLD = 60;
 const DEFAULT_RECURRENCE: Recurrence = { freq: "daily", interval: 1, basis: "due" };
-const TURN_SEGMENTED_OPTIONS: Array<{ value: NonNullable<Task["turn"]>; label: string }> = [
-  { value: "me", label: "等我" },
-  { value: "running", label: "在跑" },
-  { value: "parked", label: "搁置" },
-];
 
 /** 下滑位移（px，向下为正）是否达到关闭阈值。 */
 export function isSwipeDownClose(deltaY: number): boolean {
@@ -48,7 +41,7 @@ function normalizeTitle(value: string): string {
   return value.replace(/\s*[\r\n]+\s*/g, " ").trim();
 }
 
-export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: TaskDetailSheetProps) {
+export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const { syncAfterWrite } = useSyncContext();
   const [title, setTitle] = useState("");
@@ -350,26 +343,6 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTurnChange }: Tas
                   placeholder="加标签，回车确认"
                   className="w-full rounded-ctl border border-border-hairline bg-surface px-2 py-1 text-sm text-ink outline-none"
                 />
-              </div>
-            )}
-
-            {!isChild && onTurnChange && task && (
-              <div className="space-y-1.5">
-                <div className="text-xs text-ink-3">回合</div>
-                <SegmentedControl
-                  ariaLabel="回合"
-                  options={TURN_SEGMENTED_OPTIONS}
-                  value={task.turn ?? "me"}
-                  onChange={(value) => onTurnChange(task, value)}
-                />
-                <button
-                  type="button"
-                  aria-label="退出流程"
-                  onClick={() => onTurnChange(task, null)}
-                  className="text-xs text-ink-3 hover:text-ink-2"
-                >
-                  {task.turn ? "退出流程（移出回合）" : "未纳入回合"}
-                </button>
               </div>
             )}
 

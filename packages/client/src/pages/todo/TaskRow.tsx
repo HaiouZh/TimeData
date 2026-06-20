@@ -19,18 +19,6 @@ export interface RowDragHandle {
   listeners: DraggableSyntheticListeners;
 }
 
-const TURN_LABELS: Record<NonNullable<Task["turn"]>, string> = {
-  me: "等我",
-  running: "在跑",
-  parked: "搁置",
-};
-
-const TURN_DOT_BG: Record<NonNullable<Task["turn"]>, string> = {
-  me: "bg-accent",
-  running: "bg-warn",
-  parked: "bg-ink-3",
-};
-
 export interface TaskRowProps {
   task: Task;
   pool: TaskPool;
@@ -42,8 +30,6 @@ export interface TaskRowProps {
   onDelete?: (t: Task) => void;
   onToToday?: (t: Task) => void;
   onToInbox?: (t: Task) => void;
-  onTurnChange?: (task: Task, turn: Task["turn"]) => void;
-  turnBadgeInteractive?: boolean;
   /** 行写入后回调（InlineChildren 内部触发，宿主可在此调 syncAfterWrite）。 */
   onAfterChildWrite?: () => void;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
@@ -69,8 +55,6 @@ export function TaskRow({
   onDelete,
   onToToday,
   onToInbox,
-  onTurnChange,
-  turnBadgeInteractive,
   onAfterChildWrite,
   childrenModeOverride,
   indentTargetActive,
@@ -90,7 +74,6 @@ export function TaskRow({
     childTotal > 0 ||
     overdueDate !== null ||
     passiveScheduled ||
-    task.turn !== null ||
     (task.tags ?? []).length > 0;
   const canSwapPool = task.recurrence === null && pool !== "completed";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
@@ -184,24 +167,6 @@ export function TaskRow({
               )}
               {overdueDate && <span className="text-danger">逾期 {formatMonthDay(overdueDate)}</span>}
               {passiveScheduled && <span>{taskTimeLabel(task)}</span>}
-              {task.turn && (
-                <span
-                  data-testid="turn-badge"
-                  data-turn={task.turn}
-                  className="inline-flex items-center gap-1"
-                  onClick={
-                    turnBadgeInteractive
-                      ? (event) => {
-                          event.stopPropagation();
-                          onTurnChange?.(task, task.turn);
-                        }
-                      : undefined
-                  }
-                >
-                  <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-pill ${TURN_DOT_BG[task.turn]}`} />
-                  {TURN_LABELS[task.turn]}
-                </span>
-              )}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
                 <span
                   key={tag}
