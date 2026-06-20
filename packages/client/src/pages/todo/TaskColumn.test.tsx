@@ -91,11 +91,12 @@ describe("TaskColumn swipe 接线", () => {
     await act(async () => root.unmount());
   });
 
-  it("sortable today 列渲染拖拽手柄，非 sortable 不渲染", async () => {
+  it("sortable today 列渲染左侧拖拽抓取区，非 sortable 不渲染", async () => {
     const plain = await render(
       createElement(TaskColumn, { title: "今天", pool: "today", tasks: [task({ title: "A" })], emptyText: "空", ...handlers }),
     );
     expect(plain.host.querySelector('[aria-label="拖动 A"]')).toBeNull();
+    expect(plain.host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
     await act(async () => plain.root.unmount());
 
     const sortable = await render(
@@ -109,7 +110,8 @@ describe("TaskColumn swipe 接线", () => {
         ...handlers,
       }),
     );
-    expect(sortable.host.querySelector('[aria-label="拖动 A"]')).not.toBeNull();
+    expect(sortable.host.querySelector('[aria-label="拖动 A"]')).toBeNull();
+    expect(sortable.host.querySelector('[data-testid="task-row-grab-area"]')).not.toBeNull();
     await act(async () => sortable.root.unmount());
   });
 

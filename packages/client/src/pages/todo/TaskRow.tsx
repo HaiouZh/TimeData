@@ -1,7 +1,7 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { ArrowLeft, ArrowRight, CaretDown, CaretRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
-import { type MouseEvent as ReactMouseEvent, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
@@ -10,7 +10,6 @@ import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TURN_DOT_BG, TURN_LABELS } from "../../lib/tasks/turnTags.js";
 import { formatMonthDay } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
-import { ParentDropZone } from "./ParentDropZone.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
 export type TaskPool = "today" | "inbox" | "upcoming" | "recurring" | "completed";
@@ -38,11 +37,8 @@ export interface TaskRowProps {
   onAfterChildWrite?: () => void;
   /** AttentionQueue 等场景强制只读，覆盖按 pool 推断的 mode。 */
   childrenModeOverride?: InlineChildrenMode;
-  /**
-   * 拖拽悬停意图激活：强制展开子任务区并渲染 parent 落点区（即便无子任务）。
-   * 由顶层 TodoPage 的 hover-intent 状态驱动，仅拖拽期短暂为真。
-   */
-  dropActive?: boolean;
+  indentTargetActive?: boolean;
+  revealChildren?: { id: string; nonce: number } | null;
 }
 
 function childModeForPool(pool: TaskPool): InlineChildrenMode {
@@ -66,7 +62,8 @@ export function TaskRow({
   turnBadgeInteractive,
   onAfterChildWrite,
   childrenModeOverride,
-  dropActive,
+  indentTargetActive,
+  revealChildren,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const children = useTaskChildren(task.id);
@@ -85,11 +82,12 @@ export function TaskRow({
     task.turn !== null ||
     (task.tags ?? []).length > 0;
   const canSwapPool = task.recurrence === null && pool !== "completed";
-  const overlayRightClass = dragHandle ? "right-8" : "right-2";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
-  // dropActive（拖拽悬停激活）强制展开；既有子任务照常列出，并额外渲染空 parent 落点区。
-  const showInlineChildren = (expanded || dropActive === true) && childTotal > 0;
-  const showDropZone = dropActive === true;
+  const showInlineChildren = expanded && childTotal > 0;
+
+  useEffect(() => {
+    if (revealChildren != null && revealChildren.id === task.id) setExpanded(true);
+  }, [revealChildren, task.id]);
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
@@ -103,7 +101,11 @@ export function TaskRow({
   }
 
   return (
-    <div className="group w-full rounded-row transition hover:bg-surface-hover">
+    <div
+      className={`group w-full rounded-row transition hover:bg-surface-hover ${
+        indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
+      }`}
+    >
       <div
         className="relative flex items-center gap-1.5 px-2 py-2"
         role="link"
@@ -117,10 +119,27 @@ export function TaskRow({
           }
         }}
       >
+        {dragHandle && (
+          <button
+            type="button"
+            ref={dragHandle.setActivatorNodeRef}
+            data-testid="task-row-grab-area"
+            aria-label={`移动 ${task.title}`}
+            className="absolute inset-y-0 left-0 z-10 w-2/5 cursor-grab touch-none select-none bg-transparent p-0 active:cursor-grabbing"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (window.getSelection()?.toString()) return;
+              if (childTotal > 0) setExpanded((value) => !value);
+              else onEdit(task);
+            }}
+            {...dragHandle.attributes}
+            {...dragHandle.listeners}
+          />
+        )}
         {/* 复选框 + caret：caret 紧贴 title，落在行左 2/5 命中区内，
             点它经行 onClick + rowClickZone 仍展开。 */}
         <div className="flex shrink-0 items-center gap-1">
-          <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
+          <div className="relative z-20 shrink-0" onClick={(event) => event.stopPropagation()}>
             <Checkbox
               ariaLabel={`完成 ${task.title}`}
               checked={checked}
@@ -128,11 +147,13 @@ export function TaskRow({
               className="shrink-0"
             />
           </div>
-          {childTotal > 0 && (
-            <span data-testid="subtask-caret" aria-hidden="true" className="shrink-0 text-ink-3">
-              <Icon icon={expanded ? CaretDown : CaretRight} size={12} />
-            </span>
-          )}
+          <span
+            data-testid={childTotal > 0 ? "subtask-caret" : "task-row-left-indicator"}
+            aria-hidden="true"
+            className="shrink-0 text-ink-3"
+          >
+            <Icon icon={childTotal > 0 ? (expanded ? CaretDown : CaretRight) : DotsSixVertical} size={childTotal > 0 ? 12 : 14} />
+          </span>
         </div>
         <div className="min-w-0 flex-1">
           <span className={`select-text break-words text-sm ${checked ? "text-ink-3 line-through" : "text-ink"}`}>
@@ -185,7 +206,7 @@ export function TaskRow({
         </div>
         {coarsePointer === false && (
           <div
-            className={`pointer-events-none absolute ${overlayRightClass} inset-y-0 z-10 my-auto flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100`}
+            className="pointer-events-none absolute inset-y-0 right-2 z-30 my-auto flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
           >
             <span
               aria-hidden="true"
@@ -232,26 +253,10 @@ export function TaskRow({
             )}
           </div>
         )}
-        {dragHandle && (
-          <button
-            ref={dragHandle.setActivatorNodeRef}
-            type="button"
-            aria-label={`拖动 ${task.title}`}
-            onClick={(event) => event.stopPropagation()}
-            className="shrink-0 cursor-grab touch-none select-none rounded-ctl px-1 text-ink-3 hover:text-ink-2 active:cursor-grabbing"
-            {...dragHandle.attributes}
-            {...dragHandle.listeners}
-          >
-            <Icon icon={DotsSixVertical} size={18} />
-          </button>
-        )}
       </div>
-      {(showInlineChildren || showDropZone) && (
+      {showInlineChildren && (
         <div className="ml-9 pb-1" onClick={(event) => event.stopPropagation()}>
-          {showInlineChildren && (
-            <InlineChildren parentId={task.id} mode={childrenMode} onAfterWrite={onAfterChildWrite} />
-          )}
-          {showDropZone && <ParentDropZone parentId={task.id} />}
+          <InlineChildren parentId={task.id} mode={childrenMode} onAfterWrite={onAfterChildWrite} />
         </div>
       )}
     </div>

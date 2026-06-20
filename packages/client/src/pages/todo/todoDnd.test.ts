@@ -2,13 +2,15 @@ import type { Modifier } from "@dnd-kit/core";
 import type { Transform } from "@dnd-kit/utilities";
 import { describe, expect, it } from "vitest";
 import {
-  armTargetFromDragOver,
+  clampTodoIndentPreview,
   containerIdForTask,
   hoveredRootIdFromOver,
   parseTodoContainerId,
+  resolveIndentLevel,
   resolveTodoDragOperation,
-  resolveTodoDragWithArm,
-  restrictToVerticalAxis,
+  resolveTodoDragWithIndent,
+  TODO_CHILD_INDENT_PX,
+  TODO_INDENT_RELEASE_PX,
   type TodoContainer,
 } from "./todoDnd.js";
 
@@ -16,6 +18,80 @@ import {
 function applyModifier(modifier: Modifier, transform: Transform): Transform {
   return modifier({ transform } as Parameters<Modifier>[0]);
 }
+
+describe("resolveIndentLevel", () => {
+  it("root 起手未达 28px 保持 root", () => {
+    expect(resolveIndentLevel(27, "root")).toBe("root");
+  });
+
+  it("root 起手达到 28px 变 child", () => {
+    expect(resolveIndentLevel(TODO_CHILD_INDENT_PX, "root")).toBe("child");
+  });
+
+  it("child 态回落到 12px 以内才回 root", () => {
+    expect(resolveIndentLevel(TODO_INDENT_RELEASE_PX + 1, "child")).toBe("child");
+    expect(resolveIndentLevel(TODO_INDENT_RELEASE_PX, "child")).toBe("root");
+  });
+
+  it("负向位移恒为 root", () => {
+    expect(resolveIndentLevel(-1, "root")).toBe("root");
+    expect(resolveIndentLevel(-1, "child")).toBe("root");
+  });
+});
+
+describe("resolveIndentLevel（子任务基线 base=child）", () => {
+  it("子任务竖直拖（deltaX≈0）保持 child，不被误升级为 root", () => {
+    expect(resolveIndentLevel(0, "child", "child")).toBe("child");
+    expect(resolveIndentLevel(5, "child", "child")).toBe("child");
+  });
+
+  it("子任务正向位移（向右）恒为 child", () => {
+    expect(resolveIndentLevel(80, "child", "child")).toBe("child");
+    expect(resolveIndentLevel(80, "root", "child")).toBe("child");
+  });
+
+  it("子任务向左未越 -28 仍是 child", () => {
+    expect(resolveIndentLevel(-(TODO_CHILD_INDENT_PX - 1), "child", "child")).toBe("child");
+  });
+
+  it("子任务向左越过 -28 升级为 root", () => {
+    expect(resolveIndentLevel(-TODO_CHILD_INDENT_PX, "child", "child")).toBe("root");
+  });
+
+  it("子任务升级 root 后滞回到 -12 内才回落 child", () => {
+    expect(resolveIndentLevel(-(TODO_INDENT_RELEASE_PX + 1), "root", "child")).toBe("root");
+    expect(resolveIndentLevel(-TODO_INDENT_RELEASE_PX, "root", "child")).toBe("child");
+  });
+});
+
+describe("clampTodoIndentPreview", () => {
+  it("保留向右缩进预览但夹到一个缩进宽度", () => {
+    expect(applyModifier(clampTodoIndentPreview, { x: 80, y: 12, scaleX: 1, scaleY: 1 })).toEqual({
+      x: TODO_CHILD_INDENT_PX,
+      y: 12,
+      scaleX: 1,
+      scaleY: 1,
+    });
+  });
+
+  it("向左预览夹回 0,避免横向滚动条", () => {
+    expect(applyModifier(clampTodoIndentPreview, { x: -20, y: 12, scaleX: 1, scaleY: 1 }).x).toBe(0);
+  });
+
+  it("拖子任务时向左升级预览夹到 -28，向右夹回 0", () => {
+    const childActive = { data: { current: { containerId: "parent:root-1" } } };
+    const left = clampTodoIndentPreview({
+      transform: { x: -80, y: 0, scaleX: 1, scaleY: 1 },
+      active: childActive,
+    } as Parameters<Modifier>[0]);
+    const right = clampTodoIndentPreview({
+      transform: { x: 40, y: 0, scaleX: 1, scaleY: 1 },
+      active: childActive,
+    } as Parameters<Modifier>[0]);
+    expect(left.x).toBe(-TODO_CHILD_INDENT_PX);
+    expect(right.x).toBe(0);
+  });
+});
 
 describe("parseTodoContainerId", () => {
   it.each<[string, TodoContainer]>([
@@ -149,153 +225,96 @@ describe("hoveredRootIdFromOver", () => {
   });
 });
 
-describe("armTargetFromDragOver", () => {
-  it("根任务悬停在另一根任务行上 → 该根为可激活目标", () => {
-    expect(
-      armTargetFromDragOver({
-        overContainerId: "pool:today",
-        overId: "root-2",
-        activeId: "root-1",
-        activeParentId: null,
-      }),
-    ).toBe("root-2");
-  });
+const baseIndentInput = {
+  activeContainerId: "pool:today",
+  activeParentId: null,
+  activeId: "active",
+  activeHasChildren: false,
+  indentLevel: "root",
+  rootAboveId: "parent",
+  targetPool: "today",
+} as const;
 
-  it("悬停在自己身上 → null（不能嵌入自身）", () => {
-    expect(
-      armTargetFromDragOver({
-        overContainerId: "pool:today",
-        overId: "root-1",
-        activeId: "root-1",
-        activeParentId: null,
-      }),
-    ).toBeNull();
-  });
-
-  it("子任务悬停在自己的父行/父容器上 → null（已展开，无需激活）", () => {
-    expect(
-      armTargetFromDragOver({
-        overContainerId: "parent:p1",
-        overId: "child-x",
-        activeId: "child-a",
-        activeParentId: "p1",
-      }),
-    ).toBeNull();
-  });
-
-  it("子任务悬停在另一个根上 → 该根为可激活目标（跨父）", () => {
-    expect(
-      armTargetFromDragOver({
-        overContainerId: "parent:root-2",
-        overId: "child-y",
-        activeId: "child-a",
-        activeParentId: "p1",
-      }),
-    ).toBe("root-2");
-  });
-
-  it("无效 over → null", () => {
-    expect(
-      armTargetFromDragOver({
-        overContainerId: "",
-        overId: "x",
-        activeId: "root-1",
-        activeParentId: null,
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("resolveTodoDragWithArm", () => {
-  it("未激活：同池根任务互拖仍是 reorder", () => {
-    expect(
-      resolveTodoDragWithArm({
-        activeContainerId: "pool:today",
-        overContainerId: "pool:today",
-        overId: "root-2",
-        activeId: "root-1",
-        activeParentId: null,
-        armedParentId: null,
-      }),
-    ).toEqual({ kind: "reorder", containerId: "pool:today" });
-  });
-
-  it("未激活：today → inbox 根任务仍是 schedule-root", () => {
-    expect(
-      resolveTodoDragWithArm({
-        activeContainerId: "pool:today",
-        overContainerId: "pool:inbox",
-        overId: "root-9",
-        activeId: "root-1",
-        activeParentId: null,
-        armedParentId: null,
-      }),
-    ).toEqual({ kind: "schedule-root", pool: "inbox" });
-  });
-
-  it("已激活目标 A，松手仍落在 A 行（池容器）→ move-to-parent A", () => {
-    expect(
-      resolveTodoDragWithArm({
-        activeContainerId: "pool:today",
-        overContainerId: "pool:today",
-        overId: "root-A",
-        activeId: "root-1",
-        activeParentId: null,
-        armedParentId: "root-A",
-      }),
-    ).toEqual({ kind: "move-to-parent", parentId: "root-A" });
-  });
-
-  it("已激活目标 A，松手落在 A 的展开落点区（parent 容器）→ move-to-parent A", () => {
-    expect(
-      resolveTodoDragWithArm({
-        activeContainerId: "pool:today",
-        overContainerId: "parent:root-A",
-        overId: "parent-zone:root-A",
-        activeId: "root-1",
-        activeParentId: null,
-        armedParentId: "root-A",
-      }),
-    ).toEqual({ kind: "move-to-parent", parentId: "root-A" });
-  });
-
-  it("激活的是 A，但松手时指针已移到别处 B → 不强行嵌入，按常规判定", () => {
-    expect(
-      resolveTodoDragWithArm({
-        activeContainerId: "pool:today",
-        overContainerId: "pool:today",
-        overId: "root-B",
-        activeId: "root-1",
-        activeParentId: null,
-        armedParentId: "root-A",
-      }),
-    ).toEqual({ kind: "reorder", containerId: "pool:today" });
-  });
-
-  it("激活目标恰为自身（异常）→ 不强行嵌入", () => {
-    // armed 不该等于 activeId，但即便发生也不能把自己嵌进自己。
-    const op = resolveTodoDragWithArm({
-      activeContainerId: "pool:today",
-      overContainerId: "pool:today",
-      overId: "root-1",
-      activeId: "root-1",
-      activeParentId: null,
-      armedParentId: "root-1",
+describe("resolveTodoDragWithIndent", () => {
+  it("root 无 children + child 缩进 + 候选父 -> move-to-parent", () => {
+    expect(resolveTodoDragWithIndent({ ...baseIndentInput, indentLevel: "child" })).toEqual({
+      kind: "move-to-parent",
+      parentId: "parent",
     });
-    expect(op).not.toEqual({ kind: "move-to-parent", parentId: "root-1" });
   });
 
-  it("子任务被拖到已激活的另一根 A 落点 → move-to-parent A（跨父）", () => {
+  it("root 有 children 时 child 缩进失效,同池仍是 reorder", () => {
     expect(
-      resolveTodoDragWithArm({
-        activeContainerId: "parent:p1",
-        overContainerId: "parent:root-A",
-        overId: "parent-zone:root-A",
-        activeId: "child-a",
-        activeParentId: "p1",
-        armedParentId: "root-A",
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        activeHasChildren: true,
+        indentLevel: "child",
       }),
-    ).toEqual({ kind: "move-to-parent", parentId: "root-A" });
+    ).toEqual({ kind: "reorder", containerId: "pool:today" });
+  });
+
+  it("root 无 child 缩进、跨 today/inbox -> schedule-root", () => {
+    expect(resolveTodoDragWithIndent({ ...baseIndentInput, targetPool: "inbox" })).toEqual({
+      kind: "schedule-root",
+      pool: "inbox",
+    });
+  });
+
+  it("child 左回 root -> promote-to-root", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        activeContainerId: "parent:old",
+        activeParentId: "old",
+        indentLevel: "root",
+        targetPool: "inbox",
+      }),
+    ).toEqual({ kind: "promote-to-root", pool: "inbox" });
+  });
+
+  it("child 保持 child 且候选父为原父 -> reorder 原 parent 容器", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        activeContainerId: "parent:old",
+        activeParentId: "old",
+        indentLevel: "child",
+        rootAboveId: "old",
+      }),
+    ).toEqual({ kind: "reorder", containerId: "parent:old" });
+  });
+
+  it("child 保持 child 且候选父变化 -> move-to-parent 新父", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        activeContainerId: "parent:old",
+        activeParentId: "old",
+        indentLevel: "child",
+        rootAboveId: "new",
+      }),
+    ).toEqual({ kind: "move-to-parent", parentId: "new" });
+  });
+
+  it("候选父为自己或为空时不降级,退回 root 级判定", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        indentLevel: "child",
+        rootAboveId: "active",
+      }),
+    ).toEqual({ kind: "reorder", containerId: "pool:today" });
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        indentLevel: "child",
+        rootAboveId: null,
+      }),
+    ).toEqual({ kind: "reorder", containerId: "pool:today" });
+  });
+
+  it("无法得到目标池且没有合法候选父时返回 null", () => {
+    expect(resolveTodoDragWithIndent({ ...baseIndentInput, rootAboveId: null, targetPool: null })).toBeNull();
   });
 });
 
@@ -320,25 +339,5 @@ describe("containerIdForTask", () => {
     expect(
       containerIdForTask({ parentId: null, scheduledAt: "2026-07-01T00:00:00.000Z" }, "2026-06-19"),
     ).toBe("");
-  });
-});
-
-describe("restrictToVerticalAxis", () => {
-  it("把横向位移归零（向右拉不再顶出横向滚动条）", () => {
-    expect(applyModifier(restrictToVerticalAxis, { x: 120, y: 40, scaleX: 1, scaleY: 1 })).toEqual({
-      x: 0,
-      y: 40,
-      scaleX: 1,
-      scaleY: 1,
-    });
-  });
-
-  it("保留纵向位移与缩放（纵向重排照常）", () => {
-    expect(applyModifier(restrictToVerticalAxis, { x: -80, y: -12, scaleX: 1, scaleY: 1.5 })).toEqual({
-      x: 0,
-      y: -12,
-      scaleX: 1,
-      scaleY: 1.5,
-    });
   });
 });

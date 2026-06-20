@@ -158,6 +158,24 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("待办页不再渲染旧 parent drop zone", async () => {
+    await addTask({ title: "父" });
+    const { host, root } = await renderPage();
+    await waitForText(host, "父");
+
+    expect(host.querySelector('[data-testid="parent-drop-zone"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("root 行渲染左侧拖拽抓取区", async () => {
+    await addTask({ title: "可拖任务" });
+    const { host, root } = await renderPage();
+    await waitForText(host, "可拖任务");
+
+    expect(host.querySelector('[data-testid="task-row-grab-area"]')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
+
   // spec §4.3 硬约束零覆盖回归点：tag 筛选作用于下方各池，但**不**作用于顶部注意力区。
   // 构造场景：A 进注意力区（turn=me，tag=x），B 进普通池（tag=y）。点选筛 y → A 仍可见。
   it("tag 筛选不作用于注意力置顶区", async () => {

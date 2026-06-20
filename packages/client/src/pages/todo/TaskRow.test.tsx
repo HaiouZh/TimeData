@@ -112,35 +112,13 @@ describe("TaskRow", () => {
     await act(async () => noSub.root.unmount());
   });
 
-  it("dropActive（拖拽悬停激活）：无子任务也渲染 parent 落点区", async () => {
-    const noSub = await render(
-      createElement(TaskRow, { task: task(), pool: "today", dropActive: true, ...handlers }),
+  it("不再渲染旧 parent drop zone", async () => {
+    const { host, root } = await renderDom(
+      <TaskRow task={task({ title: "父" })} pool="today" onToggle={noop} onEdit={noop} />,
     );
-    await settle();
-    expect(noSub.host.querySelector('[data-testid="parent-drop-zone"]')).not.toBeNull();
-    await act(async () => noSub.root.unmount());
 
-    // 未激活时不渲染落点区。
-    const idle = await render(createElement(TaskRow, { task: task(), pool: "today", ...handlers }));
-    await settle();
-    expect(idle.host.querySelector('[data-testid="parent-drop-zone"]')).toBeNull();
-    await act(async () => idle.root.unmount());
-  });
-
-  it("dropActive：有子任务时同时展开既有子任务列表与落点区", async () => {
-    const parent = await addTask({ title: "父" });
-    await createChildTask(parent.id, "子甲");
-    const fresh = (await db.tasks.get(parent.id))!;
-
-    const { host, root } = await render(
-      createElement(TaskRow, { task: fresh, pool: "today", dropActive: true, ...handlers }),
-    );
-    // 两段 live query 链：TaskRow 取 children 计数 → InlineChildren 再取一次。
-    await settle();
-    await settle();
-    expect(host.querySelector('textarea[aria-label="子任务标题"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="parent-drop-zone"]')).not.toBeNull();
-    await act(async () => root.unmount());
+    expect(host.querySelector('[data-testid="parent-drop-zone"]')).toBeNull();
+    await unmount(root);
   });
 
   it("逾期重复任务在第二行显示红色逾期日期（M月D日）", async () => {
@@ -279,17 +257,66 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
-  it("传 dragHandle 时渲染拖拽手柄，不传则无", async () => {
+  it("传 dragHandle 时不再渲染右侧独立拖柄,而是渲染左 2/5 抓取区", async () => {
     const noHandle = await render(createElement(TaskRow, { task: task({ title: "X" }), pool: "today", ...handlers }));
     expect(noHandle.host.querySelector('[aria-label="拖动 X"]')).toBeNull();
+    expect(noHandle.host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
     await act(async () => noHandle.root.unmount());
 
-    const handle = { setActivatorNodeRef: () => {}, attributes: {}, listeners: {} };
+    const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
     const withHandle = await render(
       createElement(TaskRow, { task: task({ title: "X" }), pool: "today", ...handlers, dragHandle: handle }),
     );
-    expect(withHandle.host.querySelector('[aria-label="拖动 X"]')).not.toBeNull();
+    expect(withHandle.host.querySelector('[aria-label="拖动 X"]')).toBeNull();
+    expect(withHandle.host.querySelector('[data-testid="task-row-grab-area"]')).not.toBeNull();
+    expect(handle.setActivatorNodeRef).toHaveBeenCalled();
     await act(async () => withHandle.root.unmount());
+  });
+
+  it("点左 2/5 抓取区:有子任务时展开,不打开详情", async () => {
+    const onEdit = vi.fn();
+    const parent = await addTask({ title: "父" });
+    await createChildTask(parent.id, "子任务甲");
+    const fresh = (await db.tasks.get(parent.id))!;
+    const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
+
+    const { host, root } = await renderDom(
+      <TaskRow task={fresh} pool="today" onToggle={noop} onEdit={onEdit} dragHandle={handle} />,
+    );
+    await settle();
+    await click(host.querySelector('[data-testid="task-row-grab-area"]'));
+    await settle();
+
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).not.toBeNull();
+    expect(onEdit).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("点左 2/5 抓取区:无子任务时打开详情", async () => {
+    const onEdit = vi.fn();
+    const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
+    const rowTask = task({ title: "X" });
+    const { host, root } = await renderDom(
+      <TaskRow task={rowTask} pool="today" onToggle={noop} onEdit={onEdit} dragHandle={handle} />,
+    );
+
+    await click(host.querySelector('[data-testid="task-row-grab-area"]'));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: rowTask.id }));
+    await unmount(root);
+  });
+
+  it("点复选框仍只触发 onToggle", async () => {
+    const onToggle = vi.fn();
+    const onEdit = vi.fn();
+    const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
+    const { host, root } = await renderDom(
+      <TaskRow task={task({ title: "X" })} pool="today" onToggle={onToggle} onEdit={onEdit} dragHandle={handle} />,
+    );
+
+    await click(host.querySelector('input[aria-label="完成 X"]'));
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onEdit).not.toHaveBeenCalled();
+    await unmount(root);
   });
 
   it("重复任务：第二行显示重复图标", async () => {

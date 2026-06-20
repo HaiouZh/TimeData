@@ -2,6 +2,7 @@ import {
   closestCenter,
   DndContext,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
   KeyboardSensor,
@@ -13,8 +14,9 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
+import { db } from "../db/index.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
 import { filterByTags } from "../lib/tasks/turnTags.js";
@@ -51,12 +53,14 @@ import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
 import {
-  armTargetFromDragOver,
+  clampTodoIndentPreview,
+  hoveredRootIdFromOver,
   parseTodoContainerId,
-  resolveTodoDragWithArm,
-  restrictToVerticalAxis,
+  resolveIndentLevel,
+  resolveTodoDragWithIndent,
+  type TodoIndentLevel,
+  type TodoPool,
 } from "./todo/todoDnd.js";
-import { useHoverIntent } from "./todo/useHoverIntent.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
 
@@ -67,10 +71,18 @@ export function TodoPage() {
   // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
-  // 悬停意图：拖一个根任务停在另一根任务行上达阈值，自动展开它作为可落入的 parent。
-  const hover = useHoverIntent();
+  const indentRef = useRef<TodoIndentLevel>("root");
+  // 被拖项自身的缩进基线：拖根任务=root（向右变子），拖子任务=child（向左升级为根）。
+  const indentBaseRef = useRef<TodoIndentLevel>("root");
+  const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
+  const [revealChildren, setRevealChildren] = useState<{ id: string; nonce: number } | null>(null);
   const { syncAfterWrite } = useSyncContext();
   const wide = useIsWideScreen();
+  const rootIdsWithChildren =
+    useLiveQuery(async () => {
+      const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
+      return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
+    }, []) ?? new Set<string>();
 
   const toggle = async (t: Task) => {
     await toggleTaskDone(t.id);
@@ -126,40 +138,51 @@ export function TodoPage() {
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   function handleDragStart(event: DragStartEvent): void {
-    void event;
+    const activeContainerId = (event.active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
+    const base: TodoIndentLevel = parseTodoContainerId(activeContainerId)?.kind === "parent" ? "child" : "root";
+    indentBaseRef.current = base;
+    indentRef.current = base;
+    setIndentTargetId(null);
     setDragging(true);
+  }
+
+  function handleDragMove(event: DragMoveEvent): void {
+    indentRef.current = resolveIndentLevel(event.delta.x, indentRef.current, indentBaseRef.current);
+  }
+
+  function targetPoolFromOver(overContainerId: string, rootAboveId: string | null): TodoPool | null {
+    const container = parseTodoContainerId(overContainerId);
+    if (container?.kind === "pool") return container.pool;
+    if (!rootAboveId) return null;
+    if (buckets.today.some((task) => task.id === rootAboveId)) return "today";
+    if (buckets.inbox.some((task) => task.id === rootAboveId)) return "inbox";
+    return null;
   }
 
   function handleDragOver(event: DragOverEvent): void {
     const { active, over } = event;
-    if (!over) {
-      hover.point(null);
+    if (!over || indentRef.current !== "child") {
+      setIndentTargetId(null);
       return;
     }
-    const activeContainerId = (active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
     const overContainerId = (over.data.current as { containerId?: string } | undefined)?.containerId ?? "";
-    const activeContainer = parseTodoContainerId(activeContainerId);
-    const activeParentId = activeContainer?.kind === "parent" ? activeContainer.parentId : null;
-    hover.point(
-      armTargetFromDragOver({
-        overContainerId,
-        overId: String(over.id),
-        activeId: String(active.id),
-        activeParentId,
-      }),
-    );
+    const activeId = String(active.id);
+    const rootAboveId = hoveredRootIdFromOver(overContainerId, String(over.id));
+    const activeHasChildren = rootIdsWithChildren.has(activeId);
+    setIndentTargetId(rootAboveId && rootAboveId !== activeId && !activeHasChildren ? rootAboveId : null);
   }
 
   async function handleDragEnd(event: DragEndEvent): Promise<void> {
     setDragging(false);
-    const armedParentId = hover.armedId;
-    hover.reset();
+    const indentLevel = indentRef.current;
+    indentRef.current = "root";
+    setIndentTargetId(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -180,13 +203,18 @@ export function TodoPage() {
       activeParentId = found?.parentId ?? null;
     }
 
-    const op = resolveTodoDragWithArm({
+    const rootAboveId = hoveredRootIdFromOver(overContainerId, overId);
+    const targetPool = targetPoolFromOver(overContainerId, rootAboveId);
+    const activeHasChildren = rootIdsWithChildren.has(activeId);
+
+    const op = resolveTodoDragWithIndent({
       activeContainerId,
-      overContainerId,
-      overId,
-      activeId,
       activeParentId,
-      armedParentId,
+      activeId,
+      activeHasChildren,
+      indentLevel,
+      rootAboveId,
+      targetPool,
     });
 
     if (!op) return;
@@ -214,6 +242,7 @@ export function TodoPage() {
         }
         case "move-to-parent": {
           await moveTaskToParent(activeId, op.parentId, 0);
+          setRevealChildren((prev) => ({ id: op.parentId, nonce: (prev?.nonce ?? 0) + 1 }));
           syncAfterWrite();
           break;
         }
@@ -249,7 +278,8 @@ export function TodoPage() {
       isOverdue={isOverdue}
       sortable
       containerId="pool:today"
-      dropActiveId={hover.armedId}
+      indentTargetId={indentTargetId}
+      revealChildren={revealChildren}
       {...rowHandlers}
     />
   );
@@ -289,7 +319,8 @@ export function TodoPage() {
                 tasks={tasks}
                 sortable
                 containerId="pool:inbox"
-                dropActiveId={hover.armedId}
+                indentTargetId={indentTargetId}
+                revealChildren={revealChildren}
                 {...rowHandlers}
               />
             )}
@@ -321,13 +352,15 @@ export function TodoPage() {
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      modifiers={[restrictToVerticalAxis]}
+      modifiers={[clampTodoIndentPreview]}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragOver={handleDragOver}
       onDragEnd={(event) => void handleDragEnd(event)}
       onDragCancel={() => {
         setDragging(false);
-        hover.reset();
+        indentRef.current = "root";
+        setIndentTargetId(null);
       }}
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>

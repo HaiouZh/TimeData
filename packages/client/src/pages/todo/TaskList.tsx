@@ -24,8 +24,8 @@ export interface TaskListProps {
    */
   sortable?: boolean;
   containerId?: "pool:today" | "pool:inbox";
-  /** hover-intent 当前激活展开的目标 root id：该行强制展开并显示 parent 落点区。 */
-  dropActiveId?: string | null;
+  indentTargetId?: string | null;
+  revealChildren?: { id: string; nonce: number } | null;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
   onDelete: (t: Task) => void;
@@ -55,7 +55,8 @@ export function TaskList(props: TaskListProps) {
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
         onAfterChildWrite={props.onAfterChildWrite}
-        dropActive={props.dropActiveId === task.id}
+        indentTargetActive={props.indentTargetId === task.id}
+        revealChildren={props.revealChildren}
       />
     );
   }

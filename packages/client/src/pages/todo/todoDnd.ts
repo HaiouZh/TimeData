@@ -3,15 +3,49 @@ import type { Task } from "@timedata/shared";
 
 export type TodoPool = "today" | "inbox";
 
+export const TODO_CHILD_INDENT_PX = 28;
+export const TODO_INDENT_RELEASE_PX = 12;
+
+export type TodoIndentLevel = "root" | "child";
+
 /**
- * 把拖拽 transform 的横向分量归零，限制被拖行只在纵向移动。
+ * 由横向位移判定缩进层级，**相对于被拖项自身的基线层级 `base`**：
+ * - `base="root"`（拖根任务）：静止 = root；向右越过 28px 才降级为 child，滞回到 12px 内回落为 root。
+ * - `base="child"`（拖子任务）：静止 = child；向左越过 -28px 才升级为 root，滞回到 -12px 内回落为 child。
  *
- * 纵向列表里横向位移没有语义（嵌套成子任务靠"悬停在哪行"=纵向位置，与横向偏移无关）。
- * 而拖拽期 `.swipeable-list-item` 临时 `overflow:visible`（解纵向裁剪防隐身）会连横向裁剪一起放开，
- * 于是向右拉时被拖行顶出右边缘、页面冒出一条多余的横向滚动条。归零 x 即可根除。
- * 作用于渲染与碰撞矩形，故重排/悬停判定不受影响。
+ * `deltaX` 是 dnd-kit 的指针水平位移，不是绝对缩进；竖直拖（deltaX≈0）恒保持基线层级，
+ * 这保证子任务竖直重排不会被误判成 root（否则会被当成 promote-to-root 拽出父任务）。
  */
-export const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
+export function resolveIndentLevel(
+  deltaX: number,
+  previous: TodoIndentLevel,
+  base: TodoIndentLevel = "root",
+): TodoIndentLevel {
+  if (base === "child") {
+    if (deltaX >= -TODO_INDENT_RELEASE_PX) return "child";
+    if (previous === "root") return "root";
+    return deltaX <= -TODO_CHILD_INDENT_PX ? "root" : "child";
+  }
+  if (deltaX <= TODO_INDENT_RELEASE_PX) return "root";
+  if (previous === "child") return "child";
+  return deltaX >= TODO_CHILD_INDENT_PX ? "child" : "root";
+}
+
+/**
+ * 拖拽预览横向夹取，避免横向滚动条：
+ * - 拖根任务：只允许向右缩进，夹到 `[0, 28]`。
+ * - 拖子任务：只允许向左升级，夹到 `[-28, 0]`，让"向左拽出父"的手势有跟手的虚影。
+ *
+ * 仅影响渲染 transform；落点判定仍用 `handleDragMove` 里的 raw `delta.x`。
+ */
+export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
+  const containerId = (active?.data.current as { containerId?: string } | undefined)?.containerId ?? "";
+  const isChild = parseTodoContainerId(containerId)?.kind === "parent";
+  const x = isChild
+    ? Math.min(0, Math.max(transform.x, -TODO_CHILD_INDENT_PX))
+    : Math.max(0, Math.min(transform.x, TODO_CHILD_INDENT_PX));
+  return { ...transform, x };
+};
 
 /** dnd-kit container id 域：池容器或父任务容器。 */
 export type TodoContainer =
@@ -99,7 +133,7 @@ export function resolveTodoDragOperation({
 }
 
 /**
- * 由一次 drag-over 的目标，反查它归属的 root 任务 id（用于 hover-intent 判定）。
+ * 由一次 drag-over 的目标，反查它归属的 root 任务 id（用于缩进候选父判定）。
  * - 池容器（pool:today/inbox）：over 自身就是根行，root = overId。
  * - parent 容器（parent:<X>）：root = X（无论 over 是子任务行还是落点区）。
  * 无法归属（非法/缺失容器、upcoming 等）返回 null。
@@ -111,63 +145,37 @@ export function hoveredRootIdFromOver(overContainerId: string, overId: string): 
   return container.parentId;
 }
 
-export interface ArmTargetInput {
-  overContainerId: string;
-  overId: string;
-  activeId: string;
-  /** 当前被拖项的 parentId（root 为 null）。 */
-  activeParentId: string | null;
-}
-
-/**
- * 由 drag-over 计算"可激活展开"的目标 root id；无合法目标返回 null。
- * 排除：归属失败、悬停自身、悬停被拖子任务自己的父（已展开、无意义）。
- */
-export function armTargetFromDragOver({
-  overContainerId,
-  overId,
-  activeId,
-  activeParentId,
-}: ArmTargetInput): string | null {
-  const root = hoveredRootIdFromOver(overContainerId, overId);
-  if (!root) return null;
-  if (root === activeId) return null;
-  if (root === activeParentId) return null;
-  return root;
-}
-
-export interface ResolveTodoDragWithArmInput {
+export interface ResolveTodoDragWithIndentInput {
   activeContainerId: string;
-  overContainerId: string;
-  overId: string;
-  activeId: string;
   activeParentId: string | null;
-  /** hover-intent 当前激活展开的目标 root id（无则 null）。 */
-  armedParentId: string | null;
+  activeId: string;
+  activeHasChildren: boolean;
+  indentLevel: TodoIndentLevel;
+  rootAboveId: string | null;
+  targetPool: TodoPool | null;
 }
 
-/**
- * drag end 的语义解析，叠加 hover-intent 激活态：
- * 若存在已激活目标 A，且松手时 over 仍落在 A 上（A 的行或 A 的落点区），
- * 则把目标容器视为 `parent:A`，交由 {@link resolveTodoDragOperation} 得到 move-to-parent；
- * 否则退化为常规 over→over 判定（reorder / schedule-root / promote 等不变）。
- */
-export function resolveTodoDragWithArm({
+export function resolveTodoDragWithIndent({
   activeContainerId,
-  overContainerId,
-  overId,
-  activeId,
   activeParentId,
-  armedParentId,
-}: ResolveTodoDragWithArmInput): TodoDragOperation | null {
-  let targetContainerId = overContainerId || activeContainerId;
-  if (armedParentId && armedParentId !== activeId) {
-    const overRoot = hoveredRootIdFromOver(overContainerId, overId);
-    if (overRoot === armedParentId) {
-      targetContainerId = `parent:${armedParentId}`;
-    }
-  }
-  return resolveTodoDragOperation({ activeContainerId, targetContainerId, activeParentId });
+  activeId,
+  activeHasChildren,
+  indentLevel,
+  rootAboveId,
+  targetPool,
+}: ResolveTodoDragWithIndentInput): TodoDragOperation | null {
+  const canBecomeChild =
+    indentLevel === "child" &&
+    !activeHasChildren &&
+    rootAboveId !== null &&
+    rootAboveId !== activeId;
+  const targetContainerId = canBecomeChild ? `parent:${rootAboveId}` : targetPool ? `pool:${targetPool}` : "";
+
+  return resolveTodoDragOperation({
+    activeContainerId,
+    targetContainerId,
+    activeParentId,
+  });
 }
 
 /** 给一个 task 计算它在拖拽系统中所属的容器 id。 */
