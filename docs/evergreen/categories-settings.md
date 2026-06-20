@@ -29,7 +29,7 @@ last-reviewed: 2026-06-19
 - **上游**：用户在设置页编辑分类；首次启动两端用同一份 `DEFAULT_CATEGORIES` 播种。
 - **下游**：`categories` 被 [timeline](timeline.md) 的 `time_entries.categoryId` 引用、被 [stats-insights](stats-insights.md) 用作统计维度；分类 mutation 经 `syncLog(tableName="categories")` → [sync](sync.md)（**manual** 冲突策略）。
 - **契约**：`Category` 字段 schema 见本文 §2，定义在 `entitySchemas.ts:CategorySchema`；`DEFAULT_CATEGORIES` 在 `constants.ts`；跨域约定见 [data-model](data-model.md)。
-- **邻居**：[timeline](timeline.md)（分类引用 + 打点）、[stats-insights](stats-insights.md)（睡眠分类口径）、[categories-settings/settings-catalog](categories-settings/settings-catalog.md)（settings 键值表）。
+- **邻居**：[timeline](timeline.md)（分类引用 + 打点）、[stats-insights](stats-insights.md)（睡眠分类口径）、[tracks](tracks.md)（轨道当前只用 refs/tags，不新增分类或 settings 语义）、[categories-settings/settings-catalog](categories-settings/settings-catalog.md)（settings 键值表）。
 
 ## 1. 数据流（本域端到端，跨包）
 
@@ -113,6 +113,7 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 7. **categories delete 的双重 seq 冗余**：client 发 N 条 `categories/delete` + M 条 `time_entries/delete`，server 处理父级 delete 时又自行级联 + recordSeq；tombstone/delete 幂等，但 seq 有重复写入。
 8. **`useCategories` 缓存**：`categoryById`/`childrenByParentId` Map；`getCategoryPath`（“父名 · 子名”，未找到“未知”）/`getCategoryColor`（未找到 `#808080`）/`getChildren` O(1)。
 9. **`punch.ts` 不归本域**：打点动作 `punchNow` 写 `time_entries`（归 [timeline](timeline.md)）；本域/子文档只拥有其分类设置 `punchCategorySetting.ts`。
+10. **任务轨道 T1 不新增 settings key**：后续“轮到我”行动标签配置若落地，再归入 settings 子文档；T1 只有共享 schema / sync 登记触发本域复核。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 

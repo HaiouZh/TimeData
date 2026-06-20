@@ -32,7 +32,7 @@ last-reviewed: 2026-06-20
 - **上游**：用户在 `QuickNotesPage` 自记/编辑/置顶/删除；授权 agent 经 `POST /api/quick-notes` 投递 `source="agent"`；CLI `timedata notes` 只读查询。
 - **下游**：本地 mutation 经 `syncLog(tableName="quick_notes")` → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备拉取。独立备份格式 `timedata.quick-notes.backup`（见 [backup](backup.md)）。
 - **契约**：`QuickNote` 字段 schema 见本文 §2，定义在 `entitySchemas.ts:QuickNoteSchema`（`schemas.ts` re-export）；跨域约定见 [data-model](data-model.md)。
-- **邻居**：[todo](todo.md)（composer「存待办」调 `addTask`）、[timeline](timeline.md)（header「打点」建 time_entry，分类来自 [categories-settings](categories-settings.md) 的打点分类设置）、[sync](sync.md)。
+- **邻居**：[todo](todo.md)（composer「存待办」调 `addTask`）、[tracks](tracks.md)（TrackStep 复用 `source/sourceLabel` 的人/agent 来源口径）、[timeline](timeline.md)（header「打点」建 time_entry，分类来自 [categories-settings](categories-settings.md) 的打点分类设置）、[sync](sync.md)。
 
 ## 1. 数据流（本域端到端，跨包）
 
@@ -102,6 +102,8 @@ last-reviewed: 2026-06-20
 ### 2.3 同步域登记（`syncDomains.ts`）
 
 `quick_notes` 域：`conflictPolicy:"lww"`、**`countsInStatus:true`**（计入 `/api/sync/status` counts + contentHash 行数）、upsert/deletePriority 40。客户端登记在 `clientDomains.ts`。
+
+TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复用来源展示口径；轨道步骤不进入 quick notes 独立备份，也不改变 `quick_notes` 的 agent 投递端点。
 
 ## 3. 关键不变量 / 坑 / 红线
 

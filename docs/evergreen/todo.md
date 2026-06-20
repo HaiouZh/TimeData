@@ -18,6 +18,7 @@ covers:
   - packages/client/src/lib/tasks/workbenchPrefs.ts
   - packages/client/src/lib/tasks/inboxGrouping.ts
   - packages/client/src/lib/tasks/turnTags.ts
+  - packages/client/src/lib/tasks/turnQueue.ts
   - packages/client/src/lib/tasks/subtasks.ts
   - packages/client/src/lib/tasks/taskTimeLabel.ts
   - packages/client/src/lib/useIsCoarsePointer.ts
@@ -43,7 +44,7 @@ last-reviewed: 2026-06-20
 - **上游**：用户在 Web `TodoPage` 新增/编辑/勾选/排序；速记页 composer 「存待办」调 `addTask`；授权 agent / CLI 经 `POST /api/agent/tasks/:id/status` 回写状态；CLI 经 `POST /api/tasks/:id/schedule` 排期。
 - **下游**：本地 Dexie `tasks` 与 `syncLog(tableName="tasks")` 同事务写 → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备按 seq 拉取。force-push 里 `tasks` 是核心同步表之一（见 [backup](backup.md)）。
 - **契约**：`Task` 字段 schema（含 `parentId` 一层父子）见本文 §2；`Recurrence` 见 [todo/recurrence](todo/recurrence.md)；跨域约定见 [data-model](data-model.md)；`tags` 不驱动自动逻辑（见 [ADR 0014](../adr/0014-task-tags-vs-fields.md)）。
-- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
+- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[tracks](tracks.md)（任务之上的状态线，只用 `refs` 指向 task）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
 
 ## 1. 数据流（本域端到端，跨包）
 
@@ -160,6 +161,7 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 8. **子任务 = 独立可拖 `Task`（`parentId` 一层）**：见 §2.2。child 勾选不联动父 `done`/`completedAt`（父进度 `m/n` 由 `InlineChildren` 实时聚合，不回写父行）。**重复 root 完成时处理 children（历史快照）**：`completeTask` 读 reset-前 children，同一次返回 `occurrenceChildren`（克隆为指向 occurrence 的独立 child，**如实保留完成时 `done`/`completedAt`/`tags` 快照**，`recurrence`/`turn` 清空）与 `templateChildren`（同批 child reset 成 `done=false`/`completedAt=null`）；快照与 reset 同源于 reset-前入参，顺序冒险结构性消除。客户端 `toggleTaskDone` 与 agent `done=true` 共用这套，事务内 `bulkAdd(occurrenceChildren)` + `bulkPut(templateChildren)`。历史 occurrence 的 children 在「已完成」内只读显示。
 9. **`tasks` 不引用其他域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出。
 10. **`AttentionQueue` running 段计时器**：me/running/parked 三段；running 段渲染简化行 + “已跑 X 分”（60s interval），**不**用 `TaskRow`；me/parked 段用 `TaskRow`。
+11. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域，task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 
 ## 4. 模块速查
 
@@ -198,5 +200,5 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 
 ## 深水细节
 
-- **`lib/tasks/turnQueue.ts`（`selectWaitingOnMe`/`selectRunning`）是孤儿**：仅自身测试引用，生产路径用 `turnTags.turnBuckets`。**不进 covers**，待清理。
+- **`lib/tasks/turnQueue.ts`（`selectWaitingOnMe`/`selectRunning`）是孤儿**：仅自身测试引用，生产路径用 `turnTags.turnBuckets`；本文件只为源码归属被本文 covers，待后续清理。
 - **非重复排期任务过期后回到收件箱**不堆进今天；重复任务过期在“今天”区以红色“逾期 M月D日”标签呈现。
