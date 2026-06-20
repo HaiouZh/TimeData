@@ -1,17 +1,21 @@
 import type { Database } from "better-sqlite3";
 import { markCommitHashDirty } from "../sync/state.js";
 
-// 业务表 → 主键列。一次性 seq 回填用，显式列出当前四个同步域。
+// 业务表 → 主键列。一次性 seq 回填用，显式列出当前同步域。
 const BUSINESS_TABLES: Array<{ table: string; pk: string }> = [
   { table: "categories", pk: "id" },
   { table: "time_entries", pk: "id" },
   { table: "settings", pk: "key" },
   { table: "quick_notes", pk: "id" },
+  { table: "tasks", pk: "id" },
   { table: "health_heart_rate", pk: "id" },
   { table: "health_hrv", pk: "id" },
   { table: "health_sleep", pk: "id" },
   { table: "health_stress", pk: "id" },
   { table: "runs", pk: "id" },
+  { table: "health_charts", pk: "id" },
+  { table: "tracks", pk: "id" },
+  { table: "track_steps", pk: "id" },
 ];
 
 // 给所有"在业务表里有行、但 sync_seq 里没有任何记录"的行补一条 create seq。

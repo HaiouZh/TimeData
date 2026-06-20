@@ -119,6 +119,61 @@ describe("initializeDatabase", () => {
     expect(index).toMatchObject({ name: "idx_health_charts_sort" });
   });
 
+  it("creates tracks and track_steps tables without SQL cascade", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const trackColumns = db.prepare("PRAGMA table_info(tracks)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(trackColumns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["id", "TEXT", 0, 1],
+      ["title", "TEXT", 1, 0],
+      ["summary", "TEXT", 0, 0],
+      ["status", "TEXT", 1, 0],
+      ["refs", "TEXT", 1, 0],
+      ["created_at", "TEXT", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+
+    const stepColumns = db.prepare("PRAGMA table_info(track_steps)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(stepColumns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["id", "TEXT", 0, 1],
+      ["track_id", "TEXT", 1, 0],
+      ["source", "TEXT", 1, 0],
+      ["source_label", "TEXT", 0, 0],
+      ["content", "TEXT", 1, 0],
+      ["started_at", "TEXT", 1, 0],
+      ["ended_at", "TEXT", 0, 0],
+      ["refs", "TEXT", 1, 0],
+      ["tags", "TEXT", 1, 0],
+      ["seq", "INTEGER", 1, 0],
+      ["created_at", "TEXT", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+
+    const stepForeignKeys = db.prepare("PRAGMA foreign_key_list(track_steps)").all();
+    expect(stepForeignKeys).toEqual([]);
+
+    const indexes = (db.prepare("PRAGMA index_list(track_steps)").all() as Array<{ name: string }>).map(
+      (row) => row.name,
+    );
+    expect(indexes).toEqual(expect.arrayContaining(["idx_track_steps_track_id", "idx_track_steps_track_seq"]));
+    const trackIndexes = (db.prepare("PRAGMA index_list(tracks)").all() as Array<{ name: string }>).map(
+      (row) => row.name,
+    );
+    expect(trackIndexes).toContain("idx_tracks_updated_at");
+  });
+
   it("adds source columns to legacy quick_notes tables", async () => {
     const { ensureQuickNoteSourceColumns } = await import("./schema.js");
     db.exec(`

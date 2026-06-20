@@ -21,6 +21,7 @@ import {
   healthStressToRow, healthRunToRow,
 } from "../lib/healthRows.js";
 import { type HealthChartRow, rowToHealthChart, healthChartToRow } from "../lib/chartRows.js";
+import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
 import { recordSeq } from "./seq.js";
 
 export interface ApplyChangeResult {
@@ -414,6 +415,8 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   health_stress: simpleLwwDomain<HealthStressRow>("health_stress", healthStressToRow, rowToHealthStress),
   runs: simpleLwwDomain<HealthRunRow>("runs", healthRunToRow, rowToHealthRun),
   health_charts: simpleLwwDomain<HealthChartRow>("health_charts", healthChartToRow, rowToHealthChart),
+  tracks: simpleLwwDomain<TrackRow>("tracks", (data) => trackToRow(data as never), rowToTrack),
+  track_steps: simpleLwwDomain<TrackStepRow>("track_steps", (data) => trackStepToRow(data as never), rowToTrackStep),
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

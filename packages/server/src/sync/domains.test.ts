@@ -15,6 +15,8 @@ describe("server sync domains", () => {
       "settings",
       "tasks",
       "time_entries",
+      "track_steps",
+      "tracks",
     ]);
   });
 
@@ -28,6 +30,13 @@ describe("server sync domains", () => {
   it("registers health_charts on the generic lww path", () => {
     expect(getServerDomain("health_charts").apply).toBeUndefined();
     expect(getServerDomain("health_charts").lww).toBeDefined();
+  });
+
+  it("registers tracks and track_steps on the generic lww path", () => {
+    expect(getServerDomain("tracks").apply).toBeUndefined();
+    expect(getServerDomain("track_steps").apply).toBeUndefined();
+    expect(getServerDomain("tracks").lww).toBeDefined();
+    expect(getServerDomain("track_steps").lww).toBeDefined();
   });
 
   it("complex domains keep custom hooks", () => {
