@@ -1,5 +1,17 @@
+import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import { CLIENT_SYNC_DOMAINS } from "../sync/clientDomains.js";
+import { db } from "./index.js";
+
+interface SafeParseIssue {
+  path?: readonly (string | number)[];
+  message: string;
+}
+
 export interface SafeParseSchema<T extends object> {
-  safeParse(data: unknown): { success: true; data: T } | { success: false; error: { issues: Array<{ path: Array<string | number>; message: string }> } };
+  safeParse(data: unknown):
+    | { success: true; data: T }
+    | { success: false; error: { issues: readonly SafeParseIssue[] } };
 }
 
 export interface NormalizationWrite<T = unknown> {
@@ -55,7 +67,7 @@ export function planNormalization<T extends object>(
     if (!parsed.success) {
       skipped.push({
         key,
-        issues: parsed.error.issues.map((issue) => `${issue.path.join(".") || "<root>"}: ${issue.message}`),
+        issues: parsed.error.issues.map((issue) => `${issue.path?.join(".") || "<root>"}: ${issue.message}`),
       });
       continue;
     }
@@ -63,4 +75,47 @@ export function planNormalization<T extends object>(
   }
 
   return { writes, skipped };
+}
+
+/** schema 有意义变更时 +1，触发下次启动重跑归一。 */
+export const SCHEMA_NORMALIZATION_VERSION = 1;
+
+/** 在一个跨全表 rw 事务内归一所有实体表（读写同事务，原子）。 */
+export async function normalizeClientStores(): Promise<NormalizationPlan> {
+  const domains = Object.values(CLIENT_SYNC_DOMAINS);
+  const tables = domains.map((domain) => db.table(domain.storeName));
+  const writes: NormalizationWrite[] = [];
+  const skipped: NormalizationSkip[] = [];
+
+  await db.transaction("rw", tables, async () => {
+    for (const domain of domains) {
+      const table = db.table(domain.storeName);
+      const rawDocs = await table.toArray();
+      const plan = planNormalization(
+        rawDocs,
+        domain.schema as SafeParseSchema<Record<string, unknown>>,
+        (doc) => String(doc.id ?? doc.key ?? "<missing-key>"),
+      );
+      if (plan.writes.length > 0) await table.bulkPut(plan.writes.map((write) => write.value));
+      writes.push(...plan.writes);
+      skipped.push(...plan.skipped.map((item) => ({ ...item, key: `${domain.table}:${item.key}` })));
+    }
+  });
+
+  return { writes, skipped };
+}
+
+/**
+ * 启动时按 schema 归一全部实体表。localStorage 版本闸保证每个版本只跑一次。
+ * 纯本地卫生：保留 updatedAt、不写 syncLog。只有整轮成功才推进版本号；抛错不推进、下次重试。
+ */
+export async function runSchemaNormalizationIfNeeded(): Promise<void> {
+  const saved = Number(safeGetItem(STORAGE_KEYS.schemaNormalizationVersion) ?? "0");
+  if (Number.isFinite(saved) && saved >= SCHEMA_NORMALIZATION_VERSION) return;
+
+  const plan = await normalizeClientStores();
+  if (plan.skipped.length > 0) {
+    console.warn("[schema-normalization] skipped invalid records:", plan.skipped);
+  }
+  safeSetItem(STORAGE_KEYS.schemaNormalizationVersion, String(SCHEMA_NORMALIZATION_VERSION));
 }
