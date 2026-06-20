@@ -1,6 +1,7 @@
 # ADR 0014：任务 tags 与结构化字段的边界
 
 - 状态：已采纳（2026-06-16）
+> **更新（2026-06-20，M2）**：`turn` 字段已全量退役（见 docs_local/specs/2026-06-20-退役turn-design.md）。本 ADR 正文保留为历史记录。
 - 关联：延续 [ADR 0012](./0012-sync-ledger-and-domain-registry.md) 的任务 LWW 域；补充 [ADR 0013](./0013-capability-token-tiers.md) 的 agent 任务回写能力
 - 设计来源：本地计划 `docs_local/plans/2026-06-16-todo-data-completedAt-tags-plan.md`
 

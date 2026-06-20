@@ -195,7 +195,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 6. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeq` 标 dirty，`/api/sync/status` 惰性重算；force-push / reset 立即刷新。它现在只服务诊断，但仍要保持正确。
 7. **server 是冲突仲裁者**：用 `baseSeq` 判断快进 / 非重叠合并 / 本地覆盖，并用受保护备份记录本地覆盖场景。
 
-待办域的重复规则、turn/tags、排序、完成状态，以及子任务（独立 `Task` 行，靠 `parentId` 指向 root）的 create/update/delete、重复完成衍生的 occurrence children 快照与 template children reset，都只是普通 `tasks/create`/`tasks/update`/`tasks/delete` 的 LWW change：客户端 helper 通过既有 Dexie transaction 写 `tasks` + 本地 `syncLog`，授权 agent 回写（含 `note` 建 child）构造 change 后走 `applyChange()` + `sync_seq` + SSE 通知。它们**不新增同步域、不扩展 `SyncChange` 联合、不动 `SyncPushReasonCode` 与登记簿条目数**，也不改变 `tasks` 仍是通用 LWW 域的服务端契约。`parentId` 的一层结构约束**只在 force-push 全量快照兜底校验**（`forcePushValidation`：自引用 / 缺失父 / 二层嵌套三种负样本），普通增量 push 故意不挡（依赖客户端 helper，单用户威胁模型取舍）；字段语义与展示桶见 [todo](todo.md)。
+待办域的重复规则、tags、排序、完成状态，以及子任务（独立 `Task` 行，靠 `parentId` 指向 root）的 create/update/delete、重复完成衍生的 occurrence children 快照与 template children reset，都只是普通 `tasks/create`/`tasks/update`/`tasks/delete` 的 LWW change：客户端 helper 通过既有 Dexie transaction 写 `tasks` + 本地 `syncLog`，授权 agent 回写（含 `note` 建 child）构造 change 后走 `applyChange()` + `sync_seq` + SSE 通知。它们**不新增同步域、不扩展 `SyncChange` 联合、不动 `SyncPushReasonCode` 与登记簿条目数**，也不改变 `tasks` 仍是通用 LWW 域的服务端契约。`parentId` 的一层结构约束**只在 force-push 全量快照兜底校验**（`forcePushValidation`：自引用 / 缺失父 / 二层嵌套三种负样本），普通增量 push 故意不挡（依赖客户端 helper，单用户威胁模型取舍）；字段语义与展示桶见 [todo](todo.md)。
 
 ## 6. 错误码处理（客户端侧）
 
