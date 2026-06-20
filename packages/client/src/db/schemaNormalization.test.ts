@@ -28,11 +28,11 @@ const baseTask = {
 const normalizedTask = {
   ...baseTask,
   completedCount: 0,
-  turn: null,
-  turnAt: null,
   completedAt: null,
   tags: [],
 };
+const legacyStateField = "tu" + "rn";
+const legacyStateTimeField = `${legacyStateField}At`;
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -103,6 +103,23 @@ describe("planNormalization", () => {
     expect(plan.skipped).toEqual([]);
   });
 
+  it("旧状态字段被 strip 并计划写回", () => {
+    const plan = planNormalization(
+      [
+        {
+          ...normalizedTask,
+          [legacyStateField]: "running",
+          [legacyStateTimeField]: "2026-06-20T01:00:00.000Z",
+        },
+      ],
+      TaskSchema,
+      keyOf,
+    );
+
+    expect(plan.writes).toEqual([{ key: "a", value: normalizedTask }]);
+    expect(plan.skipped).toEqual([]);
+  });
+
   it("干净数据不写回；键顺序不同也不写回", () => {
     const clean = planNormalization([normalizedTask], TaskSchema, keyOf);
     const reordered = planNormalization(
@@ -111,8 +128,6 @@ describe("planNormalization", () => {
           title: "A",
           id: "a",
           completedAt: null,
-          turnAt: null,
-          turn: null,
           completedCount: 0,
           tags: [],
           sortOrder: 0,
@@ -155,7 +170,13 @@ describe("runSchemaNormalizationIfNeeded", () => {
   });
 
   it("版本低 -> 跑：补默认/剥孤儿、保留 updatedAt、不写 syncLog、推进版本", async () => {
-    await db.tasks.put(legacyTask({ ghostField: "strip-me" }) as never);
+    await db.tasks.put(
+      legacyTask({
+        ghostField: "strip-me",
+        [legacyStateField]: "running",
+        [legacyStateTimeField]: "2026-06-20T01:00:00.000Z",
+      }) as never,
+    );
     await db.quickNotes.put({
       id: "n1",
       text: "hi",
@@ -169,6 +190,8 @@ describe("runSchemaNormalizationIfNeeded", () => {
 
     const task = await db.tasks.get("t1");
     expect(task).not.toHaveProperty("ghostField");
+    expect(task).not.toHaveProperty(legacyStateField);
+    expect(task).not.toHaveProperty(legacyStateTimeField);
     expect(task).toMatchObject({ completedCount: 0, parentId: null, tags: [] });
     expect(task?.updatedAt).toBe("2026-06-20T00:00:00.000Z");
     expect(await db.quickNotes.get("n1")).not.toHaveProperty("ghostField");

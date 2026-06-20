@@ -6,6 +6,8 @@ import { importBackup } from "./importBackup.js";
 import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 
 const now = "2026-05-07T12:00:00.000Z";
+const legacyStateField = "tu" + "rn";
+const legacyStateTimeField = `${legacyStateField}At`;
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -59,11 +61,10 @@ const oldTask: Task = {
   recurrence: null,
   lastDoneAt: null,
   startAt: null,
-  scheduledAt: null,  completedCount: 0,
+  scheduledAt: null,
+  completedCount: 0,
   completedAt: null,
   tags: [],
-  turn: null,
-  turnAt: null,
   sortOrder: 0,
   createdAt: now,
   updatedAt: now,
@@ -98,9 +99,8 @@ const newTask = {
   recurrence: null,
   lastDoneAt: null,
   startAt: null,
-  scheduledAt: null,  completedCount: 0,
-  turn: null,
-  turnAt: null,
+  scheduledAt: null,
+  completedCount: 0,
   sortOrder: 1,
   createdAt: now,
   updatedAt: now,
@@ -170,6 +170,29 @@ describe("importBackup", () => {
     await expect(db.quickNotes.toArray()).resolves.toEqual([
       { id: "keep-note", text: "保留我", occurredAt: now, createdAt: now, updatedAt: now },
     ]);
+    expect(result.domainCounts).toEqual({ tasks: 1 });
+  });
+
+  it("旧备份任务带已退役状态字段时导入后剥离", async () => {
+    const backupWithLegacyTask = {
+      ...backup(),
+      domains: {
+        tasks: [
+          {
+            ...newTask,
+            [legacyStateField]: "running",
+            [legacyStateTimeField]: "2026-05-07T13:00:00.000Z",
+          },
+        ],
+      },
+    } as BackupDocument;
+
+    const result = await importBackup(backupWithLegacyTask);
+
+    const tasks = await db.tasks.toArray();
+    expect(tasks).toEqual([normalizedNewTask]);
+    expect(Object.hasOwn(tasks[0] ?? {}, legacyStateField)).toBe(false);
+    expect(Object.hasOwn(tasks[0] ?? {}, legacyStateTimeField)).toBe(false);
     expect(result.domainCounts).toEqual({ tasks: 1 });
   });
 

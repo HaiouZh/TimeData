@@ -34,8 +34,6 @@ const baseTask = (overrides: Partial<Task>): Task => ({
   startAt: null,
   scheduledAt: null,
   completedCount: 0,
-  turn: null,
-  turnAt: null,
   completedAt: null,
   tags: [],
   sortOrder: 0,

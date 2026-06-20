@@ -44,27 +44,11 @@ const taskRow: TaskRow = {
   sort_order: 0,
   scheduled_at: null,
   completed_count: 0,
-  turn: "me",
-  turn_at: "2026-06-16T01:00:00.000Z",
   created_at: "2026-06-16T00:00:00.000Z",
   updated_at: "2026-06-16T00:00:00.000Z",
 };
 
 describe("rowToTask", () => {
-  it("maps turn and turnAt", () => {
-    const task = rowToTask(taskRow);
-
-    expect(task.turn).toBe("me");
-    expect(task.turnAt).toBe("2026-06-16T01:00:00.000Z");
-  });
-
-  it("maps null turn columns to null", () => {
-    const task = rowToTask({ ...taskRow, turn: null, turn_at: null });
-
-    expect(task.turn).toBeNull();
-    expect(task.turnAt).toBeNull();
-  });
-
   it("maps completedAt and tags", () => {
     const task = rowToTask({
       ...taskRow,

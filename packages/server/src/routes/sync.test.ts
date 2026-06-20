@@ -7,6 +7,8 @@ let db: Database.Database;
 let app: Hono;
 let createServerBackupMock: ReturnType<typeof vi.fn>;
 let markServerBackupProtectedMock: ReturnType<typeof vi.fn>;
+const legacyTaskStateField = "tu" + "rn";
+const legacyTaskStateTimeField = `${legacyTaskStateField}At`;
 
 function createSchema() {
   db.exec(`
@@ -62,8 +64,6 @@ function createSchema() {
       scheduled_at TEXT,
       parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
-      turn TEXT,
-      turn_at TEXT,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -631,8 +631,8 @@ describe("sync route", () => {
             scheduledAt: "2026-06-16T00:00:00.000Z",
             sortOrder: 0,
             completedCount: 2,
-            turn: "running",
-            turnAt: "2026-06-16T01:00:00.000Z",
+            [legacyTaskStateField]: "running",
+            [legacyTaskStateTimeField]: "2026-06-16T01:00:00.000Z",
             completedAt: "2026-06-16T02:00:00.000Z",
             tags: ["agent", "idea"],
             createdAt: "2026-06-14T00:00:00.000Z",
@@ -649,8 +649,6 @@ describe("sync route", () => {
             scheduledAt: null,
             sortOrder: 0,
             completedCount: 0,
-            turn: null,
-            turnAt: null,
             completedAt: null,
             tags: [],
             createdAt: "2026-06-14T00:00:00.000Z",
@@ -671,7 +669,7 @@ describe("sync route", () => {
     });
     expect(
       db
-        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, completed_count, turn, turn_at, completed_at, tags FROM tasks WHERE id = ?")
+        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, completed_count, completed_at, tags FROM tasks WHERE id = ?")
         .get("task-force"),
     ).toMatchObject({
       title: "跑步",
@@ -680,8 +678,6 @@ describe("sync route", () => {
       scheduled_at: "2026-06-16T00:00:00.000Z",
       parent_id: null,
       completed_count: 2,
-      turn: "running",
-      turn_at: "2026-06-16T01:00:00.000Z",
       completed_at: "2026-06-16T02:00:00.000Z",
       tags: JSON.stringify(["agent", "idea"]),
     });

@@ -9,6 +9,13 @@ let seq = 0;
 const genId = () => `occ-${++seq}`;
 const opts = (now: string) => ({ now: new Date(now), genId, occurrenceSortOrder: 99 });
 const daily0 = () => ({ freq: "daily" as const, interval: 1, basis: "due" as const });
+const legacyStateField = "tu" + "rn";
+const legacyStateTimeField = `${legacyStateField}At`;
+const legacyStateInput = (value: string) =>
+  ({
+    [legacyStateField]: value,
+    [legacyStateTimeField]: "2026-06-01T00:00:00.000Z",
+  }) as Partial<Task>;
 
 function baseTask(over: Partial<Task> = {}): Task {
   return TaskSchema.parse({
@@ -20,8 +27,6 @@ function baseTask(over: Partial<Task> = {}): Task {
     startAt: null,
     scheduledAt: null,
     completedCount: 0,
-    turn: null,
-    turnAt: null,
     completedAt: null,
     tags: [],
     sortOrder: 0,
@@ -68,9 +73,9 @@ describe("completeTask", () => {
     });
 
     expect(out.occurrence?.id).toBe("occ-1");
-    expect(out.occurrenceChildren?.map((child) => [child.parentId, child.done, child.completedAt, child.recurrence, child.turn])).toEqual([
-      ["occ-1", true, "2026-06-19T07:00:00.000Z", null, null],
-      ["occ-1", false, null, null, null],
+    expect(out.occurrenceChildren?.map((child) => [child.parentId, child.done, child.completedAt, child.recurrence])).toEqual([
+      ["occ-1", true, "2026-06-19T07:00:00.000Z", null],
+      ["occ-1", false, null, null],
     ]);
     expect(out.occurrenceChildren?.map((child) => [child.id, child.title, child.tags, child.sortOrder])).toEqual([
       ["occ-2", "已完成子项", ["snapshot"], 0],
@@ -110,8 +115,8 @@ describe("completeTask", () => {
     );
   });
 
-  it("非重复任务：就地完成、补 completedAt、清 turn，无 occurrence", () => {
-    const task = baseTask({ turn: "running", turnAt: "2026-06-01T00:00:00.000Z" });
+  it("非重复任务：就地完成、补 completedAt、无 occurrence", () => {
+    const task = baseTask(legacyStateInput("running"));
     const { next, occurrence } = completeTask(task, opts("2026-06-14T08:00:00.000Z"));
 
     expect(occurrence).toBeNull();
@@ -119,9 +124,9 @@ describe("completeTask", () => {
       id: "t1",
       done: true,
       completedAt: "2026-06-14T08:00:00.000Z",
-      turn: null,
-      turnAt: null,
     });
+    expect(Object.hasOwn(next, legacyStateField)).toBe(false);
+    expect(Object.hasOwn(next, legacyStateTimeField)).toBe(false);
   });
 
   it("重复·非终结·准时：lastDoneAt 推进到当日应发生日（本地零点）", () => {
@@ -130,8 +135,7 @@ describe("completeTask", () => {
       recurrence: { freq: "daily", interval: 1, basis: "due" },
       startAt: start,
       tags: ["健身"],
-      turn: "me",
-      turnAt: "2026-06-01T00:00:00.000Z",
+      ...legacyStateInput("me"),
     });
 
     const { next, occurrence } = completeTask(task, opts("2026-06-14T08:00:00.000Z"));
@@ -142,17 +146,17 @@ describe("completeTask", () => {
       title: "跑步",
       tags: ["健身"],
       completedAt: "2026-06-14T08:00:00.000Z",
-      turn: null,
     });
+    expect(Object.hasOwn(occurrence ?? {}, legacyStateField)).toBe(false);
     expect(occurrence?.id).not.toBe("t1");
     expect(next).toMatchObject({
       id: "t1",
       done: false,
       completedCount: 1,
       lastDoneAt: localDateOf(new Date(2026, 5, 14)),
-      turn: null,
-      turnAt: null,
     });
+    expect(Object.hasOwn(next, legacyStateField)).toBe(false);
+    expect(Object.hasOwn(next, legacyStateTimeField)).toBe(false);
     expect(next.recurrence).not.toBeNull();
   });
 

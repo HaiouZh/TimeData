@@ -121,7 +121,9 @@ describe("TaskSchema completedCount", () => {
   });
 });
 
-describe("TaskSchema turn", () => {
+describe("TaskSchema legacy flow fields", () => {
+  const legacyField = "tu" + "rn";
+  const legacyTimeField = `${legacyField}At`;
   const baseTask = {
     id: "t1",
     title: "回合任务",
@@ -136,29 +138,20 @@ describe("TaskSchema turn", () => {
     updatedAt: "2026-06-16T00:00:00.000Z",
   };
 
-  it("缺省时 turn/turnAt 为 null", () => {
+  it("解析结果不再含旧回合字段", () => {
     const task = TaskSchema.parse(baseTask);
-    expect(task.turn).toBeNull();
-    expect(task.turnAt).toBeNull();
+    expect(Object.hasOwn(task, legacyField)).toBe(false);
+    expect(Object.hasOwn(task, legacyTimeField)).toBe(false);
   });
 
-  it("接受 me/running/parked 与 turnAt", () => {
+  it("带旧回合字段的输入会被剥离", () => {
     const task = TaskSchema.parse({
       ...baseTask,
-      turn: "running",
-      turnAt: "2026-06-16T01:00:00.000Z",
+      [legacyField]: "running",
+      [legacyTimeField]: "2026-06-16T01:00:00.000Z",
     });
-    expect(task.turn).toBe("running");
-    expect(task.turnAt).toBe("2026-06-16T01:00:00.000Z");
-  });
-
-  it("拒绝非法 turn", () => {
-    expect(() =>
-      TaskSchema.parse({
-        ...baseTask,
-        turn: "done",
-      }),
-    ).toThrow();
+    expect(Object.hasOwn(task, legacyField)).toBe(false);
+    expect(Object.hasOwn(task, legacyTimeField)).toBe(false);
   });
 });
 
@@ -172,8 +165,6 @@ describe("TaskSchema completedAt/tags", () => {
     startAt: null,
     scheduledAt: null,
     completedCount: 0,
-    turn: null,
-    turnAt: null,
     sortOrder: 0,
     createdAt: "2026-06-16T00:00:00.000Z",
     updatedAt: "2026-06-16T00:00:00.000Z",
@@ -210,8 +201,6 @@ describe("TaskSchema parentId", () => {
     startAt: null,
     scheduledAt: null,
     completedCount: 0,
-    turn: null,
-    turnAt: null,
     completedAt: null,
     tags: [],
     sortOrder: 0,

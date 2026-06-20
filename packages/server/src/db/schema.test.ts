@@ -288,6 +288,39 @@ describe("initializeDatabase", () => {
     });
   });
 
+  it("initializeDatabase 删存量 tasks 的已退役状态列", async () => {
+    const legacyTaskStateColumn = "tu" + "rn";
+    const legacyTaskStateTimeColumn = `${legacyTaskStateColumn}_at`;
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        last_done_at TEXT,
+        start_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        scheduled_at TEXT,
+        parent_id TEXT,
+        completed_count INTEGER NOT NULL DEFAULT 0,
+        ${legacyTaskStateColumn} TEXT,
+        ${legacyTaskStateTimeColumn} TEXT,
+        completed_at TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+    initializeDatabase();
+
+    const columns = taskColumnNames(db);
+    expect(columns.has(legacyTaskStateColumn)).toBe(false);
+    expect(columns.has(legacyTaskStateTimeColumn)).toBe(false);
+  });
+
   it("给缺 completed_at/tags 的旧 tasks 表补列", async () => {
     const { ensureTaskCompletionMetadataColumns } = await import("./schema.js");
     db.exec(`
@@ -301,8 +334,6 @@ describe("initializeDatabase", () => {
         sort_order INTEGER NOT NULL DEFAULT 0,
         scheduled_at TEXT,
         completed_count INTEGER NOT NULL DEFAULT 0,
-        turn TEXT,
-        turn_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );

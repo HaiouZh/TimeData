@@ -27,7 +27,7 @@ export interface InlineChildrenProps {
  * - readonly：纯展示快照，无任何写入入口（已完成 occurrence）。
  *
  * 新增子任务走「草稿行」：点 +子任务 或在某条子任务上回车，都会在末尾打开一条空白聚焦输入框，
- * 不预填充占位文案；输入为空不落库。不渲染 recurrence/tags/turn/scheduledAt 入口——子任务隐藏高级控件。
+ * 不预填充占位文案；输入为空不落库。不渲染 recurrence/tags/scheduledAt 入口——子任务隐藏高级控件。
  */
 export function InlineChildren({ parentId, mode, onAfterWrite }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);

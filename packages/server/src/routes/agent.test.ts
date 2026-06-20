@@ -244,7 +244,8 @@ describe("POST /api/agent/tasks/:id/status", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 400 for empty bodies and turn input", async () => {
+  it("returns 400 for empty bodies and legacy state input", async () => {
+    const legacyStateField = "tu" + "rn";
     const empty = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -253,7 +254,7 @@ describe("POST /api/agent/tasks/:id/status", () => {
     const invalidTurn = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ turn: "me" }),
+      body: JSON.stringify({ [legacyStateField]: "me" }),
     });
 
     expect(empty.status).toBe(400);

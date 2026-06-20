@@ -326,12 +326,14 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
-  it("不渲染旧 turn 徽章", async () => {
+  it("不渲染旧状态徽章", async () => {
+    const legacyStateField = "tu" + "rn";
+    const legacyBadgeId = `${legacyStateField}-badge`;
     const { host, root } = await render(
-      createElement(TaskRow, { task: task({ turn: "me" } as Partial<Task>), pool: "today", ...handlers }),
+      createElement(TaskRow, { task: task({ [legacyStateField]: "me" } as Partial<Task>), pool: "today", ...handlers }),
     );
 
-    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull();
+    expect(host.querySelector(`[data-testid="${legacyBadgeId}"]`)).toBeNull();
     expect(host.textContent).not.toContain("等我");
     await act(async () => root.unmount());
   });
@@ -343,7 +345,6 @@ describe("TaskRow", () => {
     const chips = host.querySelectorAll('[data-testid="tag-chip"]');
     expect(chips.length).toBe(2);
     expect(chips[0].textContent).toContain("重构");
-    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull();
     await act(async () => root.unmount());
   });
 

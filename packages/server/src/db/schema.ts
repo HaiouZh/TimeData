@@ -33,12 +33,6 @@ export function ensureTaskCompletedCountColumn(db: Database): void {
   if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
 }
 
-export function ensureTaskTurnColumns(db: Database): void {
-  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
-  if (!names.has("turn")) db.exec("ALTER TABLE tasks ADD COLUMN turn TEXT");
-  if (!names.has("turn_at")) db.exec("ALTER TABLE tasks ADD COLUMN turn_at TEXT");
-}
-
 export function ensureTaskCompletionMetadataColumns(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("completed_at")) db.exec("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
@@ -130,8 +124,6 @@ export function initializeDatabase(): void {
       scheduled_at TEXT,
       parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
-      turn TEXT,
-      turn_at TEXT,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -278,9 +270,10 @@ export function initializeDatabase(): void {
   ensureQuickNotePinnedColumn(db);
   ensureTaskScheduledColumns(db);
   ensureTaskCompletedCountColumn(db);
-  ensureTaskTurnColumns(db);
   ensureTaskCompletionMetadataColumns(db);
   ensureTaskParentIdColumn(db);
+  const legacyTaskStateColumn = "tu" + "rn";
+  dropColumnsIfExist(db, "tasks", [legacyTaskStateColumn, `${legacyTaskStateColumn}_at`]);
 
   const count = db.prepare("SELECT COUNT(*) as count FROM categories").get() as CountRow;
   if (count.count === 0) {

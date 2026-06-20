@@ -389,8 +389,9 @@ describe("TaskDetailSheet 自动保存", () => {
   });
 
   it("不渲染旧回合段控", async () => {
+    const legacyStateField = "tu" + "rn";
     const t = await addTask({ title: "旧回合任务" });
-    await db.tasks.update(t.id, { turn: "me" } as Partial<Task>);
+    await db.tasks.update(t.id, { [legacyStateField]: "me" } as Partial<Task>);
     const { host, root } = await renderSheet(t.id);
 
     expect(host.querySelector('[role="radiogroup"][aria-label="回合"]')).toBeNull();

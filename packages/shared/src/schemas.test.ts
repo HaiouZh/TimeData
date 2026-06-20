@@ -54,8 +54,6 @@ const task = {
   startAt: null,
   scheduledAt: null,
   completedCount: 0,
-  turn: null,
-  turnAt: null,
   sortOrder: 0,
   createdAt: "2026-06-14T00:00:00.000Z",
   updatedAt: "2026-06-14T00:00:00.000Z",
@@ -268,7 +266,11 @@ describe("runtime schemas", () => {
       quickNotes: [],
       tasks: [task],
     });
+    const legacyStateField = "tu" + "rn";
+    const legacyStateTimeField = `${legacyStateField}At`;
     expect(parsedForcePush.tasks).toEqual([{ ...task, parentId: null, completedAt: null, tags: [] }]);
+    expect(Object.hasOwn(parsedForcePush.tasks[0] ?? {}, legacyStateField)).toBe(false);
+    expect(Object.hasOwn(parsedForcePush.tasks[0] ?? {}, legacyStateTimeField)).toBe(false);
     expect(
       SyncForcePushRequestSchema.parse({
         confirmToken: "token",

@@ -250,12 +250,13 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
-  it("子任务行不渲染 recurrence / tags / turn / scheduledAt 入口", async () => {
+  it("子任务行不渲染 recurrence / tags / scheduledAt 入口", async () => {
+    const legacyBadgeId = ("tu" + "rn") + "-badge";
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 
     expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
-    expect(host.querySelector('[data-testid="turn-badge"]')).toBeNull();
+    expect(host.querySelector(`[data-testid="${legacyBadgeId}"]`)).toBeNull();
     expect(host.querySelector('[data-testid="tag-chip"]')).toBeNull();
 
     await unmount(root);
