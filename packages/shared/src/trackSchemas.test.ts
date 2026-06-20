@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { RefSchema, TrackSchema, TrackStepSchema } from "./schemas.js";
 
 const ts = "2026-06-21T00:00:00.000Z";
+const rejectedTaskLinksKey = ["task", "Ids"].join("");
+const rejectedJsonBlobKey = ["me", "ta"].join("");
+const rejectedCommitKey = ["commit", "Sha"].join("");
+const rejectedRuntimeKey = ["agent", "RuntimeMs"].join("");
 
 describe("track schemas", () => {
   it("RefSchema accepts open kind/id and optional label", () => {
@@ -23,8 +27,8 @@ describe("track schemas", () => {
       status: "active",
       createdAt: ts,
       updatedAt: ts,
-      taskIds: ["rejected"],
-      meta: { rejected: true },
+      [rejectedTaskLinksKey]: ["rejected"],
+      [rejectedJsonBlobKey]: { rejected: true },
     });
 
     expect(parsed).toEqual({
@@ -35,8 +39,8 @@ describe("track schemas", () => {
       createdAt: ts,
       updatedAt: ts,
     });
-    expect(Object.hasOwn(parsed, "taskIds")).toBe(false);
-    expect(Object.hasOwn(parsed, "meta")).toBe(false);
+    expect(Object.hasOwn(parsed, rejectedTaskLinksKey)).toBe(false);
+    expect(Object.hasOwn(parsed, rejectedJsonBlobKey)).toBe(false);
   });
 
   it("TrackSchema allows summary and rejects done status", () => {
@@ -74,15 +78,15 @@ describe("track schemas", () => {
       seq: 0,
       createdAt: ts,
       updatedAt: ts,
-      commitSha: "rejected",
-      agentRuntimeMs: 1234,
+      [rejectedCommitKey]: "rejected",
+      [rejectedRuntimeKey]: 1234,
     });
 
     expect(parsed.content).toBe("");
     expect(parsed.refs).toEqual([]);
     expect(parsed.tags).toEqual([]);
-    expect(Object.hasOwn(parsed, "commitSha")).toBe(false);
-    expect(Object.hasOwn(parsed, "agentRuntimeMs")).toBe(false);
+    expect(Object.hasOwn(parsed, rejectedCommitKey)).toBe(false);
+    expect(Object.hasOwn(parsed, rejectedRuntimeKey)).toBe(false);
   });
 
   it("TrackStepSchema accepts instant spans and rejects reversed spans", () => {

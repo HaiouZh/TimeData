@@ -59,6 +59,31 @@ beforeEach(() => {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE tracks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      status TEXT NOT NULL,
+      refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE track_steps (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      source_label TEXT,
+      content TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      refs TEXT NOT NULL DEFAULT '[]',
+      tags TEXT NOT NULL DEFAULT '[]',
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -125,11 +150,21 @@ describe("resetDatabaseConnectionToDefaults", () => {
       INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at)
       VALUES ('note-1', '临时想法', ?, ?, ?)
     `).run(now, now, now);
+    db.prepare(`
+      INSERT INTO tracks (id, title, status, refs, created_at, updated_at)
+      VALUES ('track-1', '轨道', 'active', '[]', ?, ?)
+    `).run(now, now);
+    db.prepare(`
+      INSERT INTO track_steps (id, track_id, source, content, started_at, refs, tags, seq, created_at, updated_at)
+      VALUES ('step-1', 'track-1', 'agent', '', ?, '[]', '[]', 0, ?, ?)
+    `).run(now, now, now);
 
     const result = resetDatabaseConnectionToDefaults(db);
 
     const entries = db.prepare("SELECT COUNT(*) as count FROM time_entries").get() as { count: number };
     const notes = db.prepare("SELECT COUNT(*) as count FROM quick_notes").get() as { count: number };
+    const tracks = db.prepare("SELECT COUNT(*) as count FROM tracks").get() as { count: number };
+    const steps = db.prepare("SELECT COUNT(*) as count FROM track_steps").get() as { count: number };
     const sleep = db.prepare("SELECT id, name FROM categories WHERE id = 'cat-sleep'").get() as {
       id: string;
       name: string;
@@ -142,6 +177,8 @@ describe("resetDatabaseConnectionToDefaults", () => {
     expect(result.categories).toBeGreaterThan(0);
     expect(entries.count).toBe(0);
     expect(notes.count).toBe(0);
+    expect(steps.count).toBe(0);
+    expect(tracks.count).toBe(0);
     expect(sleep).toEqual({ id: "cat-sleep", name: "睡眠" });
     expect(custom).toBeUndefined();
     expect(seqCount.count).toBe(0);

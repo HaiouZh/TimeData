@@ -72,6 +72,16 @@ function warnInvalidTrackStep(row: unknown, issues: unknown): void {
   console.warn(`[tracks] dropping invalid local track step ${id}:`, issues);
 }
 
+function omitTrackSummary(track: Track): Track {
+  const { summary: _summary, ...rest } = track;
+  return rest;
+}
+
+function omitTrackStepSourceLabel(step: TrackStep): TrackStep {
+  const { sourceLabel: _sourceLabel, ...rest } = step;
+  return rest;
+}
+
 export async function addTrack(input: AddTrackInput): Promise<Track> {
   const createdAt = nowIso(input.now);
   const candidate = {
@@ -97,12 +107,12 @@ export async function updateTrack(id: string, patch: UpdateTrackPatch): Promise<
   const existing = await db.tracks.get(id);
   if (!existing) throw new Error("轨道不存在");
 
-  const candidate: Track = { ...existing, refs: existing.refs ?? [], updatedAt: nowIso(patch.now) };
+  let candidate: Track = { ...existing, refs: existing.refs ?? [], updatedAt: nowIso(patch.now) };
   if (patch.title !== undefined) candidate.title = trimRequired(patch.title, "轨道标题不能为空");
   if (patch.status !== undefined) candidate.status = patch.status;
   if (patch.refs !== undefined) candidate.refs = patch.refs;
   if (patch.summary === null) {
-    delete candidate.summary;
+    candidate = omitTrackSummary(candidate);
   } else if (patch.summary !== undefined) {
     candidate.summary = patch.summary;
   }
@@ -149,7 +159,7 @@ export async function updateTrackStep(id: string, patch: UpdateTrackStepPatch): 
   const existing = await db.trackSteps.get(id);
   if (!existing) throw new Error("轨道步骤不存在");
 
-  const candidate: TrackStep = {
+  let candidate: TrackStep = {
     ...existing,
     refs: existing.refs ?? [],
     tags: existing.tags ?? [],
@@ -162,7 +172,7 @@ export async function updateTrackStep(id: string, patch: UpdateTrackStepPatch): 
   if (patch.tags !== undefined) candidate.tags = patch.tags;
   if (patch.seq !== undefined) candidate.seq = patch.seq;
   if (patch.sourceLabel === null) {
-    delete candidate.sourceLabel;
+    candidate = omitTrackStepSourceLabel(candidate);
   } else if (patch.sourceLabel !== undefined) {
     candidate.sourceLabel = patch.sourceLabel;
   }

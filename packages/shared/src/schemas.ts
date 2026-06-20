@@ -3,12 +3,9 @@ import {
   CategorySchema,
   NonNegativeIntSchema,
   QuickNoteSchema,
-  RefSchema,
   SettingSchema,
   TaskSchema,
   TimeEntrySchema,
-  TrackSchema,
-  TrackStepSchema,
   UtcIsoStringSchema,
 } from "./entitySchemas.js";
 import { SYNC_TABLE_NAMES, buildSyncChangeSchema } from "./syncDomains.js";
