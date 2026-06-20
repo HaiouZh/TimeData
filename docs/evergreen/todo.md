@@ -144,6 +144,8 @@ agent / CLI (task-running/task-handback/task-park/task-done/task-tag)
 
 映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引）。Dexie `tasks` 索引（v8）`"id, parentId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children。
 
+客户端读取 `listTasks` 走 `TaskSchema.safeParse`（parse-on-read）：补默认、剥孤儿、坏行 `console.warn` 跳过；不再手摊默认字段。
+
 ### 2.4 同步域登记（`syncDomains.ts`）
 
 `tasks` 域：`conflictPolicy:"lww"`、`countsInStatus:false`、upsert/deletePriority 45。服务端走通用 LWW（`sync/domains.ts`），无自定义 `validate`/`apply`/`crossValidate`，delete 写 tombstone。

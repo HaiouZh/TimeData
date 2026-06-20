@@ -11,7 +11,7 @@ covers:
   - packages/client/src/db/index.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/pages/HealthStatsPage.tsx
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-20
 ---
 
 # 健康数据
@@ -60,6 +60,8 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 ### 2.1 同步域登记（`syncDomains.ts`）
 
 6 个健康域（`health_heart_rate`/`health_hrv`/`health_sleep`/`health_stress`/`runs`/`health_charts`）均 `conflictPolicy:"lww"`、`countsInStatus:false`（不进 `/api/sync/status` 公开业务计数）。服务端走 `simpleLwwDomain`（`sync/domains.ts`），**无 `validate`/`crossValidate`/`apply`**——对比 `time_entries` 有 `crossValidate: incomingEntryOverlap`，健康数据不参与重叠校验。客户端登记在 `clientDomains.ts`。
+
+客户端启动时的 schema 归一 pass 同样遍历这些 `CLIENT_SYNC_DOMAINS`：只按 shared schema 补默认/剥孤儿并保留坏行，不写 `syncLog`，不改变健康域的 LWW 同步语义。
 
 ## 3. 关键不变量 / 坑 / 红线
 

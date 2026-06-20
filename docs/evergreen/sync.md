@@ -27,7 +27,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-20
 ---
 
 # 同步机制
@@ -52,7 +52,7 @@ last-reviewed: 2026-06-18
 
 当前十一个运行时域：`categories`（manual，钩子承载层级校验与级联删除）、`time_entries`（manual，钩子承载未来时间拒绝、重叠覆盖）、`settings`（lww，零钩子，`countsInStatus=false`，承载睡眠分类、打点分类、底部导航可见入口等 UI 偏好）、`quick_notes`（lww，零钩子）、`tasks`（lww，零钩子，`countsInStatus=false`）、`health_charts`（lww，健康统计页视图块配置），以及 5 个健康数据域 `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs`（均 lww、零钩子、`countsInStatus=false`，走通用 LWW 路径）。
 
-> 客户端登记簿 `CLIENT_SYNC_DOMAINS`（`packages/client/src/sync/clientDomains.ts`）在 `table`/`storeName`/`schema` 之外，还给每域声明一个 **`backup` 角色**（`core`/`bundled`/`excluded`），驱动完整备份的导出/校验/恢复——那是 Backup 的关注点，详见 [`backup.md`](./backup.md)，不影响同步语义。
+> 客户端登记簿 `CLIENT_SYNC_DOMAINS`（`packages/client/src/sync/clientDomains.ts`）在 `table`/`storeName`/`schema` 之外，还给每域声明一个 **`backup` 角色**（`core`/`bundled`/`excluded`），驱动完整备份的导出/校验/恢复——那是 Backup 的关注点，详见 [`backup.md`](./backup.md)，不影响同步语义。同一份 `storeName + schema` 还驱动客户端本地 schema 归一 pass（启动时清理 IndexedDB 里不符合当前 shared schema 的本地形状），归一保留 `updatedAt`、不写 `syncLog`、不改同步语义。`taskNeedsApply` 用 `TaskSchema` 投影后深比较，本地孤儿字段不再触发多余 apply。
 
 **新增一个纯 LWW 域的全部成本**：shared 登记一行 + server 写 `lww` 映射和 `readRecord` + 客户端 Dexie 表与 pull 应用分支。校验、排序、写入、记账、seq 补差、墓碑、SSE 实时下发全部白捡。验收证明见 `packages/server/src/sync/fake-domain.e2e.test.ts`。
 
@@ -230,5 +230,6 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 - [ ] 改 `SyncPushReasonCode`：shared schema、server validation/resolver、`classifyReasonCode()`、本文档第 6 节、`data-model.md`。
 - [ ] 改 `regularSync` 主路径：先测 seq no-op、pull-only 补差、push + pull 三条路径。
 - [ ] 改服务端写路径：确认写表与 `recordSeq` 同事务、commit hash 标 dirty、事务后 `notifySyncChange`。
+- [ ] 改 shared 实体 schema：客户端按需升 `SCHEMA_NORMALIZATION_VERSION` 清洗老数据；服务端按需 `ensure*Columns()` 或 `dropColumnsIfExist()`；加字段 server 先行、减字段 shared 先行物理删列最后。归一不写 `syncLog`，也不替代服务端权威校验。
 - [ ] 验 full sync fallback：`/api/health` → 带鉴权 `/api/sync/status` → 测试库走同步健康诊断和 force-push prepare；不要在生产库执行最终覆盖。
 - [ ] 真实数据回放：把 `timedata.backup` 放到 `docs_local/fixtures/` 后跑 `packages/server/src/__tests__/e2e/real-data-replay.test.ts`。

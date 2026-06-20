@@ -103,6 +103,8 @@ last-reviewed: 2026-06-20
 
 `quick_notes` 域：`conflictPolicy:"lww"`、**`countsInStatus:true`**（计入 `/api/sync/status` counts + contentHash 行数）、upsert/deletePriority 40。客户端登记在 `clientDomains.ts`。
 
+客户端启动时的 schema 归一 pass 会按这份登记簿遍历 `quickNotes`：只清理本地 IndexedDB 形状（补默认/剥孤儿，坏行保留并 warn），不写 `syncLog`，不改变 quick_notes 的 LWW 同步语义。
+
 ## 3. 关键不变量 / 坑 / 红线
 
 1. **独立数据域**：`quick_notes` 不引用 `categories`/`time_entries`，不参与分类校验、archived、时间段重叠、时间环、时长统计、分类统计。服务端域无 validate/crossValidate。

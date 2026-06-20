@@ -12,7 +12,8 @@ covers:
   - packages/server/src/db/reset.ts
   - packages/server/src/lib/db-rows.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-06-18
+  - packages/client/src/db/schemaNormalization.ts
+last-reviewed: 2026-06-20
 ---
 
 # 数据模型与契约
@@ -224,6 +225,8 @@ db.version(8).stores({
 
 服务端当前主要依靠 `CREATE TABLE IF NOT EXISTS` 和少量幂等 `ALTER TABLE ... ADD COLUMN` 补列。可以兼容新增表、列、索引；改已有列含义或类型必须写一次性迁移代码，不能只改 schema 字符串并期待已部署实例自动重建。
 
+服务端删列走 `dropColumnsIfExist(db, table, columns, indexNames?)`：先按传入索引名 `DROP INDEX IF EXISTS`（SQLite 拒删带索引列），再按 `PRAGMA table_info` 判断列存在才 `ALTER TABLE ... DROP COLUMN`，标识符走白名单校验。删字段分两步：先从 shared schema 与 `rowTo*`/`*ToRow` 映射停读写（物理列变惰性），物理 `DROP COLUMN` 是最后的卫生步骤、可滞后。时序铁律：加字段 server 先行（`ADD COLUMN` + 映射）客户端再写持久值；减字段 shared 先行、两端过 schema 的路径先停搬运、物理删列最后。
+
 ## 12. ID 约定
 
 - `Category.id`：默认分类用稳定字符串，用户新建用 UUID。
@@ -241,3 +244,7 @@ db.version(8).stores({
 - `AdminSyncResponse`：同步日志、最近 rejected/conflict 数、最近问题列表。
 - `AdminBackupRow`：备份文件、大小、保护状态、保留分类、关联 sync log。
 - `AdminHealthChecksResponse`：后台健康检查结果；这里的 health 是系统健康检查，不是 Garmin 健康数据域。
+
+## 14. 客户端 schema 归一
+
+`packages/shared/src/entitySchemas.ts` 的 Zod schema 是跨端实体形状事实源。客户端启动时在 `seedDefaultCategories()`/`migrateLocalSettingsToDexie()` 之后、render 之前跑 `runSchemaNormalizationIfNeeded()`（`packages/client/src/db/schemaNormalization.ts`）：以 `STORAGE_KEYS.schemaNormalizationVersion` 做 localStorage 版本闸，遍历 `CLIENT_SYNC_DOMAINS` 的 `storeName + schema`，在一个跨全表 `rw` 事务内把每条记录过 schema：缺字段由 `.default(...)` 补、孤儿字段由 Zod strip、坏行只 `console.warn` 并保留。纯本地卫生：只 `bulkPut` 变化行、保留 `updatedAt`、不写 `syncLog`，整轮成功才推进版本号。改实体 schema 后升 `SCHEMA_NORMALIZATION_VERSION` 即触发老数据对齐；新增索引/表仍走 Dexie 版本链。读取关键路径（如 `listTasks`）用 `TaskSchema.safeParse` parse-on-read 兜底。
