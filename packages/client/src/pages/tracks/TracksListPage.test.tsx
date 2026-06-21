@@ -4,8 +4,9 @@ import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/index.js";
+import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/tracks.js";
-import { renderDom, unmount } from "../../test/domHarness.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import TracksListPage from "./TracksListPage.js";
 
 vi.mock("../../contexts/SyncContext.tsx", () => ({ useSyncContext: () => ({ syncAfterWrite: () => {} }) }));
@@ -17,6 +18,7 @@ beforeEach(async () => {
   await db.open();
   await db.tracks.clear();
   await db.trackSteps.clear();
+  await db.settings.clear();
   await db.syncLog.clear();
 });
 afterEach(async () => {
@@ -100,5 +102,55 @@ describe("TracksListPage", () => {
   it("shows an empty hint when there are no active tracks", async () => {
     const host = await renderList();
     expect(host.textContent).toContain("还没有进行中的轨道");
+  });
+
+  it("surfaces a current step in the 轮到我 inbox when its tag hits a seed actionTag", async () => {
+    await addTrack({ title: "等确认的轨道", now });
+    const [track] = await listTracks();
+    await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "等你拍方案",
+      startedAt: "2026-06-21T01:00:00.000Z",
+      endedAt: null,
+      tags: ["等我"],
+      seq: 0,
+      now,
+    });
+    const host = await renderList();
+    await waitForText(host, "等确认的轨道");
+    // 默认未配置 → 种子含「等我」;切到「轮到我」
+    await click(host.querySelector('[role="radio"][aria-checked="false"]'));
+    await waitForText(host, "等你拍方案");
+    expect(host.querySelector(`a[href="/tracks/${track.id}"]`)).not.toBeNull();
+  });
+
+  it("guides to settings in the 轮到我 inbox when actionTags is explicitly empty", async () => {
+    await setTrackActionTags([]);
+    await addTrack({ title: "随便一条", now });
+    const host = await renderList();
+    await waitForText(host, "随便一条");
+    await click(host.querySelector('[role="radio"][aria-checked="false"]'));
+    await waitForText(host, "还没有配置行动标签");
+    expect(host.querySelector('a[href="/settings/tracks"]')).not.toBeNull();
+  });
+
+  it("shows an empty inbox hint when configured but nothing is waiting", async () => {
+    await addTrack({ title: "进行中无行动标签", now });
+    const [track] = await listTracks();
+    await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "推进中",
+      startedAt: "2026-06-21T01:00:00.000Z",
+      endedAt: null,
+      tags: [],
+      seq: 0,
+      now,
+    });
+    const host = await renderList();
+    await waitForText(host, "进行中无行动标签");
+    await click(host.querySelector('[role="radio"][aria-checked="false"]'));
+    await waitForText(host, "暂无轮到你的步骤");
   });
 });
