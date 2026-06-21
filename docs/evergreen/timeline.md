@@ -30,7 +30,7 @@ last-reviewed: 2026-06-20
 - 上游：用户在时间轴/新增记录页写入；速记页和圆环中心可触发“打点到现在”；CLI `timedata log` 可经服务端受控 API 创建记录。
 - 下游：客户端本地写 `timeEntries` 与 `syncLog(tableName="time_entries")`；CLI/server 写 SQLite 后追加 `sync_seq`；统计页按同一 `[start, end)` 交集口径读取。
 - 契约：`TimeEntry` 字段 schema 见本文 §1；跨域时间、ID、SQL/Dexie 映射见 [data-model](data-model.md)。
-- 邻居：[categories-settings](categories-settings.md) 管分类与打点分类设置；[stats-insights](stats-insights.md) 管统计聚合；[sync](sync.md) 管账本和冲突。
+- 邻居：[categories-settings](categories-settings.md) 管分类与打点分类设置；[stats-insights](stats-insights.md) 管统计聚合；[tracks](tracks.md) 管状态线历时；[sync](sync.md) 管账本和冲突。
 
 ## 1. Schema / 契约
 
@@ -53,6 +53,7 @@ type TimeEntry = {
 - 记录区间按半开 `[start, end)` 判断。客户端保存前查重叠并可在单事务内裁剪/删除旧记录；CLI `/api/entries` 创建会拒绝重叠；同步 apply 会删除与 incoming 记录重叠的旧远端记录并写 tombstone + seq。
 - `note` 是字符串或 `null`，空白备注在 UI 层归一为空值；备注不参与统计口径。
 - SQLite 表名是 `time_entries`，字段是 `category_id/start_time/end_time/note/created_at/updated_at`；Dexie 表名是 `timeEntries`，索引是 `id, categoryId, startTime, endTime`。
+- 任务轨道步骤也有 `startedAt -> endedAt` 历时，但那是状态线跨度，不写入 `time_entries`，也不参与本时间轴的分类统计口径。
 
 `TimeEntry.startTime` 和 `TimeEntry.endTime` 存储为 UTC ISO 字符串（带 `Z`），例如：
 

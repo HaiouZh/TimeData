@@ -16,6 +16,8 @@ describe("sync domain registry", () => {
       "health_stress",
       "runs",
       "health_charts",
+      "tracks",
+      "track_steps",
     ]);
   });
 
@@ -46,6 +48,55 @@ describe("sync domain registry", () => {
     const domain = SYNC_DOMAINS.find((d) => d.table === "health_charts");
     expect(domain).toBeDefined();
     expect(domain?.conflictPolicy).toBe("lww");
+  });
+});
+
+describe("track domain registration", () => {
+  it("registers tracks and track_steps with dependency-safe priorities", () => {
+    const tracks = getSyncDomain("tracks");
+    const steps = getSyncDomain("track_steps");
+
+    expect(tracks.conflictPolicy).toBe("lww");
+    expect(steps.conflictPolicy).toBe("lww");
+    expect(tracks.countsInStatus).toBe(false);
+    expect(steps.countsInStatus).toBe(false);
+    expect(steps.upsertPriority).toBeGreaterThan(tracks.upsertPriority);
+    expect(steps.deletePriority).toBeLessThan(tracks.deletePriority);
+  });
+
+  it("buildSyncChangeSchema accepts track and step changes", () => {
+    const schema = buildSyncChangeSchema(UtcIsoStringSchema);
+    const now = "2026-06-21T00:00:00.000Z";
+    expect(
+      schema.safeParse({
+        tableName: "tracks",
+        recordId: "track-1",
+        action: "create",
+        timestamp: now,
+        data: { id: "track-1", title: "T1", status: "active", refs: [], createdAt: now, updatedAt: now },
+      }).success,
+    ).toBe(true);
+    expect(
+      schema.safeParse({
+        tableName: "track_steps",
+        recordId: "step-1",
+        action: "create",
+        timestamp: now,
+        data: {
+          id: "step-1",
+          trackId: "track-1",
+          source: "agent",
+          content: "",
+          startedAt: now,
+          endedAt: null,
+          refs: [],
+          tags: [],
+          seq: 0,
+          createdAt: now,
+          updatedAt: now,
+        },
+      }).success,
+    ).toBe(true);
   });
 });
 

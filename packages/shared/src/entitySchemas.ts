@@ -102,3 +102,42 @@ export const TaskSchema = z.object({
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,
 });
+
+export const RefSchema = z.object({
+  kind: NonEmptyTrimmedStringSchema,
+  id: NonEmptyTrimmedStringSchema,
+  label: z.string().max(200).optional(),
+});
+
+export const TrackSchema = z.object({
+  id: NonEmptyTrimmedStringSchema,
+  title: NonEmptyTrimmedStringSchema,
+  summary: z.string().optional(),
+  status: z.enum(["active", "concluded", "parked"]),
+  refs: z.array(RefSchema).max(100).default([]),
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
+});
+
+export const TrackStepSchema = z
+  .object({
+    id: NonEmptyTrimmedStringSchema,
+    trackId: NonEmptyTrimmedStringSchema,
+    source: z.enum(["user", "agent"]),
+    sourceLabel: z.string().max(64).optional(),
+    content: z.string(),
+    startedAt: UtcIsoStringSchema,
+    endedAt: UtcIsoStringSchema.nullable(),
+    refs: z.array(RefSchema).max(100).default([]),
+    tags: z
+      .array(NonEmptyTrimmedStringSchema.refine((value) => value.length <= 64, "tag must be at most 64 characters"))
+      .max(50)
+      .default([]),
+    seq: NonNegativeIntSchema,
+    createdAt: UtcIsoStringSchema,
+    updatedAt: UtcIsoStringSchema,
+  })
+  .refine((step) => step.endedAt === null || step.endedAt >= step.startedAt, {
+    path: ["endedAt"],
+    message: "endedAt must be at or after startedAt",
+  });

@@ -156,6 +156,7 @@ agent / CLI (task-done/task-tag)
 6. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + OR 过滤（`TagFilterBar`，`TaskRow` 最多 3 chip）。需要代码可靠动作的维度应毕业为结构化字段。
 7. **子任务 = 独立可拖 `Task`（`parentId` 一层）**：见 §2.2。child 勾选不联动父 `done`/`completedAt`（父进度 `m/n` 由 `InlineChildren` 实时聚合，不回写父行）。**重复 root 完成时处理 children（历史快照）**：`completeTask` 读 reset-前 children，同一次返回 `occurrenceChildren`（克隆为指向 occurrence 的独立 child，**如实保留完成时 `done`/`completedAt`/`tags` 快照**，`recurrence` 清空）与 `templateChildren`（同批 child reset 成 `done=false`/`completedAt=null`）；快照与 reset 同源于 reset-前入参，顺序冒险结构性消除。客户端 `toggleTaskDone` 与 agent `done=true` 共用这套，事务内 `bulkAdd(occurrenceChildren)` + `bulkPut(templateChildren)`。历史 occurrence 的 children 在「已完成」内只读显示。
 8. **`tasks` 不引用其他域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出。
+9. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 
 ## 4. 模块速查
 

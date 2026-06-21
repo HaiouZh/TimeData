@@ -27,7 +27,7 @@ last-reviewed: 2026-06-20
 - **上游**：Garmin 定时/手动抓取，或受保护 `POST /api/health/ingest` 批量导入（详见 [health/garmin-ingest](health/garmin-ingest.md)）。
 - **下游**：服务端 `safeParse → applyChange() → sync_seq → notifySyncChange()` 写入 → [sync](sync.md) 下发 → 客户端 Dexie 健康表 → `HealthStatsPage` 渲染（块配置/渲染详见 [health/charts](health/charts.md)）。
 - **契约**：5 指标表 schema 在 `healthSchemas.ts`（见本文 §2）；视图块配置 `HealthChartConfigSchema` 在 `chartSchemas.ts`（**不在** `healthSchemas.ts`，详见 [health/charts](health/charts.md)）；跨域字段约定见 [data-model](data-model.md)。
-- **邻居**：[stats-insights](stats-insights.md)（`/stats/time` 是平级页面，与 `/stats/health` 无文件交叠）、[sync](sync.md)（6 个健康域均 LWW）、[security](security.md)（凭证与 token）。
+- **邻居**：[stats-insights](stats-insights.md)（`/stats/time` 是平级页面，与 `/stats/health` 无文件交叠）、[tracks](tracks.md)（轨道可用 refs 指向 runs/健康记录但不拥有指标字段）、[sync](sync.md)（6 个健康域均 LWW）、[security](security.md)（凭证与 token）。
 
 ## 1. 数据流总览
 
@@ -71,9 +71,10 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 2. **健康数据不参与时间段重叠、分类统计、时长统计或 `/api/sync/status` 业务计数**（`simpleLwwDomain` 无 `crossValidate`）。
 3. **`runs` 不参与自动抓取缺口判断**（`DAILY_HEALTH_DOMAINS` 不含 runs，详见 [health/garmin-ingest](health/garmin-ingest.md)）；“没有跑步”不等于数据缺失。
 4. **凭证 AES-256-GCM 加密、密钥派生自 `AUTH_TOKEN`**：换 `AUTH_TOKEN` 后旧凭证不可解密。机制与影响详见 [health/garmin-ingest](health/garmin-ingest.md) §凭证。
-5. **`health_charts` 已在运行时登记簿和 client/server 同步路径注册，但 `types.ts` 的手工 `SyncChange` 联合当前缺对应分支**（已知风险）：补齐时按公开 API 变更处理，见 [data-model](data-model.md) 与 [sync](sync.md)。
-6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据与 `health_charts`**（见 [backup](backup.md)）。
-7. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**；不要因文件名相同把它归进 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
+5. **`health_charts` 已在运行时登记簿、静态 `SyncChange` 联合和 client/server 同步路径注册**；新增健康配置域仍要同步 shared/server/client 三端登记。
+6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts` 或任务轨道**（见 [backup](backup.md)）。
+7. **轨道 refs 不改变健康 schema**：跑步、HRV 等结构化指标继续留在健康域；轨道步骤只保存指针和叙事，不新增健康专用字段。
+8. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**；不要因文件名相同把它归进 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
 
 ## 4. 模块速查（主题层）
 

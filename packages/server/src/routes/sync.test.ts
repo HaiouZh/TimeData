@@ -105,6 +105,8 @@ function createSchema() {
     CREATE TABLE IF NOT EXISTS health_stress (id TEXT PRIMARY KEY, date TEXT NOT NULL, stress INTEGER NOT NULL, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, date TEXT NOT NULL, start_time TEXT NOT NULL, distance_km REAL, duration_seconds INTEGER, average_heart_rate INTEGER, average_cadence REAL, average_stride_m REAL, average_vertical_ratio_percent REAL, average_vertical_oscillation_cm REAL, average_ground_contact_ms INTEGER, type TEXT NOT NULL, city TEXT NOT NULL, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS health_charts (id TEXT PRIMARY KEY, type TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, config TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT, status TEXT NOT NULL, refs TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS track_steps (id TEXT PRIMARY KEY, track_id TEXT NOT NULL, source TEXT NOT NULL, source_label TEXT, content TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, refs TEXT NOT NULL DEFAULT '[]', tags TEXT NOT NULL DEFAULT '[]', seq INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 
   `);
 }
@@ -1305,6 +1307,116 @@ describe("sync route", () => {
         "note-1",
       ),
     ).toMatchObject({ table_name: "quick_notes", record_id: "note-1" });
+  });
+
+  it("pushes, pulls, and tombstones tracks and track_steps", async () => {
+    const now = "2026-06-21T00:00:00.000Z";
+    const pushRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "track_steps",
+            recordId: "step-1",
+            action: "create",
+            data: {
+              id: "step-1",
+              trackId: "track-1",
+              source: "agent",
+              sourceLabel: "codex",
+              content: "",
+              startedAt: now,
+              endedAt: null,
+              refs: [{ kind: "commit", id: "abc123" }],
+              tags: ["phase:T1"],
+              seq: 0,
+              createdAt: now,
+              updatedAt: now,
+            },
+            timestamp: now,
+          },
+          {
+            tableName: "tracks",
+            recordId: "track-1",
+            action: "create",
+            data: {
+              id: "track-1",
+              title: "T1 数据地基",
+              status: "active",
+              refs: [{ kind: "task", id: "task-1" }],
+              createdAt: now,
+              updatedAt: now,
+            },
+            timestamp: now,
+          },
+        ],
+      }),
+    });
+
+    expect(pushRes.status).toBe(200);
+    await expect(pushRes.json()).resolves.toMatchObject({ accepted: 2, rejected: 0, conflicts: 0 });
+    expect(db.prepare("SELECT title, refs FROM tracks WHERE id = ?").get("track-1")).toMatchObject({
+      title: "T1 数据地基",
+      refs: JSON.stringify([{ kind: "task", id: "task-1" }]),
+    });
+    expect(db.prepare("SELECT track_id, content, tags FROM track_steps WHERE id = ?").get("step-1")).toMatchObject({
+      track_id: "track-1",
+      content: "",
+      tags: JSON.stringify(["phase:T1"]),
+    });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+    expect(pullRes.status).toBe(200);
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "tracks",
+          recordId: "track-1",
+          action: "update",
+          data: expect.objectContaining({ title: "T1 数据地基", refs: [{ kind: "task", id: "task-1" }] }),
+        }),
+        expect.objectContaining({
+          tableName: "track_steps",
+          recordId: "step-1",
+          action: "update",
+          data: expect.objectContaining({ trackId: "track-1", content: "", tags: ["phase:T1"] }),
+        }),
+      ]),
+    );
+
+    const deleteRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          { tableName: "tracks", recordId: "track-1", action: "delete", data: null, timestamp: now },
+          { tableName: "track_steps", recordId: "step-1", action: "delete", data: null, timestamp: now },
+        ],
+      }),
+    });
+
+    expect(deleteRes.status).toBe(200);
+    await expect(deleteRes.json()).resolves.toMatchObject({ accepted: 2, rejected: 0, conflicts: 0 });
+    expect(db.prepare("SELECT id FROM track_steps WHERE id = ?").get("step-1")).toBeUndefined();
+    expect(db.prepare("SELECT id FROM tracks WHERE id = ?").get("track-1")).toBeUndefined();
+    expect(
+      db.prepare("SELECT table_name, record_id FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get(
+        "track_steps",
+        "step-1",
+      ),
+    ).toMatchObject({ table_name: "track_steps", record_id: "step-1" });
+    expect(
+      db.prepare("SELECT table_name, record_id FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get(
+        "tracks",
+        "track-1",
+      ),
+    ).toMatchObject({ table_name: "tracks", record_id: "track-1" });
   });
 
   it("pulls deduplicated changes after a seq cursor and returns latest seq", async () => {

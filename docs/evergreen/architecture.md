@@ -29,7 +29,7 @@ TimeData 是个人时间记录 PWA：
 - 本地优先：Web 端先写 IndexedDB，再异步同步。
 - 自托管：服务端是 Hono + SQLite，负责最终校验、写入、同步账本和受控 API。
 - 多入口：Web/PWA、CLI、Android WebView；授权 agent 只能经服务端受控 API 写入。
-- 数据域：时间记录、分类/设置、速记、待办、健康数据、统计/洞察、同步、备份。
+- 数据域：时间记录、分类/设置、速记、待办、任务轨道、健康数据、统计/洞察、同步、备份。
 
 **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB 或备份/导出文件。
 
@@ -55,7 +55,7 @@ mobile   Capacitor Android 壳，webDir 指向 client/dist
 
 Web 端用户写入时，业务表 mutation 与 `syncLog(synced=0)` 必须在同一个 Dexie transaction 内完成。随后 `regularSync()` 把待同步变更 push 到 server，server 校验并分配 `sync_seq` / `updated_at`，其他设备按 seq pull。
 
-时间记录与时间轴见 [timeline](timeline.md)；速记见 [quick-notes](quick-notes.md)；待办见 [todo](todo.md)；分类与设置见 [categories-settings](categories-settings.md)；健康见 [health](health.md)。
+时间记录与时间轴见 [timeline](timeline.md)；速记见 [quick-notes](quick-notes.md)；待办见 [todo](todo.md)；任务轨道见 [tracks](tracks.md)；分类与设置见 [categories-settings](categories-settings.md)；健康见 [health](health.md)。
 
 ### 3.2 服务端受控写入
 
@@ -145,6 +145,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 | [timeline](timeline.md) | 域 | 时间记录、时间轴、跨夜、时间选择、相邻合并 |
 | [quick-notes](quick-notes.md) | 域 | 速记表、聊天式速记页、CLI 只读、agent 投递 |
 | [todo](todo.md) | 域 | 待办任务、重复规则、子任务、agent 状态回写 |
+| [tracks](tracks.md) | 域 | 任务轨道、轨道步骤、状态线数据地基 |
 | [health](health.md) | 域 | Garmin、ingest、健康 schema、健康图表配置、健康页 |
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |

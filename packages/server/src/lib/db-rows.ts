@@ -1,4 +1,4 @@
-import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Setting, SyncChange, Task, TimeEntry } from "@timedata/shared";
 
 export interface CountRow {
   count: number;
@@ -31,7 +31,7 @@ export interface EntryRow {
 }
 
 export interface TombstoneRow {
-  table_name: "categories" | "time_entries" | "settings" | "quick_notes" | "tasks";
+  table_name: SyncChange["tableName"];
   record_id: string;
   deleted_at: string;
 }

@@ -69,4 +69,48 @@ describe("orderPushChanges", () => {
       "categories",
     ]);
   });
+
+  it("orders track upserts before track_steps and deletes track_steps before tracks", () => {
+    const now = "2026-06-21T00:00:00.000Z";
+    const track: SyncChange = {
+      tableName: "tracks",
+      recordId: "track-1",
+      action: "create",
+      timestamp: now,
+      data: { id: "track-1", title: "T1", status: "active", refs: [], createdAt: now, updatedAt: now },
+    };
+    const step: SyncChange = {
+      tableName: "track_steps",
+      recordId: "step-1",
+      action: "create",
+      timestamp: now,
+      data: {
+        id: "step-1",
+        trackId: "track-1",
+        source: "agent",
+        content: "",
+        startedAt: now,
+        endedAt: null,
+        refs: [],
+        tags: [],
+        seq: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+    };
+    const trackDelete: SyncChange = { tableName: "tracks", recordId: "track-1", action: "delete", data: null, timestamp: now };
+    const stepDelete: SyncChange = {
+      tableName: "track_steps",
+      recordId: "step-1",
+      action: "delete",
+      data: null,
+      timestamp: now,
+    };
+
+    expect(orderPushChanges([step, track]).map((change) => change.tableName)).toEqual(["tracks", "track_steps"]);
+    expect(orderPushChanges([trackDelete, stepDelete]).map((change) => change.tableName)).toEqual([
+      "track_steps",
+      "tracks",
+    ]);
+  });
 });

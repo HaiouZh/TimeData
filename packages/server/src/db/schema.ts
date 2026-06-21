@@ -130,6 +130,31 @@ export function initializeDatabase(): void {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS tracks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      status TEXT NOT NULL,
+      refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS track_steps (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      source_label TEXT,
+      content TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      refs TEXT NOT NULL DEFAULT '[]',
+      tags TEXT NOT NULL DEFAULT '[]',
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -172,6 +197,10 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_quick_notes_occurred_at ON quick_notes(occurred_at);
     CREATE INDEX IF NOT EXISTS idx_quick_notes_updated_at ON quick_notes(updated_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_tracks_updated_at ON tracks(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_track_steps_track_id ON track_steps(track_id);
+    CREATE INDEX IF NOT EXISTS idx_track_steps_track_seq ON track_steps(track_id, seq);
+    CREATE INDEX IF NOT EXISTS idx_track_steps_updated_at ON track_steps(updated_at);
     CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_sync_seq_table_record ON sync_seq(table_name, record_id);

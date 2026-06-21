@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { HealthChartConfigSchema } from "./chartSchemas.js";
-import { CategorySchema, QuickNoteSchema, SettingSchema, TaskSchema, TimeEntrySchema } from "./entitySchemas.js";
+import {
+  CategorySchema,
+  QuickNoteSchema,
+  SettingSchema,
+  TaskSchema,
+  TimeEntrySchema,
+  TrackSchema,
+  TrackStepSchema,
+} from "./entitySchemas.js";
 import {
   HealthHeartRateSchema, HealthHrvSchema, HealthSleepSchema,
   HealthStressSchema, HealthRunSchema,
@@ -109,6 +117,22 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
     dataSchema: HealthChartConfigSchema,
     upsertPriority: 60,
     deletePriority: 60,
+    conflictPolicy: "lww",
+    countsInStatus: false,
+  },
+  {
+    table: "tracks",
+    dataSchema: TrackSchema,
+    upsertPriority: 70,
+    deletePriority: 71,
+    conflictPolicy: "lww",
+    countsInStatus: false,
+  },
+  {
+    table: "track_steps",
+    dataSchema: TrackStepSchema,
+    upsertPriority: 71,
+    deletePriority: 70,
     conflictPolicy: "lww",
     countsInStatus: false,
   },

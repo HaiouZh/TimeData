@@ -55,14 +55,14 @@ describe("resetSyncCursors", () => {
 });
 
 describe("Dexie database", () => {
-  it("creates v8 schema and seeds default categories on a fresh open", async () => {
+  it("creates v9 schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(8);
+    expect(db.verno).toBe(9);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
@@ -74,6 +74,13 @@ describe("Dexie database", () => {
     expect(db.healthCharts.schema.primKey.keyPath).toBe("id");
     expect(db.healthCharts.schema.idxByName.order).toBeDefined();
     expect(db.healthCharts.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.tracks.schema.primKey.keyPath).toBe("id");
+    expect(db.tracks.schema.idxByName.status).toBeDefined();
+    expect(db.tracks.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.trackSteps.schema.primKey.keyPath).toBe("id");
+    expect(db.trackSteps.schema.idxByName.trackId).toBeDefined();
+    expect(db.trackSteps.schema.idxByName["[trackId+seq]"]).toBeDefined();
+    expect(db.trackSteps.schema.idxByName.updatedAt).toBeDefined();
   });
 
   it("exposes a tasks table keyed by id", async () => {
@@ -107,7 +114,7 @@ describe("Dexie database", () => {
     ]);
   });
 
-  it("resets core data without deleting quick notes or their pending sync logs", async () => {
+  it("resets core data and tracks without deleting quick notes or their pending sync logs", async () => {
     await db.open();
     await db.tasks.add({
       id: "task-1",
@@ -124,6 +131,27 @@ describe("Dexie database", () => {
       id: "note-1",
       text: "repo",
       occurredAt: "2026-06-01T04:01:30.123Z",
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    });
+    await db.tracks.add({
+      id: "track-1",
+      title: "T1",
+      status: "active",
+      refs: [],
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    });
+    await db.trackSteps.add({
+      id: "step-1",
+      trackId: "track-1",
+      source: "agent",
+      content: "",
+      startedAt: "2026-06-01T04:02:00.000Z",
+      endedAt: null,
+      refs: [],
+      tags: [],
+      seq: 0,
       createdAt: "2026-06-01T04:02:00.000Z",
       updatedAt: "2026-06-01T04:02:00.000Z",
     });
@@ -145,6 +173,22 @@ describe("Dexie database", () => {
         synced: 0,
       },
       {
+        id: "track-log-1",
+        tableName: "tracks",
+        recordId: "track-1",
+        action: "create",
+        timestamp: "2026-06-01T04:02:00.000Z",
+        synced: 0,
+      },
+      {
+        id: "step-log-1",
+        tableName: "track_steps",
+        recordId: "step-1",
+        action: "create",
+        timestamp: "2026-06-01T04:02:00.000Z",
+        synced: 0,
+      },
+      {
         id: "entry-log-1",
         tableName: "time_entries",
         recordId: "entry-1",
@@ -158,6 +202,8 @@ describe("Dexie database", () => {
 
     await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "repo" });
     await expect(db.tasks.get("task-1")).resolves.toBeUndefined();
+    await expect(db.tracks.get("track-1")).resolves.toBeUndefined();
+    await expect(db.trackSteps.get("step-1")).resolves.toBeUndefined();
     await expect(db.syncLog.toArray()).resolves.toMatchObject([
       { id: "note-log-1", tableName: "quick_notes", recordId: "note-1" },
     ]);

@@ -62,6 +62,31 @@ function createSchema() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE tracks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      status TEXT NOT NULL,
+      refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE track_steps (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      source_label TEXT,
+      content TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      refs TEXT NOT NULL DEFAULT '[]',
+      tags TEXT NOT NULL DEFAULT '[]',
+      seq INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_seq (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name TEXT NOT NULL,
@@ -322,6 +347,29 @@ function makeDb2() {
       last_done_at TEXT,
       start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE tracks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      status TEXT NOT NULL,
+      refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE track_steps (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      source_label TEXT,
+      content TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      refs TEXT NOT NULL DEFAULT '[]',
+      tags TEXT NOT NULL DEFAULT '[]',
+      seq INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import type { Category, QuickNote, Task, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
 import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
@@ -51,9 +51,34 @@ const quickNote: QuickNote = {
   updatedAt: now,
 };
 
+const track: Track = {
+  id: "track-1",
+  title: "T1 数据地基",
+  status: "active",
+  refs: [],
+  createdAt: now,
+  updatedAt: now,
+};
+
+const trackStep: TrackStep = {
+  id: "step-1",
+  trackId: "track-1",
+  source: "agent",
+  content: "",
+  startedAt: now,
+  endedAt: null,
+  refs: [],
+  tags: ["phase:T1"],
+  seq: 0,
+  createdAt: now,
+  updatedAt: now,
+};
+
 beforeEach(async () => {
   await db.timeEntries.clear();
   await db.tasks.clear();
+  await db.trackSteps.clear();
+  await db.tracks.clear();
   await db.quickNotes.clear();
   await db.syncLog.clear();
   await db.categories.clear();
@@ -65,6 +90,8 @@ describe("exportBackup", () => {
     await db.timeEntries.add(entry);
     await db.tasks.add(task);
     await db.quickNotes.add(quickNote);
+    await db.tracks.add(track);
+    await db.trackSteps.add(trackStep);
 
     const backup = await exportBackup({
       now: () => "2026-05-07T12:30:00.000Z",
@@ -83,6 +110,8 @@ describe("exportBackup", () => {
     // 普通域走通用 domains map，按 table 名键入；速记与任务都在
     expect(backup.domains.tasks).toEqual([task]);
     expect(backup.domains.quick_notes).toEqual([quickNote]);
+    expect(backup.domains.tracks).toEqual([track]);
+    expect(backup.domains.track_steps).toEqual([trackStep]);
 
     // 完整导出始终写齐全部 bundled 域（空的也写成 []）
     for (const domain of BACKUP_BUNDLED_DOMAINS) {
