@@ -6,6 +6,8 @@ covers:
   - packages/server/src/routes/agent-tracks.ts
   - packages/client/src/lib/tracks.ts
   - packages/client/src/lib/tracksView.ts
+  - packages/client/src/lib/settings/trackActionTagsSetting.ts
+  - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/**
 last-reviewed: 2026-06-21
 ---
@@ -13,7 +15,7 @@ last-reviewed: 2026-06-21
 # 任务轨道
 
 > 轨道把复杂、易分支的任务升成一条可监控的状态线。T1 落数据地基；T2 提供 agent 受控 ingest API：建轨道、append 步骤、显式闭合当前步、改状态/元信息，并通过 `requestId` 防重复；T3 提供列表与详情监控面。
-> 不讲轮到我聚合和人机共编交互；这些属于后续 T4-T5。
+> T4 提供「轮到我」聚合:可配置行动标签集 `track.actionTags` + 跨轨道收件箱;不讲人机共编交互(后续 T5)。
 
 ## 承上启下
 
@@ -76,6 +78,17 @@ last-reviewed: 2026-06-21
 
 ## 6. 后续阶段
 
-- actionTags「轮到我」聚合 → T4。
+- actionTags「轮到我」聚合 → 见 §7。
 - `source="user"` 人手共编 → T5。
 - 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。
+
+## 7. 轮到我聚合(T4)
+
+跨轨道收件箱:把所有 `active` 轨道里"当前步命中行动标签"的步骤浮出来,接替已退役的 turn。**零 schema 改动**,纯复用 `TrackStep.tags`。
+
+- **配置(可配置、不写死)**:settings key `track.actionTags.v1`,JSON 字符串数组,包装文件 `lib/settings/trackActionTagsSetting.ts`(经 `setSetting` 同步,走通用 LWW)。`sanitizeActionTags` trim/去空/去重。**未配置(getSetting→null)返回种子 `["等我","待决策","卡住"]`;用户显式清空(存 `"[]"`)返回空数组并尊重**——照 `navVisibleTabsSetting` 的 null-vs-空 惯例。
+- **聚合纯函数(`lib/tracksView.ts`)**:`matchesActionTags(stepTags, actionTags)` = 两侧 trim 后取交集(actionTags 空 → false);`actionableInbox(tracks, stepsByTrack, actionTags)` 扫每个 active 轨道、取 `currentStepId` 那一步、命中即收,按当前步 `startedAt` 升序(等最久优先)。当前步取法复用 `currentStepId`(`endedAt=null` 且 seq 最大,多开口已兜底)。
+- **监控面**:`TracksListPage` 顶部 `SegmentedControl`「全部 | 轮到我 N」(本地 `useState`,不同步)。收件箱条目 `TrackInboxItem` 整行 `Link` 进 `/tracks/:id`,**不展开 RefChip**(RefChip 是 `<a>`,整行 Link 会嵌套非法 HTML;triage 视图点进详情看完整 refs)。空态:actionTags 空 → 引导去 `/settings/tracks`;配了但无命中 → "暂无轮到你的步骤"。
+- **设置页**:`/settings/tracks` → `SettingsTracksPage`,自由文本 chip 编辑(添加/删除),无自动补全。
+
+> turn 死因之一是判据写死成固定枚举;这里反过来——"哪些算该我动"是配置驱动,可加可改,造新 tag 写进配置照样进收件箱。M3(互斥标签组)暂缓,聚合不依赖它。

@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 5826,
+    "chars": 5879,
     "covers": 12
   },
   "docs/evergreen/backup.md": {
@@ -16,7 +16,7 @@
     "covers": 12
   },
   "docs/evergreen/categories-settings/settings-catalog.md": {
-    "chars": 4058,
+    "chars": 4247,
     "covers": 5
   },
   "docs/evergreen/cli.md": {
@@ -28,7 +28,7 @@
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
-    "chars": 17048,
+    "chars": 17129,
     "covers": 27
   },
   "docs/evergreen/design-language.md": {
@@ -84,7 +84,7 @@
     "covers": 5
   },
   "docs/evergreen/tracks.md": {
-    "chars": 3662,
-    "covers": 5
+    "chars": 4941,
+    "covers": 7
   }
 }
