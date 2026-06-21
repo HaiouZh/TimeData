@@ -18,6 +18,7 @@ import {
   DeviceMobile,
   HardDrives,
   Moon,
+  Signpost,
   Tag,
 } from "@phosphor-icons/react";
 import { Icon } from "../components/Icon.js";
@@ -405,6 +406,13 @@ export default function SettingsPage() {
           accent="sky"
           title="底部导航"
           subtitle="选择底部显示的入口"
+        />
+        <SettingsLinkRow
+          to="/settings/tracks"
+          icon={<Icon icon={Signpost} size={20} />}
+          accent="violet"
+          title="轨道行动标签"
+          subtitle="配置「轮到我」收件箱命中的标签"
         />
         <SettingsLinkRow
           to="/settings/data"
