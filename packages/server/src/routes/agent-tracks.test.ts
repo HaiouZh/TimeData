@@ -288,3 +288,80 @@ describe("POST /api/agent/tracks/:id/current-step/close", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("PATCH /api/agent/tracks/:id", () => {
+  beforeEach(() => {
+    seedTrack();
+  });
+
+  it("updates title, summary and refs", async () => {
+    const res = await patch("/api/agent/tracks/track-1", {
+      title: "新标题",
+      summary: "新简介",
+      refs: [{ kind: "url", id: "https://example.test", label: "参考" }],
+    });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      track: { id: "track-1", title: "新标题", summary: "新简介" },
+      closedStep: null,
+    });
+    expect(db.prepare("SELECT title, summary, refs FROM tracks WHERE id = ?").get("track-1")).toMatchObject({
+      title: "新标题",
+      summary: "新简介",
+      refs: JSON.stringify([{ kind: "url", id: "https://example.test", label: "参考" }]),
+    });
+  });
+
+  it("clears summary with summary:null", async () => {
+    db.prepare("UPDATE tracks SET summary = ? WHERE id = ?").run("旧简介", "track-1");
+    const res = await patch("/api/agent/tracks/track-1", { summary: null });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { track: { summary?: string } };
+    expect(Object.hasOwn(body.track, "summary")).toBe(false);
+    expect(db.prepare("SELECT summary FROM tracks WHERE id = ?").get("track-1")).toEqual({ summary: null });
+  });
+
+  it("status=concluded closes the current step (closedAt) and updates track", async () => {
+    seedTrackStep({ id: "open-step", startedAt: "2026-06-21T02:00:00.000Z", seq: 0 });
+    const res = await patch("/api/agent/tracks/track-1", {
+      status: "concluded",
+      closedAt: "2026-06-21T03:00:00.000Z",
+    });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      track: { id: "track-1", status: "concluded" },
+      closedStep: { id: "open-step", endedAt: "2026-06-21T03:00:00.000Z" },
+    });
+    expect(db.prepare("SELECT ended_at FROM track_steps WHERE id = ?").get("open-step")).toEqual({
+      ended_at: "2026-06-21T03:00:00.000Z",
+    });
+    expect(
+      db
+        .prepare("SELECT table_name, record_id, action FROM sync_seq WHERE table_name IN ('track_steps', 'tracks') ORDER BY id")
+        .all(),
+    ).toEqual([
+      { table_name: "track_steps", record_id: "open-step", action: "update" },
+      { table_name: "tracks", record_id: "track-1", action: "update" },
+    ]);
+  });
+
+  it("status=parked keeps the open step open", async () => {
+    seedTrackStep({ id: "open-step", startedAt: "2026-06-21T02:00:00.000Z", seq: 0 });
+    const res = await patch("/api/agent/tracks/track-1", { status: "parked" });
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      track: { id: "track-1", status: "parked" },
+      closedStep: null,
+    });
+    expect(db.prepare("SELECT ended_at FROM track_steps WHERE id = ?").get("open-step")).toEqual({ ended_at: null });
+  });
+
+  it("rejects empty body, closedAt without concluded, unknown field, and 404 for missing track", async () => {
+    expect((await patch("/api/agent/tracks/track-1", {})).status).toBe(400);
+    expect((await patch("/api/agent/tracks/track-1", { closedAt: "2026-06-21T03:00:00.000Z" })).status).toBe(400);
+    expect((await patch("/api/agent/tracks/track-1", { done: true })).status).toBe(400);
+    expect((await patch("/api/agent/tracks/missing", { status: "active" })).status).toBe(404);
+  });
+});

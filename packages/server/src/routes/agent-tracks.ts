@@ -101,6 +101,22 @@ const appendStepSchema = z
 
 const closeStepSchema = z.object({ endedAt: UtcIsoStringSchema.optional() }).strict();
 
+const patchTrackSchema = z
+  .object({
+    title: z.string().trim().min(1).max(500).optional(),
+    summary: z.string().max(5000).nullable().optional(),
+    status: z.enum(["active", "concluded", "parked"]).optional(),
+    refs: RefsSchema.optional(),
+    closedAt: UtcIsoStringSchema.optional(),
+  })
+  .strict()
+  .refine((body) => body.title !== undefined || body.summary !== undefined || body.status !== undefined || body.refs !== undefined, {
+    message: "at least one track field is required",
+  })
+  .refine((body) => body.closedAt === undefined || body.status === "concluded", {
+    message: "closedAt is only valid when status is concluded",
+  });
+
 agentTracks.post("/tracks", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = createTrackSchema.safeParse(rawBody);
@@ -191,6 +207,49 @@ agentTracks.post("/tracks/:id/current-step/close", async (c) => {
 
   applyChangesAndNotify([stepChange("update", closed, now)]);
   return c.json({ ok: true, closedStep: closed });
+});
+
+agentTracks.patch("/tracks/:id", async (c) => {
+  const id = c.req.param("id");
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const parsed = patchTrackSchema.safeParse(rawBody);
+  if (!parsed.success) return c.json(invalidRequest(parsed.error.issues), 400);
+
+  const current = getTrack(id);
+  if (!current) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Track not found" } }, 404);
+
+  const now = new Date().toISOString();
+  const nextBase = {
+    ...current,
+    ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+    ...(parsed.data.status !== undefined ? { status: parsed.data.status } : {}),
+    ...(parsed.data.refs !== undefined ? { refs: parsed.data.refs } : {}),
+    updatedAt: now,
+  };
+  const nextTrack = TrackSchema.parse(
+    parsed.data.summary === null
+      ? { ...nextBase, summary: undefined }
+      : {
+          ...nextBase,
+          ...(parsed.data.summary !== undefined ? { summary: parsed.data.summary } : {}),
+        },
+  );
+
+  const changes: SyncChange[] = [];
+  let closedStep: TrackStep | null = null;
+  if (parsed.data.status === "concluded") {
+    const openStep = latestOpenStep(id);
+    if (openStep) {
+      const closed = closeStep(openStep, parsed.data.closedAt ?? now, now);
+      if ("error" in closed) return c.json({ ok: false, error: { code: "INVALID_REQUEST", message: closed.error } }, 400);
+      closedStep = closed;
+      changes.push(stepChange("update", closedStep, now));
+    }
+  }
+  changes.push(trackChange("update", nextTrack, now));
+
+  applyChangesAndNotify(changes);
+  return c.json({ ok: true, track: nextTrack, closedStep });
 });
 
 export default agentTracks;
