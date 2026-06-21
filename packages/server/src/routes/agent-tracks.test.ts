@@ -227,6 +227,30 @@ describe("POST /api/agent/tracks/:id/steps", () => {
     expect(reversed.status).toBe(400);
     expect(db.prepare("SELECT id FROM track_steps WHERE id IN ('step-y', 'step-z')").all()).toEqual([]);
   });
+
+  it("rejects a single step whose endedAt precedes its own startedAt with 400, not 500", async () => {
+    const res = await post("/api/agent/tracks/track-1/steps", {
+      requestId: "step-self-reversed",
+      content: "x",
+      startedAt: "2026-06-21T05:00:00.000Z",
+      endedAt: "2026-06-21T04:00:00.000Z",
+    });
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "INVALID_REQUEST" } });
+    expect(db.prepare("SELECT id FROM track_steps WHERE id = 'step-self-reversed'").all()).toEqual([]);
+  });
+
+  it("rejects reusing a step requestId across tracks with 409", async () => {
+    seedTrack("track-2");
+    const first = await post("/api/agent/tracks/track-1/steps", { requestId: "shared-step", content: "在 track-1" });
+    expect(first.status).toBe(201);
+    const cross = await post("/api/agent/tracks/track-2/steps", {
+      requestId: "shared-step",
+      content: "想复用到 track-2",
+    });
+    expect(cross.status).toBe(409);
+    await expect(cross.json()).resolves.toMatchObject({ ok: false, error: { code: "CONFLICT" } });
+  });
 });
 
 describe("POST /api/agent/tracks/:id/current-step/close", () => {

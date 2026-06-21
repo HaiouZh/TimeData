@@ -160,6 +160,10 @@ agentTracks.post("/tracks/:id/steps", async (c) => {
 
   const now = new Date().toISOString();
   const startedAt = parsed.data.startedAt ?? now;
+  const endedAt = parsed.data.endedAt ?? null;
+  if (endedAt !== null && endedAt < startedAt) {
+    return c.json(invalidRequest({ startedAt, endedAt }, "endedAt cannot be before startedAt"), 400);
+  }
   const step = TrackStepSchema.parse({
     id: stepId,
     trackId,
@@ -167,7 +171,7 @@ agentTracks.post("/tracks/:id/steps", async (c) => {
     ...(parsed.data.sourceLabel ? { sourceLabel: parsed.data.sourceLabel } : {}),
     content: parsed.data.content,
     startedAt,
-    endedAt: parsed.data.endedAt ?? null,
+    endedAt,
     refs: parsed.data.refs ?? [],
     tags: parsed.data.tags ?? [],
     seq: nextStepSeq(trackId),
