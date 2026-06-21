@@ -221,7 +221,7 @@ TIMEDATA_TOKEN="$AGENT_TOKEN" timedata task-tag --id <taskId> --tags "agent,idea
 
 - `startedAt` / `endedAt` 是 UTC ISO（`...Z`，毫秒精度）。省略 `startedAt` 用 server 当前时刻；`endedAt` 省略或 `null` 表示开口当前步。
 - `refs` 是 `{ kind, id, label? }` 数组（如 `{"kind":"commit","id":"abc123"}` / `{"kind":"url","id":"https://..."}`），指向各领域的数据，轨道只存指针不存内容。
-- `tags` 用于分类与 phase 分组，也是「轮到我」聚合的判据（见末尾说明）。
+- `tags` 用于分类、phase 分组与状态标签聚合（见末尾说明）。
 - `requestId` 同时是幂等键：建轨道时作轨道 id，append 步骤时作步骤 id。
 
 判断成功看 `ok`。成功体形状例：`{ "ok": true, "track": {...}, "idempotent": false }`（建轨道）、`{ "ok": true, "step": {...}, "closedStep": {...}|null, "idempotent": false }`（append）。
@@ -250,10 +250,10 @@ curl -X POST "$BASE/tracks/track-refactor-auth/steps" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"sourceLabel":"codex","content":"梳理 token 校验路径","refs":[{"kind":"commit","id":"abc123"}]}'
 
-# 再 append 一步 → 自动闭合上一步；打 待决策 让它进用户「轮到我」收件箱
+# 再 append 一步 -> 自动闭合上一步；打 等我 把接力棒交回人
 curl -X POST "$BASE/tracks/track-refactor-auth/steps" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"sourceLabel":"codex","content":"AGENT_TOKEN 作用域要不要拆，等你拍","tags":["待决策"]}'
+  -d '{"sourceLabel":"codex","content":"AGENT_TOKEN 作用域拆分已完成，等你验收","tags":["等我"]}'
 
 # 收束轨道（status=concluded 顺手闭合开口步）
 curl -X PATCH "$BASE/tracks/track-refactor-auth" \
@@ -261,7 +261,7 @@ curl -X PATCH "$BASE/tracks/track-refactor-auth" \
   -d '{"status":"concluded"}'
 ```
 
-> 「轮到我」机制：active 轨道的**当前步** `tags` 命中用户配置的行动标签（默认 `等我` / `待决策` / `卡住`）时，会浮进 Web 端「轮到我」收件箱。agent 用 tag 把决策权交回给人，人在监控面拍板后，agent 再 append 后续步或 `PATCH` 改状态。
+> 状态面板机制：Web 端扫描 active 轨道的最新一步（最大 `seq`，不分开口/闭合），按 tags 聚合计数并支持 OR 筛选。agent 完成任务或需要人拍板时 append 一个新步骤，打 `等我` / `待决策` / `卡住` 等用户配置中的状态标签；推荐省略 `endedAt` 形成开口步，让“棒在你手里”保持可见。
 
 ## 7. 反例清单
 
