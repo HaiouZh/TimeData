@@ -59,6 +59,19 @@ export interface PlanUserStepResult {
   created: TrackStep;
 }
 
+export interface AppendUserStepInput {
+  trackId: string;
+  content: string;
+  mode: UserStepMode;
+  tags?: string[];
+  now?: Date;
+}
+
+export interface SetTrackStatusResult {
+  track: Track;
+  closedStep: TrackStep | null;
+}
+
 function nowIso(now?: Date): string {
   return (now ?? new Date()).toISOString();
 }
@@ -245,6 +258,95 @@ export function planUserStep(steps: TrackStep[], input: PlanUserStepInput): Plan
   });
 
   return { closed, created };
+}
+
+export async function appendUserStep(input: AppendUserStepInput): Promise<PlanUserStepResult> {
+  const timestamp = nowIso(input.now);
+  const content = trimRequired(input.content, "步骤内容不能为空");
+  let result: PlanUserStepResult | null = null;
+
+  await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
+    const track = await db.tracks.get(input.trackId);
+    if (!track) throw new Error("轨道不存在");
+    const steps = (await db.trackSteps.where("trackId").equals(input.trackId).toArray()).map((row) =>
+      TrackStepSchema.parse(row),
+    );
+    result = planUserStep(steps, {
+      trackId: input.trackId,
+      id: uuid(),
+      content,
+      mode: input.mode,
+      tags: input.tags ?? [],
+      timestamp,
+    });
+    if (result.closed) {
+      await db.trackSteps.put(result.closed);
+      await recordSyncLog("track_steps", result.closed.id, "update", timestamp);
+    }
+    await db.trackSteps.add(result.created);
+    await recordSyncLog("track_steps", result.created.id, "create", timestamp);
+  });
+
+  if (!result) throw new Error("步骤写入失败");
+  return result;
+}
+
+export async function closeCurrentStep(trackId: string, options?: { now?: Date }): Promise<TrackStep> {
+  const timestamp = nowIso(options?.now);
+  let closed: TrackStep | null = null;
+
+  await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
+    const track = await db.tracks.get(trackId);
+    if (!track) throw new Error("轨道不存在");
+    const steps = (await db.trackSteps.where("trackId").equals(trackId).toArray()).map((row) =>
+      TrackStepSchema.parse(row),
+    );
+    const open = latestOpenStep(steps);
+    if (!open) throw new Error("轨道没有进行中的步骤");
+    if (timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
+    closed = TrackStepSchema.parse({ ...open, endedAt: timestamp, updatedAt: timestamp });
+    await db.trackSteps.put(closed);
+    await recordSyncLog("track_steps", closed.id, "update", timestamp);
+  });
+
+  if (!closed) throw new Error("闭合失败");
+  return closed;
+}
+
+export async function setTrackStatus(
+  trackId: string,
+  status: Track["status"],
+  options?: { now?: Date },
+): Promise<SetTrackStatusResult> {
+  const timestamp = nowIso(options?.now);
+  let out: SetTrackStatusResult | null = null;
+
+  await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
+    const existing = await db.tracks.get(trackId);
+    if (!existing) throw new Error("轨道不存在");
+
+    let closedStep: TrackStep | null = null;
+    if (status === "concluded") {
+      const steps = (await db.trackSteps.where("trackId").equals(trackId).toArray()).map((row) =>
+        TrackStepSchema.parse(row),
+      );
+      const open = latestOpenStep(steps);
+      if (open) {
+        if (timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
+        closedStep = TrackStepSchema.parse({ ...open, endedAt: timestamp, updatedAt: timestamp });
+        await db.trackSteps.put(closedStep);
+        await recordSyncLog("track_steps", closedStep.id, "update", timestamp);
+      }
+    }
+
+    const next = TrackSchema.parse({ ...existing, refs: existing.refs ?? [], status, updatedAt: timestamp });
+    await db.tracks.put(next);
+    await recordSyncLog("tracks", next.id, "update", timestamp);
+    out = { track: next, closedStep };
+  });
+
+  if (!out) throw new Error("状态更新失败");
+  return out;
 }
 
 export async function getTrack(id: string): Promise<Track | undefined> {

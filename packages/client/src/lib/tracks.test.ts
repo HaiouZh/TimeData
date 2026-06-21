@@ -367,6 +367,172 @@ describe("track local data layer", () => {
     await expect(getTrack("missing")).resolves.toBeUndefined();
     await expect(getTrack("invalid")).resolves.toBeUndefined();
   });
+
+  it("appendUserStep open 模式:闭合开口步 + 建当前步,syncLog 先 update 后 create", async () => {
+    const track = await addTrack({ title: "T5", now });
+    const oldOpen = await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      sourceLabel: "codex",
+      content: "正在分析",
+      startedAt: now.toISOString(),
+      endedAt: null,
+      now,
+    });
+    await db.syncLog.clear();
+
+    const { closed, created } = await appendUserStep({
+      trackId: track.id,
+      content: "我下场推进",
+      mode: "open",
+      now: later,
+    });
+
+    expect(closed).toMatchObject({ id: oldOpen.id, endedAt: later.toISOString() });
+    expect(created).toMatchObject({ source: "user", content: "我下场推进", endedAt: null, seq: 1, tags: [] });
+    await expect(db.trackSteps.get(oldOpen.id)).resolves.toMatchObject({ endedAt: later.toISOString() });
+    const openLogs = await db.syncLog.toArray();
+    expect(openLogs).toHaveLength(2);
+    expect(openLogs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "track_steps",
+          recordId: oldOpen.id,
+          action: "update",
+          timestamp: later.toISOString(),
+        }),
+        expect.objectContaining({
+          tableName: "track_steps",
+          recordId: created.id,
+          action: "create",
+          timestamp: later.toISOString(),
+        }),
+      ]),
+    );
+  });
+
+  it("appendUserStep instant 模式:建零历时步,带 tag,不闭合开口步,syncLog 仅 create", async () => {
+    const track = await addTrack({ title: "T5", now });
+    const open = await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "继续执行",
+      startedAt: now.toISOString(),
+      endedAt: null,
+      now,
+    });
+    await db.syncLog.clear();
+
+    const { closed, created } = await appendUserStep({
+      trackId: track.id,
+      content: "记个批注",
+      mode: "instant",
+      tags: ["批注"],
+      now: later,
+    });
+
+    expect(closed).toBeNull();
+    expect(created).toMatchObject({
+      source: "user",
+      startedAt: later.toISOString(),
+      endedAt: later.toISOString(),
+      tags: ["批注"],
+      seq: 1,
+    });
+    await expect(db.trackSteps.get(open.id)).resolves.toMatchObject({ endedAt: null });
+    await expect(db.syncLog.toArray()).resolves.toMatchObject([
+      { tableName: "track_steps", recordId: created.id, action: "create", timestamp: later.toISOString() },
+    ]);
+  });
+
+  it("appendUserStep 拒空内容与缺失轨道", async () => {
+    const track = await addTrack({ title: "T5", now });
+    await expect(appendUserStep({ trackId: track.id, content: "   ", mode: "open", now })).rejects.toThrow(
+      "步骤内容不能为空",
+    );
+    await expect(appendUserStep({ trackId: "missing", content: "x", mode: "open", now })).rejects.toThrow("轨道不存在");
+  });
+
+  it("closeCurrentStep 闭合最新开口步并写 update syncLog;无开口步报错", async () => {
+    const track = await addTrack({ title: "T5", now });
+    const open = await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "进行中",
+      startedAt: now.toISOString(),
+      endedAt: null,
+      now,
+    });
+    await db.syncLog.clear();
+
+    const closed = await closeCurrentStep(track.id, { now: later });
+
+    expect(closed).toMatchObject({ id: open.id, endedAt: later.toISOString() });
+    await expect(db.trackSteps.get(open.id)).resolves.toMatchObject({ endedAt: later.toISOString() });
+    await expect(db.syncLog.toArray()).resolves.toMatchObject([
+      { tableName: "track_steps", recordId: open.id, action: "update", timestamp: later.toISOString() },
+    ]);
+    await expect(closeCurrentStep(track.id, { now: later })).rejects.toThrow("轨道没有进行中的步骤");
+  });
+
+  it("setTrackStatus parked 改状态但不闭合开口步", async () => {
+    const track = await addTrack({ title: "T5", now });
+    const open = await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "进行中",
+      startedAt: now.toISOString(),
+      endedAt: null,
+      now,
+    });
+    await db.syncLog.clear();
+
+    const { track: updated, closedStep } = await setTrackStatus(track.id, "parked", { now: later });
+
+    expect(updated).toMatchObject({ status: "parked", updatedAt: later.toISOString() });
+    expect(closedStep).toBeNull();
+    await expect(db.trackSteps.get(open.id)).resolves.toMatchObject({ endedAt: null });
+    await expect(db.syncLog.toArray()).resolves.toMatchObject([
+      { tableName: "tracks", recordId: track.id, action: "update", timestamp: later.toISOString() },
+    ]);
+  });
+
+  it("setTrackStatus concluded 顺手闭合开口步,syncLog 先步 update 后轨道 update", async () => {
+    const track = await addTrack({ title: "T5", now });
+    const open = await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "进行中",
+      startedAt: now.toISOString(),
+      endedAt: null,
+      now,
+    });
+    await db.syncLog.clear();
+
+    const { track: updated, closedStep } = await setTrackStatus(track.id, "concluded", { now: later });
+
+    expect(updated).toMatchObject({ status: "concluded" });
+    expect(closedStep).toMatchObject({ id: open.id, endedAt: later.toISOString() });
+    await expect(db.trackSteps.get(open.id)).resolves.toMatchObject({ endedAt: later.toISOString() });
+    const concludedLogs = await db.syncLog.toArray();
+    expect(concludedLogs).toHaveLength(2);
+    expect(concludedLogs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "track_steps",
+          recordId: open.id,
+          action: "update",
+          timestamp: later.toISOString(),
+        }),
+        expect.objectContaining({
+          tableName: "tracks",
+          recordId: track.id,
+          action: "update",
+          timestamp: later.toISOString(),
+        }),
+      ]),
+    );
+  });
 });
 
 const T0 = "2026-06-21T08:00:00.000Z"; // = now.toISOString()
