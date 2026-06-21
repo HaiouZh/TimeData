@@ -7,7 +7,7 @@
 - **写入 TimeData 数据只能通过服务端受控 API；CLI 是其中一个客户端。**
 - **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）和 `task-done/task-tag`（任务完成与 tags 回写）。**
 - **授权 agent 可直连 `POST /api/quick-notes` 投递速记；CLI `notes` 仍只读。**
-- **授权 agent 可直连 `/api/agent/tracks*` 写任务轨道；CLI 暂未提供轨道命令。**
+- **授权 agent 可直连 `/api/agent/tracks*` 写任务轨道（建轨道 / append 步骤 / 闭合当前步 / 改状态）；CLI 暂未提供轨道命令。端点契约与示例见 §6.7。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
 - 读取速记用 `timedata notes`；它是只读命令，不写 quick_notes。
 - CLI 只通过 server HTTP API 工作，服务端做最终校验。
@@ -54,7 +54,7 @@
 
 - 如果是授权 agent 投递 quick note，可用 `POST /api/quick-notes`，请求必须带 `Authorization: Bearer <AUTH_TOKEN>` header，body 只提交 `text`、可选 `sourceLabel`、可选 `occurredAt`；服务端会强制 `source="agent"`。
 - 如果是授权 agent 回写任务完成或 tags，优先使用 `AGENT_TOKEN` 调 `timedata task-done` / `task-tag`；这些命令只命中 `/api/agent/*` 的封闭动作集合。
-- 授权 agent 记录长周期工作状态，可用 `AGENT_TOKEN` 调 `/api/agent/tracks*`：建轨道、append agent 步骤、闭合当前步、改轨道状态。请求体可带 `requestId` 防重发重复写入。仍不代表 AI 可直接写 DB。
+- 授权 agent 记录长周期工作状态，可用 `AGENT_TOKEN` 调 `/api/agent/tracks*`：建轨道、append agent 步骤、闭合当前步、改轨道状态。请求体可带 `requestId` 防重发重复写入；完整端点、请求体字段与 curl 示例见 §6.7。仍不代表 AI 可直接写 DB。
 - 如果不是已明确授权的 agent 集成，CLI 不能写入速记；用户可以用 Web UI，或先新增受控 server API / CLI 命令后再使用。
 - 修改、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
 
@@ -203,6 +203,65 @@ curl -X POST "$TIMEDATA_SERVER_URL/api/quick-notes" \
 ```bash
 TIMEDATA_TOKEN="$AGENT_TOKEN" timedata task-tag --id <taskId> --tags "agent,idea"
 ```
+
+### 6.7 授权 agent 写任务轨道
+
+轨道用于让 agent 记录长周期、易分支工作的状态线（设计见 [`docs/evergreen/tracks.md`](evergreen/tracks.md)）。CLI 暂无 track 命令，授权 agent 直连 `/api/agent/tracks*`，鉴权同其它 agent 端点：`Authorization: Bearer $TIMEDATA_TOKEN`（token 用 `AUTH_TOKEN` 或窄域 `AGENT_TOKEN`）。服务端强制 `source="agent"`，调用方不能覆盖。
+
+端点（前缀 `/api/agent`）：
+
+| 方法 | 路径 | body（✱必填 / 其余可选） | 行为 |
+|---|---|---|---|
+| POST | `/tracks` | `title`✱、`summary`、`refs`、`status`、`requestId` | 建轨道。`requestId` 作轨道 id 幂等，重发返回已有记录并标 `idempotent:true`。默认 `status:"active"`。 |
+| POST | `/tracks/:id/steps` | `content`✱、`sourceLabel`、`startedAt`、`endedAt`、`refs`、`tags`、`requestId` | append `source="agent"` 步；**自动闭合上一开口步**（把它的 `endedAt` 设为新步 `startedAt`）。 |
+| POST | `/tracks/:id/current-step/close` | `endedAt` | 只闭合当前开口步，不前进、不改轨道状态。 |
+| PATCH | `/tracks/:id` | `title`/`summary`/`status`/`refs`（至少一项）、`closedAt` | 改状态或元信息；`status:"concluded"` 顺手闭合开口步。 |
+
+字段说明：
+
+- `startedAt` / `endedAt` 是 UTC ISO（`...Z`，毫秒精度）。省略 `startedAt` 用 server 当前时刻；`endedAt` 省略或 `null` 表示开口当前步。
+- `refs` 是 `{ kind, id, label? }` 数组（如 `{"kind":"commit","id":"abc123"}` / `{"kind":"url","id":"https://..."}`），指向各领域的数据，轨道只存指针不存内容。
+- `tags` 用于分类与 phase 分组，也是「轮到我」聚合的判据（见末尾说明）。
+- `requestId` 同时是幂等键：建轨道时作轨道 id，append 步骤时作步骤 id。
+
+判断成功看 `ok`。成功体形状例：`{ "ok": true, "track": {...}, "idempotent": false }`（建轨道）、`{ "ok": true, "step": {...}, "closedStep": {...}|null, "idempotent": false }`（append）。
+
+错误码（顶层 `error.code`）：
+
+| 错误码 | HTTP | 含义 / 处理 |
+|---|---:|---|
+| `INVALID_REQUEST` | 400 | body 不合法，或 `endedAt` 早于 `startedAt` / 开口步起点。修正参数后重试。 |
+| `NOT_FOUND` | 404 | 轨道 id 不存在。先建轨道或核对 id。 |
+| `CONFLICT` | 409 | `requestId` 已属于别的轨道；或 close 时该轨道无开口步。 |
+| `AUTH_FAILED` | 401 | 按 `/api/agent/*` 通用规则处理，不要猜 token。 |
+
+端到端示例：
+
+```bash
+TOKEN="$AGENT_TOKEN"; BASE="$TIMEDATA_SERVER_URL/api/agent"
+
+# 建轨道（requestId 幂等）
+curl -X POST "$BASE/tracks" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"requestId":"track-refactor-auth","title":"重构鉴权中间件"}'
+
+# append 一步（开口当前步，带产物 ref）
+curl -X POST "$BASE/tracks/track-refactor-auth/steps" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"sourceLabel":"codex","content":"梳理 token 校验路径","refs":[{"kind":"commit","id":"abc123"}]}'
+
+# 再 append 一步 → 自动闭合上一步；打 待决策 让它进用户「轮到我」收件箱
+curl -X POST "$BASE/tracks/track-refactor-auth/steps" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"sourceLabel":"codex","content":"AGENT_TOKEN 作用域要不要拆，等你拍","tags":["待决策"]}'
+
+# 收束轨道（status=concluded 顺手闭合开口步）
+curl -X PATCH "$BASE/tracks/track-refactor-auth" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"status":"concluded"}'
+```
+
+> 「轮到我」机制：active 轨道的**当前步** `tags` 命中用户配置的行动标签（默认 `等我` / `待决策` / `卡住`）时，会浮进 Web 端「轮到我」收件箱。agent 用 tag 把决策权交回给人，人在监控面拍板后，agent 再 append 后续步或 `PATCH` 改状态。
 
 ## 7. 反例清单
 
