@@ -14,8 +14,7 @@ last-reviewed: 2026-06-21
 
 # 任务轨道
 
-> 轨道把复杂、易分支的任务升成一条可监控的状态线。T1 落数据地基；T2 提供 agent 受控 ingest API：建轨道、append 步骤、显式闭合当前步、改状态/元信息，并通过 `requestId` 防重复；T3 提供列表与详情监控面。
-> T4 提供「轮到我」聚合:可配置行动标签集 `track.actionTags` + 跨轨道收件箱;不讲人机共编交互(后续 T5)。
+> 轨道把复杂、易分支的任务升成一条可监控的状态线。T1 落数据地基；T2 提供 agent 受控 ingest API：建轨道、append 步骤、显式闭合当前步、改状态/元信息，并通过 `requestId` 防重复；T3 提供列表与详情监控面；T4 提供「轮到我」聚合（可配置行动标签集 `track.actionTags` + 跨轨道收件箱）；T5 让人在详情页下场——加一步(开口执行/即时点)、闭合当前步、切轨道状态。
 
 ## 承上启下
 
@@ -64,7 +63,7 @@ last-reviewed: 2026-06-21
 - `POST /api/agent/tracks/:id/current-step/close`：只闭合当前步，不前进、不改轨道状态；无开口步 409。
 - `PATCH /api/agent/tracks/:id`：改 `status/title/summary/refs`；`concluded` 自动闭合当前步，`parked`/`active` 保留当前步。
 
-这些端点与任务 agent 回写一样走 `applyChange()` + `sync_seq` + `notifySyncChange()`，前台客户端经普通 sync stream 秒级感知。不写 TimeEntry、不扩 force-push、不替代后续 T5 的人手共编入口。
+这些端点与任务 agent 回写一样走 `applyChange()` + `sync_seq` + `notifySyncChange()`，前台客户端经普通 sync stream 秒级感知。不写 TimeEntry、不扩 force-push；人手共编入口见 §6。
 
 ## 5. 监控面(T3)
 
@@ -76,11 +75,16 @@ last-reviewed: 2026-06-21
 列表用 `CollapsibleSection` 折叠 concluded/parked,顶部最简新建只收标题走 `addTrack`;
 详情倒序时间线每步显示 source 徽章、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
 
-## 6. 后续阶段
+## 6. 人手共编(T5)
 
-- actionTags「轮到我」聚合 → 见 §7。
-- `source="user"` 人手共编 → T5。
-- 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。
+详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手写入统一成一个原语 `appendUserStep`,两种模式:
+
+- **开口执行(mode=open)**:开一个 `source="user"`、`endedAt=null` 的当前步,并镜像 agent 自动闭合最新开口步(守卫闭合时间不早于开口步 `startedAt`)。表示"我下场做这段"。
+- **即时点(mode=instant)**:`startedAt===endedAt` 的零历时闭合步,**不动**当前开口步。"决策 / 批注 / 提醒"是这一步上的预设 `tags`(开放扩展,非写死功能、非字段),`isDecisionStep` 据 tag 做视觉分流。
+
+另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。这些都只写 Dexie + `syncLog`,UI 写入成功后调 `syncAfterWrite()`,由普通本地优先同步推 server;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
+
+即时点的 `seq` 会晚于当前开口步,故 `tracksView` 把当前开口步钉在时间线顶部,`trackProgressSummary` 也按开口步 `seq+1` 显示「第 N 步」,不被即时点抬高。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
 
 ## 7. 轮到我聚合(T4)
 
@@ -92,3 +96,8 @@ last-reviewed: 2026-06-21
 - **设置页**:`/settings/tracks` → `SettingsTracksPage`,自由文本 chip 编辑(添加/删除),无自动补全。
 
 > turn 死因之一是判据写死成固定枚举;这里反过来——"哪些算该我动"是配置驱动,可加可改,造新 tag 写进配置照样进收件箱。M3(互斥标签组)暂缓,聚合不依赖它。
+
+## 8. 后续阶段
+
+- 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器、时间统计桥(历时聚合进 Stats)。
+- 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。
