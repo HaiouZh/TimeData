@@ -100,10 +100,13 @@ describe("tracksView pure helpers", () => {
     expect(isDecisionStep(step({ id: "c", seq: 0, source: "user", content: "做个决策", tags: [] }))).toBe(false);
   });
 
-  it("isLinkRef only treats url kind or http(s) ids as external links", () => {
+  it("isLinkRef only treats http(s) ids as external links", () => {
     expect(isLinkRef({ kind: "url", id: "https://x.test" } as Ref)).toBe(true);
     expect(isLinkRef({ kind: "note", id: "http://x.test" } as Ref)).toBe(true);
     expect(isLinkRef({ kind: "task", id: "task-1" } as Ref)).toBe(false);
     expect(isLinkRef({ kind: "commit", id: "abc123" } as Ref)).toBe(false);
+    // 协议白名单:危险协议或缺协议的 url 型 ref 都不放行,杜绝 javascript: 进 href
+    expect(isLinkRef({ kind: "url", id: "javascript:alert(1)" } as Ref)).toBe(false);
+    expect(isLinkRef({ kind: "url", id: "x.test" } as Ref)).toBe(false);
   });
 });

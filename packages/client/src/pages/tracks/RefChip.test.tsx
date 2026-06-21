@@ -35,4 +35,10 @@ describe("RefChip", () => {
     const host = await mount({ kind: "commit", id: "abc123" });
     expect(host.textContent).toContain("abc123");
   });
+
+  it("never renders an anchor for a non-http(s) (e.g. javascript:) id", async () => {
+    const host = await mount({ kind: "url", id: "javascript:alert(1)", label: "坏链" });
+    expect(host.querySelector("a")).toBeNull();
+    expect(host.textContent).toContain("坏链");
+  });
 });

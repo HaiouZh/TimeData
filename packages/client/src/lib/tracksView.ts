@@ -67,6 +67,9 @@ export function isDecisionStep(step: TrackStep): boolean {
   return step.tags.some((tag) => DECISION_TAGS.has(tag));
 }
 
+// 外链判定:仅 id 为 http(s) 才算可点外链。kind 不参与放行——url 型 ref 的 id 同样须带 http(s) 协议。
+// 用协议白名单而非信任 kind,避免 javascript:/data: 等危险协议被塞进 RefChip 的 href 触发自 XSS
+// (与 quick-notes 经 rehype-sanitize 处理用户 URL 的安全姿态一致)。
 export function isLinkRef(ref: Ref): boolean {
-  return ref.kind === "url" || /^https?:\/\//.test(ref.id);
+  return /^https?:\/\//i.test(ref.id);
 }
