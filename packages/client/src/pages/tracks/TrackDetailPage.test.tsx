@@ -18,6 +18,7 @@ beforeEach(async () => {
   await db.open();
   await db.tracks.clear();
   await db.trackSteps.clear();
+  await db.settings.clear();
   await db.syncLog.clear();
   syncAfterWriteMock.mockClear();
 });
@@ -80,7 +81,19 @@ async function seedTrack() {
 }
 
 function buttonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
-  return [...host.querySelectorAll("button")].find((b) => b.textContent === text) ?? null;
+  return [...host.querySelectorAll("button")].find((b) => b.textContent === text || b.getAttribute("aria-label") === text) ?? null;
+}
+
+async function typeInput(host: HTMLElement, label: string, value: string): Promise<void> {
+  await act(async () => {
+    const input = host.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(
+      input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 async function typeStep(host: HTMLElement, value: string): Promise<void> {
@@ -172,6 +185,47 @@ describe("TrackDetailPage", () => {
     expect(note).toMatchObject({ source: "user", tags: ["批注"] });
     expect(note?.startedAt).toBe(note?.endedAt);
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates title and summary through the existing updateTrack path", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "全马破三");
+
+    await clickButton(host, "编辑轨道");
+    await typeInput(host, "轨道标题", "标签体系退役");
+    await typeInput(host, "轨道摘要", "沉淀为 agent 轨道");
+    await clickButton(host, "保存轨道");
+
+    const updated = await getTrack(track.id);
+    expect(updated).toMatchObject({ title: "标签体系退役", summary: "沉淀为 agent 轨道" });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears summary by saving an empty summary field", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "base→build→peak");
+
+    await clickButton(host, "编辑轨道");
+    await typeInput(host, "轨道摘要", "   ");
+    await clickButton(host, "保存轨道");
+
+    const updated = await getTrack(track.id);
+    expect(updated?.summary).toBeUndefined();
+  });
+
+  it("passes configured status tags into the step composer", async () => {
+    await db.settings.put({
+      key: "track.actionTags.v1",
+      value: JSON.stringify(["等我", "agent在做"]),
+      updatedAt: now.toISOString(),
+    });
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "#agent在做");
+    expect(host.textContent).toContain("#等我");
+    expect(host.textContent).toContain("#agent在做");
   });
 
   it("闭合当前步按钮收束开口步", async () => {

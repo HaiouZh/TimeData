@@ -1,9 +1,11 @@
-import { ArrowLeft } from "@phosphor-icons/react";
+import { ArrowLeft, Check, PencilSimple, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
-import { appendUserStep, closeCurrentStep, getTrack, listTrackSteps, setTrackStatus } from "../../lib/tracks.js";
+import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import { appendUserStep, closeCurrentStep, getTrack, listTrackSteps, setTrackStatus, updateTrack } from "../../lib/tracks.js";
 import { currentStepId } from "../../lib/tracksView.js";
 import { RefChip } from "./RefChip.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
@@ -22,9 +24,19 @@ export default function TrackDetailPage() {
   const track = useLiveQuery(async () => (await getTrack(id)) ?? null, [id]);
   const steps = useLiveQuery(() => listTrackSteps(id), [id], []);
   const { syncAfterWrite } = useSyncContext();
+  const actionTags = useTrackActionTags();
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [summaryDraft, setSummaryDraft] = useState("");
 
   const isActive = track != null && track.status === "active";
   const hasOpenStep = currentStepId(steps) !== null;
+
+  useEffect(() => {
+    if (!track || editingMeta) return;
+    setTitleDraft(track.title);
+    setSummaryDraft(track.summary ?? "");
+  }, [editingMeta, track]);
 
   async function addStep(draft: StepDraft): Promise<void> {
     if (!track) return;
@@ -44,6 +56,24 @@ export default function TrackDetailPage() {
     syncAfterWrite();
   }
 
+  async function saveMeta(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!track) return;
+    await updateTrack(track.id, {
+      title: titleDraft,
+      summary: summaryDraft.trim() ? summaryDraft : null,
+    });
+    syncAfterWrite();
+    setEditingMeta(false);
+  }
+
+  function cancelMetaEdit(): void {
+    if (!track) return;
+    setTitleDraft(track.title);
+    setSummaryDraft(track.summary ?? "");
+    setEditingMeta(false);
+  }
+
   return (
     <div className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
@@ -58,19 +88,66 @@ export default function TrackDetailPage() {
         ) : (
           <>
             <header className="mb-3 rounded-card border border-border bg-surface p-4">
-              <div className="flex items-center gap-2">
-                <h1 className="break-words text-lg font-medium text-ink">{track.title}</h1>
-                <span className="rounded-pill bg-surface-hover px-2 py-0.5 text-xs text-ink-2">
-                  {STATUS_LABEL[track.status] ?? track.status}
-                </span>
-              </div>
-              {track.summary && <p className="mt-1 text-sm text-ink-2">{track.summary}</p>}
-              {track.refs.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {track.refs.map((refItem) => (
-                    <RefChip key={`${refItem.kind}:${refItem.id}`} refItem={refItem} />
-                  ))}
-                </div>
+              {editingMeta ? (
+                <form onSubmit={(event) => void saveMeta(event)} className="space-y-2">
+                  <input
+                    value={titleDraft}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    aria-label="轨道标题"
+                    className="w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <textarea
+                    value={summaryDraft}
+                    onChange={(event) => setSummaryDraft(event.target.value)}
+                    aria-label="轨道摘要"
+                    rows={2}
+                    className="w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm leading-6 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelMetaEdit}
+                      className="inline-flex items-center gap-1 rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 hover:text-ink"
+                    >
+                      <Icon icon={X} size={16} />
+                      取消
+                    </button>
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-1 rounded-ctl bg-accent px-3 py-1.5 text-sm text-page"
+                    >
+                      <Icon icon={Check} size={16} />
+                      保存轨道
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h1 className="break-words text-lg font-medium text-ink">{track.title}</h1>
+                      {track.summary && <p className="mt-1 text-sm text-ink-2">{track.summary}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingMeta(true)}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated text-ink-2 hover:text-accent"
+                      aria-label="编辑轨道"
+                    >
+                      <Icon icon={PencilSimple} size={16} />
+                    </button>
+                    <span className="rounded-pill bg-surface-hover px-2 py-0.5 text-xs text-ink-2">
+                      {STATUS_LABEL[track.status] ?? track.status}
+                    </span>
+                  </div>
+                  {track.refs.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {track.refs.map((refItem) => (
+                        <RefChip key={`${refItem.kind}:${refItem.id}`} refItem={refItem} />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
               <div className="mt-3 inline-flex rounded-ctl bg-surface-elevated p-0.5">
                 {STATUS_ORDER.map((item) => (
@@ -88,7 +165,7 @@ export default function TrackDetailPage() {
                 ))}
               </div>
             </header>
-            {isActive && <StepComposer onSubmit={(draft) => void addStep(draft)} />}
+            {isActive && <StepComposer onSubmit={(draft) => void addStep(draft)} statusTags={actionTags} />}
             {isActive && hasOpenStep && (
               <button
                 type="button"
