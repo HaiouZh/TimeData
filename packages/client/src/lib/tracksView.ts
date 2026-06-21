@@ -124,11 +124,6 @@ export function stepSourceText(step: TrackStep): string {
   return step.sourceLabel ?? "agent";
 }
 
-export interface InboxEntry {
-  track: Track;
-  step: TrackStep;
-}
-
 export interface TrackStatusFacet {
   tag: string;
   count: number;
@@ -180,33 +175,4 @@ export function filterTracksByStatusTags(
     if (!step) return false;
     return uniqueNormalizedTags(step.tags).some((tag) => selected.has(tag));
   });
-}
-
-// 「轮到我」判据:当前步 tags 与可配置 actionTags 取交集(两侧 trim)。actionTags 空 → 永不命中。
-export function matchesActionTags(stepTags: string[], actionTags: string[]): boolean {
-  if (actionTags.length === 0) return false;
-  const wanted = new Set(actionTags.map((t) => t.trim()).filter(Boolean));
-  return stepTags.some((t) => wanted.has(t.trim()));
-}
-
-// 跨轨道收件箱:扫所有 active 轨道的当前开口步,命中 actionTags 的浮出来;等最久优先。
-export function actionableInbox(
-  tracks: Track[],
-  stepsByTrack: Map<string, TrackStep[]>,
-  actionTags: string[],
-): InboxEntry[] {
-  if (actionTags.length === 0) return [];
-  const entries: InboxEntry[] = [];
-  for (const track of tracks) {
-    if (track.status !== "active") continue;
-    const steps = stepsByTrack.get(track.id) ?? [];
-    const openId = currentStepId(steps);
-    if (openId === null) continue;
-    const step = steps.find((s) => s.id === openId);
-    if (!step) continue;
-    if (matchesActionTags(step.tags, actionTags)) entries.push({ track, step });
-  }
-  return entries.sort(
-    (a, b) => a.step.startedAt.localeCompare(b.step.startedAt) || a.track.id.localeCompare(b.track.id),
-  );
 }
