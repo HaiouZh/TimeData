@@ -3,11 +3,16 @@ import { describe, expect, it } from "vitest";
 import type { InboxEntry } from "./tracksView.js";
 import {
   actionableInbox,
+  collectStatusFacets,
   currentStepId,
+  filterTracksByStatusTags,
   formatStepDuration,
   groupStepsByTrack,
   isDecisionStep,
   isLinkRef,
+  latestStep,
+  latestStepId,
+  latestStepsForCard,
   matchesActionTags,
   orderedTimeline,
   partitionTracks,
@@ -57,6 +62,58 @@ describe("tracksView pure helpers", () => {
     ).toBe("c");
     // 全闭合(concluded)→ 无 current,不退回最新历史步
     expect(currentStepId([step({ id: "a", seq: 9, endedAt: T })])).toBeNull();
+  });
+
+  it("latestStep picks the largest seq regardless of endedAt", () => {
+    const steps = [
+      step({ id: "open", seq: 1, endedAt: null, startedAt: "2026-06-21T01:00:00.000Z" }),
+      step({ id: "instant", seq: 2, endedAt: "2026-06-21T02:00:00.000Z", startedAt: "2026-06-21T02:00:00.000Z" }),
+    ];
+    expect(latestStepId(steps)).toBe("instant");
+    expect(latestStep(steps)?.id).toBe("instant");
+    expect(currentStepId(steps)).toBe("open");
+  });
+
+  it("collectStatusFacets counts active tracks by latest-step tags and keeps suggested tags first", () => {
+    const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("p1", "parked")];
+    const steps = [
+      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["等我"], endedAt: null }),
+      step({ id: "a1-new", trackId: "a1", seq: 1, tags: ["agent在做"], endedAt: "2026-06-21T02:00:00.000Z" }),
+      step({ id: "a2-new", trackId: "a2", seq: 0, tags: ["待决策", "临时标签"], endedAt: null }),
+      step({ id: "a3-new", trackId: "a3", seq: 0, tags: ["临时标签", "临时标签"], endedAt: null }),
+      step({ id: "p1-new", trackId: "p1", seq: 0, tags: ["卡住"], endedAt: null }),
+    ];
+    expect(collectStatusFacets(tracks, groupStepsByTrack(steps), ["等我", "待决策", "卡住", "agent在做"])).toEqual([
+      { tag: "等我", count: 0, suggested: true },
+      { tag: "待决策", count: 1, suggested: true },
+      { tag: "卡住", count: 0, suggested: true },
+      { tag: "agent在做", count: 1, suggested: true },
+      { tag: "临时标签", count: 2, suggested: false },
+    ]);
+  });
+
+  it("filterTracksByStatusTags uses OR against latest-step tags and ignores archived tracks", () => {
+    const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("c1", "concluded")];
+    const steps = [
+      step({ id: "a1", trackId: "a1", seq: 0, tags: ["等我"] }),
+      step({ id: "a2", trackId: "a2", seq: 0, tags: ["agent在做"] }),
+      step({ id: "a3", trackId: "a3", seq: 0, tags: ["复盘"] }),
+      step({ id: "c1", trackId: "c1", seq: 0, tags: ["等我"] }),
+    ];
+    const grouped = groupStepsByTrack(steps);
+    expect(filterTracksByStatusTags(tracks, grouped, []).map((t) => t.id)).toEqual(["a1", "a2", "a3"]);
+    expect(filterTracksByStatusTags(tracks, grouped, ["等我", "agent在做"]).map((t) => t.id)).toEqual(["a1", "a2"]);
+  });
+
+  it("latestStepsForCard returns the newest steps for compact cards", () => {
+    expect(
+      latestStepsForCard([
+        step({ id: "a", seq: 0 }),
+        step({ id: "b", seq: 1 }),
+        step({ id: "c", seq: 2 }),
+        step({ id: "d", seq: 3 }),
+      ]).map((s) => s.id),
+    ).toEqual(["d", "c", "b"]);
   });
 
   it("orderedTimeline sorts descending so the current step is on top", () => {

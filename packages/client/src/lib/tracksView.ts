@@ -9,6 +9,22 @@ function byTrackStepOrderAsc(a: TrackStep, b: TrackStep): number {
   return a.seq - b.seq || a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
 }
 
+function byTrackStepOrderDesc(a: TrackStep, b: TrackStep): number {
+  return -byTrackStepOrderAsc(a, b);
+}
+
+function uniqueNormalizedTags(tags: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tag of tags) {
+    const trimmed = tag.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 export function groupStepsByTrack(steps: TrackStep[]): Map<string, TrackStep[]> {
   const grouped = new Map<string, TrackStep[]>();
   for (const step of steps) {
@@ -27,6 +43,29 @@ export function currentStepId(steps: TrackStep[]): string | null {
     if (current === null || step.seq > current.seq) current = step;
   }
   return current?.id ?? null;
+}
+
+export function latestStep(steps: TrackStep[]): TrackStep | null {
+  let latest: TrackStep | null = null;
+  for (const step of steps) {
+    if (
+      latest === null ||
+      step.seq > latest.seq ||
+      (step.seq === latest.seq && step.startedAt > latest.startedAt) ||
+      (step.seq === latest.seq && step.startedAt === latest.startedAt && step.id > latest.id)
+    ) {
+      latest = step;
+    }
+  }
+  return latest;
+}
+
+export function latestStepId(steps: TrackStep[]): string | null {
+  return latestStep(steps)?.id ?? null;
+}
+
+export function latestStepsForCard(steps: TrackStep[], limit = 3): TrackStep[] {
+  return [...steps].sort(byTrackStepOrderDesc).slice(0, limit);
 }
 
 export function orderedTimeline(steps: TrackStep[]): TrackStep[] {
@@ -88,6 +127,59 @@ export function stepSourceText(step: TrackStep): string {
 export interface InboxEntry {
   track: Track;
   step: TrackStep;
+}
+
+export interface TrackStatusFacet {
+  tag: string;
+  count: number;
+  suggested: boolean;
+}
+
+export function collectStatusFacets(
+  tracks: Track[],
+  stepsByTrack: Map<string, TrackStep[]>,
+  suggestedTags: readonly string[],
+): TrackStatusFacet[] {
+  const suggested = uniqueNormalizedTags(suggestedTags);
+  const suggestedSet = new Set(suggested);
+  const counts = new Map<string, number>();
+
+  for (const track of tracks) {
+    if (track.status !== "active") continue;
+    const step = latestStep(stepsByTrack.get(track.id) ?? []);
+    if (!step) continue;
+    for (const tag of uniqueNormalizedTags(step.tags)) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  const facets: TrackStatusFacet[] = suggested.map((tag) => ({
+    tag,
+    count: counts.get(tag) ?? 0,
+    suggested: true,
+  }));
+
+  const actualOnly = [...counts.entries()]
+    .filter(([tag]) => !suggestedSet.has(tag))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN"));
+
+  for (const [tag, count] of actualOnly) facets.push({ tag, count, suggested: false });
+  return facets;
+}
+
+export function filterTracksByStatusTags(
+  tracks: Track[],
+  stepsByTrack: Map<string, TrackStep[]>,
+  selectedTags: readonly string[],
+): Track[] {
+  const selected = new Set(uniqueNormalizedTags(selectedTags));
+  return tracks.filter((track) => {
+    if (track.status !== "active") return false;
+    if (selected.size === 0) return true;
+    const step = latestStep(stepsByTrack.get(track.id) ?? []);
+    if (!step) return false;
+    return uniqueNormalizedTags(step.tags).some((tag) => selected.has(tag));
+  });
 }
 
 // 「轮到我」判据:当前步 tags 与可配置 actionTags 取交集(两侧 trim)。actionTags 空 → 永不命中。
