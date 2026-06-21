@@ -55,6 +55,16 @@ async function renderList() {
   return mounted.host;
 }
 
+function facetButton(host: HTMLElement, label: string): HTMLButtonElement {
+  const button = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === label);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`Missing facet button: ${label}`);
+  return button;
+}
+
+function trackCardsText(host: HTMLElement): string {
+  return [...host.querySelectorAll('a[href^="/tracks/"]')].map((item) => item.textContent ?? "").join("\n");
+}
+
 describe("TracksListPage", () => {
   it("lists active tracks with status facets, latest steps, and links to detail", async () => {
     await addTrack({ title: "全马破三", now });
@@ -162,28 +172,30 @@ describe("TracksListPage", () => {
     await waitForText(host, "等确认的轨道");
     expect(host.textContent).toContain("agent 执行中");
     expect(host.textContent).toContain("普通推进");
-    await click([...host.querySelectorAll("button")].find((button) => button.textContent?.includes("等我 1")) ?? null);
+    await click(facetButton(host, "等我 1"));
     await waitForCondition(
       () =>
-        (host.textContent?.includes("等确认的轨道") ?? false) &&
-        !(host.textContent?.includes("agent 执行中") ?? true) &&
-        !(host.textContent?.includes("普通推进") ?? true),
+        facetButton(host, "等我 1").getAttribute("aria-pressed") === "true" &&
+        trackCardsText(host).includes("等确认的轨道") &&
+        !trackCardsText(host).includes("agent 执行中") &&
+        !trackCardsText(host).includes("普通推进"),
       "等我 facet filtering",
     );
-    expect(host.textContent).toContain("等确认的轨道");
-    expect(host.textContent).not.toContain("agent 执行中");
-    expect(host.textContent).not.toContain("普通推进");
-    await click([...host.querySelectorAll("button")].find((button) => button.textContent?.includes("agent在做 1")) ?? null);
+    expect(trackCardsText(host)).toContain("等确认的轨道");
+    expect(trackCardsText(host)).not.toContain("agent 执行中");
+    expect(trackCardsText(host)).not.toContain("普通推进");
+    await click(facetButton(host, "agent在做 1"));
     await waitForCondition(
       () =>
-        (host.textContent?.includes("等确认的轨道") ?? false) &&
-        (host.textContent?.includes("agent 执行中") ?? false) &&
-        !(host.textContent?.includes("普通推进") ?? true),
+        facetButton(host, "agent在做 1").getAttribute("aria-pressed") === "true" &&
+        trackCardsText(host).includes("等确认的轨道") &&
+        trackCardsText(host).includes("agent 执行中") &&
+        !trackCardsText(host).includes("普通推进"),
       "OR status facet filtering",
     );
-    expect(host.textContent).toContain("等确认的轨道");
-    expect(host.textContent).toContain("agent 执行中");
-    expect(host.textContent).not.toContain("普通推进");
+    expect(trackCardsText(host)).toContain("等确认的轨道");
+    expect(trackCardsText(host)).toContain("agent 执行中");
+    expect(trackCardsText(host)).not.toContain("普通推进");
   });
 
   it("shows an empty active hint when selected status tags match nothing", async () => {
@@ -201,7 +213,7 @@ describe("TracksListPage", () => {
     });
     const host = await renderList();
     await waitForText(host, "进行中无行动标签");
-    await click([...host.querySelectorAll("button")].find((button) => button.textContent?.includes("等我 0")) ?? null);
+    await click(facetButton(host, "等我 0"));
     await waitForText(host, "没有命中这些状态标签的进行中轨道");
     expect(host.textContent).not.toContain("进行中无行动标签");
   });
