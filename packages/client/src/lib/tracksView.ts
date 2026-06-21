@@ -30,7 +30,12 @@ export function currentStepId(steps: TrackStep[]): string | null {
 }
 
 export function orderedTimeline(steps: TrackStep[]): TrackStep[] {
-  return [...steps].sort((a, b) => -byTrackStepOrderAsc(a, b));
+  const currentId = currentStepId(steps);
+  return [...steps].sort((a, b) => {
+    if (a.id === currentId) return -1;
+    if (b.id === currentId) return 1;
+    return -byTrackStepOrderAsc(a, b);
+  });
 }
 
 export function partitionTracks(tracks: Track[]): { active: Track[]; archived: Track[] } {
@@ -60,7 +65,8 @@ export function trackProgressSummary(steps: TrackStep[], now: Date): string {
   if (openId === null) return `共${steps.length}步 · 已收束`;
   const open = steps.find((s) => s.id === openId);
   const elapsed = open ? formatStepDuration(open.startedAt, null, now) : "";
-  return `当前:第${steps.length}步 · 已历时${elapsed}`;
+  const stepNumber = open ? open.seq + 1 : steps.length;
+  return `当前:第${stepNumber}步 · 已历时${elapsed}`;
 }
 
 export function isDecisionStep(step: TrackStep): boolean {

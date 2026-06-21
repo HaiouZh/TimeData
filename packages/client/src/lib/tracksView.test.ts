@@ -68,6 +68,15 @@ describe("tracksView pure helpers", () => {
     expect(ordered.map((s) => s.id)).toEqual(["c", "b", "a"]);
   });
 
+  it("orderedTimeline 把开口当前步钉在更大 seq 的即时点之上", () => {
+    const ordered = orderedTimeline([
+      step({ id: "done", seq: 0, endedAt: T }),
+      step({ id: "current", seq: 1, endedAt: null }),
+      step({ id: "note", seq: 2, endedAt: T, tags: ["批注"] }),
+    ]);
+    expect(ordered.map((s) => s.id)).toEqual(["current", "note", "done"]);
+  });
+
   it("partitionTracks splits active from concluded/parked, preserving order", () => {
     const { active, archived } = partitionTracks([
       track("a1", "active"),
@@ -96,6 +105,20 @@ describe("tracksView pure helpers", () => {
     ).toBe("当前:第2步 · 已历时2小时");
     expect(trackProgressSummary([step({ id: "a", seq: 0, endedAt: T })], now)).toBe("共1步 · 已收束");
     expect(trackProgressSummary([], now)).toBe("尚无步骤");
+  });
+
+  it("trackProgressSummary 按开口步 seq 计数,不被后追加的即时点抬高", () => {
+    const now = new Date("2026-06-21T02:00:00.000Z");
+    expect(
+      trackProgressSummary(
+        [
+          step({ id: "a", seq: 0, endedAt: T }),
+          step({ id: "b", seq: 1, startedAt: T, endedAt: null }),
+          step({ id: "note", seq: 2, endedAt: T, tags: ["批注"] }),
+        ],
+        now,
+      ),
+    ).toBe("当前:第2步 · 已历时2小时");
   });
 
   it("isDecisionStep matches the 决策/decision tags only", () => {
