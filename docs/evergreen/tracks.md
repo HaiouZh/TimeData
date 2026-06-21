@@ -5,13 +5,15 @@ covers:
   - packages/server/src/lib/track-rows.ts
   - packages/server/src/routes/agent-tracks.ts
   - packages/client/src/lib/tracks.ts
+  - packages/client/src/lib/tracksView.ts
+  - packages/client/src/pages/tracks/**
 last-reviewed: 2026-06-21
 ---
 
 # 任务轨道
 
-> 轨道把复杂、易分支的任务升成一条可监控的状态线。T1 落数据地基；T2 提供 agent 受控 ingest API：建轨道、append 步骤、显式闭合当前步、改状态/元信息，并通过 `requestId` 防重复。
-> 不讲 UI、轮到我聚合和人机共编交互；这些属于后续 T3-T5。
+> 轨道把复杂、易分支的任务升成一条可监控的状态线。T1 落数据地基；T2 提供 agent 受控 ingest API：建轨道、append 步骤、显式闭合当前步、改状态/元信息，并通过 `requestId` 防重复；T3 提供列表与详情监控面。
+> 不讲轮到我聚合和人机共编交互；这些属于后续 T4-T5。
 
 ## 承上启下
 
@@ -62,9 +64,18 @@ last-reviewed: 2026-06-21
 
 这些端点与任务 agent 回写一样走 `applyChange()` + `sync_seq` + `notifySyncChange()`，前台客户端经普通 sync stream 秒级感知。不写 TimeEntry、不扩 force-push、不替代后续 T5 的人手共编入口。
 
-## 5. 后续阶段（T2 不做）
+## 5. 监控面(T3)
 
-- 轨道页面 / 导航入口 / 列表 / 时间线 UI → T3。
+`/tracks` 列表与 `/tracks/:id` 详情是轨道的独立监控面(监控≠操作,不进今天视图),页面用 `useLiveQuery` 读取、吃 sync 后变化。
+取值/排序/格式化全在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
+`currentStepId`/`orderedTimeline`(当前步=最大 seq 的开口步置顶高亮;无开口步纯倒序、不高亮)、
+`trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 url/外链型 ref 可点)、
+`isDecisionStep`(tag 命中 `决策`/`decision` 即决策步,不解析 content、不加字段)。
+列表用 `CollapsibleSection` 折叠 concluded/parked,顶部最简新建只收标题走 `addTrack`;
+详情倒序时间线每步显示 source 徽章、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
+
+## 6. 后续阶段
+
 - actionTags「轮到我」聚合 → T4。
 - `source="user"` 人手共编 → T5。
 - 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。
