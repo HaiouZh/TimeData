@@ -38,8 +38,8 @@ export default function TrackDetailPage() {
               {track.summary && <p className="mt-1 text-sm text-ink-2">{track.summary}</p>}
               {track.refs.length > 0 && (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {track.refs.map((refItem, index) => (
-                    <RefChip key={`${refItem.kind}:${refItem.id}:${index}`} refItem={refItem} />
+                  {track.refs.map((refItem) => (
+                    <RefChip key={`${refItem.kind}:${refItem.id}`} refItem={refItem} />
                   ))}
                 </div>
               )}

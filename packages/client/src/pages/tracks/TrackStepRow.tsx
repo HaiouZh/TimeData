@@ -49,8 +49,8 @@ export function TrackStepRow({
               #{tag}
             </span>
           ))}
-          {step.refs.map((refItem, index) => (
-            <RefChip key={`${refItem.kind}:${refItem.id}:${index}`} refItem={refItem} />
+          {step.refs.map((refItem) => (
+            <RefChip key={`${refItem.kind}:${refItem.id}`} refItem={refItem} />
           ))}
         </div>
       )}
