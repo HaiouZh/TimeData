@@ -3,7 +3,7 @@ import { getSetting, setSetting, useSetting } from "./index.js";
 
 export const TRACK_ACTION_TAGS_KEY = "track.actionTags.v1";
 // 未配置时的种子默认;不是锁死枚举,用户可在设置页自由增删(spec §3.1 不写死)。
-export const DEFAULT_ACTION_TAGS: readonly string[] = ["等我", "待决策", "卡住"];
+export const DEFAULT_ACTION_TAGS: readonly string[] = ["等我", "待决策", "卡住", "agent在做"];
 
 // 防脏数据上限(并入 codex 版健壮性):超长 tag 丢弃、最多保留 50 个。
 const MAX_ACTION_TAGS = 50;

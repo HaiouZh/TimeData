@@ -25,7 +25,7 @@ describe("trackActionTagsSetting", () => {
   });
 
   it("defaults to the seed tags when never configured", async () => {
-    expect(await readTrackActionTags()).toEqual([...DEFAULT_ACTION_TAGS]);
+    expect(await readTrackActionTags()).toEqual(["等我", "待决策", "卡住", "agent在做"]);
   });
 
   it("round-trips set tags and respects an explicit empty list", async () => {

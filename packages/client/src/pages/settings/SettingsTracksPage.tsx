@@ -24,10 +24,10 @@ export function SettingsTracksPage() {
   }
 
   return (
-    <SettingsDetailPage title="轨道行动标签">
+    <SettingsDetailPage title="轨道状态标签">
       <section className="space-y-3">
-        <p className="text-sm text-slate-400">
-          命中这些标签的「当前步」会进入轨道面的「轮到我」收件箱。自由添加、随时增删——它不是固定枚举。
+        <p className="text-sm leading-6 text-ink-3">
+          这些标签会作为轨道接力状态的建议词表。统计面板按 active 轨道最新一步的标签聚合；这里可自由添加、删除。
         </p>
         <form
           onSubmit={(e) => {
@@ -39,30 +39,30 @@ export function SettingsTracksPage() {
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="如:等我 / 待决策 / 卡住"
-            aria-label="新增行动标签"
-            className="min-h-10 flex-1 rounded-lg border border-slate-800 bg-slate-900/70 px-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-slate-600 focus:outline-none"
+            placeholder="如:等我 / 待决策 / 卡住 / agent在做"
+            aria-label="新增状态标签"
+            className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <button
             type="submit"
-            className="shrink-0 rounded-lg bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+            className="shrink-0 rounded-ctl bg-accent px-3 text-sm font-medium text-page transition hover:bg-accent-hover"
           >
             添加
           </button>
         </form>
         {tags.length === 0 ? (
-          <p className="text-sm text-slate-500">还没有行动标签——「轮到我」收件箱会一直是空的。</p>
+          <p className="text-sm text-ink-3">还没有状态标签；统计面板只会展示实际出现在最新步上的临时标签。</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {tags.map((tag) => (
               <li key={tag}>
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2.5 py-1 text-sm text-slate-200">
+                <span className="inline-flex items-center gap-1 rounded-pill bg-surface-elevated px-2.5 py-1 text-sm text-ink-2">
                   #{tag}
                   <button
                     type="button"
                     aria-label={`删除 ${tag}`}
                     onClick={() => void remove(tag)}
-                    className="text-slate-500 transition-colors hover:text-slate-200"
+                    className="text-ink-3 transition hover:text-ink"
                   >
                     ×
                   </button>

@@ -41,18 +41,21 @@ async function waitForTags(predicate: (tags: string[]) => boolean): Promise<void
 }
 
 describe("SettingsTracksPage", () => {
-  it("shows the seed defaults when nothing is configured", async () => {
+  it("shows the seed status tags when nothing is configured", async () => {
     const host = await renderPage();
     await flush();
     expect(host.textContent).toContain("等我");
     expect(host.textContent).toContain("待决策");
     expect(host.textContent).toContain("卡住");
+    expect(host.textContent).toContain("agent在做");
+    expect(host.textContent).toContain("轨道状态标签");
+    expect(host.textContent).not.toContain("轮到我");
   });
 
-  it("adds a new action tag via the input form", async () => {
+  it("adds a new status tag via the input form", async () => {
     const host = await renderPage();
     await flush();
-    const input = host.querySelector('input[aria-label="新增行动标签"]') as HTMLInputElement;
+    const input = host.querySelector('input[aria-label="新增状态标签"]') as HTMLInputElement;
     const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
       setValue?.call(input, "需我确认");
