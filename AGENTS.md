@@ -112,6 +112,7 @@
 | 本地过程文档 | `docs_local/**`（不进 Git） | 沉淀后才同步到 evergreen 或 ADR |
 
 - AI 生成的 spec / plan / review / 审查 / 历史归档默认写入 `docs_local/{specs,plans,reviews,archive,ideas,scratch}/`。
+- **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
 - 长期文档头部 `covers:` 字段声明管辖代码路径。改代码后回头看 `covers` 是否命中，命中即改对应段落，并更新 `last-reviewed`。
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` 第 6 节"模块速查"或各文档 frontmatter 查**，不在本文件维护。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。

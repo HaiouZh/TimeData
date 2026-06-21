@@ -22,6 +22,7 @@ data/
 # Local AI/editor state
 .claude/
 .qoder/
+.superpowers/
 .worktrees/
 
 # Local-only development documents
