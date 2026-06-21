@@ -83,6 +83,7 @@ describe("TracksListPage", () => {
     const host = await renderList();
     await waitForText(host, "全马破三");
     await waitForText(host, "状态标签");
+    await waitForText(host, "base 期");
     expect(host.textContent).toContain("等我 1");
     expect(host.textContent).toContain("agent在做 0");
     expect(host.textContent).toContain("base 期");
@@ -216,5 +217,42 @@ describe("TracksListPage", () => {
     await click(facetButton(host, "等我 0"));
     await waitForText(host, "没有命中这些状态标签的进行中轨道");
     expect(host.textContent).not.toContain("进行中无行动标签");
+  });
+
+  it("drops selected temporary tags after they disappear from latest-step facets", async () => {
+    await addTrack({ title: "临时标签轨道", now });
+    const [track] = await listTracks();
+    await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "先复盘",
+      startedAt: "2026-06-21T01:00:00.000Z",
+      endedAt: null,
+      tags: ["复盘"],
+      seq: 0,
+      now,
+    });
+    const host = await renderList();
+    await waitForText(host, "复盘 1");
+    await click(facetButton(host, "复盘 1"));
+    await waitForCondition(() => facetButton(host, "复盘 1").getAttribute("aria-pressed") === "true", "复盘 selected");
+
+    await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      content: "改由 agent 接手",
+      startedAt: "2026-06-21T02:00:00.000Z",
+      endedAt: null,
+      tags: ["agent在做"],
+      seq: 1,
+      now,
+    });
+
+    await waitForCondition(
+      () => !host.textContent?.includes("复盘 1") && trackCardsText(host).includes("临时标签轨道"),
+      "stale temporary facet cleanup",
+    );
+    expect(host.textContent).toContain("agent在做 1");
+    expect(host.textContent).not.toContain("没有命中这些状态标签的进行中轨道");
   });
 });

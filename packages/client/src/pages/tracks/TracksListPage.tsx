@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
@@ -20,6 +20,14 @@ export default function TracksListPage() {
   const byTrack = groupStepsByTrack(allSteps);
   const facets = collectStatusFacets(tracks, byTrack, actionTags);
   const visibleActive = filterTracksByStatusTags(active, byTrack, selectedTags);
+
+  useEffect(() => {
+    const visibleTags = new Set(facets.map((facet) => facet.tag));
+    setSelectedTags((current) => {
+      const next = current.filter((tag) => visibleTags.has(tag));
+      return next.length === current.length ? current : next;
+    });
+  }, [facets]);
 
   async function create(title: string): Promise<void> {
     await addTrack({ title });

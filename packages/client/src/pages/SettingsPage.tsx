@@ -411,8 +411,8 @@ export default function SettingsPage() {
           to="/settings/tracks"
           icon={<Icon icon={Signpost} size={20} />}
           accent="violet"
-          title="轨道行动标签"
-          subtitle="配置「轮到我」收件箱命中的标签"
+          title="轨道状态标签"
+          subtitle="配置最新步统计面板的建议标签"
         />
         <SettingsLinkRow
           to="/settings/data"

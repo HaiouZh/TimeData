@@ -4,6 +4,10 @@ import { latestStepsForCard, stepSourceText, trackProgressSummary } from "../../
 
 const STATUS_DOT: Record<string, string> = { active: "bg-accent", concluded: "bg-ink-3", parked: "bg-ink-3" };
 
+function uniqueTags(tags: readonly string[]): string[] {
+  return [...new Set(tags)];
+}
+
 export function TrackListItem({ track, steps, now = new Date() }: { track: Track; steps: TrackStep[]; now?: Date }) {
   const latestSteps = track.status === "active" ? latestStepsForCard(steps) : [];
   return (
@@ -29,7 +33,7 @@ export function TrackListItem({ track, steps, now = new Date() }: { track: Track
               <span data-source={step.source} className="mr-1 rounded-pill bg-surface-elevated px-1.5 py-0.5 text-ink-3">
                 {stepSourceText(step)}
               </span>
-              {step.tags.map((tag) => (
+              {uniqueTags(step.tags).map((tag) => (
                 <span key={tag} className="mr-1 text-accent">
                   #{tag}
                 </span>

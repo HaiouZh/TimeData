@@ -269,7 +269,7 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 
 打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板只读，不修改 SQLite，也不提供任意 SQL。
 
-`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、服务端数据洞察、APK/服务端/前端更新这些行；轨道行动标签等领域设置归各自主题文档。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin.ts`
+`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、服务端数据洞察、APK/服务端/前端更新这些行；轨道状态标签等领域设置归各自主题文档。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin.ts`
 
 相关测试：`packages/client/src/pages/SettingsPage.test.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/lib/adminApi.test.ts`、`packages/server/src/routes/admin.test.ts`
 
