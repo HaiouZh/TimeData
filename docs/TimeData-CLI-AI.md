@@ -7,6 +7,7 @@
 - **写入 TimeData 数据只能通过服务端受控 API；CLI 是其中一个客户端。**
 - **当前 CLI 允许 AI/脚本写入的日常命令是 `timedata log`（时间记录）和 `task-done/task-tag`（任务完成与 tags 回写）。**
 - **授权 agent 可直连 `POST /api/quick-notes` 投递速记；CLI `notes` 仍只读。**
+- **授权 agent 可直连 `/api/agent/tracks*` 写任务轨道；CLI 暂未提供轨道命令。**
 - 写入前先用 `timedata categories` 确认分类路径；必要时用 `timedata list --date YYYY-MM-DD` 查看当天已有记录。
 - 读取速记用 `timedata notes`；它是只读命令，不写 quick_notes。
 - CLI 只通过 server HTTP API 工作，服务端做最终校验。
@@ -53,6 +54,7 @@
 
 - 如果是授权 agent 投递 quick note，可用 `POST /api/quick-notes`，请求必须带 `Authorization: Bearer <AUTH_TOKEN>` header，body 只提交 `text`、可选 `sourceLabel`、可选 `occurredAt`；服务端会强制 `source="agent"`。
 - 如果是授权 agent 回写任务完成或 tags，优先使用 `AGENT_TOKEN` 调 `timedata task-done` / `task-tag`；这些命令只命中 `/api/agent/*` 的封闭动作集合。
+- 授权 agent 记录长周期工作状态，可用 `AGENT_TOKEN` 调 `/api/agent/tracks*`：建轨道、append agent 步骤、闭合当前步、改轨道状态。请求体可带 `requestId` 防重发重复写入。仍不代表 AI 可直接写 DB。
 - 如果不是已明确授权的 agent 集成，CLI 不能写入速记；用户可以用 Web UI，或先新增受控 server API / CLI 命令后再使用。
 - 修改、删除、批量导入或从备份回灌仍不是日常 AI 写入能力。
 
@@ -92,7 +94,7 @@ CLI 配置优先级由高到低：
 
 AI 优先使用环境变量或配置文件，不要在可见命令行中暴露 token。只有用户明确提供临时 token 时，才使用 `--token`。
 
-外部 agent 回写任务时可把 `TIMEDATA_TOKEN` 设置为 `AGENT_TOKEN`；该 token 只能调用 `/api/agent/*`，不能 sync、admin、export 或 force-push。
+外部 agent 回写任务或任务轨道时可把 `TIMEDATA_TOKEN` 设置为 `AGENT_TOKEN`；该 token 只能调用 `/api/agent/*`，不能 sync、admin、export 或 force-push。
 
 ## 5. 错误处理
 
