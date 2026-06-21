@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 5764,
+    "chars": 5831,
     "covers": 12
   },
   "docs/evergreen/backup.md": {
@@ -28,7 +28,7 @@
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
-    "chars": 17036,
+    "chars": 17048,
     "covers": 27
   },
   "docs/evergreen/design-language.md": {
@@ -60,7 +60,7 @@
     "covers": 16
   },
   "docs/evergreen/security.md": {
-    "chars": 4056,
+    "chars": 4122,
     "covers": 9
   },
   "docs/evergreen/stats-insights.md": {
@@ -84,7 +84,7 @@
     "covers": 5
   },
   "docs/evergreen/tracks.md": {
-    "chars": 2193,
-    "covers": 2
+    "chars": 3070,
+    "covers": 3
   }
 }
