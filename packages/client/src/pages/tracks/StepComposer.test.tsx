@@ -23,6 +23,15 @@ async function type(host: HTMLElement, value: string): Promise<void> {
   });
 }
 
+async function typeInput(host: HTMLElement, label: string, value: string): Promise<void> {
+  await act(async () => {
+    const input = host.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 async function submit(host: HTMLElement): Promise<void> {
   await act(async () => {
     (host.querySelector("form") as HTMLFormElement).dispatchEvent(
@@ -51,6 +60,39 @@ describe("StepComposer", () => {
     await type(host, "这里要回看证据");
     await submit(host);
     expect(onSubmit).toHaveBeenCalledWith({ content: "这里要回看证据", mode: "instant", tags: ["批注"] });
+  });
+
+  it("renders status tags from props alongside instant tags", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["等我", "agent在做"]} />);
+    const host = mounted.host;
+    expect(host.textContent).toContain("状态/交棒");
+    expect(host.textContent).toContain("#等我");
+    expect(host.textContent).toContain("#agent在做");
+    expect(host.textContent).toContain("记一笔");
+    expect(host.textContent).toContain("#批注");
+  });
+
+  it("submits one selected status tag and replaces it with a later selection", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["等我", "agent在做"]} />);
+    const host = mounted.host;
+    await click(buttonByText(host, "#等我"));
+    await click(buttonByText(host, "#agent在做"));
+    await type(host, "交给 agent 执行");
+    await submit(host);
+    expect(onSubmit).toHaveBeenCalledWith({ content: "交给 agent 执行", mode: "open", tags: ["agent在做"] });
+  });
+
+  it("uses a custom tag when no chip is selected and clears it after submit", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["等我"]} />);
+    const host = mounted.host;
+    await typeInput(host, "自定义步骤标签", "  需复盘  ");
+    await type(host, "补一条临时状态");
+    await submit(host);
+    expect(onSubmit).toHaveBeenCalledWith({ content: "补一条临时状态", mode: "open", tags: ["需复盘"] });
+    expect((host.querySelector('input[aria-label="自定义步骤标签"]') as HTMLInputElement).value).toBe("");
   });
 
   it("空内容不提交", async () => {
