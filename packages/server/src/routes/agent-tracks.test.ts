@@ -120,3 +120,111 @@ describe("POST /api/agent/tracks", () => {
     expect((await post("/api/agent/tracks", { title: "x", source: "agent" })).status).toBe(400);
   });
 });
+
+describe("POST /api/agent/tracks/:id/steps", () => {
+  beforeEach(() => {
+    seedTrack();
+  });
+
+  it("appends an agent step, closes the latest open step, records seq and notifies", async () => {
+    seedTrackStep({ id: "open-step", startedAt: "2026-06-21T02:00:00.000Z", seq: 0 });
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+    const seen: Array<number | null> = [];
+    const listener = (seq: number | null) => seen.push(seq);
+    addSyncStreamListener(listener);
+    try {
+      const res = await post("/api/agent/tracks/track-1/steps", {
+        requestId: "step-req-1",
+        sourceLabel: "claude",
+        content: "实现路由测试",
+        startedAt: "2026-06-21T03:00:00.000Z",
+        refs: [{ kind: "commit", id: "abc123" }],
+        tags: ["phase:T2"],
+      });
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as {
+        ok: boolean;
+        idempotent: boolean;
+        step: { id: string; source: string; sourceLabel?: string; seq: number; endedAt: string | null };
+        closedStep: { id: string; endedAt: string } | null;
+      };
+      expect(body).toMatchObject({
+        ok: true,
+        idempotent: false,
+        step: { id: "step-req-1", source: "agent", sourceLabel: "claude", seq: 1, endedAt: null },
+        closedStep: { id: "open-step", endedAt: "2026-06-21T03:00:00.000Z" },
+      });
+      expect(db.prepare("SELECT ended_at FROM track_steps WHERE id = ?").get("open-step")).toEqual({
+        ended_at: "2026-06-21T03:00:00.000Z",
+      });
+      expect(db.prepare("SELECT source, source_label, refs, tags, seq FROM track_steps WHERE id = ?").get("step-req-1"))
+        .toMatchObject({
+          source: "agent",
+          source_label: "claude",
+          refs: JSON.stringify([{ kind: "commit", id: "abc123" }]),
+          tags: JSON.stringify(["phase:T2"]),
+          seq: 1,
+        });
+      expect(db.prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'track_steps' ORDER BY id").all()).toEqual(
+        [
+          { record_id: "open-step", action: "update" },
+          { record_id: "step-req-1", action: "create" },
+        ],
+      );
+      expect(seen.at(-1)).toBeGreaterThan(0);
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+
+  it("defaults startedAt to now and endedAt to null (开口当前步)", async () => {
+    const res = await post("/api/agent/tracks/track-1/steps", { content: "无时间默认" });
+    const body = (await res.json()) as { step: { startedAt: string; endedAt: string | null; seq: number } };
+    expect(body.step.startedAt).toBe(NOW);
+    expect(body.step.endedAt).toBeNull();
+    expect(body.step.seq).toBe(0);
+  });
+
+  it("returns existing step for the same requestId without closing another step again", async () => {
+    seedTrackStep({ id: "open-step", startedAt: "2026-06-21T02:00:00.000Z", seq: 0 });
+    const first = await post("/api/agent/tracks/track-1/steps", {
+      requestId: "step-req-2",
+      content: "第一次",
+      startedAt: "2026-06-21T03:00:00.000Z",
+    });
+    const second = await post("/api/agent/tracks/track-1/steps", {
+      requestId: "step-req-2",
+      content: "第二次不应覆盖",
+      startedAt: "2026-06-21T04:00:00.000Z",
+    });
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(200);
+    await expect(second.json()).resolves.toMatchObject({
+      ok: true,
+      idempotent: true,
+      step: { id: "step-req-2", content: "第一次" },
+      closedStep: null,
+    });
+    expect((db.prepare("SELECT COUNT(*) AS n FROM sync_seq WHERE table_name = 'track_steps'").get() as { n: number }).n)
+      .toBe(2);
+  });
+
+  it("rejects missing track (404), caller source (400) and reversed chronology (400)", async () => {
+    seedTrackStep({ id: "open-step", startedAt: "2026-06-21T05:00:00.000Z", seq: 0 });
+    const missing = await post("/api/agent/tracks/missing/steps", { requestId: "step-x", content: "x" });
+    const callerSource = await post("/api/agent/tracks/track-1/steps", {
+      requestId: "step-y",
+      source: "user",
+      content: "x",
+    });
+    const reversed = await post("/api/agent/tracks/track-1/steps", {
+      requestId: "step-z",
+      content: "x",
+      startedAt: "2026-06-21T04:00:00.000Z",
+    });
+    expect(missing.status).toBe(404);
+    expect(callerSource.status).toBe(400);
+    expect(reversed.status).toBe(400);
+    expect(db.prepare("SELECT id FROM track_steps WHERE id IN ('step-y', 'step-z')").all()).toEqual([]);
+  });
+});

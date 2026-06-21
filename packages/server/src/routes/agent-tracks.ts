@@ -1,9 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { RefSchema, TrackSchema, type SyncChange, type Track, type TrackStep } from "@timedata/shared";
+import {
+  RefSchema,
+  TrackSchema,
+  TrackStepSchema,
+  type SyncChange,
+  type Track,
+  type TrackStep,
+  UtcIsoStringSchema,
+} from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
-import { rowToTrack, type TrackRow } from "../lib/track-rows.js";
+import { rowToTrack, rowToTrackStep, type TrackRow, type TrackStepRow } from "../lib/track-rows.js";
 import { notifySyncChange } from "../sync/notifier.js";
 import { applyChange } from "../sync/resolver.js";
 import { getLatestSeq } from "../sync/seq.js";
@@ -11,6 +19,8 @@ import { getLatestSeq } from "../sync/seq.js";
 const agentTracks = new Hono();
 
 const RequestIdSchema = z.string().trim().min(1).max(128);
+const SourceLabelSchema = z.string().trim().min(1).max(64);
+const ContentSchema = z.string().max(20_000);
 const RefsSchema = z.array(RefSchema).max(100);
 
 function invalidRequest(details: unknown, message = "Invalid track ingest body") {
@@ -38,6 +48,35 @@ function getTrack(id: string): Track | null {
   return row ? rowToTrack(row) : null;
 }
 
+function getStep(id: string): TrackStep | null {
+  const row = getDb().prepare("SELECT * FROM track_steps WHERE id = ?").get(id) as TrackStepRow | undefined;
+  return row ? rowToTrackStep(row) : null;
+}
+
+function latestOpenStep(trackId: string): TrackStep | null {
+  const row = getDb()
+    .prepare(`
+      SELECT * FROM track_steps
+      WHERE track_id = ? AND ended_at IS NULL
+      ORDER BY seq DESC, started_at DESC, id DESC
+      LIMIT 1
+    `)
+    .get(trackId) as TrackStepRow | undefined;
+  return row ? rowToTrackStep(row) : null;
+}
+
+function nextStepSeq(trackId: string): number {
+  const row = getDb()
+    .prepare("SELECT COALESCE(MAX(seq), -1) + 1 AS next FROM track_steps WHERE track_id = ?")
+    .get(trackId) as { next: number };
+  return row.next;
+}
+
+function closeStep(step: TrackStep, endedAt: string, updatedAt: string): TrackStep | { error: string } {
+  if (endedAt < step.startedAt) return { error: "endedAt cannot be before the open step startedAt" };
+  return TrackStepSchema.parse({ ...step, endedAt, updatedAt });
+}
+
 const createTrackSchema = z
   .object({
     requestId: RequestIdSchema.optional(),
@@ -45,6 +84,18 @@ const createTrackSchema = z
     summary: z.string().max(5000).optional(),
     refs: RefsSchema.optional(),
     status: z.enum(["active", "concluded", "parked"]).optional(),
+  })
+  .strict();
+
+const appendStepSchema = z
+  .object({
+    requestId: RequestIdSchema.optional(),
+    sourceLabel: SourceLabelSchema.optional(),
+    content: ContentSchema,
+    startedAt: UtcIsoStringSchema.optional(),
+    endedAt: UtcIsoStringSchema.nullable().optional(),
+    refs: RefsSchema.optional(),
+    tags: z.array(z.string().trim().min(1).max(64)).max(50).optional(),
   })
   .strict();
 
@@ -70,6 +121,55 @@ agentTracks.post("/tracks", async (c) => {
 
   applyChangesAndNotify([trackChange("create", track, now)]);
   return c.json({ ok: true, track, idempotent: false }, 201);
+});
+
+agentTracks.post("/tracks/:id/steps", async (c) => {
+  const trackId = c.req.param("id");
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  const parsed = appendStepSchema.safeParse(rawBody);
+  if (!parsed.success) return c.json(invalidRequest(parsed.error.issues), 400);
+
+  if (!getTrack(trackId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Track not found" } }, 404);
+
+  const stepId = parsed.data.requestId ?? randomUUID();
+  const existing = getStep(stepId);
+  if (existing) {
+    if (existing.trackId !== trackId) {
+      return c.json({ ok: false, error: { code: "CONFLICT", message: "Step requestId belongs to another track" } }, 409);
+    }
+    return c.json({ ok: true, step: existing, closedStep: null, idempotent: true });
+  }
+
+  const now = new Date().toISOString();
+  const startedAt = parsed.data.startedAt ?? now;
+  const step = TrackStepSchema.parse({
+    id: stepId,
+    trackId,
+    source: "agent",
+    ...(parsed.data.sourceLabel ? { sourceLabel: parsed.data.sourceLabel } : {}),
+    content: parsed.data.content,
+    startedAt,
+    endedAt: parsed.data.endedAt ?? null,
+    refs: parsed.data.refs ?? [],
+    tags: parsed.data.tags ?? [],
+    seq: nextStepSeq(trackId),
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const changes: SyncChange[] = [];
+  let closedStep: TrackStep | null = null;
+  const openStep = latestOpenStep(trackId);
+  if (openStep) {
+    const closed = closeStep(openStep, startedAt, now);
+    if ("error" in closed) return c.json({ ok: false, error: { code: "INVALID_REQUEST", message: closed.error } }, 400);
+    closedStep = closed;
+    changes.push(stepChange("update", closedStep, now));
+  }
+  changes.push(stepChange("create", step, now));
+
+  applyChangesAndNotify(changes);
+  return c.json({ ok: true, step, closedStep, idempotent: false }, 201);
 });
 
 export default agentTracks;
