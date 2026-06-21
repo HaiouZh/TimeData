@@ -52,4 +52,16 @@ describe("navVisibleTabsSetting", () => {
 
     await expect(readVisibleTabs()).resolves.toEqual([]);
   });
+
+  it("includes tracks as a default-visible configurable tab", async () => {
+    await expect(readVisibleTabs()).resolves.toEqual([
+      "/quick-notes",
+      "/",
+      "/todo",
+      "/tracks",
+      "/stats/time",
+      "/stats/health",
+    ]);
+    expect(sanitizeVisibleTabs(["/tracks", "/bogus", "/tracks"])).toEqual(["/tracks"]);
+  });
 });

@@ -6,6 +6,7 @@ const TAB_LABELS: Record<ConfigurableTab, string> = {
   "/quick-notes": "记录",
   "/": "时间轴",
   "/todo": "待办",
+  "/tracks": "轨道",
   "/stats/time": "时间",
   "/stats/health": "健康",
 };
