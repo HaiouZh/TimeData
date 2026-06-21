@@ -12,6 +12,7 @@ import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import adminRoute from "./routes/admin/index.js";
 import agentRoute from "./routes/agent.js";
+import agentTracksRoute from "./routes/agent-tracks.js";
 import categoriesRoute from "./routes/categories.js";
 import dataRoute from "./routes/data.js";
 import entriesRoute from "./routes/entries.js";
@@ -96,6 +97,7 @@ app.route("/api/version", versionRoute);
 
 app.use("/api/agent/*", scopedAuthMiddleware);
 app.route("/api/agent", agentRoute);
+app.route("/api/agent", agentTracksRoute);
 
 app.use("/api/*", authMiddleware);
 

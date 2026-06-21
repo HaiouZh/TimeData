@@ -365,3 +365,33 @@ describe("PATCH /api/agent/tracks/:id", () => {
     expect((await patch("/api/agent/tracks/missing", { status: "active" })).status).toBe(404);
   });
 });
+
+describe("scoped auth (mounted under /api/agent/*)", () => {
+  it("rejects without token and accepts with AGENT_TOKEN", async () => {
+    process.env.AGENT_TOKEN = "agent-secret";
+    delete process.env.AUTH_TOKEN;
+    delete process.env.ALLOW_UNAUTHENTICATED_DEV;
+    try {
+      const { scopedAuthMiddleware } = await import("../middleware/auth.js");
+      const guarded = new Hono();
+      guarded.use("/api/agent/*", scopedAuthMiddleware);
+      guarded.route("/api/agent", (await import("../routes/agent-tracks.js")).default);
+
+      const unauth = await guarded.request("/api/agent/tracks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "x" }),
+      });
+      expect(unauth.status).toBe(401);
+
+      const authed = await guarded.request("/api/agent/tracks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer agent-secret" },
+        body: JSON.stringify({ title: "x" }),
+      });
+      expect(authed.status).toBe(201);
+    } finally {
+      delete process.env.AGENT_TOKEN;
+    }
+  });
+});
