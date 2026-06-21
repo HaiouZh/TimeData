@@ -226,6 +226,20 @@ export async function listTrackSteps(trackId: string): Promise<TrackStep[]> {
   return steps.sort(byTrackStepOrder);
 }
 
+export async function listAllTrackSteps(): Promise<TrackStep[]> {
+  const rows = await db.trackSteps.toArray();
+  const steps: TrackStep[] = [];
+  for (const row of rows) {
+    const parsed = TrackStepSchema.safeParse(row);
+    if (!parsed.success) {
+      warnInvalidTrackStep(row, parsed.error.issues);
+      continue;
+    }
+    steps.push(parsed.data);
+  }
+  return steps.sort(byTrackStepOrder);
+}
+
 export async function deleteTrack(id: string): Promise<void> {
   await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
     const steps = (await db.trackSteps.where("trackId").equals(id).toArray()).sort(byTrackStepOrder);

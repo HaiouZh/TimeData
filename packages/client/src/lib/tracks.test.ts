@@ -8,6 +8,7 @@ import {
   deleteTrack,
   deleteTrackStep,
   getTrack,
+  listAllTrackSteps,
   listTracks,
   listTrackSteps,
   updateTrack,
@@ -270,6 +271,19 @@ describe("track local data layer", () => {
 
     expect(steps.map((step) => step.id)).toEqual([first.id, second.id]);
     expect(warn).toHaveBeenCalled();
+  });
+
+  it("listAllTrackSteps returns parsed steps across tracks", async () => {
+    await addTrack({ title: "t1", now });
+    const [t1] = await listTracks();
+    await addTrackStep({ trackId: t1.id, source: "agent", content: "a", startedAt: now.toISOString(), now });
+    await addTrack({ title: "t2", now });
+    const t2 = (await listTracks()).find((t) => t.title === "t2");
+    if (!t2) throw new Error("t2 missing");
+    await addTrackStep({ trackId: t2.id, source: "user", content: "b", startedAt: now.toISOString(), now });
+
+    const all = await listAllTrackSteps();
+    expect(all.map((s) => s.content).sort()).toEqual(["a", "b"]);
   });
 
   it("deleteTrack deletes steps first and writes tombstone logs for every row", async () => {
