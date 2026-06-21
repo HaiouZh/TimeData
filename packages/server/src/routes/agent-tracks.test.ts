@@ -228,3 +228,63 @@ describe("POST /api/agent/tracks/:id/steps", () => {
     expect(db.prepare("SELECT id FROM track_steps WHERE id IN ('step-y', 'step-z')").all()).toEqual([]);
   });
 });
+
+describe("POST /api/agent/tracks/:id/current-step/close", () => {
+  beforeEach(() => {
+    seedTrack();
+  });
+
+  it("closes only the latest open step (轨道不结束), notifies, leaves older closed steps alone", async () => {
+    seedTrackStep({
+      id: "old-closed",
+      startedAt: "2026-06-21T01:00:00.000Z",
+      endedAt: "2026-06-21T01:30:00.000Z",
+      seq: 0,
+    });
+    seedTrackStep({ id: "latest-open", startedAt: "2026-06-21T02:00:00.000Z", seq: 1 });
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+    const seen: Array<number | null> = [];
+    const listener = (seq: number | null) => seen.push(seq);
+    addSyncStreamListener(listener);
+    try {
+      const res = await post("/api/agent/tracks/track-1/current-step/close", {
+        endedAt: "2026-06-21T03:00:00.000Z",
+      });
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({
+        ok: true,
+        closedStep: { id: "latest-open", endedAt: "2026-06-21T03:00:00.000Z" },
+      });
+      expect(db.prepare("SELECT ended_at FROM track_steps WHERE id = ?").get("latest-open")).toEqual({
+        ended_at: "2026-06-21T03:00:00.000Z",
+      });
+      expect(db.prepare("SELECT status FROM tracks WHERE id = ?").get("track-1")).toEqual({ status: "active" });
+      expect(db.prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'track_steps'").all()).toEqual([
+        { record_id: "latest-open", action: "update" },
+      ]);
+      expect(seen.at(-1)).toBeGreaterThan(0);
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+
+  it("defaults endedAt to now", async () => {
+    seedTrackStep({ id: "open", startedAt: "2026-06-21T02:00:00.000Z", seq: 0 });
+    const res = await post("/api/agent/tracks/track-1/current-step/close", {});
+    await expect(res.json()).resolves.toMatchObject({ ok: true, closedStep: { id: "open", endedAt: NOW } });
+  });
+
+  it("returns 409 when the track has no open step, 404 for missing track", async () => {
+    seedTrackStep({
+      id: "closed",
+      startedAt: "2026-06-21T01:00:00.000Z",
+      endedAt: "2026-06-21T02:00:00.000Z",
+      seq: 0,
+    });
+    const noOpen = await post("/api/agent/tracks/track-1/current-step/close", {});
+    const missing = await post("/api/agent/tracks/missing/current-step/close", {});
+    expect(noOpen.status).toBe(409);
+    await expect(noOpen.json()).resolves.toMatchObject({ ok: false, error: { code: "CONFLICT" } });
+    expect(missing.status).toBe(404);
+  });
+});

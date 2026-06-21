@@ -99,6 +99,8 @@ const appendStepSchema = z
   })
   .strict();
 
+const closeStepSchema = z.object({ endedAt: UtcIsoStringSchema.optional() }).strict();
+
 agentTracks.post("/tracks", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = createTrackSchema.safeParse(rawBody);
@@ -170,6 +172,25 @@ agentTracks.post("/tracks/:id/steps", async (c) => {
 
   applyChangesAndNotify(changes);
   return c.json({ ok: true, step, closedStep, idempotent: false }, 201);
+});
+
+agentTracks.post("/tracks/:id/current-step/close", async (c) => {
+  const trackId = c.req.param("id");
+  const rawBody: unknown = await c.req.json().catch(() => ({}));
+  const parsed = closeStepSchema.safeParse(rawBody);
+  if (!parsed.success) return c.json(invalidRequest(parsed.error.issues), 400);
+
+  if (!getTrack(trackId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Track not found" } }, 404);
+
+  const openStep = latestOpenStep(trackId);
+  if (!openStep) return c.json({ ok: false, error: { code: "CONFLICT", message: "Track has no open step" } }, 409);
+
+  const now = new Date().toISOString();
+  const closed = closeStep(openStep, parsed.data.endedAt ?? now, now);
+  if ("error" in closed) return c.json({ ok: false, error: { code: "INVALID_REQUEST", message: closed.error } }, 400);
+
+  applyChangesAndNotify([stepChange("update", closed, now)]);
+  return c.json({ ok: true, closedStep: closed });
 });
 
 export default agentTracks;
