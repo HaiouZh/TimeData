@@ -1,16 +1,20 @@
 import "fake-indexeddb/auto";
-import type { SyncLogEntry } from "@timedata/shared";
+import type { SyncLogEntry, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db/index.js";
 import {
   addTrack,
   addTrackStep,
+  appendUserStep,
+  closeCurrentStep,
   deleteTrack,
   deleteTrackStep,
   getTrack,
   listAllTrackSteps,
   listTracks,
   listTrackSteps,
+  planUserStep,
+  setTrackStatus,
   updateTrack,
   updateTrackStep,
 } from "./tracks.js";
@@ -362,5 +366,97 @@ describe("track local data layer", () => {
     await expect(getTrack(track.id)).resolves.toMatchObject({ title: "T1" });
     await expect(getTrack("missing")).resolves.toBeUndefined();
     await expect(getTrack("invalid")).resolves.toBeUndefined();
+  });
+});
+
+const T0 = "2026-06-21T08:00:00.000Z"; // = now.toISOString()
+const T1 = "2026-06-21T09:00:00.000Z"; // = later.toISOString()
+
+function buildStep(partial: Partial<TrackStep> & { id: string; seq: number }): TrackStep {
+  return {
+    trackId: "t1",
+    source: "agent",
+    content: "",
+    startedAt: T0,
+    endedAt: T0,
+    refs: [],
+    tags: [],
+    createdAt: T0,
+    updatedAt: T0,
+    ...partial,
+  };
+}
+
+describe("planUserStep (pure)", () => {
+  it("open 模式闭合最新开口步并新建开口 user 当前步,seq=max+1", () => {
+    const { closed, created } = planUserStep(
+      [buildStep({ id: "s0", seq: 0, endedAt: T0 }), buildStep({ id: "open", seq: 1, startedAt: T0, endedAt: null })],
+      { trackId: "t1", id: "new", content: "下场推进一段", mode: "open", tags: [], timestamp: T1 },
+    );
+    expect(closed).toMatchObject({ id: "open", endedAt: T1, updatedAt: T1 });
+    expect(created).toMatchObject({
+      id: "new",
+      trackId: "t1",
+      source: "user",
+      content: "下场推进一段",
+      startedAt: T1,
+      endedAt: null,
+      refs: [],
+      tags: [],
+      seq: 2,
+      createdAt: T1,
+      updatedAt: T1,
+    });
+  });
+
+  it("instant 模式建零历时闭合步,透传 tags,不动开口步", () => {
+    const { closed, created } = planUserStep([buildStep({ id: "open", seq: 0, startedAt: T0, endedAt: null })], {
+      trackId: "t1",
+      id: "note",
+      content: "记一笔",
+      mode: "instant",
+      tags: ["批注"],
+      timestamp: T1,
+    });
+    expect(closed).toBeNull();
+    expect(created).toMatchObject({ id: "note", source: "user", startedAt: T1, endedAt: T1, seq: 1, tags: ["批注"] });
+  });
+
+  it("open 模式无开口步时不闭合,seq 仍接最大", () => {
+    const { closed, created } = planUserStep([buildStep({ id: "s0", seq: 0, endedAt: T0 })], {
+      trackId: "t1",
+      id: "new",
+      content: "x",
+      mode: "open",
+      tags: [],
+      timestamp: T1,
+    });
+    expect(closed).toBeNull();
+    expect(created).toMatchObject({ endedAt: null, seq: 1 });
+  });
+
+  it("空步集 seq 从 0 起", () => {
+    const { created } = planUserStep([], {
+      trackId: "t1",
+      id: "new",
+      content: "x",
+      mode: "open",
+      tags: [],
+      timestamp: T0,
+    });
+    expect(created.seq).toBe(0);
+  });
+
+  it("闭合时间早于开口步开始 → 抛错(镜像 server closeStep 守卫)", () => {
+    expect(() =>
+      planUserStep([buildStep({ id: "open", seq: 0, startedAt: T1, endedAt: null })], {
+        trackId: "t1",
+        id: "n",
+        content: "x",
+        mode: "open",
+        tags: [],
+        timestamp: T0,
+      }),
+    ).toThrow("闭合时间不能早于开口步开始时间");
   });
 });

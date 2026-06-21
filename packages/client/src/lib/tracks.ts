@@ -43,6 +43,22 @@ export interface UpdateTrackStepPatch {
   now?: Date;
 }
 
+export type UserStepMode = "open" | "instant";
+
+export interface PlanUserStepInput {
+  trackId: string;
+  id: string;
+  content: string;
+  mode: UserStepMode;
+  tags: string[];
+  timestamp: string;
+}
+
+export interface PlanUserStepResult {
+  closed: TrackStep | null;
+  created: TrackStep;
+}
+
 function nowIso(now?: Date): string {
   return (now ?? new Date()).toISOString();
 }
@@ -56,6 +72,22 @@ function trimRequired(value: string, message: string): string {
 async function nextStepSeq(trackId: string): Promise<number> {
   const steps = await db.trackSteps.where("trackId").equals(trackId).toArray();
   return steps.reduce((max, step) => Math.max(max, step.seq + 1), 0);
+}
+
+function latestOpenStep(steps: TrackStep[]): TrackStep | null {
+  let current: TrackStep | null = null;
+  for (const step of steps) {
+    if (step.endedAt !== null) continue;
+    if (
+      current === null ||
+      step.seq > current.seq ||
+      (step.seq === current.seq && step.startedAt > current.startedAt) ||
+      (step.seq === current.seq && step.startedAt === current.startedAt && step.id > current.id)
+    ) {
+      current = step;
+    }
+  }
+  return current;
 }
 
 function byTrackStepOrder(a: TrackStep, b: TrackStep): number {
@@ -184,6 +216,35 @@ export async function updateTrackStep(id: string, patch: UpdateTrackStepPatch): 
   });
 
   return next;
+}
+
+export function planUserStep(steps: TrackStep[], input: PlanUserStepInput): PlanUserStepResult {
+  const seq = steps.reduce((max, step) => Math.max(max, step.seq + 1), 0);
+
+  let closed: TrackStep | null = null;
+  if (input.mode === "open") {
+    const open = latestOpenStep(steps);
+    if (open) {
+      if (input.timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
+      closed = TrackStepSchema.parse({ ...open, endedAt: input.timestamp, updatedAt: input.timestamp });
+    }
+  }
+
+  const created = TrackStepSchema.parse({
+    id: input.id,
+    trackId: input.trackId,
+    source: "user",
+    content: input.content,
+    startedAt: input.timestamp,
+    endedAt: input.mode === "open" ? null : input.timestamp,
+    refs: [],
+    tags: input.tags,
+    seq,
+    createdAt: input.timestamp,
+    updatedAt: input.timestamp,
+  });
+
+  return { closed, created };
 }
 
 export async function getTrack(id: string): Promise<Track | undefined> {
