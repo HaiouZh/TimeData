@@ -1,11 +1,6 @@
 import type { TrackStep } from "@timedata/shared";
-import { formatStepDuration, isDecisionStep } from "../../lib/tracksView.js";
+import { formatStepDuration, isDecisionStep, stepSourceText } from "../../lib/tracksView.js";
 import { RefChip } from "./RefChip.js";
-
-function sourceText(step: TrackStep): string {
-  if (step.source === "user") return "我";
-  return step.sourceLabel ?? "agent";
-}
 
 // 当前步>决策步>普通步:当前步用 accent,决策步用 warn,其余默认。全为已核实 token。
 function rowClass(isCurrent: boolean, decision: boolean): string {
@@ -36,7 +31,7 @@ export function TrackStepRow({
     >
       <div className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
         <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
-          {sourceText(step)}
+          {stepSourceText(step)}
         </span>
         {decision && <span className="text-warn">决策步</span>}
         <span>{durationLabel}</span>

@@ -1,13 +1,17 @@
 import type { Ref, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
+import type { InboxEntry } from "./tracksView.js";
 import {
+  actionableInbox,
   currentStepId,
   formatStepDuration,
   groupStepsByTrack,
   isDecisionStep,
   isLinkRef,
+  matchesActionTags,
   orderedTimeline,
   partitionTracks,
+  stepSourceText,
   trackProgressSummary,
 } from "./tracksView.js";
 
@@ -108,5 +112,39 @@ describe("tracksView pure helpers", () => {
     // 协议白名单:危险协议或缺协议的 url 型 ref 都不放行,杜绝 javascript: 进 href
     expect(isLinkRef({ kind: "url", id: "javascript:alert(1)" } as Ref)).toBe(false);
     expect(isLinkRef({ kind: "url", id: "x.test" } as Ref)).toBe(false);
+  });
+
+  it("stepSourceText labels user as 我 and falls back to agent", () => {
+    expect(stepSourceText(step({ id: "a", seq: 0, source: "user" }))).toBe("我");
+    expect(stepSourceText(step({ id: "b", seq: 0, source: "agent", sourceLabel: "codex" }))).toBe("codex");
+    expect(stepSourceText(step({ id: "c", seq: 0, source: "agent" }))).toBe("agent");
+  });
+
+  it("matchesActionTags intersects step tags with action tags, trimming both", () => {
+    expect(matchesActionTags(["等我"], ["等我", "卡住"])).toBe(true);
+    expect(matchesActionTags([" 等我 "], ["等我"])).toBe(true);
+    expect(matchesActionTags(["进行中"], ["等我"])).toBe(false);
+    expect(matchesActionTags(["等我"], [])).toBe(false);
+  });
+
+  it("actionableInbox surfaces current open steps of active tracks hitting actionTags, oldest first", () => {
+    const tracks = [track("a1", "active"), track("a2", "active"), track("p1", "parked"), track("c1", "concluded")];
+    const steps = [
+      step({ id: "s-a1", seq: 1, trackId: "a1", endedAt: null, startedAt: "2026-06-21T05:00:00.000Z", tags: ["等我"] }),
+      step({ id: "s-a1-old", seq: 0, trackId: "a1", endedAt: "2026-06-21T01:00:00.000Z", tags: ["等我"] }),
+      step({ id: "s-a2", seq: 0, trackId: "a2", endedAt: null, startedAt: "2026-06-21T02:00:00.000Z", tags: ["卡住"] }),
+      step({ id: "s-p1", seq: 0, trackId: "p1", endedAt: null, startedAt: T, tags: ["等我"] }),
+      step({ id: "s-c1", seq: 0, trackId: "c1", endedAt: null, startedAt: T, tags: ["等我"] }),
+    ];
+    const inbox: InboxEntry[] = actionableInbox(tracks, groupStepsByTrack(steps), ["等我", "卡住"]);
+    // parked/concluded 排除;闭合的历史步排除;a2(02:00)早于 a1(05:00)→ a2 在前。
+    expect(inbox.map((e) => e.step.id)).toEqual(["s-a2", "s-a1"]);
+    expect(inbox.map((e) => e.track.id)).toEqual(["a2", "a1"]);
+  });
+
+  it("actionableInbox returns nothing when actionTags is empty", () => {
+    const tracks = [track("a1", "active")];
+    const steps = [step({ id: "s", seq: 0, trackId: "a1", endedAt: null, tags: ["等我"] })];
+    expect(actionableInbox(tracks, groupStepsByTrack(steps), [])).toEqual([]);
   });
 });
