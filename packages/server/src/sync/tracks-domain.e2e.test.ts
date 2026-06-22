@@ -75,6 +75,7 @@ beforeEach(async () => {
       summary TEXT,
       status TEXT NOT NULL,
       refs TEXT NOT NULL DEFAULT '[]',
+      goal_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

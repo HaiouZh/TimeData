@@ -74,4 +74,9 @@ describe("rowToTask", () => {
     expect(rowToTask({ ...taskRow, parent_id: "root-1" }).parentId).toBe("root-1");
     expect(rowToTask({ ...taskRow, parent_id: null }).parentId).toBeNull();
   });
+
+  it("maps goal_id to goalId", () => {
+    expect(rowToTask({ ...taskRow, goal_id: "goal-1" }).goalId).toBe("goal-1");
+    expect(rowToTask({ ...taskRow, goal_id: null }).goalId).toBeNull();
+  });
 });

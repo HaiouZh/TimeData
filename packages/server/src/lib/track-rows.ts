@@ -6,6 +6,7 @@ export interface TrackRow {
   summary: string | null;
   status: string;
   refs: string | null;
+  goal_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +33,7 @@ export function trackToRow(data: Track): Record<string, string | number | null> 
     summary: data.summary ?? null,
     status: data.status,
     refs: JSON.stringify(data.refs ?? []),
+    goal_id: data.goalId ?? null,
     created_at: data.createdAt,
   };
 }
@@ -43,6 +45,7 @@ export function rowToTrack(row: TrackRow): Track {
     ...(row.summary !== null ? { summary: row.summary } : {}),
     status: row.status as Track["status"],
     refs: row.refs ? JSON.parse(row.refs) : [],
+    goalId: row.goal_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

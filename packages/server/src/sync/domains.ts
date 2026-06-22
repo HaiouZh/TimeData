@@ -21,6 +21,7 @@ import {
   healthStressToRow, healthRunToRow,
 } from "../lib/healthRows.js";
 import { type HealthChartRow, rowToHealthChart, healthChartToRow } from "../lib/chartRows.js";
+import { type GoalRow, goalToRow, rowToGoal } from "../lib/goal-rows.js";
 import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
 import { recordSeq } from "./seq.js";
 
@@ -343,6 +344,7 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     sort_order: task.sortOrder,
     scheduled_at: task.scheduledAt ?? null,
     parent_id: task.parentId ?? null,
+    goal_id: task.goalId ?? null,
     completed_count: task.completedCount ?? 0,
     completed_at: task.completedAt ?? null,
     tags: JSON.stringify(task.tags ?? []),
@@ -415,6 +417,7 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   health_charts: simpleLwwDomain<HealthChartRow>("health_charts", healthChartToRow, rowToHealthChart),
   tracks: simpleLwwDomain<TrackRow>("tracks", (data) => trackToRow(data as never), rowToTrack),
   track_steps: simpleLwwDomain<TrackStepRow>("track_steps", (data) => trackStepToRow(data as never), rowToTrackStep),
+  goals: simpleLwwDomain<GoalRow>("goals", (data) => goalToRow(data as never), rowToGoal),
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

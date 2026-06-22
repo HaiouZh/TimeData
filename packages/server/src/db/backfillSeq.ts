@@ -16,6 +16,7 @@ const BUSINESS_TABLES: Array<{ table: string; pk: string }> = [
   { table: "health_charts", pk: "id" },
   { table: "tracks", pk: "id" },
   { table: "track_steps", pk: "id" },
+  { table: "goals", pk: "id" },
 ];
 
 // 给所有"在业务表里有行、但 sync_seq 里没有任何记录"的行补一条 create seq。

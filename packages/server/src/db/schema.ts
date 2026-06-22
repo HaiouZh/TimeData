@@ -28,6 +28,18 @@ export function ensureTaskParentIdColumn(db: Database): void {
   db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)");
 }
 
+export function ensureTaskGoalIdColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("goal_id")) db.exec("ALTER TABLE tasks ADD COLUMN goal_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_goal_id ON tasks(goal_id)");
+}
+
+export function ensureTrackGoalIdColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tracks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("goal_id")) db.exec("ALTER TABLE tracks ADD COLUMN goal_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tracks_goal_id ON tracks(goal_id)");
+}
+
 export function ensureTaskCompletedCountColumn(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
@@ -123,6 +135,7 @@ export function initializeDatabase(): void {
       sort_order INTEGER NOT NULL DEFAULT 0,
       scheduled_at TEXT,
       parent_id TEXT,
+      goal_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
@@ -136,6 +149,18 @@ export function initializeDatabase(): void {
       summary TEXT,
       status TEXT NOT NULL,
       refs TEXT NOT NULL DEFAULT '[]',
+      goal_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      note TEXT,
+      prerequisites TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -198,6 +223,8 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_quick_notes_updated_at ON quick_notes(updated_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
     CREATE INDEX IF NOT EXISTS idx_tracks_updated_at ON tracks(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
+    CREATE INDEX IF NOT EXISTS idx_goals_updated_at ON goals(updated_at);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_id ON track_steps(track_id);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_seq ON track_steps(track_id, seq);
     CREATE INDEX IF NOT EXISTS idx_track_steps_updated_at ON track_steps(updated_at);
@@ -301,6 +328,8 @@ export function initializeDatabase(): void {
   ensureTaskCompletedCountColumn(db);
   ensureTaskCompletionMetadataColumns(db);
   ensureTaskParentIdColumn(db);
+  ensureTaskGoalIdColumn(db);
+  ensureTrackGoalIdColumn(db);
   // 退役 turn（M2，2026-06-20）：摘掉 tasks 表的 turn/turn_at 列。明文列名是合法墓碑，
   // 复用 M1 的幂等删列 helper；旧列不存在时 no-op。见 docs_local/specs/2026-06-20-退役turn-design.md。
   dropColumnsIfExist(db, "tasks", ["turn", "turn_at"]);

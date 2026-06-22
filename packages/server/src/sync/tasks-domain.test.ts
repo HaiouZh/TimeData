@@ -26,6 +26,7 @@ beforeEach(async () => {
       id TEXT PRIMARY KEY, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
       recurrence TEXT, last_done_at TEXT, start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT, parent_id TEXT,
+      goal_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',

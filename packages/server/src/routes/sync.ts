@@ -116,8 +116,8 @@ function replaceServerData(
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertTask = db.prepare(`
-    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, parent_id, completed_count, completed_at, tags, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, parent_id, goal_id, completed_count, completed_at, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const orderedCategories = [...categories].sort((a, b) => {
@@ -171,6 +171,7 @@ function replaceServerData(
       task.sortOrder,
       task.scheduledAt ?? null,
       task.parentId ?? null,
+      task.goalId ?? null,
       task.completedCount ?? 0,
       task.completedAt ?? null,
       JSON.stringify(task.tags ?? []),

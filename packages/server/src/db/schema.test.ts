@@ -11,6 +11,10 @@ function taskColumnNames(db: Database.Database): Set<string> {
   return new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
 }
 
+function trackColumnNames(db: Database.Database): Set<string> {
+  return new Set((db.prepare("PRAGMA table_info(tracks)").all() as Array<{ name: string }>).map((column) => column.name));
+}
+
 beforeEach(async () => {
   db = new Database(":memory:");
   vi.resetModules();
@@ -136,6 +140,7 @@ describe("initializeDatabase", () => {
       ["summary", "TEXT", 0, 0],
       ["status", "TEXT", 1, 0],
       ["refs", "TEXT", 1, 0],
+      ["goal_id", "TEXT", 0, 0],
       ["created_at", "TEXT", 1, 0],
       ["updated_at", "TEXT", 1, 0],
     ]);
@@ -172,6 +177,27 @@ describe("initializeDatabase", () => {
       (row) => row.name,
     );
     expect(trackIndexes).toContain("idx_tracks_updated_at");
+    expect(trackIndexes).toContain("idx_tracks_goal_id");
+  });
+
+  it("creates goals table and membership columns", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    expect(db.prepare("PRAGMA table_info(goals)").all()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "id" }),
+        expect.objectContaining({ name: "kind" }),
+        expect.objectContaining({ name: "prerequisites" }),
+      ]),
+    );
+    expect(db.prepare("PRAGMA table_info(tasks)").all()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "goal_id" })]),
+    );
+    expect(db.prepare("PRAGMA table_info(tracks)").all()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "goal_id" })]),
+    );
   });
 
   it("adds source columns to legacy quick_notes tables", async () => {
@@ -296,6 +322,34 @@ describe("initializeDatabase", () => {
 
     const indexes = (db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>).map((row) => row.name);
     expect(indexes).toContain("idx_tasks_parent_id");
+  });
+
+  it("ensureTaskGoalIdColumn adds goal_id and index", async () => {
+    const { ensureTaskGoalIdColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+
+    ensureTaskGoalIdColumn(db);
+    ensureTaskGoalIdColumn(db);
+
+    const columns = taskColumnNames(db);
+    expect(columns.has("goal_id")).toBe(true);
+
+    const indexes = (db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(indexes).toContain("idx_tasks_goal_id");
+  });
+
+  it("ensureTrackGoalIdColumn adds goal_id and index", async () => {
+    const { ensureTrackGoalIdColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tracks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+
+    ensureTrackGoalIdColumn(db);
+    ensureTrackGoalIdColumn(db);
+
+    const columns = trackColumnNames(db);
+    expect(columns.has("goal_id")).toBe(true);
+
+    const indexes = (db.prepare("PRAGMA index_list(tracks)").all() as Array<{ name: string }>).map((row) => row.name);
+    expect(indexes).toContain("idx_tracks_goal_id");
   });
 
   it("给缺 completed_count 的旧 tasks 表补列", async () => {
