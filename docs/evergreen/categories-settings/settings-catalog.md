@@ -37,7 +37,7 @@ last-reviewed: 2026-06-22
 |---|---|---|---|
 | `sleep.categoryId` | 顶层分类 ID 或 null | `lib/sleepCategorySetting.ts` | [stats-insights](../stats-insights.md)（睡眠口径） |
 | `punch.categoryId.v1` | 子分类 ID 或 null（须未归档子分类） | `lib/settings/punchCategorySetting.ts` | [timeline](../timeline.md)（打点） |
-| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/,/todo,/tracks,/stats/time,/stats/health]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 底部导航 |
+| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/,/todo,/tracks,/goals,/stats/time,/stats/health]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 底部导航 |
 | `health.range.presets` | 逗号串 `7,30,90,180,365,all` | `lib/settings/healthRangeSetting.ts`（covers 归 [health/charts](../health/charts.md)） | [health](../health.md) |
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |

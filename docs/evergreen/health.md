@@ -11,10 +11,11 @@ covers:
   - packages/client/src/db/index.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/pages/HealthStatsPage.tsx
-last-reviewed: 2026-06-20
+last-reviewed: 2026-06-22
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
+<!-- 复核 2026-06-22（目标层 Phase 1）：新增 goals 域与 Dexie v10 触及共享登记簿 / db index covers；健康 6 域 schema、同步语义、备份角色均不变。 -->
 
 # 健康数据
 
@@ -72,7 +73,7 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 3. **`runs` 不参与自动抓取缺口判断**（`DAILY_HEALTH_DOMAINS` 不含 runs，详见 [health/garmin-ingest](health/garmin-ingest.md)）；“没有跑步”不等于数据缺失。
 4. **凭证 AES-256-GCM 加密、密钥派生自 `AUTH_TOKEN`**：换 `AUTH_TOKEN` 后旧凭证不可解密。机制与影响详见 [health/garmin-ingest](health/garmin-ingest.md) §凭证。
 5. **`health_charts` 已在运行时登记簿、静态 `SyncChange` 联合和 client/server 同步路径注册**；新增健康配置域仍要同步 shared/server/client 三端登记。
-6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts` 或任务轨道**（见 [backup](backup.md)）。
+6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts`、任务轨道或目标层**（见 [backup](backup.md)）。
 7. **轨道 refs 不改变健康 schema**：跑步、HRV 等结构化指标继续留在健康域；轨道步骤只保存指针和叙事，不新增健康专用字段。
 8. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**；不要因文件名相同把它归进 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
 

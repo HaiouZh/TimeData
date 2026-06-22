@@ -17,7 +17,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
-last-reviewed: 2026-06-20
+last-reviewed: 2026-06-22
 ---
 
 # 时间轴与记录时间规则
@@ -30,7 +30,7 @@ last-reviewed: 2026-06-20
 - 上游：用户在时间轴/新增记录页写入；速记页和圆环中心可触发“打点到现在”；CLI `timedata log` 可经服务端受控 API 创建记录。
 - 下游：客户端本地写 `timeEntries` 与 `syncLog(tableName="time_entries")`；CLI/server 写 SQLite 后追加 `sync_seq`；统计页按同一 `[start, end)` 交集口径读取。
 - 契约：`TimeEntry` 字段 schema 见本文 §1；跨域时间、ID、SQL/Dexie 映射见 [data-model](data-model.md)。
-- 邻居：[categories-settings](categories-settings.md) 管分类与打点分类设置；[stats-insights](stats-insights.md) 管统计聚合；[tracks](tracks.md) 管状态线历时；[sync](sync.md) 管账本和冲突。
+- 邻居：[categories-settings](categories-settings.md) 管分类与打点分类设置；[stats-insights](stats-insights.md) 管统计聚合；[tracks](tracks.md) 管状态线历时；[goals](goals.md) 收编 Task/Track 但不引用 `time_entries`；[sync](sync.md) 管账本和冲突。
 
 ## 1. Schema / 契约
 

@@ -34,7 +34,7 @@ last-reviewed: 2026-06-22
 # 待办任务
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
-> 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
+> 本文讲：Task 字段契约（含 `parentId` 一层父子与 `goalId` 目标归属）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
 > 重复规则引擎（Recurrence schema、spawn、终止条件、预设门）见子文档 [todo/recurrence](todo/recurrence.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
@@ -42,8 +42,8 @@ last-reviewed: 2026-06-22
 
 - **上游**：用户在 Web `TodoPage` 新增/编辑/勾选/排序；速记页 composer 「存待办」调 `addTask`；授权 agent / CLI 经 `POST /api/agent/tasks/:id/status` 回写状态；CLI 经 `POST /api/tasks/:id/schedule` 排期。
 - **下游**：本地 Dexie `tasks` 与 `syncLog(tableName="tasks")` 同事务写 → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备按 seq 拉取。force-push 里 `tasks` 是核心同步表之一（见 [backup](backup.md)）。
-- **契约**：`Task` 字段 schema（含 `parentId` 一层父子）见本文 §2；`Recurrence` 见 [todo/recurrence](todo/recurrence.md)；跨域约定见 [data-model](data-model.md)；`tags` 不驱动自动逻辑（见 [ADR 0014](../adr/0014-task-tags-vs-fields.md)）。
-- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
+- **契约**：`Task` 字段 schema（含 `parentId` 一层父子与 `goalId` 目标归属）见本文 §2；`Recurrence` 见 [todo/recurrence](todo/recurrence.md)；跨域约定见 [data-model](data-model.md)；`tags` 不驱动自动逻辑（见 [ADR 0014](../adr/0014-task-tags-vs-fields.md)）。
+- **邻居**：[quick-notes](quick-notes.md)（另一捕捉入口）、[goals](goals.md)（收编 Task 作为目标成员）、[sync](sync.md)（LWW 域 + 登记簿）、[cli](cli.md)（`tasks` / `task-*` 命令）。
 
 ## 1. 数据流（本域端到端，跨包）
 
@@ -98,6 +98,7 @@ agent / CLI (task-done/task-tag)
 {
   id: string;                   // NonEmptyTrimmed
   parentId: string | null;      // 默认 null；非空 = 该行是某 root 的子任务（仅一层）
+  goalId: string | null;        // 默认 null；非空 = 该任务属于某个 Goal
   title: string;                // 保存前 trim，拒空
   done: boolean;
   recurrence: Recurrence | null; // 见 todo/recurrence
@@ -133,12 +134,13 @@ agent / CLI (task-done/task-tag)
 |---|---|---|
 | done | done | 0/1 ↔ boolean |
 | parent_id | parentId | TEXT 或 NULL（有 `idx_tasks_parent_id` 索引，无 FK 约束） |
+| goal_id | goalId | TEXT 或 NULL（有 `idx_tasks_goal_id` 索引，无 FK 约束） |
 | recurrence / tags | 同名 | JSON 字符串（recurrence 可 NULL） |
 | last_done_at / start_at / scheduled_at / completed_at | lastDoneAt / startAt / scheduledAt / completedAt | UTC ISO 或 NULL |
 | completed_count / sort_order | completedCount / sortOrder | 整数 |
 | created_at / updated_at | createdAt / updatedAt | UTC ISO（updated_at 服务器分配） |
 
-映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引）。Dexie `tasks` 索引（v8）`"id, parentId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children。
+映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引，`ensureTaskGoalIdColumn` 给旧库补 `goal_id` + 索引）。Dexie `tasks` 索引（v10）`"id, goalId, parentId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children，`goalId` 入索引供目标详情拉成员。
 
 客户端读取 `listTasks` 走 `TaskSchema.safeParse`（parse-on-read）：补默认、剥孤儿、坏行 `console.warn` 跳过；不再手摊默认字段。
 
@@ -155,8 +157,9 @@ agent / CLI (task-done/task-tag)
 5. **DnD 拓扑：顶层单一 `DndContext`，可拖区只有今天 / 收件箱 / 某 root 的 children**：`TodoPage` 顶层一个 `DndContext`，下挂 droppable/SortableContext 命名空间 `pool:today` / `pool:inbox` / `parent:<rootId>`；收件箱跨天只建**一个** SortableContext（按天分段只是 DOM 展示）。`upcoming`（已排期，按日期排序）/ `completed`（只读）/ `recurring`（不渲染）**都不参与拖拽**——每个任务在可拖范围内只渲染一次，draggable id 全局唯一。root 行的拖拽 activator 在行左 2/5 区域（复选框独立 `stopPropagation`，右侧标题区保留打开详情/选词）；有 children 的 root 左侧显示 caret，无 children 显示 grip 指示，图标只作提示。root→child 不再靠 600ms hover-intent 自动展开，而是 `todoDnd.resolveIndentLevel` 读取横向位移、**相对被拖项自身基线**判层级：拖根任务（base=root）右移达到 28px 判 child、回落到 12px 内判 root；拖子任务（base=child，由起拖容器是 `parent:*` 推出）静止恒为 child、向左越过 -28px 才升级 root、回到 -12px 内回落 child。这层基线区分是关键——子任务竖直重排（delta.x≈0）必须保持 child，否则会被误判成 root 而 `promoteToRoot` 拽出父任务。两侧都带滞回避免纵向排序时左右抖动误触；`clampTodoIndentPreview` 按基线把横向预览夹到根的 `0..28px` 或子的 `-28..0px`，拖拽期 `.todo-dnd-dragging .swipeable-list-item` 只放开纵向 overflow、横向继续 clip，避免向右拖拽把 `<main>` 撑出横向可滚面。`handleDragEnd` 经 `todoDnd.resolveTodoDragWithIndent`（内层仍是 `resolveTodoDragOperation`）结合 active container、over container、候选 root、目标池、root 是否已有 children 派发：同容器→`persistTaskOrder` 重排；child→pool→`promoteToRoot`；root/child→合法候选 root→`moveTaskToParent`（带 children 的 root 即使右移也不能降级）；root 在今天↔收件箱互拖→`scheduleTask`/`unscheduleTask`。`persistTaskOrder` 在 Dexie transaction 内回填现有 `sortOrder` 槽位、更新 `updatedAt`、为每个变化项写 `syncLog`，只对同作用域 ids 使用。拖拽中只高亮候选父，不提前展开真实 children；落定为 child 后目标父展开一次。
 6. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + 展示/检索层消费——`filterTasks` 三轴 AND 过滤（含 AND/OR、排除 NOT、标题关键词），`tagColor` 确定性派生颜色（hash 取模色板、不存储），`TagFilterPanel` 底部召唤式三态填色带计数筛选面，`TaskRow` 行内最多 3 chip 带色点。需要代码可靠动作的维度应毕业为结构化字段。
 7. **子任务 = 独立可拖 `Task`（`parentId` 一层）**：见 §2.2。child 勾选不联动父 `done`/`completedAt`（父进度 `m/n` 由 `InlineChildren` 实时聚合，不回写父行）。**重复 root 完成时处理 children（历史快照）**：`completeTask` 读 reset-前 children，同一次返回 `occurrenceChildren`（克隆为指向 occurrence 的独立 child，**如实保留完成时 `done`/`completedAt`/`tags` 快照**，`recurrence` 清空）与 `templateChildren`（同批 child reset 成 `done=false`/`completedAt=null`）；快照与 reset 同源于 reset-前入参，顺序冒险结构性消除。客户端 `toggleTaskDone` 与 agent `done=true` 共用这套，事务内 `bulkAdd(occurrenceChildren)` + `bulkPut(templateChildren)`。历史 occurrence 的 children 在「已完成」内只读显示。
-8. **`tasks` 不引用其他域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出。
-9. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
+8. **`goalId` 只是目标归属**：Goal 可以收编 Task 并读取 `done` 计算项目完成度或主题活跃度，但不会改变 Task 的完成、重复、排序、子任务或排期语义。删除 Goal 只清 `goalId`，不删 Task。
+9. **`tasks` 不引用分类/时间/速记等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；`goalId` 是目标层成员归属的普通 TEXT 字段。
+10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 
 ## 4. 模块速查
 

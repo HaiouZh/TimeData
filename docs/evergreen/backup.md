@@ -8,7 +8,7 @@ covers:
   - packages/client/src/pages/settings/BackupHistoryPage.tsx
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-22
 ---
 
 # 备份与恢复
@@ -46,6 +46,7 @@ TimeData 现有四种备份/可恢复文件：
     "quick_notes": [/* QuickNote[] */],
     "tracks": [/* Track[] */],
     "track_steps": [/* TrackStep[] */],
+    "goals": [/* Goal[] */],
     "health_heart_rate": [/* ... */],
     "health_hrv": [], "health_sleep": [], "health_stress": [], "runs": []
   }
@@ -55,14 +56,14 @@ TimeData 现有四种备份/可恢复文件：
 **备份骑客户端域登记簿（关键设计）**：导出/校验/恢复都从 `packages/client/src/sync/clientDomains.ts` 的 `CLIENT_SYNC_DOMAINS` 派生，不再手写表名。每个域声明 `backup` 角色：
 
 - `"core"`：`categories` / `time_entries`，命名顶层字段，带专属完整性校验（两级分类树、记录外键）。
-- `"bundled"`：普通状态域（`tasks`、`quick_notes`、`tracks`、`track_steps`、5 个健康域），进通用 `domains` map，按 **table 名（snake_case）** 键入，逐条用各自 schema 校验、按 `id` 去重。**新增普通域只要在登记簿标 `backup:"bundled"`，导出/校验/恢复全部白捡**（派生列表见 `BACKUP_BUNDLED_DOMAINS`）。
+- `"bundled"`：普通状态域（`tasks`、`quick_notes`、`tracks`、`track_steps`、`goals`、5 个健康域），进通用 `domains` map，按 **table 名（snake_case）** 键入，逐条用各自 schema 校验、按 `id` 去重。**新增普通域只要在登记簿标 `backup:"bundled"`，导出/校验/恢复全部白捡**（派生列表见 `BACKUP_BUNDLED_DOMAINS`）。
 - `"excluded"`：`settings` 等不进备份。
 
 `timeFormat` 恢复前必须存在且值只能是 `"utc"`。`timeEntries` 的 `startTime` / `endTime` 必须是带毫秒和 `Z` 的 UTC ISO 字符串且 `endTime > startTime`。任务时间字段同样 UTC `.sssZ` 或 `null`，重复规则满足 shared `RecurrenceSchema`；终止式重复的 `count` / `until` 随 `recurrence` JSON 保存，`completedCount` 记录已完成次数，`completedAt` 记录普通任务完成时间，`tags` 保存自由标签数组。缺省会归一为 `completedCount=0`、`completedAt=null`、`tags=[]`。分类树只支持两级结构。
 
 **域的"缺省 vs 存在"语义（恢复安全关键）**：`domains` 里**缺省**的域恢复时**原样保留本地数据**，不清空；只有**存在**（哪怕是 `[]`）的域才会被清空+覆盖。完整导出始终写齐全部 bundled 域（空的也写 `[]`），所以完整恢复语义不变；而自动备份只快照 `core + tasks`、`domains` 只含 `{ tasks }`，恢复它**不会**抹掉本地速记/健康数据。
 
-**包含**：`categories`、`timeEntries`，以及 `domains` 下的 `tasks`、`quick_notes`、`tracks`、`track_steps` 和 5 个健康域。
+**包含**：`categories`、`timeEntries`，以及 `domains` 下的 `tasks`、`quick_notes`、`tracks`、`track_steps`、`goals` 和 5 个健康域。
 
 **不包含**（明确不导出）：
 
@@ -114,7 +115,7 @@ TimeData 现有四种备份/可恢复文件：
 
 `packages/client/src/backup/exportBackup.ts`：
 
-1. 同时读 Dexie `categories`、`timeEntries`，并通过 `BACKUP_BUNDLED_DOMAINS` 读取 `tasks`、`quick_notes`、`tracks`、`track_steps` 和健康 bundled 域。
+1. 同时读 Dexie `categories`、`timeEntries`，并通过 `BACKUP_BUNDLED_DOMAINS` 读取 `tasks`、`quick_notes`、`tracks`、`track_steps`、`goals` 和健康 bundled 域。
 2. 构造 `BackupDocument`（含 `timeFormat: "utc"`），`exportedAt` 用当前时间，`appVersion` 从 `import.meta.env.VITE_APP_VERSION` 读，缺省 `0.1.0`。
 3. `device.deviceName` 默认 `"Web"`，可被参数覆盖（mobile 端会传 `"Android"` 等）。
 4. **只构造 JS 对象**，不直接下载——下载是 UI 层用 `fileDownload.ts` 做的。
@@ -123,7 +124,7 @@ TimeData 现有四种备份/可恢复文件：
 
 ## 3. 校验（`validateBackup`）
 
-恢复前必跑。`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema`、各 bundled 域 schema 与 `UtcIsoStringSchema` 严格校验分类、记录、任务、轨道和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。任务记录经 `TaskSchema` 归一化，旧记录缺少 `completedCount`、`completedAt` 或 `tags` 时分别按 0、`null`、`[]` 恢复；`recurrence.count` 与 `recurrence.until` 同时存在会被拒绝。轨道记录经 `TrackSchema` / `TrackStepSchema` 归一化，`refs` / `tags` 缺省为空数组。
+恢复前必跑。`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema`、各 bundled 域 schema 与 `UtcIsoStringSchema` 严格校验分类、记录、任务、轨道、目标和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。任务记录经 `TaskSchema` 归一化，旧记录缺少 `completedCount`、`completedAt` 或 `tags` 时分别按 0、`null`、`[]` 恢复；`recurrence.count` 与 `recurrence.until` 同时存在会被拒绝。轨道记录经 `TrackSchema` / `TrackStepSchema` 归一化，`refs` / `tags` 缺省为空数组；目标记录经 `GoalSchema` 归一化，`prerequisites` 缺省为空数组并拒绝自环、重复边和环。
 
 `packages/client/src/backup/validateBackup.ts` 检查：
 
