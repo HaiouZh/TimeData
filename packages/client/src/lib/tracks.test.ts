@@ -66,6 +66,7 @@ describe("track local data layer", () => {
       title: "新标题",
       status: "parked",
       refs: [{ kind: "task", id: "task-1", label: "任务一" }],
+      goalId: null,
       createdAt: now.toISOString(),
       updatedAt: later.toISOString(),
     });
