@@ -1,5 +1,7 @@
 import type { Ref, Track, TrackStep } from "@timedata/shared";
+import { courtOfTrackTag, type TrackActionTagConfig } from "./settings/trackActionTagsSetting.js";
 import { formatMinutesDuration } from "./time.js";
+import { TRACK_COURT_META, TRACK_COURTS, type TrackCourt } from "./trackCourts.js";
 
 const MS_PER_DAY = 86_400_000;
 // 决策步词表:命中即视觉区分。tag 是开放扩展,这里只挑出"用于视觉分流"的一组,不进 schema。
@@ -128,6 +130,63 @@ export interface TrackStatusFacet {
   tag: string;
   count: number;
   suggested: boolean;
+}
+
+export interface TrackHandoffSignal {
+  tag: string;
+  court: TrackCourt;
+  stepId: string;
+}
+
+export interface TrackBoardItem {
+  track: Track;
+  signal: TrackHandoffSignal | null;
+}
+
+export interface TrackBoardLane {
+  court: TrackCourt;
+  items: TrackBoardItem[];
+}
+
+export function latestHandoffSignal(
+  steps: TrackStep[],
+  configs: readonly TrackActionTagConfig[],
+): TrackHandoffSignal | null {
+  for (const step of [...steps].sort(byTrackStepOrderDesc)) {
+    for (const tag of uniqueNormalizedTags(step.tags)) {
+      const court = courtOfTrackTag(configs, tag);
+      if (court) return { tag, court, stepId: step.id };
+    }
+  }
+  return null;
+}
+
+export function sortTracksForBoard(
+  tracks: Track[],
+  stepsByTrack: Map<string, TrackStep[]>,
+  configs: readonly TrackActionTagConfig[],
+): TrackBoardItem[] {
+  return tracks
+    .map((track, index) => {
+      const signal = latestHandoffSignal(stepsByTrack.get(track.id) ?? [], configs);
+      const rank = signal ? TRACK_COURT_META[signal.court].rank : TRACK_COURT_META.neutral.rank;
+      return { track, signal, index, rank };
+    })
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ track, signal }) => ({ track, signal }));
+}
+
+export function groupTracksByHandoffCourt(
+  tracks: Track[],
+  stepsByTrack: Map<string, TrackStep[]>,
+  configs: readonly TrackActionTagConfig[],
+): TrackBoardLane[] {
+  const buckets = new Map<TrackCourt, TrackBoardItem[]>();
+  for (const court of TRACK_COURTS) buckets.set(court, []);
+  for (const item of sortTracksForBoard(tracks, stepsByTrack, configs)) {
+    buckets.get(item.signal?.court ?? "neutral")?.push(item);
+  }
+  return TRACK_COURTS.map((court) => ({ court, items: buckets.get(court) ?? [] }));
 }
 
 export function collectStatusFacets(

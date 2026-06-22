@@ -1,23 +1,34 @@
 import type { Ref, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
+import type { TrackActionTagConfig } from "./settings/trackActionTagsSetting.js";
 import {
   collectStatusFacets,
   currentStepId,
   filterTracksByStatusTags,
   formatStepDuration,
+  groupTracksByHandoffCourt,
   groupStepsByTrack,
   isDecisionStep,
   isLinkRef,
+  latestHandoffSignal,
   latestStep,
   latestStepId,
   latestStepsForCard,
   orderedTimeline,
   partitionTracks,
+  sortTracksForBoard,
   stepSourceText,
   trackProgressSummary,
 } from "./tracksView.js";
 
 const T = "2026-06-21T00:00:00.000Z";
+
+const HANDOFF_CONFIGS: TrackActionTagConfig[] = [
+  { tag: "等我", court: "mine" },
+  { tag: "待决策", court: "mine" },
+  { tag: "卡住", court: "blocked" },
+  { tag: "agent在做", court: "agent" },
+];
 
 function step(partial: Partial<TrackStep> & { id: string; seq: number }): TrackStep {
   return {
@@ -100,6 +111,49 @@ describe("tracksView pure helpers", () => {
     const grouped = groupStepsByTrack(steps);
     expect(filterTracksByStatusTags(tracks, grouped, []).map((t) => t.id)).toEqual(["a1", "a2", "a3"]);
     expect(filterTracksByStatusTags(tracks, grouped, ["等我", "agent在做"]).map((t) => t.id)).toEqual(["a1", "a2"]);
+  });
+
+  it("latestHandoffSignal is sticky and ignores later untagged steps", () => {
+    const signal = latestHandoffSignal(
+      [
+        step({ id: "blocked", seq: 0, tags: ["卡住"] }),
+        step({ id: "note", seq: 1, tags: ["批注"] }),
+        step({ id: "plain", seq: 2, tags: [] }),
+      ],
+      HANDOFF_CONFIGS,
+    );
+    expect(signal).toEqual({ tag: "卡住", court: "blocked", stepId: "blocked" });
+  });
+
+  it("latestHandoffSignal ignores non-configured tags", () => {
+    expect(latestHandoffSignal([step({ id: "note", seq: 0, tags: ["批注"] })], HANDOFF_CONFIGS)).toBeNull();
+  });
+
+  it("sortTracksForBoard floats mine-side tracks and preserves non-mine order", () => {
+    const tracks = [track("agent", "active"), track("plain", "active"), track("mine", "active")];
+    const steps = [
+      step({ id: "agent-step", trackId: "agent", seq: 0, tags: ["agent在做"] }),
+      step({ id: "mine-step", trackId: "mine", seq: 0, tags: ["等我"] }),
+    ];
+    expect(sortTracksForBoard(tracks, groupStepsByTrack(steps), HANDOFF_CONFIGS).map((item) => item.track.id)).toEqual([
+      "mine",
+      "agent",
+      "plain",
+    ]);
+  });
+
+  it("groupTracksByHandoffCourt keeps empty lanes in fixed order and puts no-signal tracks into neutral lane", () => {
+    const lanes = groupTracksByHandoffCourt(
+      [track("mine", "active"), track("neutral", "active")],
+      groupStepsByTrack([step({ id: "mine-step", trackId: "mine", seq: 0, tags: ["待决策"] })]),
+      HANDOFF_CONFIGS,
+    );
+    expect(lanes.map((lane) => [lane.court, lane.items.map((item) => item.track.id)])).toEqual([
+      ["mine", ["mine"]],
+      ["agent", []],
+      ["blocked", []],
+      ["neutral", ["neutral"]],
+    ]);
   });
 
   it("latestStepsForCard returns the newest steps for compact cards", () => {
