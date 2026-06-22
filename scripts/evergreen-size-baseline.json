@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 5879,
+    "chars": 5917,
     "covers": 12
   },
   "docs/evergreen/backup.md": {
@@ -16,7 +16,7 @@
     "covers": 12
   },
   "docs/evergreen/categories-settings/settings-catalog.md": {
-    "chars": 4247,
+    "chars": 4267,
     "covers": 5
   },
   "docs/evergreen/cli.md": {
@@ -32,7 +32,7 @@
     "covers": 27
   },
   "docs/evergreen/design-language.md": {
-    "chars": 4237,
+    "chars": 4360,
     "covers": 1
   },
   "docs/evergreen/design-language/controls.md": {
@@ -68,7 +68,7 @@
     "covers": 10
   },
   "docs/evergreen/sync.md": {
-    "chars": 15900,
+    "chars": 15978,
     "covers": 25
   },
   "docs/evergreen/timeline.md": {
@@ -76,7 +76,7 @@
     "covers": 15
   },
   "docs/evergreen/todo.md": {
-    "chars": 14764,
+    "chars": 14911,
     "covers": 26
   },
   "docs/evergreen/todo/recurrence.md": {
@@ -84,7 +84,7 @@
     "covers": 5
   },
   "docs/evergreen/tracks.md": {
-    "chars": 5781,
+    "chars": 5162,
     "covers": 7
   }
 }
