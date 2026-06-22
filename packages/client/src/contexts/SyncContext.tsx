@@ -86,6 +86,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const delayedSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const writeSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bumpSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const failedRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncingRef = useRef(syncState.syncing);
   const syncRef = useRef(syncState.sync);
   const cloudSyncEnabledRef = useRef(cloudSyncEnabled);
@@ -123,22 +124,40 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await syncRef.current();
   }, []);
 
+  const runStaleSync = useCallback(async ({ retryOnFailure, attemptedAt }: {
+    retryOnFailure: boolean;
+    attemptedAt: number;
+  }) => {
+    if (syncingRef.current || !cloudSyncEnabledRef.current) return;
+
+    lastAutoAttemptAtRef.current = attemptedAt;
+    const ok = await syncRef.current();
+    if (ok || !retryOnFailure || failedRetryTimerRef.current) return;
+
+    lastAutoAttemptAtRef.current = null;
+    failedRetryTimerRef.current = setTimeout(() => {
+      failedRetryTimerRef.current = null;
+      if (syncingRef.current || !cloudSyncEnabledRef.current) return;
+      lastAutoAttemptAtRef.current = Date.now();
+      void syncRef.current();
+    }, 0);
+  }, []);
+
   const syncIfStale = useCallback(async (now = Date.now()) => {
     const lastAttemptAt = lastAutoAttemptAtRef.current;
-    if (shouldRunThrottledSync({ cloudSyncEnabled, syncing: syncState.syncing, now, lastAttemptAt })) {
-      lastAutoAttemptAtRef.current = now;
-      await syncState.sync();
+    if (shouldRunThrottledSync({ cloudSyncEnabled, syncing: syncingRef.current, now, lastAttemptAt })) {
+      await runStaleSync({ retryOnFailure: true, attemptedAt: now });
       return;
     }
 
-    if (!cloudSyncEnabled || syncState.syncing || lastAttemptAt === null || delayedSyncTimerRef.current) return;
+    if (!cloudSyncEnabled || syncingRef.current || lastAttemptAt === null || delayedSyncTimerRef.current) return;
 
     const delayMs = Math.max(SYNC_STALE_THROTTLE_MS - (now - lastAttemptAt), 0);
     delayedSyncTimerRef.current = setTimeout(() => {
       delayedSyncTimerRef.current = null;
       void runSyncIfUnsynced();
     }, delayMs);
-  }, [cloudSyncEnabled, runSyncIfUnsynced, syncState.sync, syncState.syncing]);
+  }, [cloudSyncEnabled, runStaleSync, runSyncIfUnsynced]);
 
   const syncAfterWrite = useCallback(() => {
     if (!cloudSyncEnabled || syncState.syncing) return;
@@ -212,6 +231,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       }
       if (bumpSyncTimerRef.current) {
         clearTimeout(bumpSyncTimerRef.current);
+      }
+      if (failedRetryTimerRef.current) {
+        clearTimeout(failedRetryTimerRef.current);
       }
     };
   }, []);

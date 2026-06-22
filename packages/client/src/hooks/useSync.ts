@@ -51,7 +51,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setLastSynced(safeGetItem(STORAGE_KEYS.lastSyncDisplayAt));
   }, []);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (): Promise<boolean> => {
     setSyncing(true);
     setError(null);
     setConflicts([]);
@@ -66,8 +66,10 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       }
       safeSetItem(STORAGE_KEYS.lastSyncDisplayAt, new Date().toISOString());
       await refreshSyncStatus();
+      return true;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "同步失败");
+      return false;
     } finally {
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);

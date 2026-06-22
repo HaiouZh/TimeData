@@ -135,7 +135,7 @@ beforeEach(() => {
   mockSyncState.syncing = false;
   mockSyncState.lastSynced = null;
   mockSyncState.error = null;
-  mockSyncActions.sync.mockResolvedValue(undefined);
+  mockSyncActions.sync.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -398,6 +398,41 @@ describe("SyncProvider", () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(mockSyncActions.sync).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("retries a failed stale sync immediately without waiting for local unsynced changes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    mockSyncActions.sync.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    let syncIfStale: () => Promise<void> = async () => undefined;
+
+    function Probe() {
+      syncIfStale = useSyncContext().syncIfStale;
+      return createElement("span", null, "probe");
+    }
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement(Probe)));
+    });
+    await act(async () => {
+      await syncIfStale();
+    });
+
+    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
     });
 
     expect(mockSyncActions.sync).toHaveBeenCalledTimes(2);
