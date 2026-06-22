@@ -66,6 +66,17 @@ const clickAndFlush = async (el: Element | null) => {
 };
 const input = (host: HTMLElement) => host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement | null;
 
+// addTask 是异步（Dexie 写 + setText 回填），点提交到输入框清空之间隔着多个宏任务边界。
+// 单次 flush 在重载下不够，沿用主仓既有的 setTimeout(0) 宏任务边界轮询直到清空。
+async function waitForInputValue(host: HTMLElement, expected: string) {
+  const started = Date.now();
+  while (Date.now() - started < 1000) {
+    if ((input(host)?.value ?? null) === expected) return;
+    await flush();
+  }
+  throw new Error(`Timed out waiting for input value ${expected}`);
+}
+
 describe("TodoComposer 底部操作栏", () => {
   it("空输入点左键 → 展开标签面板、输入框收起", async () => {
     const { host, root } = await render({ tags: [{ tag: "工作", count: 1 }] });
@@ -95,7 +106,7 @@ describe("TodoComposer 底部操作栏", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].title).toBe("写周报");
     expect(tasks[0].tags).toEqual(["工作"]);
-    expect((input(host) as HTMLInputElement).value).toBe("");
+    await waitForInputValue(host, "");
     await unmount(root);
   });
 
