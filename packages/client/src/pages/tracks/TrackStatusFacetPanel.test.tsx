@@ -24,7 +24,7 @@ describe("TrackStatusFacetPanel", () => {
       { tag: "agent在做", count: 2, suggested: true },
       { tag: "复盘", count: 1, suggested: false },
     ]);
-    expect(host.textContent).toContain("状态标签");
+    expect(host.textContent).toContain("交棒筛选");
     expect(host.textContent).toContain("等我 0");
     expect(host.textContent).toContain("agent在做 2");
     expect(host.textContent).toContain("复盘 1");

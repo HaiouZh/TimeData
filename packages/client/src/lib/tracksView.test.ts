@@ -82,35 +82,37 @@ describe("tracksView pure helpers", () => {
     expect(currentStepId(steps)).toBe("open");
   });
 
-  it("collectStatusFacets counts active tracks by latest-step tags and keeps suggested tags first", () => {
-    const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("p1", "parked")];
+  it("collectStatusFacets counts configured sticky handoff tags only", () => {
+    const tracks = [track("a1", "active"), track("a2", "active"), track("p1", "parked")];
     const steps = [
-      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["等我"], endedAt: null }),
-      step({ id: "a1-new", trackId: "a1", seq: 1, tags: ["agent在做"], endedAt: "2026-06-21T02:00:00.000Z" }),
-      step({ id: "a2-new", trackId: "a2", seq: 0, tags: ["待决策", "临时标签"], endedAt: null }),
-      step({ id: "a3-new", trackId: "a3", seq: 0, tags: ["临时标签", "临时标签"], endedAt: null }),
-      step({ id: "p1-new", trackId: "p1", seq: 0, tags: ["卡住"], endedAt: null }),
+      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["卡住"] }),
+      step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
+      step({ id: "a2-new", trackId: "a2", seq: 0, tags: ["agent在做", "批注"] }),
+      step({ id: "p1-new", trackId: "p1", seq: 0, tags: ["等我"] }),
     ];
-    expect(collectStatusFacets(tracks, groupStepsByTrack(steps), ["等我", "待决策", "卡住", "agent在做"])).toEqual([
+    expect(collectStatusFacets(tracks, groupStepsByTrack(steps), HANDOFF_CONFIGS)).toEqual([
       { tag: "等我", count: 0, suggested: true },
-      { tag: "待决策", count: 1, suggested: true },
-      { tag: "卡住", count: 0, suggested: true },
+      { tag: "待决策", count: 0, suggested: true },
+      { tag: "卡住", count: 1, suggested: true },
       { tag: "agent在做", count: 1, suggested: true },
-      { tag: "临时标签", count: 2, suggested: false },
     ]);
   });
 
-  it("filterTracksByStatusTags uses OR against latest-step tags and ignores archived tracks", () => {
+  it("filterTracksByStatusTags uses OR against sticky handoff tags and ignores archived tracks", () => {
     const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("c1", "concluded")];
     const steps = [
-      step({ id: "a1", trackId: "a1", seq: 0, tags: ["等我"] }),
+      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["等我"] }),
+      step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
       step({ id: "a2", trackId: "a2", seq: 0, tags: ["agent在做"] }),
       step({ id: "a3", trackId: "a3", seq: 0, tags: ["复盘"] }),
       step({ id: "c1", trackId: "c1", seq: 0, tags: ["等我"] }),
     ];
     const grouped = groupStepsByTrack(steps);
-    expect(filterTracksByStatusTags(tracks, grouped, []).map((t) => t.id)).toEqual(["a1", "a2", "a3"]);
-    expect(filterTracksByStatusTags(tracks, grouped, ["等我", "agent在做"]).map((t) => t.id)).toEqual(["a1", "a2"]);
+    expect(filterTracksByStatusTags(tracks, grouped, [], HANDOFF_CONFIGS).map((t) => t.id)).toEqual(["a1", "a2", "a3"]);
+    expect(filterTracksByStatusTags(tracks, grouped, ["等我", "agent在做"], HANDOFF_CONFIGS).map((t) => t.id)).toEqual([
+      "a1",
+      "a2",
+    ]);
   });
 
   it("latestHandoffSignal is sticky and ignores later untagged steps", () => {

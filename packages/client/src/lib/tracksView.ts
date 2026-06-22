@@ -192,46 +192,35 @@ export function groupTracksByHandoffCourt(
 export function collectStatusFacets(
   tracks: Track[],
   stepsByTrack: Map<string, TrackStep[]>,
-  suggestedTags: readonly string[],
+  configs: readonly TrackActionTagConfig[],
 ): TrackStatusFacet[] {
-  const suggested = uniqueNormalizedTags(suggestedTags);
-  const suggestedSet = new Set(suggested);
   const counts = new Map<string, number>();
 
   for (const track of tracks) {
     if (track.status !== "active") continue;
-    const step = latestStep(stepsByTrack.get(track.id) ?? []);
-    if (!step) continue;
-    for (const tag of uniqueNormalizedTags(step.tags)) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
+    const signal = latestHandoffSignal(stepsByTrack.get(track.id) ?? [], configs);
+    if (!signal) continue;
+    counts.set(signal.tag, (counts.get(signal.tag) ?? 0) + 1);
   }
 
-  const facets: TrackStatusFacet[] = suggested.map((tag) => ({
-    tag,
-    count: counts.get(tag) ?? 0,
+  return configs.map((item) => ({
+    tag: item.tag,
+    count: counts.get(item.tag) ?? 0,
     suggested: true,
   }));
-
-  const actualOnly = [...counts.entries()]
-    .filter(([tag]) => !suggestedSet.has(tag))
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN"));
-
-  for (const [tag, count] of actualOnly) facets.push({ tag, count, suggested: false });
-  return facets;
 }
 
 export function filterTracksByStatusTags(
   tracks: Track[],
   stepsByTrack: Map<string, TrackStep[]>,
   selectedTags: readonly string[],
+  configs: readonly TrackActionTagConfig[],
 ): Track[] {
   const selected = new Set(uniqueNormalizedTags(selectedTags));
   return tracks.filter((track) => {
     if (track.status !== "active") return false;
     if (selected.size === 0) return true;
-    const step = latestStep(stepsByTrack.get(track.id) ?? []);
-    if (!step) return false;
-    return uniqueNormalizedTags(step.tags).some((tag) => selected.has(tag));
+    const signal = latestHandoffSignal(stepsByTrack.get(track.id) ?? [], configs);
+    return signal ? selected.has(signal.tag) : false;
   });
 }

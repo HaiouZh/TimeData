@@ -14,6 +14,7 @@ const now = new Date("2026-06-21T03:00:00.000Z");
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 
 beforeEach(async () => {
+  localStorage.clear();
   await db.open();
   await db.tracks.clear();
   await db.trackSteps.clear();
@@ -62,7 +63,48 @@ function facetButton(host: HTMLElement, label: string): HTMLButtonElement {
 }
 
 function trackCardsText(host: HTMLElement): string {
-  return [...host.querySelectorAll('a[href^="/tracks/"]')].map((item) => item.textContent ?? "").join("\n");
+  return [...host.querySelectorAll("li")].map((item) => item.textContent ?? "").join("\n");
+}
+
+async function typeTextarea(host: HTMLElement, value: string): Promise<void> {
+  await act(async () => {
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setValue?.call(textarea, value);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function clickButton(host: HTMLElement, text: string): Promise<void> {
+  const button = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === text);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`Missing button: ${text}`);
+  return click(button);
+}
+
+async function submitInlineForm(host: HTMLElement): Promise<void> {
+  await act(async () => {
+    const forms = [...host.querySelectorAll("form")];
+    const inline = forms.find((form) => form.querySelector("textarea"));
+    if (!(inline instanceof HTMLFormElement)) throw new Error("Missing inline form");
+    inline.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+}
+
+async function seedTrackWithStep(title: string, tags: string[]) {
+  await addTrack({ title, now });
+  const track = (await listTracks()).find((item) => item.title === title);
+  if (!track) throw new Error(`missing seeded track ${title}`);
+  await addTrackStep({
+    trackId: track.id,
+    source: "agent",
+    content: `${title} step`,
+    startedAt: "2026-06-21T01:00:00.000Z",
+    endedAt: null,
+    tags,
+    seq: 0,
+    now,
+  });
+  return track;
 }
 
 describe("TracksListPage", () => {
@@ -82,7 +124,7 @@ describe("TracksListPage", () => {
     });
     const host = await renderList();
     await waitForText(host, "全马破三");
-    await waitForText(host, "状态标签");
+    await waitForText(host, "交棒筛选");
     await waitForText(host, "base 期");
     expect(host.textContent).toContain("等我 1");
     expect(host.textContent).toContain("agent在做 0");
@@ -219,40 +261,68 @@ describe("TracksListPage", () => {
     expect(host.textContent).not.toContain("进行中无行动标签");
   });
 
-  it("drops selected temporary tags after they disappear from latest-step facets", async () => {
-    await addTrack({ title: "临时标签轨道", now });
+  it("keeps a blocked track in the blocked facet after a later untagged step", async () => {
+    await addTrack({ title: "卡住但有进展", now });
     const [track] = await listTracks();
     await addTrackStep({
       trackId: track.id,
       source: "agent",
-      content: "先复盘",
+      content: "缺权限",
       startedAt: "2026-06-21T01:00:00.000Z",
       endedAt: null,
-      tags: ["复盘"],
+      tags: ["卡住"],
       seq: 0,
       now,
     });
-    const host = await renderList();
-    await waitForText(host, "复盘 1");
-    await click(facetButton(host, "复盘 1"));
-    await waitForCondition(() => facetButton(host, "复盘 1").getAttribute("aria-pressed") === "true", "复盘 selected");
-
     await addTrackStep({
       trackId: track.id,
-      source: "agent",
-      content: "改由 agent 接手",
+      source: "user",
+      content: "补了一句无标签进展",
       startedAt: "2026-06-21T02:00:00.000Z",
-      endedAt: null,
-      tags: ["agent在做"],
+      endedAt: "2026-06-21T02:00:00.000Z",
+      tags: [],
       seq: 1,
       now,
     });
+    const host = await renderList();
+    await waitForText(host, "卡住 1");
+    await click(facetButton(host, "卡住 1"));
+    await waitForCondition(() => trackCardsText(host).includes("卡住但有进展"), "sticky blocked filter");
+  });
 
-    await waitForCondition(
-      () => !host.textContent?.includes("复盘 1") && trackCardsText(host).includes("临时标签轨道"),
-      "stale temporary facet cleanup",
-    );
-    expect(host.textContent).toContain("agent在做 1");
-    expect(host.textContent).not.toContain("没有命中这些状态标签的进行中轨道");
+  it("floats mine-side tracks in flat mode", async () => {
+    await seedTrackWithStep("agent 手上", ["agent在做"]);
+    await seedTrackWithStep("该我确认", ["等我"]);
+    const host = await renderList();
+    await waitForText(host, "该我确认");
+    const cards = [...host.querySelectorAll('a[href^="/tracks/"]')].map((item) => item.textContent ?? "");
+    expect(cards[0]).toContain("该我确认");
+  });
+
+  it("switches to grouped handoff lanes, persists the local view choice, and ignores hidden facet filters", async () => {
+    await seedTrackWithStep("该我确认", ["等我"]);
+    await seedTrackWithStep("agent 手上", ["agent在做"]);
+    const host = await renderList();
+    await click(facetButton(host, "等我 1"));
+    await waitForCondition(() => !trackCardsText(host).includes("agent 手上"), "flat filter applied");
+
+    const groupedButton = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("按该谁了分组"));
+    await click(groupedButton);
+    await waitForText(host, "该我了");
+    expect(localStorage.getItem("timedata_tracks_board_view")).toBe("grouped");
+    expect(host.textContent).not.toContain("交棒筛选");
+    expect(trackCardsText(host)).toContain("agent 手上");
+  });
+
+  it("writes an inline card step through the list page and refreshes handoff placement without navigation", async () => {
+    await seedTrackWithStep("待处理轨道", ["等我"]);
+    const host = await renderList();
+    await waitForText(host, "待处理轨道");
+    await click(host.querySelector('button[aria-label="写一步"]'));
+    await typeTextarea(host, "交给 agent 继续");
+    await clickButton(host, "#agent在做");
+    await submitInlineForm(host);
+    await waitForText(host, "agent在做 1");
+    expect(host.textContent).toContain("待处理轨道");
   });
 });
