@@ -111,7 +111,7 @@ export default function TracksListPage() {
         ) : (
           <div className="space-y-3">
             {lanes.map((lane, index) => (
-              <details key={lane.court} open={index === 0 || lane.items.length > 0} className="rounded-card border border-border bg-surface">
+              <details key={lane.court} open={index === 0} className="rounded-card border border-border bg-surface">
                 <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-ink">
                   <span className="inline-flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full ${TRACK_COURT_META[lane.court].dotClass}`} />

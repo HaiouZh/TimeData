@@ -314,6 +314,16 @@ describe("TracksListPage", () => {
     expect(localStorage.getItem("timedata_tracks_board_view")).toBe("grouped");
     expect(host.textContent).not.toContain("交棒筛选");
     expect(trackCardsText(host)).toContain("agent 手上");
+    // 设计稿 §4.2：该我了泳道默认展开，非我侧泳道默认折叠（点开才看别人手上的）。
+    const lane = (label: string): HTMLDetailsElement => {
+      const found = [...host.querySelectorAll("details")].find((item) =>
+        item.querySelector("summary")?.textContent?.includes(label),
+      );
+      if (!(found instanceof HTMLDetailsElement)) throw new Error(`Missing lane: ${label}`);
+      return found;
+    };
+    expect(lane("该我了").open).toBe(true);
+    expect(lane("等 agent").open).toBe(false);
   });
 
   it("writes an inline card step through the list page and refreshes handoff placement without navigation", async () => {
