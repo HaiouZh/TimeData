@@ -7,6 +7,7 @@ const TAB_LABELS: Record<ConfigurableTab, string> = {
   "/": "时间轴",
   "/todo": "待办",
   "/tracks": "轨道",
+  "/goals": "目标",
   "/stats/time": "时间",
   "/stats/health": "健康",
 };

@@ -37,6 +37,7 @@ describe("SettingsNavPage", () => {
   it("offers 轨道, 时间 and 健康 as separate toggles, not 统计", async () => {
     const { host, root } = await renderPage();
     expect(host.querySelector('[role="switch"][aria-label="轨道"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="目标"]')).not.toBeNull();
     expect(host.querySelector('[role="switch"][aria-label="时间"]')).not.toBeNull();
     expect(host.querySelector('[role="switch"][aria-label="健康"]')).not.toBeNull();
     expect(host.querySelector('[role="switch"][aria-label="统计"]')).toBeNull();

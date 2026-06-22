@@ -15,6 +15,8 @@ import SettingsPage from "./pages/SettingsPage.tsx";
 import StatsPage from "./pages/StatsPage.tsx";
 import TimeStatsPage from "./pages/TimeStatsPage.tsx";
 import { TodoPage } from "./pages/TodoPage.tsx";
+import GoalDetailPage from "./pages/goals/GoalDetailPage.tsx";
+import GoalsListPage from "./pages/goals/GoalsListPage.tsx";
 import TrackDetailPage from "./pages/tracks/TrackDetailPage.tsx";
 import TracksListPage from "./pages/tracks/TracksListPage.tsx";
 import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
@@ -36,6 +38,7 @@ const TAB_LABELS: Record<string, string> = {
   "/": "时间轴",
   "/todo": "待办",
   "/tracks": "轨道",
+  "/goals": "目标",
   "/stats/time": "时间",
   "/stats/health": "健康",
   "/settings": "设置",
@@ -50,6 +53,7 @@ export function AppShell() {
   const hidesBottomNav =
     location.pathname.startsWith("/entries/") ||
     location.pathname.startsWith("/settings/") ||
+    location.pathname.startsWith("/goals/") ||
     location.pathname.startsWith("/tracks/");
   const navItems = [...visibleTabs, "/settings"].map((to) => ({ to, label: TAB_LABELS[to] }));
 
@@ -64,6 +68,8 @@ export function AppShell() {
           <Route path="/quick-notes" element={<QuickNotesPage />} />
           <Route path="/todo" element={<TodoPage />} />
           <Route path="/tracks" element={<TracksListPage />} />
+          <Route path="/goals" element={<GoalsListPage />} />
+          <Route path="/goals/:id" element={<GoalDetailPage />} />
           <Route path="/tracks/:id" element={<TrackDetailPage />} />
           <Route path="/entries/new" element={<EntryPage refreshKey={resumeRefreshKey} />} />
           <Route path="/entries/:id/edit" element={<EntryPage refreshKey={resumeRefreshKey} />} />

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { getSetting, setSetting, useSetting } from "./index.js";
 
 export const NAV_VISIBLE_TABS_KEY = "nav.visibleTabs.v1";
-export const CONFIGURABLE_TABS = ["/quick-notes", "/", "/todo", "/tracks", "/stats/time", "/stats/health"] as const;
+export const CONFIGURABLE_TABS = ["/quick-notes", "/", "/todo", "/tracks", "/goals", "/stats/time", "/stats/health"] as const;
 
 export type ConfigurableTab = (typeof CONFIGURABLE_TABS)[number];
 

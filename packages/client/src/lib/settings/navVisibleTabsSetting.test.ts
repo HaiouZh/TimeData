@@ -59,9 +59,10 @@ describe("navVisibleTabsSetting", () => {
       "/",
       "/todo",
       "/tracks",
+      "/goals",
       "/stats/time",
       "/stats/health",
     ]);
-    expect(sanitizeVisibleTabs(["/tracks", "/bogus", "/tracks"])).toEqual(["/tracks"]);
+    expect(sanitizeVisibleTabs(["/tracks", "/goals", "/bogus", "/tracks"])).toEqual(["/tracks", "/goals"]);
   });
 });
