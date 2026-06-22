@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Goal, Task, Track } from "@timedata/shared";
@@ -88,22 +88,51 @@ async function renderGoalDetail(id = "goal-1") {
 async function waitForText(host: HTMLElement, text: string): Promise<void> {
   for (let index = 0; index < 30; index++) {
     if (document.body.textContent?.includes(text) || host.textContent?.includes(text)) return;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
   }
   expect(document.body.textContent).toContain(text);
 }
 
-function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
+function findButtonByText(root: ParentNode, text: string): HTMLButtonElement | null {
   const buttons = [...root.querySelectorAll("button")];
   const button = buttons.find((item) => item.textContent?.includes(text));
+  return button instanceof HTMLButtonElement ? button : null;
+}
+
+function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
+  const button = findButtonByText(root, text);
   if (!(button instanceof HTMLButtonElement)) throw new Error(`missing button: ${text}`);
   return button;
 }
 
+async function waitForButtonByText(root: ParentNode, text: string): Promise<HTMLButtonElement> {
+  for (let index = 0; index < 30; index++) {
+    const button = findButtonByText(root, text);
+    if (button) return button;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  throw new Error(`missing button: ${text}`);
+}
+
+async function waitForButtonByLabel(root: ParentNode, label: string): Promise<HTMLButtonElement> {
+  for (let index = 0; index < 30; index++) {
+    const button = root.querySelector(`button[aria-label="${label}"]`);
+    if (button instanceof HTMLButtonElement) return button;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  throw new Error(`missing button label: ${label}`);
+}
+
 async function chooseSelectSheetOption(host: HTMLElement, label: string, option: string): Promise<void> {
-  await click(host.querySelector(`button[aria-label="${label}"]`));
   await waitForText(host, option);
-  await click(buttonByText(document.body, option));
+  await click(await waitForButtonByLabel(host, label));
+  await click(await waitForButtonByText(document.body, option));
 }
 
 describe("GoalDetailPage", () => {
