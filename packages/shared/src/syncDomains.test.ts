@@ -18,6 +18,7 @@ describe("sync domain registry", () => {
       "health_charts",
       "tracks",
       "track_steps",
+      "goals",
     ]);
   });
 
@@ -97,6 +98,18 @@ describe("track domain registration", () => {
         },
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("goals domain registration", () => {
+  it("registers goals as an lww domain after track steps", () => {
+    const goals = getSyncDomain("goals");
+    const trackSteps = getSyncDomain("track_steps");
+    expect(goals.conflictPolicy).toBe("lww");
+    expect(goals.countsInStatus).toBe(false);
+    expect(goals.upsertPriority).toBeGreaterThan(trackSteps.upsertPriority);
+    expect(goals.deletePriority).toBeGreaterThan(getSyncDomain("tracks").deletePriority);
+    expect(SYNC_TABLE_NAMES).toContain("goals");
   });
 });
 

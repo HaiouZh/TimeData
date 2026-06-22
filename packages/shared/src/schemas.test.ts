@@ -291,7 +291,7 @@ describe("runtime schemas", () => {
     });
     const legacyStateField = "tu" + "rn";
     const legacyStateTimeField = `${legacyStateField}At`;
-    expect(parsedForcePush.tasks).toEqual([{ ...task, parentId: null, completedAt: null, tags: [] }]);
+    expect(parsedForcePush.tasks).toEqual([{ ...task, parentId: null, goalId: null, completedAt: null, tags: [] }]);
     expect(Object.hasOwn(parsedForcePush.tasks[0] ?? {}, legacyStateField)).toBe(false);
     expect(Object.hasOwn(parsedForcePush.tasks[0] ?? {}, legacyStateTimeField)).toBe(false);
     expect(
@@ -405,6 +405,25 @@ describe("SyncChangeSchema", () => {
         timestamp: "2026-06-01T04:02:00.000Z",
       }).success,
     ).toBe(false);
+  });
+
+  it("accepts goals as a synced table", () => {
+    const parsed = SyncChangeSchema.parse({
+      tableName: "goals",
+      recordId: "goal-1",
+      action: "create",
+      timestamp: "2026-06-22T01:00:00.000Z",
+      data: {
+        id: "goal-1",
+        title: "发布 v2",
+        kind: "project",
+        status: "active",
+        prerequisites: [],
+        createdAt: "2026-06-22T01:00:00.000Z",
+        updatedAt: "2026-06-22T01:00:00.000Z",
+      },
+    });
+    expect(parsed.tableName).toBe("goals");
   });
 });
 

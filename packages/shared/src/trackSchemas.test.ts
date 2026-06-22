@@ -36,6 +36,7 @@ describe("track schemas", () => {
       title: "T1 数据地基",
       status: "active",
       refs: [],
+      goalId: null,
       createdAt: ts,
       updatedAt: ts,
     });

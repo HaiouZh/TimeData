@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { RecurrenceSchema, TaskSchema } from "./entitySchemas.js";
+import { GoalSchema, RecurrenceSchema, TaskSchema, TrackSchema } from "./entitySchemas.js";
 
 describe("RecurrenceSchema", () => {
   const base = { interval: 1, basis: "due" as const };
@@ -222,5 +222,74 @@ describe("TaskSchema parentId", () => {
     const legacyKey = "sub" + "tasks";
     const parsed = TaskSchema.parse({ ...baseTask, [legacyKey]: [{ id: "s1", title: "旧子项", done: false }] });
     expect(Object.hasOwn(parsed, legacyKey)).toBe(false);
+  });
+});
+
+describe("GoalSchema", () => {
+  const now = "2026-06-22T01:00:00.000Z";
+  const baseGoal = {
+    id: "goal-1",
+    title: "发布 v2",
+    kind: "project",
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  };
+  const task = {
+    id: "t1",
+    title: "任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    completedAt: null,
+    tags: [],
+    sortOrder: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const track = {
+    id: "track-1",
+    title: "轨道",
+    status: "active",
+    refs: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  it("parses project/theme goals and defaults prerequisites", () => {
+    expect(GoalSchema.parse({ ...baseGoal, kind: "theme" })).toMatchObject({
+      kind: "theme",
+      prerequisites: [],
+    });
+  });
+
+  it("rejects self edges, duplicate edges and cycles", () => {
+    expect(GoalSchema.safeParse({ ...baseGoal, prerequisites: [{ blocker: "a", blocked: "a" }] }).success).toBe(false);
+    expect(
+      GoalSchema.safeParse({
+        ...baseGoal,
+        prerequisites: [
+          { blocker: "a", blocked: "b" },
+          { blocker: "a", blocked: "b" },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      GoalSchema.safeParse({
+        ...baseGoal,
+        prerequisites: [
+          { blocker: "a", blocked: "b" },
+          { blocker: "b", blocked: "a" },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("defaults Task.goalId and Track.goalId to null", () => {
+    expect(TaskSchema.parse(task).goalId).toBeNull();
+    expect(TrackSchema.parse(track).goalId).toBeNull();
   });
 });

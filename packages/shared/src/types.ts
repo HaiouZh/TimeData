@@ -2,6 +2,8 @@ import type { z } from "zod";
 
 import type {
   CategorySchema,
+  GoalPrerequisiteSchema,
+  GoalSchema,
   QuickNoteSchema,
   RecurrenceSchema,
   SettingSchema,
@@ -23,6 +25,10 @@ import type { HealthChartConfig } from "./chartSchemas.js";
 import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
 
 export type Category = z.infer<typeof CategorySchema>;
+
+export type GoalPrerequisite = z.infer<typeof GoalPrerequisiteSchema>;
+
+export type Goal = z.infer<typeof GoalSchema>;
 
 export type QuickNote = z.infer<typeof QuickNoteSchema>;
 
@@ -93,7 +99,9 @@ export type SyncChange =
   | SyncUpsertChange<"tracks", Track>
   | SyncDeleteChange<"tracks">
   | SyncUpsertChange<"track_steps", TrackStep>
-  | SyncDeleteChange<"track_steps">;
+  | SyncDeleteChange<"track_steps">
+  | SyncUpsertChange<"goals", Goal>
+  | SyncDeleteChange<"goals">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

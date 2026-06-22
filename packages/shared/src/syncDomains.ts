@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HealthChartConfigSchema } from "./chartSchemas.js";
 import {
   CategorySchema,
+  GoalSchema,
   QuickNoteSchema,
   SettingSchema,
   TaskSchema,
@@ -133,6 +134,14 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
     dataSchema: TrackStepSchema,
     upsertPriority: 71,
     deletePriority: 70,
+    conflictPolicy: "lww",
+    countsInStatus: false,
+  },
+  {
+    table: "goals",
+    dataSchema: GoalSchema,
+    upsertPriority: 72,
+    deletePriority: 72,
     conflictPolicy: "lww",
     countsInStatus: false,
   },

@@ -13,6 +13,8 @@ import type { SyncChange } from "./types.js";
 
 export {
   CategorySchema,
+  GoalPrerequisiteSchema,
+  GoalSchema,
   QuickNoteSchema,
   RecurrenceSchema,
   RefSchema,
