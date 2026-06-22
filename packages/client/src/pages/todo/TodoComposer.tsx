@@ -1,24 +1,59 @@
+import { MagnifyingGlass, Tag, X } from "@phosphor-icons/react";
 import { type FormEvent, useState } from "react";
+import { Icon } from "../../components/Icon.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
-import { addTask } from "../../lib/tasks.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
+import { addTask } from "../../lib/tasks.js";
+import { TagFilterPanel } from "./TagFilterPanel.js";
 
-export function TodoComposer() {
+export interface TodoComposerProps {
+  tags: { tag: string; count: number }[];
+  composerText: string;
+  onComposerTextChange: (v: string) => void;
+  filterOpen: boolean;
+  onToggleFilterOpen: () => void;
+  includeTags: string[];
+  excludeTags: string[];
+  tagMode: "and" | "or";
+  notMode: boolean;
+  onToggleTag: (tag: string) => void;
+  onToggleMode: () => void;
+  onToggleNotMode: () => void;
+  onClear: () => void;
+}
+
+export function TodoComposer({
+  tags,
+  composerText,
+  onComposerTextChange,
+  filterOpen,
+  onToggleFilterOpen,
+  includeTags,
+  excludeTags,
+  tagMode,
+  notMode,
+  onToggleTag,
+  onToggleMode,
+  onToggleNotMode,
+  onClear,
+}: TodoComposerProps) {
   const destination = useTodoDefaultDestination();
   const { syncAfterWrite } = useSyncContext();
   const { hidden } = useBottomNav();
-  const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hasTags = tags.length > 0;
+  const searching = !filterOpen && composerText.trim() !== "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await addTask({ title, toInbox: destination === "inbox" });
-      setTitle("");
+      await addTask({ title: composerText, toInbox: destination === "inbox", tags: includeTags });
+      onComposerTextChange("");
       syncAfterWrite();
     } catch (err) {
       setError((err as Error).message);
@@ -27,29 +62,89 @@ export function TodoComposer() {
     }
   }
 
+  const leftButton = filterOpen ? (
+    <button
+      type="button"
+      aria-label="收起标签筛选"
+      onClick={onToggleFilterOpen}
+      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-page"
+    >
+      <Icon icon={Tag} size={18} />
+    </button>
+  ) : searching ? (
+    <button
+      type="button"
+      aria-label="搜索中"
+      title="按标题实时搜索中"
+      disabled
+      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-ink-2"
+    >
+      <Icon icon={MagnifyingGlass} size={18} />
+    </button>
+  ) : (
+    <button
+      type="button"
+      aria-label="展开标签筛选"
+      disabled={!hasTags}
+      onClick={onToggleFilterOpen}
+      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-ink-2 hover:text-ink disabled:opacity-40"
+    >
+      <Icon icon={Tag} size={18} />
+    </button>
+  );
+
   return (
     <form
       onSubmit={submit}
-      className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 backdrop-blur sm:p-3"
+      className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 backdrop-blur sm:p-3"
       style={{ bottom: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
     >
       <div className="mx-auto w-full max-w-2xl space-y-2 lg:max-w-none">
-        <div className="flex gap-2">
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.currentTarget.value)}
-            placeholder="添加任务…"
-            className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100 outline-none focus:border-sky-500"
-          />
-          <button
-            type="submit"
-            disabled={saving || !title.trim()}
-            className="min-h-11 shrink-0 rounded-lg bg-sky-600 px-4 text-sm font-medium text-white disabled:opacity-60"
-          >
-            添加
-          </button>
+        <div className="flex items-start gap-2">
+          {leftButton}
+          {filterOpen ? (
+            <TagFilterPanel
+              tags={tags}
+              includeTags={includeTags}
+              excludeTags={excludeTags}
+              tagMode={tagMode}
+              notMode={notMode}
+              onToggleTag={onToggleTag}
+              onToggleMode={onToggleMode}
+              onToggleNotMode={onToggleNotMode}
+              onClear={onClear}
+            />
+          ) : (
+            <>
+              <div className="relative min-w-0 flex-1">
+                <input
+                  value={composerText}
+                  onChange={(event) => onComposerTextChange(event.currentTarget.value)}
+                  placeholder="添加任务…"
+                  className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-sm text-ink outline-none focus:border-accent"
+                />
+                {composerText && (
+                  <button
+                    type="button"
+                    aria-label="清空搜索"
+                    onClick={() => onComposerTextChange("")}
+                    className="absolute inset-y-0 right-1 my-auto flex h-7 w-7 items-center justify-center rounded-ctl text-ink-3 hover:text-ink"
+                  >
+                    <Icon icon={X} size={16} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={saving || !composerText.trim()}
+                className="min-h-11 shrink-0 rounded-lg bg-accent px-4 text-sm font-medium text-page disabled:opacity-60"
+              >
+                添加
+              </button>
+            </>
+          )}
         </div>
-        {error && <p className="text-sm text-rose-300">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
       </div>
     </form>
   );

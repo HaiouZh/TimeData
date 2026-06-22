@@ -196,6 +196,11 @@ describe("TodoPage", () => {
     await waitForText(host, "任务 A");
     await waitForText(host, "普通任务 B");
 
+    await act(async () => (host.querySelector('[aria-label="展开标签筛选"]') as HTMLButtonElement).click());
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
     const filterY = host.querySelector('[aria-label="筛选 y"]') as HTMLButtonElement;
     expect(filterY).not.toBeNull();
     await act(async () => filterY.click());
@@ -216,6 +221,43 @@ describe("TodoPage", () => {
     expect(inboxSection?.textContent ?? "").toContain("任务 A");
     expect(inboxSection?.textContent ?? "").not.toContain("普通任务 B");
 
+    await act(async () => root.unmount());
+  });
+
+  it("选含标签→收面板→搜索：标签上下文与关键词叠加（搜索 ∩ 标签）", async () => {
+    const a = await addTask({ title: "写工作报告", toInbox: true });
+    await setTaskTags(a.id, ["工作"]);
+    const b = await addTask({ title: "工作杂事", toInbox: true });
+    await setTaskTags(b.id, ["工作"]);
+    const c = await addTask({ title: "生活报告", toInbox: true });
+    await setTaskTags(c.id, ["生活"]);
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "写工作报告");
+
+    const clickEl = async (sel: string) => {
+      await act(async () => (host.querySelector(sel) as HTMLButtonElement).click());
+      await act(async () => {
+        await new Promise((r) => window.setTimeout(r, 0));
+      });
+    };
+    await clickEl('[aria-label="展开标签筛选"]');
+    await clickEl('[aria-label="筛选 工作"]');
+    await clickEl('[aria-label="收起标签筛选"]');
+
+    const inputEl = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(inputEl, "报告");
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    expect(inbox.textContent ?? "").toContain("写工作报告");
+    expect(inbox.textContent ?? "").not.toContain("工作杂事");
+    expect(inbox.textContent ?? "").not.toContain("生活报告");
     await act(async () => root.unmount());
   });
 });

@@ -19,7 +19,7 @@ import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
-import { filterByTags } from "../lib/tasks/turnTags.js";
+import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
 import {
   getDoneCollapsed,
   getInboxCollapsed,
@@ -45,7 +45,6 @@ import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
-import { TagFilterBar } from "./todo/TagFilterBar.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
@@ -65,7 +64,12 @@ const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [],
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [includeTags, setIncludeTags] = useState<string[]>([]);
+  const [excludeTags, setExcludeTags] = useState<string[]>([]);
+  const [tagMode, setTagMode] = useState<"and" | "or">("and");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [notMode, setNotMode] = useState(false);
+  const [composerText, setComposerText] = useState("");
   // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
@@ -104,9 +108,22 @@ export function TodoPage() {
     await setTaskTags(t.id, tags);
     syncAfterWrite();
   };
-  const toggleTag = (tag: string) =>
-    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
-  const clearTags = () => setSelectedTags([]);
+  const toggleTag = (tag: string) => {
+    if (notMode) {
+      setIncludeTags((prev) => prev.filter((x) => x !== tag));
+      setExcludeTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
+    } else {
+      setExcludeTags((prev) => prev.filter((x) => x !== tag));
+      setIncludeTags((prev) => (prev.includes(tag) ? prev.filter((x) => x !== tag) : [...prev, tag]));
+    }
+  };
+  const toggleMode = () => setTagMode((mode) => (mode === "and" ? "or" : "and"));
+  const toggleNotMode = () => setNotMode((value) => !value);
+  const clearTags = () => {
+    setIncludeTags([]);
+    setExcludeTags([]);
+    setTagMode("and");
+  };
   const isOverdue = (t: Task) => {
     const p = placementForTask(t, new Date());
     return p.pool === "today" && p.overdue;
@@ -127,7 +144,8 @@ export function TodoPage() {
       [...buckets.today, ...buckets.inbox, ...buckets.scheduled, ...buckets.recurring].map((t) => [t.id, t]),
     ).values(),
   );
-  const f = (list: Task[]) => filterByTags(list, selectedTags);
+  const tagOptions = allTags(allTasks);
+  const f = (list: Task[]) => filterTasks(list, { searchQuery: composerText, includeTags, excludeTags, tagMode });
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const sensors = useSensors(
@@ -358,7 +376,6 @@ export function TodoPage() {
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
-          <TagFilterBar tasks={allTasks} selected={selectedTags} onToggle={toggleTag} onClear={clearTags} />
           {wide ? (
             <ResizableSplit
               className="items-start gap-y-4"
@@ -385,7 +402,21 @@ export function TodoPage() {
           )}
         </div>
 
-        <TodoComposer />
+        <TodoComposer
+          tags={tagOptions}
+          composerText={composerText}
+          onComposerTextChange={setComposerText}
+          filterOpen={filterOpen}
+          onToggleFilterOpen={() => setFilterOpen((value) => !value)}
+          includeTags={includeTags}
+          excludeTags={excludeTags}
+          tagMode={tagMode}
+          notMode={notMode}
+          onToggleTag={toggleTag}
+          onToggleMode={toggleMode}
+          onToggleNotMode={toggleNotMode}
+          onClear={clearTags}
+        />
 
         {detailId && (
           <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} onTagsChange={changeTags} />

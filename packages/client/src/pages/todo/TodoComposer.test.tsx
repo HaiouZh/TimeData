@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
-import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
+import { act, useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../../contexts/BottomNavContext.js";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TodoComposer } from "./TodoComposer.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(async () => {
   localStorage.clear();
@@ -21,74 +19,98 @@ function setValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function Harness() {
+type TagOption = { tag: string; count: number };
+
+function Harness({ tags = [] as TagOption[], includeTags = [] as string[] }) {
   const { setHidden } = useBottomNav();
-  return createElement(
-    "div",
-    null,
-    createElement("button", { type: "button", "data-testid": "hide-nav", onClick: () => setHidden(true) }, "hide"),
-    createElement(TodoComposer, null),
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button type="button" data-testid="hide-nav" onClick={() => setHidden(true)}>
+        hide
+      </button>
+      <TodoComposer
+        tags={tags}
+        composerText={text}
+        onComposerTextChange={setText}
+        filterOpen={open}
+        onToggleFilterOpen={() => setOpen((v) => !v)}
+        includeTags={includeTags}
+        excludeTags={[]}
+        tagMode="and"
+        notMode={false}
+        onToggleTag={() => {}}
+        onToggleMode={() => {}}
+        onToggleNotMode={() => {}}
+        onClear={() => {}}
+      />
+    </div>
   );
 }
 
-async function renderComposer() {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () =>
-    root.render(
-      createElement(BottomNavProvider, null, createElement(SyncProvider, null, createElement(Harness, null))),
-    ),
+async function render(props: { tags?: TagOption[]; includeTags?: string[] } = {}) {
+  return renderDom(
+    <BottomNavProvider>
+      <SyncProvider>
+        <Harness {...props} />
+      </SyncProvider>
+    </BottomNavProvider>,
   );
-  return { host, root };
 }
 
-const click = (el: Element | null) =>
-  act(async () => {
-    el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 0));
-  });
 const flush = () => act(async () => new Promise((r) => setTimeout(r, 0)));
+const clickAndFlush = async (el: Element | null) => {
+  await click(el);
+  await flush();
+};
+const input = (host: HTMLElement) => host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement | null;
 
-async function waitForInputValue(host: HTMLElement, expected: string) {
-  const started = Date.now();
-  while (Date.now() - started < 1000) {
-    const value = (host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement).value;
-    if (value === expected) return;
-    await flush();
-  }
-  throw new Error(`Timed out waiting for input value ${expected}`);
-}
+describe("TodoComposer 底部操作栏", () => {
+  it("空输入点左键 → 展开标签面板、输入框收起", async () => {
+    const { host, root } = await render({ tags: [{ tag: "工作", count: 1 }] });
+    expect(input(host)).not.toBeNull();
+    await clickAndFlush(host.querySelector('[aria-label="展开标签筛选"]'));
+    expect(host.querySelector('[data-testid="tag-filter-panel"]')).not.toBeNull();
+    expect(input(host)).toBeNull();
+    await unmount(root);
+  });
 
-describe("TodoComposer", () => {
-  it("输入标题后添加 → 创建普通任务并清空 title", async () => {
-    const { host, root } = await renderComposer();
-    await act(async () => setValue(host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement, "喝水"));
+  it("有字时左键变搜索指示、文本留存、清空按钮停止搜索", async () => {
+    const { host, root } = await render();
+    await act(async () => setValue(input(host) as HTMLInputElement, "报告"));
+    expect(host.querySelector('[aria-label="搜索中"]')).not.toBeNull();
+    expect((input(host) as HTMLInputElement).value).toBe("报告");
+    await clickAndFlush(host.querySelector('[aria-label="清空搜索"]'));
+    expect((input(host) as HTMLInputElement).value).toBe("");
+    expect(host.querySelector('[aria-label="展开标签筛选"]')).not.toBeNull();
+    await unmount(root);
+  });
 
-    await click(host.querySelector('button[type="submit"]'));
-    await flush();
-
+  it("右键添加 → 建任务并清空，新任务带 includeTags", async () => {
+    const { host, root } = await render({ includeTags: ["工作"] });
+    await act(async () => setValue(input(host) as HTMLInputElement, "写周报"));
+    await clickAndFlush(host.querySelector('button[type="submit"]'));
     const tasks = await db.tasks.toArray();
     expect(tasks).toHaveLength(1);
-    expect(tasks[0].title).toBe("喝水");
-    expect(tasks[0].recurrence).toBeNull();
-    await waitForInputValue(host, "");
-    await act(async () => root.unmount());
+    expect(tasks[0].title).toBe("写周报");
+    expect(tasks[0].tags).toEqual(["工作"]);
+    expect((input(host) as HTMLInputElement).value).toBe("");
+    await unmount(root);
   });
 
-  it("三件套不再有【重复】按钮", async () => {
-    const { host, root } = await renderComposer();
-    expect(host.querySelector('button[aria-label="重复"]')).toBeNull();
-    await act(async () => root.unmount());
+  it("无标签时展开键禁用", async () => {
+    const { host, root } = await render({ tags: [] });
+    expect((host.querySelector('[aria-label="展开标签筛选"]') as HTMLButtonElement).disabled).toBe(true);
+    await unmount(root);
   });
 
   it("底栏 tab 收起时 composer 跟随贴底（bottom=0）", async () => {
-    const { host, root } = await renderComposer();
+    const { host, root } = await render();
     const form = host.querySelector("form") as HTMLFormElement;
     expect(Number.parseInt(form.style.bottom, 10)).toBe(49);
-
-    await click(host.querySelector('[data-testid="hide-nav"]'));
+    await clickAndFlush(host.querySelector('[data-testid="hide-nav"]'));
     expect(Number.parseInt(form.style.bottom, 10)).toBe(0);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
