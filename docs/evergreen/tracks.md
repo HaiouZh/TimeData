@@ -6,15 +6,17 @@ covers:
   - packages/server/src/routes/agent-tracks.ts
   - packages/client/src/lib/tracks.ts
   - packages/client/src/lib/tracksView.ts
+  - packages/client/src/lib/trackCourts.ts
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
+  - packages/client/src/pages/tracks/boardViewPref.ts
   - packages/client/src/pages/tracks/**
-last-reviewed: 2026-06-21
+last-reviewed: 2026-06-22
 ---
 
 # 任务轨道
 
-> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。T1 落数据地基；T2 提供 agent 受控 ingest API；T3 提供列表与详情监控面；T4/T5 已提供状态标签设置、跨轨道聚合与人手共编。本期口径：状态面板按 active 轨道的最新一步（最大 seq，不分开口/闭合）标签聚合；详情时间线仍用开口步高亮执行中的段落。
+> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。T1 落数据地基；T2 提供 agent 受控 ingest API；T3 提供列表与详情监控面；T4/T5 已提供状态标签设置、跨轨道聚合与人手共编。本期口径：看板交棒状态按 active 轨道最近一条带已配置交棒标签的步骤推导；详情时间线仍用开口步高亮执行中的段落。
 
 ## 承上启下
 
@@ -67,13 +69,11 @@ last-reviewed: 2026-06-21
 
 ## 5. 监控面(T3)
 
-`/tracks` 列表与 `/tracks/:id` 详情是轨道的独立监控面(监控≠操作,不进今天视图),页面用 `useLiveQuery` 读取、吃 sync 后变化。
-取值/排序/格式化全在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
+`/tracks` 列表与 `/tracks/:id` 详情是轨道的独立看板面(不进今天视图),页面用 `useLiveQuery` 读取、吃 sync 后变化。
+取值/排序/格式化在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
 `currentStepId`/`orderedTimeline`(当前步=最大 seq 的开口步置顶高亮;无开口步纯倒序、不高亮)、
 `trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 http(s) 外链可点)、
-`isDecisionStep`(tag 命中 `决策`/`decision` 即决策步,不解析 content、不加字段)。
-列表用 `CollapsibleSection` 折叠 concluded/parked,顶部最简新建只收标题走 `addTrack`;
-详情倒序时间线每步显示 source 徽章、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
+`isDecisionStep`(tag 命中 `决策`/`decision` 即决策步,不解析 content、不加字段)。列表顶部最简新建走 `addTrack`，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
 
 ## 6. 人手共编(T5)
 
@@ -86,15 +86,17 @@ last-reviewed: 2026-06-21
 
 即时点的 `seq` 会晚于当前开口步,故 `tracksView` 把当前开口步钉在时间线顶部,`trackProgressSummary` 也按开口步 `seq+1` 显示「第 N 步」,不被即时点抬高。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
 
-## 7. 状态标签聚合与人机接力
+## 7. 交棒状态看板与人机接力
 
-状态标签配置仍复用 settings key `track.actionTags.v1`，默认建议表为 `等我` / `待决策` / `卡住` / `agent在做`。它是建议词表，不是枚举闸；用户可在 `/settings/tracks` 增删，临时标签也会在列表统计面板出现。
+交棒配置写 `track.actionTags.v2`：`{tag,court}[]`，`court=mine|agent|blocked|neutral`；种子 `等我/待决策/卡住/agent在做` 对应我侧/我侧/卡住/agent。旧 `track.actionTags.v1` 仅作读时影子源；显式保存 `/settings/tracks` 才写 v2，显式 `[]` 表示无交棒标签。
 
-列表页统计面板扫描所有 `active` 轨道的最新一步（最大 `seq`，不要求 `endedAt=null`），按该步 tags 聚合计数。点击多个 chip 是 OR 筛选：任一选中标签命中最新步 tags 即显示。轨道卡片展示标题、summary 和最新 3 步轻量步流；归档轨道只保留精简行。
+看板当前交棒 = active 轨道倒序第一条带已配置交棒 tag 的步；后续无标签步不清信号，多 tag 取首个命中。无信号无牌，分组落 `其他`；`决策/批注/提醒` 除非显式配置，否则不算交棒。
 
-详情页时间线的“当前步”仍指最新开口步，用于高亮正在持续的段落；这与列表页状态口径不同，避免即时点批注把执行段落顶掉。
+列表默认扁平：`mine` 浮顶，卡片展示状态牌、最新 3 步，并可就地“写一步”（`appendUserStep` + `syncAfterWrite()`）。`STORAGE_KEYS.tracksBoardView` 只存本地视图；分组泳道固定为 `该我了/等 agent/卡住/其他`，不套隐藏筛选。
 
-agent 接力协议：派活时给 agent `trackId` 和状态词表；agent 完成或需要人拍板后经 `/api/agent/tracks/:id/steps` append 一步，默认省略 `endedAt` 形成开口步，并打 `等我` 或用户约定的我侧标签。append 会自动闭合上一条开口步，最新步立刻进入统计面板。
+详情“当前步”仍指最新开口步。生命周期控件为“状态 · 当前态”+动词按钮：active 显示 `收束/搁置`，concluded/parked 显示 `重新推进`；`concluded` 仍由 `setTrackStatus` 闭合开口步。
+
+agent 接力协议：派活时给 agent `trackId` 和交棒词表；完成或待人拍板后 append 一步，默认开口并打 `等我` 或用户约定的我侧标签。append 自动闭合上一开口步；该步成为看板当前交棒信号，直到后续步骤写入新的已配置交棒标签。
 
 ## 8. 后续阶段
 

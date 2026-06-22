@@ -16,7 +16,7 @@
     "covers": 12
   },
   "docs/evergreen/categories-settings/settings-catalog.md": {
-    "chars": 4267,
+    "chars": 4349,
     "covers": 5
   },
   "docs/evergreen/cli.md": {
@@ -84,7 +84,7 @@
     "covers": 5
   },
   "docs/evergreen/tracks.md": {
-    "chars": 5162,
-    "covers": 7
+    "chars": 5385,
+    "covers": 9
   }
 }
