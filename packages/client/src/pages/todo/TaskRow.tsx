@@ -7,6 +7,7 @@ import { Checkbox } from "../../components/ui/Checkbox.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
+import { tagColor } from "../../lib/tasks/turnTags.js";
 import { formatMonthDay } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
 import { useTaskChildren } from "./useTaskChildren.js";
@@ -171,8 +172,14 @@ export function TaskRow({
                 <span
                   key={tag}
                   data-testid="tag-chip"
-                  className="rounded-pill bg-surface-hover px-1.5 py-0.5 text-ink-2"
+                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-0.5 text-ink-2"
                 >
+                  <span
+                    data-tag-dot
+                    aria-hidden="true"
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: tagColor(tag) }}
+                  />
                   #{tag}
                 </span>
               ))}

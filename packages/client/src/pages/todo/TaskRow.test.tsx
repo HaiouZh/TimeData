@@ -375,6 +375,24 @@ describe("TaskRow", () => {
     await act(async () => root.unmount());
   });
 
+  it("tag chip 内含确定性色点（inline backgroundColor）", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ tags: ["工作"] }), pool: "today", ...handlers }),
+    );
+    const chip = host.querySelector('[data-testid="tag-chip"]') as HTMLElement;
+    const dot = chip.querySelector("[data-tag-dot]") as HTMLElement;
+    expect(dot).not.toBeNull();
+    expect(dot.style.backgroundColor).not.toBe("");
+
+    const second = await render(
+      createElement(TaskRow, { task: task({ id: "t2", tags: ["工作"] }), pool: "today", ...handlers }),
+    );
+    const dot2 = second.host.querySelector("[data-tag-dot]") as HTMLElement;
+    expect(dot2.style.backgroundColor).toBe(dot.style.backgroundColor);
+    await act(async () => root.unmount());
+    await act(async () => second.root.unmount());
+  });
+
   describe("桌面 overlay 动作", () => {
     it("桌面（细指针）+ today 池：显示「回收件箱」「删除」按钮并触发回调", async () => {
       const onToInbox = vi.fn();
