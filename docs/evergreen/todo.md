@@ -28,7 +28,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-21
+last-reviewed: 2026-06-22
 ---
 
 # 待办任务
@@ -151,9 +151,9 @@ agent / CLI (task-done/task-tag)
 1. **完成统一走 shared 纯函数 `completeTask`（`shared/src/taskCompletion.ts`）**：非重复任务就地完成（`done=true` + `completedAt=now`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复任务**非终结**完成衍生一条独立已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=nowIso`/标题·tags/新 id），模板自身 `done` 保持 `false` 并推进（`completedCount+1`、`lastDoneAt=dueIso` 当前应发生日）；root 的 children 同时被处理（见 #7）；**终结**完成（count 满 / until 过）模板就地转化为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt=nowIso`，保留原 id）。落点唯一判据仍是 `done`（`placement.ts`）。重复分支细节见 [todo/recurrence](todo/recurrence.md) §3。
 2. **"取消完成"两端仍不对称**：agent `done=true` 现在经 `completeTask` 写 `completedAt`（与客户端一致，旧版 agent 不写的问题已修）；但 agent `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 reopen 会清 `completedAt=null`。撤销完成的语义两端不一致，改前先确认。
 3. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。
-4. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供 `TagFilterBar`。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 收纳普通完成任务、重复衍生的已完成快照与终结模板（均带 `completedAt`），按 `completedAt` 倒序、**无日期过滤**（“最近 N 天”是 `DayGroupedList` 显示侧渐进展示）。
+4. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供标签来源去重。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 收纳普通完成任务、重复衍生的已完成快照与终结模板（均带 `completedAt`），按 `completedAt` 倒序、**无日期过滤**（“最近 N 天”是 `DayGroupedList` 显示侧渐进展示）。
 5. **DnD 拓扑：顶层单一 `DndContext`，可拖区只有今天 / 收件箱 / 某 root 的 children**：`TodoPage` 顶层一个 `DndContext`，下挂 droppable/SortableContext 命名空间 `pool:today` / `pool:inbox` / `parent:<rootId>`；收件箱跨天只建**一个** SortableContext（按天分段只是 DOM 展示）。`upcoming`（已排期，按日期排序）/ `completed`（只读）/ `recurring`（不渲染）**都不参与拖拽**——每个任务在可拖范围内只渲染一次，draggable id 全局唯一。root 行的拖拽 activator 在行左 2/5 区域（复选框独立 `stopPropagation`，右侧标题区保留打开详情/选词）；有 children 的 root 左侧显示 caret，无 children 显示 grip 指示，图标只作提示。root→child 不再靠 600ms hover-intent 自动展开，而是 `todoDnd.resolveIndentLevel` 读取横向位移、**相对被拖项自身基线**判层级：拖根任务（base=root）右移达到 28px 判 child、回落到 12px 内判 root；拖子任务（base=child，由起拖容器是 `parent:*` 推出）静止恒为 child、向左越过 -28px 才升级 root、回到 -12px 内回落 child。这层基线区分是关键——子任务竖直重排（delta.x≈0）必须保持 child，否则会被误判成 root 而 `promoteToRoot` 拽出父任务。两侧都带滞回避免纵向排序时左右抖动误触；`clampTodoIndentPreview` 按基线把横向预览夹到根的 `0..28px` 或子的 `-28..0px`，拖拽期 `.todo-dnd-dragging .swipeable-list-item` 只放开纵向 overflow、横向继续 clip，避免向右拖拽把 `<main>` 撑出横向可滚面。`handleDragEnd` 经 `todoDnd.resolveTodoDragWithIndent`（内层仍是 `resolveTodoDragOperation`）结合 active container、over container、候选 root、目标池、root 是否已有 children 派发：同容器→`persistTaskOrder` 重排；child→pool→`promoteToRoot`；root/child→合法候选 root→`moveTaskToParent`（带 children 的 root 即使右移也不能降级）；root 在今天↔收件箱互拖→`scheduleTask`/`unscheduleTask`。`persistTaskOrder` 在 Dexie transaction 内回填现有 `sortOrder` 槽位、更新 `updatedAt`、为每个变化项写 `syncLog`，只对同作用域 ids 使用。拖拽中只高亮候选父，不提前展开真实 children；落定为 child 后目标父展开一次。
-6. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + OR 过滤（`TagFilterBar`，`TaskRow` 最多 3 chip）。需要代码可靠动作的维度应毕业为结构化字段。
+6. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + 展示/检索层消费——`filterTasks` 三轴 AND 过滤（含 AND/OR、排除 NOT、标题关键词），`tagColor` 确定性派生颜色（hash 取模色板、不存储），`TagFilterPanel` 底部召唤式三态填色带计数筛选面，`TaskRow` 行内最多 3 chip 带色点。需要代码可靠动作的维度应毕业为结构化字段。
 7. **子任务 = 独立可拖 `Task`（`parentId` 一层）**：见 §2.2。child 勾选不联动父 `done`/`completedAt`（父进度 `m/n` 由 `InlineChildren` 实时聚合，不回写父行）。**重复 root 完成时处理 children（历史快照）**：`completeTask` 读 reset-前 children，同一次返回 `occurrenceChildren`（克隆为指向 occurrence 的独立 child，**如实保留完成时 `done`/`completedAt`/`tags` 快照**，`recurrence` 清空）与 `templateChildren`（同批 child reset 成 `done=false`/`completedAt=null`）；快照与 reset 同源于 reset-前入参，顺序冒险结构性消除。客户端 `toggleTaskDone` 与 agent `done=true` 共用这套，事务内 `bulkAdd(occurrenceChildren)` + `bulkPut(templateChildren)`。历史 occurrence 的 children 在「已完成」内只读显示。
 8. **`tasks` 不引用其他域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出。
 9. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
@@ -164,14 +164,14 @@ agent / CLI (task-done/task-tag)
 
 | 入口 | 职责 |
 |---|---|
-| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、窄屏堆叠/宽屏 `ResizableSplit`、挂 `TagFilterBar`/`TodoComposer`/`TaskDetailSheet` |
+| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet` |
 | `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、左 2/5 root 拖拽抓取区、`CaretDown`/`CaretRight` 或 grip 纯指示、`rowClickZone` 派发 expand/open、meta 第二行、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、缩进候选父高亮与落定后展开、桌面（细指针）行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列——今天在左用 `←`、收件箱在右用 `→`） |
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩，不保留旧 swipe 宽度）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不再各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（`deleteTaskCascade`）、重复预设 overlay；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件，显示「作为子任务」提示 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 上回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
-| `pages/todo/{DayGroupedList,TagFilterBar,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表 / tag 筛选 / 新增 / 双栏 / 折叠 |
+| `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表 / 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags） / 双栏 / 折叠 |
 | `lib/tasks.ts` | 核心 CRUD + `listTasks`（顶部过滤 `parentId!==null`）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对 child 走非重复路径、对 root 取 reset-前 children 委托 `completeTask`，同事务写 occurrence + occurrence/template children + 模板 |
-| `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / tag 过滤 / `subtaskProgress`（m/n 进度比例，children 数量喂入） |
+| `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / tag 聚合(allTags)/三轴过滤(filterTasks)/取色(tagColor) / `subtaskProgress`（m/n 进度比例，children 数量喂入） |
 | `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |
 | 重复规则 | → [todo/recurrence](todo/recurrence.md) |
 
@@ -189,7 +189,7 @@ agent / CLI (task-done/task-tag)
 
 ### 4.3 测试
 
-**client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskColumn,TaskDetailSheet,DayGroupedList,TagFilterBar,ResizableSplit,TodoComposer,InlineChildren,TodoListSections}.test.{ts,tsx}`、`pages/todo/todoDnd.test.ts`（二元缩进、横向预览夹取、落点矩阵）、`lib/tasks.test.ts`、`sync/clientDomains.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks}.test.ts`
+**client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskColumn,TaskDetailSheet,DayGroupedList,TagFilterPanel,ResizableSplit,TodoComposer,InlineChildren,TodoListSections}.test.{ts,tsx}`、`pages/todo/todoDnd.test.ts`（二元缩进、横向预览夹取、落点矩阵）、`lib/tasks.test.ts`、`sync/clientDomains.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks}.test.ts`
 **server**：`routes/tasks.test.ts`（GET + POST schedule）、`routes/agent.test.ts`（POST status）、`sync/tasks-domain.test.ts`、`sync/domains.test.ts`、`db/schema.test.ts`、`lib/db-rows.test.ts`
 **shared**：`entitySchemas.test.ts`、`schemas.test.ts`、`taskCompletion.test.ts`、`recurrence.test.ts`（由 client 迁入）｜ **cli**：`commands/tasks.test.ts`
 

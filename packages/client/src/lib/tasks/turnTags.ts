@@ -13,13 +13,6 @@ export function allTags(tasks: Task[]): { tag: string; count: number }[] {
     .sort((a, b) => b.count - a.count || (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
 }
 
-// 旧 OR 过滤，本期暂留（Task 6 退役）。新调用点请用 filterTasks。
-export function filterByTags(tasks: Task[], selected: string[]): Task[] {
-  if (selected.length === 0) return tasks;
-  const set = new Set(selected);
-  return tasks.filter((t) => (t.tags ?? []).some((tag) => set.has(tag)));
-}
-
 export interface TaskFilter {
   searchQuery: string;
   includeTags: string[];

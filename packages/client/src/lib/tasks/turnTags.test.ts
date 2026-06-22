@@ -1,6 +1,6 @@
 import type { Task } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { allTags, filterByTags, filterTasks, type TaskFilter, tagColor } from "./turnTags.js";
+import { allTags, filterTasks, type TaskFilter, tagColor } from "./turnTags.js";
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -25,9 +25,9 @@ function task(overrides: Partial<Task> = {}): Task {
 const emptyFilter: TaskFilter = { searchQuery: "", includeTags: [], excludeTags: [], tagMode: "and" };
 
 describe("turnTags public surface", () => {
-  it("导出聚合/旧筛选/新筛选/取色 helper", async () => {
+  it("导出 tag 聚合/过滤/取色 helper", async () => {
     const mod = await import("./turnTags.js");
-    expect(Object.keys(mod).sort()).toEqual(["allTags", "filterByTags", "filterTasks", "tagColor"]);
+    expect(Object.keys(mod).sort()).toEqual(["allTags", "filterTasks", "tagColor"]);
   });
 });
 
@@ -43,13 +43,6 @@ describe("allTags", () => {
       { tag: "重构", count: 2 },
       { tag: "api", count: 1 },
     ]);
-  });
-});
-
-describe("filterByTags（旧 OR，本期暂留）", () => {
-  it("selected 为空返回全部", () => {
-    const tasks = [task({ id: "a", tags: ["x"] }), task({ id: "b", tags: [] })];
-    expect(filterByTags(tasks, []).map((t) => t.id)).toEqual(["a", "b"]);
   });
 });
 
