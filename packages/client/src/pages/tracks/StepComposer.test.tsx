@@ -2,7 +2,7 @@
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
-import { StepComposer } from "./StepComposer.js";
+import { StepComposer, type StepDraft } from "./StepComposer.js";
 
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 afterEach(async () => {
@@ -102,5 +102,23 @@ describe("StepComposer", () => {
     await type(host, "   ");
     await submit(host);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("uses inline surface and custom submit label for card writing", async () => {
+    const submitted: StepDraft[] = [];
+    mounted = await renderDom(
+      <StepComposer
+        statusTags={["等我"]}
+        surface="inline"
+        submitLabel="写入这一步"
+        onSubmit={(draft) => submitted.push(draft)}
+      />,
+    );
+    const host = mounted.host;
+    expect(host.textContent).toContain("写入这一步");
+    await type(host, "就地推进一下");
+    await click(buttonByText(host, "#等我"));
+    await submit(host);
+    expect(submitted).toEqual([{ content: "就地推进一下", mode: "open", tags: ["等我"] }]);
   });
 });

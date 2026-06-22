@@ -30,10 +30,14 @@ export function StepComposer({
   onSubmit,
   disabled = false,
   statusTags = [],
+  surface = "card",
+  submitLabel = "加入这一步",
 }: {
   onSubmit: (draft: StepDraft) => void;
   disabled?: boolean;
   statusTags?: readonly string[];
+  surface?: "card" | "inline";
+  submitLabel?: string;
 }) {
   const [content, setContent] = useState("");
   const [mode, setMode] = useState<UserStepMode>("open");
@@ -58,8 +62,13 @@ export function StepComposer({
     setCustomTag("");
   }
 
+  const formClass =
+    surface === "card"
+      ? "mb-3 rounded-card border border-border bg-surface p-3"
+      : "border-t border-border bg-surface px-3 py-3";
+
   return (
-    <form onSubmit={submit} className="mb-3 rounded-card border border-border bg-surface p-3">
+    <form onSubmit={submit} className={formClass}>
       <div className="mb-2 inline-flex rounded-ctl bg-surface-elevated p-0.5">
         {MODES.map((item) => (
           <button
@@ -133,7 +142,7 @@ export function StepComposer({
           disabled={disabled || content.trim().length === 0}
           className="ml-auto rounded-ctl bg-accent px-3 py-1.5 text-sm text-page disabled:bg-surface-hover disabled:text-ink-3"
         >
-          加入这一步
+          {submitLabel}
         </button>
       </div>
     </form>
