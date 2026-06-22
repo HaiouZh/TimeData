@@ -3,7 +3,7 @@ type: evergreen
 title: 设计语言
 covers:
   - packages/client/src/index.css
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-21
 ---
 
 # 设计语言
@@ -51,6 +51,7 @@ last-reviewed: 2026-06-18
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或杂图标。
 5. **recharts 不解析 CSS `var()`**：图表配色须把 token 镜像成 JS 常量（见 [health/charts](health/charts.md) 的 `chartColors`）。
 6. **个别遗留实色**：如 `.cb-save` 文字色 `#022c22` 配 `--color-data-teal`，属待 Phase 收口的实色，勿当范式。
+7. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。
 
 ## 4. 模块速查
 

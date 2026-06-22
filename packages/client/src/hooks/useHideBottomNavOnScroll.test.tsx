@@ -2,7 +2,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, useNavigate } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { useHideBottomNavOnScroll } from "./useHideBottomNavOnScroll.js";
 
@@ -76,5 +76,27 @@ describe("useHideBottomNavOnScroll", () => {
 
     expect(hiddenText(host)).toBe("false");
     await act(async () => root.unmount());
+  });
+
+  it("隐藏切换后的过渡期内只刷新滚动基线，不因被动上滚立刻显示", async () => {
+    vi.useFakeTimers();
+    try {
+      const { host, root } = await render(tree());
+
+      await scrollTo(host, 100);
+      await scrollTo(host, 140);
+      expect(hiddenText(host)).toBe("true");
+
+      await scrollTo(host, 128);
+      expect(hiddenText(host)).toBe("true");
+
+      vi.advanceTimersByTime(300);
+      await scrollTo(host, 116);
+      expect(hiddenText(host)).toBe("false");
+
+      await act(async () => root.unmount());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

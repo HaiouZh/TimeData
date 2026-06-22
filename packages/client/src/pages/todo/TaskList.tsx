@@ -89,6 +89,7 @@ export function TaskList(props: TaskListProps) {
     return (
       <SwipeableListItem
         key={task.id}
+        className="min-w-0 max-w-full"
         leadingActions={leading}
         trailingActions={trailing}
         blockSwipe={!isCoarsePointer}
@@ -106,7 +107,7 @@ export function TaskList(props: TaskListProps) {
   }
 
   const list = (
-    <SwipeableList type={ListType.IOS} fullSwipe={false} threshold={0.3}>
+    <SwipeableList className="min-w-0 overflow-x-clip" type={ListType.IOS} fullSwipe={false} threshold={0.3}>
       {tasks.map((task) => renderItem(task))}
     </SwipeableList>
   );

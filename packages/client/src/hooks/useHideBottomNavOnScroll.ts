@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import { useBottomNav } from "../contexts/BottomNavContext.js";
 import { initialNavScrollState, resolveNavVisibility } from "../lib/navScroll.js";
 
+const NAV_TRANSITION_COOLDOWN_MS = 300;
+
 /**
  * 把底部导航的「滚动隐藏」接到一个共享滚动容器上：返回挂到该容器的 onScroll。
  * 时间轴 / 统计 / 设置都走 AppShell 的 <main> 滚动，一处接线即可覆盖。
@@ -16,10 +18,12 @@ export function useHideBottomNavOnScroll(): (event: UIEvent<HTMLElement>) => voi
   const { pathname } = useLocation();
   const stateRef = useRef(initialNavScrollState());
   const needsSeedRef = useRef(true);
+  const cooldownUntilRef = useRef(0);
 
   useEffect(() => {
     needsSeedRef.current = true;
     stateRef.current = initialNavScrollState();
+    cooldownUntilRef.current = 0;
     // 子页（/entries/*、/settings/*）本就不渲染底部导航，无需强制显示；
     // 其余主路由切换时回到显示，避免带着上一页的隐藏态进入新页。
     const hidesNav = pathname.startsWith("/entries/") || pathname.startsWith("/settings/");
@@ -36,8 +40,16 @@ export function useHideBottomNavOnScroll(): (event: UIEvent<HTMLElement>) => voi
         return;
       }
 
+      if (Date.now() < cooldownUntilRef.current) {
+        stateRef.current = initialNavScrollState(scrollTop, stateRef.current.hidden);
+        return;
+      }
+
       const next = resolveNavVisibility(stateRef.current, scrollTop);
-      if (next.hidden !== stateRef.current.hidden) setHidden(next.hidden);
+      if (next.hidden !== stateRef.current.hidden) {
+        setHidden(next.hidden);
+        cooldownUntilRef.current = Date.now() + NAV_TRANSITION_COOLDOWN_MS;
+      }
       stateRef.current = next;
     },
     [setHidden],

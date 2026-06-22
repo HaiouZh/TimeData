@@ -16,12 +16,22 @@ vi.mock("@meauxt/react-swipeable-list", () => ({
   TrailingActions: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SwipeAction: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   SwipeableList: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => (
-    <div data-testid="swipeable-list" data-threshold={String(rest.threshold)} data-fullswipe={String(rest.fullSwipe)}>
+    <div
+      data-testid="swipeable-list"
+      data-threshold={String(rest.threshold)}
+      data-fullswipe={String(rest.fullSwipe)}
+      data-classname={String(rest.className ?? "")}
+    >
       {children}
     </div>
   ),
   SwipeableListItem: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => (
-    <div data-testid="swipeable-item" data-blockswipe={String(rest.blockSwipe)} data-maxswipe={String(rest.maxSwipe)}>
+    <div
+      data-testid="swipeable-item"
+      data-blockswipe={String(rest.blockSwipe)}
+      data-maxswipe={String(rest.maxSwipe)}
+      data-classname={String(rest.className ?? "")}
+    >
       {children}
     </div>
   ),
@@ -92,6 +102,29 @@ describe("TaskList prop 透传", () => {
     const item = host.querySelector('[data-testid="swipeable-item"]');
     expect(item?.getAttribute("data-blockswipe")).toBe("false");
     expect(item?.getAttribute("data-maxswipe")).toBe("0.5");
+
+    await unmount(root);
+  });
+
+  it("约束 swipe 容器横向溢出，resize 后条目按当前页面宽度收缩", async () => {
+    vi.mocked(useIsCoarsePointer).mockReturnValue(true);
+    const { host, root } = await renderDom(
+      <TaskList
+        pool="today"
+        tasks={[task()]}
+        onToggle={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onToToday={noop}
+        onToInbox={noop}
+      />,
+    );
+
+    expect(host.querySelector('[data-testid="swipeable-list"]')?.getAttribute("data-classname")).toContain("min-w-0");
+    expect(host.querySelector('[data-testid="swipeable-list"]')?.getAttribute("data-classname")).toContain(
+      "overflow-x-clip",
+    );
+    expect(host.querySelector('[data-testid="swipeable-item"]')?.getAttribute("data-classname")).toContain("min-w-0");
 
     await unmount(root);
   });

@@ -122,10 +122,11 @@ samp {
 /*
  * 待办「今天」列表拖拽排序时临时解除 swipe 行容器的 overflow:hidden。
  * 否则 dnd-kit 给被拖/相邻条目加的 translateY 会被 .swipeable-list-item 裁掉，表现为条目隐身。
- * 拖拽与横向 swipe 不会并发，期间放开裁剪是安全的（拖完恢复）。
+ * 横向仍裁掉，避免向右拖拽时把 <main> 撑出可滚宽度，触发 dnd-kit 横向自动滚动。
  */
 .todo-dnd-dragging .swipeable-list-item {
-  overflow: visible;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .ts-collapse-caret {

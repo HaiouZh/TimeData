@@ -23,4 +23,10 @@ describe("index.css design tokens", () => {
     expect(css).toMatch(/body\s*\{\s*font-family:\s*var\(--font-body\);\s*\}/);
     expect(css).toMatch(/code,\npre,\nkbd,\nsamp\s*\{\s*font-family:\s*var\(--font-mono\);\s*\}/);
   });
+
+  it("clips todo drag rows horizontally while allowing vertical dnd movement", () => {
+    expect(css).toMatch(
+      /\.todo-dnd-dragging \.swipeable-list-item\s*\{\s*overflow-x:\s*clip;\s*overflow-y:\s*visible;\s*\}/,
+    );
+  });
 });
