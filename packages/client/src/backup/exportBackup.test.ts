@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import type { Category, QuickNote, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
+import type { Category, Goal, QuickNote, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db/index.js";
 import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
@@ -32,6 +32,7 @@ const entry: TimeEntry = {
 
 const task: Task = {
   id: "task-1",
+  goalId: null,
   title: "写备份测试",
   done: false,
   recurrence: null,
@@ -56,6 +57,7 @@ const track: Track = {
   title: "T1 数据地基",
   status: "active",
   refs: [],
+  goalId: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -74,8 +76,19 @@ const trackStep: TrackStep = {
   updatedAt: now,
 };
 
+const goal: Goal = {
+  id: "goal-1",
+  title: "发布 v2",
+  kind: "project",
+  status: "active",
+  prerequisites: [{ blocker: "task-1", blocked: "track-1" }],
+  createdAt: now,
+  updatedAt: now,
+};
+
 beforeEach(async () => {
   await db.timeEntries.clear();
+  await db.goals.clear();
   await db.tasks.clear();
   await db.trackSteps.clear();
   await db.tracks.clear();
@@ -90,6 +103,7 @@ describe("exportBackup", () => {
     await db.timeEntries.add(entry);
     await db.tasks.add(task);
     await db.quickNotes.add(quickNote);
+    await db.goals.add(goal);
     await db.tracks.add(track);
     await db.trackSteps.add(trackStep);
 
@@ -110,6 +124,7 @@ describe("exportBackup", () => {
     // 普通域走通用 domains map，按 table 名键入；速记与任务都在
     expect(backup.domains.tasks).toEqual([task]);
     expect(backup.domains.quick_notes).toEqual([quickNote]);
+    expect(backup.domains.goals).toEqual([goal]);
     expect(backup.domains.tracks).toEqual([track]);
     expect(backup.domains.track_steps).toEqual([trackStep]);
 

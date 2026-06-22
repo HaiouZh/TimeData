@@ -100,3 +100,29 @@ describe("track client domains", () => {
     ).toBe(true);
   });
 });
+
+describe("goal client domain", () => {
+  it("registers goals store with bundled backup", () => {
+    expect(getClientDomain("goals")).toMatchObject({
+      table: "goals",
+      storeName: "goals",
+      backup: "bundled",
+    });
+    expect(BACKUP_BUNDLED_DOMAINS.map((domain) => domain.table)).toContain("goals");
+  });
+
+  it("uses shared GoalSchema for goal payloads", () => {
+    const now = "2026-06-22T01:00:00.000Z";
+    expect(
+      getClientDomain("goals").schema.safeParse({
+        id: "goal-1",
+        title: "发布 v2",
+        kind: "theme",
+        status: "active",
+        prerequisites: [],
+        createdAt: now,
+        updatedAt: now,
+      }).success,
+    ).toBe(true);
+  });
+});

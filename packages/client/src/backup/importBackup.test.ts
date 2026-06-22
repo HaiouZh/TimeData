@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import type { Category, SyncLogEntry, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
+import type { Category, Goal, SyncLogEntry, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { LAST_SYNCED_SEQ_KEY, db } from "../db/index.js";
 import { importBackup } from "./importBackup.js";
@@ -56,6 +56,7 @@ const oldEntry: TimeEntry = {
 const oldTask: Task = {
   id: "old-task",
   parentId: null,
+  goalId: null,
   title: "旧任务",
   done: false,
   recurrence: null,
@@ -94,6 +95,7 @@ const newEntry: TimeEntry = {
 
 const newTask = {
   id: "new-task",
+  goalId: null,
   title: "新任务",
   done: true,
   recurrence: null,
@@ -113,6 +115,7 @@ const oldTrack: Track = {
   title: "旧轨道",
   status: "active",
   refs: [],
+  goalId: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -122,6 +125,7 @@ const newTrack: Track = {
   title: "新轨道",
   status: "parked",
   refs: [{ kind: "task", id: "new-task" }],
+  goalId: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -136,6 +140,26 @@ const newTrackStep: TrackStep = {
   refs: [],
   tags: ["phase:T1"],
   seq: 0,
+  createdAt: now,
+  updatedAt: now,
+};
+
+const oldGoal: Goal = {
+  id: "old-goal",
+  title: "旧目标",
+  kind: "project",
+  status: "active",
+  prerequisites: [],
+  createdAt: now,
+  updatedAt: now,
+};
+
+const newGoal: Goal = {
+  id: "new-goal",
+  title: "新目标",
+  kind: "theme",
+  status: "active",
+  prerequisites: [{ blocker: "new-task", blocked: "new-track" }],
   createdAt: now,
   updatedAt: now,
 };
@@ -164,6 +188,7 @@ function backup(): BackupDocument {
 
 beforeEach(async () => {
   await db.timeEntries.clear();
+  await db.goals.clear();
   await db.tasks.clear();
   await db.trackSteps.clear();
   await db.tracks.clear();
@@ -234,19 +259,22 @@ describe("importBackup", () => {
 
   it("restores tracks and track_steps when the backup includes those domains", async () => {
     await db.tracks.add(oldTrack);
+    await db.goals.add(oldGoal);
 
     const result = await importBackup({
       ...backup(),
       domains: {
         tasks: [newTask],
+        goals: [newGoal],
         tracks: [newTrack],
         track_steps: [newTrackStep],
       },
     });
 
+    await expect(db.goals.toArray()).resolves.toEqual([newGoal]);
     await expect(db.tracks.toArray()).resolves.toEqual([newTrack]);
     await expect(db.trackSteps.toArray()).resolves.toEqual([newTrackStep]);
-    expect(result.domainCounts).toEqual({ tasks: 1, tracks: 1, track_steps: 1 });
+    expect(result.domainCounts).toEqual({ tasks: 1, goals: 1, tracks: 1, track_steps: 1 });
   });
 
   it("does not modify local data when validation fails", async () => {

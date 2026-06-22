@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
-  Category, QuickNote, Setting, Task, TimeEntry, SyncLogEntry, Track, TrackStep,
+  Category, Goal, QuickNote, Setting, Task, TimeEntry, SyncLogEntry, Track, TrackStep,
   HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun, HealthChartConfig,
 } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
@@ -41,6 +41,7 @@ export const db = new Dexie("timedata") as Dexie & {
   healthCharts: EntityTable<HealthChartConfig, "id">;
   tracks: EntityTable<Track, "id">;
   trackSteps: EntityTable<TrackStep, "id">;
+  goals: EntityTable<Goal, "id">;
 };
 
 db.version(1).stores({
@@ -161,6 +162,25 @@ db.version(9).stores({
   healthCharts: "id, order, updatedAt",
 });
 
+db.version(10).stores({
+  categories: "id, parentId, sortOrder",
+  quickNotes: "id, occurredAt, updatedAt",
+  timeEntries: "id, categoryId, startTime, endTime",
+  tasks: "id, goalId, parentId, scheduledAt, sortOrder, updatedAt",
+  tracks: "id, goalId, status, updatedAt",
+  trackSteps: "id, trackId, [trackId+seq], updatedAt",
+  goals: "id, kind, status, updatedAt",
+  syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+  autoBackups: "id, createdAt",
+  settings: "key",
+  healthHeartRate: "id, date",
+  healthHrv: "id, date",
+  healthSleep: "id, date",
+  healthStress: "id, date",
+  runs: "id, date",
+  healthCharts: "id, order, updatedAt",
+});
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;
@@ -190,9 +210,10 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {
-  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.syncLog, db.settings], async () => {
+  await db.transaction("rw", [db.categories, db.timeEntries, db.tasks, db.tracks, db.trackSteps, db.goals, db.syncLog, db.settings], async () => {
     const nonQuickNoteLogs = await db.syncLog.filter((log) => log.tableName !== "quick_notes").toArray();
     await db.timeEntries.clear();
+    await db.goals.clear();
     await db.tasks.clear();
     await db.trackSteps.clear();
     await db.tracks.clear();

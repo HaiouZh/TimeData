@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Category, Task, TimeEntry } from "@timedata/shared";
+import type { Category, Goal, Task, TimeEntry } from "@timedata/shared";
 import { BACKUP_FORMAT } from "./schema.js";
 import { validateBackup } from "./validateBackup.js";
 
@@ -47,6 +47,7 @@ function task(value: string | (Partial<Task> & Pick<Task, "id">)): Task {
   return {
     id: overrides.id,
     parentId: overrides.parentId ?? null,
+    goalId: overrides.goalId ?? null,
     title: overrides.title ?? overrides.id,
     done: overrides.done ?? false,
     recurrence: overrides.recurrence ?? null,
@@ -57,6 +58,20 @@ function task(value: string | (Partial<Task> & Pick<Task, "id">)): Task {
     completedAt: overrides.completedAt ?? null,
     tags: overrides.tags ?? [],
     sortOrder: overrides.sortOrder ?? 0,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
+  };
+}
+
+function goal(value: string | (Partial<Goal> & Pick<Goal, "id">)): Goal {
+  const overrides = typeof value === "string" ? { id: value } : value;
+  return {
+    id: overrides.id,
+    title: overrides.title ?? overrides.id,
+    kind: overrides.kind ?? "project",
+    status: overrides.status ?? "active",
+    note: overrides.note,
+    prerequisites: overrides.prerequisites ?? [],
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
   };
@@ -135,6 +150,26 @@ describe("validateBackup", () => {
       ok: false,
       error: { code: "DUPLICATE_DOMAIN_ID", message: "备份文件中 tracks 存在重复 ID：track-1。" },
     });
+  });
+
+  it("accepts and validates goals bundled domain records", () => {
+    expect(
+      validateBackup({
+        ...validBackup(),
+        domains: { goals: [goal({ id: "goal-1", kind: "theme" })] },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        ok: true,
+        summary: expect.objectContaining({ domainCounts: { goals: 1 } }),
+      }),
+    );
+    expect(validateBackup(validBackup({ domains: { goals: [goal("goal-1"), goal("goal-1")] } }))).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "DUPLICATE_DOMAIN_ID" }),
+      }),
+    );
   });
 
   it("rejects orphan category parents", () => {

@@ -2,6 +2,7 @@ import type { BackupDocument } from "./schema.js";
 
 /** 完整备份里普通域的中文短标签，按 table 名键入；缺省回退 table 名本身。 */
 const DOMAIN_LABELS: Record<string, string> = {
+  goals: "目标",
   tasks: "任务",
   quick_notes: "速记",
   health_heart_rate: "心率",

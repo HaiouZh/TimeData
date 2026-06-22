@@ -1,6 +1,7 @@
 import type { SyncChange } from "@timedata/shared";
 import {
   CategorySchema,
+  GoalSchema,
   QuickNoteSchema,
   SettingSchema,
   TaskSchema,
@@ -199,6 +200,12 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     table: "track_steps",
     storeName: "trackSteps",
     schema: TrackStepSchema,
+    backup: "bundled",
+  },
+  goals: {
+    table: "goals",
+    storeName: "goals",
+    schema: GoalSchema,
     backup: "bundled",
   },
 };

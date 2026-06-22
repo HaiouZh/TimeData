@@ -62,12 +62,13 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(9);
+    expect(db.verno).toBe(10);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
     expect(db.quickNotes.schema.idxByName.updatedAt).toBeDefined();
     expect(db.tasks.schema.primKey.keyPath).toBe("id");
+    expect(db.tasks.schema.idxByName.goalId).toBeDefined();
     expect(db.tasks.schema.idxByName.parentId).toBeDefined();
     expect(db.tasks.schema.idxByName.sortOrder).toBeDefined();
     expect(db.tasks.schema.idxByName.updatedAt).toBeDefined();
@@ -75,12 +76,17 @@ describe("Dexie database", () => {
     expect(db.healthCharts.schema.idxByName.order).toBeDefined();
     expect(db.healthCharts.schema.idxByName.updatedAt).toBeDefined();
     expect(db.tracks.schema.primKey.keyPath).toBe("id");
+    expect(db.tracks.schema.idxByName.goalId).toBeDefined();
     expect(db.tracks.schema.idxByName.status).toBeDefined();
     expect(db.tracks.schema.idxByName.updatedAt).toBeDefined();
     expect(db.trackSteps.schema.primKey.keyPath).toBe("id");
     expect(db.trackSteps.schema.idxByName.trackId).toBeDefined();
     expect(db.trackSteps.schema.idxByName["[trackId+seq]"]).toBeDefined();
     expect(db.trackSteps.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.goals.schema.primKey.keyPath).toBe("id");
+    expect(db.goals.schema.idxByName.kind).toBeDefined();
+    expect(db.goals.schema.idxByName.status).toBeDefined();
+    expect(db.goals.schema.idxByName.updatedAt).toBeDefined();
   });
 
   it("exposes a tasks table keyed by id", async () => {
@@ -142,6 +148,15 @@ describe("Dexie database", () => {
       createdAt: "2026-06-01T04:02:00.000Z",
       updatedAt: "2026-06-01T04:02:00.000Z",
     });
+    await db.goals.add({
+      id: "goal-1",
+      title: "目标",
+      kind: "project",
+      status: "active",
+      prerequisites: [],
+      createdAt: "2026-06-01T04:02:00.000Z",
+      updatedAt: "2026-06-01T04:02:00.000Z",
+    });
     await db.trackSteps.add({
       id: "step-1",
       trackId: "track-1",
@@ -181,6 +196,14 @@ describe("Dexie database", () => {
         synced: 0,
       },
       {
+        id: "goal-log-1",
+        tableName: "goals",
+        recordId: "goal-1",
+        action: "create",
+        timestamp: "2026-06-01T04:02:00.000Z",
+        synced: 0,
+      },
+      {
         id: "step-log-1",
         tableName: "track_steps",
         recordId: "step-1",
@@ -202,6 +225,7 @@ describe("Dexie database", () => {
 
     await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({ text: "repo" });
     await expect(db.tasks.get("task-1")).resolves.toBeUndefined();
+    await expect(db.goals.get("goal-1")).resolves.toBeUndefined();
     await expect(db.tracks.get("track-1")).resolves.toBeUndefined();
     await expect(db.trackSteps.get("step-1")).resolves.toBeUndefined();
     await expect(db.syncLog.toArray()).resolves.toMatchObject([

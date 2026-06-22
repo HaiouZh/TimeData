@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TaskSchema } from "@timedata/shared";
+import { TaskSchema, TrackSchema } from "@timedata/shared";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { db } from "./index.js";
 import {
@@ -27,6 +27,7 @@ const baseTask = {
 };
 const normalizedTask = {
   ...baseTask,
+  goalId: null,
   completedCount: 0,
   completedAt: null,
   tags: [],
@@ -83,6 +84,41 @@ describe("isDeepEqual", () => {
 });
 
 describe("planNormalization", () => {
+  it("Task/Track legacy rows default goalId to null", () => {
+    expect(planNormalization([baseTask], TaskSchema, keyOf).writes).toEqual([
+      { key: "a", value: normalizedTask },
+    ]);
+    expect(
+      planNormalization(
+        [
+          {
+            id: "track-1",
+            title: "轨道",
+            status: "active",
+            refs: [],
+            createdAt: "2026-06-20T00:00:00.000Z",
+            updatedAt: "2026-06-20T00:00:00.000Z",
+          },
+        ],
+        TrackSchema,
+        keyOf,
+      ).writes,
+    ).toEqual([
+      {
+        key: "track-1",
+        value: {
+          id: "track-1",
+          title: "轨道",
+          status: "active",
+          refs: [],
+          goalId: null,
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      },
+    ]);
+  });
+
   it("缺字段按默认值计划写回", () => {
     const plan = planNormalization([baseTask], TaskSchema, keyOf);
 
@@ -136,6 +172,7 @@ describe("planNormalization", () => {
           lastDoneAt: null,
           recurrence: null,
           done: false,
+          goalId: null,
           parentId: null,
           updatedAt: "2026-06-20T00:00:00.000Z",
           createdAt: "2026-06-20T00:00:00.000Z",
@@ -192,7 +229,7 @@ describe("runSchemaNormalizationIfNeeded", () => {
     expect(task).not.toHaveProperty("ghostField");
     expect(task).not.toHaveProperty(legacyStateField);
     expect(task).not.toHaveProperty(legacyStateTimeField);
-    expect(task).toMatchObject({ completedCount: 0, parentId: null, tags: [] });
+    expect(task).toMatchObject({ completedCount: 0, parentId: null, goalId: null, tags: [] });
     expect(task?.updatedAt).toBe("2026-06-20T00:00:00.000Z");
     expect(await db.quickNotes.get("n1")).not.toHaveProperty("ghostField");
     expect(await db.syncLog.count()).toBe(0);
