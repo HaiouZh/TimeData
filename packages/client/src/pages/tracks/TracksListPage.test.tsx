@@ -215,6 +215,8 @@ describe("TracksListPage", () => {
     await waitForText(host, "等确认的轨道");
     expect(host.textContent).toContain("agent 执行中");
     expect(host.textContent).toContain("普通推进");
+    await waitForText(host, "等我 1");
+    await waitForText(host, "agent在做 1");
     await click(facetButton(host, "等我 1"));
     await waitForCondition(
       () =>
