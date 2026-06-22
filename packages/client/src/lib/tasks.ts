@@ -13,6 +13,7 @@ export interface AddTaskInput {
   startAt?: string | null;
   scheduledAt?: string | null;
   toInbox?: boolean;
+  tags?: string[];
   now?: Date;
 }
 
@@ -62,6 +63,7 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
   const task: Task = TaskSchema.parse({
     id: uuid(),
     parentId: null,
+    tags: input.tags ?? [],
     title: normalizeTitle(input.title),
     done: false,
     recurrence,

@@ -64,6 +64,18 @@ describe("addTask", () => {
     expect(t.scheduledAt).toBeNull();
   });
 
+  it("addTask 传 tags → 新任务带该 tags", async () => {
+    const task = await addTask({ title: "带标签", tags: ["工作", "紧急"] });
+    expect(task.tags).toEqual(["工作", "紧急"]);
+    const stored = await db.tasks.get(task.id);
+    expect(stored?.tags).toEqual(["工作", "紧急"]);
+  });
+
+  it("addTask 不传 tags → 默认 []", async () => {
+    const task = await addTask({ title: "无标签" });
+    expect(task.tags).toEqual([]);
+  });
+
   it("addTask 重复任务 scheduledAt=null", async () => {
     const t = await addTask({
       title: "刮胡子",
