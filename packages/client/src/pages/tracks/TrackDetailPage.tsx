@@ -12,11 +12,6 @@ import { StepComposer, type StepDraft } from "./StepComposer.js";
 import { TrackTimeline } from "./TrackTimeline.js";
 
 const STATUS_LABEL: Record<string, string> = { active: "推进中", concluded: "已收束", parked: "已搁置" };
-const STATUS_ORDER: { value: "active" | "concluded" | "parked"; label: string }[] = [
-  { value: "active", label: "推进中" },
-  { value: "concluded", label: "收束" },
-  { value: "parked", label: "搁置" },
-];
 
 export default function TrackDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
@@ -149,20 +144,36 @@ export default function TrackDetailPage() {
                   )}
                 </>
               )}
-              <div className="mt-3 inline-flex rounded-ctl bg-surface-elevated p-0.5">
-                {STATUS_ORDER.map((item) => (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-ctl bg-surface-elevated px-2.5 py-1 text-xs text-ink-2">
+                  状态 · {STATUS_LABEL[track.status] ?? track.status}
+                </span>
+                {track.status === "active" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void changeStatus("concluded")}
+                      className="rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 hover:border-accent hover:text-accent"
+                    >
+                      收束
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void changeStatus("parked")}
+                      className="rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 hover:border-accent hover:text-accent"
+                    >
+                      搁置
+                    </button>
+                  </>
+                ) : (
                   <button
-                    key={item.value}
                     type="button"
-                    aria-pressed={track.status === item.value}
-                    onClick={() => void changeStatus(item.value)}
-                    className={`rounded-ctl px-3 py-1 text-xs transition ${
-                      track.status === item.value ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
-                    }`}
+                    onClick={() => void changeStatus("active")}
+                    className="rounded-ctl bg-accent px-3 py-1.5 text-sm text-page"
                   >
-                    {item.label}
+                    重新推进
                   </button>
-                ))}
+                )}
               </div>
             </header>
             {isActive && <StepComposer onSubmit={(draft) => void addStep(draft)} statusTags={actionTags} />}

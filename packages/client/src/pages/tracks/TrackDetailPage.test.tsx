@@ -255,6 +255,25 @@ describe("TrackDetailPage", () => {
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
+  it("shows lifecycle as current state plus action buttons", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "状态 · 推进中");
+    expect(buttonByText(host, "收束")).not.toBeNull();
+    expect(buttonByText(host, "搁置")).not.toBeNull();
+    expect(host.querySelector('button[aria-pressed="true"]')?.textContent).not.toContain("推进中");
+  });
+
+  it("shows reopen action for archived lifecycle states", async () => {
+    await addTrack({ title: "已搁置轨道", status: "parked", now });
+    const [track] = await listTracks("parked");
+    const host = await renderDetail(track.id);
+    await waitForText(host, "状态 · 已搁置");
+    await clickButton(host, "重新推进");
+    const updated = await getTrack(track.id);
+    expect(updated?.status).toBe("active");
+  });
+
   it("非 active 轨道隐藏加步与闭合,状态控件仍在", async () => {
     await addTrack({ title: "已收束轨道", status: "concluded", now });
     const [track] = await listTracks("concluded");
@@ -263,6 +282,6 @@ describe("TrackDetailPage", () => {
 
     expect(host.querySelector('textarea[aria-label="步骤内容"]')).toBeNull();
     expect(buttonByText(host, "闭合当前步")).toBeNull();
-    expect(buttonByText(host, "推进中")).not.toBeNull();
+    expect(buttonByText(host, "重新推进")).not.toBeNull();
   });
 });
