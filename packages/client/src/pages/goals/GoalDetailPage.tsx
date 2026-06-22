@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Trash, X } from "@phosphor-icons/react";
+import { ArrowLeft, Check, Trash } from "@phosphor-icons/react";
 import { TaskSchema, type Goal, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useState } from "react";
@@ -33,7 +33,7 @@ const STATUS_OPTIONS: Array<{ value: Goal["status"]; label: string }> = [
   { value: "archived", label: "归档" },
 ];
 
-function progressText(goal: Goal, overview: ReturnType<typeof buildGoalOverview>): string {
+function progressText(overview: ReturnType<typeof buildGoalOverview>): string {
   const { progress } = overview;
   if (progress.kind === "project") return `完成度 ${progress.completed}/${progress.total}`;
   const last = progress.lastActivityAt ? `，最近 ${progress.lastActivityAt.slice(0, 10)}` : "";
@@ -289,7 +289,7 @@ function GoalContent({
           <SegmentedControl ariaLabel="目标类型" value={goal.kind} options={KIND_OPTIONS} onChange={onChangeKind} />
           <SegmentedControl ariaLabel="目标状态" value={goal.status} options={STATUS_OPTIONS} onChange={onChangeStatus} />
         </div>
-        <p className="mt-3 rounded-row bg-surface-elevated px-3 py-2 text-sm text-ink-2">{progressText(goal, overview)}</p>
+        <p className="mt-3 rounded-row bg-surface-elevated px-3 py-2 text-sm text-ink-2">{progressText(overview)}</p>
       </header>
       <div className="grid gap-3 md:grid-cols-2">
         <MemberSection title="现在能推进" members={overview.sections.ready} />
