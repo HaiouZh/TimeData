@@ -2,8 +2,11 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
+import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { renderDom, unmount } from "../../test/domHarness.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
+import type { TrackHandoffSignal } from "../../lib/tracksView.js";
+import type { StepDraft } from "./StepComposer.js";
 import { TrackListItem } from "./TrackListItem.js";
 
 const T = "2026-06-21T00:00:00.000Z";
@@ -43,9 +46,36 @@ function step(partial: Partial<TrackStep> & { id: string; seq: number }): TrackS
   };
 }
 
-async function mount(item: Track, steps: TrackStep[]) {
-  mounted = await renderDom(createElement(MemoryRouter, null, createElement(TrackListItem, { track: item, steps })));
+async function mount(
+  item: Track,
+  steps: TrackStep[],
+  props: { signal?: TrackHandoffSignal | null; statusTags?: readonly string[]; onSubmitStep?: (draft: StepDraft) => void } = {},
+) {
+  mounted = await renderDom(
+    createElement(MemoryRouter, null, createElement(TrackListItem, { track: item, steps, ...props })),
+  );
   return mounted.host;
+}
+
+function buttonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
+  return [...host.querySelectorAll("button")].find((button) => button.textContent === text) ?? null;
+}
+
+async function typeTextarea(host: HTMLElement, value: string): Promise<void> {
+  await act(async () => {
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setValue?.call(textarea, value);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function submitInlineForm(host: HTMLElement): Promise<void> {
+  await act(async () => {
+    (host.querySelector("form") as HTMLFormElement).dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
 }
 
 describe("TrackListItem", () => {
@@ -71,5 +101,38 @@ describe("TrackListItem", () => {
     const host = await mount(track({ status: "concluded" }), [step({ id: "a", seq: 0, content: "已完成步骤" })]);
     expect(host.textContent).toContain("轨道派活");
     expect(host.textContent).not.toContain("已完成步骤");
+  });
+
+  it("shows the provided handoff badge and no badge when signal is null", async () => {
+    const withSignal = await mount(track(), [step({ id: "a", seq: 0, content: "等你确认", tags: ["等我"] })], {
+      signal: { tag: "等我", court: "mine", stepId: "a" },
+    });
+    expect(withSignal.textContent).toContain("该我了");
+    expect(withSignal.textContent).toContain("#等我");
+
+    await unmount(mounted?.root);
+    mounted = null;
+
+    const noSignal = await mount(track(), [step({ id: "b", seq: 0, content: "普通推进", tags: [] })], {
+      signal: null,
+    });
+    expect(noSignal.textContent).not.toContain("无信号");
+    expect(noSignal.textContent).not.toContain("其他");
+  });
+
+  it("keeps inline writer outside the detail link and delegates submit to parent", async () => {
+    const submitted: StepDraft[] = [];
+    const host = await mount(track(), [step({ id: "a", seq: 0, content: "旧步骤" })], {
+      statusTags: ["等我", "agent在做"],
+      onSubmitStep: (draft) => submitted.push(draft),
+    });
+
+    await click(host.querySelector('button[aria-label="写一步"]'));
+    const form = host.querySelector("form");
+    expect(form?.closest("a")).toBeNull();
+    await typeTextarea(host, "交给 agent 继续");
+    await click(buttonByText(host, "#agent在做"));
+    await submitInlineForm(host);
+    expect(submitted).toEqual([{ content: "交给 agent 继续", mode: "open", tags: ["agent在做"] }]);
   });
 });
