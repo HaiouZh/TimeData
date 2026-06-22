@@ -60,6 +60,19 @@ describe("DayGroupedList", () => {
     await unmount(root);
   });
 
+  it("展开后的『收起』按钮可按底部输入框高度上移避让", async () => {
+    const segs = ["今天", "昨天", "6月10日", "6月9日", "6月8日"].map(seg);
+    const { host, root } = await renderDom(
+      <DayGroupedList segments={segs} renderTasks={renderTasks} stickyBottomOffsetPx={120} />,
+    );
+    await click(host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement);
+
+    const collapse = host.querySelector('[aria-label="收起"]') as HTMLButtonElement;
+    expect(collapse.style.bottom).toBe("124px");
+
+    await unmount(root);
+  });
+
   it("空段输入：不渲染卡片也不渲染按钮", async () => {
     const { host, root } = await renderDom(<DayGroupedList segments={[]} renderTasks={renderTasks} />);
     expect(host.querySelector('[aria-label^="显示更多"]')).toBeNull();

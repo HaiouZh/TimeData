@@ -48,9 +48,7 @@ export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
 };
 
 /** dnd-kit container id 域：池容器或父任务容器。 */
-export type TodoContainer =
-  | { kind: "pool"; pool: TodoPool }
-  | { kind: "parent"; parentId: string };
+export type TodoContainer = { kind: "pool"; pool: TodoPool } | { kind: "parent"; parentId: string };
 
 /** drop 后要执行的语义化操作。 */
 export type TodoDragOperation =
@@ -138,8 +136,12 @@ export function resolveTodoDragOperation({
  * - parent 容器（parent:<X>）：root = X（无论 over 是子任务行还是落点区）。
  * 无法归属（非法/缺失容器、upcoming 等）返回 null。
  */
-export function hoveredRootIdFromOver(overContainerId: string, overId: string): string | null {
-  const container = parseTodoContainerId(overContainerId);
+export function hoveredRootIdFromOver(
+  overContainerId: string,
+  overId: string,
+  fallbackContainerId?: string,
+): string | null {
+  const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(fallbackContainerId);
   if (!container) return null;
   if (container.kind === "pool") return overId;
   return container.parentId;
@@ -165,10 +167,7 @@ export function resolveTodoDragWithIndent({
   targetPool,
 }: ResolveTodoDragWithIndentInput): TodoDragOperation | null {
   const canBecomeChild =
-    indentLevel === "child" &&
-    !activeHasChildren &&
-    rootAboveId !== null &&
-    rootAboveId !== activeId;
+    indentLevel === "child" && !activeHasChildren && rootAboveId !== null && rootAboveId !== activeId;
   const targetContainerId = canBecomeChild ? `parent:${rootAboveId}` : targetPool ? `pool:${targetPool}` : "";
 
   return resolveTodoDragOperation({

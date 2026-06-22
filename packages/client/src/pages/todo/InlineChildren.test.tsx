@@ -18,6 +18,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   document.body.innerHTML = "";
 });
 
@@ -250,8 +252,40 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
+  it("子任务标题宽度变化后重算高度，不出现 textarea 内部滚动条", async () => {
+    let measuredHeight = 48;
+    vi.spyOn(HTMLTextAreaElement.prototype, "scrollHeight", "get").mockImplementation(() => measuredHeight);
+    const resizeCallbacks: ResizeObserverCallback[] = [];
+    class FakeResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback);
+      }
+      observe = vi.fn();
+      disconnect = vi.fn();
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    expect(input.style.height).toBe("48px");
+
+    measuredHeight = 96;
+    await act(async () => {
+      for (const callback of resizeCallbacks) {
+        callback([{ target: input } as ResizeObserverEntry], {} as ResizeObserver);
+      }
+    });
+
+    expect(input.style.height).toBe("96px");
+    expect(input.style.overflowY).toBe("hidden");
+
+    await unmount(root);
+  });
+
   it("子任务行不渲染 recurrence / tags / scheduledAt 入口", async () => {
-    const legacyBadgeId = ("tu" + "rn") + "-badge";
+    const legacyBadgeId = "tu" + "rn" + "-badge";
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 

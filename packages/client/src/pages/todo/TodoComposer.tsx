@@ -1,5 +1,5 @@
 import { MagnifyingGlass, Tag, X } from "@phosphor-icons/react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type Ref, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
@@ -21,6 +21,7 @@ export interface TodoComposerProps {
   onToggleMode: () => void;
   onToggleNotMode: () => void;
   onClear: () => void;
+  formRef?: Ref<HTMLFormElement>;
 }
 
 export function TodoComposer({
@@ -37,6 +38,7 @@ export function TodoComposer({
   onToggleMode,
   onToggleNotMode,
   onClear,
+  formRef,
 }: TodoComposerProps) {
   const destination = useTodoDefaultDestination();
   const { syncAfterWrite } = useSyncContext();
@@ -95,6 +97,7 @@ export function TodoComposer({
 
   return (
     <form
+      ref={formRef}
       onSubmit={submit}
       className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 backdrop-blur sm:p-3"
       style={{ bottom: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}

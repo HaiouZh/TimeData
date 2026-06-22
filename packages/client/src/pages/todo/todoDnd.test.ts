@@ -103,12 +103,9 @@ describe("parseTodoContainerId", () => {
     expect(parseTodoContainerId(input)).toEqual(expected);
   });
 
-  it.each(["", null, undefined, "parent:", "pool:upcoming", "pool:completed", "random"])(
-    "拒绝 %s",
-    (value) => {
-      expect(parseTodoContainerId(value as string | null | undefined)).toBeNull();
-    },
-  );
+  it.each(["", null, undefined, "parent:", "pool:upcoming", "pool:completed", "random"])("拒绝 %s", (value) => {
+    expect(parseTodoContainerId(value as string | null | undefined)).toBeNull();
+  });
 });
 
 describe("resolveTodoDragOperation", () => {
@@ -223,6 +220,10 @@ describe("hoveredRootIdFromOver", () => {
     expect(hoveredRootIdFromOver("parent:", "x")).toBeNull();
     expect(hoveredRootIdFromOver("pool:upcoming", "x")).toBeNull();
   });
+
+  it("同父子任务排序时 over 缺 containerId，兜底使用 active 的 parent 容器", () => {
+    expect(hoveredRootIdFromOver("", "child-2", "parent:root-1")).toBe("root-1");
+  });
 });
 
 const baseIndentInput = {
@@ -320,9 +321,7 @@ describe("resolveTodoDragWithIndent", () => {
 
 describe("containerIdForTask", () => {
   it("child 任务返回 parent:<id>", () => {
-    expect(
-      containerIdForTask({ parentId: "root-1", scheduledAt: null }, "2026-06-19"),
-    ).toBe("parent:root-1");
+    expect(containerIdForTask({ parentId: "root-1", scheduledAt: null }, "2026-06-19")).toBe("parent:root-1");
   });
 
   it("无 scheduledAt 的 root → pool:inbox", () => {
@@ -330,14 +329,12 @@ describe("containerIdForTask", () => {
   });
 
   it("scheduledAt 是今天 → pool:today", () => {
-    expect(
-      containerIdForTask({ parentId: null, scheduledAt: "2026-06-19T00:00:00.000Z" }, "2026-06-19"),
-    ).toBe("pool:today");
+    expect(containerIdForTask({ parentId: null, scheduledAt: "2026-06-19T00:00:00.000Z" }, "2026-06-19")).toBe(
+      "pool:today",
+    );
   });
 
   it("scheduledAt 是别的日期 → 空字符串（upcoming 不参与拖拽）", () => {
-    expect(
-      containerIdForTask({ parentId: null, scheduledAt: "2026-07-01T00:00:00.000Z" }, "2026-06-19"),
-    ).toBe("");
+    expect(containerIdForTask({ parentId: null, scheduledAt: "2026-07-01T00:00:00.000Z" }, "2026-06-19")).toBe("");
   });
 });

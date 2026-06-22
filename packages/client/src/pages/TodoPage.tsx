@@ -14,7 +14,8 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
@@ -60,6 +61,7 @@ import {
 } from "./todo/todoDnd.js";
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
+const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
@@ -78,13 +80,41 @@ export function TodoPage() {
   const indentBaseRef = useRef<TodoIndentLevel>("root");
   const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
   const [revealChildren, setRevealChildren] = useState<{ id: string; nonce: number } | null>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
+  const [composerHeightPx, setComposerHeightPx] = useState(0);
   const { syncAfterWrite } = useSyncContext();
+  const { hidden: navHidden } = useBottomNav();
   const wide = useIsWideScreen();
   const rootIdsWithChildren =
     useLiveQuery(async () => {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
       return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
     }, []) ?? new Set<string>();
+  const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
+  const composerAvoidancePx = Math.ceil(composerHeightPx + navOffsetPx);
+  const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
+
+  const measureComposer = useCallback(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    const height = composer.getBoundingClientRect().height;
+    if (height <= 0) return;
+    const nextHeight = Math.ceil(height);
+    setComposerHeightPx((current) => (Math.abs(current - nextHeight) > 1 ? nextHeight : current));
+  }, []);
+
+  useLayoutEffect(() => {
+    measureComposer();
+  });
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(measureComposer);
+    observer.observe(composer);
+    return () => observer.disconnect();
+  }, [measureComposer]);
 
   const toggle = async (t: Task) => {
     await toggleTaskDone(t.id);
@@ -182,9 +212,10 @@ export function TodoPage() {
       setIndentTargetId(null);
       return;
     }
+    const activeContainerId = (active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
     const overContainerId = (over.data.current as { containerId?: string } | undefined)?.containerId ?? "";
     const activeId = String(active.id);
-    const rootAboveId = hoveredRootIdFromOver(overContainerId, String(over.id));
+    const rootAboveId = hoveredRootIdFromOver(overContainerId, String(over.id), activeContainerId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
     setIndentTargetId(rootAboveId && rootAboveId !== activeId && !activeHasChildren ? rootAboveId : null);
   }
@@ -214,7 +245,7 @@ export function TodoPage() {
       activeParentId = found?.parentId ?? null;
     }
 
-    const rootAboveId = hoveredRootIdFromOver(overContainerId, overId);
+    const rootAboveId = hoveredRootIdFromOver(overContainerId, overId, activeContainerId);
     const targetPool = targetPoolFromOver(overContainerId, rootAboveId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
 
@@ -240,7 +271,11 @@ export function TodoPage() {
             break;
           }
           const containerTasks =
-            op.containerId === "pool:today" ? f(buckets.today) : op.containerId === "pool:inbox" ? f(buckets.inbox) : [];
+            op.containerId === "pool:today"
+              ? f(buckets.today)
+              : op.containerId === "pool:inbox"
+                ? f(buckets.inbox)
+                : [];
           if (containerTasks.length === 0) return;
           const ids = containerTasks.map((t) => t.id);
           const oldIndex = ids.indexOf(activeId);
@@ -305,6 +340,7 @@ export function TodoPage() {
     >
       <DayGroupedList
         segments={groupCompletedByDay(completedFiltered)}
+        stickyBottomOffsetPx={composerAvoidancePx}
         renderTasks={(tasks) => <TaskList pool="completed" tasks={tasks} {...rowHandlers} />}
       />
     </CollapsibleSection>
@@ -324,6 +360,7 @@ export function TodoPage() {
         ) : (
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
+            stickyBottomOffsetPx={composerAvoidancePx}
             renderTasks={(tasks) => (
               <TaskList
                 pool="inbox"
@@ -375,7 +412,10 @@ export function TodoPage() {
       }}
     >
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
-        <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-48 lg:max-w-none">
+        <div
+          className="mx-auto w-full max-w-2xl px-4 py-4 lg:max-w-none"
+          style={{ paddingBottom: contentBottomPaddingPx }}
+        >
           {wide ? (
             <ResizableSplit
               className="items-start gap-y-4"
@@ -416,11 +456,10 @@ export function TodoPage() {
           onToggleMode={toggleMode}
           onToggleNotMode={toggleNotMode}
           onClear={clearTags}
+          formRef={composerRef}
         />
 
-        {detailId && (
-          <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} onTagsChange={changeTags} />
-        )}
+        {detailId && <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} onTagsChange={changeTags} />}
       </div>
     </DndContext>
   );

@@ -1,7 +1,15 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Task } from "@timedata/shared";
-import { type CSSProperties, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Trash } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
@@ -20,13 +28,46 @@ interface ChildRowBodyProps extends ChildRowCallbacks {
 
 function autoGrow(el: HTMLTextAreaElement | null): void {
   if (!el) return;
+  el.style.overflowY = "hidden";
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
+}
+
+function useAutoGrowingTextarea() {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const lastObservedWidthRef = useRef<number | null>(null);
+  const grow = useCallback(() => autoGrow(ref.current), []);
+
+  useLayoutEffect(() => {
+    grow();
+  });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const width =
+        entry?.contentRect?.width ??
+        (entry?.target instanceof HTMLElement ? entry.target.getBoundingClientRect().width : null);
+      if (width !== null && entry?.contentRect) {
+        if (lastObservedWidthRef.current === width) return;
+        lastObservedWidthRef.current = width;
+      }
+      autoGrow(el);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return ref;
 }
 
 function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, onEnter }: ChildRowBodyProps) {
   const [draft, setDraft] = useState(child.title);
   const lastExternal = useRef(child.title);
+  const titleRef = useAutoGrowingTextarea();
 
   // 外部（同步/其他端）刷新标题时，仅当用户未在编辑（draft 仍等于上次外部值）才同步。
   useEffect(() => {
@@ -65,7 +106,7 @@ function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, 
           aria-label="子任务标题"
           value={draft}
           rows={1}
-          ref={(el) => autoGrow(el)}
+          ref={titleRef}
           onChange={(event) => {
             setDraft(event.currentTarget.value);
             autoGrow(event.currentTarget);
@@ -157,13 +198,7 @@ export function ReadonlyChildRow({ child }: ReadonlyChildRowProps) {
   const noop = () => {};
   return (
     <li className="group">
-      <ChildRowBody
-        child={child}
-        readonly
-        onToggleDone={noop}
-        onTitleCommit={noop}
-        onDelete={noop}
-      />
+      <ChildRowBody child={child} readonly onToggleDone={noop} onTitleCommit={noop} onDelete={noop} />
     </li>
   );
 }
@@ -179,12 +214,13 @@ export interface NewChildRowProps {
  */
 export function NewChildRow({ onResolve }: NewChildRowProps) {
   const [draft, setDraft] = useState("");
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const ref = useAutoGrowingTextarea();
 
   // 挂载即聚焦：紧随用户手势的程序化聚焦在 APK(WebView) 上会唤起软键盘；桌面端等同于光标进入输入框。
   useEffect(() => {
-    ref.current?.focus();
-  }, []);
+    const el = ref.current;
+    el?.focus();
+  }, [ref]);
 
   function handleKey(event: KeyboardEvent<HTMLTextAreaElement>): void {
     if (event.key === "Enter" && !event.shiftKey) {

@@ -6,13 +6,19 @@ export interface DayGroupedListProps {
   segments: InboxDaySegment[];
   renderTasks: (tasks: Task[]) => ReactNode;
   initialGroups?: number;
+  stickyBottomOffsetPx?: number;
 }
 
 /**
  * 单卡内多日分组：组间用 hairline 分割线 + 行内小日期标签替代每段独立卡片，
  * 并默认渐进式只露最近 N 个有任务的日期组，多余的折叠到「显示更多」后。
  */
-export function DayGroupedList({ segments, renderTasks, initialGroups = 3 }: DayGroupedListProps) {
+export function DayGroupedList({
+  segments,
+  renderTasks,
+  initialGroups = 3,
+  stickyBottomOffsetPx = 0,
+}: DayGroupedListProps) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? segments : segments.slice(0, initialGroups);
   const hidden = segments.length - visible.length;
@@ -48,7 +54,8 @@ export function DayGroupedList({ segments, renderTasks, initialGroups = 3 }: Day
           type="button"
           aria-label="收起"
           onClick={() => setExpanded(false)}
-          className="sticky bottom-1 z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 text-xs text-ink-3 shadow-sm hover:bg-surface-hover"
+          className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 text-xs text-ink-3 shadow-sm hover:bg-surface-hover"
+          style={{ bottom: stickyBottomOffsetPx + 4 }}
         >
           收起
         </button>
