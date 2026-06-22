@@ -4,7 +4,13 @@ import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/index.js";
-import { readTrackActionTags, setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import {
+  readTrackActionTagConfigs,
+  readTrackActionTags,
+  setTrackActionTagConfigs,
+  setTrackActionTags,
+  type TrackActionTagConfig,
+} from "../../lib/settings/trackActionTagsSetting.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsTracksPage } from "./SettingsTracksPage.js";
 
@@ -38,6 +44,15 @@ async function waitForTags(predicate: (tags: string[]) => boolean): Promise<void
     await flush();
   }
   throw new Error("Timed out waiting for track.actionTags.v1");
+}
+
+async function waitForConfigs(predicate: (configs: TrackActionTagConfig[]) => boolean): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    if (predicate(await readTrackActionTagConfigs())) return;
+    await flush();
+  }
+  throw new Error("Timed out waiting for track.actionTags.v2");
 }
 
 describe("SettingsTracksPage", () => {
@@ -75,5 +90,41 @@ describe("SettingsTracksPage", () => {
     await waitForTags((tags) => tags.length === 2);
     await click(host.querySelector('button[aria-label="删除 等我"]'));
     await waitForTags((tags) => tags.length === 1 && tags[0] === "卡住");
+  });
+
+  it("shows each status tag with a court segmented control", async () => {
+    const host = await renderPage();
+    await flush();
+    expect(host.textContent).toContain("该我了");
+    expect(host.textContent).toContain("等 agent");
+    expect(host.textContent).toContain("卡住");
+    expect(host.textContent).toContain("其他");
+    expect(host.querySelector('[role="radiogroup"][aria-label="等我 的阵营"]')).not.toBeNull();
+  });
+
+  it("changes an existing tag court without changing its text", async () => {
+    await setTrackActionTagConfigs([{ tag: "等我", court: "mine" }]);
+    const host = await renderPage();
+    await flush();
+    const button = [...host.querySelectorAll('[role="radio"]')].find((item) => item.textContent?.includes("等 agent"));
+    await click(button);
+    await waitForConfigs((configs) => configs.some((item) => item.tag === "等我" && item.court === "agent"));
+  });
+
+  it("adds a new tag as neutral by default", async () => {
+    const host = await renderPage();
+    await flush();
+    const input = host.querySelector('input[aria-label="新增状态标签"]') as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setValue?.call(input, "需材料");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      (host.querySelector("form") as HTMLFormElement).dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    await waitForConfigs((configs) => configs.some((item) => item.tag === "需材料" && item.court === "neutral"));
   });
 });
