@@ -19,7 +19,7 @@ import {
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { loadBoardView, saveBoardView, type BoardView } from "./boardViewPref.js";
 import { NewTrackComposer } from "./NewTrackComposer.js";
-import { StepDraft } from "./StepComposer.js";
+import type { StepDraft } from "./StepComposer.js";
 import { TrackListItem } from "./TrackListItem.js";
 import { TrackStatusFacetPanel } from "./TrackStatusFacetPanel.js";
 
