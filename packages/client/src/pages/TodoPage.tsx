@@ -15,6 +15,7 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
@@ -65,6 +66,8 @@ const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskIdParam = searchParams.get("taskId");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
   const [excludeTags, setExcludeTags] = useState<string[]>([]);
@@ -93,6 +96,20 @@ export function TodoPage() {
   const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
   const composerAvoidancePx = Math.ceil(composerHeightPx + navOffsetPx);
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
+  const deepLinkedTask = useLiveQuery(
+    async () => {
+      if (!taskIdParam) return null;
+      return (await db.tasks.get(taskIdParam)) ?? null;
+    },
+    [taskIdParam],
+    undefined,
+  );
+
+  useEffect(() => {
+    if (!taskIdParam) return;
+    if (deepLinkedTask === undefined) return;
+    setDetailId(deepLinkedTask?.id ?? null);
+  }, [deepLinkedTask, taskIdParam]);
 
   const measureComposer = useCallback(() => {
     const composer = composerRef.current;
@@ -126,6 +143,15 @@ export function TodoPage() {
     syncAfterWrite();
   };
   const openDetail = (t: Task) => setDetailId(t.id);
+  const closeDetail = () => {
+    setDetailId(null);
+    if (!taskIdParam) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("taskId");
+      return next;
+    });
+  };
   const moveToInbox = async (t: Task) => {
     await unscheduleTask(t.id);
     syncAfterWrite();
@@ -459,7 +485,7 @@ export function TodoPage() {
           formRef={composerRef}
         />
 
-        {detailId && <TaskDetailSheet id={detailId} onClose={() => setDetailId(null)} onTagsChange={changeTags} />}
+        {detailId && <TaskDetailSheet id={detailId} onClose={closeDetail} onTagsChange={changeTags} />}
       </div>
     </DndContext>
   );
