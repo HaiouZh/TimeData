@@ -121,10 +121,12 @@ describe("TodoComposer 底部操作栏", () => {
     const form = host.querySelector("form") as HTMLFormElement;
     expect(Number.parseInt(form.style.bottom, 10)).toBe(49);
     expect(form.style.transform).toBe("translateY(0)");
+    expect(form.style.zIndex).toBe("40");
     await clickAndFlush(host.querySelector('[data-testid="hide-nav"]'));
     // 下滑收起底栏时，输入框落到贴底再整体下移自身高度 → 完全移出视口，让长列表阅读区最大化
     expect(Number.parseInt(form.style.bottom, 10)).toBe(0);
     expect(form.style.transform).toBe("translateY(100%)");
+    expect(form.style.zIndex).toBe("40");
     await unmount(root);
   });
 });
