@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 6063,
+    "chars": 6222,
     "covers": 12
   },
   "docs/evergreen/backup.md": {
@@ -28,11 +28,11 @@
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
-    "chars": 17163,
+    "chars": 17297,
     "covers": 27
   },
   "docs/evergreen/design-language.md": {
-    "chars": 4360,
+    "chars": 4429,
     "covers": 1
   },
   "docs/evergreen/design-language/controls.md": {
@@ -40,15 +40,15 @@
     "covers": 4
   },
   "docs/evergreen/development.md": {
-    "chars": 9250,
+    "chars": 9835,
     "covers": 9
   },
   "docs/evergreen/goals.md": {
-    "chars": 5709,
+    "chars": 5799,
     "covers": 12
   },
   "docs/evergreen/health.md": {
-    "chars": 5626,
+    "chars": 5841,
     "covers": 9
   },
   "docs/evergreen/health/charts.md": {
@@ -60,7 +60,7 @@
     "covers": 3
   },
   "docs/evergreen/quick-notes.md": {
-    "chars": 10543,
+    "chars": 10591,
     "covers": 16
   },
   "docs/evergreen/security.md": {
@@ -68,7 +68,7 @@
     "covers": 9
   },
   "docs/evergreen/stats-insights.md": {
-    "chars": 9329,
+    "chars": 9540,
     "covers": 10
   },
   "docs/evergreen/sync.md": {
@@ -80,7 +80,7 @@
     "covers": 15
   },
   "docs/evergreen/todo.md": {
-    "chars": 16100,
+    "chars": 16288,
     "covers": 26
   },
   "docs/evergreen/todo/recurrence.md": {
