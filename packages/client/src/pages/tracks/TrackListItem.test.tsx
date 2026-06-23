@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
-import type { TrackHandoffSignal } from "../../lib/tracksView.js";
+import type { TrackBoardSignal } from "../../lib/tracksView.js";
 import type { StepDraft } from "./StepComposer.js";
 import { TrackListItem } from "./TrackListItem.js";
 
@@ -49,7 +49,7 @@ function step(partial: Partial<TrackStep> & { id: string; seq: number }): TrackS
 async function mount(
   item: Track,
   steps: TrackStep[],
-  props: { signal?: TrackHandoffSignal | null; statusTags?: readonly string[]; onSubmitStep?: (draft: StepDraft) => void } = {},
+  props: { signal?: TrackBoardSignal | null; statusTags?: readonly string[]; onSubmitStep?: (draft: StepDraft) => void } = {},
 ) {
   mounted = await renderDom(
     createElement(MemoryRouter, null, createElement(TrackListItem, { track: item, steps, ...props })),
@@ -83,7 +83,7 @@ describe("TrackListItem", () => {
     const host = await mount(track(), [
       step({ id: "a", seq: 0, content: "旧步骤" }),
       step({ id: "b", seq: 1, content: "开始处理", sourceLabel: "claude", tags: ["agent在做"] }),
-      step({ id: "c", seq: 2, content: "等你确认", sourceLabel: "codex", tags: ["等我"] }),
+      step({ id: "c", seq: 2, content: "等你确认", sourceLabel: "codex", tags: ["待我处理"] }),
       step({ id: "d", seq: 3, content: "补充证据", source: "user", tags: ["批注"] }),
     ]);
     expect(host.textContent).toContain("轨道派活");
@@ -94,7 +94,7 @@ describe("TrackListItem", () => {
     expect(host.textContent).not.toContain("旧步骤");
     expect(host.textContent).toContain("我");
     expect(host.textContent).toContain("codex");
-    expect(host.textContent).toContain("#等我");
+    expect(host.textContent).toContain("#待我处理");
   });
 
   it("does not show step stream for archived tracks", async () => {
@@ -103,12 +103,12 @@ describe("TrackListItem", () => {
     expect(host.textContent).not.toContain("已完成步骤");
   });
 
-  it("shows the provided handoff badge and no badge when signal is null", async () => {
-    const withSignal = await mount(track(), [step({ id: "a", seq: 0, content: "等你确认", tags: ["等我"] })], {
-      signal: { tag: "等我", court: "mine", stepId: "a" },
+  it("shows the provided board signal badge and no badge when signal is null", async () => {
+    const withSignal = await mount(track(), [step({ id: "a", seq: 0, content: "等你确认", tags: ["待我处理"] })], {
+      signal: { tag: "待我处理", stepId: "a" },
     });
-    expect(withSignal.textContent).toContain("该我了");
-    expect(withSignal.textContent).toContain("#等我");
+    expect(withSignal.textContent).toContain("#待我处理");
+    expect(withSignal.textContent).not.toContain("该我了");
 
     await unmount(mounted?.root);
     mounted = null;
@@ -116,14 +116,14 @@ describe("TrackListItem", () => {
     const noSignal = await mount(track(), [step({ id: "b", seq: 0, content: "普通推进", tags: [] })], {
       signal: null,
     });
-    expect(noSignal.textContent).not.toContain("无信号");
+    expect(noSignal.textContent).not.toContain("#待我处理");
     expect(noSignal.textContent).not.toContain("其他");
   });
 
   it("keeps inline writer outside the detail link and delegates submit to parent", async () => {
     const submitted: StepDraft[] = [];
     const host = await mount(track(), [step({ id: "a", seq: 0, content: "旧步骤" })], {
-      statusTags: ["等我", "agent在做"],
+      statusTags: ["待我处理", "agent在做"],
       onSubmitStep: (draft) => submitted.push(draft),
     });
 

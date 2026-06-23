@@ -18,22 +18,20 @@ async function mount(facets: TrackStatusFacet[], selectedTags: string[] = [], on
 }
 
 describe("TrackStatusFacetPanel", () => {
-  it("renders suggested and actual facets with counts", async () => {
+  it("renders configured board signal facets with counts", async () => {
     const { host } = await mount([
-      { tag: "等我", count: 0, suggested: true },
+      { tag: "待我处理", count: 0, suggested: true },
       { tag: "agent在做", count: 2, suggested: true },
-      { tag: "复盘", count: 1, suggested: false },
     ]);
-    expect(host.textContent).toContain("交棒筛选");
-    expect(host.textContent).toContain("等我 0");
+    expect(host.textContent).toContain("看板信号");
+    expect(host.textContent).toContain("待我处理 0");
     expect(host.textContent).toContain("agent在做 2");
-    expect(host.textContent).toContain("复盘 1");
   });
 
   it("marks selected tags with aria-pressed and calls onToggle", async () => {
     const { host, onToggle } = await mount(
       [
-        { tag: "等我", count: 0, suggested: true },
+        { tag: "待我处理", count: 0, suggested: true },
         { tag: "agent在做", count: 2, suggested: true },
       ],
       ["agent在做"],
@@ -41,6 +39,6 @@ describe("TrackStatusFacetPanel", () => {
     const selected = host.querySelector('button[aria-pressed="true"]') as HTMLButtonElement;
     expect(selected.textContent).toContain("agent在做 2");
     await click(host.querySelector("button"));
-    expect(onToggle).toHaveBeenCalledWith("等我");
+    expect(onToggle).toHaveBeenCalledWith("待我处理");
   });
 });

@@ -1,11 +1,7 @@
 import type { Ref, Track, TrackStep } from "@timedata/shared";
-import { courtOfTrackTag, type TrackActionTagConfig } from "./settings/trackActionTagsSetting.js";
 import { formatMinutesDuration } from "./time.js";
-import { TRACK_COURT_META, TRACK_COURTS, type TrackCourt } from "./trackCourts.js";
 
 const MS_PER_DAY = 86_400_000;
-// 决策步词表:命中即视觉区分。tag 是开放扩展,这里只挑出"用于视觉分流"的一组,不进 schema。
-const DECISION_TAGS = new Set(["决策", "decision"]);
 
 function byTrackStepOrderAsc(a: TrackStep, b: TrackStep): number {
   return a.seq - b.seq || a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
@@ -103,15 +99,11 @@ export function formatStepDuration(startedAt: string, endedAt: string | null, no
 export function trackProgressSummary(steps: TrackStep[], now: Date): string {
   if (steps.length === 0) return "尚无步骤";
   const openId = currentStepId(steps);
-  if (openId === null) return `共${steps.length}步 · 已收束`;
+  if (openId === null) return `共${steps.length}步`;
   const open = steps.find((s) => s.id === openId);
   const elapsed = open ? formatStepDuration(open.startedAt, null, now) : "";
   const stepNumber = open ? open.seq + 1 : steps.length;
   return `当前:第${stepNumber}步 · 已历时${elapsed}`;
-}
-
-export function isDecisionStep(step: TrackStep): boolean {
-  return step.tags.some((tag) => DECISION_TAGS.has(tag));
 }
 
 // 外链判定:仅 id 为 http(s) 才算可点外链。kind 不参与放行——url 型 ref 的 id 同样须带 http(s) 协议。
@@ -132,95 +124,59 @@ export interface TrackStatusFacet {
   suggested: boolean;
 }
 
-export interface TrackHandoffSignal {
+export interface TrackBoardSignal {
   tag: string;
-  court: TrackCourt;
   stepId: string;
 }
 
 export interface TrackBoardItem {
   track: Track;
-  signal: TrackHandoffSignal | null;
+  signal: TrackBoardSignal | null;
 }
 
-export interface TrackBoardLane {
-  court: TrackCourt;
-  items: TrackBoardItem[];
-}
-
-export function latestHandoffSignal(
-  steps: TrackStep[],
-  configs: readonly TrackActionTagConfig[],
-): TrackHandoffSignal | null {
+export function latestBoardSignal(steps: TrackStep[], boardSignals: readonly string[]): TrackBoardSignal | null {
+  const normalizedSignals = uniqueNormalizedTags(boardSignals);
+  if (normalizedSignals.length === 0) return null;
   for (const step of [...steps].sort(byTrackStepOrderDesc)) {
-    for (const tag of uniqueNormalizedTags(step.tags)) {
-      const court = courtOfTrackTag(configs, tag);
-      if (court) return { tag, court, stepId: step.id };
+    const stepTags = new Set(uniqueNormalizedTags(step.tags));
+    for (const tag of normalizedSignals) {
+      if (stepTags.has(tag)) return { tag, stepId: step.id };
     }
   }
   return null;
 }
 
-export function sortTracksForBoard(
+export function boardItemsForTracks(
   tracks: Track[],
   stepsByTrack: Map<string, TrackStep[]>,
-  configs: readonly TrackActionTagConfig[],
+  boardSignals: readonly string[],
 ): TrackBoardItem[] {
-  return tracks
-    .map((track, index) => {
-      const signal = latestHandoffSignal(stepsByTrack.get(track.id) ?? [], configs);
-      const rank = signal ? TRACK_COURT_META[signal.court].rank : TRACK_COURT_META.neutral.rank;
-      return { track, signal, index, rank };
-    })
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map(({ track, signal }) => ({ track, signal }));
+  return tracks.map((track) => ({
+    track,
+    signal: latestBoardSignal(stepsByTrack.get(track.id) ?? [], boardSignals),
+  }));
 }
 
-export function groupTracksByHandoffCourt(
-  tracks: Track[],
-  stepsByTrack: Map<string, TrackStep[]>,
-  configs: readonly TrackActionTagConfig[],
-): TrackBoardLane[] {
-  const buckets = new Map<TrackCourt, TrackBoardItem[]>();
-  for (const court of TRACK_COURTS) buckets.set(court, []);
-  for (const item of sortTracksForBoard(tracks, stepsByTrack, configs)) {
-    buckets.get(item.signal?.court ?? "neutral")?.push(item);
-  }
-  return TRACK_COURTS.map((court) => ({ court, items: buckets.get(court) ?? [] }));
-}
-
-export function collectStatusFacets(
-  tracks: Track[],
-  stepsByTrack: Map<string, TrackStep[]>,
-  configs: readonly TrackActionTagConfig[],
-): TrackStatusFacet[] {
+export function collectStatusFacetsFromItems(items: readonly TrackBoardItem[], boardSignals: readonly string[]): TrackStatusFacet[] {
   const counts = new Map<string, number>();
 
-  for (const track of tracks) {
-    if (track.status !== "active") continue;
-    const signal = latestHandoffSignal(stepsByTrack.get(track.id) ?? [], configs);
+  for (const item of items) {
+    const signal = item.signal;
     if (!signal) continue;
     counts.set(signal.tag, (counts.get(signal.tag) ?? 0) + 1);
   }
 
-  return configs.map((item) => ({
-    tag: item.tag,
-    count: counts.get(item.tag) ?? 0,
+  return uniqueNormalizedTags(boardSignals).map((tag) => ({
+    tag,
+    count: counts.get(tag) ?? 0,
     suggested: true,
   }));
 }
 
-export function filterTracksByStatusTags(
-  tracks: Track[],
-  stepsByTrack: Map<string, TrackStep[]>,
-  selectedTags: readonly string[],
-  configs: readonly TrackActionTagConfig[],
-): Track[] {
+export function filterBoardItemsByStatusTags(items: readonly TrackBoardItem[], selectedTags: readonly string[]): TrackBoardItem[] {
   const selected = new Set(uniqueNormalizedTags(selectedTags));
-  return tracks.filter((track) => {
-    if (track.status !== "active") return false;
+  return items.filter((item) => {
     if (selected.size === 0) return true;
-    const signal = latestHandoffSignal(stepsByTrack.get(track.id) ?? [], configs);
-    return signal ? selected.has(signal.tag) : false;
+    return item.signal ? selected.has(item.signal.tag) : false;
   });
 }

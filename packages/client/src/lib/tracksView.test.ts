@@ -1,34 +1,25 @@
 import type { Ref, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import type { TrackActionTagConfig } from "./settings/trackActionTagsSetting.js";
 import {
-  collectStatusFacets,
+  boardItemsForTracks,
+  collectStatusFacetsFromItems,
   currentStepId,
-  filterTracksByStatusTags,
+  filterBoardItemsByStatusTags,
   formatStepDuration,
-  groupTracksByHandoffCourt,
   groupStepsByTrack,
-  isDecisionStep,
   isLinkRef,
-  latestHandoffSignal,
+  latestBoardSignal,
   latestStep,
   latestStepId,
   latestStepsForCard,
   orderedTimeline,
   partitionTracks,
-  sortTracksForBoard,
   stepSourceText,
   trackProgressSummary,
 } from "./tracksView.js";
 
 const T = "2026-06-21T00:00:00.000Z";
-
-const HANDOFF_CONFIGS: TrackActionTagConfig[] = [
-  { tag: "等我", court: "mine" },
-  { tag: "待决策", court: "mine" },
-  { tag: "卡住", court: "blocked" },
-  { tag: "agent在做", court: "agent" },
-];
+const BOARD_SIGNALS = ["待我处理", "agent在做"];
 
 function step(partial: Partial<TrackStep> & { id: string; seq: number }): TrackStep {
   return {
@@ -68,7 +59,6 @@ describe("tracksView pure helpers", () => {
         step({ id: "c", seq: 2, endedAt: null }),
       ]),
     ).toBe("c");
-    // 全闭合(concluded)→ 无 current,不退回最新历史步
     expect(currentStepId([step({ id: "a", seq: 9, endedAt: T })])).toBeNull();
   });
 
@@ -82,79 +72,83 @@ describe("tracksView pure helpers", () => {
     expect(currentStepId(steps)).toBe("open");
   });
 
-  it("collectStatusFacets counts configured sticky handoff tags only", () => {
-    const tracks = [track("a1", "active"), track("a2", "active"), track("p1", "parked")];
+  it("latestBoardSignal is sticky and ignores later unconfigured tags", () => {
+    const signal = latestBoardSignal(
+      [
+        step({ id: "agent", seq: 0, tags: ["agent在做"] }),
+        step({ id: "note", seq: 1, tags: ["批注"] }),
+        step({ id: "plain", seq: 2, tags: [] }),
+      ],
+      BOARD_SIGNALS,
+    );
+    expect(signal).toEqual({ tag: "agent在做", stepId: "agent" });
+  });
+
+  it("latestBoardSignal uses config order when one step has multiple signals", () => {
+    const signal = latestBoardSignal([step({ id: "multi", seq: 0, tags: ["agent在做", "待我处理"] })], BOARD_SIGNALS);
+    expect(signal).toEqual({ tag: "待我处理", stepId: "multi" });
+  });
+
+  it("latestBoardSignal ignores non-configured tags", () => {
+    expect(latestBoardSignal([step({ id: "note", seq: 0, tags: ["批注"] })], BOARD_SIGNALS)).toBeNull();
+  });
+
+  it("boardItemsForTracks preserves track order and attaches sticky board signals", () => {
+    const tracks = [track("agent", "active"), track("plain", "active"), track("mine", "active")];
     const steps = [
-      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["卡住"] }),
-      step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
-      step({ id: "a2-new", trackId: "a2", seq: 0, tags: ["agent在做", "批注"] }),
-      step({ id: "p1-new", trackId: "p1", seq: 0, tags: ["等我"] }),
+      step({ id: "agent-step", trackId: "agent", seq: 0, tags: ["agent在做"] }),
+      step({ id: "mine-step", trackId: "mine", seq: 0, tags: ["待我处理"] }),
     ];
-    expect(collectStatusFacets(tracks, groupStepsByTrack(steps), HANDOFF_CONFIGS)).toEqual([
-      { tag: "等我", count: 0, suggested: true },
-      { tag: "待决策", count: 0, suggested: true },
-      { tag: "卡住", count: 1, suggested: true },
+    expect(boardItemsForTracks(tracks, groupStepsByTrack(steps), BOARD_SIGNALS).map((item) => item.track.id)).toEqual([
+      "agent",
+      "plain",
+      "mine",
+    ]);
+    expect(boardItemsForTracks(tracks, groupStepsByTrack(steps), BOARD_SIGNALS).map((item) => item.signal?.tag ?? null)).toEqual([
+      "agent在做",
+      null,
+      "待我处理",
+    ]);
+  });
+
+  it("collectStatusFacetsFromItems counts configured sticky board signals only", () => {
+    const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("p1", "parked")];
+    const steps = [
+      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["agent在做"] }),
+      step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
+      step({ id: "a2-new", trackId: "a2", seq: 0, tags: ["待我处理", "批注"] }),
+      step({ id: "a3-new", trackId: "a3", seq: 0, tags: ["决策"] }),
+      step({ id: "p1-new", trackId: "p1", seq: 0, tags: ["待我处理"] }),
+    ];
+    const items = boardItemsForTracks(
+      tracks.filter((item) => item.status === "active"),
+      groupStepsByTrack(steps),
+      BOARD_SIGNALS,
+    );
+    expect(collectStatusFacetsFromItems(items, BOARD_SIGNALS)).toEqual([
+      { tag: "待我处理", count: 1, suggested: true },
       { tag: "agent在做", count: 1, suggested: true },
     ]);
   });
 
-  it("filterTracksByStatusTags uses OR against sticky handoff tags and ignores archived tracks", () => {
+  it("filterBoardItemsByStatusTags uses OR against sticky board signals", () => {
     const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("c1", "concluded")];
     const steps = [
-      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["等我"] }),
+      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["agent在做"] }),
       step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
-      step({ id: "a2", trackId: "a2", seq: 0, tags: ["agent在做"] }),
+      step({ id: "a2", trackId: "a2", seq: 0, tags: ["待我处理"] }),
       step({ id: "a3", trackId: "a3", seq: 0, tags: ["复盘"] }),
-      step({ id: "c1", trackId: "c1", seq: 0, tags: ["等我"] }),
+      step({ id: "c1", trackId: "c1", seq: 0, tags: ["待我处理"] }),
     ];
-    const grouped = groupStepsByTrack(steps);
-    expect(filterTracksByStatusTags(tracks, grouped, [], HANDOFF_CONFIGS).map((t) => t.id)).toEqual(["a1", "a2", "a3"]);
-    expect(filterTracksByStatusTags(tracks, grouped, ["等我", "agent在做"], HANDOFF_CONFIGS).map((t) => t.id)).toEqual([
+    const items = boardItemsForTracks(
+      tracks.filter((item) => item.status === "active"),
+      groupStepsByTrack(steps),
+      BOARD_SIGNALS,
+    );
+    expect(filterBoardItemsByStatusTags(items, []).map((item) => item.track.id)).toEqual(["a1", "a2", "a3"]);
+    expect(filterBoardItemsByStatusTags(items, ["待我处理", "agent在做"]).map((item) => item.track.id)).toEqual([
       "a1",
       "a2",
-    ]);
-  });
-
-  it("latestHandoffSignal is sticky and ignores later untagged steps", () => {
-    const signal = latestHandoffSignal(
-      [
-        step({ id: "blocked", seq: 0, tags: ["卡住"] }),
-        step({ id: "note", seq: 1, tags: ["批注"] }),
-        step({ id: "plain", seq: 2, tags: [] }),
-      ],
-      HANDOFF_CONFIGS,
-    );
-    expect(signal).toEqual({ tag: "卡住", court: "blocked", stepId: "blocked" });
-  });
-
-  it("latestHandoffSignal ignores non-configured tags", () => {
-    expect(latestHandoffSignal([step({ id: "note", seq: 0, tags: ["批注"] })], HANDOFF_CONFIGS)).toBeNull();
-  });
-
-  it("sortTracksForBoard floats mine-side tracks and preserves non-mine order", () => {
-    const tracks = [track("agent", "active"), track("plain", "active"), track("mine", "active")];
-    const steps = [
-      step({ id: "agent-step", trackId: "agent", seq: 0, tags: ["agent在做"] }),
-      step({ id: "mine-step", trackId: "mine", seq: 0, tags: ["等我"] }),
-    ];
-    expect(sortTracksForBoard(tracks, groupStepsByTrack(steps), HANDOFF_CONFIGS).map((item) => item.track.id)).toEqual([
-      "mine",
-      "agent",
-      "plain",
-    ]);
-  });
-
-  it("groupTracksByHandoffCourt keeps empty lanes in fixed order and puts no-signal tracks into neutral lane", () => {
-    const lanes = groupTracksByHandoffCourt(
-      [track("mine", "active"), track("neutral", "active")],
-      groupStepsByTrack([step({ id: "mine-step", trackId: "mine", seq: 0, tags: ["待决策"] })]),
-      HANDOFF_CONFIGS,
-    );
-    expect(lanes.map((lane) => [lane.court, lane.items.map((item) => item.track.id)])).toEqual([
-      ["mine", ["mine"]],
-      ["agent", []],
-      ["blocked", []],
-      ["neutral", ["neutral"]],
     ]);
   });
 
@@ -205,7 +199,7 @@ describe("tracksView pure helpers", () => {
     expect(formatStepDuration("2026-06-21T00:00:00.000Z", "2026-06-21T02:30:00.000Z", now)).toBe("2小时30分钟");
   });
 
-  it("trackProgressSummary describes current open step, concluded, or empty", () => {
+  it("trackProgressSummary describes current open step, closed steps, or empty", () => {
     const now = new Date("2026-06-21T02:00:00.000Z");
     expect(
       trackProgressSummary(
@@ -213,7 +207,7 @@ describe("tracksView pure helpers", () => {
         now,
       ),
     ).toBe("当前:第2步 · 已历时2小时");
-    expect(trackProgressSummary([step({ id: "a", seq: 0, endedAt: T })], now)).toBe("共1步 · 已收束");
+    expect(trackProgressSummary([step({ id: "a", seq: 0, endedAt: T })], now)).toBe("共1步");
     expect(trackProgressSummary([], now)).toBe("尚无步骤");
   });
 
@@ -231,18 +225,11 @@ describe("tracksView pure helpers", () => {
     ).toBe("当前:第2步 · 已历时2小时");
   });
 
-  it("isDecisionStep matches the 决策/decision tags only", () => {
-    expect(isDecisionStep(step({ id: "a", seq: 0, tags: ["决策"] }))).toBe(true);
-    expect(isDecisionStep(step({ id: "b", seq: 0, tags: ["decision"] }))).toBe(true);
-    expect(isDecisionStep(step({ id: "c", seq: 0, source: "user", content: "做个决策", tags: [] }))).toBe(false);
-  });
-
   it("isLinkRef only treats http(s) ids as external links", () => {
     expect(isLinkRef({ kind: "url", id: "https://x.test" } as Ref)).toBe(true);
     expect(isLinkRef({ kind: "note", id: "http://x.test" } as Ref)).toBe(true);
     expect(isLinkRef({ kind: "task", id: "task-1" } as Ref)).toBe(false);
     expect(isLinkRef({ kind: "commit", id: "abc123" } as Ref)).toBe(false);
-    // 协议白名单:危险协议或缺协议的 url 型 ref 都不放行,杜绝 javascript: 进 href
     expect(isLinkRef({ kind: "url", id: "javascript:alert(1)" } as Ref)).toBe(false);
     expect(isLinkRef({ kind: "url", id: "x.test" } as Ref)).toBe(false);
   });
@@ -252,5 +239,4 @@ describe("tracksView pure helpers", () => {
     expect(stepSourceText(step({ id: "b", seq: 0, source: "agent", sourceLabel: "codex" }))).toBe("codex");
     expect(stepSourceText(step({ id: "c", seq: 0, source: "agent" }))).toBe("agent");
   });
-
 });

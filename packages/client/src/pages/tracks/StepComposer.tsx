@@ -7,12 +7,7 @@ export interface StepDraft {
   tags: string[];
 }
 
-const MODES: { value: UserStepMode; label: string }[] = [
-  { value: "open", label: "开始做这段" },
-  { value: "instant", label: "记一个点" },
-];
-
-const INSTANT_TAGS = ["决策", "批注", "提醒"];
+const COMMON_TAGS = ["决策", "批注", "提醒"];
 
 function uniqueTags(tags: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -40,18 +35,17 @@ export function StepComposer({
   submitLabel?: string;
 }) {
   const [content, setContent] = useState("");
-  const [mode, setMode] = useState<UserStepMode>("open");
   const [tag, setTag] = useState<string | null>(null);
   const [customTag, setCustomTag] = useState("");
   const normalizedStatusTags = uniqueTags(statusTags);
-  const normalizedInstantTags = uniqueTags(INSTANT_TAGS);
+  const normalizedCommonTags = uniqueTags(COMMON_TAGS);
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
     const trimmedCustomTag = customTag.trim();
-    onSubmit({ content: trimmed, mode, tags: tag ? [tag] : trimmedCustomTag ? [trimmedCustomTag] : [] });
+    onSubmit({ content: trimmed, mode: "open", tags: tag ? [tag] : trimmedCustomTag ? [trimmedCustomTag] : [] });
     setContent("");
     setTag(null);
     setCustomTag("");
@@ -69,25 +63,11 @@ export function StepComposer({
 
   return (
     <form onSubmit={submit} className={formClass}>
-      <div className="mb-2 inline-flex rounded-ctl bg-surface-elevated p-0.5">
-        {MODES.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            aria-pressed={mode === item.value}
-            onClick={() => setMode(item.value)}
-            className={`rounded-ctl px-3 py-1 text-sm transition ${
-              mode === item.value ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <div className="mb-2 text-xs font-medium text-ink-3">写一步</div>
       <textarea
         value={content}
         onChange={(event) => setContent(event.target.value)}
-        placeholder={mode === "open" ? "现在开始做的这段..." : "记一笔决策 / 批注 / 提醒..."}
+        placeholder="写下这一步的进展、结论或需要接手的事..."
         aria-label="步骤内容"
         rows={2}
         disabled={disabled}
@@ -96,7 +76,7 @@ export function StepComposer({
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {normalizedStatusTags.length > 0 && (
           <>
-            <span className="text-xs text-ink-3">状态/交棒</span>
+            <span className="text-xs text-ink-3">看板信号</span>
             {normalizedStatusTags.map((preset) => (
               <button
                 key={preset}
@@ -112,8 +92,8 @@ export function StepComposer({
             ))}
           </>
         )}
-        <span className="text-xs text-ink-3">记一笔</span>
-        {normalizedInstantTags.map((preset) => (
+        <span className="text-xs text-ink-3">常用标签</span>
+        {normalizedCommonTags.map((preset) => (
           <button
             key={preset}
             type="button"

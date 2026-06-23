@@ -1,12 +1,11 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { TRACK_COURT_META } from "../../lib/trackCourts.js";
 import {
   latestStepsForCard,
   stepSourceText,
   trackProgressSummary,
-  type TrackHandoffSignal,
+  type TrackBoardSignal,
 } from "../../lib/tracksView.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
 
@@ -20,7 +19,7 @@ export interface TrackListItemProps {
   track: Track;
   steps: TrackStep[];
   now?: Date;
-  signal?: TrackHandoffSignal | null;
+  signal?: TrackBoardSignal | null;
   statusTags?: readonly string[];
   onSubmitStep?: (draft: StepDraft) => Promise<void> | void;
 }
@@ -48,11 +47,8 @@ export function TrackListItem({
             <span className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="truncate text-sm text-ink">{track.title}</span>
               {signal && (
-                <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-pill border px-2 py-0.5 text-xs ${TRACK_COURT_META[signal.court].badgeClass}`}
-                >
-                  {TRACK_COURT_META[signal.court].laneLabel}
-                  <span>#{signal.tag}</span>
+                <span className="inline-flex shrink-0 items-center rounded-pill border border-accent/30 bg-accent-soft px-2 py-0.5 text-xs text-accent">
+                  #{signal.tag}
                 </span>
               )}
             </span>

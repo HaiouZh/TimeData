@@ -4,6 +4,7 @@ import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/index.js";
+import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, addTrackStep, getTrack, listTracks, listTrackSteps } from "../../lib/tracks.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import TrackDetailPage from "./TrackDetailPage.js";
@@ -168,12 +169,11 @@ describe("TrackDetailPage", () => {
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
-  it("即时点:选预设 tag 记一笔,不闭合当前步", async () => {
+  it("写一步:选常用 tag 后仍追加开口步并闭合上一开口步", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "base 期第一周");
 
-    await clickButton(host, "记一个点");
     await clickButton(host, "#批注");
     await typeStep(host, "这里要回看证据");
     await submitComposer(host);
@@ -181,9 +181,9 @@ describe("TrackDetailPage", () => {
     const steps = await listTrackSteps(track.id);
     const current = steps.find((s) => s.content === "base 期第一周");
     const note = steps.find((s) => s.content === "这里要回看证据");
-    expect(current?.endedAt).toBeNull();
+    expect(current?.endedAt).not.toBeNull();
     expect(note).toMatchObject({ source: "user", tags: ["批注"] });
-    expect(note?.startedAt).toBe(note?.endedAt);
+    expect(note?.endedAt).toBeNull();
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
@@ -215,20 +215,17 @@ describe("TrackDetailPage", () => {
     expect(updated?.summary).toBeUndefined();
   });
 
-  it("passes configured status tags into the step composer", async () => {
-    await db.settings.put({
-      key: "track.actionTags.v1",
-      value: JSON.stringify(["等我", "agent在做"]),
-      updatedAt: now.toISOString(),
-    });
+  it("passes configured board signal tags into the step composer", async () => {
+    await setTrackActionTags(["需我确认", "agent在做"]);
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "#agent在做");
-    expect(host.textContent).toContain("#等我");
+    expect(host.textContent).toContain("#需我确认");
     expect(host.textContent).toContain("#agent在做");
+    expect(host.textContent).not.toContain("#等我");
   });
 
-  it("闭合当前步按钮收束开口步", async () => {
+  it("闭合当前步按钮闭合开口步", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "base 期第一周");
@@ -241,12 +238,15 @@ describe("TrackDetailPage", () => {
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
-  it("状态控件收束轨道并闭合开口步", async () => {
+  it("shows lifecycle as active or archived and archives through concluded", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
-    await waitForText(host, "base 期第一周");
+    await waitForText(host, "状态 · 推进中");
+    expect(buttonByText(host, "归档")).not.toBeNull();
+    expect(buttonByText(host, "收束")).toBeNull();
+    expect(buttonByText(host, "搁置")).toBeNull();
 
-    await clickButton(host, "收束");
+    await clickButton(host, "归档");
 
     const updated = await getTrack(track.id);
     const steps = await listTrackSteps(track.id);
@@ -255,20 +255,11 @@ describe("TrackDetailPage", () => {
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
-  it("shows lifecycle as current state plus action buttons", async () => {
-    const track = await seedTrack();
-    const host = await renderDetail(track.id);
-    await waitForText(host, "状态 · 推进中");
-    expect(buttonByText(host, "收束")).not.toBeNull();
-    expect(buttonByText(host, "搁置")).not.toBeNull();
-    expect(host.querySelector('button[aria-pressed="true"]')?.textContent).not.toContain("推进中");
-  });
-
-  it("shows reopen action for archived lifecycle states", async () => {
+  it("shows old parked tracks as archived and can reopen them", async () => {
     await addTrack({ title: "已搁置轨道", status: "parked", now });
     const [track] = await listTracks("parked");
     const host = await renderDetail(track.id);
-    await waitForText(host, "状态 · 已搁置");
+    await waitForText(host, "状态 · 已归档");
     await clickButton(host, "重新推进");
     const updated = await getTrack(track.id);
     expect(updated?.status).toBe("active");
@@ -279,6 +270,7 @@ describe("TrackDetailPage", () => {
     const [track] = await listTracks("concluded");
     const host = await renderDetail(track.id);
     await waitForText(host, "已收束轨道");
+    await waitForText(host, "状态 · 已归档");
 
     expect(host.querySelector('textarea[aria-label="步骤内容"]')).toBeNull();
     expect(buttonByText(host, "闭合当前步")).toBeNull();

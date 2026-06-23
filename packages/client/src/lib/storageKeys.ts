@@ -14,5 +14,4 @@ export const STORAGE_KEYS = {
   todoDoneCollapsed: "timedata_todo_done_collapsed",
   todoInboxCollapsed: "timedata_todo_inbox_collapsed",
   todoScheduledCollapsed: "timedata_todo_scheduled_collapsed",
-  tracksBoardView: "timedata_tracks_board_view",
 } as const;

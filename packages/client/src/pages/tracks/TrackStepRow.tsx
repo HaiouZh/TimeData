@@ -1,11 +1,9 @@
 import type { TrackStep } from "@timedata/shared";
-import { formatStepDuration, isDecisionStep, stepSourceText } from "../../lib/tracksView.js";
+import { formatStepDuration, stepSourceText } from "../../lib/tracksView.js";
 import { RefChip } from "./RefChip.js";
 
-// 当前步>决策步>普通步:当前步用 accent,决策步用 warn,其余默认。全为已核实 token。
-function rowClass(isCurrent: boolean, decision: boolean): string {
+function rowClass(isCurrent: boolean): string {
   if (isCurrent) return "border-accent bg-accent-soft shadow-elev1";
-  if (decision) return "border-warn bg-warn-soft";
   return "border-border bg-surface";
 }
 
@@ -19,21 +17,18 @@ export function TrackStepRow({
   now: Date;
 }) {
   const open = step.endedAt === null;
-  const decision = isDecisionStep(step);
   const duration = formatStepDuration(step.startedAt, step.endedAt, now);
   const durationLabel = open ? `进行中 · 已历时${duration}` : `历时${duration}`;
 
   return (
     <li
       data-current={isCurrent ? "true" : "false"}
-      data-decision={decision ? "true" : "false"}
-      className={`rounded-card border p-3 transition ${rowClass(isCurrent, decision)}`}
+      className={`rounded-card border p-3 transition ${rowClass(isCurrent)}`}
     >
       <div className="flex flex-wrap items-center gap-2 text-xs text-ink-3">
         <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
           {stepSourceText(step)}
         </span>
-        {decision && <span className="text-warn">决策步</span>}
         <span>{durationLabel}</span>
       </div>
       {step.content && <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-ink">{step.content}</p>}

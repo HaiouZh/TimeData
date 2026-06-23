@@ -11,7 +11,7 @@ import { RefChip } from "./RefChip.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
 import { TrackTimeline } from "./TrackTimeline.js";
 
-const STATUS_LABEL: Record<string, string> = { active: "推进中", concluded: "已收束", parked: "已搁置" };
+const STATUS_LABEL: Record<string, string> = { active: "推进中", concluded: "已归档", parked: "已归档" };
 
 export default function TrackDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
@@ -45,7 +45,7 @@ export default function TrackDetailPage() {
     syncAfterWrite();
   }
 
-  async function changeStatus(status: "active" | "concluded" | "parked"): Promise<void> {
+  async function changeStatus(status: "active" | "concluded"): Promise<void> {
     if (!track || track.status === status) return;
     await setTrackStatus(track.id, status);
     syncAfterWrite();
@@ -149,22 +149,13 @@ export default function TrackDetailPage() {
                   状态 · {STATUS_LABEL[track.status] ?? track.status}
                 </span>
                 {track.status === "active" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void changeStatus("concluded")}
-                      className="rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 hover:border-accent hover:text-accent"
-                    >
-                      收束
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void changeStatus("parked")}
-                      className="rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 hover:border-accent hover:text-accent"
-                    >
-                      搁置
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={() => void changeStatus("concluded")}
+                    className="rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 hover:border-accent hover:text-accent"
+                  >
+                    归档
+                  </button>
                 ) : (
                   <button
                     type="button"

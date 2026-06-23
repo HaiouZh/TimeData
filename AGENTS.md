@@ -37,7 +37,7 @@
 - **CLI 本质是 server API 的受控简化封装**，不是新写入通道。
 - **sync 的 `SyncPushReasonCode` 与同步域登记簿都是封闭契约**：扩展前先停下，扩展步骤与影响面见 [`sync`](docs/evergreen/sync.md) 与 [`ADR 0012`](docs/adr/0012-sync-ledger-and-domain-registry.md)。
 - **任务轨道 `Track`/`TrackStep` schema 是封闭契约**：spine 已冻结，新领域数据靠 `refs`（`Ref{kind,id,label?}`）/`tags` 扩展，**不给 spine 加领域 typed 字段**（如 `commitSha`/里程/waiting）；agent 写轨道只经 `/api/agent/tracks*` 受控端点、`step.source` 恒 `agent`（人手 `source:"user"` 步是另一条路径）。破例 = 回 spec 重议，依据见 [`tracks`](docs/evergreen/tracks.md)。
-- **轨道接力协议**：派活给 agent 时若提供 `trackId`，agent 完成或需要人拍板后必须经 `/api/agent/tracks/:id/steps` append 一步；默认用开口步（省略 `endedAt` 或传 `null`）并打 `等我` / `待决策` / `卡住` 等用户配置中的状态标签，把接力棒交回人。服务端会自动闭合上一条开口步；状态面板按 active 轨道最新一步标签聚合，不再按“当前开口步”判断。
+- **轨道看板信号协议**：轨道标签首先是步骤检索辅助；其中配置为“看板信号”的少数标签会进入 `/tracks` 顶部聚合。默认看板信号为 `待我处理` / `agent在做`。派活给 agent 时若提供 `trackId`，人手可先 append 一步打 `agent在做`；agent 完成或需要人接手时必须经 `/api/agent/tracks/:id/steps` append 一步并打 `待我处理`（或用户当前配置中的等价看板信号）。服务端会自动闭合上一条开口步；看板按 active 轨道最近一条带看板信号的步骤推导，无标签步骤和普通检索标签不清信号。
 
 软约束的违反不是 bug，是产品重选；在 PR 描述里说明并请用户确认，不机械遵守。
 
@@ -155,4 +155,4 @@
 
 ------
 
-*Last reviewed: 2026-06-21（软约束新增"任务轨道 schema 封闭契约"护栏，机制与依据归 [`tracks`](docs/evergreen/tracks.md)）*
+*Last reviewed: 2026-06-23（软约束更新“轨道看板信号协议”；机制与依据归 [`tracks`](docs/evergreen/tracks.md)）*

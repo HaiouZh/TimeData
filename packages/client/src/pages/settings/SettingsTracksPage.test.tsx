@@ -4,13 +4,7 @@ import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/index.js";
-import {
-  readTrackActionTagConfigs,
-  readTrackActionTags,
-  setTrackActionTagConfigs,
-  setTrackActionTags,
-  type TrackActionTagConfig,
-} from "../../lib/settings/trackActionTagsSetting.js";
+import { readTrackActionTags, setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsTracksPage } from "./SettingsTracksPage.js";
 
@@ -43,88 +37,64 @@ async function waitForTags(predicate: (tags: string[]) => boolean): Promise<void
     if (predicate(await readTrackActionTags())) return;
     await flush();
   }
-  throw new Error("Timed out waiting for track.actionTags.v1");
-}
-
-async function waitForConfigs(predicate: (configs: TrackActionTagConfig[]) => boolean): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
-    if (predicate(await readTrackActionTagConfigs())) return;
-    await flush();
-  }
   throw new Error("Timed out waiting for track.actionTags.v2");
 }
 
+async function fillInput(host: HTMLElement, value: string): Promise<void> {
+  const input = host.querySelector('input[aria-label="新增看板信号"]') as HTMLInputElement;
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function submitForm(host: HTMLElement): Promise<void> {
+  await act(async () => {
+    (host.querySelector("form") as HTMLFormElement).dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+  });
+}
+
 describe("SettingsTracksPage", () => {
-  it("shows the seed status tags when nothing is configured", async () => {
+  it("shows the default board signal tags when nothing is configured", async () => {
     const host = await renderPage();
     await flush();
-    expect(host.textContent).toContain("等我");
-    expect(host.textContent).toContain("待决策");
-    expect(host.textContent).toContain("卡住");
+    expect(host.textContent).toContain("轨道看板信号");
+    expect(host.textContent).toContain("配置会进入轨道列表顶部聚合的步骤标签。");
+    expect(host.textContent).toContain("待我处理");
     expect(host.textContent).toContain("agent在做");
-    expect(host.textContent).toContain("轨道状态标签");
-    expect(host.textContent).not.toContain("轮到我");
+    expect(host.textContent).not.toContain("等我");
+    expect(host.textContent).not.toContain("待决策");
+    expect(host.textContent).not.toContain("阵营");
+    expect(host.querySelector('[role="radiogroup"]')).toBeNull();
   });
 
-  it("adds a new status tag via the input form", async () => {
+  it("adds a new board signal via the input form", async () => {
     const host = await renderPage();
     await flush();
-    const input = host.querySelector('input[aria-label="新增状态标签"]') as HTMLInputElement;
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    await act(async () => {
-      setValue?.call(input, "需我确认");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      (host.querySelector("form") as HTMLFormElement).dispatchEvent(
-        new Event("submit", { bubbles: true, cancelable: true }),
-      );
-    });
+    await fillInput(host, "需我确认");
+    await submitForm(host);
     await waitForTags((tags) => tags.includes("需我确认"));
   });
 
-  it("removes an existing action tag", async () => {
-    await setTrackActionTags(["等我", "卡住"]);
+  it("removes an existing board signal", async () => {
+    await setTrackActionTags(["待我处理", "agent在做"]);
     const host = await renderPage();
     await waitForTags((tags) => tags.length === 2);
-    await click(host.querySelector('button[aria-label="删除 等我"]'));
-    await waitForTags((tags) => tags.length === 1 && tags[0] === "卡住");
+    await click(host.querySelector('button[aria-label="删除 待我处理"]'));
+    await waitForTags((tags) => tags.length === 1 && tags[0] === "agent在做");
   });
 
-  it("shows each status tag with a court segmented control", async () => {
+  it("does not add duplicate or empty board signals", async () => {
+    await setTrackActionTags(["待我处理"]);
     const host = await renderPage();
     await flush();
-    expect(host.textContent).toContain("该我了");
-    expect(host.textContent).toContain("等 agent");
-    expect(host.textContent).toContain("卡住");
-    expect(host.textContent).toContain("其他");
-    expect(host.querySelector('[role="radiogroup"][aria-label="等我 的阵营"]')).not.toBeNull();
-  });
-
-  it("changes an existing tag court without changing its text", async () => {
-    await setTrackActionTagConfigs([{ tag: "等我", court: "mine" }]);
-    const host = await renderPage();
-    await flush();
-    const button = [...host.querySelectorAll('[role="radio"]')].find((item) => item.textContent?.includes("等 agent"));
-    await click(button);
-    await waitForConfigs((configs) => configs.some((item) => item.tag === "等我" && item.court === "agent"));
-  });
-
-  it("adds a new tag as neutral by default", async () => {
-    const host = await renderPage();
-    await flush();
-    const input = host.querySelector('input[aria-label="新增状态标签"]') as HTMLInputElement;
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    await act(async () => {
-      setValue?.call(input, "需材料");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      (host.querySelector("form") as HTMLFormElement).dispatchEvent(
-        new Event("submit", { bubbles: true, cancelable: true }),
-      );
-    });
-    await waitForConfigs((configs) => configs.some((item) => item.tag === "需材料" && item.court === "neutral"));
+    await fillInput(host, " 待我处理 ");
+    await submitForm(host);
+    await fillInput(host, "   ");
+    await submitForm(host);
+    await expect(readTrackActionTags()).resolves.toEqual(["待我处理"]);
   });
 });

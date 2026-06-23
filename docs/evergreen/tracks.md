@@ -6,17 +6,15 @@ covers:
   - packages/server/src/routes/agent-tracks.ts
   - packages/client/src/lib/tracks.ts
   - packages/client/src/lib/tracksView.ts
-  - packages/client/src/lib/trackCourts.ts
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
-  - packages/client/src/pages/tracks/boardViewPref.ts
   - packages/client/src/pages/tracks/**
 last-reviewed: 2026-06-23
 ---
 
 # 任务轨道
 
-> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。T1 落数据地基；T2 提供 agent 受控 ingest API；T3 提供列表与详情监控面；T4/T5 已提供状态标签设置、跨轨道聚合与人手共编。本期口径：看板交棒状态按 active 轨道最近一条带已配置交棒标签的步骤推导；详情时间线仍用开口步高亮执行中的段落。
+> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。T1 落数据地基；T2 提供 agent 受控 ingest API；T3 提供列表与详情监控面；T4/T5 已提供步骤共编与跨轨道聚合。本期口径：步骤标签默认是检索辅助；其中少数配置为“看板信号”的标签进入 `/tracks` 顶部聚合。详情时间线仍用开口步高亮执行中的段落。
 
 ## 承上启下
 
@@ -73,30 +71,29 @@ last-reviewed: 2026-06-23
 取值/排序/格式化在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
 `currentStepId`/`orderedTimeline`(当前步=最大 seq 的开口步置顶高亮;无开口步纯倒序、不高亮)、
 `trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 http(s) 外链可点)、
-`isDecisionStep`(tag 命中 `决策`/`decision` 即决策步,不解析 content、不加字段)。列表顶部最简新建走 `addTrack`，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
+`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
 
 ## 6. 人手共编(T5)
 
-详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手写入统一成一个原语 `appendUserStep`,两种模式:
+详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手入口统一为“写一步”：提交时调用 `appendUserStep({mode:"open"})`，开一个 `source="user"`、`endedAt=null` 的当前步，并镜像 agent 自动闭合最新开口步(守卫闭合时间不早于开口步 `startedAt`)。
 
-- **开口执行(mode=open)**:开一个 `source="user"`、`endedAt=null` 的当前步,并镜像 agent 自动闭合最新开口步(守卫闭合时间不早于开口步 `startedAt`)。表示"我下场做这段"。
-- **即时点(mode=instant)**:`startedAt===endedAt` 的零历时闭合步,**不动**当前开口步。"决策 / 批注 / 提醒"是这一步上的预设 `tags`(开放扩展,非写死功能、非字段),`isDecisionStep` 据 tag 做视觉分流。
+`决策 / 批注 / 提醒` 只是普通快捷标签，不再是特殊步骤性质，也不驱动特殊底色或“决策步”徽标。底层 `appendUserStep(mode:"instant")` 能力和历史瞬时步骤仍可兼容存在，但主 UI 不再让用户先选择“开始做这段 / 记一个点”。
 
 另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。这些都只写 Dexie + `syncLog`,UI 写入成功后调 `syncAfterWrite()`,由普通本地优先同步推 server;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
 
-即时点的 `seq` 会晚于当前开口步,故 `tracksView` 把当前开口步钉在时间线顶部,`trackProgressSummary` 也按开口步 `seq+1` 显示「第 N 步」,不被即时点抬高。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
+产品生命周期收敛为 `推进中 / 已归档`：active 显示 `推进中` 和 `归档` 按钮；归档写底层 `concluded` 并闭合开口步；旧数据里的 `parked` 只兼容读取为 `已归档`，非 active 统一显示 `重新推进`。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
 
-## 7. 交棒状态看板与人机接力
+## 7. 看板信号与步骤检索标签
 
-交棒配置写 `track.actionTags.v2`：`{tag,court}[]`，`court=mine|agent|blocked|neutral`；种子 `等我/待决策/卡住/agent在做` 对应我侧/我侧/卡住/agent。旧 `track.actionTags.v1` 仅作读时影子源；显式保存 `/settings/tracks` 才写 v2，显式 `[]` 表示无交棒标签。
+`TrackStep.tags` 首先是步骤检索辅助。普通标签如 `决策 / 批注 / 提醒 / 自定义标签` 不表达生命周期、不表达写者，也不进入列表聚合，除非用户在 `/settings/tracks` 主动把它们加入看板信号配置。
 
-看板当前交棒 = active 轨道倒序第一条带已配置交棒 tag 的步；后续无标签步不清信号，多 tag 取首个命中。无信号无牌，分组落 `其他`；`决策/批注/提醒` 除非显式配置，否则不算交棒。
+看板信号配置写 `track.actionTags.v2`。新写入是 JSON 字符串数组；未配置时种子为 `待我处理 / agent在做`。旧 `track.actionTags.v1` 只作读时影子源；早期 v2 的 `{tag,court}` 数组兼容读取但只消费 `tag` 文本并忽略 `court`。读到旧默认 `[等我,待决策,卡住,agent在做]` 时归一为新默认两件套；显式 `[]` 仍表示没有看板信号。
 
-列表默认扁平：`mine` 浮顶，卡片展示状态牌、最新 3 步，并可就地“写一步”（`appendUserStep` + `syncAfterWrite()`）。`STORAGE_KEYS.tracksBoardView` 只存本地视图；分组泳道固定为 `该我了/等 agent/卡住/其他`，不套隐藏筛选。
+每条 active 轨道的当前看板信号 = 按步骤倒序查找最近一条带已配置看板信号的 step；同一步有多个信号时按配置顺序取第一个。无标签步骤和普通检索标签步骤不会清掉已有信号。比如 `agent在做` 之后补一条 `决策` 或无标签步骤，列表仍显示 `agent在做`，直到后续步骤写入新的已配置看板信号。
 
-详情“当前步”仍指最新开口步。生命周期控件为“状态 · 当前态”+动词按钮：active 显示 `收束/搁置`，concluded/parked 显示 `重新推进`；`concluded` 仍由 `setTrackStatus` 闭合开口步。
+`/tracks` 列表保持扁平，不再按阵营或“该谁了”分组，也不保存本地分组视图偏好。顶部 chip 按配置顺序显示看板信号计数，如 `待我处理 N`、`agent在做 N`；点击 chip 做 OR 筛选。卡片只展示 `#tag` 信号牌、最新 3 步，并可就地“写一步”（`appendUserStep` + `syncAfterWrite()`）。
 
-agent 接力协议：派活时给 agent `trackId` 和交棒词表；完成或待人拍板后 append 一步，默认开口并打 `等我` 或用户约定的我侧标签。append 自动闭合上一开口步；该步成为看板当前交棒信号，直到后续步骤写入新的已配置交棒标签。
+agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，默认开口并打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合上一开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
 
 ## 8. 后续阶段
 

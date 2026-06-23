@@ -44,13 +44,11 @@ describe("TrackStepRow", () => {
     expect(b.querySelector('[data-source="user"]')?.textContent).toContain("我");
   });
 
-  it("marks decision steps by tag, not by source", async () => {
+  it("renders 决策 as an ordinary retrieval tag without a special badge", async () => {
     const decided = await mount({ step: step({ id: "d", source: "agent", tags: ["决策"] }), isCurrent: false, now: NOW });
-    expect(decided.querySelector('[data-decision="true"]')).not.toBeNull();
-    if (mounted) await unmount(mounted.root);
-    // source=user 但无决策 tag → 不是决策步
-    const plainUser = await mount({ step: step({ id: "u", source: "user", tags: [] }), isCurrent: false, now: NOW });
-    expect(plainUser.querySelector('[data-decision="true"]')).toBeNull();
+    expect(decided.textContent).toContain("#决策");
+    expect(decided.textContent).not.toContain("决策步");
+    expect(decided.querySelector("[data-decision]")).toBeNull();
   });
 
   it("renders tags, refs and an in-progress duration for the current open step", async () => {

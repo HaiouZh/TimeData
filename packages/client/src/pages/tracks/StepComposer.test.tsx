@@ -41,43 +41,36 @@ async function submit(host: HTMLElement): Promise<void> {
 }
 
 describe("StepComposer", () => {
-  it("默认开口执行模式提交并清空内容", async () => {
+  it("submits a written step in open mode and clears content", async () => {
     const onSubmit = vi.fn();
     mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);
     const host = mounted.host;
+    expect(host.textContent).toContain("写一步");
+    expect(host.textContent).not.toContain("开始做这段");
+    expect(host.textContent).not.toContain("记一个点");
     await type(host, "  下场推进一段  ");
     await submit(host);
     expect(onSubmit).toHaveBeenCalledWith({ content: "下场推进一段", mode: "open", tags: [] });
     expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("");
   });
 
-  it("切到即时点并选预设 tag 后提交", async () => {
+  it("renders board signals and common retrieval tags as ordinary tag chips", async () => {
     const onSubmit = vi.fn();
-    mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["待我处理", "agent在做"]} />);
     const host = mounted.host;
-    await click(buttonByText(host, "记一个点"));
-    await click(buttonByText(host, "#批注"));
-    await type(host, "这里要回看证据");
-    await submit(host);
-    expect(onSubmit).toHaveBeenCalledWith({ content: "这里要回看证据", mode: "instant", tags: ["批注"] });
-  });
-
-  it("renders status tags from props alongside instant tags", async () => {
-    const onSubmit = vi.fn();
-    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["等我", "agent在做"]} />);
-    const host = mounted.host;
-    expect(host.textContent).toContain("状态/交棒");
-    expect(host.textContent).toContain("#等我");
+    expect(host.textContent).toContain("看板信号");
+    expect(host.textContent).toContain("#待我处理");
     expect(host.textContent).toContain("#agent在做");
-    expect(host.textContent).toContain("记一笔");
+    expect(host.textContent).toContain("常用标签");
     expect(host.textContent).toContain("#批注");
+    expect(host.textContent).not.toContain("状态/交棒");
   });
 
-  it("submits one selected status tag and replaces it with a later selection", async () => {
+  it("submits one selected tag and replaces it with a later selection", async () => {
     const onSubmit = vi.fn();
-    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["等我", "agent在做"]} />);
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["待我处理", "agent在做"]} />);
     const host = mounted.host;
-    await click(buttonByText(host, "#等我"));
+    await click(buttonByText(host, "#待我处理"));
     await click(buttonByText(host, "#agent在做"));
     await type(host, "交给 agent 执行");
     await submit(host);
@@ -86,7 +79,7 @@ describe("StepComposer", () => {
 
   it("uses a custom tag when no chip is selected and clears it after submit", async () => {
     const onSubmit = vi.fn();
-    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["等我"]} />);
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["待我处理"]} />);
     const host = mounted.host;
     await typeInput(host, "自定义步骤标签", "  需复盘  ");
     await type(host, "补一条临时状态");
@@ -95,7 +88,7 @@ describe("StepComposer", () => {
     expect((host.querySelector('input[aria-label="自定义步骤标签"]') as HTMLInputElement).value).toBe("");
   });
 
-  it("空内容不提交", async () => {
+  it("does not submit blank content", async () => {
     const onSubmit = vi.fn();
     mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);
     const host = mounted.host;
@@ -108,7 +101,7 @@ describe("StepComposer", () => {
     const submitted: StepDraft[] = [];
     mounted = await renderDom(
       <StepComposer
-        statusTags={["等我"]}
+        statusTags={["待我处理"]}
         surface="inline"
         submitLabel="写入这一步"
         onSubmit={(draft) => submitted.push(draft)}
@@ -117,8 +110,8 @@ describe("StepComposer", () => {
     const host = mounted.host;
     expect(host.textContent).toContain("写入这一步");
     await type(host, "就地推进一下");
-    await click(buttonByText(host, "#等我"));
+    await click(buttonByText(host, "#待我处理"));
     await submit(host);
-    expect(submitted).toEqual([{ content: "就地推进一下", mode: "open", tags: ["等我"] }]);
+    expect(submitted).toEqual([{ content: "就地推进一下", mode: "open", tags: ["待我处理"] }]);
   });
 });

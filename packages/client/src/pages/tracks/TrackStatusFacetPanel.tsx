@@ -13,7 +13,7 @@ export function TrackStatusFacetPanel({
 
   return (
     <section className="mb-3 rounded-card border border-border bg-surface p-3">
-      <div className="mb-2 text-xs font-medium text-ink-3">交棒筛选</div>
+      <div className="mb-2 text-xs font-medium text-ink-3">看板信号</div>
       <div className="flex flex-wrap gap-2">
         {facets.map((facet) => {
           const active = selected.has(facet.tag);

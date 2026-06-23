@@ -414,8 +414,8 @@ export default function SettingsPage() {
           to="/settings/tracks"
           icon={<Icon icon={Signpost} size={20} />}
           accent="track"
-          title="轨道状态标签"
-          subtitle="配置最新步统计面板的建议标签"
+          title="轨道看板信号"
+          subtitle="配置进入轨道列表聚合的步骤标签"
         />
         <SettingsLinkRow
           to="/settings/data"

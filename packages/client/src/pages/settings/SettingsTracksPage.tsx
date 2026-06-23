@@ -1,46 +1,32 @@
 import { useState } from "react";
-import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
-import { TRACK_COURT_META, TRACK_COURTS, type TrackCourt } from "../../lib/trackCourts.js";
 import {
-  readTrackActionTagConfigs,
-  setTrackActionTagConfigs,
-  useTrackActionTagConfigs,
-  type TrackActionTagConfig,
+  readTrackActionTags,
+  setTrackActionTags,
+  useTrackActionTags,
 } from "../../lib/settings/trackActionTagsSetting.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
-const COURT_OPTIONS = TRACK_COURTS.map((court) => ({ value: court, label: TRACK_COURT_META[court].laneLabel }));
-
 export function SettingsTracksPage() {
-  const configs = useTrackActionTagConfigs();
+  const tags = useTrackActionTags();
   const [draft, setDraft] = useState("");
 
   async function add(raw: string) {
     const trimmed = raw.trim();
     setDraft("");
-    const current = await readTrackActionTagConfigs();
-    if (!trimmed || current.some((item) => item.tag === trimmed)) return;
-    await setTrackActionTagConfigs([...current, { tag: trimmed, court: "neutral" }]);
+    const current = await readTrackActionTags();
+    if (!trimmed || current.includes(trimmed)) return;
+    await setTrackActionTags([...current, trimmed]);
   }
 
   async function remove(tag: string) {
-    const current = await readTrackActionTagConfigs();
-    await setTrackActionTagConfigs(current.filter((item) => item.tag !== tag));
-  }
-
-  async function changeCourt(tag: string, court: TrackCourt) {
-    const current = await readTrackActionTagConfigs();
-    await setTrackActionTagConfigs(
-      current.map((item): TrackActionTagConfig => (item.tag === tag ? { ...item, court } : item)),
-    );
+    const current = await readTrackActionTags();
+    await setTrackActionTags(current.filter((item) => item !== tag));
   }
 
   return (
-    <SettingsDetailPage title="轨道状态标签">
+    <SettingsDetailPage title="轨道看板信号">
       <section className="space-y-3">
-        <p className="text-sm leading-6 text-ink-3">
-          这些标签是轨道的交棒状态词表。每个标签归到一个阵营；颜色跟阵营走，阵营数量固定。
-        </p>
+        <p className="text-sm leading-6 text-ink-3">配置会进入轨道列表顶部聚合的步骤标签。</p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -51,8 +37,8 @@ export function SettingsTracksPage() {
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="如:等我 / 待决策 / 卡住 / agent在做"
-            aria-label="新增状态标签"
+            placeholder="如:待我处理 / agent在做"
+            aria-label="新增看板信号"
             className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <button
@@ -62,34 +48,24 @@ export function SettingsTracksPage() {
             添加
           </button>
         </form>
-        {configs.length === 0 ? (
-          <p className="text-sm text-ink-3">还没有交棒标签；看板不会把普通批注当成交棒。</p>
+        {tags.length === 0 ? (
+          <p className="text-sm text-ink-3">还没有看板信号；步骤标签只用于回看检索。</p>
         ) : (
           <ul className="space-y-2">
-            {configs.map((item) => (
+            {tags.map((tag) => (
               <li
-                key={item.tag}
-                className="grid gap-2 rounded-card border border-border bg-surface-elevated p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                key={tag}
+                className="flex items-center justify-between gap-2 rounded-card border border-border bg-surface-elevated p-2"
               >
-                <span className="inline-flex items-center gap-2 text-sm text-ink-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${TRACK_COURT_META[item.court].dotClass}`} />
-                  <span>#{item.tag}</span>
-                  <button
-                    type="button"
-                    aria-label={`删除 ${item.tag}`}
-                    onClick={() => void remove(item.tag)}
-                    className="text-ink-3 transition hover:text-ink"
-                  >
-                    ×
-                  </button>
-                </span>
-                <SegmentedControl
-                  options={COURT_OPTIONS}
-                  value={item.court}
-                  onChange={(court) => void changeCourt(item.tag, court)}
-                  ariaLabel={`${item.tag} 的阵营`}
-                  className="w-full sm:w-[26rem]"
-                />
+                <span className="text-sm text-ink-2">#{tag}</span>
+                <button
+                  type="button"
+                  aria-label={`删除 ${tag}`}
+                  onClick={() => void remove(tag)}
+                  className="text-ink-3 transition hover:text-ink"
+                >
+                  ×
+                </button>
               </li>
             ))}
           </ul>
