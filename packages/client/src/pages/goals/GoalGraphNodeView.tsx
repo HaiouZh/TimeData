@@ -89,6 +89,7 @@ export function GoalGraphNodeView({ node, selected, lod, actions }: GoalGraphNod
 
   return (
     <div
+      role="group"
       aria-label={ariaLabel}
       data-node-kind={node.kind}
       data-node-status={node.status}

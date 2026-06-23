@@ -45,7 +45,7 @@ export function GoalEditSheet({
     setKind(goal.kind);
     setTitleError(null);
     setConfirmingDelete(false);
-  }, [goal.id, goal.kind, goal.note, goal.title, open]);
+  }, [goal.kind, goal.note, goal.title, open]);
 
   function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();

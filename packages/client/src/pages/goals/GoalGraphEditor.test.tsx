@@ -63,18 +63,6 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
   };
 }
 
-function track(id: string, overrides: Partial<Track> = {}): Track {
-  return {
-    id,
-    title: id,
-    status: "active",
-    refs: [],
-    createdAt: now,
-    updatedAt: now,
-    ...overrides,
-  };
-}
-
 async function seed(goalValue: Goal, tasks: Task[] = [], tracks: Track[] = []): Promise<void> {
   await db.goals.add(goalValue);
   await db.tasks.bulkAdd(tasks);

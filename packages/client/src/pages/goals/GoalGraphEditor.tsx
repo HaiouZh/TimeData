@@ -11,12 +11,12 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import type { Goal, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
-import { goalGraphLayout, type GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
-import { buildGoalGraphModel, GOAL_NODE_ID, type GoalGraphEdge as GoalGraphEdgeModel, type GoalGraphNode as GoalGraphNodeModel } from "../../lib/goalGraphModel.js";
+import { goalGraphLayout, type GoalGraphLayout, type GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
+import { buildGoalGraphModel, type GoalGraphEdge as GoalGraphEdgeModel, type GoalGraphNode as GoalGraphNodeModel } from "../../lib/goalGraphModel.js";
 import { loadGoalGraphViewport, saveGoalGraphViewport } from "../../lib/goalGraphViewport.js";
 import {
   addGoalMember,
@@ -71,12 +71,10 @@ interface ConnectDraft {
 
 type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 
-function memberKey(ref: GoalMemberRef): string {
-  return `${ref.kind}:${ref.id}`;
-}
-
-function sameMember(left: GoalMemberRef, right: GoalMemberRef): boolean {
-  return left.kind === right.kind && left.id === right.id;
+interface LayoutCache {
+  key: string;
+  orientation: GoalGraphOrientation;
+  layout: GoalGraphLayout;
 }
 
 function refFromNodeId(id: string): GoalMemberRef | null {
@@ -134,6 +132,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
+  const layoutCacheRef = useRef<LayoutCache | null>(null);
 
   const overview = useMemo(() => buildGoalOverview(goal, tasks, tracks, steps), [goal, steps, tasks, tracks]);
   const model = useMemo(() => buildGoalGraphModel(overview), [overview]);
@@ -141,7 +140,12 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
     () => `${model.nodes.map((node) => node.id).join("|")}#${model.edges.map((edge) => edge.id).join("|")}`,
     [model],
   );
-  const layout = useMemo(() => goalGraphLayout(model, { orientation }), [model, orientation, structureKey]);
+  const cachedLayout = layoutCacheRef.current;
+  const layout =
+    cachedLayout?.key === structureKey && cachedLayout.orientation === orientation
+      ? cachedLayout.layout
+      : goalGraphLayout(model, { orientation });
+  layoutCacheRef.current = { key: structureKey, orientation, layout };
   const nodes = useMemo<GoalGraphFlowNode[]>(
     () =>
       model.nodes.map((node) => ({

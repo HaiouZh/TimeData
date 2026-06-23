@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { act, createElement, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Root } from "react-dom/client";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { GoalGraphUndoToast } from "./GoalGraphUndoToast.js";
 
-let mountedRoot: Root | null = null;
+let mountedRoot: Awaited<ReturnType<typeof renderDom>>["root"] | null = null;
 
 beforeEach(() => {
   vi.useFakeTimers();
