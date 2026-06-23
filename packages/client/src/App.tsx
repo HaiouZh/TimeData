@@ -60,7 +60,7 @@ export function AppShell() {
   useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
 
   return (
-    <div className="flex flex-col h-dvh bg-slate-950 text-slate-100">
+    <div className="flex h-dvh flex-col bg-page text-ink">
       <AndroidBackButtonHandler />
       <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={onMainScroll}>
         <Routes>
@@ -93,8 +93,8 @@ export function AppShell() {
       </main>
       {!hidesBottomNav && (
         <nav
-          className={`flex shrink-0 overflow-hidden bg-slate-900 transition-[height] duration-200 ${
-            hidden ? "" : "border-t border-slate-800"
+          className={`flex shrink-0 overflow-hidden bg-surface transition-[height] duration-200 ${
+            hidden ? "" : "border-t border-border"
           }`}
           style={{ height: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
         >
@@ -104,7 +104,7 @@ export function AppShell() {
               to={item.to}
               end={item.to === "/"}
               className={({ isActive }) =>
-                `flex-1 py-3 text-center text-sm ${isActive ? "text-blue-400" : "text-slate-500"}`
+                `flex-1 py-3 text-center text-sm ${isActive ? "text-accent" : "text-ink-3"}`
               }
             >
               {item.label}
