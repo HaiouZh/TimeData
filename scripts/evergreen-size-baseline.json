@@ -40,12 +40,12 @@
     "covers": 4
   },
   "docs/evergreen/development.md": {
-    "chars": 9222,
+    "chars": 9250,
     "covers": 9
   },
   "docs/evergreen/goals.md": {
-    "chars": 3977,
-    "covers": 7
+    "chars": 5709,
+    "covers": 12
   },
   "docs/evergreen/health.md": {
     "chars": 5626,
@@ -80,7 +80,7 @@
     "covers": 15
   },
   "docs/evergreen/todo.md": {
-    "chars": 15963,
+    "chars": 16070,
     "covers": 26
   },
   "docs/evergreen/todo/recurrence.md": {

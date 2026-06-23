@@ -8,6 +8,11 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/client/src/lib/goals.ts
   - packages/client/src/lib/goalsView.ts
+  - packages/client/src/lib/goalGraphModel.ts
+  - packages/client/src/lib/goalGraphEdges.ts
+  - packages/client/src/lib/goalGraphLayout.ts
+  - packages/client/src/lib/goalGraphViewport.ts
+  - packages/client/src/lib/goalGraphLod.ts
   - packages/client/src/pages/goals/**
 last-reviewed: 2026-06-23
 ---
@@ -66,17 +71,27 @@ last-reviewed: 2026-06-23
 - `momentum` 固定用 7 天窗口：统计近 7 天有活动的成员数和 `lastActivityAt`，Project / Theme 都会计算。Track 活跃时间取 track `updatedAt` 与 steps 时间中的最新值。
 - 缺失成员不参与 ready/blocked/completed、Project total、Theme momentum；指向非有效成员的前置边忽略。
 
-UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项和 `/goals/:id` 详情头部都显示同一口径；Project 不显示百分号和进度条，只保留低对比总数。详情页还提供 active Goal 内快建 ToDo：同一 Dexie transaction 内创建普通根 Task、append `{kind:"task",id}` 到 `Goal.members`，并写 `tasks/create` 与 `goals/update` 两条 `syncLog`；归档 Goal 不显示快建入口，但仍允许整理成员和前置关系。
+UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显示同一口径；Project 不显示百分号和进度条，只保留低对比总数。`/goals/:id` 是 Adaptive Goal Graph Editor：壳层用 live query 读取 Goal、Task、Track、TrackStep，编辑器把 `buildGoalOverview` 转成局部图模型并显示 Goal 锚、真实 Task/Track 节点和 ghost 失效引用。详情页内快建 ToDo 仍由 `addTaskForGoal` 在同一 Dexie transaction 内创建普通根 Task、append `{kind:"task",id}` 到 `Goal.members`，并写 `tasks/create` 与 `goals/update` 两条 `syncLog`；归档 Goal 不允许快建任务，但仍允许整理成员和前置关系。
 
-## 4. 不做
+## 4. 局部星图编辑器
 
-- 不做画布、全局依赖图、多层目标或软顺序。
+`/goals/:id` 默认进入局部图编辑器，不保留 Phase 1 文字详情 fallback。图节点只表达 Goal 锚、真实 Task/Track 成员和 ghost 失效引用；前置边方向固定为 `blocker -> blocked`，Goal 锚和 ghost 不参与新建前置边。归属 tether 只表示成员属于 Goal，不作为可编辑前置关系。
+
+图布局由 `goalGraphLayout` 纯计算：有前置依赖的成员进入 dependency lane，宽屏横向、窄屏纵向；无依赖成员进入围绕 Goal 的 orbit。坐标不写入 Goal，只按 Goal id 在本地保存 pan/zoom 视口，且不参与同步。新增或删除前置边时节点可能在 orbit 与 lane 间切换，编辑器只做 transform 过渡；`prefers-reduced-motion` 下关闭这类动效。
+
+交互语义以防误触为先：点节点只选中，显式“打开”才进入源页面。打开 Task 使用 `/todo?taskId=<id>` 深链；打开 Track 使用 `/tracks/:id`。Task 可在图内快速完成/取消完成，Track 状态仍回轨道页处理。结构写入仍只经 `lib/goals.ts` 和 Task 写入 helper：加已有成员、移出成员、快建任务、增删前置、编辑/归档/删除 Goal 都复用既有 Dexie + `syncLog` 边界。
+
+轻撤销只覆盖破坏性结构操作：删除前置边、移出成员、移出失效引用。移出成员的撤销会恢复成员列表和被级联删除的前置边；Task 完成、加成员、快建任务、新建前置等非破坏操作不进入这条 undo 口径。
+
+## 5. 不做
+
 - 不做跨 Goal 全局依赖图或成员反向索引表。
+- 不做自由便签、多层目标或软顺序。
 - 不做互斥边、权重边、步骤级 roll-up。
 - 不自动展开 `Track.refs`；只有显式写入 `Goal.members` 的 Task/Track 参与 roll-up。
 - 不新增 agent 写 Goal 的端点；agent 仍通过受控 task / track API 写各自领域。
 
-## 5. 模块速查
+## 6. 模块速查
 
 | 入口 | 职责 |
 |---|---|
@@ -85,6 +100,13 @@ UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项和 `
 | `server/src/lib/goal-rows.ts` / `server/src/sync/domains.ts` | `goals.members` / `goals.prerequisites` row 映射与通用 LWW 注册 |
 | `client/src/lib/goals.ts` | Goal CRUD、添加/移出成员、前置编辑、goal 内快建 ToDo |
 | `client/src/lib/goalsView.ts` | `Goal.members` 解引用、ready/blocked/completed、project/theme roll-up、momentum |
-| `client/src/pages/goals/**` | 列表、详情、三行主显、成员选择、前置编辑、快建 ToDo |
+| `client/src/lib/goalGraphModel.ts` | `GoalOverview` → Goal 锚、真实节点、ghost 节点、tether / 前置边模型 |
+| `client/src/lib/goalGraphEdges.ts` | 前置边自环、重复、环、Goal 锚、非成员校验与增删纯函数 |
+| `client/src/lib/goalGraphLayout.ts` | dependency lane + orbit 自动布局，不持久化坐标 |
+| `client/src/lib/goalGraphViewport.ts` | 按 Goal id 保存本地 pan/zoom 视口，不同步 |
+| `client/src/lib/goalGraphLod.ts` | zoom → near/far 两档显示密度 |
+| `client/src/pages/goals/GoalDetailPage.tsx` | live-query 壳，给图编辑器提供 Goal/Task/Track/Step 快照与导航回调 |
+| `client/src/pages/goals/GoalGraphEditor.tsx` | Adaptive Goal Graph Editor：选中、动作分发、写入 helper 接线、轻撤销 |
+| `client/src/pages/goals/**` | 目标列表、图节点/边、工具栏、添加成员 sheet、Goal 编辑 sheet、撤销 toast |
 
-**测试**：`shared/src/{entitySchemas,schemas,syncDomains}.test.ts`、`server/src/sync/goals-domain.e2e.test.ts`、`client/src/lib/{goals,goalsView}.test.ts`、`client/src/pages/goals/*.test.tsx`。
+**测试**：`shared/src/{entitySchemas,schemas,syncDomains}.test.ts`、`server/src/sync/goals-domain.e2e.test.ts`、`client/src/lib/{goals,goalsView,goalGraph*}.test.ts`、`client/src/pages/goals/*.test.tsx`。
