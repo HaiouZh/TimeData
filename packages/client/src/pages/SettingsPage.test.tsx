@@ -159,6 +159,20 @@ describe("SettingsPage", () => {
     expect(html).toContain("刷新到最新前端");
   });
 
+  it("renders settings home entries without changing navigation targets", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("设置");
+    expect(html).toContain('href="/settings/server"');
+    expect(html).toContain('href="/settings/categories"');
+    expect(html).toContain('href="/settings/health-range"');
+    expect(html).toContain('href="/settings/nav"');
+    expect(html).toContain('href="/settings/tracks"');
+    expect(html).toContain('href="/settings/data"');
+    expect(html).toContain('href="/settings/garmin"');
+    expect(html).toContain('href="/settings/admin-insights"');
+  });
+
   it("shows the manual frontend refresh row with the current build id", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 

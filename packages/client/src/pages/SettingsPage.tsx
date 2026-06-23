@@ -46,22 +46,24 @@ export function getServerConnectionState(apiUrl: string, connection: SyncStreamS
 }
 
 function statusDotClass(color: ServerConnectionColor): string {
-  if (color === "green") return "bg-emerald-400";
-  if (color === "yellow") return "bg-amber-400";
-  if (color === "red") return "bg-red-400";
-  return "bg-slate-500";
+  if (color === "green") return "bg-ok";
+  if (color === "yellow") return "bg-warn";
+  if (color === "red") return "bg-danger";
+  return "bg-ink-3";
 }
 
 // 图标徽章配色：用完整类名字符串，避免 Tailwind 动态拼接被裁剪。
-type RowAccent = "sky" | "emerald" | "violet" | "amber" | "rose" | "blue";
+type RowAccent = "note" | "timeline" | "todo" | "health" | "settings" | "track" | "goal" | "time";
 
 const ACCENT_BADGE: Record<RowAccent, string> = {
-  sky: "bg-sky-500/15 text-sky-300",
-  emerald: "bg-emerald-500/15 text-emerald-300",
-  violet: "bg-violet-500/15 text-violet-300",
-  amber: "bg-amber-500/15 text-amber-300",
-  rose: "bg-rose-500/15 text-rose-300",
-  blue: "bg-blue-500/15 text-blue-300",
+  note: "bg-surface-hover text-mod-note",
+  timeline: "bg-surface-hover text-mod-timeline",
+  todo: "bg-surface-hover text-mod-todo",
+  health: "bg-surface-hover text-mod-health",
+  settings: "bg-surface-hover text-mod-settings",
+  track: "bg-surface-hover text-mod-track",
+  goal: "bg-surface-hover text-mod-goal",
+  time: "bg-surface-hover text-mod-time",
 };
 
 function ConnectionLight({ color }: { color: ServerConnectionColor }) {
@@ -89,20 +91,20 @@ function RowBody({
 }) {
   return (
     <>
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${ACCENT_BADGE[accent]}`}>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-row ${ACCENT_BADGE[accent]}`}>
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-slate-100">{title}</div>
-        {subtitle && <div className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</div>}
+        <div className="text-sm font-medium text-ink">{title}</div>
+        {subtitle && <div className="mt-0.5 truncate text-xs text-ink-3">{subtitle}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {accessory && (
-          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-slate-300">
+          <span className="rounded-pill bg-surface-elevated px-2 py-0.5 text-[11px] font-medium text-ink-2">
             {accessory}
           </span>
         )}
-        <Icon icon={CaretRight} size={16} className="text-slate-600" />
+        <Icon icon={CaretRight} size={16} className="text-ink-3" />
       </div>
     </>
   );
@@ -111,8 +113,8 @@ function RowBody({
 function SettingsGroup({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      {label && <h3 className="px-1 text-xs font-medium uppercase tracking-wider text-slate-500">{label}</h3>}
-      <div className="divide-y divide-slate-800/70 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
+      {label && <h3 className="px-1 text-xs font-medium uppercase tracking-wider text-ink-3">{label}</h3>}
+      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface">
         {children}
       </div>
     </section>
@@ -137,7 +139,7 @@ function SettingsLinkRow({
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-800/50 active:bg-slate-800/70"
+      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover active:bg-surface-elevated"
     >
       <RowBody icon={icon} accent={accent} title={title} subtitle={subtitle} accessory={accessory} />
     </Link>
@@ -166,7 +168,7 @@ function SettingsActionRow({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-800/50 active:bg-slate-800/70 disabled:opacity-60"
+      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-elevated disabled:opacity-60"
     >
       <RowBody icon={icon} accent={accent} title={title} subtitle={subtitle} accessory={accessory} />
     </button>
@@ -177,7 +179,7 @@ function SyncIssueList({ issues }: { issues: NonNullable<RegularSyncResult["push
   if (issues.length === 0) return null;
 
   return (
-    <div className="space-y-1 rounded border border-amber-900 bg-amber-950/30 p-2 text-amber-100">
+    <div className="space-y-1 rounded-ctl border border-warn/50 bg-warn-soft p-2 text-warn">
       <p>需要处理的同步项：</p>
       {issues.map((issue) => (
         <p key={`${issue.tableName}:${issue.recordId}:${issue.action}`}>
@@ -205,52 +207,52 @@ function ServerStatusCard() {
   const connectionState = getServerConnectionState(apiUrl, connection);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-900/30">
-      <Link to="/settings/server" className="flex items-center gap-3 p-4 transition-colors hover:bg-slate-800/40">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-800/70 text-slate-200">
+    <section className="overflow-hidden rounded-card border border-border bg-surface">
+      <Link to="/settings/server" className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-card bg-surface-elevated text-ink-2">
           <Icon icon={Cloud} size={24} />
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-slate-100">服务器配置</span>
+            <span className="text-base font-semibold text-ink">服务器配置</span>
             <ConnectionLight color={connectionState.color} />
           </div>
-          <div className="mt-0.5 truncate text-xs text-slate-400">{connectionState.subtitle}</div>
+          <div className="mt-0.5 truncate text-xs text-ink-3">{connectionState.subtitle}</div>
         </div>
-        <Icon icon={CaretRight} size={20} className="text-slate-500" />
+        <Icon icon={CaretRight} size={20} className="text-ink-3" />
       </Link>
 
       {cloudSyncEnabled && (
-        <div className="border-t border-slate-800/70 p-4">
+        <div className="border-t border-border p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium text-blue-100">同步信息</h3>
+            <h3 className="text-sm font-medium text-ink">同步信息</h3>
             <button
               type="button"
               onClick={sync}
               disabled={syncing}
-              className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+              className="shrink-0 rounded-ctl bg-accent px-3 py-1.5 text-xs font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
             >
               {syncing ? "同步中…" : "同步"}
             </button>
           </div>
-          <div className="mt-2 space-y-1 text-xs text-slate-300">
+          <div className="mt-2 space-y-1 text-xs text-ink-2">
             <p>上次同步: {lastSynced ? formatAppDateTime(lastSynced) : "从未"}</p>
             <p>待同步: {unsyncedCount} 条</p>
-            {lastResult?.identical && <p className="text-emerald-300">本地与云端数据一致，无需同步。</p>}
+            {lastResult?.identical && <p className="text-ok">本地与云端数据一致，无需同步。</p>}
             {lastResult && !lastResult.identical && !conflicts.length && (
-              <p className="text-emerald-300">
+              <p className="text-ok">
                 已推送 {lastResult.pushed} 条，已拉取 {lastResult.pulled} 条
               </p>
             )}
-            {lastResult && lastResult.rejected > 0 && <p className="text-red-300">云端拒绝 {lastResult.rejected} 条</p>}
+            {lastResult && lastResult.rejected > 0 && <p className="text-danger">云端拒绝 {lastResult.rejected} 条</p>}
             {lastResult && lastResult.pushConflicts > 0 && (
-              <p className="text-amber-300">云端冲突 {lastResult.pushConflicts} 条</p>
+              <p className="text-warn">云端冲突 {lastResult.pushConflicts} 条</p>
             )}
             {lastResult?.pushIssues && <SyncIssueList issues={lastResult.pushIssues} />}
             {conflicts.length > 0 && (
-              <p className="text-amber-300">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>
+              <p className="text-warn">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>
             )}
-            {error && <p className="text-red-300">{error}</p>}
+            {error && <p className="text-danger">{error}</p>}
           </div>
         </div>
       )}
@@ -363,10 +365,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-5 p-4 pb-10">
+    <div className="mx-auto max-w-xl space-y-5 bg-page p-4 pb-10 text-ink">
       {dialog}
       <header className="px-1 pt-1">
-        <h2 className="text-2xl font-semibold text-slate-100">设置</h2>
+        <h2 className="text-2xl font-semibold text-ink">设置</h2>
       </header>
 
       {/* 状态总览：服务器连接 + 同步摘要合并为一张卡（顺序：服务器配置 → 同步信息） */}
@@ -376,49 +378,49 @@ export default function SettingsPage() {
         <SettingsLinkRow
           to="/settings/categories"
           icon={<Icon icon={Tag} size={20} />}
-          accent="violet"
+          accent="timeline"
           title="分类管理"
           subtitle="新增、排序、改色、子分类与删除"
         />
         <SettingsLinkRow
           to="/settings/insights"
           icon={<Icon icon={Moon} size={20} />}
-          accent="sky"
+          accent="settings"
           title="杂项"
           subtitle="睡眠分类、新建待办默认落点等零碎设置"
         />
         <SettingsLinkRow
           to="/settings/stats-layout"
           icon={<Icon icon={ChartBar} size={20} />}
-          accent="blue"
+          accent="time"
           title="统计页面布局"
           subtitle="调整统计模块显示与顺序"
         />
         <SettingsLinkRow
           to="/settings/health-range"
           icon={<Icon icon={ChartBar} size={20} />}
-          accent="emerald"
+          accent="health"
           title="健康范围"
           subtitle="选择健康统计页显示的时间范围"
         />
         <SettingsLinkRow
           to="/settings/nav"
           icon={<Icon icon={DeviceMobile} size={20} />}
-          accent="sky"
+          accent="settings"
           title="底部导航"
           subtitle="选择底部显示的入口"
         />
         <SettingsLinkRow
           to="/settings/tracks"
           icon={<Icon icon={Signpost} size={20} />}
-          accent="violet"
+          accent="track"
           title="轨道状态标签"
           subtitle="配置最新步统计面板的建议标签"
         />
         <SettingsLinkRow
           to="/settings/data"
           icon={<Icon icon={Database} size={20} />}
-          accent="emerald"
+          accent="settings"
           title="数据设置"
           subtitle="云同步、显示、备份与高级数据恢复"
         />
@@ -428,20 +430,20 @@ export default function SettingsPage() {
         <SettingsLinkRow
           to="/settings/garmin"
           icon={<Icon icon={ArrowsClockwise} size={20} />}
-          accent="emerald"
+          accent="health"
           title="Garmin 数据同步"
           subtitle="配置 Garmin 账号、定时抓取健康数据"
         />
         <SettingsLinkRow
           to="/settings/admin-insights"
           icon={<Icon icon={HardDrives} size={20} />}
-          accent="blue"
+          accent="settings"
           title="服务端数据洞察"
           subtitle="只读查看服务器数据、同步、备份和健康检查"
         />
         <SettingsActionRow
           icon={<Icon icon={DeviceMobile} size={20} />}
-          accent="amber"
+          accent="todo"
           title="APK 更新"
           subtitle={apkStatus || `当前版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`}
           accessory={apkUpdate?.hasUpdate ? apkUpdate.versionCode : undefined}
@@ -450,7 +452,7 @@ export default function SettingsPage() {
         />
         <SettingsActionRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
-          accent="rose"
+          accent="settings"
           title="服务端更新"
           subtitle={
             serverUpdateStatus ||
@@ -464,7 +466,7 @@ export default function SettingsPage() {
         />
         <SettingsActionRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
-          accent="emerald"
+          accent="note"
           title="刷新到最新前端"
           subtitle={`当前前端版本：${currentBuildId}`}
           onClick={forceRefresh}
