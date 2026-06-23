@@ -45,6 +45,7 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 - 写入管道（抓取 / 缺口补抓 / ingest / Admin API / 凭证加密 / 冲突调和）→ [health/garmin-ingest](health/garmin-ingest.md)。
 - `health_charts` 视图块配置、指标引擎与块渲染 → [health/charts](health/charts.md)。
 - `health_charts` 是配置同步域，不是健康原始数据。
+- `HealthStatsPage` 顶部范围 selector 消费 `health.range.presets` 的完整预设列表；默认 6 档（7/30/90/180/365/全部）在移动端允许换行，保证选项可见，不用隐藏滚动条承载不可发现的横向溢出。
 
 ## 2. Schema / 契约（5 指标表）
 

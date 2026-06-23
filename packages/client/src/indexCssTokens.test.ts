@@ -13,6 +13,9 @@ describe("index.css design tokens", () => {
     expect(css).toContain("--color-page: #0e1320;");
     expect(css).toContain("--color-surface: #161d30;");
     expect(css).toContain("--color-mod-note: #2dd4bf;");
+    expect(css).toContain("--color-mod-track: #818cf8;");
+    expect(css).toContain("--color-mod-goal: #d99a6c;");
+    expect(css).toContain("--color-mod-time: #56b6d6;");
     expect(css).toContain("--color-data-purple: #a78bfa;");
     expect(css).toContain(
       '--font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;',
@@ -28,5 +31,12 @@ describe("index.css design tokens", () => {
     expect(css).toMatch(
       /\.todo-dnd-dragging \.swipeable-list-item\s*\{\s*overflow-x:\s*clip;\s*overflow-y:\s*visible;\s*\}/,
     );
+  });
+
+  it("keeps health range presets visible instead of hiding horizontal overflow", () => {
+    expect(css).toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*flex-wrap:\s*wrap;/s);
+    expect(css).not.toContain(".health-page-header .health-range-selector::-webkit-scrollbar");
+    expect(css).not.toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*scrollbar-width:\s*none;/s);
+    expect(css).not.toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*overflow-x:\s*auto;/s);
   });
 });

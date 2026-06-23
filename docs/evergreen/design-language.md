@@ -3,7 +3,7 @@ type: evergreen
 title: 设计语言
 covers:
   - packages/client/src/index.css
-last-reviewed: 2026-06-21
+last-reviewed: 2026-06-23
 ---
 
 # 设计语言
@@ -27,7 +27,7 @@ last-reviewed: 2026-06-21
 |---|---|---|
 | **L1 中性底盘** | `--color-page` `--color-surface` `--color-surface-elevated` `--color-surface-hover`；文字 `--color-ink` `--color-ink-2` `--color-ink-3` | 暗色底盘 + 三级文字（均 ≥ WCAG AA）。绝大多数 chrome 只用这一层 |
 | **L2 单一动作色** | `--color-accent` `--color-accent-strong` `--color-accent-soft` `--color-accent-ink`（蓝） | 全站唯一动作色。按钮/聚焦/主操作只用蓝，不引入第二动作色 |
-| **L3 模块署名色** | `--color-mod-note`(青) `--color-mod-timeline`(紫) `--color-mod-todo`(蓝) `--color-mod-health`(绿) `--color-mod-settings`(灰) | **低饱和、小面积**：仅图标/署名点/选中态，**绝不上按钮或大色块** |
+| **L3 模块署名色** | `--color-mod-note`(青) `--color-mod-timeline`(紫) `--color-mod-todo`(蓝) `--color-mod-health`(绿) `--color-mod-settings`(灰) `--color-mod-track`(靛) `--color-mod-goal`(琥珀) `--color-mod-time`(天蓝) | **低饱和、小面积**：仅图标/署名点/选中态，**绝不上按钮或大色块** |
 | **L4 状态色** | `--color-ok` `--color-warn` `--color-danger` + `*-soft` | 成功/警告/危险语义，soft 变体作软底 |
 | **L5 数据色板** | `--color-data-blue/teal/green/amber/red/purple`（固定 6 色） | **仅图表/健康可视化**，不外溢到 UI chrome |
 

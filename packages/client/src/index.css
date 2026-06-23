@@ -50,6 +50,9 @@
   --color-mod-todo: #4f9bf5;       /* 待办 蓝（与动作色同色） */
   --color-mod-health: #34d399;     /* 健康 绿 */
   --color-mod-settings: #8b94a8;   /* 设置 灰 */
+  --color-mod-track: #818cf8;      /* 轨道 靛 */
+  --color-mod-goal: #d99a6c;       /* 目标 琥珀 */
+  --color-mod-time: #56b6d6;       /* 时间统计 天蓝 */
 
   /* —— 第 5 层 数据色板（仅图表/健康，固定 6 色，不外溢到 UI chrome） —— */
   --color-data-blue: #4f9bf5;
@@ -484,23 +487,21 @@ textarea {
 .health-page-header .health-range-selector {
   justify-content: flex-start;
   margin-bottom: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.health-page-header .health-range-selector::-webkit-scrollbar {
-  display: none;
+  flex-wrap: wrap;
+  row-gap: 0.375rem;
 }
 
 .health-range-button {
-  min-width: 4.25rem;
+  min-width: 0;
+  flex: 1 1 4.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-ink-2);
-  padding: 0.45rem 0.8rem;
+  padding: 0.45rem 0.65rem;
   font-size: 0.8125rem;
   white-space: nowrap;
+  text-align: center;
 }
 
 .health-range-button[aria-pressed="true"] {

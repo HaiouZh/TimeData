@@ -245,6 +245,17 @@ describe("HealthStatsPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("renders all default health range presets in the header", async () => {
+    seedHealthData();
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelectorAll(".health-range-button").length === 6, "Timed out waiting for all range buttons");
+
+    const labels = [...host.querySelectorAll(".health-range-button")].map((button) => button.textContent);
+    expect(labels).toEqual(["7天", "30天", "90天", "180天", "365天", "全部"]);
+
+    await act(async () => root.unmount());
+  });
+
   it("renders an empty state without health data", async () => {
     const { host, root } = await renderPage();
 
