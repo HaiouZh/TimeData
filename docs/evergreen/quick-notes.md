@@ -36,7 +36,7 @@ last-reviewed: 2026-06-23
 - **上游**：用户在 `QuickNotesPage` 自记/编辑/置顶/删除；授权 agent 经 `POST /api/quick-notes` 投递 `source="agent"`；CLI `timedata notes` 只读查询。
 - **下游**：本地 mutation 经 `syncLog(tableName="quick_notes")` → [sync](sync.md) 推送 → 服务端通用 LWW 域 + `sync_seq` → 其他设备拉取。独立备份格式 `timedata.quick-notes.backup`（见 [backup](backup.md)）。
 - **契约**：`QuickNote` 字段 schema 见本文 §2，定义在 `entitySchemas.ts:QuickNoteSchema`（`schemas.ts` re-export）；跨域约定见 [data-model](data-model.md)。
-- **邻居**：[todo](todo.md)（composer「存待办」调 `addTask`）、[tracks](tracks.md)（TrackStep 复用 `source/sourceLabel` 的人/agent 来源口径）、[timeline](timeline.md)（header「打点」建 time_entry，分类来自 [categories-settings](categories-settings.md) 的打点分类设置）、[sync](sync.md)。
+- **邻居**：[todo](todo.md)（composer「存待办」调 `addTask`）、[tracks](tracks.md)（TrackStep 复用 `source/sourceLabel` 的人/agent 来源口径）、[timeline](timeline.md)（composer「打点」建 time_entry，分类来自 [categories-settings](categories-settings.md) 的打点分类设置）、[sync](sync.md)。
 
 ## 1. 数据流（本域端到端，跨包）
 
@@ -72,7 +72,7 @@ last-reviewed: 2026-06-23
 
 ### 1.4 捕捉中心角色
 
-速记页兼「捕捉中心」：composer「待办」把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）；header「打点」建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**两者只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。
+速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。
 
 ## 2. Schema / 契约（字段级）
 
@@ -122,7 +122,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 7. **单条上传状态从 syncLog 推导，不是 QuickNote 字段**：`useUnsyncedQuickNoteIds` 读 `syncLog(tableName="quick_notes", synced=0)`，待上传显示时钟、已同步显示单勾。agent 速记本地无 pending，恒显单勾。
 8. **本地 mutation 必须与 syncLog 同事务**；窗口查询/搜索/置顶列表查询只读、不写 syncLog。
 9. **`updateQuickNote` 保留 source/sourceLabel/pinned**：编辑只改 text/occurredAt/updatedAt。
-10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie；置顶区从 header 钉子展开，主线过滤 pinned；agent 气泡深蓝底 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。
+10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡深蓝底 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 

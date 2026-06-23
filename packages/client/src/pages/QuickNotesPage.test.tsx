@@ -141,6 +141,14 @@ function lastButtonByText(host: HTMLElement, text: string): HTMLButtonElement | 
   return matches.at(-1) ?? null;
 }
 
+function composerButton(host: HTMLElement, label: string): HTMLButtonElement {
+  const form = host.querySelector('form[aria-label="速记输入区"]');
+  if (!(form instanceof HTMLFormElement)) throw new Error("missing composer form");
+  const button = form.querySelector(`button[aria-label="${label}"]`);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`missing composer button ${label}`);
+  return button;
+}
+
 function markByText(host: HTMLElement, text: string): HTMLElement | null {
   return (
     Array.from(host.querySelectorAll("mark")).find((element) => element.textContent === text) as HTMLElement | undefined
@@ -199,7 +207,7 @@ describe("QuickNotesPage", () => {
     const { host, root } = await renderPage();
 
     await typeInto(input(host), "  一个想法  ");
-    await click(host.querySelector('button[type="submit"]'));
+    await click(composerButton(host, "记录速记"));
 
     expect(host.textContent).toContain("一个想法");
     expect(input(host).value).toBe("");
@@ -213,8 +221,16 @@ describe("QuickNotesPage", () => {
   it("does not send empty text", async () => {
     const { host, root } = await renderPage();
 
+    const composer = host.querySelector('form[aria-label="速记输入区"]');
+    if (!(composer instanceof HTMLFormElement)) throw new Error("missing composer form");
+
     await typeInto(input(host), "   ");
-    await click(host.querySelector('button[type="submit"]'));
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="记录速记"]')).toBeNull();
+
+    await act(async () => {
+      composer.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    });
+    await flush();
 
     await expect(db.quickNotes.count()).resolves.toBe(0);
 
@@ -498,7 +514,7 @@ describe("QuickNotesPage", () => {
     expect(host.textContent).toContain("正在编辑");
 
     await typeInto(input(host), "新文本");
-    await click(host.querySelector('button[type="submit"]'));
+    await click(composerButton(host, "保存速记"));
 
     await expect(db.quickNotes.get("note-1")).resolves.toMatchObject({
       text: "新文本",
@@ -651,7 +667,7 @@ describe("QuickNotesPage", () => {
   it("opens search mode with an empty-query hint and hides the bottom composer", async () => {
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('button[aria-label="搜索速记"]'));
+    await click(composerButton(host, "搜索速记"));
 
     expect(host.querySelector('input[placeholder="搜索速记…"]')).toBeInstanceOf(HTMLInputElement);
     expect(host.textContent).toContain("空格分隔多个词");
@@ -682,7 +698,7 @@ describe("QuickNotesPage", () => {
     // 搜索去抖用 fake timers 确定性推进；shouldAdvanceTime 让 flush 的 setTimeout(0) 仍能结算。
     vi.useFakeTimers({ shouldAdvanceTime: true });
 
-    await click(host.querySelector('button[aria-label="搜索速记"]'));
+    await click(composerButton(host, "搜索速记"));
     await typeIntoSearch(searchInput(host), "会议");
     await waitForSearchDebounce();
 
@@ -701,7 +717,7 @@ describe("QuickNotesPage", () => {
   it("closes search mode and restores the bottom composer", async () => {
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('button[aria-label="搜索速记"]'));
+    await click(composerButton(host, "搜索速记"));
     await click(host.querySelector('button[aria-label="退出搜索"]'));
 
     expect(input(host)).toBeInstanceOf(HTMLTextAreaElement);
@@ -710,12 +726,14 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
-  it("keeps quick note toolbar actions accessible after icon migration", async () => {
+  it("keeps secondary toolbar actions while search and punch move into the empty composer", async () => {
     const { host, root } = await renderPage();
 
-    expect(host.querySelector('[aria-label="打点（记录到现在）"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="搜索速记"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="更多操作"]')).not.toBeNull();
+    expect(host.querySelector('header button[aria-label="搜索速记"]')).toBeNull();
+    expect(host.querySelector('header button[aria-label="打点（记录到现在）"]')).toBeNull();
+    expect(host.querySelector('header button[aria-label="更多操作"]')).not.toBeNull();
+    expect(composerButton(host, "搜索速记")).toBeInstanceOf(HTMLButtonElement);
+    expect(composerButton(host, "打点（记录到现在）")).toBeInstanceOf(HTMLButtonElement);
 
     await act(async () => root.unmount());
   });
@@ -730,11 +748,93 @@ describe("捕捉中心", () => {
     await db.syncLog.clear();
   });
 
-  it("头部只有一个打点钮，且不再显示窗口计数标题", async () => {
+  it("空草稿时 composer 左侧打开搜索、右侧打点，顶部不再保留搜索按钮", async () => {
+    const { host, root } = await renderPage();
+
+    expect(composerButton(host, "搜索速记")).toBeInstanceOf(HTMLButtonElement);
+    expect(composerButton(host, "打点（记录到现在）")).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('header button[aria-label="搜索速记"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="存为待办"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="记录速记"]')).toBeNull();
+
+    await click(composerButton(host, "搜索速记"));
+
+    expect(host.querySelector('input[placeholder="搜索速记…"]')).toBeInstanceOf(HTMLInputElement);
+    expect(host.textContent).toContain("空格分隔多个词");
+    expect(host.querySelector('textarea[aria-label="速记输入"]')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("有草稿时 composer 左侧存待办、右侧记录速记", async () => {
+    const { host, root } = await renderPage();
+    await typeInto(input(host), "买牛奶");
+
+    expect(composerButton(host, "存为待办")).toBeInstanceOf(HTMLButtonElement);
+    expect(composerButton(host, "记录速记")).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="搜索速记"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="打点（记录到现在）"]')).toBeNull();
+
+    await click(composerButton(host, "记录速记"));
+
+    await expect(db.quickNotes.count()).resolves.toBe(1);
+    await expect(db.quickNotes.toArray()).resolves.toMatchObject([{ text: "买牛奶" }]);
+    expect(input(host).value).toBe("");
+
+    await typeInto(input(host), "放进任务池");
+    await click(composerButton(host, "存为待办"));
+
+    await expect(db.tasks.toArray()).resolves.toMatchObject([{ title: "放进任务池", done: false }]);
+    expect(input(host).value).toBe("");
+
+    await act(async () => root.unmount());
+  });
+
+  it("编辑中 composer 左侧取消、右侧保存，并覆盖普通状态按钮", async () => {
+    await db.quickNotes.add({
+      id: "note-edit",
+      text: "旧文本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "旧文本");
+    await click(menuItem(host, "编辑"));
+
+    expect(composerButton(host, "取消编辑")).toBeInstanceOf(HTMLButtonElement);
+    expect(composerButton(host, "保存速记")).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="搜索速记"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="存为待办"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="打点（记录到现在）"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="记录速记"]')).toBeNull();
+
+    await typeInto(input(host), "新文本");
+    await click(composerButton(host, "保存速记"));
+
+    await expect(db.quickNotes.get("note-edit")).resolves.toMatchObject({ text: "新文本" });
+
+    await openMenu(host, "新文本");
+    await click(menuItem(host, "编辑"));
+    await typeInto(input(host), "不保存的文本");
+    await click(composerButton(host, "取消编辑"));
+
+    expect(input(host).value).toBe("");
+    await expect(db.quickNotes.get("note-edit")).resolves.toMatchObject({ text: "新文本" });
+
+    await act(async () => root.unmount());
+  });
+
+  it("空草稿时只有 composer 提供打点入口，顶部不再显示打点按钮", async () => {
     const { host, root } = await renderPage();
 
     const punchButtons = host.querySelectorAll('button[aria-label="打点（记录到现在）"]');
     expect(punchButtons).toHaveLength(1);
+    expect(host.querySelector('header button[aria-label="打点（记录到现在）"]')).toBeNull();
+    expect(host.querySelector('form[aria-label="速记输入区"] button[aria-label="打点（记录到现在）"]')).toBeInstanceOf(
+      HTMLButtonElement,
+    );
     expect(host.textContent).not.toContain("当前窗口");
 
     await act(async () => root.unmount());
@@ -744,7 +844,7 @@ describe("捕捉中心", () => {
     const { host, root } = await renderPage();
     await typeInto(input(host), "买牛奶");
 
-    const todoButton = host.querySelector('button[aria-label="存为待办"]');
+    const todoButton = composerButton(host, "存为待办");
     await click(todoButton);
 
     const tasks = await db.tasks.toArray();
@@ -758,7 +858,7 @@ describe("捕捉中心", () => {
   it("存为待办成功反馈内嵌在 composer 内", async () => {
     const { host, root } = await renderPage();
     await typeInto(input(host), "买牛奶");
-    await click(host.querySelector('button[aria-label="存为待办"]'));
+    await click(composerButton(host, "存为待办"));
 
     const feedback = host.querySelector('[aria-label="捕捉操作反馈"]');
     const composer = host.querySelector('form[aria-label="速记输入区"]');
@@ -775,7 +875,7 @@ describe("捕捉中心", () => {
     await configurePunchCategory();
     const { host, root } = await renderPage();
 
-    const punchButton = host.querySelector('button[aria-label="打点（记录到现在）"]');
+    const punchButton = composerButton(host, "打点（记录到现在）");
     await click(punchButton);
 
     const entries = await db.timeEntries.toArray();
@@ -788,7 +888,7 @@ describe("捕捉中心", () => {
   it("打点成功反馈内嵌在 composer 内，不再底部浮层覆盖列表", async () => {
     await configurePunchCategory();
     const { host, root } = await renderPage();
-    await click(host.querySelector('button[aria-label="打点（记录到现在）"]'));
+    await click(composerButton(host, "打点（记录到现在）"));
 
     const feedback = host.querySelector('[aria-label="捕捉操作反馈"]');
     const composer = host.querySelector('form[aria-label="速记输入区"]');
@@ -808,7 +908,7 @@ describe("捕捉中心", () => {
     const { host, root } = await renderPage();
     await typeInto(input(host), "丢进收件箱");
 
-    const todoBtn = host.querySelector('button[aria-label="存为待办"]');
+    const todoBtn = composerButton(host, "存为待办");
     await click(todoBtn);
 
     const tasks = await db.tasks.toArray();

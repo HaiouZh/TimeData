@@ -1,4 +1,4 @@
-import { ArrowDown, Check, DotsThree, MagnifyingGlass, PushPin, Timer, X } from "@phosphor-icons/react";
+import { ArrowDown, Check, DotsThree, MagnifyingGlass, NotePencil, Plus, PushPin, Timer, X } from "@phosphor-icons/react";
 import type { QuickNote } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -152,6 +152,7 @@ export default function QuickNotesPage() {
   const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
   const hasQuery = searchTerms.length > 0;
+  const hasDraft = draftText.trim().length > 0;
 
   const longPress = useLongPress(({ x, y }) => {
     const note = pressedNoteRef.current;
@@ -794,14 +795,6 @@ export default function QuickNotesPage() {
           </div>
         ) : (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
-            <button
-              type="button"
-              aria-label="打点（记录到现在）"
-              onClick={() => void handlePunch()}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
-            >
-              <Icon icon={Timer} size={18} />
-            </button>
             <div className="min-w-0 flex-1">
               {!timeline.atLatest && (
                 <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[11px] font-medium text-slate-400">
@@ -839,15 +832,6 @@ export default function QuickNotesPage() {
                 </span>
               </button>
             )}
-
-            <button
-              type="button"
-              aria-label="搜索速记"
-              onClick={openSearch}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
-            >
-              <Icon icon={MagnifyingGlass} size={16} />
-            </button>
 
             <div className="relative shrink-0">
               <button
@@ -1183,12 +1167,28 @@ export default function QuickNotesPage() {
               <div className="flex items-end gap-2">
                 <button
                   type="button"
-                  aria-label="存为待办"
-                  disabled={!draftText.trim() || saving}
-                  onClick={() => void handleSaveTodo()}
-                  className="h-11 shrink-0 rounded-2xl border border-slate-700 px-3 text-sm font-medium text-slate-200 transition hover:border-emerald-500/40 hover:text-slate-50 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600 sm:px-4"
+                  aria-label={editingId ? "取消编辑" : hasDraft ? "存为待办" : "搜索速记"}
+                  disabled={saving}
+                  onClick={() => {
+                    if (editingId) {
+                      cancelEditing();
+                      return;
+                    }
+                    if (hasDraft) {
+                      void handleSaveTodo();
+                      return;
+                    }
+                    openSearch();
+                  }}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-slate-700 text-slate-200 transition hover:border-emerald-500/40 hover:text-slate-50 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
                 >
-                  待办
+                  {editingId ? (
+                    <Icon icon={X} size={18} />
+                  ) : hasDraft ? (
+                    <Icon icon={Plus} size={18} />
+                  ) : (
+                    <Icon icon={MagnifyingGlass} size={18} />
+                  )}
                 </button>
                 <textarea
                   ref={inputRef}
@@ -1204,11 +1204,23 @@ export default function QuickNotesPage() {
                   className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-400 outline-none"
                 />
                 <button
-                  type="submit"
-                  disabled={!draftText.trim() || saving}
-                  className="h-11 shrink-0 rounded-2xl bg-emerald-400 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 sm:px-4"
+                  type={editingId || hasDraft ? "submit" : "button"}
+                  aria-label={editingId ? "保存速记" : hasDraft ? "记录速记" : "打点（记录到现在）"}
+                  disabled={saving}
+                  onClick={(event) => {
+                    if (editingId || hasDraft) return;
+                    event.preventDefault();
+                    void handlePunch();
+                  }}
+                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
                 >
-                  {editingId ? "保存" : "记录"}
+                  {editingId ? (
+                    <Icon icon={Check} size={19} weight="bold" />
+                  ) : hasDraft ? (
+                    <Icon icon={NotePencil} size={19} />
+                  ) : (
+                    <Icon icon={Timer} size={19} />
+                  )}
                 </button>
               </div>
             </div>
