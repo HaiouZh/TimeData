@@ -309,26 +309,27 @@ export default function SettingsPage() {
     }
   }
 
-  async function refreshServerVersion() {
-    if (!apiUrl) return;
+  async function refreshServerVersion(): Promise<ServerVersionState | null> {
+    if (!apiUrl) return null;
     const version = await fetchServerVersion();
     setServerVersion(version);
+    return version;
   }
 
   async function handleServerUpdate() {
     if (!apiUrl) return;
 
-    if (!serverVersion) {
-      await refreshServerVersion();
+    const latestServerVersion = await refreshServerVersion();
+    if (!latestServerVersion) {
       return;
     }
 
-    if (!serverVersion.ok) {
-      setServerUpdateStatus(serverVersion.error);
+    if (!latestServerVersion.ok) {
+      setServerUpdateStatus(latestServerVersion.error);
       return;
     }
 
-    const version = serverVersion.version;
+    const version = latestServerVersion.version;
 
     if (!version.hasUpdate) {
       setServerUpdateStatus("服务端已是最新版本。");

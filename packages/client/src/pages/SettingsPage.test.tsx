@@ -1,11 +1,17 @@
-import { createElement } from "react";
+// @vitest-environment jsdom
+
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage, { getServerConnectionState } from "./SettingsPage.js";
+import { click, renderDom, unmount } from "../test/domHarness.tsx";
 
 const useSyncContextMock = vi.hoisted(() => vi.fn());
 const forceRefreshMock = vi.hoisted(() => vi.fn());
+const fetchServerVersionMock = vi.hoisted(() => vi.fn());
+const triggerServerUpdateMock = vi.hoisted(() => vi.fn());
+const fetchUpdateStatusMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: useSyncContextMock,
@@ -51,17 +57,9 @@ function defaultSyncState() {
 }
 
 vi.mock("../lib/serverVersion.ts", () => ({
-  fetchServerVersion: vi.fn(async () => ({
-    ok: true,
-    version: {
-      current: "abc1234",
-      latest: "def5678",
-      hasUpdate: true,
-      checkedAt: "2026-05-08T08:00:00.000Z",
-    },
-  })),
-  triggerServerUpdate: vi.fn(),
-  fetchUpdateStatus: vi.fn(),
+  fetchServerVersion: fetchServerVersionMock,
+  triggerServerUpdate: triggerServerUpdateMock,
+  fetchUpdateStatus: fetchUpdateStatusMock,
 }));
 
 vi.mock("../lib/mobileUpdate.ts", () => ({
@@ -87,11 +85,45 @@ Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
 });
 
+function serverVersion(current: string, latest: string, hasUpdate: boolean) {
+  return {
+    ok: true,
+    version: {
+      current,
+      latest,
+      hasUpdate,
+      checkedAt: "2026-05-08T08:00:00.000Z",
+    },
+  };
+}
+
+async function waitForText(root: ParentNode, text: string): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (root.textContent?.includes(text)) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  throw new Error(`Timed out waiting for text: ${text}`);
+}
+
+function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
+  const button = Array.from(root.querySelectorAll("button")).find((candidate) => candidate.textContent?.includes(text));
+  expect(button).toBeTruthy();
+  return button as HTMLButtonElement;
+}
+
 describe("SettingsPage", () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("timedata_api_url", "https://example.com");
     useSyncContextMock.mockReturnValue(defaultSyncState());
+    fetchServerVersionMock.mockReset();
+    triggerServerUpdateMock.mockReset();
+    fetchUpdateStatusMock.mockReset();
+    fetchServerVersionMock.mockResolvedValue(serverVersion("abc1234", "def5678", true));
+    triggerServerUpdateMock.mockResolvedValue(null);
+    fetchUpdateStatusMock.mockResolvedValue(null);
   });
 
   it("reflects apiUrl updates from sync context", () => {
@@ -132,6 +164,28 @@ describe("SettingsPage", () => {
 
     expect(html).toContain("刷新到最新前端");
     expect(html).toContain("build-xyz");
+  });
+
+  it("refreshes server version before deciding whether to trigger server update", async () => {
+    fetchServerVersionMock
+      .mockResolvedValueOnce(serverVersion("e09fe9e", "e09fe9e", false))
+      .mockResolvedValueOnce(serverVersion("e09fe9e", "3061657", true));
+    triggerServerUpdateMock.mockResolvedValue("update-1");
+
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsPage)));
+    try {
+      await waitForText(host, "当前 e09fe9e / 最新 e09fe9e");
+
+      await click(buttonByText(host, "服务端更新"));
+      await waitForText(host, "确认更新到 3061657");
+      await click(buttonByText(host, "确认"));
+
+      await waitForText(host, "更新任务已启动：update-1");
+      expect(fetchServerVersionMock).toHaveBeenCalledTimes(2);
+      expect(triggerServerUpdateMock).toHaveBeenCalledTimes(1);
+    } finally {
+      await unmount(root);
+    }
   });
 
   it("shows sync summary between server and data entries when cloud sync is enabled", () => {

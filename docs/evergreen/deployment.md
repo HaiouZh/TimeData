@@ -29,7 +29,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-06-21
+last-reviewed: 2026-06-23
 ---
 
 # 部署与自更新
@@ -190,7 +190,7 @@ Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mob
 1. 当前版本 = `process.env.GIT_SHA`（运行时环境变量），取前 7 位。`dev` 表示开发模式。
 2. 最新版本 = 调 GitHub API 查 `actions/workflows/build.yml/runs?status=success&branch=main&per_page=1`，取最新成功 run 的 `head_sha` 前 7 位。
 3. `hasUpdate = current !== 'dev' && latest !== 'unknown' && current !== latest`。
-4. 结果缓存 5 分钟（`CACHE_TTL_MS`）。
+4. 服务端结果缓存 5 分钟（`CACHE_TTL_MS`）；设置页点「服务端更新」会先重查版本再判断，避免页面旧状态误判。
 
 返回：
 
