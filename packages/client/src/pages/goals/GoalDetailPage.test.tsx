@@ -4,14 +4,19 @@ import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Goal, Task, Track } from "@timedata/shared";
+import type { Goal, Task } from "@timedata/shared";
 import { db } from "../../db/index.js";
+import { toggleTaskDone } from "../../lib/tasks.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import GoalDetailPage from "./GoalDetailPage.js";
 
+vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: vi.fn() }) }));
+vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: () => true }));
+vi.mock("../../lib/useIsCoarsePointer.js", () => ({ useIsCoarsePointer: () => false }));
+vi.mock("../../lib/settings/todoDefaultDestinationSetting.js", () => ({ useTodoDefaultDestination: () => "today" }));
 
-const now = "2026-06-22T01:00:00.000Z";
+const now = "2026-06-23T01:00:00.000Z";
 let mountedRoot: Awaited<ReturnType<typeof renderDom>>["root"] | null = null;
 
 beforeEach(async () => {
@@ -25,8 +30,8 @@ afterEach(async () => {
   await db.delete();
 });
 
-function seedGoal(overrides: Partial<Goal> = {}): Promise<string> {
-  const goal: Goal = {
+function goal(overrides: Partial<Goal> = {}): Goal {
+  return {
     id: "goal-1",
     title: "发布 v2",
     kind: "project",
@@ -37,15 +42,14 @@ function seedGoal(overrides: Partial<Goal> = {}): Promise<string> {
     updatedAt: now,
     ...overrides,
   };
-  return db.goals.add(goal);
 }
 
-function seedTask(overrides: Partial<Task> & Pick<Task, "id">): Promise<string> {
-  const task: Task = {
-    id: overrides.id,
+function task(id: string, overrides: Partial<Task> = {}): Task {
+  return {
+    id,
     parentId: null,
-    title: overrides.title ?? overrides.id,
-    done: overrides.done ?? false,
+    title: id,
+    done: false,
     recurrence: null,
     lastDoneAt: null,
     startAt: null,
@@ -53,214 +57,99 @@ function seedTask(overrides: Partial<Task> & Pick<Task, "id">): Promise<string> 
     completedCount: 0,
     completedAt: null,
     tags: [],
-    sortOrder: overrides.sortOrder ?? 0,
+    sortOrder: 0,
     createdAt: now,
     updatedAt: now,
     ...overrides,
   };
-  return db.tasks.add(task);
 }
 
-function seedTrack(overrides: Partial<Track> & Pick<Track, "id">): Promise<string> {
-  const track: Track = {
-    id: overrides.id,
-    title: overrides.title ?? overrides.id,
-    status: overrides.status ?? "active",
-    refs: [],
-    createdAt: now,
-    updatedAt: now,
-    ...overrides,
-  };
-  return db.tracks.add(track);
-}
-
-async function renderGoalDetail(id = "goal-1") {
-  return renderDom(
+async function renderGoalDetail(initialPath = "/goals/goal-1") {
+  const rendered = await renderDom(
     createElement(
       MemoryRouter,
-      { initialEntries: [`/goals/${id}`] },
-      createElement(Routes, null, createElement(Route, { path: "/goals/:id", element: createElement(GoalDetailPage) })),
+      { initialEntries: [initialPath] },
+      createElement(
+        Routes,
+        null,
+        createElement(Route, { path: "/goals/:id", element: createElement(GoalDetailPage) }),
+        createElement(Route, { path: "/goals", element: createElement("div", { "data-route": "goals" }, "目标列表") }),
+      ),
     ),
   );
+  mountedRoot = rendered.root;
+  return rendered;
 }
 
-async function waitForText(host: HTMLElement, text: string): Promise<void> {
+async function tick(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+async function waitForText(text: string): Promise<void> {
   for (let index = 0; index < 30; index++) {
-    if (document.body.textContent?.includes(text) || host.textContent?.includes(text)) return;
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    if (document.body.textContent?.includes(text)) return;
+    await tick();
   }
   expect(document.body.textContent).toContain(text);
 }
 
-function findButtonByText(root: ParentNode, text: string): HTMLButtonElement | null {
-  const buttons = [...root.querySelectorAll("button")];
-  const button = buttons.find((item) => item.textContent?.includes(text));
-  return button instanceof HTMLButtonElement ? button : null;
+async function waitForSelector(selector: string): Promise<Element> {
+  for (let index = 0; index < 30; index++) {
+    const element = document.body.querySelector(selector);
+    if (element) return element;
+    await tick();
+  }
+  throw new Error(`missing selector: ${selector}`);
 }
 
 function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
-  const button = findButtonByText(root, text);
+  const button = [...root.querySelectorAll("button")].find((item) => item.textContent?.includes(text));
   if (!(button instanceof HTMLButtonElement)) throw new Error(`missing button: ${text}`);
   return button;
 }
 
-async function waitForButtonByText(root: ParentNode, text: string): Promise<HTMLButtonElement> {
-  for (let index = 0; index < 30; index++) {
-    const button = findButtonByText(root, text);
-    if (button) return button;
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  }
-  throw new Error(`missing button: ${text}`);
-}
+describe("GoalDetailPage graph shell", () => {
+  it("shows loading and missing-goal states", async () => {
+    await renderGoalDetail("/goals/missing");
 
-async function waitForButtonByLabel(root: ParentNode, label: string): Promise<HTMLButtonElement> {
-  for (let index = 0; index < 30; index++) {
-    const button = root.querySelector(`button[aria-label="${label}"]`);
-    if (button instanceof HTMLButtonElement) return button;
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  }
-  throw new Error(`missing button label: ${label}`);
-}
-
-async function waitForInputByLabel(root: ParentNode, label: string): Promise<HTMLInputElement> {
-  for (let index = 0; index < 30; index++) {
-    const input = root.querySelector(`input[aria-label="${label}"]`);
-    if (input instanceof HTMLInputElement) return input;
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-  }
-  throw new Error(`missing input label: ${label}`);
-}
-
-async function typeInput(input: HTMLInputElement, value: string): Promise<void> {
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    setter?.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
-
-async function chooseSelectSheetOption(host: HTMLElement, label: string, option: string): Promise<void> {
-  await waitForText(host, option);
-  await click(await waitForButtonByLabel(host, label));
-  await click(await waitForButtonByText(document.body, option));
-}
-
-describe("GoalDetailPage", () => {
-  it("renders summary lines for empty goals", async () => {
-    await seedGoal();
-
-    const { host, root } = await renderGoalDetail();
-    mountedRoot = root;
-
-    await waitForText(host, "还没开始推进");
-    await waitForText(host, "还没有成员");
-    await waitForText(host, "✓ 0 完成");
+    await waitForText("目标不存在");
   });
 
-  it("renders ready and blocked member columns", async () => {
-    await seedGoal({
-      members: [
-        { kind: "task", id: "task-1" },
-        { kind: "track", id: "track-1" },
-      ],
-      prerequisites: [
-        {
-          blocker: { kind: "task", id: "task-1" },
-          blocked: { kind: "track", id: "track-1" },
-        },
-      ],
-    });
-    await seedTask({ id: "task-1", title: "写发布文案", done: false });
-    await seedTrack({ id: "track-1", title: "发布轨道", status: "active" });
+  it("mounts GoalGraphEditor with the goal anchor", async () => {
+    await db.goals.add(goal());
 
-    const { host, root } = await renderGoalDetail();
-    mountedRoot = root;
+    await renderGoalDetail();
 
-    await waitForText(host, "现在能推进");
-    await waitForText(host, "写发布文案");
-    await waitForText(host, "在等前置");
-    await waitForText(host, "发布轨道");
-    await waitForText(host, "等：写发布文案");
-    await waitForText(host, "▸ 1 能推 · 1 等前置");
+    expect(await waitForSelector('[data-node-id="goal"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("0 能推 · 0 等前置 · 0 完成");
   });
 
-  it("adds prerequisite edges", async () => {
-    await seedGoal({
-      members: [
-        { kind: "task", id: "task-1" },
-        { kind: "track", id: "track-1" },
-      ],
-    });
-    await seedTask({ id: "task-1", title: "写发布文案" });
-    await seedTrack({ id: "track-1", title: "发布轨道", status: "active" });
+  it("live-refreshes graph summary when a task changes", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await db.goals.add(goalValue);
+    await db.tasks.add(taskValue);
 
-    const { host, root } = await renderGoalDetail();
-    mountedRoot = root;
+    await renderGoalDetail();
 
-    await chooseSelectSheetOption(host, "选择前置成员", "写发布文案");
-    await chooseSelectSheetOption(host, "选择受阻成员", "发布轨道");
-    await click(host.querySelector('button[aria-label="添加前置关系"]'));
+    await waitForText("1 能推 · 0 等前置 · 0 完成");
 
-    await expect(db.goals.get("goal-1")).resolves.toMatchObject({
-      prerequisites: [
-        {
-          blocker: { kind: "task", id: "task-1" },
-          blocked: { kind: "track", id: "track-1" },
-        },
-      ],
-    });
+    await toggleTaskDone("task-1");
+
+    await waitForText("0 能推 · 0 等前置 · 1 完成");
   });
 
-  it("deletes a goal after confirmation and keeps members", async () => {
-    await seedGoal({ members: [{ kind: "task", id: "task-1" }] });
-    await seedTask({ id: "task-1", title: "写发布文案" });
+  it("deleting the goal in the editor navigates back to /goals", async () => {
+    await db.goals.add(goal());
 
-    const { host, root } = await renderGoalDetail();
-    mountedRoot = root;
-
-    await waitForText(host, "删除目标");
-    await click(host.querySelector('button[aria-label="删除目标"]'));
+    await renderGoalDetail();
+    await click(await waitForSelector('button[aria-label="目标菜单"]'));
     await click(buttonByText(document.body, "删除目标"));
+    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "删除目标").at(-1));
 
-    await expect(db.goals.get("goal-1")).resolves.toBeUndefined();
-    await expect(db.tasks.get("task-1")).resolves.not.toHaveProperty("goalId");
-  });
-
-  it("quick creates a todo inside an active goal", async () => {
-    await seedGoal();
-
-    const { host, root } = await renderGoalDetail();
-    mountedRoot = root;
-
-    const input = await waitForInputByLabel(host, "快速添加目标任务");
-    await typeInput(input, "写发布文案");
-    await click(host.querySelector('button[aria-label="添加目标任务"]'));
-
-    await waitForText(host, "写发布文案");
-    const tasks = await db.tasks.toArray();
-    expect(tasks).toHaveLength(1);
-    await expect(db.goals.get("goal-1")).resolves.toMatchObject({
-      members: [{ kind: "task", id: tasks[0]?.id }],
-    });
-    expect(input.value).toBe("");
-    expect(document.activeElement).toBe(input);
-  });
-
-  it("does not show quick create for archived goals", async () => {
-    await seedGoal({ status: "archived" });
-
-    const { host, root } = await renderGoalDetail();
-    mountedRoot = root;
-
-    await waitForText(host, "还没开始推进");
-    expect(host.querySelector('input[aria-label="快速添加目标任务"]')).toBeNull();
+    await waitForText("目标列表");
+    expect(await db.goals.get("goal-1")).toBeUndefined();
   });
 });
