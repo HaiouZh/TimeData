@@ -258,6 +258,7 @@ describe("GoalGraphEditor", () => {
     await tick();
 
     expect((await db.goals.get("goal-1"))?.prerequisites).toEqual([]);
+    await waitForStatusText("撤销");
 
     await click(document.body.querySelector("[data-goal-undo-action]"));
 
