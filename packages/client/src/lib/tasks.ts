@@ -109,19 +109,42 @@ export async function persistTaskOrder(orderedIds: string[]): Promise<void> {
 
 /**
  * 在同一父任务下重排子任务：读出当前 children（按 sortOrder），把 activeId 移到 overId 处，
- * 再走 persistTaskOrder 回填槽位。只传子任务自己的 id，故仅在它们自身的 sortOrder 槽位内重排，
- * 不影响根任务排序；顺序未变时 persistTaskOrder 自身短路不写库。
+ * 再把新次序回填成连续的 0..n-1。
+ *
+ * 子任务 sortOrder 是 per-parent 的独立空间（始终按 parentId 取后单独排），故直接回填 0..n-1
+ * 安全，且能自愈历史脏数据：move-to-parent 曾固定塞 sortOrder=0、或跨端同步撞值时，多个子任务
+ * 会共享同一 sortOrder——此时槽位回填式重排（persistTaskOrder）算不出任何变化、静默不写库，
+ * 表现为"拖了不动"。连续回填则无论起始值是否撞值都能落库成真正不同的次序。只写实际变动的行；
+ * 顺序未变（拖回原位）时短路不写。
  */
 export async function reorderChildren(parentId: string, activeId: string, overId: string): Promise<void> {
-  const children = await db.tasks.where("parentId").equals(parentId).sortBy("sortOrder");
-  const ids = children.map((child) => child.id);
-  const oldIndex = ids.indexOf(activeId);
-  const newIndex = ids.indexOf(overId);
-  if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
-  const ordered = ids.slice();
-  const [moved] = ordered.splice(oldIndex, 1);
-  ordered.splice(newIndex, 0, moved);
-  await persistTaskOrder(ordered);
+  const now = new Date().toISOString();
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const children = await db.tasks.where("parentId").equals(parentId).sortBy("sortOrder");
+    const ids = children.map((child) => child.id);
+    const oldIndex = ids.indexOf(activeId);
+    const newIndex = ids.indexOf(overId);
+    if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+    const ordered = ids.slice();
+    const [moved] = ordered.splice(oldIndex, 1);
+    ordered.splice(newIndex, 0, moved);
+
+    const byId = new Map(children.map((child) => [child.id, child]));
+    const updates = ordered
+      .map((id, index) => ({ child: byId.get(id), index }))
+      .filter(
+        (entry): entry is { child: Task; index: number } =>
+          entry.child !== undefined && entry.child.sortOrder !== entry.index,
+      );
+    if (updates.length === 0) return;
+
+    await db.tasks.bulkUpdate(
+      updates.map(({ child, index }) => ({ key: child.id, changes: { sortOrder: index, updatedAt: now } })),
+    );
+    for (const { child } of updates) {
+      await recordSyncLog("tasks", child.id, "update", now);
+    }
+  });
 }
 
 export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Task> {
@@ -320,12 +343,12 @@ export async function promoteToRoot(
   return putTask(next);
 }
 
-export async function moveTaskToParent(
-  taskId: string,
-  newParentId: string,
-  sortOrder: number,
-  now: Date = new Date(),
-): Promise<Task> {
+/**
+ * 把任务移动成 `newParentId` 的子任务，**追加到目标父现有 children 末尾**（`nextChildSortOrder`
+ * 取 max+1，得到一个目标作用域内不撞值的 sortOrder）。不接收外部 sortOrder——历史上调用方一律塞
+ * 0，致同父多个 child 撞同值、连累重排失效（见 `reorderChildren`），由函数自管落位根除此源。
+ */
+export async function moveTaskToParent(taskId: string, newParentId: string, now: Date = new Date()): Promise<Task> {
   const updatedAt = now.toISOString();
   let moved: Task | null = null;
 
@@ -347,7 +370,7 @@ export async function moveTaskToParent(
       completedCount: task.completedCount ?? 0,
       completedAt: task.completedAt ?? null,
       tags: task.tags ?? [],
-      sortOrder,
+      sortOrder: await nextChildSortOrder(newParentId),
       updatedAt,
     });
 

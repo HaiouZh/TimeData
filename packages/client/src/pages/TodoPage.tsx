@@ -287,7 +287,7 @@ export function TodoPage() {
           break;
         }
         case "move-to-parent": {
-          await moveTaskToParent(activeId, op.parentId, 0);
+          await moveTaskToParent(activeId, op.parentId);
           setRevealChildren((prev) => ({ id: op.parentId, nonce: (prev?.nonce ?? 0) + 1 }));
           syncAfterWrite();
           break;

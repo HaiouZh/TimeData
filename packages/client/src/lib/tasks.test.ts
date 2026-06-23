@@ -238,7 +238,7 @@ describe("independent child task helpers", () => {
       updatedAt: "2026-06-19T10:00:00.000Z",
     });
 
-    await moveTaskToParent(child.id, parent.id, 0, new Date("2026-06-19T10:30:00.000Z"));
+    await moveTaskToParent(child.id, parent.id, new Date("2026-06-19T10:30:00.000Z"));
     const todayNow = new Date("2026-06-20T11:00:00.000Z");
     const today = await promoteToRoot(child.id, "today", 3, todayNow);
     expect(today.parentId).toBeNull();
@@ -251,8 +251,8 @@ describe("independent child task helpers", () => {
     const otherRoot = await addTask({ title: "另一个父任务", now: new Date("2026-06-19T08:01:00.000Z") });
     const child = await createChildTask(parent.id, "子任务", new Date("2026-06-19T09:00:00.000Z"));
 
-    await expect(moveTaskToParent(otherRoot.id, child.id, 0)).rejects.toThrow("CANNOT_NEST_BEYOND_ONE_LEVEL");
-    await expect(moveTaskToParent(parent.id, otherRoot.id, 0)).rejects.toThrow("CANNOT_DEMOTE_ROOT_WITH_CHILDREN");
+    await expect(moveTaskToParent(otherRoot.id, child.id)).rejects.toThrow("CANNOT_NEST_BEYOND_ONE_LEVEL");
+    await expect(moveTaskToParent(parent.id, otherRoot.id)).rejects.toThrow("CANNOT_DEMOTE_ROOT_WITH_CHILDREN");
 
     await db.tasks.update(child.id, {
       recurrence: { freq: "weekly", interval: 1, byWeekday: [1], basis: "due" },
@@ -264,10 +264,11 @@ describe("independent child task helpers", () => {
       completedAt: "2026-06-19T09:45:00.000Z",
     } satisfies Partial<Task>);
 
-    const moved = await moveTaskToParent(child.id, otherRoot.id, 5, new Date("2026-06-19T10:00:00.000Z"));
+    const moved = await moveTaskToParent(child.id, otherRoot.id, new Date("2026-06-19T10:00:00.000Z"));
     expect(moved).toMatchObject({
       parentId: otherRoot.id,
-      sortOrder: 5,
+      sortOrder: 0, // otherRoot 原本无 child，追加到末尾即槽位 0
+
       recurrence: { freq: "weekly", byWeekday: [1] },
       scheduledAt: "2026-06-22T00:00:00.000Z",
       lastDoneAt: "2026-06-15T00:00:00.000Z",
@@ -276,6 +277,21 @@ describe("independent child task helpers", () => {
       tags: ["keep"],
       completedAt: "2026-06-19T09:45:00.000Z",
     });
+  });
+
+  it("moveTaskToParent 追加到目标父现有 children 末尾、不撞值", async () => {
+    const t0 = new Date("2026-06-19T08:00:00.000Z");
+    const parent = await addTask({ title: "父", now: t0 });
+    await createChildTask(parent.id, "已有1", t0); // sortOrder 0
+    await createChildTask(parent.id, "已有2", t0); // sortOrder 1
+    const root = await addTask({ title: "待降级", now: t0 });
+
+    const moved = await moveTaskToParent(root.id, parent.id, t0);
+
+    expect(moved.parentId).toBe(parent.id);
+    expect(moved.sortOrder).toBe(2); // 追加到末尾，与现有 0/1 不撞值
+    const children = await db.tasks.where("parentId").equals(parent.id).sortBy("sortOrder");
+    expect(children.map((c) => c.sortOrder)).toEqual([0, 1, 2]);
   });
 
   it("deleteTaskCascade deletes a parent and direct children with sync logs", async () => {
@@ -604,5 +620,29 @@ describe("reorderChildren", () => {
 
     const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
     expect(logs.length).toBe(0);
+  });
+
+  it("子任务 sortOrder 撞同值（历史脏数据/跨端同步）也能重排并自愈", async () => {
+    const t0 = new Date("2026-06-14T08:00:00.000Z");
+    const parent = await addTask({ title: "父", now: t0 });
+    const a = await createChildTask(parent.id, "a", t0);
+    const b = await createChildTask(parent.id, "b", t0);
+    const c = await createChildTask(parent.id, "c", t0);
+    // 直接写库模拟历史脏数据：三条子任务 sortOrder 全撞 0（旧 moveTaskToParent 塞 0 或跨端同步撞值的产物）
+    await db.tasks.bulkUpdate([a, b, c].map((t) => ({ key: t.id, changes: { sortOrder: 0 } })));
+    await db.syncLog.clear();
+
+    // 初始 sortOrder 全 0：按 sortOrder 取出的次序由主键并列兜底，先读出再据此构造期望，避免依赖 uuid 顺序
+    const before = (await db.tasks.where("parentId").equals(parent.id).sortBy("sortOrder")).map((t) => t.id);
+    const [first, , last] = before;
+
+    // 把末位子任务拖到首位
+    await reorderChildren(parent.id, last, first);
+
+    const after = await db.tasks.where("parentId").equals(parent.id).sortBy("sortOrder");
+    // 末位被移到首位，其余保持原相对次序
+    expect(after.map((t) => t.id)).toEqual([last, ...before.filter((id) => id !== last)]);
+    // sortOrder 已被回填成连续 distinct 值（自愈撞值脏数据），否则下次还是拖不动
+    expect(after.map((t) => t.sortOrder)).toEqual([0, 1, 2]);
   });
 });
