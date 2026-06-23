@@ -1,7 +1,9 @@
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Icon } from "../components/Icon.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { memoOverview } from "../lib/insights/cache.ts";
@@ -143,18 +145,18 @@ export default function TimeStatsPage() {
   );
 
   return (
-    <div className="min-h-full space-y-4 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_34rem),linear-gradient(180deg,#020617_0%,#0f172a_46%,#020617_100%)] px-3.5 pb-6 pt-4 text-slate-100 sm:px-6">
-      <header className="rounded-[1.6rem] border border-slate-700/70 bg-slate-950/80 p-4 shadow-[0_22px_60px_rgba(2,6,23,0.42)] ring-1 ring-white/[0.04]">
+    <div className="min-h-full space-y-4 bg-page px-3.5 pb-6 pt-4 text-ink sm:px-6">
+      <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-sky-300/80">TimeData</div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-normal text-white">时间统计</h2>
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-mod-time">TimeData</div>
+            <h2 className="mt-1 text-2xl font-semibold tracking-normal text-ink">时间统计</h2>
           </div>
           {!atLatest && (
             <button
               type="button"
               onClick={() => setAnchor(today)}
-              className="min-h-11 rounded-full border border-sky-400/20 bg-sky-400/10 px-4 text-sm font-medium text-sky-100"
+              className="min-h-11 rounded-pill border border-accent bg-accent-soft px-4 text-sm font-medium text-accent"
             >
               回到今天
             </button>
@@ -162,8 +164,8 @@ export default function TimeStatsPage() {
         </div>
       </header>
 
-      <header className="rounded-[1.6rem] border border-slate-700/70 bg-slate-950/80 p-4 shadow-[0_22px_60px_rgba(2,6,23,0.42)] ring-1 ring-white/[0.04]">
-        <div className="grid grid-cols-3 gap-1 rounded-2xl border border-slate-800 bg-slate-950 p-1">
+      <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
+        <div className="grid grid-cols-3 gap-1 rounded-pill border border-border bg-surface-elevated p-1">
           {(["day", "week", "month"] as ViewMode[]).map((m) => (
             <button
               key={m}
@@ -171,7 +173,7 @@ export default function TimeStatsPage() {
               onClick={() => setMode(m)}
               aria-pressed={mode === m}
               className={`min-h-11 rounded-xl text-sm font-medium transition ${
-                mode === m ? "bg-sky-500 text-white shadow-lg shadow-sky-950/40" : "text-slate-400"
+                mode === m ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
               }`}
             >
               {{ day: "日", week: "周", month: "月" }[m]}
@@ -184,12 +186,12 @@ export default function TimeStatsPage() {
             type="button"
             aria-label={`上一${periodUnit}`}
             onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
-            className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200"
+            className="grid size-11 shrink-0 place-items-center rounded-pill border border-border bg-surface-elevated text-ink-2 hover:text-ink disabled:opacity-35"
           >
-            ←
+            <Icon icon={CaretLeft} size={18} />
           </button>
-          <label className="min-w-0 flex-1 rounded-2xl border border-slate-800 bg-slate-900/80 px-3 py-2">
-            <span className="block truncate text-sm font-medium text-slate-100">{rangeLabel}</span>
+          <label className="min-w-0 flex-1 rounded-row border border-border bg-surface-elevated px-3 py-2">
+            <span className="block truncate text-sm font-medium text-ink">{rangeLabel}</span>
             <input
               type="date"
               value={statsRange.fromDate}
@@ -197,7 +199,7 @@ export default function TimeStatsPage() {
               onChange={(event) => {
                 if (event.target.value) setAnchor(event.target.value);
               }}
-              className="mt-1 w-full bg-transparent text-sm text-slate-400 outline-none"
+              className="mt-1 w-full bg-transparent text-sm text-ink-2 outline-none [color-scheme:dark]"
             />
           </label>
           <button
@@ -205,26 +207,26 @@ export default function TimeStatsPage() {
             aria-label={`下一${periodUnit}`}
             disabled={atLatest}
             onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
-            className="grid size-11 shrink-0 place-items-center rounded-full border border-slate-700 bg-slate-900 text-lg text-slate-200 disabled:opacity-35"
+            className="grid size-11 shrink-0 place-items-center rounded-pill border border-border bg-surface-elevated text-ink-2 hover:text-ink disabled:opacity-35"
           >
-            →
+            <Icon icon={CaretRight} size={18} />
           </button>
         </div>
 
-        <div className="mt-4 rounded-3xl border border-sky-400/20 bg-sky-400/10 px-4 py-3">
-          <div className="text-xs font-medium text-sky-200/80">已记录</div>
+        <div className="mt-4 rounded-card border border-border bg-surface-elevated px-4 py-3">
+          <div className="text-xs font-medium text-mod-time">已记录</div>
           <div className="mt-1 flex items-end gap-2">
-            <span className="text-4xl font-semibold leading-none text-white">{totalHours.toFixed(1)}</span>
-            <span className="pb-1 text-sm text-slate-300">小时</span>
+            <span className="text-4xl font-semibold leading-none text-ink">{totalHours.toFixed(1)}</span>
+            <span className="pb-1 text-sm text-ink-2">小时</span>
           </div>
-          {rangeClampedToToday && <div className="mt-2 text-xs text-slate-400">截至 {effectiveRange.toDate}</div>}
+          {rangeClampedToToday && <div className="mt-2 text-xs text-ink-3">截至 {effectiveRange.toDate}</div>}
         </div>
       </header>
 
       {layout.visibleModulesInOrder.length === 0 ? (
-        <div className="rounded-[1.35rem] border border-dashed border-slate-700 bg-slate-950/60 p-8 text-center text-sm text-slate-400">
+        <div className="rounded-card border border-dashed border-border bg-surface p-8 text-center text-sm text-ink-3">
           所有统计模块已隐藏。
-          <Link to="/settings/stats-layout" className="ml-1 text-sky-300 underline">
+          <Link to="/settings/stats-layout" className="ml-1 text-accent underline">
             去设置启用
           </Link>
         </div>

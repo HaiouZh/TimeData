@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-23
 ---
 
 # 统计与洞察
@@ -47,6 +47,7 @@ last-reviewed: 2026-06-18
 - 取数优化：若 `needBaseline && periodWithinBaseline` → `entries = baselineEntries` 按周期裁剪；否则 `periodFallback` 独立查周期区间。
 - **`memoOverview` 在头部“已记录”处总是算一次**（即使 overview 隐藏，用于头部总时长复用缓存）；其余 4 模块的 memo 仅在组件内调用，隐藏则不算。
 - `moduleContext`（`StatsModuleProps`）打包 mode/today/effectiveRange/baselineFrom/entries/baselineEntries/categories/parentCategories/parentNameById/sleepCategoryId；内容区按 `layout.visibleModulesInOrder` 映射 `STATS_MODULES[id].component`，全隐藏显示空态 + 跳转设置。
+- `TimeStatsPage` 页面壳、周期切换、日期导航、总时长卡片和空态消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent/mod-time` token；不使用页面级渐变或 `sky-*` 展示型 chrome。周期导航图标经 Phosphor `Icon` 包装，按钮语义仍由 `aria-label` 承载。
 
 ### 1.3 STATS_MODULES 注册表（`pages/stats/modules/statsModules.ts`）
 
