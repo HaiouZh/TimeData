@@ -24,7 +24,7 @@ export function GoalGraphToolbar({
   onOpenGoalMenu,
 }: GoalGraphToolbarProps) {
   return (
-    <div className="inline-flex max-w-full items-center gap-2 rounded-pill border border-border bg-surface-elevated px-2 py-1 text-ink shadow-elev1">
+    <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 rounded-pill border border-border bg-surface-elevated px-2 py-1 text-ink shadow-elev1">
       <span className="whitespace-nowrap px-1 text-xs text-ink-2">
         {summary.ready} 能推 · {summary.blocked} 等前置 · {summary.completed} 完成
       </span>

@@ -159,6 +159,33 @@ describe("GoalGraphEditor", () => {
     expect(buttonByLabel(host, "添加成员")).toBeInstanceOf(HTMLButtonElement);
   });
 
+  it("React Flow 画布填满编辑器容器", async () => {
+    const goalValue = goal();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue });
+    const canvasFrame = host.querySelector("[data-goal-graph-canvas]");
+    const flowCanvas = host.querySelector('[data-rf="true"]');
+
+    expect(canvasFrame).toBeInstanceOf(HTMLElement);
+    expect(canvasFrame?.className).toContain("absolute");
+    expect(canvasFrame?.className).toContain("inset-0");
+    expect(flowCanvas).toBeInstanceOf(HTMLElement);
+    expect(canvasFrame).toContain(flowCanvas);
+  });
+
+  it("工具栏在画布浮层上保持可点击", async () => {
+    const goalValue = goal();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue });
+    const addMemberButton = buttonByLabel(host, "添加成员");
+    const toolbarOverlay = addMemberButton.closest(".pointer-events-none");
+
+    expect(toolbarOverlay).toBeInstanceOf(HTMLElement);
+    expect(toolbarOverlay?.querySelector(".pointer-events-auto")).toContain(addMemberButton);
+  });
+
   it("点节点只选中，打开动作才导航到任务深链", async () => {
     const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
     const taskValue = task("task-1", { title: "写说明" });

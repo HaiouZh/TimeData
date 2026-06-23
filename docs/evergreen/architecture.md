@@ -14,7 +14,7 @@ covers:
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
   - packages/mobile/android/app/src/main/AndroidManifest.xml
-last-reviewed: 2026-06-22
+last-reviewed: 2026-06-23
 ---
 
 # 架构总览
@@ -47,7 +47,7 @@ mobile   Capacitor Android 壳，webDir 指向 client/dist
 
 依赖方向单向：`client` / `server` / `cli` 都依赖 `shared`，彼此不 import。它们靠 HTTP API、同步账本和共享类型契约协作。`mobile` 不写业务逻辑，只包装前端构建产物与原生配置。
 
-根 `package.json` 只做 workspace 脚本编排；本地命令细节见 [development](development.md)，CI 顺序见 [deployment](deployment.md)。
+根 `package.json` 只做 workspace 脚本编排：构建先产出 `shared`，再并行跑 client/server/cli；测试允许 package 间有限并行并在最后串起根目录脚本测试。本地命令细节见 [development](development.md)，CI 顺序见 [deployment](deployment.md)。
 
 ## 3. 总体数据流
 

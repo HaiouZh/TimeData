@@ -315,22 +315,24 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
 
   return (
     <div className="relative min-h-[70vh] overflow-hidden rounded-card border border-border bg-page">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        defaultViewport={loadGoalGraphViewport(goal.id) ?? undefined}
-        nodesDraggable={false}
-        onNodeClick={onNodeClick}
-        onEdgeClick={onEdgeClick}
-        onPaneClick={clearSelection}
-        onConnect={(connection) => void handleConnect(connection)}
-        onMoveEnd={handleMoveEnd}
-        className="[&_.react-flow__node]:transition-transform motion-reduce:[&_.react-flow__node]:transition-none"
-      >
-        <Background />
-      </ReactFlow>
+      <div data-goal-graph-canvas className="absolute inset-0">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          defaultViewport={loadGoalGraphViewport(goal.id) ?? undefined}
+          nodesDraggable={false}
+          onNodeClick={onNodeClick}
+          onEdgeClick={onEdgeClick}
+          onPaneClick={clearSelection}
+          onConnect={(connection) => void handleConnect(connection)}
+          onMoveEnd={handleMoveEnd}
+          className="h-full w-full [&_.react-flow__node]:transition-transform motion-reduce:[&_.react-flow__node]:transition-none"
+        >
+          <Background />
+        </ReactFlow>
+      </div>
 
       <div className="pointer-events-none absolute left-3 top-3 z-10">
         <GoalGraphToolbar
