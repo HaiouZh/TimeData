@@ -3,6 +3,7 @@ type: evergreen
 title: 设置 · 同步键值表
 covers:
   - packages/client/src/lib/settings/index.ts
+  - packages/client/src/lib/settings/desktopSidebarSetting.ts
   - packages/client/src/lib/settings/navVisibleTabsSetting.ts
   - packages/client/src/lib/settings/punchCategorySetting.ts
   - packages/client/src/lib/sleepCategorySetting.ts
@@ -37,7 +38,8 @@ last-reviewed: 2026-06-23
 |---|---|---|---|
 | `sleep.categoryId` | 顶层分类 ID 或 null | `lib/sleepCategorySetting.ts` | [stats-insights](../stats-insights.md)（睡眠口径） |
 | `punch.categoryId.v1` | 子分类 ID 或 null（须未归档子分类） | `lib/settings/punchCategorySetting.ts` | [timeline](../timeline.md)（打点） |
-| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/,/todo,/tracks,/goals,/stats/time,/stats/health]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 底部导航 |
+| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/,/todo,/tracks,/goals,/stats/time,/stats/health]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 底部导航可见入口 |
+| `nav.desktopSidebar.v1` | JSON `{items:{to,placement}[]}`；`to` ⊆ 主导航 route，`placement=primary\|more`；缺失/坏值按 registry 默认补齐 | `lib/settings/desktopSidebarSetting.ts` | 宽屏桌面侧栏排序与更多收纳 |
 | `health.range.presets` | 逗号串 `7,30,90,180,365,all` | `lib/settings/healthRangeSetting.ts`（covers 归 [health/charts](../health/charts.md)） | [health](../health.md) |
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
@@ -46,7 +48,7 @@ last-reviewed: 2026-06-23
 
 旧 `track.actionTags.v1` 只作为影子读取来源；新写入继续使用 `track.actionTags.v2`。早期 v2 的 `court` 字段不再作为产品语义消费。
 
-> 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 三个本域归属的包装：`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（health-range / stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
+> 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 四个本域归属的包装：`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（health-range / stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
 
 ## 3. 关键不变量 / 坑 / 红线
 
@@ -54,20 +56,22 @@ last-reviewed: 2026-06-23
 2. **`punch.categoryId.v1` 要求有效未归档子分类**：未配置或分类失效时打点不写 `time_entries`（动作在 [timeline](../timeline.md)）。
 3. **`sleep.categoryId` 当前 UI 只允许选一级分类**：只定义统计睡眠口径（[stats-insights](../stats-insights.md) 消费）。
 4. **`nav.visibleTabs.v1` 旧值归一化**：读取时 `/stats` → `/stats/time`，`/settings` 固定保留。
-5. **LWW 后写赢**：settings 无 manual 冲突，跨设备后写覆盖；改设置语义时注意多设备并发覆盖。
+5. **桌面与移动导航配置解耦**：`nav.visibleTabs.v1` 只控制窄屏 / APK 底部导航可见入口；`nav.desktopSidebar.v1` 只控制宽屏左侧侧栏排序和更多收纳，二者互不迁移。
+6. **LWW 后写赢**：settings 无 manual 冲突，跨设备后写覆盖；改设置语义时注意多设备并发覆盖。
 
 ## 4. 模块速查
 
 | 入口 | 职责 |
 |---|---|
 | `lib/settings/index.ts` | `getSetting`/`setSetting`/`useSetting` + syncLog 同事务 |
+| `lib/settings/desktopSidebarSetting.ts` | 桌面侧栏排序 + 更多收纳设置 + sanitize |
 | `lib/settings/navVisibleTabsSetting.ts` | 底部导航可见入口设置 + sanitize |
 | `lib/settings/punchCategorySetting.ts` | 打点分类 ID 设置（`punch.categoryId.v1`） |
 | `lib/sleepCategorySetting.ts` | 睡眠分类 ID 设置（`sleep.categoryId`，旧路径在 `lib/`） |
-| `pages/settings/SettingsNavPage.tsx` | 底部导航开关页 |
+| `pages/settings/SettingsNavPage.tsx` | 移动底栏开关 + 桌面侧栏排序/收纳页 |
 
-**测试**：`lib/settings/{index,navVisibleTabsSetting,punchCategorySetting}.test.ts`、`lib/sleepCategorySetting.test.ts`、`pages/settings/SettingsNavPage.test.tsx`。
+**测试**：`lib/settings/{desktopSidebarSetting,index,navVisibleTabsSetting,punchCategorySetting}.test.ts`、`lib/sleepCategorySetting.test.ts`、`pages/settings/SettingsNavPage.test.tsx`。
 
 ## 深水细节
 
-- **`SettingsInsightsPage` 是跨域宿主页**（待办默认落点 / 打点分类 / 睡眠分类都在它里编辑），其页面 covers 归 [stats-insights](../stats-insights.md)；本子文档只拥有 `punchCategorySetting`/`sleepCategorySetting`/`navVisibleTabsSetting` 数据层。
+- **`SettingsInsightsPage` 是跨域宿主页**（待办默认落点 / 打点分类 / 睡眠分类都在它里编辑），其页面 covers 归 [stats-insights](../stats-insights.md)；本子文档只拥有 `desktopSidebarSetting`/`navVisibleTabsSetting`/`punchCategorySetting`/`sleepCategorySetting` 数据层。

@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-import { act, createElement, type ReactElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
 import { BottomNavProvider, useBottomNav } from "./contexts/BottomNavContext.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { click, renderDom, unmount } from "./test/domHarness.js";
 
 vi.mock("./hooks/useAppResumeRefresh.ts", () => ({ useAppResumeRefresh: () => {} }));
 vi.mock("./components/AppUpdatePrompt.tsx", () => ({ default: () => null }));
@@ -27,23 +25,25 @@ function HideToggle() {
   return createElement("button", { type: "button", "data-testid": "toggle", onClick: () => setHidden(true) }, "hide");
 }
 
-async function render(element: ReactElement): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(element);
-  });
-  return { host, root };
-}
-
 beforeEach(() => {
   document.body.innerHTML = "";
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: false,
+      media: "(min-width: 1024px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 });
 
 describe("AppShell bottom nav hide", () => {
   it("collapses the nav height when hidden so the content area reclaims the space", async () => {
-    const { host, root } = await render(
+    const { host, root } = await renderDom(
       createElement(
         MemoryRouter,
         { initialEntries: ["/"] },
@@ -51,20 +51,18 @@ describe("AppShell bottom nav hide", () => {
       ),
     );
 
-    const nav = host.querySelector("nav");
+    const nav = host.querySelector('nav[aria-label="主导航"]');
     expect(nav).toBeInstanceOf(HTMLElement);
     // 显示态：占据固定高度
     expect((nav as HTMLElement).style.height).toBe("49px");
     // 用 transform 隐藏不会释放 flex 占位，必须靠塌缩高度
     expect((nav as HTMLElement).className).not.toContain("translate-y");
 
-    await act(async () => {
-      (host.querySelector('[data-testid="toggle"]') as HTMLButtonElement).click();
-    });
+    await click(host.querySelector('[data-testid="toggle"]'));
 
     // 隐藏态：高度塌缩为 0 → 同列的 <main>（flex-1）补上这段空间
-    expect((host.querySelector("nav") as HTMLElement).style.height).toBe("0px");
+    expect((host.querySelector('nav[aria-label="主导航"]') as HTMLElement).style.height).toBe("0px");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

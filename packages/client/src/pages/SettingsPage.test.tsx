@@ -147,7 +147,8 @@ describe("SettingsPage", () => {
     expect(html).toContain("数据设置");
     expect(html).toContain("数据洞察");
     expect(html).toContain("统计页面布局");
-    expect(html).toContain("底部导航");
+    expect(html).toContain("导航");
+    expect(html).toContain("配置移动底栏与桌面侧栏");
     expect(html).toContain('href="/settings/insights"');
     expect(html).toContain('href="/settings/stats-layout"');
     expect(html).toContain('href="/settings/nav"');

@@ -407,8 +407,8 @@ export default function SettingsPage() {
           to="/settings/nav"
           icon={<Icon icon={DeviceMobile} size={20} />}
           accent="settings"
-          title="底部导航"
-          subtitle="选择底部显示的入口"
+          title="导航"
+          subtitle="配置移动底栏与桌面侧栏"
         />
         <SettingsLinkRow
           to="/settings/tracks"

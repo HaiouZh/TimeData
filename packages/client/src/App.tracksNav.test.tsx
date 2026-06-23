@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
 import { BottomNavProvider } from "./contexts/BottomNavContext.js";
 import { renderDom, unmount } from "./test/domHarness.js";
@@ -17,6 +17,21 @@ vi.mock("./lib/settings/navVisibleTabsSetting.ts", async (importOriginal) => {
   return { ...actual, useVisibleTabs: () => [...actual.CONFIGURABLE_TABS] };
 });
 
+function installMobileMatchMedia() {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: false,
+      media: "(min-width: 1024px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 async function render(initial: string) {
   return renderDom(
     createElement(
@@ -27,12 +42,16 @@ async function render(initial: string) {
   );
 }
 
+beforeEach(() => {
+  installMobileMatchMedia();
+});
+
 describe("AppShell tracks nav", () => {
-  it("shows a 轨道 tab linking to /tracks", async () => {
+  it("shows a pure-icon 轨道 tab linking to /tracks", async () => {
     const { host, root } = await render("/");
-    const link = host.querySelector('nav a[href="/tracks"]');
+    const link = host.querySelector('nav a[href="/tracks"][aria-label="轨道"]');
     expect(link).not.toBeNull();
-    expect(link?.textContent).toBe("轨道");
+    expect(link?.textContent?.trim()).toBe("");
     await unmount(root);
   });
 

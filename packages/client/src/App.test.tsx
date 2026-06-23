@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
 import { BottomNavProvider } from "./contexts/BottomNavContext.js";
 
@@ -83,6 +83,26 @@ function renderAppShell(initialEntry: string) {
   );
 }
 
+function installMobileMatchMedia() {
+  if (typeof window === "undefined") return;
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn(() => ({
+      matches: false,
+      media: "(min-width: 1024px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
+beforeEach(() => {
+  installMobileMatchMedia();
+});
+
 describe("AppShell settings routes", () => {
   it("renders settings data route without bottom navigation", () => {
     const html = renderAppShell("/settings/data");
@@ -134,16 +154,18 @@ describe("AppShell settings routes", () => {
     expect(entryHtml).toContain("记录页面 0");
   });
 
-  it("renders quick notes route and bottom navigation entry", () => {
+  it("renders quick notes route and pure-icon bottom navigation entries", () => {
     const html = renderAppShell("/quick-notes");
 
     expect(html).toContain("速记页面");
-    expect(html).toContain("记录");
-    expect(html).toContain("时间轴");
-    expect(html).toContain("待办");
-    expect(html).toContain("时间");
-    expect(html).toContain("健康");
-    expect(html).toContain("设置");
+    expect(html).toContain('aria-label="记录"');
+    expect(html).toContain('aria-label="时间轴"');
+    expect(html).toContain('aria-label="待办"');
+    expect(html).toContain('aria-label="时间统计"');
+    expect(html).toContain('aria-label="健康统计"');
+    expect(html).toContain('aria-label="设置"');
+    expect(html).not.toContain(">记录</a>");
+    expect(html).not.toContain(">时间轴</a>");
   });
 
   it("renders todo route and bottom navigation entry", () => {

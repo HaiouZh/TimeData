@@ -1,117 +1,40 @@
 import { useState } from "react";
-import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
+import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
+import { DesktopSidebar } from "./components/app-shell/DesktopSidebar.tsx";
+import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
-import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "./contexts/BottomNavContext.tsx";
+import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
-import { useVisibleTabs } from "./lib/settings/navVisibleTabsSetting.ts";
-import EntryPage from "./pages/EntryPage.tsx";
-import QuickNotesPage from "./pages/QuickNotesPage.tsx";
-import HealthStatsPage from "./pages/HealthStatsPage.tsx";
-import SettingsPage from "./pages/SettingsPage.tsx";
-import StatsPage from "./pages/StatsPage.tsx";
-import TimeStatsPage from "./pages/TimeStatsPage.tsx";
-import { TodoPage } from "./pages/TodoPage.tsx";
-import GoalDetailPage from "./pages/goals/GoalDetailPage.tsx";
-import GoalsListPage from "./pages/goals/GoalsListPage.tsx";
-import TrackDetailPage from "./pages/tracks/TrackDetailPage.tsx";
-import TracksListPage from "./pages/tracks/TracksListPage.tsx";
-import BackupHistoryPage from "./pages/settings/BackupHistoryPage.tsx";
-import SettingsAdminInsightsPage from "./pages/settings/SettingsAdminInsightsPage.tsx";
-import SettingsCategoriesPage from "./pages/settings/SettingsCategoriesPage.tsx";
-import SettingsCategoryDetailPage from "./pages/settings/SettingsCategoryDetailPage.tsx";
-import SettingsDataPage from "./pages/settings/SettingsDataPage.tsx";
-import SettingsHealthRangePage from "./pages/settings/SettingsHealthRangePage.tsx";
-import SettingsInsightsPage from "./pages/settings/SettingsInsightsPage.tsx";
-import { SettingsNavPage } from "./pages/settings/SettingsNavPage.tsx";
-import SettingsServerPage from "./pages/settings/SettingsServerPage.tsx";
-import SettingsStatsLayoutPage from "./pages/settings/SettingsStatsLayoutPage.tsx";
-import { SettingsTracksPage } from "./pages/settings/SettingsTracksPage.tsx";
-import SettingsGarminPage from "./pages/settings/SettingsGarminPage.tsx";
-import TimelinePage from "./pages/TimelinePage.tsx";
-
-const TAB_LABELS: Record<string, string> = {
-  "/quick-notes": "记录",
-  "/": "时间轴",
-  "/todo": "待办",
-  "/tracks": "轨道",
-  "/goals": "目标",
-  "/stats/time": "时间",
-  "/stats/health": "健康",
-  "/settings": "设置",
-};
+import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
 
 export function AppShell() {
   const location = useLocation();
   const [resumeRefreshKey, setResumeRefreshKey] = useState(0);
-  const { hidden } = useBottomNav();
-  const visibleTabs = useVisibleTabs();
+  const isWideScreen = useIsWideScreen();
   const onMainScroll = useHideBottomNavOnScroll();
   const hidesBottomNav =
     location.pathname.startsWith("/entries/") ||
     location.pathname.startsWith("/settings/") ||
     location.pathname.startsWith("/goals/") ||
     location.pathname.startsWith("/tracks/");
-  const navItems = [...visibleTabs, "/settings"].map((to) => ({ to, label: TAB_LABELS[to] }));
 
   useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
 
   return (
-    <div className="flex h-dvh flex-col bg-page text-ink">
+    <div className="flex h-dvh bg-page text-ink">
       <AndroidBackButtonHandler />
-      <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={onMainScroll}>
-        <Routes>
-          <Route path="/" element={<TimelinePage refreshKey={resumeRefreshKey} />} />
-          <Route path="/quick-notes" element={<QuickNotesPage />} />
-          <Route path="/todo" element={<TodoPage />} />
-          <Route path="/tracks" element={<TracksListPage />} />
-          <Route path="/goals" element={<GoalsListPage />} />
-          <Route path="/goals/:id" element={<GoalDetailPage />} />
-          <Route path="/tracks/:id" element={<TrackDetailPage />} />
-          <Route path="/entries/new" element={<EntryPage refreshKey={resumeRefreshKey} />} />
-          <Route path="/entries/:id/edit" element={<EntryPage refreshKey={resumeRefreshKey} />} />
-          <Route path="/stats" element={<StatsPage />} />
-          <Route path="/stats/time" element={<TimeStatsPage />} />
-          <Route path="/stats/health" element={<HealthStatsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/categories" element={<SettingsCategoriesPage />} />
-          <Route path="/settings/categories/:id" element={<SettingsCategoryDetailPage />} />
-          <Route path="/settings/server" element={<SettingsServerPage />} />
-          <Route path="/settings/nav" element={<SettingsNavPage />} />
-          <Route path="/settings/tracks" element={<SettingsTracksPage />} />
-          <Route path="/settings/insights" element={<SettingsInsightsPage />} />
-          <Route path="/settings/health-range" element={<SettingsHealthRangePage />} />
-          <Route path="/settings/stats-layout" element={<SettingsStatsLayoutPage />} />
-          <Route path="/settings/data" element={<SettingsDataPage />} />
-          <Route path="/settings/data/backup-history" element={<BackupHistoryPage />} />
-          <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
-          <Route path="/settings/garmin" element={<SettingsGarminPage />} />
-        </Routes>
-      </main>
-      {!hidesBottomNav && (
-        <nav
-          className={`flex shrink-0 overflow-hidden bg-surface transition-[height] duration-200 ${
-            hidden ? "" : "border-t border-border"
-          }`}
-          style={{ height: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
-        >
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                `flex-1 py-3 text-center text-sm ${isActive ? "text-accent" : "text-ink-3"}`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-      )}
+      {isWideScreen && <DesktopSidebar />}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
+          <AppRoutes refreshKey={resumeRefreshKey} />
+        </main>
+        {!isWideScreen && !hidesBottomNav && <MobileBottomNav />}
+      </div>
       <AppUpdatePrompt />
     </div>
   );
