@@ -709,6 +709,16 @@ describe("QuickNotesPage", () => {
 
     await act(async () => root.unmount());
   });
+
+  it("keeps quick note toolbar actions accessible after icon migration", async () => {
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector('[aria-label="打点（记录到现在）"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="搜索速记"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="更多操作"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
 });
 
 describe("捕捉中心", () => {

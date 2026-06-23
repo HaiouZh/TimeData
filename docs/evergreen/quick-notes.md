@@ -72,7 +72,7 @@ last-reviewed: 2026-06-23
 
 ### 1.4 捕捉中心角色
 
-速记页兼「捕捉中心」：composer「待办」把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）；header ⏱「打点」建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**两者只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。反馈内嵌在底部 composer，不作浮层。
+速记页兼「捕捉中心」：composer「待办」把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）；header「打点」建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**两者只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。
 
 ## 2. Schema / 契约（字段级）
 

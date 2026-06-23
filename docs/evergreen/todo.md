@@ -170,11 +170,13 @@ agent / CLI (task-done/task-tag)
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩，不保留旧 swipe 宽度）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不再各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（`deleteTaskCascade`）、重复预设 overlay；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件，显示「作为子任务」提示 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 上回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录；子任务标题 textarea 按内容与宽度变化自动增高、不保留内部滚动条）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
-| `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按底部 composer 实测 inset 上移避让）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时随 `useBottomNav().hidden` `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠 |
+| `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按底部 composer 实测 inset 上移避让）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时随 `useBottomNav().hidden` `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠；折叠 caret 等交互图标经 Phosphor `Icon` 包装 |
 | `lib/tasks.ts` | 核心 CRUD + `listTasks`（顶部过滤 `parentId!==null`）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对 child 走非重复路径、对 root 取 reset-前 children 委托 `completeTask`，同事务写 occurrence + occurrence/template children + 模板 |
 | `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / tag 聚合(allTags)/三轴过滤(filterTasks)/取色(tagColor) / `subtaskProgress`（m/n 进度比例，children 数量喂入） |
 | `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |
 | 重复规则 | → [todo/recurrence](todo/recurrence.md) |
+
+Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾选等交互图标只改变视觉 glyph，统一经 Phosphor `Icon` 包装；按钮语义继续由现有文本与 `aria-label`（如 `删除标签 ${tag}`）承载，不改变任务 schema、同步或 recurrence 语义。
 
 > 跨包：完成纯计算 `shared/src/taskCompletion.ts`（`completeTask`，client `toggleTaskDone`、server agent `done=true`、CLI `task-done` 共用）+ 日期助手 `shared/src/taskDates.ts`（`localDateOf`/`normalizeScheduledDate`）；重复引擎 `shared/src/recurrence.ts` 见 [recurrence](todo/recurrence.md)。
 

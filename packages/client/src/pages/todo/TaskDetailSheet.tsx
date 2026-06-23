@@ -1,5 +1,5 @@
 import type { Recurrence, Task } from "@timedata/shared";
-import { Trash } from "@phosphor-icons/react";
+import { Trash, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
@@ -324,7 +324,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
                         onClick={() => removeTag(tag)}
                         className="text-ink-3 hover:text-danger"
                       >
-                        ✕
+                        <Icon icon={X} size={12} />
                       </button>
                     </span>
                   ))}

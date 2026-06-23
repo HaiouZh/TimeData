@@ -1,5 +1,7 @@
+import { Plus } from "@phosphor-icons/react";
 import type { TimeSlot as TimeSlotType } from "../lib/time.ts";
 import { formatDuration, formatTimelineTimeRange } from "../lib/time.ts";
+import { Icon } from "./Icon.js";
 
 interface TimeSlotProps {
   slot: TimeSlotType;
@@ -22,7 +24,10 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick }:
         >
           <span className="font-mono text-xs text-slate-400">{timeRange}</span>
           <div className="flex items-center gap-1.5 text-slate-400 transition-colors group-hover:text-slate-200">
-            <span className="text-xs font-medium">＋ 补记这段</span>
+            <span className="inline-flex items-center gap-1 text-xs font-medium">
+              <Icon icon={Plus} size={14} />
+              <span>补记这段</span>
+            </span>
             <span className="text-xs">· {duration}</span>
           </div>
         </button>

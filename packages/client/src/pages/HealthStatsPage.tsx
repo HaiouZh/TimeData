@@ -1,6 +1,8 @@
 import type { HealthChartConfig } from "@timedata/shared";
+import { Plus } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
+import { Icon } from "../components/Icon.js";
 import { db } from "../db/index.ts";
 import {
   deleteHealthChartBlock,
@@ -95,7 +97,7 @@ export default function HealthStatsPage() {
             onClick={handleAddChart}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xl leading-none text-slate-100 shadow-sm transition hover:border-slate-500 hover:bg-slate-800"
           >
-            ＋
+            <Icon icon={Plus} size={20} />
           </button>
         </div>
         <div className="health-range-selector" role="tablist" aria-label="健康范围">

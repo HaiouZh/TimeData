@@ -1,4 +1,6 @@
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { addDays, formatMonthDay, formatWeekday, getDateString } from "../lib/time.ts";
+import { Icon } from "./Icon.js";
 
 interface DateNavProps {
   date: string;
@@ -16,7 +18,7 @@ export default function DateNav({ date, onDateChange }: DateNavProps) {
   return (
     <div className="flex items-center justify-between bg-slate-900 px-2 py-2">
       <button onClick={() => onDateChange(addDays(date, -1))} className={arrowClass} aria-label="前一天">
-        ←
+        <Icon icon={CaretLeft} size={18} />
       </button>
       <div className="relative rounded-lg px-2 py-1 text-center focus-within:ring-2 focus-within:ring-blue-400">
         <span className="text-lg font-medium text-slate-100">{formatMonthDay(date)}</span>
@@ -44,7 +46,7 @@ export default function DateNav({ date, onDateChange }: DateNavProps) {
         />
       </div>
       <button onClick={() => onDateChange(addDays(date, 1))} className={arrowClass} disabled={isToday} aria-label="后一天">
-        →
+        <Icon icon={CaretRight} size={18} />
       </button>
     </div>
   );

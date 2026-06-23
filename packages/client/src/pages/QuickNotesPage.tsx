@@ -1,4 +1,4 @@
-import { PushPin } from "@phosphor-icons/react";
+import { ArrowDown, Check, DotsThree, MagnifyingGlass, PushPin, Timer, X } from "@phosphor-icons/react";
 import type { QuickNote } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -773,9 +773,7 @@ export default function QuickNotesPage() {
           </div>
         ) : searchOpen ? (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <span aria-hidden className="text-slate-400">
-              🔍
-            </span>
+            <Icon icon={MagnifyingGlass} size={16} className="text-ink-3" />
             <input
               ref={searchInputRef}
               type="search"
@@ -802,7 +800,7 @@ export default function QuickNotesPage() {
               onClick={() => void handlePunch()}
               className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
             >
-              ⏱
+              <Icon icon={Timer} size={18} />
             </button>
             <div className="min-w-0 flex-1">
               {!timeline.atLatest && (
@@ -848,7 +846,7 @@ export default function QuickNotesPage() {
               onClick={openSearch}
               className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-base leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
             >
-              🔍
+              <Icon icon={MagnifyingGlass} size={16} />
             </button>
 
             <div className="relative shrink-0">
@@ -863,7 +861,7 @@ export default function QuickNotesPage() {
                 }}
                 className="flex size-9 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
               >
-                ⋯
+                <Icon icon={DotsThree} size={20} />
               </button>
               {actionsOpen && (
                 <>
@@ -1064,7 +1062,7 @@ export default function QuickNotesPage() {
                               : "border-slate-600 bg-slate-950/60 text-transparent"
                           }`}
                         >
-                          ✓
+                          <Icon icon={Check} size={14} />
                         </span>
                       )}
                       <NoteBubble note={note} pending={pending} />
@@ -1111,7 +1109,10 @@ export default function QuickNotesPage() {
           className="fixed right-4 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 shadow-lg shadow-slate-950/40 transition hover:border-emerald-500/45"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
-          ↓ 最新
+          <span className="inline-flex items-center gap-1">
+            <Icon icon={ArrowDown} size={14} />
+            <span>最新</span>
+          </span>
         </button>
       )}
 
@@ -1168,8 +1169,13 @@ export default function QuickNotesPage() {
             {editingId && (
               <div className="mb-2 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-100">
                 <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
-                <button type="button" aria-label="取消编辑" onClick={cancelEditing} className="ml-2 text-emerald-200/75">
-                  ✕
+                <button
+                  type="button"
+                  aria-label="取消编辑"
+                  onClick={cancelEditing}
+                  className="ml-2 inline-flex text-emerald-200/75"
+                >
+                  <Icon icon={X} size={16} />
                 </button>
               </div>
             )}

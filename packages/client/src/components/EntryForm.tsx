@@ -1,10 +1,12 @@
 import type { TimeEntry } from "@timedata/shared";
+import { ArrowDown, ArrowUp } from "@phosphor-icons/react";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useEffect, useState } from "react";
 import { useAdjacentEntriesForRange } from "../hooks/useEntries.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { resolveClockRangeAroundEndDate } from "../lib/time.ts";
 import CategoryPicker from "./CategoryPicker.tsx";
+import { Icon } from "./Icon.js";
 import TimeRangeWheelPicker, { type DateTimeValue } from "./TimeRangeWheelPicker.tsx";
 
 export type EntrySaveResult = { ok: true } | { ok: false; error: string };
@@ -138,7 +140,10 @@ export default function EntryForm({
                   onClick={handleMergeUp}
                   className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition-colors"
                 >
-                  ↑ 向上合并
+                  <span className="inline-flex items-center gap-1">
+                    <Icon icon={ArrowUp} size={14} />
+                    <span>向上合并</span>
+                  </span>
                 </button>
               )}
               {nextEntry && (
@@ -147,7 +152,10 @@ export default function EntryForm({
                   onClick={handleMergeDown}
                   className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition-colors"
                 >
-                  ↓ 向下合并
+                  <span className="inline-flex items-center gap-1">
+                    <Icon icon={ArrowDown} size={14} />
+                    <span>向下合并</span>
+                  </span>
                 </button>
               )}
             </div>

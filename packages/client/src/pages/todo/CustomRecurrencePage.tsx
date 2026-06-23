@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Recurrence } from "@timedata/shared";
+import { Check } from "@phosphor-icons/react";
+import { Icon } from "../../components/Icon.js";
 import MonthCalendar from "../../components/MonthCalendar.js";
 import Wheel from "../../components/Wheel.js";
 import {
@@ -216,7 +218,9 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
               }`}
             >
               <span>每月最后一天</span>
-              <span>{draft.monthEnd ? "✓" : ""}</span>
+              <span className="inline-flex h-5 w-5 items-center justify-center">
+                {draft.monthEnd ? <Icon icon={Check} size={16} /> : null}
+              </span>
             </button>
           </section>
         )}
