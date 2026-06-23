@@ -11,7 +11,16 @@ describe("goal rows", () => {
       kind: "project" as const,
       status: "active" as const,
       note: "结果定义",
-      prerequisites: [{ blocker: "task-1", blocked: "track-1" }],
+      members: [
+        { kind: "task" as const, id: "task-1" },
+        { kind: "track" as const, id: "track-1" },
+      ],
+      prerequisites: [
+        {
+          blocker: { kind: "task" as const, id: "task-1" },
+          blocked: { kind: "track" as const, id: "track-1" },
+        },
+      ],
       createdAt: now,
       updatedAt: "2026-06-22T02:00:00.000Z",
     };
@@ -20,6 +29,7 @@ describe("goal rows", () => {
 
     expect(row).toMatchObject({
       id: "goal-1",
+      members: JSON.stringify(goal.members),
       prerequisites: JSON.stringify(goal.prerequisites),
       created_at: goal.createdAt,
     });
@@ -35,6 +45,7 @@ describe("goal rows", () => {
         kind: "theme",
         status: "active",
         note: null,
+        members: null,
         prerequisites: null,
         created_at: now,
         updated_at: now,
@@ -44,6 +55,7 @@ describe("goal rows", () => {
       title: "长期身体",
       kind: "theme",
       status: "active",
+      members: [],
       prerequisites: [],
       createdAt: now,
       updatedAt: now,

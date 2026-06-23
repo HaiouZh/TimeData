@@ -11,11 +11,12 @@ covers:
   - packages/client/src/db/index.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/pages/HealthStatsPage.tsx
-last-reviewed: 2026-06-22
+last-reviewed: 2026-06-23
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
 <!-- 复核 2026-06-22（目标层 Phase 1）：新增 goals 域与 Dexie v10 触及共享登记簿 / db index covers；健康 6 域 schema、同步语义、备份角色均不变。 -->
+<!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及共享类型、db index 与 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 
 # 健康数据
 

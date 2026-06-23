@@ -25,6 +25,7 @@ describe("track schemas", () => {
       id: "track-1",
       title: "T1 数据地基",
       status: "active",
+      goalId: "goal-1",
       createdAt: ts,
       updatedAt: ts,
       [rejectedTaskLinksKey]: ["rejected"],
@@ -36,12 +37,12 @@ describe("track schemas", () => {
       title: "T1 数据地基",
       status: "active",
       refs: [],
-      goalId: null,
       createdAt: ts,
       updatedAt: ts,
     });
     expect(Object.hasOwn(parsed, rejectedTaskLinksKey)).toBe(false);
     expect(Object.hasOwn(parsed, rejectedJsonBlobKey)).toBe(false);
+    expect(Object.hasOwn(parsed, "goalId")).toBe(false);
   });
 
   it("TrackSchema allows summary and rejects done status", () => {

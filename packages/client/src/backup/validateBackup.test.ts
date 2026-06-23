@@ -47,7 +47,6 @@ function task(value: string | (Partial<Task> & Pick<Task, "id">)): Task {
   return {
     id: overrides.id,
     parentId: overrides.parentId ?? null,
-    goalId: overrides.goalId ?? null,
     title: overrides.title ?? overrides.id,
     done: overrides.done ?? false,
     recurrence: overrides.recurrence ?? null,
@@ -71,6 +70,7 @@ function goal(value: string | (Partial<Goal> & Pick<Goal, "id">)): Goal {
     kind: overrides.kind ?? "project",
     status: overrides.status ?? "active",
     note: overrides.note,
+    members: overrides.members ?? [],
     prerequisites: overrides.prerequisites ?? [],
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,

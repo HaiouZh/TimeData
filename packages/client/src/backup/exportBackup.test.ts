@@ -32,13 +32,16 @@ const entry: TimeEntry = {
 
 const task: Task = {
   id: "task-1",
-  goalId: null,
+  parentId: null,
   title: "写备份测试",
   done: false,
   recurrence: null,
   lastDoneAt: null,
   startAt: null,
-  scheduledAt: null,  completedCount: 0,
+  scheduledAt: null,
+  completedCount: 0,
+  completedAt: null,
+  tags: [],
   sortOrder: 1,
   createdAt: now,
   updatedAt: now,
@@ -57,7 +60,6 @@ const track: Track = {
   title: "T1 数据地基",
   status: "active",
   refs: [],
-  goalId: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -81,7 +83,16 @@ const goal: Goal = {
   title: "发布 v2",
   kind: "project",
   status: "active",
-  prerequisites: [{ blocker: "task-1", blocked: "track-1" }],
+  members: [
+    { kind: "task", id: "task-1" },
+    { kind: "track", id: "track-1" },
+  ],
+  prerequisites: [
+    {
+      blocker: { kind: "task", id: "task-1" },
+      blocked: { kind: "track", id: "track-1" },
+    },
+  ],
   createdAt: now,
   updatedAt: now,
 };

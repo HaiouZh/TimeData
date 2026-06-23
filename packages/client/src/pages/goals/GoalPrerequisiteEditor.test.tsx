@@ -18,14 +18,39 @@ describe("GoalPrerequisiteEditor", () => {
     const { host, root } = await renderDom(
       createElement(GoalPrerequisiteEditor, {
         members,
-        prerequisites: [{ blocker: "task-1", blocked: "task-2" }],
+        prerequisites: [
+          {
+            blocker: { kind: "task", id: "task-1" },
+            blocked: { kind: "task", id: "task-2" },
+          },
+        ],
         onChange,
       }),
     );
 
-    expect(host.textContent).toContain("写文案 -> 发布");
-    await click(host.querySelector('button[aria-label="删除前置关系 写文案 到 发布"]'));
+    expect(host.textContent).toContain("任务 · 写文案 -> 任务 · 发布");
+    await click(host.querySelector('button[aria-label="删除前置关系 任务 · 写文案 到 任务 · 发布"]'));
     expect(onChange).toHaveBeenCalledWith([]);
+    await unmount(root);
+  });
+
+  it("does not expose technical keys for prerequisites pointing at missing members", async () => {
+    const { host, root } = await renderDom(
+      createElement(GoalPrerequisiteEditor, {
+        members,
+        prerequisites: [
+          {
+            blocker: { kind: "task", id: "missing-task" },
+            blocked: { kind: "track", id: "missing-track" },
+          },
+        ],
+        onChange: vi.fn(),
+      }),
+    );
+
+    expect(host.textContent).toContain("任务 · 已失效成员 -> 轨道 · 已失效成员");
+    expect(host.textContent).not.toContain("task:missing-task");
+    expect(host.textContent).not.toContain("track:missing-track");
     await unmount(root);
   });
 });

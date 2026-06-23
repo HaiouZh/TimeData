@@ -146,7 +146,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 | [quick-notes](quick-notes.md) | 域 | 速记表、聊天式速记页、CLI 只读、agent 投递 |
 | [todo](todo.md) | 域 | 待办任务、重复规则、子任务、agent 状态回写 |
 | [tracks](tracks.md) | 域 | 任务轨道、轨道步骤、状态线数据地基、agent ingest |
-| [goals](goals.md) | 域 | 目标层、Task/Track 成员归属、项目完成度、主题 7 天活跃度、前置关系 |
+| [goals](goals.md) | 域 | 目标层、Task/Track 成员引用、项目完成度、主题 7 天活跃度、前置关系 |
 | [health](health.md) | 域 | Garmin、ingest、健康 schema、健康图表配置、健康页 |
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |

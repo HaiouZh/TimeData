@@ -259,37 +259,95 @@ describe("GoalSchema", () => {
     updatedAt: now,
   };
 
-  it("parses project/theme goals and defaults prerequisites", () => {
+  it("parses project/theme goals and defaults members/prerequisites", () => {
     expect(GoalSchema.parse({ ...baseGoal, kind: "theme" })).toMatchObject({
       kind: "theme",
+      members: [],
       prerequisites: [],
     });
   });
 
-  it("rejects self edges, duplicate edges and cycles", () => {
-    expect(GoalSchema.safeParse({ ...baseGoal, prerequisites: [{ blocker: "a", blocked: "a" }] }).success).toBe(false);
+  it("parses goals with typed members and typed prerequisites", () => {
+    const parsed = GoalSchema.parse({
+      ...baseGoal,
+      members: [
+        { kind: "task", id: "task-1" },
+        { kind: "track", id: "track-1" },
+      ],
+      prerequisites: [
+        {
+          blocker: { kind: "task", id: "task-1" },
+          blocked: { kind: "track", id: "track-1" },
+        },
+      ],
+    });
+
+    expect(parsed.members).toEqual([
+      { kind: "task", id: "task-1" },
+      { kind: "track", id: "track-1" },
+    ]);
+    expect(parsed.prerequisites).toHaveLength(1);
+  });
+
+  it("rejects duplicate members and prerequisites outside members", () => {
     expect(
       GoalSchema.safeParse({
         ...baseGoal,
-        prerequisites: [
-          { blocker: "a", blocked: "b" },
-          { blocker: "a", blocked: "b" },
+        members: [
+          { kind: "task", id: "task-1" },
+          { kind: "task", id: "task-1" },
         ],
       }).success,
     ).toBe(false);
+
     expect(
       GoalSchema.safeParse({
         ...baseGoal,
+        members: [{ kind: "task", id: "task-1" }],
         prerequisites: [
-          { blocker: "a", blocked: "b" },
-          { blocker: "b", blocked: "a" },
+          {
+            blocker: { kind: "task", id: "task-1" },
+            blocked: { kind: "track", id: "track-missing" },
+          },
         ],
       }).success,
     ).toBe(false);
   });
 
-  it("defaults Task.goalId and Track.goalId to null", () => {
-    expect(TaskSchema.parse(task).goalId).toBeNull();
-    expect(TrackSchema.parse(track).goalId).toBeNull();
+  it("rejects self edges, duplicate edges and typed cycles", () => {
+    const members = [
+      { kind: "task" as const, id: "task-1" },
+      { kind: "track" as const, id: "track-1" },
+    ];
+
+    expect(GoalSchema.safeParse({ ...baseGoal, members, prerequisites: [{ blocker: members[0], blocked: members[0] }] }).success).toBe(false);
+    expect(
+      GoalSchema.safeParse({
+        ...baseGoal,
+        members,
+        prerequisites: [
+          { blocker: members[0], blocked: members[1] },
+          { blocker: members[0], blocked: members[1] },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      GoalSchema.safeParse({
+        ...baseGoal,
+        members,
+        prerequisites: [
+          { blocker: members[0], blocked: members[1] },
+          { blocker: members[1], blocked: members[0] },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("strips retired Task.goalId and Track.goalId fields", () => {
+    const parsedTask = TaskSchema.parse({ ...task, goalId: "goal-1" });
+    const parsedTrack = TrackSchema.parse({ ...track, goalId: "goal-1" });
+
+    expect(Object.hasOwn(parsedTask, "goalId")).toBe(false);
+    expect(Object.hasOwn(parsedTrack, "goalId")).toBe(false);
   });
 });

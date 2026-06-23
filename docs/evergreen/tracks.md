@@ -11,7 +11,7 @@ covers:
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/boardViewPref.ts
   - packages/client/src/pages/tracks/**
-last-reviewed: 2026-06-22
+last-reviewed: 2026-06-23
 ---
 
 # 任务轨道
@@ -21,7 +21,7 @@ last-reviewed: 2026-06-22
 ## 承上启下
 
 - **上游**：客户端数据层 `lib/tracks.ts` 可本地写入；授权 agent 只能经服务端 `/api/agent/tracks*` 受控端点写入。
-- **下游**：`tracks` / `track_steps` 走普通 [sync](sync.md) push/pull、完整 [backup](backup.md)，未来监控面读取它们渲染状态线；[goals](goals.md) 可通过 `Track.goalId` 把轨道收编为目标成员。
+- **下游**：`tracks` / `track_steps` 走普通 [sync](sync.md) push/pull、完整 [backup](backup.md)，未来监控面读取它们渲染状态线；[goals](goals.md) 可通过 `Goal.members` typed 引用把轨道收编为目标成员。
 - **契约**：字段 schema 在 `packages/shared/src/entitySchemas.ts`；跨域表名、时间、ID 与 Dexie/SQLite 映射见 [data-model](data-model.md)。
 - **邻居**：[todo](todo.md) 是操作台，轨道只是用 `refs` 指过去；[goals](goals.md) 只读轨道状态与步骤活动做目标 roll-up；[timeline](timeline.md) 是真实时间记录域，轨道步骤的历时不写入 `time_entries`；[health](health.md) 的 runs 等健康数据也只被 `refs` 指向。
 
@@ -29,13 +29,13 @@ last-reviewed: 2026-06-22
 
 `Ref = { kind, id, label? }` 是开放指针。轨道不拥有被指向领域的数据；能排序、求和、上图的数据留在各自领域，轨道只保存叙事骨架、时间跨度、顺序、来源和指针。
 
-`Track` 只有 `active` / `concluded` / `parked` 三态，没有 done。`goalId: string | null` 是目标层归属字段，仅表示这条轨道属于某个 Goal，不改变状态机、不参与 agent ingest payload。`TrackStep` 是步骤日志，`endedAt=null` 表示当前步；`endedAt` 允许等于 `startedAt`，表示瞬时步骤。`content` 是宽松字符串，允许空串，便于纯指针步骤。
+`Track` 只有 `active` / `concluded` / `parked` 三态，没有 done，也不保存 Goal 归属。Goal 对轨道的组织关系只存在于 `Goal.members`，不改变轨道状态机、不参与 agent ingest payload。`TrackStep` 是步骤日志，`endedAt=null` 表示当前步；`endedAt` 允许等于 `startedAt`，表示瞬时步骤。`content` 是宽松字符串，允许空串，便于纯指针步骤。
 
-结构化领域字段不得回流到轨道 spine。`goalId` 是目标层 Phase 1 的成员归属例外：它只提供索引与归属，不承载领域明细。新增领域先放到自己的域，再由 `refs`、`tags` 或明确批准的归属字段连接；不要给 `Track` / `TrackStep` 开通用 JSON 后门。
+结构化领域字段不得回流到轨道 spine。新增领域先放到自己的域，再由 `refs`、`tags` 或对应领域自己的关系字段连接；不要给 `Track` / `TrackStep` 开通用 JSON 后门。目标层是组织视图，必须从 Goal 侧引用 Track，而不是给 Track spine 加目标归属字段。
 
 ## 2. 存储与同步
 
-服务端表 `tracks` / `track_steps` 不建 SQL 外键，也不使用数据库级联删除。`tracks.goal_id` 是普通 TEXT 列和索引，不指向 SQL 外键。原因是同步账本只认识显式 change、tombstone 和 `sync_seq`：如果 SQLite 自行级联删除步骤，其他设备按 seq 拉取时不会知道这些步骤已被删。
+服务端表 `tracks` / `track_steps` 不建 SQL 外键，也不使用数据库级联删除。目标层成员关系不在 `tracks` 表落列；旧库上的 `tracks.goal_id` 会由 schema 初始化流程幂等删除。同步账本只认识显式 change、tombstone 和 `sync_seq`：如果 SQLite 自行级联删除步骤，其他设备按 seq 拉取时不会知道这些步骤已被删。
 
 两个域均为 LWW：
 
@@ -54,7 +54,7 @@ last-reviewed: 2026-06-22
 - `listTracks` / `listTrackSteps` parse-on-read；坏行 `console.warn` 后跳过，未知字段被 schema strip。
 - `addTrackStep` 要求轨道存在；未传 `seq` 时取同轨道当前最大序号加 1。
 - `deleteTrack` 必须手工先删该轨道步骤，并逐条写 `syncLog(tableName="track_steps", action="delete")`，再删轨道并写 `tracks/delete`。
-- Dexie stores：`tracks: "id, goalId, status, updatedAt"`；`trackSteps: "id, trackId, [trackId+seq], updatedAt"`。
+- Dexie stores：`tracks: "id, status, updatedAt"`；`trackSteps: "id, trackId, [trackId+seq], updatedAt"`。
 
 ## 4. Agent ingest API
 

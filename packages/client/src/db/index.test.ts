@@ -62,13 +62,13 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(10);
+    expect(db.verno).toBe(11);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
     expect(db.quickNotes.schema.idxByName.updatedAt).toBeDefined();
     expect(db.tasks.schema.primKey.keyPath).toBe("id");
-    expect(db.tasks.schema.idxByName.goalId).toBeDefined();
+    expect(db.tasks.schema.idxByName.goalId).toBeUndefined();
     expect(db.tasks.schema.idxByName.parentId).toBeDefined();
     expect(db.tasks.schema.idxByName.sortOrder).toBeDefined();
     expect(db.tasks.schema.idxByName.updatedAt).toBeDefined();
@@ -76,7 +76,7 @@ describe("Dexie database", () => {
     expect(db.healthCharts.schema.idxByName.order).toBeDefined();
     expect(db.healthCharts.schema.idxByName.updatedAt).toBeDefined();
     expect(db.tracks.schema.primKey.keyPath).toBe("id");
-    expect(db.tracks.schema.idxByName.goalId).toBeDefined();
+    expect(db.tracks.schema.idxByName.goalId).toBeUndefined();
     expect(db.tracks.schema.idxByName.status).toBeDefined();
     expect(db.tracks.schema.idxByName.updatedAt).toBeDefined();
     expect(db.trackSteps.schema.primKey.keyPath).toBe("id");
@@ -153,6 +153,7 @@ describe("Dexie database", () => {
       title: "目标",
       kind: "project",
       status: "active",
+      members: [],
       prerequisites: [],
       createdAt: "2026-06-01T04:02:00.000Z",
       updatedAt: "2026-06-01T04:02:00.000Z",

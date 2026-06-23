@@ -75,8 +75,9 @@ describe("rowToTask", () => {
     expect(rowToTask({ ...taskRow, parent_id: null }).parentId).toBeNull();
   });
 
-  it("maps goal_id to goalId", () => {
-    expect(rowToTask({ ...taskRow, goal_id: "goal-1" }).goalId).toBe("goal-1");
-    expect(rowToTask({ ...taskRow, goal_id: null }).goalId).toBeNull();
+  it("does not expose retired task goal_id", () => {
+    const task = rowToTask({ ...taskRow, goal_id: "goal-1" } as never);
+
+    expect(Object.hasOwn(task, "goalId")).toBe(false);
   });
 });

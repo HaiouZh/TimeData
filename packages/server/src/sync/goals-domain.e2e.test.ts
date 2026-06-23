@@ -14,7 +14,16 @@ function goal(overrides: Partial<Goal> = {}): Goal {
     title: "发布 v2",
     kind: "project",
     status: "active",
-    prerequisites: [{ blocker: "task-1", blocked: "track-1" }],
+    members: [
+      { kind: "task", id: "task-1" },
+      { kind: "track", id: "track-1" },
+    ],
+    prerequisites: [
+      {
+        blocker: { kind: "task", id: "task-1" },
+        blocked: { kind: "track", id: "track-1" },
+      },
+    ],
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -42,6 +51,7 @@ beforeEach(async () => {
       kind TEXT NOT NULL,
       status TEXT NOT NULL,
       note TEXT,
+      members TEXT NOT NULL DEFAULT '[]',
       prerequisites TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -83,7 +93,20 @@ describe("goals sync roundtrip", () => {
     expect(domains.SERVER_SYNC_DOMAINS.goals.readRecord(db, "goal-1")).toMatchObject({
       tableName: "goals",
       recordId: "goal-1",
-      data: { title: "发布 v2", kind: "project", prerequisites: [{ blocker: "task-1", blocked: "track-1" }] },
+      data: {
+        title: "发布 v2",
+        kind: "project",
+        members: [
+          { kind: "task", id: "task-1" },
+          { kind: "track", id: "track-1" },
+        ],
+        prerequisites: [
+          {
+            blocker: { kind: "task", id: "task-1" },
+            blocked: { kind: "track", id: "track-1" },
+          },
+        ],
+      },
     });
 
     expect(applyChange(change("update", goal({ title: "发布 v2.1", kind: "theme" }))).status).toBe("applied");

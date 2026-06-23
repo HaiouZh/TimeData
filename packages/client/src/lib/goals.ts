@@ -1,7 +1,8 @@
-import { GoalSchema, TaskSchema, TrackSchema, type Goal, type GoalPrerequisite, type Task, type Track } from "@timedata/shared";
+import { GoalSchema, TaskSchema, TrackSchema, type Goal, type GoalMemberRef, type GoalPrerequisite, type Task, type Track } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
+import { buildNewRootTask, insertNewTaskInCurrentTransaction } from "./tasks.js";
 
 export interface AddGoalInput {
   title: string;
@@ -15,7 +16,14 @@ export interface UpdateGoalPatch {
   kind?: Goal["kind"];
   status?: Goal["status"];
   note?: string | null;
+  members?: GoalMemberRef[];
   prerequisites?: GoalPrerequisite[];
+  now?: Date;
+}
+
+export interface AddTaskForGoalInput {
+  title: string;
+  toInbox?: boolean;
   now?: Date;
 }
 
@@ -43,6 +51,10 @@ function omitGoalNote(goal: Goal): Goal {
   return rest;
 }
 
+function sameGoalMember(left: GoalMemberRef, right: GoalMemberRef): boolean {
+  return left.kind === right.kind && left.id === right.id;
+}
+
 export async function addGoal(input: AddGoalInput): Promise<Goal> {
   const createdAt = nowIso(input.now);
   const candidate = {
@@ -50,6 +62,7 @@ export async function addGoal(input: AddGoalInput): Promise<Goal> {
     title: trimRequired(input.title, "目标标题不能为空"),
     kind: input.kind,
     status: "active",
+    members: [],
     prerequisites: [],
     createdAt,
     updatedAt: createdAt,
@@ -71,12 +84,14 @@ export async function updateGoal(id: string, patch: UpdateGoalPatch): Promise<Go
 
   let candidate: Goal = {
     ...existing,
+    members: existing.members ?? [],
     prerequisites: existing.prerequisites ?? [],
     updatedAt: nowIso(patch.now),
   };
   if (patch.title !== undefined) candidate.title = trimRequired(patch.title, "目标标题不能为空");
   if (patch.kind !== undefined) candidate.kind = patch.kind;
   if (patch.status !== undefined) candidate.status = patch.status;
+  if (patch.members !== undefined) candidate.members = patch.members;
   if (patch.prerequisites !== undefined) candidate.prerequisites = patch.prerequisites;
   if (patch.note === null) {
     candidate = omitGoalNote(candidate);
@@ -122,103 +137,141 @@ export async function listGoals(status?: Goal["status"]): Promise<Goal[]> {
   return goals.sort(byGoalOrder);
 }
 
-export async function assignTaskToGoal(
-  taskId: string,
-  goalId: string | null,
+export async function addGoalMember(
+  goalId: string,
+  ref: GoalMemberRef,
   options: { now?: Date } = {},
-): Promise<Task> {
-  if (goalId !== null && !(await db.goals.get(goalId))) throw new Error("目标不存在");
-  const existing = await db.tasks.get(taskId);
-  if (!existing) throw new Error("任务不存在");
+): Promise<Goal> {
+  const timestamp = nowIso(options.now);
+  let nextGoal: Goal | null = null;
 
-  const updatedAt = nowIso(options.now);
-  const next = TaskSchema.parse({
-    ...existing,
-    parentId: existing.parentId ?? null,
-    goalId,
-    completedCount: existing.completedCount ?? 0,
-    completedAt: existing.completedAt ?? null,
-    tags: existing.tags ?? [],
-    updatedAt,
+  await db.transaction("rw", db.goals, db.tasks, db.tracks, db.syncLog, async () => {
+    const goal = await db.goals.get(goalId);
+    if (!goal) throw new Error("目标不存在");
+    if (ref.kind === "task" && !(await db.tasks.get(ref.id))) throw new Error("任务不存在");
+    if (ref.kind === "track" && !(await db.tracks.get(ref.id))) throw new Error("轨道不存在");
+
+    const members = goal.members ?? [];
+    if (members.some((member) => sameGoalMember(member, ref))) {
+      nextGoal = GoalSchema.parse({ ...goal, members, prerequisites: goal.prerequisites ?? [] });
+      return;
+    }
+
+    const next = GoalSchema.parse({
+      ...goal,
+      members: [...members, ref],
+      prerequisites: goal.prerequisites ?? [],
+      updatedAt: timestamp,
+    });
+    await db.goals.put(next);
+    await recordSyncLog("goals", next.id, "update", timestamp);
+    nextGoal = next;
   });
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
-    await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", updatedAt);
-  });
-  return next;
+
+  if (!nextGoal) throw new Error("目标不存在");
+  return nextGoal;
 }
 
-export async function assignTrackToGoal(
-  trackId: string,
-  goalId: string | null,
+export async function removeGoalMember(
+  goalId: string,
+  ref: GoalMemberRef,
   options: { now?: Date } = {},
-): Promise<Track> {
-  if (goalId !== null && !(await db.goals.get(goalId))) throw new Error("目标不存在");
-  const existing = await db.tracks.get(trackId);
-  if (!existing) throw new Error("轨道不存在");
+): Promise<Goal> {
+  const timestamp = nowIso(options.now);
+  let nextGoal: Goal | null = null;
 
-  const updatedAt = nowIso(options.now);
-  const next = TrackSchema.parse({
-    ...existing,
-    refs: existing.refs ?? [],
-    goalId,
-    updatedAt,
+  await db.transaction("rw", db.goals, db.syncLog, async () => {
+    const goal = await db.goals.get(goalId);
+    if (!goal) throw new Error("目标不存在");
+
+    const members = goal.members ?? [];
+    if (!members.some((member) => sameGoalMember(member, ref))) {
+      nextGoal = GoalSchema.parse({ ...goal, members, prerequisites: goal.prerequisites ?? [] });
+      return;
+    }
+
+    const nextMembers = members.filter((member) => !sameGoalMember(member, ref));
+    const nextPrerequisites = (goal.prerequisites ?? []).filter(
+      (edge) => !sameGoalMember(edge.blocker, ref) && !sameGoalMember(edge.blocked, ref),
+    );
+    const next = GoalSchema.parse({
+      ...goal,
+      members: nextMembers,
+      prerequisites: nextPrerequisites,
+      updatedAt: timestamp,
+    });
+    await db.goals.put(next);
+    await recordSyncLog("goals", next.id, "update", timestamp);
+    nextGoal = next;
   });
-  await db.transaction("rw", db.tracks, db.syncLog, async () => {
-    await db.tracks.put(next);
-    await recordSyncLog("tracks", next.id, "update", updatedAt);
+
+  if (!nextGoal) throw new Error("目标不存在");
+  return nextGoal;
+}
+
+export async function addTaskForGoal(goalId: string, input: AddTaskForGoalInput): Promise<Task> {
+  const task = await buildNewRootTask({ title: input.title, toInbox: input.toInbox, now: input.now });
+  let nextTask: Task | null = null;
+
+  await db.transaction("rw", db.goals, db.tasks, db.syncLog, async () => {
+    const goal = await db.goals.get(goalId);
+    if (!goal) throw new Error("目标不存在");
+    if (goal.status !== "active") throw new Error("归档目标不允许快建任务");
+
+    const nextGoal = GoalSchema.parse({
+      ...goal,
+      members: [...(goal.members ?? []), { kind: "task", id: task.id }],
+      prerequisites: goal.prerequisites ?? [],
+      updatedAt: task.updatedAt,
+    });
+
+    await insertNewTaskInCurrentTransaction(task);
+    await db.goals.put(nextGoal);
+    await recordSyncLog("goals", nextGoal.id, "update", nextGoal.updatedAt);
+    nextTask = task;
   });
-  return next;
+
+  if (!nextTask) throw new Error("目标不存在");
+  return nextTask;
 }
 
 export async function listGoalTasks(goalId: string): Promise<Task[]> {
-  const rows = await db.tasks.where("goalId").equals(goalId).toArray();
-  const tasks: Task[] = [];
+  const goal = await getGoal(goalId);
+  if (!goal) return [];
+  const taskIds = goal.members.filter((member) => member.kind === "task").map((member) => member.id);
+  const rows = await db.tasks.bulkGet(taskIds);
+  const byId = new Map<string, Task>();
   for (const row of rows) {
     const parsed = TaskSchema.safeParse(row);
-    if (parsed.success) tasks.push(parsed.data);
+    if (parsed.success) byId.set(parsed.data.id, parsed.data);
   }
-  return tasks.sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+  return taskIds.flatMap((id) => {
+    const task = byId.get(id);
+    return task ? [task] : [];
+  });
 }
 
 export async function listGoalTracks(goalId: string): Promise<Track[]> {
-  const rows = await db.tracks.where("goalId").equals(goalId).toArray();
-  const tracks: Track[] = [];
+  const goal = await getGoal(goalId);
+  if (!goal) return [];
+  const trackIds = goal.members.filter((member) => member.kind === "track").map((member) => member.id);
+  const rows = await db.tracks.bulkGet(trackIds);
+  const byId = new Map<string, Track>();
   for (const row of rows) {
     const parsed = TrackSchema.safeParse(row);
-    if (parsed.success) tracks.push(parsed.data);
+    if (parsed.success) byId.set(parsed.data.id, parsed.data);
   }
-  return tracks.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+  return trackIds.flatMap((id) => {
+    const track = byId.get(id);
+    return track ? [track] : [];
+  });
 }
 
 export async function deleteGoal(id: string, options: { now?: Date } = {}): Promise<void> {
   const timestamp = nowIso(options.now);
-  await db.transaction("rw", db.goals, db.tasks, db.tracks, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.syncLog, async () => {
     const goal = await db.goals.get(id);
     if (!goal) throw new Error("目标不存在");
-
-    const tasks = await db.tasks.where("goalId").equals(id).toArray();
-    const tracks = await db.tracks.where("goalId").equals(id).toArray();
-
-    for (const task of tasks) {
-      const next = TaskSchema.parse({
-        ...task,
-        parentId: task.parentId ?? null,
-        goalId: null,
-        completedCount: task.completedCount ?? 0,
-        completedAt: task.completedAt ?? null,
-        tags: task.tags ?? [],
-        updatedAt: timestamp,
-      });
-      await db.tasks.put(next);
-      await recordSyncLog("tasks", next.id, "update", timestamp);
-    }
-
-    for (const track of tracks) {
-      const next = TrackSchema.parse({ ...track, refs: track.refs ?? [], goalId: null, updatedAt: timestamp });
-      await db.tracks.put(next);
-      await recordSyncLog("tracks", next.id, "update", timestamp);
-    }
 
     await db.goals.delete(id);
     await recordSyncLog("goals", id, "delete", timestamp);

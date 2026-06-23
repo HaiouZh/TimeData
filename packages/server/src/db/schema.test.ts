@@ -140,7 +140,6 @@ describe("initializeDatabase", () => {
       ["summary", "TEXT", 0, 0],
       ["status", "TEXT", 1, 0],
       ["refs", "TEXT", 1, 0],
-      ["goal_id", "TEXT", 0, 0],
       ["created_at", "TEXT", 1, 0],
       ["updated_at", "TEXT", 1, 0],
     ]);
@@ -177,27 +176,24 @@ describe("initializeDatabase", () => {
       (row) => row.name,
     );
     expect(trackIndexes).toContain("idx_tracks_updated_at");
-    expect(trackIndexes).toContain("idx_tracks_goal_id");
+    expect(trackIndexes).not.toContain("idx_tracks_goal_id");
   });
 
-  it("creates goals table and membership columns", async () => {
+  it("stores goal members on goals and does not keep member-side goal columns", async () => {
     const { initializeDatabase } = await import("./schema.js");
 
     initializeDatabase();
 
-    expect(db.prepare("PRAGMA table_info(goals)").all()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "id" }),
-        expect.objectContaining({ name: "kind" }),
-        expect.objectContaining({ name: "prerequisites" }),
-      ]),
+    const taskColumns = taskColumnNames(db);
+    const trackColumns = trackColumnNames(db);
+    const goalColumns = new Set(
+      (db.prepare("PRAGMA table_info(goals)").all() as Array<{ name: string }>).map((column) => column.name),
     );
-    expect(db.prepare("PRAGMA table_info(tasks)").all()).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "goal_id" })]),
-    );
-    expect(db.prepare("PRAGMA table_info(tracks)").all()).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "goal_id" })]),
-    );
+
+    expect(taskColumns.has("goal_id")).toBe(false);
+    expect(trackColumns.has("goal_id")).toBe(false);
+    expect(goalColumns.has("members")).toBe(true);
+    expect(goalColumns.has("prerequisites")).toBe(true);
   });
 
   it("adds source columns to legacy quick_notes tables", async () => {
@@ -324,32 +320,70 @@ describe("initializeDatabase", () => {
     expect(indexes).toContain("idx_tasks_parent_id");
   });
 
-  it("ensureTaskGoalIdColumn adds goal_id and index", async () => {
-    const { ensureTaskGoalIdColumn } = await import("./schema.js");
-    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+  it("ensureGoalMembersColumn adds members and is idempotent", async () => {
+    const { ensureGoalMembersColumn } = await import("./schema.js");
+    db.exec(`
+      CREATE TABLE goals (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        prerequisites TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
 
-    ensureTaskGoalIdColumn(db);
-    ensureTaskGoalIdColumn(db);
+    ensureGoalMembersColumn(db);
+    ensureGoalMembersColumn(db);
 
-    const columns = taskColumnNames(db);
-    expect(columns.has("goal_id")).toBe(true);
-
-    const indexes = (db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>).map((row) => row.name);
-    expect(indexes).toContain("idx_tasks_goal_id");
+    const columns = new Set(
+      (db.prepare("PRAGMA table_info(goals)").all() as Array<{ name: string }>).map((column) => column.name),
+    );
+    expect(columns.has("members")).toBe(true);
   });
 
-  it("ensureTrackGoalIdColumn adds goal_id and index", async () => {
-    const { ensureTrackGoalIdColumn } = await import("./schema.js");
-    db.exec("CREATE TABLE tracks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+  it("initializeDatabase drops retired goal_id columns and indexes from legacy member tables", async () => {
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        done INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT,
+        last_done_at TEXT,
+        start_at TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        scheduled_at TEXT,
+        parent_id TEXT,
+        goal_id TEXT,
+        completed_count INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_tasks_goal_id ON tasks(goal_id);
+      CREATE TABLE tracks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        summary TEXT,
+        status TEXT NOT NULL,
+        refs TEXT NOT NULL DEFAULT '[]',
+        goal_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_tracks_goal_id ON tracks(goal_id);
+    `);
+    const { initializeDatabase } = await import("./schema.js");
 
-    ensureTrackGoalIdColumn(db);
-    ensureTrackGoalIdColumn(db);
+    initializeDatabase();
+    initializeDatabase();
 
-    const columns = trackColumnNames(db);
-    expect(columns.has("goal_id")).toBe(true);
-
-    const indexes = (db.prepare("PRAGMA index_list(tracks)").all() as Array<{ name: string }>).map((row) => row.name);
-    expect(indexes).toContain("idx_tracks_goal_id");
+    expect(taskColumnNames(db).has("goal_id")).toBe(false);
+    expect(trackColumnNames(db).has("goal_id")).toBe(false);
+    expect((db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>).map((row) => row.name)).not.toContain("idx_tasks_goal_id");
+    expect((db.prepare("PRAGMA index_list(tracks)").all() as Array<{ name: string }>).map((row) => row.name)).not.toContain("idx_tracks_goal_id");
   });
 
   it("给缺 completed_count 的旧 tasks 表补列", async () => {

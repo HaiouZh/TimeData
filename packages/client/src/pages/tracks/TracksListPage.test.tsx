@@ -305,6 +305,7 @@ describe("TracksListPage", () => {
     await seedTrackWithStep("该我确认", ["等我"]);
     await seedTrackWithStep("agent 手上", ["agent在做"]);
     const host = await renderList();
+    await waitForText(host, "等我 1");
     await click(facetButton(host, "等我 1"));
     await waitForCondition(() => !trackCardsText(host).includes("agent 手上"), "flat filter applied");
 

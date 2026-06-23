@@ -12,6 +12,7 @@ import { SYNC_TABLE_NAMES, buildSyncChangeSchema } from "./syncDomains.js";
 import type { SyncChange } from "./types.js";
 
 export {
+  GoalMemberRefSchema,
   CategorySchema,
   GoalPrerequisiteSchema,
   GoalSchema,

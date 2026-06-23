@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, Trash } from "@phosphor-icons/react";
-import { TaskSchema, type Goal, type Task } from "@timedata/shared";
+import { TaskSchema, type Goal, type GoalMemberRef, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -9,19 +9,21 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { db } from "../../db/index.js";
 import {
-  assignTaskToGoal,
-  assignTrackToGoal,
+  addTaskForGoal,
+  addGoalMember,
   deleteGoal,
   getGoal,
-  listGoalTasks,
-  listGoalTracks,
+  removeGoalMember,
   updateGoal,
   updateGoalPrerequisites,
 } from "../../lib/goals.js";
-import { buildGoalOverview, type BlockedGoalMember, type GoalMember, type GoalMemberKind } from "../../lib/goalsView.js";
+import { buildGoalOverview, type BlockedGoalMember, type GoalMember } from "../../lib/goalsView.js";
+import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { GoalMemberPicker } from "./GoalMemberPicker.js";
 import { GoalPrerequisiteEditor } from "./GoalPrerequisiteEditor.js";
+import { goalSummaryLines } from "./goalSummaryLines.js";
+import { GoalTaskComposer } from "./GoalTaskComposer.js";
 
 const KIND_OPTIONS: Array<{ value: Goal["kind"]; label: string }> = [
   { value: "project", label: "项目" },
@@ -32,13 +34,6 @@ const STATUS_OPTIONS: Array<{ value: Goal["status"]; label: string }> = [
   { value: "active", label: "进行中" },
   { value: "archived", label: "归档" },
 ];
-
-function progressText(overview: ReturnType<typeof buildGoalOverview>): string {
-  const { progress } = overview;
-  if (progress.kind === "project") return `完成度 ${progress.completed}/${progress.total}`;
-  const last = progress.lastActivityAt ? `，最近 ${progress.lastActivityAt.slice(0, 10)}` : "";
-  return `近${progress.windowDays}天 ${progress.activeMemberCount} 个活跃${last}`;
-}
 
 function MemberRow({ member, waitingOn }: { member: GoalMember; waitingOn?: GoalMember[] }) {
   return (
@@ -98,11 +93,10 @@ export default function GoalDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const goal = useLiveQuery(async () => (await getGoal(id)) ?? null, [id]);
-  const goalTasks = useLiveQuery(() => listGoalTasks(id), [id], []);
-  const goalTracks = useLiveQuery(() => listGoalTracks(id), [id], []);
   const allTasks = useLiveQuery(() => listAllTasks(), [], []);
   const allTracks = useLiveQuery(() => listTracks(), [], []);
   const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
+  const destination = useTodoDefaultDestination();
   const { syncAfterWrite } = useSyncContext();
   const [titleDraft, setTitleDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
@@ -136,23 +130,18 @@ export default function GoalDetailPage() {
     syncAfterWrite();
   }
 
-  async function assignTask(taskId: string): Promise<void> {
-    await assignTaskToGoal(taskId, id);
+  async function addMember(ref: GoalMemberRef): Promise<void> {
+    await addGoalMember(id, ref);
     syncAfterWrite();
   }
 
-  async function assignTrack(trackId: string): Promise<void> {
-    await assignTrackToGoal(trackId, id);
+  async function removeMember(ref: GoalMemberRef): Promise<void> {
+    await removeGoalMember(id, ref);
     syncAfterWrite();
   }
 
-  async function removeMember(kind: GoalMemberKind, memberId: string): Promise<void> {
-    if (goal) {
-      const nextPrerequisites = goal.prerequisites.filter((edge) => edge.blocker !== memberId && edge.blocked !== memberId);
-      if (nextPrerequisites.length !== goal.prerequisites.length) await updateGoalPrerequisites(goal.id, nextPrerequisites);
-    }
-    if (kind === "task") await assignTaskToGoal(memberId, null);
-    else await assignTrackToGoal(memberId, null);
+  async function quickCreateTask(title: string): Promise<void> {
+    await addTaskForGoal(id, { title, toInbox: destination === "inbox" });
     syncAfterWrite();
   }
 
@@ -184,8 +173,6 @@ export default function GoalDetailPage() {
         ) : (
           <GoalContent
             goal={goal}
-            goalTasks={goalTasks}
-            goalTracks={goalTracks}
             allTasks={allTasks}
             allTracks={allTracks}
             steps={steps}
@@ -197,9 +184,9 @@ export default function GoalDetailPage() {
             onSaveMeta={saveMeta}
             onChangeKind={(kind) => void changeKind(kind)}
             onChangeStatus={(status) => void changeStatus(status)}
-            onAssignTask={(taskId) => void assignTask(taskId)}
-            onAssignTrack={(trackId) => void assignTrack(trackId)}
-            onRemoveMember={(kind, memberId) => void removeMember(kind, memberId)}
+            onAddMember={(ref) => void addMember(ref)}
+            onRemoveMember={(ref) => void removeMember(ref)}
+            onQuickCreateTask={(title) => quickCreateTask(title)}
             onSavePrerequisites={(next) => void savePrerequisites(next)}
             onOpenDelete={() => setConfirmingDelete(true)}
             onCancelDelete={() => setConfirmingDelete(false)}
@@ -213,8 +200,6 @@ export default function GoalDetailPage() {
 
 interface GoalContentProps {
   goal: Goal;
-  goalTasks: Parameters<typeof buildGoalOverview>[1];
-  goalTracks: Parameters<typeof buildGoalOverview>[2];
   allTasks: Parameters<typeof GoalMemberPicker>[0]["tasks"];
   allTracks: Parameters<typeof GoalMemberPicker>[0]["tracks"];
   steps: Parameters<typeof buildGoalOverview>[3];
@@ -226,9 +211,9 @@ interface GoalContentProps {
   onSaveMeta: (event: FormEvent<HTMLFormElement>) => void;
   onChangeKind: (kind: Goal["kind"]) => void;
   onChangeStatus: (status: Goal["status"]) => void;
-  onAssignTask: (taskId: string) => void;
-  onAssignTrack: (trackId: string) => void;
-  onRemoveMember: (kind: GoalMemberKind, memberId: string) => void;
+  onAddMember: (ref: GoalMemberRef) => void;
+  onRemoveMember: (ref: GoalMemberRef) => void;
+  onQuickCreateTask: (title: string) => Promise<void>;
   onSavePrerequisites: (next: Goal["prerequisites"]) => void;
   onOpenDelete: () => void;
   onCancelDelete: () => void;
@@ -237,8 +222,6 @@ interface GoalContentProps {
 
 function GoalContent({
   goal,
-  goalTasks,
-  goalTracks,
   allTasks,
   allTracks,
   steps,
@@ -250,15 +233,16 @@ function GoalContent({
   onSaveMeta,
   onChangeKind,
   onChangeStatus,
-  onAssignTask,
-  onAssignTrack,
+  onAddMember,
   onRemoveMember,
+  onQuickCreateTask,
   onSavePrerequisites,
   onOpenDelete,
   onCancelDelete,
   onConfirmDelete,
 }: GoalContentProps) {
-  const overview = buildGoalOverview(goal, goalTasks, goalTracks, steps);
+  const overview = buildGoalOverview(goal, allTasks, allTracks, steps);
+  const summary = goalSummaryLines(overview);
 
   return (
     <>
@@ -289,8 +273,13 @@ function GoalContent({
           <SegmentedControl ariaLabel="目标类型" value={goal.kind} options={KIND_OPTIONS} onChange={onChangeKind} />
           <SegmentedControl ariaLabel="目标状态" value={goal.status} options={STATUS_OPTIONS} onChange={onChangeStatus} />
         </div>
-        <p className="mt-3 rounded-row bg-surface-elevated px-3 py-2 text-sm text-ink-2">{progressText(overview)}</p>
+        <div className="mt-3 rounded-row bg-surface-elevated px-3 py-2 text-sm leading-6 text-ink-2">
+          <p>{summary.momentum}</p>
+          <p>{summary.frontline}</p>
+          <p className="text-ink-3">{summary.completion}</p>
+        </div>
       </header>
+      {goal.status === "active" && <GoalTaskComposer onSubmit={onQuickCreateTask} />}
       <div className="grid gap-3 md:grid-cols-2">
         <MemberSection title="现在能推进" members={overview.sections.ready} />
         <MemberSection title="在等前置" members={overview.sections.blocked} />
@@ -305,14 +294,17 @@ function GoalContent({
           有 {overview.sections.ignoredPrerequisites.length} 条前置关系指向非成员，已在推进分区中忽略。
         </p>
       )}
+      {overview.missingMembers.length > 0 && (
+        <p className="mt-3 rounded-row bg-surface px-3 py-2 text-xs text-ink-3">
+          有 {overview.missingMembers.length} 个成员引用已失效。
+        </p>
+      )}
       <div className="mt-3 grid gap-3">
         <GoalMemberPicker
-          goalId={goal.id}
           tasks={allTasks}
           tracks={allTracks}
           members={overview.members}
-          onAssignTask={onAssignTask}
-          onAssignTrack={onAssignTrack}
+          onAddMember={onAddMember}
           onRemoveMember={onRemoveMember}
         />
         <GoalPrerequisiteEditor
@@ -332,13 +324,13 @@ function GoalContent({
               <Icon icon={Trash} size={18} />
             </button>
           </div>
-          <p className="text-sm leading-6 text-ink-3">删除目标只会清空成员归属，不会删除任务或轨道。</p>
+          <p className="text-sm leading-6 text-ink-3">删除目标只会删除目标本身，不会删除任务或轨道。</p>
         </section>
       </div>
       <ConfirmSheet
         open={confirmingDelete}
         title="删除目标"
-        body="目标会被删除，任务和轨道会保留并移出该目标。"
+        body="目标会被删除，任务和轨道会保留。"
         confirmLabel="删除目标"
         cancelLabel="取消"
         danger

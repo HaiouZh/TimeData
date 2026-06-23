@@ -56,7 +56,6 @@ const oldEntry: TimeEntry = {
 const oldTask: Task = {
   id: "old-task",
   parentId: null,
-  goalId: null,
   title: "旧任务",
   done: false,
   recurrence: null,
@@ -95,7 +94,6 @@ const newEntry: TimeEntry = {
 
 const newTask = {
   id: "new-task",
-  goalId: null,
   title: "新任务",
   done: true,
   recurrence: null,
@@ -115,7 +113,6 @@ const oldTrack: Track = {
   title: "旧轨道",
   status: "active",
   refs: [],
-  goalId: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -125,7 +122,6 @@ const newTrack: Track = {
   title: "新轨道",
   status: "parked",
   refs: [{ kind: "task", id: "new-task" }],
-  goalId: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -149,6 +145,7 @@ const oldGoal: Goal = {
   title: "旧目标",
   kind: "project",
   status: "active",
+  members: [],
   prerequisites: [],
   createdAt: now,
   updatedAt: now,
@@ -159,7 +156,16 @@ const newGoal: Goal = {
   title: "新目标",
   kind: "theme",
   status: "active",
-  prerequisites: [{ blocker: "new-task", blocked: "new-track" }],
+  members: [
+    { kind: "task", id: "new-task" },
+    { kind: "track", id: "new-track" },
+  ],
+  prerequisites: [
+    {
+      blocker: { kind: "task", id: "new-task" },
+      blocked: { kind: "track", id: "new-track" },
+    },
+  ],
   createdAt: now,
   updatedAt: now,
 };

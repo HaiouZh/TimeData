@@ -1,17 +1,15 @@
 import { X } from "@phosphor-icons/react";
-import type { Task, Track } from "@timedata/shared";
+import type { GoalMemberRef, Task, Track } from "@timedata/shared";
 import { Icon } from "../../components/Icon.js";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
 import type { GoalMember, GoalMemberKind } from "../../lib/goalsView.js";
 
 interface GoalMemberPickerProps {
-  goalId: string;
   tasks: Task[];
   tracks: Track[];
   members: GoalMember[];
-  onAssignTask: (taskId: string) => void;
-  onAssignTrack: (trackId: string) => void;
-  onRemoveMember: (kind: GoalMemberKind, id: string) => void;
+  onAddMember: (ref: GoalMemberRef) => void;
+  onRemoveMember: (ref: GoalMemberRef) => void;
 }
 
 function memberKindLabel(kind: GoalMemberKind): string {
@@ -27,16 +25,15 @@ function trackOption(track: Track): SelectOption<string> {
 }
 
 export function GoalMemberPicker({
-  goalId,
   tasks,
   tracks,
   members,
-  onAssignTask,
-  onAssignTrack,
+  onAddMember,
   onRemoveMember,
 }: GoalMemberPickerProps) {
-  const taskOptions = tasks.filter((task) => (task.goalId ?? null) !== goalId).map(taskOption);
-  const trackOptions = tracks.filter((track) => (track.goalId ?? null) !== goalId).map(trackOption);
+  const memberKeys = new Set(members.map((member) => `${member.kind}:${member.id}`));
+  const taskOptions = tasks.filter((task) => !memberKeys.has(`task:${task.id}`)).map(taskOption);
+  const trackOptions = tracks.filter((track) => !memberKeys.has(`track:${track.id}`)).map(trackOption);
 
   return (
     <section className="rounded-card border border-border bg-surface p-4">
@@ -50,14 +47,14 @@ export function GoalMemberPicker({
           placeholder="添加任务成员"
           value={null}
           options={taskOptions}
-          onChange={onAssignTask}
+          onChange={(id) => onAddMember({ kind: "task", id })}
         />
         <SelectSheet
           label="添加轨道成员"
           placeholder="添加轨道成员"
           value={null}
           options={trackOptions}
-          onChange={onAssignTrack}
+          onChange={(id) => onAddMember({ kind: "track", id })}
         />
       </div>
       {members.length === 0 ? (
@@ -75,7 +72,7 @@ export function GoalMemberPicker({
               <button
                 type="button"
                 aria-label={`移出目标 ${member.title}`}
-                onClick={() => onRemoveMember(member.kind, member.id)}
+                onClick={() => onRemoveMember({ kind: member.kind, id: member.id })}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated text-ink-3 hover:text-danger"
               >
                 <Icon icon={X} size={16} />

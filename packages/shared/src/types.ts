@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import type {
   CategorySchema,
+  GoalMemberRefSchema,
   GoalPrerequisiteSchema,
   GoalSchema,
   QuickNoteSchema,
@@ -25,6 +26,8 @@ import type { HealthChartConfig } from "./chartSchemas.js";
 import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
 
 export type Category = z.infer<typeof CategorySchema>;
+
+export type GoalMemberRef = z.infer<typeof GoalMemberRefSchema>;
 
 export type GoalPrerequisite = z.infer<typeof GoalPrerequisiteSchema>;
 

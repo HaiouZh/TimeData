@@ -83,10 +83,19 @@ export const RecurrenceSchema = z
       ctx.addIssue({ code: "custom", message: "count and until are mutually exclusive" });
   });
 
-export const GoalPrerequisiteSchema = z.object({
-  blocker: NonEmptyTrimmedStringSchema,
-  blocked: NonEmptyTrimmedStringSchema,
+export const GoalMemberRefSchema = z.object({
+  kind: z.enum(["task", "track"]),
+  id: NonEmptyTrimmedStringSchema,
 });
+
+export const GoalPrerequisiteSchema = z.object({
+  blocker: GoalMemberRefSchema,
+  blocked: GoalMemberRefSchema,
+});
+
+function goalMemberKey(ref: z.infer<typeof GoalMemberRefSchema>): string {
+  return `${ref.kind}:${ref.id}`;
+}
 
 function hasPrerequisiteCycle(edges: Array<{ blocker: string; blocked: string }>): boolean {
   const adjacency = new Map<string, string[]>();
@@ -120,14 +129,40 @@ export const GoalSchema = z
     kind: z.enum(["project", "theme"]),
     status: z.enum(["active", "archived"]).default("active"),
     note: z.string().optional(),
+    members: z.array(GoalMemberRefSchema).max(500).default([]),
     prerequisites: z.array(GoalPrerequisiteSchema).max(100).default([]),
     createdAt: UtcIsoStringSchema,
     updatedAt: UtcIsoStringSchema,
   })
   .superRefine((goal, ctx) => {
-    const seen = new Set<string>();
+    const memberKeys = new Set<string>();
+    for (const member of goal.members) {
+      const key = goalMemberKey(member);
+      if (memberKeys.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["members"],
+          message: "goal member must be unique",
+        });
+      }
+      memberKeys.add(key);
+    }
+
+    const seenEdges = new Set<string>();
+    const edges: Array<{ blocker: string; blocked: string }> = [];
     for (const edge of goal.prerequisites) {
-      if (edge.blocker === edge.blocked) {
+      const blocker = goalMemberKey(edge.blocker);
+      const blocked = goalMemberKey(edge.blocked);
+
+      if (!memberKeys.has(blocker) || !memberKeys.has(blocked)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["prerequisites"],
+          message: "goal prerequisite must reference members",
+        });
+      }
+
+      if (blocker === blocked) {
         ctx.addIssue({
           code: "custom",
           path: ["prerequisites"],
@@ -135,18 +170,19 @@ export const GoalSchema = z
         });
       }
 
-      const key = `${edge.blocker}->${edge.blocked}`;
-      if (seen.has(key)) {
+      const key = `${blocker}->${blocked}`;
+      if (seenEdges.has(key)) {
         ctx.addIssue({
           code: "custom",
           path: ["prerequisites"],
           message: "goal prerequisite edge must be unique",
         });
       }
-      seen.add(key);
+      seenEdges.add(key);
+      edges.push({ blocker, blocked });
     }
 
-    if (hasPrerequisiteCycle(goal.prerequisites)) {
+    if (hasPrerequisiteCycle(edges)) {
       ctx.addIssue({
         code: "custom",
         path: ["prerequisites"],
@@ -158,7 +194,6 @@ export const GoalSchema = z
 export const TaskSchema = z.object({
   id: NonEmptyTrimmedStringSchema,
   parentId: z.string().min(1).nullable().default(null),
-  goalId: z.string().min(1).nullable().default(null),
   title: NonEmptyTrimmedStringSchema,
   done: z.boolean(),
   recurrence: RecurrenceSchema.nullable(),
@@ -188,7 +223,6 @@ export const TrackSchema = z.object({
   summary: z.string().optional(),
   status: z.enum(["active", "concluded", "parked"]),
   refs: z.array(RefSchema).max(100).default([]),
-  goalId: z.string().min(1).nullable().default(null),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,
 });

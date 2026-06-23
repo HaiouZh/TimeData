@@ -15,7 +15,6 @@ describe("track rows", () => {
         { kind: "task", id: "task-1", label: "任务一" },
         { kind: "url", id: "https://example.com/spec" },
       ],
-      goalId: "goal-1",
       createdAt: now,
       updatedAt: now,
     });
@@ -29,7 +28,6 @@ describe("track rows", () => {
         { kind: "task", id: "task-1", label: "任务一" },
         { kind: "url", id: "https://example.com/spec" },
       ]),
-      goal_id: "goal-1",
       created_at: now,
     });
     expect(
@@ -46,7 +44,6 @@ describe("track rows", () => {
         { kind: "task", id: "task-1", label: "任务一" },
         { kind: "url", id: "https://example.com/spec" },
       ],
-      goalId: "goal-1",
       createdAt: now,
       updatedAt: now,
     });
@@ -60,7 +57,6 @@ describe("track rows", () => {
         summary: null,
         status: "parked",
         refs: null,
-        goal_id: null,
         created_at: now,
         updated_at: now,
       }),
@@ -69,10 +65,24 @@ describe("track rows", () => {
       title: "T1",
       status: "parked",
       refs: [],
-      goalId: null,
       createdAt: now,
       updatedAt: now,
     });
+  });
+
+  it("does not expose retired track goal_id", () => {
+    const track = rowToTrack({
+      id: "track-1",
+      title: "T1",
+      summary: null,
+      status: "parked",
+      refs: null,
+      goal_id: "goal-1",
+      created_at: now,
+      updated_at: now,
+    } as never);
+
+    expect(Object.hasOwn(track, "goalId")).toBe(false);
   });
 
   it("maps track steps to JSON row columns and back", () => {

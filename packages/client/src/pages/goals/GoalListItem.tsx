@@ -1,17 +1,13 @@
 import type { GoalOverview } from "../../lib/goalsView.js";
 import { Link } from "react-router-dom";
+import { goalSummaryLines } from "./goalSummaryLines.js";
 
 function kindLabel(kind: "project" | "theme"): string {
   return kind === "project" ? "项目" : "主题";
 }
 
-function progressText(overview: GoalOverview): string {
-  const { progress } = overview;
-  if (progress.kind === "project") return `${progress.completed}/${progress.total}`;
-  return `近${progress.windowDays}天 ${progress.activeMemberCount} 个活跃`;
-}
-
 export function GoalListItem({ overview }: { overview: GoalOverview }) {
+  const summary = goalSummaryLines(overview);
   return (
     <Link
       to={`/goals/${overview.goal.id}`}
@@ -27,7 +23,11 @@ export function GoalListItem({ overview }: { overview: GoalOverview }) {
           </div>
           {overview.goal.note && <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-3">{overview.goal.note}</p>}
         </div>
-        <span className="shrink-0 rounded-ctl bg-surface-elevated px-2 py-1 text-xs text-ink-2">{progressText(overview)}</span>
+      </div>
+      <div className="mt-2 space-y-0.5 text-xs leading-5 text-ink-3">
+        <p>{summary.momentum}</p>
+        <p>{summary.frontline}</p>
+        <p>{summary.completion}</p>
       </div>
     </Link>
   );

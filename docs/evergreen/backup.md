@@ -8,7 +8,7 @@ covers:
   - packages/client/src/pages/settings/BackupHistoryPage.tsx
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-06-22
+last-reviewed: 2026-06-23
 ---
 
 # 备份与恢复
@@ -56,7 +56,7 @@ TimeData 现有四种备份/可恢复文件：
 **备份骑客户端域登记簿（关键设计）**：导出/校验/恢复都从 `packages/client/src/sync/clientDomains.ts` 的 `CLIENT_SYNC_DOMAINS` 派生，不再手写表名。每个域声明 `backup` 角色：
 
 - `"core"`：`categories` / `time_entries`，命名顶层字段，带专属完整性校验（两级分类树、记录外键）。
-- `"bundled"`：普通状态域（`tasks`、`quick_notes`、`tracks`、`track_steps`、`goals`、5 个健康域），进通用 `domains` map，按 **table 名（snake_case）** 键入，逐条用各自 schema 校验、按 `id` 去重。**新增普通域只要在登记簿标 `backup:"bundled"`，导出/校验/恢复全部白捡**（派生列表见 `BACKUP_BUNDLED_DOMAINS`）。
+- `"bundled"`：普通状态域（`tasks`、`quick_notes`、`tracks`、`track_steps`、`goals`、5 个健康域），进通用 `domains` map，按 **table 名（snake_case）** 键入，逐条用各自 schema 校验、按 `id` 去重。Goal 的 `members` 与 typed `prerequisites` 是核心字段，随 `domains.goals` 完整导出/校验/恢复。**新增普通域只要在登记簿标 `backup:"bundled"`，导出/校验/恢复全部白捡**（派生列表见 `BACKUP_BUNDLED_DOMAINS`）。
 - `"excluded"`：`settings` 等不进备份。
 
 `timeFormat` 恢复前必须存在且值只能是 `"utc"`。`timeEntries` 的 `startTime` / `endTime` 必须是带毫秒和 `Z` 的 UTC ISO 字符串且 `endTime > startTime`。任务时间字段同样 UTC `.sssZ` 或 `null`，重复规则满足 shared `RecurrenceSchema`；终止式重复的 `count` / `until` 随 `recurrence` JSON 保存，`completedCount` 记录已完成次数，`completedAt` 记录普通任务完成时间，`tags` 保存自由标签数组。缺省会归一为 `completedCount=0`、`completedAt=null`、`tags=[]`。分类树只支持两级结构。
@@ -124,7 +124,7 @@ TimeData 现有四种备份/可恢复文件：
 
 ## 3. 校验（`validateBackup`）
 
-恢复前必跑。`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema`、各 bundled 域 schema 与 `UtcIsoStringSchema` 严格校验分类、记录、任务、轨道、目标和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。任务记录经 `TaskSchema` 归一化，旧记录缺少 `completedCount`、`completedAt` 或 `tags` 时分别按 0、`null`、`[]` 恢复；`recurrence.count` 与 `recurrence.until` 同时存在会被拒绝。轨道记录经 `TrackSchema` / `TrackStepSchema` 归一化，`refs` / `tags` 缺省为空数组；目标记录经 `GoalSchema` 归一化，`prerequisites` 缺省为空数组并拒绝自环、重复边和环。
+恢复前必跑。`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema`、各 bundled 域 schema 与 `UtcIsoStringSchema` 严格校验分类、记录、任务、轨道、目标和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。任务记录经 `TaskSchema` 归一化，旧记录缺少 `completedCount`、`completedAt` 或 `tags` 时分别按 0、`null`、`[]` 恢复；`recurrence.count` 与 `recurrence.until` 同时存在会被拒绝。轨道记录经 `TrackSchema` / `TrackStepSchema` 归一化，`refs` / `tags` 缺省为空数组；目标记录经 `GoalSchema` 归一化，`members` / `prerequisites` 缺省为空数组，并拒绝重复成员、前置边引用非成员、自环、重复边和环。
 
 `packages/client/src/backup/validateBackup.ts` 检查：
 
@@ -137,13 +137,14 @@ TimeData 现有四种备份/可恢复文件：
 | `INVALID_DEVICE` | `device` 字段不规范 |
 | `INVALID_CATEGORIES` | `categories` 不是数组，或单条未通过 `CategorySchema` |
 | `INVALID_TIME_ENTRIES` | `timeEntries` 不是数组，或单条未通过 `TimeEntrySchema` |
-| `INVALID_TASKS` | `tasks` 不是数组，或单条未通过 `TaskSchema` |
+| `INVALID_DOMAINS` | `domains` 字段存在但不是对象 |
+| `INVALID_DOMAIN_RECORDS` | 某个 bundled 域不是数组，或单条未通过对应 shared schema |
 | `INVALID_TIME_FORMAT` | 备份缺少 `timeFormat: "utc"` |
 | `INVALID_TIME_ENTRY_TIME` | 记录时间不是 UTC ISO，或 `endTime <= startTime` |
 | `INVALID_CATEGORY_TREE` | 分类自引用、形成环，或超过两级分类树 |
 | `DUPLICATE_CATEGORY_ID` | 分类 ID 重复 |
 | `DUPLICATE_ENTRY_ID` | 记录 ID 重复 |
-| `DUPLICATE_TASK_ID` | 任务 ID 重复 |
+| `DUPLICATE_DOMAIN_ID` | 某个 bundled 域内 ID 重复 |
 | `ORPHAN_CATEGORY_PARENT` | 子分类的 `parentId` 在备份里找不到 |
 | `ORPHAN_ENTRY_CATEGORY` | 记录的 `categoryId` 在备份里找不到 |
 

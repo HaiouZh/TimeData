@@ -14,8 +14,10 @@ covers:
   - packages/client/src/lib/categoryTree.ts
   - packages/server/src/routes/categories.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-06-22
+last-reviewed: 2026-06-23
 ---
+
+<!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
 
 # 分类与设置
 

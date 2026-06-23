@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TaskSchema, TrackSchema } from "@timedata/shared";
+import { GoalSchema, TaskSchema, TrackSchema } from "@timedata/shared";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { db } from "./index.js";
 import {
@@ -27,7 +27,6 @@ const baseTask = {
 };
 const normalizedTask = {
   ...baseTask,
-  goalId: null,
   completedCount: 0,
   completedAt: null,
   tags: [],
@@ -84,8 +83,8 @@ describe("isDeepEqual", () => {
 });
 
 describe("planNormalization", () => {
-  it("Task/Track legacy rows default goalId to null", () => {
-    expect(planNormalization([baseTask], TaskSchema, keyOf).writes).toEqual([
+  it("strips retired Task/Track goalId while defaulting Goal.members", () => {
+    expect(planNormalization([{ ...baseTask, goalId: "goal-1" }], TaskSchema, keyOf).writes).toEqual([
       { key: "a", value: normalizedTask },
     ]);
     expect(
@@ -96,6 +95,7 @@ describe("planNormalization", () => {
             title: "轨道",
             status: "active",
             refs: [],
+            goalId: "goal-1",
             createdAt: "2026-06-20T00:00:00.000Z",
             updatedAt: "2026-06-20T00:00:00.000Z",
           },
@@ -111,12 +111,22 @@ describe("planNormalization", () => {
           title: "轨道",
           status: "active",
           refs: [],
-          goalId: null,
           createdAt: "2026-06-20T00:00:00.000Z",
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       },
     ]);
+    expect(
+      GoalSchema.parse({
+        id: "goal-1",
+        title: "目标",
+        kind: "project",
+        status: "active",
+        prerequisites: [],
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      }).members,
+    ).toEqual([]);
   });
 
   it("缺字段按默认值计划写回", () => {
@@ -172,7 +182,6 @@ describe("planNormalization", () => {
           lastDoneAt: null,
           recurrence: null,
           done: false,
-          goalId: null,
           parentId: null,
           updatedAt: "2026-06-20T00:00:00.000Z",
           createdAt: "2026-06-20T00:00:00.000Z",
@@ -229,7 +238,8 @@ describe("runSchemaNormalizationIfNeeded", () => {
     expect(task).not.toHaveProperty("ghostField");
     expect(task).not.toHaveProperty(legacyStateField);
     expect(task).not.toHaveProperty(legacyStateTimeField);
-    expect(task).toMatchObject({ completedCount: 0, parentId: null, goalId: null, tags: [] });
+    expect(task).toMatchObject({ completedCount: 0, parentId: null, tags: [] });
+    expect(task).not.toHaveProperty("goalId");
     expect(task?.updatedAt).toBe("2026-06-20T00:00:00.000Z");
     expect(await db.quickNotes.get("n1")).not.toHaveProperty("ghostField");
     expect(await db.syncLog.count()).toBe(0);

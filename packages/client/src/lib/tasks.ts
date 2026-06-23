@@ -25,13 +25,13 @@ export interface UpdateTaskPatch {
   now?: Date;
 }
 
-function normalizeTitle(title: string): string {
+export function normalizeTaskTitle(title: string): string {
   const trimmed = title.trim();
   if (!trimmed) throw new Error("任务标题不能为空");
   return trimmed;
 }
 
-async function nextSortOrder(): Promise<number> {
+export async function nextTaskSortOrder(): Promise<number> {
   const last = await db.tasks.orderBy("sortOrder").last();
   return last ? last.sortOrder + 1 : 0;
 }
@@ -50,6 +50,15 @@ async function putTask(next: Task): Promise<Task> {
 }
 
 export async function addTask(input: AddTaskInput): Promise<Task> {
+  const task = await buildNewRootTask(input);
+
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    await insertNewTaskInCurrentTransaction(task);
+  });
+  return task;
+}
+
+export async function buildNewRootTask(input: AddTaskInput): Promise<Task> {
   const now = input.now ?? new Date();
   const createdAt = now.toISOString();
   const recurrence = input.recurrence ?? null;
@@ -64,22 +73,25 @@ export async function addTask(input: AddTaskInput): Promise<Task> {
     id: uuid(),
     parentId: null,
     tags: input.tags ?? [],
-    title: normalizeTitle(input.title),
+    title: normalizeTaskTitle(input.title),
     done: false,
     recurrence,
     lastDoneAt: null,
     startAt: recurrence ? (input.startAt ?? createdAt) : null,
-    scheduledAt,    completedCount: 0,
-    sortOrder: await nextSortOrder(),
+    scheduledAt,
+    completedCount: 0,
+    completedAt: null,
+    sortOrder: await nextTaskSortOrder(),
     createdAt,
     updatedAt: createdAt,
   });
 
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
-    await db.tasks.add(task);
-    await recordSyncLog("tasks", task.id, "create", task.updatedAt);
-  });
   return task;
+}
+
+export async function insertNewTaskInCurrentTransaction(task: Task): Promise<void> {
+  await db.tasks.add(task);
+  await recordSyncLog("tasks", task.id, "create", task.updatedAt);
 }
 
 export async function persistTaskOrder(orderedIds: string[]): Promise<void> {
@@ -156,7 +168,7 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
   const recurrence = patch.recurrence === undefined ? existing.recurrence : patch.recurrence;
   const next: Task = TaskSchema.parse({
     ...existing,
-    title: patch.title === undefined ? existing.title : normalizeTitle(patch.title),
+    title: patch.title === undefined ? existing.title : normalizeTaskTitle(patch.title),
     recurrence,
     done: recurrence ? false : existing.done,
     lastDoneAt: recurrence ? existing.lastDoneAt : null,
@@ -242,7 +254,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   const { next, occurrence, occurrenceChildren = [], templateChildren = [] } = completeTask(base as Task, {
     now,
     genId: uuid,
-    occurrenceSortOrder: await nextSortOrder(),
+    occurrenceSortOrder: await nextTaskSortOrder(),
     children,
   });
 
@@ -297,7 +309,7 @@ export async function createChildTask(parentId: string, title: string, now: Date
     const task = TaskSchema.parse({
       id: uuid(),
       parentId,
-      title: normalizeTitle(title),
+      title: normalizeTaskTitle(title),
       done: false,
       recurrence: null,
       lastDoneAt: null,

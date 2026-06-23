@@ -48,7 +48,7 @@ async function typeInput(input: HTMLInputElement, value: string): Promise<void> 
 }
 
 describe("GoalsListPage", () => {
-  it("creates a project goal and renders project progress", async () => {
+  it("creates a project goal and renders summary lines", async () => {
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(GoalsListPage)));
     mountedRoot = root;
 
@@ -56,8 +56,12 @@ describe("GoalsListPage", () => {
     await click(host.querySelector('button[aria-label="新建目标"]'));
 
     await waitForText(host, "发布 v2");
-    await waitForText(host, "0/0");
-    await expect(db.goals.count()).resolves.toBe(1);
+    await waitForText(host, "还没开始推进");
+    await waitForText(host, "还没有成员");
+    await waitForText(host, "✓ 0 完成");
+    await expect(db.goals.toArray()).resolves.toEqual([
+      expect.objectContaining({ members: [], prerequisites: [] }),
+    ]);
   });
 
   it("renders theme activity without project completion ratio", async () => {
@@ -66,6 +70,7 @@ describe("GoalsListPage", () => {
       title: "身体更健康",
       kind: "theme",
       status: "active",
+      members: [],
       prerequisites: [],
       createdAt: "2026-06-22T01:00:00.000Z",
       updatedAt: "2026-06-22T01:00:00.000Z",
@@ -75,7 +80,8 @@ describe("GoalsListPage", () => {
     mountedRoot = root;
 
     await waitForText(host, "身体更健康");
-    await waitForText(host, "近7天");
+    await waitForText(host, "还没开始推进");
+    await waitForText(host, "✓ 0 完成");
     expect(host.textContent).not.toContain("0/0");
   });
 });

@@ -31,6 +31,7 @@ function seedGoal(overrides: Partial<Goal> = {}): Promise<string> {
     title: "发布 v2",
     kind: "project",
     status: "active",
+    members: [],
     prerequisites: [],
     createdAt: now,
     updatedAt: now,
@@ -43,7 +44,6 @@ function seedTask(overrides: Partial<Task> & Pick<Task, "id">): Promise<string> 
   const task: Task = {
     id: overrides.id,
     parentId: null,
-    goalId: overrides.goalId ?? null,
     title: overrides.title ?? overrides.id,
     done: overrides.done ?? false,
     recurrence: null,
@@ -67,7 +67,6 @@ function seedTrack(overrides: Partial<Track> & Pick<Track, "id">): Promise<strin
     title: overrides.title ?? overrides.id,
     status: overrides.status ?? "active",
     refs: [],
-    goalId: overrides.goalId ?? null,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -129,6 +128,25 @@ async function waitForButtonByLabel(root: ParentNode, label: string): Promise<HT
   throw new Error(`missing button label: ${label}`);
 }
 
+async function waitForInputByLabel(root: ParentNode, label: string): Promise<HTMLInputElement> {
+  for (let index = 0; index < 30; index++) {
+    const input = root.querySelector(`input[aria-label="${label}"]`);
+    if (input instanceof HTMLInputElement) return input;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  throw new Error(`missing input label: ${label}`);
+}
+
+async function typeInput(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 async function chooseSelectSheetOption(host: HTMLElement, label: string, option: string): Promise<void> {
   await waitForText(host, option);
   await click(await waitForButtonByLabel(host, label));
@@ -136,10 +154,32 @@ async function chooseSelectSheetOption(host: HTMLElement, label: string, option:
 }
 
 describe("GoalDetailPage", () => {
+  it("renders summary lines for empty goals", async () => {
+    await seedGoal();
+
+    const { host, root } = await renderGoalDetail();
+    mountedRoot = root;
+
+    await waitForText(host, "还没开始推进");
+    await waitForText(host, "还没有成员");
+    await waitForText(host, "✓ 0 完成");
+  });
+
   it("renders ready and blocked member columns", async () => {
-    await seedGoal({ prerequisites: [{ blocker: "task-1", blocked: "track-1" }] });
-    await seedTask({ id: "task-1", title: "写发布文案", done: false, goalId: "goal-1" });
-    await seedTrack({ id: "track-1", title: "发布轨道", status: "active", goalId: "goal-1" });
+    await seedGoal({
+      members: [
+        { kind: "task", id: "task-1" },
+        { kind: "track", id: "track-1" },
+      ],
+      prerequisites: [
+        {
+          blocker: { kind: "task", id: "task-1" },
+          blocked: { kind: "track", id: "track-1" },
+        },
+      ],
+    });
+    await seedTask({ id: "task-1", title: "写发布文案", done: false });
+    await seedTrack({ id: "track-1", title: "发布轨道", status: "active" });
 
     const { host, root } = await renderGoalDetail();
     mountedRoot = root;
@@ -149,12 +189,18 @@ describe("GoalDetailPage", () => {
     await waitForText(host, "在等前置");
     await waitForText(host, "发布轨道");
     await waitForText(host, "等：写发布文案");
+    await waitForText(host, "▸ 1 能推 · 1 等前置");
   });
 
   it("adds prerequisite edges", async () => {
-    await seedGoal();
-    await seedTask({ id: "task-1", title: "写发布文案", goalId: "goal-1" });
-    await seedTrack({ id: "track-1", title: "发布轨道", status: "active", goalId: "goal-1" });
+    await seedGoal({
+      members: [
+        { kind: "task", id: "task-1" },
+        { kind: "track", id: "track-1" },
+      ],
+    });
+    await seedTask({ id: "task-1", title: "写发布文案" });
+    await seedTrack({ id: "track-1", title: "发布轨道", status: "active" });
 
     const { host, root } = await renderGoalDetail();
     mountedRoot = root;
@@ -164,13 +210,18 @@ describe("GoalDetailPage", () => {
     await click(host.querySelector('button[aria-label="添加前置关系"]'));
 
     await expect(db.goals.get("goal-1")).resolves.toMatchObject({
-      prerequisites: [{ blocker: "task-1", blocked: "track-1" }],
+      prerequisites: [
+        {
+          blocker: { kind: "task", id: "task-1" },
+          blocked: { kind: "track", id: "track-1" },
+        },
+      ],
     });
   });
 
   it("deletes a goal after confirmation and keeps members", async () => {
-    await seedGoal();
-    await seedTask({ id: "task-1", title: "写发布文案", goalId: "goal-1" });
+    await seedGoal({ members: [{ kind: "task", id: "task-1" }] });
+    await seedTask({ id: "task-1", title: "写发布文案" });
 
     const { host, root } = await renderGoalDetail();
     mountedRoot = root;
@@ -180,6 +231,36 @@ describe("GoalDetailPage", () => {
     await click(buttonByText(document.body, "删除目标"));
 
     await expect(db.goals.get("goal-1")).resolves.toBeUndefined();
-    await expect(db.tasks.get("task-1")).resolves.toMatchObject({ goalId: null });
+    await expect(db.tasks.get("task-1")).resolves.not.toHaveProperty("goalId");
+  });
+
+  it("quick creates a todo inside an active goal", async () => {
+    await seedGoal();
+
+    const { host, root } = await renderGoalDetail();
+    mountedRoot = root;
+
+    const input = await waitForInputByLabel(host, "快速添加目标任务");
+    await typeInput(input, "写发布文案");
+    await click(host.querySelector('button[aria-label="添加目标任务"]'));
+
+    await waitForText(host, "写发布文案");
+    const tasks = await db.tasks.toArray();
+    expect(tasks).toHaveLength(1);
+    await expect(db.goals.get("goal-1")).resolves.toMatchObject({
+      members: [{ kind: "task", id: tasks[0]?.id }],
+    });
+    expect(input.value).toBe("");
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not show quick create for archived goals", async () => {
+    await seedGoal({ status: "archived" });
+
+    const { host, root } = await renderGoalDetail();
+    mountedRoot = root;
+
+    await waitForText(host, "还没开始推进");
+    expect(host.querySelector('input[aria-label="快速添加目标任务"]')).toBeNull();
   });
 });

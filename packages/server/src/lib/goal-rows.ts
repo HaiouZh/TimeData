@@ -1,4 +1,4 @@
-import type { Goal } from "@timedata/shared";
+import { GoalSchema, type Goal } from "@timedata/shared";
 
 export interface GoalRow {
   id: string;
@@ -6,6 +6,7 @@ export interface GoalRow {
   kind: string;
   status: string;
   note: string | null;
+  members: string | null;
   prerequisites: string | null;
   created_at: string;
   updated_at: string;
@@ -18,20 +19,22 @@ export function goalToRow(data: Goal): Record<string, string | number | null> {
     kind: data.kind,
     status: data.status,
     note: data.note ?? null,
+    members: JSON.stringify(data.members ?? []),
     prerequisites: JSON.stringify(data.prerequisites ?? []),
     created_at: data.createdAt,
   };
 }
 
 export function rowToGoal(row: GoalRow): Goal {
-  return {
+  return GoalSchema.parse({
     id: row.id,
     title: row.title,
     kind: row.kind as Goal["kind"],
     status: row.status as Goal["status"],
     ...(row.note !== null ? { note: row.note } : {}),
+    members: row.members ? JSON.parse(row.members) : [],
     prerequisites: row.prerequisites ? JSON.parse(row.prerequisites) : [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
