@@ -1,0 +1,75 @@
+import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
+
+export type GoalActionId =
+  | "open"
+  | "toggle-complete"
+  | "connect"
+  | "remove-member"
+  | "remove-ref"
+  | "delete-prerequisite"
+  | "edit-goal"
+  | "toggle-archive"
+  | "delete-goal";
+
+export type GoalActionTone = "primary" | "default" | "danger";
+
+export interface GoalAction {
+  id: GoalActionId;
+  label: string;
+  tone: GoalActionTone;
+}
+
+interface GoalNodeActionOptions {
+  archived?: boolean;
+}
+
+const OPEN_ACTION: GoalAction = { id: "open", label: "打开", tone: "primary" };
+const CONNECT_ACTION: GoalAction = { id: "connect", label: "连前置", tone: "default" };
+const REMOVE_MEMBER_ACTION: GoalAction = { id: "remove-member", label: "移除成员", tone: "danger" };
+const REMOVE_REF_ACTION: GoalAction = { id: "remove-ref", label: "移除引用", tone: "danger" };
+const DELETE_PREREQUISITE_ACTION: GoalAction = { id: "delete-prerequisite", label: "删除前置", tone: "danger" };
+const EDIT_GOAL_ACTION: GoalAction = { id: "edit-goal", label: "编辑目标", tone: "primary" };
+const DELETE_GOAL_ACTION: GoalAction = { id: "delete-goal", label: "删除目标", tone: "danger" };
+
+function toggleCompleteAction(node: GoalGraphNode): GoalAction {
+  return {
+    id: "toggle-complete",
+    label: node.status === "completed" ? "取消完成" : "完成",
+    tone: "default",
+  };
+}
+
+function toggleArchiveAction(options: GoalNodeActionOptions): GoalAction {
+  return {
+    id: "toggle-archive",
+    label: options.archived ? "恢复目标" : "归档目标",
+    tone: "default",
+  };
+}
+
+export function actionsForNode(node: GoalGraphNode, options: GoalNodeActionOptions = {}): GoalAction[] {
+  if (node.kind === "task") {
+    return [OPEN_ACTION, toggleCompleteAction(node), CONNECT_ACTION, REMOVE_MEMBER_ACTION];
+  }
+
+  if (node.kind === "track") {
+    return [OPEN_ACTION, CONNECT_ACTION, REMOVE_MEMBER_ACTION];
+  }
+
+  if (node.kind === "ghost") {
+    return [REMOVE_REF_ACTION];
+  }
+
+  return [EDIT_GOAL_ACTION, toggleArchiveAction(options), DELETE_GOAL_ACTION];
+}
+
+export function actionsForEdge(edge: GoalGraphEdge): GoalAction[] {
+  if (edge.kind === "tether") return [];
+
+  return [
+    {
+      ...DELETE_PREREQUISITE_ACTION,
+      label: edge.kind === "broken-prerequisite" ? "删除失效前置" : DELETE_PREREQUISITE_ACTION.label,
+    },
+  ];
+}
