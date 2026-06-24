@@ -28,7 +28,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-23
+last-reviewed: 2026-06-24
 ---
 
 # 待办任务
