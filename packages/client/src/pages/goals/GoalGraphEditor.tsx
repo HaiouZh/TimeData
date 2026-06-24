@@ -4,6 +4,7 @@ import {
   Background,
   ReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
   useReactFlow,
   type Connection,
   type EdgeMouseHandler,
@@ -11,7 +12,7 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import type { Goal, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
@@ -27,17 +28,21 @@ import {
   updateGoalPrerequisites,
 } from "../../lib/goals.js";
 import { buildGoalOverview } from "../../lib/goalsView.js";
+import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { actionsForEdge, actionsForNode, type GoalAction, type GoalActionId } from "./goalGraphActions.js";
+import { GoalEditForm } from "./GoalEditForm.js";
 import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
 import { GoalEditSheet } from "./GoalEditSheet.js";
+import { GoalMemberPicker } from "./GoalMemberPicker.js";
 import { GoalGraphEdge, type GoalGraphFlowEdge } from "./GoalGraphEdge.js";
 import { GoalGraphNode, type GoalGraphFlowNode } from "./GoalGraphNode.js";
 import { GoalGraphToolbar } from "./GoalGraphToolbar.js";
 import { GoalGraphUndoToast } from "./GoalGraphUndoToast.js";
+import { GoalSidePanel } from "./GoalSidePanel.js";
 
 const REASON_COPY = {
   "self-reference": "不能连接自己",
@@ -76,6 +81,8 @@ interface LayoutCache {
   orientation: GoalGraphOrientation;
   layout: GoalGraphLayout;
 }
+
+type WidePanel = "add-member" | "goal-menu" | null;
 
 function refFromNodeId(id: string): GoalMemberRef | null {
   const clean = id.startsWith("ghost:") ? id.slice(6) : id;
@@ -119,20 +126,25 @@ export function GoalGraphEditor(props: GoalGraphEditorProps) {
 
 function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDeletedGoal }: GoalGraphEditorProps) {
   const destination = useTodoDefaultDestination();
+  const boardSignals = useTrackActionTags();
   const wide = useIsWideScreen();
   const coarse = useIsCoarsePointer();
   const orientation: GoalGraphOrientation = wide ? "horizontal" : "vertical";
   const inlineActions = wide && !coarse;
   const { syncAfterWrite } = useSyncContext();
   const flow = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [goalMenuOpen, setGoalMenuOpen] = useState(false);
+  const [widePanel, setWidePanel] = useState<WidePanel>(null);
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const layoutCacheRef = useRef<LayoutCache | null>(null);
+  const initialFitDoneRef = useRef<string | null>(null);
+  const savedViewport = loadGoalGraphViewport(goal.id);
 
   const overview = useMemo(() => buildGoalOverview(goal, tasks, tracks, steps), [goal, steps, tasks, tracks]);
   const model = useMemo(() => buildGoalGraphModel(overview), [overview]);
@@ -171,6 +183,15 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
   );
   const selectedNode = selectedNodeId ? (model.nodes.find((node) => node.id === selectedNodeId) ?? null) : null;
   const selectedEdge = selectedEdgeId ? (model.edges.find((edge) => edge.id === selectedEdgeId) ?? null) : null;
+
+  useEffect(() => {
+    if (savedViewport) return;
+    if (!nodesInitialized) return;
+    if (model.nodes.length === 0) return;
+    if (initialFitDoneRef.current === goal.id) return;
+    initialFitDoneRef.current = goal.id;
+    void flow.fitView({ padding: 0.25 });
+  }, [flow, goal.id, model.nodes.length, nodesInitialized, savedViewport]);
 
   function clearSelection(): void {
     setSelectedNodeId(null);
@@ -244,7 +265,8 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
       return;
     }
     if (actionId === "edit-goal") {
-      setGoalMenuOpen(true);
+      if (wide) setWidePanel("goal-menu");
+      else setGoalMenuOpen(true);
       return;
     }
     if (actionId === "toggle-archive") {
@@ -314,15 +336,17 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
   }
 
   return (
-    <div className="relative min-h-[70vh] overflow-hidden rounded-card border border-border bg-page">
-      <div data-goal-graph-canvas className="absolute inset-0">
+    <div data-goal-graph-editor className="relative flex h-full min-h-0 overflow-hidden bg-page">
+      <div data-goal-graph-canvas className="relative min-w-0 flex-1">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          defaultViewport={loadGoalGraphViewport(goal.id) ?? undefined}
+          defaultViewport={savedViewport ?? undefined}
           nodesDraggable={false}
+          nodeOrigin={[0.5, 0.5]}
+          proOptions={{ hideAttribution: true }}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
           onPaneClick={clearSelection}
@@ -337,9 +361,9 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
       <div className="pointer-events-none absolute left-3 top-3 z-10">
         <GoalGraphToolbar
           summary={model.summary}
-          onAddMember={() => setAddMemberOpen(true)}
+          onAddMember={() => (wide ? setWidePanel("add-member") : setAddMemberOpen(true))}
           onFitView={fitView}
-          onOpenGoalMenu={() => setGoalMenuOpen(true)}
+          onOpenGoalMenu={() => (wide ? setWidePanel("goal-menu") : setGoalMenuOpen(true))}
         />
       </div>
 
@@ -416,11 +440,44 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
         open={addMemberOpen}
         tasks={tasks}
         tracks={tracks}
+        steps={steps}
         members={goal.members ?? []}
+        boardSignals={boardSignals}
+        archived={goal.status === "archived"}
         onAddMember={(ref) => void addMember(ref)}
         onQuickCreateTask={(title) => quickCreateTask(title)}
         onClose={() => setAddMemberOpen(false)}
       />
+      <GoalSidePanel open={widePanel === "add-member"} title="添加成员" onClose={() => setWidePanel(null)}>
+        <GoalMemberPicker
+          tasks={tasks}
+          tracks={tracks}
+          steps={steps}
+          members={goal.members ?? []}
+          boardSignals={boardSignals}
+          archived={goal.status === "archived"}
+          onAddMember={(ref) => void addMember(ref)}
+          onQuickCreateTask={(title) => quickCreateTask(title)}
+        />
+      </GoalSidePanel>
+      <GoalSidePanel open={widePanel === "goal-menu"} title="目标设置" onClose={() => setWidePanel(null)}>
+        <GoalEditForm
+          goal={goal}
+          active={widePanel === "goal-menu"}
+          onSave={(patch) => {
+            void updateGoal(goal.id, patch).then(syncAfterWrite);
+          }}
+          onToggleArchive={() => {
+            void updateGoal(goal.id, { status: goal.status === "archived" ? "active" : "archived" }).then(syncAfterWrite);
+          }}
+          onDelete={() => {
+            void deleteGoal(goal.id).then(() => {
+              syncAfterWrite();
+              onDeletedGoal();
+            });
+          }}
+        />
+      </GoalSidePanel>
       <GoalEditSheet
         open={goalMenuOpen}
         goal={goal}

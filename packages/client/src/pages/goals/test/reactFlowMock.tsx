@@ -27,10 +27,14 @@ export interface MockReactFlowProps extends FlowRootProps {
   nodes?: MockReactFlowNode[];
   edges?: MockReactFlowEdge[];
   children?: ReactNode;
+  nodeOrigin?: [number, number];
+  proOptions?: { hideAttribution?: boolean };
+  nodesDraggable?: boolean;
   onNodeClick?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
   onEdgeClick?: (event: ReactMouseEvent<HTMLButtonElement>, edge: MockReactFlowEdge) => void;
   onPaneClick?: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onConnect?: (connection: MockConnection) => void;
+  onMoveEnd?: (event: MouseEvent | TouchEvent | null, viewport: MockViewport) => void;
 }
 
 export interface MockStoreState {
@@ -54,7 +58,7 @@ const DEFAULT_CONNECTION: MockConnection = { source: "task:t1", target: "task:t2
 const STORE_STATE: MockStoreState = { transform: [0, 0, 1] };
 const DEFAULT_VIEWPORT: MockViewport = { x: 0, y: 0, zoom: 1 };
 
-const fitView = vi.fn<() => Promise<boolean>>(() => Promise.resolve(true));
+const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => Promise.resolve(true));
 const setViewport = vi.fn<(viewport: MockViewport) => Promise<boolean>>(() => Promise.resolve(true));
 const getViewport = vi.fn<() => MockViewport>(() => DEFAULT_VIEWPORT);
 const reactFlowInstance = { fitView, setViewport, getViewport };
@@ -86,10 +90,20 @@ export function ReactFlow({
   onEdgeClick,
   onPaneClick,
   onConnect,
+  nodeOrigin,
+  proOptions,
+  nodesDraggable,
   ...props
 }: MockReactFlowProps) {
   return (
-    <div {...props} data-rf="true" onClick={onPaneClick}>
+    <div
+      {...props}
+      data-rf="true"
+      data-node-origin={nodeOrigin ? nodeOrigin.join(",") : ""}
+      data-hide-attribution={proOptions?.hideAttribution ? "true" : "false"}
+      data-nodes-draggable={nodesDraggable ? "true" : "false"}
+      onClick={onPaneClick}
+    >
       <div data-rf-nodes="true">
         {nodes.map((node) => (
           <button
@@ -188,6 +202,20 @@ export function useStore<StateSlice>(selector: (state: MockStoreState) => StateS
 }
 
 export function useReactFlow() {
+  return reactFlowInstance;
+}
+
+export function useNodesInitialized() {
+  return true;
+}
+
+export function resetReactFlowMock() {
+  fitView.mockClear();
+  setViewport.mockClear();
+  getViewport.mockClear();
+}
+
+export function getReactFlowMock() {
   return reactFlowInstance;
 }
 

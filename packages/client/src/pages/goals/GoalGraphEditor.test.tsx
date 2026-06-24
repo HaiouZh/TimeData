@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Goal, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
 import { db } from "../../db/index.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
+import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: vi.fn() }) }));
@@ -168,10 +169,42 @@ describe("GoalGraphEditor", () => {
     const flowCanvas = host.querySelector('[data-rf="true"]');
 
     expect(canvasFrame).toBeInstanceOf(HTMLElement);
-    expect(canvasFrame?.className).toContain("absolute");
-    expect(canvasFrame?.className).toContain("inset-0");
+    expect(canvasFrame?.className).toContain("relative");
+    expect(canvasFrame?.className).toContain("min-w-0");
+    expect(canvasFrame?.className).toContain("flex-1");
     expect(flowCanvas).toBeInstanceOf(HTMLElement);
+    expect(flowCanvas?.className).toContain("h-full");
+    expect(flowCanvas?.className).toContain("w-full");
     expect(canvasFrame).toContain(flowCanvas);
+  });
+
+  it("星图根容器填满页面并隐藏 React Flow attribution", async () => {
+    const goalValue = goal();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue });
+    const root = host.querySelector("[data-goal-graph-editor]");
+    const flowCanvas = host.querySelector('[data-rf="true"]');
+
+    expect(root).toBeInstanceOf(HTMLElement);
+    expect(root?.className).toContain("relative");
+    expect(root?.className).toContain("h-full");
+    expect(root?.className).toContain("min-h-0");
+    expect(flowCanvas?.getAttribute("data-node-origin")).toBe("0.5,0.5");
+    expect(flowCanvas?.getAttribute("data-hide-attribution")).toBe("true");
+    expect(flowCanvas?.getAttribute("data-nodes-draggable")).toBe("false");
+  });
+
+  it("首次没有保存 viewport 时自动 fitView 一次", async () => {
+    resetReactFlowMock();
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+
+    await renderEditor({ goal: goalValue, tasks: [taskValue] });
+    await tick();
+
+    expect(getReactFlowMock().fitView).toHaveBeenCalledWith({ padding: 0.25 });
   });
 
   it("工具栏在画布浮层上保持可点击", async () => {
@@ -304,20 +337,48 @@ describe("GoalGraphEditor", () => {
     const { host } = await renderEditor({ goal: goalValue, tasks: [taskValue] });
 
     await click(buttonByLabel(host, "添加成员"));
-    await click(buttonByLabel(document.body, "添加任务成员"));
-    await click(buttonByText(document.body, "已有任务"));
+    await click(buttonByLabel(host, "添加任务 已有任务"));
     await tick();
     expect((await db.goals.get("goal-1"))?.members).toEqual([{ kind: "task", id: "task-1" }]);
 
-    const input = document.body.querySelector('input[aria-label="新建任务并加入"]');
+    const input = host.querySelector('input[aria-label="新建任务并加入"]');
     if (!(input instanceof HTMLInputElement)) throw new Error("missing quick create input");
     await setInputValue(input, "  新任务  ");
-    await click(buttonByText(document.body, "加入"));
+    await click(buttonByText(host, "加入"));
     await tick();
 
     const tasks = await db.tasks.toArray();
     expect(tasks.map((item) => item.title).sort()).toEqual(["已有任务", "新任务"]);
     expect((await db.goals.get("goal-1"))?.members).toHaveLength(2);
+  });
+
+  it("宽屏添加成员打开右侧面板", async () => {
+    const goalValue = goal();
+    const taskValue = task("task-1", { title: "已有任务" });
+    await seed(goalValue, [taskValue]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [taskValue] });
+
+    await click(buttonByLabel(host, "添加成员"));
+
+    const panel = host.querySelector('aside[aria-label="添加成员"]');
+    expect(panel?.getAttribute("aria-label")).toBe("添加成员");
+    expect(panel?.textContent).toContain("已有任务");
+  });
+
+  it("宽屏目标菜单打开右侧编辑面板", async () => {
+    const goalValue = goal({ title: "测试目标" });
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue });
+
+    await click(buttonByLabel(host, "目标菜单"));
+
+    const panel = host.querySelector('aside[aria-label="目标设置"]');
+    expect(panel?.getAttribute("aria-label")).toBe("目标设置");
+    const titleInput = panel?.querySelector('input[aria-label="目标标题"]');
+    expect(titleInput).toBeInstanceOf(HTMLInputElement);
+    expect((titleInput as HTMLInputElement).value).toBe("测试目标");
   });
 
   it("目标菜单可编辑、归档和删除目标", async () => {
