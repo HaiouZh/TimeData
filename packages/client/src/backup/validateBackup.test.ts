@@ -305,6 +305,16 @@ describe("validateBackup", () => {
     );
   });
 
+  it("rejects duplicate goal layout pin composite keys", () => {
+    const pin = { goalId: "goal-1", nodeKind: "goal" as const, nodeId: "goal-1", x: 1, y: 2, updatedAt: now };
+    expect(validateBackup(validBackup({ domains: { goal_layout_pins: [pin, pin] } }))).toEqual(
+      expect.objectContaining({
+        ok: false,
+        error: expect.objectContaining({ code: "DUPLICATE_DOMAIN_ID" }),
+      }),
+    );
+  });
+
   it("rejects invalid category parent relationships", () => {
     expect(validateBackup(validBackup({ categories: [category({ id: "a", parentId: "a" })] }))).toEqual(
       expect.objectContaining({

@@ -3,7 +3,7 @@ import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { classifyReasonCode } from "./reason.ts";
-import { CLIENT_SYNC_DOMAINS, parseRemoteRecord } from "./clientDomains.ts";
+import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
 import {
   getSyncDomain,
   SyncPullResponseSchema,
@@ -68,6 +68,10 @@ export interface RegularSyncOptions {
 interface CompactedSyncLog extends SyncLog {
   omitFromPush?: boolean;
   sourceLogIds: string[];
+}
+
+function storeKeyForRecordId(domain: ClientDomainConfig, recordId: string): string | [string, string, string] {
+  return domain.keyFromRecordId ? domain.keyFromRecordId(recordId) : recordId;
 }
 
 // 账本模型：pull 只有一种问法——“#N 之后给我”；repair/全量 = sinceSeq 0。
@@ -270,7 +274,7 @@ export async function syncPush(): Promise<SyncPushResult> {
 
     const domain = CLIENT_SYNC_DOMAINS[log.tableName];
     if (!domain) continue;
-    const data = await db.table(domain.storeName).get(log.recordId);
+    const data = await db.table(domain.storeName).get(storeKeyForRecordId(domain, log.recordId));
     if (!data) continue;
 
     if (domain.beforePush) {
@@ -350,7 +354,8 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
           applied += await domain.applyRemoteDelete(change.recordId);
         }
       } else {
-        const existing = await store.get(change.recordId);
+        const key = storeKeyForRecordId(domain, change.recordId);
+        const existing = await store.get(key);
         if (!existing) continue;
         if (sharedDomain.conflictPolicy === "manual") {
           const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
@@ -364,13 +369,13 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
               localLog,
             });
           } else {
-            await store.delete(change.recordId);
+            await store.delete(key);
             applied++;
           }
         } else {
           // lww: skip if local has pending
           if (!locallyModifiedById.has(`${change.tableName}:${change.recordId}`)) {
-            await store.delete(change.recordId);
+            await store.delete(key);
             applied++;
           }
         }
@@ -378,7 +383,7 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
     } else if (change.data) {
       const remote = parseRemoteRecord(domain, change.data, change.recordId);
       if (!remote) continue;
-      const existing = await store.get(change.recordId);
+      const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
       const hasPending = locallyModifiedById.has(`${change.tableName}:${change.recordId}`);
 
       if (sharedDomain.conflictPolicy === "manual") {
@@ -716,16 +721,17 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
       if (domain.applyRemoteDelete) {
         applied += await domain.applyRemoteDelete(change.recordId);
       } else {
-        const existing = await store.get(change.recordId);
+        const key = storeKeyForRecordId(domain, change.recordId);
+        const existing = await store.get(key);
         if (existing) {
-          await store.delete(change.recordId);
+          await store.delete(key);
           applied++;
         }
       }
     } else if (change.data) {
       const remote = parseRemoteRecord(domain, change.data, change.recordId);
       if (!remote) continue;
-      const existing = await store.get(change.recordId);
+      const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
 
       if (mode === "repair" && existing && domain.shouldSkipOnRepair?.(existing, remote)) {
         continue;

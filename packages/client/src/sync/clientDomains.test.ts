@@ -126,3 +126,25 @@ describe("goal client domain", () => {
     ).toBe(true);
   });
 });
+
+describe("goal layout pins client domain", () => {
+  it("registers compound-key pins with bundled backup", () => {
+    const domain = getClientDomain("goal_layout_pins");
+    const pin = {
+      goalId: "goal-1",
+      nodeKind: "goal" as const,
+      nodeId: "goal-1",
+      x: 1,
+      y: 2,
+      updatedAt: "2026-06-24T00:00:00.000Z",
+    };
+
+    expect(domain).toMatchObject({
+      table: "goal_layout_pins",
+      storeName: "goalLayoutPins",
+      backup: "bundled",
+    });
+    expect(domain.keyOf?.(pin)).toBe("goal-1|goal|goal-1");
+    expect(BACKUP_BUNDLED_DOMAINS.map((item) => item.table)).toContain("goal_layout_pins");
+  });
+});

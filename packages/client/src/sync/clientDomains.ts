@@ -1,6 +1,9 @@
 import type { SyncChange } from "@timedata/shared";
 import {
   CategorySchema,
+  decodeGoalLayoutPinKey,
+  GoalLayoutPinSchema,
+  goalLayoutPinKey,
   GoalSchema,
   QuickNoteSchema,
   SettingSchema,
@@ -15,7 +18,7 @@ import {
   TrackSchema,
   TrackStepSchema,
 } from "@timedata/shared";
-import type { Category, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
+import type { Category, GoalLayoutPin, QuickNote, Setting, Task, TimeEntry } from "@timedata/shared";
 import { db } from "../db/index.ts";
 import { isDeepEqual } from "../db/schemaNormalization.js";
 import { categoryDependencyChangesForEntry } from "./changes.ts";
@@ -25,6 +28,10 @@ export interface ClientDomainConfig {
   table: string;
   /** Dexie store name (camelCase) */
   storeName: string;
+  /** Optional: derive sync recordId from a record when it has no single id field. */
+  keyOf?: (record: unknown) => string;
+  /** Optional: convert sync recordId into the Dexie primary key for compound-key stores. */
+  keyFromRecordId?: (recordId: string) => string | [string, string, string];
   /** Zod schema for parsing remote data */
   schema: { safeParse: (data: unknown) => { success: true; data: unknown } | { success: false; error: { issues: Array<{ message: string }> } } };
   /** Optional: custom push logic (e.g. time_entries category dependency injection) */
@@ -75,6 +82,11 @@ function taskNeedsApply(existing: Task | undefined, remoteTask: Task): boolean {
 
 function isCompleteEntry(entry: TimeEntry): boolean {
   return Boolean(entry.categoryId && entry.startTime && entry.endTime);
+}
+
+function goalLayoutPinStoreKey(recordId: string): [string, GoalLayoutPin["nodeKind"], string] {
+  const key = decodeGoalLayoutPinKey(recordId);
+  return [key.goalId, key.nodeKind, key.nodeId];
 }
 
 // Categories cascade delete
@@ -206,6 +218,14 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     table: "goals",
     storeName: "goals",
     schema: GoalSchema,
+    backup: "bundled",
+  },
+  goal_layout_pins: {
+    table: "goal_layout_pins",
+    storeName: "goalLayoutPins",
+    schema: GoalLayoutPinSchema,
+    keyOf: (record) => goalLayoutPinKey(record as GoalLayoutPin),
+    keyFromRecordId: goalLayoutPinStoreKey,
     backup: "bundled",
   },
 };

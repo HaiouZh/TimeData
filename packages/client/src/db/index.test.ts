@@ -55,14 +55,14 @@ describe("resetSyncCursors", () => {
 });
 
 describe("Dexie database", () => {
-  it("creates v9 schema and seeds default categories on a fresh open", async () => {
+  it("creates the current schema and seeds default categories on a fresh open", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(11);
+    expect(db.verno).toBe(12);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
@@ -87,6 +87,11 @@ describe("Dexie database", () => {
     expect(db.goals.schema.idxByName.kind).toBeDefined();
     expect(db.goals.schema.idxByName.status).toBeDefined();
     expect(db.goals.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.goalLayoutPins.schema.primKey.keyPath).toEqual(["goalId", "nodeKind", "nodeId"]);
+    expect(db.goalLayoutPins.schema.idxByName.goalId).toBeDefined();
+    expect(db.goalLayoutPins.schema.idxByName.nodeKind).toBeDefined();
+    expect(db.goalLayoutPins.schema.idxByName.nodeId).toBeDefined();
+    expect(db.goalLayoutPins.schema.idxByName.updatedAt).toBeDefined();
   });
 
   it("exposes a tasks table keyed by id", async () => {

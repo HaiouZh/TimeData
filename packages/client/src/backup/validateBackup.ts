@@ -136,7 +136,7 @@ export function validateBackup(value: unknown): BackupValidationResult {
       if (!parsed.success) {
         return { ok: false, error: { code: "INVALID_DOMAIN_RECORDS", message: `备份文件 ${domain.table} 数据无效。` } };
       }
-      const id = (parsed.data as { id?: unknown }).id;
+      const id = domain.keyOf ? domain.keyOf(parsed.data) : (parsed.data as { id?: unknown }).id;
       if (typeof id === "string") {
         if (ids.has(id)) {
           return {

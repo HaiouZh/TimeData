@@ -170,6 +170,24 @@ const newGoal: Goal = {
   updatedAt: now,
 };
 
+const oldGoalLayoutPin = {
+  goalId: "old-goal",
+  nodeKind: "goal" as const,
+  nodeId: "old-goal",
+  x: 12,
+  y: 24,
+  updatedAt: now,
+};
+
+const newGoalLayoutPin = {
+  goalId: "new-goal",
+  nodeKind: "goal" as const,
+  nodeId: "new-goal",
+  x: 320,
+  y: 180,
+  updatedAt: now,
+};
+
 const syncLog: SyncLogEntry = {
   id: "sync-1",
   tableName: "categories",
@@ -281,6 +299,21 @@ describe("importBackup", () => {
     await expect(db.tracks.toArray()).resolves.toEqual([newTrack]);
     await expect(db.trackSteps.toArray()).resolves.toEqual([newTrackStep]);
     expect(result.domainCounts).toEqual({ tasks: 1, goals: 1, tracks: 1, track_steps: 1 });
+  });
+
+  it("restores goal layout pins when the backup includes that domain", async () => {
+    await db.goalLayoutPins.add(oldGoalLayoutPin);
+
+    const result = await importBackup({
+      ...backup(),
+      domains: {
+        tasks: [newTask],
+        goal_layout_pins: [newGoalLayoutPin],
+      },
+    });
+
+    await expect(db.goalLayoutPins.toArray()).resolves.toEqual([newGoalLayoutPin]);
+    expect(result.domainCounts).toEqual({ tasks: 1, goal_layout_pins: 1 });
   });
 
   it("does not modify local data when validation fails", async () => {

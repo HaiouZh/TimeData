@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { QuickNote, SyncLogEntry, Task } from "@timedata/shared";
+import type { GoalLayoutPin, QuickNote, SyncLogEntry, Task } from "@timedata/shared";
 import { db } from "../db/index.js";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -64,6 +64,7 @@ beforeEach(async () => {
   await db.timeEntries.clear();
   await db.quickNotes.clear();
   await db.tasks.clear();
+  if ("goalLayoutPins" in db) await db.goalLayoutPins.clear();
   await db.syncLog.clear();
   await db.categories.clear();
   await db.settings.clear();
@@ -393,6 +394,57 @@ describe("syncPush", () => {
       },
     ]);
     await expect(db.syncLog.get("setting-log-1")).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("pushes compound-key goal layout pins from syncLog", async () => {
+    const pin: GoalLayoutPin = {
+      goalId: "goal-1",
+      nodeKind: "goal",
+      nodeId: "goal-1",
+      x: 100,
+      y: 200,
+      updatedAt: "2026-06-24T00:00:00.000Z",
+    };
+    await db.goalLayoutPins.add(pin);
+    await db.syncLog.add({
+      id: "pin-log-1",
+      tableName: "goal_layout_pins",
+      recordId: "goal-1|goal|goal-1",
+      action: "create",
+      timestamp: "2026-06-24T00:00:00.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "goal_layout_pins",
+          recordId: "goal-1|goal|goal-1",
+          action: "create",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "applied",
+          incomingTimestamp: "2026-06-24T00:00:00.000Z",
+        },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-06-24T00:01:00.000Z",
+    });
+
+    await expect(syncPush()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    expect(pushBody.changes).toEqual([
+      {
+        tableName: "goal_layout_pins",
+        recordId: "goal-1|goal|goal-1",
+        action: "create",
+        data: pin,
+        timestamp: "2026-06-24T00:00:00.000Z",
+      },
+    ]);
+    await expect(db.syncLog.get("pin-log-1")).resolves.toMatchObject({ synced: 1 });
   });
 
   it("pushes quick note changes without category dependency changes", async () => {
@@ -1023,6 +1075,48 @@ describe("syncPull", () => {
 
     await expect(syncPull()).resolves.toBe(1);
     await expect(db.tasks.get("task-1")).resolves.toBeUndefined();
+  });
+
+  it("applies goal layout pin upsert and delete changes from pull", async () => {
+    const pin: GoalLayoutPin = {
+      goalId: "goal-1",
+      nodeKind: "goal",
+      nodeId: "goal-1",
+      x: 100,
+      y: 200,
+      updatedAt: "2026-06-24T00:00:00.000Z",
+    };
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-24T00:01:00.000Z",
+      changes: [
+        {
+          tableName: "goal_layout_pins",
+          recordId: "goal-1|goal|goal-1",
+          action: "update",
+          data: pin,
+          timestamp: "2026-06-24T00:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.goalLayoutPins.get(["goal-1", "goal", "goal-1"])).resolves.toEqual(pin);
+
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-06-24T00:02:00.000Z",
+      changes: [
+        {
+          tableName: "goal_layout_pins",
+          recordId: "goal-1|goal|goal-1",
+          action: "delete",
+          data: null,
+          timestamp: "2026-06-24T00:02:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull()).resolves.toBe(1);
+    await expect(db.goalLayoutPins.get(["goal-1", "goal", "goal-1"])).resolves.toBeUndefined();
   });
 
   it("skips duplicate boundary records during incremental pull", async () => {

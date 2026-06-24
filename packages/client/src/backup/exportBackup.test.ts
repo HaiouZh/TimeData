@@ -97,6 +97,15 @@ const goal: Goal = {
   updatedAt: now,
 };
 
+const goalLayoutPin = {
+  goalId: "goal-1",
+  nodeKind: "goal" as const,
+  nodeId: "goal-1",
+  x: 320,
+  y: 180,
+  updatedAt: now,
+};
+
 beforeEach(async () => {
   await db.timeEntries.clear();
   await db.goals.clear();
@@ -117,6 +126,7 @@ describe("exportBackup", () => {
     await db.goals.add(goal);
     await db.tracks.add(track);
     await db.trackSteps.add(trackStep);
+    await db.goalLayoutPins.add(goalLayoutPin);
 
     const backup = await exportBackup({
       now: () => "2026-05-07T12:30:00.000Z",
@@ -136,6 +146,7 @@ describe("exportBackup", () => {
     expect(backup.domains.tasks).toEqual([task]);
     expect(backup.domains.quick_notes).toEqual([quickNote]);
     expect(backup.domains.goals).toEqual([goal]);
+    expect(backup.domains.goal_layout_pins).toEqual([goalLayoutPin]);
     expect(backup.domains.tracks).toEqual([track]);
     expect(backup.domains.track_steps).toEqual([trackStep]);
 
