@@ -86,6 +86,16 @@ beforeEach(() => {
 
     CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL, note TEXT, members TEXT NOT NULL DEFAULT '[]', prerequisites TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 
+    CREATE TABLE IF NOT EXISTS goal_layout_pins (
+      goal_id TEXT NOT NULL,
+      node_kind TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      x REAL NOT NULL,
+      y REAL NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (goal_id, node_kind, node_id)
+    );
+
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL DEFAULT (datetime('now')),
@@ -160,6 +170,10 @@ describe("resetDatabaseConnectionToDefaults", () => {
       INSERT INTO track_steps (id, track_id, source, content, started_at, refs, tags, seq, created_at, updated_at)
       VALUES ('step-1', 'track-1', 'agent', '', ?, '[]', '[]', 0, ?, ?)
     `).run(now, now, now);
+    db.prepare(`
+      INSERT INTO goal_layout_pins (goal_id, node_kind, node_id, x, y, updated_at)
+      VALUES ('goal-1', 'goal', 'goal-1', 10, 20, ?)
+    `).run(now);
 
     const result = resetDatabaseConnectionToDefaults(db);
 
@@ -167,6 +181,7 @@ describe("resetDatabaseConnectionToDefaults", () => {
     const notes = db.prepare("SELECT COUNT(*) as count FROM quick_notes").get() as { count: number };
     const tracks = db.prepare("SELECT COUNT(*) as count FROM tracks").get() as { count: number };
     const steps = db.prepare("SELECT COUNT(*) as count FROM track_steps").get() as { count: number };
+    const pins = db.prepare("SELECT COUNT(*) as count FROM goal_layout_pins").get() as { count: number };
     const sleep = db.prepare("SELECT id, name FROM categories WHERE id = 'cat-sleep'").get() as {
       id: string;
       name: string;
@@ -181,6 +196,7 @@ describe("resetDatabaseConnectionToDefaults", () => {
     expect(notes.count).toBe(0);
     expect(steps.count).toBe(0);
     expect(tracks.count).toBe(0);
+    expect(pins.count).toBe(0);
     expect(sleep).toEqual({ id: "cat-sleep", name: "睡眠" });
     expect(custom).toBeUndefined();
     expect(seqCount.count).toBe(0);

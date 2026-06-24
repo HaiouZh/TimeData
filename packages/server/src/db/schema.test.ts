@@ -196,6 +196,32 @@ describe("initializeDatabase", () => {
     expect(goalColumns.has("prerequisites")).toBe(true);
   });
 
+  it("creates goal_layout_pins with a composite primary key", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const columns = db.prepare("PRAGMA table_info(goal_layout_pins)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["goal_id", "TEXT", 1, 1],
+      ["node_kind", "TEXT", 1, 2],
+      ["node_id", "TEXT", 1, 3],
+      ["x", "REAL", 1, 0],
+      ["y", "REAL", 1, 0],
+      ["updated_at", "TEXT", 1, 0],
+    ]);
+
+    const indexes = (db.prepare("PRAGMA index_list(goal_layout_pins)").all() as Array<{ name: string }>).map(
+      (row) => row.name,
+    );
+    expect(indexes).toContain("idx_goal_layout_pins_goal_id");
+  });
+
   it("adds source columns to legacy quick_notes tables", async () => {
     const { ensureQuickNoteSourceColumns } = await import("./schema.js");
     db.exec(`

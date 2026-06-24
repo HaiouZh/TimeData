@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { encodeGoalLayoutPinKey } from "@timedata/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { backfillMissingSeq } from "./backfillSeq.js";
 
@@ -23,6 +24,7 @@ beforeEach(() => {
     CREATE TABLE IF NOT EXISTS tracks (id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT, status TEXT NOT NULL, refs TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS track_steps (id TEXT PRIMARY KEY, track_id TEXT NOT NULL, source TEXT NOT NULL, source_label TEXT, content TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, refs TEXT NOT NULL DEFAULT '[]', tags TEXT NOT NULL DEFAULT '[]', seq INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL, note TEXT, members TEXT NOT NULL DEFAULT '[]', prerequisites TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS goal_layout_pins (goal_id TEXT NOT NULL, node_kind TEXT NOT NULL, node_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (goal_id, node_kind, node_id));
 
   `);
 });
@@ -44,10 +46,11 @@ describe("backfillMissingSeq", () => {
     db.prepare("INSERT INTO tracks (id, title, status, refs, created_at, updated_at) VALUES ('track-1', '轨道', 'active', '[]', 't', 't')").run();
     db.prepare("INSERT INTO track_steps (id, track_id, source, content, started_at, refs, tags, seq, created_at, updated_at) VALUES ('step-1', 'track-1', 'agent', '', 't', '[]', '[]', 0, 't', 't')").run();
     db.prepare("INSERT INTO goals (id, title, kind, status, members, prerequisites, created_at, updated_at) VALUES ('goal-1', '目标', 'project', 'active', '[]', '[]', 't', 't')").run();
+    db.prepare("INSERT INTO goal_layout_pins (goal_id, node_kind, node_id, x, y, updated_at) VALUES ('goal|1', 'task', 'task/1', 10, 20, 't')").run();
 
     const inserted = backfillMissingSeq(db);
 
-    expect(inserted).toBe(9);
+    expect(inserted).toBe(10);
     expect(seqCount("categories", "cat-default")).toBe(1);
     expect(seqCount("time_entries", "e1")).toBe(1);
     expect(seqCount("settings", "sleep.categoryId")).toBe(1);
@@ -57,6 +60,7 @@ describe("backfillMissingSeq", () => {
     expect(seqCount("tracks", "track-1")).toBe(1);
     expect(seqCount("track_steps", "step-1")).toBe(1);
     expect(seqCount("goals", "goal-1")).toBe(1);
+    expect(seqCount("goal_layout_pins", encodeGoalLayoutPinKey("goal|1", "task", "task/1"))).toBe(1);
     expect(db.prepare("SELECT value FROM sync_state WHERE key = 'dirty'").get()).toMatchObject({ value: "1" });
   });
 

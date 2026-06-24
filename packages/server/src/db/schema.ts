@@ -157,6 +157,16 @@ export function initializeDatabase(): void {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS goal_layout_pins (
+      goal_id TEXT NOT NULL,
+      node_kind TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      x REAL NOT NULL,
+      y REAL NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (goal_id, node_kind, node_id)
+    );
+
     CREATE TABLE IF NOT EXISTS track_steps (
       id TEXT PRIMARY KEY,
       track_id TEXT NOT NULL,
@@ -217,6 +227,8 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_tracks_updated_at ON tracks(updated_at);
     CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
     CREATE INDEX IF NOT EXISTS idx_goals_updated_at ON goals(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_goal_layout_pins_goal_id ON goal_layout_pins(goal_id);
+    CREATE INDEX IF NOT EXISTS idx_goal_layout_pins_updated_at ON goal_layout_pins(updated_at);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_id ON track_steps(track_id);
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_seq ON track_steps(track_id, seq);
     CREATE INDEX IF NOT EXISTS idx_track_steps_updated_at ON track_steps(updated_at);

@@ -69,6 +69,15 @@ function makeTestDb(): Database.Database {
       updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL, note TEXT, members TEXT NOT NULL DEFAULT '[]', prerequisites TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS goal_layout_pins (
+      goal_id TEXT NOT NULL,
+      node_kind TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      x REAL NOT NULL,
+      y REAL NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (goal_id, node_kind, node_id)
+    );
     CREATE TABLE sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL DEFAULT (datetime('now')),
       device TEXT, action TEXT NOT NULL, detail TEXT, record_count INTEGER DEFAULT 0
@@ -140,6 +149,9 @@ describe("runUtcResetIfNeeded", () => {
       new Date().toISOString(),
       new Date().toISOString(),
     );
+    db.prepare(
+      "INSERT INTO goal_layout_pins (goal_id, node_kind, node_id, x, y, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("goal-1", "goal", "goal-1", 10, 20, new Date().toISOString());
     computeAndPersistCommitHash(db);
 
     const result = runUtcResetIfNeeded(db);
@@ -150,6 +162,7 @@ describe("runUtcResetIfNeeded", () => {
     expect((db.prepare("SELECT COUNT(*) as n FROM quick_notes").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM track_steps").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM tracks").get() as { n: number }).n).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) as n FROM goal_layout_pins").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM sync_logs").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM sync_tombstones").get() as { n: number }).n).toBe(0);
     // 默认分类已重建

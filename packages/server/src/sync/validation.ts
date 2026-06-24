@@ -28,7 +28,12 @@ function collectBatchCategories(changes: SyncChange[]): Map<string, CategoryPare
 }
 
 // 域无关的通用校验：delete 直接接受；upsert 要求 payload 存在、过域 schema、主键与 recordId 一致。
-function validateGenericChange(change: SyncChange, domain: SyncDomainConfig, idField: string): SyncPushOutcome | null {
+function validateGenericChange(
+  change: SyncChange,
+  domain: SyncDomainConfig,
+  identity: ((data: unknown) => string) | undefined,
+  idField: string,
+): SyncPushOutcome | null {
   if (change.action === "delete") return null;
   // 静态类型上 upsert 的 data 非空，但运行时入参可能缺失（schema 之前的形状兜底）。
   const tableName = change.tableName;
@@ -48,7 +53,7 @@ function validateGenericChange(change: SyncChange, domain: SyncDomainConfig, idF
     );
   }
 
-  const payloadId = (parsed.data as Record<string, unknown>)[idField];
+  const payloadId = identity ? identity(parsed.data) : (parsed.data as Record<string, unknown>)[idField];
   if (payloadId !== change.recordId) {
     return changeOutcome(change, "rejected", "id_mismatch", `${change.tableName} payload ${idField} does not match recordId`);
   }
@@ -95,7 +100,7 @@ export function validateSyncChanges(
       const idField = hooks.lww?.idColumn ?? "id";
       result =
         hooks.crossValidate?.(change, previousChanges) ??
-        validateGenericChange(change, domain, idField) ??
+        validateGenericChange(change, domain, hooks.identity, idField) ??
         hooks.validate?.(db, change, ctx) ??
         changeOutcome(change, "accepted", "applied", `${change.tableName} change can be applied`);
     }

@@ -16,6 +16,7 @@ export function resetDatabaseConnectionToDefaults(db: Database.Database): ResetD
 
     db.prepare("DELETE FROM track_steps").run();
     db.prepare("DELETE FROM tracks").run();
+    db.prepare("DELETE FROM goal_layout_pins").run();
     db.prepare("DELETE FROM quick_notes").run();
     db.prepare("DELETE FROM time_entries").run();
     db.prepare("DELETE FROM settings").run();

@@ -1,4 +1,15 @@
-import type { Category, QuickNote, Setting, SyncChange, SyncPushOutcome, Task, TimeEntry } from "@timedata/shared";
+import {
+  decodeGoalLayoutPinKey,
+  encodeGoalLayoutPinKey,
+  type Category,
+  type GoalLayoutPin,
+  type QuickNote,
+  type Setting,
+  type SyncChange,
+  type SyncPushOutcome,
+  type Task,
+  type TimeEntry,
+} from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import {
   type CategoryRow,
@@ -22,6 +33,11 @@ import {
 } from "../lib/healthRows.js";
 import { type HealthChartRow, rowToHealthChart, healthChartToRow } from "../lib/chartRows.js";
 import { type GoalRow, goalToRow, rowToGoal } from "../lib/goal-rows.js";
+import {
+  type GoalLayoutPinRow,
+  goalLayoutPinToRow,
+  rowToGoalLayoutPin,
+} from "../lib/goal-layout-pin-rows.js";
 import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
 import { recordSeq } from "./seq.js";
 
@@ -55,6 +71,8 @@ export interface ServerDomainHooks {
   crossValidate?: (change: SyncChange, previousChanges: SyncChange[]) => SyncPushOutcome | null;
   /** 自定义写入；缺省走通用 LWW upsert/delete + tombstone */
   apply?: (db: Database, change: SyncChange, serverNow: string) => ApplyChangeResult;
+  /** 从 upsert payload 计算 sync recordId；复合键域用它替代 payload.id。 */
+  identity?: (data: unknown) => string;
   /** 通用 LWW 路径所需的表/主键列映射（apply 缺省时必填） */
   lww?: { idColumn: string; toRow: (data: unknown) => Record<string, string | number | null> };
   /** 按主键读当前行并转成 update SyncChange；pull seq 补差用，行不存在返回 null */
@@ -397,6 +415,70 @@ function readTaskRecord(db: Database, recordId: string): SyncChange | null {
   return row ? updateChange("tasks", row.id, rowToTask(row), row.updated_at) : null;
 }
 
+function validateGoalLayoutPinChange(_db: Database, change: SyncChange): SyncPushOutcome | null {
+  try {
+    decodeGoalLayoutPinKey(change.recordId);
+    return null;
+  } catch (error) {
+    return changeOutcome(
+      change,
+      "rejected",
+      "invalid_shape",
+      error instanceof Error ? error.message : "invalid goal layout pin key",
+    );
+  }
+}
+
+function applyGoalLayoutPinChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {
+  const key = decodeGoalLayoutPinKey(change.recordId);
+
+  if (change.action === "delete") {
+    db.prepare(`
+      DELETE FROM goal_layout_pins
+      WHERE goal_id = ? AND node_kind = ? AND node_id = ?
+    `).run(key.goalId, key.nodeKind, key.nodeId);
+    db.prepare(`
+      INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
+      VALUES ('goal_layout_pins', ?, ?)
+      ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
+    `).run(change.recordId, serverNow);
+    return applyResult(change, "applied", "deleted goal_layout_pins record");
+  }
+
+  const data = change.data as GoalLayoutPin;
+  const row = goalLayoutPinToRow(data);
+  const existing = db.prepare(`
+    SELECT updated_at FROM goal_layout_pins
+    WHERE goal_id = ? AND node_kind = ? AND node_id = ?
+  `).get(data.goalId, data.nodeKind, data.nodeId) as { updated_at: string } | undefined;
+
+  db.prepare("DELETE FROM sync_tombstones WHERE table_name = 'goal_layout_pins' AND record_id = ?").run(
+    change.recordId,
+  );
+  db.prepare(`
+    INSERT INTO goal_layout_pins (goal_id, node_kind, node_id, x, y, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(goal_id, node_kind, node_id)
+    DO UPDATE SET x = excluded.x, y = excluded.y, updated_at = excluded.updated_at
+  `).run(row.goal_id, row.node_kind, row.node_id, row.x, row.y, serverNow);
+
+  return applyResult(
+    change,
+    "applied",
+    existing ? "updated goal_layout_pins record" : "inserted goal_layout_pins record",
+    existing?.updated_at,
+  );
+}
+
+function readGoalLayoutPinRecord(db: Database, recordId: string): SyncChange | null {
+  const key = decodeGoalLayoutPinKey(recordId);
+  const row = db.prepare(`
+    SELECT * FROM goal_layout_pins
+    WHERE goal_id = ? AND node_kind = ? AND node_id = ?
+  `).get(key.goalId, key.nodeKind, key.nodeId) as GoalLayoutPinRow | undefined;
+  return row ? updateChange("goal_layout_pins", recordId, rowToGoalLayoutPin(row), row.updated_at) : null;
+}
+
 export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   categories: { validate: validateCategoryChange, apply: applyCategoryChange, readRecord: readCategoryRecord },
   time_entries: {
@@ -417,6 +499,15 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   tracks: simpleLwwDomain<TrackRow>("tracks", (data) => trackToRow(data as never), rowToTrack),
   track_steps: simpleLwwDomain<TrackStepRow>("track_steps", (data) => trackStepToRow(data as never), rowToTrackStep),
   goals: simpleLwwDomain<GoalRow>("goals", (data) => goalToRow(data as never), rowToGoal),
+  goal_layout_pins: {
+    identity: (data) => {
+      const pin = data as GoalLayoutPin;
+      return encodeGoalLayoutPinKey(pin.goalId, pin.nodeKind, pin.nodeId);
+    },
+    validate: validateGoalLayoutPinChange,
+    apply: applyGoalLayoutPinChange,
+    readRecord: readGoalLayoutPinRecord,
+  },
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {
