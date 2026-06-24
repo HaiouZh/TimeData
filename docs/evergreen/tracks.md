@@ -4,12 +4,13 @@ title: 任务轨道
 covers:
   - packages/server/src/lib/track-rows.ts
   - packages/server/src/routes/agent-tracks.ts
+  - packages/shared/src/trackBoardSignals.ts
   - packages/client/src/lib/tracks.ts
   - packages/client/src/lib/tracksView.ts
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/**
-last-reviewed: 2026-06-23
+last-reviewed: 2026-06-24
 ---
 
 # 任务轨道
@@ -65,6 +66,8 @@ last-reviewed: 2026-06-23
 
 这些端点与任务 agent 回写一样走 `applyChange()` + `sync_seq` + `notifySyncChange()`，前台客户端经普通 sync stream 秒级感知。不写 TimeEntry、不扩 force-push；人手共编入口见 §6。
 
+agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 active tracks、每条最近 3 步、`stepCount`、`latestBoardSignal` 与当前 `boardSignals`；`GET /api/agent/tracks/:id/context` 返回单条 active track 的全量 steps（`seq ASC, startedAt ASC, id ASC`）、`stepCount`、`latestBoardSignal` 与 `boardSignals`。两个端点只读，不写 `sync_seq`、不触发 `notifySyncChange()`，也不返回 `bestMatch` / `score` / recommendation。缺失 track 返回 404；非 active track 详情返回 409 `TRACK_NOT_ACTIVE`。
+
 ## 5. 监控面(T3)
 
 `/tracks` 列表与 `/tracks/:id` 详情是轨道的独立看板面(不进今天视图),页面用 `useLiveQuery` 读取、吃 sync 后变化。
@@ -91,9 +94,13 @@ last-reviewed: 2026-06-23
 
 每条 active 轨道的当前看板信号 = 按步骤倒序查找最近一条带已配置看板信号的 step；同一步有多个信号时按配置顺序取第一个。无标签步骤和普通检索标签步骤不会清掉已有信号。比如 `agent在做` 之后补一条 `决策` 或无标签步骤，列表仍显示 `agent在做`，直到后续步骤写入新的已配置看板信号。
 
+看板信号计算在 `packages/shared/src/trackBoardSignals.ts`，client `tracksView.ts` 与 server agent context API 共用同一纯函数：按步骤倒序找最近一条含已配置看板信号的 step；同一步多个信号时按 `boardSignals` 顺序取第一个；无标签步骤和普通检索标签不清空已有信号。
+
 `/tracks` 列表保持扁平，不再按阵营或“该谁了”分组，也不保存本地分组视图偏好。顶部 chip 按配置顺序显示看板信号计数，如 `待我处理 N`、`agent在做 N`；点击 chip 做 OR 筛选。卡片只展示 `#tag` 信号牌、最新 3 步，并可就地“写一步”（`appendUserStep` + `syncAfterWrite()`）。
 
 agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，默认开口并打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合上一开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
+
+Claude Code 本地续写协议位于 `.claude/skills/track-step/protocol.md`，由 `.claude/skills/track-step/SKILL.md` 装载。该目录是本地 AI state，被 `.gitignore` 忽略；evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
 
 ## 8. 后续阶段
 

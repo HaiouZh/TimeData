@@ -17,7 +17,7 @@ covers:
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
   - packages/mobile/android/app/src/main/AndroidManifest.xml
-last-reviewed: 2026-06-23
+last-reviewed: 2026-06-24
 ---
 
 # 架构总览
@@ -39,7 +39,7 @@ TimeData 是个人时间记录 PWA：
 ## 2. 五个包的职责与依赖
 
 ```text
-shared  类型、schema、同步域登记簿、常量、跨端纯函数（completeTask / 重复规则 / 日期助手）
+shared  类型、schema、同步域登记簿、常量、跨端纯函数（completeTask / 重复规则 / 日期助手 / 轨道看板信号）
    ▲
    ├── client  React + Dexie，本地优先 UI 与同步客户端
    ├── server  Hono + SQLite，鉴权、权威校验、同步账本、静态文件
