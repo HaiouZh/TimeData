@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   CategorySchema,
+  GoalLayoutPinNodeKindSchema,
+  GoalLayoutPinSchema,
   NonNegativeIntSchema,
   QuickNoteSchema,
   SettingSchema,
@@ -14,6 +16,8 @@ import type { SyncChange } from "./types.js";
 export {
   GoalMemberRefSchema,
   CategorySchema,
+  GoalLayoutPinNodeKindSchema,
+  GoalLayoutPinSchema,
   GoalPrerequisiteSchema,
   GoalSchema,
   QuickNoteSchema,

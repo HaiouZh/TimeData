@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GoalSchema, RecurrenceSchema, TaskSchema, TrackSchema } from "./entitySchemas.js";
+import { GoalLayoutPinSchema, GoalSchema, RecurrenceSchema, TaskSchema, TrackSchema } from "./entitySchemas.js";
 
 describe("RecurrenceSchema", () => {
   const base = { interval: 1, basis: "due" as const };
@@ -349,5 +349,57 @@ describe("GoalSchema", () => {
 
     expect(Object.hasOwn(parsedTask, "goalId")).toBe(false);
     expect(Object.hasOwn(parsedTrack, "goalId")).toBe(false);
+  });
+});
+
+describe("GoalLayoutPinSchema", () => {
+  const now = "2026-06-24T00:00:00.000Z";
+
+  it("accepts finite coordinates for goal/task/track pins", () => {
+    for (const nodeKind of ["goal", "task", "track"] as const) {
+      expect(
+        GoalLayoutPinSchema.safeParse({
+          goalId: "goal-1",
+          nodeKind,
+          nodeId: nodeKind === "goal" ? "goal-1" : `${nodeKind}-1`,
+          x: 12.5,
+          y: -8,
+          updatedAt: now,
+        }).success,
+      ).toBe(true);
+    }
+  });
+
+  it("rejects empty ids, non-finite coordinates and non-UTC timestamps", () => {
+    expect(
+      GoalLayoutPinSchema.safeParse({
+        goalId: "",
+        nodeKind: "goal",
+        nodeId: "goal-1",
+        x: 0,
+        y: 0,
+        updatedAt: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      GoalLayoutPinSchema.safeParse({
+        goalId: "goal-1",
+        nodeKind: "goal",
+        nodeId: "goal-1",
+        x: Number.NaN,
+        y: 0,
+        updatedAt: now,
+      }).success,
+    ).toBe(false);
+    expect(
+      GoalLayoutPinSchema.safeParse({
+        goalId: "goal-1",
+        nodeKind: "goal",
+        nodeId: "goal-1",
+        x: 0,
+        y: 0,
+        updatedAt: "2026-06-24T00:00:00Z",
+      }).success,
+    ).toBe(false);
   });
 });

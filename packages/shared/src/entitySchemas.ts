@@ -93,6 +93,17 @@ export const GoalPrerequisiteSchema = z.object({
   blocked: GoalMemberRefSchema,
 });
 
+export const GoalLayoutPinNodeKindSchema = z.enum(["goal", "task", "track"]);
+
+export const GoalLayoutPinSchema = z.object({
+  goalId: NonEmptyTrimmedStringSchema,
+  nodeKind: GoalLayoutPinNodeKindSchema,
+  nodeId: NonEmptyTrimmedStringSchema,
+  x: z.number().finite(),
+  y: z.number().finite(),
+  updatedAt: UtcIsoStringSchema,
+});
+
 function goalMemberKey(ref: z.infer<typeof GoalMemberRefSchema>): string {
   return `${ref.kind}:${ref.id}`;
 }

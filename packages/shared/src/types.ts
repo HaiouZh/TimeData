@@ -2,6 +2,8 @@ import type { z } from "zod";
 
 import type {
   CategorySchema,
+  GoalLayoutPinNodeKindSchema,
+  GoalLayoutPinSchema,
   GoalMemberRefSchema,
   GoalPrerequisiteSchema,
   GoalSchema,
@@ -32,6 +34,10 @@ export type GoalMemberRef = z.infer<typeof GoalMemberRefSchema>;
 export type GoalPrerequisite = z.infer<typeof GoalPrerequisiteSchema>;
 
 export type Goal = z.infer<typeof GoalSchema>;
+
+export type GoalLayoutPinNodeKind = z.infer<typeof GoalLayoutPinNodeKindSchema>;
+
+export type GoalLayoutPin = z.infer<typeof GoalLayoutPinSchema>;
 
 export type QuickNote = z.infer<typeof QuickNoteSchema>;
 
@@ -104,7 +110,9 @@ export type SyncChange =
   | SyncUpsertChange<"track_steps", TrackStep>
   | SyncDeleteChange<"track_steps">
   | SyncUpsertChange<"goals", Goal>
-  | SyncDeleteChange<"goals">;
+  | SyncDeleteChange<"goals">
+  | SyncUpsertChange<"goal_layout_pins", GoalLayoutPin>
+  | SyncDeleteChange<"goal_layout_pins">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { encodeGoalLayoutPinKey } from "./goalLayoutPins.js";
 import {
   CategorySchema,
   QuickNoteSchema,
@@ -426,6 +427,31 @@ describe("SyncChangeSchema", () => {
     });
     expect(parsed.tableName).toBe("goals");
     expect(parsed.data).toMatchObject({ members: [{ kind: "task", id: "task-1" }] });
+  });
+
+  it("accepts goal_layout_pins as a synced table", () => {
+    const now = "2026-06-24T00:00:00.000Z";
+    const data = { goalId: "goal-1", nodeKind: "goal" as const, nodeId: "goal-1", x: 100, y: -50, updatedAt: now };
+    const recordId = encodeGoalLayoutPinKey(data.goalId, data.nodeKind, data.nodeId);
+    const parsed = SyncChangeSchema.parse({
+      tableName: "goal_layout_pins",
+      recordId,
+      action: "create",
+      timestamp: now,
+      data,
+    });
+
+    expect(parsed.tableName).toBe("goal_layout_pins");
+    expect(
+      SyncLogEntrySchema.safeParse({
+        id: "log-pin-1",
+        tableName: "goal_layout_pins",
+        recordId,
+        action: "create",
+        timestamp: now,
+        synced: 0,
+      }).success,
+    ).toBe(true);
   });
 });
 

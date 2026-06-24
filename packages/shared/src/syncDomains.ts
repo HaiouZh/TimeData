@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HealthChartConfigSchema } from "./chartSchemas.js";
 import {
   CategorySchema,
+  GoalLayoutPinSchema,
   GoalSchema,
   QuickNoteSchema,
   SettingSchema,
@@ -142,6 +143,14 @@ export const SYNC_DOMAINS: readonly SyncDomainConfig[] = [
     dataSchema: GoalSchema,
     upsertPriority: 72,
     deletePriority: 72,
+    conflictPolicy: "lww",
+    countsInStatus: false,
+  },
+  {
+    table: "goal_layout_pins",
+    dataSchema: GoalLayoutPinSchema,
+    upsertPriority: 73,
+    deletePriority: 73,
     conflictPolicy: "lww",
     countsInStatus: false,
   },
