@@ -1,8 +1,6 @@
 import { z } from "zod";
 import {
   CategorySchema,
-  GoalLayoutPinNodeKindSchema,
-  GoalLayoutPinSchema,
   NonNegativeIntSchema,
   QuickNoteSchema,
   SettingSchema,

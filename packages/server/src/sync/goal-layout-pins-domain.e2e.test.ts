@@ -96,6 +96,12 @@ describe("goal_layout_pins sync roundtrip", () => {
     expect(validateSyncChanges(db, [{ ...change("delete", null), recordId: "malformed" } as SyncChange]).valid).toBe(
       false,
     );
+    expect(
+      validateSyncChanges(db, [{ ...change("delete", null), recordId: "|goal|goal-1" } as SyncChange]).valid,
+    ).toBe(false);
+    expect(
+      validateSyncChanges(db, [{ ...change("delete", null), recordId: "goal-1|goal|" } as SyncChange]).valid,
+    ).toBe(false);
   });
 
   it("pushes, reads, updates, pulls by seq, and tombstones pins", () => {

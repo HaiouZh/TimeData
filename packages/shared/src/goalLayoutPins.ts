@@ -1,3 +1,4 @@
+import { NonEmptyTrimmedStringSchema } from "./entitySchemas.js";
 import type { GoalLayoutPin, GoalLayoutPinNodeKind } from "./types.js";
 
 const NODE_KINDS = new Set<GoalLayoutPinNodeKind>(["goal", "task", "track"]);
@@ -6,6 +7,19 @@ export interface GoalLayoutPinIdentity {
   goalId: string;
   nodeKind: GoalLayoutPinNodeKind;
   nodeId: string;
+}
+
+function decodeIdentityPart(encodedPart: string, key: string): string {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(encodedPart);
+  } catch {
+    throw new Error(`Invalid goal layout pin key: ${key}`);
+  }
+  if (!NonEmptyTrimmedStringSchema.safeParse(decoded).success) {
+    throw new Error(`Invalid goal layout pin key: ${key}`);
+  }
+  return decoded;
 }
 
 export function encodeGoalLayoutPinKey(goalId: string, nodeKind: GoalLayoutPinNodeKind, nodeId: string): string {
@@ -22,11 +36,13 @@ export function decodeGoalLayoutPinKey(key: string): GoalLayoutPinIdentity {
   if (!NODE_KINDS.has(nodeKind as GoalLayoutPinNodeKind)) {
     throw new Error(`Invalid goal layout pin node kind: ${nodeKind}`);
   }
+  const goalId = decodeIdentityPart(encodedGoalId, key);
+  const nodeId = decodeIdentityPart(encodedNodeId, key);
 
   return {
-    goalId: decodeURIComponent(encodedGoalId),
+    goalId,
     nodeKind: nodeKind as GoalLayoutPinNodeKind,
-    nodeId: decodeURIComponent(encodedNodeId),
+    nodeId,
   };
 }
 

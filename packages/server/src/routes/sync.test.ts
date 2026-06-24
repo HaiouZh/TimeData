@@ -530,6 +530,50 @@ describe("sync route", () => {
     });
   });
 
+  it("clears goal layout pins during confirmed force push", async () => {
+    const recordId = "goal-1|goal|goal-1";
+    db.prepare(
+      "INSERT INTO goal_layout_pins (goal_id, node_kind, node_id, x, y, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("goal-1", "goal", "goal-1", 100, 200, "2026-06-24T00:00:00.000Z");
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+      "goal_layout_pins",
+      recordId,
+      "create",
+    );
+    db.prepare("INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)").run(
+      "goal_layout_pins",
+      recordId,
+      "2026-06-24T00:05:00.000Z",
+    );
+
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(db.prepare("SELECT COUNT(*) as count FROM goal_layout_pins").get()).toMatchObject({ count: 0 });
+    expect(
+      db.prepare("SELECT COUNT(*) as count FROM sync_tombstones WHERE table_name = ?").get("goal_layout_pins"),
+    ).toMatchObject({ count: 0 });
+    expect(
+      db.prepare("SELECT COUNT(*) as count FROM sync_seq WHERE table_name = ?").get("goal_layout_pins"),
+    ).toMatchObject({ count: 0 });
+  });
+
   it("force-push imports settings when provided and reports their count", async () => {
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",

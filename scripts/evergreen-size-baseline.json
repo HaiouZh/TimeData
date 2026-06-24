@@ -24,7 +24,7 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 11043,
+    "chars": 11092,
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
@@ -44,7 +44,7 @@
     "covers": 9
   },
   "docs/evergreen/goals.md": {
-    "chars": 7107,
+    "chars": 7169,
     "covers": 15
   },
   "docs/evergreen/health.md": {
@@ -64,7 +64,7 @@
     "covers": 16
   },
   "docs/evergreen/security.md": {
-    "chars": 4227,
+    "chars": 4460,
     "covers": 9
   },
   "docs/evergreen/stats-insights.md": {
@@ -72,7 +72,7 @@
     "covers": 10
   },
   "docs/evergreen/sync.md": {
-    "chars": 17127,
+    "chars": 17254,
     "covers": 25
   },
   "docs/evergreen/timeline.md": {

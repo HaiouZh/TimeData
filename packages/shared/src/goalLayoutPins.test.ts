@@ -35,4 +35,10 @@ describe("goal layout pin key", () => {
     expect(() => decodeGoalLayoutPinKey("goal-1|task")).toThrow(/Invalid goal layout pin key/);
     expect(() => decodeGoalLayoutPinKey("goal-1|note|node-1")).toThrow(/Invalid goal layout pin node kind/);
   });
+
+  it("rejects empty composite identity parts", () => {
+    expect(() => decodeGoalLayoutPinKey("|goal|node-1")).toThrow(/Invalid goal layout pin key/);
+    expect(() => decodeGoalLayoutPinKey("goal-1|goal|")).toThrow(/Invalid goal layout pin key/);
+    expect(() => decodeGoalLayoutPinKey("%20%20|goal|node-1")).toThrow(/Invalid goal layout pin key/);
+  });
 });

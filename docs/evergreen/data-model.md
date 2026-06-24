@@ -129,7 +129,7 @@ type SyncChange =
 
 ## 5. 全量同步兜底契约
 
-全量推送兜底当前只覆盖核心同步表：`categories`、`timeEntries`、可选 `settings`、`quickNotes`、`tasks`。服务端在导入前校验分类/记录/速记/任务的 ID 唯一性、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠等规则；健康原始数据、`health_charts`、`tracks`、`track_steps`、`goals` 与 `goal_layout_pins` 当前不在 force-push 契约内。目标成员关系只存在于 `Goal.members`，因此 force-push 的 tasks payload 不携带目标归属。
+全量推送兜底当前只覆盖核心同步表：`categories`、`timeEntries`、可选 `settings`、`quickNotes`、`tasks`。服务端在导入前校验分类/记录/速记/任务的 ID 唯一性、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠等规则；健康原始数据、`health_charts`、`tracks`、`track_steps`、`goals` 与 `goal_layout_pins` 当前不在 force-push 契约内，但覆盖流程会清空 `goal_layout_pins` 业务表，避免留下不可 pull 的钉点行。目标成员关系只存在于 `Goal.members`，因此 force-push 的 tasks payload 不携带目标归属。
 
 共享类型：
 

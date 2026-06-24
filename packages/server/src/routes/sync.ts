@@ -94,6 +94,7 @@ function replaceServerData(
 ): void {
   db.prepare("DELETE FROM sync_tombstones").run();
   db.prepare("DELETE FROM sync_seq").run();
+  db.prepare("DELETE FROM goal_layout_pins").run();
   db.prepare("DELETE FROM tasks").run();
   db.prepare("DELETE FROM quick_notes").run();
   db.prepare("DELETE FROM time_entries").run();
