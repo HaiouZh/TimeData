@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { TRACK_ACTION_TAGS_KEY } from "@timedata/shared";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupRouteTestDb, setupRouteTestApp } from "../__tests__/helpers.js";
@@ -25,6 +26,10 @@ async function post(path: string, body: unknown): Promise<Response> {
   return app.request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
 
+async function get(path: string): Promise<Response> {
+  return app.request(path, { method: "GET" });
+}
+
 async function patch(path: string, body: unknown): Promise<Response> {
   return app.request(path, {
     method: "PATCH",
@@ -33,35 +38,168 @@ async function patch(path: string, body: unknown): Promise<Response> {
   });
 }
 
-function seedTrack(id = "track-1"): void {
+function syncSeqCount(): number {
+  return (db.prepare("SELECT COUNT(*) AS n FROM sync_seq").get() as { n: number }).n;
+}
+
+function seedSetting(key: string, value: string): void {
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at)
+    VALUES (?, ?, ?)
+  `).run(key, value, "2026-06-21T00:00:00.000Z");
+}
+
+function seedTrack(
+  id = "track-1",
+  overrides: Partial<{
+    title: string;
+    summary: string | null;
+    status: "active" | "concluded" | "parked";
+    refs: unknown[];
+    createdAt: string;
+    updatedAt: string;
+  }> = {},
+): void {
+  const createdAt = overrides.createdAt ?? "2026-06-21T00:00:00.000Z";
   db.prepare(`
     INSERT INTO tracks (id, title, summary, status, refs, created_at, updated_at)
-    VALUES (?, ?, NULL, 'active', '[]', ?, ?)
-  `).run(id, "任务轨道", "2026-06-21T00:00:00.000Z", "2026-06-21T00:00:00.000Z");
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    overrides.title ?? "任务轨道",
+    overrides.summary ?? null,
+    overrides.status ?? "active",
+    JSON.stringify(overrides.refs ?? []),
+    createdAt,
+    overrides.updatedAt ?? createdAt,
+  );
 }
 
 function seedTrackStep(overrides: {
   id: string;
   trackId?: string;
+  source?: "agent" | "user";
+  sourceLabel?: string | null;
   content?: string;
   startedAt?: string;
   endedAt?: string | null;
+  refs?: unknown[];
+  tags?: string[];
   seq?: number;
 }): void {
   db.prepare(`
     INSERT INTO track_steps (id, track_id, source, source_label, content, started_at, ended_at, refs, tags, seq, created_at, updated_at)
-    VALUES (?, ?, 'agent', 'codex', ?, ?, ?, '[]', '[]', ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     overrides.id,
     overrides.trackId ?? "track-1",
+    overrides.source ?? "agent",
+    overrides.sourceLabel ?? "codex",
     overrides.content ?? overrides.id,
     overrides.startedAt ?? "2026-06-21T01:00:00.000Z",
     overrides.endedAt ?? null,
+    JSON.stringify(overrides.refs ?? []),
+    JSON.stringify(overrides.tags ?? []),
     overrides.seq ?? 0,
     "2026-06-21T01:00:00.000Z",
     "2026-06-21T01:00:00.000Z",
   );
 }
+
+describe("GET /api/agent/tracks/context", () => {
+  it("returns active tracks with board signals, recent steps and no write-side effects", async () => {
+    seedSetting(TRACK_ACTION_TAGS_KEY, JSON.stringify(["agent在做", "待我处理"]));
+    seedTrack("active-a", {
+      title: "A 轨道",
+      updatedAt: "2026-06-21T07:00:00.000Z",
+      refs: [{ kind: "task", id: "task-a", label: "任务 A" }],
+    });
+    seedTrack("active-b", { title: "B 轨道", updatedAt: "2026-06-21T05:00:00.000Z" });
+    seedTrack("parked-c", { title: "不应出现", status: "parked", updatedAt: "2026-06-21T09:00:00.000Z" });
+    seedTrackStep({ id: "a0", trackId: "active-a", seq: 0, tags: ["agent在做"] });
+    seedTrackStep({ id: "a1", trackId: "active-a", seq: 1, tags: ["批注"] });
+    seedTrackStep({ id: "a2", trackId: "active-a", seq: 2, tags: [] });
+    seedTrackStep({ id: "a3", trackId: "active-a", seq: 3, tags: ["待我处理", "agent在做"] });
+    seedTrackStep({ id: "c0", trackId: "parked-c", seq: 0, tags: ["待我处理"] });
+
+    const beforeSeq = syncSeqCount();
+    const res = await get("/api/agent/tracks/context");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      boardSignals: string[];
+      tracks: Array<{
+        track: { id: string; refs: unknown[] };
+        latestBoardSignal: string | null;
+        stepCount: number;
+        recentSteps: Array<{ id: string; tags: string[] }>;
+      }>;
+      bestMatch?: unknown;
+      score?: unknown;
+      recommendation?: unknown;
+    };
+    expect(body).toMatchObject({ ok: true, boardSignals: ["agent在做", "待我处理"] });
+    expect(body.tracks.map((item) => item.track.id)).toEqual(["active-a", "active-b"]);
+    expect(body.tracks[0]).toMatchObject({
+      track: { id: "active-a", refs: [{ kind: "task", id: "task-a", label: "任务 A" }] },
+      latestBoardSignal: "agent在做",
+      stepCount: 4,
+    });
+    expect(body.tracks[0]?.recentSteps.map((step) => step.id)).toEqual(["a3", "a2", "a1"]);
+    expect(body.tracks[1]).toMatchObject({ track: { id: "active-b" }, latestBoardSignal: null, stepCount: 0, recentSteps: [] });
+    expect(body).not.toHaveProperty("bestMatch");
+    expect(body).not.toHaveProperty("score");
+    expect(body).not.toHaveProperty("recommendation");
+    expect(body.tracks[0]).not.toHaveProperty("score");
+    expect(syncSeqCount()).toBe(beforeSeq);
+  });
+});
+
+describe("GET /api/agent/tracks/:id/context", () => {
+  it("returns one active track with full steps in ascending order and no write-side effects", async () => {
+    seedTrack();
+    seedTrackStep({ id: "s2", seq: 2, startedAt: "2026-06-21T03:00:00.000Z", tags: [] });
+    seedTrackStep({ id: "s0", seq: 0, startedAt: "2026-06-21T01:00:00.000Z", tags: ["agent在做"] });
+    seedTrackStep({ id: "s1", seq: 1, startedAt: "2026-06-21T02:00:00.000Z", tags: ["批注"] });
+
+    const beforeSeq = syncSeqCount();
+    const res = await get("/api/agent/tracks/track-1/context");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      boardSignals: string[];
+      track: { id: string };
+      latestBoardSignal: string | null;
+      stepCount: number;
+      steps: Array<{ id: string }>;
+      bestMatch?: unknown;
+      score?: unknown;
+    };
+    expect(body).toMatchObject({
+      ok: true,
+      boardSignals: ["待我处理", "agent在做"],
+      track: { id: "track-1" },
+      latestBoardSignal: "agent在做",
+      stepCount: 3,
+    });
+    expect(body.steps.map((step) => step.id)).toEqual(["s0", "s1", "s2"]);
+    expect(body).not.toHaveProperty("bestMatch");
+    expect(body).not.toHaveProperty("score");
+    expect(syncSeqCount()).toBe(beforeSeq);
+  });
+
+  it("returns 404 for missing track and 409 for non-active track", async () => {
+    seedTrack("parked-1", { status: "parked" });
+
+    const missing = await get("/api/agent/tracks/missing/context");
+    expect(missing.status).toBe(404);
+    await expect(missing.json()).resolves.toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+
+    const inactive = await get("/api/agent/tracks/parked-1/context");
+    expect(inactive.status).toBe(409);
+    await expect(inactive.json()).resolves.toMatchObject({ ok: false, error: { code: "TRACK_NOT_ACTIVE" } });
+  });
+});
 
 describe("POST /api/agent/tracks", () => {
   it("creates a track via applyChange, records seq and notifies listeners", async () => {
@@ -407,6 +545,8 @@ describe("scoped auth (mounted under /api/agent/*)", () => {
         body: JSON.stringify({ title: "x" }),
       });
       expect(unauth.status).toBe(401);
+      const unauthContext = await guarded.request("/api/agent/tracks/context", { method: "GET" });
+      expect(unauthContext.status).toBe(401);
 
       const authed = await guarded.request("/api/agent/tracks", {
         method: "POST",
@@ -414,6 +554,12 @@ describe("scoped auth (mounted under /api/agent/*)", () => {
         body: JSON.stringify({ title: "x" }),
       });
       expect(authed.status).toBe(201);
+      const authedContext = await guarded.request("/api/agent/tracks/context", {
+        method: "GET",
+        headers: { Authorization: "Bearer agent-secret" },
+      });
+      expect(authedContext.status).toBe(200);
+      await expect(authedContext.json()).resolves.toMatchObject({ ok: true });
     } finally {
       delete process.env.AGENT_TOKEN;
     }

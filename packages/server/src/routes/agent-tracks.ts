@@ -1,12 +1,16 @@
 import { randomUUID } from "node:crypto";
 import {
+  LEGACY_TRACK_ACTION_TAGS_KEY,
   RefSchema,
+  TRACK_ACTION_TAGS_KEY,
   TrackSchema,
   TrackStepSchema,
   type SyncChange,
   type Track,
   type TrackStep,
   UtcIsoStringSchema,
+  latestTrackBoardSignal,
+  parseTrackBoardSignalsFromSettings,
 } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -51,6 +55,58 @@ function getTrack(id: string): Track | null {
 function getStep(id: string): TrackStep | null {
   const row = getDb().prepare("SELECT * FROM track_steps WHERE id = ?").get(id) as TrackStepRow | undefined;
   return row ? rowToTrackStep(row) : null;
+}
+
+function getSettingValue(key: string): string | null {
+  const row = getDb().prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string | null } | undefined;
+  return row?.value ?? null;
+}
+
+function readTrackBoardSignals(): string[] {
+  return parseTrackBoardSignalsFromSettings(
+    getSettingValue(TRACK_ACTION_TAGS_KEY),
+    getSettingValue(LEGACY_TRACK_ACTION_TAGS_KEY),
+  );
+}
+
+function listActiveTracks(): Track[] {
+  const rows = getDb()
+    .prepare(`
+      SELECT * FROM tracks
+      WHERE status = 'active'
+      ORDER BY updated_at DESC, title ASC, id ASC
+    `)
+    .all() as TrackRow[];
+  return rows.map(rowToTrack);
+}
+
+function listTrackStepsAsc(trackId: string): TrackStep[] {
+  const rows = getDb()
+    .prepare(`
+      SELECT * FROM track_steps
+      WHERE track_id = ?
+      ORDER BY seq ASC, started_at ASC, id ASC
+    `)
+    .all(trackId) as TrackStepRow[];
+  return rows.map(rowToTrackStep);
+}
+
+function latestBoardSignalTag(steps: readonly TrackStep[], boardSignals: readonly string[]): string | null {
+  return latestTrackBoardSignal(steps, boardSignals)?.tag ?? null;
+}
+
+function trackContextSummary(track: Track, boardSignals: readonly string[]) {
+  const allSteps = listTrackStepsAsc(track.id);
+  return {
+    track,
+    latestBoardSignal: latestBoardSignalTag(allSteps, boardSignals),
+    stepCount: allSteps.length,
+    recentSteps: [...allSteps].slice(-3).reverse(),
+  };
+}
+
+function notFoundTrack() {
+  return { ok: false as const, error: { code: "NOT_FOUND", message: "Track not found" } };
 }
 
 function latestOpenStep(trackId: string): TrackStep | null {
@@ -116,6 +172,41 @@ const patchTrackSchema = z
   .refine((body) => body.closedAt === undefined || body.status === "concluded", {
     message: "closedAt is only valid when status is concluded",
   });
+
+agentTracks.get("/tracks/context", (c) => {
+  const boardSignals = readTrackBoardSignals();
+  return c.json({
+    ok: true,
+    boardSignals,
+    tracks: listActiveTracks().map((track) => trackContextSummary(track, boardSignals)),
+  });
+});
+
+agentTracks.get("/tracks/:id/context", (c) => {
+  const id = c.req.param("id");
+  const track = getTrack(id);
+  if (!track) return c.json(notFoundTrack(), 404);
+  if (track.status !== "active") {
+    return c.json(
+      {
+        ok: false,
+        error: { code: "TRACK_NOT_ACTIVE", message: "Track is not active" },
+      },
+      409,
+    );
+  }
+
+  const boardSignals = readTrackBoardSignals();
+  const steps = listTrackStepsAsc(id);
+  return c.json({
+    ok: true,
+    boardSignals,
+    track,
+    latestBoardSignal: latestBoardSignalTag(steps, boardSignals),
+    stepCount: steps.length,
+    steps,
+  });
+});
 
 agentTracks.post("/tracks", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
