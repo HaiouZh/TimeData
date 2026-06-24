@@ -1,4 +1,11 @@
-import type { Ref, Track, TrackStep } from "@timedata/shared";
+import {
+  latestTrackBoardSignal,
+  uniqueTrackBoardSignals,
+  type Ref,
+  type Track,
+  type TrackBoardSignal,
+  type TrackStep,
+} from "@timedata/shared";
 import { formatMinutesDuration } from "./time.js";
 
 const MS_PER_DAY = 86_400_000;
@@ -9,18 +16,6 @@ function byTrackStepOrderAsc(a: TrackStep, b: TrackStep): number {
 
 function byTrackStepOrderDesc(a: TrackStep, b: TrackStep): number {
   return -byTrackStepOrderAsc(a, b);
-}
-
-function uniqueNormalizedTags(tags: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const tag of tags) {
-    const trimmed = tag.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    out.push(trimmed);
-  }
-  return out;
 }
 
 export function groupStepsByTrack(steps: TrackStep[]): Map<string, TrackStep[]> {
@@ -124,10 +119,7 @@ export interface TrackStatusFacet {
   suggested: boolean;
 }
 
-export interface TrackBoardSignal {
-  tag: string;
-  stepId: string;
-}
+export type { TrackBoardSignal };
 
 export interface TrackBoardItem {
   track: Track;
@@ -135,15 +127,7 @@ export interface TrackBoardItem {
 }
 
 export function latestBoardSignal(steps: TrackStep[], boardSignals: readonly string[]): TrackBoardSignal | null {
-  const normalizedSignals = uniqueNormalizedTags(boardSignals);
-  if (normalizedSignals.length === 0) return null;
-  for (const step of [...steps].sort(byTrackStepOrderDesc)) {
-    const stepTags = new Set(uniqueNormalizedTags(step.tags));
-    for (const tag of normalizedSignals) {
-      if (stepTags.has(tag)) return { tag, stepId: step.id };
-    }
-  }
-  return null;
+  return latestTrackBoardSignal(steps, boardSignals);
 }
 
 export function boardItemsForTracks(
@@ -166,7 +150,7 @@ export function collectStatusFacetsFromItems(items: readonly TrackBoardItem[], b
     counts.set(signal.tag, (counts.get(signal.tag) ?? 0) + 1);
   }
 
-  return uniqueNormalizedTags(boardSignals).map((tag) => ({
+  return uniqueTrackBoardSignals(boardSignals).map((tag) => ({
     tag,
     count: counts.get(tag) ?? 0,
     suggested: true,
@@ -174,7 +158,7 @@ export function collectStatusFacetsFromItems(items: readonly TrackBoardItem[], b
 }
 
 export function filterBoardItemsByStatusTags(items: readonly TrackBoardItem[], selectedTags: readonly string[]): TrackBoardItem[] {
-  const selected = new Set(uniqueNormalizedTags(selectedTags));
+  const selected = new Set(uniqueTrackBoardSignals(selectedTags));
   return items.filter((item) => {
     if (selected.size === 0) return true;
     return item.signal ? selected.has(item.signal.tag) : false;
