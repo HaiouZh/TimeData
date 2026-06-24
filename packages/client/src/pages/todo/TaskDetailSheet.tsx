@@ -25,6 +25,7 @@ interface TaskDetailSheetProps {
 
 const SWIPE_CLOSE_THRESHOLD = 60;
 const DEFAULT_RECURRENCE: Recurrence = { freq: "daily", interval: 1, basis: "due" };
+const EMPTY_TAGS: string[] = [];
 
 /** 下滑位移（px，向下为正）是否达到关闭阈值。 */
 export function isSwipeDownClose(deltaY: number): boolean {
@@ -53,6 +54,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
   const touchStartY = useRef<number | null>(null);
   const hadTask = useRef(false);
   const lastSeenRemoteTags = useRef<string[] | null>(null);
+  const taskTags = task?.tags ?? EMPTY_TAGS;
 
   // 只在切换任务时初始化 draft，避免同步刷新覆盖用户正在编辑的内容。
   // biome-ignore lint/correctness/useExhaustiveDependencies: 仅按 task.id 重置是有意的
@@ -70,7 +72,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
   // 否则会反复把本地 state 刷回旧值。lastSeenRemoteTags 记上次见过的远端值，对比后再决定。
   useEffect(() => {
     if (!task) return;
-    const remote = task.tags ?? [];
+    const remote = taskTags;
     const last = lastSeenRemoteTags.current;
     const same = last !== null && last.length === remote.length && last.every((t, i) => t === remote[i]);
     if (same) return;
@@ -78,7 +80,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
     // 用户在敲（draft 非空）时不打断输入；本地 state 留给用户提交后下一轮同步。
     if (tagDraft !== "") return;
     setTags(remote);
-  }, [task?.tags, tagDraft]);
+  }, [task, taskTags, tagDraft]);
 
   useEffect(() => {
     if (task) {

@@ -370,7 +370,7 @@ function isEvergreenDoc(d) {
   return d.filePath.startsWith("docs/evergreen/") && d.type !== "adr";
 }
 
-export function evaluateSizes(docs, baseline, caps) {
+export function evaluateSizes(docs, baseline, _caps) {
   const violations = [];
   const currentEvergreenPaths = new Set(docs.filter(isEvergreenDoc).map((d) => d.filePath));
   for (const d of docs) {
