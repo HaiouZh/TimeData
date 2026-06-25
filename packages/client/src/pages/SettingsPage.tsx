@@ -1,5 +1,5 @@
 import type { VersionInfo } from "@timedata/shared";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAppUpdate } from "../appUpdate.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";

@@ -98,8 +98,8 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(host.querySelectorAll('textarea[aria-label="子任务标题"]').length).toBe(0);
     const titles = host.querySelectorAll('[data-testid^="child-title-"]');
     expect(titles.length).toBe(2);
-    expect(titles[0].tagName.toLowerCase()).toBe("span");
-    expect(titles[0].getAttribute("role")).toBeNull();
+    expect(titles[0].tagName.toLowerCase()).toBe("button");
+    expect((titles[0] as HTMLButtonElement).type).toBe("button");
     expect(titles[0].textContent).toBe("子任务0");
     expect(host.textContent).toContain("子任务1");
     expect(host.querySelectorAll('button[aria-label^="拖动子任务"]').length).toBe(2);

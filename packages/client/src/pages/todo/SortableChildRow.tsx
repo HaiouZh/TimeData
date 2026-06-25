@@ -184,20 +184,21 @@ function ChildRowBody({
           }`}
         />
       ) : (
-        <span
+        <button
+          type="button"
           data-testid={`child-title-${child.id}`}
-          tabIndex={0}
+          aria-label={`编辑子任务 ${child.title}`}
           onClick={() => {
             if (hasNonEmptySelection()) return;
             beginEdit();
           }}
           onKeyDown={handleTitleKey}
-          className={`min-h-8 min-w-0 flex-1 select-text break-words px-1 py-1 text-sm outline-none focus:bg-surface-hover ${
+          className={`min-h-8 min-w-0 flex-1 select-text break-words border-0 bg-transparent px-1 py-1 text-left text-sm font-normal outline-none focus:bg-surface-hover ${
             child.done ? "text-ink-3 line-through" : "text-ink"
           }`}
         >
           {child.title}
-        </span>
+        </button>
       )}
       {!readonly && (
         <button
