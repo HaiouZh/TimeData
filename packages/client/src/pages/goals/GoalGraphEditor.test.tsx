@@ -441,6 +441,18 @@ describe("GoalGraphEditor", () => {
     expect(toolbarOverlay?.querySelector(".pointer-events-auto")).toContain(addMemberButton);
   });
 
+  it("点击返回触发回到目标星图导航", async () => {
+    const goalValue = goal();
+    const onNavigate = vi.fn<(to: string) => void>();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue, onNavigate });
+
+    await click(buttonByLabel(host, "返回目标星图"));
+
+    expect(onNavigate).toHaveBeenCalledWith("/goals");
+  });
+
   it("点节点只选中，打开动作才导航到任务深链", async () => {
     const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
     const taskValue = task("task-1", { title: "写说明" });

@@ -1,4 +1,4 @@
-import { ArrowCounterClockwise, CornersOut, DotsThree, Plus } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, ArrowLeft, CornersOut, DotsThree, Plus } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
 
 export interface GoalGraphToolbarSummary {
@@ -11,6 +11,7 @@ export interface GoalGraphToolbarProps {
   summary: GoalGraphToolbarSummary;
   onAddMember: () => void;
   onFitView: () => void;
+  onBackToGalaxy: () => void;
   onOpenGoalMenu: () => void;
   onRestoreLayout?: () => void;
 }
@@ -22,6 +23,7 @@ export function GoalGraphToolbar({
   summary,
   onAddMember,
   onFitView,
+  onBackToGalaxy,
   onOpenGoalMenu,
   onRestoreLayout,
 }: GoalGraphToolbarProps) {
@@ -36,6 +38,9 @@ export function GoalGraphToolbar({
         </button>
         <button type="button" aria-label="回到全图" onClick={onFitView} className={buttonClass}>
           <Icon icon={CornersOut} size={16} />
+        </button>
+        <button type="button" aria-label="返回目标星图" onClick={onBackToGalaxy} className={buttonClass}>
+          <Icon icon={ArrowLeft} size={16} />
         </button>
         {onRestoreLayout && (
           <button type="button" aria-label="恢复自动布局" onClick={onRestoreLayout} className={buttonClass}>

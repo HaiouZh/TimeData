@@ -465,6 +465,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
           summary={model.summary}
           onAddMember={() => (wide ? setWidePanel("add-member") : setAddMemberOpen(true))}
           onFitView={fitView}
+          onBackToGalaxy={() => onNavigate("/goals")}
           onRestoreLayout={() => setConfirmRestoreLayout(true)}
           onOpenGoalMenu={() => (wide ? setWidePanel("goal-menu") : setGoalMenuOpen(true))}
         />
