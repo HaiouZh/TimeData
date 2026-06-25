@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 
-vi.mock("dexie-react-hooks", () => ({ useLiveQuery: (query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? [] }));
+vi.mock("dexie-react-hooks", () => ({ useLiveQuery: (_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? [] }));
 vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: vi.fn(() => true) }));
 vi.mock("../../lib/goals.js", async () => {
   const actual = await vi.importActual<typeof import("../../lib/goals.js")>("../../lib/goals.js");

@@ -33,6 +33,7 @@ export function GoalsPage() {
         <div className="inline-flex rounded-pill border border-border bg-surface-elevated p-1 shadow-sm" role="tablist" aria-label="目标视图">
           <button
             type="button"
+            role="tab"
             aria-label="切换到目标星图"
             aria-selected={showGalaxy}
             onClick={() => setMode("galaxy")}
@@ -42,6 +43,7 @@ export function GoalsPage() {
           </button>
           <button
             type="button"
+            role="tab"
             aria-label="切换到目标列表"
             aria-selected={!showGalaxy}
             onClick={() => setMode("list")}

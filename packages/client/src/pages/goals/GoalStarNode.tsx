@@ -10,6 +10,7 @@ export function GoalStarNode({ data }: { data: GoalStarNodeData }) {
 
   return (
     <div
+      role="group"
       aria-label={`目标：${star.title}，进度：${pct}%`}
       className="inline-flex min-w-36 max-w-44 flex-col items-center gap-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-center text-ink shadow-sm"
       data-star-id={star.nodeId}
