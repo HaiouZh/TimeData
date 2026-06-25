@@ -21,6 +21,12 @@ export async function click(el: Element | null | undefined): Promise<void> {
   });
 }
 
+export async function doubleClick(el: Element | null | undefined): Promise<void> {
+  await act(async () => {
+    el?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  });
+}
+
 export async function pressKey(key: string): Promise<void> {
   await act(async () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));

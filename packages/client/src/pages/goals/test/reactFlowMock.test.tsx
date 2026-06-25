@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ComponentType, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { click, renderDom, unmount } from "../../../test/domHarness.js";
+import { click, doubleClick, renderDom, unmount } from "../../../test/domHarness.js";
 
 interface FlowNode {
   id: string;
@@ -30,6 +30,7 @@ interface FlowProps {
   edges?: FlowEdge[];
   children?: ReactNode;
   onNodeClick?: (event: ReactMouseEvent, node: FlowNode) => void;
+  onNodeDoubleClick?: (event: ReactMouseEvent, node: FlowNode) => void;
   onEdgeClick?: (event: ReactMouseEvent, edge: FlowEdge) => void;
   onPaneClick?: (event: ReactMouseEvent) => void;
   onConnect?: (connection: FlowConnection) => void;
@@ -98,6 +99,7 @@ describe("reactFlowMock", () => {
     ];
     const edges: FlowEdge[] = [{ id: "edge:1", source: "task:t1", target: "task:t2" }];
     const onNodeClick = vi.fn<(event: ReactMouseEvent, node: FlowNode) => void>();
+    const onNodeDoubleClick = vi.fn<(event: ReactMouseEvent, node: FlowNode) => void>();
     const onEdgeClick = vi.fn<(event: ReactMouseEvent, edge: FlowEdge) => void>();
     const onPaneClick = vi.fn<(event: ReactMouseEvent) => void>();
     const onConnect = vi.fn<(connection: FlowConnection) => void>();
@@ -106,6 +108,7 @@ describe("reactFlowMock", () => {
         nodes={nodes}
         edges={edges}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         onConnect={onConnect}
@@ -120,6 +123,10 @@ describe("reactFlowMock", () => {
 
     await click(host.querySelector("[data-node-id='task:t1']"));
     expect(onNodeClick).toHaveBeenCalledWith(expect.any(Object), nodes[0]);
+    expect(onPaneClick).not.toHaveBeenCalled();
+
+    await doubleClick(host.querySelector("[data-node-id='task:t2']"));
+    expect(onNodeDoubleClick).toHaveBeenCalledWith(expect.any(Object), nodes[1]);
     expect(onPaneClick).not.toHaveBeenCalled();
 
     await click(host.querySelector("[data-edge-id='edge:1']"));

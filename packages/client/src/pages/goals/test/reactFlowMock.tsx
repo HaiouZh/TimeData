@@ -1,4 +1,4 @@
-import type { ComponentPropsWithoutRef, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ComponentType, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { vi } from "vitest";
 
 export interface MockReactFlowNode {
@@ -6,6 +6,7 @@ export interface MockReactFlowNode {
   type?: string;
   position?: { x: number; y: number };
   draggable?: boolean;
+  selected?: boolean;
   data?: Record<string, unknown> & {
     node?: unknown;
   };
@@ -31,11 +32,13 @@ export interface MockReactFlowProps extends FlowRootProps {
   nodes?: MockReactFlowNode[];
   edges?: MockReactFlowEdge[];
   children?: ReactNode;
+  nodeTypes?: Record<string, ComponentType<{ data: MockReactFlowNode["data"]; selected?: boolean; isConnectable?: boolean }>>;
   nodeOrigin?: [number, number];
   proOptions?: { hideAttribution?: boolean };
   nodesDraggable?: boolean;
   onNodesChange?: (changes: MockNodeChange[]) => void;
   onNodeClick?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
+  onNodeDoubleClick?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
   onNodeDrag?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
   onNodeDragStop?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
   onEdgeClick?: (event: ReactMouseEvent<HTMLButtonElement>, edge: MockReactFlowEdge) => void;
@@ -114,11 +117,13 @@ export function ReactFlow({
   children,
   onNodesChange,
   onNodeClick,
+  onNodeDoubleClick,
   onNodeDrag,
   onNodeDragStop,
   onEdgeClick,
   onPaneClick,
   onConnect,
+  nodeTypes,
   nodeOrigin,
   proOptions,
   nodesDraggable,
@@ -149,9 +154,21 @@ export function ReactFlow({
                 event.stopPropagation();
                 onNodeClick?.(event, node);
               }}
+              onDoubleClick={(event) => {
+                event.stopPropagation();
+                onNodeDoubleClick?.(event, node);
+              }}
             >
               {nodeTitle(node)}
             </button>
+            {node.type && nodeTypes?.[node.type] ? (
+              <span data-node-render-id={node.id}>
+                {(() => {
+                  const NodeComponent = nodeTypes[node.type];
+                  return <NodeComponent data={node.data} selected={node.selected === true} isConnectable={false} />;
+                })()}
+              </span>
+            ) : null}
             <button
               type="button"
               data-rf-drag-node-id={node.id}
