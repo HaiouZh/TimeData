@@ -34,7 +34,7 @@ describe("buildGoalGalaxyModel", () => {
     });
   });
 
-  it("creates only a star for a collapsed goal", () => {
+  it("keeps member topology for a collapsed goal", () => {
     const goals = [projectGoal("g1", ["a"])];
 
     const model = buildGoalGalaxyModel({
@@ -53,8 +53,8 @@ describe("buildGoalGalaxyModel", () => {
       memberCount: 1,
       lod: "collapsed",
     });
-    expect(model.nodes).toEqual([]);
-    expect(model.edges).toEqual([]);
+    expect(model.nodes.map((node) => node.id)).toEqual(["task:a"]);
+    expect(model.edges.some((edge) => edge.kind === "tether" && edge.source === "goal:g1" && edge.target === "task:a")).toBe(true);
   });
 
   it("creates member nodes and tether edges for an expanded goal", () => {

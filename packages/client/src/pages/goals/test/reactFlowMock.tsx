@@ -14,8 +14,10 @@ export interface MockReactFlowNode {
 
 export interface MockReactFlowEdge {
   id: string;
+  type?: string;
   source?: string;
   sourceHandle?: string | null;
+  style?: Record<string, unknown>;
   target?: string;
   targetHandle?: string | null;
   data?: Record<string, unknown>;
@@ -32,10 +34,16 @@ export interface MockReactFlowProps extends FlowRootProps {
   nodes?: MockReactFlowNode[];
   edges?: MockReactFlowEdge[];
   children?: ReactNode;
-  nodeTypes?: Record<string, ComponentType<{ data: MockReactFlowNode["data"]; selected?: boolean; isConnectable?: boolean }>>;
+  nodeTypes?: Record<
+    string,
+    ComponentType<{ data: MockReactFlowNode["data"]; selected?: boolean; isConnectable?: boolean }>
+  >;
+  edgeTypes?: Record<string, ComponentType<Record<string, unknown>>>;
   nodeOrigin?: [number, number];
   proOptions?: { hideAttribution?: boolean };
   nodesDraggable?: boolean;
+  nodesConnectable?: boolean;
+  elementsSelectable?: boolean;
   onNodesChange?: (changes: MockNodeChange[]) => void;
   onNodeClick?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
   onNodeDoubleClick?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
@@ -82,6 +90,8 @@ const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => {
 const setViewport = vi.fn<(viewport: MockViewport) => Promise<boolean>>(() => Promise.resolve(true));
 const getViewport = vi.fn<() => MockViewport>(() => DEFAULT_VIEWPORT);
 let latestOnMoveEnd: MockReactFlowProps["onMoveEnd"] | undefined;
+let latestOnNodesChange: MockReactFlowProps["onNodesChange"] | undefined;
+let nextConnection: MockConnection | null = null;
 const reactFlowInstance = { fitView, setViewport, getViewport };
 
 function readNodePayload(node: MockReactFlowNode): { kind?: string; title?: string } {
@@ -130,19 +140,24 @@ export function ReactFlow({
   onConnect,
   onMoveEnd,
   nodeTypes,
+  edgeTypes,
   nodeOrigin,
   proOptions,
   nodesDraggable,
+  nodesConnectable,
+  elementsSelectable: _elementsSelectable,
   ...props
 }: MockReactFlowProps) {
   renderedNodes.push(nodes);
   latestOnMoveEnd = onMoveEnd;
+  latestOnNodesChange = onNodesChange;
 
   return (
     <div
       {...props}
       data-rf="true"
       data-node-origin={nodeOrigin ? nodeOrigin.join(",") : ""}
+      data-edge-types={edgeTypes ? Object.keys(edgeTypes).join(",") : ""}
       data-hide-attribution={proOptions?.hideAttribution ? "true" : "false"}
       data-nodes-draggable={nodesDraggable ? "true" : "false"}
       onClick={onPaneClick}
@@ -172,7 +187,13 @@ export function ReactFlow({
               <span data-node-render-id={node.id}>
                 {(() => {
                   const NodeComponent = nodeTypes[node.type];
-                  return <NodeComponent data={node.data} selected={node.selected === true} isConnectable={false} />;
+                  return (
+                    <NodeComponent
+                      data={node.data}
+                      selected={node.selected === true}
+                      isConnectable={nodesConnectable === true}
+                    />
+                  );
                 })()}
               </span>
             ) : null}
@@ -214,6 +235,8 @@ export function ReactFlow({
             key={edge.id}
             type="button"
             data-edge-id={edge.id}
+            data-edge-type={edge.type ?? ""}
+            data-edge-style-opacity={String(edge.style?.opacity ?? "")}
             data-edge-source-handle={edge.sourceHandle ?? ""}
             data-edge-target-handle={edge.targetHandle ?? ""}
             onClick={(event) => {
@@ -231,7 +254,7 @@ export function ReactFlow({
         data-rf-connect="true"
         onClick={(event) => {
           event.stopPropagation();
-          onConnect?.(DEFAULT_CONNECTION);
+          onConnect?.(nextConnection ?? DEFAULT_CONNECTION);
         }}
       >
         connect
@@ -253,9 +276,18 @@ export function Background(props: ComponentPropsWithoutRef<"div">) {
 export function Handle({
   type,
   position,
+  isConnectable,
   ...props
-}: ComponentPropsWithoutRef<"div"> & { type?: string; position?: string }) {
-  return <div {...props} data-rf-handle="true" data-handle-type={type} data-handle-position={position} />;
+}: Omit<ComponentPropsWithoutRef<"div">, "children"> & { type?: string; position?: string; isConnectable?: boolean }) {
+  return (
+    <div
+      {...props}
+      data-rf-handle="true"
+      data-handle-type={type}
+      data-handle-position={position}
+      data-handle-connectable={isConnectable ? "true" : "false"}
+    />
+  );
 }
 
 export function BaseEdge({
@@ -283,7 +315,13 @@ export function getBezierPath({
   const offsetX = Math.abs(targetX - sourceX) / 2;
   const offsetY = Math.abs(targetY - sourceY) / 2;
 
-  return [`M${sourceX},${sourceY} C${labelX},${sourceY} ${labelX},${targetY} ${targetX},${targetY}`, labelX, labelY, offsetX, offsetY];
+  return [
+    `M${sourceX},${sourceY} C${labelX},${sourceY} ${labelX},${targetY} ${targetX},${targetY}`,
+    labelX,
+    labelY,
+    offsetX,
+    offsetY,
+  ];
 }
 
 export function useStore<StateSlice>(selector: (state: MockStoreState) => StateSlice): StateSlice {
@@ -317,6 +355,8 @@ export function resetReactFlowMock() {
   renderedNodes.length = 0;
   fitViewRenderedNodeCounts.length = 0;
   latestOnMoveEnd = undefined;
+  latestOnNodesChange = undefined;
+  nextConnection = null;
 }
 
 export function getReactFlowMock() {
@@ -325,6 +365,10 @@ export function getReactFlowMock() {
     renderedNodes,
     fitViewRenderedNodeCounts,
     fireMoveEnd: (viewport: MockViewport) => latestOnMoveEnd?.(null, viewport),
+    fireNodesChange: (changes: MockNodeChange[]) => latestOnNodesChange?.(changes),
+    setNextConnection: (connection: MockConnection | null) => {
+      nextConnection = connection;
+    },
   };
 }
 

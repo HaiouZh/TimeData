@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
-import { CheckCircle, Clock, DotOutline, Lock, PushPin, Target, WarningCircle } from "@phosphor-icons/react";
 import type { Icon as PhosphorGlyph } from "@phosphor-icons/react";
+import { CheckCircle, Clock, DotOutline, Lock, PushPin, Target, WarningCircle } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import { Icon } from "../../components/Icon.js";
 import type { GoalGraphLod } from "../../lib/goalGraphLod.js";
 import type { GoalGraphNode, GoalGraphNodeKind, GoalGraphNodeStatus } from "../../lib/goalGraphModel.js";
@@ -12,6 +12,7 @@ export interface GoalGraphNodeViewProps {
   pinned?: boolean;
   handles?: ReactNode;
   actions?: ReactNode;
+  onRestoreAuto?: () => void;
 }
 
 const KIND_LABEL: Record<GoalGraphNodeKind, string> = {
@@ -79,7 +80,15 @@ function shortTitle(title: string): string {
   return `${trimmed.slice(0, 14)}...`;
 }
 
-export function GoalGraphNodeView({ node, selected, lod, pinned = false, handles, actions }: GoalGraphNodeViewProps) {
+export function GoalGraphNodeView({
+  node,
+  selected,
+  lod,
+  pinned = false,
+  handles,
+  actions,
+  onRestoreAuto,
+}: GoalGraphNodeViewProps) {
   const statusMeta = STATUS_META[node.status];
   const title = shortTitle(node.title);
   const isFar = lod === "far";
@@ -98,13 +107,27 @@ export function GoalGraphNodeView({ node, selected, lod, pinned = false, handles
       data-selected={selected ? "true" : "false"}
       aria-describedby={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
       className="group/goal-node relative inline-flex items-center text-sm"
+    >
+      <span
+        data-goal-graph-node-shape="true"
+        className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass}`}
       >
-        <span
-          data-goal-graph-node-shape="true"
-          className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass}`}
-        >
         {handles}
-        {pinned && (
+        {pinned && onRestoreAuto ? (
+          <button
+            type="button"
+            aria-label="恢复自动布局"
+            title="恢复自动布局"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRestoreAuto();
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="nodrag nopan absolute -right-1 -top-1 inline-flex h-6 w-6 items-center justify-center rounded-pill border border-border bg-surface-elevated text-accent shadow-sm transition-colors hover:bg-surface-hover focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            <Icon icon={PushPin} size={12} />
+          </button>
+        ) : pinned ? (
           <span
             role="img"
             aria-label="已固定位置"
@@ -112,7 +135,7 @@ export function GoalGraphNodeView({ node, selected, lod, pinned = false, handles
           >
             <Icon icon={PushPin} size={12} />
           </span>
-        )}
+        ) : null}
         <Icon icon={statusMeta.icon} size={isFar ? 16 : 18} label={statusMeta.label} className="shrink-0" />
 
         {showTitleInsideShape && (

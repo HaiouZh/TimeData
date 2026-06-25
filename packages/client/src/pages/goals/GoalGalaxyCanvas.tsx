@@ -1,39 +1,56 @@
 import "@xyflow/react/dist/style.css";
 
+import { CornersOut } from "@phosphor-icons/react";
+import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
 import {
+  applyNodeChanges,
   Background,
+  type Connection,
+  type Edge,
+  type EdgeMouseHandler,
+  Handle,
+  type Node,
+  type NodeChange,
+  type NodeMouseHandler,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  type Edge,
-  type EdgeMouseHandler,
-  type Node,
-  type NodeMouseHandler,
   type Viewport,
 } from "@xyflow/react";
-import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../../components/Icon.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
-import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
+import { type ClusterLod, clusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
 import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
-import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
-import { addGoalMember, addTaskForGoal, deleteGoal, removeGoalMember, updateGoal, updateGoalPrerequisites } from "../../lib/goals.js";
+import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
+import {
+  addGoalMember,
+  addTaskForGoal,
+  deleteGoal,
+  removeGoalMember,
+  updateGoal,
+  updateGoalPrerequisites,
+} from "../../lib/goals.js";
+import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
-import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
-import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
 import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
-import { GoalEditSheet, type GoalEditPatch } from "./GoalEditSheet.js";
+import { type GoalEditPatch, GoalEditSheet } from "./GoalEditSheet.js";
+import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
+import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
+import { GoalGraphEdge as GoalGraphEdgeView } from "./GoalGraphEdge.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
-import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
+import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
+import { restoreGalaxyPin } from "./restoreGalaxyPin.js";
 
 export interface GoalGalaxyCanvasProps {
   goals: Goal[];
@@ -47,19 +64,26 @@ export interface GoalGalaxyCanvasProps {
 interface GoalGalaxyMemberNodeData extends Record<string, unknown> {
   node: GoalGraphNode;
   anchorIds: string[];
+  lod: ClusterLod;
   pinned: boolean;
+  onRestoreAuto?: () => void;
 }
 
-type GoalGalaxyFlowNode =
-  | Node<GoalStarNodeData, "goal-star">
-  | Node<GoalGalaxyMemberNodeData, "goal-galaxy-member">;
+type GoalGalaxyFlowNode = Node<GoalStarNodeData, "goal-star"> | Node<GoalGalaxyMemberNodeData, "goal-galaxy-member">;
 
-type GoalGalaxyFlowEdge = Edge<Record<string, unknown>>;
+interface GoalGalaxyEdgeData extends Record<string, unknown> {
+  kind: GoalGraphEdge["kind"];
+  goalId?: string;
+}
+
+type GoalGalaxyFlowEdge = Edge<GoalGalaxyEdgeData, "goal-graph-edge">;
 type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
 type ConnectDraft = { goalId: string; node: GoalGraphNode };
 type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
-type PrerequisiteEdgeParts = { goalId: string; blocker: GoalMemberRef; blocked: GoalMemberRef };
 type BridgeRouteChoice = { goalIds: string[]; nodeTitle: string } | null;
+type EdgeHandleSide = "left" | "right" | "top" | "bottom";
+
+const ADD_MEMBER_ACTION: GoalAction = { id: "add-member", label: "添加成员", tone: "primary" };
 
 const REASON_COPY = {
   "self-reference": "不能连接自己",
@@ -71,13 +95,108 @@ const REASON_COPY = {
 
 const DEFAULT_VIEWPORT: GalaxyViewport = { x: 0, y: 0, zoom: 1 };
 const DEFAULT_CLUSTER_BOUNDS = { x: -260, y: -260, width: 520, height: 520 };
+const DEFAULT_TETHER_OPACITY = 0.05;
+const TETHER_OPACITY_MIN = 0;
+const TETHER_OPACITY_MAX = 0.5;
 const nodeTypes = {
   "goal-star": GoalStarNode,
   "goal-galaxy-member": GoalGalaxyMemberNode,
 };
+const edgeTypes = { "goal-graph-edge": GoalGraphEdgeView };
+const CONNECT_HANDLE_CLASS =
+  "!h-2.5 !w-2.5 !border !border-accent-ink/70 !bg-accent-ink/70 !shadow-none !opacity-0 transition-opacity group-hover/goal-node:!opacity-60 focus-visible:!opacity-100 focus-visible:!ring-2 focus-visible:!ring-accent";
+const PASSIVE_HANDLE_CLASS = "nodrag nopan !h-1 !w-1 !border-0 !bg-transparent !opacity-0";
+const CENTER_HANDLE_CLASS =
+  "nodrag nopan !left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2 !border-0 !bg-transparent !opacity-0";
+const HANDLE_POSITIONS = [
+  { id: "left", position: Position.Left },
+  { id: "right", position: Position.Right },
+  { id: "top", position: Position.Top },
+  { id: "bottom", position: Position.Bottom },
+] as const;
 
-function GoalGalaxyMemberNode({ data, selected }: { data: GoalGalaxyMemberNodeData; selected?: boolean }) {
-  return <GoalGraphNodeView node={data.node} selected={selected === true} lod="near" pinned={data.pinned} />;
+function GoalGalaxyMemberNode({
+  data,
+  selected,
+  isConnectable,
+}: {
+  data: GoalGalaxyMemberNodeData;
+  selected?: boolean;
+  isConnectable?: boolean;
+}) {
+  return (
+    <GoalGraphNodeView
+      node={data.node}
+      selected={selected === true}
+      lod={data.lod === "collapsed" ? "far" : "near"}
+      pinned={data.pinned}
+      handles={<GalaxyNodeHandles canConnectPrerequisite={isConnectable === true} />}
+      onRestoreAuto={data.pinned ? data.onRestoreAuto : undefined}
+    />
+  );
+}
+
+function GalaxyNodeHandles({ canConnectPrerequisite }: { canConnectPrerequisite: boolean }) {
+  const className = canConnectPrerequisite ? CONNECT_HANDLE_CLASS : PASSIVE_HANDLE_CLASS;
+  return (
+    <>
+      <Handle
+        id="target-center"
+        type="target"
+        position={Position.Top}
+        isConnectable={false}
+        className={CENTER_HANDLE_CLASS}
+      />
+      <Handle
+        id="source-center"
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className={CENTER_HANDLE_CLASS}
+      />
+      {HANDLE_POSITIONS.map((handle) => (
+        <Handle
+          key={`target-${handle.id}`}
+          id={`target-${handle.id}`}
+          type="target"
+          position={handle.position}
+          isConnectable={canConnectPrerequisite}
+          className={className}
+        />
+      ))}
+      {HANDLE_POSITIONS.map((handle) => (
+        <Handle
+          key={`source-${handle.id}`}
+          id={`source-${handle.id}`}
+          type="source"
+          position={handle.position}
+          isConnectable={canConnectPrerequisite}
+          className={className}
+        />
+      ))}
+    </>
+  );
+}
+
+function GalaxyStarHandles() {
+  return (
+    <>
+      <Handle
+        id="target-center"
+        type="target"
+        position={Position.Top}
+        isConnectable={false}
+        className={CENTER_HANDLE_CLASS}
+      />
+      <Handle
+        id="source-center"
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className={CENTER_HANDLE_CLASS}
+      />
+    </>
+  );
 }
 
 function fallbackStarPosition(index: number): XY {
@@ -87,7 +206,10 @@ function fallbackStarPosition(index: number): XY {
   return { x: Math.round(Math.cos(angle) * radius), y: Math.round(Math.sin(angle) * radius) };
 }
 
-function splitPins(layoutPins: GoalLayoutPin[], goals: Goal[]): {
+function splitPins(
+  layoutPins: GoalLayoutPin[],
+  goals: Goal[],
+): {
   anchorCanvasById: Record<string, XY>;
   memberPinByNodeId: Record<string, { goalId: string; x: number; y: number }>;
 } {
@@ -123,22 +245,6 @@ function goalIdsFromAnchorIds(anchorIds: string[]): string[] {
   });
 }
 
-export async function restoreGalaxyPin({
-  nodeId,
-  anchorIds,
-  syncAfterWrite,
-}: {
-  nodeId: string;
-  anchorIds: string[];
-  syncAfterWrite: () => void;
-}): Promise<void> {
-  const ref = galaxyPinRef(nodeId, goalIdsFromAnchorIds(anchorIds));
-  if (!ref) return;
-
-  await deleteGoalLayoutPin(ref);
-  syncAfterWrite();
-}
-
 function toGraphNode(node: GalaxyNode): GoalGraphNode {
   return {
     id: node.id,
@@ -165,6 +271,10 @@ function refFromGraphNode(node: GoalGraphNode): GoalMemberRef | null {
   return node.ref;
 }
 
+function anchorIdsForFlowNode(node: GoalGalaxyFlowNode): string[] {
+  return node.type === "goal-galaxy-member" ? node.data.anchorIds : [];
+}
+
 function refFromNodeId(id: string): GoalMemberRef | null {
   const separator = id.indexOf(":");
   if (separator < 1) return null;
@@ -174,20 +284,140 @@ function refFromNodeId(id: string): GoalMemberRef | null {
   return { kind, id: refId };
 }
 
-function prerequisiteEdgeParts(edgeId: string): PrerequisiteEdgeParts | null {
-  const match = /^(?:prerequisite|broken-prerequisite):([^:]+):(.+)->(.+)$/.exec(edgeId);
-  if (!match) return null;
-  const blocker = refFromNodeId(match[2]);
-  const blocked = refFromNodeId(match[3]);
-  return blocker && blocked ? { goalId: match[1], blocker, blocked } : null;
-}
-
-function nextPrerequisitesWithEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
+function nextPrerequisitesWithEdge(
+  goal: GraphGoalLike,
+  blocker: GoalMemberRef,
+  blocked: GoalMemberRef,
+): GoalPrerequisite[] {
   return addPrerequisiteEdge(goal, blocker, blocked).prerequisites;
 }
 
-function nextPrerequisitesWithoutEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
+function nextPrerequisitesWithoutEdge(
+  goal: GraphGoalLike,
+  blocker: GoalMemberRef,
+  blocked: GoalMemberRef,
+): GoalPrerequisite[] {
   return removePrerequisiteEdge(goal, blocker, blocked).prerequisites;
+}
+
+function translate(position: XY, delta: XY, factor = 1): XY {
+  return { x: position.x + delta.x * factor, y: position.y + delta.y * factor };
+}
+
+function shiftGoalMembers(nodes: GoalGalaxyFlowNode[], goalNodeId: string, delta: XY): GoalGalaxyFlowNode[] {
+  if (delta.x === 0 && delta.y === 0) return nodes;
+  return nodes.map((node) => {
+    if (node.type !== "goal-galaxy-member" || !node.data.anchorIds.includes(goalNodeId)) return node;
+    const factor = 1 / Math.max(1, node.data.anchorIds.length);
+    return { ...node, position: translate(node.position, delta, factor) };
+  });
+}
+
+function applyGalaxyNodeChanges(
+  nodes: GoalGalaxyFlowNode[],
+  changes: NodeChange<GoalGalaxyFlowNode>[],
+): GoalGalaxyFlowNode[] {
+  return changes.reduce((current, change) => {
+    if (!("id" in change)) return applyNodeChanges([change], current) as GoalGalaxyFlowNode[];
+    const before = current.find((node) => node.id === change.id);
+    const next = applyNodeChanges([change], current) as GoalGalaxyFlowNode[];
+    if (change.type !== "position" || !before || before.type !== "goal-star") return next;
+
+    const after = next.find((node) => node.id === change.id);
+    if (!after) return next;
+    const delta = { x: after.position.x - before.position.x, y: after.position.y - before.position.y };
+    return shiftGoalMembers(next, change.id, delta);
+  }, nodes);
+}
+
+function layoutPositionKey(nodes: GoalGalaxyFlowNode[]): string {
+  return nodes
+    .map((node) => `${node.id}:${node.position.x}:${node.position.y}:${node.draggable === false ? "fixed" : "drag"}`)
+    .join("|");
+}
+
+function mergeLayoutNodeDataKeepingPositions(
+  currentNodes: GoalGalaxyFlowNode[],
+  layoutNodes: GoalGalaxyFlowNode[],
+): GoalGalaxyFlowNode[] {
+  const currentById = new Map(currentNodes.map((node) => [node.id, node]));
+  return layoutNodes.map((layoutNode) => {
+    const currentNode = currentById.get(layoutNode.id);
+    return currentNode ? { ...layoutNode, position: currentNode.position } : layoutNode;
+  });
+}
+
+function samePosition(left: XY, right: XY): boolean {
+  return left.x === right.x && left.y === right.y;
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function canReuseGalaxyNode(
+  previous: GoalGalaxyFlowNode | undefined,
+  next: GoalGalaxyFlowNode,
+): previous is GoalGalaxyFlowNode {
+  if (
+    !previous ||
+    previous.type !== next.type ||
+    previous.selected !== next.selected ||
+    previous.draggable !== next.draggable
+  )
+    return false;
+  if (!samePosition(previous.position, next.position)) return false;
+
+  if (previous.type === "goal-star" && next.type === "goal-star") {
+    return previous.data.star === next.data.star && previous.data.pinned === next.data.pinned;
+  }
+
+  if (previous.type === "goal-galaxy-member" && next.type === "goal-galaxy-member") {
+    return (
+      previous.data.node.id === next.data.node.id &&
+      previous.data.node.title === next.data.node.title &&
+      previous.data.node.status === next.data.node.status &&
+      previous.data.node.kind === next.data.node.kind &&
+      previous.data.lod === next.data.lod &&
+      previous.data.pinned === next.data.pinned &&
+      sameStringArray(previous.data.anchorIds, next.data.anchorIds)
+    );
+  }
+
+  return false;
+}
+
+function commonGoalIds(first: GoalGalaxyFlowNode | undefined, second: GoalGalaxyFlowNode | undefined): string[] {
+  if (!first || !second) return [];
+  const firstIds = new Set(goalIdsFromAnchorIds(anchorIdsForFlowNode(first)));
+  return goalIdsFromAnchorIds(anchorIdsForFlowNode(second)).filter((goalId) => firstIds.has(goalId));
+}
+
+function edgeHandleSides(source: XY, target: XY): { source: EdgeHandleSide; target: EdgeHandleSide } {
+  const delta = { x: target.x - source.x, y: target.y - source.y };
+  if (Math.abs(delta.x) >= Math.abs(delta.y)) {
+    return delta.x >= 0 ? { source: "right", target: "left" } : { source: "left", target: "right" };
+  }
+  return delta.y >= 0 ? { source: "bottom", target: "top" } : { source: "top", target: "bottom" };
+}
+
+function edgeHandlesFor(
+  edge: GoalGraphEdge,
+  nodesById: Map<string, GoalGalaxyFlowNode>,
+): { sourceHandle?: string; targetHandle?: string } {
+  if (edge.kind === "tether") {
+    return { sourceHandle: "source-center", targetHandle: "target-center" };
+  }
+
+  const source = nodesById.get(edge.source);
+  const target = nodesById.get(edge.target);
+  if (!source || !target) return {};
+
+  const sides = edgeHandleSides(source.position, target.position);
+  return {
+    sourceHandle: `source-${sides.source}`,
+    targetHandle: `target-${sides.target}`,
+  };
 }
 
 export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
@@ -201,6 +431,7 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
 function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
   const { syncAfterWrite } = useSyncContext();
+  const boardSignals = useTrackActionTags();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
   const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
@@ -212,6 +443,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
   const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
+  const [tetherOpacity, setTetherOpacity] = useState(DEFAULT_TETHER_OPACITY);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
@@ -231,11 +463,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     () => buildGoalGalaxyModel({ goals, tasks, tracks, steps, lodByGoalId }),
     [goals, lodByGoalId, steps, tasks, tracks],
   );
-  const layout = useMemo(
-    () => goalGalaxyLayout({ model, anchorCanvasById, memberPinByNodeId }),
-    [anchorCanvasById, memberPinByNodeId, model],
-  );
-  const rollup = useMemo(() => goalGalaxyRollup(goals, tasks, tracks, steps), [goals, steps, tasks, tracks]);
   const pinnedStarIds = useMemo(() => {
     const ids = new Set<string>();
     for (const pin of layoutPins) {
@@ -243,14 +470,23 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     }
     return ids;
   }, [layoutPins]);
+  const layout = useMemo(
+    () => goalGalaxyLayout({ model, anchorCanvasById, memberPinByNodeId, pinnedAnchorIds: pinnedStarIds }),
+    [anchorCanvasById, memberPinByNodeId, model, pinnedStarIds],
+  );
+  const rollup = useMemo(() => goalGalaxyRollup(goals, tasks, tracks, steps), [goals, steps, tasks, tracks]);
   const pinnedMemberIds = useMemo(() => {
     const ids = new Set<string>();
     for (const pin of layoutPins) {
-      if (pin.nodeKind !== "goal") ids.add(`${pin.nodeKind}:${pin.nodeId}`);
+      if (pin.nodeKind !== "goal") ids.add(`goal:${pin.goalId}|${pin.nodeKind}:${pin.nodeId}`);
     }
     return ids;
   }, [layoutPins]);
-  const nodes = useMemo<GoalGalaxyFlowNode[]>(() => {
+  const nodeCacheRef = useRef<Map<string, GoalGalaxyFlowNode>>(new Map());
+  const layoutNodes = useMemo<GoalGalaxyFlowNode[]>(() => {
+    const restoreAuto = (nodeId: string, anchorIds: string[]) => {
+      void restoreGalaxyPin({ nodeId, anchorIds, syncAfterWrite });
+    };
     const starNodes = model.stars.map(
       (star) =>
         ({
@@ -259,40 +495,83 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           position: layout.positions[star.nodeId] ?? { x: 0, y: 0 },
           draggable: true,
           selected: star.nodeId === selectedNodeId,
-          data: { star, pinned: pinnedStarIds.has(star.nodeId) },
+          data: {
+            star,
+            pinned: pinnedStarIds.has(star.nodeId),
+            handles: <GalaxyStarHandles />,
+            onRestoreAuto: () => restoreAuto(star.nodeId, []),
+          },
         }) satisfies GoalGalaxyFlowNode,
     );
-    const memberNodes = model.nodes.map(
-      (node) =>
-        ({
-          id: node.id,
-          type: "goal-galaxy-member",
-          position: layout.positions[node.id] ?? { x: 0, y: 0 },
-          draggable: node.anchorIds.length === 1,
-          selected: node.id === selectedNodeId,
-          data: { node: toGraphNode(node), anchorIds: node.anchorIds, pinned: pinnedMemberIds.has(node.id) },
-        }) satisfies GoalGalaxyFlowNode,
-    );
-    return [...starNodes, ...memberNodes];
-  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds, selectedNodeId]);
-  const edges = useMemo<GoalGalaxyFlowEdge[]>(
-    () =>
-      model.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        data: { kind: edge.kind },
-        selected: edge.id === selectedEdgeId,
-      })),
-    [model.edges, selectedEdgeId],
-  );
+    const memberNodes = model.nodes.map((node) => {
+      const pinned = node.anchorIds.length === 1 && pinnedMemberIds.has(`${node.anchorIds[0]}|${node.id}`);
+      return {
+        id: node.id,
+        type: "goal-galaxy-member",
+        position: layout.positions[node.id] ?? { x: 0, y: 0 },
+        draggable: node.anchorIds.length === 1,
+        selected: node.id === selectedNodeId,
+        data: {
+          node: toGraphNode(node),
+          anchorIds: node.anchorIds,
+          lod: node.lod,
+          pinned,
+          onRestoreAuto: () => restoreAuto(node.id, node.anchorIds),
+        },
+      } satisfies GoalGalaxyFlowNode;
+    });
+    const nextNodes = [...starNodes, ...memberNodes].map((node) => {
+      const previous = nodeCacheRef.current.get(node.id);
+      return canReuseGalaxyNode(previous, node) ? previous : node;
+    });
+    nodeCacheRef.current = new Map(nextNodes.map((node) => [node.id, node]));
+    return nextNodes;
+  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds, selectedNodeId, syncAfterWrite]);
+  const [nodes, setNodes] = useState<GoalGalaxyFlowNode[]>(() => layoutNodes);
+  const layoutPositionKeyValue = useMemo(() => layoutPositionKey(layoutNodes), [layoutNodes]);
+  const lastLayoutPositionKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const shouldResetPositions = lastLayoutPositionKeyRef.current !== layoutPositionKeyValue;
+    lastLayoutPositionKeyRef.current = layoutPositionKeyValue;
+    setNodes((current) => {
+      const next =
+        current.length === 0 || shouldResetPositions
+          ? layoutNodes
+          : mergeLayoutNodeDataKeepingPositions(current, layoutNodes);
+      return next;
+    });
+  }, [layoutNodes, layoutPositionKeyValue]);
+  const edges = useMemo<GoalGalaxyFlowEdge[]>(() => {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    return model.edges.map((edge) => ({
+      id: edge.id,
+      type: "goal-graph-edge",
+      source: edge.source,
+      target: edge.target,
+      ...edgeHandlesFor(edge, nodesById),
+      style: edge.kind === "tether" ? { opacity: tetherOpacity } : undefined,
+      data: { kind: edge.kind, goalId: edge.goalId },
+      selected: edge.id === selectedEdgeId,
+    }));
+  }, [model.edges, nodes, selectedEdgeId, tetherOpacity]);
   useEffect(() => {
     if (initialFitGoalKey === activeGoalKey) return;
     if (activeGoalCount === 0) return;
     if (Object.keys(lodByGoalId).length < activeGoalCount) return;
+    if (nodes.length < model.stars.length + model.nodes.length) return;
     void flow.fitView({ padding: 0.2 });
     setInitialFitGoalKey(activeGoalKey);
-  }, [activeGoalCount, activeGoalKey, flow, initialFitGoalKey, lodByGoalId]);
+  }, [
+    activeGoalCount,
+    activeGoalKey,
+    flow,
+    initialFitGoalKey,
+    lodByGoalId,
+    model.nodes.length,
+    model.stars.length,
+    nodes.length,
+  ]);
 
   const onNodeDoubleClick = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
     (_event, node) => {
@@ -303,18 +582,15 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [onNavigate],
   );
 
-  const onNodeClick = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
-    (_event, node) => {
-      if (connectDraft) {
-        void connectToTarget(node);
-        return;
-      }
-      setSelectedNodeId(node.id);
-      setSelectedEdgeId(null);
-      setErrorMessage(null);
-    },
-    [connectDraft],
-  );
+  function handleNodeClick(node: GoalGalaxyFlowNode): void {
+    if (connectDraft) {
+      void connectToTarget(node);
+      return;
+    }
+    setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
+    setErrorMessage(null);
+  }
 
   const onEdgeClick = useCallback<EdgeMouseHandler<GoalGalaxyFlowEdge>>((_event, edge) => {
     setSelectedEdgeId(edge.id);
@@ -323,27 +599,59 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setErrorMessage(null);
   }, []);
 
-  const onNodeDragStop = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
-    (_event, node) => {
-      const anchorIds = Array.isArray(node.data.anchorIds) ? node.data.anchorIds : [];
-      const ref = galaxyPinRef(node.id, goalIdsFromAnchorIds(anchorIds));
-      if (!ref) return;
+  const onNodesChange = useCallback((changes: NodeChange<GoalGalaxyFlowNode>[]) => {
+    setNodes((current) => {
+      const next = applyGalaxyNodeChanges(current, changes);
+      return next;
+    });
+  }, []);
 
-      if (ref.nodeKind === "goal") {
-        const coords = goalPinFromCanvas(node.position);
-        void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
-        return;
-      }
+  function handleNodeDragStop(node: GoalGalaxyFlowNode): void {
+    const finalPosition = node.position;
+    const anchorIds = anchorIdsForFlowNode(node);
+    const ref = galaxyPinRef(node.id, goalIdsFromAnchorIds(anchorIds));
+    if (!ref) return;
 
-      const anchor = anchorCanvasById[`goal:${ref.goalId}`] ?? { x: 0, y: 0 };
-      const coords = memberPinFromCanvas(node.position, anchor);
+    if (ref.nodeKind === "goal") {
+      const coords = goalPinFromCanvas(finalPosition);
       void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
-    },
-    [anchorCanvasById, syncAfterWrite],
-  );
+      return;
+    }
+
+    const anchor = anchorCanvasById[`goal:${ref.goalId}`] ?? { x: 0, y: 0 };
+    const coords = memberPinFromCanvas(finalPosition, anchor);
+    void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
+  }
 
   function handleMoveEnd(_event: MouseEvent | TouchEvent | null, nextViewport: Viewport): void {
     setViewport(nextViewport);
+  }
+
+  function fitGalaxyView(): void {
+    void flow.fitView({ padding: 0.2 });
+  }
+
+  function handleTetherOpacityChange(value: string): void {
+    const next = Number(value);
+    if (!Number.isFinite(next)) return;
+    setTetherOpacity(Math.min(TETHER_OPACITY_MAX, Math.max(TETHER_OPACITY_MIN, next / 100)));
+  }
+
+  async function writePrerequisite(goalId: string, blocker: GoalMemberRef, blocked: GoalMemberRef): Promise<void> {
+    const goal = goalById.get(goalId);
+    if (!goal) return;
+
+    const validation = validatePrerequisiteEdge(goal, blocker, blocked);
+    if (!validation.ok && validation.error) {
+      setErrorMessage(REASON_COPY[validation.error]);
+      setConnectDraft(null);
+      return;
+    }
+
+    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
+    syncAfterWrite();
+    setConnectDraft(null);
+    setErrorMessage(null);
   }
 
   const selectedFlowNode = useMemo(
@@ -357,16 +665,24 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   }, [selectedFlowNode]);
   const selectedNodeActions = useMemo(() => {
     if (!selectedGraphNode || !selectedFlowNode) return [];
-    return actionsForNode(selectedGraphNode, {
+    const actions = actionsForNode(selectedGraphNode, {
       pinned: selectedFlowNode.data.pinned === true,
     });
+    return selectedGraphNode.kind === "goal" ? [ADD_MEMBER_ACTION, ...actions] : actions;
   }, [selectedFlowNode, selectedGraphNode]);
   const selectedGraphEdge = useMemo<GoalGraphEdge | null>(() => {
     if (!selectedEdgeId) return null;
     const edge = model.edges.find((item) => item.id === selectedEdgeId);
     return edge ? { id: edge.id, kind: edge.kind, source: edge.source, target: edge.target } : null;
   }, [model.edges, selectedEdgeId]);
-  const selectedEdgeActions = useMemo(() => (selectedGraphEdge ? actionsForEdge(selectedGraphEdge) : []), [selectedGraphEdge]);
+  const selectedEdgeActions = useMemo(
+    () => (selectedGraphEdge ? actionsForEdge(selectedGraphEdge) : []),
+    [selectedGraphEdge],
+  );
+  const selectedFlowEdge = useMemo(
+    () => (selectedEdgeId ? (edges.find((edge) => edge.id === selectedEdgeId) ?? null) : null),
+    [edges, selectedEdgeId],
+  );
 
   function clearSelection(): void {
     setSelectedNodeId(null);
@@ -429,7 +745,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (action.id === "restore-auto") {
       void restoreGalaxyPin({
         nodeId: selectedFlowNode.id,
-        anchorIds: "anchorIds" in selectedFlowNode.data ? selectedFlowNode.data.anchorIds : [],
+        anchorIds: anchorIdsForFlowNode(selectedFlowNode),
         syncAfterWrite,
       });
       return;
@@ -453,24 +769,38 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
   async function connectToTarget(targetFlowNode: GoalGalaxyFlowNode): Promise<void> {
     if (!connectDraft || targetFlowNode.type !== "goal-galaxy-member") return;
-    const goal = goalById.get(connectDraft.goalId);
     const blocker = refFromGraphNode(connectDraft.node);
     const blocked = refFromGraphNode(targetFlowNode.data.node);
-    if (!goal || !blocker || !blocked) return;
+    if (!blocker || !blocked) return;
 
-    const validation = validatePrerequisiteEdge(goal, blocker, blocked);
-    if (!validation.ok && validation.error) {
-      setErrorMessage(REASON_COPY[validation.error]);
-      setConnectDraft(null);
-      setSelectedNodeId(targetFlowNode.id);
+    await writePrerequisite(connectDraft.goalId, blocker, blocked);
+    setSelectedNodeId(targetFlowNode.id);
+  }
+
+  async function handleConnect(connection: Connection): Promise<void> {
+    if (!connection.source || !connection.target) return;
+    const blocker = refFromNodeId(connection.source);
+    const blocked = refFromNodeId(connection.target);
+    if (!blocker || !blocked) {
+      setErrorMessage(REASON_COPY["goal-anchor"]);
       return;
     }
 
-    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
-    syncAfterWrite();
-    setConnectDraft(null);
-    setErrorMessage(null);
-    setSelectedNodeId(targetFlowNode.id);
+    const sourceNode = nodes.find((node) => node.id === connection.source);
+    const targetNode = nodes.find((node) => node.id === connection.target);
+    const sharedGoalIds = commonGoalIds(sourceNode, targetNode);
+    if (sharedGoalIds.length === 0) {
+      setErrorMessage(REASON_COPY["non-member"]);
+      return;
+    }
+    if (sharedGoalIds.length > 1) {
+      setBridgeRouteChoice({ goalIds: sharedGoalIds, nodeTitle: "这条前置关系" });
+      return;
+    }
+
+    await writePrerequisite(sharedGoalIds[0], blocker, blocked);
+    setSelectedEdgeId(null);
+    setSelectedNodeId(connection.target);
   }
 
   async function confirmRemoveMember(): Promise<void> {
@@ -519,13 +849,15 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   }
 
   async function runEdgeAction(action: GoalAction): Promise<void> {
-    if (action.id !== "delete-prerequisite" || !selectedGraphEdge) return;
-    const parts = prerequisiteEdgeParts(selectedGraphEdge.id);
-    if (!parts) return;
-    const goal = goalById.get(parts.goalId);
+    const edgeGoalId = selectedFlowEdge?.data?.goalId;
+    if (action.id !== "delete-prerequisite" || !selectedGraphEdge || !edgeGoalId) return;
+    const blocker = refFromNodeId(selectedGraphEdge.source);
+    const blocked = refFromNodeId(selectedGraphEdge.target);
+    if (!blocker || !blocked) return;
+    const goal = goalById.get(edgeGoalId);
     if (!goal) return;
 
-    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, parts.blocker, parts.blocked));
+    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, blocker, blocked));
     syncAfterWrite();
     setSelectedEdgeId(null);
   }
@@ -536,23 +868,48 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesDraggable
-        nodesConnectable={false}
+        nodesConnectable
         elementsSelectable
         nodeOrigin={[0.5, 0.5]}
         proOptions={{ hideAttribution: true }}
-        onNodeClick={onNodeClick}
+        onNodesChange={onNodesChange}
+        onNodeClick={(_event, node) => handleNodeClick(node)}
         onNodeDoubleClick={onNodeDoubleClick}
-        onNodeDragStop={onNodeDragStop}
+        onNodeDragStop={(_event, node) => handleNodeDragStop(node)}
         onEdgeClick={onEdgeClick}
+        onConnect={(connection) => void handleConnect(connection)}
         onPaneClick={clearSelection}
         onMoveEnd={handleMoveEnd}
         className="h-full w-full"
       >
         <Background />
       </ReactFlow>
-      <div className="pointer-events-none absolute left-3 top-3 z-10">
+      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-2">
         <GoalGalaxyHud rollup={rollup} />
+        <button
+          type="button"
+          aria-label="回到全图"
+          onClick={fitGalaxyView}
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface-elevated text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <Icon icon={CornersOut} size={16} />
+        </button>
+        <label className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm">
+          <span className="whitespace-nowrap">归属线</span>
+          <input
+            type="range"
+            aria-label="归属线透明度"
+            min="0"
+            max="50"
+            step="1"
+            value={Math.round(tetherOpacity * 100)}
+            onInput={(event) => handleTetherOpacityChange(event.currentTarget.value)}
+            className="h-1 w-24 accent-accent"
+          />
+          <span className="w-7 text-right tabular-nums">{Math.round(tetherOpacity * 100)}%</span>
+        </label>
       </div>
       <GoalGalaxyActionBar
         node={selectedGraphNode}
@@ -586,7 +943,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         tracks={tracks}
         steps={steps}
         members={addMemberGoal?.members ?? []}
-        boardSignals={[]}
+        boardSignals={boardSignals}
         archived={addMemberGoal?.status === "archived"}
         onAddMember={(ref) => void addMember(ref)}
         onQuickCreateTask={(title) => void quickCreateTask(title)}

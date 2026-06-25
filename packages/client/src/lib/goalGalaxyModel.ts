@@ -18,6 +18,7 @@ export interface GalaxyNode {
   kind: GoalGraphNodeKind;
   title: string;
   anchorIds: string[];
+  lod: ClusterLod;
   status: string;
   ref: GoalMemberRef | null;
 }
@@ -27,6 +28,7 @@ export interface GalaxyEdge {
   kind: GoalGraphEdge["kind"];
   source: string;
   target: string;
+  goalId?: string;
 }
 
 export interface GalaxyModel {
@@ -45,6 +47,10 @@ function addAnchor(node: GalaxyNode, anchorId: string): void {
   }
 }
 
+function nodeLod(anchorIds: string[], lodByAnchorId: Map<string, ClusterLod>): ClusterLod {
+  return anchorIds.some((anchorId) => lodByAnchorId.get(anchorId) === "expanded") ? "expanded" : "collapsed";
+}
+
 export function buildGoalGalaxyModel(args: {
   goals: Goal[];
   tasks: Task[];
@@ -57,6 +63,7 @@ export function buildGoalGalaxyModel(args: {
   const stars: GalaxyStar[] = [];
   const nodesById = new Map<string, GalaxyNode>();
   const edges: GalaxyEdge[] = [];
+  const lodByAnchorId = new Map<string, ClusterLod>();
 
   for (const goal of goals) {
     if (goal.status !== "active") continue;
@@ -64,6 +71,7 @@ export function buildGoalGalaxyModel(args: {
     const overview = buildGoalOverview(goal, tasks, tracks, steps, now ? { now } : {});
     const anchorId = anchorNodeId(goal.id);
     const lod = lodByGoalId[goal.id] ?? "collapsed";
+    lodByAnchorId.set(anchorId, lod);
 
     stars.push({
       nodeId: anchorId,
@@ -75,14 +83,13 @@ export function buildGoalGalaxyModel(args: {
       lod,
     });
 
-    if (lod !== "expanded") continue;
-
     const graph = buildGoalGraphModel(overview);
     for (const node of graph.nodes) {
       if (node.id === GOAL_NODE_ID || node.kind === "ghost") continue;
       const existing = nodesById.get(node.id);
       if (existing) {
         addAnchor(existing, anchorId);
+        existing.lod = nodeLod(existing.anchorIds, lodByAnchorId);
         continue;
       }
       nodesById.set(node.id, {
@@ -90,6 +97,7 @@ export function buildGoalGalaxyModel(args: {
         kind: node.kind,
         title: node.title,
         anchorIds: [anchorId],
+        lod,
         status: node.status,
         ref: node.ref,
       });
@@ -112,6 +120,7 @@ export function buildGoalGalaxyModel(args: {
         kind: edge.kind,
         source: edge.source,
         target: edge.target,
+        goalId: goal.id,
       });
     }
   }

@@ -53,7 +53,6 @@ describe("goalGraphActions", () => {
     ]);
 
     expect(actionsForNode(node({ kind: "goal", status: "anchor" }))).toEqual([
-      { id: "add-member", label: "添加成员", tone: "primary" },
       { id: "edit-goal", label: "编辑目标", tone: "primary" },
       { id: "toggle-archive", label: "归档目标", tone: "default" },
       { id: "delete-goal", label: "删除目标", tone: "danger" },

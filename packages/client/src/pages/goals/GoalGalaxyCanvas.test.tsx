@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { act } from "react";
+
 import type { Goal, GoalLayoutPin, Task } from "@timedata/shared";
+import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, doubleClick, renderDom, unmount } from "../../test/domHarness.js";
 import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
@@ -31,9 +32,13 @@ vi.mock("../../lib/goals.js", () => ({
   updateGoal: updateGoalMock,
   updateGoalPrerequisites: updateGoalPrerequisitesMock,
 }));
+vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
+  useTrackActionTags: () => ["待我处理", "agent在做"],
+}));
 
 const goalGalaxyCanvasModule = await import("./GoalGalaxyCanvas.js");
 const { GoalGalaxyCanvas } = goalGalaxyCanvasModule;
+const { restoreGalaxyPin } = await import("./restoreGalaxyPin.js");
 
 function goal(overrides: Partial<Goal> = {}): Goal {
   return {
@@ -89,6 +94,20 @@ function lastButtonByText(root: ParentNode, text: string): HTMLButtonElement {
   const button = [...root.querySelectorAll("button")].filter((item) => item.textContent === text).at(-1);
   if (!(button instanceof HTMLButtonElement)) throw new Error(`missing button text: ${text}`);
   return button;
+}
+
+function buttonByEdgeId(root: ParentNode, edgeId: string): HTMLButtonElement {
+  const button = [...root.querySelectorAll<HTMLButtonElement>("[data-edge-id]")].find(
+    (item) => item.getAttribute("data-edge-id") === edgeId,
+  );
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`missing edge id: ${edgeId}`);
+  return button;
+}
+
+function inputByLabel(root: ParentNode, label: string): HTMLInputElement {
+  const input = root.querySelector(`input[aria-label="${label}"]`);
+  if (!(input instanceof HTMLInputElement)) throw new Error(`missing input label: ${label}`);
+  return input;
 }
 
 async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
@@ -159,6 +178,277 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("renders galaxy edges with the shared goal graph edge renderer", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    const edge = buttonByEdgeId(host, "tether:goal:g1->task:a");
+    expect(host.querySelector("[data-rf='true']")?.getAttribute("data-edge-types")).toBe("goal-graph-edge");
+    expect(edge.getAttribute("data-edge-type")).toBe("goal-graph-edge");
+    expect(edge.getAttribute("data-edge-style-opacity")).toBe("0.05");
+    expect(edge.getAttribute("data-edge-source-handle")).toBe("source-center");
+    expect(edge.getAttribute("data-edge-target-handle")).toBe("target-center");
+    await unmount(root);
+  });
+
+  it("renders connectable four-way member handles plus passive center handles for tethers", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    const memberHandles = [...host.querySelectorAll('[data-node-render-id="task:a"] [data-rf-handle="true"]')];
+    const starHandles = [...host.querySelectorAll('[data-node-render-id="goal:g1"] [data-rf-handle="true"]')];
+
+    expect(memberHandles).toHaveLength(10);
+    expect(memberHandles.filter((handle) => handle.getAttribute("data-handle-connectable") === "true")).toHaveLength(8);
+    expect(
+      memberHandles
+        .filter((handle) => handle.getAttribute("data-handle-connectable") === "false")
+        .map((handle) => handle.getAttribute("data-handle-position"))
+        .sort(),
+    ).toEqual(["bottom", "top"]);
+    expect(starHandles).toHaveLength(2);
+    expect(starHandles.map((handle) => handle.getAttribute("data-handle-position")).sort()).toEqual(["bottom", "top"]);
+    expect(starHandles.every((handle) => handle.getAttribute("data-handle-connectable") === "false")).toBe(true);
+    await unmount(root);
+  });
+
+  it("uses the nearest side handles for prerequisite edges on the galaxy canvas", async () => {
+    const firstRef = { kind: "task" as const, id: "a" };
+    const secondRef = { kind: "task" as const, id: "b" };
+    const goalValue = goal({
+      members: [firstRef, secondRef],
+      prerequisites: [{ blocker: firstRef, blocked: secondRef }],
+    });
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "goal", nodeId: "g1", x: 0, y: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
+      { goalId: "g1", nodeKind: "task", nodeId: "a", x: -120, y: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
+      { goalId: "g1", nodeKind: "task", nodeId: "b", x: 120, y: 0, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    const edge = buttonByEdgeId(host, "prerequisite:g1:task:a->task:b");
+    expect(edge.getAttribute("data-edge-source-handle")).toBe("source-right");
+    expect(edge.getAttribute("data-edge-target-handle")).toBe("target-left");
+    await unmount(root);
+  });
+
+  it("lets the user adjust goal membership tether opacity without dimming prerequisites", async () => {
+    const firstRef = { kind: "task" as const, id: "a" };
+    const secondRef = { kind: "task" as const, id: "b" };
+    const goalValue = goal({
+      members: [firstRef, secondRef],
+      prerequisites: [{ blocker: firstRef, blocked: secondRef }],
+    });
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    const slider = inputByLabel(host, "归属线透明度");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(slider, "0");
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(buttonByEdgeId(host, "tether:goal:g1->task:a").getAttribute("data-edge-style-opacity")).toBe("0");
+    expect(buttonByEdgeId(host, "prerequisite:g1:task:a->task:b").getAttribute("data-edge-style-opacity")).toBe("");
+    await unmount(root);
+  });
+
+  it("keeps dragged nodes moving locally before the pin live query refreshes", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const member = () => host.querySelector('[data-node-id="task:a"]');
+    const startX = Number(member()?.getAttribute("data-node-x"));
+    const startY = Number(member()?.getAttribute("data-node-y"));
+
+    await click(host.querySelector('[data-rf-drag-node-id="task:a"]'));
+
+    expect(member()?.getAttribute("data-node-x")).toBe(String(startX + 10));
+    expect(member()?.getAttribute("data-node-y")).toBe(String(startY + 20));
+    await unmount(root);
+  });
+
+  it("keeps a dragged local member position when selecting the node rerenders the canvas", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const member = () => host.querySelector('[data-node-id="task:a"]');
+    const startX = Number(member()?.getAttribute("data-node-x"));
+    const startY = Number(member()?.getAttribute("data-node-y"));
+
+    await click(host.querySelector('[data-rf-drag-node-id="task:a"]'));
+    await click(member());
+
+    expect(member()?.getAttribute("data-node-x")).toBe(String(startX + 10));
+    expect(member()?.getAttribute("data-node-y")).toBe(String(startY + 20));
+    await unmount(root);
+  });
+
+  it("moves a single-goal member with its goal star while dragging", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const star = () => host.querySelector('[data-node-id="goal:g1"]');
+    const member = () => host.querySelector('[data-node-id="task:a"]');
+    const starStartX = Number(star()?.getAttribute("data-node-x"));
+    const starStartY = Number(star()?.getAttribute("data-node-y"));
+    const memberStartX = Number(member()?.getAttribute("data-node-x"));
+    const memberStartY = Number(member()?.getAttribute("data-node-y"));
+
+    await click(host.querySelector('[data-rf-drag-node-id="goal:g1"]'));
+
+    expect(star()?.getAttribute("data-node-x")).toBe(String(starStartX + 10));
+    expect(star()?.getAttribute("data-node-y")).toBe(String(starStartY + 20));
+    expect(member()?.getAttribute("data-node-x")).toBe(String(memberStartX + 10));
+    expect(member()?.getAttribute("data-node-y")).toBe(String(memberStartY + 20));
+    await unmount(root);
+  });
+
+  it("moves a goal cluster from React Flow position changes during drag", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const star = () => host.querySelector('[data-node-id="goal:g1"]');
+    const member = () => host.querySelector('[data-node-id="task:a"]');
+    const starStartX = Number(star()?.getAttribute("data-node-x"));
+    const starStartY = Number(star()?.getAttribute("data-node-y"));
+    const memberStartX = Number(member()?.getAttribute("data-node-x"));
+    const memberStartY = Number(member()?.getAttribute("data-node-y"));
+
+    await act(async () => {
+      getReactFlowMock().fireNodesChange([
+        { id: "goal:g1", type: "position", position: { x: starStartX + 10, y: starStartY + 20 } },
+      ]);
+    });
+
+    expect(star()?.getAttribute("data-node-x")).toBe(String(starStartX + 10));
+    expect(star()?.getAttribute("data-node-y")).toBe(String(starStartY + 20));
+    expect(member()?.getAttribute("data-node-x")).toBe(String(memberStartX + 10));
+    expect(member()?.getAttribute("data-node-y")).toBe(String(memberStartY + 20));
+    await unmount(root);
+  });
+
+  it("continues dragging a goal cluster from the latest local position", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const star = () => host.querySelector('[data-node-id="goal:g1"]');
+    const member = () => host.querySelector('[data-node-id="task:a"]');
+    const starStartX = Number(star()?.getAttribute("data-node-x"));
+    const starStartY = Number(star()?.getAttribute("data-node-y"));
+    const memberStartX = Number(member()?.getAttribute("data-node-x"));
+    const memberStartY = Number(member()?.getAttribute("data-node-y"));
+
+    await act(async () => {
+      getReactFlowMock().fireNodesChange([
+        { id: "goal:g1", type: "position", position: { x: starStartX + 10, y: starStartY + 20 } },
+      ]);
+    });
+    await act(async () => {
+      getReactFlowMock().fireNodesChange([
+        { id: "goal:g1", type: "position", position: { x: starStartX + 15, y: starStartY + 25 } },
+      ]);
+    });
+
+    expect(star()?.getAttribute("data-node-x")).toBe(String(starStartX + 15));
+    expect(star()?.getAttribute("data-node-y")).toBe(String(starStartY + 25));
+    expect(member()?.getAttribute("data-node-x")).toBe(String(memberStartX + 15));
+    expect(member()?.getAttribute("data-node-y")).toBe(String(memberStartY + 25));
+    await unmount(root);
+  });
+
+  it("offers a fit-view control on the galaxy canvas", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+    getReactFlowMock().fitView.mockClear();
+
+    await click(buttonByLabel(host, "回到全图"));
+
+    expect(getReactFlowMock().fitView).toHaveBeenCalledWith({ padding: 0.2 });
+    await unmount(root);
+  });
+
   it("persists a goal star world pin after drag stop", async () => {
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
@@ -181,6 +471,29 @@ describe("GoalGalaxyCanvas", () => {
         y: startY + 20,
       }),
     );
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("restores a pinned goal star from the pin button", async () => {
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "goal", nodeId: "g1", x: 100, y: 100, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal()]}
+        tasks={[]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-star-id="goal:g1"] button[aria-label="恢复自动布局"]'));
+    await flushPromises();
+
+    expect(deleteGoalLayoutPinMock).toHaveBeenCalledWith({ goalId: "g1", nodeKind: "goal", nodeId: "g1" });
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
@@ -240,14 +553,38 @@ describe("GoalGalaxyCanvas", () => {
       />,
     );
 
-    expect(host.querySelectorAll('[aria-label="已固定位置"]')).toHaveLength(2);
+    expect(host.querySelectorAll('[aria-label="恢复自动布局"]')).toHaveLength(2);
+    await unmount(root);
+  });
+
+  it("does not show a pinned badge or restore action for bridge members with scoped member pins", async () => {
+    const goals = [
+      goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
+      goal({ id: "g2", title: "G2", members: [{ kind: "task", id: "a" }] }),
+    ];
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "task", nodeId: "a", x: 30, y: -10, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={goals}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(host.querySelector('[aria-label="已固定位置"]')).toBeNull();
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    expect(document.body.querySelector('button[aria-label="恢复自动 A"]')).toBeNull();
     await unmount(root);
   });
 
   it("restoreGalaxyPin deletes the selected node pin and syncs after write", async () => {
-    await (goalGalaxyCanvasModule as typeof goalGalaxyCanvasModule & {
-      restoreGalaxyPin: (input: { nodeId: string; anchorIds: string[]; syncAfterWrite: () => void }) => Promise<void>;
-    }).restoreGalaxyPin({
+    await restoreGalaxyPin({
       nodeId: "task:a",
       anchorIds: ["goal:g1"],
       syncAfterWrite: syncAfterWriteMock,
@@ -259,6 +596,56 @@ describe("GoalGalaxyCanvas", () => {
       nodeId: "a",
     });
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs restore-auto from a selected pinned member action", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "task", nodeId: "a", x: 30, y: -10, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "恢复自动 A"));
+    await flushPromises();
+
+    expect(deleteGoalLayoutPinMock).toHaveBeenCalledWith({ goalId: "g1", nodeKind: "task", nodeId: "a" });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("connects two single-goal members on the galaxy canvas", async () => {
+    const firstRef = { kind: "task" as const, id: "t1" };
+    const secondRef = { kind: "task" as const, id: "t2" };
+    const goalValue = goal({ members: [firstRef, secondRef] });
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("t1"), task("t2")]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    getReactFlowMock().setNextConnection({ source: "task:t1", target: "task:t2" });
+
+    await click(host.querySelector("[data-rf-connect='true']"));
+    await flushPromises();
+
+    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", [{ blocker: firstRef, blocked: secondRef }]);
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
   });
 
   it("selects a member node and shows node actions", async () => {
@@ -279,6 +666,42 @@ describe("GoalGalaxyCanvas", () => {
     expect(buttonByLabel(document.body, "完成 A")).toBeInstanceOf(HTMLButtonElement);
     expect(buttonByLabel(document.body, "连前置 A")).toBeInstanceOf(HTMLButtonElement);
     expect(buttonByLabel(document.body, "移除成员 A")).toBeInstanceOf(HTMLButtonElement);
+    await unmount(root);
+  });
+
+  it("opens task and track sources from selected member actions", async () => {
+    const onNavigate = vi.fn();
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "track", id: "t1" },
+      ],
+    });
+    const track = {
+      id: "t1",
+      title: "轨道",
+      status: "active",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    } as const;
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[track]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "打开 A"));
+    await click(host.querySelector('[data-node-id="track:t1"]'));
+    await click(buttonByLabel(document.body, "打开 轨道"));
+
+    expect(onNavigate).toHaveBeenCalledWith("/todo?taskId=a");
+    expect(onNavigate).toHaveBeenCalledWith("/tracks/t1");
     await unmount(root);
   });
 
@@ -319,7 +742,9 @@ describe("GoalGalaxyCanvas", () => {
 
     await click(host.querySelector('[data-node-id="task:a"]'));
     await click(buttonByLabel(document.body, "移除成员 A"));
-    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "移除成员").at(-1));
+    await click(
+      [...document.body.querySelectorAll("button")].filter((button) => button.textContent === "移除成员").at(-1),
+    );
     await flushPromises();
 
     expect(removeGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "a" });
@@ -410,6 +835,34 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("deletes a selected prerequisite edge when member ids contain edge separators", async () => {
+    const firstRef = { kind: "task" as const, id: "a:1" };
+    const secondRef = { kind: "task" as const, id: "b->2" };
+    const goalValue = goal({
+      members: [firstRef, secondRef],
+      prerequisites: [{ blocker: firstRef, blocked: secondRef }],
+    });
+    const edgeId = "prerequisite:g1:task:a:1->task:b->2";
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a:1", { title: "A" }), task("b->2", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(buttonByEdgeId(host, edgeId));
+    await click(buttonByLabel(document.body, "删除前置"));
+    await flushPromises();
+
+    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
   it("adds an existing task member from a selected goal star", async () => {
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas
@@ -432,9 +885,41 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("quick-creates a task member from a selected goal star", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ members: [] })]}
+        tasks={[]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "添加成员 G1"));
+    const input = document.body.querySelector('input[aria-label="新建任务并加入"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing quick create input");
+    await setInputValue(input, "  新任务  ");
+    await click(buttonByText(document.body, "加入"));
+    await flushPromises();
+
+    expect(addTaskForGoalMock).toHaveBeenCalledWith("g1", { title: "新任务", toInbox: false });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
   it("edits archives and deletes a selected goal star from the goal menu", async () => {
     const { host, root } = await renderDom(
-      <GoalGalaxyCanvas goals={[goal({ title: "G1" })]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+      <GoalGalaxyCanvas
+        goals={[goal({ title: "G1" })]}
+        tasks={[]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
     );
 
     await click(host.querySelector('[data-node-id="goal:g1"]'));
@@ -465,9 +950,37 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("archives a selected goal star directly from the action bar", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ title: "G1" })]}
+        tasks={[]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "归档目标 G1"));
+    await flushPromises();
+
+    expect(updateGoalMock).toHaveBeenCalledWith("g1", { status: "archived" });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
   it("confirms before deleting a selected goal star from the action bar", async () => {
     const { host, root } = await renderDom(
-      <GoalGalaxyCanvas goals={[goal({ title: "G1" })]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+      <GoalGalaxyCanvas
+        goals={[goal({ title: "G1" })]}
+        tasks={[]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
     );
 
     await click(host.querySelector('[data-node-id="goal:g1"]'));
@@ -509,6 +1022,32 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("routes bridge member connect action to the selected focused editor", async () => {
+    const onNavigate = vi.fn();
+    const goals = [
+      goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
+      goal({ id: "g2", title: "G2", members: [{ kind: "task", id: "a" }] }),
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={goals}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(buttonByLabel(document.body, "在 G1 中编辑"));
+
+    expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledWith("/goals/g1");
+    await unmount(root);
+  });
+
   it("does not render archived goals as stars", async () => {
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas
@@ -541,7 +1080,14 @@ describe("GoalGalaxyCanvas", () => {
     const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
 
     const { root } = await renderDom(
-      <GoalGalaxyCanvas goals={[goalValue]} tasks={[task("a")]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a")]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
     );
 
     expect(getReactFlowMock().renderedNodes.some((nodes) => nodes.some((node) => node.id === "task:a"))).toBe(true);
@@ -559,7 +1105,14 @@ describe("GoalGalaxyCanvas", () => {
 
     await act(async () => {
       root.render(
-        <GoalGalaxyCanvas goals={[goalValue]} tasks={[task("a")]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+        <GoalGalaxyCanvas
+          goals={[goalValue]}
+          tasks={[task("a")]}
+          tracks={[]}
+          steps={[]}
+          layoutPins={[]}
+          onNavigate={vi.fn()}
+        />,
       );
     });
 
@@ -571,7 +1124,14 @@ describe("GoalGalaxyCanvas", () => {
   it("keeps expanded clusters expanded while zoom remains inside the hysteresis band", async () => {
     const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
     const { host, root } = await renderDom(
-      <GoalGalaxyCanvas goals={[goalValue]} tasks={[task("a")]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a")]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
     );
     expect(host.querySelector('[data-node-id="task:a"]')).toBeTruthy();
 
@@ -583,6 +1143,35 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("keeps collapsed cluster topology visible while hiding member labels", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a")]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      getReactFlowMock().fireMoveEnd({ x: 0, y: 0, zoom: 0.2 });
+    });
+
+    expect(host.querySelector('[data-node-id="task:a"]')).toBeTruthy();
+    expect(host.querySelector('[data-node-render-id="task:a"] [data-goal-graph-node-shape="true"]')).toBeTruthy();
+    expect(host.querySelector('[data-node-render-id="task:a"] [data-goal-graph-node-label="true"]')).toBeNull();
+    expect(buttonByEdgeId(host, "tether:goal:g1->task:a")).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('[data-star-id="goal:g1"]')?.getAttribute("data-star-lod")).toBe("collapsed");
+    expect(host.querySelector('[data-star-id="goal:g1"] [data-star-title="true"]')?.className).toContain("sr-only");
+    expect(host.querySelector('[data-star-id="goal:g1"] [data-star-member-count="true"]')?.className).toContain(
+      "sr-only",
+    );
+    await unmount(root);
+  });
+
   it("keeps per-goal member pins separate when the same member has pins under multiple goals", async () => {
     const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
     const layoutPins: GoalLayoutPin[] = [
@@ -591,7 +1180,14 @@ describe("GoalGalaxyCanvas", () => {
     ];
 
     const { host, root } = await renderDom(
-      <GoalGalaxyCanvas goals={[goalValue]} tasks={[task("a")]} tracks={[]} steps={[]} layoutPins={layoutPins} onNavigate={vi.fn()} />,
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a")]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
     );
 
     expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-x")).toBe("40");

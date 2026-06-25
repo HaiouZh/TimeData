@@ -1,5 +1,5 @@
-import { goalGraphLayout, type GoalGraphNodeBox } from "./goalGraphLayout.js";
 import type { GalaxyModel, GalaxyNode } from "./goalGalaxyModel.js";
+import { type GoalGraphNodeBox, goalGraphLayout } from "./goalGraphLayout.js";
 
 export interface XY {
   x: number;
@@ -10,25 +10,31 @@ export interface GalaxyLayoutInput {
   model: GalaxyModel;
   anchorCanvasById: Record<string, XY>;
   memberPinByNodeId: Record<string, { goalId: string; x: number; y: number }>;
+  pinnedAnchorIds?: ReadonlySet<string>;
 }
 
 const DEFAULT_BOX: GoalGraphNodeBox = { width: 180, height: 56 };
 const COLLISION_PADDING = 6;
 const COLLISION_ITERATIONS = 24;
+const ANCHOR_SOLVE_PASSES = 8;
 
 function boxFor(kind: string): GoalGraphNodeBox {
   if (kind === "goal") return { width: 220, height: 80 };
-  if (kind === "task") return { width: 228, height: 48 };
+  if (kind === "task") return { width: 228, height: 48, offsetX: 94 };
   if (kind === "track") return { width: 190, height: 56 };
   return DEFAULT_BOX;
 }
 
 function rectFor(position: XY, box: GoalGraphNodeBox) {
+  const center = {
+    x: position.x + (box.offsetX ?? 0),
+    y: position.y + (box.offsetY ?? 0),
+  };
   return {
-    left: position.x - box.width / 2,
-    right: position.x + box.width / 2,
-    top: position.y - box.height / 2,
-    bottom: position.y + box.height / 2,
+    left: center.x - box.width / 2,
+    right: center.x + box.width / 2,
+    top: center.y - box.height / 2,
+    bottom: center.y + box.height / 2,
   };
 }
 
@@ -94,39 +100,23 @@ function placeMember(node: GalaxyNode, input: GalaxyLayoutInput, seeds: Record<s
   return { x: anchor.x + seed.x, y: anchor.y + seed.y };
 }
 
-export function goalGalaxyLayout(input: GalaxyLayoutInput): { positions: Record<string, XY>; boxes: Record<string, GoalGraphNodeBox> } {
-  const seeds = seedOffsets(input.model);
-  const positions: Record<string, XY> = {};
-  const boxes: Record<string, GoalGraphNodeBox> = {};
-  const fixed = new Set<string>();
+function resolveCollisions(
+  positions: Record<string, XY>,
+  boxes: Record<string, GoalGraphNodeBox>,
+  fixed: ReadonlySet<string>,
+  shouldResolvePair: (leftId: string, rightId: string) => boolean = () => true,
+): Record<string, XY> {
+  const next = Object.fromEntries(Object.entries(positions).map(([id, position]) => [id, { ...position }]));
+  const ids = Object.keys(next);
 
-  for (const star of input.model.stars) {
-    positions[star.nodeId] = input.anchorCanvasById[star.nodeId] ?? { x: 0, y: 0 };
-    boxes[star.nodeId] = boxFor("goal");
-    fixed.add(star.nodeId);
-  }
-
-  for (const node of input.model.nodes) {
-    positions[node.id] = placeMember(node, input, seeds);
-    boxes[node.id] = boxFor(node.kind);
-    const anchorId = node.anchorIds[0];
-    const anchorGoalId = anchorId?.startsWith("goal:") ? anchorId.slice("goal:".length) : "";
-    if (
-      node.anchorIds.length === 1 &&
-      (input.memberPinByNodeId[`${node.anchorIds[0]}|${node.id}`] ?? input.memberPinByNodeId[node.id])?.goalId === anchorGoalId
-    ) {
-      fixed.add(node.id);
-    }
-  }
-
-  const ids = Object.keys(positions);
   for (let iter = 0; iter < COLLISION_ITERATIONS; iter += 1) {
     let moved = false;
     for (let i = 0; i < ids.length; i += 1) {
       for (let j = i + 1; j < ids.length; j += 1) {
         const a = ids[i];
         const b = ids[j];
-        const itemOverlap = overlap(positions[a], boxes[a], positions[b], boxes[b]);
+        if (!shouldResolvePair(a, b)) continue;
+        const itemOverlap = overlap(next[a], boxes[a], next[b], boxes[b]);
         if (itemOverlap.x <= 0 || itemOverlap.y <= 0) continue;
 
         const aFixed = fixed.has(a);
@@ -140,24 +130,146 @@ export function goalGalaxyLayout(input: GalaxyLayoutInput): { positions: Record<
         const sign = delta === 0 ? stableSign(`${a}:${b}`, axis) : Math.sign(delta);
 
         if (axis === "x") {
-          if (aFixed) positions[b] = { ...positions[b], x: positions[b].x + sign * push };
-          else if (bFixed) positions[a] = { ...positions[a], x: positions[a].x - sign * push };
+          if (aFixed) next[b] = { ...next[b], x: next[b].x + sign * push };
+          else if (bFixed) next[a] = { ...next[a], x: next[a].x - sign * push };
           else {
-            positions[a] = { ...positions[a], x: positions[a].x - (sign * push) / 2 };
-            positions[b] = { ...positions[b], x: positions[b].x + (sign * push) / 2 };
+            next[a] = { ...next[a], x: next[a].x - (sign * push) / 2 };
+            next[b] = { ...next[b], x: next[b].x + (sign * push) / 2 };
           }
           continue;
         }
 
-        if (aFixed) positions[b] = { ...positions[b], y: positions[b].y + sign * push };
-        else if (bFixed) positions[a] = { ...positions[a], y: positions[a].y - sign * push };
+        if (aFixed) next[b] = { ...next[b], y: next[b].y + sign * push };
+        else if (bFixed) next[a] = { ...next[a], y: next[a].y - sign * push };
         else {
-          positions[a] = { ...positions[a], y: positions[a].y - (sign * push) / 2 };
-          positions[b] = { ...positions[b], y: positions[b].y + (sign * push) / 2 };
+          next[a] = { ...next[a], y: next[a].y - (sign * push) / 2 };
+          next[b] = { ...next[b], y: next[b].y + (sign * push) / 2 };
         }
       }
     }
     if (!moved) break;
+  }
+
+  return next;
+}
+
+function samePosition(left: XY | undefined, right: XY | undefined): boolean {
+  return left?.x === right?.x && left?.y === right?.y;
+}
+
+function samePositions(left: Record<string, XY>, right: Record<string, XY>): boolean {
+  const leftIds = Object.keys(left);
+  if (leftIds.length !== Object.keys(right).length) return false;
+  return leftIds.every((id) => samePosition(left[id], right[id]));
+}
+
+function splitPinnedMembers(
+  input: GalaxyLayoutInput,
+): Set<string> {
+  const pinnedMemberIds = new Set<string>();
+  for (const node of input.model.nodes) {
+    const anchorId = node.anchorIds[0];
+    const anchorGoalId = anchorId?.startsWith("goal:") ? anchorId.slice("goal:".length) : "";
+    if (
+      node.anchorIds.length === 1 &&
+      (input.memberPinByNodeId[`${node.anchorIds[0]}|${node.id}`] ?? input.memberPinByNodeId[node.id])?.goalId ===
+        anchorGoalId
+    ) {
+      pinnedMemberIds.add(node.id);
+    }
+  }
+  return pinnedMemberIds;
+}
+
+function memberAnchorIds(input: GalaxyLayoutInput): Record<string, string[]> {
+  return Object.fromEntries(input.model.nodes.map((node) => [node.id, node.anchorIds]));
+}
+
+function isOwnPinnedSingleGoalPair(
+  leftId: string,
+  rightId: string,
+  anchorsByMemberId: Record<string, string[]>,
+  pinnedMemberIds: ReadonlySet<string>,
+): boolean {
+  const leftIsGoal = leftId.startsWith("goal:");
+  const rightIsGoal = rightId.startsWith("goal:");
+  if (leftIsGoal === rightIsGoal) return false;
+
+  const goalId = leftIsGoal ? leftId : rightId;
+  const memberId = leftIsGoal ? rightId : leftId;
+  const anchorIds = anchorsByMemberId[memberId] ?? [];
+  return pinnedMemberIds.has(memberId) && anchorIds.length === 1 && anchorIds[0] === goalId;
+}
+
+function memberPositionsForAnchors(
+  input: GalaxyLayoutInput,
+  seeds: Record<string, Record<string, XY>>,
+  anchorCanvasById: Record<string, XY>,
+): Record<string, XY> {
+  return Object.fromEntries(
+    input.model.nodes.map((node) => [
+      node.id,
+      placeMember(node, { ...input, anchorCanvasById }, seeds),
+    ]),
+  );
+}
+
+export function goalGalaxyLayout(input: GalaxyLayoutInput): {
+  positions: Record<string, XY>;
+  boxes: Record<string, GoalGraphNodeBox>;
+} {
+  const seeds = seedOffsets(input.model);
+  const boxes: Record<string, GoalGraphNodeBox> = {};
+  const starBoxes: Record<string, GoalGraphNodeBox> = {};
+  const starPositions: Record<string, XY> = {};
+  const pinnedStarIds = input.pinnedAnchorIds ?? new Set<string>();
+  const pinnedMemberIds = splitPinnedMembers(input);
+  const anchorsByMemberId = memberAnchorIds(input);
+  const shouldResolvePair = (leftId: string, rightId: string) =>
+    !isOwnPinnedSingleGoalPair(leftId, rightId, anchorsByMemberId, pinnedMemberIds);
+
+  for (const star of input.model.stars) {
+    starPositions[star.nodeId] = input.anchorCanvasById[star.nodeId] ?? { x: 0, y: 0 };
+    starBoxes[star.nodeId] = boxFor("goal");
+  }
+
+  Object.assign(boxes, starBoxes);
+  for (const node of input.model.nodes) {
+    boxes[node.id] = boxFor(node.kind);
+  }
+
+  let resolvedStarPositions = resolveCollisions(starPositions, starBoxes, pinnedStarIds);
+  for (let pass = 0; pass < ANCHOR_SOLVE_PASSES; pass += 1) {
+    const memberPositions = memberPositionsForAnchors(input, seeds, resolvedStarPositions);
+    const allPositions = { ...resolvedStarPositions, ...memberPositions };
+    const membersAsObstacles = new Set([...pinnedStarIds, ...Object.keys(memberPositions)]);
+    const nextPositions = resolveCollisions(allPositions, boxes, membersAsObstacles, shouldResolvePair);
+    const nextStarPositions = Object.fromEntries(
+      input.model.stars.map((star) => [star.nodeId, nextPositions[star.nodeId] ?? resolvedStarPositions[star.nodeId]]),
+    );
+    if (samePositions(resolvedStarPositions, nextStarPositions)) break;
+    resolvedStarPositions = nextStarPositions;
+  }
+
+  let positions = {
+    ...resolvedStarPositions,
+    ...memberPositionsForAnchors(input, seeds, resolvedStarPositions),
+  };
+  const hardFixed = new Set([...pinnedStarIds, ...pinnedMemberIds]);
+  for (let pass = 0; pass < ANCHOR_SOLVE_PASSES; pass += 1) {
+    const nextPositions = resolveCollisions(positions, boxes, hardFixed, shouldResolvePair);
+    const nextStarPositions = Object.fromEntries(
+      input.model.stars.map((star) => [star.nodeId, nextPositions[star.nodeId] ?? positions[star.nodeId]]),
+    );
+    if (samePositions(resolvedStarPositions, nextStarPositions)) {
+      positions = nextPositions;
+      break;
+    }
+    resolvedStarPositions = nextStarPositions;
+    positions = {
+      ...resolvedStarPositions,
+      ...memberPositionsForAnchors(input, seeds, resolvedStarPositions),
+    };
   }
 
   return { positions, boxes };
