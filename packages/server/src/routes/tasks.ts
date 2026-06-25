@@ -22,7 +22,9 @@ tasks.get("/", (c) => {
     );
   }
 
-  const rows = getDb().prepare("SELECT * FROM tasks ORDER BY sort_order, created_at, id").all() as TaskRow[];
+  const rows = getDb()
+    .prepare("SELECT * FROM tasks WHERE parent_id IS NULL ORDER BY sort_order, created_at, id")
+    .all() as TaskRow[];
   let result = rows.map(rowToTask);
 
   if (parsed.data.kind === "pool") {

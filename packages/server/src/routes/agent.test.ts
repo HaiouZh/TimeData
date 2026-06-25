@@ -198,6 +198,84 @@ describe("POST /api/agent/tasks/:id/status", () => {
     );
   });
 
+  it("done=true child task completes through lightweight update instead of completeTask", async () => {
+    seedChild({ id: "child-1", parentId: "task-1", title: "子任务" });
+
+    const res = await app.request("/api/agent/tasks/child-1/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: true }),
+    });
+
+    expect(res.status).toBe(200);
+    const row = db.prepare("SELECT done, completed_at FROM tasks WHERE id = ?").get("child-1") as {
+      done: number;
+      completed_at: string | null;
+    };
+    expect(row.done).toBe(1);
+    expect(row.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(db.prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'tasks'").all()).toEqual(
+      expect.arrayContaining([{ record_id: "child-1", action: "update" }]),
+    );
+  });
+
+  it("done=false child task reopens and clears completedAt", async () => {
+    seedChild({
+      id: "child-1",
+      parentId: "task-1",
+      title: "子任务",
+      done: true,
+      completedAt: "2026-06-16T01:00:00.000Z",
+    });
+
+    const res = await app.request("/api/agent/tasks/child-1/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: false }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(db.prepare("SELECT done, completed_at FROM tasks WHERE id = ?").get("child-1")).toMatchObject({
+      done: 0,
+      completed_at: null,
+    });
+  });
+
+  it("rejects note on child task without creating a grandchild", async () => {
+    seedChild({ id: "child-1", parentId: "task-1", title: "子任务" });
+
+    const res = await app.request("/api/agent/tasks/child-1/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: "不应生成孙任务" }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: { code: "TASK_CHILD_CANNOT_HAVE_CHILDREN" },
+    });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM tasks WHERE parent_id = ?").get("child-1")).toEqual({
+      count: 0,
+    });
+  });
+
+  it("rejects child done=true + note without partial update", async () => {
+    seedChild({ id: "child-1", parentId: "task-1", title: "子任务" });
+
+    const res = await app.request("/api/agent/tasks/child-1/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: true, note: "不应部分更新" }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(db.prepare("SELECT done, completed_at FROM tasks WHERE id = ?").get("child-1")).toMatchObject({
+      done: 0,
+      completed_at: null,
+    });
+  });
+
   it("done=true 重复终结(count:1)：就地转化、不新增行", async () => {
     seedRecurring("rec-2", '{"freq":"daily","interval":1,"basis":"due","count":1}');
     const before = (db.prepare("SELECT COUNT(*) AS n FROM tasks").get() as { n: number }).n;

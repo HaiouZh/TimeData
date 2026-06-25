@@ -71,11 +71,13 @@ agent / CLI (task-done/task-tag)
         → POST /api/agent/tasks/:id/status { done?, note?, tags? }
         → scopedAuthMiddleware（AUTH_TOKEN 或 AGENT_TOKEN，仅 /api/agent/* 生效）
         → routes/agent.ts: statusSchema 严格校验（至少一个字段）
-        → 读当前 task，按封闭动作构造 next：
-            · done=true   → 经 shared completeTask：非重复就地完成(done+completedAt)；
-                            重复非终结衍生已完成 occurrence + 推进模板；重复终结就地转化模板
-            · done=false  → done=false 【不清 completedAt】
-            · note        → 新建独立 child Task（parentId 指向父任务），不再写父的内嵌数组
+        → 读当前 task，按 root / child 分流后构造 next：
+            · root done=true  → 经 shared completeTask：非重复就地完成(done+completedAt)；
+                                重复非终结衍生已完成 occurrence + 推进模板；重复终结就地转化模板
+            · root done=false → done=false 【不清 completedAt】
+            · child done      → 轻量更新 done/completedAt（true 写 now，false 清 null），不调用 completeTask
+            · root note       → 新建独立 child Task（parentId 指向父任务），不再写父的内嵌数组
+            · child note      → 409 TASK_CHILD_CANNOT_HAVE_CHILDREN，整次请求不做部分更新
             · tags        → 整体替换 tags
         → TaskSchema.parse(next) 再校验 → db.transaction（顺序：occurrence create →
            occurrenceChildren create → templateChildren update → note child create → 父 next update）
@@ -86,7 +88,7 @@ agent / CLI (task-done/task-tag)
 
 ### 1.3 只读查询 + 排期写端点（第三条写入通道）
 
-- `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
+- `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，SQL 层只取 `parent_id IS NULL` 的 root tasks，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
 - `POST /api/tasks/:id/schedule { scheduledDate: "YYYY-MM-DD" | null }`（`routes/tasks.ts`）：CLI `task-schedule`/`task-unschedule` 调用，受 `AUTH_TOKEN` 保护；重复任务 409 `TASK_RECURRING_USE_RULE`。
   - **红线**：这条端点**直接 `UPDATE tasks SET scheduled_at, updated_at` + `recordSeq`，不走 `applyChange`/LWW 域**——即它**绕过了 LWW 的 schema 校验/冲突路径**。对比 agent 端点反而走 `applyChange`。这是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），改 tasks 写入逻辑时三条通道都要照顾。
 
@@ -149,7 +151,7 @@ agent / CLI (task-done/task-tag)
 ## 3. 关键不变量 / 坑 / 红线
 
 1. **完成统一走 shared 纯函数 `completeTask`（`shared/src/taskCompletion.ts`）**：非重复任务就地完成（`done=true` + `completedAt=now`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复任务**非终结**完成衍生一条独立已完成快照 `Task`（`recurrence=null`/`done=true`/`completedAt=nowIso`/标题·tags/新 id），模板自身 `done` 保持 `false` 并推进（`completedCount+1`、`lastDoneAt=dueIso` 当前应发生日）；root 的 children 同时被处理（见 #7）；**终结**完成（count 满 / until 过）模板就地转化为最终完成记录（`recurrence=null`/`done=true`/写 `completedAt=nowIso`，保留原 id）。落点唯一判据仍是 `done`（`placement.ts`）。重复分支细节见 [todo/recurrence](todo/recurrence.md) §3。
-2. **"取消完成"两端仍不对称**：agent `done=true` 现在经 `completeTask` 写 `completedAt`（与客户端一致，旧版 agent 不写的问题已修）；但 agent `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 reopen 会清 `completedAt=null`。撤销完成的语义两端不一致，改前先确认。
+2. **"取消完成"两端仍不对称（root only）**：agent root `done=true` 现在经 `completeTask` 写 `completedAt`（与客户端一致，旧版 agent 不写的问题已修）；但 agent root `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 root reopen 会清 `completedAt=null`。child 是例外：agent child `done=true/false` 走轻量路径并与客户端子任务勾选对齐（true 写 now，false 清 `completedAt=null`）。撤销完成的 root 语义两端不一致，改前先确认。
 3. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。
 4. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供标签来源去重。`scheduled` = 一次性未来排期 + 未到期重复，按下一发生日升序；`completed` 收纳普通完成任务、重复衍生的已完成快照与终结模板（均带 `completedAt`），按 `completedAt` 倒序、**无日期过滤**（“最近 N 天”是 `DayGroupedList` 显示侧渐进展示）。
 5. **DnD 拓扑：顶层单一 `DndContext`，可拖区只有今天 / 收件箱 / 某 root 的 children**：`TodoPage` 顶层一个 `DndContext`，下挂 droppable/SortableContext 命名空间 `pool:today` / `pool:inbox` / `parent:<rootId>`；收件箱跨天只建**一个** SortableContext（按天分段只是 DOM 展示）。`upcoming`（已排期，按日期排序）/ `completed`（只读）/ `recurring`（不渲染）**都不参与拖拽**——每个任务在可拖范围内只渲染一次，draggable id 全局唯一。root 行的拖拽 activator 在行左 2/5 区域（复选框独立 `stopPropagation`，右侧标题区保留打开详情/选词）；有 children 的 root 左侧显示 caret，无 children 显示 grip 指示，图标只作提示。root→child 不再靠 600ms hover-intent 自动展开，而是 `todoDnd.resolveIndentLevel` 读取横向位移、**相对被拖项自身基线**判层级：拖根任务（base=root）右移达到 28px 判 child、回落到 12px 内判 root；拖子任务（base=child，由起拖容器是 `parent:*` 推出）静止恒为 child、向左越过 -28px 才升级 root、回到 -12px 内回落 child。这层基线区分是关键——子任务竖直重排（delta.x≈0）必须保持 child，否则会被误判成 root 而 `promoteToRoot` 拽出父任务。两侧都带滞回避免纵向排序时左右抖动误触；`clampTodoIndentPreview` 按基线把横向预览夹到根的 `0..28px` 或子的 `-28..0px`，拖拽期 `.todo-dnd-dragging .swipeable-list-item` 只放开纵向 overflow、横向继续 clip，避免向右拖拽把 `<main>` 撑出横向可滚面。`handleDragEnd` 经 `todoDnd.resolveTodoDragWithIndent`（内层仍是 `resolveTodoDragOperation`）结合 active container、over container、候选 root、目标池、root 是否已有 children 派发：同容器重排（池 `persistTaskOrder`、child `reorderChildren`）；child→pool→`promoteToRoot`；root/child→合法候选 root→`moveTaskToParent`（追加到目标父 children 末尾、`nextChildSortOrder` 取 max+1 不撞值；带 children 的 root 即使右移也不能降级）；root 在今天↔收件箱互拖→`scheduleTask`/`unscheduleTask`。`persistTaskOrder` 在 Dexie transaction 内回填现有 `sortOrder` 槽位、更新 `updatedAt`、为每个变化项写 `syncLog`，只对同作用域 ids 使用。**子任务重排走 `reorderChildren`**（非 `persistTaskOrder`）：child `sortOrder` per-parent 独立，回填连续 `0..n-1`（只写变化行）以自愈撞值脏数据（旧 `moveTaskToParent` 塞 `0` 或跨端同步的产物）——撞值时槽位回填式算不出变化会静默不写、"拖了不动"。拖拽中只高亮候选父，不提前展开真实 children；落定为 child 后目标父展开一次。
@@ -184,8 +186,8 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 
 | 入口 | 职责 |
 |---|---|
-| `routes/tasks.ts` | `GET /`（只读查询）+ `POST /:id/schedule`（排期直写，重复 409，**不走 applyChange**） |
-| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`；`done=true` 先查父 children 传 `completeTask`，事务内 occurrence → occurrenceChildren → templateChildren → note child → 父 next 各 `applyChange`；`note` 建独立 child Task 不再写内嵌数组） |
+| `routes/tasks.ts` | `GET /`（只读查询，只返回 root tasks）+ `POST /:id/schedule`（排期直写，重复 409，**不走 applyChange**） |
+| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`；root `done=true` 先查父 children 传 `completeTask`，事务内 occurrence → occurrenceChildren → templateChildren → note child → 父 next 各 `applyChange`；child `done` 只轻量更新自身 done/completedAt；root `note` 建独立 child Task，child `note` 409 拒绝） |
 | `sync/domains.ts` | `tasks` 通用 LWW 注册 + `taskToRow`/`readTaskRecord` |
 | `db/schema.ts` / `lib/db-rows.ts` | 建表/列迁移 + `rowToTask` |
 | `cli/src/commands/tasks.ts` | `tasks` / `task-*` 命令（server API 封装） |

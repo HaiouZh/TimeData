@@ -42,13 +42,27 @@ agent.post("/tasks/:id/status", async (c) => {
   const nowDate = new Date();
   const now = nowDate.toISOString();
   const { done, note, tags } = parsed.data;
+  const isChild = task.parentId !== null;
+
+  if (note !== undefined && isChild) {
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: "TASK_CHILD_CANNOT_HAVE_CHILDREN",
+          message: "Child tasks cannot create child notes",
+        },
+      },
+      409,
+    );
+  }
 
   let occurrence: Task | null = null;
   let occurrenceChildren: Task[] = [];
   let templateChildren: Task[] = [];
   let noteChild: Task | null = null;
   let next: Task;
-  if (done === true) {
+  if (done === true && !isChild) {
     const sortRow = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks").get() as { next: number };
     const children = (db
       .prepare("SELECT * FROM tasks WHERE parent_id = ? ORDER BY sort_order, id")
@@ -68,9 +82,15 @@ agent.post("/tasks/:id/status", async (c) => {
       updatedAt: now,
     });
   } else {
+    const childDoneFields =
+      isChild && done !== undefined
+        ? { done, completedAt: done ? now : null }
+        : done === false
+          ? { done: false }
+          : {};
     next = TaskSchema.parse({
       ...task,
-      ...(done === false ? { done: false } : {}),
+      ...childDoneFields,
       ...(tags !== undefined ? { tags } : {}),
       updatedAt: now,
     });
