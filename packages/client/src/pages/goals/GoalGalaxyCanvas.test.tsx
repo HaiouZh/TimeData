@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import type { Goal, GoalLayoutPin, Task } from "@timedata/shared";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { doubleClick, renderDom, unmount } from "../../test/domHarness.js";
 import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
 
+const syncAfterWriteMock = vi.hoisted(() => vi.fn());
+const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
+const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
+
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
+vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
+vi.mock("../../lib/goalLayoutPins.js", () => ({
+  upsertGoalLayoutPin: upsertGoalLayoutPinMock,
+  deleteGoalLayoutPin: deleteGoalLayoutPinMock,
+}));
 
 const { GoalGalaxyCanvas } = await import("./GoalGalaxyCanvas.js");
 
@@ -32,7 +41,19 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
   } as Task;
 }
 
+async function flushPromises(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 describe("GoalGalaxyCanvas", () => {
+  beforeEach(() => {
+    syncAfterWriteMock.mockClear();
+    upsertGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
+    deleteGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
+  });
+
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
     const onNavigate = vi.fn();
 
@@ -77,6 +98,69 @@ describe("GoalGalaxyCanvas", () => {
     expect(host.querySelector('[data-node-id="goal:g1"]')?.getAttribute("data-node-draggable")).toBe("true");
     expect(host.querySelector('[data-node-id="task:b"]')?.getAttribute("data-node-draggable")).toBe("true");
     expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-draggable")).toBe("false");
+    await unmount(root);
+  });
+
+  it("persists a goal star world pin after drag stop", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+    const star = host.querySelector('[data-node-id="goal:g1"]');
+    const startX = Number(star?.getAttribute("data-node-x"));
+    const startY = Number(star?.getAttribute("data-node-y"));
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-rf-drag-stop-node-id="goal:g1"]')?.click();
+    });
+    await flushPromises();
+
+    expect(upsertGoalLayoutPinMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goalId: "g1",
+        nodeKind: "goal",
+        nodeId: "g1",
+        x: startX + 10,
+        y: startY + 20,
+      }),
+    );
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("persists a single-goal member pin relative to its goal anchor after drag stop", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "goal", nodeId: "g1", x: 100, y: 100, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const member = host.querySelector('[data-node-id="task:a"]');
+    const startX = Number(member?.getAttribute("data-node-x"));
+    const startY = Number(member?.getAttribute("data-node-y"));
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-rf-drag-stop-node-id="task:a"]')?.click();
+    });
+    await flushPromises();
+
+    expect(upsertGoalLayoutPinMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goalId: "g1",
+        nodeKind: "task",
+        nodeId: "a",
+        x: startX + 10 - 100,
+        y: startY + 20 - 100,
+      }),
+    );
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 

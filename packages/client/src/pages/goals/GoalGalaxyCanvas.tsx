@@ -12,14 +12,18 @@ import {
 } from "@xyflow/react";
 import type { Goal, GoalLayoutPin, Task, Track, TrackStep } from "@timedata/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSyncContext } from "../../contexts/SyncContext.js";
 import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
 import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
 import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
+import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
+import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
+import { galaxyPinRef } from "./galaxyPinRef.js";
 
 export interface GoalGalaxyCanvasProps {
   goals: Goal[];
@@ -88,6 +92,14 @@ function goalIdFromStarNodeId(nodeId: string): string | null {
   return goalId.length > 0 ? goalId : null;
 }
 
+function goalIdsFromAnchorIds(anchorIds: string[]): string[] {
+  return anchorIds.flatMap((anchorId) => {
+    if (!anchorId.startsWith("goal:")) return [];
+    const goalId = anchorId.slice("goal:".length);
+    return goalId ? [goalId] : [];
+  });
+}
+
 function toGraphNode(node: GalaxyNode): GoalGraphNode {
   return {
     id: node.id,
@@ -109,6 +121,7 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
 
 function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
+  const { syncAfterWrite } = useSyncContext();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
   const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
@@ -199,6 +212,25 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [onNavigate],
   );
 
+  const onNodeDragStop = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
+    (_event, node) => {
+      const anchorIds = Array.isArray(node.data.anchorIds) ? node.data.anchorIds : [];
+      const ref = galaxyPinRef(node.id, goalIdsFromAnchorIds(anchorIds));
+      if (!ref) return;
+
+      if (ref.nodeKind === "goal") {
+        const coords = goalPinFromCanvas(node.position);
+        void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
+        return;
+      }
+
+      const anchor = anchorCanvasById[`goal:${ref.goalId}`] ?? { x: 0, y: 0 };
+      const coords = memberPinFromCanvas(node.position, anchor);
+      void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
+    },
+    [anchorCanvasById, syncAfterWrite],
+  );
+
   function handleMoveEnd(_event: MouseEvent | TouchEvent | null, nextViewport: Viewport): void {
     setViewport(nextViewport);
   }
@@ -215,6 +247,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         nodeOrigin={[0.5, 0.5]}
         proOptions={{ hideAttribution: true }}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDragStop={onNodeDragStop}
         onMoveEnd={handleMoveEnd}
         className="h-full w-full"
       >
