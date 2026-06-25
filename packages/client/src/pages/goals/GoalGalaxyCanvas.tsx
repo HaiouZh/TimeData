@@ -23,10 +23,11 @@ import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge }
 import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
-import { removeGoalMember, updateGoalPrerequisites } from "../../lib/goals.js";
+import { addGoalMember, addTaskForGoal, removeGoalMember, updateGoalPrerequisites } from "../../lib/goals.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
+import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
@@ -205,6 +206,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [pendingRemoveMember, setPendingRemoveMember] = useState<PendingRemoveMember | null>(null);
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
@@ -373,6 +375,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
   function runNodeAction(action: GoalAction): void {
     if (!selectedFlowNode || !selectedGraphNode) return;
+    if (action.id === "add-member") {
+      const goalId = goalIdFromStarNodeId(selectedFlowNode.id);
+      if (goalId) setAddMemberGoalId(goalId);
+      return;
+    }
     if (action.id === "open" && selectedGraphNode.ref?.kind === "task") {
       onNavigate(`/todo?taskId=${selectedGraphNode.ref.id}`);
       return;
@@ -441,6 +448,20 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setPendingRemoveMember(null);
   }
 
+  const addMemberGoal = addMemberGoalId ? (goalById.get(addMemberGoalId) ?? null) : null;
+
+  async function addMember(ref: GoalMemberRef): Promise<void> {
+    if (!addMemberGoalId) return;
+    await addGoalMember(addMemberGoalId, ref);
+    syncAfterWrite();
+  }
+
+  async function quickCreateTask(title: string): Promise<void> {
+    if (!addMemberGoalId) return;
+    await addTaskForGoal(addMemberGoalId, { title, toInbox: false });
+    syncAfterWrite();
+  }
+
   async function runEdgeAction(action: GoalAction): Promise<void> {
     if (action.id !== "delete-prerequisite" || !selectedGraphEdge) return;
     const parts = prerequisiteEdgeParts(selectedGraphEdge.id);
@@ -502,6 +523,18 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         danger
         onCancel={() => setPendingRemoveMember(null)}
         onConfirm={() => void confirmRemoveMember()}
+      />
+      <GoalAddMemberSheet
+        open={addMemberGoal !== null}
+        tasks={tasks}
+        tracks={tracks}
+        steps={steps}
+        members={addMemberGoal?.members ?? []}
+        boardSignals={[]}
+        archived={addMemberGoal?.status === "archived"}
+        onAddMember={(ref) => void addMember(ref)}
+        onQuickCreateTask={(title) => void quickCreateTask(title)}
+        onClose={() => setAddMemberGoalId(null)}
       />
     </div>
   );

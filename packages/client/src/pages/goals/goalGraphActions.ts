@@ -2,6 +2,7 @@ import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 
 export type GoalActionId =
   | "open"
+  | "add-member"
   | "toggle-complete"
   | "connect"
   | "restore-auto"
@@ -26,6 +27,7 @@ interface GoalNodeActionOptions {
 }
 
 const OPEN_ACTION: GoalAction = { id: "open", label: "打开", tone: "primary" };
+const ADD_MEMBER_ACTION: GoalAction = { id: "add-member", label: "添加成员", tone: "primary" };
 const CONNECT_ACTION: GoalAction = { id: "connect", label: "连前置", tone: "default" };
 const RESTORE_AUTO_ACTION: GoalAction = { id: "restore-auto", label: "恢复自动", tone: "default" };
 const REMOVE_MEMBER_ACTION: GoalAction = { id: "remove-member", label: "移除成员", tone: "danger" };
@@ -68,7 +70,7 @@ export function actionsForNode(node: GoalGraphNode, options: GoalNodeActionOptio
     return [REMOVE_REF_ACTION];
   }
 
-  return withRestoreAuto([EDIT_GOAL_ACTION, toggleArchiveAction(options), DELETE_GOAL_ACTION], node, options);
+  return withRestoreAuto([ADD_MEMBER_ACTION, EDIT_GOAL_ACTION, toggleArchiveAction(options), DELETE_GOAL_ACTION], node, options);
 }
 
 export function actionsForEdge(edge: GoalGraphEdge): GoalAction[] {

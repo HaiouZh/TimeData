@@ -11,6 +11,8 @@ const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
 const removeGoalMemberMock = vi.hoisted(() => vi.fn());
 const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
+const addGoalMemberMock = vi.hoisted(() => vi.fn());
+const addTaskForGoalMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
@@ -20,6 +22,8 @@ vi.mock("../../lib/goalLayoutPins.js", () => ({
 }));
 vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
 vi.mock("../../lib/goals.js", () => ({
+  addGoalMember: addGoalMemberMock,
+  addTaskForGoal: addTaskForGoalMock,
   removeGoalMember: removeGoalMemberMock,
   updateGoalPrerequisites: updateGoalPrerequisitesMock,
 }));
@@ -42,8 +46,17 @@ function goal(overrides: Partial<Goal> = {}): Goal {
 function task(id: string, overrides: Partial<Task> = {}): Task {
   return {
     id,
+    parentId: null,
     title: id,
     done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    completedAt: null,
+    tags: [],
+    sortOrder: 0,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -70,6 +83,8 @@ describe("GoalGalaxyCanvas", () => {
     toggleTaskDoneMock.mockReset().mockResolvedValue(undefined);
     removeGoalMemberMock.mockReset().mockResolvedValue(undefined);
     updateGoalPrerequisitesMock.mockReset().mockResolvedValue(undefined);
+    addGoalMemberMock.mockReset().mockResolvedValue(undefined);
+    addTaskForGoalMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -366,6 +381,28 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("adds an existing task member from a selected goal star", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ members: [] })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "添加成员 G1"));
+    await click(buttonByLabel(document.body, "添加任务 候选任务"));
+    await flushPromises();
+
+    expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
