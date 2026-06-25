@@ -9,6 +9,7 @@ const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
+const removeGoalMemberMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
@@ -17,6 +18,7 @@ vi.mock("../../lib/goalLayoutPins.js", () => ({
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,
 }));
 vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
+vi.mock("../../lib/goals.js", () => ({ removeGoalMember: removeGoalMemberMock }));
 
 const goalGalaxyCanvasModule = await import("./GoalGalaxyCanvas.js");
 const { GoalGalaxyCanvas } = goalGalaxyCanvasModule;
@@ -62,6 +64,7 @@ describe("GoalGalaxyCanvas", () => {
     upsertGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     deleteGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     toggleTaskDoneMock.mockReset().mockResolvedValue(undefined);
+    removeGoalMemberMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -252,6 +255,29 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(toggleTaskDoneMock).toHaveBeenCalledWith("a");
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("confirms and removes a single-goal member from the selected member action", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "移除成员 A"));
+    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "移除成员").at(-1));
+    await flushPromises();
+
+    expect(removeGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "a" });
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });

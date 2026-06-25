@@ -12,6 +12,7 @@ import {
 } from "@xyflow/react";
 import type { Goal, GoalLayoutPin, Task, Track, TrackStep } from "@timedata/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
@@ -20,6 +21,7 @@ import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
 import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
+import { removeGoalMember } from "../../lib/goals.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGalaxyActionBar } from "./GoalGalaxyActionBar.js";
@@ -48,6 +50,7 @@ type GoalGalaxyFlowNode =
   | Node<GoalGalaxyMemberNodeData, "goal-galaxy-member">;
 
 type GoalGalaxyFlowEdge = Edge<Record<string, unknown>>;
+type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
 
 const DEFAULT_VIEWPORT: GalaxyViewport = { x: 0, y: 0, zoom: 1 };
 const DEFAULT_CLUSTER_BOUNDS = { x: -260, y: -260, width: 520, height: 520 };
@@ -156,6 +159,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
   const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [pendingRemoveMember, setPendingRemoveMember] = useState<PendingRemoveMember | null>(null);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
   const activeGoalKey = activeGoalIds.join("\n");
@@ -292,6 +296,10 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setSelectedNodeId(null);
   }
 
+  function owningGoalIdsForNode(node: GoalGalaxyFlowNode): string[] {
+    return node.type === "goal-galaxy-member" ? goalIdsFromAnchorIds(node.data.anchorIds) : [];
+  }
+
   function runNodeAction(action: GoalAction): void {
     if (!selectedFlowNode || !selectedGraphNode) return;
     if (action.id === "open" && selectedGraphNode.ref?.kind === "task") {
@@ -312,7 +320,24 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         anchorIds: "anchorIds" in selectedFlowNode.data ? selectedFlowNode.data.anchorIds : [],
         syncAfterWrite,
       });
+      return;
     }
+    if (action.id === "remove-member") {
+      const ref = selectedGraphNode.ref;
+      const owningGoalIds = owningGoalIdsForNode(selectedFlowNode);
+      if (!ref || owningGoalIds.length !== 1) return;
+      setPendingRemoveMember({ goalId: owningGoalIds[0], node: selectedGraphNode });
+    }
+  }
+
+  async function confirmRemoveMember(): Promise<void> {
+    const pending = pendingRemoveMember;
+    const ref = pending?.node.ref;
+    if (!pending || !ref) return;
+
+    await removeGoalMember(pending.goalId, ref);
+    syncAfterWrite();
+    setPendingRemoveMember(null);
   }
 
   return (
@@ -343,6 +368,16 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         actions={selectedNodeActions}
         onAction={runNodeAction}
         onClose={clearSelection}
+      />
+      <ConfirmSheet
+        open={pendingRemoveMember !== null}
+        title="移除成员"
+        body={pendingRemoveMember ? `将从目标中移除「${pendingRemoveMember.node.title}」。` : ""}
+        confirmLabel="移除成员"
+        cancelLabel="取消"
+        danger
+        onCancel={() => setPendingRemoveMember(null)}
+        onConfirm={() => void confirmRemoveMember()}
       />
     </div>
   );
