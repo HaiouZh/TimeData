@@ -114,6 +114,7 @@ export default function QuickNotesPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const composeDraftRef = useRef("");
+  const saveTodoPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,7 +137,7 @@ export default function QuickNotesPage() {
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
   const inputInteractionActive = composerFocused || searchOpen || softKeyboardOpen;
-  const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
+  const navOffsetPx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   const displayItems = useMemo(
     () => groupQuickNotesForDisplay(timeline.notes.filter((note) => !note.pinned), { today }),
@@ -462,7 +463,9 @@ export default function QuickNotesPage() {
 
   async function handleSaveTodo() {
     const text = draftText.trim();
-    if (!text || saving) return;
+    if (!text || saving || saveTodoPendingRef.current) return;
+    saveTodoPendingRef.current = true;
+    setSaving(true);
     setError(null);
     try {
       const dest = await readTodoDefaultDestination();
@@ -476,6 +479,9 @@ export default function QuickNotesPage() {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      saveTodoPendingRef.current = false;
+      setSaving(false);
     }
   }
 

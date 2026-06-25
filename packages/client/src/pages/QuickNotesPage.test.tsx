@@ -474,6 +474,18 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("宽屏 composer 不为移动底栏预留底部空隙", async () => {
+    stubScreenWidth(true);
+
+    const { host, root } = await renderPage();
+    const composer = host.querySelector('form[aria-label="速记输入区"]');
+
+    expect(composer).toBeInstanceOf(HTMLFormElement);
+    expect((composer as HTMLFormElement).style.bottom).toBe("0px");
+
+    await act(async () => root.unmount());
+  });
+
   it("hides the bottom nav while the composer input is focused", async () => {
     const { host, root } = await renderPage();
     const composerInput = input(host);
@@ -851,6 +863,24 @@ describe("捕捉中心", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toMatchObject({ title: "买牛奶", done: false });
     expect(input(host).value).toBe("");
+
+    await act(async () => root.unmount());
+  });
+
+  it("连续点「待办」只保存一条任务", async () => {
+    const { host, root } = await renderPage();
+    await typeInto(input(host), "只存一次");
+
+    const todoButton = composerButton(host, "存为待办");
+    await act(async () => {
+      todoButton.click();
+      todoButton.click();
+    });
+    await flush();
+
+    const tasks = await db.tasks.toArray();
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({ title: "只存一次" });
 
     await act(async () => root.unmount());
   });

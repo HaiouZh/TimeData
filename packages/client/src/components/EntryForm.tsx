@@ -92,12 +92,14 @@ export default function EntryForm({
   function handleMergeUp() {
     if (!prevEntry) return;
     setStart(splitDateTime(utcToLocalDateTime(prevEntry.startTime)));
+    setCategoryId(prevEntry.categoryId);
     if (error) setError("");
   }
 
   function handleMergeDown() {
     if (!nextEntry) return;
     setEnd(splitDateTime(utcToLocalDateTime(nextEntry.endTime)));
+    setCategoryId(nextEntry.categoryId);
     if (error) setError("");
   }
 

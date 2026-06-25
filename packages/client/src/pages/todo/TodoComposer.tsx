@@ -1,7 +1,6 @@
 import { MagnifyingGlass, Tag, X } from "@phosphor-icons/react";
 import { type FormEvent, type Ref, useState } from "react";
 import { Icon } from "../../components/Icon.js";
-import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../../lib/tasks.js";
@@ -21,6 +20,8 @@ export interface TodoComposerProps {
   onToggleMode: () => void;
   onToggleNotMode: () => void;
   onClear: () => void;
+  bottomOffsetPx: number;
+  hiddenByScroll: boolean;
   formRef?: Ref<HTMLFormElement>;
 }
 
@@ -38,11 +39,12 @@ export function TodoComposer({
   onToggleMode,
   onToggleNotMode,
   onClear,
+  bottomOffsetPx,
+  hiddenByScroll,
   formRef,
 }: TodoComposerProps) {
   const destination = useTodoDefaultDestination();
   const { syncAfterWrite } = useSyncContext();
-  const { hidden } = useBottomNav();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,8 +106,8 @@ export function TodoComposer({
       // bottom 的瞬跳发生在元素已移出屏幕外，回弹时不可见。上滑则随底栏一起归位。
       // zIndex 40 压过任务行内部交互层，低于详情抽屉/系统弹层。
       style={{
-        bottom: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX,
-        transform: hidden ? "translateY(100%)" : "translateY(0)",
+        bottom: bottomOffsetPx,
+        transform: hiddenByScroll ? "translateY(100%)" : "translateY(0)",
         zIndex: 40,
       }}
     >

@@ -6,7 +6,7 @@ covers:
   - packages/client/src/lib/navigation/navRegistry.ts
   - packages/client/src/components/app-shell/DesktopSidebar.tsx
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
-last-reviewed: 2026-06-23
+last-reviewed: 2026-06-25
 ---
 
 # 设计语言
@@ -62,7 +62,7 @@ last-reviewed: 2026-06-23
 | 关注点 | 入口 |
 |---|---|
 | 全部颜色/圆角/边框/阴影/字体 token + 全局样式 | `packages/client/src/index.css`（Tailwind v4 `@theme static`） |
-| 主导航图标映射与纯图标壳 | `packages/client/src/lib/navigation/navRegistry.ts`、`components/app-shell/{MobileBottomNav,DesktopSidebar}.tsx` |
+| 主导航图标映射与纯图标壳 | `packages/client/src/lib/navigation/navRegistry.ts`、`components/app-shell/{MobileBottomNav,DesktopSidebar}.tsx`；移动底栏的更多菜单是底栏附属层，底栏隐藏时同步收起，不作为独立悬浮菜单保留 |
 | 字体引入（GB 屏显子集 + Tinos） | `packages/client/src/main.tsx`（covers 归 [architecture](architecture.md)）；守序测试 `fontLoading.test.ts` |
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
 | 图表取色（token→JS 常量镜像） | [health/charts](health/charts.md) 的 `chartColors.ts` |

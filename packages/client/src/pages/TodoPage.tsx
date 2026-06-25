@@ -93,8 +93,9 @@ export function TodoPage() {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
       return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
     }, []) ?? new Set<string>();
-  const navOffsetPx = navHidden ? 0 : BOTTOM_NAV_HEIGHT_PX;
-  const composerAvoidancePx = Math.ceil(composerHeightPx + navOffsetPx);
+  const navOffsetPx = !wide && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
+  const composerHiddenByScroll = !wide && navHidden;
+  const composerAvoidancePx = Math.ceil((composerHiddenByScroll ? 0 : composerHeightPx) + navOffsetPx);
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
   const deepLinkedTask = useLiveQuery(
     async () => {
@@ -482,6 +483,8 @@ export function TodoPage() {
           onToggleMode={toggleMode}
           onToggleNotMode={toggleNotMode}
           onClear={clearTags}
+          bottomOffsetPx={navOffsetPx}
+          hiddenByScroll={composerHiddenByScroll}
           formRef={composerRef}
         />
 

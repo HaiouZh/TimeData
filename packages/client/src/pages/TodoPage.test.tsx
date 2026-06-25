@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
-import { act, createElement } from "react";
+import { act, createElement, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BottomNavProvider } from "../contexts/BottomNavContext.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
@@ -21,7 +21,19 @@ beforeEach(async () => {
   await db.syncLog.clear();
 });
 
-async function renderPage() {
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function HideBottomNavOnMount() {
+  const { setHidden } = useBottomNav();
+  useEffect(() => {
+    setHidden(true);
+  }, [setHidden]);
+  return null;
+}
+
+async function renderPage({ hideBottomNav = false } = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -30,7 +42,12 @@ async function renderPage() {
       createElement(
         MemoryRouter,
         null,
-        createElement(BottomNavProvider, null, createElement(SyncProvider, null, createElement(TodoPage))),
+        createElement(
+          BottomNavProvider,
+          null,
+          hideBottomNav ? createElement(HideBottomNavOnMount) : null,
+          createElement(SyncProvider, null, createElement(TodoPage)),
+        ),
       ),
     );
   });
@@ -258,6 +275,49 @@ describe("TodoPage", () => {
     expect(inbox.textContent ?? "").toContain("写工作报告");
     expect(inbox.textContent ?? "").not.toContain("工作杂事");
     expect(inbox.textContent ?? "").not.toContain("生活报告");
+    await act(async () => root.unmount());
+  });
+
+  it("底栏和输入框隐藏时，收件箱展开的收起按钮不避让已滑出视口的输入框", async () => {
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this instanceof HTMLFormElement) {
+        return {
+          x: 0,
+          y: 0,
+          width: 390,
+          height: 120,
+          top: 0,
+          right: 390,
+          bottom: 120,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+      return originalGetBoundingClientRect.call(this);
+    });
+
+    await addTask({ title: "今天收件箱", toInbox: true, now: new Date("2026-06-20T09:00:00.000Z") });
+    await addTask({ title: "昨天收件箱", toInbox: true, now: new Date("2026-06-19T09:00:00.000Z") });
+    await addTask({ title: "前天收件箱", toInbox: true, now: new Date("2026-06-18T09:00:00.000Z") });
+    await addTask({ title: "更早收件箱", toInbox: true, now: new Date("2026-06-17T09:00:00.000Z") });
+
+    const { host, root } = await renderPage({ hideBottomNav: true });
+    await waitForText(host, "今天收件箱");
+
+    const inboxSection = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
+    expect(inboxSection).not.toBeNull();
+    await act(async () => {
+      (inboxSection?.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement | null)?.click();
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    const collapse = inboxSection?.querySelector('[aria-label="收起"]') as HTMLButtonElement | null;
+    expect(collapse).not.toBeNull();
+    expect(collapse?.style.bottom).toBe("4px");
+
     await act(async () => root.unmount());
   });
 });

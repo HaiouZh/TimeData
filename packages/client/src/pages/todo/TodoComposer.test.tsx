@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { act, useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { BottomNavProvider, useBottomNav } from "../../contexts/BottomNavContext.js";
+import { BOTTOM_NAV_HEIGHT_PX } from "../../contexts/BottomNavContext.js";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -22,12 +22,12 @@ function setValue(input: HTMLInputElement, value: string) {
 type TagOption = { tag: string; count: number };
 
 function Harness({ tags = [] as TagOption[], includeTags = [] as string[] }) {
-  const { setHidden } = useBottomNav();
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
+  const [hiddenByScroll, setHiddenByScroll] = useState(false);
   return (
     <div>
-      <button type="button" data-testid="hide-nav" onClick={() => setHidden(true)}>
+      <button type="button" data-testid="hide-nav" onClick={() => setHiddenByScroll(true)}>
         hide
       </button>
       <TodoComposer
@@ -44,6 +44,8 @@ function Harness({ tags = [] as TagOption[], includeTags = [] as string[] }) {
         onToggleMode={() => {}}
         onToggleNotMode={() => {}}
         onClear={() => {}}
+        bottomOffsetPx={hiddenByScroll ? 0 : BOTTOM_NAV_HEIGHT_PX}
+        hiddenByScroll={hiddenByScroll}
       />
     </div>
   );
@@ -51,11 +53,9 @@ function Harness({ tags = [] as TagOption[], includeTags = [] as string[] }) {
 
 async function render(props: { tags?: TagOption[]; includeTags?: string[] } = {}) {
   return renderDom(
-    <BottomNavProvider>
-      <SyncProvider>
-        <Harness {...props} />
-      </SyncProvider>
-    </BottomNavProvider>,
+    <SyncProvider>
+      <Harness {...props} />
+    </SyncProvider>,
   );
 }
 

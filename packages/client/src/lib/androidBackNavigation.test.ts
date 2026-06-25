@@ -5,6 +5,20 @@ describe("resolveAndroidBackAction", () => {
   it("returns settings parent for settings detail pages", () => {
     expect(resolveAndroidBackAction("/settings/data")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/server")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/nav")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/tracks")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/insights")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/health-range")).toEqual({
+      type: "navigate",
+      to: "/settings",
+      replace: true,
+    });
+    expect(resolveAndroidBackAction("/settings/stats-layout")).toEqual({
+      type: "navigate",
+      to: "/settings",
+      replace: true,
+    });
+    expect(resolveAndroidBackAction("/settings/garmin")).toEqual({ type: "navigate", to: "/settings", replace: true });
   });
 
   it("goes back for entry editor pages", () => {
@@ -37,6 +51,22 @@ describe("resolveAndroidBackAction", () => {
     expect(resolveAndroidBackAction("/settings/categories/abc-123")).toEqual({
       type: "navigate",
       to: "/settings/categories",
+      replace: true,
+    });
+  });
+
+  it("returns tracks list parent for /tracks/:id detail", () => {
+    expect(resolveAndroidBackAction("/tracks/track-1")).toEqual({
+      type: "navigate",
+      to: "/tracks",
+      replace: true,
+    });
+  });
+
+  it("returns goals list parent for /goals/:id detail", () => {
+    expect(resolveAndroidBackAction("/goals/goal-1")).toEqual({
+      type: "navigate",
+      to: "/goals",
       replace: true,
     });
   });

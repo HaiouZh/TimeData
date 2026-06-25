@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.js";
 import { MAIN_NAV_ITEMS, MORE_NAV_ITEM, findMainNavItem, type MainNavItem, type MainNavRoute } from "../../lib/navigation/navRegistry.js";
@@ -35,6 +35,11 @@ export function MobileBottomNav() {
     const visibleRoutes = new Set(routes);
     return MAIN_NAV_ITEMS.filter((item) => !visibleRoutes.has(item.to));
   }, [routes]);
+  const showMoreMenu = open && !hidden;
+
+  useEffect(() => {
+    if (hidden && open) setOpen(false);
+  }, [hidden, open]);
 
   return (
     <nav
@@ -53,13 +58,13 @@ export function MobileBottomNav() {
             type="button"
             aria-label={MORE_NAV_ITEM.ariaLabel}
             title={MORE_NAV_ITEM.label}
-            aria-expanded={open}
+            aria-expanded={showMoreMenu}
             onClick={() => setOpen((value) => !value)}
             className="flex h-full w-full items-center justify-center text-ink-3 transition-colors hover:text-ink-2"
           >
             <Icon icon={MORE_NAV_ITEM.icon} size={23} weight="regular" />
           </button>
-          {open && (
+          {showMoreMenu && (
             <div className="fixed bottom-14 right-1 z-30 min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
               {hiddenItems.map((item) => (
                 <NavLink

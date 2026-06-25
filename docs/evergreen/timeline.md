@@ -7,6 +7,7 @@ covers:
   - packages/shared/src/schemas.ts
   - packages/client/src/pages/TimelinePage.tsx
   - packages/client/src/pages/EntryPage.tsx
+  - packages/client/src/components/EntryForm.tsx
   - packages/client/src/components/Timeline.tsx
   - packages/client/src/components/CircularTimeline.tsx
   - packages/client/src/components/TimeRangeWheelPicker.tsx
@@ -194,7 +195,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 相邻关系按严格边界相等判定：上一条 `endTime === 当前开始`，下一条 `startTime === 当前结束`。`EntryForm` 通过 `useAdjacentEntriesForRange` 以表单当前时间范围实时查询，所以新增页从时间轴空档进入、编辑页调整时间后，都能在存在严格相邻记录时显示合并按钮。
 
-真正写入仍只走保存流程：`EntryPage.handleSave()` 经 `findOverlappingEntries` / `planEntryOverlapAdjustments` 弹覆盖确认，再由 `saveEntryWithOverlapAdjustments()` 在单个 Dexie transaction 里把被并入的相邻记录裁剪或删除。编辑态语义是当前记录扩展并存活，相邻记录保存时被并入删除；分类与备注归当前记录。
+真正写入仍只走保存流程：`EntryPage.handleSave()` 经 `findOverlappingEntries` / `planEntryOverlapAdjustments` 弹覆盖确认，再由 `saveEntryWithOverlapAdjustments()` 在单个 Dexie transaction 里把被并入的相邻记录裁剪或删除。编辑态语义是当前记录扩展并存活，相邻记录保存时被并入删除；点“向上合并/向下合并”时，`EntryForm` 会把表单分类同步到被并入的上一条/下一条记录，备注仍归当前记录。
 
 如果旧版本或设备时钟偏移已经把未来结束记录写进本地 IndexedDB，当前客户端不再提供单条本地未来记录修复入口。用户应先校准设备时间；若异常记录导致同步持续失败，可在 `设置 → 数据设置 → 高级 · 数据恢复` 中运行同步诊断，并在确认云端数据正确时使用“将本地数据替换为云端数据”恢复本地数据。
 

@@ -16,6 +16,12 @@ export function resolveAndroidBackAction(pathname: string): AndroidBackAction {
     pathname === "/settings/data" ||
     pathname === "/settings/server" ||
     pathname === "/settings/categories" ||
+    pathname === "/settings/nav" ||
+    pathname === "/settings/tracks" ||
+    pathname === "/settings/insights" ||
+    pathname === "/settings/health-range" ||
+    pathname === "/settings/stats-layout" ||
+    pathname === "/settings/garmin" ||
     pathname === "/settings/admin-insights"
   ) {
     return { type: "navigate", to: "/settings", replace: true };
@@ -27,6 +33,14 @@ export function resolveAndroidBackAction(pathname: string): AndroidBackAction {
 
   if (/^\/settings\/categories\/[^/]+$/.test(pathname)) {
     return { type: "navigate", to: "/settings/categories", replace: true };
+  }
+
+  if (/^\/tracks\/[^/]+$/.test(pathname)) {
+    return { type: "navigate", to: "/tracks", replace: true };
+  }
+
+  if (/^\/goals\/[^/]+$/.test(pathname)) {
+    return { type: "navigate", to: "/goals", replace: true };
   }
 
   if (pathname === "/entries/new" || /^\/entries\/[^/]+\/edit$/.test(pathname)) {

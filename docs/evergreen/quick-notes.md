@@ -18,7 +18,7 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/notes.ts
   - packages/cli/src/lib/format.ts
-last-reviewed: 2026-06-24
+last-reviewed: 2026-06-25
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
@@ -72,7 +72,7 @@ last-reviewed: 2026-06-24
 
 ### 1.4 捕捉中心角色
 
-速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。
+速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。composer 的 fixed bottom 只在窄屏且底部 Tab 可见时避让移动底栏，宽屏不预留移动底栏空隙；「存为待办」提交期间用 pending guard 拦截连点，避免同一草稿生成重复任务。
 
 ## 2. Schema / 契约（字段级）
 
@@ -130,7 +130,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 
 | 入口 | 职责 |
 |---|---|
-| `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、日期跳转/浮层、底部 Tab 隐藏、actionToast。composer 回车按屏宽分流（`useIsWideScreen`）：宽屏(≥1024px)发送、窄屏（手机）换行交给 textarea 默认行为、靠「记录」按钮发送 |
+| `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、日期跳转/浮层、底部 Tab 隐藏、actionToast。composer 回车按屏宽分流（`useIsWideScreen`）：宽屏(≥1024px)发送、窄屏（手机）换行交给 textarea 默认行为、靠「记录」按钮发送；宽屏不套移动底栏 bottom offset，窄屏只在底栏可见时避让 |
 | `lib/quickNotes.ts` | 域 CRUD + 按日期/范围/窗口/置顶列表查询，全部同事务 syncLog |
 | `lib/quickNoteDisplay.ts` | 展示分组 `groupQuickNotesForDisplay` + `formatLocalClock` |
 | `quick-notes/useQuickNoteTimeline.ts` | 时间线 hook：最新窗口 + 向上懒加载 + 向下补差 + 日期跳转 |
