@@ -33,7 +33,7 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
 }
 
 describe("GoalGalaxyCanvas", () => {
-  it("renders one star for each active goal and keeps the canvas read-only", async () => {
+  it("renders one star for each active goal and opens the focused editor on double click", async () => {
     const onNavigate = vi.fn();
 
     const { host, root } = await renderDom(
@@ -43,10 +43,40 @@ describe("GoalGalaxyCanvas", () => {
     const star = host.querySelector('[data-star-id="goal:g1"]');
     expect(host.querySelector("[data-galaxy]")).toBeTruthy();
     expect(star).toBeTruthy();
-    expect(host.querySelector("[data-rf='true']")?.getAttribute("data-nodes-draggable")).toBe("false");
 
     await doubleClick(host.querySelector('[data-node-id="goal:g1"]'));
     expect(onNavigate).toHaveBeenCalledWith("/goals/g1");
+    await unmount(root);
+  });
+
+  it("lets goal stars and single-goal members drag while bridge members stay fixed", async () => {
+    const goals = [
+      goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
+      goal({
+        id: "g2",
+        title: "G2",
+        members: [
+          { kind: "task", id: "a" },
+          { kind: "task", id: "b" },
+        ],
+      }),
+    ];
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={goals}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(host.querySelector("[data-rf='true']")?.getAttribute("data-nodes-draggable")).toBe("true");
+    expect(host.querySelector('[data-node-id="goal:g1"]')?.getAttribute("data-node-draggable")).toBe("true");
+    expect(host.querySelector('[data-node-id="task:b"]')?.getAttribute("data-node-draggable")).toBe("true");
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-draggable")).toBe("false");
     await unmount(root);
   });
 

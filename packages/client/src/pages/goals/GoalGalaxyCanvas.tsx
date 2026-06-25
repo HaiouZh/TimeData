@@ -32,6 +32,8 @@ export interface GoalGalaxyCanvasProps {
 
 interface GoalGalaxyMemberNodeData extends Record<string, unknown> {
   node: GoalGraphNode;
+  anchorIds: string[];
+  pinned: boolean;
 }
 
 type GoalGalaxyFlowNode =
@@ -48,7 +50,7 @@ const nodeTypes = {
 };
 
 function GoalGalaxyMemberNode({ data, selected }: { data: GoalGalaxyMemberNodeData; selected?: boolean }) {
-  return <GoalGraphNodeView node={data.node} selected={selected === true} lod="near" />;
+  return <GoalGraphNodeView node={data.node} selected={selected === true} lod="near" pinned={data.pinned} />;
 }
 
 function fallbackStarPosition(index: number): XY {
@@ -133,6 +135,20 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [anchorCanvasById, memberPinByNodeId, model],
   );
   const rollup = useMemo(() => goalGalaxyRollup(goals, tasks, tracks, steps), [goals, steps, tasks, tracks]);
+  const pinnedStarIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const pin of layoutPins) {
+      if (pin.nodeKind === "goal") ids.add(`goal:${pin.nodeId}`);
+    }
+    return ids;
+  }, [layoutPins]);
+  const pinnedMemberIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const pin of layoutPins) {
+      if (pin.nodeKind !== "goal") ids.add(`${pin.nodeKind}:${pin.nodeId}`);
+    }
+    return ids;
+  }, [layoutPins]);
   const nodes = useMemo<GoalGalaxyFlowNode[]>(() => {
     const starNodes = model.stars.map(
       (star) =>
@@ -140,8 +156,8 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           id: star.nodeId,
           type: "goal-star",
           position: layout.positions[star.nodeId] ?? { x: 0, y: 0 },
-          draggable: false,
-          data: { star },
+          draggable: true,
+          data: { star, pinned: pinnedStarIds.has(star.nodeId) },
         }) satisfies GoalGalaxyFlowNode,
     );
     const memberNodes = model.nodes.map(
@@ -150,12 +166,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           id: node.id,
           type: "goal-galaxy-member",
           position: layout.positions[node.id] ?? { x: 0, y: 0 },
-          draggable: false,
-          data: { node: toGraphNode(node) },
+          draggable: node.anchorIds.length === 1,
+          data: { node: toGraphNode(node), anchorIds: node.anchorIds, pinned: pinnedMemberIds.has(node.id) },
         }) satisfies GoalGalaxyFlowNode,
     );
     return [...starNodes, ...memberNodes];
-  }, [layout.positions, model.nodes, model.stars]);
+  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds]);
   const edges = useMemo<GoalGalaxyFlowEdge[]>(
     () =>
       model.edges.map((edge) => ({
@@ -193,7 +209,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable
         nodeOrigin={[0.5, 0.5]}
