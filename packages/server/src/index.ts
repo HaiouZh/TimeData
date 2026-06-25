@@ -6,7 +6,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { getDb } from "./db/connection.js";
 import { initializeDatabase } from "./db/schema.js";
 import { runUtcResetIfNeeded } from "./db/utcReset.js";
-import { authMiddleware, scopedAuthMiddleware } from "./middleware/auth.js";
+import { authMiddleware, type AuthTokenTier, scopedAuthMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
 import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
@@ -30,7 +30,14 @@ import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
 import { cleanupServerBackups } from "./sync/backup.js";
 
-const app = new Hono();
+type ServerEnv = {
+  Variables: {
+    secureHeadersNonce?: string;
+    tokenTier?: AuthTokenTier;
+  };
+};
+
+const app = new Hono<ServerEnv>();
 const allowedOrigins = allowedOriginsFromEnv(process.env);
 
 if (allowedOrigins.includes("*")) {
