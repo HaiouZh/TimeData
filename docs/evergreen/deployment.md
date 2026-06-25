@@ -29,7 +29,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
   - .env.example
   - .github/workflows/**
-last-reviewed: 2026-06-23
+last-reviewed: 2026-06-25
 ---
 
 # 部署与自更新
@@ -82,7 +82,7 @@ last-reviewed: 2026-06-23
 | `ALLOWED_ORIGINS` | 生产必填 | CORS 允许来源白名单，逗号分隔；未配置时所有跨域 `/api/*` 请求会被拒绝（fail-closed） |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
-| `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空也使用该限流，其中清空必须发送 `X-Confirm: true` |
+| `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流，其中 sync logs 清空必须发送 `X-Confirm: true` |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
 | `PORT` | 否 | 监听端口，默认 3000 |
 | `UPDATE_REPO` | 否 | 查最新版本的 GitHub 仓库，默认 `HaiouZh/TimeData` |
@@ -97,6 +97,8 @@ last-reviewed: 2026-06-23
 受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。`/api/agent/*` 在全局 auth 前单独挂 scoped auth，接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`，但只暴露封闭的 agent 动作集合。
 
 `ALLOWED_ORIGINS` 由 `packages/server/src/middleware/cors.ts` 解析，`packages/server/src/index.ts` 在 `/api/*` CORS 中间件里使用。自 2026-05-19 起，未配置时解析为**空数组**，所有跨域 `/api/*` 请求都会被拒绝；生产部署必须显式填写 Web 前端域名，例如 `ALLOWED_ORIGINS=https://timedata.example.com`。多域名用逗号分隔，例如 `ALLOWED_ORIGINS=https://timedata.example.com,https://timedata-staging.example.com`。Android/Capacitor 壳（`androidScheme: "https"`）的 origin 是 `https://localhost`，必须显式加入白名单；兼容旧 scheme 时一并加 `capacitor://localhost`。保留 `ALLOWED_ORIGINS=*` 可以通配来源，但 `*` 配合 `credentials: true` 等于反射任意来源请求，server 启动期会打印 WARN，不推荐用于生产环境。
+
+服务端 CORS 允许的请求头包括 `Content-Type`、`Authorization`、`X-Confirm` 和 `X-TimeData-Client`。`X-Confirm` 供 `/api/admin/sync-logs` 清空确认使用，`X-TimeData-Client` 供请求审计记录 client hint；新增跨域自定义 header 时必须同步 server CORS 配置、本文档和相关测试。
 
 **部署陷阱**：`docker-compose.yml` 的 `environment:` 块**必须**显式列出 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}`，否则就算 `.env` 写了值，变量也进不到容器里。Web 前端走同源不触发 CORS，所以这种漏配通常要等到 Android App 第一次跨域请求 `/api/sync/status` 才会暴露，表现为 App 内提示"网络请求失败：无法连接 https://&lt;your-host&gt;/api/sync/status"。
 
@@ -265,9 +267,9 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 - `/index.html` 是客户端入口
 - `*.js` / `*.css` 是 Vite 打包产物
 - 所有未匹配 API 的路径 fallback 到 `index.html`（SPA 路由）
-- 设置页的 `/settings/admin-insights` 是服务端数据洞察入口，会调用 `/api/admin/*` 读取服务器概览、最近记录、分类汇总、同步诊断、服务端备份、健康检查和基础分析；它仍受 `AUTH_TOKEN` 保护。
+- 设置页的 `/settings/admin-insights` 是服务端数据洞察入口，会调用 `/api/admin/*` 读取服务器概览、最近记录、分类汇总、同步诊断、服务端备份、健康检查、基础分析和请求审计；它仍受 `AUTH_TOKEN` 保护。
 
-打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板只读，不修改 SQLite，也不提供任意 SQL。
+打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板只读，不修改 SQLite，也不提供任意 SQL；请求审计区块读取 `/api/admin/request-logs`，仅用于展示和排查认证/限流/客户端提示分布。
 
 `SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页的「导航」入口统一通往移动底栏与桌面侧栏配置页，具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。主入口里的服务器配置、同步摘要和更新动作消费 [design-language](design-language.md) 的 `surface/border/ink/accent/status` token，不使用独立渐变卡片或旧 Tailwind 展示色。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin.ts`
 

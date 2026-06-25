@@ -18,10 +18,11 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
-last-reviewed: 2026-06-24
+last-reviewed: 2026-06-25
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
+<!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
 
 # 时间轴与记录时间规则
 

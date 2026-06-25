@@ -579,7 +579,7 @@ export async function syncForcePushToServer(confirmToken: string, confirmationPh
 async function reportToServer(logs: Array<{ action: string; detail?: string; record_count?: number }>): Promise<void> {
   try {
     const device = getDeviceName();
-    await apiFetch("/api/sync-logs", {
+    await apiFetch("/api/admin/sync-logs", {
       method: "POST",
       body: JSON.stringify(logs.map((l) => ({ ...l, device }))),
     });

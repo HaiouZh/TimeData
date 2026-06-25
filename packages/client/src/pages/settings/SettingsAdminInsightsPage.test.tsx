@@ -5,6 +5,7 @@ import type {
   AdminCategoriesResponse,
   AdminEntriesResponse,
   AdminHealthChecksResponse,
+  AdminRequestLogsResponse,
   AdminSummaryResponse,
   AdminSyncResponse,
 } from "@timedata/shared";
@@ -24,6 +25,7 @@ const fetchAdminSync = vi.hoisted(() => vi.fn());
 const fetchAdminBackups = vi.hoisted(() => vi.fn());
 const fetchAdminHealthChecks = vi.hoisted(() => vi.fn());
 const fetchAdminAnalytics = vi.hoisted(() => vi.fn());
+const fetchAdminRequestLogs = vi.hoisted(() => vi.fn());
 
 vi.mock("../../lib/adminApi.ts", () => ({
   fetchAdminSummary,
@@ -33,6 +35,7 @@ vi.mock("../../lib/adminApi.ts", () => ({
   fetchAdminBackups,
   fetchAdminHealthChecks,
   fetchAdminAnalytics,
+  fetchAdminRequestLogs,
 }));
 
 const summaryResponse: AdminSummaryResponse = {
@@ -162,6 +165,26 @@ const analyticsResponse: AdminAnalyticsResponse = {
   ],
 };
 
+const requestLogsResponse: AdminRequestLogsResponse = {
+  limit: 100,
+  logs: [
+    {
+      id: 1,
+      timestamp: "2026-05-19T12:00:00.000Z",
+      method: "POST",
+      path: "/api/agent/tasks/task-1/status",
+      status: 401,
+      outcome: "auth_failed",
+      tokenTier: "invalid",
+      ip: "127.0.0.1",
+      userAgent: "Vitest",
+      clientHint: "agent",
+      deviceLabel: "agent",
+      durationMs: 12,
+    },
+  ],
+};
+
 function mockSuccessfulAdminInsights() {
   fetchAdminSummary.mockResolvedValue(summaryResponse);
   fetchAdminEntries.mockResolvedValue(entriesResponse);
@@ -170,6 +193,7 @@ function mockSuccessfulAdminInsights() {
   fetchAdminBackups.mockResolvedValue(backupsResponse);
   fetchAdminHealthChecks.mockResolvedValue(healthChecksResponse);
   fetchAdminAnalytics.mockResolvedValue(analyticsResponse);
+  fetchAdminRequestLogs.mockResolvedValue(requestLogsResponse);
 }
 
 afterEach(() => {
@@ -203,8 +227,62 @@ describe("SettingsAdminInsightsPage", () => {
     expect(host.textContent).toContain("分类汇总");
     expect(host.textContent).toContain("同步诊断");
     expect(host.textContent).toContain("服务端备份");
+    expect(host.textContent).toContain("请求审计");
+    expect(host.textContent).toContain("权限矩阵");
     expect(host.textContent).toContain("entry-missing-category");
     expect(host.textContent).toContain("timedata-backup.sqlite");
+    expect(host.textContent).toContain("/api/agent/tasks/task-1/status");
+    expect(host.textContent).toContain("auth_failed");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("filters request audit logs independently", async () => {
+    mockSuccessfulAdminInsights();
+    fetchAdminRequestLogs.mockResolvedValue({ limit: 100, logs: [] });
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    });
+
+    const statusSelect = host.querySelector("select[aria-label='请求状态']");
+    const outcomeSelect = host.querySelector("select[aria-label='请求结果']");
+    const tierSelect = host.querySelector("select[aria-label='令牌层级']");
+    const clientSelect = host.querySelector("select[aria-label='客户端提示']");
+    expect(statusSelect).not.toBeNull();
+    expect(outcomeSelect).not.toBeNull();
+    expect(tierSelect).not.toBeNull();
+    expect(clientSelect).not.toBeNull();
+
+    await act(async () => {
+      (statusSelect as HTMLSelectElement).value = "401";
+      statusSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      (outcomeSelect as HTMLSelectElement).value = "auth_failed";
+      outcomeSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      (tierSelect as HTMLSelectElement).value = "invalid";
+      tierSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      (clientSelect as HTMLSelectElement).value = "agent";
+      clientSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(fetchAdminRequestLogs).toHaveBeenLastCalledWith({
+      limit: 100,
+      status: 401,
+      outcome: "auth_failed",
+      tokenTier: "invalid",
+      clientHint: "agent",
+    });
+    expect(host.textContent).toContain("暂无请求审计记录。");
 
     await act(async () => {
       root.unmount();

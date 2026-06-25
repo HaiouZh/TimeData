@@ -4,6 +4,10 @@ import type {
   AdminCategoriesResponse,
   AdminEntriesResponse,
   AdminHealthChecksResponse,
+  AdminRequestLogClientHint,
+  AdminRequestLogOutcome,
+  AdminRequestLogsResponse,
+  AdminRequestLogTokenTier,
   AdminSummaryResponse,
   AdminSyncResponse,
 } from "@timedata/shared";
@@ -24,6 +28,14 @@ export interface AdminAnalyticsQuery {
   from?: string;
   to?: string;
   groupBy?: AdminAnalyticsGroupBy;
+}
+
+export interface AdminRequestLogsQuery {
+  limit?: number;
+  status?: number;
+  outcome?: AdminRequestLogOutcome;
+  tokenTier?: AdminRequestLogTokenTier;
+  clientHint?: AdminRequestLogClientHint;
 }
 
 function withQuery<T extends object>(path: string, query: T): string {
@@ -63,4 +75,8 @@ export function fetchAdminHealthChecks(): Promise<AdminHealthChecksResponse> {
 
 export function fetchAdminAnalytics(query: AdminAnalyticsQuery = {}): Promise<AdminAnalyticsResponse> {
   return apiFetch(withQuery("/api/admin/analytics", query));
+}
+
+export function fetchAdminRequestLogs(query: AdminRequestLogsQuery = {}): Promise<AdminRequestLogsResponse> {
+  return apiFetch(withQuery("/api/admin/request-logs", query));
 }

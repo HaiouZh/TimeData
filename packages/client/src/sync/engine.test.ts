@@ -2235,7 +2235,7 @@ describe("regularSync", () => {
     const pullBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
     expect(pullBody.sinceSeq).toBe(0);
     expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/push", expect.anything());
-    expect(apiFetchMock).toHaveBeenNthCalledWith(3, "/api/sync-logs", expect.objectContaining({ method: "POST" }));
+    expect(apiFetchMock).toHaveBeenNthCalledWith(3, "/api/admin/sync-logs", expect.objectContaining({ method: "POST" }));
     const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
     expect(logBody[0]).toMatchObject({ action: "pull_seq_catchup", record_count: 1 });
     expect(result).toMatchObject({ identical: false, pushed: 0, pulled: 1 });

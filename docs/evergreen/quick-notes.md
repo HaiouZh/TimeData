@@ -24,6 +24,7 @@ last-reviewed: 2026-06-25
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
 <!-- 复核 2026-06-22（目标层 Phase 1）：新增 goals 域触及共享 schema / sync 登记簿 / db index covers；quick_notes 字段、LWW 语义、独立备份格式均不变。 -->
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及共享 schema / sync 登记簿 / db index covers；quick_notes 字段、LWW 语义、独立备份格式仍不变。 -->
+<!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，server schema 新增非同步运维表；quick_notes 字段、LWW 语义、独立备份格式仍不变。 -->
 
 # 速记
 

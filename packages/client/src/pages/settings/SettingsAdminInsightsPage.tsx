@@ -4,6 +4,10 @@ import type {
   AdminCategoriesResponse,
   AdminEntriesResponse,
   AdminHealthChecksResponse,
+  AdminRequestLogClientHint,
+  AdminRequestLogOutcome,
+  AdminRequestLogsResponse,
+  AdminRequestLogTokenTier,
   AdminSummaryResponse,
   AdminSyncResponse,
 } from "@timedata/shared";
@@ -14,6 +18,7 @@ import {
   fetchAdminCategories,
   fetchAdminEntries,
   fetchAdminHealthChecks,
+  fetchAdminRequestLogs,
   fetchAdminSummary,
   fetchAdminSync,
 } from "../../lib/adminApi.ts";
@@ -30,6 +35,14 @@ interface AdminInsightsState {
   analytics?: AdminAnalyticsResponse;
 }
 
+interface RequestLogFilters {
+  limit: number;
+  status?: number;
+  outcome?: AdminRequestLogOutcome;
+  tokenTier?: AdminRequestLogTokenTier;
+  clientHint?: AdminRequestLogClientHint;
+}
+
 function settledValue<T>(result: PromiseSettledResult<T>, errors: string[]): T | undefined {
   if (result.status === "fulfilled") return result.value;
   errors.push(result.reason instanceof Error ? result.reason.message : String(result.reason));
@@ -41,6 +54,50 @@ const anomalyLabel: Record<string, string> = {
   missing_category: "分类缺失",
   archived_category: "归档分类",
 };
+
+const requestOutcomeLabel: Record<AdminRequestLogOutcome, string> = {
+  ok: "通过",
+  auth_failed: "认证失败",
+  rate_limited: "限流",
+  server_error: "服务端错误",
+  client_error: "客户端错误",
+};
+
+const tokenTierLabel: Record<AdminRequestLogTokenTier, string> = {
+  public: "公开",
+  master: "主令牌",
+  agent: "Agent",
+  dev_bypass: "开发绕过",
+  missing: "缺失",
+  invalid: "无效",
+  unknown: "未知",
+};
+
+const clientHintLabel: Record<AdminRequestLogClientHint, string> = {
+  web: "Web",
+  android: "Android",
+  cli: "CLI",
+  agent: "Agent",
+  unknown: "未知",
+};
+
+const requestOutcomeOptions: AdminRequestLogOutcome[] = [
+  "ok",
+  "auth_failed",
+  "rate_limited",
+  "server_error",
+  "client_error",
+];
+const tokenTierOptions: AdminRequestLogTokenTier[] = [
+  "public",
+  "master",
+  "agent",
+  "dev_bypass",
+  "missing",
+  "invalid",
+  "unknown",
+];
+const clientHintOptions: AdminRequestLogClientHint[] = ["web", "android", "cli", "agent", "unknown"];
 
 function minutesLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -77,8 +134,179 @@ function SyncIssueBadge({ label }: { label: string }) {
   return <span className="rounded bg-amber-900/40 px-2 py-0.5 text-[11px] text-amber-200">{label}</span>;
 }
 
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex min-w-[9rem] flex-1 flex-col gap-1 text-xs text-slate-500">
+      <span>{label}</span>
+      <select
+        aria-label={label}
+        className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1.5 text-sm text-slate-100"
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function PermissionMatrix() {
+  const rows = [
+    { tier: "public", access: "健康检查、版本信息", notes: "不读取个人数据。" },
+    { tier: "master", access: "同步、数据管理、Admin 洞察", notes: "唯一可读取请求审计的令牌层级。" },
+    { tier: "agent", access: "受控 agent 写入端点", notes: "不可读取 `/api/admin/*`。" },
+  ];
+
+  return (
+    <Section title="权限矩阵">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-xs">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">层级</th>
+              <th className="px-3 py-2 font-medium">可访问范围</th>
+              <th className="px-3 py-2 font-medium">说明</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800 text-slate-300">
+            {rows.map((row) => (
+              <tr key={row.tier}>
+                <td className="px-3 py-2 font-mono text-slate-100">{row.tier}</td>
+                <td className="px-3 py-2">{row.access}</td>
+                <td className="px-3 py-2 text-slate-500">{row.notes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+  );
+}
+
+function RequestAuditSection({
+  logs,
+  filters,
+  loading,
+  error,
+  onFiltersChange,
+}: {
+  logs?: AdminRequestLogsResponse;
+  filters: RequestLogFilters;
+  loading: boolean;
+  error: string;
+  onFiltersChange: (filters: RequestLogFilters) => void;
+}) {
+  const updateFilter = <K extends keyof RequestLogFilters>(key: K, value: RequestLogFilters[K] | undefined) => {
+    onFiltersChange({
+      ...filters,
+      [key]: value,
+    });
+  };
+
+  return (
+    <Section title="请求审计">
+      <div className="flex flex-wrap gap-2">
+        <FilterSelect
+          label="请求状态"
+          value={filters.status === undefined ? "" : String(filters.status)}
+          onChange={(value) => updateFilter("status", value ? Number(value) : undefined)}
+        >
+          <option value="">全部状态</option>
+          <option value="200">200</option>
+          <option value="400">400</option>
+          <option value="401">401</option>
+          <option value="403">403</option>
+          <option value="429">429</option>
+          <option value="500">500</option>
+        </FilterSelect>
+        <FilterSelect
+          label="请求结果"
+          value={filters.outcome ?? ""}
+          onChange={(value) => updateFilter("outcome", (value || undefined) as AdminRequestLogOutcome | undefined)}
+        >
+          <option value="">全部结果</option>
+          {requestOutcomeOptions.map((outcome) => (
+            <option key={outcome} value={outcome}>
+              {requestOutcomeLabel[outcome]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          label="令牌层级"
+          value={filters.tokenTier ?? ""}
+          onChange={(value) => updateFilter("tokenTier", (value || undefined) as AdminRequestLogTokenTier | undefined)}
+        >
+          <option value="">全部层级</option>
+          {tokenTierOptions.map((tier) => (
+            <option key={tier} value={tier}>
+              {tokenTierLabel[tier]}
+            </option>
+          ))}
+        </FilterSelect>
+        <FilterSelect
+          label="客户端提示"
+          value={filters.clientHint ?? ""}
+          onChange={(value) =>
+            updateFilter("clientHint", (value || undefined) as AdminRequestLogClientHint | undefined)
+          }
+        >
+          <option value="">全部客户端</option>
+          {clientHintOptions.map((hint) => (
+            <option key={hint} value={hint}>
+              {clientHintLabel[hint]}
+            </option>
+          ))}
+        </FilterSelect>
+      </div>
+
+      <p className="text-xs text-slate-500">
+        IP 仅用于展示；反代未清洗 X-Forwarded-For / X-Real-IP 时不可作为安全证据。
+      </p>
+
+      {loading && <div className="text-sm text-slate-400">正在加载请求审计…</div>}
+      {error && <div className="rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-sm text-red-200">{error}</div>}
+
+      <div className="space-y-2">
+        {logs?.logs.map((log) => (
+          <div key={log.id} className="rounded-lg bg-slate-950/50 px-3 py-2 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center gap-2 text-slate-100">
+              <span className="font-mono">{log.method}</span>
+              <span className="min-w-0 break-all">{log.path}</span>
+              <SyncIssueBadge label={String(log.status)} />
+              <SyncIssueBadge label={log.outcome} />
+              <SyncIssueBadge label={log.tokenTier} />
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              <span>{formatAppDateTime(log.timestamp)}</span>
+              <span>IP：{log.ip ?? "未知"}</span>
+              <span>设备：{log.deviceLabel ?? clientHintLabel[log.clientHint]}</span>
+              <span>{log.durationMs} ms</span>
+            </div>
+            {log.userAgent && <div className="mt-1 truncate text-slate-500">{log.userAgent}</div>}
+          </div>
+        ))}
+        {logs && logs.logs.length === 0 && <div className="text-sm text-slate-500">暂无请求审计记录。</div>}
+      </div>
+    </Section>
+  );
+}
+
 export default function SettingsAdminInsightsPage() {
   const [data, setData] = useState<AdminInsightsState | null>(null);
+  const [requestLogs, setRequestLogs] = useState<AdminRequestLogsResponse | undefined>();
+  const [requestLogFilters, setRequestLogFilters] = useState<RequestLogFilters>({ limit: 100 });
+  const [requestLogsLoading, setRequestLogsLoading] = useState(true);
+  const [requestLogsError, setRequestLogsError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -122,6 +350,32 @@ export default function SettingsAdminInsightsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRequestLogs() {
+      setRequestLogsLoading(true);
+      setRequestLogsError("");
+      try {
+        const nextLogs = await fetchAdminRequestLogs(requestLogFilters);
+        if (!cancelled) {
+          setRequestLogs(nextLogs);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRequestLogsError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setRequestLogsLoading(false);
+        }
+      }
+    }
+    void loadRequestLogs();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestLogFilters]);
 
   return (
     <SettingsDetailPage title="服务端数据洞察">
@@ -297,6 +551,16 @@ export default function SettingsAdminInsightsPage() {
             </div>
             </Section>
           )}
+
+          <RequestAuditSection
+            logs={requestLogs}
+            filters={requestLogFilters}
+            loading={requestLogsLoading}
+            error={requestLogsError}
+            onFiltersChange={setRequestLogFilters}
+          />
+
+          <PermissionMatrix />
 
           {data.backups && (
             <Section title="服务端备份">

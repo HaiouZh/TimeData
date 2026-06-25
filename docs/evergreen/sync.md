@@ -27,7 +27,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-06-24
+last-reviewed: 2026-06-25
 ---
 
 # 同步机制
@@ -68,7 +68,7 @@ last-reviewed: 2026-06-24
 3. unsyncedCount=0 但云端账本更新：先创建本地自动备份，再 syncPullSinceSeq() 补差
 4. unsyncedCount>0：先创建本地自动备份，再 syncPush()（合并、压缩、带分类依赖），然后 syncPullSinceSeq()
 5. resolveConflicts()（UI 决定）keep_local 还是 use_remote
-6. reportToServer() 往服务器写一条 sync_logs 摘要（best-effort）
+6. reportToServer() 通过 `/api/admin/sync-logs` 往服务器写一条 sync_logs 摘要（best-effort）
 ```
 
 no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照。`contentHash` 降级为诊断工具：`getSyncHealth()`（设置页同步健康诊断）仍用它做本地与云端的深度体检。
@@ -222,7 +222,7 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 | Dexie `syncLog` | 客户端 IndexedDB | 待同步队列；`synced=0/1`；未同步项才会被 push |
 | SQLite `sync_logs` | 服务端 | 运维审计；记录每次 push/pull 的摘要 |
 
-客户端每次 `regularSync` 完成调 `reportToServer`（best-effort）。主路径动作名：`push`、`pull_since_seq`、`pull_seq_catchup`（无待上传时的补差）、`conflict`。`/api/admin/sync` 读取最近 50 条服务端 `sync_logs`。客户端 cursor key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_SEQ_KEY`），`resetSyncCursors()` 清理读数并顺手清理已退役的 `timedata_last_synced` / `timedata_legacy_snapshot_sync`。
+客户端每次 `regularSync` 完成调 `reportToServer`（best-effort），POST 到 `/api/admin/sync-logs`，因此走 admin 鉴权、admin 限流和 `X-Confirm` 清空确认所在的同一管理命名空间。主路径动作名：`push`、`pull_since_seq`、`pull_seq_catchup`（无待上传时的补差）、`conflict`。`/api/admin/sync` 读取最近 50 条服务端 `sync_logs`。客户端 cursor key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_SEQ_KEY`），`resetSyncCursors()` 清理读数并顺手清理已退役的 `timedata_last_synced` / `timedata_legacy_snapshot_sync`。
 
 ## 8. 改这块代码前的清单
 

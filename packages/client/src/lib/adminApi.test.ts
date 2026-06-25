@@ -5,6 +5,7 @@ import {
   fetchAdminCategories,
   fetchAdminEntries,
   fetchAdminHealthChecks,
+  fetchAdminRequestLogs,
   fetchAdminSummary,
   fetchAdminSync,
 } from "./adminApi.js";
@@ -58,5 +59,21 @@ describe("adminApi", () => {
     await fetchAdminAnalytics({ from: "2026-05-08", groupBy: "month" });
 
     expect(apiFetch).toHaveBeenCalledWith("/api/admin/analytics?from=2026-05-08&groupBy=month");
+  });
+
+  it("serializes request audit filters", async () => {
+    apiFetch.mockResolvedValue({});
+
+    await fetchAdminRequestLogs({
+      limit: 25,
+      status: 401,
+      outcome: "auth_failed",
+      tokenTier: "invalid",
+      clientHint: "agent",
+    });
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/admin/request-logs?limit=25&status=401&outcome=auth_failed&tokenTier=invalid&clientHint=agent",
+    );
   });
 });
