@@ -10,6 +10,23 @@ export const AdminBackupRetentionSchema = z.enum(["recent", "snapshot", "protect
 export const AdminHealthCheckCodeSchema = z.enum(["invalid_time_range", "missing_category", "archived_category", "overlap"]);
 export const AdminHealthSeveritySchema = z.enum(["warning", "error"]);
 export const AdminAnalyticsGroupBySchema = z.enum(["day", "week", "month"]);
+export const AdminRequestLogOutcomeSchema = z.enum([
+  "ok",
+  "auth_failed",
+  "rate_limited",
+  "server_error",
+  "client_error",
+]);
+export const AdminRequestLogTokenTierSchema = z.enum([
+  "public",
+  "master",
+  "agent",
+  "dev_bypass",
+  "missing",
+  "invalid",
+  "unknown",
+]);
+export const AdminRequestLogClientHintSchema = z.enum(["web", "android", "cli", "agent", "unknown"]);
 
 export const AdminSummaryResponseSchema = z.object({
   generatedAt: UtcIsoStringSchema,
@@ -150,6 +167,26 @@ export const AdminAnalyticsResponseSchema = z.object({
   byCategory: z.array(AdminAnalyticsCategoryBucketSchema),
 });
 
+export const AdminRequestLogRowSchema = z.object({
+  id: z.number().int().positive(),
+  timestamp: UtcIsoStringSchema,
+  method: z.string(),
+  path: z.string(),
+  status: z.number().int(),
+  outcome: AdminRequestLogOutcomeSchema,
+  tokenTier: AdminRequestLogTokenTierSchema,
+  ip: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  clientHint: AdminRequestLogClientHintSchema,
+  deviceLabel: z.string().nullable(),
+  durationMs: NonNegativeIntSchema,
+});
+
+export const AdminRequestLogsResponseSchema = z.object({
+  logs: z.array(AdminRequestLogRowSchema),
+  limit: z.number().int().positive(),
+});
+
 export type AdminSummaryResponse = z.infer<typeof AdminSummaryResponseSchema>;
 export type AdminEntryRow = z.infer<typeof AdminEntryRowSchema>;
 export type AdminEntriesResponse = z.infer<typeof AdminEntriesResponseSchema>;
@@ -165,3 +202,8 @@ export type AdminHealthChecksResponse = z.infer<typeof AdminHealthChecksResponse
 export type AdminAnalyticsBucket = z.infer<typeof AdminAnalyticsBucketSchema>;
 export type AdminAnalyticsCategoryBucket = z.infer<typeof AdminAnalyticsCategoryBucketSchema>;
 export type AdminAnalyticsResponse = z.infer<typeof AdminAnalyticsResponseSchema>;
+export type AdminRequestLogOutcome = z.infer<typeof AdminRequestLogOutcomeSchema>;
+export type AdminRequestLogTokenTier = z.infer<typeof AdminRequestLogTokenTierSchema>;
+export type AdminRequestLogClientHint = z.infer<typeof AdminRequestLogClientHintSchema>;
+export type AdminRequestLogRow = z.infer<typeof AdminRequestLogRowSchema>;
+export type AdminRequestLogsResponse = z.infer<typeof AdminRequestLogsResponseSchema>;

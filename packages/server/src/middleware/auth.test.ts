@@ -1,6 +1,12 @@
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authMiddleware, createAuthMiddleware, createScopedAuthMiddleware, scopedAuthMiddleware } from "./auth.js";
+import {
+  authMiddleware,
+  createAuthMiddleware,
+  createScopedAuthMiddleware,
+  scopedAuthMiddleware,
+  TOKEN_TIER_CONTEXT_KEY,
+} from "./auth.js";
 
 const originalAuthToken = process.env.AUTH_TOKEN;
 const originalAgentToken = process.env.AGENT_TOKEN;
@@ -21,6 +27,20 @@ function createScopedApp() {
   app.use("/api/*", scopedAuthMiddleware);
   app.get("/api/protected", handler);
   return { app, handler };
+}
+
+function createTierEchoApp() {
+  const app = new Hono();
+  app.use("/api/*", authMiddleware);
+  app.get("/api/protected", (c) => c.json({ tokenTier: c.get(TOKEN_TIER_CONTEXT_KEY) }));
+  return app;
+}
+
+function createScopedTierEchoApp() {
+  const app = new Hono();
+  app.use("/api/*", scopedAuthMiddleware);
+  app.get("/api/protected", (c) => c.json({ tokenTier: c.get(TOKEN_TIER_CONTEXT_KEY) }));
+  return app;
 }
 
 beforeEach(() => {
@@ -118,20 +138,57 @@ describe("authMiddleware", () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it("sets master token tier on successful bearer auth", async () => {
+    process.env.AUTH_TOKEN = "correct-token";
+    const app = createTierEchoApp();
+
+    const res = await app.request("/api/protected", {
+      headers: { Authorization: "Bearer correct-token" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tokenTier: "master" });
+  });
+
+  it("sets dev_bypass token tier when unauthenticated dev mode is enabled", async () => {
+    process.env.ALLOW_UNAUTHENTICATED_DEV = "1";
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const app = createTierEchoApp();
+
+    const res = await app.request("/api/protected");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tokenTier: "dev_bypass" });
+  });
+
   it("returns 401 when authorization is missing", async () => {
     process.env.AUTH_TOKEN = "correct-token";
-    const { app, handler } = createApp();
+    let tier = "unset";
+    const app = new Hono();
+    app.use("/api/*", async (c, next) => {
+      await next();
+      tier = c.get(TOKEN_TIER_CONTEXT_KEY) ?? "unset";
+    });
+    app.use("/api/*", authMiddleware);
+    app.get("/api/protected", (c) => c.json({ ok: true }));
 
     const res = await app.request("/api/protected");
 
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthorized" });
-    expect(handler).not.toHaveBeenCalled();
+    expect(tier).toBe("missing");
   });
 
   it("returns 401 for a wrong bearer token", async () => {
     process.env.AUTH_TOKEN = "correct-token";
-    const { app, handler } = createApp();
+    let tier = "unset";
+    const app = new Hono();
+    app.use("/api/*", async (c, next) => {
+      await next();
+      tier = c.get(TOKEN_TIER_CONTEXT_KEY) ?? "unset";
+    });
+    app.use("/api/*", authMiddleware);
+    app.get("/api/protected", (c) => c.json({ ok: true }));
 
     const res = await app.request("/api/protected", {
       headers: { Authorization: "Bearer wrong-token" },
@@ -139,7 +196,7 @@ describe("authMiddleware", () => {
 
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthorized" });
-    expect(handler).not.toHaveBeenCalled();
+    expect(tier).toBe("invalid");
   });
 
   it("returns 401 for an equal-length wrong bearer token", async () => {
@@ -184,6 +241,19 @@ describe("scopedAuthMiddleware", () => {
     expect(handler).toHaveBeenCalledOnce();
   });
 
+  it("sets master token tier for scoped auth master token", async () => {
+    process.env.AUTH_TOKEN = "master-token";
+    process.env.AGENT_TOKEN = "agent-token";
+    const app = createScopedTierEchoApp();
+
+    const res = await app.request("/api/protected", {
+      headers: { Authorization: "Bearer master-token" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tokenTier: "master" });
+  });
+
   it("passes through for the agent bearer token", async () => {
     process.env.AUTH_TOKEN = "master-token";
     process.env.AGENT_TOKEN = "agent-token";
@@ -196,6 +266,19 @@ describe("scopedAuthMiddleware", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("sets agent token tier for scoped auth agent token", async () => {
+    process.env.AUTH_TOKEN = "master-token";
+    process.env.AGENT_TOKEN = "agent-token";
+    const app = createScopedTierEchoApp();
+
+    const res = await app.request("/api/protected", {
+      headers: { Authorization: "Bearer agent-token" },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ tokenTier: "agent" });
   });
 
   it("records unauthorized scoped requests through the audit hook", async () => {

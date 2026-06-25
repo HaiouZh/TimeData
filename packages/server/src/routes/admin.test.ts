@@ -45,6 +45,21 @@ function createSchema() {
       record_count INTEGER DEFAULT 0
     );
 
+    CREATE TABLE api_request_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      status INTEGER NOT NULL,
+      outcome TEXT NOT NULL,
+      token_tier TEXT NOT NULL,
+      ip TEXT,
+      user_agent TEXT,
+      client_hint TEXT,
+      device_label TEXT,
+      duration_ms INTEGER NOT NULL
+    );
+
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,
@@ -128,6 +143,62 @@ function seed() {
     "push_rejected",
     JSON.stringify({ rejected: 1, conflicts: 1, outcomes: [] }),
     2,
+  );
+  db.prepare(`
+    INSERT INTO api_request_logs (
+      timestamp,
+      method,
+      path,
+      status,
+      outcome,
+      token_tier,
+      ip,
+      user_agent,
+      client_hint,
+      device_label,
+      duration_ms
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "2026-05-08T16:10:00.000Z",
+    "POST",
+    "/api/tasks",
+    401,
+    "auth_failed",
+    "invalid",
+    "203.0.113.7",
+    "Vitest",
+    "agent",
+    "agent",
+    12,
+  );
+  db.prepare(`
+    INSERT INTO api_request_logs (
+      timestamp,
+      method,
+      path,
+      status,
+      outcome,
+      token_tier,
+      ip,
+      user_agent,
+      client_hint,
+      device_label,
+      duration_ms
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "2026-05-08T16:20:00.000Z",
+    "GET",
+    "/api/health",
+    200,
+    "ok",
+    "public",
+    null,
+    null,
+    "web",
+    "web",
+    3,
   );
   db.prepare("INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)").run(
     "time_entries",
@@ -261,6 +332,57 @@ describe("admin route", () => {
       recentRejectedCount: 1,
       recentConflictCount: 1,
     });
+  });
+
+  it("returns request audit logs using the shared response shape", async () => {
+    const res = await app.request("/api/admin/request-logs?limit=1");
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      limit: 1,
+      logs: [
+        expect.objectContaining({
+          timestamp: "2026-05-08T16:20:00.000Z",
+          method: "GET",
+          path: "/api/health",
+          status: 200,
+          outcome: "ok",
+          tokenTier: "public",
+          clientHint: "web",
+          durationMs: 3,
+        }),
+      ],
+    });
+  });
+
+  it("filters request audit logs by status, outcome, token tier, and client hint", async () => {
+    const res = await app.request(
+      "/api/admin/request-logs?status=401&outcome=auth_failed&tokenTier=invalid&clientHint=agent",
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.logs).toEqual([
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/tasks",
+        status: 401,
+        outcome: "auth_failed",
+        tokenTier: "invalid",
+        clientHint: "agent",
+      }),
+    ]);
+    expect(JSON.stringify(body)).not.toContain("Authorization");
+    expect(JSON.stringify(body)).not.toContain("body");
+  });
+
+  it("rejects invalid request audit limits", async () => {
+    const res = await app.request("/api/admin/request-logs?limit=9999");
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
   it("counts rejected and conflicts from JSON sync details", async () => {

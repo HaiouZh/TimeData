@@ -8,6 +8,7 @@ import {
   AdminEntryAnomalySchema,
   AdminEntryRowSchema,
   AdminHealthChecksResponseSchema,
+  AdminRequestLogsResponseSchema,
   AdminSummaryResponseSchema,
 } from "./admin-schemas.js";
 
@@ -110,6 +111,26 @@ describe("admin response schemas", () => {
         color: "#3366ff",
       }],
     }).success).toBe(true);
+  });
+
+  it("accepts request log response payloads", () => {
+    expect(AdminRequestLogsResponseSchema.parse({
+      logs: [{
+        id: 1,
+        timestamp: "2026-06-25T00:00:00.000Z",
+        method: "GET",
+        path: "/api/tasks",
+        status: 200,
+        outcome: "ok",
+        tokenTier: "master",
+        ip: "127.0.0.1",
+        userAgent: "Vitest",
+        clientHint: "web",
+        deviceLabel: "web",
+        durationMs: 12,
+      }],
+      limit: 100,
+    })).toMatchObject({ logs: [{ outcome: "ok", tokenTier: "master" }] });
   });
 
   it("rejects non-finite or non-integer counts and empty backup identifiers", () => {

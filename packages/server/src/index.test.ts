@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const originalAuthToken = process.env.AUTH_TOKEN;
+const originalAgentToken = process.env.AGENT_TOKEN;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalAllowedOrigins = process.env.ALLOWED_ORIGINS;
 
@@ -8,6 +9,7 @@ beforeEach(() => {
   vi.resetModules();
   process.env.NODE_ENV = "production";
   process.env.AUTH_TOKEN = "secret";
+  process.env.AGENT_TOKEN = "agent-secret";
   process.env.ALLOWED_ORIGINS = "https://app.example.com";
   vi.doMock("./db/schema.js", () => ({ initializeDatabase: vi.fn() }));
   vi.doMock("./db/connection.js", () => ({
@@ -51,6 +53,12 @@ afterEach(() => {
     delete process.env.AUTH_TOKEN;
   } else {
     process.env.AUTH_TOKEN = originalAuthToken;
+  }
+
+  if (originalAgentToken === undefined) {
+    delete process.env.AGENT_TOKEN;
+  } else {
+    process.env.AGENT_TOKEN = originalAgentToken;
   }
 
   if (originalNodeEnv === undefined) {
@@ -117,6 +125,8 @@ describe("server app middleware order", () => {
         },
       });
       expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
+      expect(allowed.headers.get("Access-Control-Allow-Headers")).toContain("X-Confirm");
+      expect(allowed.headers.get("Access-Control-Allow-Headers")).toContain("X-TimeData-Client");
 
       const blocked = await app.request("/api/categories", {
         method: "OPTIONS",
@@ -126,6 +136,86 @@ describe("server app middleware order", () => {
         },
       });
       expect(blocked.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "registers request auditing before auth so unauthorized API requests are logged",
+    async () => {
+      const { getDb } = await import("./db/connection.js");
+      const rows: unknown[] = [];
+      vi.mocked(getDb).mockReturnValue({
+        prepare: vi.fn((sql: string) => {
+          if (sql.includes("SELECT 1 as ok")) return { get: vi.fn(() => ({ ok: 1 })) };
+          if (sql.includes("INSERT INTO api_request_logs")) {
+            return {
+              run: vi.fn((...params: unknown[]) => {
+                rows.push(params);
+              }),
+            };
+          }
+          if (sql.includes("DELETE FROM api_request_logs")) return { run: vi.fn() };
+          return { all: vi.fn(() => []), get: vi.fn(() => undefined), run: vi.fn() };
+        }),
+      } as never);
+      const { default: app } = await import("./index.js");
+
+      const res = await app.request("/api/categories", {
+        headers: { "X-TimeData-Client": "web" },
+      });
+
+      expect(res.status).toBe(401);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual(
+        expect.arrayContaining(["GET", "/api/categories", 401, "auth_failed", "missing", null, expect.anything(), "web"]),
+      );
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "keeps request audit admin endpoint master-only",
+    async () => {
+      const { getDb } = await import("./db/connection.js");
+      vi.mocked(getDb).mockReturnValue({
+        prepare: vi.fn((sql: string) => {
+          if (sql.includes("SELECT 1 as ok")) return { get: vi.fn(() => ({ ok: 1 })) };
+          if (sql.includes("INSERT INTO api_request_logs")) return { run: vi.fn() };
+          if (sql.includes("DELETE FROM api_request_logs")) return { run: vi.fn() };
+          if (sql.includes("FROM api_request_logs")) {
+            return {
+              all: vi.fn(() => [{
+                id: 1,
+                timestamp: "2026-06-25T00:00:00.000Z",
+                method: "GET",
+                path: "/api/health",
+                status: 200,
+                outcome: "ok",
+                token_tier: "public",
+                ip: null,
+                user_agent: null,
+                client_hint: "web",
+                device_label: "web",
+                duration_ms: 1,
+              }]),
+            };
+          }
+          return { all: vi.fn(() => []), get: vi.fn(() => undefined), run: vi.fn() };
+        }),
+      } as never);
+      const { default: app } = await import("./index.js");
+
+      const agent = await app.request("/api/admin/request-logs", {
+        headers: { Authorization: "Bearer agent-secret" },
+      });
+      const master = await app.request("/api/admin/request-logs", {
+        headers: { Authorization: "Bearer secret" },
+      });
+
+      expect(agent.status).toBe(401);
+      expect(master.status).toBe(200);
+      expect(await master.json()).toMatchObject({ limit: 100, logs: [expect.objectContaining({ tokenTier: "public" })] });
     },
     INDEX_TEST_TIMEOUT_MS,
   );

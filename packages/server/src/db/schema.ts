@@ -191,6 +191,21 @@ export function initializeDatabase(): void {
       record_count INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS api_request_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      status INTEGER NOT NULL,
+      outcome TEXT NOT NULL,
+      token_tier TEXT NOT NULL,
+      ip TEXT,
+      user_agent TEXT,
+      client_hint TEXT,
+      device_label TEXT,
+      duration_ms INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,
@@ -233,6 +248,10 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_track_steps_track_seq ON track_steps(track_id, seq);
     CREATE INDEX IF NOT EXISTS idx_track_steps_updated_at ON track_steps(updated_at);
     CREATE INDEX IF NOT EXISTS idx_sync_logs_timestamp ON sync_logs(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_api_request_logs_timestamp ON api_request_logs(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_api_request_logs_status ON api_request_logs(status);
+    CREATE INDEX IF NOT EXISTS idx_api_request_logs_outcome ON api_request_logs(outcome);
+    CREATE INDEX IF NOT EXISTS idx_api_request_logs_token_tier ON api_request_logs(token_tier);
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_sync_seq_table_record ON sync_seq(table_name, record_id);
   `);

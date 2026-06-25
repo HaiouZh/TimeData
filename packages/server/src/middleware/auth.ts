@@ -9,6 +9,9 @@ const SCOPED_AUTH_DEV_BYPASS_WARNING =
 let hasWarnedAuthUnset = false;
 let hasWarnedScopedAuthUnset = false;
 
+export type AuthTokenTier = "public" | "master" | "agent" | "dev_bypass" | "missing" | "invalid" | "unknown";
+export const TOKEN_TIER_CONTEXT_KEY = "tokenTier";
+
 function bearerTokenMatches(authHeader: string | undefined, token: string): boolean {
   if (!authHeader) {
     return false;
@@ -39,6 +42,20 @@ function bearerTokenMatchesAny(authHeader: string | undefined, tokens: string[])
   return matchesAnyToken;
 }
 
+function bearerTokenTier(
+  authHeader: string | undefined,
+  tokens: Array<{ token: string; tier: AuthTokenTier }>,
+): AuthTokenTier | null {
+  let matchedTier: AuthTokenTier | null = null;
+
+  for (const candidate of tokens) {
+    const matchesToken = bearerTokenMatches(authHeader, candidate.token);
+    if (matchesToken && matchedTier === null) matchedTier = candidate.tier;
+  }
+
+  return matchedTier;
+}
+
 function recordAuthFailure(audit: AuthAuditLogger | undefined, path: string, ip?: string): void {
   audit?.recordAuthFailure?.({ path, ip });
 }
@@ -58,15 +75,19 @@ export function createAuthMiddleware(audit?: AuthAuditLogger): MiddlewareHandler
         console.warn(AUTH_DEV_BYPASS_WARNING);
         hasWarnedAuthUnset = true;
       }
+      c.set(TOKEN_TIER_CONTEXT_KEY, "dev_bypass");
       await next();
       return;
     }
 
-    if (!bearerTokenMatchesAny(c.req.header("Authorization"), tokens)) {
+    const authHeader = c.req.header("Authorization");
+    if (!bearerTokenMatchesAny(authHeader, tokens)) {
+      c.set(TOKEN_TIER_CONTEXT_KEY, authHeader ? "invalid" : "missing");
       recordAuthFailure(audit, c.req.path, c.req.header("X-Forwarded-For") || undefined);
       return c.json({ error: "Unauthorized" }, 401);
     }
 
+    c.set(TOKEN_TIER_CONTEXT_KEY, "master");
     await next();
   };
 }
@@ -84,15 +105,23 @@ export function createScopedAuthMiddleware(audit?: AuthAuditLogger): MiddlewareH
         console.warn(SCOPED_AUTH_DEV_BYPASS_WARNING);
         hasWarnedScopedAuthUnset = true;
       }
+      c.set(TOKEN_TIER_CONTEXT_KEY, "dev_bypass");
       await next();
       return;
     }
 
-    if (!bearerTokenMatchesAny(c.req.header("Authorization"), tokens)) {
+    const authHeader = c.req.header("Authorization");
+    const matchedTier = bearerTokenTier(authHeader, [
+      ...configuredTokens([process.env.AUTH_TOKEN]).map((token) => ({ token, tier: "master" as const })),
+      ...configuredTokens([process.env.AGENT_TOKEN]).map((token) => ({ token, tier: "agent" as const })),
+    ]);
+    if (!matchedTier) {
+      c.set(TOKEN_TIER_CONTEXT_KEY, authHeader ? "invalid" : "missing");
       recordAuthFailure(audit, c.req.path, c.req.header("X-Forwarded-For") || undefined);
       return c.json({ error: "Unauthorized" }, 401);
     }
 
+    c.set(TOKEN_TIER_CONTEXT_KEY, matchedTier);
     await next();
   };
 }

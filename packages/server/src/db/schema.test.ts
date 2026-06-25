@@ -70,6 +70,46 @@ describe("initializeDatabase", () => {
     ]);
   });
 
+  it("creates api_request_logs as a non-sync operational audit table", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+
+    initializeDatabase();
+
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'api_request_logs'").get();
+    expect(table).toMatchObject({ name: "api_request_logs" });
+
+    const columns = db.prepare("PRAGMA table_info(api_request_logs)").all() as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      pk: number;
+    }>;
+    expect(columns.map((column) => [column.name, column.type, column.notnull, column.pk])).toEqual([
+      ["id", "INTEGER", 0, 1],
+      ["timestamp", "TEXT", 1, 0],
+      ["method", "TEXT", 1, 0],
+      ["path", "TEXT", 1, 0],
+      ["status", "INTEGER", 1, 0],
+      ["outcome", "TEXT", 1, 0],
+      ["token_tier", "TEXT", 1, 0],
+      ["ip", "TEXT", 0, 0],
+      ["user_agent", "TEXT", 0, 0],
+      ["client_hint", "TEXT", 0, 0],
+      ["device_label", "TEXT", 0, 0],
+      ["duration_ms", "INTEGER", 1, 0],
+    ]);
+
+    const indexes = (db.prepare("PRAGMA index_list(api_request_logs)").all() as Array<{ name: string }>).map(
+      (row) => row.name,
+    );
+    expect(indexes).toEqual(expect.arrayContaining([
+      "idx_api_request_logs_timestamp",
+      "idx_api_request_logs_status",
+      "idx_api_request_logs_outcome",
+      "idx_api_request_logs_token_tier",
+    ]));
+  });
+
   it("creates quick_notes as an independent synced table", async () => {
     const { initializeDatabase } = await import("./schema.js");
 

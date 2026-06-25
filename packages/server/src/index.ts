@@ -10,6 +10,7 @@ import { authMiddleware, scopedAuthMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
 import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
+import { requestAudit } from "./middleware/requestAudit.js";
 import adminRoute from "./routes/admin/index.js";
 import agentRoute from "./routes/agent.js";
 import agentTracksRoute from "./routes/agent-tracks.js";
@@ -75,13 +76,22 @@ app.use(
       }
       return allowedOrigins.includes(origin) ? origin : null;
     },
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Confirm", "X-TimeData-Client"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   }),
 );
 
 app.use("/api/*", bodyLimit(MAX_BODY_BYTES));
+app.use("/api/*", requestAudit());
+app.use("/api/health", async (c, next) => {
+  c.set("tokenTier", "public");
+  await next();
+});
+app.use("/api/version", async (c, next) => {
+  c.set("tokenTier", "public");
+  await next();
+});
 
 app.get("/api/health", (c) => {
   try {
