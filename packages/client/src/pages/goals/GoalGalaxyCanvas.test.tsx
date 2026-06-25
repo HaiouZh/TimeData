@@ -483,6 +483,32 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("routes bridge member goal-scoped removal to the selected focused editor", async () => {
+    const onNavigate = vi.fn();
+    const goals = [
+      goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
+      goal({ id: "g2", title: "G2", members: [{ kind: "task", id: "a" }] }),
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={goals}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "移除成员 A"));
+    await click(buttonByLabel(document.body, "在 G2 中编辑"));
+
+    expect(removeGoalMemberMock).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledWith("/goals/g2");
+    await unmount(root);
+  });
+
   it("does not render archived goals as stars", async () => {
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas

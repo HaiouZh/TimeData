@@ -14,6 +14,7 @@ import {
 import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
+import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
@@ -58,6 +59,7 @@ type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
 type ConnectDraft = { goalId: string; node: GoalGraphNode };
 type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 type PrerequisiteEdgeParts = { goalId: string; blocker: GoalMemberRef; blocked: GoalMemberRef };
+type BridgeRouteChoice = { goalIds: string[]; nodeTitle: string } | null;
 
 const REASON_COPY = {
   "self-reference": "不能连接自己",
@@ -209,6 +211,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
+  const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
@@ -414,7 +417,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (action.id === "connect") {
       const ref = refFromGraphNode(selectedGraphNode);
       const owningGoalIds = owningGoalIdsForNode(selectedFlowNode);
-      if (!ref || owningGoalIds.length !== 1) return;
+      if (!ref) return;
+      if (owningGoalIds.length !== 1) {
+        setBridgeRouteChoice({ goalIds: owningGoalIds, nodeTitle: selectedGraphNode.title });
+        return;
+      }
       setConnectDraft({ goalId: owningGoalIds[0], node: selectedGraphNode });
       setErrorMessage(null);
       return;
@@ -430,9 +437,18 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (action.id === "remove-member") {
       const ref = selectedGraphNode.ref;
       const owningGoalIds = owningGoalIdsForNode(selectedFlowNode);
-      if (!ref || owningGoalIds.length !== 1) return;
+      if (!ref) return;
+      if (owningGoalIds.length !== 1) {
+        setBridgeRouteChoice({ goalIds: owningGoalIds, nodeTitle: selectedGraphNode.title });
+        return;
+      }
       setPendingRemoveMember({ goalId: owningGoalIds[0], node: selectedGraphNode });
     }
+  }
+
+  function navigateBridgeGoal(goalId: string): void {
+    setBridgeRouteChoice(null);
+    onNavigate(`/goals/${goalId}`);
   }
 
   async function connectToTarget(targetFlowNode: GoalGalaxyFlowNode): Promise<void> {
@@ -586,6 +602,25 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           onClose={() => setGoalMenuGoalId(null)}
         />
       )}
+      <Sheet open={bridgeRouteChoice !== null} onClose={() => setBridgeRouteChoice(null)} title="选择目标">
+        <div className="grid gap-2 px-4 pb-4">
+          {bridgeRouteChoice?.goalIds.map((goalId) => {
+            const goal = goalById.get(goalId);
+            const title = goal?.title ?? goalId;
+            return (
+              <button
+                key={goalId}
+                type="button"
+                aria-label={`在 ${title} 中编辑`}
+                onClick={() => navigateBridgeGoal(goalId)}
+                className="min-h-11 rounded-ctl border border-border px-3 text-left text-sm text-ink"
+              >
+                {title}
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
     </div>
   );
 }
