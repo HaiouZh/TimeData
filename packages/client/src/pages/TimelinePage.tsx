@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CircularTimeline from "../components/CircularTimeline.tsx";
 import DateNav from "../components/DateNav.tsx";
-import DayOverview from "../components/DayOverview.tsx";
 import SyncIndicator from "../components/SyncIndicator.tsx";
 import Timeline from "../components/Timeline.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
@@ -51,7 +50,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
   async function handlePunch() {
     const result = await punchNow();
     if (!result.ok) {
-      setPunchMessage(result.reason === "no_range" ? "距上次记录还没有时间" : "请先在设置 · 杂项选择打点分类");
+      setPunchMessage(result.reason === "no_range" ? "距上次记录还没有时间" : "请先在设置 · 记录偏好选择打点分类");
       return;
     }
     setPunchMessage(null);
@@ -69,7 +68,6 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
         overlay={<SyncIndicator />}
       />
       {punchMessage && <p className="px-4 pt-2 text-center text-xs text-amber-300">{punchMessage}</p>}
-      <DayOverview slots={slots} date={date} />
       <Timeline
         slots={slots}
         onGapClick={(startTime, endTime) =>

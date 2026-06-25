@@ -36,7 +36,20 @@ vi.mock("../components/Timeline.tsx", () => ({
 }));
 
 vi.mock("../hooks/useEntries.ts", () => ({
-  useEntries: () => ({ entries: [], previousEntry: null }),
+  useEntries: () => ({
+    entries: [
+      {
+        id: "entry-1",
+        categoryId: "cat-1",
+        startTime: "2026-06-25T00:00:00.000Z",
+        endTime: "2026-06-25T01:00:00.000Z",
+        note: null,
+        createdAt: "2026-06-25T00:00:00.000Z",
+        updatedAt: "2026-06-25T01:00:00.000Z",
+      },
+    ],
+    previousEntry: null,
+  }),
 }));
 
 vi.mock("../lib/overnightDisplaySetting.ts", () => ({
@@ -58,5 +71,15 @@ describe("TimelinePage sync indicator", () => {
       createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
     );
     expect(html).toContain('data-has-punch="true"');
+  });
+
+  it("does not render the standalone day overview coverage card", () => {
+    const html = renderToStaticMarkup(
+      createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
+    );
+
+    expect(html).not.toContain("已记录");
+    expect(html).not.toContain("覆盖 ");
+    expect(html).not.toContain("个空档");
   });
 });
