@@ -2,7 +2,7 @@
 import { act } from "react";
 import type { Goal, GoalLayoutPin, Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { doubleClick, renderDom, unmount } from "../../test/domHarness.js";
+import { click, doubleClick, renderDom, unmount } from "../../test/domHarness.js";
 import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
 
 const syncAfterWriteMock = vi.hoisted(() => vi.fn());
@@ -46,6 +46,12 @@ async function flushPromises(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
   });
+}
+
+function buttonByLabel(root: ParentNode, label: string): HTMLButtonElement {
+  const button = root.querySelector(`button[aria-label="${label}"]`);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`missing button label: ${label}`);
+  return button;
 }
 
 describe("GoalGalaxyCanvas", () => {
@@ -202,6 +208,27 @@ describe("GoalGalaxyCanvas", () => {
       nodeId: "a",
     });
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects a member node and shows node actions", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+
+    expect(buttonByLabel(document.body, "完成 A")).toBeInstanceOf(HTMLButtonElement);
+    expect(buttonByLabel(document.body, "连前置 A")).toBeInstanceOf(HTMLButtonElement);
+    expect(buttonByLabel(document.body, "移除成员 A")).toBeInstanceOf(HTMLButtonElement);
+    await unmount(root);
   });
 
   it("does not render archived goals as stars", async () => {

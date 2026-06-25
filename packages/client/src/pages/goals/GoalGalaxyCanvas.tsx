@@ -21,8 +21,10 @@ import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
+import { GoalGalaxyActionBar } from "./GoalGalaxyActionBar.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
+import { actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 
 export interface GoalGalaxyCanvasProps {
@@ -127,6 +129,17 @@ function toGraphNode(node: GalaxyNode): GoalGraphNode {
   };
 }
 
+function toStarGraphNode(star: GoalStarNodeData["star"]): GoalGraphNode {
+  return {
+    id: star.nodeId,
+    kind: "goal",
+    status: "anchor",
+    title: star.title,
+    ref: null,
+    hasDependency: false,
+  };
+}
+
 export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -141,6 +154,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
   const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
   const activeGoalKey = activeGoalIds.join("\n");
@@ -186,6 +200,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           type: "goal-star",
           position: layout.positions[star.nodeId] ?? { x: 0, y: 0 },
           draggable: true,
+          selected: star.nodeId === selectedNodeId,
           data: { star, pinned: pinnedStarIds.has(star.nodeId) },
         }) satisfies GoalGalaxyFlowNode,
     );
@@ -196,11 +211,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           type: "goal-galaxy-member",
           position: layout.positions[node.id] ?? { x: 0, y: 0 },
           draggable: node.anchorIds.length === 1,
+          selected: node.id === selectedNodeId,
           data: { node: toGraphNode(node), anchorIds: node.anchorIds, pinned: pinnedMemberIds.has(node.id) },
         }) satisfies GoalGalaxyFlowNode,
     );
     return [...starNodes, ...memberNodes];
-  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds]);
+  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds, selectedNodeId]);
   const edges = useMemo<GoalGalaxyFlowEdge[]>(
     () =>
       model.edges.map((edge) => ({
@@ -228,6 +244,10 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [onNavigate],
   );
 
+  const onNodeClick = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>((_event, node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
   const onNodeDragStop = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
     (_event, node) => {
       const anchorIds = Array.isArray(node.data.anchorIds) ? node.data.anchorIds : [];
@@ -251,6 +271,45 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setViewport(nextViewport);
   }
 
+  const selectedFlowNode = useMemo(
+    () => (selectedNodeId ? (nodes.find((node) => node.id === selectedNodeId) ?? null) : null),
+    [nodes, selectedNodeId],
+  );
+  const selectedGraphNode = useMemo(() => {
+    if (!selectedFlowNode) return null;
+    if (selectedFlowNode.type === "goal-star") return toStarGraphNode(selectedFlowNode.data.star);
+    return selectedFlowNode.data.node;
+  }, [selectedFlowNode]);
+  const selectedNodeActions = useMemo(() => {
+    if (!selectedGraphNode || !selectedFlowNode) return [];
+    return actionsForNode(selectedGraphNode, {
+      pinned: selectedFlowNode.data.pinned === true,
+    });
+  }, [selectedFlowNode, selectedGraphNode]);
+
+  function clearSelection(): void {
+    setSelectedNodeId(null);
+  }
+
+  function runNodeAction(action: GoalAction): void {
+    if (!selectedFlowNode || !selectedGraphNode) return;
+    if (action.id === "open" && selectedGraphNode.ref?.kind === "task") {
+      onNavigate(`/todo?taskId=${selectedGraphNode.ref.id}`);
+      return;
+    }
+    if (action.id === "open" && selectedGraphNode.ref?.kind === "track") {
+      onNavigate(`/tracks/${selectedGraphNode.ref.id}`);
+      return;
+    }
+    if (action.id === "restore-auto") {
+      void restoreGalaxyPin({
+        nodeId: selectedFlowNode.id,
+        anchorIds: "anchorIds" in selectedFlowNode.data ? selectedFlowNode.data.anchorIds : [],
+        syncAfterWrite,
+      });
+    }
+  }
+
   return (
     <div data-galaxy className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink">
       <ReactFlow
@@ -262,8 +321,10 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         elementsSelectable
         nodeOrigin={[0.5, 0.5]}
         proOptions={{ hideAttribution: true }}
+        onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
+        onPaneClick={clearSelection}
         onMoveEnd={handleMoveEnd}
         className="h-full w-full"
       >
@@ -272,6 +333,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       <div className="pointer-events-none absolute left-3 top-3 z-10">
         <GoalGalaxyHud rollup={rollup} />
       </div>
+      <GoalGalaxyActionBar
+        node={selectedGraphNode}
+        actions={selectedNodeActions}
+        onAction={runNodeAction}
+        onClose={clearSelection}
+      />
     </div>
   );
 }
