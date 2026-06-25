@@ -343,6 +343,33 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("deletes a selected prerequisite edge", async () => {
+    const firstRef = { kind: "task" as const, id: "a" };
+    const secondRef = { kind: "task" as const, id: "b" };
+    const goalValue = goal({
+      members: [firstRef, secondRef],
+      prerequisites: [{ blocker: firstRef, blocked: secondRef }],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-edge-id="prerequisite:g1:task:a->task:b"]'));
+    await click(buttonByLabel(document.body, "删除前置"));
+    await flushPromises();
+
+    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
   it("does not render archived goals as stars", async () => {
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas

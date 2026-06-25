@@ -6,6 +6,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type Edge,
+  type EdgeMouseHandler,
   type Node,
   type NodeMouseHandler,
   type Viewport,
@@ -18,17 +19,17 @@ import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goal
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
 import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
-import { addPrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
-import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
+import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
+import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
 import { removeGoalMember, updateGoalPrerequisites } from "../../lib/goals.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
-import { GoalGalaxyActionBar } from "./GoalGalaxyActionBar.js";
+import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
-import { actionsForNode, type GoalAction } from "./goalGraphActions.js";
+import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 
 export interface GoalGalaxyCanvasProps {
@@ -54,6 +55,7 @@ type GoalGalaxyFlowEdge = Edge<Record<string, unknown>>;
 type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
 type ConnectDraft = { goalId: string; node: GoalGraphNode };
 type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
+type PrerequisiteEdgeParts = { goalId: string; blocker: GoalMemberRef; blocked: GoalMemberRef };
 
 const REASON_COPY = {
   "self-reference": "不能连接自己",
@@ -159,8 +161,29 @@ function refFromGraphNode(node: GoalGraphNode): GoalMemberRef | null {
   return node.ref;
 }
 
+function refFromNodeId(id: string): GoalMemberRef | null {
+  const separator = id.indexOf(":");
+  if (separator < 1) return null;
+  const kind = id.slice(0, separator);
+  const refId = id.slice(separator + 1);
+  if (kind !== "task" && kind !== "track") return null;
+  return { kind, id: refId };
+}
+
+function prerequisiteEdgeParts(edgeId: string): PrerequisiteEdgeParts | null {
+  const match = /^(?:prerequisite|broken-prerequisite):([^:]+):(.+)->(.+)$/.exec(edgeId);
+  if (!match) return null;
+  const blocker = refFromNodeId(match[2]);
+  const blocked = refFromNodeId(match[3]);
+  return blocker && blocked ? { goalId: match[1], blocker, blocked } : null;
+}
+
 function nextPrerequisitesWithEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
   return addPrerequisiteEdge(goal, blocker, blocked).prerequisites;
+}
+
+function nextPrerequisitesWithoutEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
+  return removePrerequisiteEdge(goal, blocker, blocked).prerequisites;
 }
 
 export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
@@ -178,6 +201,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
   const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [pendingRemoveMember, setPendingRemoveMember] = useState<PendingRemoveMember | null>(null);
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -251,8 +275,9 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         source: edge.source,
         target: edge.target,
         data: { kind: edge.kind },
+        selected: edge.id === selectedEdgeId,
       })),
-    [model.edges],
+    [model.edges, selectedEdgeId],
   );
   useEffect(() => {
     if (initialFitGoalKey === activeGoalKey) return;
@@ -278,10 +303,18 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         return;
       }
       setSelectedNodeId(node.id);
+      setSelectedEdgeId(null);
       setErrorMessage(null);
     },
     [connectDraft],
   );
+
+  const onEdgeClick = useCallback<EdgeMouseHandler<GoalGalaxyFlowEdge>>((_event, edge) => {
+    setSelectedEdgeId(edge.id);
+    setSelectedNodeId(null);
+    setConnectDraft(null);
+    setErrorMessage(null);
+  }, []);
 
   const onNodeDragStop = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
     (_event, node) => {
@@ -321,9 +354,16 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       pinned: selectedFlowNode.data.pinned === true,
     });
   }, [selectedFlowNode, selectedGraphNode]);
+  const selectedGraphEdge = useMemo<GoalGraphEdge | null>(() => {
+    if (!selectedEdgeId) return null;
+    const edge = model.edges.find((item) => item.id === selectedEdgeId);
+    return edge ? { id: edge.id, kind: edge.kind, source: edge.source, target: edge.target } : null;
+  }, [model.edges, selectedEdgeId]);
+  const selectedEdgeActions = useMemo(() => (selectedGraphEdge ? actionsForEdge(selectedGraphEdge) : []), [selectedGraphEdge]);
 
   function clearSelection(): void {
     setSelectedNodeId(null);
+    setSelectedEdgeId(null);
     setConnectDraft(null);
   }
 
@@ -401,6 +441,18 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setPendingRemoveMember(null);
   }
 
+  async function runEdgeAction(action: GoalAction): Promise<void> {
+    if (action.id !== "delete-prerequisite" || !selectedGraphEdge) return;
+    const parts = prerequisiteEdgeParts(selectedGraphEdge.id);
+    if (!parts) return;
+    const goal = goalById.get(parts.goalId);
+    if (!goal) return;
+
+    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, parts.blocker, parts.blocked));
+    syncAfterWrite();
+    setSelectedEdgeId(null);
+  }
+
   return (
     <div data-galaxy className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink">
       <ReactFlow
@@ -415,6 +467,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
+        onEdgeClick={onEdgeClick}
         onPaneClick={clearSelection}
         onMoveEnd={handleMoveEnd}
         className="h-full w-full"
@@ -428,6 +481,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         node={selectedGraphNode}
         actions={selectedNodeActions}
         onAction={runNodeAction}
+        onClose={clearSelection}
+      />
+      <GoalGalaxyEdgeActionBar
+        actions={selectedEdgeActions}
+        onAction={(action) => void runEdgeAction(action)}
         onClose={clearSelection}
       />
       {errorMessage && (

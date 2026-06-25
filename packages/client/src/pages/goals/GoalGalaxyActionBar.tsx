@@ -55,3 +55,43 @@ export function GoalGalaxyActionBar({
     </Sheet>
   );
 }
+
+export function GoalGalaxyEdgeActionBar({
+  actions,
+  onAction,
+  onClose,
+}: {
+  actions: GoalAction[];
+  onAction: (action: GoalAction) => void;
+  onClose: () => void;
+}) {
+  const wide = useIsWideScreen();
+  const coarse = useIsCoarsePointer();
+  if (actions.length === 0) return null;
+
+  const buttons = actions.map((action) => (
+    <button
+      key={action.id}
+      type="button"
+      aria-label={action.label}
+      onClick={() => onAction(action)}
+      className={`min-h-11 rounded-ctl border px-3 text-sm ${actionClass(action)}`}
+    >
+      {action.label}
+    </button>
+  ));
+
+  if (wide && !coarse) {
+    return (
+      <div className="absolute bottom-3 left-3 z-10 flex flex-wrap gap-2 rounded-card border border-border bg-surface-elevated p-2 shadow-elev1">
+        {buttons}
+      </div>
+    );
+  }
+
+  return (
+    <Sheet open onClose={onClose} title="前置关系">
+      <div className="grid gap-2 px-4 pb-4">{buttons}</div>
+    </Sheet>
+  );
+}
