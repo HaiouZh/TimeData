@@ -6,6 +6,8 @@ covers:
   - packages/client/src/lib/navigation/navRegistry.ts
   - packages/client/src/components/app-shell/DesktopSidebar.tsx
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
+  - packages/client/src/pages/settings/SettingsDetailPage.tsx
+  - packages/client/src/pages/settings/components/SettingsRows.tsx
 last-reviewed: 2026-06-25
 ---
 
@@ -56,6 +58,7 @@ last-reviewed: 2026-06-25
 6. **个别遗留实色**：如 `.cb-save` 文字色 `#022c22` 配 `--color-data-teal`，属待 Phase 收口的实色，勿当范式。
 7. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。
 8. **主导航纯图标**：移动底栏与桌面侧栏的主导航使用 Phosphor 纯图标；图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名。主导航按钮必须有 `aria-label`，设置页配置界面可显示图标 + 文字。active/hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。
+9. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` 只使用 `surface/border/ink/accent/mod-*` token，避免各设置入口重新引入旧 `slate-*` / 大圆角样式。
 
 ## 4. 模块速查
 
@@ -63,6 +66,7 @@ last-reviewed: 2026-06-25
 |---|---|
 | 全部颜色/圆角/边框/阴影/字体 token + 全局样式 | `packages/client/src/index.css`（Tailwind v4 `@theme static`） |
 | 主导航图标映射与纯图标壳 | `packages/client/src/lib/navigation/navRegistry.ts`、`components/app-shell/{MobileBottomNav,DesktopSidebar}.tsx`；移动底栏的更多菜单是底栏附属层，底栏隐藏时同步收起，不作为独立悬浮菜单保留 |
+| 设置详情页外壳与设置首页行组件 | `packages/client/src/pages/settings/SettingsDetailPage.tsx`、`packages/client/src/pages/settings/components/SettingsRows.tsx` |
 | 字体引入（GB 屏显子集 + Tinos） | `packages/client/src/main.tsx`（covers 归 [architecture](architecture.md)）；守序测试 `fontLoading.test.ts` |
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
 | 图表取色（token→JS 常量镜像） | [health/charts](health/charts.md) 的 `chartColors.ts` |

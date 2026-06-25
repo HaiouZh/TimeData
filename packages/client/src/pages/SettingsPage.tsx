@@ -22,6 +22,7 @@ import {
   Tag,
 } from "@phosphor-icons/react";
 import { Icon } from "../components/Icon.js";
+import { SettingsRow, SettingsSection } from "./settings/components/SettingsRows.js";
 
 type ServerConnectionColor = "green" | "gray" | "red" | "yellow";
 
@@ -52,20 +53,6 @@ function statusDotClass(color: ServerConnectionColor): string {
   return "bg-ink-3";
 }
 
-// 图标徽章配色：用完整类名字符串，避免 Tailwind 动态拼接被裁剪。
-type RowAccent = "note" | "timeline" | "todo" | "health" | "settings" | "track" | "goal" | "time";
-
-const ACCENT_BADGE: Record<RowAccent, string> = {
-  note: "bg-surface-hover text-mod-note",
-  timeline: "bg-surface-hover text-mod-timeline",
-  todo: "bg-surface-hover text-mod-todo",
-  health: "bg-surface-hover text-mod-health",
-  settings: "bg-surface-hover text-mod-settings",
-  track: "bg-surface-hover text-mod-track",
-  goal: "bg-surface-hover text-mod-goal",
-  time: "bg-surface-hover text-mod-time",
-};
-
 function ConnectionLight({ color }: { color: ServerConnectionColor }) {
   const dot = statusDotClass(color);
   return (
@@ -73,105 +60,6 @@ function ConnectionLight({ color }: { color: ServerConnectionColor }) {
       <span className={`absolute h-2.5 w-2.5 rounded-full opacity-50 blur-[3px] ${dot}`} />
       <span className={`relative h-2 w-2 rounded-full ${dot}`} />
     </span>
-  );
-}
-
-function RowBody({
-  icon,
-  accent,
-  title,
-  subtitle,
-  accessory,
-}: {
-  icon: ReactNode;
-  accent: RowAccent;
-  title: string;
-  subtitle?: string;
-  accessory?: string;
-}) {
-  return (
-    <>
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-row ${ACCENT_BADGE[accent]}`}>
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-ink">{title}</div>
-        {subtitle && <div className="mt-0.5 truncate text-xs text-ink-3">{subtitle}</div>}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {accessory && (
-          <span className="rounded-pill bg-surface-elevated px-2 py-0.5 text-[11px] font-medium text-ink-2">
-            {accessory}
-          </span>
-        )}
-        <Icon icon={CaretRight} size={16} className="text-ink-3" />
-      </div>
-    </>
-  );
-}
-
-function SettingsGroup({ label, children }: { label?: string; children: ReactNode }) {
-  return (
-    <section className="space-y-2">
-      {label && <h3 className="px-1 text-xs font-medium uppercase tracking-wider text-ink-3">{label}</h3>}
-      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function SettingsLinkRow({
-  to,
-  icon,
-  accent,
-  title,
-  subtitle,
-  accessory,
-}: {
-  to: string;
-  icon: ReactNode;
-  accent: RowAccent;
-  title: string;
-  subtitle?: string;
-  accessory?: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover active:bg-surface-elevated"
-    >
-      <RowBody icon={icon} accent={accent} title={title} subtitle={subtitle} accessory={accessory} />
-    </Link>
-  );
-}
-
-function SettingsActionRow({
-  icon,
-  accent,
-  title,
-  subtitle,
-  accessory,
-  disabled,
-  onClick,
-}: {
-  icon: ReactNode;
-  accent: RowAccent;
-  title: string;
-  subtitle?: string;
-  accessory?: string;
-  disabled?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-elevated disabled:opacity-60"
-    >
-      <RowBody icon={icon} accent={accent} title={title} subtitle={subtitle} accessory={accessory} />
-    </button>
   );
 }
 
@@ -374,74 +262,83 @@ export default function SettingsPage() {
       {/* 状态总览：服务器连接 + 同步摘要合并为一张卡（顺序：服务器配置 → 同步信息） */}
       <ServerStatusCard />
 
-      <SettingsGroup label="记录与数据">
-        <SettingsLinkRow
-          to="/settings/categories"
-          icon={<Icon icon={Tag} size={20} />}
-          accent="timeline"
-          title="分类管理"
-          subtitle="新增、排序、改色、子分类与删除"
-        />
-        <SettingsLinkRow
-          to="/settings/insights"
-          icon={<Icon icon={Moon} size={20} />}
-          accent="settings"
-          title="杂项"
-          subtitle="睡眠分类、新建待办默认落点等零碎设置"
-        />
-        <SettingsLinkRow
-          to="/settings/stats-layout"
-          icon={<Icon icon={ChartBar} size={20} />}
-          accent="time"
-          title="统计页面布局"
-          subtitle="调整统计模块显示与顺序"
-        />
-        <SettingsLinkRow
-          to="/settings/health-range"
-          icon={<Icon icon={ChartBar} size={20} />}
-          accent="health"
-          title="健康范围"
-          subtitle="选择健康统计页显示的时间范围"
-        />
-        <SettingsLinkRow
-          to="/settings/nav"
-          icon={<Icon icon={DeviceMobile} size={20} />}
-          accent="settings"
-          title="导航"
-          subtitle="配置移动底栏与桌面侧栏"
-        />
-        <SettingsLinkRow
-          to="/settings/tracks"
-          icon={<Icon icon={Signpost} size={20} />}
-          accent="track"
-          title="轨道看板信号"
-          subtitle="配置进入轨道列表聚合的步骤标签"
-        />
-        <SettingsLinkRow
-          to="/settings/data"
-          icon={<Icon icon={Database} size={20} />}
-          accent="settings"
-          title="数据设置"
-          subtitle="云同步、显示、备份与高级数据恢复"
-        />
-      </SettingsGroup>
-
-      <SettingsGroup label="服务端与更新">
-        <SettingsLinkRow
+      <SettingsSection title="连接与同步">
+        <SettingsRow
           to="/settings/garmin"
           icon={<Icon icon={ArrowsClockwise} size={20} />}
           accent="health"
           title="Garmin 数据同步"
           subtitle="配置 Garmin 账号、定时抓取健康数据"
         />
-        <SettingsLinkRow
+      </SettingsSection>
+
+      <SettingsSection title="记录偏好">
+        <SettingsRow
+          to="/settings/categories"
+          icon={<Icon icon={Tag} size={20} />}
+          accent="timeline"
+          title="分类管理"
+          subtitle="新增、排序、改色、子分类与删除"
+        />
+        <SettingsRow
+          to="/settings/insights"
+          icon={<Icon icon={Moon} size={20} />}
+          accent="settings"
+          title="记录偏好"
+          subtitle="待办默认落点、打点分类、睡眠分类"
+        />
+        <SettingsRow
+          to="/settings/tracks"
+          icon={<Icon icon={Signpost} size={20} />}
+          accent="track"
+          title="轨道看板信号"
+          subtitle="配置进入轨道列表聚合的步骤标签"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="统计与健康">
+        <SettingsRow
+          to="/settings/stats-layout"
+          icon={<Icon icon={ChartBar} size={20} />}
+          accent="time"
+          title="统计页面布局"
+          subtitle="调整统计模块显示与顺序"
+        />
+        <SettingsRow
+          to="/settings/health-range"
+          icon={<Icon icon={ChartBar} size={20} />}
+          accent="health"
+          title="健康范围"
+          subtitle="选择健康统计页显示的时间范围"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="导航与界面">
+        <SettingsRow
+          to="/settings/nav"
+          icon={<Icon icon={DeviceMobile} size={20} />}
+          accent="settings"
+          title="导航"
+          subtitle="配置移动底栏与桌面侧栏"
+        />
+      </SettingsSection>
+
+      <SettingsSection title="高级与更新">
+        <SettingsRow
+          to="/settings/data"
+          icon={<Icon icon={Database} size={20} />}
+          accent="settings"
+          title="数据设置"
+          subtitle="云同步、显示、备份与高级数据恢复"
+        />
+        <SettingsRow
           to="/settings/admin-insights"
           icon={<Icon icon={HardDrives} size={20} />}
           accent="settings"
           title="服务端数据洞察"
-          subtitle="只读查看服务器数据、同步、备份和健康检查"
+          subtitle="只读查看服务器数据、同步、备份、健康检查和请求审计"
         />
-        <SettingsActionRow
+        <SettingsRow
           icon={<Icon icon={DeviceMobile} size={20} />}
           accent="todo"
           title="APK 更新"
@@ -450,7 +347,7 @@ export default function SettingsPage() {
           disabled={apkChecking}
           onClick={handleCheckApkUpdate}
         />
-        <SettingsActionRow
+        <SettingsRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
           accent="settings"
           title="服务端更新"
@@ -464,14 +361,14 @@ export default function SettingsPage() {
           disabled={serverUpdating || !apiUrl}
           onClick={handleServerUpdate}
         />
-        <SettingsActionRow
+        <SettingsRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
           accent="note"
           title="刷新到最新前端"
           subtitle={`当前前端版本：${currentBuildId}`}
           onClick={forceRefresh}
         />
-      </SettingsGroup>
+      </SettingsSection>
     </div>
   );
 }

@@ -146,6 +146,14 @@ describe("SettingsDataPage", () => {
     expect(html).toContain("接受删除（丢弃本地修改）");
   });
 
+  it("uses settings design tokens instead of legacy slate/blue shell classes", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
+
+    expect(html).not.toMatch(
+      /(?:bg|text|border|divide|placeholder|ring-offset)-slate-|rounded-xl|bg-blue-|text-blue-|border-blue-|red-950|amber-900/,
+    );
+  });
+
   it("opens the recovery details when sync diagnostics are needed", async () => {
     syncContextMock.value.needsSyncDiagnostics = true;
     syncContextMock.value.syncFailureCount = 3;

@@ -185,6 +185,21 @@ const requestLogsResponse: AdminRequestLogsResponse = {
   ],
 };
 
+async function chooseFilterOption(host: ParentNode, ariaLabel: string, optionText: string) {
+  const trigger = host.querySelector(`button[aria-label='${ariaLabel}']`);
+  expect(trigger).not.toBeNull();
+  await act(async () => {
+    trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  const option = Array.from(host.querySelectorAll('[role="dialog"] button')).find((item) =>
+    item.textContent?.includes(optionText),
+  );
+  expect(option).not.toBeNull();
+  await act(async () => {
+    option?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
 function mockSuccessfulAdminInsights() {
   fetchAdminSummary.mockResolvedValue(summaryResponse);
   fetchAdminEntries.mockResolvedValue(entriesResponse);
@@ -208,6 +223,14 @@ describe("SettingsAdminInsightsPage", () => {
     expect(html).toContain("只读查看服务器 SQLite 数据");
     expect(html).toContain("这里不会修改服务器数据");
     expect(html).toContain("正在加载服务端数据");
+  });
+
+  it("uses settings design tokens for the admin shell", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+
+    expect(html).not.toMatch(
+      /(?:bg|text|border|divide|placeholder|ring-offset)-slate-|rounded-xl|bg-blue-|text-blue-|border-blue-|red-950|amber-900/,
+    );
   });
 
   it("renders successful admin insight sections when one endpoint fails", async () => {
@@ -249,31 +272,12 @@ describe("SettingsAdminInsightsPage", () => {
       root.render(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
     });
 
-    const statusSelect = host.querySelector("select[aria-label='请求状态']");
-    const outcomeSelect = host.querySelector("select[aria-label='请求结果']");
-    const tierSelect = host.querySelector("select[aria-label='令牌层级']");
-    const clientSelect = host.querySelector("select[aria-label='客户端提示']");
-    expect(statusSelect).not.toBeNull();
-    expect(outcomeSelect).not.toBeNull();
-    expect(tierSelect).not.toBeNull();
-    expect(clientSelect).not.toBeNull();
+    expect(host.querySelector("select")).toBeNull();
 
-    await act(async () => {
-      (statusSelect as HTMLSelectElement).value = "401";
-      statusSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => {
-      (outcomeSelect as HTMLSelectElement).value = "auth_failed";
-      outcomeSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => {
-      (tierSelect as HTMLSelectElement).value = "invalid";
-      tierSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await act(async () => {
-      (clientSelect as HTMLSelectElement).value = "agent";
-      clientSelect?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await chooseFilterOption(host, "请求状态", "401");
+    await chooseFilterOption(host, "请求结果", "认证失败");
+    await chooseFilterOption(host, "令牌层级", "无效");
+    await chooseFilterOption(host, "客户端提示", "Agent");
 
     expect(fetchAdminRequestLogs).toHaveBeenLastCalledWith({
       limit: 100,

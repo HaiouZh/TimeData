@@ -271,7 +271,7 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 
 打开方式：先在客户端 `设置 → 服务器配置` 保存 API 地址和 Token，再进入 `设置 → 服务端数据洞察`，或直接访问前端域名下的 `/settings/admin-insights`。该面板只读，不修改 SQLite，也不提供任意 SQL；请求审计区块读取 `/api/admin/request-logs`，仅用于展示和排查认证/限流/客户端提示分布。
 
-`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页的「导航」入口统一通往移动底栏与桌面侧栏配置页，具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。主入口里的服务器配置、同步摘要和更新动作消费 [design-language](design-language.md) 的 `surface/border/ink/accent/status` token，不使用独立渐变卡片或旧 Tailwind 展示色。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin.ts`
+`SettingsPage` 是共享设置入口：部署文档只拥有其中服务器配置、同步摘要、服务端数据洞察、APK/服务端/前端更新这些行；轨道看板信号、导航配置等领域设置归各自主题文档。设置首页当前按「连接与同步 / 记录偏好 / 统计与健康 / 导航与界面 / 高级与更新」五组组织，`/settings/insights` 行显示为“记录偏好”但路由名保留历史兼容。设置首页的「导航」入口统一通往移动底栏与桌面侧栏配置页，具体 key 契约见 [categories-settings/settings-catalog](categories-settings/settings-catalog.md)。主入口里的服务器配置、同步摘要和更新动作消费 [design-language](design-language.md) 的 `surface/border/ink/accent/status` token，不使用独立渐变卡片或旧 Tailwind 展示色。代码入口：`packages/client/src/pages/SettingsPage.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx`、`packages/client/src/lib/adminApi.ts`、`packages/server/src/routes/admin.ts`
 
 相关测试：`packages/client/src/pages/SettingsPage.test.tsx`、`packages/client/src/pages/settings/SettingsAdminInsightsPage.test.tsx`、`packages/client/src/lib/adminApi.test.ts`、`packages/server/src/routes/admin.test.ts`
 

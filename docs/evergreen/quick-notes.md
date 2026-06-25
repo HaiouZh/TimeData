@@ -73,7 +73,7 @@ last-reviewed: 2026-06-25
 
 ### 1.4 捕捉中心角色
 
-速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。composer 的 fixed bottom 只在窄屏且底部 Tab 可见时避让移动底栏，宽屏不预留移动底栏空隙；「存为待办」提交期间用 pending guard 拦截连点，避免同一草稿生成重复任务。
+速记页兼「轻量捕捉入口」：底部 composer 按草稿状态切换动作，空草稿时左侧按钮打开既有搜索态、右侧按钮执行「打点」；有草稿时左侧按钮把文本存为 `tasks` 池任务（调 `addTask`，落点由 `todo.defaultDestination.v1` 决定，见 [todo](todo.md)）、右侧按钮保存速记；编辑中左侧取消、右侧保存。打点建一条普通 `time_entry`（分类来自 `punch.categoryId.v1`，见 [timeline](timeline.md) 的 `punch.ts`）；未配置或分类失效时提示用户到 `设置 → 记录偏好 → 打点分类` 选择。**这些只是现有域的现有写入路径，不新增写入通道，也不让 quick_notes 拥有时间记录/分类契约**。交互按钮统一经 Phosphor `Icon` 包装，不使用 emoji/Unicode 字符按钮；反馈内嵌在底部 composer，不作浮层。composer 的 fixed bottom 只在窄屏且底部 Tab 可见时避让移动底栏，宽屏不预留移动底栏空隙；「存为待办」提交期间用 pending guard 拦截连点，避免同一草稿生成重复任务。
 
 ## 2. Schema / 契约（字段级）
 

@@ -37,7 +37,7 @@ export default function StructureSection(props: StatsModuleProps) {
         <>
           <div className="space-y-1 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm text-slate-200">
             <div className="text-xs text-slate-400">
-              深度 vs 杂项{structure.excludedSleep ? "" : "（含睡眠，指定睡眠分类后更准）"}
+              深度 vs 浅记录{structure.excludedSleep ? "" : "（含睡眠，指定睡眠分类后更准）"}
             </div>
             <div>
               深度时间占比 <span className="text-emerald-400">{structure.current.deepRatioPct}%</span>

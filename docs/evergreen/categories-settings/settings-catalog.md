@@ -8,7 +8,7 @@ covers:
   - packages/client/src/lib/settings/punchCategorySetting.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsNavPage.tsx
-last-reviewed: 2026-06-24
+last-reviewed: 2026-06-25
 ---
 
 # 设置 · 同步键值表
@@ -74,4 +74,4 @@ last-reviewed: 2026-06-24
 
 ## 深水细节
 
-- **`SettingsInsightsPage` 是跨域宿主页**（待办默认落点 / 打点分类 / 睡眠分类都在它里编辑），其页面 covers 归 [stats-insights](../stats-insights.md)；本子文档只拥有 `desktopSidebarSetting`/`navVisibleTabsSetting`/`punchCategorySetting`/`sleepCategorySetting` 数据层。
+- **`SettingsInsightsPage` 是跨域宿主页**（显示名“记录偏好”；待办默认落点 / 打点分类 / 睡眠分类都在它里编辑），其页面 covers 归 [stats-insights](../stats-insights.md)；本子文档只拥有 `desktopSidebarSetting`/`navVisibleTabsSetting`/`punchCategorySetting`/`sleepCategorySetting` 数据层。

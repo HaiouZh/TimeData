@@ -410,7 +410,7 @@ export default function QuickNotesPage() {
     try {
       const result = await punchNow();
       if (!result.ok) {
-        showStatus(result.reason === "no_range" ? "距上次记录还没有时间" : "请先在设置 · 杂项选择打点分类");
+        showStatus(result.reason === "no_range" ? "距上次记录还没有时间" : "请先在设置 · 记录偏好选择打点分类");
         return;
       }
       const { entry } = result;

@@ -138,4 +138,4 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 ## 深水细节
 
 - **`SettingsHealthRangePage`/`SettingsStatsLayoutPage` 不归本域**：前者→[health](health.md)，后者→[stats-insights](stats-insights.md)。
-- **`SettingsInsightsPage` 是跨域宿主**（杂项页），归 [stats-insights](stats-insights.md) covers；本域的 `punchCategorySetting` 在该页有编辑 UI，但页面本身不属本域。
+- **`SettingsInsightsPage` 是跨域宿主**（显示名“记录偏好”，历史路由 `/settings/insights`），归 [stats-insights](stats-insights.md) covers；本域的 `punchCategorySetting` 在该页有编辑 UI，但页面本身不属本域。

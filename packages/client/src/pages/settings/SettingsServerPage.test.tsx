@@ -72,6 +72,14 @@ describe("SettingsServerPage", () => {
     expect(html).toContain("Token 会保存在本机浏览器存储中");
   });
 
+  it("uses settings design tokens instead of legacy slate/blue classes", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
+
+    expect(html).not.toMatch(
+      /(?:bg|text|border|divide|placeholder|ring-offset)-slate-|rounded-xl|bg-blue-|text-blue-|border-blue-/,
+    );
+  });
+
   it("strips Bearer prefix before saving api token", async () => {
     localStorage.setItem("timedata_api_token", "Bearer abc123");
     const host = document.createElement("div");

@@ -8,8 +8,10 @@ covers:
   - packages/client/src/pages/settings/BackupHistoryPage.tsx
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-06-24
+last-reviewed: 2026-06-25
 ---
+
+<!-- 复核 2026-06-25（设置页信息架构）：SettingsDataPage 只收束到 design token 视觉壳，备份导出、恢复、自动备份和强制覆盖语义均不变。 -->
 
 # 备份与恢复
 

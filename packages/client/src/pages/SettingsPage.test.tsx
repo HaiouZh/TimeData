@@ -174,6 +174,17 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/admin-insights"');
   });
 
+  it("organizes settings into five user-facing groups", () => {
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    for (const label of ["连接与同步", "记录偏好", "统计与健康", "导航与界面", "高级与更新"]) {
+      expect(html).toContain(label);
+    }
+    expect(html).toContain('href="/settings/insights"');
+    expect(html).toContain("记录偏好");
+    expect(html).not.toContain(">杂项<");
+  });
+
   it("shows the manual frontend refresh row with the current build id", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 

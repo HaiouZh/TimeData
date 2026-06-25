@@ -88,7 +88,8 @@ describe("SettingsInsightsPage", () => {
   it("renders the sleep category selector", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
-    expect(html).toContain("杂项");
+    expect(html).toContain("记录偏好");
+    expect(html).not.toContain("杂项");
     expect(html).toContain("睡眠分类");
     expect(html).toContain("睡眠");
   });

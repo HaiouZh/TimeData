@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
-last-reviewed: 2026-06-23
+last-reviewed: 2026-06-25
 ---
 
 # 统计与洞察
@@ -35,7 +35,7 @@ last-reviewed: 2026-06-23
 - `/stats` → `StatsPage` 仅 `<Navigate to="/stats/time" replace />`。
 - `/stats/time` → `TimeStatsPage`。
 - `/settings/stats-layout` → `SettingsStatsLayoutPage`（模块显隐/上下移/重置）。
-- `/settings/insights` → `SettingsInsightsPage`（**历史路由名保留，实为“杂项”页**：含待办默认落点（[todo](todo.md)）+ 打点分类（[categories-settings](categories-settings.md)）+ 睡眠分类（本域消费）三块，仅睡眠分类属本域）。
+- `/settings/insights` → `SettingsInsightsPage`（**历史路由名保留，显示名为“记录偏好”**：含待办默认落点（[todo](todo.md)）+ 打点分类（[categories-settings](categories-settings.md)）+ 睡眠分类（本域消费）三块，仅睡眠分类属本域）。
 
 ### 1.2 TimeStatsPage 周期/日期/总时长上下文 + 共享取数（`TimeStatsPage.tsx`）
 
@@ -129,7 +129,7 @@ last-reviewed: 2026-06-23
 | `lib/stats.ts` | `buildStatsRangeForDate`/`shiftStatsAnchor`/`isLatestPeriod`/`formatStatsRangeLabel`/`summarizeEntriesByParentCategory` |
 | `lib/insights/{cache,constants,types,dailyRollup,sessions,overview,routine,baseline,anomalies,trends,structure}.ts` | 见 §2.4 |
 | `lib/statsLayoutSetting.ts` / `lib/statsModuleTrendSetting.ts` | 布局 / 趋势设置存取 + sanitize |
-| `pages/settings/SettingsInsightsPage.tsx` | “杂项”设置页（跨域宿主）：待办默认落点 + 打点分类 + 睡眠分类（仅睡眠属本域） |
+| `pages/settings/SettingsInsightsPage.tsx` | “记录偏好”设置页（历史路由 `/settings/insights` 的跨域宿主）：待办默认落点 + 打点分类 + 睡眠分类（仅睡眠属本域） |
 | `pages/settings/SettingsStatsLayoutPage.tsx` | 统计模块显隐/上移下移/重置 |
 
 ### 4.2 测试
@@ -140,5 +140,5 @@ last-reviewed: 2026-06-23
 ## 深水细节
 
 - **`hooks/useInView.ts` 是孤儿**（grep 仅自身测试引用，生产零引用）：为统计图表延迟挂载准备的 IntersectionObserver hook，**当前未接线**。**不进 covers**，待清理或接线。
-- **`SettingsInsightsPage` 命名误导**：文件名/路由名 `insights`，实际 title=“杂项”。三 section 分属三域（待办落点→[todo](todo.md)、打点分类→[categories-settings](categories-settings.md)、睡眠分类→本域消费）。本域 covers 含它因睡眠口径属统计，但编辑该页也影响 todo/categories-settings，需一并复查。
+- **`SettingsInsightsPage` 命名误导**：文件名/路由名 `insights` 保留历史兼容，实际 title=“记录偏好”。三 section 分属三域（待办落点→[todo](todo.md)、打点分类→[categories-settings](categories-settings.md)、睡眠分类→本域消费）。本域 covers 含它因睡眠口径属统计，但编辑该页也影响 todo/categories-settings，需一并复查。
 - **`summarizeEntriesByParentCategory`（`lib/stats.ts`）存在但 `TimeStatsPage` 未用**——旧实现遗留，当前用 `memoOverview` 替代。

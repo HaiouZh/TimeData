@@ -22,6 +22,18 @@ import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../../quick-
 import { importQuickNotes } from "../../quick-notes/importQuickNotes.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
+const cardClassName = "space-y-3 rounded-card border border-border bg-surface p-4";
+const roomyCardClassName = "space-y-4 rounded-card border border-border bg-surface p-4";
+const primaryButtonClassName =
+  "rounded-ctl bg-accent px-4 py-2 text-sm font-medium text-page hover:bg-accent-strong disabled:opacity-40";
+const secondaryButtonClassName =
+  "rounded-ctl border border-border bg-surface-elevated px-4 py-2 text-sm text-ink hover:bg-surface-hover disabled:opacity-40";
+const warnButtonClassName =
+  "rounded-ctl border border-warn/40 bg-warn-soft px-4 py-2 text-sm text-warn hover:border-warn disabled:opacity-40";
+const dangerButtonClassName =
+  "rounded-ctl bg-danger px-4 py-2 text-sm text-page hover:bg-danger/80 disabled:opacity-40";
+const inputClassName = "w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink";
+
 export default function SettingsDataPage() {
   const {
     syncing,
@@ -313,43 +325,43 @@ export default function SettingsDataPage() {
     <SettingsDetailPage title="数据设置">
       {dialog}
       {remoteDeleteConflicts.length > 0 && (
-        <section className="space-y-3 rounded-xl border border-amber-800 bg-amber-950/30 p-4">
-          <h3 className="text-sm font-medium text-amber-100">服务器上这条记录已被删除</h3>
-          <div className="text-xs text-amber-100/80">本地仍保留了一些未同步的修改。</div>
-          <div className="text-xs text-slate-400">受影响：{remoteDeleteConflicts.length} 条冲突。</div>
+        <section className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
+          <h3 className="text-sm font-medium text-warn">服务器上这条记录已被删除</h3>
+          <div className="text-xs text-warn">本地仍保留了一些未同步的修改。</div>
+          <div className="text-xs text-ink-3">受影响：{remoteDeleteConflicts.length} 条冲突。</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void handleConflictResolution("keep_local")}
-              className="rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600"
+              className={secondaryButtonClassName}
             >
               保留本地（重新创建到服务器）
             </button>
             <button
               type="button"
               onClick={() => void handleConflictResolution("use_remote")}
-              className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900"
+              className={dangerButtonClassName}
             >
               接受删除（丢弃本地修改）
             </button>
           </div>
         </section>
       )}
-      <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+      <section className={cardClassName}>
         <label className="flex items-center justify-between gap-4">
           <span>
-            <span className="block text-sm font-medium text-slate-100">是否开启云同步</span>
-            <span className="mt-1 block text-xs text-slate-500">关闭后不会自动同步，也不会强制替换云端数据。</span>
+            <span className="block text-sm font-medium text-ink">是否开启云同步</span>
+            <span className="mt-1 block text-xs text-ink-3">关闭后不会自动同步，也不会强制替换云端数据。</span>
           </span>
           <Switch ariaLabel="是否开启云同步" checked={cloudSyncEnabled} onChange={(on) => handleCloudSyncChange(on)} />
         </label>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+      <section className={cardClassName}>
         <label className="flex items-center justify-between gap-4">
           <span>
-            <span className="block text-sm font-medium text-slate-100">跨天记录合并展示</span>
-            <span className="mt-1 block text-xs text-slate-500">
+            <span className="block text-sm font-medium text-ink">跨天记录合并展示</span>
+            <span className="mt-1 block text-xs text-ink-3">
               开启后，结束于当天的跨天记录会显示完整时间段，例如 23:57 - 06:00。统计仍按自然日计算。
             </span>
           </span>
@@ -361,15 +373,15 @@ export default function SettingsDataPage() {
         </label>
       </section>
 
-      <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-sm font-medium text-slate-400">备份与数据</h3>
+      <section className={roomyCardClassName}>
+        <h3 className="text-sm font-medium text-ink-2">备份与数据</h3>
         <div className="space-y-3">
           <div className="space-y-2">
             <button
               type="button"
               onClick={handleFullBackupExport}
               disabled={dataBusy}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+              className={primaryButtonClassName}
             >
               导出完整备份
             </button>
@@ -387,47 +399,47 @@ export default function SettingsDataPage() {
               type="button"
               onClick={() => restoreInputRef.current?.click()}
               disabled={dataBusy}
-              className="rounded bg-amber-700 px-4 py-2 text-sm text-amber-50 hover:bg-amber-600 disabled:opacity-40"
+              className={warnButtonClassName}
             >
               从完整备份恢复
             </button>
-            <div className="text-xs text-slate-500">恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。</div>
+            <div className="text-xs text-ink-3">恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。</div>
           </div>
 
           <div className="space-y-2">
             <Link
               to="/settings/data/backup-history"
-              className="inline-flex rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600"
+              className={`inline-flex ${secondaryButtonClassName}`}
             >
               查看本地备份记录
             </Link>
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-ink-3">
               这里只展示同步、恢复等操作前创建的本地安全备份，不是云同步日志。
             </div>
           </div>
         </div>
       </section>
 
-      <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-sm font-medium text-slate-400">速记数据</h3>
-        <div className="text-xs text-slate-500">只处理速记，不影响时间记录。</div>
+      <section className={roomyCardClassName}>
+        <h3 className="text-sm font-medium text-ink-2">速记数据</h3>
+        <div className="text-xs text-ink-3">只处理速记，不影响时间记录。</div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="space-y-1 text-xs text-slate-400">
+          <label className="space-y-1 text-xs text-ink-2">
             开始日期
             <input
               type="date"
               value={quickNotesFromDate}
               onChange={(e) => setQuickNotesFromDate(e.target.value)}
-              className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className={inputClassName}
             />
           </label>
-          <label className="space-y-1 text-xs text-slate-400">
+          <label className="space-y-1 text-xs text-ink-2">
             结束日期
             <input
               type="date"
               value={quickNotesToDate}
               onChange={(e) => setQuickNotesToDate(e.target.value)}
-              className="w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100"
+              className={inputClassName}
             />
           </label>
         </div>
@@ -436,7 +448,7 @@ export default function SettingsDataPage() {
             type="button"
             onClick={() => void handleQuickNotesExportJson()}
             disabled={dataBusy}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+            className={primaryButtonClassName}
           >
             导出速记 JSON
           </button>
@@ -444,7 +456,7 @@ export default function SettingsDataPage() {
             type="button"
             onClick={() => void handleQuickNotesExportMarkdown()}
             disabled={dataBusy}
-            className="rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+            className={secondaryButtonClassName}
           >
             导出速记 Markdown
           </button>
@@ -459,7 +471,7 @@ export default function SettingsDataPage() {
             type="button"
             onClick={() => quickNotesImportInputRef.current?.click()}
             disabled={dataBusy}
-            className="rounded bg-amber-700 px-4 py-2 text-sm text-amber-50 hover:bg-amber-600 disabled:opacity-40"
+            className={warnButtonClassName}
           >
             导入速记 JSON
           </button>
@@ -467,42 +479,42 @@ export default function SettingsDataPage() {
             type="button"
             onClick={() => void handleQuickNotesDeleteRange()}
             disabled={dataBusy}
-            className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900 disabled:opacity-40"
+            className={dangerButtonClassName}
           >
             删除日期范围速记
           </button>
         </div>
-        <div className="text-xs text-slate-500">删除前请先导出需要保留的内容。</div>
+        <div className="text-xs text-ink-3">删除前请先导出需要保留的内容。</div>
       </section>
 
       <details
         open={recoveryOpen}
         onToggle={(e) => setRecoveryOpen(e.currentTarget.open)}
-        className="rounded-xl border border-slate-800 bg-slate-900/60"
+        className="rounded-card border border-border bg-surface"
       >
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-300">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink-2">
           高级 · 数据恢复
-          <span className="ml-2 text-xs text-slate-500">同步诊断、强制替换、覆盖云端、重置</span>
+          <span className="ml-2 text-xs text-ink-3">同步诊断、强制替换、覆盖云端、重置</span>
         </summary>
         <div className="space-y-5 p-4 pt-0">
           {needsSyncDiagnostics && (
-            <div className="rounded border border-amber-800 bg-amber-950/40 p-3 text-xs text-amber-100">
+            <div className="rounded-ctl border border-warn/40 bg-warn-soft p-3 text-xs text-warn">
               普通同步已连续失败 {syncFailureCount} 次。建议先运行诊断，再决定使用云端覆盖本地或本地覆盖云端。
             </div>
           )}
 
           <section className="space-y-3">
-            <h3 className="text-sm font-medium text-slate-400">同步健康诊断</h3>
+            <h3 className="text-sm font-medium text-ink-2">同步健康诊断</h3>
             <button
               type="button"
               onClick={handleRunDiagnostics}
               disabled={healthLoading || !apiUrl || !cloudSyncEnabled}
-              className="rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+              className={secondaryButtonClassName}
             >
               {healthLoading ? "诊断中…" : "检查本地与云端状态"}
             </button>
             {healthReport && (
-              <div className="space-y-1 text-xs text-slate-400">
+              <div className="space-y-1 text-xs text-ink-2">
                 <div>
                   本地：{healthReport.local.categoryCount} 个分类，{healthReport.local.entryCount} 条记录，未同步{" "}
                   {healthReport.local.unsyncedCount} 条，速记 {healthReport.local.quickNoteCount} 条。
@@ -511,52 +523,52 @@ export default function SettingsDataPage() {
                   云端：{healthReport.server.categoryCount} 个分类，{healthReport.server.entryCount} 条记录，
                   {healthReport.server.quickNoteCount} 条速记。
                 </div>
-                <div className="text-slate-300">建议：{healthReport.reason}</div>
+                <div className="text-ink-2">建议：{healthReport.reason}</div>
               </div>
             )}
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-medium text-slate-400">强制替换</h3>
+            <h3 className="text-sm font-medium text-ink-2">强制替换</h3>
             <button
               type="button"
               onClick={handleForceReplace}
               disabled={syncing || !apiUrl || !cloudSyncEnabled}
-              className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900 disabled:opacity-40"
+              className={dangerButtonClassName}
             >
               {syncing ? "同步中…" : "将本地数据替换为云端数据"}
             </button>
-            <div className="text-xs text-slate-500">此操作会先自动备份本地数据，再用云端完整数据覆盖本地。</div>
+            <div className="text-xs text-ink-3">此操作会先自动备份本地数据，再用云端完整数据覆盖本地。</div>
           </section>
 
-          <section className="space-y-3 rounded border border-red-950 bg-red-950/20 p-3">
-            <h3 className="text-sm font-medium text-red-200">将本地数据覆盖到云端</h3>
-            <div className="text-xs text-red-100/80">
+          <section className="space-y-3 rounded-ctl border border-danger/40 bg-danger-soft p-3">
+            <h3 className="text-sm font-medium text-danger">将本地数据覆盖到云端</h3>
+            <div className="text-xs text-danger">
               仅当你已经确认当前设备数据是正确版本时使用。此操作会先在服务器创建备份，然后清空服务器分类和时间记录并导入本地数据。
             </div>
             <button
               type="button"
               onClick={handlePrepareForcePush}
               disabled={syncing || !apiUrl || !cloudSyncEnabled}
-              className="rounded bg-red-800 px-4 py-2 text-sm text-red-50 hover:bg-red-700 disabled:opacity-40"
+              className={dangerButtonClassName}
             >
               准备覆盖云端
             </button>
             {forcePushPreparation && (
-              <div className="space-y-2 rounded border border-red-900 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">
+              <div className="space-y-2 rounded-ctl border border-danger/40 bg-surface-elevated p-3">
+                <div className="text-xs text-ink-2">
                   云端当前：{forcePushPreparation.serverStatus.categoryCount} 个分类，
                   {forcePushPreparation.serverStatus.entryCount} 条记录，
                   {forcePushPreparation.serverStatus.quickNoteCount} 条速记。令牌过期时间：
                   {formatAppDateTime(forcePushPreparation.expiresAt)}。
                 </div>
-                <label className="block text-xs text-slate-300">
+                <label className="block text-xs text-ink-2">
                   输入确认短语：{forcePushPreparation.confirmationPhrase}
                   <input
                     type="text"
                     value={forcePushPhrase}
                     onChange={(e) => setForcePushPhrase(e.target.value)}
-                    className="mt-1 w-full rounded bg-slate-800 px-3 py-2 text-sm text-slate-100"
+                    className={`mt-1 ${inputClassName}`}
                   />
                 </label>
                 <Checkbox
@@ -571,7 +583,7 @@ export default function SettingsDataPage() {
                   disabled={
                     syncing || forcePushPhrase !== forcePushPreparation.confirmationPhrase || !forcePushConfirmation
                   }
-                  className="rounded bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-600 disabled:opacity-40"
+                  className={dangerButtonClassName}
                 >
                   确认用本地覆盖云端
                 </button>
@@ -580,12 +592,12 @@ export default function SettingsDataPage() {
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-medium text-slate-400">数据重置</h3>
+            <h3 className="text-sm font-medium text-ink-2">数据重置</h3>
             <button
               type="button"
               onClick={handleResetLocalData}
               disabled={dataBusy}
-              className="rounded bg-red-950 px-4 py-2 text-sm text-red-100 hover:bg-red-900 disabled:opacity-40"
+              className={dangerButtonClassName}
             >
               清空本地并恢复预设
             </button>
@@ -593,8 +605,8 @@ export default function SettingsDataPage() {
         </div>
       </details>
 
-      {error && <div className="text-xs text-red-400">{error}</div>}
-      {dataStatus && <div className="text-xs text-slate-400">{dataStatus}</div>}
+      {error && <div className="text-xs text-danger">{error}</div>}
+      {dataStatus && <div className="text-xs text-ink-2">{dataStatus}</div>}
     </SettingsDetailPage>
   );
 }
