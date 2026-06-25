@@ -109,7 +109,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const flow = useReactFlow();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
+  const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
+  const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
+  const activeGoalKey = activeGoalIds.join("\n");
+  const activeGoalCount = activeGoalIds.length;
   useEffect(() => {
     setLodByGoalId((current) => {
       const next: Record<string, ClusterLod> = {};
@@ -120,9 +124,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       return next;
     });
   }, [goals, viewport]);
-  useEffect(() => {
-    void flow.fitView({ padding: 0.2 });
-  }, [flow]);
   const model = useMemo(
     () => buildGoalGalaxyModel({ goals, tasks, tracks, steps, lodByGoalId }),
     [goals, lodByGoalId, steps, tasks, tracks],
@@ -165,6 +166,13 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       })),
     [model.edges],
   );
+  useEffect(() => {
+    if (initialFitGoalKey === activeGoalKey) return;
+    if (activeGoalCount === 0) return;
+    if (Object.keys(lodByGoalId).length < activeGoalCount) return;
+    void flow.fitView({ padding: 0.2 });
+    setInitialFitGoalKey(activeGoalKey);
+  }, [activeGoalCount, activeGoalKey, flow, initialFitGoalKey, lodByGoalId]);
 
   const onNodeDoubleClick = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
     (_event, node) => {

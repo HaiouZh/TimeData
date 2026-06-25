@@ -77,6 +77,38 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("fits after the initial LOD pass renders expanded member nodes", async () => {
+    resetReactFlowMock();
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+
+    const { root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goalValue]} tasks={[task("a")]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    expect(getReactFlowMock().renderedNodes.some((nodes) => nodes.some((node) => node.id === "task:a"))).toBe(true);
+    const counts = getReactFlowMock().fitViewRenderedNodeCounts;
+    expect(counts[counts.length - 1]).toBeGreaterThanOrEqual(2);
+    await unmount(root);
+  });
+
+  it("waits to fit until live query data arrives", async () => {
+    resetReactFlowMock();
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { root } = await renderDom(
+      <GoalGalaxyCanvas goals={[]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    await act(async () => {
+      root.render(
+        <GoalGalaxyCanvas goals={[goalValue]} tasks={[task("a")]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+      );
+    });
+
+    const counts = getReactFlowMock().fitViewRenderedNodeCounts;
+    expect(counts[counts.length - 1]).toBeGreaterThanOrEqual(2);
+    await unmount(root);
+  });
+
   it("keeps expanded clusters expanded while zoom remains inside the hysteresis band", async () => {
     const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
     const { host, root } = await renderDom(

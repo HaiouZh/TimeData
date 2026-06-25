@@ -73,10 +73,14 @@ const DEFAULT_CONNECTION: MockConnection = { source: "task:t1", target: "task:t2
 const STORE_STATE: MockStoreState = { transform: [0, 0, 1] };
 const DEFAULT_VIEWPORT: MockViewport = { x: 0, y: 0, zoom: 1 };
 
-const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => Promise.resolve(true));
+const renderedNodes: MockReactFlowNode[][] = [];
+const fitViewRenderedNodeCounts: number[] = [];
+const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => {
+  fitViewRenderedNodeCounts.push(renderedNodes[renderedNodes.length - 1]?.length ?? 0);
+  return Promise.resolve(true);
+});
 const setViewport = vi.fn<(viewport: MockViewport) => Promise<boolean>>(() => Promise.resolve(true));
 const getViewport = vi.fn<() => MockViewport>(() => DEFAULT_VIEWPORT);
-const renderedNodes: MockReactFlowNode[][] = [];
 let latestOnMoveEnd: MockReactFlowProps["onMoveEnd"] | undefined;
 const reactFlowInstance = { fitView, setViewport, getViewport };
 
@@ -311,6 +315,7 @@ export function resetReactFlowMock() {
   setViewport.mockClear();
   getViewport.mockClear();
   renderedNodes.length = 0;
+  fitViewRenderedNodeCounts.length = 0;
   latestOnMoveEnd = undefined;
 }
 
@@ -318,6 +323,7 @@ export function getReactFlowMock() {
   return {
     ...reactFlowInstance,
     renderedNodes,
+    fitViewRenderedNodeCounts,
     fireMoveEnd: (viewport: MockViewport) => latestOnMoveEnd?.(null, viewport),
   };
 }
