@@ -1,25 +1,16 @@
-import { TaskSchema } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
-import { db } from "../../db/index.js";
 import { listGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { getGoal } from "../../lib/goals.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { GoalGraphEditor } from "./GoalGraphEditor.js";
-
-async function listAllTasks() {
-  const rows = await db.tasks.toArray();
-  return rows.flatMap((row) => {
-    const parsed = TaskSchema.safeParse(row);
-    return parsed.success ? [parsed.data] : [];
-  });
-}
+import { listAllTasksForGoals } from "./goalPageData.js";
 
 export default function GoalDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const goal = useLiveQuery(async () => (await getGoal(id)) ?? null, [id]);
-  const tasks = useLiveQuery(() => listAllTasks(), [], []);
+  const tasks = useLiveQuery(() => listAllTasksForGoals(), [], []);
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const layoutPins = useLiveQuery(() => listGoalLayoutPins(id), [id]);

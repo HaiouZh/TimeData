@@ -7,7 +7,7 @@ import StatsPage from "../../pages/StatsPage.tsx";
 import TimeStatsPage from "../../pages/TimeStatsPage.tsx";
 import { TodoPage } from "../../pages/TodoPage.tsx";
 import GoalDetailPage from "../../pages/goals/GoalDetailPage.tsx";
-import GoalsListPage from "../../pages/goals/GoalsListPage.tsx";
+import GoalsPage from "../../pages/goals/GoalsPage.tsx";
 import BackupHistoryPage from "../../pages/settings/BackupHistoryPage.tsx";
 import SettingsAdminInsightsPage from "../../pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "../../pages/settings/SettingsCategoriesPage.tsx";
@@ -35,7 +35,7 @@ export function AppRoutes({ refreshKey }: AppRoutesProps) {
       <Route path="/quick-notes" element={<QuickNotesPage />} />
       <Route path="/todo" element={<TodoPage />} />
       <Route path="/tracks" element={<TracksListPage />} />
-      <Route path="/goals" element={<GoalsListPage />} />
+      <Route path="/goals" element={<GoalsPage />} />
       <Route path="/goals/:id" element={<GoalDetailPage />} />
       <Route path="/tracks/:id" element={<TrackDetailPage />} />
       <Route path="/entries/new" element={<EntryPage refreshKey={refreshKey} />} />

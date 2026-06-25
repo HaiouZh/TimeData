@@ -1,23 +1,16 @@
-import { TaskSchema } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db } from "../../db/index.js";
 import { addGoal, listGoals } from "../../lib/goals.js";
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
+import { listAllTasksForGoals } from "./goalPageData.js";
 import { GoalListItem } from "./GoalListItem.js";
 import { NewGoalComposer } from "./NewGoalComposer.js";
 
 export default function GoalsListPage() {
   const goals = useLiveQuery(() => listGoals(), [], []);
-  const tasks = useLiveQuery(async () => {
-    const rows = await db.tasks.toArray();
-    return rows.flatMap((row) => {
-      const parsed = TaskSchema.safeParse(row);
-      return parsed.success ? [parsed.data] : [];
-    });
-  }, [], []);
+  const tasks = useLiveQuery(() => listAllTasksForGoals(), [], []);
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const { syncAfterWrite } = useSyncContext();
