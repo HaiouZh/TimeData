@@ -5,6 +5,7 @@ import { db } from "../db/index.js";
 import {
   deleteGoalLayoutPin,
   getGoalLayoutPin,
+  listAllGoalLayoutPins,
   listGoalLayoutPins,
   upsertGoalLayoutPin,
 } from "./goalLayoutPins.js";
@@ -51,5 +52,17 @@ describe("goalLayoutPins", () => {
     await expect(db.syncLog.toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ recordId: "goal-1|task|task-1", action: "delete" })]),
     );
+  });
+
+  it("listAllGoalLayoutPins returns pins from every goal", async () => {
+    await upsertGoalLayoutPin({ goalId: "g1", nodeKind: "goal", nodeId: "g1", x: 1, y: 2, now });
+    await upsertGoalLayoutPin({ goalId: "g2", nodeKind: "task", nodeId: "t1", x: 3, y: 4, now });
+
+    const all = await listAllGoalLayoutPins();
+
+    expect(all.map((pin) => `${pin.goalId}:${pin.nodeKind}:${pin.nodeId}`).sort()).toEqual([
+      "g1:goal:g1",
+      "g2:task:t1",
+    ]);
   });
 });

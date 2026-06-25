@@ -41,6 +41,14 @@ export async function listGoalLayoutPins(goalId: string): Promise<GoalLayoutPin[
   });
 }
 
+export async function listAllGoalLayoutPins(): Promise<GoalLayoutPin[]> {
+  const rows = await db.goalLayoutPins.toArray();
+  return rows.flatMap((row) => {
+    const parsed = GoalLayoutPinSchema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 export async function upsertGoalLayoutPin(input: UpsertGoalLayoutPinInput): Promise<GoalLayoutPin> {
   const timestamp = nowIso(input.now);
   const pin = GoalLayoutPinSchema.parse({
