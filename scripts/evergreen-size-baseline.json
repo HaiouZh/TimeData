@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 6669,
+    "chars": 6718,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
@@ -48,8 +48,8 @@
     "covers": 10
   },
   "docs/evergreen/goals.md": {
-    "chars": 7409,
-    "covers": 15
+    "chars": 9195,
+    "covers": 19
   },
   "docs/evergreen/health.md": {
     "chars": 5961,
