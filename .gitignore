@@ -22,6 +22,7 @@ data/
 # Local AI/editor state
 .claude/
 .qoder/
+.trae/
 .superpowers/
 .worktrees/
 
@@ -32,9 +33,8 @@ docs_local/
 docs/superpowers/
 docs/Achieve/
 
-# Local scratch dir for dev logs / debug output (keep the dir, ignore contents)
-.local/*
-!.local/.gitkeep
+# Local scratch dir for dev logs / debug output
+.local/
 
 # Local scripts/debug artifacts
 scripts/_debug.*
