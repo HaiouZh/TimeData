@@ -63,14 +63,7 @@ async function render(node: ReturnType<typeof createElement>) {
 describe("TaskRow", () => {
   // 默认不渲染桌面 overlay：只有 TaskList 明确传 coarsePointer=false 时才开启桌面入口。
   // 用一条聚合 sanity 钉住兼容性；其它分散 toBeNull 不重复列。
-  const NO_INLINE_ACTION_LABELS = [
-    "排进今天",
-    "回收件箱",
-    "删除",
-    "编辑重复与时间",
-    "计划到某天",
-    "添加子任务",
-  ];
+  const NO_INLINE_ACTION_LABELS = ["排进今天", "回收件箱", "删除", "编辑重复与时间", "计划到某天", "添加子任务"];
 
   it("普通任务：复选框 + 标题 + 文本可选区；无行内 hover-action 按钮", async () => {
     const { host, root } = await render(
@@ -192,17 +185,16 @@ describe("TaskRow", () => {
     await createChildTask(parent.id, "子任务甲");
     const fresh = (await db.tasks.get(parent.id))!;
 
-    const { host, root } = await render(
-      createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, onEdit }),
-    );
+    const { host, root } = await render(createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, onEdit }));
     await settle();
     const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
     row.getBoundingClientRect = () =>
       ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
     await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
     await settle();
-    const field = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
-    expect(field?.value).toBe("子任务甲");
+    const title = host.querySelector('[data-testid^="child-title-"]') as HTMLElement | null;
+    expect(title?.textContent).toBe("子任务甲");
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
     expect(onEdit).not.toHaveBeenCalled();
     await act(async () => root.unmount());
   });
@@ -230,9 +222,7 @@ describe("TaskRow", () => {
     const child = await createChildTask(parent.id, "子甲");
     const fresh = (await db.tasks.get(parent.id))!;
 
-    const { host, root } = await render(
-      createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, onToggle }),
-    );
+    const { host, root } = await render(createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers, onToggle }));
     await settle();
 
     const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
@@ -283,7 +273,9 @@ describe("TaskRow", () => {
     await click(host.querySelector('[data-testid="task-row-grab-area"]'));
     await settle();
 
-    expect(host.querySelector('textarea[aria-label="子任务标题"]')).not.toBeNull();
+    const title = host.querySelector('[data-testid^="child-title-"]') as HTMLElement | null;
+    expect(title?.textContent).toBe("子任务甲");
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
     expect(onEdit).not.toHaveBeenCalled();
     await unmount(root);
   });

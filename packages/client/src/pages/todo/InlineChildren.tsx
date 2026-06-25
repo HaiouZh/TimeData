@@ -1,12 +1,7 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useState } from "react";
-import {
-  createChildTask,
-  deleteTaskCascade,
-  toggleTaskDone,
-  updateTask,
-} from "../../lib/tasks.js";
+import { createChildTask, deleteTaskCascade, toggleTaskDone, updateTask } from "../../lib/tasks.js";
 import { NewChildRow, ReadonlyChildRow, SortableChildRow, StaticChildRow } from "./SortableChildRow.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
@@ -32,6 +27,7 @@ export interface InlineChildrenProps {
 export function InlineChildren({ parentId, mode, onAfterWrite }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
   const [drafting, setDrafting] = useState(false);
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
 
   function notify(): void {
     onAfterWrite?.();
@@ -44,11 +40,13 @@ export function InlineChildren({ parentId, mode, onAfterWrite }: InlineChildrenP
 
   async function handleTitleCommit(child: Task, nextTitle: string): Promise<void> {
     await updateTask(child.id, { title: nextTitle });
+    setEditingChildId(null);
     notify();
   }
 
   async function handleDelete(child: Task): Promise<void> {
     await deleteTaskCascade(child.id);
+    setEditingChildId((current) => (current === child.id ? null : current));
     notify();
   }
 
@@ -79,18 +77,24 @@ export function InlineChildren({ parentId, mode, onAfterWrite }: InlineChildrenP
       <StaticChildRow
         key={child.id}
         child={child}
+        editing={editingChildId === child.id}
         onToggleDone={(c) => void handleToggle(c)}
         onTitleCommit={(c, t) => void handleTitleCommit(c, t)}
         onDelete={(c) => void handleDelete(c)}
+        onBeginEdit={(c) => setEditingChildId(c.id)}
+        onCancelEdit={(c) => setEditingChildId((current) => (current === c.id ? null : current))}
         onEnter={() => setDrafting(true)}
       />
     ) : (
       <SortableChildRow
         key={child.id}
         child={child}
+        editing={editingChildId === child.id}
         onToggleDone={(c) => void handleToggle(c)}
         onTitleCommit={(c, t) => void handleTitleCommit(c, t)}
         onDelete={(c) => void handleDelete(c)}
+        onBeginEdit={(c) => setEditingChildId(c.id)}
+        onCancelEdit={(c) => setEditingChildId((current) => (current === c.id ? null : current))}
         onEnter={() => setDrafting(true)}
       />
     ),

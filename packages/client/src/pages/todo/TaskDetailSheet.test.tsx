@@ -45,6 +45,16 @@ const click = (el: Element | null) =>
     el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 
+async function beginChildTitleEdit(host: HTMLElement): Promise<HTMLTextAreaElement> {
+  const title = host.querySelector('[data-testid^="child-title-"]') as HTMLElement | null;
+  expect(title).not.toBeNull();
+  await click(title);
+  await settle();
+  const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement | null;
+  expect(input).not.toBeNull();
+  return input as HTMLTextAreaElement;
+}
+
 const badgeOf = (host: HTMLElement) => host.querySelector('button[aria-label="编辑重复与时间"]') as HTMLButtonElement;
 
 function setTextareaValue(input: HTMLTextAreaElement, value: string): void {
@@ -93,9 +103,10 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const { host, root } = await renderSheet(t.id);
     await settle();
     const titleInput = host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement;
-    const subtaskInput = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    const subtaskTitle = host.querySelector('[data-testid^="child-title-"]') as HTMLElement | null;
     expect(titleInput.value).toBe("写计划");
-    expect(subtaskInput.value).toBe("调研参考代码");
+    expect(subtaskTitle?.textContent).toBe("调研参考代码");
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
     expect(host.textContent).toContain("每天");
     await unmount(root);
   });
@@ -314,7 +325,7 @@ describe("TaskDetailSheet 自动保存", () => {
     const child = await createChildTask(t.id, "原文字");
     const { host, root } = await renderSheet(t.id);
     await settle();
-    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    const input = await beginChildTitleEdit(host);
     await act(async () => {
       setTextareaValue(input, "改后文字");
     });

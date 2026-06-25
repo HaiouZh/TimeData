@@ -19,11 +19,14 @@ export interface ChildRowCallbacks {
   onTitleCommit: (child: Task, nextTitle: string) => void;
   onDelete: (child: Task) => void;
   onEnter?: (child: Task) => void;
+  onBeginEdit?: (child: Task) => void;
+  onCancelEdit?: (child: Task) => void;
 }
 
 interface ChildRowBodyProps extends ChildRowCallbacks {
   child: Task;
   readonly: boolean;
+  editing?: boolean;
 }
 
 function autoGrow(el: HTMLTextAreaElement | null): void {
@@ -59,14 +62,29 @@ function useAutoGrowingTextarea() {
     });
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  });
 
   return ref;
 }
 
-function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, onEnter }: ChildRowBodyProps) {
+function hasNonEmptySelection(): boolean {
+  return (window.getSelection()?.toString().trim().length ?? 0) > 0;
+}
+
+function ChildRowBody({
+  child,
+  readonly,
+  editing = false,
+  onToggleDone,
+  onTitleCommit,
+  onDelete,
+  onEnter,
+  onBeginEdit,
+  onCancelEdit,
+}: ChildRowBodyProps) {
   const [draft, setDraft] = useState(child.title);
   const lastExternal = useRef(child.title);
+  const skipBlurCommitRef = useRef(false);
   const titleRef = useAutoGrowingTextarea();
 
   // 外部（同步/其他端）刷新标题时，仅当用户未在编辑（draft 仍等于上次外部值）才同步。
@@ -77,11 +95,53 @@ function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, 
     lastExternal.current = child.title;
   }, [child.title, draft]);
 
-  function handleKey(event: KeyboardEvent<HTMLTextAreaElement>): void {
+  useEffect(() => {
+    if (!editing) return;
+    skipBlurCommitRef.current = false;
+    const el = titleRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editing, titleRef]);
+
+  function beginEdit(): void {
+    if (readonly) return;
+    onBeginEdit?.(child);
+  }
+
+  function cancelEdit(): void {
+    skipBlurCommitRef.current = true;
+    setDraft(child.title);
+    onCancelEdit?.(child);
+  }
+
+  function commitEdit(): void {
+    const next = draft.trim();
+    if (!next || next === child.title) {
+      setDraft(child.title);
+      onCancelEdit?.(child);
+      return;
+    }
+    onTitleCommit(child, next);
+  }
+
+  function handleEditKey(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEdit();
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      event.currentTarget.blur();
+      commitEdit();
       onEnter?.(child);
+    }
+  }
+
+  function handleTitleKey(event: KeyboardEvent<HTMLElement>): void {
+    if (event.key === "Enter" || event.key === "F2") {
+      event.preventDefault();
+      beginEdit();
     }
   }
 
@@ -101,7 +161,7 @@ function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, 
         >
           {child.title}
         </span>
-      ) : (
+      ) : editing ? (
         <textarea
           aria-label="子任务标题"
           value={draft}
@@ -112,18 +172,32 @@ function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, 
             autoGrow(event.currentTarget);
           }}
           onBlur={() => {
-            const next = draft.trim();
-            if (!next || next === child.title) {
-              setDraft(child.title);
+            if (skipBlurCommitRef.current) {
+              skipBlurCommitRef.current = false;
               return;
             }
-            onTitleCommit(child, next);
+            commitEdit();
           }}
-          onKeyDown={handleKey}
+          onKeyDown={handleEditKey}
           className={`min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm outline-none focus:bg-surface-hover ${
             child.done ? "text-ink-3 line-through" : "text-ink"
           }`}
         />
+      ) : (
+        <span
+          data-testid={`child-title-${child.id}`}
+          tabIndex={0}
+          onClick={() => {
+            if (hasNonEmptySelection()) return;
+            beginEdit();
+          }}
+          onKeyDown={handleTitleKey}
+          className={`min-h-8 min-w-0 flex-1 select-text break-words px-1 py-1 text-sm outline-none focus:bg-surface-hover ${
+            child.done ? "text-ink-3 line-through" : "text-ink"
+          }`}
+        >
+          {child.title}
+        </span>
       )}
       {!readonly && (
         <button
@@ -141,6 +215,7 @@ function ChildRowBody({ child, readonly, onToggleDone, onTitleCommit, onDelete, 
 
 export interface SortableChildRowProps extends ChildRowCallbacks {
   child: Task;
+  editing?: boolean;
 }
 
 /** draggable 模式：包裹 useSortable，带拖柄。 */
@@ -178,6 +253,7 @@ export function SortableChildRow(props: SortableChildRowProps) {
 
 export interface StaticChildRowProps extends ChildRowCallbacks {
   child: Task;
+  editing?: boolean;
 }
 
 /** static 模式：可编辑但无拖柄（已排期池）。 */

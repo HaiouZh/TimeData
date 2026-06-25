@@ -62,6 +62,24 @@ function draftInput(host: HTMLElement): HTMLTextAreaElement | null {
   return host.querySelector('textarea[aria-label="新子任务标题"]');
 }
 
+function childTitle(host: HTMLElement, index = 0): HTMLElement {
+  const title = host.querySelectorAll('[data-testid^="child-title-"]').item(index) as HTMLElement | null;
+  expect(title).not.toBeNull();
+  return title as HTMLElement;
+}
+
+async function beginEditingChildTitle(host: HTMLElement, index = 0): Promise<HTMLTextAreaElement> {
+  const title = childTitle(host, index);
+  await act(async () => {
+    title.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+
+  const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement | null;
+  expect(input).not.toBeNull();
+  return input as HTMLTextAreaElement;
+}
+
 async function typeIntoTextarea(el: HTMLTextAreaElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
   await act(async () => {
@@ -72,24 +90,33 @@ async function typeIntoTextarea(el: HTMLTextAreaElement, value: string) {
 }
 
 describe("InlineChildren mode 行为矩阵", () => {
-  it("draggable：有复选框、标题编辑、拖柄、新增按钮", async () => {
+  it("draggable：有复选框、可选择标题文本、拖柄、新增按钮", async () => {
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 
     expect(host.querySelectorAll('input[aria-label^="完成子任务"]').length).toBe(2);
-    expect(host.querySelectorAll('textarea[aria-label="子任务标题"]').length).toBe(2);
+    expect(host.querySelectorAll('textarea[aria-label="子任务标题"]').length).toBe(0);
+    const titles = host.querySelectorAll('[data-testid^="child-title-"]');
+    expect(titles.length).toBe(2);
+    expect(titles[0].tagName.toLowerCase()).toBe("span");
+    expect(titles[0].getAttribute("role")).toBeNull();
+    expect(titles[0].textContent).toBe("子任务0");
+    expect(host.textContent).toContain("子任务1");
     expect(host.querySelectorAll('button[aria-label^="拖动子任务"]').length).toBe(2);
     expect(host.querySelector('button[aria-label="添加子任务"]')).not.toBeNull();
 
     await unmount(root);
   });
 
-  it("static：有复选框、标题编辑、新增按钮，无拖柄", async () => {
+  it("static：有复选框、可选择标题文本、新增按钮，无拖柄", async () => {
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "static");
 
     expect(host.querySelectorAll('input[aria-label^="完成子任务"]').length).toBe(2);
-    expect(host.querySelectorAll('textarea[aria-label="子任务标题"]').length).toBe(2);
+    expect(host.querySelectorAll('textarea[aria-label="子任务标题"]').length).toBe(0);
+    expect(host.querySelectorAll('[data-testid^="child-title-"]').length).toBe(2);
+    expect(host.textContent).toContain("子任务0");
+    expect(host.textContent).toContain("子任务1");
     expect(host.querySelector('button[aria-label="添加子任务"]')).not.toBeNull();
     expect(host.querySelectorAll('button[aria-label^="拖动子任务"]').length).toBe(0);
 
@@ -106,6 +133,73 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(host.querySelector('button[aria-label="添加子任务"]')).toBeNull();
     // 只读模式下仍显示子任务标题文本
     expect(host.textContent).toContain("子任务0");
+
+    await unmount(root);
+  });
+
+  it("点击子任务标题且无选区时进入单行编辑态并自动聚焦", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    const input = await beginEditingChildTitle(host);
+
+    const editors = host.querySelectorAll('textarea[aria-label="子任务标题"]');
+    expect(editors.length).toBe(1);
+    expect(input.value).toBe("子任务0");
+    expect(document.activeElement).toBe(input);
+
+    await unmount(root);
+  });
+
+  it("已有非空选区时点击标题不进入编辑态，便于跨行复制", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "static");
+    vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "子任务0\n子任务1" } as Selection);
+
+    await act(async () => {
+      childTitle(host).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("标题获焦后按 Enter 进入编辑态", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "static");
+
+    await act(async () => {
+      childTitle(host).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+
+    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement | null;
+    expect(input?.value).toBe("子任务0");
+
+    await unmount(root);
+  });
+
+  it("标题获焦后按 F2 进入编辑态，Escape 退出且不落库", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "static");
+
+    await act(async () => {
+      childTitle(host).dispatchEvent(new KeyboardEvent("keydown", { key: "F2", bubbles: true }));
+    });
+    await settle();
+
+    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    await typeIntoTextarea(input, "改了但取消");
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await settle();
+
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
+    const children = await db.tasks.where("parentId").equals(parent.id).sortBy("sortOrder");
+    expect(children[0].title).toBe("子任务0");
 
     await unmount(root);
   });
@@ -204,7 +298,7 @@ describe("InlineChildren mode 行为矩阵", () => {
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 
-    const firstChild = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    const firstChild = await beginEditingChildTitle(host);
     await act(async () => {
       firstChild.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
@@ -235,12 +329,8 @@ describe("InlineChildren mode 行为矩阵", () => {
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 
-    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    await act(async () => {
-      setter?.call(input, "改后标题");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    const input = await beginEditingChildTitle(host);
+    await typeIntoTextarea(input, "改后标题");
     await act(async () => {
       input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
@@ -268,7 +358,7 @@ describe("InlineChildren mode 行为矩阵", () => {
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");
 
-    const input = host.querySelector('textarea[aria-label="子任务标题"]') as HTMLTextAreaElement;
+    const input = await beginEditingChildTitle(host);
     expect(input.style.height).toBe("48px");
 
     measuredHeight = 96;
