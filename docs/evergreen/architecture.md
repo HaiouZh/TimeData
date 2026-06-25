@@ -133,7 +133,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 
 ## 6. 文档登记簿
 
-文档组织规则、主题轴（域/模块/设计语言/横切）判定树、单轴 covers 归属、骨架模板和体量阈值见 [_docs-guide](_docs-guide.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复（当前有子文档的主题：health、todo、categories-settings、design-language）。
+文档组织规则、主题轴（域/模块/设计语言/横切）判定树、单轴 covers 归属、骨架模板和体量阈值见 [_docs-guide](_docs-guide.md)。本登记簿只列**主题文档**；主题膨胀后外提的子文档由各自主题文档在“子文档索引”里登记，不在此重复（当前有子文档的主题：health、todo、categories-settings、design-language、deployment、sync）。
 
 | 文档 | 类型 | 职责 |
 |---|---|---|
