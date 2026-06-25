@@ -124,7 +124,8 @@
 - 默认 `main`，保持线性 history（不用 merge commit）。
 - **worktree 合 main**：在 main 仓库 `git cherry-pick <base>..<branch>`（base = worktree 基底 commit，≈当时 origin/main），不用 merge / `--no-ff`。
 - 推送前在最新 `origin/main` 上变基；变基后重跑验收命令。
-- 合完清理 worktree（Windows）：按 `git worktree prune` → `git branch -D <branch>` → `rm -rf <path>` 收尾；`git worktree remove` 在 Windows 常报错，别纠结，直接走这套。
+- **worktree 优先复用固定槽位**（Windows 提效）：隔离任务用 `.worktrees/slot-*`，`git switch -C <分支> main` + `pnpm install --frozen-lockfile --prefer-offline`（多为校验补链），别每任务重建 / 删整棵 `node_modules`。不共享 main 的 `node_modules`（pnpm 软链会串到 main 的 workspace 包）；pnpm store 同盘已全局共享。切槽位前先确保里面的活已提交。机制见 [`development`](docs/evergreen/development.md)。
+- 一次性 worktree 才清理：`git worktree prune` → `git branch -D <分支>` → `rm -rf <path>`（Windows 下 `git worktree remove` 常报错，走这套）。
 
 ------
 

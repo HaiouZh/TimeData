@@ -56,6 +56,34 @@ pnpm install
 
 仓库使用 pnpm 10 的 `onlyBuiltDependencies` 允许 `better-sqlite3` 和 `esbuild` 执行安装构建脚本。CI 和本地安装后不应出现 `Ignored build scripts: better-sqlite3`；如果出现，server 测试会因为缺少 `better_sqlite3.node` 而失败。
 
+## Worktree 工作流
+
+并行 / 隔离任务多在 Windows 上跑，`node_modules` 的建 / 删是主要耗时。推荐固定 1–2 个长期槽位复用，而不是每个任务新建再删整棵依赖树。
+
+一次性建槽位：
+
+```bash
+git worktree add .worktrees/slot-a -b slot-a main
+pnpm -C .worktrees/slot-a install
+```
+
+之后每个任务在槽位内切分支、增量装：
+
+```bash
+git -C .worktrees/slot-a switch -C feat/xxx main
+pnpm -C .worktrees/slot-a install --frozen-lockfile --prefer-offline
+```
+
+lockfile 不变时 `install` 基本只校验 / 补链接，很快；变了也只是本地增删链接，仍比全量重建快。
+
+要点与坑：
+
+- **不要把槽位的 `node_modules` 共享 / junction 到 main**。pnpm 把 workspace 包（`@timedata/*`）按当前 checkout 路径建软链；共享后槽位里的测试 / 构建会解析到 **main 的 `packages/`**，你以为在测分支代码、其实在测 main——静默串线，极难查。
+- **pnpm store 安全且默认已共享**：store 全盘内容寻址，槽位与 main 同盘时自动 hardlink，无需任何配置。别给单个槽位另设 `store-dir`、别把槽位放到别的盘，否则反而退化成各自复制。
+- **切分支前先确保槽位里的活已提交**：`git switch -C <分支> main` 会重置工作树，未提交改动会丢。
+- **偶发 stale 构建**：`dist` / `.vite` / `*.tsbuildinfo` 跨分支留在槽位里；遇到构建产物串味时定点删它们即可，不必删 `node_modules`。
+- 清理：复用槽位平时只 `git switch` / 删旧分支；真要回收一次性 worktree 才 `git worktree prune` → `git branch -D <分支>` → `rm -rf <path>`（Windows 下 `git worktree remove` 常报错，走这套）。
+
 ## 启动开发服务器
 
 打开两个终端分别启动后端和前端。
