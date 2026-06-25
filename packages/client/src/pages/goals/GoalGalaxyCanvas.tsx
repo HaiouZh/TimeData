@@ -20,6 +20,7 @@ import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
 import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
+import { toggleTaskDone } from "../../lib/tasks.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGalaxyActionBar } from "./GoalGalaxyActionBar.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
@@ -299,6 +300,10 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     }
     if (action.id === "open" && selectedGraphNode.ref?.kind === "track") {
       onNavigate(`/tracks/${selectedGraphNode.ref.id}`);
+      return;
+    }
+    if (action.id === "toggle-complete" && selectedGraphNode.ref?.kind === "task") {
+      void toggleTaskDone(selectedGraphNode.ref.id).then(syncAfterWrite);
       return;
     }
     if (action.id === "restore-auto") {
