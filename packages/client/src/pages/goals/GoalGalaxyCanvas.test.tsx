@@ -13,6 +13,8 @@ const removeGoalMemberMock = vi.hoisted(() => vi.fn());
 const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
 const addGoalMemberMock = vi.hoisted(() => vi.fn());
 const addTaskForGoalMock = vi.hoisted(() => vi.fn());
+const updateGoalMock = vi.hoisted(() => vi.fn());
+const deleteGoalMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
@@ -24,7 +26,9 @@ vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
 vi.mock("../../lib/goals.js", () => ({
   addGoalMember: addGoalMemberMock,
   addTaskForGoal: addTaskForGoalMock,
+  deleteGoal: deleteGoalMock,
   removeGoalMember: removeGoalMemberMock,
+  updateGoal: updateGoalMock,
   updateGoalPrerequisites: updateGoalPrerequisitesMock,
 }));
 
@@ -75,6 +79,25 @@ function buttonByLabel(root: ParentNode, label: string): HTMLButtonElement {
   return button;
 }
 
+function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
+  const button = [...root.querySelectorAll("button")].find((item) => item.textContent === text);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`missing button text: ${text}`);
+  return button;
+}
+
+function lastButtonByText(root: ParentNode, text: string): HTMLButtonElement {
+  const button = [...root.querySelectorAll("button")].filter((item) => item.textContent === text).at(-1);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`missing button text: ${text}`);
+  return button;
+}
+
+async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 describe("GoalGalaxyCanvas", () => {
   beforeEach(() => {
     syncAfterWriteMock.mockClear();
@@ -85,6 +108,8 @@ describe("GoalGalaxyCanvas", () => {
     updateGoalPrerequisitesMock.mockReset().mockResolvedValue(undefined);
     addGoalMemberMock.mockReset().mockResolvedValue(undefined);
     addTaskForGoalMock.mockReset().mockResolvedValue(undefined);
+    updateGoalMock.mockReset().mockResolvedValue(undefined);
+    deleteGoalMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -403,6 +428,57 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("edits archives and deletes a selected goal star from the goal menu", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal({ title: "G1" })]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "编辑目标 G1"));
+    const titleInput = document.body.querySelector('input[aria-label="目标标题"]');
+    if (!(titleInput instanceof HTMLInputElement)) throw new Error("missing title input");
+    await setInputValue(titleInput, "  G1 updated  ");
+    await click(buttonByText(document.body, "保存目标"));
+    await flushPromises();
+
+    expect(updateGoalMock).toHaveBeenCalledWith(
+      "g1",
+      expect.objectContaining({
+        title: "G1 updated",
+      }),
+    );
+
+    await click(buttonByText(document.body, "归档目标"));
+    await flushPromises();
+    expect(updateGoalMock).toHaveBeenCalledWith("g1", { status: "archived" });
+
+    await click(lastButtonByText(document.body, "删除目标"));
+    await click(lastButtonByText(document.body, "删除目标"));
+    await flushPromises();
+
+    expect(deleteGoalMock).toHaveBeenCalledWith("g1");
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(3);
+    await unmount(root);
+  });
+
+  it("confirms before deleting a selected goal star from the action bar", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal({ title: "G1" })]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "删除目标 G1"));
+    expect(deleteGoalMock).not.toHaveBeenCalled();
+
+    await click(lastButtonByText(document.body, "删除目标"));
+    await click(lastButtonByText(document.body, "删除目标"));
+    await flushPromises();
+
+    expect(deleteGoalMock).toHaveBeenCalledWith("g1");
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
