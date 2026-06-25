@@ -9,9 +9,21 @@ interface TimelineProps {
   onEntryClick: (entry: TimeEntry) => void;
 }
 
+const MIN_TERMINAL_GAP_MS = 2 * 60 * 1000;
+
+function slotDurationMs(slot: TimeSlot): number {
+  return Math.max(0, new Date(slot.endTime).getTime() - new Date(slot.startTime).getTime());
+}
+
 export default function Timeline({ slots, onGapClick, onEntryClick }: TimelineProps) {
   const { getCategoryPath, getCategoryColor } = useCategories();
-  const displaySlots = slots.filter((slot) => slot.kind !== "future").slice().reverse();
+  const displaySlots = slots
+    .filter((slot, index) => {
+      if (slot.kind === "future") return false;
+      return !(slot.kind === "gap" && slots[index + 1]?.kind === "future" && slotDurationMs(slot) < MIN_TERMINAL_GAP_MS);
+    })
+    .slice()
+    .reverse();
 
   if (displaySlots.length === 0) {
     return <div className="px-4 py-10 text-center text-sm text-slate-400">今天还没有记录</div>;

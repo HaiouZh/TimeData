@@ -69,4 +69,101 @@ describe("Timeline", () => {
 
     expect(html).toContain("今天还没有记录");
   });
+
+  it("hides the short terminal gap before the future segment", () => {
+    const slots: TimeSlot[] = [
+      {
+        startTime: "2026-05-08T07:00:00.000Z",
+        endTime: "2026-05-08T07:30:00.000Z",
+        entry: entry("entry-1", "2026-05-08T07:00:00.000Z", "2026-05-08T07:30:00.000Z"),
+        kind: "entry",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:30:00.000Z",
+        endTime: "2026-05-08T07:31:30.000Z",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:31:30.000Z",
+        endTime: "2026-05-08T16:00:00.000Z",
+        entry: null,
+        kind: "future",
+        displayMode: "default",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Timeline, { slots, onGapClick: () => {}, onEntryClick: () => {} }),
+    );
+
+    expect(html).toContain("工作");
+    expect(html).not.toContain("15:30 - 15:31");
+    expect(html).not.toContain("补记这段");
+  });
+
+  it("keeps two-minute terminal gaps visible", () => {
+    const slots: TimeSlot[] = [
+      {
+        startTime: "2026-05-08T07:00:00.000Z",
+        endTime: "2026-05-08T07:30:00.000Z",
+        entry: entry("entry-1", "2026-05-08T07:00:00.000Z", "2026-05-08T07:30:00.000Z"),
+        kind: "entry",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:30:00.000Z",
+        endTime: "2026-05-08T07:32:00.000Z",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:32:00.000Z",
+        endTime: "2026-05-08T16:00:00.000Z",
+        entry: null,
+        kind: "future",
+        displayMode: "default",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Timeline, { slots, onGapClick: () => {}, onEntryClick: () => {} }),
+    );
+
+    expect(html).toContain("15:30 - 15:32");
+    expect(html).toContain("补记这段");
+  });
+
+  it("keeps short gaps visible when they are between records", () => {
+    const slots: TimeSlot[] = [
+      {
+        startTime: "2026-05-08T07:00:00.000Z",
+        endTime: "2026-05-08T07:30:00.000Z",
+        entry: entry("entry-1", "2026-05-08T07:00:00.000Z", "2026-05-08T07:30:00.000Z"),
+        kind: "entry",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:30:00.000Z",
+        endTime: "2026-05-08T07:31:30.000Z",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+      {
+        startTime: "2026-05-08T07:31:30.000Z",
+        endTime: "2026-05-08T08:00:00.000Z",
+        entry: entry("entry-2", "2026-05-08T07:31:30.000Z", "2026-05-08T08:00:00.000Z"),
+        kind: "entry",
+        displayMode: "default",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Timeline, { slots, onGapClick: () => {}, onEntryClick: () => {} }),
+    );
+
+    expect(html).toContain("15:30 - 15:31");
+    expect(html).toContain("补记这段");
+  });
 });
