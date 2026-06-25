@@ -10,7 +10,7 @@ import {
   type NodeMouseHandler,
   type Viewport,
 } from "@xyflow/react";
-import type { Goal, GoalLayoutPin, Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
@@ -18,10 +18,11 @@ import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goal
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
 import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
+import { addPrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
-import { removeGoalMember } from "../../lib/goals.js";
+import { removeGoalMember, updateGoalPrerequisites } from "../../lib/goals.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGalaxyActionBar } from "./GoalGalaxyActionBar.js";
@@ -51,6 +52,16 @@ type GoalGalaxyFlowNode =
 
 type GoalGalaxyFlowEdge = Edge<Record<string, unknown>>;
 type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
+type ConnectDraft = { goalId: string; node: GoalGraphNode };
+type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
+
+const REASON_COPY = {
+  "self-reference": "不能连接自己",
+  duplicate: "这条前置已存在",
+  cycle: "会形成循环前置",
+  "goal-anchor": "Goal 锚不参与前置",
+  "non-member": "只能连当前目标里的有效成员",
+} as const;
 
 const DEFAULT_VIEWPORT: GalaxyViewport = { x: 0, y: 0, zoom: 1 };
 const DEFAULT_CLUSTER_BOUNDS = { x: -260, y: -260, width: 520, height: 520 };
@@ -144,6 +155,14 @@ function toStarGraphNode(star: GoalStarNodeData["star"]): GoalGraphNode {
   };
 }
 
+function refFromGraphNode(node: GoalGraphNode): GoalMemberRef | null {
+  return node.ref;
+}
+
+function nextPrerequisitesWithEdge(goal: GraphGoalLike, blocker: GoalMemberRef, blocked: GoalMemberRef): GoalPrerequisite[] {
+  return addPrerequisiteEdge(goal, blocker, blocked).prerequisites;
+}
+
 export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -160,7 +179,10 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [initialFitGoalKey, setInitialFitGoalKey] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pendingRemoveMember, setPendingRemoveMember] = useState<PendingRemoveMember | null>(null);
+  const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
+  const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
   const activeGoalKey = activeGoalIds.join("\n");
   const activeGoalCount = activeGoalIds.length;
@@ -249,9 +271,17 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [onNavigate],
   );
 
-  const onNodeClick = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>((_event, node) => {
-    setSelectedNodeId(node.id);
-  }, []);
+  const onNodeClick = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
+    (_event, node) => {
+      if (connectDraft) {
+        void connectToTarget(node);
+        return;
+      }
+      setSelectedNodeId(node.id);
+      setErrorMessage(null);
+    },
+    [connectDraft],
+  );
 
   const onNodeDragStop = useCallback<NodeMouseHandler<GoalGalaxyFlowNode>>(
     (_event, node) => {
@@ -294,6 +324,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
   function clearSelection(): void {
     setSelectedNodeId(null);
+    setConnectDraft(null);
   }
 
   function owningGoalIdsForNode(node: GoalGalaxyFlowNode): string[] {
@@ -314,6 +345,14 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       void toggleTaskDone(selectedGraphNode.ref.id).then(syncAfterWrite);
       return;
     }
+    if (action.id === "connect") {
+      const ref = refFromGraphNode(selectedGraphNode);
+      const owningGoalIds = owningGoalIdsForNode(selectedFlowNode);
+      if (!ref || owningGoalIds.length !== 1) return;
+      setConnectDraft({ goalId: owningGoalIds[0], node: selectedGraphNode });
+      setErrorMessage(null);
+      return;
+    }
     if (action.id === "restore-auto") {
       void restoreGalaxyPin({
         nodeId: selectedFlowNode.id,
@@ -328,6 +367,28 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       if (!ref || owningGoalIds.length !== 1) return;
       setPendingRemoveMember({ goalId: owningGoalIds[0], node: selectedGraphNode });
     }
+  }
+
+  async function connectToTarget(targetFlowNode: GoalGalaxyFlowNode): Promise<void> {
+    if (!connectDraft || targetFlowNode.type !== "goal-galaxy-member") return;
+    const goal = goalById.get(connectDraft.goalId);
+    const blocker = refFromGraphNode(connectDraft.node);
+    const blocked = refFromGraphNode(targetFlowNode.data.node);
+    if (!goal || !blocker || !blocked) return;
+
+    const validation = validatePrerequisiteEdge(goal, blocker, blocked);
+    if (!validation.ok && validation.error) {
+      setErrorMessage(REASON_COPY[validation.error]);
+      setConnectDraft(null);
+      setSelectedNodeId(targetFlowNode.id);
+      return;
+    }
+
+    await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
+    syncAfterWrite();
+    setConnectDraft(null);
+    setErrorMessage(null);
+    setSelectedNodeId(targetFlowNode.id);
   }
 
   async function confirmRemoveMember(): Promise<void> {
@@ -369,6 +430,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         onAction={runNodeAction}
         onClose={clearSelection}
       />
+      {errorMessage && (
+        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
+          {errorMessage}
+        </div>
+      )}
       <ConfirmSheet
         open={pendingRemoveMember !== null}
         title="移除成员"

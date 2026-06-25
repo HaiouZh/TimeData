@@ -10,6 +10,7 @@ const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
 const removeGoalMemberMock = vi.hoisted(() => vi.fn());
+const updateGoalPrerequisitesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
@@ -18,7 +19,10 @@ vi.mock("../../lib/goalLayoutPins.js", () => ({
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,
 }));
 vi.mock("../../lib/tasks.js", () => ({ toggleTaskDone: toggleTaskDoneMock }));
-vi.mock("../../lib/goals.js", () => ({ removeGoalMember: removeGoalMemberMock }));
+vi.mock("../../lib/goals.js", () => ({
+  removeGoalMember: removeGoalMemberMock,
+  updateGoalPrerequisites: updateGoalPrerequisitesMock,
+}));
 
 const goalGalaxyCanvasModule = await import("./GoalGalaxyCanvas.js");
 const { GoalGalaxyCanvas } = goalGalaxyCanvasModule;
@@ -65,6 +69,7 @@ describe("GoalGalaxyCanvas", () => {
     deleteGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     toggleTaskDoneMock.mockReset().mockResolvedValue(undefined);
     removeGoalMemberMock.mockReset().mockResolvedValue(undefined);
+    updateGoalPrerequisitesMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -279,6 +284,62 @@ describe("GoalGalaxyCanvas", () => {
 
     expect(removeGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "a" });
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("connects a prerequisite within the selected member goal", async () => {
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "task", id: "b" },
+      ],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(host.querySelector('[data-node-id="task:b"]'));
+    await flushPromises();
+
+    expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", [
+      { blocker: { kind: "task", id: "a" }, blocked: { kind: "task", id: "b" } },
+    ]);
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("rejects a prerequisite target outside the selected member goal", async () => {
+    const goals = [
+      goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
+      goal({ id: "g2", title: "G2", members: [{ kind: "task", id: "b" }] }),
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={goals}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(host.querySelector('[data-node-id="task:b"]'));
+    await flushPromises();
+
+    expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("只能连当前目标里的有效成员");
     await unmount(root);
   });
 
