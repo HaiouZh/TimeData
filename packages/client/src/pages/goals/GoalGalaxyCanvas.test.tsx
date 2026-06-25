@@ -16,7 +16,8 @@ vi.mock("../../lib/goalLayoutPins.js", () => ({
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,
 }));
 
-const { GoalGalaxyCanvas } = await import("./GoalGalaxyCanvas.js");
+const goalGalaxyCanvasModule = await import("./GoalGalaxyCanvas.js");
+const { GoalGalaxyCanvas } = goalGalaxyCanvasModule;
 
 function goal(overrides: Partial<Goal> = {}): Goal {
   return {
@@ -162,6 +163,45 @@ describe("GoalGalaxyCanvas", () => {
     );
     expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
+  });
+
+  it("renders pinned badges for pinned stars and members", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "goal", nodeId: "g1", x: 100, y: 100, updatedAt: "2026-01-01T00:00:00.000Z" },
+      { goalId: "g1", nodeKind: "task", nodeId: "a", x: 30, y: -10, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(host.querySelectorAll('[aria-label="已固定位置"]')).toHaveLength(2);
+    await unmount(root);
+  });
+
+  it("restoreGalaxyPin deletes the selected node pin and syncs after write", async () => {
+    await (goalGalaxyCanvasModule as typeof goalGalaxyCanvasModule & {
+      restoreGalaxyPin: (input: { nodeId: string; anchorIds: string[]; syncAfterWrite: () => void }) => Promise<void>;
+    }).restoreGalaxyPin({
+      nodeId: "task:a",
+      anchorIds: ["goal:g1"],
+      syncAfterWrite: syncAfterWriteMock,
+    });
+
+    expect(deleteGoalLayoutPinMock).toHaveBeenCalledWith({
+      goalId: "g1",
+      nodeKind: "task",
+      nodeId: "a",
+    });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not render archived goals as stars", async () => {

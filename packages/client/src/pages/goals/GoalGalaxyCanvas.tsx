@@ -19,7 +19,7 @@ import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel
 import { goalGalaxyRollup } from "../../lib/goalGalaxyRollup.js";
 import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
-import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
+import { deleteGoalLayoutPin, upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
@@ -98,6 +98,22 @@ function goalIdsFromAnchorIds(anchorIds: string[]): string[] {
     const goalId = anchorId.slice("goal:".length);
     return goalId ? [goalId] : [];
   });
+}
+
+export async function restoreGalaxyPin({
+  nodeId,
+  anchorIds,
+  syncAfterWrite,
+}: {
+  nodeId: string;
+  anchorIds: string[];
+  syncAfterWrite: () => void;
+}): Promise<void> {
+  const ref = galaxyPinRef(nodeId, goalIdsFromAnchorIds(anchorIds));
+  if (!ref) return;
+
+  await deleteGoalLayoutPin(ref);
+  syncAfterWrite();
 }
 
 function toGraphNode(node: GalaxyNode): GoalGraphNode {
