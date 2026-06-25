@@ -11,7 +11,7 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import type { Goal, GoalLayoutPin, Task, Track, TrackStep } from "@timedata/shared";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { clusterLod, type ClusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
@@ -74,7 +74,7 @@ function splitPins(layoutPins: GoalLayoutPin[], goals: Goal[]): {
       anchorCanvasById[`goal:${pin.nodeId}`] = { x: pin.x, y: pin.y };
       continue;
     }
-    memberPinByNodeId[`${pin.nodeKind}:${pin.nodeId}`] = { goalId: pin.goalId, x: pin.x, y: pin.y };
+    memberPinByNodeId[`goal:${pin.goalId}|${pin.nodeKind}:${pin.nodeId}`] = { goalId: pin.goalId, x: pin.x, y: pin.y };
   }
 
   return { anchorCanvasById, memberPinByNodeId };
@@ -108,15 +108,21 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
 function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
+  const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
-  const lodByGoalId = useMemo<Record<string, ClusterLod>>(() => {
-    const next: Record<string, ClusterLod> = {};
-    for (const goal of goals) {
-      if (goal.status !== "active") continue;
-      next[goal.id] = clusterLod(DEFAULT_CLUSTER_BOUNDS, viewport, "collapsed");
-    }
-    return next;
+  useEffect(() => {
+    setLodByGoalId((current) => {
+      const next: Record<string, ClusterLod> = {};
+      for (const goal of goals) {
+        if (goal.status !== "active") continue;
+        next[goal.id] = clusterLod(DEFAULT_CLUSTER_BOUNDS, viewport, current[goal.id] ?? "collapsed");
+      }
+      return next;
+    });
   }, [goals, viewport]);
+  useEffect(() => {
+    void flow.fitView({ padding: 0.2 });
+  }, [flow]);
   const model = useMemo(
     () => buildGoalGalaxyModel({ goals, tasks, tracks, steps, lodByGoalId }),
     [goals, lodByGoalId, steps, tasks, tracks],

@@ -65,6 +65,9 @@ interface MockModule {
     setViewport: ReturnType<typeof vi.fn>;
     getViewport: ReturnType<typeof vi.fn<() => MockViewport>>;
   };
+  getReactFlowMock?: () => {
+    fireMoveEnd: (viewport: MockViewport) => void;
+  };
   Position?: Record<string, string>;
   MarkerType?: Record<string, string>;
 }
@@ -155,5 +158,19 @@ describe("reactFlowMock", () => {
     expect(first?.setViewport).toBe(second?.setViewport);
     expect(first?.getViewport).toBe(second?.getViewport);
     expect(first?.getViewport()).toEqual({ x: 0, y: 0, zoom: 1 });
+  });
+
+  it("exposes a helper for driving onMoveEnd in canvas tests", async () => {
+    const mock = await loadMock();
+    expect(mock.ReactFlow).toBeTypeOf("function");
+    expect(mock.getReactFlowMock).toBeTypeOf("function");
+    const ReactFlow = mock.ReactFlow as ComponentType<FlowProps>;
+    const onMoveEnd = vi.fn<(event: MouseEvent | TouchEvent | null, viewport: MockViewport) => void>();
+    const { root } = await renderDom(<ReactFlow onMoveEnd={onMoveEnd} />);
+
+    mock.getReactFlowMock?.().fireMoveEnd({ x: 1, y: 2, zoom: 0.8 });
+
+    expect(onMoveEnd).toHaveBeenCalledWith(null, { x: 1, y: 2, zoom: 0.8 });
+    await unmount(root);
   });
 });

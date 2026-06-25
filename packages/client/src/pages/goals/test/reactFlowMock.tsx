@@ -77,6 +77,7 @@ const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => Promise.re
 const setViewport = vi.fn<(viewport: MockViewport) => Promise<boolean>>(() => Promise.resolve(true));
 const getViewport = vi.fn<() => MockViewport>(() => DEFAULT_VIEWPORT);
 const renderedNodes: MockReactFlowNode[][] = [];
+let latestOnMoveEnd: MockReactFlowProps["onMoveEnd"] | undefined;
 const reactFlowInstance = { fitView, setViewport, getViewport };
 
 function readNodePayload(node: MockReactFlowNode): { kind?: string; title?: string } {
@@ -123,6 +124,7 @@ export function ReactFlow({
   onEdgeClick,
   onPaneClick,
   onConnect,
+  onMoveEnd,
   nodeTypes,
   nodeOrigin,
   proOptions,
@@ -130,6 +132,7 @@ export function ReactFlow({
   ...props
 }: MockReactFlowProps) {
   renderedNodes.push(nodes);
+  latestOnMoveEnd = onMoveEnd;
 
   return (
     <div
@@ -308,10 +311,15 @@ export function resetReactFlowMock() {
   setViewport.mockClear();
   getViewport.mockClear();
   renderedNodes.length = 0;
+  latestOnMoveEnd = undefined;
 }
 
 export function getReactFlowMock() {
-  return { ...reactFlowInstance, renderedNodes };
+  return {
+    ...reactFlowInstance,
+    renderedNodes,
+    fireMoveEnd: (viewport: MockViewport) => latestOnMoveEnd?.(null, viewport),
+  };
 }
 
 export const Position = {

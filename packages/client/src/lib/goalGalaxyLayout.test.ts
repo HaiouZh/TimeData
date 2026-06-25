@@ -67,6 +67,19 @@ describe("goalGalaxyLayout", () => {
     expect(out.positions["task:a"]).toEqual({ x: 130, y: 90 });
   });
 
+  it("uses the pin matching the member's single anchor when the same member has pins in multiple goals", () => {
+    const out = goalGalaxyLayout({
+      model: model(["goal:g1", "goal:g2"], [{ id: "task:a", anchorIds: ["goal:g1"] }]),
+      anchorCanvasById: { "goal:g1": { x: 100, y: 100 }, "goal:g2": { x: 500, y: 500 } },
+      memberPinByNodeId: {
+        "goal:g1|task:a": { goalId: "g1", x: 30, y: -10 },
+        "goal:g2|task:a": { goalId: "g2", x: 300, y: 300 },
+      },
+    });
+
+    expect(out.positions["task:a"]).toEqual({ x: 130, y: 90 });
+  });
+
   it("pushes a movable overlapping member away from a pinned member", () => {
     const out = goalGalaxyLayout({
       model: model(

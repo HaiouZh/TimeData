@@ -86,7 +86,7 @@ function placeMember(node: GalaxyNode, input: GalaxyLayoutInput, seeds: Record<s
   }
   const anchorId = node.anchorIds[0];
   const anchor = input.anchorCanvasById[anchorId] ?? { x: 0, y: 0 };
-  const pin = input.memberPinByNodeId[node.id];
+  const pin = input.memberPinByNodeId[`${anchorId}|${node.id}`] ?? input.memberPinByNodeId[node.id];
   if (pin && anchorId === `goal:${pin.goalId}`) {
     return { x: anchor.x + pin.x, y: anchor.y + pin.y };
   }
@@ -109,7 +109,12 @@ export function goalGalaxyLayout(input: GalaxyLayoutInput): { positions: Record<
   for (const node of input.model.nodes) {
     positions[node.id] = placeMember(node, input, seeds);
     boxes[node.id] = boxFor(node.kind);
-    if (node.anchorIds.length === 1 && input.memberPinByNodeId[node.id]) {
+    const anchorId = node.anchorIds[0];
+    const anchorGoalId = anchorId?.startsWith("goal:") ? anchorId.slice("goal:".length) : "";
+    if (
+      node.anchorIds.length === 1 &&
+      (input.memberPinByNodeId[`${node.anchorIds[0]}|${node.id}`] ?? input.memberPinByNodeId[node.id])?.goalId === anchorGoalId
+    ) {
       fixed.add(node.id);
     }
   }
