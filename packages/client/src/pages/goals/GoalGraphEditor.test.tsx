@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Goal, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
+import type { Goal, GoalLayoutPin, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
 import { db } from "../../db/index.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
@@ -75,6 +75,7 @@ async function renderEditor(options: {
   tasks?: Task[];
   tracks?: Track[];
   steps?: TrackStep[];
+  layoutPins?: GoalLayoutPin[];
   onNavigate?: (to: string) => void;
   onDeletedGoal?: () => void;
 } = {}) {
@@ -85,6 +86,7 @@ async function renderEditor(options: {
       tasks: options.tasks ?? [],
       tracks: options.tracks ?? [],
       steps: options.steps ?? [],
+      layoutPins: options.layoutPins ?? [],
       onNavigate: options.onNavigate ?? vi.fn(),
       onDeletedGoal: options.onDeletedGoal ?? vi.fn(),
     }),
@@ -178,6 +180,18 @@ describe("GoalGraphEditor", () => {
     expect(canvasFrame).toContain(flowCanvas);
   });
 
+  it("React Flow 节点不套全局 transform 过渡，避免拖拽闪烁", async () => {
+    const goalValue = goal();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue });
+    const flowCanvas = host.querySelector('[data-rf="true"]');
+
+    expect(flowCanvas?.className).toContain("h-full");
+    expect(flowCanvas?.className).not.toContain("react-flow__node");
+    expect(flowCanvas?.className).not.toContain("transition-transform");
+  });
+
   it("星图根容器填满页面并隐藏 React Flow attribution", async () => {
     const goalValue = goal();
     await seed(goalValue);
@@ -192,7 +206,8 @@ describe("GoalGraphEditor", () => {
     expect(root?.className).toContain("min-h-0");
     expect(flowCanvas?.getAttribute("data-node-origin")).toBe("0.5,0.5");
     expect(flowCanvas?.getAttribute("data-hide-attribution")).toBe("true");
-    expect(flowCanvas?.getAttribute("data-nodes-draggable")).toBe("false");
+    expect(flowCanvas?.getAttribute("data-nodes-draggable")).toBe("true");
+    expect(host.querySelector('[data-node-id="goal"]')?.getAttribute("data-node-draggable")).toBe("true");
   });
 
   it("首次没有保存 viewport 时自动 fitView 一次", async () => {
@@ -205,6 +220,213 @@ describe("GoalGraphEditor", () => {
     await tick();
 
     expect(getReactFlowMock().fitView).toHaveBeenCalledWith({ padding: 0.25 });
+  });
+
+  it("layout pins place goal anchor in world coordinates and members relative to it", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+
+    const { host } = await renderEditor({
+      goal: goalValue,
+      tasks: [taskValue],
+      layoutPins: [
+        { goalId: "goal-1", nodeKind: "goal", nodeId: "goal-1", x: 100, y: 200, updatedAt: now },
+        { goalId: "goal-1", nodeKind: "task", nodeId: "task-1", x: 30, y: -10, updatedAt: now },
+      ],
+    });
+
+    expect(nodeButton(host, "goal").getAttribute("data-node-x")).toBe("100");
+    expect(nodeButton(host, "goal").getAttribute("data-node-y")).toBe("200");
+    expect(nodeButton(host, "task:task-1").getAttribute("data-node-x")).toBe("130");
+    expect(nodeButton(host, "task:task-1").getAttribute("data-node-y")).toBe("190");
+  });
+
+  it("拖成员后写入相对 goal 锚的 pin", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+
+    const { host } = await renderEditor({
+      goal: goalValue,
+      tasks: [taskValue],
+      layoutPins: [{ goalId: "goal-1", nodeKind: "goal", nodeId: "goal-1", x: 100, y: 200, updatedAt: now }],
+    });
+    const taskNode = nodeButton(host, "task:task-1");
+    const startX = Number(taskNode.getAttribute("data-node-x"));
+    const startY = Number(taskNode.getAttribute("data-node-y"));
+
+    await click(host.querySelector("[data-rf-drag-stop-node-id='task:task-1']"));
+    await tick();
+
+    expect(await db.goalLayoutPins.get(["goal-1", "task", "task-1"])).toMatchObject({
+      x: startX + 10 - 100,
+      y: startY + 20 - 200,
+    });
+  });
+
+  it("拖成员时只移动当前节点，拖停后不重排邻近节点", async () => {
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "task-1" },
+        { kind: "task", id: "task-2" },
+      ],
+    });
+    const first = task("task-1", { title: "A" });
+    const second = task("task-2", { title: "B" });
+    await seed(goalValue, [first, second]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
+    const dragged = nodeButton(host, "task:task-1");
+    const draggedStartX = Number(dragged.getAttribute("data-node-x"));
+    const draggedStartY = Number(dragged.getAttribute("data-node-y"));
+    const neighbor = nodeButton(host, "task:task-2");
+    const startX = neighbor.getAttribute("data-node-x");
+    const startY = neighbor.getAttribute("data-node-y");
+
+    await click(host.querySelector("[data-rf-drag-node-id='task:task-1']"));
+
+    expect(Number(nodeButton(host, "task:task-1").getAttribute("data-node-x"))).toBe(draggedStartX + 10);
+    expect(Number(nodeButton(host, "task:task-1").getAttribute("data-node-y"))).toBe(draggedStartY + 20);
+    expect(nodeButton(host, "task:task-2").getAttribute("data-node-x")).toBe(startX);
+    expect(nodeButton(host, "task:task-2").getAttribute("data-node-y")).toBe(startY);
+
+    await click(host.querySelector("[data-rf-drag-stop-node-id='task:task-1']"));
+
+    expect(Number(nodeButton(host, "task:task-1").getAttribute("data-node-x"))).toBe(draggedStartX + 20);
+    expect(Number(nodeButton(host, "task:task-1").getAttribute("data-node-y"))).toBe(draggedStartY + 40);
+    expect(nodeButton(host, "task:task-2").getAttribute("data-node-x")).toBe(startX);
+    expect(nodeButton(host, "task:task-2").getAttribute("data-node-y")).toBe(startY);
+  });
+
+  it("拖 goal 锚时 goal 和成员一起平移", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [taskValue] });
+    const goalNode = nodeButton(host, "goal");
+    const goalStartX = Number(goalNode.getAttribute("data-node-x"));
+    const goalStartY = Number(goalNode.getAttribute("data-node-y"));
+    const member = nodeButton(host, "task:task-1");
+    const startX = Number(member.getAttribute("data-node-x"));
+    const startY = Number(member.getAttribute("data-node-y"));
+
+    await click(host.querySelector("[data-rf-drag-node-id='goal']"));
+
+    expect(Number(nodeButton(host, "goal").getAttribute("data-node-x"))).toBe(goalStartX + 10);
+    expect(Number(nodeButton(host, "goal").getAttribute("data-node-y"))).toBe(goalStartY + 20);
+    expect(Number(nodeButton(host, "task:task-1").getAttribute("data-node-x"))).toBe(startX + 10);
+    expect(Number(nodeButton(host, "task:task-1").getAttribute("data-node-y"))).toBe(startY + 20);
+  });
+
+  it("前置边按节点相对位置选择几何端点，避免反向绕线", async () => {
+    const members: GoalMemberRef[] = [
+      { kind: "task", id: "left" },
+      { kind: "task", id: "right" },
+    ];
+    const goalValue = goal({
+      members,
+      prerequisites: [{ blocker: members[0], blocked: members[1] }],
+    });
+    const left = task("left", { title: "Left" });
+    const right = task("right", { title: "Right" });
+    await seed(goalValue, [left, right]);
+
+    const { host } = await renderEditor({
+      goal: goalValue,
+      tasks: [left, right],
+      layoutPins: [
+        { goalId: "goal-1", nodeKind: "task", nodeId: "left", x: -200, y: 0, updatedAt: now },
+        { goalId: "goal-1", nodeKind: "task", nodeId: "right", x: 200, y: 0, updatedAt: now },
+      ],
+    });
+
+    const leftToRight = edgeButton(host, "prerequisite:task:left->task:right");
+    expect(leftToRight.getAttribute("data-edge-source-handle")).toBe("source-right");
+    expect(leftToRight.getAttribute("data-edge-target-handle")).toBe("target-left");
+  });
+
+  it("拖 goal 锚后写入 world pin", async () => {
+    const goalValue = goal();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue });
+    const goalNode = nodeButton(host, "goal");
+    const startX = Number(goalNode.getAttribute("data-node-x"));
+    const startY = Number(goalNode.getAttribute("data-node-y"));
+
+    await click(host.querySelector("[data-rf-drag-stop-node-id='goal']"));
+    await tick();
+
+    expect(await db.goalLayoutPins.get(["goal-1", "goal", "goal-1"])).toMatchObject({
+      x: startX + 10,
+      y: startY + 20,
+    });
+  });
+
+  it("ghost node is not draggable and does not write pin", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "missing-task" }] });
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [], layoutPins: [] });
+
+    const ghost = host.querySelector('[data-node-id="ghost:task:missing-task"]');
+    expect(ghost?.getAttribute("data-node-draggable")).toBe("false");
+
+    await click(host.querySelector("[data-rf-drag-stop-node-id='ghost:task:missing-task']"));
+    await tick();
+
+    expect(await db.goalLayoutPins.count()).toBe(0);
+  });
+
+  it("恢复自动 action deletes the selected node pin", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+    await db.goalLayoutPins.add({
+      goalId: "goal-1",
+      nodeKind: "task",
+      nodeId: "task-1",
+      x: 30,
+      y: -10,
+      updatedAt: now,
+    });
+
+    const { host } = await renderEditor({
+      goal: goalValue,
+      tasks: [taskValue],
+      layoutPins: await db.goalLayoutPins.toArray(),
+    });
+
+    await click(nodeButton(host, "task:task-1"));
+    await click(buttonByLabel(document.body, "恢复自动 写说明"));
+    await tick();
+
+    expect(await db.goalLayoutPins.get(["goal-1", "task", "task-1"])).toBeUndefined();
+  });
+
+  it("恢复自动布局确认后只清成员 pins 并保留 goal world pin", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "task-1" }] });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+    await db.goalLayoutPins.bulkAdd([
+      { goalId: "goal-1", nodeKind: "goal", nodeId: "goal-1", x: 100, y: 200, updatedAt: now },
+      { goalId: "goal-1", nodeKind: "task", nodeId: "task-1", x: 30, y: -10, updatedAt: now },
+    ]);
+
+    const { host } = await renderEditor({
+      goal: goalValue,
+      tasks: [taskValue],
+      layoutPins: await db.goalLayoutPins.toArray(),
+    });
+
+    await click(buttonByLabel(host, "恢复自动布局"));
+    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "恢复自动布局").at(-1));
+    await tick();
+
+    expect(await db.goalLayoutPins.get(["goal-1", "goal", "goal-1"])).toBeTruthy();
+    expect(await db.goalLayoutPins.get(["goal-1", "task", "task-1"])).toBeUndefined();
   });
 
   it("工具栏在画布浮层上保持可点击", async () => {

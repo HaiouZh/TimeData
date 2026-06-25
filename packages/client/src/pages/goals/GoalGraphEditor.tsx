@@ -1,6 +1,7 @@
 import "@xyflow/react/dist/style.css";
 
 import {
+  applyNodeChanges,
   Background,
   ReactFlow,
   ReactFlowProvider,
@@ -8,16 +9,23 @@ import {
   useReactFlow,
   type Connection,
   type EdgeMouseHandler,
+  type NodeChange,
   type NodeMouseHandler,
   type Viewport,
 } from "@xyflow/react";
-import type { Goal, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track, TrackStep } from "@timedata/shared";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
-import { goalGraphLayout, type GoalGraphLayout, type GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
-import { buildGoalGraphModel, type GoalGraphEdge as GoalGraphEdgeModel, type GoalGraphNode as GoalGraphNodeModel } from "../../lib/goalGraphModel.js";
+import type { GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
+import {
+  buildGoalGraphModel,
+  GOAL_NODE_ID,
+  type GoalGraphEdge as GoalGraphEdgeModel,
+  type GoalGraphNode as GoalGraphNodeModel,
+} from "../../lib/goalGraphModel.js";
 import { loadGoalGraphViewport, saveGoalGraphViewport } from "../../lib/goalGraphViewport.js";
 import {
   addGoalMember,
@@ -43,6 +51,7 @@ import { GoalGraphNode, type GoalGraphFlowNode } from "./GoalGraphNode.js";
 import { GoalGraphToolbar } from "./GoalGraphToolbar.js";
 import { GoalGraphUndoToast } from "./GoalGraphUndoToast.js";
 import { GoalSidePanel } from "./GoalSidePanel.js";
+import { useGoalGraphLayout } from "./useGoalGraphLayout.js";
 
 const REASON_COPY = {
   "self-reference": "不能连接自己",
@@ -60,6 +69,7 @@ export interface GoalGraphEditorProps {
   tasks: Task[];
   tracks: Track[];
   steps: TrackStep[];
+  layoutPins: GoalLayoutPin[];
   onNavigate: (to: string) => void;
   onDeletedGoal: () => void;
 }
@@ -76,13 +86,11 @@ interface ConnectDraft {
 
 type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 
-interface LayoutCache {
-  key: string;
-  orientation: GoalGraphOrientation;
-  layout: GoalGraphLayout;
-}
-
 type WidePanel = "add-member" | "goal-menu" | null;
+type FlowPosition = { x: number; y: number };
+type EdgeHandleSide = "left" | "right" | "top" | "bottom";
+
+const DEFAULT_NODE_POSITION: FlowPosition = { x: 0, y: 0 };
 
 function refFromNodeId(id: string): GoalMemberRef | null {
   const clean = id.startsWith("ghost:") ? id.slice(6) : id;
@@ -116,6 +124,62 @@ function actionLabel(action: GoalAction, node: GoalGraphNodeModel): string {
   return `${action.label} ${node.title}`;
 }
 
+function samePosition(left: FlowPosition, right: FlowPosition): boolean {
+  return left.x === right.x && left.y === right.y;
+}
+
+function canReuseNode(
+  previous: GoalGraphFlowNode | undefined,
+  node: GoalGraphNodeModel,
+  position: FlowPosition,
+  orientation: GoalGraphOrientation,
+  pinned: boolean,
+  selected: boolean,
+  draggable: boolean,
+): previous is GoalGraphFlowNode {
+  return (
+    previous !== undefined &&
+    previous.type === "goal-graph-node" &&
+    previous.data.node === node &&
+    previous.data.orientation === orientation &&
+    previous.data.pinned === pinned &&
+    previous.selected === selected &&
+    previous.draggable === draggable &&
+    samePosition(previous.position, position)
+  );
+}
+
+function isHandleNode(node: GoalGraphNodeModel | undefined): boolean {
+  return node?.kind === "task" || node?.kind === "track";
+}
+
+function edgeHandleSides(source: FlowPosition, target: FlowPosition): { source: EdgeHandleSide; target: EdgeHandleSide } {
+  const delta = { x: target.x - source.x, y: target.y - source.y };
+  if (Math.abs(delta.x) >= Math.abs(delta.y)) {
+    return delta.x >= 0 ? { source: "right", target: "left" } : { source: "left", target: "right" };
+  }
+  return delta.y >= 0 ? { source: "bottom", target: "top" } : { source: "top", target: "bottom" };
+}
+
+function edgeHandlesFor(
+  edge: GoalGraphEdgeModel,
+  nodesById: Map<string, GoalGraphFlowNode>,
+  modelNodesById: Map<string, GoalGraphNodeModel>,
+): { sourceHandle?: string; targetHandle?: string } {
+  if (edge.kind === "tether") return {};
+  if (!isHandleNode(modelNodesById.get(edge.source)) || !isHandleNode(modelNodesById.get(edge.target))) return {};
+
+  const source = nodesById.get(edge.source)?.position;
+  const target = nodesById.get(edge.target)?.position;
+  if (!source || !target) return {};
+
+  const sides = edgeHandleSides(source, target);
+  return {
+    sourceHandle: `source-${sides.source}`,
+    targetHandle: `target-${sides.target}`,
+  };
+}
+
 export function GoalGraphEditor(props: GoalGraphEditorProps) {
   return (
     <ReactFlowProvider>
@@ -124,7 +188,7 @@ export function GoalGraphEditor(props: GoalGraphEditorProps) {
   );
 }
 
-function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDeletedGoal }: GoalGraphEditorProps) {
+function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNavigate, onDeletedGoal }: GoalGraphEditorProps) {
   const destination = useTodoDefaultDestination();
   const boardSignals = useTrackActionTags();
   const wide = useIsWideScreen();
@@ -142,45 +206,77 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
-  const layoutCacheRef = useRef<LayoutCache | null>(null);
+  const [confirmRestoreLayout, setConfirmRestoreLayout] = useState(false);
   const initialFitDoneRef = useRef<string | null>(null);
+  const nodeCacheRef = useRef<Map<string, GoalGraphFlowNode>>(new Map());
   const savedViewport = loadGoalGraphViewport(goal.id);
 
   const overview = useMemo(() => buildGoalOverview(goal, tasks, tracks, steps), [goal, steps, tasks, tracks]);
   const model = useMemo(() => buildGoalGraphModel(overview), [overview]);
-  const structureKey = useMemo(
-    () => `${model.nodes.map((node) => node.id).join("|")}#${model.edges.map((edge) => edge.id).join("|")}`,
-    [model],
+  const layout = useGoalGraphLayout({ goal, model, orientation, layoutPins, onChanged: syncAfterWrite });
+  const layoutNodes = useMemo<GoalGraphFlowNode[]>(
+    () => {
+      const previousNodes = nodeCacheRef.current;
+      const nextNodes = model.nodes.map((node) => {
+        const position = layout.positions[node.id] ?? DEFAULT_NODE_POSITION;
+        const draggable = node.kind !== "ghost";
+        const pinned = layout.pinnedIds.has(node.id);
+        const selected = node.id === selectedNodeId;
+        const previous = previousNodes.get(node.id);
+        if (canReuseNode(previous, node, position, orientation, pinned, selected, draggable)) return previous;
+        return {
+          id: node.id,
+          type: "goal-graph-node",
+          position,
+          draggable,
+          data: { node, orientation, pinned },
+          selected,
+        } satisfies GoalGraphFlowNode;
+      });
+      nodeCacheRef.current = new Map(nextNodes.map((node) => [node.id, node]));
+      return nextNodes;
+    },
+    [layout.pinnedIds, layout.positions, model.nodes, orientation, selectedNodeId],
   );
-  const cachedLayout = layoutCacheRef.current;
-  const layout =
-    cachedLayout?.key === structureKey && cachedLayout.orientation === orientation
-      ? cachedLayout.layout
-      : goalGraphLayout(model, { orientation });
-  layoutCacheRef.current = { key: structureKey, orientation, layout };
-  const nodes = useMemo<GoalGraphFlowNode[]>(
-    () =>
-      model.nodes.map((node) => ({
-        id: node.id,
-        type: "goal-graph-node",
-        position: layout.positions[node.id] ?? { x: 0, y: 0 },
-        data: { node, orientation },
-        selected: node.id === selectedNodeId,
-      })),
-    [layout.positions, model.nodes, orientation, selectedNodeId],
-  );
-  const edges = useMemo<GoalGraphFlowEdge[]>(
-    () =>
-      model.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        type: "goal-graph-edge",
-        data: { kind: edge.kind },
-        selected: edge.id === selectedEdgeId,
-      })),
-    [model.edges, selectedEdgeId],
-  );
+  const [nodes, setNodes] = useState<GoalGraphFlowNode[]>(() => layoutNodes);
+
+  useEffect(() => {
+    setNodes(layoutNodes);
+  }, [layoutNodes]);
+
+  const onNodesChange = useCallback((changes: NodeChange<GoalGraphFlowNode>[]) => {
+    setNodes((current) => {
+      const goalBefore = current.find((node) => node.id === GOAL_NODE_ID)?.position;
+      const next = applyNodeChanges(changes, current);
+      const goalAfter = next.find((node) => node.id === GOAL_NODE_ID)?.position;
+      const goalMoved = changes.some((change) => change.type === "position" && change.id === GOAL_NODE_ID && change.position);
+      if (!goalMoved || !goalBefore || !goalAfter) return next;
+
+      const delta = { x: goalAfter.x - goalBefore.x, y: goalAfter.y - goalBefore.y };
+      if (delta.x === 0 && delta.y === 0) return next;
+      return next.map((node) =>
+        node.id === GOAL_NODE_ID
+          ? node
+          : {
+              ...node,
+              position: { x: node.position.x + delta.x, y: node.position.y + delta.y },
+            },
+      );
+    });
+  }, []);
+  const edges = useMemo<GoalGraphFlowEdge[]>(() => {
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const modelNodesById = new Map(model.nodes.map((node) => [node.id, node]));
+    return model.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      ...edgeHandlesFor(edge, nodesById, modelNodesById),
+      type: "goal-graph-edge",
+      data: { kind: edge.kind },
+      selected: edge.id === selectedEdgeId,
+    }));
+  }, [model.edges, model.nodes, nodes, selectedEdgeId]);
   const selectedNode = selectedNodeId ? (model.nodes.find((node) => node.id === selectedNodeId) ?? null) : null;
   const selectedEdge = selectedEdgeId ? (model.edges.find((edge) => edge.id === selectedEdgeId) ?? null) : null;
 
@@ -258,6 +354,10 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
     }
     if (actionId === "connect") {
       setConnectDraft({ node, direction: null });
+      return;
+    }
+    if (actionId === "restore-auto") {
+      layout.restorePin(node.id);
       return;
     }
     if (actionId === "remove-member" || actionId === "remove-ref") {
@@ -344,15 +444,17 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           defaultViewport={savedViewport ?? undefined}
-          nodesDraggable={false}
+          nodesDraggable
           nodeOrigin={[0.5, 0.5]}
           proOptions={{ hideAttribution: true }}
           onNodeClick={onNodeClick}
+          onNodesChange={onNodesChange}
+          onNodeDragStop={(_event, node) => layout.onNodeDragStop(node.id, node.position)}
           onEdgeClick={onEdgeClick}
           onPaneClick={clearSelection}
           onConnect={(connection) => void handleConnect(connection)}
           onMoveEnd={handleMoveEnd}
-          className="h-full w-full [&_.react-flow__node]:transition-transform motion-reduce:[&_.react-flow__node]:transition-none"
+          className="h-full w-full"
         >
           <Background />
         </ReactFlow>
@@ -363,13 +465,17 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
           summary={model.summary}
           onAddMember={() => (wide ? setWidePanel("add-member") : setAddMemberOpen(true))}
           onFitView={fitView}
+          onRestoreLayout={() => setConfirmRestoreLayout(true)}
           onOpenGoalMenu={() => (wide ? setWidePanel("goal-menu") : setGoalMenuOpen(true))}
         />
       </div>
 
       {inlineActions && selectedNode && (
         <div className="absolute bottom-3 left-3 z-10 flex flex-wrap gap-2 rounded-card border border-border bg-surface-elevated p-2 shadow-elev1">
-          {actionsForNode(selectedNode, { archived: goal.status === "archived" }).map((action) => (
+          {actionsForNode(selectedNode, {
+            archived: goal.status === "archived",
+            pinned: layout.pinnedIds.has(selectedNode.id),
+          }).map((action) => (
             <button
               key={action.id}
               type="button"
@@ -403,7 +509,14 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
 
       <Sheet open={!inlineActions && Boolean(selectedNode)} onClose={clearSelection} title={selectedNode?.title ?? "节点操作"}>
         <ActionList
-          actions={selectedNode ? actionsForNode(selectedNode, { archived: goal.status === "archived" }) : []}
+          actions={
+            selectedNode
+              ? actionsForNode(selectedNode, {
+                  archived: goal.status === "archived",
+                  pinned: layout.pinnedIds.has(selectedNode.id),
+                })
+              : []
+          }
           labelFor={(action) => (selectedNode ? actionLabel(action, selectedNode) : action.label)}
           onAction={(action) => {
             if (selectedNode) void runNodeAction(action.id, selectedNode);
@@ -505,6 +618,18 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, onNavigate, onDelete
           if (undoAction) void undoAction();
         }}
         onDismiss={() => setUndo(null)}
+      />
+      <ConfirmSheet
+        open={confirmRestoreLayout}
+        title="恢复自动布局"
+        body="将清除当前目标内任务和轨道成员的固定位置，保留目标恒星在全局星图中的位置。"
+        confirmLabel="恢复自动布局"
+        cancelLabel="取消"
+        onCancel={() => setConfirmRestoreLayout(false)}
+        onConfirm={() => {
+          layout.restoreLayout();
+          setConfirmRestoreLayout(false);
+        }}
       />
     </div>
   );

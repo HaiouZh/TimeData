@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle, Clock, DotOutline, Lock, Target, WarningCircle } from "@phosphor-icons/react";
+import { CheckCircle, Clock, DotOutline, Lock, PushPin, Target, WarningCircle } from "@phosphor-icons/react";
 import type { Icon as PhosphorGlyph } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
 import type { GoalGraphLod } from "../../lib/goalGraphLod.js";
@@ -9,6 +9,8 @@ export interface GoalGraphNodeViewProps {
   node: GoalGraphNode;
   selected: boolean;
   lod: GoalGraphLod;
+  pinned?: boolean;
+  handles?: ReactNode;
   actions?: ReactNode;
 }
 
@@ -77,7 +79,7 @@ function shortTitle(title: string): string {
   return `${trimmed.slice(0, 14)}...`;
 }
 
-export function GoalGraphNodeView({ node, selected, lod, actions }: GoalGraphNodeViewProps) {
+export function GoalGraphNodeView({ node, selected, lod, pinned = false, handles, actions }: GoalGraphNodeViewProps) {
   const statusMeta = STATUS_META[node.status];
   const title = shortTitle(node.title);
   const isFar = lod === "far";
@@ -94,11 +96,23 @@ export function GoalGraphNodeView({ node, selected, lod, actions }: GoalGraphNod
       data-node-kind={node.kind}
       data-node-status={node.status}
       data-selected={selected ? "true" : "false"}
-      className="inline-flex items-center gap-2 text-sm"
-    >
-      <span
-        className={`inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass}`}
+      aria-describedby={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
+      className="group/goal-node relative inline-flex items-center text-sm"
       >
+        <span
+          data-goal-graph-node-shape="true"
+          className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass}`}
+        >
+        {handles}
+        {pinned && (
+          <span
+            role="img"
+            aria-label="已固定位置"
+            className="absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-pill border border-border bg-surface-elevated text-accent shadow-sm"
+          >
+            <Icon icon={PushPin} size={12} />
+          </span>
+        )}
         <Icon icon={statusMeta.icon} size={isFar ? 16 : 18} label={statusMeta.label} className="shrink-0" />
 
         {showTitleInsideShape && (
@@ -110,7 +124,10 @@ export function GoalGraphNodeView({ node, selected, lod, actions }: GoalGraphNod
       </span>
 
       {!showTitleInsideShape && !isFar && (
-        <span className="min-w-0 leading-tight">
+        <span
+          data-goal-graph-node-label="true"
+          className="nodrag nopan absolute left-full top-1/2 ml-2 min-w-0 -translate-y-1/2 leading-tight"
+        >
           <span className="block max-w-40 truncate font-medium text-ink">{title}</span>
           <span className="block text-xs text-ink-3">{statusMeta.label}</span>
         </span>
@@ -118,7 +135,17 @@ export function GoalGraphNodeView({ node, selected, lod, actions }: GoalGraphNod
 
       {!showTitleInsideShape && isFar && <span className="sr-only">{statusMeta.label}</span>}
 
-      {actions && <span className="ml-1 inline-flex shrink-0 items-center gap-1">{actions}</span>}
+      {actions && <span className="ml-2 inline-flex shrink-0 items-center gap-1">{actions}</span>}
+
+      <span
+        id={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
+        role="tooltip"
+        data-goal-graph-node-tooltip="true"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left text-xs leading-relaxed text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100"
+      >
+        <span className="block font-medium">{node.title}</span>
+        <span className="mt-0.5 block text-ink-3">{statusMeta.label}</span>
+      </span>
     </div>
   );
 }

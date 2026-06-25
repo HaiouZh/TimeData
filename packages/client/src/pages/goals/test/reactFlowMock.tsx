@@ -4,6 +4,8 @@ import { vi } from "vitest";
 export interface MockReactFlowNode {
   id: string;
   type?: string;
+  position?: { x: number; y: number };
+  draggable?: boolean;
   data?: Record<string, unknown> & {
     node?: unknown;
   };
@@ -12,7 +14,9 @@ export interface MockReactFlowNode {
 export interface MockReactFlowEdge {
   id: string;
   source?: string;
+  sourceHandle?: string | null;
   target?: string;
+  targetHandle?: string | null;
   data?: Record<string, unknown>;
 }
 
@@ -30,7 +34,10 @@ export interface MockReactFlowProps extends FlowRootProps {
   nodeOrigin?: [number, number];
   proOptions?: { hideAttribution?: boolean };
   nodesDraggable?: boolean;
+  onNodesChange?: (changes: MockNodeChange[]) => void;
   onNodeClick?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
+  onNodeDrag?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
+  onNodeDragStop?: (event: ReactMouseEvent<HTMLButtonElement>, node: MockReactFlowNode) => void;
   onEdgeClick?: (event: ReactMouseEvent<HTMLButtonElement>, edge: MockReactFlowEdge) => void;
   onPaneClick?: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onConnect?: (connection: MockConnection) => void;
@@ -40,6 +47,11 @@ export interface MockReactFlowProps extends FlowRootProps {
 export interface MockStoreState {
   transform: [number, number, number];
 }
+
+export type MockNodeChange =
+  | { id: string; type: "position"; position?: { x: number; y: number } }
+  | { id: string; type: "select"; selected: boolean }
+  | { id: string; type: "remove" };
 
 export interface MockViewport {
   x: number;
@@ -61,6 +73,7 @@ const DEFAULT_VIEWPORT: MockViewport = { x: 0, y: 0, zoom: 1 };
 const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => Promise.resolve(true));
 const setViewport = vi.fn<(viewport: MockViewport) => Promise<boolean>>(() => Promise.resolve(true));
 const getViewport = vi.fn<() => MockViewport>(() => DEFAULT_VIEWPORT);
+const renderedNodes: MockReactFlowNode[][] = [];
 const reactFlowInstance = { fitView, setViewport, getViewport };
 
 function readNodePayload(node: MockReactFlowNode): { kind?: string; title?: string } {
@@ -82,11 +95,27 @@ function nodeTitle(node: MockReactFlowNode): string {
   return readNodePayload(node).title ?? node.id;
 }
 
+function nodePosition(node: MockReactFlowNode): { x: number; y: number } {
+  return node.position ?? { x: 0, y: 0 };
+}
+
+function nextDragNode(node: MockReactFlowNode): MockReactFlowNode {
+  const position = nodePosition(node);
+  return { ...node, position: { x: position.x + 10, y: position.y + 20 } };
+}
+
+function canDragNode(node: MockReactFlowNode, nodesDraggable?: boolean): boolean {
+  return nodesDraggable === true && node.draggable !== false;
+}
+
 export function ReactFlow({
   nodes = [],
   edges = [],
   children,
+  onNodesChange,
   onNodeClick,
+  onNodeDrag,
+  onNodeDragStop,
   onEdgeClick,
   onPaneClick,
   onConnect,
@@ -95,6 +124,8 @@ export function ReactFlow({
   nodesDraggable,
   ...props
 }: MockReactFlowProps) {
+  renderedNodes.push(nodes);
+
   return (
     <div
       {...props}
@@ -106,18 +137,50 @@ export function ReactFlow({
     >
       <div data-rf-nodes="true">
         {nodes.map((node) => (
-          <button
-            key={node.id}
-            type="button"
-            data-node-id={node.id}
-            data-node-kind={nodeKind(node)}
-            onClick={(event) => {
-              event.stopPropagation();
-              onNodeClick?.(event, node);
-            }}
-          >
-            {nodeTitle(node)}
-          </button>
+          <span key={node.id} data-node-wrap-id={node.id}>
+            <button
+              type="button"
+              data-node-id={node.id}
+              data-node-kind={nodeKind(node)}
+              data-node-x={String(nodePosition(node).x)}
+              data-node-y={String(nodePosition(node).y)}
+              data-node-draggable={canDragNode(node, nodesDraggable) ? "true" : "false"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onNodeClick?.(event, node);
+              }}
+            >
+              {nodeTitle(node)}
+            </button>
+            <button
+              type="button"
+              data-rf-drag-node-id={node.id}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (canDragNode(node, nodesDraggable)) {
+                  const nextNode = nextDragNode(node);
+                  onNodesChange?.([{ id: node.id, type: "position", position: nextNode.position }]);
+                  onNodeDrag?.(event, nextNode);
+                }
+              }}
+            >
+              drag {node.id}
+            </button>
+            <button
+              type="button"
+              data-rf-drag-stop-node-id={node.id}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (canDragNode(node, nodesDraggable)) {
+                  const nextNode = nextDragNode(node);
+                  onNodesChange?.([{ id: node.id, type: "position", position: nextNode.position }]);
+                  onNodeDragStop?.(event, nextNode);
+                }
+              }}
+            >
+              drag stop {node.id}
+            </button>
+          </span>
         ))}
       </div>
 
@@ -127,6 +190,8 @@ export function ReactFlow({
             key={edge.id}
             type="button"
             data-edge-id={edge.id}
+            data-edge-source-handle={edge.sourceHandle ?? ""}
+            data-edge-target-handle={edge.targetHandle ?? ""}
             onClick={(event) => {
               event.stopPropagation();
               onEdgeClick?.(event, edge);
@@ -209,14 +274,27 @@ export function useNodesInitialized() {
   return true;
 }
 
+export function applyNodeChanges(changes: MockNodeChange[], nodes: MockReactFlowNode[]): MockReactFlowNode[] {
+  return changes.reduce((current, change) => {
+    if (change.type === "remove") return current.filter((node) => node.id !== change.id);
+    return current.map((node) => {
+      if (node.id !== change.id) return node;
+      if (change.type === "position" && change.position) return { ...node, position: change.position };
+      if (change.type === "select") return { ...node, selected: change.selected };
+      return node;
+    });
+  }, nodes);
+}
+
 export function resetReactFlowMock() {
   fitView.mockClear();
   setViewport.mockClear();
   getViewport.mockClear();
+  renderedNodes.length = 0;
 }
 
 export function getReactFlowMock() {
-  return reactFlowInstance;
+  return { ...reactFlowInstance, renderedNodes };
 }
 
 export const Position = {

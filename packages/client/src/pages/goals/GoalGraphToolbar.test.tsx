@@ -42,4 +42,22 @@ describe("GoalGraphToolbar", () => {
 
     await unmount(root);
   });
+
+  it("renders restore layout action when provided", async () => {
+    const onRestoreLayout = vi.fn<() => void>();
+    const { host, root } = await renderDom(
+      createElement(GoalGraphToolbar, {
+        summary: { ready: 1, blocked: 0, completed: 0 },
+        onAddMember: vi.fn(),
+        onFitView: vi.fn(),
+        onOpenGoalMenu: vi.fn(),
+        onRestoreLayout,
+      }),
+    );
+
+    await click(host.querySelector('button[aria-label="恢复自动布局"]'));
+
+    expect(onRestoreLayout).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
 });

@@ -10,6 +10,8 @@ export type GoalGraphNodeLayoutKind = "goal" | "task" | "track" | "ghost";
 export interface GoalGraphNodeBox {
   width: number;
   height: number;
+  offsetX?: number;
+  offsetY?: number;
 }
 
 export interface GoalGraphLayout {
@@ -50,22 +52,17 @@ export interface GoalGraphModelLike {
   edges: GoalGraphEdgeLike[];
 }
 
-type NodePlacement = {
-  id: string;
-  rank: number;
-  index: number;
-};
-
 const DEFAULT_BOX: GoalGraphNodeBox = { width: 180, height: 56 };
 const NODE_BOX_BY_KIND: Record<GoalGraphNodeLayoutKind, GoalGraphNodeBox> = {
   goal: { width: 220, height: 80 },
-  task: { width: 240, height: 56 },
+  task: { width: 228, height: 48, offsetX: 94 },
   track: { width: 190, height: 56 },
   ghost: { width: 170, height: 56 },
 };
 const RANK_GAP = 96;
 const STACK_GAP = 32;
 const ORBIT_GAP = 72;
+const MIN_ORBIT_RADIUS = 260;
 
 function edgeSource(edge: GoalGraphEdgeLike): string {
   return "source" in edge ? edge.source : edge.from;
@@ -110,14 +107,8 @@ function buildDependencyGraph(model: GoalGraphModelLike): {
   return { incoming, dependencyNodeIds };
 }
 
-function stackedCenter(index: number, boxes: GoalGraphNodeBox[], gap: number, dimension: keyof GoalGraphNodeBox): number {
-  const total = boxes.reduce((sum, box) => sum + box[dimension], 0) + Math.max(0, boxes.length - 1) * gap;
-  const before = boxes.slice(0, index).reduce((sum, box) => sum + box[dimension], 0) + index * gap;
-  return before + boxes[index][dimension] / 2 - total / 2;
-}
-
 function orbitPosition(index: number, count: number, radius: number): GoalGraphPosition {
-  const angle = -Math.PI / 4 + (Math.PI * 2 * index) / Math.max(count, 1);
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(count, 1);
   return {
     x: Math.cos(angle) * radius,
     y: Math.sin(angle) * radius,
@@ -133,7 +124,7 @@ function buildBoxes(nodes: GoalGraphNodeLike[]): Record<string, GoalGraphNodeBox
 }
 
 function maxDimension(boxes: GoalGraphNodeBox[], dimension: keyof GoalGraphNodeBox): number {
-  return boxes.reduce((max, box) => Math.max(max, box[dimension]), 0);
+  return boxes.reduce((max, box) => Math.max(max, box[dimension] ?? 0), 0);
 }
 
 function orbitRadius(goalBox: GoalGraphNodeBox, orbitBoxes: GoalGraphNodeBox[], fallbackRadius: number): number {
@@ -146,8 +137,21 @@ function orbitRadius(goalBox: GoalGraphNodeBox, orbitBoxes: GoalGraphNodeBox[], 
     goalBox.width / 2 + maxWidth / 2 + ORBIT_GAP,
     goalBox.height / 2 + maxHeight / 2 + ORBIT_GAP,
     circumferenceRadius,
+    MIN_ORBIT_RADIUS,
     fallbackRadius,
   );
+}
+
+function orderedOrbitNodes(model: GoalGraphModelLike, ranks: Record<string, number>): GoalGraphNodeLike[] {
+  return model.nodes
+    .filter((node) => node.id !== model.goalNodeId)
+    .map((node, index) => ({
+      node,
+      index,
+      rank: ranks[node.id] ?? Number.POSITIVE_INFINITY,
+    }))
+    .sort((left, right) => left.rank - right.rank || left.index - right.index || left.node.id.localeCompare(right.node.id))
+    .map((item) => item.node);
 }
 
 export function computeRanks(model: GoalGraphModelLike): Record<string, number> {
@@ -181,68 +185,17 @@ export function computeRanks(model: GoalGraphModelLike): Record<string, number> 
 
 export function goalGraphLayout(model: GoalGraphModelLike, options: GoalGraphLayoutOptions): GoalGraphLayout {
   const ranks = computeRanks(model);
-  const rankGap = options.rankGap ?? RANK_GAP;
-  const nodeGap = options.nodeGap ?? STACK_GAP;
   const boxes = buildBoxes(model.nodes);
   const positions: Record<string, GoalGraphPosition> = {
     [model.goalNodeId]: { x: 0, y: 0 },
   };
 
-  const placements: NodePlacement[] = [];
-  for (const [index, node] of model.nodes.entries()) {
-    const rank = ranks[node.id];
-    if (node.id === model.goalNodeId || rank === undefined) continue;
-    placements.push({ id: node.id, rank, index });
-  }
-
-  const lanePlacements = placements.sort((left, right) => {
-    return left.rank - right.rank || left.index - right.index || left.id.localeCompare(right.id);
-  });
-
-  const groupedByRank = new Map<number, NodePlacement[]>();
-  for (const placement of lanePlacements) {
-    const group = groupedByRank.get(placement.rank);
-    if (group) {
-      group.push(placement);
-    } else {
-      groupedByRank.set(placement.rank, [placement]);
-    }
-  }
-
-  const sortedRanks = [...groupedByRank.keys()].sort((left, right) => left - right);
-  let previousRankCenter = 0;
-  let previousRankSize = boxes[model.goalNodeId]?.width ?? DEFAULT_BOX.width;
-  let previousRankHeight = boxes[model.goalNodeId]?.height ?? DEFAULT_BOX.height;
-  for (const rank of sortedRanks) {
-    const members = groupedByRank.get(rank) ?? [];
-    members.sort((left, right) => left.index - right.index || left.id.localeCompare(right.id));
-    const memberBoxes = members.map((member) => boxes[member.id] ?? DEFAULT_BOX);
-    const rankWidth = maxDimension(memberBoxes, "width") || DEFAULT_BOX.width;
-    const rankHeight = maxDimension(memberBoxes, "height") || DEFAULT_BOX.height;
-    const horizontalCenter = previousRankCenter + previousRankSize / 2 + rankGap + rankWidth / 2;
-    const verticalCenter = previousRankCenter + previousRankHeight / 2 + rankGap + rankHeight / 2;
-
-    for (const [index, placement] of members.entries()) {
-      const offset =
-        options.orientation === "horizontal"
-          ? stackedCenter(index, memberBoxes, nodeGap, "height")
-          : stackedCenter(index, memberBoxes, nodeGap, "width");
-      positions[placement.id] =
-        options.orientation === "horizontal"
-          ? { x: horizontalCenter, y: offset }
-          : { x: offset, y: verticalCenter };
-    }
-    previousRankCenter = options.orientation === "horizontal" ? horizontalCenter : verticalCenter;
-    previousRankSize = rankWidth;
-    previousRankHeight = rankHeight;
-  }
-
-  const orbitNodes = model.nodes.filter((node) => node.id !== model.goalNodeId && ranks[node.id] === undefined);
+  const orbitNodes = orderedOrbitNodes(model, ranks);
   const orbitBoxes = orbitNodes.map((node) => boxes[node.id] ?? DEFAULT_BOX);
   const radius = orbitRadius(
     boxes[model.goalNodeId] ?? DEFAULT_BOX,
     orbitBoxes,
-    options.orbitRadius ?? Math.max(rankGap, nodeGap) * 1.5,
+    options.orbitRadius ?? Math.max(options.rankGap ?? RANK_GAP, options.nodeGap ?? STACK_GAP) * 1.5,
   );
   for (const [index, node] of orbitNodes.entries()) {
     positions[node.id] = orbitPosition(index, orbitNodes.length || 1, radius);

@@ -49,7 +49,7 @@ function expectNoOverlap(layout: ReturnType<typeof goalGraphLayout>, ids: string
 }
 
 describe("goalGraphLayout", () => {
-  it("source/target 的 prerequisite 链进入 dependency lane，tether 仅走 orbit", () => {
+  it("source/target 的 prerequisite 链参与星环排序，tether 节点也围绕 Goal", () => {
     expect(computeRanks(runtimeModel())).toEqual({
       blocker: 0,
       blocked: 1,
@@ -64,16 +64,16 @@ describe("goalGraphLayout", () => {
 
     expect(horizontal.orientation).toBe("horizontal");
     expect(horizontal.positions.goal).toEqual({ x: 0, y: 0 });
-    expect(horizontal.positions.blocker.x).toBeGreaterThan(horizontal.positions.goal.x);
-    expect(horizontal.positions.blocked.x).toBeGreaterThan(horizontal.positions.blocker.x);
-    expect(horizontal.positions.blocker.y).toBe(0);
-    expect(horizontal.positions.blocked.y).toBe(0);
-    expect(Math.hypot(horizontal.positions.tether.x, horizontal.positions.tether.y)).toBeGreaterThan(0);
-    expect(horizontal.positions.tether.x).not.toBe(0);
-    expect(horizontal.positions.tether.y).not.toBe(0);
+    expect(Math.hypot(horizontal.positions.blocker.x, horizontal.positions.blocker.y)).toBeGreaterThan(120);
+    expect(Math.hypot(horizontal.positions.blocked.x, horizontal.positions.blocked.y)).toBeGreaterThan(120);
+    expect(Math.hypot(horizontal.positions.tether.x, horizontal.positions.tether.y)).toBeGreaterThan(120);
+    expect(Math.min(horizontal.positions.blocker.x, horizontal.positions.blocked.x, horizontal.positions.tether.x)).toBeLessThan(0);
+    expect(Math.max(horizontal.positions.blocker.x, horizontal.positions.blocked.x, horizontal.positions.tether.x)).toBeGreaterThan(0);
+    expect(Math.min(horizontal.positions.blocker.y, horizontal.positions.blocked.y, horizontal.positions.tether.y)).toBeLessThan(0);
+    expect(Math.max(horizontal.positions.blocker.y, horizontal.positions.blocked.y, horizontal.positions.tether.y)).toBeGreaterThan(0);
   });
 
-  it("纵向布局时 prerequisite 链按 blocker -> blocked 排 rank，lane 方向切到 top->bottom", () => {
+  it("纵向布局仍保持 Goal 居中和成员环绕", () => {
     const vertical = goalGraphLayout(runtimeModel(), {
       orientation: "vertical",
       rankGap: 90,
@@ -83,11 +83,13 @@ describe("goalGraphLayout", () => {
 
     expect(vertical.orientation).toBe("vertical");
     expect(vertical.positions.goal).toEqual({ x: 0, y: 0 });
-    expect(vertical.positions.blocker.y).toBeGreaterThan(vertical.positions.goal.y);
-    expect(vertical.positions.blocked.y).toBeGreaterThan(vertical.positions.blocker.y);
-    expect(vertical.positions.blocker.x).toBe(0);
-    expect(vertical.positions.blocked.x).toBe(0);
-    expect(Math.hypot(vertical.positions.tether.x, vertical.positions.tether.y)).toBeGreaterThan(0);
+    expect(Math.hypot(vertical.positions.blocker.x, vertical.positions.blocker.y)).toBeGreaterThan(120);
+    expect(Math.hypot(vertical.positions.blocked.x, vertical.positions.blocked.y)).toBeGreaterThan(120);
+    expect(Math.hypot(vertical.positions.tether.x, vertical.positions.tether.y)).toBeGreaterThan(120);
+    expect(Math.min(vertical.positions.blocker.x, vertical.positions.blocked.x, vertical.positions.tether.x)).toBeLessThan(0);
+    expect(Math.max(vertical.positions.blocker.x, vertical.positions.blocked.x, vertical.positions.tether.x)).toBeGreaterThan(0);
+    expect(Math.min(vertical.positions.blocker.y, vertical.positions.blocked.y, vertical.positions.tether.y)).toBeLessThan(0);
+    expect(Math.max(vertical.positions.blocker.y, vertical.positions.blocked.y, vertical.positions.tether.y)).toBeGreaterThan(0);
   });
 
   it("宽屏 dependency lane 同 rank 多节点不重叠", () => {

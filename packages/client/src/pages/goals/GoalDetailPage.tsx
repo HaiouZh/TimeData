@@ -2,6 +2,7 @@ import { TaskSchema } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams } from "react-router-dom";
 import { db } from "../../db/index.js";
+import { listGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { getGoal } from "../../lib/goals.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { GoalGraphEditor } from "./GoalGraphEditor.js";
@@ -21,8 +22,9 @@ export default function GoalDetailPage() {
   const tasks = useLiveQuery(() => listAllTasks(), [], []);
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
+  const layoutPins = useLiveQuery(() => listGoalLayoutPins(id), [id]);
 
-  if (goal === undefined) {
+  if (goal === undefined || layoutPins === undefined) {
     return <div className="min-h-full bg-page px-4 py-6 text-sm text-ink-3">正在加载...</div>;
   }
 
@@ -37,6 +39,7 @@ export default function GoalDetailPage() {
         tasks={tasks}
         tracks={tracks}
         steps={steps}
+        layoutPins={layoutPins}
         onNavigate={(to) => navigate(to)}
         onDeletedGoal={() => navigate("/goals")}
       />

@@ -22,6 +22,7 @@ async function renderNode(options: {
   node?: GoalGraphNode;
   selected?: boolean;
   lod?: GoalGraphLod;
+  pinned?: boolean;
   actions?: ReactNode;
 }) {
   return renderDom(
@@ -29,6 +30,7 @@ async function renderNode(options: {
       node={options.node ?? node()}
       selected={options.selected ?? false}
       lod={options.lod ?? "near"}
+      pinned={options.pinned}
       actions={options.actions}
     />,
   );
@@ -47,7 +49,8 @@ describe("GoalGraphNodeView", () => {
 
     const far = await renderNode({ node: node({ title: "完成第一版交互原型并邀请自己复盘" }), lod: "far" });
 
-    expect(far.host.textContent).not.toContain("完成第一版交互原型");
+    expect(far.host.querySelector("[data-goal-graph-node-shape]")?.textContent).not.toContain("完成第一版交互原型");
+    expect(far.host.querySelector("[data-goal-graph-node-label]")).toBeNull();
     expect(far.host.querySelector("[aria-label]")?.getAttribute("aria-label")).toContain(
       "完成第一版交互原型并邀请自己复盘",
     );
@@ -89,5 +92,30 @@ describe("GoalGraphNodeView", () => {
     const far = await renderNode({ lod: "far", actions: <button type="button">操作</button> });
     expect(far.host.querySelector("button")?.textContent).toBe("操作");
     await unmount(far.root);
+  });
+
+  it("shows a pin badge for pinned nodes", async () => {
+    const { host, root } = await renderNode({ pinned: true });
+
+    expect(host.querySelector('[aria-label="已固定位置"]')).toBeTruthy();
+    await unmount(root);
+  });
+
+  it("uses an in-app hover tooltip and separates visual shape from task label", async () => {
+    const fullTitle = "一个很长很长的任务标题用于悬停查看完整内容";
+    const { host, root } = await renderNode({ node: node({ title: fullTitle }) });
+    const rootEl = host.firstElementChild;
+
+    expect(rootEl?.getAttribute("title")).toBeNull();
+    expect(rootEl?.getAttribute("aria-describedby")).toBeTruthy();
+    expect(host.querySelector("[data-goal-graph-node-shape]")).toBeTruthy();
+    expect(host.querySelector("[data-goal-graph-node-label]")?.getAttribute("title")).toBeNull();
+    expect(host.querySelector("[data-goal-graph-node-label]")?.className).toContain("absolute");
+    expect(host.querySelector("[data-goal-graph-node-label]")?.className).toContain("left-full");
+    expect(host.querySelector("[data-goal-graph-node-tooltip]")?.textContent).toContain(fullTitle);
+    expect(host.querySelector("[data-goal-graph-node-tooltip]")?.className).toContain("group-hover/goal-node:opacity-100");
+    expect(host.querySelector("[data-goal-graph-node-shape]")?.textContent).not.toContain(fullTitle.slice(0, 6));
+    expect(host.textContent).toContain("一个很长很长的任务标题");
+    await unmount(root);
   });
 });
