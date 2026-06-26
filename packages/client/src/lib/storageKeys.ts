@@ -14,4 +14,5 @@ export const STORAGE_KEYS = {
   todoDoneCollapsed: "timedata_todo_done_collapsed",
   todoInboxCollapsed: "timedata_todo_inbox_collapsed",
   todoScheduledCollapsed: "timedata_todo_scheduled_collapsed",
+  galaxyEngine: "timedata_galaxy_engine",
 } as const;

@@ -16,6 +16,8 @@ const addGoalMemberMock = vi.hoisted(() => vi.fn());
 const addTaskForGoalMock = vi.hoisted(() => vi.fn());
 const updateGoalMock = vi.hoisted(() => vi.fn());
 const deleteGoalMock = vi.hoisted(() => vi.fn());
+const settleReheatMock = vi.hoisted(() => vi.fn());
+const settleSetDragPinMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
@@ -34,6 +36,9 @@ vi.mock("../../lib/goals.js", () => ({
 }));
 vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
   useTrackActionTags: () => ["待我处理", "agent在做"],
+}));
+vi.mock("./useGalaxySettleEngine.js", () => ({
+  useGalaxySettleEngine: () => ({ reheat: settleReheatMock, setDragPin: settleSetDragPinMock }),
 }));
 
 const goalGalaxyCanvasModule = await import("./GoalGalaxyCanvas.js");
@@ -129,6 +134,8 @@ describe("GoalGalaxyCanvas", () => {
     addTaskForGoalMock.mockReset().mockResolvedValue(undefined);
     updateGoalMock.mockReset().mockResolvedValue(undefined);
     deleteGoalMock.mockReset().mockResolvedValue(undefined);
+    settleReheatMock.mockClear();
+    settleSetDragPinMock.mockClear();
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -1193,5 +1200,165 @@ describe("GoalGalaxyCanvas", () => {
     expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-x")).toBe("40");
     expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-y")).toBe("10");
     await unmount(root);
+  });
+
+  it("shows the engine toggle defaulting to the deterministic label", async () => {
+    localStorage.clear();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    expect(buttonByLabel(host, "切换星图引擎")).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('[aria-label="重新整理"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("switches the engine toggle to settle mode and reveals the live settling control", async () => {
+    localStorage.clear();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    await click(buttonByLabel(host, "切换星图引擎"));
+
+    expect(localStorage.getItem("timedata_galaxy_engine")).toBe("settle");
+    expect(buttonByLabel(host, "暂停持续整理")).toBeInstanceOf(HTMLButtonElement);
+    await unmount(root);
+  });
+
+  it("adds the lively decoration class to stars only in settle mode", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    expect(host.querySelector('[data-star-id="goal:g1"][data-galaxy-lively="true"]')).toBeTruthy();
+    await unmount(root);
+    localStorage.clear();
+  });
+
+  it("reconciles node data and membership while settle mode keeps current positions", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const firstGoal = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[firstGoal]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const settledPosition = { x: 321, y: 123 };
+    act(() => {
+      getReactFlowMock().fireNodesChange([{ id: "task:a", type: "position", position: settledPosition }]);
+    });
+
+    await act(async () => {
+      root.render(
+        <GoalGalaxyCanvas
+          goals={[goal({ members: [{ kind: "task", id: "a" }, { kind: "task", id: "b" }] })]}
+          tasks={[task("a", { title: "A updated" }), task("b", { title: "B" })]}
+          tracks={[]}
+          steps={[]}
+          layoutPins={[]}
+          onNavigate={vi.fn()}
+        />,
+      );
+    });
+
+    expect(host.querySelector('[data-node-id="task:a"]')?.textContent).toBe("A updated");
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-x")).toBe(String(settledPosition.x));
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-y")).toBe(String(settledPosition.y));
+    expect(host.querySelector('[data-node-id="task:b"]')).toBeTruthy();
+    await unmount(root);
+    localStorage.clear();
+  });
+
+  it("drops settle positions when switching back to the deterministic engine", async () => {
+    localStorage.clear();
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(buttonByLabel(host, "切换星图引擎"));
+    expect(localStorage.getItem("timedata_galaxy_engine")).toBe("settle");
+
+    act(() => {
+      getReactFlowMock().fireNodesChange([{ id: "task:a", type: "position", position: { x: 333, y: 222 } }]);
+    });
+
+    await click(buttonByLabel(host, "切换星图引擎"));
+
+    expect(localStorage.getItem("timedata_galaxy_engine")).toBe("deterministic");
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-x")).not.toBe("333");
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-y")).not.toBe("222");
+    await unmount(root);
+    localStorage.clear();
+  });
+
+  it("keeps goal members pinned with the star while dragging in settle mode", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    settleSetDragPinMock.mockClear();
+    const goalButton = host.querySelector('[data-node-id="goal:g1"]');
+    const taskButton = host.querySelector('[data-node-id="task:a"]');
+    const goalX = Number(goalButton?.getAttribute("data-node-x"));
+    const goalY = Number(goalButton?.getAttribute("data-node-y"));
+    const taskX = Number(taskButton?.getAttribute("data-node-x"));
+    const taskY = Number(taskButton?.getAttribute("data-node-y"));
+
+    act(() => {
+      getReactFlowMock().fireNodesChange([
+        { id: "goal:g1", type: "position", position: { x: goalX + 40, y: goalY + 30 } },
+      ]);
+    });
+
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-x")).toBe(String(taskX + 40));
+    expect(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-y")).toBe(String(taskY + 30));
+    expect(settleSetDragPinMock).toHaveBeenCalledWith("goal:g1", { x: goalX + 40, y: goalY + 30 });
+    expect(settleSetDragPinMock).toHaveBeenCalledWith("task:a", { x: taskX + 40, y: taskY + 30 });
+    await unmount(root);
+    localStorage.clear();
+  });
+
+  it("does not persist layout pins when dragging in settle mode", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-rf-drag-stop-node-id="task:a"]'));
+
+    expect(upsertGoalLayoutPinMock).not.toHaveBeenCalled();
+    await unmount(root);
+    localStorage.clear();
   });
 });

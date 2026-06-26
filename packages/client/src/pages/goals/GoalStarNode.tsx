@@ -6,6 +6,7 @@ import type { GalaxyStar } from "../../lib/goalGalaxyModel.js";
 export interface GoalStarNodeData extends Record<string, unknown> {
   star: GalaxyStar;
   pinned?: boolean;
+  lively?: boolean;
   handles?: ReactNode;
   onRestoreAuto?: () => void;
 }
@@ -20,9 +21,10 @@ export function GoalStarNode({ data }: { data: GoalStarNodeData }) {
       aria-label={`目标：${star.title}，进度：${pct}%`}
       className={`relative inline-flex flex-col items-center rounded-card border border-border bg-surface-elevated text-center text-ink shadow-sm ${
         star.lod === "collapsed" ? "h-16 w-16 justify-center gap-0 px-2 py-2" : "min-w-36 max-w-44 gap-1 px-3 py-2"
-      }`}
+      } ${data.lively ? "motion-safe:animate-pulse" : ""}`}
       data-star-id={star.nodeId}
       data-star-lod={star.lod}
+      data-galaxy-lively={data.lively ? "true" : undefined}
     >
       {data.handles}
       {data.pinned && data.onRestoreAuto ? (

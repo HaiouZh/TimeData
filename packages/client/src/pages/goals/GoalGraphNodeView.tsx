@@ -10,6 +10,7 @@ export interface GoalGraphNodeViewProps {
   selected: boolean;
   lod: GoalGraphLod;
   pinned?: boolean;
+  lively?: boolean;
   handles?: ReactNode;
   actions?: ReactNode;
   onRestoreAuto?: () => void;
@@ -85,6 +86,7 @@ export function GoalGraphNodeView({
   selected,
   lod,
   pinned = false,
+  lively = false,
   handles,
   actions,
   onRestoreAuto,
@@ -95,6 +97,7 @@ export function GoalGraphNodeView({
   const shapeClass = isFar ? FAR_SHAPE_CLASS[node.kind] : SHAPE_CLASS[node.kind];
   const selectedClass = selected ? "border-border-strong ring-2 ring-accent" : "";
   const ghostClass = node.kind === "ghost" || node.status === "ghost" ? "opacity-70" : "";
+  const livelyClass = lively ? "motion-safe:animate-pulse" : "";
   const ariaLabel = `${KIND_LABEL[node.kind]}：${node.title}，状态：${statusMeta.label}`;
   const showTitleInsideShape = node.kind !== "task";
 
@@ -105,12 +108,13 @@ export function GoalGraphNodeView({
       data-node-kind={node.kind}
       data-node-status={node.status}
       data-selected={selected ? "true" : "false"}
+      data-galaxy-lively={lively ? "true" : undefined}
       aria-describedby={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
       className="group/goal-node relative inline-flex items-center text-sm"
     >
       <span
         data-goal-graph-node-shape="true"
-        className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass}`}
+        className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass} ${livelyClass}`}
       >
         {handles}
         {pinned && onRestoreAuto ? (

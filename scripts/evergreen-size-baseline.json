@@ -44,12 +44,12 @@
     "covers": 4
   },
   "docs/evergreen/development.md": {
-    "chars": 11236,
+    "chars": 11344,
     "covers": 10
   },
   "docs/evergreen/goals.md": {
-    "chars": 10047,
-    "covers": 19
+    "chars": 10659,
+    "covers": 21
   },
   "docs/evergreen/health.md": {
     "chars": 5961,
@@ -68,7 +68,7 @@
     "covers": 16
   },
   "docs/evergreen/security.md": {
-    "chars": 5326,
+    "chars": 5395,
     "covers": 13
   },
   "docs/evergreen/stats-insights.md": {

@@ -15,7 +15,7 @@ covers:
   - packages/server/src/routes/syncLog.ts
   - packages/server/src/routes/admin/index.ts
   - packages/server/src/routes/admin/requestLogs.ts
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-26
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：force-push 写路径去 turn 列，不影响安全/凭据；复核确认无需改动。 -->
@@ -30,7 +30,7 @@ last-reviewed: 2026-06-25
 
 设置页必须明确提示用户：Token 会保存在本机浏览器存储中，只应在可信设备上保存服务器 Token。当前实现不引入 sessionStorage，也不在页面刷新后自动丢弃 Token。
 
-`storageKeys.ts` 还集中登记底部导航、待办布局/折叠等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务内容或其他业务数据；轨道看板信号词表走同步 `settings` 表，不放在本地 storage key 里。
+`storageKeys.ts` 还集中登记底部导航、待办布局/折叠、星图引擎模式等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务内容或其他业务数据；`timedata_galaxy_engine` 只保存 `/goals` 全局星图使用确定性还是本地 settle 引擎。轨道看板信号词表走同步 `settings` 表，不放在本地 storage key 里。
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 

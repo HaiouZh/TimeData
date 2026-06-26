@@ -23,6 +23,7 @@ import { Icon } from "../../components/Icon.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
+import { useGalaxyEngineMode } from "../../lib/galaxyEngineMode.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { type ClusterLod, clusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
@@ -44,13 +45,16 @@ import { toggleTaskDone } from "../../lib/tasks.js";
 import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
 import { type GoalEditPatch, GoalEditSheet } from "./GoalEditSheet.js";
 import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
+import { GoalGalaxyEngineToggle } from "./GoalGalaxyEngineToggle.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGraphEdge as GoalGraphEdgeView } from "./GoalGraphEdge.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
+import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { restoreGalaxyPin } from "./restoreGalaxyPin.js";
+import { useGalaxySettleEngine } from "./useGalaxySettleEngine.js";
 
 export interface GoalGalaxyCanvasProps {
   goals: Goal[];
@@ -66,6 +70,7 @@ interface GoalGalaxyMemberNodeData extends Record<string, unknown> {
   anchorIds: string[];
   lod: ClusterLod;
   pinned: boolean;
+  lively?: boolean;
   onRestoreAuto?: () => void;
 }
 
@@ -130,6 +135,7 @@ function GoalGalaxyMemberNode({
       selected={selected === true}
       lod={data.lod === "collapsed" ? "far" : "near"}
       pinned={data.pinned}
+      lively={data.lively}
       handles={<GalaxyNodeHandles canConnectPrerequisite={isConnectable === true} />}
       onRestoreAuto={data.pinned ? data.onRestoreAuto : undefined}
     />
@@ -369,7 +375,11 @@ function canReuseGalaxyNode(
   if (!samePosition(previous.position, next.position)) return false;
 
   if (previous.type === "goal-star" && next.type === "goal-star") {
-    return previous.data.star === next.data.star && previous.data.pinned === next.data.pinned;
+    return (
+      previous.data.star === next.data.star &&
+      previous.data.pinned === next.data.pinned &&
+      previous.data.lively === next.data.lively
+    );
   }
 
   if (previous.type === "goal-galaxy-member" && next.type === "goal-galaxy-member") {
@@ -380,6 +390,7 @@ function canReuseGalaxyNode(
       previous.data.node.kind === next.data.node.kind &&
       previous.data.lod === next.data.lod &&
       previous.data.pinned === next.data.pinned &&
+      previous.data.lively === next.data.lively &&
       sameStringArray(previous.data.anchorIds, next.data.anchorIds)
     );
   }
@@ -444,6 +455,9 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
   const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
   const [tetherOpacity, setTetherOpacity] = useState(DEFAULT_TETHER_OPACITY);
+  const [engineMode, setEngineMode] = useGalaxyEngineMode();
+  const [liveSettle, setLiveSettle] = useState(true);
+  const settleEnabled = engineMode === "settle";
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
@@ -482,6 +496,17 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     }
     return ids;
   }, [layoutPins]);
+  const settleInput = useMemo(
+    () =>
+      buildGalaxySettleInput({
+        model,
+        seedPositions: layout.positions,
+        boxes: layout.boxes,
+        pinnedMemberIds,
+        anchorCanvasById,
+      }),
+    [anchorCanvasById, layout.boxes, layout.positions, model, pinnedMemberIds],
+  );
   const nodeCacheRef = useRef<Map<string, GoalGalaxyFlowNode>>(new Map());
   const layoutNodes = useMemo<GoalGalaxyFlowNode[]>(() => {
     const restoreAuto = (nodeId: string, anchorIds: string[]) => {
@@ -498,6 +523,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           data: {
             star,
             pinned: pinnedStarIds.has(star.nodeId),
+            lively: settleEnabled,
             handles: <GalaxyStarHandles />,
             onRestoreAuto: () => restoreAuto(star.nodeId, []),
           },
@@ -516,6 +542,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           anchorIds: node.anchorIds,
           lod: node.lod,
           pinned,
+          lively: settleEnabled,
           onRestoreAuto: () => restoreAuto(node.id, node.anchorIds),
         },
       } satisfies GoalGalaxyFlowNode;
@@ -526,22 +553,59 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     });
     nodeCacheRef.current = new Map(nextNodes.map((node) => [node.id, node]));
     return nextNodes;
-  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds, selectedNodeId, syncAfterWrite]);
+  }, [
+    layout.positions,
+    model.nodes,
+    model.stars,
+    pinnedMemberIds,
+    pinnedStarIds,
+    selectedNodeId,
+    settleEnabled,
+    syncAfterWrite,
+  ]);
   const [nodes, setNodes] = useState<GoalGalaxyFlowNode[]>(() => layoutNodes);
+  const applySettlePositions = useCallback((positions: Record<string, XY>) => {
+    setNodes((current) => {
+      let changed = false;
+      const nextNodes = current.map((node) => {
+        const next = positions[node.id];
+        if (!next || (next.x === node.position.x && next.y === node.position.y)) return node;
+        changed = true;
+        return { ...node, position: { x: next.x, y: next.y } };
+      });
+      return changed ? nextNodes : current;
+    });
+  }, []);
+  const settle = useGalaxySettleEngine({
+    enabled: settleEnabled,
+    input: settleInput,
+    live: liveSettle,
+    onPositions: applySettlePositions,
+  });
   const layoutPositionKeyValue = useMemo(() => layoutPositionKey(layoutNodes), [layoutNodes]);
   const lastLayoutPositionKeyRef = useRef<string | null>(null);
+  const wasSettleEnabledRef = useRef(settleEnabled);
 
   useEffect(() => {
+    const wasSettleEnabled = wasSettleEnabledRef.current;
+    wasSettleEnabledRef.current = settleEnabled;
+    if (settleEnabled) {
+      setNodes((current) => mergeLayoutNodeDataKeepingPositions(current, layoutNodes));
+      return;
+    }
     const shouldResetPositions = lastLayoutPositionKeyRef.current !== layoutPositionKeyValue;
     lastLayoutPositionKeyRef.current = layoutPositionKeyValue;
     setNodes((current) => {
       const next =
-        current.length === 0 || shouldResetPositions
+        current.length === 0 || shouldResetPositions || wasSettleEnabled
           ? layoutNodes
           : mergeLayoutNodeDataKeepingPositions(current, layoutNodes);
       return next;
     });
-  }, [layoutNodes, layoutPositionKeyValue]);
+  }, [layoutNodes, layoutPositionKeyValue, settleEnabled]);
+  useEffect(() => {
+    if (settleEnabled) setLiveSettle(true);
+  }, [settleEnabled]);
   const edges = useMemo<GoalGalaxyFlowEdge[]>(() => {
     const nodesById = new Map(nodes.map((node) => [node.id, node]));
     return model.edges.map((edge) => ({
@@ -599,14 +663,46 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setErrorMessage(null);
   }, []);
 
-  const onNodesChange = useCallback((changes: NodeChange<GoalGalaxyFlowNode>[]) => {
-    setNodes((current) => {
-      const next = applyGalaxyNodeChanges(current, changes);
-      return next;
-    });
-  }, []);
+  const onNodesChange = useCallback(
+    (changes: NodeChange<GoalGalaxyFlowNode>[]) => {
+      const settlePins: Array<{ id: string; position: XY }> = [];
+      setNodes((current) => applyGalaxyNodeChanges(current, changes));
+      if (settleEnabled) {
+        const currentById = new Map(nodes.map((node) => [node.id, node]));
+        for (const change of changes) {
+          if (change.type !== "position" || !("id" in change) || !change.position) continue;
+          settlePins.push({ id: change.id, position: change.position });
+          const movedNode = currentById.get(change.id);
+          if (movedNode?.type !== "goal-star") continue;
+          const delta = {
+            x: change.position.x - movedNode.position.x,
+            y: change.position.y - movedNode.position.y,
+          };
+          for (const node of nodes) {
+            if (node.type === "goal-galaxy-member" && node.data.anchorIds.includes(change.id)) {
+              const factor = 1 / Math.max(1, node.data.anchorIds.length);
+              settlePins.push({ id: node.id, position: translate(node.position, delta, factor) });
+            }
+          }
+        }
+        for (const pin of settlePins) settle.setDragPin(pin.id, pin.position);
+      }
+    },
+    [nodes, settle, settleEnabled],
+  );
 
   function handleNodeDragStop(node: GoalGalaxyFlowNode): void {
+    if (settleEnabled) {
+      settle.setDragPin(node.id, null);
+      if (node.type === "goal-star") {
+        for (const currentNode of nodes) {
+          if (currentNode.type === "goal-galaxy-member" && currentNode.data.anchorIds.includes(node.id)) {
+            settle.setDragPin(currentNode.id, null);
+          }
+        }
+      }
+      return;
+    }
     const finalPosition = node.position;
     const anchorIds = anchorIdsForFlowNode(node);
     const ref = galaxyPinRef(node.id, goalIdsFromAnchorIds(anchorIds));
@@ -910,6 +1006,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           />
           <span className="w-7 text-right tabular-nums">{Math.round(tetherOpacity * 100)}%</span>
         </label>
+        <GoalGalaxyEngineToggle
+          live={liveSettle}
+          mode={engineMode}
+          onModeChange={setEngineMode}
+          onLiveChange={setLiveSettle}
+        />
       </div>
       <GoalGalaxyActionBar
         node={selectedGraphNode}

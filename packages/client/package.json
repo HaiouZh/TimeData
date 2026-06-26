@@ -30,6 +30,7 @@
     "@phosphor-icons/react": "^2.1.10",
     "@timedata/shared": "workspace:*",
     "@xyflow/react": "12.11.1",
+    "d3-force": "^3.0.0",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^4.4.0",
     "lxgw-wenkai-screen-webfont": "^1.7.0",
@@ -46,6 +47,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
+    "@types/d3-force": "^3.0.10",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@types/uuid": "^11.0.0",

@@ -229,7 +229,8 @@ TimeData/
 
 ## 技术栈
 
-- 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、React Flow（`@xyflow/react`）、dnd-kit、react-markdown/remark-gfm/rehype-sanitize
+- 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、React Flow（`@xyflow/react`）、dnd-kit、d3-force、react-markdown/remark-gfm/rehype-sanitize
+  - d3-force 只服务 `/goals` 全局星图的可选 settle 引擎，必须由 `useGalaxySettleEngine` 动态 import；默认确定性星图路径不静态引入它。
   - dnd-kit 目前用于设置页下的分类管理拖拽排序：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx` 组织一级分类 DnD 作用域，`SettingsCategoryDetailPage.tsx` 组织子分类 DnD 作用域，`SortableCategoryItem.tsx` 封装拖拽手柄，`useCategories.ts` 负责持久化 `sortOrder` 和 `syncLog`。
   - react-markdown/remark-gfm/rehype-sanitize 只用于 Quick Notes 的安全 Markdown 展示；速记仍保存原始文本，编辑、复制、导出和同步不依赖渲染结果。
 - 后端：Node.js、Hono、better-sqlite3、Zod、TypeScript
