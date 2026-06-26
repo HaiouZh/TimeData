@@ -18,7 +18,7 @@ import {
   useReactFlow,
   type Viewport,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Icon } from "../../components/Icon.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
@@ -32,6 +32,8 @@ import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge }
 import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
+import { buildGoalOverview } from "../../lib/goalsView.js";
+import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import {
   addGoalMember,
   addTaskForGoal,
@@ -42,6 +44,7 @@ import {
 } from "../../lib/goals.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
+import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
 import { type GoalEditPatch, GoalEditSheet } from "./GoalEditSheet.js";
 import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
@@ -49,10 +52,14 @@ import { GoalGalaxyEngineToggle } from "./GoalGalaxyEngineToggle.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGraphEdge as GoalGraphEdgeView } from "./GoalGraphEdge.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
+import { GoalIndexPanel, type GoalIndexItem } from "./GoalIndexPanel.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
 import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
+import { readDragRef } from "./goalMemberDragData.js";
+import { hitTestGoalStar, type GoalStarHitTarget } from "./goalStarHitTest.js";
+import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
 import { restoreGalaxyPin } from "./restoreGalaxyPin.js";
 import { useGalaxySettleEngine } from "./useGalaxySettleEngine.js";
 
@@ -100,6 +107,7 @@ const REASON_COPY = {
 
 const DEFAULT_VIEWPORT: GalaxyViewport = { x: 0, y: 0, zoom: 1 };
 const DEFAULT_CLUSTER_BOUNDS = { x: -260, y: -260, width: 520, height: 520 };
+const STAR_HIT_FALLBACK = { width: 176, height: 96 };
 const DEFAULT_TETHER_OPACITY = 0.05;
 const TETHER_OPACITY_MIN = 0;
 const TETHER_OPACITY_MAX = 0.5;
@@ -113,6 +121,8 @@ const CONNECT_HANDLE_CLASS =
 const PASSIVE_HANDLE_CLASS = "nodrag nopan !h-1 !w-1 !border-0 !bg-transparent !opacity-0";
 const CENTER_HANDLE_CLASS =
   "nodrag nopan !left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2 !border-0 !bg-transparent !opacity-0";
+const CONTROL_PILL_CLASS =
+  "pointer-events-auto inline-flex h-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent aria-pressed:bg-accent aria-pressed:text-page";
 const HANDLE_POSITIONS = [
   { id: "left", position: Position.Left },
   { id: "right", position: Position.Right },
@@ -203,6 +213,10 @@ function GalaxyStarHandles() {
       />
     </>
   );
+}
+
+function isGalaxyOverlayTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("[data-drawer], [data-galaxy-controls]") !== null;
 }
 
 function fallbackStarPosition(index: number): XY {
@@ -442,6 +456,7 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
 function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
   const { syncAfterWrite } = useSyncContext();
+  const wide = useIsWideScreen();
   const boardSignals = useTrackActionTags();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
@@ -454,6 +469,8 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
   const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
+  const [indexOpen, setIndexOpen] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false);
   const [tetherOpacity, setTetherOpacity] = useState(DEFAULT_TETHER_OPACITY);
   const [engineMode, setEngineMode] = useGalaxyEngineMode();
   const [liveSettle, setLiveSettle] = useState(true);
@@ -489,6 +506,28 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [anchorCanvasById, memberPinByNodeId, model, pinnedStarIds],
   );
   const rollup = useMemo(() => goalGalaxyRollup(goals, tasks, tracks, steps), [goals, steps, tasks, tracks]);
+  const trayTasks = useMemo(() => unassignedTasks(tasks, goals), [goals, tasks]);
+  const trayTracks = useMemo(() => unassignedTracks(tracks, goals), [goals, tracks]);
+  const indexItems = useMemo<GoalIndexItem[]>(
+    () =>
+      goals
+        .filter((goal) => goal.status === "active")
+        .map((goal) => {
+          const overview = buildGoalOverview(goal, tasks, tracks, steps);
+          const progress =
+            overview.progress.kind === "project"
+              ? { completed: overview.progress.completed, total: overview.progress.total }
+              : { completed: overview.momentum.activeMemberCount, total: overview.progress.totalMembers };
+          return {
+            goalId: goal.id,
+            title: goal.title,
+            completed: progress.completed,
+            total: progress.total,
+            weekActiveMembers: overview.momentum.activeMemberCount,
+          };
+        }),
+    [goals, steps, tasks, tracks],
+  );
   const pinnedMemberIds = useMemo(() => {
     const ids = new Set<string>();
     for (const pin of layoutPins) {
@@ -727,6 +766,46 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     void flow.fitView({ padding: 0.2 });
   }
 
+  const focusGoalStar = useCallback(
+    (goalId: string): void => {
+      void flow.fitView({ nodes: [{ id: `goal:${goalId}` }], padding: 0.35, duration: 300 });
+    },
+    [flow],
+  );
+
+  const onGalaxyDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
+    if (isGalaxyOverlayTarget(event.target)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const onGalaxyDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>): void => {
+      if (isGalaxyOverlayTarget(event.target)) return;
+      event.preventDefault();
+      const ref = readDragRef(event.dataTransfer);
+      if (!ref) return;
+
+      const flowPos = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const positionByNodeId = new Map(nodes.map((node) => [node.id, node.position]));
+      const stars: GoalStarHitTarget[] = model.stars.map((star) => {
+        const measured = flow.getNode(star.nodeId)?.measured;
+        return {
+          goalId: star.goalId,
+          center: positionByNodeId.get(star.nodeId) ?? layout.positions[star.nodeId] ?? { x: 0, y: 0 },
+          width: measured?.width ?? STAR_HIT_FALLBACK.width,
+          height: measured?.height ?? STAR_HIT_FALLBACK.height,
+        };
+      });
+      const goalId = hitTestGoalStar(flowPos, stars);
+      if (!goalId) return;
+
+      event.dataTransfer.dropEffect = "copy";
+      void addGoalMember(goalId, ref).then(syncAfterWrite);
+    },
+    [flow, layout.positions, model.stars, nodes, syncAfterWrite],
+  );
+
   function handleTetherOpacityChange(value: string): void {
     const next = Number(value);
     if (!Number.isFinite(next)) return;
@@ -959,7 +1038,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   }
 
   return (
-    <div data-galaxy className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink">
+    <div
+      data-galaxy
+      onDragOver={onGalaxyDragOver}
+      onDrop={onGalaxyDrop}
+      className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink"
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -982,8 +1066,51 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       >
         <Background />
       </ReactFlow>
-      <div className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-2">
+      {wide && indexOpen && (
+        <aside
+          aria-label="目标索引"
+          data-drawer="index"
+          className="absolute left-0 top-0 z-20 h-full w-72 border-r border-border bg-surface-elevated shadow-elev2"
+        >
+          <GoalIndexPanel items={indexItems} onFocus={focusGoalStar} />
+        </aside>
+      )}
+      {wide && trayOpen && (
+        <aside
+          aria-label="未归类托盘"
+          data-drawer="tray"
+          className="absolute right-0 top-0 z-20 h-full w-80 border-l border-border bg-surface-elevated shadow-elev2"
+        >
+          <GoalUnassignedTray tasks={trayTasks} tracks={trayTracks} steps={steps} boardSignals={boardSignals} />
+        </aside>
+      )}
+      <div
+        data-galaxy-controls
+        className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-2"
+      >
         <GoalGalaxyHud rollup={rollup} />
+        {wide && (
+          <>
+            <button
+              type="button"
+              aria-label="目标"
+              aria-pressed={indexOpen}
+              onClick={() => setIndexOpen((value) => !value)}
+              className={CONTROL_PILL_CLASS}
+            >
+              目标
+            </button>
+            <button
+              type="button"
+              aria-label="未归类"
+              aria-pressed={trayOpen}
+              onClick={() => setTrayOpen((value) => !value)}
+              className={CONTROL_PILL_CLASS}
+            >
+              未归类({trayTasks.length + trayTracks.length})
+            </button>
+          </>
+        )}
         <button
           type="button"
           aria-label="回到全图"

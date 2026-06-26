@@ -37,6 +37,7 @@ vi.mock("../../lib/goals.js", () => ({
 vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
   useTrackActionTags: () => ["待我处理", "agent在做"],
 }));
+vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: () => true }));
 vi.mock("./useGalaxySettleEngine.js", () => ({
   useGalaxySettleEngine: () => ({ reheat: settleReheatMock, setDragPin: settleSetDragPinMock }),
 }));
@@ -115,11 +116,40 @@ function inputByLabel(root: ParentNode, label: string): HTMLInputElement {
   return input;
 }
 
+function asideByLabel(root: ParentNode, label: string): HTMLElement | null {
+  const aside = root.querySelector(`aside[aria-label="${label}"]`);
+  return aside instanceof HTMLElement ? aside : null;
+}
+
 async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+async function dropGoalMember(
+  target: Element,
+  ref: { kind: "task" | "track"; id: string },
+  position: { x: number; y: number },
+): Promise<{ dropEffect: string }> {
+  const data = new Map<string, string>([["application/x-goal-member", JSON.stringify(ref)]]);
+  const dataTransfer = {
+    dropEffect: "none",
+    getData: (type: string) => data.get(type) ?? "",
+  };
+  await act(async () => {
+    const event = new MouseEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+      clientX: position.x,
+      clientY: position.y,
+    });
+    Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+    target.dispatchEvent(event);
+  });
+  await flushPromises();
+  return dataTransfer;
 }
 
 describe("GoalGalaxyCanvas", () => {
@@ -453,6 +483,117 @@ describe("GoalGalaxyCanvas", () => {
     await click(buttonByLabel(host, "回到全图"));
 
     expect(getReactFlowMock().fitView).toHaveBeenCalledWith({ padding: 0.2 });
+    await unmount(root);
+  });
+
+  it("renders closed goal index and unassigned tray controls by default", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(buttonByLabel(host, "目标")).toBeInstanceOf(HTMLButtonElement);
+    expect(buttonByLabel(host, "未归类").textContent).toBe("未归类(1)");
+    expect(asideByLabel(host, "目标索引")).toBeNull();
+    expect(asideByLabel(host, "未归类托盘")).toBeNull();
+    await unmount(root);
+  });
+
+  it("opens the unassigned tray and drops a task onto a goal star", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(buttonByLabel(host, "未归类"));
+    expect(asideByLabel(host, "未归类托盘")?.querySelector('[data-tray-ref="task:candidate"]')).toBeTruthy();
+    const dataTransfer = await dropGoalMember(host.querySelector("[data-galaxy]") ?? host, { kind: "task", id: "candidate" }, { x: 0, y: 0 });
+
+    expect(dataTransfer.dropEffect).toBe("copy");
+    expect(getReactFlowMock().screenToFlowPosition).toHaveBeenCalledWith({ x: 0, y: 0 });
+    expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
+    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("ignores tray drops that land on the drawer instead of the canvas", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(buttonByLabel(host, "未归类"));
+    const drawer = asideByLabel(host, "未归类托盘");
+    expect(drawer).toBeTruthy();
+    await dropGoalMember(drawer ?? host, { kind: "task", id: "candidate" }, { x: 0, y: 0 });
+
+    expect(addGoalMemberMock).not.toHaveBeenCalled();
+    expect(syncAfterWriteMock).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("ignores tray drops that miss every goal star", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await dropGoalMember(host.querySelector("[data-galaxy]") ?? host, { kind: "task", id: "candidate" }, { x: 500, y: 500 });
+
+    expect(addGoalMemberMock).not.toHaveBeenCalled();
+    expect(syncAfterWriteMock).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("opens the goal index and focuses a selected goal star", async () => {
+    resetReactFlowMock();
+    const goals = [
+      goal({ id: "g1", title: "第一目标", members: [{ kind: "task", id: "a" }] }),
+      goal({ id: "g2", title: "第二目标" }),
+    ];
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={goals}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    getReactFlowMock().fitView.mockClear();
+
+    await click(buttonByLabel(host, "目标"));
+    await click(buttonByLabel(host, "聚焦目标 第二目标"));
+
+    expect(getReactFlowMock().fitView).toHaveBeenCalledWith({ nodes: [{ id: "goal:g2" }], padding: 0.35, duration: 300 });
     await unmount(root);
   });
 

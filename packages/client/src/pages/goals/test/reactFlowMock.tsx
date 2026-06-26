@@ -5,6 +5,7 @@ export interface MockReactFlowNode {
   id: string;
   type?: string;
   position?: { x: number; y: number };
+  measured?: { width?: number; height?: number };
   draggable?: boolean;
   selected?: boolean;
   data?: Record<string, unknown> & {
@@ -89,10 +90,22 @@ const fitView = vi.fn<(_options?: unknown) => Promise<boolean>>(() => {
 });
 const setViewport = vi.fn<(viewport: MockViewport) => Promise<boolean>>(() => Promise.resolve(true));
 const getViewport = vi.fn<() => MockViewport>(() => DEFAULT_VIEWPORT);
+const screenToFlowPosition = vi.fn<(position: { x: number; y: number }) => { x: number; y: number }>((position) => ({
+  x: position.x,
+  y: position.y,
+}));
 let latestOnMoveEnd: MockReactFlowProps["onMoveEnd"] | undefined;
 let latestOnNodesChange: MockReactFlowProps["onNodesChange"] | undefined;
 let nextConnection: MockConnection | null = null;
-const reactFlowInstance = { fitView, setViewport, getViewport };
+const getNode = vi.fn<(id: string) => (MockReactFlowNode & { measured?: { width?: number; height?: number } }) | undefined>(
+  (id) => {
+    const node = renderedNodes[renderedNodes.length - 1]?.find((item) => item.id === id);
+    if (!node) return undefined;
+    const measured = node.measured ?? (node.type === "goal-star" ? { width: 80, height: 60 } : { width: 180, height: 56 });
+    return { ...node, measured };
+  },
+);
+const reactFlowInstance = { fitView, setViewport, getViewport, screenToFlowPosition, getNode };
 
 function readNodePayload(node: MockReactFlowNode): { kind?: string; title?: string } {
   const payload = node.data?.node;
@@ -352,6 +365,8 @@ export function resetReactFlowMock() {
   fitView.mockClear();
   setViewport.mockClear();
   getViewport.mockClear();
+  screenToFlowPosition.mockClear();
+  getNode.mockClear();
   renderedNodes.length = 0;
   fitViewRenderedNodeCounts.length = 0;
   latestOnMoveEnd = undefined;
