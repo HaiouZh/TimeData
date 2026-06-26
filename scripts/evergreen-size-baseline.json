@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 6718,
+    "chars": 6805,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
@@ -28,11 +28,11 @@
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
-    "chars": 13867,
+    "chars": 14002,
     "covers": 17
   },
   "docs/evergreen/deployment/android-apk.md": {
-    "chars": 5691,
+    "chars": 5657,
     "covers": 14
   },
   "docs/evergreen/design-language.md": {
@@ -44,11 +44,11 @@
     "covers": 4
   },
   "docs/evergreen/development.md": {
-    "chars": 11049,
+    "chars": 11236,
     "covers": 10
   },
   "docs/evergreen/goals.md": {
-    "chars": 9195,
+    "chars": 10047,
     "covers": 19
   },
   "docs/evergreen/health.md": {
@@ -84,7 +84,7 @@
     "covers": 14
   },
   "docs/evergreen/timeline.md": {
-    "chars": 10835,
+    "chars": 10922,
     "covers": 16
   },
   "docs/evergreen/todo.md": {

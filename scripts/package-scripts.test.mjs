@@ -11,6 +11,17 @@ function readRootScripts() {
   return pkg.scripts;
 }
 
+function readRootPackage() {
+  return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+}
+
+function pnpmSetupStep(workflow) {
+  const start = workflow.indexOf("uses: pnpm/action-setup@v6");
+  assert.notEqual(start, -1);
+  const nextStep = workflow.indexOf("\n      - name:", start + 1);
+  return nextStep === -1 ? workflow.slice(start) : workflow.slice(start, nextStep);
+}
+
 test("root build keeps shared first and builds app packages in parallel", () => {
   const scripts = readRootScripts();
 
@@ -31,4 +42,17 @@ test("local fast paths are explicit and do not replace release gates", () => {
 
   assert.equal(scripts["build:client:fast"], "pnpm build:shared && pnpm --filter @timedata/client exec vite build");
   assert.equal(scripts["test:client:changed"], "pnpm --filter @timedata/client exec vitest run --project unit --changed");
+});
+
+test("tooling resolves pnpm version from the root packageManager", () => {
+  const pkg = readRootPackage();
+  const ciWorkflow = fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+  const androidWorkflow = fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/android-apk.yml"), "utf8");
+  const serverDockerfile = fs.readFileSync(path.join(REPO_ROOT, "packages/server/Dockerfile"), "utf8");
+
+  assert.match(pkg.packageManager, /^pnpm@\d+\.\d+\.\d+$/);
+  assert.equal(pnpmSetupStep(ciWorkflow).includes("version:"), false);
+  assert.equal(pnpmSetupStep(androidWorkflow).includes("version:"), false);
+  assert.match(serverDockerfile, /packageManager\.split\('@'\)\[1\]/);
+  assert.doesNotMatch(serverDockerfile, /npm install -g pnpm@\d/);
 });

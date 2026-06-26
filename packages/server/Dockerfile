@@ -1,10 +1,12 @@
 FROM node:26-alpine AS builder
 
-# Node 25+ 不再默认带 corepack，直接安装 pnpm
-RUN npm install -g pnpm@10.10.0
-
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
+
+# Node 25+ 不再默认带 corepack，直接安装 packageManager 指定的 pnpm。
+RUN PNPM_VERSION="$(node -p "require('./package.json').packageManager.split('@')[1]")" \
+ && npm install -g "pnpm@${PNPM_VERSION}"
+
 COPY packages/shared/package.json packages/shared/
 COPY packages/client/package.json packages/client/
 COPY packages/server/package.json packages/server/

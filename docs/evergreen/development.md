@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/androidBackNavigation.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-26
 ---
 
 # 本地开发指南
@@ -21,14 +21,14 @@ last-reviewed: 2026-06-25
 
 ```text
 Node.js 22.12+   # Vite 7+ 要求
-pnpm 10.10+
+pnpm 11.0+
 ```
 
 如果本机没有 pnpm，可以先启用 corepack：
 
 ```bash
 corepack enable
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@11.9.0 --activate
 ```
 
 Android APK 打包还需要：
@@ -54,7 +54,7 @@ ANDROID_HOME=C:\Users\yanzh\AppData\Local\Android\Sdk
 pnpm install
 ```
 
-仓库使用 pnpm 10 的 `onlyBuiltDependencies` 允许 `better-sqlite3` 和 `esbuild` 执行安装构建脚本。CI 和本地安装后不应出现 `Ignored build scripts: better-sqlite3`；如果出现，server 测试会因为缺少 `better_sqlite3.node` 而失败。
+仓库使用 pnpm 11，`package.json` 的 `packageManager` 是唯一版本源；Corepack、CI 的 `pnpm/action-setup` 和 Dockerfile 都从这里读取当前验证版本。`pnpm-workspace.yaml` 的 `allowBuilds` 允许 `better-sqlite3` 和 `esbuild` 执行安装构建脚本，避免 pnpm 11 的构建审批在 install 阶段阻断测试。CI 和本地安装后不应出现 `Ignored build scripts: better-sqlite3`；如果出现，server 测试会因为缺少 `better_sqlite3.node` 而失败，可先跑 `pnpm rebuild better-sqlite3 esbuild`。
 
 ## Worktree 工作流
 

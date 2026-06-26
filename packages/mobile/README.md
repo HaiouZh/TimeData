@@ -7,7 +7,7 @@ This package contains the Capacitor Android shell for TimeData.
 Android APK 构建需要：
 
 - Node.js 22+
-- pnpm 9+
+- pnpm 11+
 - JDK 21
 - Android SDK Platform 35
 - Android SDK Build-Tools 35.0.0

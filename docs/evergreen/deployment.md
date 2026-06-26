@@ -19,7 +19,7 @@ covers:
   - .env.example
   - .github/workflows/ci.yml
   - .github/workflows/build.yml
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-26
 ---
 
 # 部署与自更新
@@ -110,13 +110,13 @@ git push main
   → push 到 ghcr.io/haiouzh/timedata:latest（带 GIT_SHA tag）
 ```
 
-Dockerfile 构建镜像时会临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段另外安装 Python 3 + pip 并通过 pip 安装 `garminconnect` 和 `garth`，供 Garmin 健康数据抓取服务使用；生产镜像把抓取脚本放在 `/app/garminFetch.py`，服务启动 Python 子进程时优先使用该路径，再回退开发路径。相关代码入口：`packages/server/Dockerfile`、`packages/server/src/garmin/garminService.ts`。
+Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 11，再临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段另外安装 Python 3 + pip 并通过 pip 安装 `garminconnect` 和 `garth`，供 Garmin 健康数据抓取服务使用；生产镜像把抓取脚本放在 `/app/garminFetch.py`，服务启动 Python 子进程时优先使用该路径，再回退开发路径。相关代码入口：`packages/server/Dockerfile`、`packages/server/src/garmin/garminService.ts`。
 
 具体 workflow yaml 文件名和构建参数详见 `.github/workflows/`。其中：
 
-- `ci.yml`：push / PR 的基础 CI，安装依赖后先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后依次运行 `pnpm lint`、`pnpm -r typecheck`、`pnpm -r --parallel test`、`pnpm test:scripts`、evergreen 文档一致性检查、`pnpm check:docs:size` 和 `pnpm build`，不发布产物。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：dependabot 触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。
+- `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后依次运行 `pnpm lint`、`pnpm -r typecheck`、`pnpm -r --parallel test`、`pnpm test:scripts`、evergreen 文档一致性检查、`pnpm check:docs:size` 和 `pnpm build`，不发布产物。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：dependabot 触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。
 - `build.yml`：main 分支发布镜像到 GHCR，自更新机制读取它的成功运行记录。
-- `android-apk.yml`：Android 签名 release APK 构建与 GitHub Release 发布流程；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。`ci.yml` 同此约定。
+- `android-apk.yml`：Android 签名 release APK 构建与 GitHub Release 发布流程；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。此 workflow 和 `ci.yml` 都从根 `packageManager` 读取 pnpm 11 版本。
 
 ## 3.1 Android APK 发布
 
