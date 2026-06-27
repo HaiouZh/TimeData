@@ -14,6 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CHART_CHROME } from "./health/chartColors.js";
 
 export interface TrendSeriesItem {
   key: string;
@@ -32,11 +33,11 @@ function formatTooltipValue(value: unknown, suffix: string): string {
 }
 
 const tooltipStyle = {
-  background: "#0f172a",
-  border: "1px solid rgba(51, 65, 85, 0.9)",
+  background: CHART_CHROME.tooltipBg,
+  border: `1px solid ${CHART_CHROME.tooltipBorder}`,
   borderRadius: 14,
-  color: "#e2e8f0",
-  boxShadow: "0 18px 40px rgba(2, 6, 23, 0.35)",
+  color: CHART_CHROME.tooltipText,
+  boxShadow: CHART_CHROME.tooltipShadow,
 };
 
 export const TrendChart = memo(function TrendChart({
@@ -62,15 +63,20 @@ export const TrendChart = memo(function TrendChart({
       <ResponsiveContainer width="100%" height={220}>
         {chart === "line" ? (
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
-            <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <YAxis unit={yAxisUnit} tick={{ fill: "#94a3b8", fontSize: 12 }} domain={yAxisDomain} ticks={yAxisTicks} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_CHROME.grid} />
+            <XAxis dataKey="date" tick={{ fill: CHART_CHROME.tick, fontSize: 12 }} />
+            <YAxis
+              unit={yAxisUnit}
+              tick={{ fill: CHART_CHROME.tick, fontSize: 12 }}
+              domain={yAxisDomain}
+              ticks={yAxisTicks}
+            />
             <Tooltip
               formatter={tooltipFormatter}
               contentStyle={tooltipStyle}
-              cursor={{ stroke: "#38bdf8", strokeOpacity: 0.32 }}
+              cursor={{ stroke: CHART_CHROME.cursor, strokeOpacity: 0.32 }}
             />
-            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
+            <Legend wrapperStyle={{ color: CHART_CHROME.legend, fontSize: 12 }} />
             {series.map((item) => (
               <Line
                 key={item.key}
@@ -84,15 +90,20 @@ export const TrendChart = memo(function TrendChart({
           </LineChart>
         ) : (
           <AreaChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
-            <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <YAxis unit={yAxisUnit} tick={{ fill: "#94a3b8", fontSize: 12 }} domain={yAxisDomain} ticks={yAxisTicks} />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_CHROME.grid} />
+            <XAxis dataKey="date" tick={{ fill: CHART_CHROME.tick, fontSize: 12 }} />
+            <YAxis
+              unit={yAxisUnit}
+              tick={{ fill: CHART_CHROME.tick, fontSize: 12 }}
+              domain={yAxisDomain}
+              ticks={yAxisTicks}
+            />
             <Tooltip
               formatter={tooltipFormatter}
               contentStyle={tooltipStyle}
-              cursor={{ stroke: "#38bdf8", strokeOpacity: 0.32 }}
+              cursor={{ stroke: CHART_CHROME.cursor, strokeOpacity: 0.32 }}
             />
-            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
+            <Legend wrapperStyle={{ color: CHART_CHROME.legend, fontSize: 12 }} />
             {series.map((item) => (
               <Area
                 key={item.key}
@@ -140,7 +151,7 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
         const childTotal = parent.children.reduce((sum, child) => sum + child.min, 0) || 1;
         const expanded = expandedId === parent.id;
         return (
-          <div key={parent.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div key={parent.id} className="rounded-2xl border border-border bg-surface-elevated px-3 py-2">
             <button
               type="button"
               aria-expanded={expanded}
@@ -149,13 +160,13 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
-                <span className="truncate text-slate-200">{parent.name}</span>
+                <span className="truncate text-ink">{parent.name}</span>
               </span>
-              <span className="shrink-0 text-slate-400">
+              <span className="shrink-0 text-ink-2">
                 {parent.totalHours.toFixed(1)}h · {parent.sharePct}%
               </span>
             </button>
-            <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-slate-950">
+            <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-page">
               {parent.children.map((child) => (
                 <div
                   key={child.id}
@@ -171,9 +182,9 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
                   <li key={child.id} className="flex items-center justify-between gap-2 text-xs">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: child.color }} />
-                      <span className="truncate text-slate-400">{child.name}</span>
+                      <span className="truncate text-ink-2">{child.name}</span>
                     </span>
-                    <span className="shrink-0 text-slate-500">
+                    <span className="shrink-0 text-ink-3">
                       {(child.min / 60).toFixed(1)}h · {Math.round((child.min / childTotal) * 100)}%
                     </span>
                   </li>
@@ -205,7 +216,7 @@ function DonutTooltip({ active, payload, total }: DonutTooltipProps) {
   const datum = payload[0].payload;
   const pct = total > 0 ? Math.round((datum.value / total) * 1000) / 10 : 0;
   return (
-    <div className="rounded-2xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200 shadow-xl shadow-slate-950/40">
+    <div className="rounded-2xl border border-border bg-surface px-3 py-2 text-xs text-ink shadow-elev2">
       {datum.name} · {datum.value}h · {pct}%
     </div>
   );
@@ -246,9 +257,9 @@ export const CategoryDonut = memo(function CategoryDonut({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-semibold text-slate-100">{totalHours.toFixed(1)}h</div>
-        <div className="text-xs text-slate-400">覆盖率 {coveragePct.toFixed(1)}%</div>
-        {coverageNote && <div className="text-[10px] text-slate-500">{coverageNote}</div>}
+        <div className="text-2xl font-semibold text-ink">{totalHours.toFixed(1)}h</div>
+        <div className="text-xs text-ink-2">覆盖率 {coveragePct.toFixed(1)}%</div>
+        {coverageNote && <div className="text-[10px] text-ink-3">{coverageNote}</div>}
       </div>
     </div>
   );

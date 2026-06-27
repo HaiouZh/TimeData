@@ -4,15 +4,15 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 6851,
+    "chars": 6958,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
-    "chars": 12395,
+    "chars": 12650,
     "covers": 6
   },
   "docs/evergreen/categories-settings.md": {
-    "chars": 8838,
+    "chars": 8985,
     "covers": 12
   },
   "docs/evergreen/categories-settings/settings-catalog.md": {
@@ -24,7 +24,7 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 11615,
+    "chars": 11806,
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
@@ -36,11 +36,11 @@
     "covers": 14
   },
   "docs/evergreen/design-language.md": {
-    "chars": 7246,
+    "chars": 8322,
     "covers": 8
   },
   "docs/evergreen/design-language/controls.md": {
-    "chars": 3041,
+    "chars": 3218,
     "covers": 5
   },
   "docs/evergreen/development.md": {
@@ -52,11 +52,11 @@
     "covers": 22
   },
   "docs/evergreen/health.md": {
-    "chars": 6348,
+    "chars": 6725,
     "covers": 9
   },
   "docs/evergreen/health/charts.md": {
-    "chars": 5291,
+    "chars": 5832,
     "covers": 8
   },
   "docs/evergreen/health/garmin-ingest.md": {
@@ -64,7 +64,7 @@
     "covers": 3
   },
   "docs/evergreen/quick-notes.md": {
-    "chars": 11018,
+    "chars": 11253,
     "covers": 16
   },
   "docs/evergreen/security.md": {
@@ -72,7 +72,7 @@
     "covers": 13
   },
   "docs/evergreen/stats-insights.md": {
-    "chars": 9907,
+    "chars": 10404,
     "covers": 10
   },
   "docs/evergreen/sync.md": {
@@ -84,7 +84,7 @@
     "covers": 14
   },
   "docs/evergreen/timeline.md": {
-    "chars": 10922,
+    "chars": 11272,
     "covers": 16
   },
   "docs/evergreen/todo.md": {
@@ -92,7 +92,7 @@
     "covers": 26
   },
   "docs/evergreen/todo/recurrence.md": {
-    "chars": 5070,
+    "chars": 5291,
     "covers": 5
   },
   "docs/evergreen/tracks.md": {

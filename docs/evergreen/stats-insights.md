@@ -48,7 +48,10 @@ last-reviewed: 2026-06-27
 - **`memoOverview` 在头部“已记录”处总是算一次**（即使 overview 隐藏，用于头部总时长复用缓存）；其余 4 模块的 memo 仅在组件内调用，隐藏则不算。
 - `moduleContext`（`StatsModuleProps`）打包 mode/today/effectiveRange/baselineFrom/entries/baselineEntries/categories/parentCategories/parentNameById/sleepCategoryId；内容区按 `layout.visibleModulesInOrder` 映射 `STATS_MODULES[id].component`，全隐藏显示空态 + 跳转设置。
 - `TimeStatsPage` 页面壳、周期切换、日期导航、总时长卡片和空态消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；`mod-time` 已退役，不再作为时间统计署名色。不使用页面级渐变或 `sky-*` 展示型 chrome。周期导航图标经 Phosphor `Icon` 包装，按钮语义仍由 `aria-label` 承载。
-- P3 设计语言迁移对象：`pages/stats/modules/**`、`pages/stats/InsightCharts.tsx`、健康图表色板和旧统计模块 chrome 仍在 `check:design` allowlist 中。迁移时要一起收口 UI chrome、状态色、数据色板和 Recharts token 镜像边界，避免“图表色迁了、模块壳没迁”的半收口状态。
+- **P3 已收口（`P3-stat-health` allowlist 归零）**：`pages/stats/modules/**`、`pages/stats/InsightCharts.tsx`、`TimeStatsPage` 全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` 与 `ok/warn/danger` token，不留裸 `slate-*`/状态裸色。边界已分清：
+  - **UI chrome**（卡片/边框/文字/选中态）用中性 + accent + 状态 token；
+  - **数据图表色与 chrome 分离**——`InsightCharts` 的 axis/grid/tooltip/legend/cursor 用 `CHART_CHROME` 镜像（出自 `pages/stats/health/chartColors.ts`，recharts 不解析 `var()`，见 [health/charts](health/charts.md)），数据序列用**用户分类色**；
+  - **用户分类色属用户内容色**，允许用于数据表达（图例、堆叠条、饼图）；无色分类回退到 `UNCATEGORIZED_COLOR`（`@timedata/shared` 常量，冷中性灰）。
 
 ### 1.3 STATS_MODULES 注册表（`pages/stats/modules/statsModules.ts`）
 
@@ -114,7 +117,7 @@ last-reviewed: 2026-06-27
 7. **`stats/health/**` 属 health 域，本域不收**：`HealthStatsPage`（`/stats/health`）与 `TimeStatsPage`（`/stats/time`）平级、共享 `stats/` 前缀但实现独立、无文件交叠。
 8. **时间一律 UTC ISO，本地日桶按 `APP_TIME_ZONE` 切分**：`dailyRollup.ts` 用 `localDateTimeToUtc`；`routine.ts`/`anomalies.ts` 用 `Intl.DateTimeFormat` 带 `APP_TIME_ZONE`。
 9. **会话合并容差 3min、噪声会话下限 1min**（`lib/insights/constants.ts`）。
-10. **统计视觉旧债按 P3 收口**：统计模块、时间趋势图、健康图表共享一批裸 `slate-*`、裸状态色和图表裸色旧债；这是设计语言迁移对象，不是功能 bug。新增统计 UI 不得照抄 allowlist 中的旧类名。
+10. **统计视觉已按 P3 收口**：统计模块、时间趋势图、`InsightCharts` 已全部 token 化，`P3-stat-health` allowlist 归零；图表 chrome 走 `CHART_CHROME` 镜像、数据序列走用户分类色。新增统计 UI 一律用 token，不写裸 `slate-*`/裸状态色，图表色统一从 `chartColors.ts` 取。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 

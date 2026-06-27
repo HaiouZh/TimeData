@@ -10,6 +10,8 @@ covers:
 last-reviewed: 2026-06-27
 ---
 
+<!-- 复核 2026-06-27（设计语言 P3）：check-design-language.mjs 新增「--shadow-* token 定义」与「图表色镜像文件」两处 bare-raw-color 跳过（详见 design-language §3），属 check:design 颜色范畴；交互图标规则（本控件子文档关注点）不变。 -->
+
 # 设计语言 · 控件库
 
 > [design-language](../design-language.md) 的**控件子文档**：自绘控件词汇表 + 图标包装 + 无原生控件 CI 棘轮。

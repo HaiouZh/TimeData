@@ -19,6 +19,7 @@ last-reviewed: 2026-06-25
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
 <!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，未改变 Category / Setting schema、同步语义或设置 key 契约。 -->
+<!-- 复核 2026-06-27（设计语言 P3）：constants.ts 新增 UNCATEGORIZED_COLOR（无色分类回退色，用户内容色域，详见 data-model §8），未改变 Category / Setting schema、播种规则或设置 key 契约。 -->
 
 # 分类与设置
 

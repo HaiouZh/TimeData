@@ -95,7 +95,7 @@ export default function HealthStatsPage() {
             type="button"
             aria-label="添加图表"
             onClick={handleAddChart}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xl leading-none text-slate-100 shadow-sm transition hover:border-slate-500 hover:bg-slate-800"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-xl leading-none text-ink shadow-elev1 transition hover:border-border-strong hover:bg-surface-hover"
           >
             <Icon icon={Plus} size={20} />
           </button>

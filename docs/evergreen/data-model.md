@@ -170,7 +170,7 @@ type SyncChange =
 
 ## 8. 默认分类预设
 
-`DEFAULT_CATEGORIES` 定义在 `packages/shared/src/constants.ts`，包含五个顶层：睡眠、生存、投资、享乐、运转。`createDefaultCategories(timestamp?)` 同时给客户端和服务端使用，确保两端出厂状态一致。
+`DEFAULT_CATEGORIES` 定义在 `packages/shared/src/constants.ts`，包含五个顶层：睡眠、生存、投资、享乐、运转。`createDefaultCategories(timestamp?)` 同时给客户端和服务端使用，确保两端出厂状态一致。同文件的 `UNCATEGORIZED_COLOR`（冷中性灰，镜像 `--color-ink-3`）是无色分类（未设色或父分类缺失）在统计/图表里的回退色，属用户内容色域；放在 shared 既给统计层（`lib/stats.ts`、`lib/insights/overview.ts`、`TrendSection`）共用，也在设计语言 `check:design` 扫描范围外。
 
 分类管理行为见 [categories-settings](categories-settings.md)。
 

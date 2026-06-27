@@ -11,12 +11,19 @@ export const DATA_PALETTE = {
 
 export type DataColor = (typeof DATA_PALETTE)[keyof typeof DATA_PALETTE];
 
-// chrome：镜像中性 token（grid=--color-border, tick=--color-ink-3, legend=--color-ink-2）
+// chrome：镜像中性 token（grid=--color-border, tick=--color-ink-3, legend=--color-ink-2,
+// tooltip 背/边/字=--color-surface-elevated/--color-border/--color-ink, shadow=--shadow-elev2,
+// cursor=--color-accent）。recharts 的 SVG presentation 属性不解析 var()，故用 JS 常量镜像。
 export const CHART_CHROME = {
   grid: "#2b344e",
   tick: "#8b94a8",
   legend: "#aab4c8",
   reference: "#8b94a8",
+  tooltipBg: "#1b2336",
+  tooltipBorder: "#2b344e",
+  tooltipText: "#e8edf6",
+  tooltipShadow: "0 8px 30px rgba(0,0,0,.4)",
+  cursor: "#4f9bf5",
 } as const;
 
 // 碰撞回退的固定取色顺序

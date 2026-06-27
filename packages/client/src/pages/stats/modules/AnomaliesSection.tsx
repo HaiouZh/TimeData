@@ -131,14 +131,14 @@ export default function AnomaliesSection(props: StatsModuleProps) {
       eyebrow="Attention"
       action={
         anomalies.length > 0 ? (
-          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-100">
+          <span className="rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 text-xs text-warn">
             {anomalies.length} 项
           </span>
         ) : null
       }
     >
       {anomalies.length === 0 ? (
-        <p className="text-sm text-slate-500">本周期未发现明显异常或长空挡。</p>
+        <p className="text-sm text-ink-3">本周期未发现明显异常或长空挡。</p>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 text-sm">
@@ -164,20 +164,20 @@ export default function AnomaliesSection(props: StatsModuleProps) {
 
           {longGapAnomalies.length > 0 && (
             <div className="mt-4 space-y-2">
-              <div className="text-xs font-medium text-slate-500">长空挡 Top</div>
+              <div className="text-xs font-medium text-ink-3">长空挡 Top</div>
               <ul className="space-y-1.5">
                 {longGapAnomalies.slice(0, 5).map((anomaly) => (
                   <li
                     key={anomalyKey(anomaly, "top")}
-                    className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm"
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm"
                   >
-                    <span className="min-w-0 text-slate-300">
+                    <span className="min-w-0 text-ink-2">
                       {anomaly.date}
                       {formatAnomalyTimeRange(anomaly) && (
-                        <span className="ml-2 text-xs text-slate-500">{formatAnomalyTimeRange(anomaly)}</span>
+                        <span className="ml-2 text-xs text-ink-3">{formatAnomalyTimeRange(anomaly)}</span>
                       )}
                     </span>
-                    <span className="shrink-0 text-slate-100">{formatDurationFromMin(anomaly.valueMin)}</span>
+                    <span className="shrink-0 text-ink">{formatDurationFromMin(anomaly.valueMin)}</span>
                   </li>
                 ))}
               </ul>
@@ -185,18 +185,18 @@ export default function AnomaliesSection(props: StatsModuleProps) {
           )}
 
           <details
-            className="mt-4 space-y-2 rounded-2xl border border-slate-800 bg-slate-900/40 px-3 py-2"
+            className="mt-4 space-y-2 rounded-2xl border border-border bg-surface-elevated px-3 py-2"
             open={props.mode !== "month"}
           >
-            <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-slate-400">按日期分布</summary>
+            <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-ink-2">按日期分布</summary>
             <div className="mt-2 space-y-2">
               {anomalyDateGroups.map((group) => (
-                <div key={group.date} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                <div key={group.date} className="rounded-2xl border border-border bg-surface px-3 py-2">
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium text-slate-200">{group.date}</span>
-                    <span className="text-xs text-slate-500">{group.items.length} 项</span>
+                    <span className="font-medium text-ink">{group.date}</span>
+                    <span className="text-xs text-ink-3">{group.items.length} 项</span>
                   </div>
-                  <ul className="mt-2 divide-y divide-slate-700/60">
+                  <ul className="mt-2 divide-y divide-border">
                     {group.items.map((anomaly) => {
                       const timeRange = formatAnomalyTimeRange(anomaly);
                       return (
@@ -205,15 +205,15 @@ export default function AnomaliesSection(props: StatsModuleProps) {
                           className="py-2 first:pt-0 last:pb-0"
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                            <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-ink-2">
                               {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
                             </span>
-                            {timeRange && <span className="text-xs text-slate-500">{timeRange}</span>}
+                            {timeRange && <span className="text-xs text-ink-3">{timeRange}</span>}
                             {anomaly.valueMin !== undefined && (
-                              <span className="text-xs text-slate-400">{formatDurationFromMin(anomaly.valueMin)}</span>
+                              <span className="text-xs text-ink-2">{formatDurationFromMin(anomaly.valueMin)}</span>
                             )}
                           </div>
-                          <p className="mt-1 text-sm text-slate-300">{anomaly.message}</p>
+                          <p className="mt-1 text-sm text-ink-2">{anomaly.message}</p>
                         </li>
                       );
                     })}

@@ -64,12 +64,12 @@ export default function OverviewSection(props: StatsModuleProps) {
       </div>
       {compositionParents.length > 0 && (
         <div className="mt-4 space-y-2">
-          <div className="text-xs font-medium text-slate-500">父分类 → 子分类构成</div>
+          <div className="text-xs font-medium text-ink-3">父分类 → 子分类构成</div>
           <CategoryCompositionBars parents={compositionParents} />
         </div>
       )}
       {pieData.length > 0 ? (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
+        <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface-elevated">
           <CategoryDonut
             data={pieData}
             totalHours={overview.totalRecordedHours}
@@ -78,7 +78,7 @@ export default function OverviewSection(props: StatsModuleProps) {
           />
         </div>
       ) : (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 py-10 text-center text-sm text-slate-500">
+        <div className="mt-4 rounded-2xl border border-dashed border-border bg-surface-elevated py-10 text-center text-sm text-ink-3">
           暂无统计数据
         </div>
       )}

@@ -1,4 +1,5 @@
 import type { Category, TimeEntry } from "@timedata/shared";
+import { UNCATEGORIZED_COLOR } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import {
   buildStatsRange,
@@ -140,7 +141,7 @@ describe("stats helpers", () => {
       range,
     );
 
-    expect(rows).toEqual([{ id: "unknown", name: "其他", value: 2, color: "#808080" }]);
+    expect(rows).toEqual([{ id: "unknown", name: "其他", value: 2, color: UNCATEGORIZED_COLOR }]);
   });
 });
 

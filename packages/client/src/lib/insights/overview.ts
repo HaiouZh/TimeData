@@ -1,5 +1,5 @@
 import type { Category, TimeEntry } from "@timedata/shared";
-import { localDateTimeToUtc } from "@timedata/shared";
+import { UNCATEGORIZED_COLOR, localDateTimeToUtc } from "@timedata/shared";
 import { addDays } from "../time.ts";
 import { resolveParentId } from "./sessions.js";
 
@@ -62,7 +62,7 @@ function categoryName(category: Category | undefined, fallback: string): string 
 }
 
 function categoryColor(category: Category | undefined): string {
-  return category?.color ?? "#808080";
+  return category?.color ?? UNCATEGORIZED_COLOR;
 }
 
 export function buildOverviewInsights(input: OverviewInput): OverviewInsights {

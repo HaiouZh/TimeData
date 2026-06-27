@@ -18,6 +18,7 @@ last-reviewed: 2026-06-27
 <!-- 复核 2026-06-22（目标层 Phase 1）：新增 goals 域与 Dexie v10 触及共享登记簿 / db index covers；健康 6 域 schema、同步语义、备份角色均不变。 -->
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及共享类型、db index 与 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，server schema 新增非同步运维表；健康 6 域 schema、同步语义、备份角色仍不变。 -->
+<!-- 复核 2026-06-27（设计语言 P3）：HealthStatsPage 视觉收口（删旧死 CSS、范围按钮/页面壳 token 化、图表色走 chartColors 镜像）；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 
 # 健康数据
 
@@ -48,7 +49,7 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 - `health_charts` 是配置同步域，不是健康原始数据。
 - `HealthStatsPage` 顶部范围 selector 消费 `health.range.presets` 的完整预设列表；默认 6 档（7/30/90/180/365/全部）在移动端允许换行，保证选项可见，不用隐藏滚动条承载不可发现的横向溢出。
 - `HealthStatsPage` 的交互图标（如添加图表）经 Phosphor `Icon` 包装，按钮语义仍由 `aria-label` 承载，不使用字符图标。
-- `HealthStatsPage` 是 P3 设计语言大重构对象：旧 `.stats-tab` / `.health-card` / `.run-item` / `.sleep-*` CSS、健康图表色、范围按钮、健康卡片与统计模块 chrome 需要一起迁到 [design-language](design-language.md) 的中性 / 动作 / 状态 / 数据色板体系。当前旧 CSS 与新 token 并存属于设计债，不是健康数据功能 bug。
+- **`HealthStatsPage` 与健康图表已按 P3 收口**：旧 `.stats-tab` / `.health-card` / `.run-item` / `.sleep-*` 死 CSS 已删；页面壳与范围 selector 走 [design-language](design-language.md) 的中性 / `accent` / 状态 token（范围选中态用动作蓝 `accent`，**不用健康绿**，也不用退役 `mod-health`）；健康指标曲线（心率 / 睡眠 / 压力 / HRV / 配速）用**数据色板** `--color-data-*`、图表 chrome（axis/grid/tooltip/legend/cursor）用 `CHART_CHROME` 中性镜像，二者统一出自 `chartColors.ts`（见 [health/charts](health/charts.md)）。状态色只留给同步成功 / 缺数据 / 错误等真状态，不上指标曲线。
 
 ## 2. Schema / 契约（5 指标表）
 
@@ -81,7 +82,7 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts`、任务轨道或目标层**（见 [backup](backup.md)）。
 7. **轨道 refs 不改变健康 schema**：跑步、HRV 等结构化指标继续留在健康域；轨道步骤只保存指针和叙事，不新增健康专用字段。
 8. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**；不要因文件名相同把它归进 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
-9. **健康页视觉旧债按 P3 大重构处理**：健康状态色、数据色和 UI chrome 边界当前未完全规范化，相关裸色/旧 chrome 已登记在 `check:design` allowlist。迁移时应连同健康图表、范围 selector、旧健康卡片和统计模块一并验收，不做零散几行 CSS 清理。
+9. **健康页视觉已按 P3 收口**：旧死 CSS 已删、健康图表 / 范围 selector / 页面壳全部 token 化，`P3-stat-health` allowlist 归零。健康 UI chrome 用中性 / `accent` / 状态色，指标曲线用数据色板，二者边界清晰；不使用 `mod-health`。新增健康 UI 一律用 token。
 
 ## 4. 模块速查（主题层）
 

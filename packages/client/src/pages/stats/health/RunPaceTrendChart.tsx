@@ -1,5 +1,6 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatAxisPace, type RunPaceTrendPoint } from "../../../lib/healthMetrics/index.ts";
+import { CHART_CHROME, DATA_PALETTE } from "./chartColors.js";
 
 export function RunPaceTrendChart({ data }: { data: RunPaceTrendPoint[] }) {
   return (
@@ -14,13 +15,9 @@ export function RunPaceTrendChart({ data }: { data: RunPaceTrendPoint[] }) {
       ) : (
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(51,65,85,0.75)" />
-            <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
-            <YAxis
-              reversed
-              tickFormatter={formatAxisPace}
-              tick={{ fill: "#94a3b8", fontSize: 12 }}
-            />
+            <CartesianGrid strokeDasharray="3 3" stroke={CHART_CHROME.grid} />
+            <XAxis dataKey="date" tick={{ fill: CHART_CHROME.tick, fontSize: 12 }} />
+            <YAxis reversed tickFormatter={formatAxisPace} tick={{ fill: CHART_CHROME.tick, fontSize: 12 }} />
             <Tooltip
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
@@ -48,11 +45,43 @@ export function RunPaceTrendChart({ data }: { data: RunPaceTrendPoint[] }) {
                 );
               }}
             />
-            <Legend wrapperStyle={{ color: "#cbd5e1", fontSize: 12 }} />
-            <Line type="monotone" dataKey="paceSecondsPerKm" name="配速" stroke="#38bdf8" strokeWidth={2.25} dot={false} connectNulls />
-            <Line type="monotone" dataKey="rolling3SecondsPerKm" name="近 3 次" stroke="#4ade80" strokeWidth={1.8} dot={false} connectNulls />
-            <Line type="monotone" dataKey="rolling5SecondsPerKm" name="近 5 次" stroke="#fbbf24" strokeWidth={1.8} dot={false} connectNulls />
-            <Line type="monotone" dataKey="rolling10SecondsPerKm" name="近 10 次" stroke="#fb923c" strokeWidth={1.8} dot={false} connectNulls />
+            <Legend wrapperStyle={{ color: CHART_CHROME.legend, fontSize: 12 }} />
+            <Line
+              type="monotone"
+              dataKey="paceSecondsPerKm"
+              name="配速"
+              stroke={DATA_PALETTE.blue}
+              strokeWidth={2.25}
+              dot={false}
+              connectNulls
+            />
+            <Line
+              type="monotone"
+              dataKey="rolling3SecondsPerKm"
+              name="近 3 次"
+              stroke={DATA_PALETTE.green}
+              strokeWidth={1.8}
+              dot={false}
+              connectNulls
+            />
+            <Line
+              type="monotone"
+              dataKey="rolling5SecondsPerKm"
+              name="近 5 次"
+              stroke={DATA_PALETTE.amber}
+              strokeWidth={1.8}
+              dot={false}
+              connectNulls
+            />
+            <Line
+              type="monotone"
+              dataKey="rolling10SecondsPerKm"
+              name="近 10 次"
+              stroke={DATA_PALETTE.red}
+              strokeWidth={1.8}
+              dot={false}
+              connectNulls
+            />
           </LineChart>
         </ResponsiveContainer>
       )}

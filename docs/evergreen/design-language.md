@@ -41,6 +41,7 @@ last-reviewed: 2026-06-27
 
 - **模块署名色已退役**：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 不再作为设计语言的一部分。模块身份靠固定位置、图标、页面标题、信息架构和 active 形态，不靠每个模块一套品牌色。
 - **Goal 星图局部命名空间**：`--galaxy-edge` / `--galaxy-edge-glow` / `--galaxy-star-core` 只允许 `pages/goals/**` 的星图边、星核和光晕使用；它们不扩展全站动作色，也不替代 `--color-accent`。
+- **预留 `--health-*` 命名空间（scoped，暂无色值）**：健康指标的「条件着色 / 分级指示色」（好 / 警告 / 差，或睡眠阶段、心率区间等分类）落地时走 scoped `--health-*` 色板，与 `--color-data-*`（序列区分）、`--galaxy-*`（场景专属）同类。规矩：独立前缀、语义命名（`--health-good` 而非 `--health-1`）、集中定义于 `index.css`、只服务健康可视化、不外溢按钮 / 页面壳。它表达「数据好不好 / 是哪类」（合法），不是「模块身份」（禁止，已随 module color 退役）。**当前只写下这条契约，不定义实际色值**——现有健康曲线是「序列区分」，用 `--color-data-*` 已够；色值等跑步表格 / 分级指示功能落地时随功能设计、由用户拍板。
 - **圆角阶梯**：`--radius-ctl`(8) / `--radius-row`(12) / `--radius-card`(16) / `--radius-pill`(999)。
 - **边框**：`--color-border` / `--color-border-strong` / `--color-border-hairline`(rgba 8%)。
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用。
@@ -70,6 +71,7 @@ last-reviewed: 2026-06-27
 - 禁止退役模块色：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 等。
 - 禁止新增 UI chrome 裸 `slate-*`，主操作裸 `blue-*` / `sky-*`，状态裸 `emerald-*` / `green-*` / `amber-*` / `yellow-*` / `orange-*` / `red-*` / `rose-*` / `gray-*`；覆盖 `bg/text/border/ring/fill/stroke/outline/caret/accent/shadow/decoration` 等常见 Tailwind 色彩工具。
 - 禁止 UI chrome 新增裸 hex / rgb / rgba / hsl / oklch / lab；测试 fixture、用户内容色、图表色和 scoped 特殊场景由脚本/allowlist 显式区分。
+- **token 定义与图表镜像不算「裸色」**：`index.css` 里 `--color-*` / `--galaxy-*` / `--shadow-*` 的 token 定义本身（值含 hex/rgba）是颜色的唯一事实源，脚本直接跳过；图表色镜像文件 `pages/stats/health/chartColors.ts`（recharts 不解析 `var()`，故把 token 镜像成 JS 常量）也整文件跳过 `bare-raw-color`。镜像文件登记在脚本的 `CHART_COLOR_MIRROR_FILES`，新增镜像文件需登记，不要用长期 allowlist 维持图表裸 hex。
 - 禁止交互控件用文字字符或 emoji 伪装图标。
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
 
@@ -77,15 +79,14 @@ last-reviewed: 2026-06-27
 
 ## 4. 关键不变量 / 坑 / 红线
 
-1. **新 UI 一律用 token，不写裸 hex/rgba**；旧健康/统计 CSS 与部分主干页面仍在 allowlist 中，勿当范式。
+1. **新 UI 一律用 token，不写裸 hex/rgba**；统计 / 健康面（TimeStats、HealthStats、stats 模块、图表 chrome、旧健康 CSS）已在 P3 收口，`P3-stat-health` allowlist 归零；剩余 allowlist 仅 `P4-*` 边角与 scoped 例外，勿当范式。
 2. **数据色不外溢 UI chrome**（只在图表/健康可视化里）；用户内容色只代表分类、标签、用户自定义标记。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。
-5. **recharts 不解析 CSS `var()`**：图表配色须把 token 镜像成 JS 常量（见 [health/charts](health/charts.md) 的 `chartColors`）。
-6. **个别遗留实色**：如 `.cb-save` 文字色 `#022c22` 配 `--color-data-teal`，属待 Phase 收口的实色，勿当范式。
-7. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。
-8. **主导航纯图标**：移动底栏与桌面侧栏的主导航使用 Phosphor 纯图标；图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色。主导航按钮必须有 `aria-label`，设置页配置界面和更多菜单可显示图标 + 文字。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。
-9. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。
+5. **recharts 不解析 CSS `var()`**：图表配色（数据色 + chrome 的 axis/grid/tooltip 背景边框文字/cursor）须把 token 镜像成 JS 常量，统一出自 `pages/stats/health/chartColors.ts`（`DATA_PALETTE` + `CHART_CHROME`），TimeStats 的 `InsightCharts` 与 Health 图表都消费它；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源仍是 `index.css` token。详见 [health/charts](health/charts.md)。
+6. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。
+7. **主导航纯图标**：移动底栏与桌面侧栏的主导航使用 Phosphor 纯图标；图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色。主导航按钮必须有 `aria-label`，设置页配置界面和更多菜单可显示图标 + 文字。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。
+8. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。
 
 ## 5. 模块速查
 

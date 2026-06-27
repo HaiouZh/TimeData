@@ -1,4 +1,4 @@
-import { localDateTimeToUtc } from "@timedata/shared";
+import { UNCATEGORIZED_COLOR, localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
 import { db } from "../../../db/index.ts";
@@ -80,7 +80,7 @@ export default function TrendSection(props: StatsModuleProps) {
     () =>
       trend.parentTrends.map((t) => ({
         key: props.parentNameById.get(t.parentId) ?? t.parentId,
-        color: props.parentCategories.find((category) => category.id === t.parentId)?.color ?? "#808080",
+        color: props.parentCategories.find((category) => category.id === t.parentId)?.color ?? UNCATEGORIZED_COLOR,
       })),
     [trend, props.parentNameById, props.parentCategories],
   );
@@ -100,7 +100,7 @@ export default function TrendSection(props: StatsModuleProps) {
               aria-pressed={active}
               onClick={() => setWindow({ kind: "preset", days: preset.days })}
               className={`min-h-10 rounded-full px-3 text-xs font-medium ${
-                active ? "bg-sky-500 text-white" : "border border-slate-800 bg-slate-900 text-slate-400"
+                active ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
               {preset.label}
@@ -117,9 +117,9 @@ export default function TrendSection(props: StatsModuleProps) {
             const days = Number(event.target.value);
             if (Number.isFinite(days) && days >= 1) setWindow({ kind: "customDays", days });
           }}
-          className="min-h-10 w-28 rounded-full border border-slate-800 bg-slate-900 px-3 text-xs text-slate-300 outline-none"
+          className="min-h-10 w-28 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
         />
-        <span className="text-xs text-slate-500">或</span>
+        <span className="text-xs text-ink-3">或</span>
         <input
           type="date"
           max={props.today}
@@ -132,7 +132,7 @@ export default function TrendSection(props: StatsModuleProps) {
               setWindow({ kind: "customRange", from, to: to < from ? from : to });
             }
           }}
-          className="min-h-10 rounded-full border border-slate-800 bg-slate-900 px-3 text-xs text-slate-300 outline-none"
+          className="min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
         />
         <input
           type="date"
@@ -146,33 +146,33 @@ export default function TrendSection(props: StatsModuleProps) {
               setWindow({ kind: "customRange", from: from > to ? to : from, to });
             }
           }}
-          className="min-h-10 rounded-full border border-slate-800 bg-slate-900 px-3 text-xs text-slate-300 outline-none"
+          className="min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
         />
       </div>
 
-      <div className="text-xs text-slate-500">
+      <div className="text-xs text-ink-3">
         {trend.window.from} ~ {trend.window.to}
         {!trend.prevComparable && "（对比期数据不足，仅显示本期投入）"}
       </div>
 
       {trend.parentTrends.length === 0 ? (
-        <p className="text-sm text-slate-500">本期窗口无投入记录。</p>
+        <p className="text-sm text-ink-3">本期窗口无投入记录。</p>
       ) : (
         <>
           <ul className="space-y-1.5">
             {trend.parentTrends.map((t) => (
               <li
                 key={t.parentId}
-                className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-sm"
+                className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm"
               >
-                <span className="text-slate-200">{props.parentNameById.get(t.parentId) ?? t.parentId}</span>
+                <span className="text-ink">{props.parentNameById.get(t.parentId) ?? t.parentId}</span>
                 <span
                   className={
                     t.state === "compared" && (t.deltaPct ?? 0) > 0
-                      ? "text-emerald-400"
+                      ? "text-ok"
                       : t.state === "compared" && (t.deltaPct ?? 0) < 0
-                        ? "text-rose-400"
-                        : "text-slate-400"
+                        ? "text-danger"
+                        : "text-ink-2"
                   }
                 >
                   {trendLabel(t)}
@@ -183,25 +183,25 @@ export default function TrendSection(props: StatsModuleProps) {
 
           {(trend.topRising.length > 0 || trend.topFalling.length > 0) && (
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-3">
-                <div className="mb-1 text-slate-400">上升最多</div>
+              <div className="rounded-2xl border border-ok/30 bg-ok/10 p-3">
+                <div className="mb-1 text-ink-2">上升最多</div>
                 {trend.topRising.length === 0 ? (
-                  <div className="text-slate-600">—</div>
+                  <div className="text-ink-3">—</div>
                 ) : (
                   trend.topRising.map((t) => (
-                    <div key={t.parentId} className="text-emerald-400">
+                    <div key={t.parentId} className="text-ok">
                       {props.parentNameById.get(t.parentId) ?? t.parentId} ↑{t.deltaPct}%
                     </div>
                   ))
                 )}
               </div>
-              <div className="rounded-2xl border border-rose-400/20 bg-rose-400/10 p-3">
-                <div className="mb-1 text-slate-400">下降最多</div>
+              <div className="rounded-2xl border border-danger/30 bg-danger/10 p-3">
+                <div className="mb-1 text-ink-2">下降最多</div>
                 {trend.topFalling.length === 0 ? (
-                  <div className="text-slate-600">—</div>
+                  <div className="text-ink-3">—</div>
                 ) : (
                   trend.topFalling.map((t) => (
-                    <div key={t.parentId} className="text-rose-400">
+                    <div key={t.parentId} className="text-danger">
                       {props.parentNameById.get(t.parentId) ?? t.parentId} ↓{Math.abs(t.deltaPct ?? 0)}%
                     </div>
                   ))
@@ -216,7 +216,7 @@ export default function TrendSection(props: StatsModuleProps) {
               aria-pressed={trendChart === "line"}
               onClick={() => setChart("line")}
               className={`min-h-10 rounded-full px-3 text-xs font-medium ${
-                trendChart === "line" ? "bg-sky-500 text-white" : "border border-slate-800 bg-slate-900 text-slate-400"
+                trendChart === "line" ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
               折线
@@ -226,14 +226,14 @@ export default function TrendSection(props: StatsModuleProps) {
               aria-pressed={trendChart === "area"}
               onClick={() => setChart("area")}
               className={`min-h-10 rounded-full px-3 text-xs font-medium ${
-                trendChart === "area" ? "bg-sky-500 text-white" : "border border-slate-800 bg-slate-900 text-slate-400"
+                trendChart === "area" ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
               堆叠面积
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50">
+          <div className="overflow-hidden rounded-2xl border border-border bg-surface-elevated">
             <TrendChart
               chart={trendChart}
               data={trendChartData}

@@ -89,6 +89,10 @@ export function createDefaultCategories(timestamp = new Date().toISOString()): C
   return categories;
 }
 
+// 无色分类（未设色或父分类缺失）在统计/图表里的回退色。属于用户内容色域，
+// 取冷中性灰（镜像 index.css 的 --color-ink-3），与深冷工具盘协调。
+export const UNCATEGORIZED_COLOR = "#8b94a8";
+
 export const DAY_START_HOUR = 0;
 
 export const SYNC_DIAGNOSTIC_FAILURE_THRESHOLD = 3;

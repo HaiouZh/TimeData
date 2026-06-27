@@ -1,5 +1,5 @@
 import type { Category, TimeEntry } from "@timedata/shared";
-import { localDateTimeToUtc } from "@timedata/shared";
+import { UNCATEGORIZED_COLOR, localDateTimeToUtc } from "@timedata/shared";
 import { addDays, addMonths, getDateString, startOfWeek } from "./time.ts";
 
 export type StatsViewMode = "day" | "week" | "month";
@@ -111,7 +111,7 @@ export function summarizeEntriesByParentCategory(
         id,
         name: parent?.name || "其他",
         value: roundHours(ms),
-        color: parent?.color || "#808080",
+        color: parent?.color || UNCATEGORIZED_COLOR,
       };
     })
     .filter((row) => row.value > 0)

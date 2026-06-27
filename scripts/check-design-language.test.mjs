@@ -165,6 +165,34 @@ test("does not flag theme token declarations as bare raw colors", () => {
   );
 });
 
+test("does not flag shadow token declarations in index.css", () => {
+  assert.equal(
+    classifyLine("packages/client/src/index.css", "  --shadow-elev2: 0 8px 30px rgba(0,0,0,.4);").length,
+    0,
+  );
+  // 非 index.css 的 --shadow-* 仍按裸色处理
+  assert.equal(
+    classifyLine("packages/client/src/other.css", "  --shadow-elev2: 0 8px 30px rgba(0,0,0,.4);").some(
+      (violation) => violation.rule === "bare-raw-color",
+    ),
+    true,
+  );
+});
+
+test("does not flag hex inside the chart color mirror file", () => {
+  assert.equal(
+    classifyLine("packages/client/src/pages/stats/health/chartColors.ts", '  tooltipBg: "#1b2336",').length,
+    0,
+  );
+  // 同样的镜像值出现在普通文件里仍是裸色违规
+  assert.equal(
+    classifyLine("packages/client/src/pages/stats/InsightCharts.tsx", '  background: "#1b2336",').some(
+      (violation) => violation.rule === "bare-raw-color",
+    ),
+    true,
+  );
+});
+
 test("flags font-mono inside multiline class arrays", () => {
   const result = collectViolations({
     files: [

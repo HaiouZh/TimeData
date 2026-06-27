@@ -10,7 +10,7 @@ covers:
   - packages/client/src/pages/stats/health/**
   - packages/client/src/lib/settings/healthRangeSetting.ts
   - packages/client/src/pages/settings/SettingsHealthRangePage.tsx
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-27
 ---
 
 # 健康 · 视图块配置与渲染
@@ -50,7 +50,7 @@ last-reviewed: 2026-06-18
 
 - **指标引擎 `healthMetrics/`**：`registry.ts`（13 个 `DailyMetricDef`）、`chartSeries.ts`（日期枚举 + rolling）、`chartDisplay.ts`（raw-single/dual-axis/index 布局 + Y domain）、`aggregate.ts`（latest/avg/max/min/sum 五种聚合）、`format.ts`（睡眠时长/配速/时钟/距离）、`types.ts`。
 - **块数据层 `healthBlocks/`**：`range.ts`（块级范围解析）、`summary.ts`（统计卡数据）、`tableData.ts`（指标表 + 跑步表数据）、`csv.ts`（CSV 导出）。
-- **页面渲染 `pages/stats/health/`**：`HealthBlockList.tsx` 按 `block.view + block.source` 分发；`MetricChartBlock.tsx`（recharts 趋势图）、`MetricTableBlock.tsx`、`RunTableBlock.tsx`、`HealthSummaryCards.tsx`、`ChartBuilderSheet.tsx`（增删改块）、`chartColors.ts`（DATA_PALETTE / metricColor / semanticColor）。
+- **页面渲染 `pages/stats/health/`**：`HealthBlockList.tsx` 按 `block.view + block.source` 分发；`MetricChartBlock.tsx`（recharts 趋势图）、`MetricTableBlock.tsx`、`RunTableBlock.tsx`、`HealthSummaryCards.tsx`、`ChartBuilderSheet.tsx`（增删改块）、`chartColors.ts`（`DATA_PALETTE` 数据色 + `metricColor` / `semanticColor` 取色 + `CHART_CHROME` 中性 chrome 镜像）。`chartColors.ts` 是**全站图表色镜像唯一源**：把 `index.css` 的 `--color-data-*` 与中性 token（grid/tick/legend/reference + tooltip 背/边/字 + cursor）镜像成 JS 常量，TimeStats 的 `pages/stats/InsightCharts.tsx` 也跨域消费它（见 [stats-insights](../stats-insights.md)）。
 - **范围设置**：`healthRangeSetting.ts` 页面级 6 档预设（`7,30,90,180,365,all`，key `health.range.presets`，默认 "30"）；设置页 `SettingsHealthRangePage.tsx`。
 
 ## 3. 关键不变量 / 坑 / 红线
@@ -59,7 +59,7 @@ last-reviewed: 2026-06-18
 2. **`health_charts` 是同步 LWW 域**；`sortOrder/config` 变更要和 `syncLog(tableName="health_charts")` 同事务写入。
 3. **配置 vs 原始数据**：`health.range.presets` 是 settings 键值，不是 `health_charts` 配置；别混。
 4. **打包/展开两套格式**：改 `chartRows.ts` 映射时注意 SQLite 打包格式与同步展开格式的字段覆盖顺序。
-5. **recharts 不解析 CSS `var()`**：图表配色须把 token 镜像成 JS 常量（`chartColors.ts`），不能直接传 `var(--…)`。
+5. **recharts 不解析 CSS `var()`**：图表配色须把 token 镜像成 JS 常量（`chartColors.ts` 的 `DATA_PALETTE` + `CHART_CHROME`），不能直接传 `var(--…)`。该文件登记在 `check-design-language.mjs` 的 `CHART_COLOR_MIRROR_FILES`，整文件豁免 `bare-raw-color`（它是 token 镜像、不是 UI chrome 裸色）；新增图表镜像文件要补登记，别用长期 allowlist 维持图表裸 hex。改了 `index.css` 的数据/中性 token 必须同步镜像值，`chartColors.test.ts` 锁定 `CHART_CHROME` 各值。
 
 ## 4. 模块速查
 
