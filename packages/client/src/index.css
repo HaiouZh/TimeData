@@ -111,6 +111,21 @@ samp {
   animation: sync-pulse 1.5s ease-in-out infinite;
 }
 
+/* 前置依赖线的"流光"：短亮段沿路径(source→target，即箭头方向)流动，纯虚线偏移、不靠每帧 JS。 */
+@keyframes goal-edge-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.goal-edge-flow {
+  animation: goal-edge-flow 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-edge-flow {
+    animation: none;
+  }
+}
+
 .animate-sync-blink {
   animation: sync-blink 2.5s ease-in-out infinite;
 }

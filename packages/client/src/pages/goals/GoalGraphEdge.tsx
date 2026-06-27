@@ -13,8 +13,9 @@ const PREREQUISITE_STROKE = "var(--color-accent-ink)";
 const EDGE_STYLE: Record<GoalGraphEdgeModel["kind"], CSSProperties> = {
   prerequisite: {
     stroke: PREREQUISITE_STROKE,
-    strokeWidth: 1.75,
+    strokeWidth: 1.1,
     strokeLinecap: "round",
+    opacity: 0.5,
   },
   "broken-prerequisite": {
     stroke: "var(--color-ink-3)",
@@ -33,6 +34,13 @@ const EDGE_STYLE: Record<GoalGraphEdgeModel["kind"], CSSProperties> = {
 
 function markerIdForEdge(id: string): string {
   return `goal-graph-prerequisite-arrow-${id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+/** 按边 id 算一个错峰延迟(ms)，让各条线的流光不同步。 */
+function flowDelayForEdge(id: string): number {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  return hash % 1400;
 }
 
 export function GoalGraphEdge({
@@ -59,6 +67,7 @@ export function GoalGraphEdge({
   const kind = data?.kind ?? "tether";
   const arrowMarkerId = markerIdForEdge(id);
   const resolvedMarkerEnd = kind === "prerequisite" ? (markerEnd ?? `url(#${arrowMarkerId})`) : undefined;
+  const flowDelay = flowDelayForEdge(id);
 
   return (
     <>
@@ -66,18 +75,29 @@ export function GoalGraphEdge({
         <defs>
           <marker
             id={arrowMarkerId}
-            markerWidth="10"
-            markerHeight="10"
-            refX="8"
-            refY="5"
+            markerWidth="14"
+            markerHeight="14"
+            refX="11"
+            refY="7"
             orient="auto"
-            markerUnits="strokeWidth"
+            markerUnits="userSpaceOnUse"
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill={PREREQUISITE_STROKE} />
+            <path d="M 2 2 L 12 7 L 2 12 z" fill={PREREQUISITE_STROKE} opacity={0.95} />
           </marker>
         </defs>
       )}
 
+      {kind === "prerequisite" && (
+        <path
+          d={path}
+          fill="none"
+          stroke={PREREQUISITE_STROKE}
+          strokeWidth={5}
+          strokeOpacity={0.12}
+          strokeLinecap="round"
+          style={{ pointerEvents: "none" }}
+        />
+      )}
       <BaseEdge
         id={id}
         path={path}
@@ -85,6 +105,19 @@ export function GoalGraphEdge({
         interactionWidth={interactionWidth}
         style={{ ...EDGE_STYLE[kind], ...style }}
       />
+      {kind === "prerequisite" && (
+        <path
+          className="goal-edge-flow"
+          d={path}
+          fill="none"
+          stroke={PREREQUISITE_STROKE}
+          strokeWidth={1.6}
+          strokeOpacity={0.85}
+          strokeDasharray="2 18"
+          strokeLinecap="round"
+          style={{ animationDelay: `${flowDelay}ms`, pointerEvents: "none" }}
+        />
+      )}
     </>
   );
 }
