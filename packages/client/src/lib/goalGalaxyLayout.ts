@@ -19,7 +19,7 @@ const COLLISION_ITERATIONS = 24;
 const ANCHOR_SOLVE_PASSES = 8;
 
 function boxFor(kind: string): GoalGraphNodeBox {
-  if (kind === "goal") return { width: 220, height: 80 };
+  if (kind === "goal") return { width: 144, height: 144 };
   if (kind === "task") return { width: 228, height: 48, offsetX: 94 };
   if (kind === "track") return { width: 190, height: 56 };
   return DEFAULT_BOX;
@@ -163,9 +163,7 @@ function samePositions(left: Record<string, XY>, right: Record<string, XY>): boo
   return leftIds.every((id) => samePosition(left[id], right[id]));
 }
 
-function splitPinnedMembers(
-  input: GalaxyLayoutInput,
-): Set<string> {
+function splitPinnedMembers(input: GalaxyLayoutInput): Set<string> {
   const pinnedMemberIds = new Set<string>();
   for (const node of input.model.nodes) {
     const anchorId = node.anchorIds[0];
@@ -207,10 +205,7 @@ function memberPositionsForAnchors(
   anchorCanvasById: Record<string, XY>,
 ): Record<string, XY> {
   return Object.fromEntries(
-    input.model.nodes.map((node) => [
-      node.id,
-      placeMember(node, { ...input, anchorCanvasById }, seeds),
-    ]),
+    input.model.nodes.map((node) => [node.id, placeMember(node, { ...input, anchorCanvasById }, seeds)]),
   );
 }
 

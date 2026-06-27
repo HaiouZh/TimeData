@@ -347,6 +347,27 @@ describe("GoalGraphEditor", () => {
     expect(leftToRight.getAttribute("data-edge-target-handle")).toBe("target-left");
   });
 
+  it("局部编辑器使用共享前置边渲染器和默认透明度", async () => {
+    const members: GoalMemberRef[] = [
+      { kind: "task", id: "task-1" },
+      { kind: "task", id: "task-2" },
+    ];
+    const goalValue = goal({
+      members,
+      prerequisites: [{ blocker: members[0], blocked: members[1] }],
+    });
+    const first = task("task-1", { title: "第一步" });
+    const second = task("task-2", { title: "第二步" });
+    await seed(goalValue, [first, second]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
+    const edge = edgeButton(host, "prerequisite:task:task-1->task:task-2");
+
+    expect(host.querySelector("[data-rf='true']")?.getAttribute("data-edge-types")).toBe("goal-graph-edge");
+    expect(edge.getAttribute("data-edge-data-kind")).toBe("prerequisite");
+    expect(edge.getAttribute("data-edge-data-opacity")).toBe("");
+  });
+
   it("拖 goal 锚后写入 world pin", async () => {
     const goalValue = goal();
     await seed(goalValue);

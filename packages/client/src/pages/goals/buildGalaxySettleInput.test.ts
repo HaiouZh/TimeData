@@ -35,10 +35,16 @@ function model(): GalaxyModel {
 }
 
 function args() {
+  const starBox = { width: 144, height: 144 };
   return {
     model: model(),
-    seedPositions: { "goal:g1": { x: 0, y: 0 }, "goal:g2": { x: 500, y: 0 }, "task:a": { x: 250, y: 0 }, "task:b": { x: 60, y: 0 } },
-    boxes: { "goal:g1": { width: 220, height: 80 }, "goal:g2": { width: 220, height: 80 }, "task:a": BOX, "task:b": BOX },
+    seedPositions: {
+      "goal:g1": { x: 0, y: 0 },
+      "goal:g2": { x: 500, y: 0 },
+      "task:a": { x: 250, y: 0 },
+      "task:b": { x: 60, y: 0 },
+    },
+    boxes: { "goal:g1": starBox, "goal:g2": starBox, "task:a": BOX, "task:b": BOX },
     pinnedMemberIds: new Set<string>(),
     anchorCanvasById: { "goal:g1": { x: 0, y: 0 }, "goal:g2": { x: 500, y: 0 } },
   };

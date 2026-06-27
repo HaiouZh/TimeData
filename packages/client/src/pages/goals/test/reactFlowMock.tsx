@@ -97,14 +97,15 @@ const screenToFlowPosition = vi.fn<(position: { x: number; y: number }) => { x: 
 let latestOnMoveEnd: MockReactFlowProps["onMoveEnd"] | undefined;
 let latestOnNodesChange: MockReactFlowProps["onNodesChange"] | undefined;
 let nextConnection: MockConnection | null = null;
-const getNode = vi.fn<(id: string) => (MockReactFlowNode & { measured?: { width?: number; height?: number } }) | undefined>(
-  (id) => {
-    const node = renderedNodes[renderedNodes.length - 1]?.find((item) => item.id === id);
-    if (!node) return undefined;
-    const measured = node.measured ?? (node.type === "goal-star" ? { width: 80, height: 60 } : { width: 180, height: 56 });
-    return { ...node, measured };
-  },
-);
+const getNode = vi.fn<
+  (id: string) => (MockReactFlowNode & { measured?: { width?: number; height?: number } }) | undefined
+>((id) => {
+  const node = renderedNodes[renderedNodes.length - 1]?.find((item) => item.id === id);
+  if (!node) return undefined;
+  const measured =
+    node.measured ?? (node.type === "goal-star" ? { width: 144, height: 144 } : { width: 180, height: 56 });
+  return { ...node, measured };
+});
 const reactFlowInstance = { fitView, setViewport, getViewport, screenToFlowPosition, getNode };
 
 function readNodePayload(node: MockReactFlowNode): { kind?: string; title?: string } {
@@ -250,6 +251,8 @@ export function ReactFlow({
             data-edge-id={edge.id}
             data-edge-type={edge.type ?? ""}
             data-edge-style-opacity={String(edge.style?.opacity ?? "")}
+            data-edge-data-kind={String(edge.data?.kind ?? "")}
+            data-edge-data-opacity={String(edge.data?.opacity ?? "")}
             data-edge-source-handle={edge.sourceHandle ?? ""}
             data-edge-target-handle={edge.targetHandle ?? ""}
             onClick={(event) => {

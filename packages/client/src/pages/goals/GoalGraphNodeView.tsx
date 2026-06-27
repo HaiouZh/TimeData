@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Icon } from "../../components/Icon.js";
 import type { GoalGraphLod } from "../../lib/goalGraphLod.js";
 import type { GoalGraphNode, GoalGraphNodeKind, GoalGraphNodeStatus } from "../../lib/goalGraphModel.js";
+import { GoalStarCore } from "./GoalStarCore.js";
 
 export interface GoalGraphNodeViewProps {
   node: GoalGraphNode;
@@ -28,50 +29,60 @@ const STATUS_META = {
     label: "就绪",
     icon: DotOutline,
     className: "border-border bg-surface-elevated text-ink-2",
+    glowClassName: "shadow-[0_0_14px_rgba(170,180,200,0.16)]",
   },
   blocked: {
     label: "受阻",
     icon: WarningCircle,
     className: "border-border-strong bg-danger-soft text-danger",
+    glowClassName: "shadow-[0_0_18px_rgba(248,113,113,0.28)]",
   },
   completed: {
     label: "已完成",
     icon: CheckCircle,
     className: "border-border bg-ok text-page",
+    glowClassName: "shadow-[0_0_18px_rgba(52,211,153,0.24)]",
   },
   parked: {
     label: "停放",
     icon: Lock,
     className: "border-border bg-surface-elevated text-ink-3",
+    glowClassName: "shadow-[0_0_12px_rgba(139,148,168,0.14)]",
   },
   active: {
     label: "进行中",
     icon: Clock,
     className: "border-border bg-accent-soft text-accent",
+    glowClassName: "shadow-[0_0_18px_rgba(79,155,245,0.24)]",
   },
   ghost: {
     label: "缺失引用",
     icon: WarningCircle,
     className: "border-border border-dashed bg-surface text-ink-3",
+    glowClassName: "shadow-none",
   },
   anchor: {
     label: "目标锚点",
     icon: Target,
     className: "border-border-strong bg-accent text-page",
+    glowClassName: "shadow-[0_0_20px_rgba(155,188,255,0.24)]",
   },
-} satisfies Record<GoalGraphNodeStatus, { label: string; icon: PhosphorGlyph; className: string }>;
+} satisfies Record<
+  GoalGraphNodeStatus,
+  { label: string; icon: PhosphorGlyph; className: string; glowClassName: string }
+>;
 
 const SHAPE_CLASS: Record<GoalGraphNodeKind, string> = {
   task: "h-10 w-10 rounded-pill",
   track: "min-h-12 min-w-36 rounded-pill px-4",
-  goal: "min-h-16 min-w-44 rounded-card px-5",
+  goal: "h-28 w-28 rounded-pill px-4",
   ghost: "min-h-12 min-w-28 rounded-card border-dashed px-3 opacity-70",
 };
 
 const FAR_SHAPE_CLASS: Record<GoalGraphNodeKind, string> = {
   task: "h-9 w-9 rounded-pill",
   track: "h-9 min-w-24 rounded-pill px-3",
-  goal: "h-12 min-w-32 rounded-card px-4",
+  goal: "h-20 w-20 rounded-pill px-3",
   ghost: "h-9 min-w-20 rounded-card border-dashed px-2 opacity-70",
 };
 
@@ -100,6 +111,7 @@ export function GoalGraphNodeView({
   const livelyClass = lively ? "motion-safe:animate-pulse" : "";
   const ariaLabel = `${KIND_LABEL[node.kind]}：${node.title}，状态：${statusMeta.label}`;
   const showTitleInsideShape = node.kind !== "task";
+  const isGoal = node.kind === "goal";
 
   return (
     <div
@@ -114,7 +126,13 @@ export function GoalGraphNodeView({
     >
       <span
         data-goal-graph-node-shape="true"
-        className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${statusMeta.className} ${selectedClass} ${ghostClass} ${livelyClass}`}
+        data-goal-star-shell={isGoal ? "true" : undefined}
+        data-status-glow={node.kind === "task" || node.kind === "track" ? node.status : undefined}
+        className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${
+          isGoal
+            ? "border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-ink shadow-[0_0_26px_rgba(155,188,255,0.22)]"
+            : statusMeta.className
+        } ${isGoal ? "" : statusMeta.glowClassName} ${selectedClass} ${ghostClass} ${livelyClass}`}
       >
         {handles}
         {pinned && onRestoreAuto ? (
@@ -140,9 +158,21 @@ export function GoalGraphNodeView({
             <Icon icon={PushPin} size={12} />
           </span>
         ) : null}
-        <Icon icon={statusMeta.icon} size={isFar ? 16 : 18} label={statusMeta.label} className="shrink-0" />
+        {isGoal ? (
+          <span className="flex min-w-0 flex-col items-center gap-1">
+            <GoalStarCore label={isFar ? "" : "◎"} size={isFar ? "sm" : "md"} />
+            <span className={isFar ? "sr-only" : "max-w-24 truncate text-center text-xs font-semibold text-ink"}>
+              {title}
+            </span>
+            <span className={isFar ? "sr-only" : "text-[10px] text-[var(--galaxy-star-core)]"}>
+              {statusMeta.label}
+            </span>
+          </span>
+        ) : (
+          <Icon icon={statusMeta.icon} size={isFar ? 16 : 18} label={statusMeta.label} className="shrink-0" />
+        )}
 
-        {showTitleInsideShape && (
+        {!isGoal && showTitleInsideShape && (
           <span className={`min-w-0 ${isFar ? "sr-only" : "flex flex-col leading-tight"}`}>
             {!isFar && <span className="max-w-36 truncate font-medium text-current">{title}</span>}
             <span className={isFar ? "sr-only" : "text-xs text-current opacity-80"}>{statusMeta.label}</span>

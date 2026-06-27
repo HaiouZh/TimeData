@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
+import type { GoalGraphLod } from "../../lib/goalGraphLod.js";
+import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
-import type { GoalGraphNode } from "../../lib/goalGraphModel.js";
-import type { GoalGraphLod } from "../../lib/goalGraphLod.js";
 
 function node(overrides: Partial<GoalGraphNode> = {}): GoalGraphNode {
   return {
@@ -101,6 +101,42 @@ describe("GoalGraphNodeView", () => {
     await unmount(root);
   });
 
+  it("renders goal anchors as star cores instead of card blocks", async () => {
+    const { host, root } = await renderNode({
+      node: node({ id: "goal", kind: "goal", status: "anchor", title: "星云视觉验收", ref: null }),
+    });
+
+    expect(host.querySelector('[data-node-kind="goal"]')).toBeTruthy();
+    expect(host.querySelector('[data-goal-star-core="true"]')).toBeTruthy();
+    const shellClass = host.querySelector('[data-goal-star-shell="true"]')?.className;
+    expect(shellClass).toContain("rounded-pill");
+    expect(shellClass).toContain("h-28");
+    expect(shellClass).toContain("w-28");
+    expect(shellClass).not.toContain("rounded-card");
+    expect(host.textContent).toContain("星云视觉验收");
+    expect(host.textContent).toContain("目标锚点");
+    await unmount(root);
+  });
+
+  it("adds status glow to task and track shapes while keeping their distinct forms", async () => {
+    const taskNode = await renderNode({ node: node({ kind: "task", status: "blocked" }) });
+    const taskShape = taskNode.host.querySelector("[data-goal-graph-node-shape]");
+    expect(taskShape?.getAttribute("data-status-glow")).toBe("blocked");
+    expect(taskShape?.className).toContain("rounded-pill");
+    expect(taskNode.host.textContent).toContain("受阻");
+    await unmount(taskNode.root);
+
+    const trackNode = await renderNode({
+      node: node({ id: "track:r1", kind: "track", status: "active", ref: { kind: "track", id: "r1" } }),
+    });
+    const trackShape = trackNode.host.querySelector("[data-goal-graph-node-shape]");
+    expect(trackShape?.getAttribute("data-status-glow")).toBe("active");
+    expect(trackShape?.className).toContain("rounded-pill");
+    expect(trackShape?.className).toContain("min-w-36");
+    expect(trackNode.host.textContent).toContain("进行中");
+    await unmount(trackNode.root);
+  });
+
   it("uses an in-app hover tooltip and separates visual shape from task label", async () => {
     const fullTitle = "一个很长很长的任务标题用于悬停查看完整内容";
     const { host, root } = await renderNode({ node: node({ title: fullTitle }) });
@@ -113,7 +149,9 @@ describe("GoalGraphNodeView", () => {
     expect(host.querySelector("[data-goal-graph-node-label]")?.className).toContain("absolute");
     expect(host.querySelector("[data-goal-graph-node-label]")?.className).toContain("left-full");
     expect(host.querySelector("[data-goal-graph-node-tooltip]")?.textContent).toContain(fullTitle);
-    expect(host.querySelector("[data-goal-graph-node-tooltip]")?.className).toContain("group-hover/goal-node:opacity-100");
+    expect(host.querySelector("[data-goal-graph-node-tooltip]")?.className).toContain(
+      "group-hover/goal-node:opacity-100",
+    );
     expect(host.querySelector("[data-goal-graph-node-shape]")?.textContent).not.toContain(fullTitle.slice(0, 6));
     expect(host.textContent).toContain("一个很长很长的任务标题");
     await unmount(root);

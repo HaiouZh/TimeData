@@ -18,7 +18,7 @@ import {
   useReactFlow,
   type Viewport,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
@@ -33,8 +33,6 @@ import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge }
 import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
-import { buildGoalOverview } from "../../lib/goalsView.js";
-import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import {
   addGoalMember,
   addTaskForGoal,
@@ -43,9 +41,12 @@ import {
   updateGoal,
   updateGoalPrerequisites,
 } from "../../lib/goals.js";
+import { buildGoalOverview } from "../../lib/goalsView.js";
+import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
+import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
 import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
 import { type GoalEditPatch, GoalEditSheet } from "./GoalEditSheet.js";
 import { GoalGalaxyActionBar, GoalGalaxyEdgeActionBar } from "./GoalGalaxyActionBar.js";
@@ -53,14 +54,13 @@ import { GoalGalaxyEngineToggle } from "./GoalGalaxyEngineToggle.js";
 import { GoalGalaxyHud } from "./GoalGalaxyHud.js";
 import { GoalGraphEdge as GoalGraphEdgeView } from "./GoalGraphEdge.js";
 import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
-import { GoalIndexPanel, type GoalIndexItem } from "./GoalIndexPanel.js";
+import { type GoalIndexItem, GoalIndexPanel } from "./GoalIndexPanel.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
-import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
+import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { readDragRef } from "./goalMemberDragData.js";
-import { hitTestGoalStar, type GoalStarHitTarget } from "./goalStarHitTest.js";
-import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
+import { type GoalStarHitTarget, hitTestGoalStar } from "./goalStarHitTest.js";
 import { restoreGalaxyPin } from "./restoreGalaxyPin.js";
 import { useGalaxySettleEngine } from "./useGalaxySettleEngine.js";
 
@@ -87,6 +87,7 @@ type GoalGalaxyFlowNode = Node<GoalStarNodeData, "goal-star"> | Node<GoalGalaxyM
 interface GoalGalaxyEdgeData extends Record<string, unknown> {
   kind: GoalGraphEdge["kind"];
   goalId?: string;
+  opacity?: number;
 }
 
 type GoalGalaxyFlowEdge = Edge<GoalGalaxyEdgeData, "goal-graph-edge">;
@@ -107,10 +108,14 @@ const REASON_COPY = {
 
 const DEFAULT_VIEWPORT: GalaxyViewport = { x: 0, y: 0, zoom: 1 };
 const DEFAULT_CLUSTER_BOUNDS = { x: -260, y: -260, width: 520, height: 520 };
-const STAR_HIT_FALLBACK = { width: 176, height: 96 };
+const STAR_HIT_FALLBACK = { width: 144, height: 144 };
 const DEFAULT_TETHER_OPACITY = 0.05;
 const TETHER_OPACITY_MIN = 0;
 const TETHER_OPACITY_MAX = 0.5;
+type OpacityTarget = "tether" | "prerequisite";
+const DEFAULT_PREREQUISITE_OPACITY = 1;
+const PREREQUISITE_OPACITY_MIN = 0;
+const PREREQUISITE_OPACITY_MAX = 1;
 const nodeTypes = {
   "goal-star": GoalStarNode,
   "goal-galaxy-member": GoalGalaxyMemberNode,
@@ -469,6 +474,8 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [indexOpen, setIndexOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const [tetherOpacity, setTetherOpacity] = useState(DEFAULT_TETHER_OPACITY);
+  const [opacityTarget, setOpacityTarget] = useState<OpacityTarget>("tether");
+  const [prereqOpacity, setPrereqOpacity] = useState(DEFAULT_PREREQUISITE_OPACITY);
   const [engineMode, setEngineMode] = useGalaxyEngineMode();
   const [liveSettle, setLiveSettle] = useState(true);
   const settleEnabled = engineMode === "settle";
@@ -661,10 +668,10 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       target: edge.target,
       ...edgeHandlesFor(edge, handleBoxById),
       style: edge.kind === "tether" ? { opacity: tetherOpacity } : undefined,
-      data: { kind: edge.kind, goalId: edge.goalId },
+      data: { kind: edge.kind, goalId: edge.goalId, opacity: edge.kind === "prerequisite" ? prereqOpacity : undefined },
       selected: edge.id === selectedEdgeId,
     }));
-  }, [layout.boxes, model.edges, nodes, selectedEdgeId, tetherOpacity]);
+  }, [layout.boxes, model.edges, nodes, prereqOpacity, selectedEdgeId, tetherOpacity]);
   useEffect(() => {
     if (initialFitGoalKey === activeGoalKey) return;
     if (activeGoalCount === 0) return;
@@ -820,10 +827,14 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     [flow, layout.positions, model.stars, nodes, syncAfterWrite],
   );
 
-  function handleTetherOpacityChange(value: string): void {
+  function handleLineOpacityChange(value: string): void {
     const next = Number(value);
     if (!Number.isFinite(next)) return;
-    setTetherOpacity(Math.min(TETHER_OPACITY_MAX, Math.max(TETHER_OPACITY_MIN, next / 100)));
+    if (opacityTarget === "tether") {
+      setTetherOpacity(Math.min(TETHER_OPACITY_MAX, Math.max(TETHER_OPACITY_MIN, next / 100)));
+      return;
+    }
+    setPrereqOpacity(Math.min(PREREQUISITE_OPACITY_MAX, Math.max(PREREQUISITE_OPACITY_MIN, next / 100)));
   }
 
   async function writePrerequisite(goalId: string, blocker: GoalMemberRef, blocked: GoalMemberRef): Promise<void> {
@@ -1037,6 +1048,9 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     setGoalMenuGoalId(null);
   }
 
+  const opacityPercent = Math.round((opacityTarget === "tether" ? tetherOpacity : prereqOpacity) * 100);
+  const opacityMax = opacityTarget === "tether" ? 50 : 100;
+
   async function runEdgeAction(action: GoalAction): Promise<void> {
     const edgeGoalId = selectedFlowEdge?.data?.goalId;
     if (action.id !== "delete-prerequisite" || !selectedGraphEdge || !edgeGoalId) return;
@@ -1133,20 +1147,39 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         >
           <Icon icon={CornersOut} size={16} />
         </button>
-        <label className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm">
-          <span className="whitespace-nowrap">归属线</span>
+        <div className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-pill border border-border bg-surface-elevated px-2 text-xs text-ink-2 shadow-sm">
+          <div className="inline-flex overflow-hidden rounded-pill border border-border bg-surface">
+            <button
+              type="button"
+              aria-label="归属线透明度"
+              aria-pressed={opacityTarget === "tether"}
+              onClick={() => setOpacityTarget("tether")}
+              className="h-6 px-2 text-xs transition-colors aria-pressed:bg-accent aria-pressed:text-page"
+            >
+              归属线
+            </button>
+            <button
+              type="button"
+              aria-label="连接线透明度"
+              aria-pressed={opacityTarget === "prerequisite"}
+              onClick={() => setOpacityTarget("prerequisite")}
+              className="h-6 px-2 text-xs transition-colors aria-pressed:bg-accent aria-pressed:text-page"
+            >
+              连接线
+            </button>
+          </div>
           <input
             type="range"
-            aria-label="归属线透明度"
+            aria-label="星图线透明度"
             min="0"
-            max="50"
+            max={opacityMax}
             step="1"
-            value={Math.round(tetherOpacity * 100)}
-            onInput={(event) => handleTetherOpacityChange(event.currentTarget.value)}
+            value={opacityPercent}
+            onInput={(event) => handleLineOpacityChange(event.currentTarget.value)}
             className="h-1 w-24 accent-accent"
           />
-          <span className="w-7 text-right tabular-nums">{Math.round(tetherOpacity * 100)}%</span>
-        </label>
+          <span className="w-8 text-right tabular-nums">{opacityPercent}%</span>
+        </div>
         <GoalGalaxyEngineToggle
           live={liveSettle}
           mode={engineMode}

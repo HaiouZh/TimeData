@@ -54,7 +54,7 @@ export interface GoalGraphModelLike {
 
 const DEFAULT_BOX: GoalGraphNodeBox = { width: 180, height: 56 };
 const NODE_BOX_BY_KIND: Record<GoalGraphNodeLayoutKind, GoalGraphNodeBox> = {
-  goal: { width: 220, height: 80 },
+  goal: { width: 112, height: 112 },
   task: { width: 228, height: 48, offsetX: 94 },
   track: { width: 190, height: 56 },
   ghost: { width: 170, height: 56 },
@@ -150,7 +150,9 @@ function orderedOrbitNodes(model: GoalGraphModelLike, ranks: Record<string, numb
       index,
       rank: ranks[node.id] ?? Number.POSITIVE_INFINITY,
     }))
-    .sort((left, right) => left.rank - right.rank || left.index - right.index || left.node.id.localeCompare(right.node.id))
+    .sort(
+      (left, right) => left.rank - right.rank || left.index - right.index || left.node.id.localeCompare(right.node.id),
+    )
     .map((item) => item.node);
 }
 

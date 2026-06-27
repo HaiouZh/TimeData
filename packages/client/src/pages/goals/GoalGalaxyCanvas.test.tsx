@@ -299,7 +299,7 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
-  it("lets the user adjust goal membership tether opacity without dimming prerequisites", async () => {
+  it("lets the user switch the opacity slider between tethers and prerequisite links", async () => {
     const firstRef = { kind: "task" as const, id: "a" };
     const secondRef = { kind: "task" as const, id: "b" };
     const goalValue = goal({
@@ -318,14 +318,33 @@ describe("GoalGalaxyCanvas", () => {
       />,
     );
 
-    const slider = inputByLabel(host, "归属线透明度");
+    const slider = inputByLabel(host, "星图线透明度");
+    expect(slider.getAttribute("max")).toBe("50");
+    expect(buttonByEdgeId(host, "tether:goal:g1->task:a").getAttribute("data-edge-style-opacity")).toBe("0.05");
+    expect(buttonByEdgeId(host, "prerequisite:g1:task:a->task:b").getAttribute("data-edge-data-opacity")).toBe("1");
+
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(slider, "0");
       slider.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
     expect(buttonByEdgeId(host, "tether:goal:g1->task:a").getAttribute("data-edge-style-opacity")).toBe("0");
-    expect(buttonByEdgeId(host, "prerequisite:g1:task:a->task:b").getAttribute("data-edge-style-opacity")).toBe("");
+    expect(buttonByEdgeId(host, "prerequisite:g1:task:a->task:b").getAttribute("data-edge-data-opacity")).toBe("1");
+
+    const prerequisiteButton = host.querySelector('button[aria-label="连接线透明度"]') as HTMLButtonElement | null;
+    expect(prerequisiteButton).toBeTruthy();
+    await act(async () => prerequisiteButton?.click());
+
+    expect(slider.getAttribute("max")).toBe("100");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(slider, "35");
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(buttonByEdgeId(host, "tether:goal:g1->task:a").getAttribute("data-edge-style-opacity")).toBe("0");
+    expect(buttonByEdgeId(host, "prerequisite:g1:task:a->task:b").getAttribute("data-edge-data-opacity")).toBe(
+      "0.35",
+    );
     await unmount(root);
   });
 

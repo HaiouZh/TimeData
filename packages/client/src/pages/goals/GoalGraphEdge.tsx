@@ -4,11 +4,13 @@ import type { GoalGraphEdge as GoalGraphEdgeModel } from "../../lib/goalGraphMod
 
 export interface GoalGraphEdgeData extends Record<string, unknown> {
   kind: GoalGraphEdgeModel["kind"];
+  opacity?: number;
 }
 
 export type GoalGraphFlowEdge = Edge<GoalGraphEdgeData, "goal-graph-edge">;
 
-const PREREQUISITE_STROKE = "var(--color-accent-ink)";
+const PREREQUISITE_STROKE = "var(--galaxy-edge)";
+const PREREQUISITE_GLOW = "var(--galaxy-edge-glow)";
 
 const EDGE_STYLE: Record<GoalGraphEdgeModel["kind"], CSSProperties> = {
   prerequisite: {
@@ -68,6 +70,8 @@ export function GoalGraphEdge({
   const arrowMarkerId = markerIdForEdge(id);
   const resolvedMarkerEnd = kind === "prerequisite" ? (markerEnd ?? `url(#${arrowMarkerId})`) : undefined;
   const flowDelay = flowDelayForEdge(id);
+  const prerequisiteOpacity =
+    typeof data?.opacity === "number" && Number.isFinite(data.opacity) ? Math.min(1, Math.max(0, data.opacity)) : 1;
 
   return (
     <>
@@ -88,34 +92,44 @@ export function GoalGraphEdge({
       )}
 
       {kind === "prerequisite" && (
-        <path
-          d={path}
-          fill="none"
-          stroke={PREREQUISITE_STROKE}
-          strokeWidth={5}
-          strokeOpacity={0.12}
-          strokeLinecap="round"
-          style={{ pointerEvents: "none" }}
-        />
+        <g data-goal-edge-layer="prerequisite" opacity={prerequisiteOpacity}>
+          <path
+            data-goal-edge-halo="true"
+            d={path}
+            fill="none"
+            stroke={PREREQUISITE_GLOW}
+            strokeWidth={5}
+            strokeOpacity={0.16}
+            strokeLinecap="round"
+            style={{ pointerEvents: "none" }}
+          />
+          <BaseEdge
+            id={id}
+            path={path}
+            markerEnd={resolvedMarkerEnd}
+            interactionWidth={interactionWidth}
+            style={{ ...EDGE_STYLE[kind], ...style }}
+          />
+          <path
+            className="goal-edge-flow"
+            d={path}
+            fill="none"
+            stroke={PREREQUISITE_STROKE}
+            strokeWidth={1.6}
+            strokeOpacity={0.85}
+            strokeDasharray="2 18"
+            strokeLinecap="round"
+            style={{ animationDelay: `${flowDelay}ms`, pointerEvents: "none" }}
+          />
+        </g>
       )}
-      <BaseEdge
-        id={id}
-        path={path}
-        markerEnd={resolvedMarkerEnd}
-        interactionWidth={interactionWidth}
-        style={{ ...EDGE_STYLE[kind], ...style }}
-      />
-      {kind === "prerequisite" && (
-        <path
-          className="goal-edge-flow"
-          d={path}
-          fill="none"
-          stroke={PREREQUISITE_STROKE}
-          strokeWidth={1.6}
-          strokeOpacity={0.85}
-          strokeDasharray="2 18"
-          strokeLinecap="round"
-          style={{ animationDelay: `${flowDelay}ms`, pointerEvents: "none" }}
+      {kind !== "prerequisite" && (
+        <BaseEdge
+          id={id}
+          path={path}
+          markerEnd={resolvedMarkerEnd}
+          interactionWidth={interactionWidth}
+          style={{ ...EDGE_STYLE[kind], ...style }}
         />
       )}
     </>

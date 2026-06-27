@@ -61,6 +61,11 @@
   --color-data-amber: #fbbf24;
   --color-data-red: #f87171;
   --color-data-purple: #a78bfa;
+
+  /* —— 星图专属色（仅 Goal 星图组件使用，不外溢到全站 chrome） —— */
+  --galaxy-edge: #a78bfa;
+  --galaxy-edge-glow: #7c6fd6;
+  --galaxy-star-core: #9bbcff;
 }
 
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }

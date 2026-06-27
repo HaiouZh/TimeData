@@ -8,7 +8,7 @@ covers:
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
   - packages/client/src/pages/settings/SettingsDetailPage.tsx
   - packages/client/src/pages/settings/components/SettingsRows.tsx
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-27
 ---
 
 # 设计语言
@@ -36,6 +36,7 @@ last-reviewed: 2026-06-25
 | **L4 状态色** | `--color-ok` `--color-warn` `--color-danger` + `*-soft` | 成功/警告/危险语义，soft 变体作软底 |
 | **L5 数据色板** | `--color-data-blue/teal/green/amber/red/purple`（固定 6 色） | **仅图表/健康可视化**，不外溢到 UI chrome |
 
+- **Goal 星图局部命名空间**：`--galaxy-edge` / `--galaxy-edge-glow` / `--galaxy-star-core` 只允许 `pages/goals/**` 的星图边、星核和光晕使用；它们不扩展全站动作色，也不替代 L2 `--color-accent`。
 - **圆角阶梯**：`--radius-ctl`(8) / `--radius-row`(12) / `--radius-card`(16) / `--radius-pill`(999)。
 - **边框**：`--color-border` / `--color-border-strong` / `--color-border-hairline`(rgba 8%)。
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用。

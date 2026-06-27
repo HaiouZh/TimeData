@@ -73,6 +73,12 @@ describe("goalGraphLayout", () => {
     expect(Math.max(horizontal.positions.blocker.y, horizontal.positions.blocked.y, horizontal.positions.tether.y)).toBeGreaterThan(0);
   });
 
+  it("Goal 锚 box 跟圆形星核实际占位一致", () => {
+    const layout = goalGraphLayout(runtimeModel(), { orientation: "horizontal" });
+
+    expect(layout.boxes.goal).toEqual({ width: 112, height: 112 });
+  });
+
   it("纵向布局仍保持 Goal 居中和成员环绕", () => {
     const vertical = goalGraphLayout(runtimeModel(), {
       orientation: "vertical",

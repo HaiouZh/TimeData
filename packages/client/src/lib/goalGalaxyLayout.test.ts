@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { goalGalaxyLayout } from "./goalGalaxyLayout.js";
-import { goalGraphLayout } from "./goalGraphLayout.js";
 import type { GalaxyModel } from "./goalGalaxyModel.js";
 import type { GoalGraphNodeBox } from "./goalGraphLayout.js";
+import { goalGraphLayout } from "./goalGraphLayout.js";
 
 function model(stars: string[], nodes: Array<{ id: string; anchorIds: string[] }>, edges = []): GalaxyModel {
   return {
@@ -85,6 +85,16 @@ describe("goalGalaxyLayout", () => {
     expect(out.positions["goal:g1"]).toEqual({ x: 100, y: 200 });
   });
 
+  it("uses a circular goal star box instead of the old card footprint", () => {
+    const out = goalGalaxyLayout({
+      model: model(["goal:g1"], []),
+      anchorCanvasById: { "goal:g1": { x: 0, y: 0 } },
+      memberPinByNodeId: {},
+    });
+
+    expect(out.boxes["goal:g1"]).toEqual({ width: 144, height: 144 });
+  });
+
   it("pushes overlapping unpinned stars away from each other", () => {
     const out = goalGalaxyLayout({
       model: model(["goal:g1", "goal:g2"], []),
@@ -134,10 +144,19 @@ describe("goalGalaxyLayout", () => {
     });
 
     expect(out.positions["goal:g1"]).not.toEqual(out.positions["goal:g2"]);
-    expect(out.positions["task:a"].x - out.positions["goal:g1"].x).toBeCloseTo(seed.x);
-    expect(out.positions["task:a"].y - out.positions["goal:g1"].y).toBeCloseTo(seed.y);
-    expect(out.positions["task:b"].x - out.positions["goal:g2"].x).toBeCloseTo(seed.x);
-    expect(out.positions["task:b"].y - out.positions["goal:g2"].y).toBeCloseTo(seed.y);
+    const offsetA = {
+      x: out.positions["task:a"].x - out.positions["goal:g1"].x,
+      y: out.positions["task:a"].y - out.positions["goal:g1"].y,
+    };
+    const offsetB = {
+      x: out.positions["task:b"].x - out.positions["goal:g2"].x,
+      y: out.positions["task:b"].y - out.positions["goal:g2"].y,
+    };
+    expect(offsetA.x).toBeCloseTo(seed.x);
+    expect(offsetB.x).toBeCloseTo(seed.x);
+    expect((offsetA.y + offsetB.y) / 2).toBeCloseTo(seed.y);
+    expect(Math.sign(offsetA.y)).toBe(Math.sign(seed.y));
+    expect(Math.sign(offsetB.y)).toBe(Math.sign(seed.y));
     expectNoVisualOverlap(out, ["goal:g1", "goal:g2", "task:a", "task:b"]);
   });
 
