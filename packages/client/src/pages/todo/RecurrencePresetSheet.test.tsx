@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
+import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { RecurrencePresetSheet } from "./RecurrencePresetSheet.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -45,7 +46,7 @@ describe("RecurrencePresetSheet", () => {
     expect(onChoose).toHaveBeenCalledWith({
       kind: "recurrence",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
-      startAt: null,
+      startAt: normalizeScheduledDate("2026-06-16"),
     });
     await act(async () => root.unmount());
   });

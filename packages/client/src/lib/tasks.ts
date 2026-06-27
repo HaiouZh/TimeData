@@ -49,6 +49,16 @@ async function putTask(next: Task): Promise<Task> {
   return next;
 }
 
+function stableJson(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+    .join(",")}}`;
+}
+
 export async function addTask(input: AddTaskInput): Promise<Task> {
   const task = await buildNewRootTask(input);
 
@@ -166,14 +176,19 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
   const now = patch.now ?? new Date();
   const updatedAt = now.toISOString();
   const recurrence = patch.recurrence === undefined ? existing.recurrence : patch.recurrence;
+  const recurrenceChanged =
+    patch.recurrence !== undefined && stableJson(patch.recurrence) !== stableJson(existing.recurrence);
+  const startChanged = patch.startAt !== undefined && patch.startAt !== existing.startAt;
+  const resetRecurrenceProgress = Boolean(recurrence && (recurrenceChanged || startChanged));
   const next: Task = TaskSchema.parse({
     ...existing,
     title: patch.title === undefined ? existing.title : normalizeTaskTitle(patch.title),
     recurrence,
     done: recurrence ? false : existing.done,
-    lastDoneAt: recurrence ? existing.lastDoneAt : null,
+    lastDoneAt: recurrence ? (resetRecurrenceProgress ? null : existing.lastDoneAt) : null,
     startAt: recurrence ? (patch.startAt ?? existing.startAt ?? updatedAt) : null,
-    scheduledAt: existing.scheduledAt ?? null,    completedCount: recurrence ? (existing.completedCount ?? 0) : 0,
+    scheduledAt: existing.scheduledAt ?? null,
+    completedCount: recurrence ? (resetRecurrenceProgress ? 0 : (existing.completedCount ?? 0)) : 0,
     sortOrder: patch.sortOrder ?? existing.sortOrder,
     updatedAt,
   });

@@ -6,7 +6,7 @@ import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
-import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
+import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
 import { subtaskProgress } from "../../lib/tasks/subtasks.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
@@ -167,7 +167,13 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
   const subtaskTotal = childRows.length;
   const subtaskDone = childRows.filter((c) => c.done).length;
   const todayDate = getDateString(new Date());
-  const anchorDate = task?.startAt ? getDateString(new Date(task.startAt)) : todayDate;
+  const taskPlacement = task ? placementForTask(task, new Date()) : null;
+  const anchorDate =
+    task?.recurrence && taskPlacement?.pool === "today" && taskPlacement.overdue
+      ? todayDate
+      : task?.startAt
+        ? getDateString(new Date(task.startAt))
+        : todayDate;
   const nextTimeLabel = task ? taskTimeLabel(task) : "设定时间";
   const customInitial = useMemo(
     () =>

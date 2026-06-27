@@ -8,6 +8,7 @@ import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { addTask, createChildTask, setTaskTags, toggleTaskDone } from "../../lib/tasks.js";
+import { addDays, getDateString } from "../../lib/time.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
@@ -89,6 +90,24 @@ const pressEnter = (input: HTMLInputElement) =>
   act(async () => {
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
+
+async function waitForTask(id: string, predicate: (task: Task | undefined) => boolean): Promise<Task | undefined> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const task = await db.tasks.get(id);
+    if (predicate(task)) return task;
+    await settle();
+  }
+  return db.tasks.get(id);
+}
+
+async function waitForElement(host: HTMLElement, selector: string): Promise<Element | null> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const element = host.querySelector(selector);
+    if (element) return element;
+    await settle();
+  }
+  return host.querySelector(selector);
+}
 
 describe("isSwipeDownClose", () => {
   it("下滑超过阈值 -> true", () => expect(isSwipeDownClose(80)).toBe(true));
@@ -346,6 +365,30 @@ describe("TaskDetailSheet 自动保存", () => {
     const saved = await db.tasks.get(t.id);
     expect(saved?.recurrence).not.toBeNull();
     expect(placementForTask(saved!, new Date()).pool).toBe("today");
+    await unmount(root);
+  });
+
+  it("逾期重复任务从预设改为每天时，用今天重新锚定起始日", async () => {
+    const today = getDateString(new Date());
+    const yesterday = addDays(today, -1);
+    const task = await addTask({
+      title: "逾期重复",
+      recurrence: { freq: "daily", interval: 2, basis: "due" },
+      startAt: normalizeScheduledDate(yesterday),
+    });
+    const { host, root } = await renderSheet(task.id);
+
+    await click(badgeOf(host));
+    const dailyButton = await waitForElement(host, 'button[aria-label="每天"]');
+    expect(dailyButton).not.toBeNull();
+    await click(dailyButton);
+    await settle();
+
+    const saved = await waitForTask(task.id, (current) => current?.recurrence?.interval === 1);
+    expect(saved?.recurrence).toMatchObject({ freq: "daily", interval: 1, basis: "due" });
+    expect(saved?.startAt).toBe(normalizeScheduledDate(today));
+    expect(placementForTask(saved!, new Date())).toEqual({ pool: "today", overdue: false });
+
     await unmount(root);
   });
 

@@ -383,6 +383,82 @@ describe("updateTask", () => {
     expect(next).toMatchObject({ title: "new", recurrence: { freq: "weekly", byWeekday: [1] } });
     expect(next.startAt).toBe("2026-06-14T09:00:00.000Z");
   });
+
+  it("resets the old recurrence cursor when the recurrence rule is re-anchored", async () => {
+    const task = await addTask({
+      title: "old",
+      recurrence: { freq: "daily", interval: 2, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 20)),
+      now: new Date("2026-06-20T08:00:00.000Z"),
+    });
+    await db.tasks.update(task.id, {
+      lastDoneAt: localDateOf(new Date(2026, 5, 24)),
+      completedCount: 2,
+    } satisfies Partial<Task>);
+
+    const next = await updateTask(task.id, {
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 27)),
+      now: new Date("2026-06-27T08:00:00.000Z"),
+    });
+
+    expect(next).toMatchObject({
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 27)),
+      lastDoneAt: null,
+      completedCount: 0,
+    });
+  });
+
+  it("keeps recurrence progress when saving an unchanged recurrence rule", async () => {
+    const recurrence = { freq: "daily", interval: 2, basis: "due" } as const;
+    const startAt = localDateOf(new Date(2026, 5, 20));
+    const task = await addTask({
+      title: "old",
+      recurrence,
+      startAt,
+      now: new Date("2026-06-20T08:00:00.000Z"),
+    });
+    await db.tasks.update(task.id, {
+      lastDoneAt: localDateOf(new Date(2026, 5, 24)),
+      completedCount: 2,
+    } satisfies Partial<Task>);
+
+    const next = await updateTask(task.id, {
+      recurrence: { ...recurrence },
+      startAt,
+      now: new Date("2026-06-27T08:00:00.000Z"),
+    });
+
+    expect(next).toMatchObject({
+      lastDoneAt: localDateOf(new Date(2026, 5, 24)),
+      completedCount: 2,
+    });
+  });
+
+  it("keeps recurrence progress when unchanged recurrence fields arrive in a different order", async () => {
+    const task = await addTask({
+      title: "old",
+      recurrence: { freq: "daily", interval: 2, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 20)),
+      now: new Date("2026-06-20T08:00:00.000Z"),
+    });
+    await db.tasks.update(task.id, {
+      lastDoneAt: localDateOf(new Date(2026, 5, 24)),
+      completedCount: 2,
+    } satisfies Partial<Task>);
+
+    const next = await updateTask(task.id, {
+      recurrence: { basis: "due", interval: 2, freq: "daily" },
+      startAt: localDateOf(new Date(2026, 5, 20)),
+      now: new Date("2026-06-27T08:00:00.000Z"),
+    });
+
+    expect(next).toMatchObject({
+      lastDoneAt: localDateOf(new Date(2026, 5, 24)),
+      completedCount: 2,
+    });
+  });
 });
 
 describe("deleteTask", () => {

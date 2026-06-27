@@ -7,7 +7,7 @@ covers:
   - packages/client/src/lib/tasks/recurrencePresets.ts
   - packages/client/src/components/MonthCalendar.tsx
   - packages/client/src/components/Wheel.tsx
-last-reviewed: 2026-06-19
+last-reviewed: 2026-06-27
 ---
 
 # 待办 · 重复规则引擎
@@ -61,6 +61,7 @@ last-reviewed: 2026-06-19
 - **逾期保留**：`until` 已过但仍有逾期未完成发生时，留在“今天”区（`placement.ts` 的 `hasOutstandingUntilOccurrence`）。
 - **模板不写 `completedAt`**：活动模板始终 `completedAt=null`，完成事件由衍生快照承载；仅终结转化时模板才写 `completedAt`（见 [todo](../todo.md) §3.1）。
 - **复选框恒不勾选/不划线**：重复模板（含已排期未到期）复选框点击表示“完成一轮”、可提前推进，不进入“撤销完成”路径。
+- **重设规则/起始日会重置进度游标**：用户修改 `recurrence` 内容或 `startAt` 时，客户端把活动模板视为重新锚定，清空旧 `lastDoneAt`/`completedCount`；规则和起始日未变的保存不清进度。
 - `scheduleTask`/`unscheduleTask` 拒绝重复任务（重复任务的排期由重复规则管理；server 端 schedule 端点对重复任务回 409 `TASK_RECURRING_USE_RULE`）。
 
 ## 4. 预设门 UI（行为）
@@ -68,6 +69,7 @@ last-reviewed: 2026-06-19
 重复设置走“徽章 → 预设门 → 自定义整页”：
 
 - 常用 每天/工作日/每周/每月/月末 一击写入；复杂规则进 `RecurrencePresetSheet` → `CustomRecurrencePage`（z=70 全屏）。
+- 逾期重复模板从详情抽屉打开重复设置时，预设门和自定义页默认用今天作为锚点；从“今天”区把旧逾期改成“每天”等新规则时，会从今天重新开始，而不是继续显示旧到期日。
 - `preserveHitDays`（`recurrencePresets.ts`）保留多周几/多月号/`byMonthday:[-1]` 月末，不因打开/完成而静默降级。
 - `CustomRecurrencePage` UI 限制 `interval`/`count` 1..99（schema 允许 1..999，UI 更严）；时间滚轮用共享 `components/Wheel.tsx`，月号选择用 `components/MonthCalendar.tsx`。
 - “仅某天”预设通过 `applyRecurrenceChoice()` 一次写成普通排期任务（非重复）。

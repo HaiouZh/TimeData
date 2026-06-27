@@ -3,6 +3,7 @@ import type { Recurrence } from "@timedata/shared";
 import { useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import MonthCalendar from "../../components/MonthCalendar.js";
+import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import {
   buildPresetRows,
   type PresetActionKey,
@@ -53,7 +54,7 @@ export function RecurrencePresetList({ current, scheduledAt, anchor, onChoose, o
       onChoose({
         kind: "recurrence",
         recurrence: presetToRecurrence(key as RecurrencePresetKey, anchor),
-        startAt: null,
+        startAt: normalizeScheduledDate(anchor),
       });
     }
   }

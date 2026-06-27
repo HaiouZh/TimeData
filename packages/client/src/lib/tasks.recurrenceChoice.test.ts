@@ -82,4 +82,23 @@ describe("applyRecurrenceChoice", () => {
     expect(placementForTask(saved!, new Date("2026-06-18T12:00:00"))?.pool).toBe("recurring");
     expect(placementForTask(saved!, new Date("2026-06-20T12:00:00"))?.pool).toBe("today");
   });
+
+  it("re-anchors an overdue recurring task when applying a preset with today's startAt", async () => {
+    const task = await addTask({
+      title: "x",
+      recurrence: { freq: "daily", interval: 2, basis: "due" },
+      startAt: normalizeScheduledDate("2026-06-26"),
+      now: new Date("2026-06-26T08:00:00.000Z"),
+    });
+
+    await applyRecurrenceChoice(task.id, {
+      kind: "recurrence",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: normalizeScheduledDate("2026-06-27"),
+    });
+
+    const saved = await db.tasks.get(task.id);
+    expect(saved?.startAt).toBe(normalizeScheduledDate("2026-06-27"));
+    expect(placementForTask(saved!, new Date("2026-06-27T12:00:00"))).toEqual({ pool: "today", overdue: false });
+  });
 });
