@@ -12,19 +12,41 @@ describe("index.css design tokens", () => {
     expect(themeBlock).toBeGreaterThan(tailwindImport);
     expect(css).toContain("--color-page: #0e1320;");
     expect(css).toContain("--color-surface: #161d30;");
-    expect(css).toContain("--color-mod-note: #2dd4bf;");
-    expect(css).toContain("--color-mod-track: #818cf8;");
-    expect(css).toContain("--color-mod-goal: #d99a6c;");
-    expect(css).toContain("--color-mod-time: #56b6d6;");
     expect(css).toContain("--color-data-purple: #a78bfa;");
     expect(css).toContain(
       '--font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;',
     );
   });
 
+  it("does not expose retired module signature color tokens", () => {
+    expect(css).not.toContain("--color-mod-note");
+    expect(css).not.toContain("--color-mod-timeline");
+    expect(css).not.toContain("--color-mod-todo");
+    expect(css).not.toContain("--color-mod-health");
+    expect(css).not.toContain("--color-mod-settings");
+    expect(css).not.toContain("--color-mod-track");
+    expect(css).not.toContain("--color-mod-goal");
+    expect(css).not.toContain("--color-mod-time");
+  });
+
   it("applies body and code font families from tokens", () => {
     expect(css).toMatch(/body\s*\{\s*font-family:\s*var\(--font-body\);\s*\}/);
     expect(css).toMatch(/code,\npre,\nkbd,\nsamp\s*\{\s*font-family:\s*var\(--font-mono\);\s*\}/);
+  });
+
+  it("defines TimeData typography roles on top of the body font", () => {
+    expect(css).toContain(".td-text-caption");
+    expect(css).toContain(".td-text-label");
+    expect(css).toContain(".td-text-body");
+    expect(css).toContain(".td-text-title");
+    expect(css).toContain(".td-text-display");
+    expect(css).toContain(".td-num");
+    expect(css).toContain(".td-time");
+    expect(css).toContain(".td-duration");
+    expect(css).toContain(".td-stat");
+    expect(css).toContain(".td-metric");
+    expect(css).toContain("font-family: var(--font-body)");
+    expect(css).toContain("font-variant-numeric: tabular-nums");
   });
 
   it("clips todo drag rows horizontally while allowing vertical dnd movement", () => {

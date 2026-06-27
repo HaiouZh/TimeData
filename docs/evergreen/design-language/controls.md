@@ -6,13 +6,14 @@ covers:
   - packages/client/src/components/Icon.tsx
   - packages/client/src/hooks/useConfirm.tsx
   - scripts/check-no-native-controls.mjs
-last-reviewed: 2026-06-18
+  - scripts/check-design-language.mjs
+last-reviewed: 2026-06-27
 ---
 
 # 设计语言 · 控件库
 
 > [design-language](../design-language.md) 的**控件子文档**：自绘控件词汇表 + 图标包装 + 无原生控件 CI 棘轮。
-> 讲什么：`components/ui/**` 各原子件、`Icon.tsx`、`useConfirm`、`check:ui` 棘轮。
+> 讲什么：`components/ui/**` 各原子件、`Icon.tsx`、`useConfirm`、`check:ui` 棘轮，以及交互图标由 `check:design` 辅助防回退。
 > 不讲什么：颜色/字体 token（见 [design-language](../design-language.md)）、具体功能里怎么用控件（见各功能主题）。
 
 ## 承上启下
@@ -54,9 +55,9 @@ last-reviewed: 2026-06-18
 
 - **禁用模式**：`<select>`、`type="checkbox"`、`type="radio"`、`window.confirm(`、`window.alert(`，命中即 `exit 1` 并指明该用哪个自绘控件。
 - **豁免**：`components/ui/**`（原子件本身）与 `*.test.*` 测试文件。
-- **CI**：`.github/workflows/ci.yml` 有 `pnpm check:ui` 步骤（与 `check:test` 并列）。这是“Phase 1 棘轮闸”——锁住表单控件不回退到原生。
+- **CI**：`.github/workflows/ci.yml` 有 `pnpm check:ui` 步骤（与 `check:design`、`check:test` 并列）。这是“Phase 1 棘轮闸”——锁住表单控件不回退到原生。
 
-> 注意：本棘轮只管**原生控件**，**不检查颜色**。“去裸色”是 [design-language](../design-language.md) §3 的红线但**尚无颜色机检脚本**；遗留 CSS 仍有裸色，靠人工迁移。
+> 注意：`check:ui` 只管**原生控件**。裸色、退役模块色、散装交互图标和业务 `font-mono` 由 [design-language](../design-language.md) §3 的 `check:design` 棘轮检查；遗留旧债必须登记在 allowlist，并随 P1/P3/P4 迁移逐步删除。
 
 ## 5. 关键不变量 / 坑 / 红线
 

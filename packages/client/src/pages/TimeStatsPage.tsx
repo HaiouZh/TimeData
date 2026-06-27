@@ -149,7 +149,7 @@ export default function TimeStatsPage() {
       <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-mod-time">TimeData</div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-2">TimeData</div>
             <h2 className="mt-1 text-2xl font-semibold tracking-normal text-ink">时间统计</h2>
           </div>
           {!atLatest && (
@@ -214,7 +214,7 @@ export default function TimeStatsPage() {
         </div>
 
         <div className="mt-4 rounded-card border border-border bg-surface-elevated px-4 py-3">
-          <div className="text-xs font-medium text-mod-time">已记录</div>
+          <div className="text-xs font-medium text-ink-2">已记录</div>
           <div className="mt-1 flex items-end gap-2">
             <span className="text-4xl font-semibold leading-none text-ink">{totalHours.toFixed(1)}</span>
             <span className="pb-1 text-sm text-ink-2">小时</span>

@@ -40,6 +40,9 @@ jobs:
       - name: UI controls guard
         run: pnpm check:ui
 
+      - name: Design language guard
+        run: pnpm check:design
+
       - name: Test hygiene guard
         run: pnpm check:test
 

@@ -31,6 +31,7 @@
     "check:docs:size": "node scripts/check-evergreen-docs.mjs --mode=size",
     "check:docs:coverage": "node scripts/check-evergreen-docs.mjs --mode=coverage",
     "check:docs:links": "node scripts/check-evergreen-docs.mjs --mode=links",
+    "check:design": "node scripts/check-design-language.mjs",
     "check:ui": "node scripts/check-no-native-controls.mjs",
     "check:test": "node scripts/check-test-hygiene.mjs"
   },

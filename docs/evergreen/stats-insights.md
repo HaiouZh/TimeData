@@ -12,7 +12,7 @@ covers:
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-27
 ---
 
 # 统计与洞察
@@ -47,7 +47,8 @@ last-reviewed: 2026-06-25
 - 取数优化：若 `needBaseline && periodWithinBaseline` → `entries = baselineEntries` 按周期裁剪；否则 `periodFallback` 独立查周期区间。
 - **`memoOverview` 在头部“已记录”处总是算一次**（即使 overview 隐藏，用于头部总时长复用缓存）；其余 4 模块的 memo 仅在组件内调用，隐藏则不算。
 - `moduleContext`（`StatsModuleProps`）打包 mode/today/effectiveRange/baselineFrom/entries/baselineEntries/categories/parentCategories/parentNameById/sleepCategoryId；内容区按 `layout.visibleModulesInOrder` 映射 `STATS_MODULES[id].component`，全隐藏显示空态 + 跳转设置。
-- `TimeStatsPage` 页面壳、周期切换、日期导航、总时长卡片和空态消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent/mod-time` token；不使用页面级渐变或 `sky-*` 展示型 chrome。周期导航图标经 Phosphor `Icon` 包装，按钮语义仍由 `aria-label` 承载。
+- `TimeStatsPage` 页面壳、周期切换、日期导航、总时长卡片和空态消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；`mod-time` 已退役，不再作为时间统计署名色。不使用页面级渐变或 `sky-*` 展示型 chrome。周期导航图标经 Phosphor `Icon` 包装，按钮语义仍由 `aria-label` 承载。
+- P3 设计语言迁移对象：`pages/stats/modules/**`、`pages/stats/InsightCharts.tsx`、健康图表色板和旧统计模块 chrome 仍在 `check:design` allowlist 中。迁移时要一起收口 UI chrome、状态色、数据色板和 Recharts token 镜像边界，避免“图表色迁了、模块壳没迁”的半收口状态。
 
 ### 1.3 STATS_MODULES 注册表（`pages/stats/modules/statsModules.ts`）
 
@@ -113,6 +114,7 @@ last-reviewed: 2026-06-25
 7. **`stats/health/**` 属 health 域，本域不收**：`HealthStatsPage`（`/stats/health`）与 `TimeStatsPage`（`/stats/time`）平级、共享 `stats/` 前缀但实现独立、无文件交叠。
 8. **时间一律 UTC ISO，本地日桶按 `APP_TIME_ZONE` 切分**：`dailyRollup.ts` 用 `localDateTimeToUtc`；`routine.ts`/`anomalies.ts` 用 `Intl.DateTimeFormat` 带 `APP_TIME_ZONE`。
 9. **会话合并容差 3min、噪声会话下限 1min**（`lib/insights/constants.ts`）。
+10. **统计视觉旧债按 P3 收口**：统计模块、时间趋势图、健康图表共享一批裸 `slate-*`、裸状态色和图表裸色旧债；这是设计语言迁移对象，不是功能 bug。新增统计 UI 不得照抄 allowlist 中的旧类名。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 

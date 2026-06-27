@@ -266,7 +266,6 @@ export default function SettingsPage() {
         <SettingsRow
           to="/settings/garmin"
           icon={<Icon icon={ArrowsClockwise} size={20} />}
-          accent="health"
           title="Garmin 数据同步"
           subtitle="配置 Garmin 账号、定时抓取健康数据"
         />
@@ -276,21 +275,18 @@ export default function SettingsPage() {
         <SettingsRow
           to="/settings/categories"
           icon={<Icon icon={Tag} size={20} />}
-          accent="timeline"
           title="分类管理"
           subtitle="新增、排序、改色、子分类与删除"
         />
         <SettingsRow
           to="/settings/insights"
           icon={<Icon icon={Moon} size={20} />}
-          accent="settings"
           title="记录偏好"
           subtitle="待办默认落点、打点分类、睡眠分类"
         />
         <SettingsRow
           to="/settings/tracks"
           icon={<Icon icon={Signpost} size={20} />}
-          accent="track"
           title="轨道看板信号"
           subtitle="配置进入轨道列表聚合的步骤标签"
         />
@@ -300,14 +296,12 @@ export default function SettingsPage() {
         <SettingsRow
           to="/settings/stats-layout"
           icon={<Icon icon={ChartBar} size={20} />}
-          accent="time"
           title="统计页面布局"
           subtitle="调整统计模块显示与顺序"
         />
         <SettingsRow
           to="/settings/health-range"
           icon={<Icon icon={ChartBar} size={20} />}
-          accent="health"
           title="健康范围"
           subtitle="选择健康统计页显示的时间范围"
         />
@@ -317,7 +311,6 @@ export default function SettingsPage() {
         <SettingsRow
           to="/settings/nav"
           icon={<Icon icon={DeviceMobile} size={20} />}
-          accent="settings"
           title="导航"
           subtitle="配置移动底栏与桌面侧栏"
         />
@@ -327,20 +320,18 @@ export default function SettingsPage() {
         <SettingsRow
           to="/settings/data"
           icon={<Icon icon={Database} size={20} />}
-          accent="settings"
           title="数据设置"
           subtitle="云同步、显示、备份与高级数据恢复"
         />
         <SettingsRow
           to="/settings/admin-insights"
           icon={<Icon icon={HardDrives} size={20} />}
-          accent="settings"
           title="服务端数据洞察"
           subtitle="只读查看服务器数据、同步、备份、健康检查和请求审计"
         />
         <SettingsRow
           icon={<Icon icon={DeviceMobile} size={20} />}
-          accent="todo"
+          tone="accent"
           title="APK 更新"
           subtitle={apkStatus || `当前版本：${__TIMEDATA_ANDROID_VERSION_CODE__}`}
           accessory={apkUpdate?.hasUpdate ? apkUpdate.versionCode : undefined}
@@ -349,7 +340,7 @@ export default function SettingsPage() {
         />
         <SettingsRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
-          accent="settings"
+          tone="accent"
           title="服务端更新"
           subtitle={
             serverUpdateStatus ||
@@ -363,7 +354,7 @@ export default function SettingsPage() {
         />
         <SettingsRow
           icon={<Icon icon={ArrowsClockwise} size={20} />}
-          accent="note"
+          tone="accent"
           title="刷新到最新前端"
           subtitle={`当前前端版本：${currentBuildId}`}
           onClick={forceRefresh}

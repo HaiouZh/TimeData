@@ -3,35 +3,30 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../../components/Icon.js";
 
-export type SettingsRowAccent = "note" | "timeline" | "todo" | "health" | "settings" | "track" | "goal" | "time";
+export type SettingsRowTone = "neutral" | "accent" | "status";
 
-const ACCENT_BADGE: Record<SettingsRowAccent, string> = {
-  note: "bg-surface-hover text-mod-note",
-  timeline: "bg-surface-hover text-mod-timeline",
-  todo: "bg-surface-hover text-mod-todo",
-  health: "bg-surface-hover text-mod-health",
-  settings: "bg-surface-hover text-mod-settings",
-  track: "bg-surface-hover text-mod-track",
-  goal: "bg-surface-hover text-mod-goal",
-  time: "bg-surface-hover text-mod-time",
+const TONE_BADGE: Record<SettingsRowTone, string> = {
+  neutral: "bg-surface-hover text-ink-2",
+  accent: "bg-accent-soft text-accent-ink",
+  status: "bg-surface-hover text-ok",
 };
 
 function RowBody({
   icon,
-  accent,
+  tone,
   title,
   subtitle,
   accessory,
 }: {
   icon: ReactNode;
-  accent: SettingsRowAccent;
+  tone: SettingsRowTone;
   title: string;
   subtitle?: string;
   accessory?: string;
 }) {
   return (
     <>
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-row ${ACCENT_BADGE[accent]}`}>
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-row ${TONE_BADGE[tone]}`}>
         {icon}
       </span>
       <div className="min-w-0 flex-1">
@@ -77,7 +72,7 @@ export function SettingsSection({
 export function SettingsRow({
   to,
   icon,
-  accent,
+  tone = "neutral",
   title,
   subtitle,
   accessory,
@@ -86,7 +81,7 @@ export function SettingsRow({
 }: {
   to?: string;
   icon: ReactNode;
-  accent: SettingsRowAccent;
+  tone?: SettingsRowTone;
   title: string;
   subtitle?: string;
   accessory?: string;
@@ -95,7 +90,7 @@ export function SettingsRow({
 }) {
   const className =
     "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-elevated disabled:opacity-60";
-  const body = <RowBody icon={icon} accent={accent} title={title} subtitle={subtitle} accessory={accessory} />;
+  const body = <RowBody icon={icon} tone={tone} title={title} subtitle={subtitle} accessory={accessory} />;
 
   if (to) {
     return (

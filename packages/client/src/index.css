@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme static {
-  /* —— 第 1 层 中性底盘 —— */
+  /* —— 中性底盘 —— */
   --color-page: #0e1320;
   --color-surface: #161d30;
   --color-surface-elevated: #1b2336;
@@ -12,13 +12,13 @@
   --color-ink-2: #aab4c8;
   --color-ink-3: #8b94a8;
 
-  /* —— 第 2 层 单一动作色（蓝） —— */
+  /* —— 单一动作色（蓝） —— */
   --color-accent: #4f9bf5;
   --color-accent-strong: #3b82f6;
   --color-accent-soft: #1b2740;
   --color-accent-ink: #8fbdf8;
 
-  /* —— 第 4 层 状态色 —— */
+  /* —— 状态色 —— */
   --color-ok: #34d399;
   --color-warn: #fbbf24;
   --color-danger: #f87171;
@@ -31,7 +31,7 @@
   --radius-card: 16px;
   --radius-pill: 999px;
 
-  /* 边框（spec §1 L1） */
+  /* 边框 */
   --color-border: #2b344e;
   --color-border-strong: #3a4668;
   --color-border-hairline: rgba(255, 255, 255, 0.08);
@@ -44,17 +44,7 @@
   --font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* —— 第 3 层 模块署名色（低饱和小面积：仅图标/署名点/选中态，绝不上按钮） —— */
-  --color-mod-note: #2dd4bf;       /* 速记 青 */
-  --color-mod-timeline: #a78bfa;   /* 时间轴 紫 */
-  --color-mod-todo: #4f9bf5;       /* 待办 蓝（与动作色同色） */
-  --color-mod-health: #34d399;     /* 健康 绿 */
-  --color-mod-settings: #8b94a8;   /* 设置 灰 */
-  --color-mod-track: #818cf8;      /* 轨道 靛 */
-  --color-mod-goal: #d99a6c;       /* 目标 琥珀 */
-  --color-mod-time: #56b6d6;       /* 时间统计 天蓝 */
-
-  /* —— 第 5 层 数据色板（仅图表/健康，固定 6 色，不外溢到 UI chrome） —— */
+  /* —— 数据色板（仅图表/健康，固定 6 色，不外溢到 UI chrome） —— */
   --color-data-blue: #4f9bf5;
   --color-data-teal: #2dd4bf;
   --color-data-green: #34d399;
@@ -90,6 +80,59 @@ pre,
 kbd,
 samp {
   font-family: var(--font-mono);
+}
+
+.td-text-caption {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0;
+}
+
+.td-text-label {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  letter-spacing: 0;
+}
+
+.td-text-body {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.45rem;
+  letter-spacing: 0;
+}
+
+.td-text-title {
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  line-height: 1.55rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.td-text-display {
+  font-family: var(--font-body);
+  font-size: 1.75rem;
+  line-height: 2.1rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.td-num,
+.td-time,
+.td-duration,
+.td-stat,
+.td-metric {
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.td-stat {
+  font-size: 1.5rem;
+  line-height: 1.9rem;
+  font-weight: 600;
 }
 
 @keyframes sync-pulse {
@@ -491,7 +534,7 @@ textarea {
 }
 
 .health-kicker {
-  color: var(--color-mod-health);
+  color: var(--color-ink-2);
   font-size: 0.6875rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -525,9 +568,9 @@ textarea {
 }
 
 .health-range-button[aria-pressed="true"] {
-  border-color: var(--color-mod-health);
-  background: color-mix(in srgb, var(--color-mod-health) 16%, transparent);
-  color: var(--color-mod-health);
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
 }
 
 .health-empty-state,
@@ -801,8 +844,8 @@ textarea {
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .health-block-edit:hover {
-  color: var(--color-mod-health);
-  border-color: var(--color-mod-health);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 .health-block-delete:hover {
   color: var(--color-danger);
