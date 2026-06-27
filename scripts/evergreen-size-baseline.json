@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 6805,
+    "chars": 6809,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
@@ -76,7 +76,7 @@
     "covers": 10
   },
   "docs/evergreen/sync.md": {
-    "chars": 13483,
+    "chars": 13554,
     "covers": 33
   },
   "docs/evergreen/sync/domain-registry.md": {

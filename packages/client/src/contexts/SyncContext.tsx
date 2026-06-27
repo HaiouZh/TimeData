@@ -90,6 +90,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const syncingRef = useRef(syncState.syncing);
   const syncRef = useRef(syncState.sync);
   const cloudSyncEnabledRef = useRef(cloudSyncEnabled);
+  const needsConnectionRetryRef = useRef(false);
 
   useEffect(() => {
     syncingRef.current = syncState.syncing;
@@ -124,24 +125,29 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await syncRef.current();
   }, []);
 
-  const runStaleSync = useCallback(async ({ retryOnFailure, attemptedAt }: {
-    retryOnFailure: boolean;
-    attemptedAt: number;
-  }) => {
+  const runStaleSyncAttempt = useCallback(async (attemptedAt: number) => {
     if (syncingRef.current || !cloudSyncEnabledRef.current) return;
 
     lastAutoAttemptAtRef.current = attemptedAt;
     const ok = await syncRef.current();
-    if (ok || !retryOnFailure || failedRetryTimerRef.current) return;
+    needsConnectionRetryRef.current = !ok;
+    return ok;
+  }, []);
+
+  const runStaleSync = useCallback(async ({ retryOnFailure, attemptedAt }: {
+    retryOnFailure: boolean;
+    attemptedAt: number;
+  }) => {
+    const ok = await runStaleSyncAttempt(attemptedAt);
+    if (ok !== false || !retryOnFailure || failedRetryTimerRef.current) return;
 
     lastAutoAttemptAtRef.current = null;
     failedRetryTimerRef.current = setTimeout(() => {
       failedRetryTimerRef.current = null;
       if (syncingRef.current || !cloudSyncEnabledRef.current) return;
-      lastAutoAttemptAtRef.current = Date.now();
-      void syncRef.current();
+      void runStaleSyncAttempt(Date.now());
     }, 0);
-  }, []);
+  }, [runStaleSyncAttempt]);
 
   const syncIfStale = useCallback(async (now = Date.now()) => {
     const lastAttemptAt = lastAutoAttemptAtRef.current;
@@ -193,6 +199,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }, SYNC_BUMP_DEBOUNCE_MS);
   }, []);
 
+  const handleSyncStreamStateChange = useCallback((state: SyncStreamState) => {
+    setConnection(state);
+    if (state !== "connected" || !needsConnectionRetryRef.current || failedRetryTimerRef.current) return;
+    void runStaleSyncAttempt(Date.now());
+  }, [runStaleSyncAttempt]);
+
   useEffect(() => {
     if (!cloudSyncEnabled || !apiUrl) {
       setConnection("disconnected");
@@ -200,7 +212,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
 
     const stream = createSyncStream({
-      onStateChange: setConnection,
+      onStateChange: handleSyncStreamStateChange,
       onMessage: handleSyncStreamMessage,
     });
 
@@ -219,7 +231,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", syncStreamVisibility);
       stream.stop();
     };
-  }, [apiUrl, cloudSyncEnabled, handleSyncStreamMessage]);
+  }, [apiUrl, cloudSyncEnabled, handleSyncStreamMessage, handleSyncStreamStateChange]);
 
   useEffect(() => {
     return () => {

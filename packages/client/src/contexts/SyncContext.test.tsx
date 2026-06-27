@@ -3,6 +3,7 @@ import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../test/domHarness.js";
 import {
   deriveSyncStatus,
   SYNC_BUMP_DEBOUNCE_MS,
@@ -440,6 +441,37 @@ describe("SyncProvider", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("retries a failed stale sync when the stream connects later without remounting", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1000);
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    mockSyncActions.sync.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    let syncIfStale: () => Promise<void> = async () => undefined;
+
+    function Probe() {
+      syncIfStale = useSyncContext().syncIfStale;
+      return createElement("span", null, "probe");
+    }
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
+    await act(async () => {
+      await syncIfStale();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(mockSyncActions.sync).toHaveBeenCalledTimes(2);
+
+    vi.setSystemTime(5000);
+    await act(async () => {
+      syncStreamMock.setState("connected");
+    });
+
+    expect(mockSyncActions.sync).toHaveBeenCalledTimes(3);
+
+    await unmount(root);
   });
 
   it("skips a throttled flush when no unsynced changes remain", async () => {
