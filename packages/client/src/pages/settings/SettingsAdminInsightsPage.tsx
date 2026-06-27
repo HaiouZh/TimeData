@@ -203,7 +203,7 @@ function PermissionMatrix() {
           <tbody className="divide-y divide-border text-ink-2">
             {rows.map((row) => (
               <tr key={row.tier}>
-                <td className="px-3 py-2 font-mono text-ink">{row.tier}</td>
+                <td className="px-3 py-2 text-ink"><code>{row.tier}</code></td>
                 <td className="px-3 py-2">{row.access}</td>
                 <td className="px-3 py-2 text-ink-3">{row.notes}</td>
               </tr>
@@ -277,7 +277,7 @@ function RequestAuditSection({
         {logs?.logs.map((log) => (
           <div key={log.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">
             <div className="flex flex-wrap items-center gap-2 text-ink">
-              <span className="font-mono">{log.method}</span>
+              <code>{log.method}</code>
               <span className="min-w-0 break-all">{log.path}</span>
               <SyncIssueBadge label={String(log.status)} />
               <SyncIssueBadge label={log.outcome} />

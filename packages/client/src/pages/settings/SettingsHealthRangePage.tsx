@@ -25,10 +25,10 @@ export default function SettingsHealthRangePage() {
   return (
     <SettingsDetailPage title="健康范围">
       <section className="space-y-3">
-        <p className="px-1 text-xs leading-relaxed text-slate-500">选择健康统计页顶部显示哪些时间范围。</p>
+        <p className="px-1 text-xs leading-relaxed text-ink-3">选择健康统计页顶部显示哪些时间范围。</p>
         <ul className="space-y-2">
           {HEALTH_RANGE_PRESETS.map((preset) => (
-            <li key={preset} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+            <li key={preset} className="rounded-2xl border border-border bg-surface p-3">
               <Checkbox
                 ariaLabel={rangeLabel(preset)}
                 label={rangeLabel(preset)}

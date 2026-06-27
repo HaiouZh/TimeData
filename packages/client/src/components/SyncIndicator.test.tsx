@@ -11,14 +11,14 @@ vi.mock("../contexts/SyncContext.tsx", () => ({
 
 describe("syncIndicatorClassName", () => {
   it("uses the expected color and animation classes", () => {
-    expect(syncIndicatorClassName("disabled")).toContain("bg-gray-400");
-    expect(syncIndicatorClassName("success")).toContain("bg-green-500");
-    expect(syncIndicatorClassName("idle")).toContain("bg-green-500");
-    expect(syncIndicatorClassName("syncing")).toContain("bg-yellow-500");
+    expect(syncIndicatorClassName("disabled")).toContain("bg-ink-3");
+    expect(syncIndicatorClassName("success")).toContain("bg-ok");
+    expect(syncIndicatorClassName("idle")).toContain("bg-ok");
+    expect(syncIndicatorClassName("syncing")).toContain("bg-warn");
     expect(syncIndicatorClassName("syncing")).toContain("animate-sync-pulse");
-    expect(syncIndicatorClassName("error")).toContain("bg-red-500");
+    expect(syncIndicatorClassName("error")).toContain("bg-danger");
     expect(syncIndicatorClassName("error")).toContain("animate-sync-blink");
-    expect(syncIndicatorClassName("pending")).toContain("bg-blue-500");
+    expect(syncIndicatorClassName("pending")).toContain("bg-accent");
   });
 });
 
@@ -40,6 +40,6 @@ describe("SyncIndicator", () => {
     const html = renderToStaticMarkup(createElement(SyncIndicator));
 
     expect(html).toContain('aria-label="同步状态：待上传"');
-    expect(html).toContain("bg-blue-500");
+    expect(html).toContain("bg-accent");
   });
 });

@@ -56,6 +56,17 @@
   --galaxy-edge: #a78bfa;
   --galaxy-edge-glow: #7c6fd6;
   --galaxy-star-core: #9bbcff;
+
+  /* —— 星图专属光晕阴影（仅 Goal galaxy 节点状态光晕，不外溢到 UI chrome） —— */
+  --shadow-galaxy-ready: 0 0 14px rgba(170,180,200,0.16);
+  --shadow-galaxy-blocked: 0 0 18px rgba(248,113,113,0.28);
+  --shadow-galaxy-completed: 0 0 18px rgba(52,211,153,0.24);
+  --shadow-galaxy-parked: 0 0 12px rgba(139,148,168,0.14);
+  --shadow-galaxy-active: 0 0 18px rgba(79,155,245,0.24);
+  --shadow-galaxy-anchor: 0 0 20px rgba(155,188,255,0.24);
+  --shadow-galaxy-star-core: 0 0 26px rgba(155,188,255,0.22);
+  --shadow-galaxy-star-core-strong: 0 0 26px rgba(155,188,255,0.32);
+  --shadow-galaxy-star-core-wide: 0 0 34px rgba(155,188,255,0.2);
 }
 
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }

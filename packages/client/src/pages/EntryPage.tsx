@@ -107,14 +107,14 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
   }, [end, clampedQueryStart, clampedQueryEnd, prevEndLocal]);
 
   if (isEdit && existingEntry === undefined) {
-    return <div className="p-6 text-center text-slate-500">正在加载记录...</div>;
+    return <div className="p-6 text-center text-ink-3">正在加载记录...</div>;
   }
 
   if (isEdit && !existingEntry) {
     return (
       <div className="p-6 space-y-4 text-center">
-        <p className="text-slate-400">没有找到这条记录。</p>
-        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg bg-slate-800 text-sm">
+        <p className="text-ink-3">没有找到这条记录。</p>
+        <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg bg-surface-hover text-sm">
           返回
         </button>
       </div>
@@ -190,9 +190,9 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
   }
 
   return (
-    <div className="min-h-full bg-slate-950">
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-3 py-2 backdrop-blur">
-        <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-sm text-slate-300">
+    <div className="min-h-full bg-page">
+      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-page/95 px-3 py-2 backdrop-blur">
+        <button onClick={() => navigate(-1)} className="px-3 py-1.5 rounded-lg bg-surface-hover text-sm text-ink-2">
           返回
         </button>
         <h1 className="text-lg font-medium">{existingEntry ? "编辑记录" : "新增记录"}</h1>

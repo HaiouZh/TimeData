@@ -329,7 +329,7 @@ export default function SettingsGarminPage() {
   if (!apiUrl) {
     return (
       <SettingsDetailPage title="Garmin 数据同步">
-        <p className="text-sm text-slate-400">请先配置服务器地址</p>
+        <p className="text-sm text-ink-3">请先配置服务器地址</p>
       </SettingsDetailPage>
     );
   }
@@ -337,61 +337,61 @@ export default function SettingsGarminPage() {
   return (
     <SettingsDetailPage title="Garmin 数据同步">
       {loading ? (
-        <p className="text-sm text-slate-400">加载中…</p>
+        <p className="text-sm text-ink-3">加载中…</p>
       ) : (
         <div className="space-y-6">
           {/* Config form */}
           <form onSubmit={handleSave} className="space-y-4">
-            <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
+            <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
               账号配置
             </h3>
-            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
               <label className="block">
-                <span className="text-xs text-slate-400">Garmin 邮箱</span>
+                <span className="text-xs text-ink-3">Garmin 邮箱</span>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                   placeholder="user@example.com"
                 />
               </label>
               <label className="block">
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-ink-3">
                   密码{config?.password ? "（已设置，留空保持不变）" : ""}
                 </span>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                   placeholder="••••••••"
                 />
               </label>
               <Checkbox ariaLabel="中国区 (Garmin CN)" label="中国区 (Garmin CN)" checked={isCn} onChange={setIsCn} />
             </div>
 
-            <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
+            <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
               定时抓取
             </h3>
-            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
               <label className="flex min-h-11 items-center justify-between gap-3 py-1">
-                <span className="text-sm text-slate-200">启用每日定时抓取</span>
+                <span className="text-sm text-ink-2">启用每日定时抓取</span>
                 <Switch ariaLabel="启用每日定时抓取" checked={enabled} onChange={setEnabled} />
               </label>
               {enabled && (
                 <label className="block">
-                  <span className="text-xs text-slate-400">抓取时间 (HH:MM)</span>
+                  <span className="text-xs text-ink-3">抓取时间 (HH:MM)</span>
                   <input
                     type="time"
                     value={schedule}
                     onChange={(e) => setSchedule(e.target.value)}
-                    className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                    className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                   />
                 </label>
               )}
               <label className="block">
-                <span className="text-xs text-slate-400">首次回填天数</span>
+                <span className="text-xs text-ink-3">首次回填天数</span>
                 <input
                   name="initialBackfillDays"
                   type="number"
@@ -400,11 +400,11 @@ export default function SettingsGarminPage() {
                   step={1}
                   value={initialBackfillDays}
                   onChange={(e) => setInitialBackfillDays(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                 />
               </label>
               {config?.lastFetchDate && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-ink-3">
                   上次抓取到: {config.lastFetchDate}
                 </p>
               )}
@@ -414,7 +414,7 @@ export default function SettingsGarminPage() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+                className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
               >
                 {saving ? "保存中…" : "保存配置"}
               </button>
@@ -422,7 +422,7 @@ export default function SettingsGarminPage() {
                 type="button"
                 disabled={testing || !config?.email}
                 onClick={handleTest}
-                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-50"
+                className="rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-hover disabled:opacity-50"
               >
                 {testing ? "测试中…" : "测试连接"}
               </button>
@@ -431,30 +431,30 @@ export default function SettingsGarminPage() {
 
           {/* Manual fetch */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
+            <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
               手动抓取
             </h3>
-            <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <div className="flex flex-wrap gap-3 rounded-2xl border border-border bg-surface p-4">
               <label className="block min-w-[9rem] flex-1">
-                <span className="text-xs text-slate-400">开始日期</span>
+                <span className="text-xs text-ink-3">开始日期</span>
                 <input
                   type="date"
                   value={fetchStartDate}
                   onChange={(e) => setFetchStartDate(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                 />
               </label>
               <label className="block min-w-[9rem] flex-1">
-                <span className="text-xs text-slate-400">结束日期</span>
+                <span className="text-xs text-ink-3">结束日期</span>
                 <input
                   type="date"
                   value={fetchEndDate}
                   onChange={(e) => setFetchEndDate(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                 />
               </label>
               <label className="block min-w-[9rem] flex-1">
-                <span className="text-xs text-slate-400">强制重抓最近 N 天</span>
+                <span className="text-xs text-ink-3">强制重抓最近 N 天</span>
                 <input
                   name="fetchDays"
                   type="number"
@@ -463,7 +463,7 @@ export default function SettingsGarminPage() {
                   step={1}
                   value={fetchDays}
                   onChange={(e) => setFetchDays(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
                 />
               </label>
               <div className="flex items-end">
@@ -471,40 +471,40 @@ export default function SettingsGarminPage() {
                   type="button"
                   disabled={fetching || !config?.email}
                   onClick={handleFetch}
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+                  className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
                 >
                   {fetching ? "抓取中…" : "立即抓取"}
                 </button>
               </div>
             </div>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-3">
               日期和 N 天都留空时，服务器会按健康表缺口智能补到昨天
             </p>
           </div>
 
           {/* Status */}
           {status?.running && (
-            <div className="rounded-xl border border-blue-800 bg-blue-950/30 p-3 text-sm text-blue-200">
+            <div className="rounded-xl border border-accent/40 bg-accent-soft p-3 text-sm text-accent-ink">
               Garmin 正在抓取中，请稍后刷新状态
             </div>
           )}
           {status?.lastFetch && (
             <div className="space-y-2">
-              <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
+              <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
                 上次抓取结果
               </h3>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm">
-                <p className="text-slate-300">
+              <div className="rounded-2xl border border-border bg-surface p-4 text-sm">
+                <p className="text-ink-2">
                   {garminStatusLabel(status.lastFetch.status)} | {status.lastFetch.startDate} →{" "}
                   {status.lastFetch.endDate} |{" "}
                   {Math.round(status.lastFetch.duration / 1000)}s
                 </p>
                 {status.lastFetch.status === "no_op" && (
-                  <p className="mt-2 text-xs text-emerald-300">
+                  <p className="mt-2 text-xs text-ok">
                     已同步到昨天，无需抓取
                   </p>
                 )}
-                <div className="mt-2 space-y-1 text-xs text-slate-400">
+                <div className="mt-2 space-y-1 text-xs text-ink-3">
                   {Object.entries(status.lastFetch.counts).map(([k, v]) => (
                     <p key={k}>
                       {GARMIN_DOMAIN_LABELS[k] ?? k}: {v} 条
@@ -512,7 +512,7 @@ export default function SettingsGarminPage() {
                   ))}
                 </div>
                 {status.lastFetch.errors.length > 0 && (
-                  <div className="mt-2 space-y-1 rounded border border-red-900 bg-red-950/30 p-2 text-xs text-red-300">
+                  <div className="mt-2 space-y-1 rounded border border-danger/40 bg-danger-soft p-2 text-xs text-danger">
                     {status.lastFetch.errors.map((err) => (
                       <p key={`${err.code}-${err.domain ?? ""}-${err.date ?? ""}`}>
                         {formatGarminError(err)}
@@ -526,12 +526,12 @@ export default function SettingsGarminPage() {
 
           {/* Messages */}
           {message && (
-            <div className="rounded-xl border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-300">
+            <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 text-sm text-ok">
               {message}
             </div>
           )}
           {error && (
-            <div className="rounded-xl border border-red-800 bg-red-950/30 p-3 text-sm text-red-300">
+            <div className="rounded-xl border border-danger/40 bg-danger-soft p-3 text-sm text-danger">
               {error}
             </div>
           )}

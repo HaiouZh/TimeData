@@ -29,7 +29,7 @@ export function GoalStarCore({ pct, label, size = "md" }: GoalStarCoreProps) {
   return (
     <span
       data-goal-star-core="true"
-      className={`relative inline-flex items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-accent-soft text-ink shadow-[0_0_26px_rgba(155,188,255,0.32)] ${classes.shell}`}
+      className={`relative inline-flex items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-accent-soft text-ink shadow-[var(--shadow-galaxy-star-core-strong)] ${classes.shell}`}
     >
       <span
         data-goal-star-progress-ring="true"

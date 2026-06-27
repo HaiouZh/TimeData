@@ -5,7 +5,7 @@ covers:
   - packages/server/src/garmin/**
   - packages/server/src/routes/ingest.ts
   - packages/client/src/pages/settings/SettingsGarminPage.tsx
-last-reviewed: 2026-06-18
+last-reviewed: 2026-06-27
 ---
 
 # 健康 · Garmin 抓取与 ingest

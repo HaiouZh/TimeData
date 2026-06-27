@@ -3,11 +3,11 @@ import { type SyncStatus, useSyncContext } from "../contexts/SyncContext.tsx";
 const BASE_CLASS = "absolute right-2 top-2 h-2 w-2 rounded-full border border-white/90 shadow-sm pointer-events-none";
 
 export function syncIndicatorClassName(status: SyncStatus): string {
-  if (status === "disabled") return `${BASE_CLASS} bg-gray-400`;
-  if (status === "syncing") return `${BASE_CLASS} bg-yellow-500 animate-sync-pulse`;
-  if (status === "error") return `${BASE_CLASS} bg-red-500 animate-sync-blink`;
-  if (status === "pending") return `${BASE_CLASS} bg-blue-500`;
-  return `${BASE_CLASS} bg-green-500`;
+  if (status === "disabled") return `${BASE_CLASS} bg-ink-3`;
+  if (status === "syncing") return `${BASE_CLASS} bg-warn animate-sync-pulse`;
+  if (status === "error") return `${BASE_CLASS} bg-danger animate-sync-blink`;
+  if (status === "pending") return `${BASE_CLASS} bg-accent`;
+  return `${BASE_CLASS} bg-ok`;
 }
 
 const SYNC_STATUS_LABEL: Record<SyncStatus, string> = {

@@ -21,7 +21,7 @@ export function GoalStarNode({ data }: { data: GoalStarNodeData }) {
       role="group"
       aria-label={`目标：${star.title}，进度：${pct}%`}
       data-goal-star-shell="true"
-      className={`relative inline-flex flex-col items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-center text-ink shadow-[0_0_34px_rgba(155,188,255,0.2)] ${
+      className={`relative inline-flex flex-col items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-center text-ink shadow-[var(--shadow-galaxy-star-core-wide)] ${
         star.lod === "collapsed" ? "h-20 w-20 gap-0 px-2 py-2" : "h-36 w-36 gap-1 px-4 py-4"
       } ${data.lively ? "motion-safe:animate-pulse" : ""}`}
       data-star-id={star.nodeId}

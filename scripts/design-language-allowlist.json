@@ -2,2084 +2,436 @@
   "version": 1,
   "entries": [
     {
-      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "<div className=\"fixed inset-x-3 bottom-20 z-50 mx-auto max-w-lg rounded-xl border border-blue-500/40 bg-slate-900 p-4 shadow-2xl shadow-black/40\">",
-      "reason": "边角浮层旧 chrome，P4 统一迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500\"",
-      "reason": "边角浮层旧 chrome，P4 统一迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"fixed inset-x-3 bottom-20 z-50 mx-auto max-w-lg rounded-xl border border-blue-500/40 bg-slate-900 p-4 shadow-2xl shadow-black/40\">",
-      "reason": "边角浮层旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"mt-1 text-xs text-slate-400\">点击更新后会刷新页面并加载最新代码。</div>",
-      "reason": "边角浮层旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-sm font-medium text-slate-100\">发现新版本</div>",
-      "reason": "边角浮层旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700\"",
-      "reason": "边角浮层旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/CategoryPicker.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "color: selected ? \"#0f172a\" : color,",
-      "reason": "分类色属于用户内容色，P4 收口分类选择器与用户颜色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/CategoryPicker.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "color: selected ? \"#0f172a\" : parent.color,",
-      "reason": "分类色属于用户内容色，P4 收口分类选择器与用户颜色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/CategoryPicker.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-500\">",
-      "reason": "分类选择器旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/CategoryPicker.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "selected ? \"font-semibold ring-2 ring-offset-1 ring-offset-slate-900\" : \"opacity-85 hover:opacity-100\"",
-      "reason": "分类选择器旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/CategoryPicker.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "selected ? \"ring-2 ring-offset-1 ring-offset-slate-900\" : \"opacity-80 hover:opacity-100\"",
-      "reason": "分类选择器旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/ErrorBoundary.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<button onClick={() => location.reload()} className=\"rounded bg-slate-700 px-4 py-2 text-sm\">",
-      "reason": "错误页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/ErrorBoundary.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"p-6 space-y-3 text-center text-slate-100\">",
-      "reason": "错误页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/ErrorBoundary.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-xs text-slate-400\">{error.message}</p>",
-      "reason": "错误页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SortableCategoryItem.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "boxShadow: isDragging ? \"0 18px 45px rgba(15, 23, 42, 0.45)\" : style?.boxShadow,",
-      "reason": "分类色属于用户内容色，P4 收口分类管理与用户颜色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SortableCategoryItem.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className={`shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-slate-500 hover:bg-slate-800 hover:text-slate-200 active:cursor-grabbing ${handleClassName}`}",
-      "reason": "分类排序旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SyncIndicator.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "if (status === \"pending\") return `${BASE_CLASS} bg-blue-500`;",
-      "reason": "同步指示器旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SyncIndicator.tsx",
-      "rule": "bare-status-color",
-      "lineText": "if (status === \"error\") return `${BASE_CLASS} bg-red-500 animate-sync-blink`;",
-      "reason": "同步指示器旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SyncIndicator.tsx",
-      "rule": "bare-status-color",
-      "lineText": "return `${BASE_CLASS} bg-green-500`;",
-      "reason": "同步指示器旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SyncIndicator.tsx",
-      "rule": "bare-status-color",
-      "lineText": "if (status === \"disabled\") return `${BASE_CLASS} bg-gray-400`;",
-      "reason": "同步指示器旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/components/SyncIndicator.tsx",
-      "rule": "bare-status-color",
-      "lineText": "if (status === \"syncing\") return `${BASE_CLASS} bg-yellow-500 animate-sync-pulse`;",
-      "reason": "同步指示器旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/hooks/useCategories.ts",
-      "rule": "bare-raw-color",
-      "lineText": "if (!cat) return \"#808080\";",
-      "reason": "默认分类色属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#2E86AB\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#417505\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#4A4A4A\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#4A90D9\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#50E3C2\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#6B705C\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#6D6875\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#7ED321\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#8E9AAF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#9013FE\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#90DBF4\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#98F5E1\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#9B9B9B\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#9BF6FF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#A0C4FF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#A3B18A\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#A3C4F3\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#A5A58D\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#B5838D\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#B7B7A4\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#B8E986\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#BD10E0\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#BDB2FF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#CAFFBF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#CB997E\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#CBC0D3\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#CFBAF0\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#D0021B\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#DDBEA9\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#DEE2FF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#EFD3D7\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#F1C0E8\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#F26419\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#F5A623\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#F8E71C\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FDFFB6\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FEEAFA\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FFADAD\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FFC6FF\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FFD6A5\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FFE8D6\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/categoryColors.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#FFFFFC\",",
-      "reason": "分类色板属于用户内容色，P4 收口分类色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#2C5F60\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#2F4858\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#33636C\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#3A5743\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#3D5A80\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#3E6259\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#445A7A\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#48506B\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#4C5C68\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#54667A\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#5A4E6D\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     },
     {
       "file": "packages/client/src/lib/tasks/turnTags.ts",
       "rule": "bare-raw-color",
       "lineText": "\"#615A77\",",
-      "reason": "任务标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<button onClick={() => navigate(-1)} className=\"px-3 py-1.5 rounded-lg bg-slate-800 text-sm text-slate-300\">",
-      "reason": "记录编辑页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<button onClick={() => navigate(-1)} className=\"px-4 py-2 rounded-lg bg-slate-800 text-sm\">",
-      "reason": "记录编辑页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"min-h-full bg-slate-950\">",
-      "reason": "记录编辑页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<header className=\"sticky top-0 z-20 flex items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-3 py-2 backdrop-blur\">",
-      "reason": "记录编辑页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-slate-400\">没有找到这条记录。</p>",
-      "reason": "记录编辑页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "return <div className=\"p-6 text-center text-slate-500\">正在加载记录...</div>;",
-      "reason": "记录编辑页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "? \"border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-ink shadow-[0_0_26px_rgba(155,188,255,0.22)]\"",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "glowClassName: \"shadow-[0_0_12px_rgba(139,148,168,0.14)]\",",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "glowClassName: \"shadow-[0_0_14px_rgba(170,180,200,0.16)]\",",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "glowClassName: \"shadow-[0_0_18px_rgba(248,113,113,0.28)]\",",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "glowClassName: \"shadow-[0_0_18px_rgba(52,211,153,0.24)]\",",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "glowClassName: \"shadow-[0_0_18px_rgba(79,155,245,0.24)]\",",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "glowClassName: \"shadow-[0_0_20px_rgba(155,188,255,0.24)]\",",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalStarCore.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "className={`relative inline-flex items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-accent-soft text-ink shadow-[0_0_26px_rgba(155,188,255,0.32)] ${classes.shell}`}",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalStarNode.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "className={`relative inline-flex flex-col items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-center text-ink shadow-[0_0_34px_rgba(155,188,255,0.2)] ${",
-      "reason": "目标星图 scoped 特殊场景色，后续随星图设计契约单独收口。",
-      "ownerBatch": "P4-goal-scoped-palette",
-      "removeBy": "完成目标星图 scoped palette 文档与脚本规则收口"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "{restoringId === record.id && <div className=\"mt-2 text-xs text-blue-300\">正在恢复…</div>}",
-      "reason": "设置边角页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"shrink-0 rounded bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40\"",
-      "reason": "设置边角页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "{!loading && records.length === 0 && <div className=\"text-sm text-slate-500\">暂无自动备份记录</div>}",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "{loading && <div className=\"text-sm text-slate-400\">正在读取自动备份记录…</div>}",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"mt-1 text-xs text-slate-500\">",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-sm font-medium text-slate-100\">{formatAppDateTime(record.createdAt)}</div>",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium text-slate-400\">自动备份</h3>",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<section className=\"space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4\">",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"flex items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-950/40 p-3 hover:border-slate-700 hover:bg-slate-900\"",
-      "reason": "设置边角页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{status && <div className=\"text-xs text-red-400\">{status}</div>}",
-      "reason": "设置边角页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
-      "rule": "font-mono-business-number",
-      "lineText": "<span className=\"font-mono\">{log.method}</span>",
-      "reason": "服务端洞察页技术字段/日志使用等宽，P4 细分技术文本例外或迁移。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
-      "rule": "font-mono-business-number",
-      "lineText": "<td className=\"px-3 py-2 font-mono text-ink\">{row.tier}</td>",
-      "reason": "服务端洞察页技术字段/日志使用等宽，P4 细分技术文本例外或迁移。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400\"",
-      "reason": "分类设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500\"",
-      "reason": "分类设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500\"",
-      "reason": "分类设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className={`w-full rounded-lg p-3 text-left ${oneClickPalette === paletteId ? \"bg-blue-600/40 ring-1 ring-blue-400\" : \"bg-slate-800 hover:bg-slate-700\"}`}",
-      "reason": "分类设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "const [newColor, setNewColor] = useState(\"#4A90D9\");",
-      "reason": "分类色属于用户内容色，P4 收口分类管理与用户颜色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "setNewColor(\"#4A90D9\");",
-      "reason": "分类色属于用户内容色，P4 收口分类管理与用户颜色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<button type=\"button\" onClick={() => setAdding(false)} className=\"rounded bg-slate-800 px-4 py-2 text-sm\">",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500\">",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-80 space-y-3 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-96 space-y-4 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div key={category.id} className=\"flex items-center gap-2 text-sm text-slate-300\">",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<label className=\"text-sm text-slate-400\">颜色</label>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-sm text-slate-400\">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-xs text-slate-500\">还有 {parentCategories.length - 6} 个一级分类会继续循环配色。</p>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"shrink-0 text-slate-500\">›</span>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"shrink-0 text-xs text-slate-500\">{childCount} 个子分类</span>",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"flex items-stretch overflow-hidden rounded-lg border border-slate-800 bg-slate-900/60\"",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left text-slate-100 hover:bg-slate-800/70\"",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-400\"",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-3 py-1.5 text-sm text-slate-100 hover:bg-slate-700\"",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-4 py-2 text-sm\"",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"w-full rounded bg-slate-800 px-3 py-2 text-sm\"",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className={`w-full rounded-lg p-3 text-left ${oneClickPalette === paletteId ? \"bg-blue-600/40 ring-1 ring-blue-400\" : \"bg-slate-800 hover:bg-slate-700\"}`}",
-      "reason": "分类设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{addError && <p className=\"text-sm text-red-400\">{addError}</p>}",
-      "reason": "分类设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{colorError && <p className=\"text-sm text-red-400\">{colorError}</p>}",
-      "reason": "分类设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
-      "rule": "interactive-text-icon",
-      "lineText": "<span className=\"shrink-0 text-slate-500\">›</span>",
-      "reason": "分类设置页旧文字箭头，P4 迁到 Phosphor 图标。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "<span className=\"text-sm text-blue-400 hover:text-blue-300\">修改</span>",
-      "reason": "分类详情页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500\"",
-      "reason": "分类详情页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"min-w-0 truncate text-sm text-blue-400 hover:text-blue-300\"",
-      "reason": "分类详情页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"min-w-0 truncate text-sm text-slate-200 hover:text-blue-300\"",
-      "reason": "分类详情页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"text-sm text-blue-400 hover:text-blue-300\"",
-      "reason": "分类详情页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className={`rounded px-3 py-1 text-sm ${selectedPalette === paletteId ? \"bg-blue-600\" : \"bg-slate-800 hover:bg-slate-700\"}`}",
-      "reason": "分类详情页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "const [selectedColor, setSelectedColor] = useState(\"#4A90D9\");",
-      "reason": "分类色属于用户内容色，P4 收口分类详情与用户颜色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "{children.length === 0 && <p className=\"text-sm text-slate-500\">暂无子分类。</p>}",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-80 space-y-3 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-96 space-y-3 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-96 space-y-4 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium text-slate-400\">基本信息</h3>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium text-slate-400\">子分类</h3>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-sm leading-6 text-slate-300\">{deleteMessage()}</p>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-sm text-slate-400\">该分类不存在或已被删除。</p>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<section className=\"space-y-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4\">",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-sm text-slate-300\">{category.name}</span>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-sm text-slate-300\">名称</span>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-sm text-slate-300\">颜色</span>",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"flex items-center rounded-lg bg-slate-800/50 px-2 py-2\"",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"h-5 w-5 rounded-full border border-slate-700\"",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"h-8 w-8 rounded-full border border-slate-700\"",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"min-w-0 truncate text-sm text-slate-200 hover:text-blue-300\"",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-4 py-2 text-sm\"",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"w-full rounded bg-slate-800 px-3 py-2 text-sm\"",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className={`h-8 w-8 rounded-full border ${selectedColor.toUpperCase() === color ? \"border-white\" : \"border-slate-700\"}`}",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className={`rounded px-3 py-1 text-sm ${selectedPalette === paletteId ? \"bg-blue-600\" : \"bg-slate-800 hover:bg-slate-700\"}`}",
-      "reason": "分类详情页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{childAddError && <p className=\"text-sm text-red-400\">{childAddError}</p>}",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{childRenameError && <p className=\"text-sm text-red-400\">{childRenameError}</p>}",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{colorError && <p className=\"text-sm text-red-400\">{colorError}</p>}",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{deleteError && !deleting && <p className=\"text-sm text-red-400\">{deleteError}</p>}",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{deleteError && <p className=\"text-sm text-red-400\">{deleteError}</p>}",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "{nameError && <p className=\"text-sm text-red-400\">{nameError}</p>}",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<h3 className=\"font-medium text-red-300\">删除分类</h3>",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<h3 className=\"text-sm font-medium text-red-300\">危险操作</h3>",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<section className=\"space-y-3 rounded-xl border border-red-900/50 bg-red-950/20 p-4\">",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "className=\"flex-1 rounded bg-red-600 py-2 text-sm hover:bg-red-500\"",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "className=\"shrink-0 text-xs text-red-400 hover:text-red-300\"",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "className=\"w-full rounded bg-red-600 py-2 text-sm hover:bg-red-500\"",
-      "reason": "分类详情页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "<div className=\"rounded-xl border border-blue-800 bg-blue-950/30 p-3 text-sm text-blue-200\">",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"flex flex-wrap gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"mt-2 space-y-1 text-xs text-slate-400\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-sm\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-slate-500\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-slate-300\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-sm text-slate-400\">加载中…</p>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-sm text-slate-400\">请先配置服务器地址</p>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-xs text-slate-500\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-sm text-slate-200\">启用每日定时抓取</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">结束日期</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">开始日期</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">强制重抓最近 N 天</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">首次回填天数</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">抓取时间 (HH:MM)</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-400\">Garmin 邮箱</span>",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-50\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<div className=\"mt-2 space-y-1 rounded border border-red-900 bg-red-950/30 p-2 text-xs text-red-300\">",
-      "reason": "Garmin 设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<div className=\"rounded-xl border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-300\">",
-      "reason": "Garmin 设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<div className=\"rounded-xl border border-red-800 bg-red-950/30 p-3 text-sm text-red-300\">",
-      "reason": "Garmin 设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "<p className=\"mt-2 text-xs text-emerald-300\">",
-      "reason": "Garmin 设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-status-color",
-      "lineText": "className=\"rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50\"",
-      "reason": "Garmin 设置页旧状态色，P4 迁到状态 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsHealthRangePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<li key={preset} className=\"rounded-2xl border border-slate-800 bg-slate-900/70 p-3\">",
-      "reason": "健康范围设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsHealthRangePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"px-1 text-xs leading-relaxed text-slate-500\">选择健康统计页顶部显示哪些时间范围。</p>",
-      "reason": "健康范围设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "isHidden ? \"bg-slate-700\" : \"bg-sky-500\"",
-      "reason": "统计布局设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"mt-0.5 text-xs leading-relaxed text-slate-500\">{module.description}</div>",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-sm font-medium text-slate-100\">{module.title}</div>",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<li key={id} className=\"rounded-2xl border border-slate-800 bg-slate-900/70 p-3\">",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"px-1 text-xs leading-relaxed text-slate-500\">调整统计页各模块的显示与顺序，设置会跨设备同步。</p>",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"min-h-11 w-full rounded-full border border-slate-700 bg-slate-900 text-sm text-slate-300\"",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"min-h-9 rounded-full border border-slate-700 bg-slate-900 px-3 text-xs text-slate-300 disabled:opacity-30\"",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "isHidden ? \"bg-slate-700\" : \"bg-sky-500\"",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CollapsibleSection.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<span className=\"text-xs text-slate-500\">{count}</span>",
-      "reason": "待办边角组件旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CollapsibleSection.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<summary className=\"flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-sm font-medium text-slate-300\">",
-      "reason": "待办边角组件旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "active ? \"bg-sky-400/20 text-sky-50\" : \"text-slate-400 hover:bg-slate-800 hover:text-slate-100\"",
-      "reason": "自定义重复页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"min-h-11 rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100 outline-none focus:border-sky-500\"",
-      "reason": "自定义重复页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"min-h-11 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100 outline-none focus:border-sky-500\"",
-      "reason": "自定义重复页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"rounded-lg px-2 py-1 text-sm font-medium text-sky-200 hover:bg-sky-400/10\"",
-      "reason": "自定义重复页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "draft.monthEnd ? \"bg-sky-400/15 text-sky-50\" : \"bg-slate-900/80 text-slate-300\"",
-      "reason": "自定义重复页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"fixed inset-0 z-[70] flex flex-col bg-slate-950 text-slate-100\">",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"flex min-h-14 items-center justify-between border-b border-slate-800 px-4\">",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"grid grid-cols-2 rounded-xl bg-slate-900/70 p-1\">",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"grid grid-cols-3 rounded-xl bg-slate-900/70 p-1\">",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"mb-1 text-center text-xs text-slate-500\">单位</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"mb-1 text-center text-xs text-slate-500\">每</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-xs font-medium text-slate-500\">结束</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-xs font-medium text-slate-500\">频率</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-xs font-medium text-slate-500\">起始日期</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-xs font-medium text-slate-500\">时间</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"text-xs font-medium text-slate-500\">顺延基准</div>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h2 className=\"text-sm font-semibold text-slate-100\">自定义重复</h2>",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "active ? \"bg-sky-400/20 text-sky-50\" : \"text-slate-400 hover:bg-slate-800 hover:text-slate-100\"",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"min-h-11 rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100 outline-none focus:border-sky-500\"",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"min-h-11 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100 outline-none focus:border-sky-500\"",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded-lg px-2 py-1 text-sm text-slate-300 hover:bg-slate-800\"",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "draft.monthEnd ? \"bg-sky-400/15 text-sky-50\" : \"bg-slate-900/80 text-slate-300\"",
-      "reason": "自定义重复页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/todo/TagFilterPanel.tsx",
-      "rule": "bare-raw-color",
-      "lineText": "? { backgroundColor: color, color: \"#fff\", borderColor: color }",
-      "reason": "标签色属于用户内容色，P4 收口标签色边界。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<section className=\"space-y-3 rounded-xl border border-slate-800 bg-slate-900/80 p-4\">",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500\"",
-      "reason": "分类详情设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-4 py-2 text-sm\"",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-80 space-y-3 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"w-full rounded bg-slate-800 px-3 py-2 text-sm\"",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500\"",
-      "reason": "分类详情设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-4 py-2 text-sm\"",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"w-80 space-y-3 rounded-xl bg-slate-900 p-5\" onClick={(event) => event.stopPropagation()}>",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"w-full rounded bg-slate-800 px-3 py-2 text-sm\"",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"flex-1 rounded bg-blue-600 py-2 text-sm hover:bg-blue-500\"",
-      "reason": "分类详情设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-4 py-2 text-sm\"",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"rounded bg-slate-800 px-4 py-2 text-sm\"",
-      "reason": "分类详情设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-slate-500\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<div className=\"space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-slate-500\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-action-blue",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧动作色，P4 迁到 accent token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:outline-none\"",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<p className=\"text-xs text-slate-500\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-slate-500\">",
-      "reason": "Garmin 设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
-      "rule": "bare-slate-chrome",
-      "lineText": "className=\"min-h-9 rounded-full border border-slate-700 bg-slate-900 px-3 text-xs text-slate-300 disabled:opacity-30\"",
-      "reason": "统计布局设置页旧 chrome，P4 统一迁到中性 token。",
-      "ownerBatch": "P4-settings-edge",
-      "removeBy": "完成 docs_local/plans/2026-06-27-设计语言全量收口-P4-设置与边角收口-plan.md"
+      "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
+      "ownerBatch": "user-content-color",
+      "removeBy": "分类色/标签色系统重构时复核"
     }
   ]
 }

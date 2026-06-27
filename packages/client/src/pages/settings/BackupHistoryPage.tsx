@@ -98,27 +98,27 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
   return (
     <SettingsDetailPage title="备份记录">
       {dialog}
-      <section className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <h3 className="text-sm font-medium text-slate-400">自动备份</h3>
-        {loading && <div className="text-sm text-slate-400">正在读取自动备份记录…</div>}
-        {!loading && records.length === 0 && <div className="text-sm text-slate-500">暂无自动备份记录</div>}
+      <section className="space-y-3 rounded-xl border border-border bg-surface p-4">
+        <h3 className="text-sm font-medium text-ink-3">自动备份</h3>
+        {loading && <div className="text-sm text-ink-3">正在读取自动备份记录…</div>}
+        {!loading && records.length === 0 && <div className="text-sm text-ink-3">暂无自动备份记录</div>}
         {!loading && records.length > 0 && (
           <div className="space-y-2">
             {records.map((record) => (
               <div
                 key={record.id}
-                className="flex items-center justify-between gap-4 rounded-lg border border-slate-800 bg-slate-950/40 p-3 hover:border-slate-700 hover:bg-slate-900"
+                className="flex items-center justify-between gap-4 rounded-lg border border-border bg-page/40 p-3 hover:border-border-strong hover:bg-surface-hover"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-slate-100">{formatAppDateTime(record.createdAt)}</div>
-                  <div className="mt-1 text-xs text-slate-500">
+                  <div className="text-sm font-medium text-ink">{formatAppDateTime(record.createdAt)}</div>
+                  <div className="mt-1 text-xs text-ink-3">
                     {record.categories.length} 个分类，{record.timeEntries.length} 条记录，{record.tasks.length} 个任务
                   </div>
-                  {restoringId === record.id && <div className="mt-2 text-xs text-blue-300">正在恢复…</div>}
+                  {restoringId === record.id && <div className="mt-2 text-xs text-accent-ink">正在恢复…</div>}
                 </div>
                 <button
                   type="button"
-                  className="shrink-0 rounded bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-40"
+                  className="shrink-0 rounded bg-accent px-3 py-2 text-xs font-medium text-page hover:bg-accent-strong disabled:opacity-40"
                   onClick={() => void restoreRecord(record)}
                   disabled={restoringId !== null}
                 >
@@ -129,7 +129,7 @@ export default function BackupHistoryPage({ initialRecords }: BackupHistoryPageP
           </div>
         )}
       </section>
-      {status && <div className="text-xs text-red-400">{status}</div>}
+      {status && <div className="text-xs text-danger">{status}</div>}
     </SettingsDetailPage>
   );
 }

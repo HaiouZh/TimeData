@@ -1,3 +1,4 @@
+import { UNCATEGORIZED_COLOR } from "@timedata/shared";
 import type { Category, TimeEntry } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useMemo } from "react";
@@ -354,7 +355,7 @@ export function useCategories() {
   const getCategoryColor = useCallback(
     (categoryId: string): string => {
       const cat = categoryById.get(categoryId);
-      if (!cat) return "#808080";
+      if (!cat) return UNCATEGORIZED_COLOR;
       if (cat.parentId) {
         const parent = categoryById.get(cat.parentId);
         return parent?.color || cat.color;

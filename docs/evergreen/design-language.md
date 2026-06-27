@@ -40,7 +40,7 @@ last-reviewed: 2026-06-27
 | **scoped 特殊场景色** | 例如 `--galaxy-*` | 只服务独立画布/世界观场景，必须有独立 prefix，不扩展全站动作色 |
 
 - **模块署名色已退役**：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 不再作为设计语言的一部分。模块身份靠固定位置、图标、页面标题、信息架构和 active 形态，不靠每个模块一套品牌色。
-- **Goal 星图局部命名空间**：`--galaxy-edge` / `--galaxy-edge-glow` / `--galaxy-star-core` 只允许 `pages/goals/**` 的星图边、星核和光晕使用；它们不扩展全站动作色，也不替代 `--color-accent`。
+- **Goal 星图局部命名空间**：`--galaxy-edge` / `--galaxy-edge-glow` / `--galaxy-star-core` 只允许 `pages/goals/**` 的星图边、星核和光晕使用；它们不扩展全站动作色，也不替代 `--color-accent`。星图节点的状态光晕（ready/blocked/completed/parked/active/anchor）通过 `--shadow-galaxy-*` scoped shadow token 消费（如 `--shadow-galaxy-ready`、`--shadow-galaxy-blocked` 等），组件用 `shadow-[var(--shadow-galaxy-*)]`，不写裸 rgba。
 - **预留 `--health-*` 命名空间（scoped，暂无色值）**：健康指标的「条件着色 / 分级指示色」（好 / 警告 / 差，或睡眠阶段、心率区间等分类）落地时走 scoped `--health-*` 色板，与 `--color-data-*`（序列区分）、`--galaxy-*`（场景专属）同类。规矩：独立前缀、语义命名（`--health-good` 而非 `--health-1`）、集中定义于 `index.css`、只服务健康可视化、不外溢按钮 / 页面壳。它表达「数据好不好 / 是哪类」（合法），不是「模块身份」（禁止，已随 module color 退役）。**当前只写下这条契约，不定义实际色值**——现有健康曲线是「序列区分」，用 `--color-data-*` 已够；色值等跑步表格 / 分级指示功能落地时随功能设计、由用户拍板。
 - **圆角阶梯**：`--radius-ctl`(8) / `--radius-row`(12) / `--radius-card`(16) / `--radius-pill`(999)。
 - **边框**：`--color-border` / `--color-border-strong` / `--color-border-hairline`(rgba 8%)。
@@ -75,11 +75,11 @@ last-reviewed: 2026-06-27
 - 禁止交互控件用文字字符或 emoji 伪装图标。
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
 
-`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项；P1 主干页面迁移完成后，`P1-main-pages` owner batch 已归零，后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` 会直接失败；P3/P4 迁移完成对应行后，也要删除相应 allowlist 项让闸继续收紧。不得把本轮新代码违规加入 allowlist。
+`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；剩余 allowlist 仅 54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板），属业务数据非 UI chrome。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` 会直接失败。不得把本轮新代码违规加入 allowlist。
 
 ## 4. 关键不变量 / 坑 / 红线
 
-1. **新 UI 一律用 token，不写裸 hex/rgba**；统计 / 健康面（TimeStats、HealthStats、stats 模块、图表 chrome、旧健康 CSS）已在 P3 收口，`P3-stat-health` allowlist 归零；剩余 allowlist 仅 `P4-*` 边角与 scoped 例外，勿当范式。
+1. **新 UI 一律用 token，不写裸 hex/rgba**；统计 / 健康面（TimeStats、HealthStats、stats 模块、图表 chrome、旧健康 CSS）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零，剩余仅 `user-content-color` 长期例外（分类预设色 + 标签 hash 色板），勿当范式。
 2. **数据色不外溢 UI chrome**（只在图表/健康可视化里）；用户内容色只代表分类、标签、用户自定义标记。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。

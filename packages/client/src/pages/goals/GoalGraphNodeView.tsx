@@ -29,31 +29,31 @@ const STATUS_META = {
     label: "就绪",
     icon: DotOutline,
     className: "border-border bg-surface-elevated text-ink-2",
-    glowClassName: "shadow-[0_0_14px_rgba(170,180,200,0.16)]",
+    glowClassName: "shadow-[var(--shadow-galaxy-ready)]",
   },
   blocked: {
     label: "受阻",
     icon: WarningCircle,
     className: "border-border-strong bg-danger-soft text-danger",
-    glowClassName: "shadow-[0_0_18px_rgba(248,113,113,0.28)]",
+    glowClassName: "shadow-[var(--shadow-galaxy-blocked)]",
   },
   completed: {
     label: "已完成",
     icon: CheckCircle,
     className: "border-border bg-ok text-page",
-    glowClassName: "shadow-[0_0_18px_rgba(52,211,153,0.24)]",
+    glowClassName: "shadow-[var(--shadow-galaxy-completed)]",
   },
   parked: {
     label: "停放",
     icon: Lock,
     className: "border-border bg-surface-elevated text-ink-3",
-    glowClassName: "shadow-[0_0_12px_rgba(139,148,168,0.14)]",
+    glowClassName: "shadow-[var(--shadow-galaxy-parked)]",
   },
   active: {
     label: "进行中",
     icon: Clock,
     className: "border-border bg-accent-soft text-accent",
-    glowClassName: "shadow-[0_0_18px_rgba(79,155,245,0.24)]",
+    glowClassName: "shadow-[var(--shadow-galaxy-active)]",
   },
   ghost: {
     label: "缺失引用",
@@ -65,7 +65,7 @@ const STATUS_META = {
     label: "目标锚点",
     icon: Target,
     className: "border-border-strong bg-accent text-page",
-    glowClassName: "shadow-[0_0_20px_rgba(155,188,255,0.24)]",
+    glowClassName: "shadow-[var(--shadow-galaxy-anchor)]",
   },
 } satisfies Record<
   GoalGraphNodeStatus,
@@ -130,7 +130,7 @@ export function GoalGraphNodeView({
         data-status-glow={node.kind === "task" || node.kind === "track" ? node.status : undefined}
         className={`relative inline-flex items-center justify-center gap-2 border shadow-sm ${shapeClass} ${
           isGoal
-            ? "border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-ink shadow-[0_0_26px_rgba(155,188,255,0.22)]"
+            ? "border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-ink shadow-[var(--shadow-galaxy-star-core)]"
             : statusMeta.className
         } ${isGoal ? "" : statusMeta.glowClassName} ${selectedClass} ${ghostClass} ${livelyClass}`}
       >

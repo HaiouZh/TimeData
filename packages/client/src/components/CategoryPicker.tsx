@@ -42,7 +42,7 @@ export default function CategoryPicker({ onSelect, selectedId }: CategoryPickerP
 
   if (parentCategories.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-slate-700 p-3 text-sm text-slate-500">
+      <div className="rounded-lg border border-dashed border-border p-3 text-sm text-ink-3">
         还没有分类，请先在分类页添加。
       </div>
     );
@@ -65,11 +65,11 @@ export default function CategoryPicker({ onSelect, selectedId }: CategoryPickerP
               key={parent.id}
               onClick={() => chooseParent(parent.id)}
               className={`shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-all ${
-                selected ? "ring-2 ring-offset-1 ring-offset-slate-900" : "opacity-80 hover:opacity-100"
+                selected ? "ring-2 ring-offset-1 ring-offset-page" : "opacity-80 hover:opacity-100"
               }`}
               style={{
                 backgroundColor: selected ? parent.color : `${parent.color}22`,
-                color: selected ? "#0f172a" : parent.color,
+                color: selected ? "var(--color-page)" : parent.color,
               }}
             >
               {parent.name}
@@ -88,11 +88,11 @@ export default function CategoryPicker({ onSelect, selectedId }: CategoryPickerP
               key={category.id}
               onClick={() => onSelect(category.id)}
               className={`rounded-full px-3 py-2 text-sm transition-all ${
-                selected ? "font-semibold ring-2 ring-offset-1 ring-offset-slate-900" : "opacity-85 hover:opacity-100"
+                selected ? "font-semibold ring-2 ring-offset-1 ring-offset-page" : "opacity-85 hover:opacity-100"
               }`}
               style={{
                 backgroundColor: selected ? color : `${color}20`,
-                color: selected ? "#0f172a" : color,
+                color: selected ? "var(--color-page)" : color,
                 border: `1px solid ${color}55`,
               }}
             >

@@ -74,7 +74,7 @@ export function TagFilterPanel({
         const state: ChipState = includeSet.has(tag) ? "include" : excludeSet.has(tag) ? "exclude" : "unselected";
         const style =
           state === "include"
-            ? { backgroundColor: color, color: "#fff", borderColor: color }
+            ? { backgroundColor: color, color: "var(--color-page)", borderColor: color }
             : state === "unselected"
               ? { borderColor: color }
               : undefined;

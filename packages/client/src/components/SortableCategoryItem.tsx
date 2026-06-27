@@ -1,6 +1,8 @@
+import { DotsSixVertical } from "@phosphor-icons/react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties, ReactNode } from "react";
+import { Icon } from "./Icon.tsx";
 
 interface SortableCategoryItemProps {
   id: string;
@@ -28,7 +30,7 @@ export default function SortableCategoryItem({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.6 : 1,
-    boxShadow: isDragging ? "0 18px 45px rgba(15, 23, 42, 0.45)" : style?.boxShadow,
+    boxShadow: isDragging ? "var(--shadow-elev2)" : style?.boxShadow,
     zIndex: isDragging ? 10 : style?.zIndex,
   };
 
@@ -38,11 +40,11 @@ export default function SortableCategoryItem({
         ref={setActivatorNodeRef}
         type="button"
         aria-label={dragLabel}
-        className={`shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-slate-500 hover:bg-slate-800 hover:text-slate-200 active:cursor-grabbing ${handleClassName}`}
+        className={`shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-ink-3 hover:bg-surface-hover hover:text-ink active:cursor-grabbing ${handleClassName}`}
         {...attributes}
         {...listeners}
       >
-        ≡
+        <Icon icon={DotsSixVertical} size={16} />
       </button>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
