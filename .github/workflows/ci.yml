@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  TZ: Asia/Shanghai
+
 jobs:
   test:
     runs-on: ubuntu-latest
