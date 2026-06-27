@@ -92,7 +92,6 @@ const LIVE_INNER_MAX_STEP = 0.42;
 const LIVE_PREREQ_DISTANCE = 155;
 const LIVE_PREREQ_PULL = 0.0018;
 const LIVE_PREREQ_MAX_STEP = 0.86;
-const ORBIT_RADIUS: Record<SettleLinkInput["kind"], number> = { tether: 112, prerequisite: 155, bridge: 220 };
 const LINK_DISTANCE: Record<SettleLinkInput["kind"], number> = { tether: 105, prerequisite: 155, bridge: 220 };
 const LINK_STRENGTH: Record<SettleLinkInput["kind"], number> = { tether: 0.62, prerequisite: 0.24, bridge: 0.2 };
 const LIVE_COLLISION_PADDING = 10;
@@ -201,6 +200,7 @@ export function createGalaxySettleSim(input: GalaxySettleInput): GalaxySettleSim
   let anchorById = input.anchorById;
   let live = false;
   let liveTick = 0;
+  let liveWarmupTicks = 0;
   const dragPins = new Map<string, XY>();
   const anchorOverrides = new Map<string, XY>();
   const orbitStates = new Map<string, OrbitState>();
@@ -486,6 +486,10 @@ export function createGalaxySettleSim(input: GalaxySettleInput): GalaxySettleSim
   return {
     tick(): SettleTickResult {
       applyDragPins();
+      if (live && liveWarmupTicks > 0) {
+        liveWarmupTicks -= 1;
+        return { alpha: simulation.alpha(), positions: positions() };
+      }
       if (live) {
         simulation.tick();
         applyOrbitStep();
@@ -515,8 +519,10 @@ export function createGalaxySettleSim(input: GalaxySettleInput): GalaxySettleSim
       simulation.alpha(live ? Math.min(alpha, LIVE_REHEAT_ALPHA) : alpha).alphaTarget(live ? LIVE_ALPHA_TARGET : 0).restart().stop();
     },
     setLive(nextLive): void {
+      const wasLive = live;
       live = nextLive;
       if (nextLive) seedLocks.clear();
+      if (nextLive && !wasLive) liveWarmupTicks = 1;
       refreshLinkStrength();
       refreshChargeStrength();
       simulation.alphaTarget(nextLive ? LIVE_ALPHA_TARGET : 0);
@@ -538,8 +544,10 @@ export function createGalaxySettleSim(input: GalaxySettleInput): GalaxySettleSim
     },
     syncModel(next): void {
       const wasSettled = simulation.alpha() <= SETTLE_ALPHA_MIN;
+      if (live) seedLocks.clear();
       anchorById = { ...next.anchorById, ...Object.fromEntries(anchorOverrides) };
       const prevById = nodeById;
+      let addedLiveNode = false;
       nodes = next.nodes.map((node) => {
         const prev = prevById.get(node.id);
         const sim: SimNode = prev
@@ -553,10 +561,14 @@ export function createGalaxySettleSim(input: GalaxySettleInput): GalaxySettleSim
               x: node.seed.x,
               y: node.seed.y,
             };
-        if (!prev && !sim.fixed) seedLocks.set(sim.id, node.seed);
+        if (!prev && !sim.fixed) {
+          if (live) addedLiveNode = true;
+          else seedLocks.set(sim.id, node.seed);
+        }
         if (sim.fixed) lockFixedToSeed(sim, anchorOverrides.get(sim.id) ?? node.seed);
         return sim;
       });
+      if (addedLiveNode) liveWarmupTicks = Math.max(liveWarmupTicks, 1);
       nodeById = new Map(nodes.map((node) => [node.id, node]));
       simulation.nodes(nodes);
       linkForce()?.links(buildLinks(next));

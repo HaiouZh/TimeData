@@ -3,7 +3,10 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 
-vi.mock("dexie-react-hooks", () => ({ useLiveQuery: (_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? [] }));
+const useLiveQueryMock = vi.hoisted(() => vi.fn((_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? []));
+const goalGalaxyPropsMock = vi.hoisted(() => vi.fn());
+
+vi.mock("dexie-react-hooks", () => ({ useLiveQuery: useLiveQueryMock }));
 vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: vi.fn(() => true) }));
 vi.mock("../../lib/goals.js", async () => {
   const actual = await vi.importActual<typeof import("../../lib/goals.js")>("../../lib/goals.js");
@@ -19,7 +22,10 @@ vi.mock("../../lib/tracks.js", async () => {
 });
 vi.mock("./goalPageData.js", () => ({ listAllTasksForGoals: vi.fn(() => []) }));
 vi.mock("./GoalGalaxyCanvas.js", () => ({
-  GoalGalaxyCanvas: () => <div data-galaxy>星图画布</div>,
+  GoalGalaxyCanvas: (props: Record<string, unknown>) => {
+    goalGalaxyPropsMock(props);
+    return <div data-galaxy>星图画布</div>;
+  },
 }));
 vi.mock("./GoalsListPage.js", () => ({ default: () => <div data-goals-list>目标列表</div> }));
 
@@ -37,6 +43,9 @@ async function renderPage() {
 }
 
 beforeEach(() => {
+  useLiveQueryMock.mockReset();
+  useLiveQueryMock.mockImplementation((_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? []);
+  goalGalaxyPropsMock.mockClear();
   mockedUseIsWideScreen.mockReturnValue(true);
 });
 
@@ -48,6 +57,33 @@ describe("GoalsPage", () => {
 
     expect(host.querySelector("[data-galaxy]")).toBeTruthy();
     expect(host.querySelector("[data-goals-list]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("waits for all galaxy live query data before mounting the canvas", async () => {
+    mockedUseIsWideScreen.mockReturnValue(true);
+    useLiveQueryMock
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => undefined);
+
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector("[data-galaxy]")).toBeNull();
+    expect(host.querySelector("[data-galaxy-loading]")).toBeTruthy();
+    expect(goalGalaxyPropsMock).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("does not mask unresolved galaxy live queries with empty-array defaults", async () => {
+    mockedUseIsWideScreen.mockReturnValue(true);
+
+    const { root } = await renderPage();
+
+    expect(useLiveQueryMock.mock.calls).toHaveLength(5);
+    expect(useLiveQueryMock.mock.calls.every((call) => call[2] === undefined)).toBe(true);
     await unmount(root);
   });
 

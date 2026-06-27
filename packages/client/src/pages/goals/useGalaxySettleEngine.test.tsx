@@ -124,6 +124,35 @@ describe("useGalaxySettleEngine", () => {
     await unmount(root);
   });
 
+  it("uses the latest live value when the simulation import resolves", async () => {
+    const { root } = await renderDom(<Harness enabled live={false} />);
+
+    await act(async () => {
+      root.render(<Harness enabled live />);
+    });
+    await flushImport();
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(setLiveMock).toHaveBeenCalledWith(true);
+    await unmount(root);
+  });
+
+  it("restarts ticking when live mode is re-enabled after a frame was left pending", async () => {
+    const { root } = await renderDom(<Harness enabled live={false} />);
+    await flushImport();
+    await flushFrame();
+    expect(tickMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.render(<Harness enabled live />);
+    });
+    await flushFrame();
+
+    expect(setLiveMock).toHaveBeenCalledWith(true);
+    expect(tickMock).toHaveBeenCalledTimes(2);
+    await unmount(root);
+  });
+
   it("stops the simulation and cancels animation frame on unmount", async () => {
     const { root } = await renderDom(<Harness enabled live={false} />);
     await flushImport();

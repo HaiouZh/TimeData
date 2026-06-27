@@ -572,16 +572,23 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
-  it("opens the goal index and focuses a selected goal star", async () => {
+  it("opens the goal index and focuses the selected goal star with its member nodes", async () => {
     resetReactFlowMock();
     const goals = [
-      goal({ id: "g1", title: "第一目标", members: [{ kind: "task", id: "a" }] }),
-      goal({ id: "g2", title: "第二目标" }),
+      goal({ id: "g1", title: "第一目标", members: [{ kind: "task", id: "shared" }] }),
+      goal({
+        id: "g2",
+        title: "第二目标",
+        members: [
+          { kind: "task", id: "own" },
+          { kind: "task", id: "shared" },
+        ],
+      }),
     ];
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas
         goals={goals}
-        tasks={[task("a", { title: "A" })]}
+        tasks={[task("own", { title: "Own" }), task("shared", { title: "Shared" })]}
         tracks={[]}
         steps={[]}
         layoutPins={[]}
@@ -593,7 +600,11 @@ describe("GoalGalaxyCanvas", () => {
     await click(buttonByLabel(host, "目标"));
     await click(buttonByLabel(host, "聚焦目标 第二目标"));
 
-    expect(getReactFlowMock().fitView).toHaveBeenCalledWith({ nodes: [{ id: "goal:g2" }], padding: 0.35, duration: 300 });
+    const focusOptions = getReactFlowMock().fitView.mock.calls.at(-1)?.[0] as
+      | { nodes?: Array<{ id: string }>; padding?: number; duration?: number }
+      | undefined;
+    expect(focusOptions).toMatchObject({ padding: 0.35, duration: 300 });
+    expect(focusOptions?.nodes?.map((node) => node.id).sort()).toEqual(["goal:g2", "task:own", "task:shared"]);
     await unmount(root);
   });
 

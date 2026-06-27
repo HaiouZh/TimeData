@@ -185,6 +185,54 @@ describe("createGalaxySettleSim", () => {
     expect(after).not.toEqual(before);
   });
 
+  it("starts live mode from the static seeds without an initial jump", () => {
+    const sim = createGalaxySettleSim({
+      nodes: [
+        { id: "goal:g1", seed: { x: 0, y: 0 }, box: { width: 220, height: 80 }, fixed: true },
+        { id: "task:a", seed: { x: 160, y: 0 }, box: BOX, fixed: false, anchorId: "goal:g1" },
+        { id: "task:b", seed: { x: 0, y: 160 }, box: BOX, fixed: false, anchorId: "goal:g1" },
+        { id: "task:c", seed: { x: -160, y: 0 }, box: BOX, fixed: false, anchorId: "goal:g1" },
+      ],
+      links: [
+        { source: "goal:g1", target: "task:a", kind: "tether" },
+        { source: "goal:g1", target: "task:b", kind: "tether" },
+        { source: "goal:g1", target: "task:c", kind: "tether" },
+      ],
+      anchorById: { "goal:g1": { x: 0, y: 0 } },
+    });
+
+    sim.setLive(true);
+    const first = sim.tick().positions;
+    sim.stop();
+
+    expect(first["goal:g1"]).toEqual({ x: 0, y: 0 });
+    expect(Math.hypot(first["task:a"].x - 160, first["task:a"].y)).toBeLessThan(5);
+    expect(Math.hypot(first["task:b"].x, first["task:b"].y - 160)).toBeLessThan(5);
+    expect(Math.hypot(first["task:c"].x + 160, first["task:c"].y)).toBeLessThan(5);
+  });
+
+  it("keeps nodes added after an empty live start moving from their static seeds", () => {
+    const sim = createGalaxySettleSim({ nodes: [], links: [], anchorById: {} });
+    sim.setLive(true);
+    sim.tick();
+
+    sim.syncModel({
+      nodes: [
+        { id: "goal:g1", seed: { x: 0, y: 0 }, box: { width: 220, height: 80 }, fixed: true },
+        { id: "task:a", seed: { x: 160, y: 0 }, box: BOX, fixed: false, anchorId: "goal:g1" },
+      ],
+      links: [{ source: "goal:g1", target: "task:a", kind: "tether" }],
+      anchorById: { "goal:g1": { x: 0, y: 0 } },
+    });
+    const first = sim.tick().positions["task:a"];
+    for (let i = 0; i < 80; i += 1) sim.tick();
+    const after = sim.tick().positions["task:a"];
+    sim.stop();
+
+    expect(first).toEqual({ x: 160, y: 0 });
+    expect(Math.hypot(after.x - first.x, after.y - first.y)).toBeGreaterThan(0.5);
+  });
+
   it("keeps live orbital drift slow and non-uniform", () => {
     const sim = createGalaxySettleSim(baseInput());
     while (!sim.isSettled()) sim.tick();

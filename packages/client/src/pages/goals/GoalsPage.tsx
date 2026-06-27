@@ -15,11 +15,17 @@ export function GoalsPage() {
   const wide = useIsWideScreen();
   const navigate = useNavigate();
   const [mode, setMode] = useState<GoalsViewMode>(() => (wide ? "galaxy" : "list"));
-  const goals = useLiveQuery(() => listGoals(), [], []);
-  const tasks = useLiveQuery(() => listAllTasksForGoals(), [], []);
-  const tracks = useLiveQuery(() => listTracks(), [], []);
-  const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
-  const layoutPins = useLiveQuery(() => listAllGoalLayoutPins(), [], []);
+  const goals = useLiveQuery(() => listGoals(), []);
+  const tasks = useLiveQuery(() => listAllTasksForGoals(), []);
+  const tracks = useLiveQuery(() => listTracks(), []);
+  const steps = useLiveQuery(() => listAllTrackSteps(), []);
+  const layoutPins = useLiveQuery(() => listAllGoalLayoutPins(), []);
+  const galaxyReady =
+    goals !== undefined &&
+    tasks !== undefined &&
+    tracks !== undefined &&
+    steps !== undefined &&
+    layoutPins !== undefined;
 
   useEffect(() => {
     setMode(wide ? "galaxy" : "list");
@@ -54,7 +60,7 @@ export function GoalsPage() {
         </div>
       </div>
       <div className="min-h-0 flex-1">
-        {showGalaxy ? (
+        {showGalaxy && galaxyReady ? (
           <GoalGalaxyCanvas
             goals={goals}
             tasks={tasks}
@@ -63,6 +69,8 @@ export function GoalsPage() {
             layoutPins={layoutPins}
             onNavigate={(to) => navigate(to)}
           />
+        ) : showGalaxy ? (
+          <div data-galaxy-loading className="h-full min-h-[520px] bg-page" />
         ) : (
           <GoalsListPage />
         )}

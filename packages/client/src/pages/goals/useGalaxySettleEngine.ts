@@ -50,7 +50,7 @@ export function useGalaxySettleEngine(args: {
       if (!activeRef.current || generationRef.current !== generation) return;
       simRef.current?.stop();
       simRef.current = createGalaxySettleSim(inputRef.current);
-      simRef.current.setLive(live);
+      simRef.current.setLive(liveRef.current);
       ensureRunning();
     });
 

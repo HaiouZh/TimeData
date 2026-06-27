@@ -768,9 +768,16 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
   const focusGoalStar = useCallback(
     (goalId: string): void => {
-      void flow.fitView({ nodes: [{ id: `goal:${goalId}` }], padding: 0.35, duration: 300 });
+      const starId = `goal:${goalId}`;
+      const focusNodes = [
+        { id: starId },
+        ...nodes
+          .filter((node) => node.type === "goal-galaxy-member" && node.data.anchorIds.includes(starId))
+          .map((node) => ({ id: node.id })),
+      ];
+      void flow.fitView({ nodes: focusNodes, padding: 0.35, duration: 300 });
     },
-    [flow],
+    [flow, nodes],
   );
 
   const onGalaxyDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {

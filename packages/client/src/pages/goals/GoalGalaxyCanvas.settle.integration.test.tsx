@@ -195,4 +195,30 @@ describe("GoalGalaxyCanvas settle integration", () => {
     );
     await unmount(root);
   });
+
+  it("passes the currently rendered static positions as the first settle seeds", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const firstGoal = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[firstGoal]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const staticX = Number(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-x"));
+    const staticY = Number(host.querySelector('[data-node-id="task:a"]')?.getAttribute("data-node-y"));
+
+    await flushImport();
+
+    const firstInput = createSettleSimMock.mock.calls[0]?.[0] as
+      | { nodes?: Array<{ id: string; seed: { x: number; y: number } }> }
+      | undefined;
+    const taskSeed = firstInput?.nodes?.find((node) => node.id === "task:a")?.seed;
+    expect(taskSeed).toEqual({ x: staticX, y: staticY });
+    await unmount(root);
+  });
 });
