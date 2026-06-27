@@ -64,6 +64,7 @@
 - 测试：`pnpm test`（全包 + 根目录脚本测试），或 `pnpm --filter @timedata/<pkg> test`。
 - 构建：`pnpm build`（不含 mobile）。
 - 开发：`pnpm dev:client` / `pnpm dev:server`。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
+  - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」。本地预览改用 `pnpm --filter @timedata/client exec vite --host 127.0.0.1`，再开 `http://127.0.0.1:5173`（别用 `localhost`，可能解析回旧的 IPv6 实例）。
 - 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（体量棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
 
@@ -139,4 +140,4 @@
 
 ------
 
-*Last reviewed: 2026-06-25*
+*Last reviewed: 2026-06-27*
