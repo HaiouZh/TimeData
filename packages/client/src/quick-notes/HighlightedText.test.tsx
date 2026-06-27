@@ -27,6 +27,8 @@ describe("HighlightedText", () => {
 
     const mark = host.querySelector("mark");
     expect(mark?.textContent).toBe("会议");
+    expect(mark?.className).toContain("bg-accent-soft");
+    expect(mark?.className).toContain("text-accent-ink");
   });
 
   it("renders plain text without marks when nothing matches", () => {

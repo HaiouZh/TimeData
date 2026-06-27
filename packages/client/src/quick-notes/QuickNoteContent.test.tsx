@@ -22,6 +22,16 @@ describe("QuickNoteContent", () => {
     expect(html).toContain('href="https://example.com"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noreferrer"');
+    expect(html).toContain("text-accent");
+    expect(html).not.toContain("text-emerald");
+  });
+
+  it("uses token chrome for Markdown blocks and tables", () => {
+    const html = render("> 引用\n\n`code`\n\n| A |\n| - |\n| B |");
+
+    expect(html).toContain("border-border");
+    expect(html).toContain("bg-surface-elevated");
+    expect(html).not.toContain(["slate", ""].join("-"));
   });
 
   it("escapes raw HTML instead of rendering it", () => {

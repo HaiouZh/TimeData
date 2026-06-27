@@ -54,6 +54,13 @@ const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 const STATUS_AUTO_DISMISS_MS = 2400;
 const ACTION_TOAST_DISMISS_MS = 6000;
 const BUBBLE_HIDE_DELAY_MS = 1200;
+const NOTE_CARD_BASE =
+  "relative max-w-full select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus:ring-2 focus:ring-accent";
+const NOTE_CARD_DEFAULT = "border-border bg-surface/90 hover:bg-surface-hover";
+const NOTE_CARD_AGENT = "border-accent/40 bg-accent-soft hover:bg-surface-hover";
+const NOTE_CARD_SELECTED = "ring-2 ring-accent";
+const MENU_PANEL_CLASS = "overflow-hidden rounded-card border border-border bg-surface-elevated py-1 shadow-elev2";
+const MENU_ITEM_CLASS = "block w-full px-4 py-3 text-left text-sm text-ink-2 transition hover:bg-surface-hover hover:text-ink";
 
 interface MenuTarget {
   note: QuickNote;
@@ -704,24 +711,26 @@ export default function QuickNotesPage() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-30 shrink-0 border-b border-slate-800/80 bg-slate-950/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-[0_14px_40px_rgba(2,6,23,0.22)]">
+    <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
+      <header className="sticky top-0 z-30 shrink-0 border-b border-border bg-page/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-elev1">
         {selectionMode ? (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <button
               type="button"
               aria-label="退出多选"
               onClick={exitSelection}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-slate-300"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2"
             >
-              x
+              <Icon icon={X} size={16} />
             </button>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-100">已选 {selectedIds.size} 条</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+              已选 <span className="td-num">{selectedIds.size}</span> 条
+            </span>
             <button
               type="button"
               disabled={selectedIds.size === 0}
               onClick={() => void handleBatchCopy()}
-              className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-sm text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600"
+              className="rounded-xl border border-border bg-surface px-3 py-1.5 text-sm text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
             >
               复制
             </button>
@@ -732,7 +741,7 @@ export default function QuickNotesPage() {
                 aria-expanded={exportMenuOpen}
                 disabled={selectedIds.size === 0}
                 onClick={() => setExportMenuOpen((open) => !open)}
-                className="rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-sm text-slate-200 disabled:cursor-not-allowed disabled:text-slate-600"
+                className="rounded-xl border border-border bg-surface px-3 py-1.5 text-sm text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
               >
                 导出
               </button>
@@ -741,7 +750,7 @@ export default function QuickNotesPage() {
                   <div role="presentation" className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
                   <div
                     role="menu"
-                    className="absolute right-0 z-50 mt-2 w-40 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 py-1 shadow-xl"
+                    className={`absolute right-0 z-50 mt-2 w-40 ${MENU_PANEL_CLASS}`}
                   >
                     <button
                       type="button"
@@ -750,7 +759,7 @@ export default function QuickNotesPage() {
                         setExportMenuOpen(false);
                         void handleBatchExportMarkdown();
                       }}
-                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800"
+                      className={MENU_ITEM_CLASS}
                     >
                       Markdown
                     </button>
@@ -761,7 +770,7 @@ export default function QuickNotesPage() {
                         setExportMenuOpen(false);
                         void handleBatchExportJson();
                       }}
-                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800"
+                      className={MENU_ITEM_CLASS}
                     >
                       JSON
                     </button>
@@ -773,7 +782,7 @@ export default function QuickNotesPage() {
               type="button"
               disabled={selectedIds.size === 0}
               onClick={() => void handleBatchDelete()}
-              className="rounded-xl border border-red-900/60 bg-red-950/40 px-3 py-1.5 text-sm font-medium text-red-300 disabled:cursor-not-allowed disabled:text-red-900"
+              className="rounded-xl border border-danger/40 bg-danger-soft px-3 py-1.5 text-sm font-medium text-danger disabled:cursor-not-allowed disabled:text-ink-3"
             >
               删除
             </button>
@@ -788,13 +797,13 @@ export default function QuickNotesPage() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="搜索速记…"
-              className="min-w-0 flex-1 bg-transparent text-base text-slate-100 placeholder-slate-400 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-3 outline-none"
             />
             <button
               type="button"
               aria-label="退出搜索"
               onClick={() => closeSearch()}
-              className="shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:text-slate-100"
+              className="shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:text-ink"
             >
               取消
             </button>
@@ -803,20 +812,20 @@ export default function QuickNotesPage() {
           <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
             <div className="min-w-0 flex-1">
               {!timeline.atLatest && (
-                <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-0.5 text-[11px] font-medium text-slate-400">
+                <span className="rounded-full border border-border-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-3">
                   历史
                 </span>
               )}
             </div>
-            <label className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/80 px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
-              <span className="hidden text-[11px] text-slate-500 sm:block">日期</span>
+            <label className="flex items-center gap-1 rounded-xl border border-border bg-surface px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
+              <span className="hidden text-[11px] text-ink-3 sm:block">日期</span>
               <input
                 ref={dateInputRef}
                 type="date"
                 aria-label="跳转日期"
                 value={jumpDate}
                 onChange={(event) => handleJumpDateChange(event.target.value)}
-                className="w-[7.5rem] bg-transparent text-xs font-medium text-slate-100 outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
+                className="td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
               />
             </label>
 
@@ -830,10 +839,10 @@ export default function QuickNotesPage() {
                   setActionsOpen(false);
                   setPinnedOpen((open) => !open);
                 }}
-                className="relative flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+                className="relative flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
               >
                 <Icon icon={PushPin} size={16} />
-                <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-emerald-300 px-1 text-[11px] font-semibold leading-5 text-slate-950">
+                <span className="td-num absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold leading-5 text-page">
                   {pinnedNotes.length}
                 </span>
               </button>
@@ -849,7 +858,7 @@ export default function QuickNotesPage() {
                   setPinnedOpen(false);
                   setActionsOpen((open) => !open);
                 }}
-                className="flex size-9 items-center justify-center rounded-full border border-slate-800 bg-slate-900/75 text-lg leading-none text-slate-300 transition hover:border-emerald-500/40 hover:text-slate-100 sm:size-11"
+                className="flex size-9 items-center justify-center rounded-full border border-border bg-surface text-lg leading-none text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
               >
                 <Icon icon={DotsThree} size={20} />
               </button>
@@ -863,7 +872,7 @@ export default function QuickNotesPage() {
                   <div
                     role="menu"
                     aria-label="速记导出与清理"
-                    className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 py-1 shadow-xl"
+                    className={`absolute right-0 z-50 mt-2 w-48 ${MENU_PANEL_CLASS}`}
                   >
                     <button
                       type="button"
@@ -872,7 +881,7 @@ export default function QuickNotesPage() {
                         setActionsOpen(false);
                         void handleExportMarkdown();
                       }}
-                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-800"
+                      className={MENU_ITEM_CLASS}
                     >
                       导出 Markdown
                     </button>
@@ -883,11 +892,11 @@ export default function QuickNotesPage() {
                         setActionsOpen(false);
                         void handleExportJson();
                       }}
-                      className="block w-full px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-slate-800"
+                      className={MENU_ITEM_CLASS}
                     >
                       导出 JSON
                     </button>
-                    <div className="my-1 h-px bg-slate-800" />
+                    <div className="my-1 h-px bg-border" />
                     <button
                       type="button"
                       role="menuitem"
@@ -895,7 +904,7 @@ export default function QuickNotesPage() {
                         setActionsOpen(false);
                         void handleDeleteDate();
                       }}
-                      className="block w-full px-4 py-3 text-left text-sm font-medium text-red-300 transition hover:bg-red-950/40"
+                      className="block w-full px-4 py-3 text-left text-sm font-medium text-danger transition hover:bg-danger-soft"
                     >
                       清理当天
                     </button>
@@ -909,9 +918,11 @@ export default function QuickNotesPage() {
           <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 px-4">
             <section
               aria-label="置顶速记"
-              className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-3 shadow-2xl shadow-slate-950/60"
+              className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-2xl border border-border bg-surface p-3 shadow-elev2"
             >
-              <p className="px-1 text-xs font-semibold text-slate-400">置顶 · {pinnedNotes.length}</p>
+              <p className="px-1 text-xs font-semibold text-ink-3">
+                置顶 · <span className="td-num">{pinnedNotes.length}</span>
+              </p>
               {pinnedNotes.map((note) => {
                 const isAgentNote = note.source === "agent";
                 const selected = selectedIds.has(note.id);
@@ -925,11 +936,9 @@ export default function QuickNotesPage() {
                     aria-pressed={selectionMode ? selected : undefined}
                     {...noteInteractionProps(note)}
                     style={{ WebkitTouchCallout: "none" }}
-                    className={`relative max-w-full select-none rounded-xl border px-3 py-2 text-sm text-slate-100 outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
-                      isAgentNote
-                        ? "border-sky-700/55 bg-sky-950/70 hover:bg-sky-900/65"
-                        : "border-slate-800 bg-slate-950/70"
-                    } ${selected ? "ring-2 ring-emerald-400/70" : ""}`}
+                    className={`${NOTE_CARD_BASE} rounded-xl text-sm ${isAgentNote ? NOTE_CARD_AGENT : "border-border bg-page/70"} ${
+                      selected ? NOTE_CARD_SELECTED : ""
+                    }`}
                   >
                     <NoteBubble note={note} pending={pending} />
                   </div>
@@ -950,11 +959,11 @@ export default function QuickNotesPage() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           {searchOpen ? (
             !hasQuery ? (
-              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center text-sm text-slate-400">
+              <div className="rounded-3xl border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3">
                 输入关键词搜索速记，空格分隔多个词表示同时包含。
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center text-sm text-slate-400">
+              <div className="rounded-3xl border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3">
                 没有匹配的速记
               </div>
             ) : (
@@ -965,17 +974,13 @@ export default function QuickNotesPage() {
                     key={note.id}
                     type="button"
                     onClick={() => handleResultClick(note)}
-                    className={`relative w-full rounded-2xl border px-4 py-2 text-left text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] transition hover:border-emerald-500/35 ${
-                      isAgentNote
-                        ? "border-sky-700/55 bg-sky-950/70 hover:bg-sky-900/65"
-                        : "border-slate-800 bg-slate-900/90 hover:bg-slate-900"
-                    }`}
+                    className={`w-full text-left ${NOTE_CARD_BASE} rounded-2xl ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
                   >
-                    <time className="float-right ml-2 font-mono text-[11px] tabular-nums text-slate-500">
+                    <time className="td-time float-right ml-2 text-[11px] text-ink-3">
                       {formatLocalClock(note.occurredAt)}
                     </time>
                     {isAgentNote && (
-                      <div className="mb-1 text-[11px] font-semibold text-sky-200/95">
+                      <div className="mb-1 text-[11px] font-semibold text-accent-ink">
                         {note.sourceLabel ?? "助手"}
                       </div>
                     )}
@@ -991,7 +996,7 @@ export default function QuickNotesPage() {
                   <button
                     type="button"
                     onClick={() => void timeline.loadOlder()}
-                    className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-emerald-500/40 hover:text-slate-200"
+                    className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
                   >
                     加载更早
                   </button>
@@ -999,15 +1004,15 @@ export default function QuickNotesPage() {
               )}
 
               {timeline.loading && (
-                <div className="rounded-3xl border border-slate-800 bg-slate-900/60 px-4 py-8 text-center text-sm text-slate-400">
+                <div className="rounded-3xl border border-border bg-surface/60 px-4 py-8 text-center text-sm text-ink-3">
                   正在读取速记...
                 </div>
               )}
 
               {!timeline.loading && displayItems.length === 0 && pinnedNotes.length === 0 && (
-                <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/45 px-5 py-10 text-center">
-                  <p className="text-sm font-medium text-slate-200">还没有速记</p>
-                  <p className="mt-1 text-xs text-slate-400">写下一个想法、线索或待办，稍后再回来看。</p>
+                <div className="rounded-3xl border border-dashed border-border bg-surface/45 px-5 py-10 text-center">
+                  <p className="text-sm font-medium text-ink-2">还没有速记</p>
+                  <p className="mt-1 text-xs text-ink-3">写下一个想法、线索或待办，稍后再回来看。</p>
                 </div>
               )}
 
@@ -1015,11 +1020,11 @@ export default function QuickNotesPage() {
                 if (item.type === "date") {
                   return (
                     <div key={item.key} data-date-label={item.label} data-local-date={item.localDate} className="flex items-center gap-3 pt-1">
-                      <div className="h-px flex-1 bg-slate-800" />
-                      <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-400">
+                      <div className="h-px flex-1 bg-border" />
+                      <div className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-ink-3">
                         {item.label}
                       </div>
-                      <div className="h-px flex-1 bg-slate-800" />
+                      <div className="h-px flex-1 bg-border" />
                     </div>
                   );
                 }
@@ -1037,19 +1042,17 @@ export default function QuickNotesPage() {
                       aria-pressed={selectionMode ? selected : undefined}
                       {...noteInteractionProps(note)}
                       style={{ WebkitTouchCallout: "none" }}
-                      className={`relative max-w-full select-none rounded-2xl border px-4 py-2 text-[15px] leading-relaxed text-slate-100 shadow-[0_12px_40px_rgba(2,6,23,0.18)] outline-none transition hover:border-emerald-500/35 focus:ring-2 focus:ring-emerald-400/40 ${
-                        isAgentNote
-                          ? "border-sky-700/55 bg-sky-950/70 hover:bg-sky-900/65"
-                          : "border-slate-800 bg-slate-900/90 hover:bg-slate-900"
-                      } ${selected ? "ring-2 ring-emerald-400/70" : ""}`}
+                      className={`${NOTE_CARD_BASE} rounded-2xl ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT} ${
+                        selected ? NOTE_CARD_SELECTED : ""
+                      }`}
                     >
                       {selectionMode && (
                         <span
                           aria-hidden="true"
                           className={`absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border text-[11px] ${
                             selected
-                              ? "border-emerald-300 bg-emerald-300 text-slate-950"
-                              : "border-slate-600 bg-slate-950/60 text-transparent"
+                              ? "border-accent bg-accent text-page"
+                              : "border-border-strong bg-page/60 text-transparent"
                           }`}
                         >
                           <Icon icon={Check} size={14} />
@@ -1068,7 +1071,7 @@ export default function QuickNotesPage() {
       {bubbleDate && !pinnedOpen && !searchOpen && (
         <label
           aria-label={`当前日期 ${bubbleDate.label}，点击选择日期`}
-          className={`fixed left-1/2 top-[4.75rem] z-[35] -translate-x-1/2 rounded-full border border-slate-700 bg-slate-900/90 px-3 py-1 text-xs font-medium text-slate-200 shadow-lg backdrop-blur transition-opacity duration-300 sm:top-20 ${
+          className={`fixed left-1/2 top-[4.75rem] z-[35] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
             bubbleVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
           }`}
         >
@@ -1096,7 +1099,7 @@ export default function QuickNotesPage() {
             const el = scrollRef.current;
             if (el) el.scrollTop = el.scrollHeight;
           }}
-          className="fixed right-4 rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 shadow-lg shadow-slate-950/40 transition hover:border-emerald-500/45"
+          className="fixed right-4 rounded-full border border-border-strong bg-surface px-3 py-2 text-xs font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           <span className="inline-flex items-center gap-1">
@@ -1108,7 +1111,7 @@ export default function QuickNotesPage() {
 
       {error && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-red-900/60 bg-red-950/90 px-3 py-2 text-sm text-red-200 shadow-lg"
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger shadow-elev1"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {error}
@@ -1116,7 +1119,7 @@ export default function QuickNotesPage() {
       )}
       {status && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-slate-800 bg-slate-900/95 px-3 py-2 text-sm text-slate-300 shadow-lg"
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-border bg-surface/95 px-3 py-2 text-sm text-ink-2 shadow-elev1"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {status}
@@ -1126,7 +1129,7 @@ export default function QuickNotesPage() {
         <form
           ref={composerRef}
           aria-label="速记输入区"
-          className="fixed left-0 right-0 border-t border-slate-800/80 bg-slate-950/95 p-2 shadow-[0_-18px_40px_rgba(2,6,23,0.42)] backdrop-blur transition-[bottom] duration-200 sm:p-3"
+          className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-[bottom] duration-200 sm:p-3"
           style={{ bottom: navOffsetPx }}
           onSubmit={(event) => {
             event.preventDefault();
@@ -1138,7 +1141,7 @@ export default function QuickNotesPage() {
               <div
                 role="status"
                 aria-label="捕捉操作反馈"
-                className="mb-2 flex items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/95 px-3 py-2 text-sm text-slate-100 shadow-lg"
+                className="mb-2 flex items-center gap-3 rounded-2xl border border-border-strong bg-surface/95 px-3 py-2 text-sm text-ink shadow-elev1"
               >
                 <span className="min-w-0 flex-1 truncate">{actionToast.message}</span>
                 {actionToast.actions?.map((action) => (
@@ -1149,7 +1152,7 @@ export default function QuickNotesPage() {
                       setActionToast(null);
                       action.onClick();
                     }}
-                    className="shrink-0 font-semibold text-emerald-300 transition hover:text-emerald-200"
+                    className="shrink-0 font-semibold text-accent transition hover:text-accent-ink"
                   >
                     {action.label}
                   </button>
@@ -1157,19 +1160,19 @@ export default function QuickNotesPage() {
               </div>
             )}
             {editingId && (
-              <div className="mb-2 flex items-center justify-between rounded-2xl border border-emerald-500/20 bg-emerald-950/25 px-3 py-2 text-xs text-emerald-100">
+              <div className="mb-2 flex items-center justify-between rounded-2xl border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-accent-ink">
                 <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
                 <button
                   type="button"
                   aria-label="取消编辑"
                   onClick={cancelEditing}
-                  className="ml-2 inline-flex text-emerald-200/75"
+                  className="ml-2 inline-flex text-accent-ink"
                 >
                   <Icon icon={X} size={16} />
                 </button>
               </div>
             )}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
+            <div className="rounded-2xl border border-border bg-surface/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
               <div className="flex items-end gap-2">
                 <button
                   type="button"
@@ -1186,7 +1189,7 @@ export default function QuickNotesPage() {
                     }
                     openSearch();
                   }}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-slate-700 text-slate-200 transition hover:border-emerald-500/40 hover:text-slate-50 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-border-strong text-ink-2 transition hover:border-accent hover:text-ink disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
                 >
                   {editingId ? (
                     <Icon icon={X} size={18} />
@@ -1207,7 +1210,7 @@ export default function QuickNotesPage() {
                   onBlur={() => setComposerFocused(false)}
                   rows={1}
                   placeholder={editingId ? "修改这条速记..." : "捕捉一个当下想法..."}
-                  className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-slate-100 placeholder-slate-400 outline-none"
+                  className="max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-ink placeholder:text-ink-3 outline-none"
                 />
                 <button
                   type={editingId || hasDraft ? "submit" : "button"}
@@ -1218,7 +1221,7 @@ export default function QuickNotesPage() {
                     event.preventDefault();
                     void handlePunch();
                   }}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-400 text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
                 >
                   {editingId ? (
                     <Icon icon={Check} size={19} weight="bold" />

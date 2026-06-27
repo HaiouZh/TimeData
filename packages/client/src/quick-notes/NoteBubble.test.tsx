@@ -84,7 +84,7 @@ describe("NoteBubble", () => {
     const { host, root } = await render(createElement(NoteBubble, { note: note("Agent", { source: "agent" }) }));
 
     const meta = host.querySelector('[aria-label="已上传"]')?.closest("span");
-    expect(meta?.className).toContain("text-sky-100/80");
+    expect(meta?.className).toContain("text-accent-ink");
 
     await act(async () => root.unmount());
   });

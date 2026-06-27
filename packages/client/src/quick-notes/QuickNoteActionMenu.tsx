@@ -47,7 +47,7 @@ export default function QuickNoteActionMenu({
       <div
         role="menu"
         aria-label="速记操作"
-        className="absolute min-w-[120px] overflow-hidden rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-xl"
+        className="absolute min-w-[120px] overflow-hidden rounded-ctl border border-border bg-surface-elevated py-1 shadow-elev2"
         style={{ left, top }}
         onClick={(event) => event.stopPropagation()}
       >
@@ -55,7 +55,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onCopy)}
-          className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
         >
           复制
         </button>
@@ -63,7 +63,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onEdit)}
-          className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
         >
           编辑
         </button>
@@ -71,7 +71,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onTogglePin)}
-          className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
         >
           {pinned ? "取消置顶" : "置顶"}
         </button>
@@ -79,7 +79,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onSelect)}
-          className="block w-full px-4 py-2 text-left text-sm text-slate-100 hover:bg-slate-700"
+          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
         >
           选择
         </button>
@@ -87,7 +87,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onDelete)}
-          className="block w-full px-4 py-2 text-left text-sm text-red-300 hover:bg-slate-700"
+          className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-danger-soft"
         >
           删除
         </button>

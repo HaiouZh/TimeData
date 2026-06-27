@@ -18,7 +18,7 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/notes.ts
   - packages/cli/src/lib/format.ts
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-27
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
@@ -123,7 +123,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 7. **单条上传状态从 syncLog 推导，不是 QuickNote 字段**：`useUnsyncedQuickNoteIds` 读 `syncLog(tableName="quick_notes", synced=0)`，待上传显示时钟、已同步显示单勾。agent 速记本地无 pending，恒显单勾。
 8. **本地 mutation 必须与 syncLog 同事务**；窗口查询/搜索/置顶列表查询只读、不写 syncLog。
 9. **`updateQuickNote` 保留 source/sourceLabel/pinned**：编辑只改 text/occurredAt/updatedAt。
-10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡深蓝底 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。
+10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 

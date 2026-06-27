@@ -73,7 +73,7 @@ last-reviewed: 2026-06-27
 - 禁止交互控件用文字字符或 emoji 伪装图标。
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
 
-`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项；P1/P3/P4 迁移完成对应行后，删除相应 allowlist 项让闸自动收紧。不得把本轮新代码违规加入 allowlist。
+`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项；P1 主干页面迁移完成后，`P1-main-pages` owner batch 已归零，后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` 会直接失败；P3/P4 迁移完成对应行后，也要删除相应 allowlist 项让闸继续收紧。不得把本轮新代码违规加入 allowlist。
 
 ## 4. 关键不变量 / 坑 / 红线
 

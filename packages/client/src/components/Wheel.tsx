@@ -82,10 +82,10 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
   }
 
   return (
-    <div className="relative h-[102px] overflow-hidden rounded-lg bg-slate-950">
-      <div className="pointer-events-none absolute inset-x-1 top-1/2 z-10 h-[34px] -translate-y-1/2 rounded-md border border-blue-400/60 bg-blue-400/10" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-slate-950 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-slate-950 to-transparent" />
+    <div className="relative h-[102px] overflow-hidden rounded-lg bg-page">
+      <div className="pointer-events-none absolute inset-x-1 top-1/2 z-10 h-[34px] -translate-y-1/2 rounded-md border border-accent bg-accent-soft/60" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-page to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-page to-transparent" />
       <div
         ref={containerRef}
         role="listbox"
@@ -102,8 +102,8 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
               aria-selected={selected}
               key={option.key}
               onClick={() => onChange(option.value)}
-              className={`block h-[34px] w-full snap-center text-center text-base tabular-nums transition-colors ${
-                selected ? "font-semibold text-slate-50" : "text-slate-500"
+              className={`td-num block h-[34px] w-full snap-center text-center text-base transition-colors ${
+                selected ? "font-semibold text-ink" : "text-ink-3"
               }`}
             >
               {option.value}

@@ -197,7 +197,7 @@ describe("CircularTimeline selection", () => {
     expect(html).not.toContain('stroke-linecap="round"');
   });
 
-  it("renders gap slots with full opacity and slate-500 color", () => {
+  it("renders gap slots with full opacity and the neutral token fill", () => {
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
         date: "2026-05-08",
@@ -210,10 +210,10 @@ describe("CircularTimeline selection", () => {
     );
 
     expect(html).toMatch(/data-segment-type="gap"[^>]*opacity="1"/);
-    expect(html).toMatch(/data-segment-type="gap"[^>]*fill="rgb\(100 116 139\)"/);
+    expect(html).toMatch(/data-segment-type="gap"[^>]*fill="var\(--color-ink-3\)"/);
   });
 
-  it("renders future slots in slate-800 and excludes them from selection", () => {
+  it("renders future slots with surface token fill and excludes them from selection", () => {
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
         date: "2026-05-08",
@@ -226,7 +226,7 @@ describe("CircularTimeline selection", () => {
     );
 
     expect(html).toContain('data-segment-type="future"');
-    expect(html).toMatch(/data-segment-type="future"[^>]*fill="rgb\(24 32 48\)"/);
+    expect(html).toMatch(/data-segment-type="future"[^>]*fill="var\(--color-surface\)"/);
   });
 
   it("dims non-selected segments while a selection exists", () => {

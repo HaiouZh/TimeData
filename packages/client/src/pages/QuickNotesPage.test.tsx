@@ -155,6 +155,17 @@ function markByText(host: HTMLElement, text: string): HTMLElement | null {
   ) ?? null;
 }
 
+function expectNoRetiredQuickNoteChrome(host: HTMLElement) {
+  const html = host.innerHTML;
+  expect(html).not.toContain("text-mod-");
+  expect(html).not.toContain("bg-blue-600");
+  expect(html.replace(/\s+/g, "")).not.toContain(">x<");
+  expect(html).not.toMatch(/\b(?:bg|text|border)-slate-/);
+  expect(html).not.toMatch(/\b(?:bg|text|border)-(?:sky|emerald|red)-/);
+  expect(html).not.toContain("font-mono");
+  expect(html).not.toContain("rgba(");
+}
+
 function category(id: string, name: string, parentId: string | null): Category {
   return {
     id,
@@ -390,6 +401,25 @@ describe("QuickNotesPage", () => {
 
     expect(pendingBubble?.querySelector('[aria-label="待上传"]')).not.toBeNull();
     expect(uploadedBubble?.querySelector('[aria-label="已上传"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it("keeps selection controls accessible without retired chrome classes", async () => {
+    await db.quickNotes.add({
+      id: "note-select",
+      text: "进入多选",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "进入多选");
+    await click(menuItem(host, "选择"));
+
+    expect(host.querySelector('button[aria-label="退出多选"]')).toBeInstanceOf(HTMLButtonElement);
+    expectNoRetiredQuickNoteChrome(host);
 
     await act(async () => root.unmount());
   });
@@ -715,6 +745,7 @@ describe("QuickNotesPage", () => {
     await waitForSearchDebounce();
 
     expect(markByText(host, "会议")).toBeInstanceOf(HTMLElement);
+    expect(markByText(host, "会议")?.className).toContain("bg-accent-soft");
     expect(host.textContent).not.toContain("买牛奶");
 
     await typeIntoSearch(searchInput(host), "不存在的词");

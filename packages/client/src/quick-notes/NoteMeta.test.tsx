@@ -27,6 +27,8 @@ describe("NoteMeta", () => {
     );
 
     expect(host.textContent).toContain("12:08");
+    expect(host.querySelector("span")?.className).toContain("td-time");
+    expect(host.querySelector("span")?.className).not.toContain(["font", "mono"].join("-"));
 
     await act(async () => root.unmount());
   });

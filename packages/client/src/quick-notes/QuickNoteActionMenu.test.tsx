@@ -64,6 +64,28 @@ describe("QuickNoteActionMenu", () => {
     await act(async () => root.unmount());
   });
 
+  it("uses design tokens for menu chrome", async () => {
+    const { host, root } = await render({
+      x: 10,
+      y: 10,
+      onCopy: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+      onSelect: vi.fn(),
+      onTogglePin: vi.fn(),
+      pinned: false,
+      onClose: vi.fn(),
+    });
+
+    expect(host.innerHTML).toContain("border-border");
+    expect(host.innerHTML).toContain("bg-surface-elevated");
+    expect(host.innerHTML).toContain("text-danger");
+    expect(host.innerHTML).not.toContain(["slate", ""].join("-"));
+    expect(host.innerHTML).not.toContain(["text", "red", ""].join("-"));
+
+    await act(async () => root.unmount());
+  });
+
   it("closes when the backdrop is clicked", async () => {
     const onClose = vi.fn();
     const { host, root } = await render({

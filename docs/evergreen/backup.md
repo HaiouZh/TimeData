@@ -8,10 +8,11 @@ covers:
   - packages/client/src/pages/settings/BackupHistoryPage.tsx
   - packages/server/src/sync/backup.ts
   - packages/client/src/db/index.ts:autoBackups
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-27
 ---
 
 <!-- 复核 2026-06-25（设置页信息架构）：SettingsDataPage 只收束到 design token 视觉壳，备份导出、恢复、自动备份和强制覆盖语义均不变。 -->
+<!-- 复核 2026-06-27（设计语言 P1）：quick-notes 展示组件只迁移 token / typography / Phosphor 图标，Quick Notes 独立备份 JSON、Markdown 导出、导入合并和 syncLog 语义均不变。 -->
 
 # 备份与恢复
 
@@ -102,7 +103,7 @@ TimeData 现有四种备份/可恢复文件：
 - `packages/client/src/quick-notes/deleteQuickNotesByIds.ts`：按多选 ID 批量删除速记。
 - `packages/client/src/quick-notes/fileDownload.ts`：Web 下载和 Capacitor Documents + Share 落盘。
 
-`packages/client/src/quick-notes/` 还包含速记页交互与展示组件（如菜单、剪贴板、时间线窗口 Hook、搜索/高亮、上传状态、长文本折叠和 Markdown 安全渲染）；这些不是备份格式入口，不改变本节 JSON / Markdown 契约。
+`packages/client/src/quick-notes/` 还包含速记页交互与展示组件（如菜单、剪贴板、时间线窗口 Hook、搜索/高亮、上传状态、长文本折叠和 Markdown 安全渲染）；这些不是备份格式入口，不改变本节 JSON / Markdown 契约。展示组件可以随 [design-language](design-language.md) 迁移 token / typography / Phosphor 图标，但不得改变导出字段、导入合并或删除写 `syncLog` 的语义。
 
 语义：
 

@@ -40,7 +40,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
   return (
     <div>
       {isAgent && (
-        <div className="mb-1 text-[11px] font-semibold text-sky-200/95">
+        <div className="mb-1 text-[11px] font-semibold text-accent-ink">
           {sourceLabel}
         </div>
       )}
@@ -54,7 +54,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
         </div>
 
         {collapsed && (
-          <div className="pointer-events-none -mt-8 h-8 bg-gradient-to-t from-slate-900/95 to-transparent" />
+          <div className="pointer-events-none -mt-8 h-8 bg-gradient-to-t from-surface/95 to-transparent" />
         )}
 
         {!canExpand && markdownLayout ? (
@@ -82,7 +82,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
               event.stopPropagation();
               setExpanded((value) => !value);
             }}
-            className="text-xs font-medium text-emerald-300/90 transition hover:text-emerald-200"
+            className="text-xs font-medium text-accent transition hover:text-accent-ink"
           >
             {expanded ? "收起" : "展开"}
           </button>

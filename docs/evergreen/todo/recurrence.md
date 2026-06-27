@@ -10,6 +10,8 @@ covers:
 last-reviewed: 2026-06-27
 ---
 
+<!-- 复核 2026-06-27（设计语言 P1）：MonthCalendar / Wheel 只迁移 token / typography / Phosphor 图标，重复规则 schema、判定“今天是否待做”和预设门行为均不变。 -->
+
 # 待办 · 重复规则引擎
 
 > [todo](../todo.md) 的重复规则**子文档**：`Recurrence` 字段契约、判定“今天是否待做”、终止条件、衍生式完成（spawn）、预设门 UI。
@@ -71,7 +73,7 @@ last-reviewed: 2026-06-27
 - 常用 每天/工作日/每周/每月/月末 一击写入；复杂规则进 `RecurrencePresetSheet` → `CustomRecurrencePage`（z=70 全屏）。
 - 逾期重复模板从详情抽屉打开重复设置时，预设门和自定义页默认用今天作为锚点；从“今天”区把旧逾期改成“每天”等新规则时，会从今天重新开始，而不是继续显示旧到期日。
 - `preserveHitDays`（`recurrencePresets.ts`）保留多周几/多月号/`byMonthday:[-1]` 月末，不因打开/完成而静默降级。
-- `CustomRecurrencePage` UI 限制 `interval`/`count` 1..99（schema 允许 1..999，UI 更严）；时间滚轮用共享 `components/Wheel.tsx`，月号选择用 `components/MonthCalendar.tsx`。
+- `CustomRecurrencePage` UI 限制 `interval`/`count` 1..99（schema 允许 1..999，UI 更严）；时间滚轮用共享 `components/Wheel.tsx`，月号选择用 `components/MonthCalendar.tsx`。这两个共享组件消费 [design-language](../design-language.md) token 与 `td-num` 数字角色；样式迁移不改变重复规则的取值、锚点或保存语义。
 - “仅某天”预设通过 `applyRecurrenceChoice()` 一次写成普通排期任务（非重复）。
 
 ## 5. 模块速查

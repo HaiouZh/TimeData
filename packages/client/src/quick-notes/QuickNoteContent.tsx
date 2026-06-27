@@ -24,12 +24,12 @@ const components = {
   ul: ({ node: _node, ...props }) => <ul {...props} className="my-1 ml-4 list-disc space-y-0.5" />,
   ol: ({ node: _node, ...props }) => <ol {...props} className="my-1 ml-4 list-decimal space-y-0.5" />,
   blockquote: ({ node: _node, ...props }) => (
-    <blockquote {...props} className="my-1 border-l-2 border-slate-600 pl-3 text-slate-300" />
+    <blockquote {...props} className="my-1 border-l-2 border-border-strong pl-3 text-ink-2" />
   ),
   a: ({ node: _node, children, ...props }) => (
     <a
       {...props}
-      className="text-emerald-300 underline underline-offset-2"
+      className="text-accent underline underline-offset-2"
       target="_blank"
       rel="noreferrer"
     >
@@ -37,7 +37,7 @@ const components = {
     </a>
   ),
   pre: ({ node: _node, ...props }) => (
-    <pre {...props} className="my-1 overflow-x-auto rounded-lg bg-slate-950/70 p-3 text-[13px]" />
+    <pre {...props} className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 text-[13px]" />
   ),
   code: ({ node: _node, children, className, ...props }) => {
     const isBlock = String(children).includes("\n") || /language-/.test(className ?? "");
@@ -46,7 +46,7 @@ const components = {
         {children}
       </code>
     ) : (
-      <code {...props} className="rounded bg-slate-800/80 px-1 py-0.5 text-[13px]">
+      <code {...props} className="rounded bg-surface-elevated px-1 py-0.5 text-[13px]">
         {children}
       </code>
     );
@@ -56,8 +56,8 @@ const components = {
       <table {...props} className="border-collapse text-sm" />
     </div>
   ),
-  th: ({ node: _node, ...props }) => <th {...props} className="border border-slate-700 px-2 py-1 text-left" />,
-  td: ({ node: _node, ...props }) => <td {...props} className="border border-slate-700 px-2 py-1" />,
+  th: ({ node: _node, ...props }) => <th {...props} className="border border-border px-2 py-1 text-left" />,
+  td: ({ node: _node, ...props }) => <td {...props} className="border border-border px-2 py-1" />,
 } satisfies Components;
 
 export default function QuickNoteContent({ text, trailing }: { text: string; trailing?: ReactNode }) {

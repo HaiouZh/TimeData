@@ -131,16 +131,16 @@ export default function EntryForm({
         onEndChange={handleEndChange}
       />
 
-      <section className="rounded-2xl bg-slate-900 border border-slate-800 p-3 space-y-2">
+      <section className="space-y-2 rounded-2xl border border-border bg-surface p-3">
         <div className="flex items-center justify-between gap-2">
-          <label className="text-sm text-slate-400">分类</label>
+          <label className="text-sm text-ink-2">分类</label>
           {(prevEntry || nextEntry) && (
             <div className="flex gap-2">
               {prevEntry && (
                 <button
                   type="button"
                   onClick={handleMergeUp}
-                  className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition-colors"
+                  className="rounded-full bg-surface-elevated px-3 py-1 text-xs text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
                 >
                   <span className="inline-flex items-center gap-1">
                     <Icon icon={ArrowUp} size={14} />
@@ -152,7 +152,7 @@ export default function EntryForm({
                 <button
                   type="button"
                   onClick={handleMergeDown}
-                  className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition-colors"
+                  className="rounded-full bg-surface-elevated px-3 py-1 text-xs text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
                 >
                   <span className="inline-flex items-center gap-1">
                     <Icon icon={ArrowDown} size={14} />
@@ -166,28 +166,28 @@ export default function EntryForm({
         <CategoryPicker onSelect={setCategoryId} selectedId={categoryId} />
       </section>
 
-      <section className="rounded-2xl bg-slate-900 border border-slate-800 p-3">
-        <label className="text-sm text-slate-400 mb-2 block">备注（可选）</label>
+      <section className="rounded-2xl border border-border bg-surface p-3">
+        <label className="mb-2 block text-sm text-ink-2">备注（可选）</label>
         <textarea
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder="做了什么，或补充一点细节..."
           rows={2}
-          className="w-full resize-none bg-slate-800 rounded-lg px-3 py-2 text-sm placeholder-slate-600"
+          className="w-full resize-none rounded-lg bg-surface-elevated px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
       </section>
 
       <div className="grid grid-cols-2 gap-3 pb-4">
         <button
           onClick={onCancel}
-          className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm font-medium"
+          className="rounded-xl bg-surface-elevated py-3 text-sm font-medium text-ink-2 hover:bg-surface-hover hover:text-ink"
         >
           取消
         </button>
         <button
           onClick={handleSave}
           disabled={!categoryId || saving}
-          className="py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-sm font-medium"
+          className="rounded-xl bg-accent py-3 text-sm font-medium text-page hover:bg-accent-strong disabled:opacity-40"
         >
           {saving ? "保存中…" : "保存"}
         </button>
@@ -196,7 +196,7 @@ export default function EntryForm({
       {onDelete && (
         <button
           onClick={onDelete}
-          className="w-full py-3 rounded-xl bg-red-950/70 hover:bg-red-950 text-sm font-medium text-red-300"
+          className="w-full rounded-xl bg-danger-soft py-3 text-sm font-medium text-danger hover:bg-danger-soft/80"
         >
           删除这条记录
         </button>

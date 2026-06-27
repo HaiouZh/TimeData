@@ -67,7 +67,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
         onPunch={() => void handlePunch()}
         overlay={<SyncIndicator />}
       />
-      {punchMessage && <p className="px-4 pt-2 text-center text-xs text-amber-300">{punchMessage}</p>}
+      {punchMessage && <p className="px-4 pt-2 text-center text-xs text-warn">{punchMessage}</p>}
       <Timeline
         slots={slots}
         onGapClick={(startTime, endTime) =>

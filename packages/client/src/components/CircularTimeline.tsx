@@ -30,6 +30,15 @@ const ARROW_HALF_WIDTH_DEG = 6;
 const DAY_MINUTES = 24 * 60;
 const TICK_INDICES = Array.from({ length: 144 }, (_, index) => index);
 
+const timelineChromeColors = {
+  ringBase: "var(--color-border)",
+  futureSegment: "var(--color-surface)",
+  gapSegment: "var(--color-ink-3)",
+  tick: "var(--color-ink)",
+  textStroke: "var(--color-page)",
+  now: "var(--color-danger)",
+} as const;
+
 function minutesFromClock(value: string): number {
   const hours = Number(value.slice(11, 13));
   const minutes = Number(value.slice(14, 16));
@@ -196,7 +205,8 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
   const selectedMinutes = selectedRange
     ? clampSlotToDayMinutes(date, selectedRange.startTime, selectedRange.endTime)
     : null;
-  const selectedColor = selection?.type === "entry" ? getCategoryColor(selection.entry.categoryId) : "rgb(100 116 139)";
+  const selectedColor =
+    selection?.type === "entry" ? getCategoryColor(selection.entry.categoryId) : timelineChromeColors.gapSegment;
   const centerTitle =
     selection?.type === "entry"
       ? getCategoryPath(selection.entry.categoryId)
@@ -210,7 +220,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
 
   return (
     <section className="px-4 pt-4">
-      <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-3">
+      <div className="rounded-2xl border border-border bg-surface/80 p-3">
         <div className="flex justify-center">
           <div className="relative aspect-square w-full max-w-[372px]">
             {overlay}
@@ -233,7 +243,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                 }
               }}
             >
-              <path d={describeRingSegment(0, DAY_MINUTES)} fill="rgb(51 65 85)" />
+              <path d={describeRingSegment(0, DAY_MINUTES)} fill={timelineChromeColors.ringBase} />
               {slots.map((slot, index) => {
                 const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
                 if (end <= start) return null;
@@ -244,9 +254,9 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                 if (slot.kind === "entry" && slot.entry) {
                   fill = getCategoryColor(slot.entry.categoryId);
                 } else if (slot.kind === "future") {
-                  fill = "rgb(24 32 48)";
+                  fill = timelineChromeColors.futureSegment;
                 } else {
-                  fill = "rgb(100 116 139)";
+                  fill = timelineChromeColors.gapSegment;
                 }
                 // 有选中段时，把其余可选段压暗，让选中段相对提亮；future 自身已足够克制，不再压。
                 const dimmed = selection !== null && !selected && slot.kind !== "future";
@@ -280,7 +290,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                     y1={outer.y}
                     x2={inner.x}
                     y2={inner.y}
-                    stroke="rgb(248 250 252)"
+                    stroke={timelineChromeColors.tick}
                     strokeWidth={strokeWidth}
                     opacity={opacity}
                     data-tick-tier={tier}
@@ -299,9 +309,9 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                     y={label.y}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className={isAnchor ? "fill-slate-100 text-[10px] font-semibold" : "fill-slate-400 text-[9px]"}
+                    className={isAnchor ? "td-num fill-ink text-[10px] font-semibold" : "td-num fill-ink-2 text-[9px]"}
                     style={{ paintOrder: "stroke" }}
-                    stroke="rgb(15 23 42)"
+                    stroke={timelineChromeColors.textStroke}
                     strokeWidth="1"
                     strokeLinejoin="round"
                     pointerEvents="none"
@@ -373,7 +383,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                     data-ring-indicator="true"
                     points={`${tip.x},${tip.y} ${baseLeft.x},${baseLeft.y} ${baseRight.x},${baseRight.y}`}
                     fill={selectedColor}
-                    stroke="rgb(15 23 42)"
+                    stroke={timelineChromeColors.textStroke}
                     strokeWidth="1"
                     strokeLinejoin="round"
                     pointerEvents="none"
@@ -395,10 +405,10 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                       y1={handInner.y}
                       x2={handOuter.x}
                       y2={handOuter.y}
-                      stroke="rgb(248 113 113)"
+                      stroke={timelineChromeColors.now}
                       strokeWidth="1.5"
                     />
-                    <circle cx={handOuter.x} cy={handOuter.y} r="2.4" fill="rgb(248 113 113)" />
+                    <circle cx={handOuter.x} cy={handOuter.y} r="2.4" fill={timelineChromeColors.now} />
                   </g>
                 );
               })()}
@@ -406,17 +416,17 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
             <button
               type="button"
               onClick={() => onPunch?.()}
-              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center ring-1 ring-inset ring-white/10 transition hover:ring-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 active:scale-95"
+              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95"
               style={{ containerType: "inline-size" }}
               aria-label="打点（记录到现在）"
             >
-              <span className="text-[8cqw] leading-none text-white/85">{centerRange}</span>
-              <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-white">{centerTitle}</span>
-              <span className="text-[17cqw] font-semibold leading-none text-white">{centerDuration}</span>
+              <span className="td-time text-[8cqw] leading-none text-ink-2">{centerRange}</span>
+              <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-ink">{centerTitle}</span>
+              <span className="td-duration text-[17cqw] font-semibold leading-none text-ink">{centerDuration}</span>
             </button>
           </div>
         </div>
-        {slots.length === 0 && <p className="mt-2 text-center text-xs text-slate-500">今天还没有可显示的时间段。</p>}
+        {slots.length === 0 && <p className="mt-2 text-center text-xs text-ink-3">今天还没有可显示的时间段。</p>}
       </div>
     </section>
   );

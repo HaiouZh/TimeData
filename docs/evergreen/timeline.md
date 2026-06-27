@@ -18,7 +18,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-27
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
@@ -124,11 +124,11 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 **几何**：外半径 104、内半径 62（比例 0.6），内圈不再画底色圆，选中段的分类色作为指针填色暗示；每段都是两个同心圆之间的闭合 SVG 环形扇区，段首段尾由径向直线切分，不用圆头粗线描边。
 
-**段配色**：所有段一律 100% 不透明。`slot.kind === "entry"` 用分类色；`"gap"`（已过、未填）用 `rgb(100 116 139)`（slate-500 暖灰）；`"future"`（今天 `now → 24:00` 尚未到达）用 `rgb(30 41 59)`（slate-800，比底色 slate-700 更暗一档），并禁用点击交互。`buildTimeSlots` 在当日还有“未到达”区间时显式追加 `kind: "future"` 的 slot，列表组件 `Timeline.tsx` 会过滤掉该段，圆环则保留以维持“一整圈被填满”的视觉。
+**段配色**：所有段一律 100% 不透明。`slot.kind === "entry"` 用分类色（用户内容色，允许进入时间段展示）；`"gap"`（已过、未填）用 `var(--color-ink-3)`；`"future"`（今天 `now → 24:00` 尚未到达）用 `var(--color-surface)`，并禁用点击交互。圆环底、刻度、文字描边和当前时间针使用 `timelineChromeColors` 镜像 `border/ink/page/danger` token，不直接写裸 `rgb()`；`buildTimeSlots` 在当日还有“未到达”区间时显式追加 `kind: "future"` 的 slot，列表组件 `Timeline.tsx` 会过滤掉该段，圆环则保留以维持“一整圈被填满”的视觉。
 
 **刻度**：三层刻度——144 个 10 分钟微刻度（弱、短），每隔 3 个升级为半点刻度，每隔 6 个升级为整点刻度（最长、最亮）；在 RADIUS 中线位置标 0–23 全部整点数字，0/6/12/18 加粗作为锚点。文字以深色描边压在分段之上避免被分类色淹没。
 
-**中心打点**：中心大圆是固定的打点入口（⏱ + “打点到现在”），点击调用 `punchNow`（规则同速记页 header 打点：起点=今天最后一条记录 end，否则今天 0 点，分类取 `设置 → 记录偏好 → 打点分类` 绑定的子分类），成功后 `syncAfterWrite`；未配置或分类失效时不写记录并显示提示。中心不再展示选中段信息、也不再承担编辑/补录跳转——查看、编辑记录与补录空档全部交给下方的 `Timeline` 列表（点记录进编辑页、点空档进新增页并带 `start` / `end` / `date`）。环面仍保留选中态：当槽位变化时默认选中最后一个空档、否则退选最后一条记录、`future` 段永不进入默认选中，用于高亮与指针箭头，但不驱动中心。`onEntryOpen` / `onGapOpen` 降为可选 prop、保留兼容但中心已不使用。
+**中心打点**：中心大圆是固定的打点入口，点击调用 `punchNow`（规则同速记页 header 打点：起点=今天最后一条记录 end，否则今天 0 点，分类取 `设置 → 记录偏好 → 打点分类` 绑定的子分类），成功后 `syncAfterWrite`；未配置或分类失效时不写记录并显示提示。中心仍展示当前选中段的时间范围、标题和时长作为上下文，但不承担编辑/补录跳转——查看、编辑记录与补录空档全部交给下方的 `Timeline` 列表（点记录进编辑页、点空档进新增页并带 `start` / `end` / `date`）。环面仍保留选中态：当槽位变化时默认选中最后一个空档、否则退选最后一条记录、`future` 段永不进入默认选中，用于高亮与指针箭头，但不驱动中心行为。`onEntryOpen` / `onGapOpen` 降为可选 prop、保留兼容但中心已不使用。中心时间范围、时长和下方列表的时间文案使用 `td-time` / `td-duration`，不直接使用 `font-mono`。
 
 时间轴页在圆环后直接进入时间流列表，不再保留独立的日覆盖率卡片；覆盖率、时长分析等汇总口径保留在统计页，不作为时间轴页 standalone UI。列表层会隐藏今天末尾直接贴着 `future` 段、且短于 2 分钟的空档，避免刚记录完最新时间段后立刻出现“补记这段”的误导提示；历史日期和两条记录中间的短空档仍正常显示。
 
@@ -188,7 +188,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 跨午夜场景之外，新增记录页的”逻辑日期”由 URL `date=YYYY-MM-DD` 参数显式决定。TimelinePage 在空挡跳转时把当前 timeline 的 `date` 一起带过去；EntryPage 读取后，作为表单 `end.date` 的锚，并把 `defaults.end` 钉到 `${date}T23:59:00`（非今天）或当前时刻（今天），避免”昨天尾部空挡的 dayEnd 实际是次日 00:00”导致表单悄悄滑到今天。`resolveClockRangeAroundEndDate` 因此只保留”endClock <= startClock 时把 start 日期前移一天”这一条规则，不再根据”endTime 落在未来”自动推一天；用户真要补昨天就应当先切到昨天的 timeline。表单顶部不再有”已识别为…”蓝字提示。点保存时 `EntryPage.handleSave` 走单一流程：`isFutureLocalDateTime` 兜底（手填的未来 endTime 直接红字”不能记录尚未发生的时间”），否则查重叠，按既有”切两段阻断 / 多条裁剪确认”弹窗处理。新增或编辑记录保存成功后，返回的时间轴日期按表单本地时间决定：同日记录回到开始日期；跨天且结束时间不是 `00:00` 的记录回到结束日期，便于保存 `22:00 -> 05:00` 后直接看到完成日的跨夜合并段；跨天但精确结束在 `00:00` 的记录仍回到开始日期，因为 TimeData 的时间段按 `[start, end)` 处理，下一天没有可见时长。
 
-`TimeRangeWheelPicker` 的滚轮选择行为已抽到共享 `packages/client/src/components/Wheel.tsx`；时间记录页面仍通过 `TimeRangeWheelPicker` 组合时、分两列并保留原有解析规则，共享组件只复用滚动索引、吸附与无框滚轮交互，不改变新增/编辑记录的时间语义。
+`TimeRangeWheelPicker` 的滚轮选择行为已抽到共享 `packages/client/src/components/Wheel.tsx`；时间记录页面仍通过 `TimeRangeWheelPicker` 组合时、分两列并保留原有解析规则，共享组件只复用滚动索引、吸附与无框滚轮交互，不改变新增/编辑记录的时间语义。选择器、日期导航、月历、补记空档、`EntryForm` 表面和操作按钮消费 `page/surface/border/ink/accent/danger` token；日期、时钟、时长、日号使用 `td-time` / `td-duration` / `td-num`。`DateNav`、`TimeSlot` 和相邻合并按钮的箭头/加号均经 Phosphor `Icon` 包装，不使用字符箭头或文字加号伪图标。
 
 `useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，页面调用 `SyncContext.syncAfterWrite()`，在 1.5 秒防抖窗口后把本地待同步日志推到服务器；进入时间轴页的对账兜底仍由 `syncIfStale()` 走较长节流。
 

@@ -10,11 +10,11 @@ interface NoteMetaProps {
 }
 
 export default function NoteMeta({ occurredAt, pending, agent = false, className = "" }: NoteMetaProps) {
-  const colorClass = agent ? "text-sky-100/80" : "text-slate-500";
+  const colorClass = agent ? "text-accent-ink" : "text-ink-3";
   return (
     <span
       className={[
-        "inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11px] leading-none tabular-nums",
+        "td-time inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none",
         colorClass,
         className,
       ]

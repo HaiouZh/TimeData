@@ -39,15 +39,15 @@ function monthLabel(year: number, month: number): string {
 }
 
 const navButtonClass =
-  "flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-950 text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400";
+  "flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-elevated text-ink-2 transition-colors hover:border-border-strong hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 function dayButtonClass(selected: boolean, today: boolean): string {
   const base =
-    "flex aspect-square min-h-9 w-full items-center justify-center rounded-lg border text-sm tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400";
+    "td-num flex aspect-square min-h-9 w-full items-center justify-center rounded-lg border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
-  if (selected) return `${base} border-sky-400/70 bg-sky-500/20 font-semibold text-sky-50`;
-  if (today) return `${base} border-slate-600 bg-slate-950/80 text-slate-100`;
-  return `${base} border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-600 hover:bg-slate-800`;
+  if (selected) return `${base} border-accent bg-accent-soft font-semibold text-accent-ink`;
+  if (today) return `${base} border-border-strong bg-surface text-ink`;
+  return `${base} border-border bg-page/60 text-ink-2 hover:border-border-strong hover:bg-surface-hover`;
 }
 
 export function MonthCalendar({ value, onChange }: MonthCalendarProps) {
@@ -76,18 +76,18 @@ export function MonthCalendar({ value, onChange }: MonthCalendarProps) {
   }
 
   return (
-    <section className="rounded-xl border border-slate-800 bg-slate-900/80 p-3 text-slate-100" aria-label="月历">
+    <section className="rounded-xl border border-border bg-surface/80 p-3 text-ink" aria-label="月历">
       <div className="mb-3 flex items-center justify-between gap-3">
         <button type="button" aria-label="上个月" onClick={() => moveMonth(-1)} className={navButtonClass}>
           <Icon icon={CaretLeft} size={18} weight="bold" />
         </button>
-        <div className="text-sm font-semibold text-slate-100">{monthLabel(year, month)}</div>
+        <div className="td-time text-sm font-semibold text-ink">{monthLabel(year, month)}</div>
         <button type="button" aria-label="下个月" onClick={() => moveMonth(1)} className={navButtonClass}>
           <Icon icon={CaretRight} size={18} weight="bold" />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-500">
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-ink-3">
         {WEEKDAYS.map((weekday) => (
           <div key={weekday}>{weekday}</div>
         ))}

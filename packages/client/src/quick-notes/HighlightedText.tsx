@@ -12,7 +12,7 @@ export default function HighlightedText({ text, terms }: { text: string; terms: 
         offset += segment.text.length;
         const key = `${start}-${offset}-${segment.match ? "match" : "text"}`;
         return segment.match ? (
-          <mark key={key} className="rounded bg-emerald-400/30 px-0.5 text-emerald-100">
+          <mark key={key} className="rounded bg-accent-soft px-0.5 text-accent-ink">
             {segment.text}
           </mark>
         ) : (

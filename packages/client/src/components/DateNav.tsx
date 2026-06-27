@@ -8,7 +8,7 @@ interface DateNavProps {
 }
 
 const arrowClass =
-  "rounded-lg px-4 py-2.5 text-lg leading-none text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400";
+  "rounded-lg px-4 py-2.5 text-lg leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3";
 
 export default function DateNav({ date, onDateChange }: DateNavProps) {
   const today = getDateString(new Date());
@@ -16,13 +16,13 @@ export default function DateNav({ date, onDateChange }: DateNavProps) {
   const weekday = formatWeekday(date);
 
   return (
-    <div className="flex items-center justify-between bg-slate-900 px-2 py-2">
+    <div className="flex items-center justify-between bg-surface px-2 py-2">
       <button onClick={() => onDateChange(addDays(date, -1))} className={arrowClass} aria-label="前一天">
         <Icon icon={CaretLeft} size={18} />
       </button>
-      <div className="relative rounded-lg px-2 py-1 text-center focus-within:ring-2 focus-within:ring-blue-400">
-        <span className="text-lg font-medium text-slate-100">{formatMonthDay(date)}</span>
-        <span className="ml-2 text-sm text-slate-400">{isToday ? "今天" : weekday}</span>
+      <div className="relative rounded-lg px-2 py-1 text-center focus-within:ring-2 focus-within:ring-accent">
+        <span className="td-time text-lg font-medium text-ink">{formatMonthDay(date)}</span>
+        <span className="ml-2 text-sm text-ink-2">{isToday ? "今天" : weekday}</span>
         <input
           type="date"
           value={date}
