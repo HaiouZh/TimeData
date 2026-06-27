@@ -15,6 +15,7 @@ import { pinRefFromNodeId } from "./goalLayoutPinRefs.js";
 export interface GoalLayoutController {
   positions: Record<string, XY>;
   pinnedIds: Set<string>;
+  boxes: Record<string, GoalGraphNodeBox>;
   onNodeDrag: (nodeId: string, position: XY) => void;
   onNodeDragStop: (nodeId: string, position: XY) => void;
   restorePin: (nodeId: string) => void;
@@ -388,5 +389,5 @@ export function useGoalGraphLayout({
     void Promise.all(refs.map((ref) => deleteGoalLayoutPin(ref))).then(onChanged);
   }, [goal.id, onChanged, pins.members]);
 
-  return { positions: renderedPositions, pinnedIds, onNodeDrag, onNodeDragStop, restorePin, restoreLayout };
+  return { positions: renderedPositions, pinnedIds, boxes: layoutBoxes, onNodeDrag, onNodeDragStop, restorePin, restoreLayout };
 }

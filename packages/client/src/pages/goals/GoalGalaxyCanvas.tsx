@@ -24,6 +24,7 @@ import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { useGalaxyEngineMode } from "../../lib/galaxyEngineMode.js";
+import { chooseEdgeHandleSides, type HandleBox } from "../../lib/goalEdgeRouting.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { type ClusterLod, clusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
@@ -93,7 +94,6 @@ type PendingRemoveMember = { goalId: string; node: GoalGraphNode };
 type ConnectDraft = { goalId: string; node: GoalGraphNode };
 type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 type BridgeRouteChoice = { goalIds: string[]; nodeTitle: string } | null;
-type EdgeHandleSide = "left" | "right" | "top" | "bottom";
 
 const ADD_MEMBER_ACTION: GoalAction = { id: "add-member", label: "添加成员", tone: "primary" };
 
@@ -418,27 +418,24 @@ function commonGoalIds(first: GoalGalaxyFlowNode | undefined, second: GoalGalaxy
   return goalIdsFromAnchorIds(anchorIdsForFlowNode(second)).filter((goalId) => firstIds.has(goalId));
 }
 
-function edgeHandleSides(source: XY, target: XY): { source: EdgeHandleSide; target: EdgeHandleSide } {
-  const delta = { x: target.x - source.x, y: target.y - source.y };
-  if (Math.abs(delta.x) >= Math.abs(delta.y)) {
-    return delta.x >= 0 ? { source: "right", target: "left" } : { source: "left", target: "right" };
-  }
-  return delta.y >= 0 ? { source: "bottom", target: "top" } : { source: "top", target: "bottom" };
-}
-
 function edgeHandlesFor(
   edge: GoalGraphEdge,
-  nodesById: Map<string, GoalGalaxyFlowNode>,
+  handleBoxById: Map<string, HandleBox>,
 ): { sourceHandle?: string; targetHandle?: string } {
   if (edge.kind === "tether") {
     return { sourceHandle: "source-center", targetHandle: "target-center" };
   }
 
-  const source = nodesById.get(edge.source);
-  const target = nodesById.get(edge.target);
+  const source = handleBoxById.get(edge.source);
+  const target = handleBoxById.get(edge.target);
   if (!source || !target) return {};
 
-  const sides = edgeHandleSides(source.position, target.position);
+  const obstacles: HandleBox[] = [];
+  for (const [id, box] of handleBoxById) {
+    if (id !== edge.source && id !== edge.target) obstacles.push(box);
+  }
+
+  const sides = chooseEdgeHandleSides(source, target, obstacles);
   return {
     sourceHandle: `source-${sides.source}`,
     targetHandle: `target-${sides.target}`,
@@ -646,18 +643,28 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (settleEnabled) setLiveSettle(true);
   }, [settleEnabled]);
   const edges = useMemo<GoalGalaxyFlowEdge[]>(() => {
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const handleBoxById = new Map<string, HandleBox>();
+    for (const node of nodes) {
+      const box = layout.boxes[node.id];
+      if (!box) continue;
+      handleBoxById.set(node.id, {
+        x: node.position.x + (box.offsetX ?? 0),
+        y: node.position.y + (box.offsetY ?? 0),
+        width: box.width,
+        height: box.height,
+      });
+    }
     return model.edges.map((edge) => ({
       id: edge.id,
       type: "goal-graph-edge",
       source: edge.source,
       target: edge.target,
-      ...edgeHandlesFor(edge, nodesById),
+      ...edgeHandlesFor(edge, handleBoxById),
       style: edge.kind === "tether" ? { opacity: tetherOpacity } : undefined,
       data: { kind: edge.kind, goalId: edge.goalId },
       selected: edge.id === selectedEdgeId,
     }));
-  }, [model.edges, nodes, selectedEdgeId, tetherOpacity]);
+  }, [layout.boxes, model.edges, nodes, selectedEdgeId, tetherOpacity]);
   useEffect(() => {
     if (initialFitGoalKey === activeGoalKey) return;
     if (activeGoalCount === 0) return;

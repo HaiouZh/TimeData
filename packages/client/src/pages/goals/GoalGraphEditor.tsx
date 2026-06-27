@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
+import { chooseEdgeHandleSides, type HandleBox } from "../../lib/goalEdgeRouting.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
 import {
@@ -88,7 +89,6 @@ type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 
 type WidePanel = "add-member" | "goal-menu" | null;
 type FlowPosition = { x: number; y: number };
-type EdgeHandleSide = "left" | "right" | "top" | "bottom";
 
 const DEFAULT_NODE_POSITION: FlowPosition = { x: 0, y: 0 };
 
@@ -153,27 +153,24 @@ function isHandleNode(node: GoalGraphNodeModel | undefined): boolean {
   return node?.kind === "task" || node?.kind === "track";
 }
 
-function edgeHandleSides(source: FlowPosition, target: FlowPosition): { source: EdgeHandleSide; target: EdgeHandleSide } {
-  const delta = { x: target.x - source.x, y: target.y - source.y };
-  if (Math.abs(delta.x) >= Math.abs(delta.y)) {
-    return delta.x >= 0 ? { source: "right", target: "left" } : { source: "left", target: "right" };
-  }
-  return delta.y >= 0 ? { source: "bottom", target: "top" } : { source: "top", target: "bottom" };
-}
-
 function edgeHandlesFor(
   edge: GoalGraphEdgeModel,
-  nodesById: Map<string, GoalGraphFlowNode>,
+  handleBoxById: Map<string, HandleBox>,
   modelNodesById: Map<string, GoalGraphNodeModel>,
 ): { sourceHandle?: string; targetHandle?: string } {
   if (edge.kind === "tether") return {};
   if (!isHandleNode(modelNodesById.get(edge.source)) || !isHandleNode(modelNodesById.get(edge.target))) return {};
 
-  const source = nodesById.get(edge.source)?.position;
-  const target = nodesById.get(edge.target)?.position;
+  const source = handleBoxById.get(edge.source);
+  const target = handleBoxById.get(edge.target);
   if (!source || !target) return {};
 
-  const sides = edgeHandleSides(source, target);
+  const obstacles: HandleBox[] = [];
+  for (const [id, box] of handleBoxById) {
+    if (id !== edge.source && id !== edge.target) obstacles.push(box);
+  }
+
+  const sides = chooseEdgeHandleSides(source, target, obstacles);
   return {
     sourceHandle: `source-${sides.source}`,
     targetHandle: `target-${sides.target}`,
@@ -265,18 +262,28 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     });
   }, []);
   const edges = useMemo<GoalGraphFlowEdge[]>(() => {
-    const nodesById = new Map(nodes.map((node) => [node.id, node]));
     const modelNodesById = new Map(model.nodes.map((node) => [node.id, node]));
+    const handleBoxById = new Map<string, HandleBox>();
+    for (const node of nodes) {
+      const box = layout.boxes[node.id];
+      if (!box) continue;
+      handleBoxById.set(node.id, {
+        x: node.position.x + (box.offsetX ?? 0),
+        y: node.position.y + (box.offsetY ?? 0),
+        width: box.width,
+        height: box.height,
+      });
+    }
     return model.edges.map((edge) => ({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      ...edgeHandlesFor(edge, nodesById, modelNodesById),
+      ...edgeHandlesFor(edge, handleBoxById, modelNodesById),
       type: "goal-graph-edge",
       data: { kind: edge.kind },
       selected: edge.id === selectedEdgeId,
     }));
-  }, [model.edges, model.nodes, nodes, selectedEdgeId]);
+  }, [layout.boxes, model.edges, model.nodes, nodes, selectedEdgeId]);
   const selectedNode = selectedNodeId ? (model.nodes.find((node) => node.id === selectedNodeId) ?? null) : null;
   const selectedEdge = selectedEdgeId ? (model.edges.find((edge) => edge.id === selectedEdgeId) ?? null) : null;
 
