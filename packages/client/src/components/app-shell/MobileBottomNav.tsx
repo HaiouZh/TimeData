@@ -15,8 +15,10 @@ function MobileIconLink({ item, onClick }: { item: MainNavItem; onClick?: () => 
       title={item.label}
       onClick={onClick}
       className={({ isActive }) =>
-        `flex flex-1 items-center justify-center transition-colors ${
-          isActive ? "text-accent" : "text-ink-3 hover:text-ink-2"
+        `flex flex-1 items-center justify-center rounded-row transition-colors ${
+          isActive
+            ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent/30"
+            : "text-ink-3 hover:bg-surface-hover hover:text-ink-2"
         }`
       }
     >

@@ -48,6 +48,15 @@ describe("navRegistry", () => {
     expect(DESKTOP_NAV_DEFAULT_ITEMS).toEqual(MAIN_NAV_ROUTES.map((to) => ({ to, placement: "primary" })));
   });
 
+  it("does not expose module signature colors for navigation", () => {
+    const retiredModuleMarker = "mo" + "d-";
+    const retiredModuleColorField = "module" + "Color";
+    for (const item of MAIN_NAV_ITEMS) {
+      expect(item).not.toHaveProperty(retiredModuleColorField);
+      expect(JSON.stringify(item)).not.toContain(retiredModuleMarker);
+    }
+  });
+
   it("normalizes legacy and detail paths to their primary route", () => {
     expect(primaryRouteForPath("/")).toBe("/");
     expect(primaryRouteForPath("/entries/new")).toBe("/");

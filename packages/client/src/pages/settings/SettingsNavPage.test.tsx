@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/index.js";
 import { readDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
 import { readVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
-import { click, renderDom, unmount } from "../../test/domHarness.js";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsNavPage } from "./SettingsNavPage.js";
+
+vi.mock("../../lib/settings/index.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/settings/index.ts")>();
+  return { ...actual, useSetting: () => null };
+});
 
 beforeEach(async () => {
   await db.settings.clear();
@@ -18,11 +23,20 @@ async function renderPage() {
   return renderDom(createElement(MemoryRouter, null, createElement(SettingsNavPage)));
 }
 
+async function clickAndFlushSettings(el: Element | null | undefined): Promise<void> {
+  await act(async () => {
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  });
+}
+
 async function waitForTabs(predicate: (tabs: string[]) => boolean): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 1000) {
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
     if (predicate(await readVisibleTabs())) return;
-    await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
   throw new Error("Timed out waiting for nav.visibleTabs.v1");
 }
@@ -30,8 +44,10 @@ async function waitForTabs(predicate: (tabs: string[]) => boolean): Promise<void
 async function waitForDesktopConfig(predicate: (items: { to: string; placement: string }[]) => boolean): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < 1000) {
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
     if (predicate(await readDesktopSidebarConfig())) return;
-    await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
   throw new Error("Timed out waiting for nav.desktopSidebar.v1");
 }
@@ -39,7 +55,7 @@ async function waitForDesktopConfig(predicate: (items: { to: string; placement: 
 describe("SettingsNavPage", () => {
   it("toggles a tab off and persists", async () => {
     const { host, root } = await renderPage();
-    await click(host.querySelector('[role="switch"][aria-label="健康"]'));
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="健康"]'));
     await waitForTabs((tabs) => tabs.includes("/stats/time") && !tabs.includes("/stats/health"));
     await unmount(root);
   });
@@ -71,10 +87,24 @@ describe("SettingsNavPage", () => {
     await unmount(root);
   });
 
+  it("shows route labels for configuration without module-color identity language", async () => {
+    const retiredTextModuleClass = "text-" + "mo" + "d-";
+    const { host, root } = await renderPage();
+
+    expect(host.textContent).toContain("记录");
+    expect(host.textContent).toContain("时间轴");
+    expect(host.textContent).toContain("侧栏");
+    expect(host.innerHTML).not.toContain(retiredTextModuleClass);
+    expect(host.textContent).not.toContain("模块色");
+    expect(host.textContent).not.toContain("彩色模块");
+
+    await unmount(root);
+  });
+
   it("moves a desktop sidebar item down and persists order", async () => {
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('button[aria-label="下移 记录"]'));
+    await clickAndFlushSettings(host.querySelector('button[aria-label="下移 记录"]'));
     await waitForDesktopConfig((items) => items[0]?.to === "/" && items[1]?.to === "/quick-notes");
 
     await unmount(root);
@@ -83,7 +113,7 @@ describe("SettingsNavPage", () => {
   it("moves a desktop sidebar item into more and persists placement", async () => {
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('button[aria-label="收进更多 轨道"]'));
+    await clickAndFlushSettings(host.querySelector('button[aria-label="收进更多 轨道"]'));
     await waitForDesktopConfig((items) => items.find((item) => item.to === "/tracks")?.placement === "more");
 
     await unmount(root);
@@ -92,10 +122,10 @@ describe("SettingsNavPage", () => {
   it("restores default desktop sidebar config", async () => {
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('button[aria-label="收进更多 轨道"]'));
+    await clickAndFlushSettings(host.querySelector('button[aria-label="收进更多 轨道"]'));
     await waitForDesktopConfig((items) => items.find((item) => item.to === "/tracks")?.placement === "more");
 
-    await click(host.querySelector('button[aria-label="恢复桌面侧栏默认"]'));
+    await clickAndFlushSettings(host.querySelector('button[aria-label="恢复桌面侧栏默认"]'));
     await waitForDesktopConfig((items) => items.every((item) => item.placement === "primary"));
 
     await unmount(root);

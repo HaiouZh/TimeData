@@ -13,7 +13,9 @@ function NavIconLink({ item, activeRoute }: { item: MainNavItem; activeRoute: st
       aria-label={item.ariaLabel}
       title={item.label}
       className={`flex h-11 w-11 items-center justify-center rounded-row transition-colors ${
-        active ? "bg-accent-soft text-accent" : "text-ink-3 hover:bg-surface-hover hover:text-ink"
+        active
+          ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent/30"
+          : "text-ink-3 hover:bg-surface-hover hover:text-ink"
       }`}
     >
       <Icon icon={item.icon} size={22} weight="regular" />

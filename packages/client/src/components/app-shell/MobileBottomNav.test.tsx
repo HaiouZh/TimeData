@@ -17,6 +17,32 @@ function HideBottomNavButton() {
 }
 
 describe("MobileBottomNav", () => {
+  it("keeps visible mobile tabs icon-only while exposing accessible labels", async () => {
+    const retiredTextModuleClass = "text-" + "mo" + "d-";
+    const legacyPrimaryClass = "bg-" + "blue-600";
+    const { host, root } = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/quick-notes"] },
+        createElement(BottomNavProvider, null, createElement(MobileBottomNav)),
+      ),
+    );
+
+    const nav = host.querySelector('nav[aria-label="主导航"]');
+    const quickNotes = host.querySelector('nav a[href="/quick-notes"][aria-label="记录"]');
+    expect(quickNotes).not.toBeNull();
+    expect(quickNotes?.textContent).toBe("");
+    expect(quickNotes?.className).toContain("bg-accent-soft");
+    expect(quickNotes?.className).toContain("text-accent");
+    expect(quickNotes?.className).toContain("ring-accent/30");
+    expect(nav?.textContent).not.toContain("记录");
+    expect(nav?.textContent).not.toContain("时间轴");
+    expect(host.innerHTML).not.toContain(retiredTextModuleClass);
+    expect(host.innerHTML).not.toContain(legacyPrimaryClass);
+
+    await unmount(root);
+  });
+
   it("opens hidden mobile routes from the more button", async () => {
     const { host, root } = await renderDom(
       createElement(MemoryRouter, null, createElement(BottomNavProvider, null, createElement(MobileBottomNav))),
