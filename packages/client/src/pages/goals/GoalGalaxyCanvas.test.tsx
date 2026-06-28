@@ -294,8 +294,8 @@ describe("GoalGalaxyCanvas", () => {
     );
 
     const edge = buttonByEdgeId(host, "prerequisite:g1:task:a->task:b");
-    expect(edge.getAttribute("data-edge-source-handle")).toBe("source-right");
-    expect(edge.getAttribute("data-edge-target-handle")).toBe("target-left");
+    expect(edge.getAttribute("data-edge-source-handle")).toBe("source-center");
+    expect(edge.getAttribute("data-edge-target-handle")).toBe("target-center");
     await unmount(root);
   });
 

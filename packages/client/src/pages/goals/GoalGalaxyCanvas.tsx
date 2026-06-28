@@ -24,7 +24,7 @@ import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
 import { useGalaxyEngineMode } from "../../lib/galaxyEngineMode.js";
-import { chooseEdgeHandleSides, type HandleBox } from "../../lib/goalEdgeRouting.js";
+import { computeEdgeRoutings, type HandleBox, type EdgeRouting } from "../../lib/goalEdgeRouting.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
 import { type ClusterLod, clusterLod, type GalaxyViewport } from "../../lib/goalGalaxyLod.js";
 import { buildGoalGalaxyModel, type GalaxyNode } from "../../lib/goalGalaxyModel.js";
@@ -88,6 +88,7 @@ interface GoalGalaxyEdgeData extends Record<string, unknown> {
   kind: GoalGraphEdge["kind"];
   goalId?: string;
   opacity?: number;
+  routing?: EdgeRouting;
 }
 
 type GoalGalaxyFlowEdge = Edge<GoalGalaxyEdgeData, "goal-graph-edge">;
@@ -423,30 +424,6 @@ function commonGoalIds(first: GoalGalaxyFlowNode | undefined, second: GoalGalaxy
   return goalIdsFromAnchorIds(anchorIdsForFlowNode(second)).filter((goalId) => firstIds.has(goalId));
 }
 
-function edgeHandlesFor(
-  edge: GoalGraphEdge,
-  handleBoxById: Map<string, HandleBox>,
-): { sourceHandle?: string; targetHandle?: string } {
-  if (edge.kind === "tether") {
-    return { sourceHandle: "source-center", targetHandle: "target-center" };
-  }
-
-  const source = handleBoxById.get(edge.source);
-  const target = handleBoxById.get(edge.target);
-  if (!source || !target) return {};
-
-  const obstacles: HandleBox[] = [];
-  for (const [id, box] of handleBoxById) {
-    if (id !== edge.source && id !== edge.target) obstacles.push(box);
-  }
-
-  const sides = chooseEdgeHandleSides(source, target, obstacles);
-  return {
-    sourceHandle: `source-${sides.source}`,
-    targetHandle: `target-${sides.target}`,
-  };
-}
-
 export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
   return (
     <ReactFlowProvider>
@@ -661,14 +638,21 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         height: box.height,
       });
     }
+    const routings = computeEdgeRoutings(model.edges, handleBoxById);
     return model.edges.map((edge) => ({
       id: edge.id,
       type: "goal-graph-edge",
       source: edge.source,
       target: edge.target,
-      ...edgeHandlesFor(edge, handleBoxById),
+      sourceHandle: "source-center",
+      targetHandle: "target-center",
       style: edge.kind === "tether" ? { opacity: tetherOpacity } : undefined,
-      data: { kind: edge.kind, goalId: edge.goalId, opacity: edge.kind === "prerequisite" ? prereqOpacity : undefined },
+      data: {
+        kind: edge.kind,
+        goalId: edge.goalId,
+        opacity: edge.kind === "prerequisite" ? prereqOpacity : undefined,
+        routing: routings.get(edge.id),
+      },
       selected: edge.id === selectedEdgeId,
     }));
   }, [layout.boxes, model.edges, nodes, prereqOpacity, selectedEdgeId, tetherOpacity]);

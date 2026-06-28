@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
 import { useSyncContext } from "../../contexts/SyncContext.js";
-import { chooseEdgeHandleSides, type HandleBox } from "../../lib/goalEdgeRouting.js";
+import { computeEdgeRoutings, type HandleBox, type EdgeRouting } from "../../lib/goalEdgeRouting.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
 import {
@@ -149,34 +149,6 @@ function canReuseNode(
   );
 }
 
-function isHandleNode(node: GoalGraphNodeModel | undefined): boolean {
-  return node?.kind === "task" || node?.kind === "track";
-}
-
-function edgeHandlesFor(
-  edge: GoalGraphEdgeModel,
-  handleBoxById: Map<string, HandleBox>,
-  modelNodesById: Map<string, GoalGraphNodeModel>,
-): { sourceHandle?: string; targetHandle?: string } {
-  if (edge.kind === "tether") return {};
-  if (!isHandleNode(modelNodesById.get(edge.source)) || !isHandleNode(modelNodesById.get(edge.target))) return {};
-
-  const source = handleBoxById.get(edge.source);
-  const target = handleBoxById.get(edge.target);
-  if (!source || !target) return {};
-
-  const obstacles: HandleBox[] = [];
-  for (const [id, box] of handleBoxById) {
-    if (id !== edge.source && id !== edge.target) obstacles.push(box);
-  }
-
-  const sides = chooseEdgeHandleSides(source, target, obstacles);
-  return {
-    sourceHandle: `source-${sides.source}`,
-    targetHandle: `target-${sides.target}`,
-  };
-}
-
 export function GoalGraphEditor(props: GoalGraphEditorProps) {
   return (
     <ReactFlowProvider>
@@ -262,7 +234,6 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     });
   }, []);
   const edges = useMemo<GoalGraphFlowEdge[]>(() => {
-    const modelNodesById = new Map(model.nodes.map((node) => [node.id, node]));
     const handleBoxById = new Map<string, HandleBox>();
     for (const node of nodes) {
       const box = layout.boxes[node.id];
@@ -274,16 +245,18 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
         height: box.height,
       });
     }
+    const routings = computeEdgeRoutings(model.edges, handleBoxById);
     return model.edges.map((edge) => ({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      ...edgeHandlesFor(edge, handleBoxById, modelNodesById),
+      sourceHandle: "source-center",
+      targetHandle: "target-center",
       type: "goal-graph-edge",
-      data: { kind: edge.kind },
+      data: { kind: edge.kind, routing: routings.get(edge.id) },
       selected: edge.id === selectedEdgeId,
     }));
-  }, [layout.boxes, model.edges, model.nodes, nodes, selectedEdgeId]);
+  }, [layout.boxes, model.edges, nodes, selectedEdgeId]);
   const selectedNode = selectedNodeId ? (model.nodes.find((node) => node.id === selectedNodeId) ?? null) : null;
   const selectedEdge = selectedEdgeId ? (model.edges.find((edge) => edge.id === selectedEdgeId) ?? null) : null;
 

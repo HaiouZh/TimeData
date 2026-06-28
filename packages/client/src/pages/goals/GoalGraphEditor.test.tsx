@@ -343,8 +343,8 @@ describe("GoalGraphEditor", () => {
     });
 
     const leftToRight = edgeButton(host, "prerequisite:task:left->task:right");
-    expect(leftToRight.getAttribute("data-edge-source-handle")).toBe("source-right");
-    expect(leftToRight.getAttribute("data-edge-target-handle")).toBe("target-left");
+    expect(leftToRight.getAttribute("data-edge-source-handle")).toBe("source-center");
+    expect(leftToRight.getAttribute("data-edge-target-handle")).toBe("target-center");
   });
 
   it("局部编辑器使用共享前置边渲染器和默认透明度", async () => {
