@@ -108,6 +108,33 @@ const getNode = vi.fn<
 });
 const reactFlowInstance = { fitView, setViewport, getViewport, screenToFlowPosition, getNode };
 
+const mockNodeGeomById = new Map<string, { x: number; y: number; width: number; height: number }>();
+
+export function setMockNodeGeom(id: string, geom: { x: number; y: number; width: number; height: number }): void {
+  mockNodeGeomById.set(id, geom);
+}
+
+export function useInternalNode(
+  id: string,
+): {
+  internals: { positionAbsolute: { x: number; y: number } };
+  measured: { width?: number; height?: number };
+} | undefined {
+  const injected = mockNodeGeomById.get(id);
+  if (injected) {
+    return {
+      internals: { positionAbsolute: { x: injected.x - injected.width / 2, y: injected.y - injected.height / 2 } },
+      measured: { width: injected.width, height: injected.height },
+    };
+  }
+  const node = getNode(id);
+  if (!node) return undefined;
+  return {
+    internals: { positionAbsolute: node.position ?? { x: 0, y: 0 } },
+    measured: node.measured,
+  };
+}
+
 function readNodePayload(node: MockReactFlowNode): { kind?: string; title?: string } {
   const payload = node.data?.node;
   if (typeof payload !== "object" || payload === null) return {};
@@ -375,6 +402,7 @@ export function resetReactFlowMock() {
   latestOnMoveEnd = undefined;
   latestOnNodesChange = undefined;
   nextConnection = null;
+  mockNodeGeomById.clear();
 }
 
 export function getReactFlowMock() {
