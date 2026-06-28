@@ -16,7 +16,7 @@
     "covers": 12
   },
   "docs/evergreen/categories-settings/settings-catalog.md": {
-    "chars": 5080,
+    "chars": 5524,
     "covers": 6
   },
   "docs/evergreen/cli.md": {
@@ -24,7 +24,7 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 11806,
+    "chars": 11892,
     "covers": 11
   },
   "docs/evergreen/deployment.md": {
@@ -88,8 +88,8 @@
     "covers": 16
   },
   "docs/evergreen/todo.md": {
-    "chars": 17010,
-    "covers": 26
+    "chars": 18055,
+    "covers": 29
   },
   "docs/evergreen/todo/recurrence.md": {
     "chars": 5291,
