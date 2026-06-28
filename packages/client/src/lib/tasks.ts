@@ -203,9 +203,29 @@ export async function setTaskTags(id: string, tags: string[], options: { now?: D
   const updatedAt = (options.now ?? new Date()).toISOString();
   const next = TaskSchema.parse({
     ...existing,
-    scheduledAt: existing.scheduledAt ?? null,    completedCount: existing.completedCount ?? 0,
+    scheduledAt: existing.scheduledAt ?? null,
+    completedCount: existing.completedCount ?? 0,
+    weight: existing.weight ?? 0,
     completedAt: existing.completedAt ?? null,
     tags,
+    updatedAt,
+  });
+  return putTask(next);
+}
+
+export async function bumpTaskWeight(id: string, options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const next = TaskSchema.parse({
+    ...existing,
+    parentId: existing.parentId ?? null,
+    scheduledAt: existing.scheduledAt ?? null,
+    completedCount: existing.completedCount ?? 0,
+    completedAt: existing.completedAt ?? null,
+    tags: existing.tags ?? [],
+    weight: (existing.weight ?? 0) + 1,
     updatedAt,
   });
   return putTask(next);

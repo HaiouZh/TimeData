@@ -5,6 +5,7 @@ import { db } from "../db/index.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
   addTask,
+  bumpTaskWeight,
   createChildTask,
   deleteTask,
   deleteTaskCascade,
@@ -720,5 +721,36 @@ describe("reorderChildren", () => {
     expect(after.map((t) => t.id)).toEqual([last, ...before.filter((id) => id !== last)]);
     // sortOrder 已被回填成连续 distinct 值（自愈撞值脏数据），否则下次还是拖不动
     expect(after.map((t) => t.sortOrder)).toEqual([0, 1, 2]);
+  });
+});
+
+describe("bumpTaskWeight", () => {
+  it("increments weight and writes a task sync log", async () => {
+    const created = await addTask({ title: "旧想法", toInbox: true, now: new Date("2026-06-01T00:00:00.000Z") });
+
+    const updated = await bumpTaskWeight(created.id, { now: new Date("2026-06-28T12:00:00.000Z") });
+
+    expect(updated.weight).toBe(1);
+    expect(updated.updatedAt).toBe("2026-06-28T12:00:00.000Z");
+    const logs = await db.syncLog.where("recordId").equals(created.id).toArray();
+    expect(logs.some((log) => log.action === "update")).toBe(true);
+  });
+
+  it("preserves existing fields when incrementing weight", async () => {
+    const task = await addTask({
+      title: "带标签想法",
+      toInbox: true,
+      tags: ["实验"],
+      now: new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    const updated = await bumpTaskWeight(task.id, { now: new Date("2026-06-28T12:00:00.000Z") });
+
+    expect(updated).toMatchObject({
+      id: task.id,
+      title: "带标签想法",
+      tags: ["实验"],
+      weight: 1,
+    });
   });
 });
