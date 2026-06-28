@@ -537,7 +537,7 @@ describe("TaskRow", () => {
           coarsePointer
           onToggle={noop}
           onEdit={noop}
-          extraAction={(item) => <button type="button" aria-label={`顶一下 ${item.title}`}>↑</button>}
+          extraAction={(item) => <button type="button" aria-label={`顶一下 ${item.title}`} />}
         />,
       );
 
