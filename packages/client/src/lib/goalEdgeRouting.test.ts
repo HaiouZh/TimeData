@@ -1,64 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  chooseEdgeHandleSides,
   intersectBorder,
   floatingEdgeGeometry,
+  computeEdgeRoutings,
   ZERO_ROUTING,
   BASE_BOW,
-  type EdgeHandleChoice,
-  type HandleBox,
+  SHIFT,
+  MAX_BOW,
   type NodeGeom,
 } from "./goalEdgeRouting.js";
 
-const box = (x: number, y: number, width = 120, height = 48): HandleBox => ({ x, y, width, height });
 const geom = (x: number, y: number, width = 120, height = 48): NodeGeom => ({ x, y, width, height });
-
-describe("chooseEdgeHandleSides", () => {
-  describe("无障碍时退化为现状选口（按相对位置选最近的一对口）", () => {
-    it.each<[string, HandleBox, HandleBox, EdgeHandleChoice]>([
-      ["水平向右 → right/left", box(0, 0), box(320, 0), { source: "right", target: "left" }],
-      ["水平向左 → left/right", box(320, 0), box(0, 0), { source: "left", target: "right" }],
-      ["垂直向下 → bottom/top", box(0, 0), box(0, 320), { source: "bottom", target: "top" }],
-      ["垂直向上 → top/bottom", box(0, 320), box(0, 0), { source: "top", target: "bottom" }],
-    ])("%s", (_name, source, target, expected) => {
-      expect(chooseEdgeHandleSides(source, target, [])).toEqual(expected);
-    });
-  });
-
-  describe("现状直连被障碍挡住时换口绕开", () => {
-    it("水平直连被居中偏下障碍挡住 → 两端改走 top 从上方绕", () => {
-      const obstacle = box(160, 30, 80, 80);
-      expect(chooseEdgeHandleSides(box(0, 0), box(320, 0), [obstacle])).toEqual({ source: "top", target: "top" });
-    });
-  });
-
-  describe("边界与稳定性", () => {
-    it("障碍不在直连路径上时保持现状选口（不无谓改线）", () => {
-      const farObstacle = box(160, 200, 80, 80);
-      expect(chooseEdgeHandleSides(box(0, 0), box(320, 0), [farObstacle])).toEqual({
-        source: "right",
-        target: "left",
-      });
-    });
-
-    it("绕开一侧障碍又会顶到另一障碍时，选穿到最少的那侧", () => {
-      // 障碍盖住 y=0(挡 right/left) 和 y=-24(挡 top)，但 y=24(bottom) 是空的
-      const obstacle = box(160, -10, 80, 40);
-      expect(chooseEdgeHandleSides(box(0, 0), box(320, 0), [obstacle])).toEqual({
-        source: "bottom",
-        target: "bottom",
-      });
-    });
-
-    it("被大障碍整片罩住(无干净解)时不崩，退回最短的一对口", () => {
-      const blob = box(160, 0, 400, 400);
-      expect(chooseEdgeHandleSides(box(0, 0), box(320, 0), [blob])).toEqual({
-        source: "right",
-        target: "left",
-      });
-    });
-  });
-});
+const pre = (id: string, source: string, target: string) => ({ id, source, target, kind: "prerequisite" });
 
 describe("intersectBorder", () => {
   it("正右方射线交右边框中点", () => {
@@ -100,5 +53,86 @@ describe("floatingEdgeGeometry", () => {
     });
     expect(g.sy).toBe(7);
     expect(g.ty).toBe(-7);
+  });
+});
+
+describe("computeEdgeRoutings — 绕障(鼓包方向与强度)", () => {
+  const nodes = (entries: Array<[string, NodeGeom]>) => new Map(entries);
+
+  it("无障碍 → baseBow 统一微弧、固定侧、零错开", () => {
+    const map = nodes([
+      ["a", { x: 0, y: 0, width: 120, height: 48 }],
+      ["b", { x: 320, y: 0, width: 120, height: 48 }],
+    ]);
+    const r = computeEdgeRoutings([pre("e", "a", "b")], map).get("e");
+    expect(r).toEqual({ bow: BASE_BOW, bowSide: 1, sourceShift: 0, targetShift: 0 });
+  });
+
+  it("水平直连被居中偏下障碍挡住 → 向上鼓(bowSide=-1)、bow 加大", () => {
+    const map = nodes([
+      ["a", { x: 0, y: 0, width: 120, height: 48 }],
+      ["b", { x: 320, y: 0, width: 120, height: 48 }],
+      ["o", { x: 160, y: 30, width: 80, height: 80 }],
+    ]);
+    const r = computeEdgeRoutings([pre("e", "a", "b")], map).get("e");
+    expect(r?.bowSide).toBe(-1);
+    expect(r?.bow).toBeGreaterThan(BASE_BOW);
+    expect(r?.bow).toBeLessThanOrEqual(MAX_BOW);
+  });
+
+  it("障碍不在直连路径上 → 保持 baseBow 不额外避让", () => {
+    const map = nodes([
+      ["a", { x: 0, y: 0, width: 120, height: 48 }],
+      ["b", { x: 320, y: 0, width: 120, height: 48 }],
+      ["o", { x: 160, y: 200, width: 80, height: 80 }],
+    ]);
+    const r = computeEdgeRoutings([pre("e", "a", "b")], map).get("e");
+    expect(r?.bow).toBe(BASE_BOW);
+  });
+
+  it("上方被挡、下方空 → 向下鼓(bowSide=1)", () => {
+    const map = nodes([
+      ["a", { x: 0, y: 0, width: 120, height: 48 }],
+      ["b", { x: 320, y: 0, width: 120, height: 48 }],
+      ["o", { x: 160, y: -10, width: 80, height: 40 }],
+    ]);
+    const r = computeEdgeRoutings([pre("e", "a", "b")], map).get("e");
+    expect(r?.bowSide).toBe(1);
+    expect(r?.bow).toBeGreaterThan(BASE_BOW);
+  });
+
+  it("大障碍整片罩住(无干净解) → bow 封顶、不抛错", () => {
+    const map = nodes([
+      ["a", { x: 0, y: 0, width: 120, height: 48 }],
+      ["b", { x: 320, y: 0, width: 120, height: 48 }],
+      ["o", { x: 160, y: 0, width: 400, height: 400 }],
+    ]);
+    const r = computeEdgeRoutings([pre("e", "a", "b")], map).get("e");
+    expect(r?.bow).toBeLessThanOrEqual(MAX_BOW);
+  });
+
+  it("tether 边 → 零 routing(无弧)", () => {
+    const map = nodes([
+      ["g", { x: 0, y: 0, width: 144, height: 144 }],
+      ["a", { x: 200, y: 0, width: 120, height: 48 }],
+    ]);
+    const r = computeEdgeRoutings([{ id: "t", source: "g", target: "a", kind: "tether" }], map).get("t");
+    expect(r).toEqual({ bow: 0, bowSide: 1, sourceShift: 0, targetShift: 0 });
+  });
+});
+
+describe("computeEdgeRoutings — 入出端点错开", () => {
+  it("同节点一进一出且方向接近 → 按角色把两端推到两侧", () => {
+    const map = new Map<string, NodeGeom>([
+      ["A", { x: 0, y: 0, width: 120, height: 48 }],
+      ["B", { x: 300, y: 0, width: 120, height: 48 }],
+      ["C", { x: 300, y: 6, width: 120, height: 48 }],
+    ]);
+    const routings = computeEdgeRoutings(
+      [pre("out", "A", "B"), pre("in", "C", "A")],
+      map,
+    );
+    expect(routings.get("out")?.sourceShift).toBe(-SHIFT); // A 是 out 边的 source
+    expect(routings.get("in")?.targetShift).toBe(SHIFT); // A 是 in 边的 target
   });
 });

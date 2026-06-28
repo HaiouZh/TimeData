@@ -1,16 +1,9 @@
-export type EdgeHandleSide = "left" | "right" | "top" | "bottom";
-
 export interface HandleBox {
   /** 节点可视框中心（已折算 offset） */
   x: number;
   y: number;
   width: number;
   height: number;
-}
-
-export interface EdgeHandleChoice {
-  source: EdgeHandleSide;
-  target: EdgeHandleSide;
 }
 
 interface Point {
@@ -23,31 +16,6 @@ interface Rect {
   maxX: number;
   minY: number;
   maxY: number;
-}
-
-const SIDES: readonly EdgeHandleSide[] = ["top", "right", "bottom", "left"];
-
-/** 现状选口：只看两端相对位置，横向错开走左右口、纵向错开走上下口。 */
-function baseSides(source: HandleBox, target: HandleBox): EdgeHandleChoice {
-  const dx = target.x - source.x;
-  const dy = target.y - source.y;
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return dx >= 0 ? { source: "right", target: "left" } : { source: "left", target: "right" };
-  }
-  return dy >= 0 ? { source: "bottom", target: "top" } : { source: "top", target: "bottom" };
-}
-
-function handlePoint(box: HandleBox, side: EdgeHandleSide): Point {
-  switch (side) {
-    case "left":
-      return { x: box.x - box.width / 2, y: box.y };
-    case "right":
-      return { x: box.x + box.width / 2, y: box.y };
-    case "top":
-      return { x: box.x, y: box.y - box.height / 2 };
-    case "bottom":
-      return { x: box.x, y: box.y + box.height / 2 };
-  }
 }
 
 function rectOf(box: HandleBox): Rect {
@@ -94,45 +62,6 @@ function crossings(a: Point, b: Point, obstacles: Rect[]): number {
     if (segmentHitsRect(a, b, rect)) count += 1;
   }
   return count;
-}
-
-function segLength(a: Point, b: Point): number {
-  return Math.hypot(b.x - a.x, b.y - a.y);
-}
-
-/**
- * 为一条线选出入口：先看现状选口是否穿过别的节点；不穿就保持现状（不无谓改线），
- * 穿了就枚举四向口对，选穿到的节点最少、并列时线段最短的那对。
- */
-export function chooseEdgeHandleSides(
-  source: HandleBox,
-  target: HandleBox,
-  obstacles: HandleBox[],
-): EdgeHandleChoice {
-  const base = baseSides(source, target);
-  if (obstacles.length === 0) return base;
-
-  const rects = obstacles.map(rectOf);
-  const baseHit = crossings(handlePoint(source, base.source), handlePoint(target, base.target), rects);
-  if (baseHit === 0) return base;
-
-  let best = base;
-  let bestCrossings = baseHit;
-  let bestLength = segLength(handlePoint(source, base.source), handlePoint(target, base.target));
-  for (const s of SIDES) {
-    for (const t of SIDES) {
-      const a = handlePoint(source, s);
-      const b = handlePoint(target, t);
-      const c = crossings(a, b, rects);
-      const len = segLength(a, b);
-      if (c < bestCrossings || (c === bestCrossings && len < bestLength)) {
-        best = { source: s, target: t };
-        bestCrossings = c;
-        bestLength = len;
-      }
-    }
-  }
-  return best;
 }
 
 export type NodeGeom = HandleBox;
@@ -192,4 +121,106 @@ export function floatingEdgeGeometry(
   const tcy = ty - uy * ctrlLen + ny * bow;
   const path = `M${sx},${sy} C${scx},${scy} ${tcx},${tcy} ${tx},${ty}`;
   return { sx, sy, tx, ty, path };
+}
+
+export const AVOID_BOW = 36;
+export const MAX_BOW = 60;
+export const PROBE = 60;
+export const NEAR_ANGLE = 0.35;
+export const SHIFT = 7;
+
+export type RoutableEdge = { id: string; source: string; target: string; kind: string };
+
+/** 单条 prerequisite 边的鼓包方向与强度。 */
+function bowForEdge(source: NodeGeom, target: NodeGeom, obstacles: Rect[]): { bow: number; bowSide: -1 | 1 } {
+  const a: Point = { x: source.x, y: source.y };
+  const b: Point = { x: target.x, y: target.y };
+  if (crossings(a, b, obstacles) === 0) return { bow: BASE_BOW, bowSide: 1 };
+
+  const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const nx = -(b.y - a.y) / dist;
+  const ny = (b.x - a.x) / dist;
+  const mid: Point = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const sideCrossings = (side: -1 | 1): number => {
+    const m: Point = { x: mid.x + nx * PROBE * side, y: mid.y + ny * PROBE * side };
+    return crossings(a, m, obstacles) + crossings(m, b, obstacles);
+  };
+  const bowSide: -1 | 1 = sideCrossings(1) <= sideCrossings(-1) ? 1 : -1;
+  return { bow: Math.min(MAX_BOW, BASE_BOW + AVOID_BOW), bowSide };
+}
+
+/** 方位角(rad)：从 from 中心指向 to 中心。 */
+function bearing(from: NodeGeom, to: NodeGeom): number {
+  return Math.atan2(to.y - from.y, to.x - from.x);
+}
+
+/** 两角的最小夹角(0..π)。 */
+function angleGap(a: number, b: number): number {
+  const d = Math.abs(a - b) % (Math.PI * 2);
+  return d > Math.PI ? Math.PI * 2 - d : d;
+}
+
+/** 为一节点上方向接近的"入/出"边按角色加切向错开。 */
+function applyShifts(
+  edges: ReadonlyArray<RoutableEdge>,
+  nodeGeomById: Map<string, NodeGeom>,
+  result: Map<string, EdgeRouting>,
+): void {
+  type Endpoint = { edgeId: string; role: "source" | "target"; bearing: number };
+  const byNode = new Map<string, Endpoint[]>();
+  for (const edge of edges) {
+    if (edge.kind !== "prerequisite") continue;
+    const s = nodeGeomById.get(edge.source);
+    const t = nodeGeomById.get(edge.target);
+    if (!s || !t) continue;
+    let sourceArr = byNode.get(edge.source);
+    if (!sourceArr) {
+      sourceArr = [];
+      byNode.set(edge.source, sourceArr);
+    }
+    sourceArr.push({ edgeId: edge.id, role: "source", bearing: bearing(s, t) });
+    let targetArr = byNode.get(edge.target);
+    if (!targetArr) {
+      targetArr = [];
+      byNode.set(edge.target, targetArr);
+    }
+    targetArr.push({ edgeId: edge.id, role: "target", bearing: bearing(t, s) });
+  }
+  for (const endpoints of byNode.values()) {
+    for (const ep of endpoints) {
+      const tooClose = endpoints.some(
+        (other) => other !== ep && angleGap(other.bearing, ep.bearing) < NEAR_ANGLE,
+      );
+      if (!tooClose) continue;
+      const routing = result.get(ep.edgeId);
+      if (!routing) continue;
+      const shift = ep.role === "target" ? SHIFT : -SHIFT;
+      if (ep.role === "source") routing.sourceShift = shift;
+      else routing.targetShift = shift;
+    }
+  }
+}
+
+/** 看全图为每条边算 routing：prerequisite 走绕障+错开，其余零 routing。 */
+export function computeEdgeRoutings(
+  edges: ReadonlyArray<RoutableEdge>,
+  nodeGeomById: Map<string, NodeGeom>,
+): Map<string, EdgeRouting> {
+  const result = new Map<string, EdgeRouting>();
+  for (const edge of edges) {
+    const s = nodeGeomById.get(edge.source);
+    const t = nodeGeomById.get(edge.target);
+    if (edge.kind !== "prerequisite" || !s || !t) {
+      result.set(edge.id, { ...ZERO_ROUTING });
+      continue;
+    }
+    const obstacles: Rect[] = [];
+    for (const [id, box] of nodeGeomById) {
+      if (id !== edge.source && id !== edge.target) obstacles.push(rectOf(box));
+    }
+    const { bow, bowSide } = bowForEdge(s, t, obstacles);
+    result.set(edge.id, { bow, bowSide, sourceShift: 0, targetShift: 0 });
+  }
+  applyShifts(edges, nodeGeomById, result);
+  return result;
 }
