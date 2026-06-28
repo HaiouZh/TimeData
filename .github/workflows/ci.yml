@@ -52,8 +52,8 @@ jobs:
       - name: Typecheck
         run: pnpm -r typecheck
 
-      - name: Test
-        run: pnpm -r --parallel test
+      - name: Test (non-client packages)
+        run: pnpm -r --parallel --filter '!@timedata/client' test
 
       - name: Script tests
         run: pnpm test:scripts
@@ -82,3 +82,32 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  client-unit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Client unit tests (shard ${{ matrix.shard }}/4)
+        run: pnpm --filter @timedata/client exec vitest run --project unit --shard=${{ matrix.shard }}/4
