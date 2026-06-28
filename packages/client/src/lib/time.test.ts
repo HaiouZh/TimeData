@@ -9,6 +9,7 @@ import {
   formatMonthDay,
   formatTime,
   formatTimelineTimeRange,
+  formatYearAwareMonthDay,
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
   rollBackOvernightRange,
@@ -443,6 +444,20 @@ describe("formatMonthDay", () => {
 
   it("handles double-digit month and day", () => {
     expect(formatMonthDay("2026-12-25")).toBe("12月25日");
+  });
+});
+
+describe("formatYearAwareMonthDay", () => {
+  it("当年省略年份", () => {
+    expect(formatYearAwareMonthDay("2026-06-03", new Date("2026-06-28T12:00:00.000Z"))).toBe("6月3日");
+  });
+
+  it("非当年（去年）补年份前缀", () => {
+    expect(formatYearAwareMonthDay("2025-12-31", new Date("2026-06-28T12:00:00.000Z"))).toBe("2025年12月31日");
+  });
+
+  it("非当年（明年）补年份前缀", () => {
+    expect(formatYearAwareMonthDay("2027-01-01", new Date("2026-06-28T12:00:00.000Z"))).toBe("2027年1月1日");
   });
 });
 

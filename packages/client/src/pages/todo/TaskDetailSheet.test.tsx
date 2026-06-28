@@ -432,7 +432,7 @@ describe("TaskDetailSheet 自动保存", () => {
       toInbox: true,
     });
     rendered = await renderSheet(scheduled.id);
-    expect(badgeOf(rendered.host).textContent).toContain("7/1");
+    expect(badgeOf(rendered.host).textContent).toContain("7月1日");
     await unmount(rendered.root);
 
     const recurrence = { freq: "daily", interval: 1, basis: "due" } as const;

@@ -123,7 +123,7 @@ describe("TaskRow", () => {
         ...handlers,
       }),
     );
-    expect(host.textContent).toContain("逾期 6月16日");
+    expect(host.textContent).toContain("6月16日");
     await act(async () => root.unmount());
   });
 
@@ -135,7 +135,7 @@ describe("TaskRow", () => {
         ...handlers,
       }),
     );
-    expect(host.textContent).toContain("6/20");
+    expect(host.textContent).toContain("6月20日");
     await act(async () => root.unmount());
   });
 

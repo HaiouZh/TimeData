@@ -28,7 +28,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-27
+last-reviewed: 2026-06-28
 ---
 
 # 待办任务
@@ -200,4 +200,4 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 
 ## 深水细节
 
-- **非重复排期任务过期后回到收件箱**不堆进今天；重复任务过期在“今天”区以红色“逾期 M月D日”标签呈现。
+- **非重复排期任务过期后回到收件箱**不堆进今天；重复任务过期在“今天”区以红色日期呈现（当年 `m月d日`，跨年补年份 `yyyy年m月d日`），无“逾期”前缀。

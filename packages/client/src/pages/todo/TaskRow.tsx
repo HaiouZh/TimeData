@@ -8,7 +8,7 @@ import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { tagColor } from "../../lib/tasks/turnTags.js";
-import { formatMonthDay } from "../../lib/time.js";
+import { formatYearAwareMonthDay } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
@@ -166,7 +166,7 @@ export function TaskRow({
                   {childDone}/{childTotal}
                 </span>
               )}
-              {overdueDate && <span className="text-danger">逾期 {formatMonthDay(overdueDate)}</span>}
+              {overdueDate && <span className="text-danger">{formatYearAwareMonthDay(overdueDate)}</span>}
               {passiveScheduled && <span>{taskTimeLabel(task)}</span>}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
                 <span

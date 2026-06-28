@@ -18,7 +18,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
-last-reviewed: 2026-06-27
+last-reviewed: 2026-06-28
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->

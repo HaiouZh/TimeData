@@ -220,6 +220,18 @@ export function formatMonthDay(dateStr: string): string {
   return `${Number(month)}月${Number(day)}日`;
 }
 
+/**
+ * 任务标签专用：当年省略年份「6月3日」，跨年补年份前缀「2025年6月3日」。
+ * now 仅用于注入当前时间做年份判定，默认取系统当前。
+ */
+export function formatYearAwareMonthDay(dateStr: string, now: Date = new Date()): string {
+  const [yearStr, month, day] = dateStr.split("-");
+  const year = Number(yearStr);
+  const currentYear = Number(getDateString(now).slice(0, 4));
+  if (year !== currentYear) return `${year}年${Number(month)}月${Number(day)}日`;
+  return `${Number(month)}月${Number(day)}日`;
+}
+
 export interface DaySummary {
   /** 已记录时长（分钟），不含 future。 */
   recordedMinutes: number;
