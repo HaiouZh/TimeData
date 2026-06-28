@@ -69,6 +69,16 @@ import {
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
+function msUntilNextLocalDay(now: Date): number {
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return Math.max(1, next.getTime() - now.getTime());
+}
+
+function currentGravityDate(): Date {
+  return new Date(Date.now());
+}
+
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -193,11 +203,32 @@ export function TodoPage() {
 
   const gravitySettings = useTodoGravitySettings();
   const [surfacedMap, setSurfacedMap] = useState(() => readGravitySurfacedMap());
-  const gravityNowRef = useRef(new Date());
+  const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
+  useEffect(() => {
+    let timer: number | undefined;
+    const refreshGravityNow = () => setGravityNow(currentGravityDate());
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        refreshGravityNow();
+        schedule();
+      }, msUntilNextLocalDay(currentGravityDate()));
+    };
+    schedule();
+    const refreshOnVisible = () => {
+      if (document.visibilityState !== "hidden") refreshGravityNow();
+    };
+    window.addEventListener("focus", refreshGravityNow);
+    document.addEventListener("visibilitychange", refreshOnVisible);
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshGravityNow);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
+    };
+  }, []);
   const { floating: floatingInbox, sunken: sunkenInbox } = splitInboxByGravity(
     buckets.inbox,
     gravitySettings,
-    gravityNowRef.current,
+    gravityNow,
   );
 
   const bumpWeight = async (t: Task) => {
@@ -397,7 +428,7 @@ export function TodoPage() {
       sunkenTasks={sunkenInbox}
       settings={gravitySettings}
       surfaced={surfacedMap}
-      now={gravityNowRef.current}
+      now={gravityNow}
       onSurfacedChange={setSurfacedMap}
       onBump={bumpWeight}
       {...rowHandlers}

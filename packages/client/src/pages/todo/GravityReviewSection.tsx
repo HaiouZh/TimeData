@@ -37,12 +37,12 @@ export function GravityReviewSection({
   const remainingPicks = Math.max(0, settings.pickN - pickedThisBatch.size);
 
   const drawBatch = useCallback(
-    (excludeIds: ReadonlySet<string> = new Set()) => {
+    (excludeIds: ReadonlySet<string> = new Set(), pickedIds: ReadonlySet<string> = new Set()) => {
       const currentSurfaced = { ...surfaced, ...readGravitySurfacedMap() };
       const candidates = sunkenTasks.filter((task) => !excludeIds.has(task.id));
       const nextBatch = pickGravityReviewBatch(candidates, currentSurfaced, { now, drawM: settings.drawM });
       setBatch(nextBatch);
-      setPickedThisBatch(new Set());
+      setPickedThisBatch(new Set(pickedIds));
       if (nextBatch.length === 0) return;
 
       const nextSurfaced = markGravityTasksSurfaced(nextBatch.map((task) => task.id), now);
@@ -66,7 +66,7 @@ export function GravityReviewSection({
             const nextPicked = new Set([...pickedThisBatch, task.id]);
             setPickedThisBatch(nextPicked);
             void Promise.resolve(onBump(task)).then(() => {
-              if (nextPicked.size >= settings.pickN) drawBatch(nextPicked);
+              drawBatch(nextPicked, nextPicked.size >= settings.pickN ? new Set() : nextPicked);
             });
           }}
           className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-accent disabled:opacity-40"

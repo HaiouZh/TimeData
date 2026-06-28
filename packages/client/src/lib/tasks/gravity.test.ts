@@ -65,4 +65,21 @@ describe("todo gravity", () => {
 
     expect(batch.map((item) => item.id)).toEqual(["never", "old"]);
   });
+
+  it("uses weight as a mild tiebreaker for surfaced review cards", () => {
+    const surfaced: GravitySurfacedMap = {
+      low: "2026-06-20T00:00:00.000Z",
+      high: "2026-06-20T00:00:00.000Z",
+    };
+    const batch = pickGravityReviewBatch(
+      [
+        task({ id: "low", createdAt: "2026-05-01T00:00:00.000Z", weight: 0 }),
+        task({ id: "high", createdAt: "2026-05-02T00:00:00.000Z", weight: 3 }),
+      ],
+      surfaced,
+      { now, drawM: 2 },
+    );
+
+    expect(batch.map((item) => item.id)).toEqual(["high", "low"]);
+  });
 });

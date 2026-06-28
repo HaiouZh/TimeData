@@ -35,7 +35,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-06-27
+last-reviewed: 2026-06-28
 ---
 
 # 同步机制
@@ -54,6 +54,8 @@ last-reviewed: 2026-06-27
 **域登记簿**决定系统认识哪些数据类型：shared `SYNC_DOMAINS` 负责运行时 schema、优先级、冲突策略和计数语义；server `SERVER_SYNC_DOMAINS` 负责校验 / 写入 / pull 读回；client `CLIENT_SYNC_DOMAINS` 负责 Dexie store、pull 应用与备份角色。登记簿细节、当前 15 个运行时域、新增普通 LWW 域与复合键域的完整 checklist，见子文档 [sync/domain-registry](sync/domain-registry.md)。
 
 **登记簿是封闭契约**：新增域必须同步 shared 配置、server 钩子/映射、客户端 Dexie 表与 pull 分支、静态 `SyncChange` 类型、backup 角色和文档，不能让运行时登记簿、静态判别联合、客户端登记簿三者分叉。
+
+实体字段演进不等于新增同步域：例如 `Task.weight` 是既有 `tasks` LWW 域的结构化字段，随 `TaskSchema`、Dexie/SQLite 映射、backup/force-push 和 sync pull/push 载荷一起演进，不增加运行时域数量，也不扩展 `SyncPushReasonCode`。
 
 ## 1. 整体流程
 

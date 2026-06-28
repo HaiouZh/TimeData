@@ -68,7 +68,7 @@ export function pickGravityReviewBatch(
       if (!aSeen && !bSeen) return a.createdAt.localeCompare(b.createdAt);
       const aAge = ageDaysSince(aSeen, now);
       const bAge = ageDaysSince(bSeen, now);
-      return bAge - aAge || a.createdAt.localeCompare(b.createdAt);
+      return bAge - aAge || (b.weight ?? 0) - (a.weight ?? 0) || a.createdAt.localeCompare(b.createdAt);
     })
     .slice(0, options.drawM);
 }

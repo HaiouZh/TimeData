@@ -70,6 +70,8 @@ describe("POST /api/agent/tasks/:id/status", () => {
     addSyncStreamListener(listener);
 
     try {
+      db.prepare("UPDATE tasks SET weight = ? WHERE id = ?").run(4, "task-1");
+
       const res = await app.request("/api/agent/tasks/task-1/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,16 +81,20 @@ describe("POST /api/agent/tasks/:id/status", () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         ok: boolean;
-        task: { id: string };
+        task: { id: string; weight: number };
       };
       expect(body.ok).toBe(true);
-      const child = db.prepare("SELECT id, parent_id, title, done FROM tasks WHERE parent_id = ?").get("task-1") as {
+      expect(body.task.weight).toBe(4);
+
+      const child = db.prepare("SELECT id, parent_id, title, done, weight FROM tasks WHERE parent_id = ?").get("task-1") as {
         id: string;
         parent_id: string;
         title: string;
         done: number;
+        weight: number;
       };
-      expect(child).toMatchObject({ parent_id: "task-1", title: "done PR#123", done: 0 });
+      expect(child).toMatchObject({ parent_id: "task-1", title: "done PR#123", done: 0, weight: 0 });
+      expect(db.prepare("SELECT weight FROM tasks WHERE id = ?").get("task-1")).toEqual({ weight: 4 });
       expect(db.prepare("SELECT table_name, record_id, action FROM sync_seq ORDER BY id").all()).toEqual(
         expect.arrayContaining([
           { table_name: "tasks", record_id: child.id, action: "create" },
@@ -102,6 +108,8 @@ describe("POST /api/agent/tasks/:id/status", () => {
   });
 
   it("done=true 普通任务：写 completedAt", async () => {
+    db.prepare("UPDATE tasks SET weight = ? WHERE id = ?").run(5, "task-1");
+
     const res = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -109,12 +117,14 @@ describe("POST /api/agent/tasks/:id/status", () => {
     });
 
     expect(res.status).toBe(200);
-    const row = db.prepare("SELECT done, completed_at FROM tasks WHERE id = ?").get("task-1") as {
+    const row = db.prepare("SELECT done, completed_at, weight FROM tasks WHERE id = ?").get("task-1") as {
       done: number;
       completed_at: string | null;
+      weight: number;
     };
     expect(row.done).toBe(1);
     expect(row.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(row.weight).toBe(5);
   });
 
   it("done=true 重复非终结：衍生一条已完成行 + 模板推进", async () => {
@@ -298,6 +308,8 @@ describe("POST /api/agent/tasks/:id/status", () => {
   });
 
   it("sets tags", async () => {
+    db.prepare("UPDATE tasks SET weight = ? WHERE id = ?").run(6, "task-1");
+
     const res = await app.request("/api/agent/tasks/task-1/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -307,8 +319,9 @@ describe("POST /api/agent/tasks/:id/status", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { task: { tags: string[] } };
     expect(body.task.tags).toEqual(["agent", "idea"]);
-    expect(db.prepare("SELECT tags FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
+    expect(db.prepare("SELECT tags, weight FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
       tags: JSON.stringify(["agent", "idea"]),
+      weight: 6,
     });
   });
 

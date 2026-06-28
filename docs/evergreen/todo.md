@@ -141,10 +141,10 @@ agent / CLI (task-done/task-tag)
 | parent_id | parentId | TEXT 或 NULL（有 `idx_tasks_parent_id` 索引，无 FK 约束） |
 | recurrence / tags | 同名 | JSON 字符串（recurrence 可 NULL） |
 | last_done_at / start_at / scheduled_at / completed_at | lastDoneAt / startAt / scheduledAt / completedAt | UTC ISO 或 NULL |
-| completed_count / sort_order | completedCount / sortOrder | 整数 |
+| completed_count / weight / sort_order | completedCount / weight / sortOrder | 整数 |
 | created_at / updated_at | createdAt / updatedAt | UTC ISO（updated_at 服务器分配） |
 
-映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引），并用 `dropColumnsIfExist` 删除旧目标归属列 `goal_id` 及索引。Dexie `tasks` 索引（v11）`"id, parentId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；目标详情按 `Goal.members` 解引用任务，不再依赖任务侧索引。
+映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引，`ensureTaskWeightColumn` 给旧任务补 `weight=0`），并用 `dropColumnsIfExist` 删除旧目标归属列 `goal_id` 及索引。Dexie `tasks` 索引（v13）`"id, parentId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；目标详情按 `Goal.members` 解引用任务，不再依赖任务侧索引。
 
 客户端读取 `listTasks` 走 `TaskSchema.safeParse`（parse-on-read）：补默认、剥孤儿、坏行 `console.warn` 跳过；不再手摊默认字段。
 
@@ -164,7 +164,7 @@ agent / CLI (task-done/task-tag)
 8. **目标层只从 Goal 侧引用 Task**：Goal 可以把 Task 写入 `Goal.members` 并读取 `done` 计算项目完成度或主题活跃度，但不会改变 Task 的完成、重复、排序、子任务或排期语义。删除 Goal 不改 Task；删除 Task 后，Goal 读取时把失效引用作为缺失成员提示。
 9. **`tasks` 不引用分类/时间/速记/目标等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；目标组织关系属于 [goals](goals.md)，不回流到 Task schema。
 10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
-11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 是同步字段，`updatedAt` 提供时间衰减，`TodoPage` 在 `listTasks()` 出桶后把 inbox 拆成浮起/水下；`listTasks()`、排期分桶、tag/search、DnD 域登记不改变。翻牌区是 today 附近的临时复查面，不注册 `sortable/containerId`，`lastSurfacedAt` 只在 localStorage 记录本机轮换。
+11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 是同步字段，`updatedAt` 提供时间衰减，`TodoPage` 在 `listTasks()` 出桶后把 inbox 拆成浮起/水下，并在本地跨日、focus、visibility 恢复时刷新当前水位日期；`listTasks()`、排期分桶、tag/search、DnD 域登记不改变。翻牌区是 today 附近的临时复查面，不注册 `sortable/containerId`，`lastSurfacedAt` 只在 localStorage 记录本机轮换。翻牌抽卡优先久未露面，其次 `weight` 作为温和 tie-breaker；`pickN>1` 时，已顶过的卡先从当前批移除并补抽，直到本轮额度耗尽。
 
 ## 4. 模块速查
 
@@ -172,15 +172,15 @@ agent / CLI (task-done/task-tag)
 
 | 入口 | 职责 |
 |---|---|
-| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet`；gravity 水位线拆 `floatingInbox`/`sunkenInbox` + 渲染 `GravityReviewSection`；支持 `/todo?taskId=<id>` 作为打开任务详情的 deep link，参数变化会切换抽屉目标，关闭抽屉只移除 `taskId` 并保留其他 query 参数，行点击仍只走本地打开状态、不写 URL |
+| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet`；gravity 水位线拆 `floatingInbox`/`sunkenInbox` + 渲染 `GravityReviewSection`，并在本地跨日/focus/visibility 恢复时刷新水位；支持 `/todo?taskId=<id>` 作为打开任务详情的 deep link，参数变化会切换抽屉目标，关闭抽屉只移除 `taskId` 并保留其他 query 参数，行点击仍只走本地打开状态、不写 URL |
 | `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、左 2/5 root 拖拽抓取区、`CaretDown`/`CaretRight` 或 grip 纯指示、`rowClickZone` 派发 expand/open、meta 第二行、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、缩进候选父高亮与落定后展开、桌面（细指针）行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列——今天在左用 `←`、收件箱在右用 `→`）；可选 `extraAction` 行内插槽供翻牌区渲染「顶一下」 |
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩，不保留旧 swipe 宽度）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不再各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（`deleteTaskCascade`）、重复预设 overlay；逾期重复模板打开重复设置时用今天作为预设/自定义锚点，便于把旧逾期重设为从今天开始；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件，显示「作为子任务」提示 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 编辑态回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录；子任务标题默认是可跨行选择复制的 `span` 文本，无行尾编辑按钮，空选区点击或标题获焦后 Enter/F2 才进入编辑；编辑态 textarea 按内容与宽度变化自动增高、不保留内部滚动条，blur/Enter 提交，Escape 取消）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
 | `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按 `TodoPage` 计算出的底部避让值上移；当窄屏下滑把底栏和 composer 隐藏后，不再避让已不可见的输入栏）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`TodoPage` 传入当前移动底栏 offset 与隐藏状态，宽屏不套移动底栏避让；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时 `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠；折叠 caret 等交互图标经 Phosphor `Icon` 包装 |
 | `lib/tasks.ts` | 核心 CRUD + `listTasks`（顶部过滤 `parentId!==null`）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对 child 走非重复路径、对 root 取 reset-前 children 委托 `completeTask`，同事务写 occurrence + occurrence/template children + 模板；`bumpTaskWeight` 累加 `weight` 并写 syncLog |
-| `lib/tasks/{gravity,gravityReviewStorage}.ts` | 想法重力纯函数（`isTaskSunken`/`splitInboxByGravity`/`pickGravityReviewBatch`）+ 本机翻牌轮换记忆（localStorage `lastSurfacedAt` map） |
-| `pages/todo/GravityReviewSection.tsx` | 翻牌折叠复查区：展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张、不注册 DnD；`↑ 顶一下` 经 `extraAction` 插槽渲染 |
+| `lib/tasks/{gravity,gravityReviewStorage}.ts` | 想法重力纯函数（`isTaskSunken`/`splitInboxByGravity`/`pickGravityReviewBatch`；抽卡按久未露面、`weight`、创建时间排序）+ 本机翻牌轮换记忆（localStorage `lastSurfacedAt` map） |
+| `pages/todo/GravityReviewSection.tsx` | 翻牌折叠复查区：展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张、不注册 DnD；`↑ 顶一下` 经 `extraAction` 插槽渲染，顶过的卡在本轮额度内即时移出并补抽 |
 | `lib/settings/todoGravitySetting.ts` | `todo.gravity.v1` JSON 设置包装（parse/sanitize/default/set/use） |
 | `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / tag 聚合(allTags)/三轴过滤(filterTasks)/取色(tagColor) / `subtaskProgress`（m/n 进度比例，children 数量喂入） |
 | `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |

@@ -54,16 +54,32 @@ async function renderPage({ hideBottomNav = false } = {}) {
   return { host, root };
 }
 
-async function waitForText(host: HTMLElement, text: string): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
-    if (host.textContent?.includes(text)) return;
-    // setTimeout(0)：让位给 Dexie 异步与 React 渲染的宏任务边界，不是真实计时等待。
-    await act(async () => {
-      await new Promise((r) => window.setTimeout(r, 0));
-    });
+async function flushAsync(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function waitForCondition(assertion: () => boolean, label: string): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (assertion()) return;
+    await flushAsync();
   }
-  throw new Error(`Timed out waiting for ${text}`);
+  throw new Error(`Timed out waiting for ${label}`);
+}
+
+async function waitForText(host: HTMLElement, text: string): Promise<void> {
+  await waitForCondition(() => host.textContent?.includes(text) ?? false, text);
+}
+
+async function openGravityReview(host: HTMLElement): Promise<void> {
+  const details = host.querySelector('[data-section="todo-gravity-review"] details') as HTMLDetailsElement;
+  await act(async () => {
+    details.open = true;
+    details.dispatchEvent(new Event("toggle", { bubbles: true }));
+  });
+  await flushAsync();
 }
 
 async function typeAndAdd(host: HTMLElement, title: string) {
@@ -142,14 +158,10 @@ describe("TodoPage", () => {
     });
 
     // 等 dexie liveQuery → 重渲染把任务从收件箱挪到今天分区。
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < 1000) {
+    await waitForCondition(() => {
       const today = host.querySelector('[data-section="today"]') as HTMLElement | null;
-      if (today?.textContent?.includes("收件箱条目")) break;
-      await act(async () => {
-        await new Promise((r) => window.setTimeout(r, 0));
-      });
-    }
+      return today?.textContent?.includes("收件箱条目") ?? false;
+    }, "task to move to today section");
 
     const tasks = await db.tasks.toArray();
     expect(tasks[0]?.scheduledAt).not.toBeNull();
@@ -344,9 +356,7 @@ describe("TodoPage", () => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await act(async () => {
-      await new Promise((r) => window.setTimeout(r, 0));
-    });
+    await flushAsync();
 
     expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("旧想法 搜索词");
     await act(async () => root.unmount());
@@ -357,29 +367,37 @@ describe("TodoPage", () => {
     const { host, root } = await renderPage();
     await waitForText(host, "水下 1 条");
 
-    const details = host.querySelector('[data-section="todo-gravity-review"] details') as HTMLDetailsElement;
-    await act(async () => {
-      details.open = true;
-      details.dispatchEvent(new Event("toggle", { bubbles: true }));
-    });
-    await act(async () => {
-      await new Promise((r) => window.setTimeout(r, 0));
-    });
+    await openGravityReview(host);
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('button[aria-label="顶一下 值得继续"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < 1000) {
-      const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
-      if (inbox?.textContent?.includes("值得继续")) break;
-      await act(async () => {
-        await new Promise((r) => window.setTimeout(r, 0));
-      });
-    }
+    await waitForCondition(
+      () => host.querySelector('[data-section="inbox"]')?.textContent?.includes("值得继续") ?? false,
+      "bumped task to return to inbox",
+    );
+    await act(async () => root.unmount());
+  });
 
-    expect(host.querySelector('[data-section="inbox"]')?.textContent).toContain("值得继续");
+  it("advances the gravity waterline while the page stays mounted across days", async () => {
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-06-01T12:00:00.000Z"));
+    await addTask({ title: "会跨日下沉", toInbox: true, now: new Date("2026-06-01T12:00:00.000Z") });
+    const { host, root } = await renderPage();
+    await waitForText(host, "会跨日下沉");
+
+    expect(host.querySelector('[data-section="inbox"]')?.textContent).toContain("会跨日下沉");
+
+    dateNow.mockReturnValue(Date.parse("2026-06-20T00:00:00.000Z"));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitForCondition(() => host.textContent?.includes("水下 1 条") ?? false, "waterline to advance");
+
+    expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("会跨日下沉");
+    expect(host.textContent).toContain("水下 1 条");
     await act(async () => root.unmount());
   });
 });

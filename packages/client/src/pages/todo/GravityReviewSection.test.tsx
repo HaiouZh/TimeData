@@ -108,4 +108,33 @@ describe("GravityReviewSection", () => {
     );
     await unmount(root);
   });
+
+  it("removes a bumped card from the current batch before pickN is exhausted", async () => {
+    const onBump = vi.fn();
+    const onSurfacedChange = vi.fn();
+    const candidates = [task({ id: "a", title: "A" }), task({ id: "b", title: "B" }), task({ id: "c", title: "C" })];
+    const { host, root } = await renderDom(
+      <GravityReviewSection
+        sunkenTasks={candidates}
+        settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 2, pickN: 2 }}
+        surfaced={{}}
+        now={NOW}
+        onSurfacedChange={onSurfacedChange}
+        onBump={onBump}
+        {...handlers}
+      />,
+    );
+
+    await openReview(host);
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="顶一下 A"]'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onBump).toHaveBeenCalledTimes(1);
+    expect(host.textContent).not.toContain("A");
+    expect(host.textContent).toContain("B");
+    expect(host.textContent).toContain("C");
+    await unmount(root);
+  });
 });

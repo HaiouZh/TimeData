@@ -16,7 +16,7 @@ covers:
   - packages/server/src/sync/goal-layout-pins-domain.e2e.test.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/sync/clientDomains.test.ts
-last-reviewed: 2026-06-25
+last-reviewed: 2026-06-28
 ---
 
 # 同步 · 域登记簿
@@ -84,7 +84,7 @@ last-reviewed: 2026-06-25
 - **time_entries 钩子**：upsert 前先删除与该记录时间段重叠的旧远端记录（写 tombstone + delete seq，outcome 带 `overriddenRecordIds` 和 `backupId`，对应备份标受保护 `local_override_overlap`）；分类不存在时 skip 并带结构化 `skipReason`。
 - 只有 `status === "applied"` 的变更才记账（skipped 不占 seq）。
 
-待办域的重复规则、tags、排序、完成状态，以及子任务（独立 `Task` 行，靠 `parentId` 指向 root）的 create/update/delete、重复完成衍生的 occurrence children 快照与 template children reset，都只是普通 `tasks/create`/`tasks/update`/`tasks/delete` 的 LWW change：客户端 helper 通过既有 Dexie transaction 写 `tasks` + 本地 `syncLog`，授权 agent 回写（含 `note` 建 child）构造 change 后走 `applyChange()` + `sync_seq` + SSE 通知。它们**不新增同步域、不扩展 `SyncChange` 联合、不动 `SyncPushReasonCode` 与登记簿条目数**，也不改变 `tasks` 仍是通用 LWW 域的服务端契约。`parentId` 的一层结构约束**只在 force-push 全量快照兜底校验**（`forcePushValidation`：自引用 / 缺失父 / 二层嵌套三种负样本），普通增量 push 故意不挡（依赖客户端 helper，单用户威胁模型取舍）；字段语义与展示桶见 [todo](../todo.md)。
+待办域的重复规则、tags、排序、完成状态、想法重力 `weight`，以及子任务（独立 `Task` 行，靠 `parentId` 指向 root）的 create/update/delete、重复完成衍生的 occurrence children 快照与 template children reset，都只是普通 `tasks/create`/`tasks/update`/`tasks/delete` 的 LWW change：客户端 helper 通过既有 Dexie transaction 写 `tasks` + 本地 `syncLog`，授权 agent 回写（含 `note` 建 child）构造 change 后走 `applyChange()` + `sync_seq` + SSE 通知。它们**不新增同步域、不扩展 `SyncChange` 联合、不动 `SyncPushReasonCode` 与登记簿条目数**，也不改变 `tasks` 仍是通用 LWW 域的服务端契约。`parentId` 的一层结构约束**只在 force-push 全量快照兜底校验**（`forcePushValidation`：自引用 / 缺失父 / 二层嵌套三种负样本），普通增量 push 故意不挡（依赖客户端 helper，单用户威胁模型取舍）；字段语义与展示桶见 [todo](../todo.md)。
 
 ### 3.2 字段演进卫生
 

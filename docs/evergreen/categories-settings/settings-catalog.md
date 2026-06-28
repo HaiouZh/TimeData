@@ -45,7 +45,6 @@ last-reviewed: 2026-06-28
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `todo.defaultDestination.v1` | `"today"\|"inbox"`，默认 today | `lib/settings/todoDefaultDestinationSetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md) |
 | `todo.gravity.v1` | JSON `{enabled,waterlineDays,weightStepDays,graceDays,drawM,pickN}`，默认 `{true,14,7,7,5,1}` | `lib/settings/todoGravitySetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（inbox 水位线 + 翻牌参数） |
-| `todo.gravity.v1` | JSON `{enabled,waterlineDays,weightStepDays,graceDays,drawM,pickN}`，默认 `{true,14,7,7,5,1}` | `lib/settings/todoGravitySetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（inbox 水位线 + 翻牌参数） |
 | `track.actionTags.v2` | JSON 字符串数组；旧 `{tag,court}` 数组兼容读取但忽略 `court`；未配置→种子 `[待我处理,agent在做]`；旧默认 `[等我,待决策,卡住,agent在做]` 读时归一为新默认；显式 `"[]"`→空 | `lib/settings/trackActionTagsSetting.ts` + `shared/src/trackBoardSignals.ts` parser（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)(看板信号 + 步骤检索标签) |
 
 旧 `track.actionTags.v1` 只作为影子读取来源；新写入继续使用 `track.actionTags.v2`。早期 v2 的 `court` 字段不再作为产品语义消费。server agent context API 与 client 轨道列表使用同一 shared parser 读取该 key，避免看板信号词表在前后端漂移。

@@ -15,6 +15,7 @@ function seedTask(overrides: Partial<{
   lastDoneAt: string | null;
   startAt: string | null;
   scheduledAt: string | null;
+  weight: number;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -22,8 +23,8 @@ function seedTask(overrides: Partial<{
   const id = overrides.id ?? `t-${Math.random().toString(36).slice(2)}`;
   const timestamp = overrides.createdAt ?? "2026-06-14T00:00:00.000Z";
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, scheduled_at, sort_order, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, scheduled_at, sort_order, weight, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     overrides.parentId ?? null,
@@ -34,6 +35,7 @@ function seedTask(overrides: Partial<{
     overrides.startAt ?? null,
     overrides.scheduledAt ?? null,
     overrides.sortOrder ?? 0,
+    overrides.weight ?? 0,
     timestamp,
     overrides.updatedAt ?? timestamp,
   );
@@ -151,6 +153,29 @@ describe("POST /api/tasks/:id/schedule", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.task.scheduledAt).toBeNull();
+  });
+
+  it("保留任务 weight，不因排期或清排期被重置", async () => {
+    seedTask({ id: "weighted", title: "高水位任务", weight: 7 });
+
+    const scheduled = await app.request("/api/tasks/weighted/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledDate: "2026-06-15" }),
+    });
+    const scheduledBody = await scheduled.json();
+    expect(scheduledBody.task.weight).toBe(7);
+
+    const cleared = await app.request("/api/tasks/weighted/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledDate: null }),
+    });
+    const clearedBody = await cleared.json();
+
+    expect(clearedBody.task.scheduledAt).toBeNull();
+    expect(clearedBody.task.weight).toBe(7);
+    expect(db.prepare("SELECT weight FROM tasks WHERE id = ?").get("weighted")).toEqual({ weight: 7 });
   });
 
   it("非法日期 → 400 INVALID_REQUEST", async () => {

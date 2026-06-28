@@ -15,12 +15,13 @@ covers:
   - packages/server/src/routes/syncLog.ts
   - packages/server/src/routes/admin/index.ts
   - packages/server/src/routes/admin/requestLogs.ts
-last-reviewed: 2026-06-26
+last-reviewed: 2026-06-28
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：force-push 写路径去 turn 列，不影响安全/凭据；复核确认无需改动。 -->
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：退役 tasks/tracks 目标归属列；认证、限流、确认 token 机制不变。 -->
 <!-- 复核 2026-06-24（目标层 Plan A）：force-push 请求契约不纳入 goal_layout_pins；覆盖流程清空该表以避免账本清空后残留脱账行，认证/限流/确认 token 机制不变。 -->
+<!-- 复核 2026-06-28（待办想法重力）：force-push 的 Task payload 新增 weight，todo 翻牌的 lastSurfaced 本地 key 只存任务 id 到时间戳的展示记忆；认证、限流、确认 token 机制不变。 -->
 
 # 安全与凭据处理
 
@@ -30,7 +31,7 @@ last-reviewed: 2026-06-26
 
 设置页必须明确提示用户：Token 会保存在本机浏览器存储中，只应在可信设备上保存服务器 Token。当前实现不引入 sessionStorage，也不在页面刷新后自动丢弃 Token。
 
-`storageKeys.ts` 还集中登记底部导航、待办布局/折叠、星图引擎模式等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务内容或其他业务数据；`timedata_galaxy_engine` 只保存 `/goals` 全局星图使用确定性还是本地 settle 引擎。轨道看板信号词表走同步 `settings` 表，不放在本地 storage key 里。
+`storageKeys.ts` 还集中登记底部导航、待办布局/折叠、星图引擎模式、待办翻牌本机已过目时间等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务正文或其他业务内容；`timedata_galaxy_engine` 只保存 `/goals` 全局星图使用确定性还是本地 settle 引擎，`timedata_todo_gravity_last_surfaced` 只保存任务 id 到 ISO 时间戳的本机轮换记忆。轨道看板信号词表走同步 `settings` 表，不放在本地 storage key 里。
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 
