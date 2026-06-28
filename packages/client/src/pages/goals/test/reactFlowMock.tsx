@@ -320,12 +320,20 @@ export function Handle({
   type,
   position,
   isConnectable,
+  id,
   ...props
-}: Omit<ComponentPropsWithoutRef<"div">, "children"> & { type?: string; position?: string; isConnectable?: boolean }) {
+}: Omit<ComponentPropsWithoutRef<"div">, "children"> & {
+  type?: string;
+  position?: string;
+  isConnectable?: boolean;
+  id?: string;
+}) {
   return (
     <div
       {...props}
+      id={id}
       data-rf-handle="true"
+      data-handleid={id}
       data-handle-type={type}
       data-handle-position={position}
       data-handle-connectable={isConnectable ? "true" : "false"}

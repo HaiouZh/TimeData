@@ -1,10 +1,12 @@
 import type { CSSProperties } from "react";
-import { BaseEdge, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, useInternalNode, type Edge, type EdgeProps } from "@xyflow/react";
 import type { GoalGraphEdge as GoalGraphEdgeModel } from "../../lib/goalGraphModel.js";
+import { floatingEdgeGeometry, ZERO_ROUTING, type EdgeRouting, type NodeGeom } from "../../lib/goalEdgeRouting.js";
 
 export interface GoalGraphEdgeData extends Record<string, unknown> {
   kind: GoalGraphEdgeModel["kind"];
   opacity?: number;
+  routing?: EdgeRouting;
 }
 
 export type GoalGraphFlowEdge = Edge<GoalGraphEdgeData, "goal-graph-edge">;
@@ -45,27 +47,41 @@ function flowDelayForEdge(id: string): number {
   return hash % 1400;
 }
 
+function geomOf(node: ReturnType<typeof useInternalNode>): NodeGeom | null {
+  if (!node) return null;
+  const width = node.measured?.width;
+  const height = node.measured?.height;
+  if (!width || !height) return null;
+  return {
+    x: node.internals.positionAbsolute.x + width / 2,
+    y: node.internals.positionAbsolute.y + height / 2,
+    width,
+    height,
+  };
+}
+
 export function GoalGraphEdge({
   id,
   data,
+  source,
+  target,
   sourceX,
   sourceY,
-  sourcePosition,
   targetX,
   targetY,
-  targetPosition,
   markerEnd,
   style,
   interactionWidth,
 }: EdgeProps<GoalGraphFlowEdge>) {
-  const [path] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+  const sourceGeom = geomOf(sourceNode);
+  const targetGeom = geomOf(targetNode);
+  const routing = data?.routing ?? ZERO_ROUTING;
+  const path =
+    sourceGeom && targetGeom
+      ? floatingEdgeGeometry(sourceGeom, targetGeom, routing).path
+      : `M${sourceX},${sourceY} L${targetX},${targetY}`;
   const kind = data?.kind ?? "tether";
   const arrowMarkerId = markerIdForEdge(id);
   const resolvedMarkerEnd = kind === "prerequisite" ? (markerEnd ?? `url(#${arrowMarkerId})`) : undefined;
