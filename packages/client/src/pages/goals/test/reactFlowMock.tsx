@@ -131,7 +131,7 @@ export function useInternalNode(
   if (!node) return undefined;
   return {
     internals: { positionAbsolute: node.position ?? { x: 0, y: 0 } },
-    measured: node.measured,
+    measured: node.measured ?? {},
   };
 }
 
