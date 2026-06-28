@@ -8,6 +8,9 @@ afterEach(async () => {
   vi.useRealTimers();
   // mock / spy 复位
   vi.restoreAllMocks();
+  // 全局 stub 复位：撤销 vi.stubGlobal 注入的全局（restoreAllMocks 撤不掉它）；
+  // 防止 no-isolate 下 stub 的 fetch/Date/IntersectionObserver/rAF 等永久挂在 worker globalThis 上跨文件串味。
+  vi.unstubAllGlobals();
   // localStorage 清空
   if (typeof localStorage !== "undefined") localStorage.clear();
   // DOM 残留清理（裸 createRoot 未 unmount 的兜底）
