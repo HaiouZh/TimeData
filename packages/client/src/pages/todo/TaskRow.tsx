@@ -1,7 +1,7 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { ArrowLeft, ArrowRight, CaretDown, CaretRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
-import { type MouseEvent as ReactMouseEvent, useEffect, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
@@ -35,6 +35,8 @@ export interface TaskRowProps {
   onAfterChildWrite?: () => void;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
+  /** 行内额外动作插槽（如翻牌「顶一下」）；UI 按钮自带 stopPropagation。 */
+  extraAction?: (task: Task) => ReactNode;
   indentTargetActive?: boolean;
   revealChildren?: { id: string; nonce: number } | null;
 }
@@ -58,6 +60,7 @@ export function TaskRow({
   onToInbox,
   onAfterChildWrite,
   childrenModeOverride,
+  extraAction,
   indentTargetActive,
   revealChildren,
 }: TaskRowProps) {
@@ -79,6 +82,7 @@ export function TaskRow({
   const canSwapPool = task.recurrence === null && pool !== "completed";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
   const showInlineChildren = expanded && childTotal > 0;
+  const extraActionNode = extraAction?.(task);
 
   useEffect(() => {
     if (revealChildren != null && revealChildren.id === task.id) setExpanded(true);
@@ -221,6 +225,7 @@ export function TaskRow({
                 <Icon icon={ArrowLeft} size={16} />
               </button>
             )}
+            {extraActionNode}
             {onDelete && (
               <button
                 type="button"
@@ -234,6 +239,11 @@ export function TaskRow({
                 <Icon icon={Trash} size={16} />
               </button>
             )}
+          </div>
+        )}
+        {coarsePointer !== false && extraActionNode && (
+          <div className="relative z-30 ml-1 flex shrink-0 items-center" onClick={(event) => event.stopPropagation()}>
+            {extraActionNode}
           </div>
         )}
       </div>

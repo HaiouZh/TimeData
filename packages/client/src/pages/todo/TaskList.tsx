@@ -9,9 +9,11 @@ import {
 } from "@meauxt/react-swipeable-list";
 import "@meauxt/react-swipeable-list/dist/styles.css";
 import type { Task } from "@timedata/shared";
+import type { ReactNode } from "react";
 import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { SortableTaskRow } from "./SortableTaskRow.js";
 import { type RowDragHandle, type TaskPool, TaskRow } from "./TaskRow.js";
+import type { InlineChildrenMode } from "./InlineChildren.js";
 
 export interface TaskListProps {
   pool: Extract<TaskPool, "today" | "inbox" | "upcoming" | "completed">;
@@ -33,6 +35,10 @@ export interface TaskListProps {
   onToInbox: (t: Task) => void;
   /** 行内 children 写入后回调，宿主可在此触发同步。 */
   onAfterChildWrite?: () => void;
+  /** 行内额外动作插槽（如翻牌「顶一下」）。 */
+  extraAction?: (task: Task) => ReactNode;
+  /** 只读场景强制覆盖按 pool 推断的 children mode。 */
+  childrenModeOverride?: InlineChildrenMode;
 }
 
 export function TaskList(props: TaskListProps) {
@@ -55,6 +61,8 @@ export function TaskList(props: TaskListProps) {
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
         onAfterChildWrite={props.onAfterChildWrite}
+        extraAction={props.extraAction}
+        childrenModeOverride={props.childrenModeOverride}
         indentTargetActive={props.indentTargetId === task.id}
         revealChildren={props.revealChildren}
       />

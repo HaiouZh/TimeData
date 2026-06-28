@@ -493,4 +493,56 @@ describe("TaskRow", () => {
       await unmount(root);
     });
   });
+
+  describe("extraAction 插槽", () => {
+    it("renders an extra action and stops row activation when clicked", async () => {
+      const onEdit = vi.fn();
+      const onExtra = vi.fn();
+      const rowTask = task({ title: "水下想法" });
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={rowTask}
+          pool="inbox"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={onEdit}
+          extraAction={(item) => (
+            <button
+              type="button"
+              aria-label={`顶一下 ${item.title}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onExtra(item.id);
+              }}
+            >
+              ↑
+            </button>
+          )}
+        />,
+      );
+
+      await click(host.querySelector<HTMLButtonElement>('button[aria-label="顶一下 水下想法"]'));
+
+      expect(onExtra).toHaveBeenCalledWith(rowTask.id);
+      expect(onEdit).not.toHaveBeenCalled();
+      await unmount(root);
+    });
+
+    it("shows extra action on coarse pointers without hover", async () => {
+      const rowTask = task({ title: "移动端想法" });
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={rowTask}
+          pool="inbox"
+          coarsePointer
+          onToggle={noop}
+          onEdit={noop}
+          extraAction={(item) => <button type="button" aria-label={`顶一下 ${item.title}`}>↑</button>}
+        />,
+      );
+
+      expect(host.querySelector('button[aria-label="顶一下 移动端想法"]')).not.toBeNull();
+      await unmount(root);
+    });
+  });
 });
