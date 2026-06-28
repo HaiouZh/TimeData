@@ -134,3 +134,62 @@ export function chooseEdgeHandleSides(
   }
   return best;
 }
+
+export type NodeGeom = HandleBox;
+
+export interface EdgeRouting {
+  /** 弯曲强度=控制点沿连线法向偏移量(px) */
+  bow: number;
+  /** 弯向：连线法向的哪一侧 */
+  bowSide: -1 | 1;
+  /** source 端沿法向错开量(px，含符号) */
+  sourceShift: number;
+  /** target 端沿法向错开量(px，含符号) */
+  targetShift: number;
+}
+
+export const CURVATURE = 0.25;
+export const BASE_BOW = 14;
+export const ZERO_ROUTING: EdgeRouting = { bow: 0, bowSide: 1, sourceShift: 0, targetShift: 0 };
+
+/** 射线 center→towards 与中心矩形(±halfW,±halfH)边框的交点。 */
+export function intersectBorder(center: Point, halfW: number, halfH: number, towards: Point): Point {
+  const dx = towards.x - center.x;
+  const dy = towards.y - center.y;
+  if (dx === 0 && dy === 0) return { x: center.x, y: center.y };
+  const scaleX = dx === 0 ? Number.POSITIVE_INFINITY : halfW / Math.abs(dx);
+  const scaleY = dy === 0 ? Number.POSITIVE_INFINITY : halfH / Math.abs(dy);
+  const scale = Math.min(scaleX, scaleY);
+  return { x: center.x + dx * scale, y: center.y + dy * scale };
+}
+
+/** 自绘三次贝塞尔：端点=真实交点(+法向错开)，控制点沿真实方向延伸(+法向 bow)。 */
+export function floatingEdgeGeometry(
+  source: NodeGeom,
+  target: NodeGeom,
+  routing: EdgeRouting,
+): { sx: number; sy: number; tx: number; ty: number; path: string } {
+  const sc: Point = { x: source.x, y: source.y };
+  const tc: Point = { x: target.x, y: target.y };
+  const sHit = intersectBorder(sc, source.width / 2, source.height / 2, tc);
+  const tHit = intersectBorder(tc, target.width / 2, target.height / 2, sc);
+  const dx = tHit.x - sHit.x;
+  const dy = tHit.y - sHit.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const nx = -uy;
+  const ny = ux;
+  const sx = sHit.x + nx * routing.sourceShift;
+  const sy = sHit.y + ny * routing.sourceShift;
+  const tx = tHit.x + nx * routing.targetShift;
+  const ty = tHit.y + ny * routing.targetShift;
+  const ctrlLen = CURVATURE * dist;
+  const bow = routing.bow * routing.bowSide;
+  const scx = sx + ux * ctrlLen + nx * bow;
+  const scy = sy + uy * ctrlLen + ny * bow;
+  const tcx = tx - ux * ctrlLen + nx * bow;
+  const tcy = ty - uy * ctrlLen + ny * bow;
+  const path = `M${sx},${sy} C${scx},${scy} ${tcx},${tcy} ${tx},${ty}`;
+  return { sx, sy, tx, ty, path };
+}

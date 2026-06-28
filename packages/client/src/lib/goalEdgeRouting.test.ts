@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { chooseEdgeHandleSides, type EdgeHandleChoice, type HandleBox } from "./goalEdgeRouting.js";
+import {
+  chooseEdgeHandleSides,
+  intersectBorder,
+  floatingEdgeGeometry,
+  ZERO_ROUTING,
+  BASE_BOW,
+  type EdgeHandleChoice,
+  type HandleBox,
+  type NodeGeom,
+} from "./goalEdgeRouting.js";
 
 const box = (x: number, y: number, width = 120, height = 48): HandleBox => ({ x, y, width, height });
+const geom = (x: number, y: number, width = 120, height = 48): NodeGeom => ({ x, y, width, height });
 
 describe("chooseEdgeHandleSides", () => {
   describe("无障碍时退化为现状选口（按相对位置选最近的一对口）", () => {
@@ -47,5 +57,48 @@ describe("chooseEdgeHandleSides", () => {
         target: "left",
       });
     });
+  });
+});
+
+describe("intersectBorder", () => {
+  it("正右方射线交右边框中点", () => {
+    expect(intersectBorder({ x: 0, y: 0 }, 60, 24, { x: 300, y: 0 })).toEqual({ x: 60, y: 0 });
+  });
+  it("正下方射线交下边框中点", () => {
+    expect(intersectBorder({ x: 0, y: 0 }, 60, 24, { x: 0, y: 300 })).toEqual({ x: 0, y: 24 });
+  });
+  it("斜向射线被较矮的上下边框先截住", () => {
+    expect(intersectBorder({ x: 0, y: 0 }, 60, 24, { x: 100, y: 100 })).toEqual({ x: 24, y: 24 });
+  });
+  it("目标与中心重合时退化为中心，不抛错", () => {
+    expect(intersectBorder({ x: 5, y: 5 }, 60, 24, { x: 5, y: 5 })).toEqual({ x: 5, y: 5 });
+  });
+});
+
+describe("floatingEdgeGeometry", () => {
+  it("零 routing 时端点落在两端边框、路径为共线(近直线)", () => {
+    const g = floatingEdgeGeometry(geom(0, 0), geom(300, 0), ZERO_ROUTING);
+    expect(g.sx).toBe(60);
+    expect(g.tx).toBe(240);
+    expect(g.path).toBe("M60,0 C105,0 195,0 240,0");
+  });
+  it("bow>0 时控制点沿法向偏移形成弧(末端切线偏离水平)", () => {
+    const g = floatingEdgeGeometry(geom(0, 0), geom(300, 0), {
+      bow: BASE_BOW,
+      bowSide: 1,
+      sourceShift: 0,
+      targetShift: 0,
+    });
+    expect(g.path).toBe("M60,0 C105,14 195,14 240,0");
+  });
+  it("sourceShift/targetShift 沿法向把入出端点推到两侧", () => {
+    const g = floatingEdgeGeometry(geom(0, 0), geom(300, 0), {
+      bow: 0,
+      bowSide: 1,
+      sourceShift: 7,
+      targetShift: -7,
+    });
+    expect(g.sy).toBe(7);
+    expect(g.ty).toBe(-7);
   });
 });
