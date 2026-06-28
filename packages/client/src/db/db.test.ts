@@ -7,13 +7,13 @@ afterEach(async () => {
 });
 
 describe("Dexie database", () => {
-  it("opens the current database as a v12 schema", async () => {
+  it("opens the current database as a v13 schema", async () => {
     await db.delete();
 
     await db.open();
     await seedDefaultCategories();
 
-    expect(db.verno).toBe(12);
+    expect(db.verno).toBe(13);
     expect(await db.categories.count()).toBeGreaterThan(0);
     expect(await db.timeEntries.count()).toBe(0);
     expect(await db.settings.count()).toBe(0);
