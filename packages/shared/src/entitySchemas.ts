@@ -212,6 +212,7 @@ export const TaskSchema = z.object({
   startAt: UtcIsoStringSchema.nullable(),
   scheduledAt: UtcIsoStringSchema.nullable(),
   completedCount: z.number().int().min(0).default(0),
+  weight: z.number().int().min(0).default(0),
   completedAt: UtcIsoStringSchema.nullable().default(null),
   tags: z
     .array(NonEmptyTrimmedStringSchema.refine((value) => value.length <= 64, "tag must be at most 64 characters"))

@@ -352,6 +352,39 @@ describe("GoalSchema", () => {
   });
 });
 
+describe("TaskSchema weight", () => {
+  const baseTask = {
+    id: "t1",
+    title: "想法",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    completedAt: null,
+    tags: [],
+    sortOrder: 0,
+    createdAt: "2026-06-28T00:00:00.000Z",
+    updatedAt: "2026-06-28T00:00:00.000Z",
+  };
+
+  it("defaults weight to zero for legacy task payloads", () => {
+    const parsed = TaskSchema.parse(baseTask);
+    expect(parsed.weight).toBe(0);
+  });
+
+  it("accepts non-negative integer weight", () => {
+    const parsed = TaskSchema.parse({ ...baseTask, weight: 3 });
+    expect(parsed.weight).toBe(3);
+  });
+
+  it("rejects negative or fractional weight", () => {
+    expect(() => TaskSchema.parse({ ...baseTask, weight: -1 })).toThrow();
+    expect(() => TaskSchema.parse({ ...baseTask, weight: 1.5 })).toThrow();
+  });
+});
+
 describe("GoalLayoutPinSchema", () => {
   const now = "2026-06-24T00:00:00.000Z";
 
