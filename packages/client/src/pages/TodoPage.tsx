@@ -31,6 +31,7 @@ import {
   setScheduledCollapsed,
 } from "../lib/tasks/workbenchPrefs.js";
 import {
+  bumpTaskWeight,
   deleteTask,
   listTasks,
   moveTaskToParent,
@@ -43,9 +44,13 @@ import {
   toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
+import { splitInboxByGravity } from "../lib/tasks/gravity.js";
+import { readGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
+import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
+import { GravityReviewSection } from "./todo/GravityReviewSection.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
@@ -186,6 +191,20 @@ export function TodoPage() {
     return p.pool === "today" && p.overdue;
   };
 
+  const gravitySettings = useTodoGravitySettings();
+  const [surfacedMap, setSurfacedMap] = useState(() => readGravitySurfacedMap());
+  const gravityNowRef = useRef(new Date());
+  const { floating: floatingInbox, sunken: sunkenInbox } = splitInboxByGravity(
+    buckets.inbox,
+    gravitySettings,
+    gravityNowRef.current,
+  );
+
+  const bumpWeight = async (t: Task) => {
+    await bumpTaskWeight(t.id);
+    syncAfterWrite();
+  };
+
   const rowHandlers = {
     onToggle: toggle,
     onEdit: openDetail,
@@ -229,7 +248,7 @@ export function TodoPage() {
     if (container?.kind === "pool") return container.pool;
     if (!rootAboveId) return null;
     if (buckets.today.some((task) => task.id === rootAboveId)) return "today";
-    if (buckets.inbox.some((task) => task.id === rootAboveId)) return "inbox";
+    if (floatingInbox.some((task) => task.id === rootAboveId)) return "inbox";
     return null;
   }
 
@@ -301,7 +320,7 @@ export function TodoPage() {
             op.containerId === "pool:today"
               ? f(buckets.today)
               : op.containerId === "pool:inbox"
-                ? f(buckets.inbox)
+                ? f(floatingInbox)
                 : [];
           if (containerTasks.length === 0) return;
           const ids = containerTasks.map((t) => t.id);
@@ -320,7 +339,7 @@ export function TodoPage() {
           break;
         }
         case "promote-to-root": {
-          const targetTasks = op.pool === "today" ? f(buckets.today) : f(buckets.inbox);
+          const targetTasks = op.pool === "today" ? f(buckets.today) : f(floatingInbox);
           const sortOrder = targetTasks.length > 0 ? Math.max(...targetTasks.map((t) => t.sortOrder)) + 1 : 0;
           await promoteToRoot(activeId, op.pool, sortOrder);
           syncAfterWrite();
@@ -373,7 +392,19 @@ export function TodoPage() {
     </CollapsibleSection>
   );
 
-  const inboxFiltered = f(buckets.inbox);
+  const gravityReviewBlock = (
+    <GravityReviewSection
+      sunkenTasks={sunkenInbox}
+      settings={gravitySettings}
+      surfaced={surfacedMap}
+      now={gravityNowRef.current}
+      onSurfacedChange={setSurfacedMap}
+      onBump={bumpWeight}
+      {...rowHandlers}
+    />
+  );
+
+  const inboxFiltered = f(floatingInbox);
   const inboxBlock = (
     <section data-section="inbox">
       <CollapsibleSection
@@ -449,6 +480,7 @@ export function TodoPage() {
               left={
                 <>
                   {todayBlock}
+                  {gravityReviewBlock}
                   {completedBlock}
                 </>
               }
@@ -462,6 +494,7 @@ export function TodoPage() {
           ) : (
             <div className="flex flex-col gap-4">
               {todayBlock}
+              {gravityReviewBlock}
               {completedBlock}
               {scheduledBlock}
               {inboxBlock}

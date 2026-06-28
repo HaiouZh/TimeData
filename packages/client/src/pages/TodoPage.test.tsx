@@ -320,4 +320,66 @@ describe("TodoPage", () => {
 
     await act(async () => root.unmount());
   });
+
+  it("hides sunken inbox tasks from the default inbox list", async () => {
+    await addTask({ title: "新想法", toInbox: true });
+    await addTask({ title: "旧想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+    const { host, root } = await renderPage();
+    await waitForText(host, "新想法");
+
+    expect(host.querySelector('[data-section="inbox"]')?.textContent).toContain("新想法");
+    expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("旧想法");
+    expect(host.textContent).toContain("水下 1 条");
+    await act(async () => root.unmount());
+  });
+
+  it("does not let search bring sunken tasks into the default inbox", async () => {
+    await addTask({ title: "旧想法 搜索词", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "水下 1 条");
+    const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "搜索词");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("旧想法 搜索词");
+    await act(async () => root.unmount());
+  });
+
+  it("bumps a sunken task so it returns to the inbox", async () => {
+    await addTask({ title: "值得继续", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+    const { host, root } = await renderPage();
+    await waitForText(host, "水下 1 条");
+
+    const details = host.querySelector('[data-section="todo-gravity-review"] details') as HTMLDetailsElement;
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+    });
+    await act(async () => {
+      await new Promise((r) => window.setTimeout(r, 0));
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="顶一下 值得继续"]')?.click();
+    });
+
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 1000) {
+      const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
+      if (inbox?.textContent?.includes("值得继续")) break;
+      await act(async () => {
+        await new Promise((r) => window.setTimeout(r, 0));
+      });
+    }
+
+    expect(host.querySelector('[data-section="inbox"]')?.textContent).toContain("值得继续");
+    await act(async () => root.unmount());
+  });
 });
