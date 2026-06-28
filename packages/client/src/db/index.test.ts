@@ -62,7 +62,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(12);
+    expect(db.verno).toBe(13);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();

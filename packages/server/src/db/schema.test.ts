@@ -478,6 +478,17 @@ describe("initializeDatabase", () => {
     expect(columns.has("completed_count")).toBe(true);
   });
 
+  it("ensureTaskWeightColumn adds weight with zero default and is idempotent", async () => {
+    const { ensureTaskWeightColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+
+    ensureTaskWeightColumn(db);
+    ensureTaskWeightColumn(db);
+
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string; dflt_value: string | null }>;
+    expect(columns.find((column) => column.name === "weight")?.dflt_value).toBe("0");
+  });
+
   it("creates tasks with completed_at and tags columns", async () => {
     const { initializeDatabase } = await import("./schema.js");
 

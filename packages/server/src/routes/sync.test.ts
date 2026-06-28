@@ -64,6 +64,7 @@ function createSchema() {
       scheduled_at TEXT,
       parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
+      weight INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -679,6 +680,7 @@ describe("sync route", () => {
             scheduledAt: "2026-06-16T00:00:00.000Z",
             sortOrder: 0,
             completedCount: 2,
+            weight: 3,
             [legacyTaskStateField]: "running",
             [legacyTaskStateTimeField]: "2026-06-16T01:00:00.000Z",
             completedAt: "2026-06-16T02:00:00.000Z",
@@ -697,6 +699,7 @@ describe("sync route", () => {
             scheduledAt: null,
             sortOrder: 0,
             completedCount: 0,
+            weight: 0,
             completedAt: null,
             tags: [],
             createdAt: "2026-06-14T00:00:00.000Z",
@@ -717,7 +720,7 @@ describe("sync route", () => {
     });
     expect(
       db
-        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, completed_count, completed_at, tags FROM tasks WHERE id = ?")
+        .prepare("SELECT title, recurrence, start_at, scheduled_at, parent_id, completed_count, weight, completed_at, tags FROM tasks WHERE id = ?")
         .get("task-force"),
     ).toMatchObject({
       title: "跑步",
@@ -726,6 +729,7 @@ describe("sync route", () => {
       scheduled_at: "2026-06-16T00:00:00.000Z",
       parent_id: null,
       completed_count: 2,
+      weight: 3,
       completed_at: "2026-06-16T02:00:00.000Z",
       tags: JSON.stringify(["agent", "idea"]),
     });
@@ -986,6 +990,7 @@ describe("sync route", () => {
       scheduledAt: null,
       sortOrder: 0,
       completedCount: 2,
+      weight: 0,
       createdAt: "2026-06-14T00:00:00.000Z",
       updatedAt: "2026-06-14T00:00:00.000Z",
     };

@@ -44,6 +44,9 @@ const taskRow: TaskRow = {
   sort_order: 0,
   scheduled_at: null,
   completed_count: 0,
+  weight: 0,
+  completed_at: "2026-06-16T00:00:00.000Z",
+  tags: null,
   created_at: "2026-06-16T00:00:00.000Z",
   updated_at: "2026-06-16T00:00:00.000Z",
 };
@@ -79,5 +82,10 @@ describe("rowToTask", () => {
     const task = rowToTask({ ...taskRow, goal_id: "goal-1" } as never);
 
     expect(Object.hasOwn(task, "goalId")).toBe(false);
+  });
+
+  it("maps task weight and defaults legacy rows to zero", () => {
+    expect(rowToTask({ ...taskRow, weight: 4 }).weight).toBe(4);
+    expect(rowToTask({ ...taskRow, weight: null } as unknown as TaskRow).weight).toBe(0);
   });
 });

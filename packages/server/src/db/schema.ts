@@ -33,6 +33,11 @@ export function ensureTaskCompletedCountColumn(db: Database): void {
   if (!names.has("completed_count")) db.exec("ALTER TABLE tasks ADD COLUMN completed_count INTEGER NOT NULL DEFAULT 0");
 }
 
+export function ensureTaskWeightColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("weight")) db.exec("ALTER TABLE tasks ADD COLUMN weight INTEGER NOT NULL DEFAULT 0");
+}
+
 export function ensureTaskCompletionMetadataColumns(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("completed_at")) db.exec("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
@@ -129,6 +134,7 @@ export function initializeDatabase(): void {
       scheduled_at TEXT,
       parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
+      weight INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -349,6 +355,7 @@ export function initializeDatabase(): void {
   ensureQuickNotePinnedColumn(db);
   ensureTaskScheduledColumns(db);
   ensureTaskCompletedCountColumn(db);
+  ensureTaskWeightColumn(db);
   ensureTaskCompletionMetadataColumns(db);
   ensureTaskParentIdColumn(db);
   ensureGoalMembersColumn(db);

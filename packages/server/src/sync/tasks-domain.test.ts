@@ -27,6 +27,7 @@ beforeEach(async () => {
       recurrence TEXT, last_done_at TEXT, start_at TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT, parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
+      weight INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL

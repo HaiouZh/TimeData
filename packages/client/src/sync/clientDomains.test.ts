@@ -49,6 +49,13 @@ describe("taskNeedsApply", () => {
 
     expect(__test.taskNeedsApply(existing, remote)).toBe(true);
   });
+
+  it("treats task weight differences as a sync apply change", () => {
+    const local = task({ id: "t1", weight: 0, updatedAt: "2026-06-28T01:00:00.000Z" });
+    const remote = { ...local, weight: 2, updatedAt: "2026-06-28T02:00:00.000Z" };
+
+    expect(__test.taskNeedsApply(local, remote)).toBe(true);
+  });
 });
 
 describe("track client domains", () => {

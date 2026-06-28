@@ -28,6 +28,7 @@ const baseTask = {
 const normalizedTask = {
   ...baseTask,
   completedCount: 0,
+  weight: 0,
   completedAt: null,
   tags: [],
 };
@@ -175,6 +176,7 @@ describe("planNormalization", () => {
           id: "a",
           completedAt: null,
           completedCount: 0,
+          weight: 0,
           tags: [],
           sortOrder: 0,
           scheduledAt: null,
