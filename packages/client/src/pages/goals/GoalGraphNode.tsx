@@ -34,6 +34,22 @@ export function GoalGraphNode({ data, selected, isConnectable }: NodeProps<GoalG
   const handleClassName = selected ? `${HANDLE_CLASS} !opacity-70` : HANDLE_CLASS;
   const handleElements = renderHandles ? (
     <>
+      <Handle
+        key="target-center"
+        id="target-center"
+        type="target"
+        position={Position.Top}
+        isConnectable={false}
+        className={handleClassName}
+      />
+      <Handle
+        key="source-center"
+        id="source-center"
+        type="source"
+        position={Position.Bottom}
+        isConnectable={false}
+        className={handleClassName}
+      />
       {HANDLE_POSITIONS.map((handle) => (
         <Handle
           key={`target-${handle.id}`}

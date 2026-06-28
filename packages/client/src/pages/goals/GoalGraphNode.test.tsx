@@ -33,14 +33,16 @@ describe("GoalGraphNode", () => {
     );
 
     const handles = [...host.querySelectorAll("[data-rf-handle='true']")];
-    expect(handles).toHaveLength(8);
+    expect(handles).toHaveLength(10);
     expect(handles.map((handle) => handle.getAttribute("data-handle-position")).sort()).toEqual([
       "bottom",
       "bottom",
+      "bottom",
       "left",
       "left",
       "right",
       "right",
+      "top",
       "top",
       "top",
     ]);
@@ -53,5 +55,14 @@ describe("GoalGraphNode", () => {
     );
     expect(selected.host.querySelector("[data-rf-handle='true']")?.className).toContain("!opacity-70");
     await unmount(selected.root);
+  });
+
+  it("可连节点渲染 center 锚点 handle", async () => {
+    const { host, root } = await renderDom(
+      <GraphNode data={{ node: node(), orientation: "horizontal", pinned: false }} selected={false} isConnectable />,
+    );
+    expect(host.querySelector('[data-handleid="source-center"]')).not.toBeNull();
+    expect(host.querySelector('[data-handleid="target-center"]')).not.toBeNull();
+    await unmount(root);
   });
 });
