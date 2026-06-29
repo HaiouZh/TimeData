@@ -10,6 +10,7 @@ import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
+import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
 import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
 
@@ -25,6 +26,7 @@ export function AppShell() {
     location.pathname.startsWith("/tracks/");
 
   useDocumentTitle(location.pathname);
+  useFavicon(location.pathname);
   useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
 
   return (
