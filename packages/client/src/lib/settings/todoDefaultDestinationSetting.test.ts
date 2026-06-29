@@ -1,6 +1,5 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import {
   TODO_DEFAULT_DESTINATION_KEY,
   readTodoDefaultDestination,
@@ -8,10 +7,7 @@ import {
   setTodoDefaultDestination,
 } from "./todoDefaultDestinationSetting.js";
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("todoDefaultDestinationSetting", () => {
   it("defaults to today when unset", async () => {

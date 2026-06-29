@@ -1,3 +1,7 @@
+// 必须在任何 dexie 模块求值前注册：Dexie 在 dexie 模块加载时即把 globalThis.indexedDB 存入 Dexie.dependencies。
+// isolate:false 下文件加载顺序随机（纯逻辑文件经 lib→db/index 也会间接加载 dexie），
+// 只有在 setupFile 顶部统一注册 fake-idb，才能保证 dexie 永远捕获到（fake 的）indexedDB，db 测试方可入此桶。
+import "fake-indexeddb/auto";
 import { afterEach, vi } from "vitest";
 
 // 干净桶（unit-clean，isolate:false、node 环境）的精简清理。

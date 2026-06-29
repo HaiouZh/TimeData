@@ -1,12 +1,8 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import { getSetting, setSetting } from "./index.js";
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("settings", () => {
   it("setSetting 写入值并记录同步日志", async () => {

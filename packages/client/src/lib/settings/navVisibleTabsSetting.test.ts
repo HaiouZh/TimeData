@@ -1,6 +1,5 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import {
   CONFIGURABLE_TABS,
   NAV_VISIBLE_TABS_KEY,
@@ -9,10 +8,7 @@ import {
   setVisibleTabs,
 } from "./navVisibleTabsSetting.js";
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("navVisibleTabsSetting", () => {
   it("defaults to all configurable tabs when unset", async () => {

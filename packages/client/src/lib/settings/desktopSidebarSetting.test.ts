@@ -1,6 +1,5 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import {
   DESKTOP_SIDEBAR_KEY,
   readDesktopSidebarConfig,
@@ -19,10 +18,7 @@ const defaultItems = [
   { to: "/settings", placement: "primary" },
 ] as const;
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("desktopSidebarSetting", () => {
   it("defaults every main route to primary placement when unset", async () => {

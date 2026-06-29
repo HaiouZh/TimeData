@@ -1,6 +1,5 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.ts";
+import { db, resetDb } from "../../test/dbReset.js";
 import {
   DEFAULT_TODO_GRAVITY_SETTINGS,
   TODO_GRAVITY_SETTING_KEY,
@@ -9,10 +8,7 @@ import {
   setTodoGravitySettings,
 } from "./todoGravitySetting.ts";
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("todoGravitySetting", () => {
   it("returns defaults when unset", async () => {
