@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
 import { addQuickNote } from "../lib/quickNotes.js";
+import { resetDb } from "../test/dbReset.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { useQuickNoteTimeline } from "./useQuickNoteTimeline.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 async function flush() {
   await act(async () => {
@@ -25,24 +22,15 @@ function Harness() {
     createElement("span", { "data-testid": "count" }, String(timeline.notes.length)),
     createElement("span", { "data-testid": "hasOlder" }, String(timeline.hasOlder)),
     createElement("span", { "data-testid": "atLatest" }, String(timeline.atLatest)),
-    createElement(
-      "span",
-      { "data-testid": "texts" },
-      timeline.notes.map((note) => note.text).join(","),
-    ),
+    createElement("span", { "data-testid": "texts" }, timeline.notes.map((note) => note.text).join(",")),
     createElement("button", { "data-testid": "older", onClick: () => void timeline.loadOlder() }, "older"),
     createElement("button", { "data-testid": "newer", onClick: () => void timeline.loadNewer() }, "newer"),
     createElement("button", { "data-testid": "jump", onClick: () => void timeline.jumpToDate("2026-06-02") }, "jump"),
   );
 }
 
-async function renderHarness(): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(Harness));
-  });
+async function renderHarness() {
+  const { host, root } = await renderDom(createElement(Harness));
   await flush();
   return { host, root };
 }
@@ -67,8 +55,7 @@ async function waitForText(host: HTMLElement, id: string, expected: string) {
 }
 
 beforeEach(async () => {
-  await db.quickNotes.clear();
-  await db.syncLog.clear();
+  await resetDb();
   document.body.innerHTML = "";
 
   for (let day = 1; day <= 5; day++) {
@@ -96,7 +83,7 @@ describe("useQuickNoteTimeline", () => {
     expect(text(host, "texts")).toBe("note-1,note-2,note-3,note-4,note-5");
     expect(text(host, "hasOlder")).toBe("false");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("jumpToDate loads a bounded window starting at that date", async () => {
@@ -110,6 +97,6 @@ describe("useQuickNoteTimeline", () => {
     await clickTestId(host, "newer");
     await waitForText(host, "texts", "note-2,note-3,note-4,note-5");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

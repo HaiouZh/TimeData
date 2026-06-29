@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
-import { act, createElement, type ReactElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { BottomNavProvider, useBottomNav } from "./BottomNavContext.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function Harness() {
   const { hidden, setHidden } = useBottomNav();
@@ -22,23 +20,13 @@ function OutsideProviderHarness() {
   return createElement("div");
 }
 
-async function render(element: ReactElement): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(element);
-  });
-  return { host, root };
-}
-
 beforeEach(() => {
   document.body.innerHTML = "";
 });
 
 describe("BottomNavContext", () => {
   it("updates the hidden state from descendants", async () => {
-    const { host, root } = await render(createElement(BottomNavProvider, null, createElement(Harness)));
+    const { host, root } = await renderDom(createElement(BottomNavProvider, null, createElement(Harness)));
 
     expect(host.querySelector('[data-testid="hidden"]')?.textContent).toBe("false");
     await act(async () => {
@@ -47,7 +35,7 @@ describe("BottomNavContext", () => {
 
     expect(host.querySelector('[data-testid="hidden"]')?.textContent).toBe("true");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("throws outside the provider", async () => {

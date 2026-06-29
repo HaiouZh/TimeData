@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { act, createElement, type ReactElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { useHideBottomNavOnScroll } from "./useHideBottomNavOnScroll.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function Harness() {
   const onScroll = useHideBottomNavOnScroll();
@@ -21,21 +19,15 @@ function Harness() {
   );
 }
 
-async function render(element: ReactElement): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(element);
-  });
-  return { host, root };
-}
-
 function tree(): ReactElement {
-  return createElement(MemoryRouter, { initialEntries: ["/"] }, createElement(BottomNavProvider, null, createElement(Harness)));
+  return createElement(
+    MemoryRouter,
+    { initialEntries: ["/"] },
+    createElement(BottomNavProvider, null, createElement(Harness)),
+  );
 }
 
-async function scrollTo(host: HTMLDivElement, top: number): Promise<void> {
+async function scrollTo(host: HTMLElement, top: number): Promise<void> {
   const el = host.querySelector('[data-testid="scroller"]') as HTMLElement;
   Object.defineProperty(el, "scrollTop", { configurable: true, value: top });
   await act(async () => {
@@ -43,7 +35,7 @@ async function scrollTo(host: HTMLDivElement, top: number): Promise<void> {
   });
 }
 
-function hiddenText(host: HTMLDivElement): string | null | undefined {
+function hiddenText(host: HTMLElement): string | null | undefined {
   return host.querySelector('[data-testid="hidden"]')?.textContent;
 }
 
@@ -53,18 +45,18 @@ beforeEach(() => {
 
 describe("useHideBottomNavOnScroll", () => {
   it("向下滑过阈值后把底部导航置为隐藏", async () => {
-    const { host, root } = await render(tree());
+    const { host, root } = await renderDom(tree());
     expect(hiddenText(host)).toBe("false");
 
     await scrollTo(host, 0); // 首个事件作为基线种子
     await scrollTo(host, 40); // 向下 40，越过隐藏阈值
 
     expect(hiddenText(host)).toBe("true");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("路由切换时把导航重置为显示", async () => {
-    const { host, root } = await render(tree());
+    const { host, root } = await renderDom(tree());
 
     await scrollTo(host, 0);
     await scrollTo(host, 60);
@@ -75,13 +67,13 @@ describe("useHideBottomNavOnScroll", () => {
     });
 
     expect(hiddenText(host)).toBe("false");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("隐藏切换后的过渡期内只刷新滚动基线，不因被动上滚立刻显示", async () => {
     vi.useFakeTimers();
     try {
-      const { host, root } = await render(tree());
+      const { host, root } = await renderDom(tree());
 
       await scrollTo(host, 100);
       await scrollTo(host, 140);
@@ -94,7 +86,7 @@ describe("useHideBottomNavOnScroll", () => {
       await scrollTo(host, 116);
       expect(hiddenText(host)).toBe("false");
 
-      await act(async () => root.unmount());
+      await unmount(root);
     } finally {
       vi.useRealTimers();
     }

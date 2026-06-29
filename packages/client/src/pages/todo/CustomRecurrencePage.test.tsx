@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import type { CustomRecurrenceInput } from "../../lib/tasks/recurrencePresets.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const initial: CustomRecurrenceInput = {
   interval: 2,
@@ -16,14 +14,9 @@ const initial: CustomRecurrenceInput = {
 };
 
 async function render(props: Parameters<typeof CustomRecurrencePage>[0]) {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => root.render(createElement(CustomRecurrencePage, props)));
-  return { host, root };
+  return await renderDom(createElement(CustomRecurrencePage, props));
 }
 
-const click = (el: Element | null) => act(async () => el?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 const byLabel = (host: HTMLElement, label: string) => host.querySelector(`[aria-label="${label}"]`);
 const clickOption = (host: HTMLElement, text: string) =>
   click([...host.querySelectorAll('[role="option"]')].find((el) => el.textContent === text) ?? null);
@@ -36,7 +29,7 @@ describe("CustomRecurrencePage", () => {
     await click(byLabel(host, "完成"));
 
     expect(onComplete).toHaveBeenCalledWith({ freq: "daily", interval: 2, basis: "due" }, "2026-06-16");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("单位是可滚动转盘（天/周/月）", async () => {
@@ -48,7 +41,7 @@ describe("CustomRecurrencePage", () => {
     expect(labels).toContain("天");
     expect(labels).toContain("周");
     expect(labels).toContain("月");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("切到周单位后按起始日推 byWeekday", async () => {
@@ -59,7 +52,7 @@ describe("CustomRecurrencePage", () => {
     await click(byLabel(host, "完成"));
 
     expect(onComplete.mock.calls.at(-1)?.[0]).toMatchObject({ freq: "weekly", byWeekday: [2] });
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("月末开关写 byMonthday [-1]", async () => {
@@ -74,7 +67,7 @@ describe("CustomRecurrencePage", () => {
     await click(byLabel(host, "完成"));
 
     expect(onComplete.mock.calls.at(-1)?.[0]).toMatchObject({ freq: "monthly", byMonthday: [-1] });
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("复杂旧规则未改时保留命中日", async () => {
@@ -94,7 +87,7 @@ describe("CustomRecurrencePage", () => {
     await click(byLabel(host, "完成"));
 
     expect(onComplete.mock.calls.at(-1)?.[0]).toMatchObject({ freq: "weekly", byWeekday: [1, 3, 5] });
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("父级用等价 initial 重新渲染时不重置本地草稿", async () => {
@@ -109,7 +102,7 @@ describe("CustomRecurrencePage", () => {
     await click(byLabel(host, "完成"));
 
     expect(onComplete.mock.calls.at(-1)?.[0]).toMatchObject({ freq: "weekly", byWeekday: [2] });
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点返回不调用 onComplete", async () => {
@@ -121,6 +114,6 @@ describe("CustomRecurrencePage", () => {
 
     expect(onBack).toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

@@ -2,6 +2,8 @@ import type { ReactElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+export type { Root } from "react-dom/client";
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const hostRoots = new WeakMap<Root, HTMLElement>();

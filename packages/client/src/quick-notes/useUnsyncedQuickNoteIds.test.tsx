@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import type { SyncLogEntry } from "@timedata/shared";
-import { act, createElement, useEffect, type ReactElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { act, createElement, type ReactElement, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { useUnsyncedQuickNoteIds } from "./useUnsyncedQuickNoteIds.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function log(overrides: Partial<SyncLogEntry>): SyncLogEntry {
   return {
@@ -29,25 +27,17 @@ async function flush() {
   });
 }
 
-async function render(element: ReactElement): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(element);
-  });
+async function render(element: ReactElement): Promise<{ host: HTMLElement; root: Root }> {
+  const { host, root } = await renderDom(element);
   await flush();
   return { host, root };
 }
 
 beforeEach(async () => {
-  await db.syncLog.clear();
-  document.body.innerHTML = "";
+  await resetDb();
 });
 
-afterEach(() => {
-  document.body.innerHTML = "";
-});
+afterEach(resetDb);
 
 describe("useUnsyncedQuickNoteIds", () => {
   it("includes quick note logs that are not synced", async () => {
@@ -65,7 +55,7 @@ describe("useUnsyncedQuickNoteIds", () => {
     const { root } = await render(createElement(Probe));
     expect(latest).toEqual(["note-pending"]);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("ignores synced quick note logs", async () => {
@@ -83,7 +73,7 @@ describe("useUnsyncedQuickNoteIds", () => {
     const { root } = await render(createElement(Probe));
     expect(latest).toEqual([]);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("ignores unsynced logs from other tables", async () => {
@@ -101,7 +91,7 @@ describe("useUnsyncedQuickNoteIds", () => {
     const { root } = await render(createElement(Probe));
     expect(latest).toEqual([]);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("returns an empty set when there are no logs", async () => {
@@ -118,6 +108,6 @@ describe("useUnsyncedQuickNoteIds", () => {
     const { root } = await render(createElement(Probe));
     expect(latest).toEqual([]);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

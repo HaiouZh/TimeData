@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import QuickNoteActionMenu from "./QuickNoteActionMenu.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 async function flush() {
   await act(async () => {
@@ -20,13 +19,8 @@ function menuItem(host: HTMLElement, text: string): HTMLButtonElement {
   return match;
 }
 
-async function render(props: QuickNoteActionMenuProps): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(QuickNoteActionMenu, props));
-  });
+async function render(props: QuickNoteActionMenuProps): Promise<{ host: HTMLElement; root: Root }> {
+  const { host, root } = await renderDom(createElement(QuickNoteActionMenu, props));
   await flush();
   return { host, root };
 }
@@ -61,7 +55,7 @@ describe("QuickNoteActionMenu", () => {
     expect(onCopy).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("uses design tokens for menu chrome", async () => {
@@ -83,7 +77,7 @@ describe("QuickNoteActionMenu", () => {
     expect(host.innerHTML).not.toContain(["slate", ""].join("-"));
     expect(host.innerHTML).not.toContain(["text", "red", ""].join("-"));
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("closes when the backdrop is clicked", async () => {
@@ -108,7 +102,7 @@ describe("QuickNoteActionMenu", () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点击「选择」触发 onSelect 并关闭", async () => {
@@ -134,7 +128,7 @@ describe("QuickNoteActionMenu", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("未置顶显示「置顶」，已置顶显示「取消置顶」", async () => {
@@ -158,6 +152,6 @@ describe("QuickNoteActionMenu", () => {
 
     expect(onTogglePin).toHaveBeenCalledTimes(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

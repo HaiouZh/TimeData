@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import type { QuickNote } from "@timedata/shared";
 import { act, createElement, type ReactElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import NoteBubble from "./NoteBubble.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function note(text: string, overrides: Partial<QuickNote> = {}): QuickNote {
   return {
@@ -24,15 +23,10 @@ async function flush() {
   });
 }
 
-async function render(element: ReactElement): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(element);
-  });
+async function render(element: ReactElement): Promise<{ host: HTMLElement; root: Root }> {
+  const result = await renderDom(element);
   await flush();
-  return { host, root };
+  return result;
 }
 
 beforeEach(() => {
@@ -53,7 +47,7 @@ describe("NoteBubble", () => {
     expect(host.querySelector('[aria-label="待上传"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="已上传"]')).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("renders an uploaded check when the note is not pending", async () => {
@@ -64,18 +58,20 @@ describe("NoteBubble", () => {
     expect(host.querySelector('[aria-label="已上传"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="待上传"]')).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("shows a source badge for agent notes using sourceLabel", async () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(120);
 
-    const { host, root } = await render(createElement(NoteBubble, { note: note("周报已生成", { source: "agent", sourceLabel: "Hermes" }) }));
+    const { host, root } = await render(
+      createElement(NoteBubble, { note: note("周报已生成", { source: "agent", sourceLabel: "Hermes" }) }),
+    );
 
     expect(host.textContent).toContain("Hermes");
     expect(host.textContent).toContain("周报已生成");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("uses the agent meta color branch for agent notes", async () => {
@@ -86,7 +82,7 @@ describe("NoteBubble", () => {
     const meta = host.querySelector('[aria-label="已上传"]')?.closest("span");
     expect(meta?.className).toContain("text-accent-ink");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("falls back to a default badge label for agent notes", async () => {
@@ -96,7 +92,7 @@ describe("NoteBubble", () => {
 
     expect(host.textContent).toContain("助手");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("renders no source badge for user and legacy notes", async () => {
@@ -106,7 +102,7 @@ describe("NoteBubble", () => {
 
     expect(host.textContent).not.toContain("助手");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("does not show expand controls for short content", async () => {
@@ -117,7 +113,7 @@ describe("NoteBubble", () => {
     expect(host.textContent).toContain("短文本");
     expect(host.textContent).not.toContain("展开");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("expands and collapses long content", async () => {
@@ -148,7 +144,7 @@ describe("NoteBubble", () => {
 
     expect(host.querySelector("button")?.textContent).toBe("展开");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("keeps the expand button out of the parent long-press path", async () => {
@@ -166,6 +162,6 @@ describe("NoteBubble", () => {
 
     expect(parentPointerDown).not.toHaveBeenCalled();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

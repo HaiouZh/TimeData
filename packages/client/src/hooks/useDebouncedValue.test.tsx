@@ -1,20 +1,18 @@
 // @vitest-environment jsdom
-import { createElement } from "react";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function renderHook(initialValue: string, delayMs = 200): {
+async function renderHook(
+  initialValue: string,
+  delayMs = 200,
+): Promise<{
   getRenderedValue: () => string;
   root: Root;
   setValue: (value: string) => void;
-} {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
+}> {
   let currentValue = initialValue;
   let renderedValue = "";
 
@@ -23,13 +21,13 @@ function renderHook(initialValue: string, delayMs = 200): {
     return createElement("span", null, renderedValue);
   }
 
+  const { root } = await renderDom(createElement(TestComponent, { value: currentValue }));
+
   function render(value: string) {
     act(() => {
       root.render(createElement(TestComponent, { value }));
     });
   }
-
-  render(currentValue);
 
   return {
     getRenderedValue: () => renderedValue,
@@ -43,13 +41,12 @@ function renderHook(initialValue: string, delayMs = 200): {
 
 afterEach(() => {
   vi.useRealTimers();
-  document.body.innerHTML = "";
 });
 
 describe("useDebouncedValue", () => {
-  it("keeps the previous value until the delay expires", () => {
+  it("keeps the previous value until the delay expires", async () => {
     vi.useFakeTimers();
-    const hook = renderHook("old");
+    const hook = await renderHook("old");
 
     hook.setValue("new");
     expect(hook.getRenderedValue()).toBe("old");
@@ -60,12 +57,12 @@ describe("useDebouncedValue", () => {
     act(() => vi.advanceTimersByTime(1));
     expect(hook.getRenderedValue()).toBe("new");
 
-    act(() => hook.root.unmount());
+    await unmount(hook.root);
   });
 
-  it("uses the last value when changes happen quickly", () => {
+  it("uses the last value when changes happen quickly", async () => {
     vi.useFakeTimers();
-    const hook = renderHook("a");
+    const hook = await renderHook("a");
 
     hook.setValue("b");
     act(() => vi.advanceTimersByTime(100));
@@ -74,6 +71,6 @@ describe("useDebouncedValue", () => {
 
     expect(hook.getRenderedValue()).toBe("c");
 
-    act(() => hook.root.unmount());
+    await unmount(hook.root);
   });
 });

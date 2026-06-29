@@ -1,28 +1,18 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
+
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.ts";
-import { getSetting } from "../../lib/settings/index.ts";
 import { HEALTH_RANGE_PRESETS_KEY } from "../../lib/settings/healthRangeSetting.ts";
+import { getSetting } from "../../lib/settings/index.ts";
+import { resetDb } from "../../test/dbReset.ts";
+import { renderDom, unmount } from "../../test/domHarness.tsx";
 import SettingsHealthRangePage from "./SettingsHealthRangePage.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 async function renderPage() {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(MemoryRouter, null, createElement(SettingsHealthRangePage)));
-  });
-  return { host, root };
+  return await renderDom(createElement(MemoryRouter, null, createElement(SettingsHealthRangePage)));
 }
 
 function inputByLabel(host: HTMLElement, label: string): HTMLInputElement {
@@ -52,9 +42,7 @@ describe("SettingsHealthRangePage", () => {
       expect(inputByLabel(host, label)).toBeTruthy();
     }
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("点掉 7 天后写入设置", async () => {
@@ -66,8 +54,6 @@ describe("SettingsHealthRangePage", () => {
 
     await waitForSetting((value) => value != null && !value.split(",").includes("7"));
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });
