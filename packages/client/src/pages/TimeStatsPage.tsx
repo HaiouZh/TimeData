@@ -216,7 +216,7 @@ export default function TimeStatsPage() {
         <div className="mt-4 rounded-card border border-border bg-surface-elevated px-4 py-3">
           <div className="text-xs font-medium text-ink-2">已记录</div>
           <div className="mt-1 flex items-end gap-2">
-            <span className="text-4xl font-semibold leading-none text-ink">{totalHours.toFixed(1)}</span>
+            <span className="td-num text-4xl font-semibold leading-none text-ink">{totalHours.toFixed(1)}</span>
             <span className="pb-1 text-sm text-ink-2">小时</span>
           </div>
           {rangeClampedToToday && <div className="mt-2 text-xs text-ink-3">截至 {effectiveRange.toDate}</div>}

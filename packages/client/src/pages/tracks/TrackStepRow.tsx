@@ -29,7 +29,7 @@ export function TrackStepRow({
         <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
           {stepSourceText(step)}
         </span>
-        <span>{durationLabel}</span>
+        <span className="td-duration">{durationLabel}</span>
       </div>
       {step.content && <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-ink">{step.content}</p>}
       {(step.tags.length > 0 || step.refs.length > 0) && (

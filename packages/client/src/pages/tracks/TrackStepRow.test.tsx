@@ -70,4 +70,11 @@ describe("TrackStepRow", () => {
     // 当前步高亮:accent token,不裸色
     expect(host.querySelector('[data-current="true"]')?.className).toContain("border-accent");
   });
+
+  it("renders the duration label with a tabular number role", async () => {
+    const host = await mount({ step: step({ id: "dur" }), isCurrent: false, now: NOW });
+    const duration = host.querySelector(".td-duration");
+    expect(duration).not.toBeNull();
+    expect(duration?.textContent).toContain("历时");
+  });
 });

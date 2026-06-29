@@ -53,7 +53,7 @@ export function TrackListItem({
               )}
             </span>
             {track.summary && <span className="mt-0.5 block truncate text-xs text-ink-2">{track.summary}</span>}
-            <span className="mt-0.5 block truncate text-xs text-ink-3">{trackProgressSummary(steps, now)}</span>
+            <span className="td-num mt-0.5 block truncate text-xs text-ink-3">{trackProgressSummary(steps, now)}</span>
           </span>
         </span>
         {latestSteps.length > 0 && (

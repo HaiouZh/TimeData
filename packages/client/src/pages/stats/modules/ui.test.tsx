@@ -19,4 +19,10 @@ describe("stats ui", () => {
     expect(html).toContain("3.0h");
     expect(html).toContain("覆盖率");
   });
+
+  it("MetricCard value 接 td-metric tabular 数字角色", () => {
+    const html = renderToStaticMarkup(createElement(MetricCard, { label: "本周", value: "12.5h" }));
+    expect(html).toContain("td-metric");
+    expect(html).toContain("12.5h");
+  });
 });

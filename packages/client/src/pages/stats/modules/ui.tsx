@@ -51,7 +51,7 @@ export function MetricCard({
   return (
     <div className={`rounded-card border px-3.5 py-3 ${metricToneClass(tone)}`}>
       <div className="text-[11px] font-medium text-ink-2">{label}</div>
-      <div className="mt-1 text-xl font-semibold leading-tight tracking-normal">{value}</div>
+      <div className="td-metric mt-1 text-xl font-semibold leading-tight">{value}</div>
       {hint && <div className="mt-1 text-[11px] leading-snug text-ink-3">{hint}</div>}
     </div>
   );
