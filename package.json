@@ -36,8 +36,8 @@
     "check:test": "node scripts/check-test-hygiene.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.0",
-    "sharp": "^0.35.1",
+    "@biomejs/biome": "^2.5.1",
+    "sharp": "^0.35.2",
     "vite-tsconfig-paths": "^6.1.1"
   }
 }
