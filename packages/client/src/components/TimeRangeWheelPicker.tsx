@@ -64,7 +64,7 @@ export default function TimeRangeWheelPicker({
   onEndChange,
 }: TimeRangeWheelPickerProps) {
   return (
-    <div className="space-y-3 rounded-2xl border border-border bg-surface p-3">
+    <div className="space-y-3 rounded-card border border-border bg-surface p-3">
       <div
         className={`rounded-xl px-3 py-2 text-center ${error ? "bg-danger-soft text-danger" : "bg-page text-ink"}`}
       >

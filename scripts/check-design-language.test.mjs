@@ -310,6 +310,28 @@ test("does not let one allowlist entry cover duplicated line text", () => {
   assert.equal(result.staleAllowlist.length, 0);
 });
 
+test("flags bare card radii outside the token ladder", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="rounded-3xl border"').some((v) => v.rule === "bare-card-radius"),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="sm:rounded-2xl"').some((v) => v.rule === "bare-card-radius"),
+    true,
+  );
+});
+
+test("does not flag token radii or radii in test files", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="rounded-card rounded-pill"').some((v) => v.rule === "bare-card-radius"),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.test.tsx", 'expect(html).toContain("rounded-2xl")').some((v) => v.rule === "bare-card-radius"),
+    false,
+  );
+});
+
 test("validates allowlist schema", () => {
   assert.throws(
     () =>

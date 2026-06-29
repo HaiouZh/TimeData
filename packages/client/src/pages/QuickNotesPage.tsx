@@ -817,7 +817,7 @@ export default function QuickNotesPage() {
                 </span>
               )}
             </div>
-            <label className="flex items-center gap-1 rounded-xl border border-border bg-surface px-2 py-1 text-right shadow-sm sm:rounded-2xl sm:px-3 sm:py-2">
+            <label className="flex items-center gap-1 rounded-xl border border-border bg-surface px-2 py-1 text-right shadow-sm sm:rounded-card sm:px-3 sm:py-2">
               <span className="hidden text-[11px] text-ink-3 sm:block">日期</span>
               <input
                 ref={dateInputRef}
@@ -918,7 +918,7 @@ export default function QuickNotesPage() {
           <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 px-4">
             <section
               aria-label="置顶速记"
-              className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-2xl border border-border bg-surface p-3 shadow-elev2"
+              className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-card border border-border bg-surface p-3 shadow-elev2"
             >
               <p className="px-1 text-xs font-semibold text-ink-3">
                 置顶 · <span className="td-num">{pinnedNotes.length}</span>
@@ -959,11 +959,11 @@ export default function QuickNotesPage() {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           {searchOpen ? (
             !hasQuery ? (
-              <div className="rounded-3xl border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3">
+              <div className="rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3">
                 输入关键词搜索速记，空格分隔多个词表示同时包含。
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3">
+              <div className="rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3">
                 没有匹配的速记
               </div>
             ) : (
@@ -974,7 +974,7 @@ export default function QuickNotesPage() {
                     key={note.id}
                     type="button"
                     onClick={() => handleResultClick(note)}
-                    className={`w-full text-left ${NOTE_CARD_BASE} rounded-2xl ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
+                    className={`w-full text-left ${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
                   >
                     <time className="td-time float-right ml-2 text-[11px] text-ink-3">
                       {formatLocalClock(note.occurredAt)}
@@ -1004,13 +1004,13 @@ export default function QuickNotesPage() {
               )}
 
               {timeline.loading && (
-                <div className="rounded-3xl border border-border bg-surface/60 px-4 py-8 text-center text-sm text-ink-3">
+                <div className="rounded-card border border-border bg-surface/60 px-4 py-8 text-center text-sm text-ink-3">
                   正在读取速记...
                 </div>
               )}
 
               {!timeline.loading && displayItems.length === 0 && pinnedNotes.length === 0 && (
-                <div className="rounded-3xl border border-dashed border-border bg-surface/45 px-5 py-10 text-center">
+                <div className="rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center">
                   <p className="text-sm font-medium text-ink-2">还没有速记</p>
                   <p className="mt-1 text-xs text-ink-3">写下一个想法、线索或待办，稍后再回来看。</p>
                 </div>
@@ -1042,7 +1042,7 @@ export default function QuickNotesPage() {
                       aria-pressed={selectionMode ? selected : undefined}
                       {...noteInteractionProps(note)}
                       style={{ WebkitTouchCallout: "none" }}
-                      className={`${NOTE_CARD_BASE} rounded-2xl ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT} ${
+                      className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT} ${
                         selected ? NOTE_CARD_SELECTED : ""
                       }`}
                     >
@@ -1111,7 +1111,7 @@ export default function QuickNotesPage() {
 
       {error && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger shadow-elev1"
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger shadow-elev1"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {error}
@@ -1119,7 +1119,7 @@ export default function QuickNotesPage() {
       )}
       {status && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-2xl border border-border bg-surface/95 px-3 py-2 text-sm text-ink-2 shadow-elev1"
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 text-sm text-ink-2 shadow-elev1"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {status}
@@ -1141,7 +1141,7 @@ export default function QuickNotesPage() {
               <div
                 role="status"
                 aria-label="捕捉操作反馈"
-                className="mb-2 flex items-center gap-3 rounded-2xl border border-border-strong bg-surface/95 px-3 py-2 text-sm text-ink shadow-elev1"
+                className="mb-2 flex items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 text-sm text-ink shadow-elev1"
               >
                 <span className="min-w-0 flex-1 truncate">{actionToast.message}</span>
                 {actionToast.actions?.map((action) => (
@@ -1160,7 +1160,7 @@ export default function QuickNotesPage() {
               </div>
             )}
             {editingId && (
-              <div className="mb-2 flex items-center justify-between rounded-2xl border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-accent-ink">
+              <div className="mb-2 flex items-center justify-between rounded-card border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-accent-ink">
                 <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
                 <button
                   type="button"
@@ -1172,7 +1172,7 @@ export default function QuickNotesPage() {
                 </button>
               </div>
             )}
-            <div className="rounded-2xl border border-border bg-surface/90 p-1.5 shadow-sm sm:rounded-3xl sm:p-2">
+            <div className="rounded-card border border-border bg-surface/90 p-1.5 shadow-sm sm:rounded-card sm:p-2">
               <div className="flex items-end gap-2">
                 <button
                   type="button"
@@ -1189,7 +1189,7 @@ export default function QuickNotesPage() {
                     }
                     openSearch();
                   }}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-border-strong text-ink-2 transition hover:border-accent hover:text-ink disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-card border border-border-strong text-ink-2 transition hover:border-accent hover:text-ink disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
                 >
                   {editingId ? (
                     <Icon icon={X} size={18} />
@@ -1221,7 +1221,7 @@ export default function QuickNotesPage() {
                     event.preventDefault();
                     void handlePunch();
                   }}
-                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+                  className="flex size-11 shrink-0 items-center justify-center rounded-card bg-accent text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
                 >
                   {editingId ? (
                     <Icon icon={Check} size={19} weight="bold" />

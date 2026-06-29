@@ -169,7 +169,7 @@ export default function AnomaliesSection(props: StatsModuleProps) {
                 {longGapAnomalies.slice(0, 5).map((anomaly) => (
                   <li
                     key={anomalyKey(anomaly, "top")}
-                    className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm"
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm"
                   >
                     <span className="min-w-0 text-ink-2">
                       {anomaly.date}
@@ -185,13 +185,13 @@ export default function AnomaliesSection(props: StatsModuleProps) {
           )}
 
           <details
-            className="mt-4 space-y-2 rounded-2xl border border-border bg-surface-elevated px-3 py-2"
+            className="mt-4 space-y-2 rounded-card border border-border bg-surface-elevated px-3 py-2"
             open={props.mode !== "month"}
           >
             <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-ink-2">按日期分布</summary>
             <div className="mt-2 space-y-2">
               {anomalyDateGroups.map((group) => (
-                <div key={group.date} className="rounded-2xl border border-border bg-surface px-3 py-2">
+                <div key={group.date} className="rounded-card border border-border bg-surface px-3 py-2">
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="font-medium text-ink">{group.date}</span>
                     <span className="text-xs text-ink-3">{group.items.length} 项</span>

@@ -31,7 +31,7 @@ export default function SettingsStatsLayoutPage() {
             const module = STATS_MODULES[id];
             const isHidden = hidden.has(id);
             return (
-              <li key={id} className="rounded-2xl border border-border bg-surface p-3">
+              <li key={id} className="rounded-card border border-border bg-surface p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-ink">{module.title}</div>

@@ -220,7 +220,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
 
   return (
     <section className="px-4 pt-4">
-      <div className="rounded-2xl border border-border bg-surface/80 p-3">
+      <div className="rounded-card border border-border bg-surface/80 p-3">
         <div className="flex justify-center">
           <div className="relative aspect-square w-full max-w-[372px]">
             {overlay}

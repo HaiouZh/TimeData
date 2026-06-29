@@ -69,7 +69,7 @@ export default function OverviewSection(props: StatsModuleProps) {
         </div>
       )}
       {pieData.length > 0 ? (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-surface-elevated">
+        <div className="mt-4 overflow-hidden rounded-card border border-border bg-surface-elevated">
           <CategoryDonut
             data={pieData}
             totalHours={overview.totalRecordedHours}
@@ -78,7 +78,7 @@ export default function OverviewSection(props: StatsModuleProps) {
           />
         </div>
       ) : (
-        <div className="mt-4 rounded-2xl border border-dashed border-border bg-surface-elevated py-10 text-center text-sm text-ink-3">
+        <div className="mt-4 rounded-card border border-dashed border-border bg-surface-elevated py-10 text-center text-sm text-ink-3">
           暂无统计数据
         </div>
       )}

@@ -163,7 +163,7 @@ export default function TrendSection(props: StatsModuleProps) {
             {trend.parentTrends.map((t) => (
               <li
                 key={t.parentId}
-                className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm"
+                className="flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm"
               >
                 <span className="text-ink">{props.parentNameById.get(t.parentId) ?? t.parentId}</span>
                 <span
@@ -183,7 +183,7 @@ export default function TrendSection(props: StatsModuleProps) {
 
           {(trend.topRising.length > 0 || trend.topFalling.length > 0) && (
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-2xl border border-ok/30 bg-ok/10 p-3">
+              <div className="rounded-card border border-ok/30 bg-ok/10 p-3">
                 <div className="mb-1 text-ink-2">上升最多</div>
                 {trend.topRising.length === 0 ? (
                   <div className="text-ink-3">—</div>
@@ -195,7 +195,7 @@ export default function TrendSection(props: StatsModuleProps) {
                   ))
                 )}
               </div>
-              <div className="rounded-2xl border border-danger/30 bg-danger/10 p-3">
+              <div className="rounded-card border border-danger/30 bg-danger/10 p-3">
                 <div className="mb-1 text-ink-2">下降最多</div>
                 {trend.topFalling.length === 0 ? (
                   <div className="text-ink-3">—</div>
@@ -233,7 +233,7 @@ export default function TrendSection(props: StatsModuleProps) {
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-border bg-surface-elevated">
+          <div className="overflow-hidden rounded-card border border-border bg-surface-elevated">
             <TrendChart
               chart={trendChart}
               data={trendChartData}

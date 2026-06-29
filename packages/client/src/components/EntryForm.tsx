@@ -131,7 +131,7 @@ export default function EntryForm({
         onEndChange={handleEndChange}
       />
 
-      <section className="space-y-2 rounded-2xl border border-border bg-surface p-3">
+      <section className="space-y-2 rounded-card border border-border bg-surface p-3">
         <div className="flex items-center justify-between gap-2">
           <label className="text-sm text-ink-2">分类</label>
           {(prevEntry || nextEntry) && (
@@ -166,7 +166,7 @@ export default function EntryForm({
         <CategoryPicker onSelect={setCategoryId} selectedId={categoryId} />
       </section>
 
-      <section className="rounded-2xl border border-border bg-surface p-3">
+      <section className="rounded-card border border-border bg-surface p-3">
         <label className="mb-2 block text-sm text-ink-2">备注（可选）</label>
         <textarea
           value={note}

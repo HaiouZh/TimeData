@@ -35,7 +35,7 @@ export default function StructureSection(props: StatsModuleProps) {
         <p className="text-sm text-ink-3">本周期无足够会话用于结构诊断。</p>
       ) : (
         <>
-          <div className="space-y-1 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink">
+          <div className="space-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink">
             <div className="text-xs text-ink-2">
               深度 vs 浅记录{structure.excludedSleep ? "" : "（含睡眠，指定睡眠分类后更准）"}
             </div>
@@ -50,7 +50,7 @@ export default function StructureSection(props: StatsModuleProps) {
             </div>
           </div>
 
-          <div className="space-y-1 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink">
+          <div className="space-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink">
             <div className="text-xs text-ink-2">碎片化（仅供观察，不报警）</div>
             <div className="text-xs text-ink-2">
               每活跃小时切换 {structure.fragment.switchesPerActiveHour} 次（基线{" "}
@@ -59,7 +59,7 @@ export default function StructureSection(props: StatsModuleProps) {
             </div>
           </div>
 
-          <div className="space-y-1 rounded-2xl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink">
+          <div className="space-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink">
             <div className="text-xs text-ink-2">投入分散度（香农熵）</div>
             <div className="text-xs text-ink-2">
               {structure.entropy.normalizedPct}%（H={structure.entropy.entropyBits} / {structure.entropy.parentCount}{" "}

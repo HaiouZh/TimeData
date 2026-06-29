@@ -345,7 +345,7 @@ export default function SettingsGarminPage() {
             <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
               账号配置
             </h3>
-            <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+            <div className="space-y-3 rounded-card border border-border bg-surface p-4">
               <label className="block">
                 <span className="text-xs text-ink-3">Garmin 邮箱</span>
                 <input
@@ -374,7 +374,7 @@ export default function SettingsGarminPage() {
             <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
               定时抓取
             </h3>
-            <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+            <div className="space-y-3 rounded-card border border-border bg-surface p-4">
               <label className="flex min-h-11 items-center justify-between gap-3 py-1">
                 <span className="text-sm text-ink-2">启用每日定时抓取</span>
                 <Switch ariaLabel="启用每日定时抓取" checked={enabled} onChange={setEnabled} />
@@ -434,7 +434,7 @@ export default function SettingsGarminPage() {
             <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
               手动抓取
             </h3>
-            <div className="flex flex-wrap gap-3 rounded-2xl border border-border bg-surface p-4">
+            <div className="flex flex-wrap gap-3 rounded-card border border-border bg-surface p-4">
               <label className="block min-w-[9rem] flex-1">
                 <span className="text-xs text-ink-3">开始日期</span>
                 <input
@@ -493,7 +493,7 @@ export default function SettingsGarminPage() {
               <h3 className="text-sm font-medium uppercase tracking-wider text-ink-3">
                 上次抓取结果
               </h3>
-              <div className="rounded-2xl border border-border bg-surface p-4 text-sm">
+              <div className="rounded-card border border-border bg-surface p-4 text-sm">
                 <p className="text-ink-2">
                   {garminStatusLabel(status.lastFetch.status)} | {status.lastFetch.startDate} →{" "}
                   {status.lastFetch.endDate} |{" "}

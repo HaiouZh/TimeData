@@ -151,7 +151,7 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
         const childTotal = parent.children.reduce((sum, child) => sum + child.min, 0) || 1;
         const expanded = expandedId === parent.id;
         return (
-          <div key={parent.id} className="rounded-2xl border border-border bg-surface-elevated px-3 py-2">
+          <div key={parent.id} className="rounded-card border border-border bg-surface-elevated px-3 py-2">
             <button
               type="button"
               aria-expanded={expanded}
@@ -216,7 +216,7 @@ function DonutTooltip({ active, payload, total }: DonutTooltipProps) {
   const datum = payload[0].payload;
   const pct = total > 0 ? Math.round((datum.value / total) * 1000) / 10 : 0;
   return (
-    <div className="rounded-2xl border border-border bg-surface px-3 py-2 text-xs text-ink shadow-elev2">
+    <div className="rounded-card border border-border bg-surface px-3 py-2 text-xs text-ink shadow-elev2">
       {datum.name} · {datum.value}h · {pct}%
     </div>
   );

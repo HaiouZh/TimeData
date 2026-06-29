@@ -65,6 +65,12 @@ const RULES = [
     msg: "业务时间/数字/统计值不得直接使用 font-mono，使用 td-num/td-time/td-duration/td-stat",
     skip: (file, line) => isFontMonoTechnicalLine(file, line),
   },
+  {
+    id: "bare-card-radius",
+    re: new RegExp(`\\b${TAILWIND_VARIANTS}rounded-(?:2xl|3xl)\\b`),
+    msg: "卡片圆角必须使用 rounded-ctl/row/card token（rounded-2xl/3xl 已并入 --radius 阶梯）",
+    skip: (file) => isTestFile(file),
+  },
 ];
 
 for (const rule of RULES) {
