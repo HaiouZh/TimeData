@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { Cards } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
@@ -8,6 +8,7 @@ import { splitInboxByGravity } from "../../lib/tasks/gravity.js";
 import { currentGravityDate } from "../../lib/tasks/gravityClock.js";
 import {
   DEFAULT_TODO_GRAVITY_SETTINGS,
+  readTodoGravitySettings,
   sanitizeTodoGravitySettings,
   setTodoGravitySettings,
   useTodoGravitySettings,
@@ -21,15 +22,29 @@ export default function SettingsTodoGravityPage() {
   const settings = useTodoGravitySettings();
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const { syncAfterWrite } = useSyncContext();
+  const pendingSettingsRef = useRef<Promise<typeof settings> | null>(null);
   const now = currentGravityDate();
   const { sunken } = splitInboxByGravity(buckets.inbox, settings, now);
 
   const persist = useCallback(
     (patch: Partial<typeof settings>) => {
-      const next = sanitizeTodoGravitySettings({ ...settings, ...patch });
-      void setTodoGravitySettings(next).then(() => syncAfterWrite());
+      const basePromise = pendingSettingsRef.current ?? readTodoGravitySettings();
+      const nextPromise = basePromise
+        .catch(() => readTodoGravitySettings())
+        .then(async (base) => {
+          const next = sanitizeTodoGravitySettings({ ...base, ...patch });
+          await setTodoGravitySettings(next);
+          syncAfterWrite();
+          return next;
+        });
+      pendingSettingsRef.current = nextPromise;
+      void nextPromise
+        .finally(() => {
+          if (pendingSettingsRef.current === nextPromise) pendingSettingsRef.current = null;
+        })
+        .catch(() => undefined);
     },
-    [settings, syncAfterWrite],
+    [syncAfterWrite],
   );
 
   const restoreDefaults = useCallback(() => {
@@ -63,7 +78,6 @@ export default function SettingsTodoGravityPage() {
           value={settings.waterlineDays}
           min={1}
           max={365}
-          disabled={!settings.enabled}
           onChange={(v) => persist({ waterlineDays: v })}
         />
         <SettingsNumberRow
@@ -72,7 +86,6 @@ export default function SettingsTodoGravityPage() {
           value={settings.weightStepDays}
           min={1}
           max={365}
-          disabled={!settings.enabled}
           onChange={(v) => persist({ weightStepDays: v })}
         />
         <SettingsNumberRow
@@ -81,7 +94,6 @@ export default function SettingsTodoGravityPage() {
           value={settings.graceDays}
           min={0}
           max={365}
-          disabled={!settings.enabled}
           onChange={(v) => persist({ graceDays: v })}
         />
         <SettingsNumberRow
@@ -90,7 +102,6 @@ export default function SettingsTodoGravityPage() {
           value={settings.drawM}
           min={1}
           max={10}
-          disabled={!settings.enabled}
           onChange={(v) => persist({ drawM: v })}
         />
         <SettingsNumberRow
@@ -99,7 +110,6 @@ export default function SettingsTodoGravityPage() {
           value={settings.pickN}
           min={1}
           max={settings.drawM}
-          disabled={!settings.enabled}
           onChange={(v) => persist({ pickN: v })}
         />
       </SettingsSection>

@@ -453,7 +453,7 @@ describe("TodoPage", () => {
     const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
       (b) => b.textContent?.includes("水下 1 条"),
     ) as HTMLButtonElement;
-    expect(tailBtn).not.toBeNull();
+    expect(tailBtn).toBeTruthy();
     await act(async () => tailBtn.click());
     await flushAsync();
 
@@ -476,6 +476,26 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("shows sunken tail when all inbox tasks are underwater", async () => {
+    await addTask({ title: "沉没想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "水下 1 条");
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    expect(inbox.querySelector('[aria-label^="显示更多"]')).toBeNull();
+    const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
+      (b) => b.textContent?.includes("水下 1 条"),
+    ) as HTMLButtonElement;
+    expect(tailBtn).toBeTruthy();
+
+    await act(async () => tailBtn.click());
+    await flushAsync();
+
+    expect(inbox.textContent).toContain("沉没想法");
+    await act(async () => root.unmount());
+  });
+
   it("search does not bring sunken tasks into default inbox but tail can show them", async () => {
     await addTask({ title: "浮起任务", toInbox: true });
     await addTask({ title: "沉没搜索词", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
@@ -494,6 +514,15 @@ describe("TodoPage", () => {
     const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
     // 搜索不把水下任务混入默认浮层
     expect(inbox.textContent).not.toContain("沉没搜索词");
+    const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
+      (b) => b.textContent?.includes("水下 1 条"),
+    ) as HTMLButtonElement;
+    expect(tailBtn).not.toBeNull();
+
+    await act(async () => tailBtn.click());
+    await flushAsync();
+
+    expect(inbox.textContent).toContain("沉没搜索词");
     await act(async () => root.unmount());
   });
 });

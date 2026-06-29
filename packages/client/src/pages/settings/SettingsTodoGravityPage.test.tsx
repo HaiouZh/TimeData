@@ -144,4 +144,34 @@ describe("SettingsTodoGravityPage", () => {
     expect(host.textContent).toContain("0 / 1");
     await act(async () => root.unmount());
   });
+
+  it("keeps number controls editable when waterline is disabled", async () => {
+    const { host, root } = await renderDom(
+      createElement(MemoryRouter, null, createElement(SyncProvider, null, createElement(SettingsTodoGravityPage))),
+    );
+
+    const toggle = host.querySelector('[role="switch"]') as HTMLButtonElement;
+    await click(toggle);
+    await act(async () => { await Promise.resolve(); });
+
+    const waterlineInput = host.querySelector('[aria-label="多少天没动静就沉下去"]') as HTMLInputElement;
+    expect(waterlineInput.disabled).toBe(false);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(waterlineInput, "30");
+      waterlineInput.dispatchEvent(new Event("input", { bubbles: true }));
+      waterlineInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    let parsed: { enabled: boolean; waterlineDays: number } | null = null;
+    for (let i = 0; i < 30; i++) {
+      await act(async () => { await Promise.resolve(); });
+      const raw = await getSetting("todo.gravity.v1");
+      parsed = raw ? JSON.parse(raw) : null;
+      if (parsed?.enabled === false && parsed.waterlineDays === 30) break;
+    }
+    expect(parsed).not.toBeNull();
+    expect(parsed.enabled).toBe(false);
+    expect(parsed.waterlineDays).toBe(30);
+    await act(async () => root.unmount());
+  });
 });

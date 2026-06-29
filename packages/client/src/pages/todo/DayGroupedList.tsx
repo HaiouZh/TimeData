@@ -27,7 +27,7 @@ export function DayGroupedList({
   const hidden = segments.length - visible.length;
   const fullyVisible = expanded || segments.length <= initialGroups;
 
-  if (segments.length === 0) {
+  if (segments.length === 0 && !expandedFooter) {
     return null;
   }
 

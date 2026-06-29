@@ -32,7 +32,7 @@ last-reviewed: 2026-06-28
 
 设置页必须明确提示用户：Token 会保存在本机浏览器存储中，只应在可信设备上保存服务器 Token。当前实现不引入 sessionStorage，也不在页面刷新后自动丢弃 Token。
 
-`storageKeys.ts` 还集中登记底部导航、待办布局/折叠、星图引擎模式、待办翻牌本机已过目时间等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务正文或其他业务内容；`timedata_galaxy_engine` 只保存 `/goals` 全局星图使用确定性还是本地 settle 引擎，`timedata_todo_gravity_last_surfaced` 只保存任务 id 到 ISO 时间戳的本机轮换记忆。轨道看板信号词表走同步 `settings` 表，不放在本地 storage key 里。
+`storageKeys.ts` 还集中登记底部导航、待办布局/折叠、星图引擎模式等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务正文或其他业务内容；`timedata_galaxy_engine` 只保存 `/goals` 全局星图使用确定性还是本地 settle 引擎。待办翻牌「已过目表」已迁到同步 `settings` key `todo.gravity.review.v1`，只保存任务 id 到 ISO 时间戳，不保存任务正文或 Token；轨道看板信号词表也走同步 `settings` 表，不放在本地 storage key 里。
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 

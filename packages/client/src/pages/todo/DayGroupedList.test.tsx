@@ -106,6 +106,16 @@ describe("DayGroupedList", () => {
     await unmount(root);
   });
 
+  it("expandedFooter: 0 组但有尾部时仍直接显示", async () => {
+    const footer = <div data-testid="tail">水下尾部</div>;
+    const { host, root } = await renderDom(
+      <DayGroupedList segments={[]} renderTasks={renderTasks} expandedFooter={footer} />,
+    );
+    expect(host.querySelector('[data-testid="tail"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label^="显示更多"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("expandedFooter: 无 footer 时不影响现有行为", async () => {
     const segs = ["今天", "昨天", "6月10日", "6月9日"].map(seg);
     const { host, root } = await renderDom(<DayGroupedList segments={segs} renderTasks={renderTasks} />);
