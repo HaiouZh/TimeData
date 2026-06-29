@@ -12,6 +12,7 @@ import type { RegularSyncResult } from "../sync/engine.ts";
 import {
   ArrowsClockwise,
   CaretRight,
+  Cards,
   ChartBar,
   Cloud,
   Database,
@@ -289,6 +290,12 @@ export default function SettingsPage() {
           icon={<Icon icon={Signpost} size={20} />}
           title="轨道看板信号"
           subtitle="配置进入轨道列表聚合的步骤标签"
+        />
+        <SettingsRow
+          to="/settings/todo-gravity"
+          icon={<Icon icon={Cards} size={20} />}
+          title="水位线与翻牌"
+          subtitle="调整收件箱沉下去的节奏和翻牌数量"
         />
       </SettingsSection>
 

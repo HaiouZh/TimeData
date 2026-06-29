@@ -47,6 +47,7 @@ import {
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
 import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
+import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClock.js";
 import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -69,16 +70,6 @@ import {
 
 const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
-
-function msUntilNextLocalDay(now: Date): number {
-  const next = new Date(now);
-  next.setHours(24, 0, 0, 0);
-  return Math.max(1, next.getTime() - now.getTime());
-}
-
-function currentGravityDate(): Date {
-  return new Date(Date.now());
-}
 
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;

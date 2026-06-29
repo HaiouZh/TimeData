@@ -44,7 +44,7 @@ last-reviewed: 2026-06-29
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `todo.defaultDestination.v1` | `"today"\|"inbox"`，默认 today | `lib/settings/todoDefaultDestinationSetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md) |
-| `todo.gravity.v1` | JSON `{enabled,waterlineDays,weightStepDays,graceDays,drawM,pickN}`，默认 `{true,14,7,7,5,1}` | `lib/settings/todoGravitySetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（inbox 水位线 + 翻牌参数） |
+| `todo.gravity.v1` | JSON `{enabled,waterlineDays,weightStepDays,graceDays,drawM,pickN}`，默认 `{true,14,7,7,5,1}` | `lib/settings/todoGravitySetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（inbox 水位线 + 翻牌参数，可视化入口 `/settings/todo-gravity`） |
 | `todo.gravity.review.v1` | JSON `{[taskId]: iso}`；机器轮换状态，写时 merge + prune `max(90, waterlineDays*4)` 天 | `lib/tasks/gravityReviewStorage.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（翻牌跨设备避重） |
 | `track.actionTags.v2` | JSON 字符串数组；旧 `{tag,court}` 数组兼容读取但忽略 `court`；未配置→种子 `[待我处理,agent在做]`；旧默认 `[等我,待决策,卡住,agent在做]` 读时归一为新默认；显式 `"[]"`→空 | `lib/settings/trackActionTagsSetting.ts` + `shared/src/trackBoardSignals.ts` parser（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)(看板信号 + 步骤检索标签) |
 

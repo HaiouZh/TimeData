@@ -19,7 +19,7 @@ covers:
   - .env.example
   - .github/workflows/ci.yml
   - .github/workflows/build.yml
-last-reviewed: 2026-06-27
+last-reviewed: 2026-06-29
 ---
 
 # 部署与自更新

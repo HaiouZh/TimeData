@@ -143,3 +143,67 @@ export function SettingsToggleRow({
     </button>
   );
 }
+
+export function SettingsNumberRow({
+  title,
+  subtitle,
+  value,
+  min,
+  max,
+  step = 1,
+  disabled,
+  onChange,
+}: {
+  title: string;
+  subtitle?: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) {
+  const clamp = (v: number) => Math.min(max, Math.max(min, v));
+  return (
+    <div className="flex w-full items-center justify-between gap-3 px-4 py-3 disabled:opacity-60">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-ink">{title}</span>
+        {subtitle && <span className="mt-0.5 block text-xs text-ink-3">{subtitle}</span>}
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          aria-label={`减少 ${title}`}
+          disabled={disabled || value <= min}
+          onClick={() => onChange(clamp(value - step))}
+          className="flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-hover text-ink-2 hover:bg-surface-elevated disabled:opacity-40"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          aria-label={title}
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          disabled={disabled}
+          onChange={(event) => {
+            const n = Number(event.target.value);
+            if (Number.isFinite(n)) onChange(clamp(Math.round(n)));
+          }}
+          className="w-14 rounded-ctl border border-border bg-surface px-2 py-1 text-center text-sm text-ink focus:border-accent focus:outline-none"
+        />
+        <button
+          type="button"
+          aria-label={`增加 ${title}`}
+          disabled={disabled || value >= max}
+          onClick={() => onChange(clamp(value + step))}
+          className="flex h-7 w-7 items-center justify-center rounded-ctl bg-surface-hover text-ink-2 hover:bg-surface-elevated disabled:opacity-40"
+        >
+          +
+        </button>
+      </span>
+    </div>
+  );
+}

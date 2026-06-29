@@ -19,6 +19,7 @@ import SettingsInsightsPage from "../../pages/settings/SettingsInsightsPage.tsx"
 import { SettingsNavPage } from "../../pages/settings/SettingsNavPage.tsx";
 import SettingsServerPage from "../../pages/settings/SettingsServerPage.tsx";
 import SettingsStatsLayoutPage from "../../pages/settings/SettingsStatsLayoutPage.tsx";
+import SettingsTodoGravityPage from "../../pages/settings/SettingsTodoGravityPage.tsx";
 import { SettingsTracksPage } from "../../pages/settings/SettingsTracksPage.tsx";
 import TimelinePage from "../../pages/TimelinePage.tsx";
 import TrackDetailPage from "../../pages/tracks/TrackDetailPage.tsx";
@@ -56,6 +57,7 @@ export function AppRoutes({ refreshKey }: AppRoutesProps) {
       <Route path="/settings/data/backup-history" element={<BackupHistoryPage />} />
       <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
       <Route path="/settings/garmin" element={<SettingsGarminPage />} />
+      <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />
     </Routes>
   );
 }

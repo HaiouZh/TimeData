@@ -22,7 +22,8 @@ export function resolveAndroidBackAction(pathname: string): AndroidBackAction {
     pathname === "/settings/health-range" ||
     pathname === "/settings/stats-layout" ||
     pathname === "/settings/garmin" ||
-    pathname === "/settings/admin-insights"
+    pathname === "/settings/admin-insights" ||
+    pathname === "/settings/todo-gravity"
   ) {
     return { type: "navigate", to: "/settings", replace: true };
   }

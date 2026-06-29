@@ -172,6 +172,8 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/data"');
     expect(html).toContain('href="/settings/garmin"');
     expect(html).toContain('href="/settings/admin-insights"');
+    expect(html).toContain("水位线与翻牌");
+    expect(html).toContain('href="/settings/todo-gravity"');
   });
 
   it("organizes settings into five user-facing groups", () => {

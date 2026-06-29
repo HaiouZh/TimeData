@@ -19,6 +19,11 @@ describe("resolveAndroidBackAction", () => {
       replace: true,
     });
     expect(resolveAndroidBackAction("/settings/garmin")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/todo-gravity")).toEqual({
+      type: "navigate",
+      to: "/settings",
+      replace: true,
+    });
   });
 
   it("goes back for entry editor pages", () => {
