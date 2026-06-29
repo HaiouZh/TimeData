@@ -8,10 +8,14 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-export const CLEAN_BUCKET_DIRS = ["src/lib", "src/quick-notes"];
+// Stage 3a：从 lib/quick-notes 扩到全 src——纯逻辑/renderToStaticMarkup 测试无论在哪个目录都能进 node 快桶。
+export const CLEAN_BUCKET_DIRS = ["src"];
 
-// 命中任一即为脏：db（fake-indexeddb 全局 + db 单例三态竞态）、DOM（jsdom 环境 / React root / domHarness）、
-// 全局态注入（stubGlobal / defineProperty(window）。这些在 no-isolate 下跨文件串味，必须留在 isolate:true 桶。
+// 命中任一即为脏：db（fake-indexeddb 全局 + db 单例三态竞态、db.delete 重建 schema）、
+// DOM（jsdom 环境 / React root / domHarness）、全局态注入（stubGlobal / defineProperty(window）。
+// 这些在 no-isolate 下跨文件串味，必须留在 isolate:true 的 unit 桶（或洗白后进各自的 isolate:false 桶）。
+// 注：`fake-indexeddb` 只命中"测试文件直接 import fake-indexeddb/auto"者；db 测试洗白后改 import
+// ./test/dbReset 助手（字样只在助手里、助手非 .test 文件不被扫），故自然落入 node 派生桶。
 export const DIRTY_MARKERS = [
   /@vitest-environment\s+jsdom/,
   /fake-indexeddb/,
@@ -20,6 +24,7 @@ export const DIRTY_MARKERS = [
   /domHarness/,
   /stubGlobal/,
   /defineProperty\(\s*window/,
+  /\bdb\.delete\(/,
 ];
 
 const isTestFile = (name) => /\.test\.[jt]sx?$/.test(name);

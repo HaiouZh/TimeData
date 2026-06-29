@@ -11,8 +11,10 @@ const BASELINE = join(ROOT, "scripts", "test-hygiene-baseline.json");
 const isTest = (rel) => /\.test\.[jt]sx?$/.test(rel);
 
 // 干净桶目录（相对 src）：dirty-in-clean-bucket 规则只在此范围生效，唯一事实源在 test-buckets.mjs。
-const CLEAN_DIR_PREFIXES = CLEAN_BUCKET_DIRS.map((d) => d.replace(/^src\//, ""));
-const inCleanBucketDir = (rel) => CLEAN_DIR_PREFIXES.some((p) => rel === p || rel.startsWith(`${p}/`));
+// "src" → ""（全 src 范围，prefix 为空时视全体在内）；"src/lib" → "lib"。
+const CLEAN_DIR_PREFIXES = CLEAN_BUCKET_DIRS.map((d) => d.replace(/^src\/?/, ""));
+const inCleanBucketDir = (rel) =>
+  CLEAN_DIR_PREFIXES.some((p) => p === "" || rel === p || rel.startsWith(`${p}/`));
 
 // 测试卫生反模式。文件级棘轮：存量整文件进 baseline 豁免，禁新增同类文件；
 // 存量文件修完后从 baseline 删对应 id:path，闸自动收紧、不可回退。
