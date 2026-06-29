@@ -8,8 +8,11 @@ import { findMainNavItem, primaryRouteForPath } from "./navRegistry.js";
 // 在运行时渲染 Phosphor React 组件 —— 后者会把 react-dom/server 拖进主包、
 // 抬高打包体积棘轮。路径取自 @phosphor-icons/react 同名图标，与导航图标同源。
 
-const TILE_COLOR = "#0f172a";
-const GLYPH_COLOR = "#f1f5f9";
+// 底色/字形色镜像 index.css 的 --color-page / --color-ink 为具体 hex：与 chartColors.ts 同理，
+// 这些值要嵌进 favicon 的 SVG data-URI，而 SVG presentation 属性与 data-URI 都不解析 var()，
+// 故镜像成 JS 常量（唯一事实源仍是 token）。check:design 已把本文件登记为 token 镜像豁免。
+const TILE_COLOR = "#0e1320"; // 镜像 --color-page
+const GLYPH_COLOR = "#e8edf6"; // 镜像 --color-ink
 
 const ICON_PATHS: Record<string, string> = {
   Alarm:

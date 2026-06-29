@@ -193,6 +193,20 @@ test("does not flag hex inside the chart color mirror file", () => {
   );
 });
 
+test("does not flag hex inside the favicon token mirror file", () => {
+  assert.equal(
+    classifyLine("packages/client/src/lib/navigation/routeFavicon.ts", 'const TILE_COLOR = "#0e1320";').length,
+    0,
+  );
+  // 同样的镜像值出现在普通文件里仍是裸色违规
+  assert.equal(
+    classifyLine("packages/client/src/pages/Other.tsx", 'const TILE_COLOR = "#0e1320";').some(
+      (violation) => violation.rule === "bare-raw-color",
+    ),
+    true,
+  );
+});
+
 test("flags font-mono inside multiline class arrays", () => {
   const result = collectViolations({
     files: [

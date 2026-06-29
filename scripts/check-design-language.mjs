@@ -51,7 +51,7 @@ const RULES = [
     id: "bare-raw-color",
     re: /(?:#[0-9A-Fa-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(|oklab\(|lch\(|lab\()/,
     msg: "UI chrome 不得直接写裸 hex/rgb/hsl/oklch/lab 颜色",
-    skip: (file, line) => isThemeTokenDeclaration(file, line) || isChartColorMirror(file),
+    skip: (file, line) => isThemeTokenDeclaration(file, line) || isTokenColorMirror(file),
   },
   {
     id: "interactive-text-icon",
@@ -90,13 +90,16 @@ function isThemeTokenDeclaration(file, line) {
   );
 }
 
-// 图表色镜像文件：recharts 的 SVG presentation 属性不解析 var()，故这些文件把
-// index.css 的 --color-data-* / 中性 token 镜像成 JS 常量，是 token 的唯一事实源镜像，
+// Token 镜像文件：SVG presentation 属性（recharts）与 SVG data-URI（favicon）都不解析 var()，
+// 故这些文件把 index.css 的 --color-* token 镜像成具体 hex 的 JS 常量，是 token 唯一事实源的镜像，
 // 不是 UI chrome 裸色。集中登记，便于审计。
-const CHART_COLOR_MIRROR_FILES = new Set(["packages/client/src/pages/stats/health/chartColors.ts"]);
+const TOKEN_MIRROR_FILES = new Set([
+  "packages/client/src/pages/stats/health/chartColors.ts", // --color-data-* / 中性 chrome token
+  "packages/client/src/lib/navigation/routeFavicon.ts", // --color-page / --color-ink（favicon SVG data-URI）
+]);
 
-function isChartColorMirror(file) {
-  return CHART_COLOR_MIRROR_FILES.has(normalizePath(file));
+function isTokenColorMirror(file) {
+  return TOKEN_MIRROR_FILES.has(normalizePath(file));
 }
 
 function isFontMonoTechnicalLine(file, line) {
