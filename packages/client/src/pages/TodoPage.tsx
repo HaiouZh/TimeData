@@ -53,6 +53,7 @@ import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { GravityReviewSection } from "./todo/GravityReviewSection.js";
+import { SunkenInboxTail, makeSunkenExtraAction } from "./todo/SunkenInboxTail.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
@@ -434,6 +435,8 @@ export function TodoPage() {
   );
 
   const inboxFiltered = f(floatingInbox);
+  const sunkenFiltered = f(sunkenInbox);
+  const sunkenExtraAction = makeSunkenExtraAction(bumpWeight);
   const inboxBlock = (
     <section data-section="inbox">
       <CollapsibleSection
@@ -442,12 +445,20 @@ export function TodoPage() {
         defaultOpen={!getInboxCollapsed()}
         onToggle={(open) => setInboxCollapsed(!open)}
       >
-        {inboxFiltered.length === 0 ? (
+        {inboxFiltered.length === 0 && sunkenFiltered.length === 0 ? (
           <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
         ) : (
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
             stickyBottomOffsetPx={composerAvoidancePx}
+            expandedFooter={
+              <SunkenInboxTail
+                sunkenTasks={sunkenFiltered}
+                stickyBottomOffsetPx={composerAvoidancePx}
+                extraAction={sunkenExtraAction}
+                {...rowHandlers}
+              />
+            }
             renderTasks={(tasks) => (
               <TaskList
                 pool="inbox"

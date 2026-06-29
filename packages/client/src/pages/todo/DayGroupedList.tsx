@@ -7,6 +7,8 @@ export interface DayGroupedListProps {
   renderTasks: (tasks: Task[]) => ReactNode;
   initialGroups?: number;
   stickyBottomOffsetPx?: number;
+  /** 列表已完全展开（或天然 ≤ initialGroups）时渲染的尾部插槽。 */
+  expandedFooter?: ReactNode;
 }
 
 /**
@@ -18,10 +20,12 @@ export function DayGroupedList({
   renderTasks,
   initialGroups = 3,
   stickyBottomOffsetPx = 0,
+  expandedFooter,
 }: DayGroupedListProps) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? segments : segments.slice(0, initialGroups);
   const hidden = segments.length - visible.length;
+  const fullyVisible = expanded || segments.length <= initialGroups;
 
   if (segments.length === 0) {
     return null;
@@ -48,6 +52,7 @@ export function DayGroupedList({
           显示更多（{hidden}）
         </button>
       )}
+      {fullyVisible && expandedFooter}
       {expanded && segments.length > initialGroups && (
         // sticky 贴底：展开后浏览到中途也能随手收起，不必拉到列表最末或回到顶部分区标题。
         <button

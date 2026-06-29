@@ -423,4 +423,77 @@ describe("TodoPage", () => {
     expect(logs[0]).toMatchObject({ tableName: "settings" });
     await act(async () => root.unmount());
   });
+
+  it("shows sunken inbox tail after show-more in inbox", async () => {
+    // 4 floating date groups + 1 sunken task
+    await addTask({ title: "今天任务", toInbox: true, now: new Date("2026-06-28T09:00:00.000Z") });
+    await addTask({ title: "昨天任务", toInbox: true, now: new Date("2026-06-27T09:00:00.000Z") });
+    await addTask({ title: "前天任务", toInbox: true, now: new Date("2026-06-26T09:00:00.000Z") });
+    await addTask({ title: "更早任务", toInbox: true, now: new Date("2026-06-25T09:00:00.000Z") });
+    await addTask({ title: "沉没想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "今天任务");
+
+    // 默认不显示水下列表
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    expect(inbox.textContent).not.toContain("沉没想法");
+    expect(inbox.textContent).not.toContain("水下 1 条");
+
+    // 点击显示更多
+    const moreBtn = inbox.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement;
+    expect(moreBtn).not.toBeNull();
+    await act(async () => moreBtn.click());
+    await flushAsync();
+
+    // 尾部出现
+    expect(inbox.textContent).toContain("水下 1 条");
+
+    // 展开尾部
+    const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
+      (b) => b.textContent?.includes("水下 1 条"),
+    ) as HTMLButtonElement;
+    expect(tailBtn).not.toBeNull();
+    await act(async () => tailBtn.click());
+    await flushAsync();
+
+    expect(inbox.textContent).toContain("沉没想法");
+    await act(async () => root.unmount());
+  });
+
+  it("shows sunken tail when floating groups <= 3 without show-more", async () => {
+    await addTask({ title: "唯一浮起", toInbox: true });
+    await addTask({ title: "沉没想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "唯一浮起");
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    // 无显示更多按钮
+    expect(inbox.querySelector('[aria-label^="显示更多"]')).toBeNull();
+    // 尾部直接可达
+    expect(inbox.textContent).toContain("水下 1 条");
+    await act(async () => root.unmount());
+  });
+
+  it("search does not bring sunken tasks into default inbox but tail can show them", async () => {
+    await addTask({ title: "浮起任务", toInbox: true });
+    await addTask({ title: "沉没搜索词", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "水下 1 条");
+
+    // 搜索
+    const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "搜索词");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushAsync();
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    // 搜索不把水下任务混入默认浮层
+    expect(inbox.textContent).not.toContain("沉没搜索词");
+    await act(async () => root.unmount());
+  });
 });

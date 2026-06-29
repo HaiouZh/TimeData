@@ -80,4 +80,38 @@ describe("DayGroupedList", () => {
     expect(host.children.length).toBe(0);
     await unmount(root);
   });
+
+  it("expandedFooter: >3 组时展开前不显示，展开后显示", async () => {
+    const segs = ["今天", "昨天", "6月10日", "6月9日", "6月8日"].map(seg);
+    const footer = <div data-testid="tail">水下尾部</div>;
+    const { host, root } = await renderDom(
+      <DayGroupedList segments={segs} renderTasks={renderTasks} expandedFooter={footer} />,
+    );
+    // 展开前不显示尾部
+    expect(host.querySelector('[data-testid="tail"]')).toBeNull();
+    // 展开后显示尾部
+    await click(host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement);
+    expect(host.querySelector('[data-testid="tail"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("expandedFooter: ≤3 组时直接显示（列表已天然到底）", async () => {
+    const footer = <div data-testid="tail">水下尾部</div>;
+    const { host, root } = await renderDom(
+      <DayGroupedList segments={[seg("今天"), seg("昨天")]} renderTasks={renderTasks} expandedFooter={footer} />,
+    );
+    expect(host.querySelector('[data-testid="tail"]')).not.toBeNull();
+    // 无「显示更多」按钮
+    expect(host.querySelector('[aria-label^="显示更多"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("expandedFooter: 无 footer 时不影响现有行为", async () => {
+    const segs = ["今天", "昨天", "6月10日", "6月9日"].map(seg);
+    const { host, root } = await renderDom(<DayGroupedList segments={segs} renderTasks={renderTasks} />);
+    expect(host.querySelector('[data-testid="tail"]')).toBeNull();
+    await click(host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement);
+    expect(host.textContent).toContain("6月9日");
+    await unmount(root);
+  });
 });
