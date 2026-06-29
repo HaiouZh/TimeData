@@ -37,7 +37,12 @@ update.post("/", async (c) => {
       return c.json(body, status);
     }
 
-    const status = triggerUpdate({ stateDir: updateStateDir(), watchtowerUrl: url, watchtowerToken: token });
+    const status = triggerUpdate({
+      stateDir: updateStateDir(),
+      watchtowerUrl: url,
+      watchtowerToken: token,
+      currentSha: process.env.GIT_SHA,
+    });
     return c.json({ ok: true, status: "updating", updateId: status.updateId }, 202);
   } catch (err) {
     if (err instanceof UpdateAlreadyRunningError) {

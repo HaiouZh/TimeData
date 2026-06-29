@@ -152,6 +152,51 @@ describe("reconcileInterruptedUpdate", () => {
     expect(status.finishedAt).not.toBeNull();
   });
 
+  it("marks the interrupted update as succeeded when the running image sha changed", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    createUpdateStatus({ stateDir: tempDir, updateId: "update-1", now: () => "2026-05-27T06:18:33.524Z" });
+    fs.writeFileSync(
+      updateLockPath(tempDir),
+      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-27T06:18:33.527Z", fromSha: "oldsha1" }),
+      "utf8",
+    );
+
+    reconcileInterruptedUpdate(tempDir, "newsha2");
+
+    expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
+    const status = getUpdateStatus(tempDir);
+    expect(status.status).toBe("succeeded");
+    expect(status.exitCode).toBe(0);
+  });
+
+  it("marks the interrupted update as failed when the running image sha is unchanged", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    createUpdateStatus({ stateDir: tempDir, updateId: "update-1", now: () => "2026-05-27T06:18:33.524Z" });
+    fs.writeFileSync(
+      updateLockPath(tempDir),
+      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-27T06:18:33.527Z", fromSha: "samesha" }),
+      "utf8",
+    );
+
+    reconcileInterruptedUpdate(tempDir, "samesha");
+
+    expect(getUpdateStatus(tempDir).status).toBe("failed");
+  });
+
+  it("falls back to unknown when the running image sha is unavailable", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    createUpdateStatus({ stateDir: tempDir, updateId: "update-1", now: () => "2026-05-27T06:18:33.524Z" });
+    fs.writeFileSync(
+      updateLockPath(tempDir),
+      JSON.stringify({ updateId: "update-1", createdAt: "2026-05-27T06:18:33.527Z", fromSha: "oldsha1" }),
+      "utf8",
+    );
+
+    reconcileInterruptedUpdate(tempDir, "dev");
+
+    expect(getUpdateStatus(tempDir).status).toBe("unknown");
+  });
+
   it("is a no-op when no lock exists", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
     fs.writeFileSync(
@@ -216,5 +261,21 @@ describe("reconcileInterruptedUpdate", () => {
 
     expect(getUpdateStatus(tempDir).logTail).toMatch(/watchtower update failed: 401/);
     expect(fs.existsSync(updateLockPath(tempDir))).toBe(false);
+  });
+
+  it("records the current image sha in the lock so recovery can judge success", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-update-"));
+    const neverResolves = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+
+    triggerUpdate({
+      stateDir: tempDir,
+      watchtowerUrl: "http://watchtower:8080",
+      watchtowerToken: "secret-token",
+      currentSha: "oldsha1",
+      fetch: neverResolves,
+    });
+
+    const lock = JSON.parse(fs.readFileSync(updateLockPath(tempDir), "utf8")) as { fromSha?: string };
+    expect(lock.fromSha).toBe("oldsha1");
   });
 });

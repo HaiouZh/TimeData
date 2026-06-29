@@ -10,6 +10,9 @@ export interface UpdaterOpts {
   watchtowerUrl: string;
   watchtowerToken: string;
   updateId?: string;
+  /** Image sha this process is running when the update is triggered, recorded
+   * so a restarted process can tell whether the new image actually landed. */
+  currentSha?: string;
   fetch?: typeof fetch;
 }
 
@@ -125,12 +128,20 @@ export async function triggerUpdateViaWatchtower(
   await fetchOrThrow(response, "watchtower update failed");
 }
 
-function readLock(lockFile: string): { updateId: string | null; createdAt: string | null } {
+function readLock(lockFile: string): { updateId: string | null; createdAt: string | null; fromSha: string | null } {
   try {
-    const parsed = JSON.parse(fs.readFileSync(lockFile, "utf8")) as { updateId?: string; createdAt?: string };
-    return { updateId: parsed.updateId || null, createdAt: parsed.createdAt || null };
+    const parsed = JSON.parse(fs.readFileSync(lockFile, "utf8")) as {
+      updateId?: string;
+      createdAt?: string;
+      fromSha?: string;
+    };
+    return {
+      updateId: parsed.updateId || null,
+      createdAt: parsed.createdAt || null,
+      fromSha: parsed.fromSha || null,
+    };
   } catch {
-    return { updateId: null, createdAt: null };
+    return { updateId: null, createdAt: null, fromSha: null };
   }
 }
 
@@ -141,27 +152,31 @@ function isStaleLock(lockFile: string): boolean {
   return Number.isNaN(age) || age > STALE_LOCK_TTL_MS;
 }
 
-function writeLock(stateDir: string, updateId: string): void {
+function writeLock(stateDir: string, updateId: string, fromSha: string | null): void {
   const fd = fs.openSync(updateLockPath(stateDir), "wx");
   try {
-    fs.writeFileSync(fd, JSON.stringify({ updateId, createdAt: new Date().toISOString() }, null, 2), "utf8");
+    fs.writeFileSync(
+      fd,
+      JSON.stringify({ updateId, createdAt: new Date().toISOString(), fromSha }, null, 2),
+      "utf8",
+    );
   } finally {
     fs.closeSync(fd);
   }
 }
 
-function acquireUpdateLock(stateDir: string, updateId: string): void {
+function acquireUpdateLock(stateDir: string, updateId: string, fromSha: string | null): void {
   fs.mkdirSync(updateDataDir(stateDir), { recursive: true });
   const lockFile = updateLockPath(stateDir);
   try {
-    writeLock(stateDir, updateId);
+    writeLock(stateDir, updateId, fromSha);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
     if (!isStaleLock(lockFile)) {
       throw new UpdateAlreadyRunningError(readLock(lockFile).updateId);
     }
     releaseUpdateLock(stateDir);
-    writeLock(stateDir, updateId);
+    writeLock(stateDir, updateId, fromSha);
   }
 }
 
@@ -169,25 +184,44 @@ function releaseUpdateLock(stateDir: string): void {
   fs.rmSync(updateLockPath(stateDir), { force: true });
 }
 
+// Decide how an interrupted update turned out by comparing the image sha that
+// was recorded when the update was triggered against the sha this (restarted)
+// process is now running. A changed sha means Watchtower really replaced the
+// container with a new image -> the update succeeded. An unchanged sha means
+// the restart did not pick up a new image -> it failed. Without a recorded sha
+// (lock written by an older build) or a known current sha (dev/local), we
+// cannot tell, so we stay with "unknown".
+function resolveInterruptedStatus(
+  fromSha: string | null,
+  currentSha: string | undefined,
+): "succeeded" | "failed" | "unknown" {
+  if (!fromSha || !currentSha || currentSha === "dev") return "unknown";
+  return currentSha !== fromSha ? "succeeded" : "failed";
+}
+
 // Called at server startup. A lock present here means the previous update
 // process was killed (by the container restart that the update itself caused)
-// before it could release the lock. Without this, the stale lock would block
-// every future update with a 409 forever.
-export function reconcileInterruptedUpdate(stateDir: string): void {
+// before it could release the lock and write its terminal status. Without this,
+// the stale lock would block every future update with a 409 forever, and the
+// success the killed process never got to record would be lost. We infer the
+// outcome from whether the running image sha changed (see resolveInterruptedStatus).
+export function reconcileInterruptedUpdate(stateDir: string, currentSha?: string): void {
   const lockFile = updateLockPath(stateDir);
   if (!fs.existsSync(lockFile)) return;
-  const { updateId } = readLock(lockFile);
+  const { updateId, fromSha } = readLock(lockFile);
   appendUpdateLog(stateDir, "previous update was interrupted by a container restart; recovering");
   const prior = getUpdateStatus(stateDir);
+  const status = resolveInterruptedStatus(fromSha, currentSha);
+  appendUpdateLog(stateDir, `recovery verdict: ${status} (sha ${fromSha ?? "?"} -> ${currentSha ?? "?"})`);
   fs.writeFileSync(
     updateStatusPath(stateDir),
     JSON.stringify(
       {
         updateId: updateId ?? prior.updateId,
-        status: "unknown",
+        status,
         startedAt: prior.startedAt,
         finishedAt: new Date().toISOString(),
-        exitCode: null,
+        exitCode: status === "succeeded" ? 0 : null,
       },
       null,
       2,
@@ -229,7 +263,7 @@ export function triggerUpdate(opts: UpdaterOpts): UpdateStatus {
   }
   const updateId = opts.updateId || `update-${Date.now()}`;
   const startedAt = new Date().toISOString();
-  acquireUpdateLock(opts.stateDir, updateId);
+  acquireUpdateLock(opts.stateDir, updateId, opts.currentSha ?? null);
   try {
     const status = createUpdateStatus({ stateDir: opts.stateDir, updateId, now: () => startedAt });
 

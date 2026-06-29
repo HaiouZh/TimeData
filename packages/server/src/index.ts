@@ -139,7 +139,7 @@ app.get("*", serveStatic({ root: "./public", path: "index.html" }));
 initializeDatabase();
 
 try {
-  reconcileInterruptedUpdate(process.env.UPDATE_STATE_DIR || "/app/data");
+  reconcileInterruptedUpdate(process.env.UPDATE_STATE_DIR || "/app/data", process.env.GIT_SHA);
 } catch (error) {
   console.warn("[update] startup lock reconciliation failed", error);
 }
