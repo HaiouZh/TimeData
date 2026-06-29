@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import {
   DEFAULT_ACTION_TAGS,
   LEGACY_TRACK_ACTION_TAGS_KEY,
@@ -11,11 +10,7 @@ import {
   TRACK_ACTION_TAGS_KEY,
 } from "./trackActionTagsSetting.js";
 
-beforeEach(async () => {
-  await db.open();
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("trackActionTagsSetting", () => {
   it("sanitizeActionTags trims, drops empties/non-strings/overlong, and dedupes", () => {
@@ -40,7 +35,11 @@ describe("trackActionTagsSetting", () => {
     const now = new Date().toISOString();
     await db.settings.put({ key: TRACK_ACTION_TAGS_KEY, value: "{bad json", updatedAt: now });
     expect(await readTrackActionTags()).toEqual([...DEFAULT_ACTION_TAGS]);
-    await db.settings.put({ key: TRACK_ACTION_TAGS_KEY, value: JSON.stringify({ tags: ["待我处理"] }), updatedAt: now });
+    await db.settings.put({
+      key: TRACK_ACTION_TAGS_KEY,
+      value: JSON.stringify({ tags: ["待我处理"] }),
+      updatedAt: now,
+    });
     expect(await readTrackActionTags()).toEqual([...DEFAULT_ACTION_TAGS]);
     await db.settings.put({ key: TRACK_ACTION_TAGS_KEY, value: JSON.stringify([42, "", "   "]), updatedAt: now });
     expect(await readTrackActionTags()).toEqual([...DEFAULT_ACTION_TAGS]);

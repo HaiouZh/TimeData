@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { searchQuickNotes } from "./searchQuickNotes.js";
 
-beforeEach(async () => {
-  await db.quickNotes.clear();
-});
+beforeEach(resetDb);
 
 describe("searchQuickNotes", () => {
   it("returns an empty list for blank queries", async () => {

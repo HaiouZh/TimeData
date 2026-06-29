@@ -5,6 +5,9 @@
   "src/components/ui/SelectSheet.test.tsx",
   "src/components/ui/Sheet.test.tsx",
   "src/components/ui/Switch.test.tsx",
+  "src/lib/galaxyEngineMode.test.ts",
+  "src/lib/safeStorage.test.ts",
+  "src/lib/settings/trackActionTagsSetting.test.ts",
   "src/lib/useIsCoarsePointer.test.ts",
   "src/pages/TodoPage.deeplink.test.tsx",
   "src/pages/goals/GoalAddMemberSheet.test.tsx",
@@ -32,5 +35,6 @@
   "src/pages/tracks/StepComposer.test.tsx",
   "src/pages/tracks/TrackListItem.test.tsx",
   "src/pages/tracks/TrackStatusFacetPanel.test.tsx",
-  "src/pages/tracks/TrackStepRow.test.tsx"
+  "src/pages/tracks/TrackStepRow.test.tsx",
+  "src/quick-notes/searchQuickNotes.test.ts"
 ]
