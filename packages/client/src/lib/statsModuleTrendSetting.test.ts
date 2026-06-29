@@ -1,12 +1,8 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.ts";
+import { resetDb } from "../test/dbReset.js";
 import { DEFAULT_TREND_CONFIG, sanitizeTrendConfig } from "./statsModuleTrendSetting.ts";
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("sanitizeTrendConfig", () => {
   it("null 回退默认（preset 7 天 + line）", () => {

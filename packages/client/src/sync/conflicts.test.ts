@@ -1,13 +1,8 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { resolveConflicts } from "./conflicts.js";
 
-beforeEach(async () => {
-  await db.categories.clear();
-  await db.timeEntries.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("resolveConflicts", () => {
   it("writes remote category and marks pending sync logs for the same record as synced", async () => {

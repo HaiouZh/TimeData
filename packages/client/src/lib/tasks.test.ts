@@ -1,7 +1,6 @@
-import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
   addTask,
@@ -21,10 +20,7 @@ import {
   updateTask,
 } from "./tasks.js";
 
-beforeEach(async () => {
-  await db.tasks.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("addTask", () => {
   it("adds a pool task and writes a syncLog", async () => {
@@ -303,7 +299,11 @@ describe("independent child task helpers", () => {
 
     await deleteTaskCascade(parent.id);
 
-    await expect(db.tasks.bulkGet([parent.id, childA.id, childB.id])).resolves.toEqual([undefined, undefined, undefined]);
+    await expect(db.tasks.bulkGet([parent.id, childA.id, childB.id])).resolves.toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
     const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
     expect(logs.map((log) => [log.recordId, log.action])).toEqual(
       expect.arrayContaining([

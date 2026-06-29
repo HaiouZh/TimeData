@@ -1,10 +1,9 @@
-import "fake-indexeddb/auto";
 import type { Category } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
 import { findOverlappingEntries } from "../hooks/useEntries.js";
-import { setPunchCategoryId } from "./settings/punchCategorySetting.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { punchNow, resolvePunchRange } from "./punch.js";
+import { setPunchCategoryId } from "./settings/punchCategorySetting.js";
 
 // 全部用 UTC ISO 字符串；APP 时区 +08:00，今天 0 点 = 前一日 16:00Z。
 const TODAY_START = "2026-06-14T16:00:00.000Z"; // 2026-06-15 00:00 (+08:00)
@@ -26,20 +25,12 @@ function category(id: string, name: string, parentId: string | null): Category {
 }
 
 async function configurePunchCategory() {
-  await db.categories.bulkAdd([
-    category("cat-work", "工作", null),
-    category(PUNCH_CATEGORY_ID, "深度", "cat-work"),
-  ]);
+  await db.categories.bulkAdd([category("cat-work", "工作", null), category(PUNCH_CATEGORY_ID, "深度", "cat-work")]);
   await setPunchCategoryId(PUNCH_CATEGORY_ID);
   await db.syncLog.clear();
 }
 
-beforeEach(async () => {
-  await db.timeEntries.clear();
-  await db.categories.clear();
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("resolvePunchRange", () => {
   it("今天有记录时，起点=今天最后一条 end", () => {

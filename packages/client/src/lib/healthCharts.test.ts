@@ -1,19 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import "fake-indexeddb/auto";
-import { db } from "../db/index.js";
-import { getSetting } from "./settings/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import {
   deleteHealthChartBlock,
   listHealthChartBlocks,
   putHealthChartBlock,
   seedDefaultHealthChartsOnce,
 } from "./healthCharts.js";
+import { getSetting } from "./settings/index.js";
 
-beforeEach(async () => {
-  await db.healthCharts.clear();
-  await db.syncLog.clear();
-  await db.settings.clear();
-});
+beforeEach(resetDb);
 
 describe("healthCharts repo", () => {
   it("put 写表并产生 syncLog", async () => {

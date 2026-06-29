@@ -1,7 +1,6 @@
-import "fake-indexeddb/auto";
 import type { QuickNote } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { importQuickNotes } from "./importQuickNotes.js";
 import type { QuickNotesFile } from "./schema.js";
 
@@ -22,11 +21,7 @@ function backup(notes: QuickNote[]): QuickNotesFile {
   };
 }
 
-beforeEach(async () => {
-  await db.quickNotes.clear();
-  await db.timeEntries.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("importQuickNotes", () => {
   it("rejects invalid format and timeFormat", async () => {

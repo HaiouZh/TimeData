@@ -1,7 +1,6 @@
-import "fake-indexeddb/auto";
 import type { TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import {
   applyEntryOverlapAdjustments,
   findAdjacentEntriesForRange,
@@ -34,10 +33,7 @@ function entry(
   };
 }
 
-beforeEach(async () => {
-  await db.timeEntries.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("validateEntryTimeRange", () => {
   it("rejects entries ending in the future", () => {
@@ -372,10 +368,7 @@ describe("findAdjacentEntriesForRange", () => {
       entry("next", "2026-05-20T03:00:00.000Z", "2026-05-20T04:00:00.000Z"),
     ]);
 
-    const result = await findAdjacentEntriesForRange(
-      "2026-05-20T02:00:00.000Z",
-      "2026-05-20T03:00:00.000Z",
-    );
+    const result = await findAdjacentEntriesForRange("2026-05-20T02:00:00.000Z", "2026-05-20T03:00:00.000Z");
 
     expect(result.prevEntry?.id).toBe("prev");
     expect(result.nextEntry?.id).toBe("next");
@@ -387,10 +380,7 @@ describe("findAdjacentEntriesForRange", () => {
       entry("next", "2026-05-20T03:01:00.000Z", "2026-05-20T04:00:00.000Z"),
     ]);
 
-    const result = await findAdjacentEntriesForRange(
-      "2026-05-20T02:00:00.000Z",
-      "2026-05-20T03:00:00.000Z",
-    );
+    const result = await findAdjacentEntriesForRange("2026-05-20T02:00:00.000Z", "2026-05-20T03:00:00.000Z");
 
     expect(result.prevEntry).toBeNull();
     expect(result.nextEntry).toBeNull();
@@ -402,11 +392,7 @@ describe("findAdjacentEntriesForRange", () => {
       entry("prev", "2026-05-20T01:00:00.000Z", "2026-05-20T02:00:00.000Z"),
     ]);
 
-    const result = await findAdjacentEntriesForRange(
-      "2026-05-20T02:00:00.000Z",
-      "2026-05-20T03:00:00.000Z",
-      "self",
-    );
+    const result = await findAdjacentEntriesForRange("2026-05-20T02:00:00.000Z", "2026-05-20T03:00:00.000Z", "self");
 
     expect(result.prevEntry?.id).toBe("prev");
     expect(result.nextEntry).toBeNull();

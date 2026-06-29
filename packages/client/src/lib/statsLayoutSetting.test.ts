@@ -1,9 +1,8 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.ts";
 import type { StatsModuleDescriptor } from "../pages/stats/modules/types.ts";
-import { getStatsLayout, DEFAULT_STATS_LAYOUT, sanitizeStatsLayout } from "./statsLayoutSetting.ts";
+import { resetDb } from "../test/dbReset.js";
 import { setSetting } from "./settings/index.ts";
+import { DEFAULT_STATS_LAYOUT, getStatsLayout, sanitizeStatsLayout } from "./statsLayoutSetting.ts";
 
 const MODS: StatsModuleDescriptor[] = [
   { id: "overview", defaultVisible: true },
@@ -13,10 +12,7 @@ const MODS: StatsModuleDescriptor[] = [
   { id: "structure", defaultVisible: true },
 ];
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("sanitizeStatsLayout", () => {
   it("null 输入回退默认布局", () => {

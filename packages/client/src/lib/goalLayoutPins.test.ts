@@ -1,7 +1,5 @@
-import "fake-indexeddb/auto";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import {
   deleteGoalLayoutPin,
   getGoalLayoutPin,
@@ -12,13 +10,9 @@ import {
 
 const now = new Date("2026-06-24T00:00:00.000Z");
 
-beforeEach(async () => {
-  await db.open();
-});
+beforeEach(resetDb);
 
-afterEach(async () => {
-  await db.delete();
-});
+afterEach(resetDb);
 
 describe("goalLayoutPins", () => {
   it("upserts pins by compound key and records sync logs", async () => {

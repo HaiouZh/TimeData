@@ -1,8 +1,7 @@
-import "fake-indexeddb/auto";
 import type { TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
 import { addQuickNote } from "../lib/quickNotes.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { deleteQuickNotesByRange } from "./deleteQuickNotesRange.js";
 
 function entry(id: string): TimeEntry {
@@ -17,11 +16,7 @@ function entry(id: string): TimeEntry {
   };
 }
 
-beforeEach(async () => {
-  await db.quickNotes.clear();
-  await db.timeEntries.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("deleteQuickNotesByRange", () => {
   it("deletes only notes in the closed local date range", async () => {
@@ -45,7 +40,9 @@ describe("deleteQuickNotesByRange", () => {
     await expect(db.quickNotes.get(inSecondDay.id)).resolves.toBeUndefined();
     await expect(db.quickNotes.get(outside.id)).resolves.toMatchObject({ text: "outside" });
     await expect(db.timeEntries.count()).resolves.toBe(1);
-    const deleteLogs = await db.syncLog.filter((log) => log.tableName === "quick_notes" && log.action === "delete").toArray();
+    const deleteLogs = await db.syncLog
+      .filter((log) => log.tableName === "quick_notes" && log.action === "delete")
+      .toArray();
     expect(deleteLogs.map((log) => log.recordId).sort()).toEqual([inFirstDay.id, inSecondDay.id].sort());
   });
 });

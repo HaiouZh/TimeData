@@ -1,13 +1,9 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
-import { addTask, applyRecurrenceChoice, toggleTaskDone } from "./tasks.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
+import { addTask, applyRecurrenceChoice, toggleTaskDone } from "./tasks.js";
 
-beforeEach(async () => {
-  await db.tasks.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("applyRecurrenceChoice", () => {
   it("none 清 recurrence 和 completedCount", async () => {

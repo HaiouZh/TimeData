@@ -1,12 +1,8 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { getSleepCategoryId, SLEEP_CATEGORY_KEY, setSleepCategoryId } from "./sleepCategorySetting.js";
 
-beforeEach(async () => {
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("sleepCategorySetting", () => {
   it("默认未指定返回 null", async () => {

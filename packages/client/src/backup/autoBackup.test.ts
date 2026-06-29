@@ -1,15 +1,8 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { backupSignature, createAutoBackup, listAutoBackups } from "./autoBackup.js";
 
-beforeEach(async () => {
-  await db.timeEntries.clear();
-  await db.tasks.clear();
-  await db.syncLog.clear();
-  await db.categories.clear();
-  await db.autoBackups.clear();
-});
+beforeEach(resetDb);
 
 const category = (id: string, updatedAt: string) => ({
   id,
@@ -40,7 +33,8 @@ const task = (id: string, updatedAt: string) => ({
   recurrence: null,
   lastDoneAt: null,
   startAt: null,
-  scheduledAt: null,  completedCount: 0,
+  scheduledAt: null,
+  completedCount: 0,
   sortOrder: 0,
   createdAt: updatedAt,
   updatedAt,

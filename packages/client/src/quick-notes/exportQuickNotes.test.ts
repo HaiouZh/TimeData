@@ -1,17 +1,14 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
 import { addQuickNote } from "../lib/quickNotes.js";
+import { resetDb } from "../test/dbReset.js";
 import {
-  exportQuickNotesJsonForNotes,
   exportQuickNotesJsonByRange,
+  exportQuickNotesJsonForNotes,
   exportQuickNotesMarkdownByDate,
   exportQuickNotesMarkdownByRange,
 } from "./exportQuickNotes.js";
 
-beforeEach(async () => {
-  await db.quickNotes.clear();
-});
+beforeEach(resetDb);
 
 describe("export quick notes", () => {
   it("exports JSON with only quick notes", async () => {

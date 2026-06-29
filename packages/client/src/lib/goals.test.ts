@@ -1,10 +1,8 @@
-import "fake-indexeddb/auto";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import {
-  addGoalMember,
   addGoal,
+  addGoalMember,
   addTaskForGoal,
   deleteGoal,
   getGoal,
@@ -16,14 +14,9 @@ import {
 
 const now = "2026-06-22T01:00:00.000Z";
 
-beforeEach(async () => {
-  await db.delete();
-  await db.open();
-});
+beforeEach(resetDb);
 
-afterEach(async () => {
-  await db.delete();
-});
+afterEach(resetDb);
 
 function date(iso: string): Date {
   return new Date(iso);
@@ -64,7 +57,12 @@ describe("goals data helpers", () => {
     await expect(getGoal(goal.id)).resolves.toMatchObject({ title: "发布 v2" });
     await expect(listGoals()).resolves.toHaveLength(1);
 
-    const updated = await updateGoal(goal.id, { title: "发布 v2.1", kind: "theme", note: "长期推进", now: date("2026-06-22T02:00:00.000Z") });
+    const updated = await updateGoal(goal.id, {
+      title: "发布 v2.1",
+      kind: "theme",
+      note: "长期推进",
+      now: date("2026-06-22T02:00:00.000Z"),
+    });
     expect(updated).toMatchObject({ title: "发布 v2.1", kind: "theme", note: "长期推进" });
     await expect(db.syncLog.toArray()).resolves.toEqual(
       expect.arrayContaining([
@@ -101,9 +99,7 @@ describe("goals data helpers", () => {
     await removeGoalMember(goal.id, { kind: "task", id: "task-1" }, { now: date("2026-06-22T03:00:00.000Z") });
     await expect(db.goals.get(goal.id)).resolves.toMatchObject({ members: [{ kind: "track", id: "track-1" }] });
     await expect(db.syncLog.toArray()).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ tableName: "goals", recordId: goal.id, action: "update" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ tableName: "goals", recordId: goal.id, action: "update" })]),
     );
   });
 
@@ -121,7 +117,9 @@ describe("goals data helpers", () => {
       prerequisites: [{ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "track", id: "track-1" } }],
     });
     await expect(
-      updateGoalPrerequisites(goal.id, [{ blocker: { kind: "task", id: "task-1" }, blocked: { kind: "task", id: "task-1" } }]),
+      updateGoalPrerequisites(goal.id, [
+        { blocker: { kind: "task", id: "task-1" }, blocked: { kind: "task", id: "task-1" } },
+      ]),
     ).rejects.toThrow();
   });
 
@@ -153,9 +151,7 @@ describe("goals data helpers", () => {
     await expect(db.tasks.get("task-1")).resolves.toBeDefined();
     await expect(db.tracks.get("track-1")).resolves.toBeDefined();
     await expect(db.syncLog.toArray()).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ tableName: "goals", recordId: goal.id, action: "delete" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ tableName: "goals", recordId: goal.id, action: "delete" })]),
     );
   });
 

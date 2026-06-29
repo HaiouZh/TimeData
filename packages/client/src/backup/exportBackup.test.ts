@@ -1,8 +1,7 @@
-import "fake-indexeddb/auto";
 import type { Category, Goal, QuickNote, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
 import { BACKUP_BUNDLED_DOMAINS } from "../sync/clientDomains.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { exportBackup } from "./exportBackup.js";
 import { BACKUP_FORMAT } from "./schema.js";
 
@@ -106,16 +105,7 @@ const goalLayoutPin = {
   updatedAt: now,
 };
 
-beforeEach(async () => {
-  await db.timeEntries.clear();
-  await db.goals.clear();
-  await db.tasks.clear();
-  await db.trackSteps.clear();
-  await db.tracks.clear();
-  await db.quickNotes.clear();
-  await db.syncLog.clear();
-  await db.categories.clear();
-});
+beforeEach(resetDb);
 
 describe("exportBackup", () => {
   it("exports core tables plus every bundled domain (tasks, quick notes, health) keyed by table name", async () => {

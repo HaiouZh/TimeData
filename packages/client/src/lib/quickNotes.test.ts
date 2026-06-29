@@ -1,10 +1,10 @@
-import "fake-indexeddb/auto";
 import type { TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
+import { db, resetDb } from "../test/dbReset.js";
 import {
   addQuickNote,
   deleteQuickNote,
+  listPinnedQuickNotes,
   listQuickNotesByDate,
   listQuickNotesByRange,
   listQuickNotesFrom,
@@ -12,7 +12,6 @@ import {
   listQuickNotesNewerThan,
   listQuickNotesOlderThan,
   listQuickNotesWindow,
-  listPinnedQuickNotes,
   setQuickNotePinned,
   updateQuickNote,
 } from "./quickNotes.js";
@@ -29,11 +28,7 @@ function entry(id: string): TimeEntry {
   };
 }
 
-beforeEach(async () => {
-  await db.quickNotes.clear();
-  await db.timeEntries.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("quick note local model", () => {
   it("adds a trimmed quick note with occurredAt defaulting to createdAt", async () => {
@@ -80,9 +75,7 @@ describe("quick note local model", () => {
       now: new Date("2026-06-01T04:00:00.000Z"),
     });
 
-    await expect(listQuickNotesByDate("2026-06-01")).resolves.toMatchObject([
-      { text: "业务时间在 6 月 1 日" },
-    ]);
+    await expect(listQuickNotesByDate("2026-06-01")).resolves.toMatchObject([{ text: "业务时间在 6 月 1 日" }]);
   });
 
   it("updates text without changing occurredAt", async () => {

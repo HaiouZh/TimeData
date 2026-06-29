@@ -12,10 +12,14 @@ import { join, relative } from "node:path";
 export const CLEAN_BUCKET_DIRS = ["src"];
 
 // 命中任一即为脏：db（fake-indexeddb 全局 + db 单例三态竞态、db.delete 重建 schema）、
-// DOM（jsdom 环境 / React root / domHarness）、全局态注入（stubGlobal / defineProperty(window）。
-// 这些在 no-isolate 下跨文件串味，必须留在 isolate:true 的 unit 桶（或洗白后进各自的 isolate:false 桶）。
+// DOM（jsdom 环境 / React root / domHarness）、全局态注入（stubGlobal / defineProperty(window|globalThis）、
+// 模块 mock（vi.mock / vi.doMock）。这些在 no-isolate 下跨文件串味，必须留在 isolate:true 的 unit 桶
+//（或洗白后进各自的 isolate:false 桶）。
 // 注：`fake-indexeddb` 只命中"测试文件直接 import fake-indexeddb/auto"者；db 测试洗白后改 import
 // ./test/dbReset 助手（字样只在助手里、助手非 .test 文件不被扫），故自然落入 node 派生桶。
+// 注：vi.mock 在 isolate:false 下，同 worker 的模块/mock 注册表跨文件共享——一个文件的残缺模块 mock
+// 会泄漏给后续文件，令其 import 到真模块时拿到 mock（曾令 EntryPage/TimelinePage 的 useEntries mock
+// 漏给 punch、报 "No findLatestEntryEndingBefore export on the mock"）。故 vi.mock 文件一律留 isolate:true。
 export const DIRTY_MARKERS = [
   /@vitest-environment\s+jsdom/,
   /fake-indexeddb/,
@@ -24,6 +28,8 @@ export const DIRTY_MARKERS = [
   /domHarness/,
   /stubGlobal/,
   /defineProperty\(\s*window/,
+  /defineProperty\(\s*globalThis/,
+  /\bvi\.(?:do)?mock\(/,
   /\bdb\.delete\(/,
 ];
 

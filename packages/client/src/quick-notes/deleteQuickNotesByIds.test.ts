@@ -1,13 +1,9 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db/index.js";
 import { addQuickNote } from "../lib/quickNotes.js";
+import { db, resetDb } from "../test/dbReset.js";
 import { deleteQuickNotesByIds } from "./deleteQuickNotesByIds.js";
 
-beforeEach(async () => {
-  await db.quickNotes.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 describe("deleteQuickNotesByIds", () => {
   it("删除选中的多条并为每条写一条 delete 同步日志", async () => {
