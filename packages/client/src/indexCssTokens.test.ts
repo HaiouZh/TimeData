@@ -18,6 +18,13 @@ describe("index.css design tokens", () => {
     );
   });
 
+  it("defines motion duration and easing tokens", () => {
+    expect(css).toContain("--duration-fast: 150ms;");
+    expect(css).toContain("--duration-base: 200ms;");
+    expect(css).toContain("--duration-slow: 300ms;");
+    expect(css).toContain("--ease-standard:");
+  });
+
   it("does not expose retired module signature color tokens", () => {
     expect(css).not.toContain("--color-mod-note");
     expect(css).not.toContain("--color-mod-timeline");

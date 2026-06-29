@@ -44,6 +44,13 @@
   --font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
+  /* —— 动效（时长 + 缓动）—— */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-standard: ease-out;
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
   /* —— 数据色板（仅图表/健康，固定 6 色，不外溢到 UI chrome） —— */
   --color-data-blue: #4f9bf5;
   --color-data-teal: #2dd4bf;
@@ -71,8 +78,8 @@
 
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-rise { from { transform: translateY(6%); opacity: 0.5; } to { transform: none; opacity: 1; } }
-.sheet-overlay { animation: overlay-fade 150ms ease-out; }
-.sheet-panel { animation: sheet-rise 200ms ease-out; }
+.sheet-overlay { animation: overlay-fade var(--duration-fast) var(--ease-standard); }
+.sheet-panel { animation: sheet-rise var(--duration-base) var(--ease-standard); }
 @media (prefers-reduced-motion: reduce) {
   .sheet-overlay, .sheet-panel { animation: none; }
 }
@@ -574,7 +581,7 @@ textarea {
   background: var(--color-surface);
   color: var(--color-ink-3);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
 }
 .health-block-edit:hover {
   color: var(--color-accent);
@@ -630,7 +637,7 @@ textarea {
   align-items: flex-end;
   justify-content: center;
   background: color-mix(in srgb, var(--color-page) 55%, transparent);
-  animation: cb-fade 0.18s ease-out;
+  animation: cb-fade var(--duration-fast) var(--ease-standard);
 }
 
 .chart-builder-sheet {
@@ -646,7 +653,7 @@ textarea {
   color: var(--color-ink);
   box-shadow: var(--shadow-elev2);
   padding-bottom: env(safe-area-inset-bottom);
-  animation: cb-slide 0.22s ease-out;
+  animation: cb-slide var(--duration-base) var(--ease-standard);
 }
 
 @keyframes cb-fade {
@@ -741,7 +748,7 @@ textarea {
   font-size: 0.8125rem;
   cursor: pointer;
   user-select: none;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition: border-color var(--duration-fast), background var(--duration-fast), color var(--duration-fast);
 }
 
 .chart-builder-num {
