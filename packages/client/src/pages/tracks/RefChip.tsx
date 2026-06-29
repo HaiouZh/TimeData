@@ -4,7 +4,7 @@ import { Icon } from "../../components/Icon.js";
 import { isLinkRef } from "../../lib/tracksView.js";
 
 const CHIP_CLASS =
-  "inline-flex max-w-[12rem] items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 text-xs text-ink-2";
+  "inline-flex max-w-[12rem] items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2";
 
 function refIcon(kind: string) {
   if (kind === "url") return ArrowSquareOut;

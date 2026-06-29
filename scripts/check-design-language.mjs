@@ -77,6 +77,12 @@ const RULES = [
     msg: "全局浮层 z-index 必须用 z-[var(--z-*)]（局部 stacking 用 z-10/z-20）",
     skip: (file) => isTestFile(file),
   },
+  {
+    id: "bare-text-size",
+    re: new RegExp(`\\b${TAILWIND_VARIANTS}text-(?:xs|sm|base|lg|\\dxl|xl)\\b|\\btext-\\[[0-9.]+(?:px|rem)\\]`),
+    msg: "字号必须使用 .td-text-{caption,label,body,title,display} 语义类",
+    skip: (file) => isTestFile(file) || normalizePath(file).endsWith(".css"),
+  },
 ];
 
 for (const rule of RULES) {

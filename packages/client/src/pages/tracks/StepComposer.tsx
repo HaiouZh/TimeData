@@ -63,7 +63,7 @@ export function StepComposer({
 
   return (
     <form onSubmit={submit} className={formClass}>
-      <div className="mb-2 text-xs font-medium text-ink-3">写一步</div>
+      <div className="mb-2 td-text-caption font-medium text-ink-3">写一步</div>
       <textarea
         value={content}
         onChange={(event) => setContent(event.target.value)}
@@ -71,19 +71,19 @@ export function StepComposer({
         aria-label="步骤内容"
         rows={2}
         disabled={disabled}
-        className="min-h-16 w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm leading-6 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+        className="min-h-16 w-full resize-none rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-body text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
       />
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {normalizedStatusTags.length > 0 && (
           <>
-            <span className="text-xs text-ink-3">看板信号</span>
+            <span className="td-text-caption text-ink-3">看板信号</span>
             {normalizedStatusTags.map((preset) => (
               <button
                 key={preset}
                 type="button"
                 aria-pressed={tag === preset}
                 onClick={() => toggle(preset)}
-                className={`rounded-pill px-2.5 py-0.5 text-xs transition ${
+                className={`rounded-pill px-2.5 py-0.5 td-text-caption transition ${
                   tag === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
                 }`}
               >
@@ -92,14 +92,14 @@ export function StepComposer({
             ))}
           </>
         )}
-        <span className="text-xs text-ink-3">常用标签</span>
+        <span className="td-text-caption text-ink-3">常用标签</span>
         {normalizedCommonTags.map((preset) => (
           <button
             key={preset}
             type="button"
             aria-pressed={tag === preset}
             onClick={() => toggle(preset)}
-            className={`rounded-pill px-2.5 py-0.5 text-xs transition ${
+            className={`rounded-pill px-2.5 py-0.5 td-text-caption transition ${
               tag === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
             }`}
           >
@@ -115,12 +115,12 @@ export function StepComposer({
           placeholder="自定义标签"
           aria-label="自定义步骤标签"
           disabled={disabled}
-          className="min-h-8 w-28 rounded-ctl border border-border bg-surface-elevated px-2 text-xs text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+          className="min-h-8 w-28 rounded-ctl border border-border bg-surface-elevated px-2 td-text-caption text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
         />
         <button
           type="submit"
           disabled={disabled || content.trim().length === 0}
-          className="ml-auto rounded-ctl bg-accent px-3 py-1.5 text-sm text-page disabled:bg-surface-hover disabled:text-ink-3"
+          className="ml-auto rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page disabled:bg-surface-hover disabled:text-ink-3"
         >
           {submitLabel}
         </button>

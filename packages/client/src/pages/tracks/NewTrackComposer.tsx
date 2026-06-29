@@ -21,7 +21,7 @@ export function NewTrackComposer({ onCreate }: { onCreate: (title: string) => vo
         onChange={(event) => setTitle(event.target.value)}
         placeholder="新建轨道..."
         aria-label="新建轨道标题"
-        className="min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+        className="min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
       />
       <button
         type="submit"

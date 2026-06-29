@@ -342,6 +342,26 @@ test("does not flag local stacking z-10/z-20", () => {
   assert.equal(classifyLine("x.tsx", 'className="relative z-20"').some((v) => v.rule === "bare-zindex"), false);
 });
 
+test("flags bare tailwind text sizes in components", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="text-sm text-ink"').some((v) => v.rule === "bare-text-size"),
+    true,
+  );
+  assert.equal(classifyLine("x.tsx", 'className="text-[11px]"').some((v) => v.rule === "bare-text-size"), true);
+  assert.equal(classifyLine("x.tsx", 'className="td-text-body"').some((v) => v.rule === "bare-text-size"), false);
+});
+
+test("skips text-size checks in css and test files", () => {
+  assert.equal(
+    classifyLine("packages/client/src/index.css", "  font-size: 0.75rem;").some((v) => v.rule === "bare-text-size"),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.test.tsx", 'expect(c).toContain("text-sm")').some((v) => v.rule === "bare-text-size"),
+    false,
+  );
+});
+
 test("validates allowlist schema", () => {
   assert.throws(
     () =>

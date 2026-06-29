@@ -432,6 +432,4102 @@
       "reason": "用户分类/标签调色板预设色，属业务数据非 UI chrome",
       "ownerBatch": "user-content-color",
       "removeBy": "分类色/标签色系统重构时复核"
+    },
+    {
+      "file": "packages/client/src/components/app-shell/DesktopSidebar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex items-center gap-2 rounded-row px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/app-shell/MobileBottomNav.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex items-center gap-2 rounded-row px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-sm font-medium text-ink\">发现新版本</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-1 text-xs text-ink-2\">点击更新后会刷新页面并加载最新代码。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded border border-border bg-surface px-3 py-1.5 text-xs text-ink-2 hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/AppUpdatePrompt.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-accent px-3 py-1.5 text-xs font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/CategoryPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-lg border border-dashed border-border p-3 text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/CategoryPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-all ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/CategoryPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`rounded-full px-3 py-2 text-sm transition-all ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/CircularTimeline.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={isAnchor ? \"td-num fill-ink text-[10px] font-semibold\" : \"td-num fill-ink-2 text-[9px]\"}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/CircularTimeline.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{slots.length === 0 && <p className=\"mt-2 text-center text-xs text-ink-3\">今天还没有可显示的时间段。</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/DateNav.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"rounded-lg px-4 py-2.5 text-lg leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/DateNav.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-time text-lg font-medium text-ink\">{formatMonthDay(date)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/DateNav.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"ml-2 text-sm text-ink-2\">{isToday ? \"今天\" : weekday}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"text-sm text-ink-2\">分类</label>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-full bg-surface-elevated px-3 py-1 text-xs text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-full bg-surface-elevated px-3 py-1 text-xs text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"mb-2 block text-sm text-ink-2\">备注（可选）</label>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full resize-none rounded-lg bg-surface-elevated px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl bg-surface-elevated py-3 text-sm font-medium text-ink-2 hover:bg-surface-hover hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl bg-accent py-3 text-sm font-medium text-page hover:bg-accent-strong disabled:opacity-40\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/EntryForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded-xl bg-danger-soft py-3 text-sm font-medium text-danger hover:bg-danger-soft/80\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ErrorBoundary.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h1 className=\"text-lg font-medium\">应用出错了</h1>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ErrorBoundary.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-2\">{error.message}</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ErrorBoundary.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-accent px-4 py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/MonthCalendar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"td-num flex aspect-square min-h-9 w-full items-center justify-center rounded-lg border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/MonthCalendar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"td-time text-sm font-semibold text-ink\">{monthLabel(year, month)}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/MonthCalendar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"grid grid-cols-7 gap-1 text-center text-xs font-medium text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/Timeline.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return <div className=\"px-4 py-10 text-center text-sm text-ink-2\">今天还没有记录</div>;",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/Timeline.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"mb-1.5 px-0.5 text-xs font-medium text-ink-3\">时间流</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeRangeWheelPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-center text-xs font-medium text-ink-2\">{label}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeRangeWheelPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-time text-lg font-semibold text-ink-3\">:</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeRangeWheelPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">本次记录时长</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeRangeWheelPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className={`text-lg font-semibold ${error ? \"\" : \"td-duration\"}`}>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-time text-xs text-ink-2\">{timeRange}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"inline-flex items-center gap-1 text-xs font-medium\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-duration text-xs\">· {duration}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm font-medium leading-tight text-ink\">{categoryPath}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-duration mt-0.5 shrink-0 text-xs text-ink-2\">{duration}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"td-time mt-0.5 text-xs text-ink-2\">{timeRange}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{slot.entry?.note && <div className=\"mt-1 line-clamp-1 text-xs text-ink-2\">{slot.entry.note}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/Checkbox.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{label && <span className=\"text-sm text-ink\">{label}</span>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/ConfirmSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"whitespace-pre-line text-sm text-ink-2\">{body}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/ConfirmSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-ctl border border-border px-4 text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/ConfirmSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-11 rounded-ctl px-4 text-sm text-page ${danger ? \"bg-danger\" : \"bg-accent-strong\"}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/SegmentedControl.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-9 flex-1 rounded-pill px-3 text-sm transition-colors motion-reduce:transition-none disabled:opacity-40 ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/SelectSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`flex min-h-11 w-full items-center justify-between rounded-row border border-border bg-surface-elevated px-3 text-sm ${className ?? \"\"}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/SelectSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"m-4 rounded-row border border-dashed border-border-hairline p-6 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/SelectSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex min-h-11 w-full items-center justify-between px-4 text-sm text-ink hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/ui/Sheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"text-base text-ink\">{title}</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/Wheel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`td-num block h-[34px] w-full snap-center text-center text-base transition-colors ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/EntryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<button onClick={() => navigate(-1)} className=\"px-4 py-2 rounded-lg bg-surface-hover text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/EntryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<button onClick={() => navigate(-1)} className=\"px-3 py-1.5 rounded-lg bg-surface-hover text-sm text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/EntryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h1 className=\"text-lg font-medium\">{existingEntry ? \"编辑记录\" : \"新增记录\"}</h1>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return <div className=\"min-h-full bg-page px-4 py-6 text-sm text-ink-3\">正在加载...</div>;",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return <div className=\"min-h-full bg-page px-4 py-6 text-sm text-ink-3\">目标不存在</div>;",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">标题</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded-ctl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p id=\"goal-edit-title-error\" className=\"-mt-3 text-xs text-danger\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">备注</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full resize-none rounded-ctl border border-border bg-surface px-3 py-2 text-sm leading-6 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">类型</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<button type=\"button\" onClick={onToggleArchive} className=\"min-h-11 rounded-ctl border border-border px-4 text-sm text-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-ctl border border-danger/40 px-4 text-sm text-danger\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalEditForm.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<button type=\"submit\" className=\"min-h-11 rounded-ctl bg-accent px-4 text-sm text-page\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyActionBar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-11 rounded-ctl border px-3 text-sm ${actionClass(action)}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyActionBar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-11 rounded-ctl border px-3 text-sm ${actionClass(action)}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"pointer-events-auto inline-flex h-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent aria-pressed:bg-accent aria-pressed:text-page\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"pointer-events-auto inline-flex h-9 items-center gap-2 rounded-pill border border-border bg-surface-elevated px-2 text-xs text-ink-2 shadow-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"h-6 px-2 text-xs transition-colors aria-pressed:bg-accent aria-pressed:text-page\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"h-6 px-2 text-xs transition-colors aria-pressed:bg-accent aria-pressed:text-page\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-ctl border border-border px-3 text-left text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyEngineToggle.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyHud.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink shadow-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-9 rounded-ctl px-3 text-sm ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-9 rounded-ctl px-3 text-sm text-danger\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-11 rounded-ctl border px-3 text-sm ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-ctl border border-border px-3 text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-ctl border border-border px-3 text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-row border border-border bg-surface px-3 text-left text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"group/goal-node relative inline-flex items-center text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className={isFar ? \"sr-only\" : \"max-w-24 truncate text-center text-xs font-semibold text-ink\"}>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className={isFar ? \"sr-only\" : \"text-[10px] text-[var(--galaxy-star-core)]\"}>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className={isFar ? \"sr-only\" : \"text-xs text-current opacity-80\"}>{statusMeta.label}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-xs text-ink-3\">{statusMeta.label}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left text-xs leading-relaxed text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphToolbar.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"whitespace-nowrap px-1 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphUndoToast.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"fixed inset-x-4 bottom-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 text-sm text-page shadow-lg\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGraphUndoToast.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"shrink-0 rounded-ctl bg-page px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-elevated\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalIndexPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"text-sm font-medium text-ink\">目标</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalIndexPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"rounded-row border border-dashed border-border px-3 py-4 text-sm text-ink-3\">没有进行中的目标</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalIndexPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"min-w-0 truncate text-sm text-ink\">{item.title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalIndexPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"shrink-0 text-xs tabular-nums text-accent\">{pct}%</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalIndexPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"mt-1 block text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalListItem.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"break-words text-sm font-medium\">{overview.goal.title}</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalListItem.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"rounded-pill bg-surface-elevated px-2 py-0.5 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalListItem.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{overview.goal.note && <p className=\"mt-1 line-clamp-2 text-xs leading-5 text-ink-3\">{overview.goal.note}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalListItem.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-2 space-y-0.5 text-xs leading-5 text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "const tabButtonClass = \"min-h-9 rounded-ctl px-3 text-sm transition-colors\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 w-full rounded-row border border-border bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm text-ink\">{candidate.task.title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-xs text-ink-3\">{taskMeta(candidate)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm text-ink\">{candidate.track.title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-xs text-ink-3\">{trackMeta(candidate)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{candidate.latestStep && <span className=\"mt-1 block truncate text-xs text-ink-2\">{candidate.latestStep.content}</span>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 min-w-0 flex-1 rounded-row border border-border bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<button type=\"submit\" className=\"min-h-11 rounded-ctl bg-accent px-4 text-sm font-medium text-page hover:bg-accent-strong\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"px-1 text-xs text-ink-3\">{title}</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalMemberPicker.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return <p className=\"rounded-row border border-dashed border-border px-3 py-4 text-sm text-ink-3\">没有可添加成员</p>;",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalSidePanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"text-base text-ink\">{title}</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalsListPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3\">还没有进行中的目标</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-8 rounded-pill px-3 text-sm ${showGalaxy ? \"bg-accent text-page\" : \"text-ink-2 hover:bg-surface-hover\"}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-8 rounded-pill px-3 text-sm ${showGalaxy ? \"text-ink-2 hover:bg-surface-hover\" : \"bg-accent text-page\"}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalStarCore.tsx",
+      "rule": "bare-text-size",
+      "lineText": "center: \"h-10 w-10 text-[11px]\",",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalStarCore.tsx",
+      "rule": "bare-text-size",
+      "lineText": "center: \"h-12 w-12 text-xs\",",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalStarCore.tsx",
+      "rule": "bare-text-size",
+      "lineText": "center: \"h-14 w-14 text-sm\",",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalStarNode.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={star.lod === \"collapsed\" ? \"sr-only\" : \"w-full truncate text-sm font-semibold\"}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalStarNode.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span data-star-member-count=\"true\" className={star.lod === \"collapsed\" ? \"sr-only\" : \"text-xs text-ink-3\"}>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "const tabButtonClass = \"min-h-9 rounded-ctl px-3 text-sm transition-colors\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"text-sm font-medium text-ink\">未归类</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"rounded-pill bg-accent-soft px-2 py-1 text-xs tabular-nums text-accent\">{total}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 w-full rounded-row border border-border bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-3 focus:border-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm text-ink\">{candidate.task.title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-xs text-ink-3\">{taskMeta(candidate)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm text-ink\">{candidate.track.title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-xs text-ink-3\">{trackMeta(candidate)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{candidate.latestStep && <span className=\"mt-1 block truncate text-xs text-ink-2\">{candidate.latestStep.content}</span>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"px-1 text-xs text-ink-3\">{title}</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return <p className=\"rounded-row border border-dashed border-border px-3 py-4 text-sm text-ink-3\">没有未归类项</p>;",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/goals/NewGoalComposer.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/HealthStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-xl leading-none text-ink shadow-elev1 transition hover:border-border-strong hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"relative max-w-full select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus:ring-2 focus:ring-accent\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "const MENU_ITEM_CLASS = \"block w-full px-4 py-3 text-left text-sm text-ink-2 transition hover:bg-surface-hover hover:text-ink\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"min-w-0 flex-1 truncate text-sm font-medium text-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl border border-border bg-surface px-3 py-1.5 text-sm text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl border border-border bg-surface px-3 py-1.5 text-sm text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl border border-danger/40 bg-danger-soft px-3 py-1.5 text-sm font-medium text-danger disabled:cursor-not-allowed disabled:text-ink-3\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-3 outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"shrink-0 rounded-full px-3 py-1.5 text-sm font-medium text-ink-2 transition hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"rounded-full border border-border-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"hidden text-[11px] text-ink-3 sm:block\">日期</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-num absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold leading-5 text-page\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex size-9 items-center justify-center rounded-full border border-border bg-surface text-lg leading-none text-ink-2 transition hover:border-accent hover:text-ink sm:size-11\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"block w-full px-4 py-3 text-left text-sm font-medium text-danger transition hover:bg-danger-soft\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"px-1 text-xs font-semibold text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`${NOTE_CARD_BASE} rounded-xl text-sm ${isAgentNote ? NOTE_CARD_AGENT : \"border-border bg-page/70\"} ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-dashed border-border bg-surface/45 px-5 py-10 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<time className=\"td-time float-right ml-2 text-[11px] text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-1 text-[11px] font-semibold text-accent-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink-3 transition hover:border-accent hover:text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-border bg-surface/60 px-4 py-8 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm font-medium text-ink-2\">还没有速记</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-xs text-ink-3\">写下一个想法、线索或待办，稍后再回来看。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`absolute right-2 top-2 flex size-5 items-center justify-center rounded-full border text-[11px] ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`fixed left-1/2 top-[4.75rem] z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"fixed right-4 rounded-full border border-border-strong bg-surface px-3 py-2 text-xs font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger shadow-elev1\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 text-sm text-ink-2 shadow-elev1\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mb-2 flex items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 text-sm text-ink shadow-elev1\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-2 flex items-center justify-between rounded-card border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-accent-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"max-h-40 min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-ink placeholder:text-ink-3 outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-3\">自动备份</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{loading && <div className=\"text-sm text-ink-3\">正在读取自动备份记录…</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{!loading && records.length === 0 && <div className=\"text-sm text-ink-3\">暂无自动备份记录</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-sm font-medium text-ink\">{formatAppDateTime(record.createdAt)}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-1 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{restoringId === record.id && <div className=\"mt-2 text-xs text-accent-ink\">正在恢复…</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"shrink-0 rounded bg-accent px-3 py-2 text-xs font-medium text-page hover:bg-accent-strong disabled:opacity-40\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{status && <div className=\"text-xs text-danger\">{status}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-sm font-medium text-ink\">{title}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{subtitle && <div className=\"mt-0.5 truncate text-xs text-ink-3\">{subtitle}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"rounded-pill bg-surface-elevated px-2 py-0.5 text-[11px] font-medium text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{title && <h3 className=\"text-xs font-medium uppercase tracking-wider text-ink-3\">{title}</h3>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{description && <p className=\"mt-1 text-xs text-ink-3\">{description}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm font-medium text-ink\">{title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{subtitle && <span className=\"mt-0.5 block text-xs text-ink-3\">{subtitle}</span>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm font-medium text-ink\">{title}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{subtitle && <span className=\"mt-0.5 block text-xs text-ink-3\">{subtitle}</span>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-14 rounded-ctl border border-border bg-surface px-2 py-1 text-center text-sm text-ink focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">{label}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-2 text-2xl font-semibold text-ink\">{value}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{hint && <div className=\"mt-1 text-xs text-ink-3\">{hint}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">{title}</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return <span className=\"rounded-pill bg-warn-soft px-2 py-0.5 text-[11px] text-warn\">{label}</span>;",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"flex min-w-[9rem] flex-1 flex-col gap-1 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<table className=\"min-w-full text-left text-xs\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{loading && <div className=\"text-sm text-ink-2\">正在加载请求审计…</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{error && <div className=\"rounded-ctl border border-danger/40 bg-danger-soft p-3 text-sm text-danger\">{error}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={log.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{logs && logs.logs.length === 0 && <div className=\"text-sm text-ink-3\">暂无请求审计记录。</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-accent/30 bg-accent-soft p-4 text-sm text-accent-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{loading && <div className=\"text-sm text-ink-2\">正在加载服务端数据…</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-danger/40 bg-danger-soft p-4 text-sm text-danger\">{error}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex items-center justify-between gap-3 rounded-ctl bg-surface-elevated px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-1 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-lg font-semibold text-ink\">{check.count}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={bucket.bucket} className=\"flex items-center justify-between text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={category.categoryId} className=\"mt-2 flex items-center justify-between text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={entry.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"shrink-0 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-1 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{entry.anomaly && <div className=\"mt-1 text-xs text-warn\">{anomalyLabel[entry.anomaly]}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={category.id} className=\"flex items-center justify-between gap-3 text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"space-y-2 text-sm text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={log.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={backup.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{!data.backups.backups.length && <div className=\"text-sm text-ink-3\">暂无服务端备份。</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-3 py-1.5 text-sm text-ink-2 hover:bg-surface\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-accent px-3 py-1.5 text-sm text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"shrink-0 text-xs text-ink-3\">{childCount} 个子分类</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded bg-surface px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"text-sm text-ink-3\">颜色</label>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{addError && <p className=\"text-sm text-danger\">{addError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-accent py-2 text-sm text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<button type=\"button\" onClick={() => setAdding(false)} className=\"rounded bg-surface-hover px-4 py-2 text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-2 text-sm\">{CATEGORY_COLOR_PALETTES[paletteId].label}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div key={category.id} className=\"flex items-center gap-2 text-sm text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">还有 {parentCategories.length - 6} 个一级分类会继续循环配色。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{colorError && <p className=\"text-sm text-danger\">{colorError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-accent py-2 text-sm text-page hover:bg-accent-strong disabled:bg-surface-hover disabled:text-ink-3\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoriesPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-4 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">该分类不存在或已被删除。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-3\">基本信息</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm text-ink-2\">名称</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-w-0 truncate text-sm text-accent hover:text-accent-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm text-ink-2\">颜色</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm text-accent hover:text-accent-ink\">修改</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-3\">子分类</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"text-sm text-accent hover:text-accent-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{children.length === 0 && <p className=\"text-sm text-ink-3\">暂无子分类。</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-w-0 truncate text-sm text-ink-2 hover:text-accent-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"shrink-0 text-xs text-danger hover:text-danger/80\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-danger\">危险操作</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded bg-danger py-2 text-sm font-medium text-page hover:bg-danger/80\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{deleteError && !deleting && <p className=\"text-sm text-danger\">{deleteError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded bg-surface px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{nameError && <p className=\"text-sm text-danger\">{nameError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-accent py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-4 py-2 text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm text-ink-2\">{category.name}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`rounded px-3 py-1 text-sm ${selectedPalette === paletteId ? \"bg-accent text-page\" : \"bg-surface-hover text-ink-2 hover:bg-surface\"}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{colorError && <p className=\"text-sm text-danger\">{colorError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-accent py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-4 py-2 text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded bg-surface px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{childAddError && <p className=\"text-sm text-danger\">{childAddError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-accent py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-4 py-2 text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded bg-surface px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{childRenameError && <p className=\"text-sm text-danger\">{childRenameError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-accent py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-4 py-2 text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm leading-6 text-ink-2\">{deleteMessage()}</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{deleteError && <p className=\"text-sm text-danger\">{deleteError}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex-1 rounded bg-danger py-2 text-sm font-medium text-page hover:bg-danger/80\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsCategoryDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded bg-surface-hover px-4 py-2 text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"rounded-ctl bg-accent px-4 py-2 text-sm font-medium text-page hover:bg-accent-strong disabled:opacity-40\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"rounded-ctl border border-border bg-surface-elevated px-4 py-2 text-sm text-ink hover:bg-surface-hover disabled:opacity-40\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"rounded-ctl border border-warn/40 bg-warn-soft px-4 py-2 text-sm text-warn hover:border-warn disabled:opacity-40\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"rounded-ctl bg-danger px-4 py-2 text-sm text-page hover:bg-danger/80 disabled:opacity-40\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "const inputClassName = \"w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-warn\">服务器上这条记录已被删除</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-warn\">本地仍保留了一些未同步的修改。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">受影响：{remoteDeleteConflicts.length} 条冲突。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm font-medium text-ink\">是否开启云同步</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"mt-1 block text-xs text-ink-3\">关闭后不会自动同步，也不会强制替换云端数据。</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm font-medium text-ink\">跨天记录合并展示</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"mt-1 block text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">备份与数据</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">速记数据</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">只处理速记，不影响时间记录。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"space-y-1 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"space-y-1 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">删除前请先导出需要保留的内容。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<summary className=\"cursor-pointer px-4 py-3 text-sm font-medium text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"ml-2 text-xs text-ink-3\">同步诊断、强制替换、覆盖云端、重置</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-ctl border border-warn/40 bg-warn-soft p-3 text-xs text-warn\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">同步健康诊断</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"space-y-1 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">强制替换</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">此操作会先自动备份本地数据，再用云端完整数据覆盖本地。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-danger\">将本地数据覆盖到云端</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-danger\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"block text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">数据重置</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{error && <div className=\"text-xs text-danger\">{error}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{dataStatus && <div className=\"text-xs text-ink-2\">{dataStatus}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsDetailPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"mt-1.5 text-xl font-semibold text-ink\">{title}</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">请先配置服务器地址</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">加载中…</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">Garmin 邮箱</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder-ink-3 focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder-ink-3 focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm text-ink-2\">启用每日定时抓取</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">抓取时间 (HH:MM)</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">首次回填天数</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl bg-accent px-4 py-2 text-sm font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition-colors hover:bg-surface-hover disabled:opacity-50\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">开始日期</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">结束日期</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">强制重抓最近 N 天</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-xl bg-accent px-4 py-2 text-sm font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-xl border border-accent/40 bg-accent-soft p-3 text-sm text-accent-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-border bg-surface p-4 text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-2 text-xs text-ok\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-2 space-y-1 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-2 space-y-1 rounded border border-danger/40 bg-danger-soft p-2 text-xs text-danger\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-xl border border-ok/40 bg-ok/10 p-3 text-sm text-ok\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-xl border border-danger/40 bg-danger-soft p-3 text-sm text-danger\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsHealthRangePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"px-1 text-xs leading-relaxed text-ink-3\">选择健康统计页顶部显示哪些时间范围。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink\">新建待办默认落点</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink\">打点分类</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-xs text-ink-3\">速记页和时间轴打点时，直接记录到这个子分类。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink\">睡眠分类</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-xs text-ink-3\">用于作息、覆盖率、异常时段活动和超长记录的睡眠口径。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-base font-semibold text-ink\">移动底栏</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-sm text-ink-3\">控制窄屏与 APK 底部纯图标导航显示哪些入口。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex min-h-12 items-center justify-between rounded-row border border-border bg-surface px-4 text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-base font-semibold text-ink\">桌面侧栏</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-sm text-ink-3\">控制宽屏左侧纯图标导航的顺序和更多收纳。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-ctl border border-border px-3 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-row border border-border bg-surface px-4 text-sm text-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "const inputClassName = \"w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"mb-1 block text-xs text-ink-3\">API 地址</label>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-2 text-xs text-ink-3\">Android App 保持 HTTPS-only；自托管服务器请配置 HTTPS 反向代理后填写 https:// 地址。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-xs text-ink-3\">自托管：服务端 <code className=\"font-mono\">ALLOWED_ORIGINS</code> 必须包含 <code className=\"font-mono\">https://localhost</code>，否则 Android 跨域请求会被 CORS 拒绝。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<label className=\"mb-1 block text-xs text-ink-3\">Token</label>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-2 text-xs text-warn\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{error ? <p className=\"text-xs text-danger\">{error}</p> : null}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-ctl bg-accent px-4 py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsServerPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">新的服务器配置会用于后续同步、服务端更新和数据导出。</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"px-1 text-xs leading-relaxed text-ink-3\">调整统计页各模块的显示与顺序，设置会跨设备同步。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-sm font-medium text-ink\">{module.title}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-0.5 text-xs leading-relaxed text-ink-3\">{module.description}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-9 rounded-full border border-border bg-surface px-3 text-xs text-ink-2 disabled:opacity-30\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-9 rounded-full border border-border bg-surface px-3 text-xs text-ink-2 disabled:opacity-30\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 w-full rounded-full border border-border bg-surface text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTodoGravityPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-sm text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTodoGravityPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded-ctl border border-border bg-surface px-4 py-2.5 text-sm text-ink-2 transition-colors hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTracksPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm leading-6 text-ink-3\">配置会进入轨道列表顶部聚合的步骤标签。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTracksPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTracksPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"shrink-0 rounded-ctl bg-accent px-3 text-sm font-medium text-page transition hover:bg-accent-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTracksPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">还没有看板信号；步骤标签只用于回看检索。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsTracksPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-sm text-ink-2\">#{tag}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/SettingsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-base font-semibold text-ink\">服务器配置</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/SettingsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-0.5 truncate text-xs text-ink-3\">{connectionState.subtitle}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/SettingsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-sm font-medium text-ink\">同步信息</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/SettingsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"shrink-0 rounded-ctl bg-accent px-3 py-1.5 text-xs font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/SettingsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-2 space-y-1 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/SettingsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"text-2xl font-semibold text-ink\">设置</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex min-h-10 w-full items-center justify-between gap-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<li key={child.id} className=\"flex items-center justify-between gap-2 text-xs\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-border bg-surface px-3 py-2 text-xs text-ink shadow-elev2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-2xl font-semibold text-ink\">{totalHours.toFixed(1)}h</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">覆盖率 {coveragePct.toFixed(1)}%</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{coverageNote && <div className=\"text-[10px] text-ink-3\">{coverageNote}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 text-xs text-warn\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">本周期未发现明显异常或长空挡。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"grid grid-cols-3 gap-2 text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">长空挡 Top</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"ml-2 text-xs text-ink-3\">{formatAnomalyTimeRange(anomaly)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<summary className=\"min-h-10 cursor-pointer py-2 text-xs font-medium text-ink-2\">按日期分布</summary>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"flex items-center justify-between gap-3 text-sm\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">{group.items.length} 项</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"rounded-full bg-surface-hover px-2 py-0.5 text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{timeRange && <span className=\"text-xs text-ink-3\">{timeRange}</span>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-2\">{formatDurationFromMin(anomaly.valueMin)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/AnomaliesSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"mt-1 text-sm text-ink-2\">{anomaly.message}</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/OverviewSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">父分类 → 子分类构成</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/OverviewSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-4 rounded-card border border-dashed border-border bg-surface-elevated py-10 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/RoutineSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"inline-flex min-h-11 items-center gap-1 rounded-full border border-border bg-surface px-4 text-sm text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/RoutineSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">本周期暂无睡眠样本。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/RoutineSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"grid grid-cols-1 gap-2 text-sm sm:grid-cols-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/RoutineSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">本周期无足够会话用于结构诊断。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"space-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"space-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">碎片化（仅供观察，不报警）</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"space-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">投入分散度（香农熵）</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-2\">占比失衡</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-xs text-ink-3\">本周期各父分类占比均在你的常态范围内。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/StructureSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<li key={item.parentId} className=\"text-xs\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-10 rounded-full px-3 text-xs font-medium ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-10 w-28 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">或</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"text-sm text-ink-3\">本期窗口无投入记录。</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"grid grid-cols-2 gap-2 text-xs\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-10 rounded-full px-3 text-xs font-medium ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-10 rounded-full px-3 text-xs font-medium ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/ui.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3\">{eyebrow}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/ui.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h3 className=\"text-base font-semibold text-ink\">{title}</h3>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/ui.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-[11px] font-medium text-ink-2\">{label}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/ui.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"td-metric mt-1 text-xl font-semibold leading-tight\">{value}</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/stats/modules/ui.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{hint && <div className=\"mt-1 text-[11px] leading-snug text-ink-3\">{hint}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimelinePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{punchMessage && <p className=\"px-4 pt-2 text-center text-xs text-warn\">{punchMessage}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-[11px] font-medium uppercase tracking-[0.16em] text-ink-2\">TimeData</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"mt-1 text-2xl font-semibold tracking-normal text-ink\">时间统计</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-pill border border-accent bg-accent-soft px-4 text-sm font-medium text-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-11 rounded-xl text-sm font-medium transition ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block truncate text-sm font-medium text-ink\">{rangeLabel}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 w-full bg-transparent text-sm text-ink-2 outline-none [color-scheme:dark]\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-2\">已记录</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"td-num text-4xl font-semibold leading-none text-ink\">{totalHours.toFixed(1)}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"pb-1 text-sm text-ink-2\">小时</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{rangeClampedToToday && <div className=\"mt-2 text-xs text-ink-3\">截至 {effectiveRange.toDate}</div>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TimeStatsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"rounded-card border border-dashed border-border bg-surface p-8 text-center text-sm text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CollapsibleSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<summary className=\"flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-sm font-medium text-ink-2\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CollapsibleSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">{count}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "return `min-h-9 rounded-lg px-3 text-sm transition-colors ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-lg px-2 py-1 text-sm text-ink-2 hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className=\"text-sm font-semibold text-ink\">自定义重复</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"rounded-lg px-2 py-1 text-sm font-medium text-accent-ink hover:bg-accent/10\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">频率</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-1 text-center text-xs text-ink-3\">每</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-1 text-center text-xs text-ink-3\">单位</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">结束</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">时间</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">顺延基准</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`flex min-h-11 w-full items-center justify-between rounded-xl px-3 text-sm ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-xs font-medium text-ink-3\">起始日期</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/DayGroupedList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"shrink-0 text-xs text-ink-3\">{segment.label}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/DayGroupedList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/DayGroupedList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 text-xs text-ink-3 shadow-sm hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/GravityReviewSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3\">水下暂时没有可翻的任务</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/GravityReviewSection.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"mt-1 w-full rounded-ctl px-3 py-1.5 text-xs text-ink-3 hover:bg-surface-elevated\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/InlineChildren.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-8 text-xs text-ink-3 hover:text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/RecurrencePresetList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left text-sm text-ink transition-colors hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/SortableChildRow.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-8 min-w-0 flex-1 break-words px-1 py-1 text-sm ${child.done ? \"text-ink-3 line-through\" : \"text-ink\"}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/SortableChildRow.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm outline-none focus:bg-surface-hover ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/SortableChildRow.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-8 min-w-0 flex-1 select-text break-words border-0 bg-transparent px-1 py-1 text-left text-sm font-normal outline-none focus:bg-surface-hover ${",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/SortableChildRow.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm text-ink outline-none focus:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/SunkenInboxTail.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/SunkenInboxTail.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"shrink-0 text-xs text-ink-3\">{segment.label}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TagFilterPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"min-h-9 rounded-pill border border-border px-3 text-xs transition-colors disabled:opacity-40\";",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TagFilterPanel.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className={`min-h-9 rounded-pill border px-2.5 text-xs transition-colors ${cls}`}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskColumn.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<h2 className={`font-medium text-ink ${hero ? \"text-base\" : \"text-sm\"}`}>{title}</h2>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskColumn.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">{tasks.length}</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskColumn.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3\">{emptyText}</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"absolute right-3 rounded-ctl px-2 py-1 text-xs text-ink-3 hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{error && <p className=\"px-4 pb-2 text-sm text-danger\">{error}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full resize-none break-words bg-transparent py-2 text-xl font-medium leading-relaxed text-ink outline-none placeholder:text-ink-3\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"inline-flex items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 text-xs text-ink-2\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"w-full rounded-ctl border border-border-hairline bg-surface px-2 py-1 text-sm text-ink outline-none\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"flex h-full items-center bg-accent-strong px-4 text-sm font-medium text-page\">排进今天</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"flex h-full items-center bg-surface-elevated px-4 text-sm font-medium text-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskList.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"flex h-full items-center bg-danger px-4 text-sm font-medium text-page\">删除</div>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskRow.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className={`select-text break-words text-sm ${checked ? \"text-ink-3 line-through\" : \"text-ink\"}`}>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskRow.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mt-0.5 flex items-center gap-2 text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TodoComposer.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-sm text-ink outline-none focus:border-accent\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TodoComposer.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"min-h-11 shrink-0 rounded-lg bg-accent px-4 text-sm font-medium text-page disabled:opacity-60\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TodoComposer.tsx",
+      "rule": "bare-text-size",
+      "lineText": "{error && <p className=\"text-sm text-danger\">{error}</p>}",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TodoPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3\">收件箱为空</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/TodoPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<p className=\"rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3\">没有已排期任务</p>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/NoteBubble.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"mb-1 text-[11px] font-semibold text-accent-ink\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/NoteBubble.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"text-xs font-medium text-accent transition hover:text-accent-ink\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/NoteMeta.tsx",
+      "rule": "bare-text-size",
+      "lineText": "\"td-time inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none\",",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteActionMenu.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteActionMenu.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteActionMenu.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteActionMenu.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteActionMenu.tsx",
+      "rule": "bare-text-size",
+      "lineText": "className=\"block w-full px-4 py-2 text-left text-sm text-danger hover:bg-danger-soft\"",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "h1: ({ children }) => <p className=\"mb-1 mt-2 text-base font-semibold\">{children}</p>,",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "h2: ({ children }) => <p className=\"mb-1 mt-2 text-[15px] font-semibold\">{children}</p>,",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "h3: ({ children }) => <p className=\"mb-1 mt-2 text-sm font-semibold\">{children}</p>,",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<pre {...props} className=\"my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 text-[13px]\" />",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<code {...props} className=\"rounded bg-surface-elevated px-1 py-0.5 text-[13px]\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<table {...props} className=\"border-collapse text-sm\" />",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteContent.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<div className=\"text-[15px] leading-relaxed\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
     }
   ]
 }

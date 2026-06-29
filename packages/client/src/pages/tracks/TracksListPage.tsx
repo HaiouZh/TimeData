@@ -60,7 +60,7 @@ export default function TracksListPage() {
         <NewTrackComposer onCreate={(title) => void create(title)} />
         <TrackStatusFacetPanel facets={facets} selectedTags={selectedTags} onToggle={toggleTag} />
         {visibleItems.length === 0 ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">
+          <p className="rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">
             {selectedTags.length > 0 ? "没有命中这些看板信号的进行中轨道" : "还没有进行中的轨道"}
           </p>
         ) : (

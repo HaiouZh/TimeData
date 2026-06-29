@@ -45,21 +45,21 @@ export function TrackListItem({
           />
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="truncate text-sm text-ink">{track.title}</span>
+              <span className="truncate td-text-body text-ink">{track.title}</span>
               {signal && (
-                <span className="inline-flex shrink-0 items-center rounded-pill border border-accent/30 bg-accent-soft px-2 py-0.5 text-xs text-accent">
+                <span className="inline-flex shrink-0 items-center rounded-pill border border-accent/30 bg-accent-soft px-2 py-0.5 td-text-caption text-accent">
                   #{signal.tag}
                 </span>
               )}
             </span>
-            {track.summary && <span className="mt-0.5 block truncate text-xs text-ink-2">{track.summary}</span>}
-            <span className="td-num mt-0.5 block truncate text-xs text-ink-3">{trackProgressSummary(steps, now)}</span>
+            {track.summary && <span className="mt-0.5 block truncate td-text-caption text-ink-2">{track.summary}</span>}
+            <span className="td-num td-text-caption mt-0.5 block truncate text-ink-3">{trackProgressSummary(steps, now)}</span>
           </span>
         </span>
         {latestSteps.length > 0 && (
           <span className="mt-2 block space-y-1 border-t border-border pt-2">
             {latestSteps.map((step) => (
-              <span key={step.id} className="block truncate text-xs leading-5 text-ink-2">
+              <span key={step.id} className="block truncate td-text-caption text-ink-2">
                 <span data-source={step.source} className="mr-1 rounded-pill bg-surface-elevated px-1.5 py-0.5 text-ink-3">
                   {stepSourceText(step)}
                 </span>
@@ -81,7 +81,7 @@ export function TrackListItem({
               type="button"
               aria-label="写一步"
               onClick={() => setExpanded((current) => !current)}
-              className="rounded-ctl border border-border px-3 py-1.5 text-sm text-ink-2 transition hover:border-accent hover:text-accent"
+              className="rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 transition hover:border-accent hover:text-accent"
             >
               写一步
             </button>

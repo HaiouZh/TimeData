@@ -4,7 +4,7 @@ import { TrackStepRow } from "./TrackStepRow.js";
 
 export function TrackTimeline({ steps, now = new Date() }: { steps: TrackStep[]; now?: Date }) {
   if (steps.length === 0) {
-    return <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">尚无步骤</p>;
+    return <p className="rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>;
   }
   const currentId = currentStepId(steps);
   return (
