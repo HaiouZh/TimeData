@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
-import { CLEAN_BUCKET_DIRS, DIRTY_MARKERS } from "../packages/client/test-buckets.mjs";
+import { CLEAN_BUCKET_DIRS, DIRTY_MARKERS, resolveFastJsdomBucket } from "../packages/client/test-buckets.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "packages", "client", "src");
@@ -15,6 +15,12 @@ const isTest = (rel) => /\.test\.[jt]sx?$/.test(rel);
 const CLEAN_DIR_PREFIXES = CLEAN_BUCKET_DIRS.map((d) => d.replace(/^src\/?/, ""));
 const inCleanBucketDir = (rel) =>
   CLEAN_DIR_PREFIXES.some((p) => p === "" || rel === p || rel.startsWith(`${p}/`));
+
+// jsdom 快桶 allowlist 成员（相对 src）。它们在 isolate:false 下跑，必须走 domHarness（无裸 createRoot，
+// 保证自动 unmount）且不直接碰 fake-indexeddb/auto 或 db.delete（走 dbReset，不重建 schema）。
+const FAST_JSDOM = new Set(
+  resolveFastJsdomBucket(join(ROOT, "packages", "client")).map((p) => p.replace(/^src\//, "")),
+);
 
 // 测试卫生反模式。文件级棘轮：存量整文件进 baseline 豁免，禁新增同类文件；
 // 存量文件修完后从 baseline 删对应 id:path，闸自动收紧、不可回退。
@@ -67,6 +73,26 @@ function walk(dir) {
           `${relative(ROOT, full)}  [dirty-in-clean-bucket] 干净桶目录里的脏文件(db/DOM 依赖)，会留在 unit 桶；` +
             `如确为脏文件用 --write-baseline 收编，或去掉依赖以进 unit-clean 快桶`,
         );
+    }
+    // jsdom 快桶 allowlist 成员守护：裸 createRoot 会在 isolate:false 下漏 root/DOM（全局 bare-createroot
+    // 对存量豁免文件不拦，这里对 allowlist 成员严守）；直接 fake-idb/db.delete 会漏 db 态或重建 schema。
+    if (FAST_JSDOM.has(rel)) {
+      if (/from ["']react-dom\/client["']/.test(content)) {
+        const key = `bare-createroot-in-fast-jsdom:${rel}`;
+        keys.add(key);
+        if (!baseline.has(key))
+          violations.push(
+            `${relative(ROOT, full)}  [bare-createroot-in-fast-jsdom] 快桶 allowlist 成员含裸 createRoot；改走 src/test/domHarness 自动 unmount`,
+          );
+      }
+      if (/import\s+["']fake-indexeddb\/auto["']/.test(content) || /\bdb\.delete\(/.test(content)) {
+        const key = `unsafe-db-in-fast:${rel}`;
+        keys.add(key);
+        if (!baseline.has(key))
+          violations.push(
+            `${relative(ROOT, full)}  [unsafe-db-in-fast] 快桶 allowlist 成员直接 import fake-indexeddb/auto 或用 db.delete(；改走 src/test/dbReset`,
+          );
+      }
     }
   }
 }

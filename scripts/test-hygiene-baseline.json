@@ -1,4 +1,5 @@
 [
+  "bare-createroot-in-fast-jsdom:pages/todo/TaskRow.test.tsx",
   "bare-createroot:appUpdate.versionCheck.test.tsx",
   "bare-createroot:components/AndroidBackButtonHandler.test.tsx",
   "bare-createroot:components/CircularTimeline.test.tsx",
