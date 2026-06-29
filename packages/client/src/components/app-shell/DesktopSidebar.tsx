@@ -12,13 +12,14 @@ function NavIconLink({ item, activeRoute }: { item: MainNavItem; activeRoute: st
       end={item.to === "/"}
       aria-label={item.ariaLabel}
       title={item.label}
-      className={`flex h-11 w-11 items-center justify-center rounded-row transition-colors ${
+      className={`flex w-full flex-col items-center gap-1 rounded-row px-1 py-2 transition-colors ${
         active
           ? "bg-accent-soft text-accent ring-1 ring-inset ring-accent/30"
           : "text-ink-3 hover:bg-surface-hover hover:text-ink"
       }`}
     >
       <Icon icon={item.icon} size={22} weight="regular" />
+      <span className="td-text-caption leading-none">{item.label}</span>
     </NavLink>
   );
 }
@@ -44,26 +45,27 @@ export function DesktopSidebar() {
   return (
     <aside
       aria-label="桌面主导航"
-      className="flex w-16 shrink-0 flex-col items-center border-r border-border bg-surface-elevated py-3 text-ink"
+      className="flex w-20 shrink-0 flex-col items-center border-r border-border bg-surface-elevated py-3 text-ink"
     >
-      <div className="flex flex-1 flex-col items-center gap-2">
+      <div className="flex w-full flex-1 flex-col items-center gap-2">
         {primaryItems.map((item) => (
           <NavIconLink key={item.to} item={item} activeRoute={activeRoute} />
         ))}
         {moreItems.length > 0 && (
-          <div className="relative">
+          <div className="relative w-full">
             <button
               type="button"
               aria-label={MORE_NAV_ITEM.ariaLabel}
               title={MORE_NAV_ITEM.label}
               aria-expanded={open}
               onClick={() => setOpen((value) => !value)}
-              className="flex h-11 w-11 items-center justify-center rounded-row text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink"
+              className="flex w-full flex-col items-center gap-1 rounded-row px-1 py-2 text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink"
             >
               <Icon icon={MORE_NAV_ITEM.icon} size={22} weight="regular" />
+              <span className="td-text-caption leading-none">{MORE_NAV_ITEM.label}</span>
             </button>
             {open && (
-              <div className="absolute left-12 top-0 z-[var(--z-dropdown)] min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
+              <div className="absolute left-full top-0 ml-1 z-[var(--z-dropdown)] min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
                 {moreItems.map((item) => (
                   <NavLink
                     key={item.to}

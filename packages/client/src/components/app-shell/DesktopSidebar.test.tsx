@@ -35,7 +35,7 @@ describe("DesktopSidebar", () => {
     desktopConfigMock.items = [...DESKTOP_NAV_DEFAULT_ITEMS];
   });
 
-  it("renders icon-only primary navigation with accessible labels and tokenized active state", async () => {
+  it("renders primary navigation with text labels and tokenized active state", async () => {
     const retiredTextModuleClass = "text-" + "mo" + "d-";
     const legacyPrimaryClass = "bg-" + "blue-600";
     const { host, root } = await renderSidebar("/todo");
@@ -43,7 +43,8 @@ describe("DesktopSidebar", () => {
     const active = host.querySelector('a[href="/todo"][aria-label="待办"]');
 
     expect(sidebar).not.toBeNull();
-    expect(active?.textContent).toBe("");
+    expect(active?.textContent).toContain("待办");
+    expect(host.querySelector('a[href="/"]')?.textContent).toContain("时间轴");
     expect(active?.className).toContain("bg-accent-soft");
     expect(active?.className).toContain("text-accent");
     expect(active?.className).toContain("ring-accent/30");
@@ -53,7 +54,7 @@ describe("DesktopSidebar", () => {
     await unmount(root);
   });
 
-  it("allows labels inside the more menu while keeping primary icons label-free", async () => {
+  it("exposes labeled links inside the more menu", async () => {
     desktopConfigMock.items = [
       { to: "/quick-notes", placement: "primary" },
       { to: "/", placement: "primary" },
