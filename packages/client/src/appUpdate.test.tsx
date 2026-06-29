@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getLastRegisterOptions, resetPwaRegisterMock } from "./test/pwaRegisterMock.js";
 import { AppUpdateProvider } from "./appUpdate.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { renderDom, unmount } from "./test/domHarness.js";
+import { getLastRegisterOptions, resetPwaRegisterMock } from "./test/pwaRegisterMock.js";
 
 describe("AppUpdateProvider PWA update polling", () => {
   beforeEach(() => {
@@ -21,13 +19,7 @@ describe("AppUpdateProvider PWA update polling", () => {
     const firstRegistration = { update: vi.fn() };
     const secondRegistration = { update: vi.fn() };
     const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(createElement(AppUpdateProvider, null, "内容"));
-    });
+    const { root } = await renderDom(createElement(AppUpdateProvider, null, "内容"));
 
     const registerOptions = getLastRegisterOptions();
     expect(registerOptions?.onRegisteredSW).toBeTypeOf("function");
@@ -49,9 +41,7 @@ describe("AppUpdateProvider PWA update polling", () => {
     expect(firstRegistration.update).not.toHaveBeenCalled();
     expect(secondRegistration.update).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
 
     expect(clearIntervalSpy).toHaveBeenCalledTimes(2);
 
@@ -62,25 +52,16 @@ describe("AppUpdateProvider PWA update polling", () => {
     expect(secondRegistration.update).toHaveBeenCalledTimes(1);
 
     clearIntervalSpy.mockRestore();
-    container.remove();
   });
 
   it("does not start update polling when the service worker registration resolves after unmount", async () => {
     const registration = { update: vi.fn() };
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    await act(async () => {
-      root.render(createElement(AppUpdateProvider, null, "内容"));
-    });
+    const { root } = await renderDom(createElement(AppUpdateProvider, null, "内容"));
 
     const registerOptions = getLastRegisterOptions();
     expect(registerOptions?.onRegisteredSW).toBeTypeOf("function");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
 
     act(() => {
       registerOptions?.onRegisteredSW?.("/sw.js", registration);
@@ -91,7 +72,5 @@ describe("AppUpdateProvider PWA update polling", () => {
     });
 
     expect(registration.update).not.toHaveBeenCalled();
-
-    container.remove();
   });
 });

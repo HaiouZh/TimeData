@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom } from "../test/domHarness.js";
 import DateNav from "./DateNav.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-function mount(date: string, onDateChange: (next: string) => void): HTMLDivElement {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  act(() => {
-    createRoot(container).render(createElement(DateNav, { date, onDateChange }));
-  });
-  return container;
+async function mount(date: string, onDateChange: (next: string) => void): Promise<HTMLElement> {
+  const { host } = await renderDom(createElement(DateNav, { date, onDateChange }));
+  return host;
 }
 
 function findButton(container: HTMLElement, label: string): HTMLButtonElement {
@@ -36,24 +30,24 @@ describe("DateNav", () => {
     vi.useRealTimers();
   });
 
-  it("renders a humanized date label with the today marker", () => {
-    const container = mount("2026-06-03", () => {});
+  it("renders a humanized date label with the today marker", async () => {
+    const container = await mount("2026-06-03", () => {});
     expect(container.textContent).toContain("6月3日");
     expect(container.textContent).toContain("今天");
   });
 
-  it("still jumps one day back via the arrow", () => {
+  it("still jumps one day back via the arrow", async () => {
     const onDateChange = vi.fn();
-    const container = mount("2026-06-03", onDateChange);
+    const container = await mount("2026-06-03", onDateChange);
     act(() => {
       findButton(container, "前一天").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(onDateChange).toHaveBeenCalledWith("2026-06-02");
   });
 
-  it("exposes a date picker capped at today and jumps to the picked date", () => {
+  it("exposes a date picker capped at today and jumps to the picked date", async () => {
     const onDateChange = vi.fn();
-    const container = mount("2026-05-20", onDateChange);
+    const container = await mount("2026-05-20", onDateChange);
     const input = container.querySelector('input[type="date"]') as HTMLInputElement | null;
     if (!input) throw new Error("date input not found");
     expect(input.getAttribute("max")).toBe("2026-06-03");

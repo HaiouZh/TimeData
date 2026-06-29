@@ -1,4 +1,6 @@
 [
+  "src/appUpdate.test.tsx",
+  "src/components/DateNav.test.tsx",
   "src/components/ui/Checkbox.test.tsx",
   "src/components/ui/ConfirmSheet.test.tsx",
   "src/components/ui/SegmentedControl.test.tsx",
