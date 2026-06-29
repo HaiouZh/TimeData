@@ -37,8 +37,8 @@
   --color-border-hairline: rgba(255, 255, 255, 0.08);
 
   /* 柔和高度（仅大表面用） */
-  --shadow-elev1: 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.16);
-  --shadow-elev2: 0 8px 30px rgba(0,0,0,.4);
+  --shadow-elev1: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.16);
+  --shadow-elev2: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 30px rgba(0,0,0,.4);
 
   /* 字体（霞鹭文楷+Times；西文在前、中文在后，逐字回退） */
   --font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;

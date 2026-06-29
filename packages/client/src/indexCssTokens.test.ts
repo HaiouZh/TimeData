@@ -33,6 +33,11 @@ describe("index.css design tokens", () => {
     expect(css).toContain("--z-top: 70;");
   });
 
+  it("layers a top hairline highlight into the dark elevation shadows", () => {
+    expect(css).toMatch(/--shadow-elev1:[^;]*inset 0 1px 0/);
+    expect(css).toMatch(/--shadow-elev2:[^;]*inset 0 1px 0/);
+  });
+
   it("does not expose retired module signature color tokens", () => {
     expect(css).not.toContain("--color-mod-note");
     expect(css).not.toContain("--color-mod-timeline");
