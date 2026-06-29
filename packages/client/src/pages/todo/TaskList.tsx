@@ -28,6 +28,8 @@ export interface TaskListProps {
   containerId?: "pool:today" | "pool:inbox";
   indentTargetId?: string | null;
   revealChildren?: { id: string; nonce: number } | null;
+  /** 已归入某 active 目标的 task id 集合：命中的行渲染「已有去处」外圈。 */
+  goalLinkedIds?: ReadonlySet<string>;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
   onDelete: (t: Task) => void;
@@ -65,6 +67,7 @@ export function TaskList(props: TaskListProps) {
         childrenModeOverride={props.childrenModeOverride}
         indentTargetActive={props.indentTargetId === task.id}
         revealChildren={props.revealChildren}
+        inGoal={props.goalLinkedIds?.has(task.id) ?? false}
       />
     );
   }

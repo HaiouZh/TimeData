@@ -20,6 +20,7 @@ beforeEach(async () => {
   await db.tasks.clear();
   await db.settings.clear();
   await db.syncLog.clear();
+  await db.goals.clear();
 });
 
 afterEach(() => {
@@ -98,6 +99,35 @@ async function typeAndAdd(host: HTMLElement, title: string) {
 }
 
 describe("TodoPage", () => {
+  it("已归入 active 目标的收件箱任务带外圈标记，未归入的不带", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    const linked = await addTask({ title: "已归目标任务", toInbox: true });
+    await addTask({ title: "自由任务", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "目标一",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: linked.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "已归目标任务");
+    await waitForCondition(() => {
+      const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
+      return (inbox?.querySelectorAll("[data-in-goal='true']").length ?? 0) === 1;
+    }, "linked inbox task to get goal ring");
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    const marked = inbox.querySelectorAll("[data-in-goal='true']");
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.textContent ?? "").toContain("已归目标任务");
+    await act(async () => root.unmount());
+  });
+
   it("渲染四分区：今天 / 已完成 / 收件箱 / 已排期，且不再出现旧分区名", async () => {
     const today = await addTask({ title: "今天事" });
     await addTask({ title: "稍后处理", toInbox: true });

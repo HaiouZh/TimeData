@@ -39,6 +39,8 @@ export interface TaskRowProps {
   extraAction?: (task: Task) => ReactNode;
   indentTargetActive?: boolean;
   revealChildren?: { id: string; nonce: number } | null;
+  /** 该任务已归入某个 active 目标：渲染常驻外圈，提示「已有去处、不必再纠结」。 */
+  inGoal?: boolean;
 }
 
 function childModeForPool(pool: TaskPool): InlineChildrenMode {
@@ -63,6 +65,7 @@ export function TaskRow({
   extraAction,
   indentTargetActive,
   revealChildren,
+  inGoal,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const children = useTaskChildren(task.id);
@@ -101,8 +104,9 @@ export function TaskRow({
 
   return (
     <div
+      data-in-goal={inGoal ? "true" : undefined}
       className={`group w-full rounded-row transition hover:bg-surface-hover ${
-        indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
+        indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : inGoal ? "ring-1 ring-ok" : ""
       }`}
     >
       <div

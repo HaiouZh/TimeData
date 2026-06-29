@@ -51,6 +51,24 @@ function render(node: ReturnType<typeof createElement>) {
 }
 
 describe("TaskRow", () => {
+  it("已归入目标的任务：根容器带 ring-ok 外圈标记", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task(), pool: "inbox", inGoal: true, ...handlers }),
+    );
+    const marked = host.querySelector("[data-in-goal='true']");
+    expect(marked).not.toBeNull();
+    expect(marked?.className).toContain("ring-ok");
+    await unmount(root);
+  });
+
+  it("未归入目标：无外圈标记", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }),
+    );
+    expect(host.querySelector("[data-in-goal='true']")).toBeNull();
+    await unmount(root);
+  });
+
   // 默认不渲染桌面 overlay：只有 TaskList 明确传 coarsePointer=false 时才开启桌面入口。
   // 用一条聚合 sanity 钉住兼容性；其它分散 toBeNull 不重复列。
   const NO_INLINE_ACTION_LABELS = ["排进今天", "回收件箱", "删除", "编辑重复与时间", "计划到某天", "添加子任务"];

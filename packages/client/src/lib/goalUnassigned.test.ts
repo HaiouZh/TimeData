@@ -4,6 +4,7 @@ import {
   activeGoalMemberKeys,
   activeGoalMemberRefs,
   buildUnassignedGoalCandidates,
+  goalLinkedTaskIds,
   unassignedTasks,
   unassignedTracks,
 } from "./goalUnassigned.js";
@@ -176,6 +177,25 @@ describe("goalUnassigned", () => {
     expect(candidates.trackCandidates[0]?.latestStep?.content).toBe("最新一步");
     expect(candidates.trackCandidates[0]?.signal?.tag).toBe("待我处理");
     expect(candidates.total).toBe(3);
+  });
+
+  it("collects task ids referenced by active goals, ignoring tracks and non-active goals", () => {
+    const ids = goalLinkedTaskIds([
+      goal({
+        id: "active",
+        title: "Active",
+        members: [
+          { kind: "task", id: "t1" },
+          { kind: "track", id: "r1" },
+        ],
+      }),
+      goal({ id: "active2", title: "Active2", members: [{ kind: "task", id: "t2" }] }),
+      goal({ id: "archived", title: "Archived", status: "archived", members: [{ kind: "task", id: "t3" }] }),
+    ]);
+
+    expect([...ids].sort()).toEqual(["t1", "t2"]);
+    expect(ids.has("r1")).toBe(false);
+    expect(ids.has("t3")).toBe(false);
   });
 
   it("keeps search and tag filtering for tray tasks", () => {

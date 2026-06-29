@@ -36,6 +36,18 @@ export function activeGoalMemberKeys(goals: readonly Goal[]): Set<string> {
   return keys;
 }
 
+/** 被任一 active 目标引用的 task id 集合（用于 inbox「已有去处」外圈提示）。 */
+export function goalLinkedTaskIds(goals: readonly Goal[]): Set<string> {
+  const ids = new Set<string>();
+  for (const goal of goals) {
+    if (goal.status !== "active") continue;
+    for (const member of goal.members ?? []) {
+      if (member.kind === "task") ids.add(member.id);
+    }
+  }
+  return ids;
+}
+
 export function activeGoalMemberRefs(goals: readonly Goal[]): GoalMemberRef[] {
   return goals.filter((goal) => goal.status === "active").flatMap((goal) => goal.members);
 }

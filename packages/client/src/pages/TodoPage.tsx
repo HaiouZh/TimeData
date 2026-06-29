@@ -19,6 +19,7 @@ import { useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
+import { goalLinkedTaskIds } from "../lib/goalUnassigned.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
@@ -74,6 +75,8 @@ const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
 export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
+  const goals = useLiveQuery(() => db.goals.toArray(), []) ?? [];
+  const goalLinkedIds = goalLinkedTaskIds(goals);
   const [searchParams, setSearchParams] = useSearchParams();
   const taskIdParam = searchParams.get("taskId");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -467,6 +470,7 @@ export function TodoPage() {
                 containerId="pool:inbox"
                 indentTargetId={indentTargetId}
                 revealChildren={revealChildren}
+                goalLinkedIds={goalLinkedIds}
                 {...rowHandlers}
               />
             )}
