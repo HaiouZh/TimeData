@@ -79,3 +79,15 @@ export function listCleanBucketDirtyFiles(clientRoot) {
     .map((f) => toPosixRel(clientRoot, f))
     .sort();
 }
+
+// jsdom 快桶（unit-clean-jsdom）成员：显式 allowlist，非派生。
+// jsdom 文件天生带 DOM 标记，无法靠"标记缺失"判 isolate:false 安全，必须正面列出已过硬闸者。
+// 文件 test-buckets.fast-jsdom.json = 相对 clientRoot 的 posix 路径数组（按批增长）。
+export function resolveFastJsdomBucket(clientRoot) {
+  try {
+    const raw = readFileSync(join(clientRoot, "test-buckets.fast-jsdom.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}

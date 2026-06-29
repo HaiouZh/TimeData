@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "build:mobile": "tsc -b && vite build --mode mobile",
     "preview": "vite preview",
-    "test": "vitest run --project unit --project unit-clean",
+    "test": "vitest run --project unit --project unit-clean --project unit-clean-jsdom",
     "test:e2e": "vitest run --project e2e",
     "typecheck": "pnpm --filter @timedata/shared build && tsc --noEmit"
   },
