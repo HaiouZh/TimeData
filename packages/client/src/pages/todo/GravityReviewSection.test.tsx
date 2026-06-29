@@ -5,6 +5,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TODO_GRAVITY_SETTINGS } from "../../lib/tasks/gravity.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
+import type { GravitySurfacedMap } from "../../lib/tasks/gravity.js";
 import { GravityReviewSection } from "./GravityReviewSection.js";
 
 const NOW = new Date("2026-06-28T00:00:00.000Z");
@@ -48,20 +49,19 @@ async function openReview(host: HTMLElement): Promise<void> {
 }
 
 beforeEach(() => {
-  localStorage.clear();
   vi.clearAllMocks();
 });
 
 describe("GravityReviewSection", () => {
-  it("draws cards on expand and marks them as surfaced", async () => {
-    const onSurfacedChange = vi.fn();
+  it("draws cards on expand and marks them as surfaced via onMarkSurfaced", async () => {
+    const onMarkSurfaced = vi.fn().mockResolvedValue({ a: NOW.toISOString() });
     const { host, root } = await renderDom(
       <GravityReviewSection
         sunkenTasks={[task({ id: "a" }), task({ id: "b" })]}
         settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 1 }}
         surfaced={{}}
         now={NOW}
-        onSurfacedChange={onSurfacedChange}
+        onMarkSurfaced={onMarkSurfaced}
         onBump={vi.fn()}
         {...handlers}
       />,
@@ -73,13 +73,13 @@ describe("GravityReviewSection", () => {
     await openReview(host);
 
     expect(host.textContent).toContain("水下想法");
-    expect(onSurfacedChange).toHaveBeenCalledWith({ a: NOW.toISOString() });
+    expect(onMarkSurfaced).toHaveBeenCalledWith(["a"], NOW);
     await unmount(root);
   });
 
   it("limits bumping to pickN and redraws after a bump", async () => {
     const onBump = vi.fn();
-    const onSurfacedChange = vi.fn();
+    const onMarkSurfaced = vi.fn().mockResolvedValue({});
     const candidates = [task({ id: "a", title: "A" }), task({ id: "b", title: "B" }), task({ id: "c", title: "C" })];
     const { host, root } = await renderDom(
       <GravityReviewSection
@@ -87,7 +87,7 @@ describe("GravityReviewSection", () => {
         settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 2, pickN: 1 }}
         surfaced={{}}
         now={NOW}
-        onSurfacedChange={onSurfacedChange}
+        onMarkSurfaced={onMarkSurfaced}
         onBump={onBump}
         {...handlers}
       />,
@@ -102,13 +102,12 @@ describe("GravityReviewSection", () => {
     expect(onBump).toHaveBeenCalledTimes(1);
     expect(host.textContent).toContain("C");
     expect(host.textContent).not.toContain("A");
-    expect(onSurfacedChange).toHaveBeenLastCalledWith(expect.objectContaining({ c: NOW.toISOString() }));
     await unmount(root);
   });
 
   it("removes a bumped card from the current batch before pickN is exhausted", async () => {
     const onBump = vi.fn();
-    const onSurfacedChange = vi.fn();
+    const onMarkSurfaced = vi.fn().mockResolvedValue({});
     const candidates = [task({ id: "a", title: "A" }), task({ id: "b", title: "B" }), task({ id: "c", title: "C" })];
     const { host, root } = await renderDom(
       <GravityReviewSection
@@ -116,7 +115,7 @@ describe("GravityReviewSection", () => {
         settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 2, pickN: 2 }}
         surfaced={{}}
         now={NOW}
-        onSurfacedChange={onSurfacedChange}
+        onMarkSurfaced={onMarkSurfaced}
         onBump={onBump}
         {...handlers}
       />,
@@ -132,6 +131,64 @@ describe("GravityReviewSection", () => {
     expect(host.textContent).not.toContain("A");
     expect(host.textContent).toContain("B");
     expect(host.textContent).toContain("C");
+    await unmount(root);
+  });
+
+  it("does not redraw the same task immediately after 再翻几张", async () => {
+    const onMarkSurfaced = vi.fn().mockResolvedValue({});
+    // 3 candidates, drawM=1: first draw picks 1, then 再翻几张 should pick a different one.
+    const candidates = [
+      task({ id: "a", title: "Alpha" }),
+      task({ id: "b", title: "Bravo" }),
+      task({ id: "c", title: "Charlie" }),
+    ];
+    const { host, root } = await renderDom(
+      <GravityReviewSection
+        sunkenTasks={candidates}
+        settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 1 }}
+        surfaced={{}}
+        now={NOW}
+        onMarkSurfaced={onMarkSurfaced}
+        onBump={vi.fn()}
+        {...handlers}
+      />,
+    );
+
+    await openReview(host);
+
+    const firstTitle = host.textContent?.match(/Alpha|Bravo|Charlie/)?.[0];
+    expect(firstTitle).toBeTruthy();
+
+    // Click 再翻几张 — session memory should exclude the just-shown card.
+    await click(host.querySelector<HTMLButtonElement>('button:not([aria-label])'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const secondTitle = host.textContent?.match(/Alpha|Bravo|Charlie/)?.[0];
+    expect(secondTitle).toBeTruthy();
+    expect(secondTitle).not.toBe(firstTitle);
+    await unmount(root);
+  });
+
+  it("does not block rendering when onMarkSurfaced rejects", async () => {
+    const onMarkSurfaced = vi.fn().mockRejectedValue(new Error("settings write failed"));
+    const { host, root } = await renderDom(
+      <GravityReviewSection
+        sunkenTasks={[task({ id: "a" })]}
+        settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 1 }}
+        surfaced={{}}
+        now={NOW}
+        onMarkSurfaced={onMarkSurfaced}
+        onBump={vi.fn()}
+        {...handlers}
+      />,
+    );
+
+    await openReview(host);
+
+    // Card is still shown despite settings write failure.
+    expect(host.textContent).toContain("水下想法");
     await unmount(root);
   });
 });

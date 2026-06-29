@@ -4,7 +4,6 @@ import { useCallback, useMemo, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import type { GravitySurfacedMap, TodoGravitySettings } from "../../lib/tasks/gravity.js";
 import { pickGravityReviewBatch } from "../../lib/tasks/gravity.js";
-import { markGravityTasksSurfaced, readGravitySurfacedMap } from "../../lib/tasks/gravityReviewStorage.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TaskList } from "./TaskList.js";
 
@@ -13,7 +12,7 @@ interface GravityReviewSectionProps {
   settings: TodoGravitySettings;
   surfaced: GravitySurfacedMap;
   now?: Date;
-  onSurfacedChange: (surfaced: GravitySurfacedMap) => void;
+  onMarkSurfaced: (ids: string[], now: Date) => Promise<GravitySurfacedMap> | GravitySurfacedMap;
   onBump: (task: Task) => void | Promise<void>;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
@@ -28,27 +27,39 @@ export function GravityReviewSection({
   settings,
   surfaced,
   now = new Date(),
-  onSurfacedChange,
+  onMarkSurfaced,
   onBump,
   ...rowHandlers
 }: GravityReviewSectionProps) {
   const [batch, setBatch] = useState<Task[]>([]);
   const [pickedThisBatch, setPickedThisBatch] = useState<Set<string>>(() => new Set());
+  // 本会话已展示过的牌，防止 settings 回流慢时「再翻几张」抽回刚展示过的任务。
+  const [sessionSurfacedMap, setSessionSurfacedMap] = useState<GravitySurfacedMap>({});
   const remainingPicks = Math.max(0, settings.pickN - pickedThisBatch.size);
+
+  const effectiveSurfaced = useMemo(() => ({ ...surfaced, ...sessionSurfacedMap }), [surfaced, sessionSurfacedMap]);
 
   const drawBatch = useCallback(
     (excludeIds: ReadonlySet<string> = new Set(), pickedIds: ReadonlySet<string> = new Set()) => {
-      const currentSurfaced = { ...surfaced, ...readGravitySurfacedMap() };
       const candidates = sunkenTasks.filter((task) => !excludeIds.has(task.id));
-      const nextBatch = pickGravityReviewBatch(candidates, currentSurfaced, { now, drawM: settings.drawM });
+      const nextBatch = pickGravityReviewBatch(candidates, effectiveSurfaced, { now, drawM: settings.drawM });
       setBatch(nextBatch);
       setPickedThisBatch(new Set(pickedIds));
       if (nextBatch.length === 0) return;
 
-      const nextSurfaced = markGravityTasksSurfaced(nextBatch.map((task) => task.id), now);
-      onSurfacedChange(nextSurfaced);
+      const ids = nextBatch.map((task) => task.id);
+      const optimistic = Object.fromEntries(ids.map((id) => [id, now.toISOString()]));
+      setSessionSurfacedMap((prev) => ({ ...prev, ...optimistic }));
+      void Promise.resolve(onMarkSurfaced(ids, now)).then(
+        (stored) => {
+          if (stored) setSessionSurfacedMap((prev) => ({ ...prev, ...stored }));
+        },
+        () => {
+          // settings 写失败不阻塞 UI；最坏以后重复一次。
+        },
+      );
     },
-    [now, onSurfacedChange, settings.drawM, sunkenTasks, surfaced],
+    [effectiveSurfaced, now, onMarkSurfaced, settings.drawM, sunkenTasks],
   );
 
   const extraAction = useMemo(

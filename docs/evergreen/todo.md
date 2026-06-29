@@ -31,7 +31,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-28
+last-reviewed: 2026-06-29
 ---
 
 # 待办任务
@@ -164,7 +164,7 @@ agent / CLI (task-done/task-tag)
 8. **目标层只从 Goal 侧引用 Task**：Goal 可以把 Task 写入 `Goal.members` 并读取 `done` 计算项目完成度或主题活跃度，但不会改变 Task 的完成、重复、排序、子任务或排期语义。删除 Goal 不改 Task；删除 Task 后，Goal 读取时把失效引用作为缺失成员提示。
 9. **`tasks` 不引用分类/时间/速记/目标等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；目标组织关系属于 [goals](goals.md)，不回流到 Task schema。
 10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
-11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 是同步字段，`updatedAt` 提供时间衰减，`TodoPage` 在 `listTasks()` 出桶后把 inbox 拆成浮起/水下，并在本地跨日、focus、visibility 恢复时刷新当前水位日期；`listTasks()`、排期分桶、tag/search、DnD 域登记不改变。翻牌区是 today 附近的临时复查面，不注册 `sortable/containerId`，`lastSurfacedAt` 只在 localStorage 记录本机轮换。翻牌抽卡优先久未露面，其次 `weight` 作为温和 tie-breaker；`pickN>1` 时，已顶过的卡先从当前批移除并补抽，直到本轮额度耗尽。
+11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 是同步字段，`updatedAt` 提供时间衰减，`TodoPage` 在 `listTasks()` 出桶后把 inbox 拆成浮起/水下，并在本地跨日、focus、visibility 恢复时刷新当前水位日期；`listTasks()`、排期分桶、tag/search、DnD 域登记不改变。翻牌区是 today 附近的临时复查面，不注册 `sortable/containerId`；翻牌「已过目表」走 settings key `todo.gravity.review.v1`（`Record<taskId, iso>`，LWW 同步），展示即标记——`GravityReviewSection.drawBatch()` 发牌后经 `onMarkSurfaced` 写 settings，不写 Task、不刷新 `updatedAt`；`GravityReviewSection` 另维护本会话已标记 set 防止 settings 回流慢时「再翻几张」抽回刚展示过的任务。settings LWW 在极端并发下可能丢少量已过目标记，结果只是偶尔重复翻到，容错可接受。翻牌抽卡优先久未露面，其次 `weight` 作为温和 tie-breaker；`pickN>1` 时，已顶过的卡先从当前批移除并补抽，直到本轮额度耗尽。
 
 ## 4. 模块速查
 
@@ -179,8 +179,8 @@ agent / CLI (task-done/task-tag)
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,todoDnd}.*` | children 列表（三 mode；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 编辑态回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录；子任务标题默认是可跨行选择复制的 `span` 文本，无行尾编辑按钮，空选区点击或标题获焦后 Enter/F2 才进入编辑；编辑态 textarea 按内容与宽度变化自动增高、不保留内部滚动条，blur/Enter 提交，Escape 取消）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
 | `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按 `TodoPage` 计算出的底部避让值上移；当窄屏下滑把底栏和 composer 隐藏后，不再避让已不可见的输入栏）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`TodoPage` 传入当前移动底栏 offset 与隐藏状态，宽屏不套移动底栏避让；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时 `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠；折叠 caret 等交互图标经 Phosphor `Icon` 包装 |
 | `lib/tasks.ts` | 核心 CRUD + `listTasks`（顶部过滤 `parentId!==null`）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对 child 走非重复路径、对 root 取 reset-前 children 委托 `completeTask`，同事务写 occurrence + occurrence/template children + 模板；`bumpTaskWeight` 累加 `weight` 并写 syncLog |
-| `lib/tasks/{gravity,gravityReviewStorage}.ts` | 想法重力纯函数（`isTaskSunken`/`splitInboxByGravity`/`pickGravityReviewBatch`；抽卡按久未露面、`weight`、创建时间排序）+ 本机翻牌轮换记忆（localStorage `lastSurfacedAt` map） |
-| `pages/todo/GravityReviewSection.tsx` | 翻牌折叠复查区：展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张、不注册 DnD；`↑ 顶一下` 经 `extraAction` 插槽渲染，顶过的卡在本轮额度内即时移出并补抽 |
+| `lib/tasks/{gravity,gravityReviewStorage}.ts` | 想法重力纯函数（`isTaskSunken`/`splitInboxByGravity`/`pickGravityReviewBatch`；抽卡按久未露面、`weight`、创建时间排序）+ 翻牌轮换记忆（settings key `todo.gravity.review.v1`，`useGravitySurfacedMap`/`markGravityTasksSurfaced`，写时 merge + prune `max(90, waterlineDays*4)` 天） |
+| `pages/todo/GravityReviewSection.tsx` | 翻牌折叠复查区：展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张、不注册 DnD；`↑ 顶一下` 经 `extraAction` 插槽渲染，顶过的卡在本轮额度内即时移出并补抽；展示即标记——`drawBatch()` 发牌后调 `onMarkSurfaced(ids, now)` 写 settings review key，并维护本会话已标记 set 避重 |
 | `lib/settings/todoGravitySetting.ts` | `todo.gravity.v1` JSON 设置包装（parse/sanitize/default/set/use） |
 | `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / tag 聚合(allTags)/三轴过滤(filterTasks)/取色(tagColor) / `subtaskProgress`（m/n 进度比例，children 数量喂入） |
 | `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |

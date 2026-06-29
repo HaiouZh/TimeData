@@ -9,6 +9,7 @@ import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import { getSetting } from "../lib/settings/index.js";
 import { TodoPage } from "./TodoPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -398,6 +399,28 @@ describe("TodoPage", () => {
 
     expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("会跨日下沉");
     expect(host.textContent).toContain("水下 1 条");
+    await act(async () => root.unmount());
+  });
+
+  it("writes todo.gravity.review.v1 to settings on gravity review open without refreshing updatedAt", async () => {
+    const t = await addTask({ title: "旧想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
+    const before = await db.tasks.get(t.id);
+    const { host, root } = await renderPage();
+    await waitForText(host, "水下 1 条");
+
+    await openGravityReview(host);
+    await flushAsync();
+
+    const after = await db.tasks.get(t.id);
+    expect(after?.updatedAt).toBe(before?.updatedAt);
+
+    const reviewRaw = await getSetting("todo.gravity.review.v1");
+    expect(reviewRaw).not.toBeNull();
+    expect(reviewRaw).toContain(t.id);
+
+    const logs = await db.syncLog.where("recordId").equals("todo.gravity.review.v1").toArray();
+    expect(logs.length).toBeGreaterThanOrEqual(1);
+    expect(logs[0]).toMatchObject({ tableName: "settings" });
     await act(async () => root.unmount());
   });
 });

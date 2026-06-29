@@ -45,7 +45,8 @@ import {
   unscheduleTask,
 } from "../lib/tasks.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
-import { readGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
+import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
+import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
 import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -202,7 +203,7 @@ export function TodoPage() {
   };
 
   const gravitySettings = useTodoGravitySettings();
-  const [surfacedMap, setSurfacedMap] = useState(() => readGravitySurfacedMap());
+  const surfacedMap = useGravitySurfacedMap();
   const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
   useEffect(() => {
     let timer: number | undefined;
@@ -234,6 +235,12 @@ export function TodoPage() {
   const bumpWeight = async (t: Task) => {
     await bumpTaskWeight(t.id);
     syncAfterWrite();
+  };
+
+  const markSurfaced = async (ids: string[], now: Date): Promise<GravitySurfacedMap> => {
+    const next = await markGravityTasksSurfaced(ids, now, { waterlineDays: gravitySettings.waterlineDays });
+    if (ids.length > 0) syncAfterWrite();
+    return next;
   };
 
   const rowHandlers = {
@@ -429,7 +436,7 @@ export function TodoPage() {
       settings={gravitySettings}
       surfaced={surfacedMap}
       now={gravityNow}
-      onSurfacedChange={setSurfacedMap}
+      onMarkSurfaced={markSurfaced}
       onBump={bumpWeight}
       {...rowHandlers}
     />
