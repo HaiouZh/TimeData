@@ -6,6 +6,7 @@ import SettingsPage from "../../pages/SettingsPage.tsx";
 import StatsPage from "../../pages/StatsPage.tsx";
 import TimeStatsPage from "../../pages/TimeStatsPage.tsx";
 import { TodoPage } from "../../pages/TodoPage.tsx";
+import StyleguidePage from "../../pages/dev/StyleguidePage.tsx";
 import GoalDetailPage from "../../pages/goals/GoalDetailPage.tsx";
 import GoalsPage from "../../pages/goals/GoalsPage.tsx";
 import BackupHistoryPage from "../../pages/settings/BackupHistoryPage.tsx";
@@ -58,6 +59,7 @@ export function AppRoutes({ refreshKey }: AppRoutesProps) {
       <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
       <Route path="/settings/garmin" element={<SettingsGarminPage />} />
       <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />
+      <Route path="/dev/styleguide" element={<StyleguidePage />} />
     </Routes>
   );
 }
