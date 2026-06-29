@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
+import { CLEAN_BUCKET_DIRS, DIRTY_MARKERS } from "../packages/client/test-buckets.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "packages", "client", "src");
@@ -8,6 +9,10 @@ const BASELINE = join(ROOT, "scripts", "test-hygiene-baseline.json");
 
 // 仅扫测试文件。
 const isTest = (rel) => /\.test\.[jt]sx?$/.test(rel);
+
+// 干净桶目录（相对 src）：dirty-in-clean-bucket 规则只在此范围生效，唯一事实源在 test-buckets.mjs。
+const CLEAN_DIR_PREFIXES = CLEAN_BUCKET_DIRS.map((d) => d.replace(/^src\//, ""));
+const inCleanBucketDir = (rel) => CLEAN_DIR_PREFIXES.some((p) => rel === p || rel.startsWith(`${p}/`));
 
 // 测试卫生反模式。文件级棘轮：存量整文件进 baseline 豁免，禁新增同类文件；
 // 存量文件修完后从 baseline 删对应 id:path，闸自动收紧、不可回退。
@@ -40,7 +45,8 @@ function walk(dir) {
     }
     const rel = relative(SRC, full).replace(/\\/g, "/");
     if (!isTest(rel)) continue;
-    const lines = readFileSync(full, "utf8").split("\n");
+    const content = readFileSync(full, "utf8");
+    const lines = content.split("\n");
     lines.forEach((line, i) => {
       for (const { id, re, msg } of RULES) {
         if (!re.test(line)) continue;
@@ -49,6 +55,17 @@ function walk(dir) {
         if (!baseline.has(key)) violations.push(`${relative(ROOT, full)}:${i + 1}  [${id}] ${msg}`);
       }
     });
+    // 文件级：干净桶目录(lib/quick-notes)里命中脏标记(db/DOM)的文件会被排出 unit-clean、留在 isolate:true 的 unit 桶。
+    // 棘轮记录为存量还债项，禁新增——防新脏文件以为进了快桶其实没进，并提示 Stage 3 洗白对象。
+    if (inCleanBucketDir(rel) && DIRTY_MARKERS.some((re) => re.test(content))) {
+      const key = `dirty-in-clean-bucket:${rel}`;
+      keys.add(key);
+      if (!baseline.has(key))
+        violations.push(
+          `${relative(ROOT, full)}  [dirty-in-clean-bucket] 干净桶目录里的脏文件(db/DOM 依赖)，会留在 unit 桶；` +
+            `如确为脏文件用 --write-baseline 收编，或去掉依赖以进 unit-clean 快桶`,
+        );
+    }
   }
 }
 walk(SRC);
@@ -67,4 +84,4 @@ if (violations.length > 0) {
   );
   process.exit(1);
 }
-console.log("✓ 测试卫生：无新增真实等待 / 裸 createRoot");
+console.log("✓ 测试卫生：无新增真实等待 / 裸 createRoot / 干净桶混入脏文件");
