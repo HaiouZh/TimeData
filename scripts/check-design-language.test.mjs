@@ -362,6 +362,33 @@ test("skips text-size checks in css and test files", () => {
   );
 });
 
+test("flags bare arbitrary spacing/size values", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="top-[4.75rem]"').some((v) => v.rule === "bare-arbitrary-value"),
+    true,
+  );
+  assert.equal(classifyLine("x.tsx", 'className="w-[34px]"').some((v) => v.rule === "bare-arbitrary-value"), true);
+});
+
+test("does not flag calc/var/content arbitrary values", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="top-[calc(100%+0.5rem)]"').some((v) => v.rule === "bare-arbitrary-value"),
+    false,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="z-[var(--z-modal)]"').some((v) => v.rule === "bare-arbitrary-value"),
+    false,
+  );
+});
+
+test("does not double-flag text arbitrary values under bare-arbitrary-value", () => {
+  // 字号任意值归 bare-text-size（C1），bare-arbitrary-value 只管间距/尺寸/定位
+  assert.equal(
+    classifyLine("x.tsx", 'className="text-[11px]"').some((v) => v.rule === "bare-arbitrary-value"),
+    false,
+  );
+});
+
 test("validates allowlist schema", () => {
   assert.throws(
     () =>

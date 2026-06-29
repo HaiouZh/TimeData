@@ -83,6 +83,15 @@ const RULES = [
     msg: "字号必须使用 .td-text-{caption,label,body,title,display} 语义类",
     skip: (file) => isTestFile(file) || normalizePath(file).endsWith(".css"),
   },
+  {
+    id: "bare-arbitrary-value",
+    // 间距/尺寸/定位的裸任意值（纯数字+单位）；字号任意值归 bare-text-size，calc/var/content 例外。
+    re: new RegExp(
+      `\\b${TAILWIND_VARIANTS}(?:w|h|min-w|min-h|max-w|max-h|top|bottom|left|right|inset|m[trblxy]?|p[trblxy]?|gap|gap-[xy]|translate-[xy])-\\[[0-9.]+(?:px|rem|em|vh|vw)\\]`,
+    ),
+    msg: "裸任意尺寸/间距值应收进 token 或标准 Tailwind 阶（calc/var 例外）",
+    skip: (file) => isTestFile(file),
+  },
 ];
 
 for (const rule of RULES) {

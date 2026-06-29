@@ -4528,6 +4528,198 @@
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/components/CircularTimeline.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div className=\"relative aspect-square w-full max-w-[372px]\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/components/TimeSlot.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className=\"group flex min-h-[56px] w-full flex-col justify-center gap-0.5 rounded-lg border border-dashed border-border bg-surface/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-border-strong hover:bg-surface-hover/60 active:bg-surface-hover\"",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/components/ui/Sheet.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className={`sheet-panel flex w-full max-w-2xl flex-col rounded-t-card border border-border bg-surface-elevated text-ink shadow-elev2 outline-none max-h-[88vh] ${className ?? \"\"}`}",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/components/Wheel.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div className=\"relative h-[102px] overflow-hidden rounded-lg bg-page\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/components/Wheel.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div className=\"pointer-events-none absolute inset-x-1 top-1/2 z-10 h-[34px] -translate-y-1/2 rounded-md border border-accent bg-accent-soft/60\" />",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/components/Wheel.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className=\"wheel-scroll h-full overflow-y-auto snap-y snap-mandatory py-[34px] overscroll-contain\"",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/components/Wheel.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className={`td-num block h-[34px] w-full snap-center text-center text-base transition-colors ${",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className=\"relative h-full min-h-[520px] overflow-hidden bg-page text-ink\"",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalSidePanel.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className=\"flex h-full min-h-0 w-[420px] max-w-[40vw] shrink-0 flex-col border-l border-border bg-surface-elevated text-ink shadow-elev2\"",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/goals/GoalsPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div data-galaxy-loading className=\"h-full min-h-[520px] bg-page\" />",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className=\"td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm\"",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/QuickNotesPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className={`fixed left-1/2 top-[4.75rem] z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<label className=\"flex min-w-[9rem] flex-1 flex-col gap-1 text-xs text-ink-3\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<label className=\"block min-w-[9rem] flex-1\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<label className=\"block min-w-[9rem] flex-1\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<label className=\"block min-w-[9rem] flex-1\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div className=\"min-h-[220px] px-1 py-3\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/stats/InsightCharts.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div className=\"relative min-h-[250px] py-2\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TagFilterPanel.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className={`flex max-h-[40vh] flex-1 flex-wrap items-center gap-1.5 overflow-y-auto ${className ?? \"\"}`}",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? \"h-[90vh]\" : \"max-h-[calc(90vh)]\"}`}",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/todo/TaskDetailSheet.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "<div data-testid=\"subtask-progress\" className=\"h-[3px] w-full bg-surface-hover\" aria-hidden=\"true\">",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/tracks/RefChip.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "\"inline-flex max-w-[12rem] items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2\";",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/quick-notes/NoteBubble.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "const inlineSpacer = <span aria-hidden=\"true\" className=\"inline-block h-[1em] w-[4.25rem]\" />;",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/quick-notes/QuickNoteActionMenu.tsx",
+      "rule": "bare-arbitrary-value",
+      "lineText": "className=\"absolute min-w-[120px] overflow-hidden rounded-ctl border border-border bg-surface-elevated py-1 shadow-elev2\"",
+      "reason": "任意值收口前的存量裸尺寸/间距值",
+      "ownerBatch": "arbitrary-value-debt",
+      "removeBy": "arbitrary-cleanup"
     }
   ]
 }
