@@ -8,6 +8,8 @@ covers:
   - packages/client/src/components/app-shell/MobileBottomNav.tsx
   - packages/client/src/pages/settings/SettingsDetailPage.tsx
   - packages/client/src/pages/settings/components/SettingsRows.tsx
+  - packages/client/src/lib/zLayers.ts
+  - packages/client/src/pages/dev/StyleguidePage.tsx
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
 last-reviewed: 2026-06-29
@@ -42,9 +44,11 @@ last-reviewed: 2026-06-29
 - **模块署名色已退役**：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 不再作为设计语言的一部分。模块身份靠固定位置、图标、页面标题、信息架构和 active 形态，不靠每个模块一套品牌色。
 - **Goal 星图局部命名空间**：`--galaxy-edge` / `--galaxy-edge-glow` / `--galaxy-star-core` 只允许 `pages/goals/**` 的星图边、星核和光晕使用；它们不扩展全站动作色，也不替代 `--color-accent`。星图节点的状态光晕（ready/blocked/completed/parked/active/anchor）通过 `--shadow-galaxy-*` scoped shadow token 消费（如 `--shadow-galaxy-ready`、`--shadow-galaxy-blocked` 等），组件用 `shadow-[var(--shadow-galaxy-*)]`，不写裸 rgba。
 - **预留 `--health-*` 命名空间（scoped，暂无色值）**：健康指标的「条件着色 / 分级指示色」（好 / 警告 / 差，或睡眠阶段、心率区间等分类）落地时走 scoped `--health-*` 色板，与 `--color-data-*`（序列区分）、`--galaxy-*`（场景专属）同类。规矩：独立前缀、语义命名（`--health-good` 而非 `--health-1`）、集中定义于 `index.css`、只服务健康可视化、不外溢按钮 / 页面壳。它表达「数据好不好 / 是哪类」（合法），不是「模块身份」（禁止，已随 module color 退役）。**当前只写下这条契约，不定义实际色值**——现有健康曲线是「序列区分」，用 `--color-data-*` 已够；色值等跑步表格 / 分级指示功能落地时随功能设计、由用户拍板。
-- **圆角阶梯**：`--radius-ctl`(8) / `--radius-row`(12) / `--radius-card`(16) / `--radius-pill`(999)。
+- **圆角阶梯**：`--radius-ctl`(8) / `--radius-row`(12) / `--radius-card`(16) / `--radius-pill`(999)。裸 `rounded-2xl`/`rounded-3xl` 已全仓 codemod 收敛进该阶梯（统一 `rounded-card`），新代码只用 token 圆角（棘轮 `bare-card-radius`，见 §3）。
 - **边框**：`--color-border` / `--color-border-strong` / `--color-border-hairline`(rgba 8%)。
-- **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用。
+- **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
+- **动效**：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-slow`(300ms) + `--ease-standard`(ease-out) / `--ease-emphasized`(cubic-bezier(.2,0,0,1))。交互过渡 / 弹层动画时长就近映射到这组 token；keyframe 与长循环动画（如 `sync-pulse`）属合法多值，保留裸时长、不收 token、不加硬棘轮。
+- **z-index 层级**：`--z-sticky`(20) / `--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；组件内部局部 stacking 仍用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
 - **派生软色**用 `color-mix(in srgb, <token> N%, transparent)` 或已有 soft token，不另写裸色。
 
 新增颜色流程：
@@ -61,7 +65,7 @@ last-reviewed: 2026-06-29
 - `--font-mono`（JetBrains Mono…）只用于 `code/pre/kbd/samp`、日志、ID、debug、技术标识。
 - 字体在 `main.tsx` 引入：**只引霞鹭文楷 GB 屏显子集** `lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css`（约 4.7MB，避免 R 变体与重复字族撑大 APK）+ `@fontsource/tinos` 的 400/400-italic/700。`fontLoading.test.ts` 守 import 顺序（lxgw 在 tinos 之前）。
 - 全站 `body` 用 `--font-body`；远程加载推迟到做字体设置时再上。
-- 新 UI 优先使用语义排版类：`td-text-caption`、`td-text-label`、`td-text-body`、`td-text-title`、`td-text-display`。
+- 新 UI 优先使用语义排版类：`td-text-caption`、`td-text-label`、`td-text-body`、`td-text-title`、`td-text-display`。桌面侧栏导航已采用 `td-text-caption`、轨道页已试点全量迁移；存量裸字号（`text-xs/sm/...`）按 `bare-text-size` 棘轮 + `typography-debt` 旧债逐子系统渐进迁移（见 §3）。语义档与字号映射：caption≈12px、label≈13px、body≈15px、title≈20px(600)、display≈28px(600)。
 - 数字/时间/时长/统计值使用 `td-num`、`td-time`、`td-duration`、`td-stat`、`td-metric`，当前仍指向 `--font-body`，并启用 `font-variant-numeric: tabular-nums`。数字默认不使用等宽字体；未来若切换数字字体，只改这些语义角色。
 
 ## 3. 设计语言棘轮
@@ -74,19 +78,25 @@ last-reviewed: 2026-06-29
 - **token 定义与图表镜像不算「裸色」**：`index.css` 里 `--color-*` / `--galaxy-*` / `--shadow-*` 的 token 定义本身（值含 hex/rgba）是颜色的唯一事实源，脚本直接跳过；图表色镜像文件 `pages/stats/health/chartColors.ts`（recharts 不解析 `var()`，故把 token 镜像成 JS 常量）也整文件跳过 `bare-raw-color`。镜像文件登记在脚本的 `CHART_COLOR_MIRROR_FILES`，新增镜像文件需登记，不要用长期 allowlist 维持图表裸 hex。
 - 禁止交互控件用文字字符或 emoji 伪装图标。
 - 禁止业务时间/数字/统计值直接用 `font-mono`；代码、日志、ID、debug 标识应优先放在 `code/pre/kbd/samp` 或专用技术文本组件中，确有遗留例外必须进 allowlist。
+- 禁止裸卡片圆角 `rounded-2xl`/`rounded-3xl`（已并入 `--radius` 阶梯）：规则 `bare-card-radius`，新代码用 `rounded-ctl/row/card/pill`（测试文件豁免）。
+- 禁止裸字号 `text-{xs,sm,base,lg,xl,2xl…}` 与字号任意值 `text-[…px|rem]`：规则 `bare-text-size`，须用 `.td-text-{caption,label,body,title,display}` 语义类（`.css` 与测试文件豁免）。
+- 禁止全局浮层裸高 z-index（`z-30/40/50/60/70`、`z-[…]`）：规则 `bare-zindex`，须用 `z-[var(--z-*)]`；局部 stacking `z-10`/`z-20` 放行（测试文件豁免）。
+- 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。
 
-`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；剩余 allowlist 仅 54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板），属业务数据非 UI chrome。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` 会直接失败。不得把本轮新代码违规加入 allowlist。
+`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；当前 allowlist 含三类共 590 项：54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板，属业务数据非 UI chrome）；512 项 `typography-debt`（字号语义类迁移前的存量裸字号，`removeBy=typography-migration`）；24 项 `arbitrary-value-debt`（任意值收口前的存量裸尺寸/间距，`removeBy=arbitrary-cleanup`）。后两类是**受控渐进迁移**旧债——新规则即时止血、按子系统逐步清并删对应条目（如轨道页已试点全量迁移）。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` / 裸圆角 / 裸字号 / 裸任意值会直接失败。不得把本轮新代码违规加入 allowlist。
 
 ## 4. 关键不变量 / 坑 / 红线
 
-1. **新 UI 一律用 token，不写裸 hex/rgba**；统计 / 健康面（TimeStats、HealthStats、stats 模块、图表 chrome、旧健康 CSS）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零，剩余仅 `user-content-color` 长期例外（分类预设色 + 标签 hash 色板），勿当范式。
+1. **新 UI 一律用 token，不写裸 hex/rgba**；统计 / 健康面（TimeStats、HealthStats、stats 模块、图表 chrome、旧健康 CSS）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零；裸色剩余仅 `user-content-color` 长期例外（分类预设色 + 标签 hash 色板），勿当范式；字号 / 任意值另由 `typography-debt` / `arbitrary-value-debt` 受控渐进迁移（见 §3）。
 2. **数据色不外溢 UI chrome**（只在图表/健康可视化里）；用户内容色只代表分类、标签、用户自定义标记。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。
 5. **recharts 不解析 CSS `var()`**：图表配色（数据色 + chrome 的 axis/grid/tooltip 背景边框文字/cursor）须把 token 镜像成 JS 常量，统一出自 `pages/stats/health/chartColors.ts`（`DATA_PALETTE` + `CHART_CHROME`），TimeStats 的 `InsightCharts` 与 Health 图表都消费它；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源仍是 `index.css` token。详见 [health/charts](health/charts.md)。
 6. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。
-7. **主导航纯图标**：移动底栏与桌面侧栏的主导航使用 Phosphor 纯图标；图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色。主导航按钮必须有 `aria-label`，设置页配置界面和更多菜单可显示图标 + 文字。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。
+7. **主导航：移动纯图标 / 桌面图标+文字**：移动底栏主导航用 Phosphor 纯图标（仅 `aria-label`）；桌面侧栏主导航图标下方配 `td-text-caption` 文字标签（aside `w-20`，"更多"按钮同款），这是设计审查 C1 的可读性收口——**仅桌面，移动底栏维持纯图标不变**。图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色；主导航按钮必须有 `aria-label`。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。
 8. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` / `SettingsNumberRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。`SettingsNumberRow` 的 `−`/`+` 按钮和 `input[type=number]` 消费 `surface-hover`/`border`/`ink`/`accent` token，不引入裸色。
+9. **z-index 走层级 token**：全局浮层（粘顶头 / 下拉 / 遮罩 / 弹层 / 全屏接管）用 `z-[var(--z-*)]`，内联 `style.zIndex` 用 `lib/zLayers.ts` 的 `Z`；组件内部局部 stacking 保留 `z-10`/`z-20`，不升 token。新全局浮层选层级按语义对号入座，不另造数值。
+10. **本轮视觉收口决策（2026-06-29）**：维持单一暗色主题（不搭换肤机制、不引 `[data-theme]`、不出亮色）、单一品牌蓝动作色；动效 / z-index / 任意值已 token 化并加棘轮；字号按棘轮渐进迁移（试点轨道页）。视觉一致性靠单测 + `/dev/styleguide` 预览页人工验收，不做像素快照。
 
 ## 5. 模块速查
 
@@ -99,6 +109,8 @@ last-reviewed: 2026-06-29
 | 字体引入（GB 屏显子集 + Tinos） | `packages/client/src/main.tsx`（covers 归 [architecture](architecture.md)）；守序测试 `fontLoading.test.ts` |
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
 | 图表取色（token→JS 常量镜像） | [health/charts](health/charts.md) 的 `chartColors.ts` |
+| z-index 层级 JS 镜像 | `packages/client/src/lib/zLayers.ts`（`Z`，与 `--z-*` 同步，`zLayers.test.ts` 守一致） |
+| 设计语言预览 / 验收台 | `packages/client/src/pages/dev/StyleguidePage.tsx`（路由 `/dev/styleguide`，渲染全部 token + `.td-*` + 自绘控件） |
 
 ## 子文档索引
 
