@@ -92,6 +92,7 @@ describe("SettingsInsightsPage", () => {
     expect(html).not.toContain("杂项");
     expect(html).toContain("睡眠分类");
     expect(html).toContain("睡眠");
+    expect(html).toContain("跨天记录合并展示");
   });
 
   it("persists sleep category selection through synced setting", async () => {

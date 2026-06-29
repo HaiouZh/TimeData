@@ -12,7 +12,6 @@ import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { resetLocalDataToDefaults } from "../../db/index.ts";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
-import { getMergeOvernightEnabled, setMergeOvernightEnabled } from "../../lib/overnightDisplaySetting.ts";
 import { safeGetItem } from "../../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { formatAppDateTime, getDateString } from "../../lib/time.ts";
@@ -59,7 +58,6 @@ export default function SettingsDataPage() {
       ? String(location.state.dataStatus)
       : "";
   const [cloudSyncEnabled, setCloudSyncEnabledState] = useState(getCloudSyncEnabled());
-  const [mergeOvernightEnabled, setMergeOvernightEnabledState] = useState(getMergeOvernightEnabled());
   const [dataBusy, setDataBusy] = useState(false);
   const [dataStatus, setDataStatus] = useState(initialDataStatus);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
@@ -79,11 +77,6 @@ export default function SettingsDataPage() {
   function handleCloudSyncChange(checked: boolean) {
     setCloudSyncEnabledInContext(checked);
     setCloudSyncEnabledState(checked);
-  }
-
-  function handleMergeOvernightChange(checked: boolean) {
-    setMergeOvernightEnabled(checked);
-    setMergeOvernightEnabledState(checked);
   }
 
   async function handleForceReplace() {
@@ -354,22 +347,6 @@ export default function SettingsDataPage() {
             <span className="mt-1 block text-xs text-ink-3">关闭后不会自动同步，也不会强制替换云端数据。</span>
           </span>
           <Switch ariaLabel="是否开启云同步" checked={cloudSyncEnabled} onChange={(on) => handleCloudSyncChange(on)} />
-        </label>
-      </section>
-
-      <section className={cardClassName}>
-        <label className="flex items-center justify-between gap-4">
-          <span>
-            <span className="block text-sm font-medium text-ink">跨天记录合并展示</span>
-            <span className="mt-1 block text-xs text-ink-3">
-              开启后，结束于当天的跨天记录会显示完整时间段，例如 23:57 - 06:00。统计仍按自然日计算。
-            </span>
-          </span>
-          <Switch
-            ariaLabel="跨天记录合并展示"
-            checked={mergeOvernightEnabled}
-            onChange={(on) => handleMergeOvernightChange(on)}
-          />
         </label>
       </section>
 

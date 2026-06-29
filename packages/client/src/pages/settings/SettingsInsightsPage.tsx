@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { SelectSheet } from "../../components/ui/SelectSheet.js";
+import { Switch } from "../../components/ui/Switch.js";
 import { useCategories } from "../../hooks/useCategories.ts";
+import { getMergeOvernightEnabled, setMergeOvernightEnabled } from "../../lib/overnightDisplaySetting.ts";
 import { setSleepCategoryId, useSleepCategoryId } from "../../lib/sleepCategorySetting.ts";
 import { setPunchCategoryId, usePunchCategoryId } from "../../lib/settings/punchCategorySetting.ts";
 import {
@@ -13,6 +15,7 @@ import SettingsDetailPage from "./SettingsDetailPage.tsx";
 // 历史路由名 /settings/insights、文件名 SettingsInsightsPage 均保留；本页现为「记录偏好」设置归处。
 export default function SettingsInsightsPage() {
   const { parentCategories, getChildren, getCategoryPath } = useCategories();
+  const [mergeOvernightEnabled, setMergeOvernightEnabledState] = useState(getMergeOvernightEnabled());
   const sleepCategoryId = useSleepCategoryId();
   const todoDestination = useTodoDefaultDestination();
   const punchCategoryId = usePunchCategoryId();
@@ -31,6 +34,11 @@ export default function SettingsInsightsPage() {
         : null,
     [getCategoryPath, punchCategories, punchCategoryId],
   );
+
+  function handleMergeOvernightChange(checked: boolean) {
+    setMergeOvernightEnabled(checked);
+    setMergeOvernightEnabledState(checked);
+  }
 
   return (
     <SettingsDetailPage title="记录偏好">
@@ -89,6 +97,22 @@ export default function SettingsInsightsPage() {
             ? `当前使用「${selectedName}」作为睡眠父分类。`
             : "未指定时，覆盖率按全天估算，睡眠时段使用默认 23:00~07:00。"}
         </p>
+      </section>
+
+      <section className="space-y-3 rounded-card border border-border bg-surface p-4">
+        <label className="flex items-center justify-between gap-4">
+          <span>
+            <span className="block text-sm font-medium text-ink">跨天记录合并展示</span>
+            <span className="mt-1 block text-xs text-ink-3">
+              开启后，结束于当天的跨天记录会显示完整时间段，例如 23:57 - 06:00。统计仍按自然日计算。
+            </span>
+          </span>
+          <Switch
+            ariaLabel="跨天记录合并展示"
+            checked={mergeOvernightEnabled}
+            onChange={(on) => handleMergeOvernightChange(on)}
+          />
+        </label>
       </section>
     </SettingsDetailPage>
   );
