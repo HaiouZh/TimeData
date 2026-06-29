@@ -62,7 +62,7 @@ const clickAndFlush = async (el: Element | null) => {
   await click(el);
   await flush();
 };
-const input = (host: HTMLElement) => host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement | null;
+const input = (host: HTMLElement) => host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement | null;
 
 // addTask 是异步（Dexie 写 + setText 回填），点提交到输入框清空之间隔着多个宏任务边界。
 // 单次 flush 在重载下不够，沿用主仓既有的 setTimeout(0) 宏任务边界轮询直到清空。

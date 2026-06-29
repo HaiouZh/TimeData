@@ -132,7 +132,7 @@ export function TodoComposer({
                 <input
                   value={composerText}
                   onChange={(event) => onComposerTextChange(event.currentTarget.value)}
-                  placeholder="添加任务…"
+                  placeholder="做什么？怎样算做完…"
                   className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-sm text-ink outline-none focus:border-accent"
                 />
                 {composerText && (

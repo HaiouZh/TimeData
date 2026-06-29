@@ -84,7 +84,7 @@ async function openGravityReview(host: HTMLElement): Promise<void> {
 }
 
 async function typeAndAdd(host: HTMLElement, title: string) {
-  const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+  const input = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
   const form = host.querySelector("form");
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -275,7 +275,7 @@ describe("TodoPage", () => {
     await clickEl('[aria-label="筛选 工作"]');
     await clickEl('[aria-label="收起标签筛选"]');
 
-    const inputEl = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    const inputEl = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(inputEl, "报告");
       inputEl.dispatchEvent(new Event("input", { bubbles: true }));
@@ -351,7 +351,7 @@ describe("TodoPage", () => {
 
     const { host, root } = await renderPage();
     await waitForText(host, "水下 1 条");
-    const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    const input = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "搜索词");
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -504,7 +504,7 @@ describe("TodoPage", () => {
     await waitForText(host, "水下 1 条");
 
     // 搜索
-    const input = host.querySelector('input[placeholder="添加任务…"]') as HTMLInputElement;
+    const input = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "搜索词");
       input.dispatchEvent(new Event("input", { bubbles: true }));
