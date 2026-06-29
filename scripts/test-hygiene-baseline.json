@@ -1,5 +1,4 @@
 [
-  "bare-createroot-in-fast-jsdom:pages/todo/TaskRow.test.tsx",
   "bare-createroot:appUpdate.versionCheck.test.tsx",
   "bare-createroot:components/AndroidBackButtonHandler.test.tsx",
   "bare-createroot:components/CircularTimeline.test.tsx",
@@ -23,7 +22,6 @@
   "bare-createroot:pages/stats/health/MetricChartBlock.test.tsx",
   "bare-createroot:pages/stats/modules/TrendSection.test.tsx",
   "bare-createroot:pages/todo/ResizableSplit.test.tsx",
-  "bare-createroot:pages/todo/TaskRow.test.tsx",
   "dirty-in-clean-bucket:App.goalsNav.test.tsx",
   "dirty-in-clean-bucket:App.navHide.test.tsx",
   "dirty-in-clean-bucket:App.test.tsx",

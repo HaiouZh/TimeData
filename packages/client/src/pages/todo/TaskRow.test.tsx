@@ -2,14 +2,11 @@
 
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addTask, createChildTask, toggleTaskDone } from "../../lib/tasks.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // 兜底清理：portal/popover 测试若异常路径未 unmount 会污染下一条 document.body 查询。
 afterEach(() => {
@@ -49,11 +46,8 @@ const handlers = {
   onDelete: noop,
 };
 
-async function render(node: ReturnType<typeof createElement>) {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  await act(async () => root.render(node));
-  return { host, root };
+function render(node: ReturnType<typeof createElement>) {
+  return renderDom(node);
 }
 
 describe("TaskRow", () => {
@@ -72,7 +66,7 @@ describe("TaskRow", () => {
     for (const label of NO_INLINE_ACTION_LABELS) {
       expect(host.querySelector(`[aria-label^="${label}"]`)).toBeNull();
     }
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("有子任务渲染非交互折叠指示器与 m/n；无子任务不渲染槽位", async () => {
@@ -89,12 +83,12 @@ describe("TaskRow", () => {
     // caret 是 <span> 而非 <button>，覆盖"无展开/收起子任务按钮"语义。
     expect(caret?.tagName.toLowerCase()).toBe("span");
     expect(withSub.host.textContent).toContain("1/2");
-    await act(async () => withSub.root.unmount());
+    await unmount(withSub.root);
 
     const noSub = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
     await settle();
     expect(noSub.host.querySelector('[data-testid="subtask-caret"]')).toBeNull();
-    await act(async () => noSub.root.unmount());
+    await unmount(noSub.root);
   });
 
   it("不再渲染旧 parent drop zone", async () => {
@@ -120,7 +114,7 @@ describe("TaskRow", () => {
       }),
     );
     expect(host.textContent).toContain("6月16日");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("已排期一次性任务行显示被动日期摘要", async () => {
@@ -132,7 +126,7 @@ describe("TaskRow", () => {
       }),
     );
     expect(host.textContent).toContain("6月20日");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("已排期重复任务行显示重复摘要而非日期", async () => {
@@ -147,7 +141,7 @@ describe("TaskRow", () => {
       }),
     );
     expect(host.textContent).toContain("每天");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("已排期重复任务行：复选框不勾选、标题不划线", async () => {
@@ -161,7 +155,7 @@ describe("TaskRow", () => {
     const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
     expect(cb?.checked).toBe(false);
     expect(host.querySelector(".line-through")).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点行（无子任务）触发 onEdit", async () => {
@@ -172,7 +166,7 @@ describe("TaskRow", () => {
     const row = host.querySelector('[aria-label="打开 点我"]')!;
     await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(onEdit).toHaveBeenCalledTimes(1);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点 caret（在行左 2/5 命中区）经行 onClick 仍展开，不调 onEdit", async () => {
@@ -192,7 +186,7 @@ describe("TaskRow", () => {
     expect(title?.textContent).toBe("子任务甲");
     expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
     expect(onEdit).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("有选区时点行不开抽屉", async () => {
@@ -206,7 +200,7 @@ describe("TaskRow", () => {
       const row = host.querySelector('[aria-label="打开 点我"]')!;
       await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true })));
       expect(onEdit).not.toHaveBeenCalled();
-      await act(async () => root.unmount());
+      await unmount(root);
     } finally {
       window.getSelection = original;
     }
@@ -236,14 +230,14 @@ describe("TaskRow", () => {
     const after = await db.tasks.get(child.id);
     expect(after?.done).toBe(true);
     expect(onToggle).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("传 dragHandle 时不再渲染右侧独立拖柄,而是渲染左 2/5 抓取区", async () => {
     const noHandle = await render(createElement(TaskRow, { task: task({ title: "X" }), pool: "today", ...handlers }));
     expect(noHandle.host.querySelector('[aria-label="拖动 X"]')).toBeNull();
     expect(noHandle.host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
-    await act(async () => noHandle.root.unmount());
+    await unmount(noHandle.root);
 
     const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
     const withHandle = await render(
@@ -252,7 +246,7 @@ describe("TaskRow", () => {
     expect(withHandle.host.querySelector('[aria-label="拖动 X"]')).toBeNull();
     expect(withHandle.host.querySelector('[data-testid="task-row-grab-area"]')).not.toBeNull();
     expect(handle.setActivatorNodeRef).toHaveBeenCalled();
-    await act(async () => withHandle.root.unmount());
+    await unmount(withHandle.root);
   });
 
   it("点左 2/5 抓取区:有子任务时展开,不打开详情", async () => {
@@ -311,7 +305,7 @@ describe("TaskRow", () => {
     });
     const { host, root } = await render(createElement(TaskRow, { task: r, pool: "recurring", ...handlers }));
     expect(host.querySelector('[data-icon="repeat"]')).not.toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("不渲染旧状态徽章", async () => {
@@ -323,7 +317,7 @@ describe("TaskRow", () => {
 
     expect(host.querySelector(`[data-testid="${legacyBadgeId}"]`)).toBeNull();
     expect(host.textContent).not.toContain("等我");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("tag chip 展示在 meta 带，无 tag 不显示", async () => {
@@ -333,7 +327,7 @@ describe("TaskRow", () => {
     const chips = host.querySelectorAll('[data-testid="tag-chip"]');
     expect(chips.length).toBe(2);
     expect(chips[0].textContent).toContain("重构");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("tag chip 超过 3 个截断显示 …", async () => {
@@ -347,7 +341,7 @@ describe("TaskRow", () => {
     const chips = host.querySelectorAll('[data-testid="tag-chip"]');
     expect(chips.length).toBe(3);
     expect(host.textContent).toContain("…");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("tag 数量正好 3 个不显示 …", async () => {
@@ -360,7 +354,7 @@ describe("TaskRow", () => {
     );
     expect(host.querySelectorAll('[data-testid="tag-chip"]').length).toBe(3);
     expect(host.textContent).not.toContain("…");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("tag chip 内含确定性色点（inline backgroundColor）", async () => {
@@ -377,8 +371,8 @@ describe("TaskRow", () => {
     );
     const dot2 = second.host.querySelector("[data-tag-dot]") as HTMLElement;
     expect(dot2.style.backgroundColor).toBe(dot.style.backgroundColor);
-    await act(async () => root.unmount());
-    await act(async () => second.root.unmount());
+    await unmount(root);
+    await unmount(second.root);
   });
 
   describe("桌面 overlay 动作", () => {
