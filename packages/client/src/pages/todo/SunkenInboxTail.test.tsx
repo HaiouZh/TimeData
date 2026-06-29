@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import "fake-indexeddb/auto";
-import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@timedata/shared";
 import { click, renderDom, unmount } from "../../test/domHarness.js";

@@ -5,7 +5,6 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TODO_GRAVITY_SETTINGS } from "../../lib/tasks/gravity.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
-import type { GravitySurfacedMap } from "../../lib/tasks/gravity.js";
 import { GravityReviewSection } from "./GravityReviewSection.js";
 
 const NOW = new Date("2026-06-28T00:00:00.000Z");

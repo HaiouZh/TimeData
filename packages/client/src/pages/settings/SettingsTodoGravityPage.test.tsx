@@ -3,8 +3,8 @@
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { click, renderDom, unmount } from "../../test/domHarness.tsx";
+import { beforeEach, describe, expect, it } from "vitest";
+import { click, renderDom } from "../../test/domHarness.tsx";
 import { db } from "../../db/index.js";
 import { addTask } from "../../lib/tasks.js";
 import { getSetting } from "../../lib/settings/index.js";
@@ -110,7 +110,7 @@ describe("SettingsTodoGravityPage", () => {
     // 等 liveQuery 渲染
     for (let i = 0; i < 30; i++) {
       if (host.textContent?.includes("1 / 2")) break;
-      await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+      await act(async () => { await Promise.resolve(); });
     }
 
     expect(host.textContent).toContain("1 / 2");
@@ -127,7 +127,7 @@ describe("SettingsTodoGravityPage", () => {
     // 等 liveQuery 渲染
     for (let i = 0; i < 30; i++) {
       if (host.textContent?.includes("1 / 1")) break;
-      await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+      await act(async () => { await Promise.resolve(); });
     }
 
     expect(host.textContent).toContain("1 / 1");
@@ -138,7 +138,7 @@ describe("SettingsTodoGravityPage", () => {
     // 等 settings 写入 + re-render
     for (let i = 0; i < 30; i++) {
       if (host.textContent?.includes("0 / 1")) break;
-      await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+      await act(async () => { await Promise.resolve(); });
     }
 
     expect(host.textContent).toContain("0 / 1");
