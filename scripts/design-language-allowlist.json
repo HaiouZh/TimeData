@@ -2636,22 +2636,6 @@
     {
       "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<span className=\"block text-sm font-medium text-ink\">跨天记录合并展示</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"mt-1 block text-xs text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">备份与数据</h3>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -4720,6 +4704,22 @@
       "reason": "任意值收口前的存量裸尺寸/间距值",
       "ownerBatch": "arbitrary-value-debt",
       "removeBy": "arbitrary-cleanup"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"block text-sm font-medium text-ink\">跨天记录合并展示</span>",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
+    },
+    {
+      "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
+      "rule": "bare-text-size",
+      "lineText": "<span className=\"mt-1 block text-xs text-ink-3\">",
+      "reason": "字号语义类迁移前的存量裸字号",
+      "ownerBatch": "typography-debt",
+      "removeBy": "typography-migration"
     }
   ]
 }
