@@ -1,22 +1,20 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
-import { act, createElement } from "react";
+
 import type { ReactNode } from "react";
+import { act, createElement } from "react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
-import { db } from "../db/index.js";
 import { addTask } from "../lib/tasks.js";
+import { resetDb } from "../test/dbReset.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
 beforeEach(async () => {
   localStorage.clear();
   vi.unstubAllGlobals();
-  await db.tasks.clear();
-  await db.settings.clear();
-  await db.syncLog.clear();
+  await resetDb();
 });
 
 function LocationProbe() {

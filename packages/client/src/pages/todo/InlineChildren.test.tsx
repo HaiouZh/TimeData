@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
-import { db } from "../../db/index.js";
 import { addTask, createChildTask, toggleTaskDone } from "../../lib/tasks.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { InlineChildren } from "./InlineChildren.js";
 
@@ -13,8 +12,7 @@ import { InlineChildren } from "./InlineChildren.js";
 
 beforeEach(async () => {
   localStorage.clear();
-  await db.tasks.clear();
-  await db.syncLog.clear();
+  await resetDb();
 });
 
 afterEach(() => {

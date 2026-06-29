@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 
-import "fake-indexeddb/auto";
+import type { Task } from "@timedata/shared";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Task } from "@timedata/shared";
-import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { DEFAULT_TODO_GRAVITY_SETTINGS } from "../../lib/tasks/gravity.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { GravityReviewSection } from "./GravityReviewSection.js";
 
 const NOW = new Date("2026-06-28T00:00:00.000Z");
@@ -103,9 +102,7 @@ describe("GravityReviewSection", () => {
     expect(onBump).toHaveBeenCalledTimes(1);
     expect(host.textContent).toContain("C");
     expect(host.textContent).not.toContain("A");
-    expect(onSurfacedChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ c: NOW.toISOString() }),
-    );
+    expect(onSurfacedChange).toHaveBeenLastCalledWith(expect.objectContaining({ c: NOW.toISOString() }));
     await unmount(root);
   });
 

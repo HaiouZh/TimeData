@@ -1,14 +1,13 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
-import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { addTask, createChildTask, setTaskTags, toggleTaskDone } from "../../lib/tasks.js";
 import { addDays, getDateString } from "../../lib/time.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
@@ -16,8 +15,7 @@ import { isSwipeDownClose, TaskDetailSheet } from "./TaskDetailSheet.js";
 
 beforeEach(async () => {
   localStorage.clear();
-  await db.tasks.clear();
-  await db.syncLog.clear();
+  await resetDb();
 });
 
 // 兜底清理：sheet 与各种 popover 都走 createPortal 到 document.body，异常路径未 unmount 会留垃圾。

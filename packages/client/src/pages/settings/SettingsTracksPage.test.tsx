@@ -1,20 +1,15 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
 import { readTrackActionTags, setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import { resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsTracksPage } from "./SettingsTracksPage.js";
 
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 
-beforeEach(async () => {
-  await db.open();
-  await db.settings.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 afterEach(async () => {
   if (mounted) await unmount(mounted.root);
   mounted = null;

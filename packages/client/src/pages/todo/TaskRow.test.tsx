@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../../db/index.js";
 import { addTask, createChildTask, toggleTaskDone } from "../../lib/tasks.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
 
@@ -17,10 +16,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-beforeEach(async () => {
-  await db.tasks.clear();
-  await db.syncLog.clear();
-});
+beforeEach(resetDb);
 
 const settle = () =>
   act(async () => {
