@@ -25,6 +25,14 @@ describe("index.css design tokens", () => {
     expect(css).toContain("--ease-standard:");
   });
 
+  it("defines a z-index layer ladder", () => {
+    expect(css).toContain("--z-sticky: 20;");
+    expect(css).toContain("--z-dropdown: 30;");
+    expect(css).toContain("--z-backdrop: 40;");
+    expect(css).toContain("--z-modal: 50;");
+    expect(css).toContain("--z-top: 70;");
+  });
+
   it("does not expose retired module signature color tokens", () => {
     expect(css).not.toContain("--color-mod-note");
     expect(css).not.toContain("--color-mod-timeline");

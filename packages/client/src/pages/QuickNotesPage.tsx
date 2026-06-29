@@ -712,7 +712,7 @@ export default function QuickNotesPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
-      <header className="sticky top-0 z-30 shrink-0 border-b border-border bg-page/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-elev1">
+      <header className="sticky top-0 z-[var(--z-dropdown)] shrink-0 border-b border-border bg-page/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-elev1">
         {selectionMode ? (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <button
@@ -747,10 +747,10 @@ export default function QuickNotesPage() {
               </button>
               {exportMenuOpen && (
                 <>
-                  <div role="presentation" className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
+                  <div role="presentation" className="fixed inset-0 z-[var(--z-backdrop)]" onClick={() => setExportMenuOpen(false)} />
                   <div
                     role="menu"
-                    className={`absolute right-0 z-50 mt-2 w-40 ${MENU_PANEL_CLASS}`}
+                    className={`absolute right-0 z-[var(--z-modal)] mt-2 w-40 ${MENU_PANEL_CLASS}`}
                   >
                     <button
                       type="button"
@@ -866,13 +866,13 @@ export default function QuickNotesPage() {
                 <>
                   <div
                     role="presentation"
-                    className="fixed inset-0 z-40"
+                    className="fixed inset-0 z-[var(--z-backdrop)]"
                     onClick={() => setActionsOpen(false)}
                   />
                   <div
                     role="menu"
                     aria-label="速记导出与清理"
-                    className={`absolute right-0 z-50 mt-2 w-48 ${MENU_PANEL_CLASS}`}
+                    className={`absolute right-0 z-[var(--z-modal)] mt-2 w-48 ${MENU_PANEL_CLASS}`}
                   >
                     <button
                       type="button"
@@ -915,7 +915,7 @@ export default function QuickNotesPage() {
           </div>
         )}
         {!selectionMode && !searchOpen && pinnedOpen && pinnedNotes.length > 0 && (
-          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 px-4">
+          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[var(--z-modal)] px-4">
             <section
               aria-label="置顶速记"
               className="mx-auto flex max-h-[min(52vh,24rem)] w-full max-w-3xl flex-col gap-2 overflow-y-auto rounded-card border border-border bg-surface p-3 shadow-elev2"
@@ -1071,7 +1071,7 @@ export default function QuickNotesPage() {
       {bubbleDate && !pinnedOpen && !searchOpen && (
         <label
           aria-label={`当前日期 ${bubbleDate.label}，点击选择日期`}
-          className={`fixed left-1/2 top-[4.75rem] z-[35] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
+          className={`fixed left-1/2 top-[4.75rem] z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
             bubbleVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
           }`}
         >

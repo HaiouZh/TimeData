@@ -287,7 +287,7 @@ export default function SettingsCategoryDetailPage() {
 
       {editingName && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setEditingName(false)}
         >
           <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
@@ -325,7 +325,7 @@ export default function SettingsCategoryDetailPage() {
 
       {colorEditing && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setColorEditing(false)}
         >
           <div className="w-96 space-y-4 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
@@ -391,7 +391,7 @@ export default function SettingsCategoryDetailPage() {
 
       {addingChild && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setAddingChild(false)}
         >
           <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
@@ -429,7 +429,7 @@ export default function SettingsCategoryDetailPage() {
 
       {renamingChild && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setRenamingChild(null)}
         >
           <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
@@ -467,7 +467,7 @@ export default function SettingsCategoryDetailPage() {
 
       {deleting && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setDeleting(null)}
         >
           <div className="w-96 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>

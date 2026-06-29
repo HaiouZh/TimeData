@@ -136,7 +136,7 @@ export default function SettingsCategoriesPage() {
 
       {adding && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setAdding(false)}
         >
           <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
@@ -180,7 +180,7 @@ export default function SettingsCategoriesPage() {
 
       {paletteDialogOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setPaletteDialogOpen(false)}
         >
           <div className="w-96 space-y-4 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>

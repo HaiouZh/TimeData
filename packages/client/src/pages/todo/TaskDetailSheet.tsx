@@ -207,7 +207,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
       role="dialog"
       aria-modal="true"
       aria-label="任务详情"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/60"
       onClick={(event) => {
         if (event.target === event.currentTarget) handleClose();
       }}

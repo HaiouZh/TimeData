@@ -34,7 +34,7 @@ export function GoalGraphUndoToast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 text-sm text-page shadow-lg"
+      className="fixed inset-x-4 bottom-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 text-sm text-page shadow-lg"
     >
       <span className="min-w-0 flex-1 break-words">{message}</span>
       {canUndo ? (

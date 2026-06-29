@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { X } from "@phosphor-icons/react";
 import { Icon } from "../Icon.js";
+import { Z } from "../../lib/zLayers.js";
 
 export interface SheetProps {
   open: boolean;
@@ -38,7 +39,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z 
   return (
     <div
       className="sheet-overlay fixed inset-0 flex items-end justify-center bg-black/60"
-      style={{ zIndex: z ?? 50 }}
+      style={{ zIndex: z ?? Z.modal }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

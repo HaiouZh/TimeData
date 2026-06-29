@@ -4,6 +4,7 @@ import { Icon } from "../../components/Icon.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../../lib/tasks.js";
+import { Z } from "../../lib/zLayers.js";
 import { TagFilterPanel } from "./TagFilterPanel.js";
 
 export interface TodoComposerProps {
@@ -104,11 +105,11 @@ export function TodoComposer({
       className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 backdrop-blur transition-transform duration-200 ease-out will-change-transform sm:p-3"
       // 下滑收起底栏时（hidden），输入框先贴底（bottom=0）再整体下移自身高度（translateY 100%）滑出视口；
       // bottom 的瞬跳发生在元素已移出屏幕外，回弹时不可见。上滑则随底栏一起归位。
-      // zIndex 40 压过任务行内部交互层，低于详情抽屉/系统弹层。
+      // zIndex backdrop(40) 压过任务行内部交互层，低于详情抽屉/系统弹层。
       style={{
         bottom: bottomOffsetPx,
         transform: hiddenByScroll ? "translateY(100%)" : "translateY(0)",
-        zIndex: 40,
+        zIndex: Z.backdrop,
       }}
     >
       <div className="mx-auto w-full max-w-2xl space-y-2 lg:max-w-none">

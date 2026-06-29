@@ -67,7 +67,7 @@ export function MobileBottomNav() {
             <Icon icon={MORE_NAV_ITEM.icon} size={23} weight="regular" />
           </button>
           {showMoreMenu && (
-            <div className="fixed bottom-14 right-1 z-30 min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
+            <div className="fixed bottom-14 right-1 z-[var(--z-dropdown)] min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
               {hiddenItems.map((item) => (
                 <NavLink
                   key={item.to}

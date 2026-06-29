@@ -51,6 +51,13 @@
   --ease-standard: ease-out;
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 
+  /* —— z-index 层级阶梯（仅全局浮层；组件内部局部 stacking 仍用 z-10/z-20）—— */
+  --z-sticky: 20; /* 粘顶头部 */
+  --z-dropdown: 30; /* 下拉 / 侧栏弹出 */
+  --z-backdrop: 40; /* 点击遮罩 / toast */
+  --z-modal: 50; /* 弹层 / 抽屉 / 确认 */
+  --z-top: 70; /* 全屏接管层 */
+
   /* —— 数据色板（仅图表/健康，固定 6 色，不外溢到 UI chrome） —— */
   --color-data-blue: #4f9bf5;
   --color-data-teal: #2dd4bf;

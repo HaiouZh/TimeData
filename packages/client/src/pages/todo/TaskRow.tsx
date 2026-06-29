@@ -193,7 +193,7 @@ export function TaskRow({
         </div>
         {coarsePointer === false && (
           <div
-            className="pointer-events-none absolute inset-y-0 right-2 z-30 my-auto flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+            className="pointer-events-none absolute inset-y-0 right-2 z-20 my-auto flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
           >
             <span
               aria-hidden="true"
@@ -242,7 +242,7 @@ export function TaskRow({
           </div>
         )}
         {coarsePointer !== false && extraActionNode && (
-          <div className="relative z-30 ml-1 flex shrink-0 items-center" onClick={(event) => event.stopPropagation()}>
+          <div className="relative z-20 ml-1 flex shrink-0 items-center" onClick={(event) => event.stopPropagation()}>
             {extraActionNode}
           </div>
         )}

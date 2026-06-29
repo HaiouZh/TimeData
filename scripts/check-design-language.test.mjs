@@ -332,6 +332,16 @@ test("does not flag token radii or radii in test files", () => {
   );
 });
 
+test("flags bare high z-index on global overlays", () => {
+  assert.equal(classifyLine("x.tsx", 'className="fixed inset-0 z-50"').some((v) => v.rule === "bare-zindex"), true);
+  assert.equal(classifyLine("x.tsx", 'className="z-[70]"').some((v) => v.rule === "bare-zindex"), true);
+});
+
+test("does not flag local stacking z-10/z-20", () => {
+  assert.equal(classifyLine("x.tsx", 'className="relative z-10"').some((v) => v.rule === "bare-zindex"), false);
+  assert.equal(classifyLine("x.tsx", 'className="relative z-20"').some((v) => v.rule === "bare-zindex"), false);
+});
+
 test("validates allowlist schema", () => {
   assert.throws(
     () =>

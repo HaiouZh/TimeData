@@ -63,7 +63,7 @@ export function DesktopSidebar() {
               <Icon icon={MORE_NAV_ITEM.icon} size={22} weight="regular" />
             </button>
             {open && (
-              <div className="absolute left-12 top-0 z-30 min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
+              <div className="absolute left-12 top-0 z-[var(--z-dropdown)] min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
                 {moreItems.map((item) => (
                   <NavLink
                     key={item.to}

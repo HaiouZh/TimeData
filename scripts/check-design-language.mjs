@@ -71,6 +71,12 @@ const RULES = [
     msg: "卡片圆角必须使用 rounded-ctl/row/card token（rounded-2xl/3xl 已并入 --radius 阶梯）",
     skip: (file) => isTestFile(file),
   },
+  {
+    id: "bare-zindex",
+    re: new RegExp(`\\b${TAILWIND_VARIANTS}z-(?:(?:30|40|50|60|70)\\b|\\[\\d+\\])`),
+    msg: "全局浮层 z-index 必须用 z-[var(--z-*)]（局部 stacking 用 z-10/z-20）",
+    skip: (file) => isTestFile(file),
+  },
 ];
 
 for (const rule of RULES) {

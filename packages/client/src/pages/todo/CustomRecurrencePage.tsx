@@ -88,7 +88,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-page text-ink">
+    <div className="fixed inset-0 z-[var(--z-top)] flex flex-col bg-page text-ink">
       <div className="flex min-h-14 items-center justify-between border-b border-border px-4">
         <button
           type="button"

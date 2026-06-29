@@ -37,7 +37,7 @@ export default function QuickNoteActionMenu({
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50"
+      className="fixed inset-0 z-[var(--z-modal)]"
       onClick={onClose}
       onContextMenu={(event) => {
         event.preventDefault();
