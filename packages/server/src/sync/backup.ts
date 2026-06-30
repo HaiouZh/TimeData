@@ -26,8 +26,24 @@ export interface ServerBackupManifestEntry {
   details: Record<string, unknown> | null;
 }
 
+export interface BackupConfig {
+  dailyBackup: { enabled: boolean; timeOfDay: string };
+  retentionDays: number;
+}
+
+export interface BackupMeta extends BackupConfig {
+  lastDailySeq: number;
+}
+
+export const DEFAULT_BACKUP_META: BackupMeta = {
+  dailyBackup: { enabled: true, timeOfDay: "04:00" },
+  retentionDays: 7,
+  lastDailySeq: 0,
+};
+
 export interface ServerBackupManifest {
   backups: Record<string, ServerBackupManifestEntry>;
+  meta?: BackupMeta;
 }
 
 export interface CreateServerBackupOptions {
@@ -59,7 +75,7 @@ function manifestPath(): string {
 export function readBackupManifest(): ServerBackupManifest {
   try {
     const parsed = JSON.parse(fs.readFileSync(manifestPath(), "utf8")) as ServerBackupManifest;
-    return { backups: parsed.backups ?? {} };
+    return { backups: parsed.backups ?? {}, meta: parsed.meta };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       console.warn("[backup] failed to read manifest", error);
@@ -71,6 +87,31 @@ export function readBackupManifest(): ServerBackupManifest {
 function writeBackupManifest(manifest: ServerBackupManifest): void {
   fs.mkdirSync(getBackupDir(), { recursive: true });
   fs.writeFileSync(manifestPath(), `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function mergeMeta(stored: BackupMeta | undefined, patch: Partial<BackupMeta>): BackupMeta {
+  const base = {
+    ...DEFAULT_BACKUP_META,
+    ...stored,
+    dailyBackup: { ...DEFAULT_BACKUP_META.dailyBackup, ...stored?.dailyBackup },
+  };
+  return {
+    ...base,
+    ...patch,
+    dailyBackup: { ...base.dailyBackup, ...patch.dailyBackup },
+  };
+}
+
+export function readBackupMeta(): BackupMeta {
+  return mergeMeta(readBackupManifest().meta, {});
+}
+
+export function writeBackupMeta(patch: Partial<BackupMeta>): BackupMeta {
+  const manifest = readBackupManifest();
+  const next = mergeMeta(manifest.meta, patch);
+  manifest.meta = next;
+  writeBackupManifest(manifest);
+  return next;
 }
 
 function updateBackupManifestEntry(id: string, patch: UpdateServerBackupOptions): ServerBackupManifestEntry | null {

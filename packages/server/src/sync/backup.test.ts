@@ -10,7 +10,9 @@ vi.stubEnv("DB_PATH", dbPath);
 
 const { getDb } = await import("../db/connection.js");
 const { initializeDatabase } = await import("../db/schema.js");
-const { createServerBackup, cleanupServerBackups, readBackupManifest } = await import("./backup.js");
+const { createServerBackup, cleanupServerBackups, readBackupManifest, readBackupMeta, writeBackupMeta } = await import(
+  "./backup.js"
+);
 
 beforeEach(() => {
   const db = getDb();
@@ -43,6 +45,31 @@ describe("readBackupManifest", () => {
     expect(readBackupManifest()).toEqual({ backups: {} });
 
     expect(warnSpy).toHaveBeenCalledWith("[backup] failed to read manifest", expect.any(Error));
+  });
+});
+
+describe("backup meta", () => {
+  it("returns defaults when manifest has no meta", () => {
+    expect(readBackupMeta()).toEqual({
+      dailyBackup: { enabled: true, timeOfDay: "04:00" },
+      retentionDays: 7,
+      lastDailySeq: 0,
+    });
+  });
+
+  it("merges and persists meta without touching backups", async () => {
+    const backup = await createServerBackup("manual", { protected: true });
+
+    writeBackupMeta({ retentionDays: 14, lastDailySeq: 42 });
+    writeBackupMeta({ dailyBackup: { enabled: false, timeOfDay: "02:30" } });
+
+    const manifest = readBackupManifest();
+    expect(manifest.backups[backup.id]).toBeDefined();
+    expect(manifest.meta).toEqual({
+      dailyBackup: { enabled: false, timeOfDay: "02:30" },
+      retentionDays: 14,
+      lastDailySeq: 42,
+    });
   });
 });
 
