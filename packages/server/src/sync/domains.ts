@@ -267,8 +267,7 @@ function incomingEntryOverlap(change: SyncChange, previousChanges: SyncChange[])
   return null;
 }
 
-// 删除与新记录时间段重叠的现有记录，并写 tombstone + seq，返回被删除的 ID 列表。
-function deleteOverlappingEntries(db: Database, data: TimeEntry, deletedAt: string): string[] {
+export function findOverlappingEntryIds(db: Database, data: TimeEntry): string[] {
   const rows = db
     .prepare(`
     SELECT id FROM time_entries
@@ -277,19 +276,35 @@ function deleteOverlappingEntries(db: Database, data: TimeEntry, deletedAt: stri
   `)
     .all(data.id, data.endTime, data.startTime) as Array<{ id: string }>;
 
+  return rows.map((row) => row.id);
+}
+
+// 保守预测：过度备份无害，漏备份才有害。
+export function predictOverlappingDeletions(db: Database, changes: SyncChange[]): string[] {
+  const ids: string[] = [];
+  for (const change of changes) {
+    if (change.tableName !== "time_entries" || change.action === "delete" || !change.data) continue;
+    ids.push(...findOverlappingEntryIds(db, change.data as TimeEntry));
+  }
+  return [...new Set(ids)];
+}
+
+// 删除与新记录时间段重叠的现有记录，并写 tombstone + seq，返回被删除的 ID 列表。
+function deleteOverlappingEntries(db: Database, data: TimeEntry, deletedAt: string): string[] {
+  const ids = findOverlappingEntryIds(db, data);
   const insertTombstone = db.prepare(`
     INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
     VALUES ('time_entries', ?, ?)
     ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
   `);
 
-  for (const row of rows) {
-    db.prepare("DELETE FROM time_entries WHERE id = ?").run(row.id);
-    insertTombstone.run(row.id, deletedAt);
-    recordSeq("time_entries", row.id, "delete");
+  for (const id of ids) {
+    db.prepare("DELETE FROM time_entries WHERE id = ?").run(id);
+    insertTombstone.run(id, deletedAt);
+    recordSeq("time_entries", id, "delete");
   }
 
-  return rows.map((row) => row.id);
+  return ids;
 }
 
 function applyEntryChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {

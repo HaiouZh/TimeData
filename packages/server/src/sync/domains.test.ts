@@ -1,5 +1,25 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SERVER_SYNC_DOMAINS, getServerDomain } from "./domains.js";
+
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-domains-test-"));
+const dbPath = path.join(tempRoot, "timedata.db");
+
+vi.stubEnv("DB_PATH", dbPath);
+
+const { getDb } = await import("../db/connection.js");
+const { initializeDatabase } = await import("../db/schema.js");
+
+beforeEach(() => {
+  initializeDatabase();
+  getDb().exec("DELETE FROM sync_logs; DELETE FROM sync_tombstones; DELETE FROM time_entries; DELETE FROM categories;");
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("server sync domains", () => {
   it("covers every registered shared domain", () => {
@@ -67,5 +87,45 @@ describe("server sync domains", () => {
 
   it("throws on unknown domain", () => {
     expect(() => getServerDomain("nope")).toThrow(/Unknown server sync domain/);
+  });
+});
+
+describe("time entry overlap prediction", () => {
+  it("predicts overlapping deletions without mutating", async () => {
+    const { findOverlappingEntryIds, predictOverlappingDeletions } = await import("./domains.js");
+    const db = getDb();
+    db.prepare(
+      "INSERT INTO categories (id,name,parent_id,color,icon,sort_order,is_archived,created_at,updated_at) VALUES ('c','c',NULL,'#808080',NULL,0,0,?,?)",
+    ).run("2026-06-30T00:00:00.000Z", "2026-06-30T00:00:00.000Z");
+    db.prepare(
+      "INSERT INTO time_entries (id,category_id,start_time,end_time,note,created_at,updated_at) VALUES ('e1','c',?,?,NULL,?,?)",
+    ).run(
+      "2026-06-30T09:00:00.000Z",
+      "2026-06-30T10:00:00.000Z",
+      "2026-06-30T00:00:00.000Z",
+      "2026-06-30T00:00:00.000Z",
+    );
+
+    const incoming = {
+      id: "e2",
+      categoryId: "c",
+      startTime: "2026-06-30T09:30:00.000Z",
+      endTime: "2026-06-30T10:30:00.000Z",
+      createdAt: "2026-06-30T00:00:00.000Z",
+      note: null,
+    };
+    expect(findOverlappingEntryIds(db, incoming as never)).toEqual(["e1"]);
+
+    const changes = [
+      {
+        tableName: "time_entries",
+        recordId: "e2",
+        action: "create",
+        data: incoming,
+        timestamp: "2026-06-30T00:00:00.000Z",
+      },
+    ];
+    expect(predictOverlappingDeletions(db, changes as never)).toEqual(["e1"]);
+    expect(db.prepare("SELECT COUNT(*) AS c FROM time_entries").get()).toEqual({ c: 1 });
   });
 });
