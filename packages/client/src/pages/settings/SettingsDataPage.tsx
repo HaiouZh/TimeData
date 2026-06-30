@@ -13,6 +13,7 @@ import { resetLocalDataToDefaults } from "../../db/index.ts";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { getCloudSyncEnabled } from "../../lib/cloudSyncSetting.ts";
 import { safeGetItem } from "../../lib/safeStorage.js";
+import { requestServerBackup } from "../../lib/serverBackup.ts";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { formatAppDateTime, getDateString } from "../../lib/time.ts";
 import { deleteQuickNotesByRange } from "../../quick-notes/deleteQuickNotesRange.ts";
@@ -160,6 +161,19 @@ export default function SettingsDataPage() {
       );
     } catch (e: unknown) {
       setDataStatus(`完整备份导出失败：${e instanceof Error ? e.message : "未知错误"}`);
+    } finally {
+      setDataBusy(false);
+    }
+  }
+
+  async function handleServerBackup() {
+    setDataBusy(true);
+    setDataStatus("正在创建服务器备份...");
+    try {
+      const { backupId } = await requestServerBackup();
+      setDataStatus(`服务器备份已创建：${backupId}`);
+    } catch (e: unknown) {
+      setDataStatus(`服务器备份失败：${e instanceof Error ? e.message : "未知错误"}`);
     } finally {
       setDataBusy(false);
     }
@@ -362,6 +376,18 @@ export default function SettingsDataPage() {
             >
               导出完整备份
             </button>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => void handleServerBackup()}
+              disabled={dataBusy}
+              className={secondaryButtonClassName}
+            >
+              立即在服务器备份
+            </button>
+            <div className="text-xs text-ink-3">在服务器拍一份当前数据快照（永久保留，可在 admin 备份列表删除）。</div>
           </div>
 
           <div className="space-y-2">

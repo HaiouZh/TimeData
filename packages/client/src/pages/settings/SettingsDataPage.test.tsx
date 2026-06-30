@@ -99,6 +99,7 @@ describe("SettingsDataPage", () => {
     expect(html).toContain("高级 · 数据恢复");
     expect(html).toContain("强制替换");
     expect(html).toContain("导出完整备份");
+    expect(html).toContain("立即在服务器备份");
     expect(html).toContain("从完整备份恢复");
     expect(html).toContain("查看本地备份记录");
     expect(html).toContain("同步健康诊断");
