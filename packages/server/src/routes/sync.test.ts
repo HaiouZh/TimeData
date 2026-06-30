@@ -519,6 +519,14 @@ describe("sync route", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ importedCategories: 2, importedTimeEntries: 1, backupId: "backup-1", latestSeq: 3 });
+    expect(createServerBackupMock).toHaveBeenCalledWith("sync_force_push");
+    expect(markServerBackupProtectedMock).toHaveBeenCalledWith(
+      "backup-1",
+      expect.objectContaining({
+        protected: true,
+        reason: "force_push_overwrite",
+      }),
+    );
     expect(db.prepare("SELECT COUNT(*) as count FROM sync_seq").get()).toMatchObject({ count: 3 });
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 2 });
     expect(db.prepare("SELECT COUNT(*) as count FROM time_entries").get()).toMatchObject({ count: 1 });

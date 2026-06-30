@@ -381,6 +381,18 @@ sync.post("/force-push", async (c) => {
   }
 
   const backup = await createServerBackup("sync_force_push");
+  markServerBackupProtected(backup.id, {
+    protected: true,
+    reason: "force_push_overwrite",
+    details: {
+      localSummary: tokenRecord.record.localSummary,
+      importedCategories: body.categories.length,
+      importedTimeEntries: body.timeEntries.length,
+      importedSettings: body.settings?.length ?? 0,
+      importedQuickNotes: body.quickNotes.length,
+      importedTasks: body.tasks.length,
+    },
+  });
   const replaceAll = db.transaction(() => {
     replaceServerData(db, body.categories, body.timeEntries, body.quickNotes, body.tasks, body.settings);
   });
