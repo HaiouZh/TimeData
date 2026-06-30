@@ -953,6 +953,7 @@ describe("sync route", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        baseSeq: 0,
         changes: [
           {
             tableName: "time_entries",
@@ -975,8 +976,63 @@ describe("sync route", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: null });
     expect(body.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied", recordId: "entry-1" });
+    expect(createServerBackupMock).not.toHaveBeenCalled();
+    expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
+  });
+
+  it("creates a protected sync_overlap_delete backup when a push deletes overlapping entries", async () => {
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-existing",
+      "cat-1",
+      "2026-05-08T09:00:00.000Z",
+      "2026-05-08T10:00:00.000Z",
+      null,
+      "2026-05-08T09:00:00.000Z",
+      "2026-05-08T09:00:00.000Z",
+    );
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        changes: [
+          {
+            tableName: "time_entries",
+            recordId: "entry-overlap",
+            action: "create",
+            data: {
+              id: "entry-overlap",
+              categoryId: "cat-1",
+              startTime: "2026-05-08T09:30:00.000Z",
+              endTime: "2026-05-08T10:30:00.000Z",
+              note: null,
+              createdAt: "2026-05-08T09:30:00.000Z",
+              updatedAt: "2026-05-08T09:30:00.000Z",
+            },
+            timestamp: "2026-05-08T09:30:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
+    expect(createServerBackupMock).toHaveBeenCalledWith("sync_overlap_delete");
+    expect(markServerBackupProtectedMock).toHaveBeenCalledWith(
+      "backup-1",
+      expect.objectContaining({
+        protected: true,
+        reason: "overlap_delete",
+        details: { predictedDeletedRecordIds: ["entry-existing"] },
+      }),
+    );
   });
 
   it("同步往返保留 completedCount 与 recurrence.count", async () => {

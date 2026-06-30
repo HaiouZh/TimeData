@@ -29,7 +29,7 @@ import type { CountRow, MaxRow, TombstoneRow } from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup, markServerBackupProtected } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
-import { getServerDomain } from "../sync/domains.js";
+import { getServerDomain, predictOverlappingDeletions } from "../sync/domains.js";
 import { applyChange, type ApplyChangeResult } from "../sync/resolver.js";
 import { orderPushChanges } from "../sync/order.js";
 import { validateSyncChanges } from "../sync/validation.js";
@@ -255,18 +255,6 @@ function syncPushResponse(outcomes: SyncPushOutcome[], backupId: string | null):
   };
 }
 
-function protectedBackupDetails(outcomes: SyncPushOutcome[]): Record<string, unknown> | null {
-  const overridden = outcomes
-    .filter((outcome) => outcome.overriddenRecordIds?.length)
-    .map((outcome) => ({
-      localRecordId: outcome.recordId,
-      tableName: outcome.tableName,
-      overriddenRecordIds: outcome.overriddenRecordIds ?? [],
-    }));
-
-  return overridden.length ? { overridden } : null;
-}
-
 function seqAnalysisBackupDetails(
   baseSeq: number | null,
   analysis: ReturnType<typeof analyzePushBaseSeq>,
@@ -463,13 +451,31 @@ sync.post("/push", async (c) => {
 
   const pushRecords = orderedChanges.map((change) => ({ tableName: change.tableName, recordId: change.recordId }));
   const seqAnalysis = analyzePushBaseSeq(body.baseSeq ?? null, pushRecords);
-  const backupOperation =
-    seqAnalysis.strategy === "local_wins_non_fast_forward"
-      ? "sync_local_wins"
-      : seqAnalysis.strategy === "unknown_base"
-        ? "sync_unknown_base"
-        : "sync_push";
-  const backup = await createServerBackup(backupOperation);
+  let backupReason: string | null = null;
+  let backupOperation: string | null = null;
+  let backupDetails: Record<string, unknown> | null = null;
+  if (seqAnalysis.strategy === "local_wins_non_fast_forward") {
+    backupReason = "local_wins_non_fast_forward";
+    backupOperation = "sync_local_wins";
+    backupDetails = seqAnalysisBackupDetails(body.baseSeq ?? null, seqAnalysis, orderedChanges);
+  } else if (seqAnalysis.strategy === "unknown_base") {
+    backupReason = "unknown_base";
+    backupOperation = "sync_unknown_base";
+    backupDetails = seqAnalysisBackupDetails(null, seqAnalysis, orderedChanges);
+  } else {
+    const predictedDeletedRecordIds = predictOverlappingDeletions(db, orderedChanges);
+    if (predictedDeletedRecordIds.length > 0) {
+      backupReason = "overlap_delete";
+      backupOperation = "sync_overlap_delete";
+      backupDetails = { predictedDeletedRecordIds };
+    }
+  }
+
+  let backup: { id: string } | null = null;
+  if (backupOperation) {
+    backup = await createServerBackup(backupOperation);
+    markServerBackupProtected(backup.id, { protected: true, reason: backupReason, details: backupDetails });
+  }
   const results: ApplyChangeResult[] = [];
   const applyAll = db.transaction(() => {
     for (const change of orderedChanges) {
@@ -482,44 +488,23 @@ sync.post("/push", async (c) => {
   } catch (err) {
     const message = (err as Error).message;
     console.error("[sync/push] apply failed:", message);
-    writeSyncLog(db, "push_failed_after_backup", { backupId: backup.id, message }, orderedChanges.length);
+    writeSyncLog(db, "push_failed_after_backup", { backupId: backup?.id ?? null, message }, orderedChanges.length);
     const { body: errBody, status } = errorJson(
       ErrorCode.INTERNAL_ERROR,
       500,
       undefined,
-      { backupId: backup.id },
+      { backupId: backup?.id ?? null },
     );
     return c.json(errBody, status);
   }
 
-  const outcomes = results.map((result) => outcomeFromApplyResult(result, backup.id));
-  const protectedDetails = protectedBackupDetails(outcomes);
-  if (seqAnalysis.strategy === "local_wins_non_fast_forward") {
-    markServerBackupProtected(backup.id, {
-      protected: true,
-      reason: "local_wins_non_fast_forward",
-      details: seqAnalysisBackupDetails(body.baseSeq ?? null, seqAnalysis, orderedChanges),
-    });
-  } else if (seqAnalysis.strategy === "unknown_base") {
-    markServerBackupProtected(backup.id, {
-      protected: true,
-      reason: "unknown_base",
-      details: seqAnalysisBackupDetails(null, seqAnalysis, orderedChanges),
-    });
-  } else if (protectedDetails) {
-    markServerBackupProtected(backup.id, {
-      protected: true,
-      reason: "local_override_overlap",
-      details: protectedDetails,
-    });
-  }
-
-  const response = syncPushResponse(outcomes, backup.id);
+  const outcomes = results.map((result) => outcomeFromApplyResult(result, backup?.id ?? null));
+  const response = syncPushResponse(outcomes, backup?.id ?? null);
   writeSyncLog(db, "push_received", {
-    backupId: backup.id,
+    backupId: backup?.id ?? null,
     outcomes: response.outcomes,
     seqAnalysis,
-    protected: seqAnalysis.strategy === "local_wins_non_fast_forward" || seqAnalysis.strategy === "unknown_base" || Boolean(protectedDetails),
+    protected: Boolean(backup),
     overriddenRecordIds: protectedOutcomeIds(outcomes),
   }, orderedChanges.length);
   notifySyncChange(getLatestSeq());
