@@ -8,6 +8,8 @@ export interface DailyBackupResult {
   reason: "created" | "disabled" | "before_time" | "already_today" | "no_change";
 }
 
+let dailyBackupGate: Promise<void> = Promise.resolve();
+
 function localDate(value: Date): string {
   return toAppLocalDateTimeString(value).slice(0, 10);
 }
@@ -16,7 +18,7 @@ function localTime(value: Date): string {
   return toAppLocalDateTimeString(value).slice(11, 16);
 }
 
-export async function runDailyBackupIfDue(now = new Date()): Promise<DailyBackupResult> {
+async function runDailyBackupIfDueLocked(now: Date): Promise<DailyBackupResult> {
   const meta = readBackupMeta();
   if (!meta.dailyBackup.enabled) return { created: false, backupId: null, reason: "disabled" };
   if (localTime(now) < meta.dailyBackup.timeOfDay) return { created: false, backupId: null, reason: "before_time" };
@@ -33,4 +35,18 @@ export async function runDailyBackupIfDue(now = new Date()): Promise<DailyBackup
   const backup = await createServerBackup("auto_daily");
   writeBackupMeta({ lastDailySeq: latestSeq });
   return { created: true, backupId: backup.id, reason: "created" };
+}
+
+export async function runDailyBackupIfDue(now = new Date()): Promise<DailyBackupResult> {
+  const previous = dailyBackupGate;
+  let release!: () => void;
+  dailyBackupGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await previous.catch(() => undefined);
+  try {
+    return await runDailyBackupIfDueLocked(now);
+  } finally {
+    release();
+  }
 }

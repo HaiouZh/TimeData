@@ -530,14 +530,14 @@ describe("sync route", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ importedCategories: 2, importedTimeEntries: 1, backupId: "backup-1", latestSeq: 3 });
-    expect(createServerBackupMock).toHaveBeenCalledWith("sync_force_push");
-    expect(markServerBackupProtectedMock).toHaveBeenCalledWith(
-      "backup-1",
+    expect(createServerBackupMock).toHaveBeenCalledWith(
+      "sync_force_push",
       expect.objectContaining({
         protected: true,
         reason: "force_push_overwrite",
       }),
     );
+    expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
     expect(db.prepare("SELECT COUNT(*) as count FROM sync_seq").get()).toMatchObject({ count: 3 });
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 2 });
     expect(db.prepare("SELECT COUNT(*) as count FROM time_entries").get()).toMatchObject({ count: 1 });
@@ -947,8 +947,7 @@ describe("sync route", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
-    expect(createServerBackupMock).toHaveBeenCalledWith("sync_unknown_base");
-    expect(markServerBackupProtectedMock).toHaveBeenCalledWith("backup-1", {
+    expect(createServerBackupMock).toHaveBeenCalledWith("sync_unknown_base", {
       protected: true,
       reason: "unknown_base",
       details: {
@@ -958,6 +957,7 @@ describe("sync route", () => {
         pushedRecords: [{ tableName: "categories", recordId: "cat-1", action: "update" }],
       },
     });
+    expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
     const logRow = db
       .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
       .get("push_received") as { detail: string };
@@ -1043,15 +1043,15 @@ describe("sync route", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "backup-1" });
-    expect(createServerBackupMock).toHaveBeenCalledWith("sync_overlap_delete");
-    expect(markServerBackupProtectedMock).toHaveBeenCalledWith(
-      "backup-1",
+    expect(createServerBackupMock).toHaveBeenCalledWith(
+      "sync_overlap_delete",
       expect.objectContaining({
         protected: true,
         reason: "overlap_delete",
         details: { predictedDeletedRecordIds: ["entry-existing"] },
       }),
     );
+    expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
   });
 
   it("同步往返保留 completedCount 与 recurrence.count", async () => {
@@ -1711,8 +1711,7 @@ describe("sync route", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "sync_local_wins-backup-1" });
-    expect(createServerBackupMock).toHaveBeenCalledWith("sync_local_wins");
-    expect(markServerBackupProtectedMock).toHaveBeenCalledWith("sync_local_wins-backup-1", {
+    expect(createServerBackupMock).toHaveBeenCalledWith("sync_local_wins", {
       protected: true,
       reason: "local_wins_non_fast_forward",
       details: {
@@ -1722,6 +1721,7 @@ describe("sync route", () => {
         pushedRecords: [{ tableName: "categories", recordId: "cat-overlap", action: "update" }],
       },
     });
+    expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
     expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-overlap")).toMatchObject({
       name: "local name",
     });

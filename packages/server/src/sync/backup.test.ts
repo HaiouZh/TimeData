@@ -71,6 +71,32 @@ describe("backup meta", () => {
       lastDailySeq: 42,
     });
   });
+
+  it("falls back to defaults for invalid persisted meta fields", () => {
+    const backupDir = path.join(tempRoot, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(backupDir, "manifest.json"),
+      `${JSON.stringify(
+        {
+          backups: {},
+          meta: {
+            dailyBackup: { enabled: "yes", timeOfDay: "9pm" },
+            retentionDays: 0,
+            lastDailySeq: -1,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(readBackupMeta()).toEqual({
+      dailyBackup: { enabled: true, timeOfDay: "04:00" },
+      retentionDays: 7,
+      lastDailySeq: 0,
+    });
+  });
 });
 
 describe("createServerBackup", () => {
@@ -294,6 +320,7 @@ describe("createServerBackup", () => {
     fs.writeFileSync(path.join(backupDir, "sync_push-2026-06-01T00-00-00-000Z.db"), "x");
     fs.writeFileSync(path.join(backupDir, "auto_daily-2026-06-29T00-00-00-000Z.db"), "x");
     fs.writeFileSync(path.join(backupDir, "sync_force_push-2026-01-01T00-00-00-000Z.db"), "x");
+    fs.writeFileSync(path.join(backupDir, "data_reset-2026-01-01T00-00-00-000Z.db"), "x");
     fs.writeFileSync(path.join(backupDir, "manifest.json"), `${JSON.stringify({ backups: {} }, null, 2)}\n`);
 
     const removed = cleanupServerBackups(new Date("2026-06-30T00:00:00.000Z"), 7);
@@ -301,6 +328,33 @@ describe("createServerBackup", () => {
     expect(removed).toEqual(["sync_push-2026-06-01T00-00-00-000Z.db"]);
     expect(fs.existsSync(path.join(backupDir, "auto_daily-2026-06-29T00-00-00-000Z.db"))).toBe(true);
     expect(fs.existsSync(path.join(backupDir, "sync_force_push-2026-01-01T00-00-00-000Z.db"))).toBe(true);
+    expect(fs.existsSync(path.join(backupDir, "data_reset-2026-01-01T00-00-00-000Z.db"))).toBe(true);
+  });
+
+  it("keeps old protected-class manifest entries even when legacy manifests missed the protected flag", async () => {
+    const backupDir = path.join(tempRoot, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+    const entry = {
+      id: "sync_force_push-legacy",
+      fileName: "sync_force_push-legacy.db",
+      operation: "sync_force_push",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      protected: false,
+      reason: null,
+      relatedSyncLogId: null,
+      details: null,
+    };
+    fs.writeFileSync(path.join(backupDir, entry.fileName), "x");
+    fs.writeFileSync(
+      path.join(backupDir, "manifest.json"),
+      `${JSON.stringify({ backups: { [entry.id]: entry } }, null, 2)}\n`,
+    );
+
+    const removed = cleanupServerBackups(new Date("2026-06-30T00:00:00.000Z"), 7);
+
+    expect(removed).toEqual([]);
+    expect(fs.existsSync(path.join(backupDir, entry.fileName))).toBe(true);
+    expect(readBackupManifest().backups[entry.id]).toBeDefined();
   });
 
   it("removes manifest entries whose backup files are missing", () => {

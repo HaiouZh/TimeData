@@ -506,6 +506,31 @@ describe("admin route", () => {
     expect(fs.existsSync(path.join(tempDir, "backups", "del-me.db"))).toBe(false);
   });
 
+  it("deletes an unregistered backup by file name", async () => {
+    const backupDir = path.join(tempDir, "backups");
+    const fileName = "sync_push-2026-05-07T08-00-00-000Z.db";
+    fs.writeFileSync(path.join(backupDir, fileName), "orphan backup");
+
+    const res = await app.request(`/api/admin/backups/${encodeURIComponent(fileName)}`, { method: "DELETE" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: fileName });
+    expect(fs.existsSync(path.join(backupDir, fileName))).toBe(false);
+  });
+
+  it("rejects backup delete ids that escape the backup directory", async () => {
+    const outsidePath = path.join(tempDir, "escape.db");
+    fs.writeFileSync(outsidePath, "outside backup");
+
+    const res = await app.request("/api/admin/backups/..%2Fescape", { method: "DELETE" });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
+    expect(fs.existsSync(outsidePath)).toBe(true);
+  });
+
   it("runs daily backup through admin endpoint", async () => {
     const backupDir = path.join(tempDir, "backups");
     fs.mkdirSync(backupDir, { recursive: true });

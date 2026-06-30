@@ -10,10 +10,14 @@ covers:
   - packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx
   - packages/client/src/pages/settings/BackupHistoryPage.tsx
   - packages/server/src/sync/backup.ts
+  - packages/server/src/sync/domains.ts
   - packages/server/src/sync/dailyBackup.ts
   - packages/server/src/routes/admin/backups.ts
+  - packages/server/src/routes/admin/_helpers.ts
   - packages/server/src/routes/admin/backupConfig.ts
   - packages/server/src/routes/sync.ts
+  - packages/shared/src/admin-schemas.ts
+  - packages/shared/src/types.ts
   - packages/client/src/db/index.ts:autoBackups
 last-reviewed: 2026-06-30
 ---

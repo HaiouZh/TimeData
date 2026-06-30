@@ -9,7 +9,7 @@ vi.stubEnv("DB_PATH", path.join(tempRoot, "timedata.db"));
 
 const { getDb } = await import("../db/connection.js");
 const { initializeDatabase } = await import("../db/schema.js");
-const { readBackupMeta, writeBackupMeta } = await import("./backup.js");
+const { readBackupManifest, readBackupMeta, writeBackupMeta } = await import("./backup.js");
 const { runDailyBackupIfDue } = await import("./dailyBackup.js");
 const { recordSeq } = await import("./seq.js");
 
@@ -74,5 +74,24 @@ describe("runDailyBackupIfDue", () => {
     vi.setSystemTime(new Date("2026-06-30T13:00:00.000Z"));
     const second = await runDailyBackupIfDue(new Date("2026-06-30T13:00:00.000Z"));
     expect(second).toMatchObject({ created: false, backupId: null, reason: "already_today" });
+  });
+
+  it("creates at most one auto_daily backup when concurrent callers race", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-30T12:00:00.000Z"));
+    writeBackupMeta({ dailyBackup: { enabled: true, timeOfDay: "00:00" }, lastDailySeq: 0 });
+    const latestSeq = bumpSeq();
+
+    const results = await Promise.all([
+      runDailyBackupIfDue(new Date("2026-06-30T12:00:00.000Z")),
+      runDailyBackupIfDue(new Date("2026-06-30T12:00:00.000Z")),
+    ]);
+
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(results.filter((result) => result.reason === "already_today")).toHaveLength(1);
+    expect(Object.values(readBackupManifest().backups).filter((entry) => entry.operation === "auto_daily")).toHaveLength(
+      1,
+    );
+    expect(readBackupMeta().lastDailySeq).toBe(latestSeq);
   });
 });

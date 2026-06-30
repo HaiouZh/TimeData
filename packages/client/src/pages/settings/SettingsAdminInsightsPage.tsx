@@ -422,7 +422,13 @@ export default function SettingsAdminInsightsPage() {
       setBackupActionStatus(
         result.created ? `已创建每日备份：${result.backupId}` : `未创建每日备份：${result.reason}`,
       );
-      await refreshBackups();
+      try {
+        await refreshBackups();
+      } catch (refreshError) {
+        setBackupActionStatus(
+          `日备操作已完成，但列表刷新失败：${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+        );
+      }
     } catch (err) {
       setBackupActionStatus(`每日备份触发失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -444,7 +450,13 @@ export default function SettingsAdminInsightsPage() {
     try {
       await deleteAdminBackup(id);
       setBackupActionStatus(`已删除备份：${id}`);
-      await refreshBackups();
+      try {
+        await refreshBackups();
+      } catch (refreshError) {
+        setBackupActionStatus(
+          `已删除备份，但列表刷新失败：${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+        );
+      }
     } catch (err) {
       setBackupActionStatus(`备份删除失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -711,9 +723,9 @@ export default function SettingsAdminInsightsPage() {
                       立即触发日备
                     </button>
                   </div>
-                  {backupActionStatus && <div className="text-xs text-ink-3">{backupActionStatus}</div>}
                 </div>
               )}
+              {backupActionStatus && <div className="text-xs text-ink-3">{backupActionStatus}</div>}
               <div className="space-y-2">
                 {data.backups.backups.slice(0, 8).map((backup) => (
                 <div key={backup.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">

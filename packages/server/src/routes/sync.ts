@@ -27,7 +27,7 @@ import type {
 import { getDb } from "../db/connection.js";
 import type { CountRow, MaxRow, TombstoneRow } from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
-import { createServerBackup, markServerBackupProtected } from "../sync/backup.js";
+import { createServerBackup } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
 import { getServerDomain, predictOverlappingDeletions } from "../sync/domains.js";
 import { applyChange, type ApplyChangeResult } from "../sync/resolver.js";
@@ -380,8 +380,7 @@ sync.post("/force-push", async (c) => {
     return c.json(errBody, status);
   }
 
-  const backup = await createServerBackup("sync_force_push");
-  markServerBackupProtected(backup.id, {
+  const backup = await createServerBackup("sync_force_push", {
     protected: true,
     reason: "force_push_overwrite",
     details: {
@@ -490,8 +489,11 @@ sync.post("/push", async (c) => {
 
   let backup: { id: string } | null = null;
   if (backupOperation) {
-    backup = await createServerBackup(backupOperation);
-    markServerBackupProtected(backup.id, { protected: true, reason: backupReason, details: backupDetails });
+    backup = await createServerBackup(backupOperation, {
+      protected: true,
+      reason: backupReason,
+      details: backupDetails,
+    });
   }
   const results: ApplyChangeResult[] = [];
   const applyAll = db.transaction(() => {

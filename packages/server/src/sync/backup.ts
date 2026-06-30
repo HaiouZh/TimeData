@@ -95,11 +95,33 @@ function mergeMeta(stored: BackupMeta | undefined, patch: Partial<BackupMeta>): 
     ...stored,
     dailyBackup: { ...DEFAULT_BACKUP_META.dailyBackup, ...stored?.dailyBackup },
   };
-  return {
+  const merged = {
     ...base,
     ...patch,
     dailyBackup: { ...base.dailyBackup, ...patch.dailyBackup },
   };
+  return sanitizeBackupMeta(merged);
+}
+
+function sanitizeBackupMeta(meta: Partial<BackupMeta>): BackupMeta {
+  const enabled =
+    typeof meta.dailyBackup?.enabled === "boolean"
+      ? meta.dailyBackup.enabled
+      : DEFAULT_BACKUP_META.dailyBackup.enabled;
+  const timeOfDay =
+    typeof meta.dailyBackup?.timeOfDay === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(meta.dailyBackup.timeOfDay)
+      ? meta.dailyBackup.timeOfDay
+      : DEFAULT_BACKUP_META.dailyBackup.timeOfDay;
+  const retentionDays =
+    typeof meta.retentionDays === "number" && Number.isInteger(meta.retentionDays) && meta.retentionDays >= 1
+      ? meta.retentionDays
+      : DEFAULT_BACKUP_META.retentionDays;
+  const lastDailySeq =
+    typeof meta.lastDailySeq === "number" && Number.isInteger(meta.lastDailySeq) && meta.lastDailySeq >= 0
+      ? meta.lastDailySeq
+      : DEFAULT_BACKUP_META.lastDailySeq;
+
+  return { dailyBackup: { enabled, timeOfDay }, retentionDays, lastDailySeq };
 }
 
 export function readBackupMeta(): BackupMeta {
@@ -199,6 +221,7 @@ const PROTECTED_OPERATION_PREFIXES = [
   "sync_unknown_base",
   "sync_overlap_delete",
   "manual",
+  "data_reset",
 ];
 
 export function isProtectedClassOperation(operation: string): boolean {
@@ -226,7 +249,8 @@ export function cleanupServerBackups(now = new Date(), retentionDays = readBacku
       delete manifest.backups[entry.id];
       continue;
     }
-    if (classifyBackupRetention(entry.createdAt, entry.protected, now, retentionDays) === "deletable") {
+    const protectedBackup = entry.protected || isProtectedClassOperation(entry.operation);
+    if (classifyBackupRetention(entry.createdAt, protectedBackup, now, retentionDays) === "deletable") {
       fs.rmSync(filePath, { force: true });
       delete manifest.backups[entry.id];
       removed.push(entry.id);
