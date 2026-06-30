@@ -141,10 +141,11 @@ export function classifyBackupRetention(
   createdAt: string,
   protectedBackup: boolean,
   now = new Date(),
+  retentionDays = DEFAULT_BACKUP_META.retentionDays,
 ): BackupRetention {
   if (protectedBackup) return "protected";
   const ageMs = now.getTime() - Date.parse(createdAt);
-  if (ageMs <= 15 * 24 * 60 * 60 * 1000) return "recent";
+  if (ageMs <= retentionDays * 24 * 60 * 60 * 1000) return "recent";
   return "deletable";
 }
 
@@ -192,45 +193,69 @@ export async function createServerBackup(
   return result;
 }
 
-function cleanupWindowKey(createdAt: string, now: Date): number {
-  const created = new Date(createdAt);
-  const createdDay = Date.UTC(created.getUTCFullYear(), created.getUTCMonth(), created.getUTCDate());
-  const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const ageDays = Math.floor((nowDay - createdDay) / (24 * 60 * 60 * 1000));
-  return Math.floor((ageDays - 16) / 15);
+const PROTECTED_OPERATION_PREFIXES = [
+  "sync_force_push",
+  "sync_local_wins",
+  "sync_unknown_base",
+  "sync_overlap_delete",
+  "manual",
+];
+
+export function isProtectedClassOperation(operation: string): boolean {
+  return PROTECTED_OPERATION_PREFIXES.some((prefix) => operation === prefix || operation.startsWith(prefix));
 }
 
-export function cleanupServerBackups(now = new Date()): string[] {
+function parseOrphanOperation(fileName: string): string {
+  return fileName.replace(/-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.db$/, "");
+}
+
+function parseOrphanCreatedAt(fileName: string): string | null {
+  const match = fileName.match(/-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.db$/);
+  if (!match) return null;
+  return match[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, "T$1:$2:$3.$4Z");
+}
+
+export function cleanupServerBackups(now = new Date(), retentionDays = readBackupMeta().retentionDays): string[] {
+  const dir = getBackupDir();
   const manifest = readBackupManifest();
-  const entries = Object.values(manifest.backups);
-  const keepIds = new Set<string>();
-
-  for (const entry of entries) {
-    if (entry.protected || classifyBackupRetention(entry.createdAt, entry.protected, now) === "recent") {
-      keepIds.add(entry.id);
-    }
-  }
-
-  const oldNormalByWindow = new Map<number, ServerBackupManifestEntry>();
-  for (const entry of entries) {
-    if (entry.protected || keepIds.has(entry.id)) continue;
-    const key = cleanupWindowKey(entry.createdAt, now);
-    const current = oldNormalByWindow.get(key);
-    if (!current || entry.createdAt > current.createdAt) {
-      oldNormalByWindow.set(key, entry);
-    }
-  }
-
-  for (const entry of oldNormalByWindow.values()) {
-    keepIds.add(entry.id);
-  }
-
   const removed: string[] = [];
-  for (const entry of entries) {
-    if (keepIds.has(entry.id)) continue;
-    fs.rmSync(path.join(getBackupDir(), entry.fileName), { force: true });
-    delete manifest.backups[entry.id];
-    removed.push(entry.id);
+
+  for (const entry of Object.values(manifest.backups)) {
+    const filePath = path.join(dir, entry.fileName);
+    if (!fs.existsSync(filePath)) {
+      delete manifest.backups[entry.id];
+      continue;
+    }
+    if (classifyBackupRetention(entry.createdAt, entry.protected, now, retentionDays) === "deletable") {
+      fs.rmSync(filePath, { force: true });
+      delete manifest.backups[entry.id];
+      removed.push(entry.id);
+    }
+  }
+
+  let diskFiles: string[] = [];
+  try {
+    diskFiles = fs.readdirSync(dir).filter((file) => file.endsWith(".db"));
+  } catch {
+    diskFiles = [];
+  }
+  const known = new Set(Object.values(manifest.backups).map((entry) => entry.fileName));
+  for (const fileName of diskFiles) {
+    if (known.has(fileName)) continue;
+    const operation = parseOrphanOperation(fileName);
+    if (isProtectedClassOperation(operation)) {
+      console.warn("[backup] keeping unregistered protected-class orphan", { fileName, operation });
+      continue;
+    }
+    const createdAt = parseOrphanCreatedAt(fileName);
+    if (!createdAt) {
+      console.warn("[backup] keeping unparseable orphan", { fileName });
+      continue;
+    }
+    if (classifyBackupRetention(createdAt, false, now, retentionDays) === "deletable") {
+      fs.rmSync(path.join(dir, fileName), { force: true });
+      removed.push(fileName);
+    }
   }
 
   writeBackupManifest(manifest);
