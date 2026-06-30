@@ -1,6 +1,6 @@
 import type { VersionInfo } from "@timedata/shared";
 
-const CACHE_TTL_MS = 300_000;
+const CACHE_TTL_MS = 30_000;
 
 let cache: { value: VersionInfo; expiresAt: number } | null = null;
 
@@ -32,20 +32,22 @@ export async function fetchLatestSha(owner: string, repo: string): Promise<strin
   }
 }
 
-export async function getVersionInfo(opts: { currentSha: string; repo: string }): Promise<VersionInfo> {
+export async function getVersionInfo(opts: { currentSha: string; repo: string; force?: boolean }): Promise<VersionInfo> {
   const now = Date.now();
-  if (cache && cache.expiresAt > now) {
+  if (!opts.force && cache && cache.expiresAt > now) {
     return cache.value;
   }
   const [owner, repo] = opts.repo.split("/");
   const latest = await fetchLatestSha(owner, repo);
   const current = opts.currentSha.slice(0, 7);
-  const hasUpdate = current !== "dev" && latest !== "unknown" && current !== latest;
+  const checkOk = latest !== "unknown";
+  const hasUpdate = current !== "dev" && checkOk && current !== latest;
   const info: VersionInfo = {
     current,
     latest,
     hasUpdate,
     checkedAt: new Date(now).toISOString(),
+    checkOk,
   };
   cache = { value: info, expiresAt: now + CACHE_TTL_MS };
   return info;

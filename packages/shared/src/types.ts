@@ -198,10 +198,12 @@ export interface VersionInfo {
   current: string;
   /** GitHub Actions 最近成功 build 的 head_sha 前 7 位 */
   latest: string;
-  /** current !== latest && current !== 'dev' */
+  /** current !== latest && current !== 'dev' && checkOk */
   hasUpdate: boolean;
   /** ISO 时间戳，便于前端显示 */
   checkedAt: string;
+  /** GitHub 最新版是否查到；false 表示查询失败/限流，latest 不可信，不能据此判定「已最新」 */
+  checkOk: boolean;
 }
 
 export type {

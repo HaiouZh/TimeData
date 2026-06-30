@@ -12,6 +12,7 @@ const forceRefreshMock = vi.hoisted(() => vi.fn());
 const fetchServerVersionMock = vi.hoisted(() => vi.fn());
 const triggerServerUpdateMock = vi.hoisted(() => vi.fn());
 const fetchUpdateStatusMock = vi.hoisted(() => vi.fn());
+const pollServerUpdateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../contexts/SyncContext.tsx", () => ({
   useSyncContext: useSyncContextMock,
@@ -60,6 +61,7 @@ vi.mock("../lib/serverVersion.ts", () => ({
   fetchServerVersion: fetchServerVersionMock,
   triggerServerUpdate: triggerServerUpdateMock,
   fetchUpdateStatus: fetchUpdateStatusMock,
+  pollServerUpdate: pollServerUpdateMock,
 }));
 
 vi.mock("../lib/mobileUpdate.ts", () => ({
@@ -93,6 +95,7 @@ function serverVersion(current: string, latest: string, hasUpdate: boolean) {
       latest,
       hasUpdate,
       checkedAt: "2026-05-08T08:00:00.000Z",
+      checkOk: true,
     },
   };
 }
@@ -121,9 +124,11 @@ describe("SettingsPage", () => {
     fetchServerVersionMock.mockReset();
     triggerServerUpdateMock.mockReset();
     fetchUpdateStatusMock.mockReset();
+    pollServerUpdateMock.mockReset();
     fetchServerVersionMock.mockResolvedValue(serverVersion("abc1234", "def5678", true));
-    triggerServerUpdateMock.mockResolvedValue(null);
+    triggerServerUpdateMock.mockResolvedValue({ ok: true, updateId: "update-default" });
     fetchUpdateStatusMock.mockResolvedValue(null);
+    pollServerUpdateMock.mockResolvedValue({ kind: "succeeded", version: "def5678" });
   });
 
   it("reflects apiUrl updates from sync context", () => {
@@ -194,11 +199,12 @@ describe("SettingsPage", () => {
     expect(html).toContain("build-xyz");
   });
 
-  it("refreshes server version before deciding whether to trigger server update", async () => {
+  it("force-rechecks version, triggers update, and drives it to completion", async () => {
     fetchServerVersionMock
       .mockResolvedValueOnce(serverVersion("e09fe9e", "e09fe9e", false))
       .mockResolvedValueOnce(serverVersion("e09fe9e", "3061657", true));
-    triggerServerUpdateMock.mockResolvedValue("update-1");
+    triggerServerUpdateMock.mockResolvedValue({ ok: true, updateId: "update-1" });
+    pollServerUpdateMock.mockResolvedValue({ kind: "succeeded", version: "3061657" });
 
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsPage)));
     try {
@@ -208,9 +214,45 @@ describe("SettingsPage", () => {
       await waitForText(host, "确认更新到 3061657");
       await click(buttonByText(host, "确认"));
 
-      await waitForText(host, "更新任务已启动：update-1");
+      await waitForText(host, "已更新到 3061657 ✅");
       expect(fetchServerVersionMock).toHaveBeenCalledTimes(2);
       expect(triggerServerUpdateMock).toHaveBeenCalledTimes(1);
+      expect(pollServerUpdateMock).toHaveBeenCalledTimes(1);
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("reports failure when polling resolves failed", async () => {
+    fetchServerVersionMock
+      .mockResolvedValueOnce(serverVersion("e09fe9e", "e09fe9e", false))
+      .mockResolvedValueOnce(serverVersion("e09fe9e", "3061657", true));
+    triggerServerUpdateMock.mockResolvedValue({ ok: true, updateId: "update-2" });
+    pollServerUpdateMock.mockResolvedValue({ kind: "failed", message: "watchtower update failed: 500" });
+
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsPage)));
+    try {
+      await waitForText(host, "当前 e09fe9e / 最新 e09fe9e");
+      await click(buttonByText(host, "服务端更新"));
+      await waitForText(host, "确认更新到 3061657");
+      await click(buttonByText(host, "确认"));
+      await waitForText(host, "更新失败：watchtower update failed: 500");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("does not claim up-to-date when the GitHub check failed", async () => {
+    fetchServerVersionMock.mockResolvedValue({
+      ok: true,
+      version: { current: "e09fe9e", latest: "unknown", hasUpdate: false, checkedAt: "x", checkOk: false },
+    });
+
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsPage)));
+    try {
+      await click(buttonByText(host, "服务端更新"));
+      await waitForText(host, "检查失败");
+      expect(triggerServerUpdateMock).not.toHaveBeenCalled();
     } finally {
       await unmount(root);
     }

@@ -69,6 +69,38 @@ describe("getVersionInfo", () => {
     expect(info.hasUpdate).toBe(false);
   });
 
+  it("checkOk=false when latest unknown, and does not claim up-to-date", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404 }) as unknown as typeof fetch;
+    const info = await getVersionInfo({ currentSha: "abc1234", repo: "HaiouZh/TimeData" });
+    expect(info.latest).toBe("unknown");
+    expect(info.checkOk).toBe(false);
+    expect(info.hasUpdate).toBe(false);
+  });
+
+  it("checkOk=true when latest resolved", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ workflow_runs: [{ head_sha: "deadbeef00000000" }] }),
+    }) as unknown as typeof fetch;
+    const info = await getVersionInfo({ currentSha: "abc1234", repo: "HaiouZh/TimeData" });
+    expect(info.checkOk).toBe(true);
+  });
+
+  it("force=true bypasses the cache", async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ workflow_runs: [{ head_sha: "1111111aaaa" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ workflow_runs: [{ head_sha: "2222222bbbb" }] }) });
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const first = await getVersionInfo({ currentSha: "x", repo: "a/b" });
+    const second = await getVersionInfo({ currentSha: "x", repo: "a/b", force: true });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(first.latest).toBe("1111111");
+    expect(second.latest).toBe("2222222");
+  });
+
   it("caches result for 5 minutes", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

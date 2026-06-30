@@ -5,7 +5,7 @@ import { useAppUpdate } from "../appUpdate.tsx";
 import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } from "../lib/mobileUpdate.ts";
-import { fetchServerVersion, fetchUpdateStatus, triggerServerUpdate } from "../lib/serverVersion.ts";
+import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../lib/serverVersion.ts";
 import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
 import type { RegularSyncResult } from "../sync/engine.ts";
@@ -200,30 +200,27 @@ export default function SettingsPage() {
     }
   }
 
-  async function refreshServerVersion(): Promise<ServerVersionState | null> {
-    if (!apiUrl) return null;
-    const version = await fetchServerVersion();
-    setServerVersion(version);
-    return version;
-  }
-
   async function handleServerUpdate() {
     if (!apiUrl) return;
 
-    const latestServerVersion = await refreshServerVersion();
-    if (!latestServerVersion) {
-      return;
-    }
+    setServerUpdateStatus("正在检查更新…");
+    const latestServerVersion = await fetchServerVersion({ force: true });
+    setServerVersion(latestServerVersion);
 
     if (!latestServerVersion.ok) {
-      setServerUpdateStatus(latestServerVersion.error);
+      setServerUpdateStatus(`检查失败：${latestServerVersion.error}`);
       return;
     }
 
     const version = latestServerVersion.version;
 
+    if (!version.checkOk) {
+      setServerUpdateStatus("检查失败：无法从 GitHub 获取最新版本（网络或限流），请稍后重试。");
+      return;
+    }
+
     if (!version.hasUpdate) {
-      setServerUpdateStatus("服务端已是最新版本。");
+      setServerUpdateStatus(`服务端已是最新版本（${version.current}）。`);
       return;
     }
 
@@ -238,17 +235,30 @@ export default function SettingsPage() {
 
     setServerUpdating(true);
     setServerUpdateStatus("已发起更新…");
-    const updateId = await triggerServerUpdate();
-    if (!updateId) {
+    const triggered = await triggerServerUpdate();
+
+    if (!triggered.ok && triggered.reason === "error") {
       setServerUpdating(false);
-      setServerUpdateStatus("触发失败，请检查 token 是否正确。");
+      setServerUpdateStatus(`触发失败：${triggered.message}`);
       return;
     }
+    if (!triggered.ok) {
+      setServerUpdateStatus(`更新已在进行中（${triggered.updateId ?? "未知任务"}），正在等待完成…`);
+    } else {
+      setServerUpdateStatus(`更新中…（${triggered.updateId}）`);
+    }
 
-    setServerUpdateStatus(`更新任务已启动：${updateId}`);
-    const status = await fetchUpdateStatus();
-    if (status?.logTail) {
-      setServerUpdateStatus(`更新任务：${status.updateId}\n${status.logTail.slice(-500)}`);
+    const outcome = await pollServerUpdate({
+      fromSha: version.current,
+      onProgress: (text) => setServerUpdateStatus(text),
+    });
+
+    if (outcome.kind === "succeeded") {
+      setServerUpdateStatus(`已更新到 ${outcome.version} ✅`);
+    } else if (outcome.kind === "failed") {
+      setServerUpdateStatus(`更新失败：${outcome.message}`);
+    } else {
+      setServerUpdateStatus("更新已发起，但等待超时；服务端可能仍在更新，请稍后手动刷新版本。");
     }
     setServerUpdating(false);
   }

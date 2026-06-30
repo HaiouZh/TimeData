@@ -37,6 +37,21 @@ describe("GET /api/version", () => {
     });
   });
 
+  it("?refresh=1 bypasses the cache and re-checks GitHub", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ workflow_runs: [{ head_sha: "1111111aaaaaaaa" }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ workflow_runs: [{ head_sha: "2222222bbbbbbbb" }] })));
+
+    const primed = await (await app.request("/api/version")).json();
+    expect(primed.latest).toBe("1111111");
+
+    const cached = await (await app.request("/api/version")).json();
+    expect(cached.latest).toBe("1111111");
+
+    const refreshed = await (await app.request("/api/version?refresh=1")).json();
+    expect(refreshed.latest).toBe("2222222");
+  });
+
   it("returns unknown latest when GitHub lookup fails", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response("not found", { status: 404 }));
     const { _resetCache } = await import("../lib/version.js");
