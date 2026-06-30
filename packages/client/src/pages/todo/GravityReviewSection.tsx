@@ -14,6 +14,8 @@ interface GravityReviewSectionProps {
   now?: Date;
   onMarkSurfaced: (ids: string[], now: Date) => Promise<GravitySurfacedMap> | GravitySurfacedMap;
   onBump: (task: Task) => void | Promise<void>;
+  /** 被任一 active 目标引用的 task id 集合：命中的翻牌行也渲染「已有去处」竖条。 */
+  goalLinkedIds?: ReadonlySet<string>;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -29,6 +31,7 @@ export function GravityReviewSection({
   now = new Date(),
   onMarkSurfaced,
   onBump,
+  goalLinkedIds,
   ...rowHandlers
 }: GravityReviewSectionProps) {
   const [batch, setBatch] = useState<Task[]>([]);
@@ -110,6 +113,7 @@ export function GravityReviewSection({
               tasks={batch}
               extraAction={extraAction}
               childrenModeOverride="static"
+              goalLinkedIds={goalLinkedIds}
               {...rowHandlers}
             />
             <button

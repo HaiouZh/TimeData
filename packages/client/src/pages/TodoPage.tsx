@@ -433,6 +433,7 @@ export function TodoPage() {
       now={gravityNow}
       onMarkSurfaced={markSurfaced}
       onBump={bumpWeight}
+      goalLinkedIds={goalLinkedIds}
       {...rowHandlers}
     />
   );
@@ -459,6 +460,7 @@ export function TodoPage() {
                 sunkenTasks={sunkenFiltered}
                 stickyBottomOffsetPx={composerAvoidancePx}
                 extraAction={sunkenExtraAction}
+                goalLinkedIds={goalLinkedIds}
                 {...rowHandlers}
               />
             }

@@ -9,6 +9,8 @@ interface SunkenInboxTailProps {
   sunkenTasks: Task[];
   stickyBottomOffsetPx: number;
   extraAction?: (task: Task) => ReactNode;
+  /** 被任一 active 目标引用的 task id 集合：命中的水下行也渲染「已有去处」竖条。 */
+  goalLinkedIds?: ReadonlySet<string>;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -25,6 +27,7 @@ export function SunkenInboxTail({
   sunkenTasks,
   stickyBottomOffsetPx: _stickyBottomOffsetPx,
   extraAction,
+  goalLinkedIds,
   ...rowHandlers
 }: SunkenInboxTailProps) {
   const [expanded, setExpanded] = useState(false);
@@ -55,6 +58,7 @@ export function SunkenInboxTail({
                 tasks={segment.tasks}
                 extraAction={extraAction}
                 childrenModeOverride="static"
+                goalLinkedIds={goalLinkedIds}
                 {...rowHandlers}
               />
             </div>

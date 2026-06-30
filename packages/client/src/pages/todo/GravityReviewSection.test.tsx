@@ -170,6 +170,27 @@ describe("GravityReviewSection", () => {
     await unmount(root);
   });
 
+  it("goal-linked card shows the goal bar", async () => {
+    const onMarkSurfaced = vi.fn().mockResolvedValue({});
+    const { host, root } = await renderDom(
+      <GravityReviewSection
+        sunkenTasks={[task({ id: "g1", title: "已归目标" })]}
+        settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 1 }}
+        surfaced={{}}
+        now={NOW}
+        onMarkSurfaced={onMarkSurfaced}
+        onBump={vi.fn()}
+        goalLinkedIds={new Set(["g1"])}
+        {...handlers}
+      />,
+    );
+
+    await openReview(host);
+
+    expect(host.querySelectorAll('[data-testid="goal-linked-bar"]').length).toBe(1);
+    await unmount(root);
+  });
+
   it("does not block rendering when onMarkSurfaced rejects", async () => {
     const onMarkSurfaced = vi.fn().mockRejectedValue(new Error("settings write failed"));
     const { host, root } = await renderDom(

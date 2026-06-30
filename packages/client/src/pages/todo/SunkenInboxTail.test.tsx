@@ -94,6 +94,20 @@ describe("SunkenInboxTail", () => {
     await unmount(root);
   });
 
+  it("goal-linked sunken task shows the goal bar after expanding", async () => {
+    const { host, root } = await renderDom(
+      <SunkenInboxTail
+        sunkenTasks={[task({ id: "g1", title: "已归目标" }), task({ id: "n1", title: "未归目标" })]}
+        stickyBottomOffsetPx={0}
+        goalLinkedIds={new Set(["g1"])}
+        {...handlers}
+      />,
+    );
+    await click(host.querySelector("button") as HTMLButtonElement);
+    expect(host.querySelectorAll('[data-testid="goal-linked-bar"]').length).toBe(1);
+    await unmount(root);
+  });
+
   it("extraAction renders 顶一下 and click calls bump", async () => {
     const onBump = vi.fn();
     const extraAction = (t: Task) => (
