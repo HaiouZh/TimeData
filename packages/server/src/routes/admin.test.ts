@@ -212,6 +212,34 @@ function createBackupFixture() {
   fs.writeFileSync(path.join(tempDir, "backups", "sync_push-2026-05-08T08-00-00-000Z.db"), "backup fixture");
 }
 
+function seedBackup(entry: {
+  id: string;
+  operation: string;
+  createdAt: string;
+  protected?: boolean;
+  reason?: string | null;
+}) {
+  const backupDir = path.join(tempDir, "backups");
+  fs.mkdirSync(backupDir, { recursive: true });
+  const fileName = `${entry.id}.db`;
+  const manifestPath = path.join(backupDir, "manifest.json");
+  const manifest = fs.existsSync(manifestPath)
+    ? JSON.parse(fs.readFileSync(manifestPath, "utf8"))
+    : { backups: {} };
+  manifest.backups[entry.id] = {
+    id: entry.id,
+    fileName,
+    operation: entry.operation,
+    createdAt: entry.createdAt,
+    protected: entry.protected ?? false,
+    reason: entry.reason ?? null,
+    relatedSyncLogId: null,
+    details: null,
+  };
+  fs.writeFileSync(path.join(backupDir, fileName), "backup fixture");
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
 beforeEach(async () => {
   db = new Database(":memory:");
   createSchema();
@@ -435,6 +463,22 @@ describe("admin route", () => {
         },
       ],
     });
+  });
+
+  it("classifies an old non-protected backup as deletable", async () => {
+    seedBackup({
+      id: "old",
+      operation: "sync_push",
+      createdAt: "2026-04-01T00:00:00.000Z",
+      protected: false,
+    });
+
+    const res = await app.request("/api/admin/backups");
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const row = body.backups.find((backup: { id: string }) => backup.id === "old");
+    expect(row.retention).toBe("deletable");
   });
 
   it("skips backup files that cannot be statted", async () => {

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AdminAnalyticsResponse, AdminBackupRow, AdminEntryRow, AdminHealthCheckItem } from "@timedata/shared";
 import { getDb, getDbPath } from "../../db/connection.js";
 import { currentAppLocalDateTimeString } from "../../lib/timezone.js";
-import { readBackupManifest } from "../../sync/backup.js";
+import { classifyBackupRetention, readBackupManifest, readBackupMeta } from "../../sync/backup.js";
 
 export type CountRow = { count: number };
 export type MaxRow = { value: string | null };
@@ -132,6 +132,8 @@ function parseBackupOperation(fileName: string): string {
 export function listServerBackups(): AdminBackupRow[] {
   const backupDir = path.join(path.dirname(getDbPath()), "backups");
   const manifest = readBackupManifest();
+  const retentionDays = readBackupMeta().retentionDays;
+  const now = new Date();
   const manifestByFileName = new Map<string, BackupManifestEntry>(
     Object.values(manifest.backups).map((entry) => [entry.fileName, entry]),
   );
@@ -152,14 +154,20 @@ export function listServerBackups(): AdminBackupRow[] {
       }
       const manifestEntry = manifestByFileName.get(fileName);
       const protectedBackup = manifestEntry?.protected ?? false;
-      const retention: AdminBackupRow["retention"] = protectedBackup ? "protected" : "recent";
+      const createdAt = manifestEntry?.createdAt ?? parseBackupCreatedAt(fileName) ?? stat.mtime.toISOString();
+      const retention: AdminBackupRow["retention"] = classifyBackupRetention(
+        createdAt,
+        protectedBackup,
+        now,
+        retentionDays,
+      );
       return [
         {
           id: manifestEntry?.id ?? fileName,
           fileName,
           operation: manifestEntry?.operation ?? parseBackupOperation(fileName),
           sizeBytes: stat.size,
-          createdAt: manifestEntry?.createdAt ?? parseBackupCreatedAt(fileName) ?? stat.mtime.toISOString(),
+          createdAt,
           protected: protectedBackup,
           reason: manifestEntry?.reason ?? null,
           retention,
