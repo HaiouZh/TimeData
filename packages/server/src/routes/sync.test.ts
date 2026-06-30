@@ -186,6 +186,17 @@ describe("sync route", () => {
     expect(Array.isArray(body.changes)).toBe(true);
   });
 
+  it("creates a protected manual server backup", async () => {
+    const response = await app.request("/api/sync/backup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ backupId: "backup-1" });
+    expect(createServerBackupMock).toHaveBeenCalledWith("manual", { protected: true, reason: "manual" });
+  });
+
   it("returns 400 for malformed force-push prepare requests", async () => {
     const response = await app.request("/api/sync/force-push/prepare", {
       method: "POST",

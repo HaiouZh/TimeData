@@ -442,6 +442,11 @@ sync.post("/force-push", async (c) => {
   return c.json(response);
 });
 
+sync.post("/backup", async (c) => {
+  const backup = await createServerBackup("manual", { protected: true, reason: "manual" });
+  return c.json({ backupId: backup.id });
+});
+
 sync.post("/push", async (c) => {
   const rawBody: unknown = await c.req.json();
   const parsed = SyncPushRequestSchema.safeParse(rawBody);

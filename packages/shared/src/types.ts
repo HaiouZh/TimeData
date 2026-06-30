@@ -140,6 +140,10 @@ export interface SyncPushResponse {
   serverTime: string;
 }
 
+export interface SyncBackupResponse {
+  backupId: string;
+}
+
 export type SyncPullResponse = z.infer<typeof SyncPullResponseSchema>;
 
 export interface SyncDatasetStatus {
