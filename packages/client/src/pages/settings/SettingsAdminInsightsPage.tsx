@@ -129,10 +129,10 @@ const clientHintFilterOptions: SelectOption<string>[] = [
   { value: "", label: "全部客户端" },
   ...clientHintOptions.map((hint) => ({ value: hint, label: clientHintLabel[hint] })),
 ];
-const inputClassName = "w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink";
+const inputClassName = "w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-body text-ink";
 const secondaryButtonClassName =
-  "rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-xs text-ink hover:bg-surface-hover disabled:opacity-40";
-const dangerButtonClassName = "rounded-ctl bg-danger px-3 py-2 text-xs text-page hover:bg-danger/80 disabled:opacity-40";
+  "rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-label text-ink hover:bg-surface-hover disabled:opacity-40";
+const dangerButtonClassName = "rounded-ctl bg-danger px-3 py-2 td-text-label text-page hover:bg-danger/80 disabled:opacity-40";
 
 function minutesLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -654,9 +654,9 @@ export default function SettingsAdminInsightsPage() {
             <Section title="服务端备份">
               {backupConfig && (
                 <div className="space-y-3 rounded-ctl bg-surface-elevated p-3">
-                  <div className="text-sm font-medium text-ink">备份设置</div>
+                  <div className="td-text-body font-medium text-ink">备份设置</div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-ink-3">每日定时备份</span>
+                    <span className="td-text-caption text-ink-3">每日定时备份</span>
                     <Switch
                       ariaLabel="每日定时备份"
                       checked={backupConfig.dailyBackup.enabled}
@@ -670,7 +670,7 @@ export default function SettingsAdminInsightsPage() {
                     />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1 text-xs text-ink-3">
+                    <label className="space-y-1 td-text-caption text-ink-3">
                       定时时点
                       <input
                         aria-label="每日备份时点"
@@ -686,7 +686,7 @@ export default function SettingsAdminInsightsPage() {
                         className={inputClassName}
                       />
                     </label>
-                    <label className="space-y-1 text-xs text-ink-3">
+                    <label className="space-y-1 td-text-caption text-ink-3">
                       保留天数
                       <input
                         aria-label="备份保留天数"
@@ -725,7 +725,7 @@ export default function SettingsAdminInsightsPage() {
                   </div>
                 </div>
               )}
-              {backupActionStatus && <div className="text-xs text-ink-3">{backupActionStatus}</div>}
+              {backupActionStatus && <div className="td-text-caption text-ink-3">{backupActionStatus}</div>}
               <div className="space-y-2">
                 {data.backups.backups.slice(0, 8).map((backup) => (
                 <div key={backup.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">
