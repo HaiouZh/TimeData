@@ -106,7 +106,7 @@ export function TaskRow({
     <div
       data-in-goal={inGoal ? "true" : undefined}
       className={`group w-full rounded-row transition hover:bg-surface-hover ${
-        indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : inGoal ? "ring-1 ring-ok" : ""
+        indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
       }`}
     >
       <div
@@ -122,6 +122,13 @@ export function TaskRow({
           }
         }}
       >
+        {inGoal && (
+          <span
+            data-testid="goal-linked-bar"
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-1.5 left-0 z-20 w-1 rounded-r-sm bg-ok"
+          />
+        )}
         {dragHandle && (
           <button
             type="button"

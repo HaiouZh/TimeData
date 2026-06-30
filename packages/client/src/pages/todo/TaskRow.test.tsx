@@ -51,21 +51,22 @@ function render(node: ReturnType<typeof createElement>) {
 }
 
 describe("TaskRow", () => {
-  it("已归入目标的任务：根容器带 ring-ok 外圈标记", async () => {
+  it("已归入目标的任务：行内渲染绿色归属竖条", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task(), pool: "inbox", inGoal: true, ...handlers }),
     );
-    const marked = host.querySelector("[data-in-goal='true']");
-    expect(marked).not.toBeNull();
-    expect(marked?.className).toContain("ring-ok");
+    const bar = host.querySelector("[data-testid='goal-linked-bar']");
+    expect(bar).not.toBeNull();
+    expect(bar?.className).toContain("bg-ok");
     await unmount(root);
   });
 
-  it("未归入目标：无外圈标记", async () => {
+  it("未归入目标：无归属竖条", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }),
     );
     expect(host.querySelector("[data-in-goal='true']")).toBeNull();
+    expect(host.querySelector("[data-testid='goal-linked-bar']")).toBeNull();
     await unmount(root);
   });
 
