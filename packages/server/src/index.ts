@@ -29,6 +29,7 @@ import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
 import { cleanupServerBackups } from "./sync/backup.js";
+import { runDailyBackupIfDue } from "./sync/dailyBackup.js";
 
 type ServerEnv = {
   Variables: {
@@ -155,6 +156,14 @@ try {
 } catch (error) {
   console.warn("[backup] startup cleanup failed", error);
 }
+
+runDailyBackupIfDue().catch((error) => console.warn("[backup] startup daily backup failed", error));
+
+const DAILY_BACKUP_TICK_MS = Number.parseInt(process.env.DAILY_BACKUP_TICK_MS || "", 10) || 5 * 60 * 1000;
+const dailyBackupTimer = setInterval(() => {
+  runDailyBackupIfDue().catch((error) => console.warn("[backup] scheduled daily backup failed", error));
+}, DAILY_BACKUP_TICK_MS);
+dailyBackupTimer.unref?.();
 
 try {
   const garminConfig = loadGarminConfig();
