@@ -69,6 +69,10 @@ function compareTaskStable(left: Task, right: Task): number {
   return compareText(left.title, right.title) || left.id.localeCompare(right.id);
 }
 
+function compareUpdatedDesc(left: Task, right: Task): number {
+  return right.updatedAt.localeCompare(left.updatedAt) || compareTaskStable(left, right);
+}
+
 function taskGroup(task: Task, now: Date): Pick<GoalTaskCandidate, "group" | "overdue"> {
   const placement = placementForTask(task, now);
   if (placement.pool === "upcoming") return { group: "scheduled", overdue: false };
@@ -83,7 +87,7 @@ function compareTaskCandidate(left: GoalTaskCandidate, right: GoalTaskCandidate)
   }
 
   if (left.group === "inbox" && right.group === "inbox") {
-    return left.task.sortOrder - right.task.sortOrder || compareTaskStable(left.task, right.task);
+    return compareUpdatedDesc(left.task, right.task);
   }
 
   if (left.group === "scheduled" && right.group === "scheduled") {
@@ -94,7 +98,8 @@ function compareTaskCandidate(left: GoalTaskCandidate, right: GoalTaskCandidate)
     return (right.task.completedAt ?? "").localeCompare(left.task.completedAt ?? "") || compareTaskStable(left.task, right.task);
   }
 
-  return compareTaskStable(left.task, right.task);
+  // 其余（重复等）按最近更新倒序，避免回落到字母序看着像随机。
+  return compareUpdatedDesc(left.task, right.task);
 }
 
 function searchTerms(query: string): string[] {

@@ -88,6 +88,44 @@ describe("goalMemberCandidates", () => {
     ]);
   });
 
+  it("收件箱组按最近更新倒序排列", () => {
+    const tasks = [
+      task({ id: "old", title: "旧", updatedAt: "2026-06-20T00:00:00.000Z", sortOrder: 0 }),
+      task({ id: "new", title: "新", updatedAt: "2026-06-22T00:00:00.000Z", sortOrder: 5 }),
+      task({ id: "mid", title: "中", updatedAt: "2026-06-21T00:00:00.000Z", sortOrder: 3 }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      searchQuery: "",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    const inbox = taskCandidateGroups(candidates).find((group) => group.key === "inbox");
+    expect(inbox?.items.map((item) => item.task.id)).toEqual(["new", "mid", "old"]);
+  });
+
+  it("重复组按最近更新倒序排列", () => {
+    const recurrence = { freq: "daily", interval: 1, basis: "due" } as const;
+    const tasks = [
+      task({ id: "r-old", title: "重复旧", recurrence, startAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z" }),
+      task({ id: "r-new", title: "重复新", recurrence, startAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-22T00:00:00.000Z" }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      searchQuery: "",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    const recurring = taskCandidateGroups(candidates).find((group) => group.key === "recurring");
+    expect(recurring?.items.map((item) => item.task.id)).toEqual(["r-new", "r-old"]);
+  });
+
   it("任务候选复用搜索和标签筛选", () => {
     const tasks = [
       task({ id: "a", title: "写星图", tags: ["goal"] }),
