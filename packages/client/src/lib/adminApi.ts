@@ -1,5 +1,6 @@
 import type {
   AdminAnalyticsResponse,
+  AdminBackupConfigResponse,
   AdminBackupsResponse,
   AdminCategoriesResponse,
   AdminEntriesResponse,
@@ -8,8 +9,10 @@ import type {
   AdminRequestLogOutcome,
   AdminRequestLogsResponse,
   AdminRequestLogTokenTier,
+  AdminRunDailyResponse,
   AdminSummaryResponse,
   AdminSyncResponse,
+  BackupConfig,
 } from "@timedata/shared";
 import { apiFetch } from "./api.ts";
 
@@ -67,6 +70,22 @@ export function fetchAdminSync(): Promise<AdminSyncResponse> {
 
 export function fetchAdminBackups(): Promise<AdminBackupsResponse> {
   return apiFetch("/api/admin/backups");
+}
+
+export function fetchBackupConfig(): Promise<AdminBackupConfigResponse> {
+  return apiFetch("/api/admin/backup-config");
+}
+
+export function updateBackupConfig(config: BackupConfig): Promise<AdminBackupConfigResponse> {
+  return apiFetch("/api/admin/backup-config", { method: "PUT", body: JSON.stringify(config) });
+}
+
+export function deleteAdminBackup(id: string): Promise<{ deleted: string }> {
+  return apiFetch(`/api/admin/backups/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function triggerDailyBackup(): Promise<AdminRunDailyResponse> {
+  return apiFetch("/api/admin/backups/run-daily", { method: "POST" });
 }
 
 export function fetchAdminHealthChecks(): Promise<AdminHealthChecksResponse> {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type {
   AdminAnalyticsResponse,
+  AdminBackupConfigResponse,
   AdminBackupsResponse,
   AdminCategoriesResponse,
   AdminEntriesResponse,
@@ -23,6 +24,10 @@ const fetchAdminEntries = vi.hoisted(() => vi.fn());
 const fetchAdminCategories = vi.hoisted(() => vi.fn());
 const fetchAdminSync = vi.hoisted(() => vi.fn());
 const fetchAdminBackups = vi.hoisted(() => vi.fn());
+const fetchBackupConfig = vi.hoisted(() => vi.fn());
+const updateBackupConfig = vi.hoisted(() => vi.fn());
+const deleteAdminBackup = vi.hoisted(() => vi.fn());
+const triggerDailyBackup = vi.hoisted(() => vi.fn());
 const fetchAdminHealthChecks = vi.hoisted(() => vi.fn());
 const fetchAdminAnalytics = vi.hoisted(() => vi.fn());
 const fetchAdminRequestLogs = vi.hoisted(() => vi.fn());
@@ -33,6 +38,10 @@ vi.mock("../../lib/adminApi.ts", () => ({
   fetchAdminCategories,
   fetchAdminSync,
   fetchAdminBackups,
+  fetchBackupConfig,
+  updateBackupConfig,
+  deleteAdminBackup,
+  triggerDailyBackup,
   fetchAdminHealthChecks,
   fetchAdminAnalytics,
   fetchAdminRequestLogs,
@@ -128,6 +137,10 @@ const backupsResponse: AdminBackupsResponse = {
   ],
 };
 
+const backupConfigResponse: AdminBackupConfigResponse = {
+  config: { dailyBackup: { enabled: true, timeOfDay: "04:00" }, retentionDays: 7 },
+};
+
 const healthChecksResponse: AdminHealthChecksResponse = {
   generatedAt: "2026-05-19T11:00:00.000Z",
   checks: [
@@ -206,6 +219,10 @@ function mockSuccessfulAdminInsights() {
   fetchAdminCategories.mockResolvedValue(categoriesResponse);
   fetchAdminSync.mockResolvedValue(syncResponse);
   fetchAdminBackups.mockResolvedValue(backupsResponse);
+  fetchBackupConfig.mockResolvedValue(backupConfigResponse);
+  updateBackupConfig.mockResolvedValue(backupConfigResponse);
+  deleteAdminBackup.mockResolvedValue({ deleted: "backup-1" });
+  triggerDailyBackup.mockResolvedValue({ created: false, backupId: null, reason: "no_change" });
   fetchAdminHealthChecks.mockResolvedValue(healthChecksResponse);
   fetchAdminAnalytics.mockResolvedValue(analyticsResponse);
   fetchAdminRequestLogs.mockResolvedValue(requestLogsResponse);
@@ -220,8 +237,8 @@ describe("SettingsAdminInsightsPage", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
     expect(html).toContain("服务端数据洞察");
-    expect(html).toContain("只读查看服务器 SQLite 数据");
-    expect(html).toContain("这里不会修改服务器数据");
+    expect(html).toContain("诊断数据只读查看");
+    expect(html).toContain("仅备份管理会修改服务器备份");
     expect(html).toContain("正在加载服务端数据");
   });
 
@@ -252,6 +269,8 @@ describe("SettingsAdminInsightsPage", () => {
     expect(host.textContent).toContain("服务端备份");
     expect(host.textContent).toContain("请求审计");
     expect(host.textContent).toContain("权限矩阵");
+    expect(host.textContent).toContain("备份设置");
+    expect(host.textContent).toContain("保留天数");
     expect(host.textContent).toContain("entry-missing-category");
     expect(host.textContent).toContain("timedata-backup.sqlite");
     expect(host.textContent).toContain("/api/agent/tasks/task-1/status");
@@ -287,6 +306,58 @@ describe("SettingsAdminInsightsPage", () => {
       clientHint: "agent",
     });
     expect(host.textContent).toContain("暂无请求审计记录。");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("updates backup config, triggers daily backup, and deletes backups", async () => {
+    mockSuccessfulAdminInsights();
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    });
+
+    const retentionInput = host.querySelector("input[aria-label='备份保留天数']");
+    expect(retentionInput).not.toBeNull();
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(retentionInput, "14");
+      retentionInput?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("保存备份设置"),
+    );
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(updateBackupConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retentionDays: 14,
+      }),
+    );
+
+    const runButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("立即触发日备"),
+    );
+    await act(async () => {
+      runButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(triggerDailyBackup).toHaveBeenCalled();
+
+    const deleteButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "删除");
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const confirmButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "删除备份");
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(deleteAdminBackup).toHaveBeenCalledWith("backup-1");
+    expect(fetchAdminBackups).toHaveBeenCalledTimes(3);
 
     await act(async () => {
       root.unmount();

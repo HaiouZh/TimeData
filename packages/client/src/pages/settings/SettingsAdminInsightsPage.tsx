@@ -1,5 +1,6 @@
 import type {
   AdminAnalyticsResponse,
+  AdminBackupConfigResponse,
   AdminBackupsResponse,
   AdminCategoriesResponse,
   AdminEntriesResponse,
@@ -13,6 +14,7 @@ import type {
 } from "@timedata/shared";
 import { type ReactNode, useEffect, useState } from "react";
 import {
+  deleteAdminBackup,
   fetchAdminAnalytics,
   fetchAdminBackups,
   fetchAdminCategories,
@@ -21,8 +23,13 @@ import {
   fetchAdminRequestLogs,
   fetchAdminSummary,
   fetchAdminSync,
+  fetchBackupConfig,
+  triggerDailyBackup,
+  updateBackupConfig,
 } from "../../lib/adminApi.ts";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
+import { Switch } from "../../components/ui/Switch.js";
+import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { formatAppDateTime } from "../../lib/time.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 
@@ -32,6 +39,7 @@ interface AdminInsightsState {
   categories?: AdminCategoriesResponse;
   sync?: AdminSyncResponse;
   backups?: AdminBackupsResponse;
+  backupConfig?: AdminBackupConfigResponse;
   health?: AdminHealthChecksResponse;
   analytics?: AdminAnalyticsResponse;
 }
@@ -121,6 +129,10 @@ const clientHintFilterOptions: SelectOption<string>[] = [
   { value: "", label: "全部客户端" },
   ...clientHintOptions.map((hint) => ({ value: hint, label: clientHintLabel[hint] })),
 ];
+const inputClassName = "w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink";
+const secondaryButtonClassName =
+  "rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-xs text-ink hover:bg-surface-hover disabled:opacity-40";
+const dangerButtonClassName = "rounded-ctl bg-danger px-3 py-2 text-xs text-page hover:bg-danger/80 disabled:opacity-40";
 
 function minutesLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
@@ -299,7 +311,11 @@ function RequestAuditSection({
 }
 
 export default function SettingsAdminInsightsPage() {
+  const { confirm, dialog } = useConfirm();
   const [data, setData] = useState<AdminInsightsState | null>(null);
+  const [backupConfig, setBackupConfig] = useState<AdminBackupConfigResponse["config"] | null>(null);
+  const [backupActionStatus, setBackupActionStatus] = useState("");
+  const [backupActionBusy, setBackupActionBusy] = useState(false);
   const [requestLogs, setRequestLogs] = useState<AdminRequestLogsResponse | undefined>();
   const [requestLogFilters, setRequestLogFilters] = useState<RequestLogFilters>({ limit: 100 });
   const [requestLogsLoading, setRequestLogsLoading] = useState(true);
@@ -313,12 +329,14 @@ export default function SettingsAdminInsightsPage() {
       setLoading(true);
       setError("");
       try {
-        const [summaryR, entriesR, categoriesR, syncR, backupsR, healthR, analyticsR] = await Promise.allSettled([
+        const [summaryR, entriesR, categoriesR, syncR, backupsR, backupConfigR, healthR, analyticsR] =
+          await Promise.allSettled([
           fetchAdminSummary(),
           fetchAdminEntries({ limit: 10 }),
           fetchAdminCategories(),
           fetchAdminSync(),
           fetchAdminBackups(),
+          fetchBackupConfig(),
           fetchAdminHealthChecks(),
           fetchAdminAnalytics({ groupBy: "day" }),
         ]);
@@ -329,11 +347,13 @@ export default function SettingsAdminInsightsPage() {
           categories: settledValue(categoriesR, errors),
           sync: settledValue(syncR, errors),
           backups: settledValue(backupsR, errors),
+          backupConfig: settledValue(backupConfigR, errors),
           health: settledValue(healthR, errors),
           analytics: settledValue(analyticsR, errors),
         };
         if (!cancelled) {
           setData(nextData);
+          if (nextData.backupConfig) setBackupConfig(nextData.backupConfig.config);
           setError(errors.length ? `部分服务端洞察加载失败：${errors.join("；")}` : "");
         }
       } finally {
@@ -374,10 +394,69 @@ export default function SettingsAdminInsightsPage() {
     };
   }, [requestLogFilters]);
 
+  async function refreshBackups() {
+    const backups = await fetchAdminBackups();
+    setData((current) => (current ? { ...current, backups } : current));
+  }
+
+  async function handleSaveBackupConfig() {
+    if (!backupConfig) return;
+    setBackupActionBusy(true);
+    setBackupActionStatus("");
+    try {
+      const response = await updateBackupConfig(backupConfig);
+      setBackupConfig(response.config);
+      setBackupActionStatus("备份设置已保存。");
+    } catch (err) {
+      setBackupActionStatus(`备份设置保存失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBackupActionBusy(false);
+    }
+  }
+
+  async function handleTriggerDailyBackup() {
+    setBackupActionBusy(true);
+    setBackupActionStatus("");
+    try {
+      const result = await triggerDailyBackup();
+      setBackupActionStatus(
+        result.created ? `已创建每日备份：${result.backupId}` : `未创建每日备份：${result.reason}`,
+      );
+      await refreshBackups();
+    } catch (err) {
+      setBackupActionStatus(`每日备份触发失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBackupActionBusy(false);
+    }
+  }
+
+  async function handleDeleteBackup(id: string) {
+    const confirmed = await confirm({
+      title: "删除服务端备份",
+      body: `确定删除备份 ${id}？此操作会删除服务器上的备份文件和 manifest 条目。`,
+      confirmLabel: "删除备份",
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setBackupActionBusy(true);
+    setBackupActionStatus("");
+    try {
+      await deleteAdminBackup(id);
+      setBackupActionStatus(`已删除备份：${id}`);
+      await refreshBackups();
+    } catch (err) {
+      setBackupActionStatus(`备份删除失败：${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBackupActionBusy(false);
+    }
+  }
+
   return (
     <SettingsDetailPage title="服务端数据洞察">
+      {dialog}
       <div className="rounded-card border border-accent/30 bg-accent-soft p-4 text-sm text-accent-ink">
-        只读查看服务器 SQLite 数据、同步诊断、备份和健康检查；这里不会修改服务器数据。
+        诊断数据只读查看；仅备份管理会修改服务器备份（创建、删除、配置）。
       </div>
 
       {loading && <div className="text-sm text-ink-2">正在加载服务端数据…</div>}
@@ -561,6 +640,80 @@ export default function SettingsAdminInsightsPage() {
 
           {data.backups && (
             <Section title="服务端备份">
+              {backupConfig && (
+                <div className="space-y-3 rounded-ctl bg-surface-elevated p-3">
+                  <div className="text-sm font-medium text-ink">备份设置</div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-ink-3">每日定时备份</span>
+                    <Switch
+                      ariaLabel="每日定时备份"
+                      checked={backupConfig.dailyBackup.enabled}
+                      disabled={backupActionBusy}
+                      onChange={(enabled) =>
+                        setBackupConfig({
+                          ...backupConfig,
+                          dailyBackup: { ...backupConfig.dailyBackup, enabled },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1 text-xs text-ink-3">
+                      定时时点
+                      <input
+                        aria-label="每日备份时点"
+                        type="time"
+                        value={backupConfig.dailyBackup.timeOfDay}
+                        disabled={backupActionBusy}
+                        onChange={(event) =>
+                          setBackupConfig({
+                            ...backupConfig,
+                            dailyBackup: { ...backupConfig.dailyBackup, timeOfDay: event.target.value },
+                          })
+                        }
+                        className={inputClassName}
+                      />
+                    </label>
+                    <label className="space-y-1 text-xs text-ink-3">
+                      保留天数
+                      <input
+                        aria-label="备份保留天数"
+                        type="number"
+                        min={1}
+                        max={3650}
+                        value={backupConfig.retentionDays}
+                        disabled={backupActionBusy}
+                        onChange={(event) =>
+                          setBackupConfig({
+                            ...backupConfig,
+                            retentionDays: Number(event.target.value),
+                          })
+                        }
+                        className={inputClassName}
+                      />
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={backupActionBusy}
+                      onClick={() => void handleSaveBackupConfig()}
+                      className={secondaryButtonClassName}
+                    >
+                      保存备份设置
+                    </button>
+                    <button
+                      type="button"
+                      disabled={backupActionBusy}
+                      onClick={() => void handleTriggerDailyBackup()}
+                      className={secondaryButtonClassName}
+                    >
+                      立即触发日备
+                    </button>
+                  </div>
+                  {backupActionStatus && <div className="text-xs text-ink-3">{backupActionStatus}</div>}
+                </div>
+              )}
               <div className="space-y-2">
                 {data.backups.backups.slice(0, 8).map((backup) => (
                 <div key={backup.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">
@@ -571,6 +724,16 @@ export default function SettingsAdminInsightsPage() {
                   </div>
                   <div className="mt-1">
                     {backup.operation} · {maybeDateTime(backup.createdAt)} · {backup.sizeBytes} bytes
+                  </div>
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      disabled={backupActionBusy}
+                      onClick={() => void handleDeleteBackup(backup.id)}
+                      className={dangerButtonClassName}
+                    >
+                      删除
+                    </button>
                   </div>
                 </div>
               ))}
