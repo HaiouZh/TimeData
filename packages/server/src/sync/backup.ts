@@ -84,7 +84,7 @@ export function readBackupManifest(): ServerBackupManifest {
   }
 }
 
-function writeBackupManifest(manifest: ServerBackupManifest): void {
+export function writeBackupManifest(manifest: ServerBackupManifest): void {
   fs.mkdirSync(getBackupDir(), { recursive: true });
   fs.writeFileSync(manifestPath(), `${JSON.stringify(manifest, null, 2)}\n`);
 }

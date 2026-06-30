@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import syncLogRoute from "../syncLog.js";
 import analytics from "./analytics.js";
+import backupConfig from "./backupConfig.js";
 import backups from "./backups.js";
 import categories from "./categories.js";
 import entries from "./entries.js";
@@ -18,6 +19,7 @@ admin.route("/sync", sync);
 admin.route("/sync-logs", syncLogRoute);
 admin.route("/request-logs", requestLogs);
 admin.route("/backups", backups);
+admin.route("/backup-config", backupConfig);
 admin.route("/health-checks", health);
 admin.route("/analytics", analytics);
 

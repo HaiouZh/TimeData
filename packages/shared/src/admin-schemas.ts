@@ -130,6 +130,22 @@ export const AdminBackupsResponseSchema = z.object({
   backups: z.array(AdminBackupRowSchema),
 });
 
+export const BackupConfigSchema = z.object({
+  dailyBackup: z.object({
+    enabled: z.boolean(),
+    timeOfDay: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "HH:MM"),
+  }),
+  retentionDays: z.number().int().min(1).max(3650),
+});
+
+export const AdminBackupConfigResponseSchema = z.object({ config: BackupConfigSchema });
+
+export const AdminRunDailyResponseSchema = z.object({
+  created: z.boolean(),
+  backupId: z.string().nullable(),
+  reason: z.enum(["created", "disabled", "before_time", "already_today", "no_change"]),
+});
+
 export const AdminHealthCheckItemSchema = z.object({
   code: AdminHealthCheckCodeSchema,
   severity: AdminHealthSeveritySchema,
@@ -197,6 +213,9 @@ export type AdminSyncIssueRow = z.infer<typeof AdminSyncIssueRowSchema>;
 export type AdminSyncResponse = z.infer<typeof AdminSyncResponseSchema>;
 export type AdminBackupRow = z.infer<typeof AdminBackupRowSchema>;
 export type AdminBackupsResponse = z.infer<typeof AdminBackupsResponseSchema>;
+export type BackupConfig = z.infer<typeof BackupConfigSchema>;
+export type AdminBackupConfigResponse = z.infer<typeof AdminBackupConfigResponseSchema>;
+export type AdminRunDailyResponse = z.infer<typeof AdminRunDailyResponseSchema>;
 export type AdminHealthCheckItem = z.infer<typeof AdminHealthCheckItemSchema>;
 export type AdminHealthChecksResponse = z.infer<typeof AdminHealthChecksResponseSchema>;
 export type AdminAnalyticsBucket = z.infer<typeof AdminAnalyticsBucketSchema>;

@@ -66,6 +66,14 @@ function createSchema() {
       deleted_at TEXT NOT NULL,
       PRIMARY KEY (table_name, record_id)
     );
+
+    CREATE TABLE sync_seq (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      table_name TEXT NOT NULL,
+      record_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }
 
@@ -479,6 +487,68 @@ describe("admin route", () => {
     const body = await res.json();
     const row = body.backups.find((backup: { id: string }) => backup.id === "old");
     expect(row.retention).toBe("deletable");
+  });
+
+  it("deletes a backup by id including protected", async () => {
+    seedBackup({
+      id: "del-me",
+      operation: "manual",
+      createdAt: "2026-05-01T00:00:00.000Z",
+      protected: true,
+    });
+
+    const res = await app.request("/api/admin/backups/del-me", { method: "DELETE" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ deleted: "del-me" });
+    const list = await (await app.request("/api/admin/backups")).json();
+    expect(list.backups.find((backup: { id: string }) => backup.id === "del-me")).toBeUndefined();
+    expect(fs.existsSync(path.join(tempDir, "backups", "del-me.db"))).toBe(false);
+  });
+
+  it("runs daily backup through admin endpoint", async () => {
+    const backupDir = path.join(tempDir, "backups");
+    fs.mkdirSync(backupDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(backupDir, "manifest.json"),
+      `${JSON.stringify({ backups: {}, meta: { dailyBackup: { enabled: true, timeOfDay: "00:00" }, retentionDays: 7, lastDailySeq: 999_999 } }, null, 2)}\n`,
+    );
+
+    const res = await app.request("/api/admin/backups/run-daily", { method: "POST" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ created: false, backupId: null, reason: "no_change" });
+  });
+
+  it("reads and updates backup config", async () => {
+    const put = await app.request("/api/admin/backup-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dailyBackup: { enabled: false, timeOfDay: "03:15" }, retentionDays: 14 }),
+    });
+
+    expect(put.status).toBe(200);
+    expect(await put.json()).toEqual({
+      config: { dailyBackup: { enabled: false, timeOfDay: "03:15" }, retentionDays: 14 },
+    });
+
+    const get = await app.request("/api/admin/backup-config");
+    expect(await get.json()).toEqual({
+      config: { dailyBackup: { enabled: false, timeOfDay: "03:15" }, retentionDays: 14 },
+    });
+  });
+
+  it("rejects invalid backup config", async () => {
+    const res = await app.request("/api/admin/backup-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dailyBackup: { enabled: true, timeOfDay: "9pm" }, retentionDays: 0 }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("INVALID_REQUEST");
   });
 
   it("skips backup files that cannot be statted", async () => {

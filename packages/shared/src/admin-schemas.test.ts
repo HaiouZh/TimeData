@@ -4,11 +4,14 @@ import {
   AdminAnalyticsResponseSchema,
   AdminBackupRetentionSchema,
   AdminBackupsResponseSchema,
+  AdminBackupConfigResponseSchema,
   AdminEntriesResponseSchema,
   AdminEntryAnomalySchema,
   AdminEntryRowSchema,
   AdminHealthChecksResponseSchema,
   AdminRequestLogsResponseSchema,
+  AdminRunDailyResponseSchema,
+  BackupConfigSchema,
   AdminSummaryResponseSchema,
 } from "./admin-schemas.js";
 
@@ -32,6 +35,24 @@ describe("AdminBackupRetentionSchema", () => {
 
   it("rejects unknown values", () => {
     expect(AdminBackupRetentionSchema.safeParse("auto").success).toBe(false);
+  });
+});
+
+describe("BackupConfigSchema", () => {
+  it("accepts backup config and run-daily response payloads", () => {
+    const config = { dailyBackup: { enabled: true, timeOfDay: "04:00" }, retentionDays: 7 };
+
+    expect(BackupConfigSchema.safeParse(config).success).toBe(true);
+    expect(AdminBackupConfigResponseSchema.safeParse({ config }).success).toBe(true);
+    expect(AdminRunDailyResponseSchema.safeParse({ created: true, backupId: "b1", reason: "created" }).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects invalid backup config", () => {
+    expect(
+      BackupConfigSchema.safeParse({ dailyBackup: { enabled: true, timeOfDay: "9pm" }, retentionDays: 0 }).success,
+    ).toBe(false);
   });
 });
 

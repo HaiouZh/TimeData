@@ -210,6 +210,7 @@ export type {
   AdminAnalyticsResponse,
   AdminBackupRow,
   AdminBackupsResponse,
+  AdminBackupConfigResponse,
   AdminCategoriesResponse,
   AdminCategoryRow,
   AdminEntriesResponse,
@@ -221,10 +222,12 @@ export type {
   AdminRequestLogRow,
   AdminRequestLogsResponse,
   AdminRequestLogTokenTier,
+  AdminRunDailyResponse,
   AdminSummaryResponse,
   AdminSyncIssueRow,
   AdminSyncLogRow,
   AdminSyncResponse,
+  BackupConfig,
 } from "./admin-schemas.js";
 
 export type SyncReasonCategory =
