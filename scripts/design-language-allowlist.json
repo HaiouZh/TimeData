@@ -1378,22 +1378,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/goals/GoalStarNode.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className={star.lod === \"collapsed\" ? \"sr-only\" : \"w-full truncate text-sm font-semibold\"}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalStarNode.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span data-star-member-count=\"true\" className={star.lod === \"collapsed\" ? \"sr-only\" : \"text-xs text-ink-3\"}>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/goals/GoalUnassignedTray.tsx",
       "rule": "bare-text-size",
       "lineText": "const tabButtonClass = \"min-h-9 rounded-ctl px-3 text-sm transition-colors\";",

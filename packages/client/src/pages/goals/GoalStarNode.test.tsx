@@ -25,8 +25,9 @@ describe("GoalStarNode", () => {
     expect(host.textContent).toContain("50%");
     expect(host.textContent).toContain("4 项");
     expect(host.querySelector('[data-progress="50"]')).toBeTruthy();
-    expect(host.querySelector('[data-goal-star-core="true"]')).toBeTruthy();
-    expect(host.querySelector('[data-goal-star-progress-ring="true"]')?.getAttribute("aria-hidden")).toBe("true");
+    const ring = host.querySelector('[data-goal-star-progress-ring="true"]');
+    expect(ring?.getAttribute("aria-hidden")).toBe("true");
+    expect((ring as HTMLElement | null)?.style.background).toContain("conic-gradient");
     const shellClass = host.querySelector('[data-goal-star-shell="true"]')?.className;
     expect(shellClass).toContain("rounded-pill");
     expect(shellClass).toContain("h-20");
@@ -54,6 +55,8 @@ describe("GoalStarNode", () => {
 
     expect(host.querySelector('[data-star-title="true"]')?.textContent).toContain("长期项目");
     expect(host.querySelector('[data-star-member-count="true"]')?.textContent).toContain("5 项");
+    expect(host.textContent).toContain("20%");
+    expect(host.querySelector('[data-progress="20"]')).toBeTruthy();
     expect(host.querySelector('[role="group"]')?.getAttribute("aria-label")).toContain("进度：20%");
     const shellClass = host.querySelector('[data-goal-star-shell="true"]')?.className;
     expect(shellClass).toContain("rounded-pill");
