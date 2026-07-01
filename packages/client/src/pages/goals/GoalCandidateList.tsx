@@ -116,23 +116,29 @@ function TaskRow({
   const hasChildren = children.length > 0;
   const rootClass =
     interaction.mode === "drag" ? `${rootButtonBase} cursor-grab active:cursor-grabbing` : rootButtonBase;
+  // 有子任务时标题紧贴折叠箭头（箭头列自带内边距），无子任务则标题占满、左侧不留空档。
+  const titleClass = hasChildren ? `${rootClass} pl-1` : rootClass;
+  const titleBody = (
+    <>
+      <span className="block td-text-body text-ink">{task.title}</span>
+      <span className="block td-text-caption text-ink-3">{taskMeta(candidate)}</span>
+    </>
+  );
 
   return (
     <div className="space-y-1">
       <div className="flex items-stretch rounded-row border border-border bg-surface">
-        {hasChildren ? (
+        {hasChildren && (
           <button
             type="button"
             aria-label={`${expanded ? "折叠" : "展开"}子任务 ${task.title}`}
             aria-expanded={expanded}
             onClick={onToggle}
-            className="flex w-9 shrink-0 flex-col items-center justify-center gap-0.5 text-ink-3 hover:text-ink"
+            className="flex shrink-0 flex-col items-center justify-center gap-0.5 px-1.5 text-ink-3 hover:text-ink"
           >
-            <Icon icon={expanded ? CaretDown : CaretRight} size={16} />
+            <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
             <span className="td-text-caption leading-none tabular-nums">{children.length}</span>
           </button>
-        ) : (
-          <span className="w-9 shrink-0" aria-hidden="true" />
         )}
         {interaction.mode === "drag" ? (
           <button
@@ -143,25 +149,23 @@ function TaskRow({
             onDragStart={(event: DragEvent<HTMLElement>) =>
               writeDragRef(event.dataTransfer, { kind: "task", id: task.id })
             }
-            className={rootClass}
+            className={titleClass}
           >
-            <span className="block td-text-body text-ink">{task.title}</span>
-            <span className="block td-text-caption text-ink-3">{taskMeta(candidate)}</span>
+            {titleBody}
           </button>
         ) : (
           <button
             type="button"
             aria-label={`添加任务 ${task.title}`}
             onClick={() => interaction.onSelect({ kind: "task", id: task.id })}
-            className={rootClass}
+            className={titleClass}
           >
-            <span className="block td-text-body text-ink">{task.title}</span>
-            <span className="block td-text-caption text-ink-3">{taskMeta(candidate)}</span>
+            {titleBody}
           </button>
         )}
       </div>
       {expanded && hasChildren && (
-        <ul className="space-y-1 pl-11">
+        <ul className="space-y-1 pl-7">
           {children.map((child) => (
             <li
               key={child.id}
