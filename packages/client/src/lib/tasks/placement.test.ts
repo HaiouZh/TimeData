@@ -6,7 +6,8 @@ const TODAY = new Date("2026-06-14T08:00:00.000Z");
 function task(p: Partial<Task>): Task {
   return { id: "t", title: "x", done: false, recurrence: null, lastDoneAt: null,
     startAt: null, scheduledAt: null, completedCount: 0, sortOrder: 0,
-    createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z", ...p };
+    createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
+    ruleId: null, skipped: false, ...p };
 }
 
 describe("placementForTask 普通任务", () => {
@@ -49,6 +50,24 @@ describe("placementForTask 重复任务", () => {
     const r = placementForTask(task({ recurrence: daily, startAt: "2026-06-01T00:00:00.000Z",
       lastDoneAt: "2026-06-14T06:00:00.000Z" }), TODAY);
     expect(r.pool).toBe("recurring");
+  });
+});
+
+describe("placementForTask occurrence", () => {
+  it("今天的 occurrence → today 不逾期", () => {
+    const r = placementForTask(task({ ruleId: "r1", scheduledAt: "2026-06-14T00:00:00.000Z" }), TODAY);
+    expect(r).toEqual({ pool: "today", overdue: false });
+  });
+  it("逾期 occurrence（过去日）→ today + overdue（不落 inbox）", () => {
+    const r = placementForTask(task({ ruleId: "r1", scheduledAt: "2026-06-13T00:00:00.000Z" }), TODAY);
+    expect(r).toEqual({ pool: "today", overdue: true });
+  });
+  it("未来 occurrence → upcoming", () => {
+    const r = placementForTask(task({ ruleId: "r1", scheduledAt: "2026-06-20T00:00:00.000Z" }), TODAY);
+    expect(r).toEqual({ pool: "upcoming" });
+  });
+  it("坏数据兜底：ruleId 非空但 scheduledAt=null → inbox，不抛错", () => {
+    expect(placementForTask(task({ ruleId: "r1", scheduledAt: null }), TODAY)).toEqual({ pool: "inbox" });
   });
 });
 

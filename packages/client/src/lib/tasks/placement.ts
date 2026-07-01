@@ -54,6 +54,15 @@ export function placementForTask(task: Task, now: Date): TodoPlacement {
   }
 
   if (task.scheduledAt === null) return { pool: "inbox" };
+
+  // occurrence（ruleId 非空、recurrence 已在上面 null）：逾期落 today 红追平，不回 inbox。
+  if (task.ruleId !== null) {
+    const schedDay = localDayIndex(new Date(task.scheduledAt));
+    const nowDay = localDayIndex(now);
+    if (schedDay > nowDay) return { pool: "upcoming" };
+    return { pool: "today", overdue: schedDay < nowDay };
+  }
+
   const schedDay = localDayIndex(new Date(task.scheduledAt));
   const nowDay = localDayIndex(now);
   if (schedDay > nowDay) return { pool: "upcoming" };
