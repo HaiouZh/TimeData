@@ -153,7 +153,8 @@ export function TaskRow({
             <Checkbox
               ariaLabel={`完成 ${task.title}`}
               checked={checked}
-              onChange={() => onToggle(task)}
+              onChange={() => { if (!isRecurring) onToggle(task); }}
+              disabled={isRecurring}
               className="shrink-0"
             />
           </div>

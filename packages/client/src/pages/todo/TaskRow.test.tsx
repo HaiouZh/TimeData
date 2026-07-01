@@ -177,6 +177,19 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
+  it("重复模板行：复选框 disabled，点击不触发 onToggle", async () => {
+    const onToggle = vi.fn();
+    const r = task({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const { host, root } = await render(
+      createElement(TaskRow, { task: r, pool: "upcoming", ...handlers, onToggle }),
+    );
+    const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
+    expect(cb?.disabled).toBe(true);
+    await click(cb);
+    expect(onToggle).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
   it("点行（无子任务）触发 onEdit", async () => {
     const onEdit = vi.fn();
     const { host, root } = await render(
