@@ -391,13 +391,18 @@ describe("TaskDetailSheet 自动保存", () => {
   });
 
   it("点徽章 → 仅某天 → 月历选日后为普通排期", async () => {
+    // 月历默认渲染当前月（anchor=今天），故按当前月派生目标日，避免硬编码绝对日期跨月漂移。
+    // 用当月 15 号：每月必存在、必被渲染、且不会跨月边界。
+    const target = `${getDateString(new Date()).slice(0, 7)}-15`;
     const t = await addTask({ title: "池任务" });
     const { host, root } = await renderSheet(t.id);
     await click(badgeOf(host));
     await click(host.querySelector('button[aria-label="仅某天…"]'));
-    await click(host.querySelector('button[aria-label="2026-06-20"]'));
+    const dayButton = host.querySelector(`button[aria-label="${target}"]`);
+    expect(dayButton).not.toBeNull();
+    await click(dayButton);
     await settle();
-    expect((await db.tasks.get(t.id))?.scheduledAt).toBe(normalizeScheduledDate("2026-06-20"));
+    expect((await db.tasks.get(t.id))?.scheduledAt).toBe(normalizeScheduledDate(target));
     await unmount(root);
   });
 
