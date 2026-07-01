@@ -218,6 +218,8 @@ export const TaskSchema = z.object({
     .array(NonEmptyTrimmedStringSchema.refine((value) => value.length <= 64, "tag must be at most 64 characters"))
     .max(50)
     .default([]),
+  ruleId: z.string().min(1).nullable().default(null),
+  skipped: z.boolean().default(false),
   sortOrder: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
   updatedAt: UtcIsoStringSchema,

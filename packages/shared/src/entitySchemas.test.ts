@@ -385,6 +385,28 @@ describe("TaskSchema weight", () => {
   });
 });
 
+describe("TaskSchema ruleId/skipped", () => {
+  const baseTask = {
+    id: "t1", title: "占位", done: false, recurrence: null,
+    lastDoneAt: null, startAt: null, scheduledAt: null, completedCount: 0,
+    completedAt: null, tags: [], weight: 0, sortOrder: 0,
+    createdAt: "2026-06-30T00:00:00.000Z", updatedAt: "2026-06-30T00:00:00.000Z",
+  };
+  it("legacy payload 缺 ruleId/skipped → 默认 null/false", () => {
+    const t = TaskSchema.parse(baseTask);
+    expect(t.ruleId).toBeNull();
+    expect(t.skipped).toBe(false);
+  });
+  it("接受 ruleId 字符串与 skipped=true", () => {
+    const t = TaskSchema.parse({ ...baseTask, ruleId: "rule-1", skipped: true });
+    expect(t.ruleId).toBe("rule-1");
+    expect(t.skipped).toBe(true);
+  });
+  it("拒绝空串 ruleId", () => {
+    expect(() => TaskSchema.parse({ ...baseTask, ruleId: "" })).toThrow();
+  });
+});
+
 describe("GoalLayoutPinSchema", () => {
   const now = "2026-06-24T00:00:00.000Z";
 

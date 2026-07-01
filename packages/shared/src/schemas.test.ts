@@ -292,7 +292,7 @@ describe("runtime schemas", () => {
     });
     const legacyStateField = "tu" + "rn";
     const legacyStateTimeField = `${legacyStateField}At`;
-    expect(parsedForcePush.tasks).toEqual([{ ...task, parentId: null, completedAt: null, tags: [], weight: 0 }]);
+    expect(parsedForcePush.tasks).toEqual([{ ...task, parentId: null, completedAt: null, tags: [], weight: 0, ruleId: null, skipped: false }]);
     expect(Object.hasOwn(parsedForcePush.tasks[0] ?? {}, legacyStateField)).toBe(false);
     expect(Object.hasOwn(parsedForcePush.tasks[0] ?? {}, legacyStateTimeField)).toBe(false);
     expect(
