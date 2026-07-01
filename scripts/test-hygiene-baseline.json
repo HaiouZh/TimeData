@@ -86,6 +86,7 @@
   "dirty-in-clean-bucket:pages/TodoPage.deeplink.test.tsx",
   "dirty-in-clean-bucket:pages/TodoPage.test.tsx",
   "dirty-in-clean-bucket:pages/goals/GoalAddMemberSheet.test.tsx",
+  "dirty-in-clean-bucket:pages/goals/GoalCandidateList.test.tsx",
   "dirty-in-clean-bucket:pages/goals/GoalDetailPage.layoutPinsLoading.test.tsx",
   "dirty-in-clean-bucket:pages/goals/GoalDetailPage.test.tsx",
   "dirty-in-clean-bucket:pages/goals/GoalEditSheet.test.tsx",

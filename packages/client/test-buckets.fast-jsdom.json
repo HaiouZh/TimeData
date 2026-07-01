@@ -21,6 +21,7 @@
   "src/pages/StatsPage.test.tsx",
   "src/pages/TodoPage.deeplink.test.tsx",
   "src/pages/goals/GoalAddMemberSheet.test.tsx",
+  "src/pages/goals/GoalCandidateList.test.tsx",
   "src/pages/goals/GoalEditSheet.test.tsx",
   "src/pages/goals/GoalGalaxyHud.test.tsx",
   "src/pages/goals/GoalGraphNodeView.test.tsx",
