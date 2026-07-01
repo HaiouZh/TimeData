@@ -1,4 +1,4 @@
-import { completeTask, type Recurrence, type Task, TaskSchema } from "@timedata/shared";
+import { completeTask, materializeDue, type Recurrence, type Task, TaskSchema } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
@@ -248,6 +248,34 @@ export async function markOccurrenceSkipped(id: string, options: { now?: Date } 
     updatedAt,
   });
   return putTask(next);
+}
+
+let materializationInFlight: Promise<void> | null = null;
+
+/** 遍历所有重复规则，对没有活跃 pending occurrence 的 rule 物化当前该做的一条到库。并发调用合并为同一个 in-flight Promise。 */
+export async function runMaterialization(now: Date = new Date()): Promise<void> {
+  if (materializationInFlight) return materializationInFlight;
+  materializationInFlight = runMaterializationOnce(now).finally(() => {
+    materializationInFlight = null;
+  });
+  return materializationInFlight;
+}
+
+async function runMaterializationOnce(now: Date): Promise<void> {
+  const rules = await db.tasks.filter((t) => t.recurrence !== null && (t.parentId ?? null) === null).toArray();
+  for (const rule of rules) {
+    await db.transaction("rw", db.tasks, db.syncLog, async () => {
+      const freshRule = await db.tasks.get(rule.id);
+      if (!freshRule || freshRule.recurrence === null || (freshRule.parentId ?? null) !== null) return;
+      const forRule = await db.tasks.where("ruleId").equals(freshRule.id).toArray();
+      if (forRule.some((o) => !o.done && !o.skipped)) return; // 同时只一条活跃
+      const processed = forRule.filter((o) => o.done || o.skipped);
+      const occ = materializeDue(freshRule, processed, now, await nextTaskSortOrder());
+      if (occ == null) return;
+      await db.tasks.add(occ);
+      await recordSyncLog("tasks", occ.id, "create", occ.updatedAt);
+    });
+  }
 }
 
 export async function applyRecurrenceChoice(

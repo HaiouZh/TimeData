@@ -14,6 +14,7 @@ import {
   persistTaskOrder,
   promoteToRoot,
   reorderChildren,
+  runMaterialization,
   scheduleTask,
   setTaskTags,
   toggleTaskDone,
@@ -773,5 +774,43 @@ describe("markOccurrenceSkipped", () => {
   it("对非 occurrence（ruleId=null）抛错", async () => {
     const t = await addTask({ title: "普通" });
     await expect(markOccurrenceSkipped(t.id)).rejects.toThrow();
+  });
+});
+
+describe("runMaterialization", () => {
+  it("到期 rule 物化一条 pending occurrence 进库", async () => {
+    const rule = await addTask({
+      title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 14)), now: new Date("2026-06-14T06:00:00.000Z"),
+    });
+    await runMaterialization(new Date("2026-06-14T08:00:00.000Z"));
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped);
+    expect(occ).toMatchObject({ ruleId: rule.id, recurrence: null, done: false, skipped: false, scheduledAt: localDateOf(new Date(2026, 5, 14)) });
+    await expect(db.syncLog.where("recordId").equals(occ!.id).toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "create" })]),
+    );
+  });
+  it("已有活跃 pending 时不重复物化（幂等）", async () => {
+    const rule = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 14)), now: new Date("2026-06-14T06:00:00.000Z") });
+    await runMaterialization(new Date("2026-06-14T08:00:00.000Z"));
+    const before = await db.tasks.count();
+    await runMaterialization(new Date("2026-06-14T10:00:00.000Z"));
+    expect(await db.tasks.count()).toBe(before);
+  });
+  it("并发触发也只物化一条 pending occurrence", async () => {
+    const rule = await addTask({
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 14)),
+      now: new Date("2026-06-14T06:00:00.000Z"),
+    });
+
+    await Promise.all([
+      runMaterialization(new Date("2026-06-14T08:00:00.000Z")),
+      runMaterialization(new Date("2026-06-14T08:00:00.000Z")),
+    ]);
+
+    const active = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(active).toHaveLength(1);
   });
 });
