@@ -65,6 +65,8 @@ function createSchema() {
       parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
       weight INTEGER NOT NULL DEFAULT 0,
+      rule_id TEXT,
+      skipped INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -759,6 +761,70 @@ describe("sync route", () => {
       table_name: "tasks",
       record_id: "task-force",
     });
+  });
+
+  it("force-push imports task ruleId/skipped fields", async () => {
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: "2026-06-30T00:00:00.000Z" }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+        quickNotes: [],
+        tasks: [
+          {
+            id: "occ-1",
+            parentId: null,
+            title: "补铁",
+            done: false,
+            recurrence: null,
+            lastDoneAt: null,
+            startAt: null,
+            scheduledAt: "2026-06-30T00:00:00.000Z",
+            completedCount: 0,
+            weight: 0,
+            completedAt: null,
+            tags: [],
+            ruleId: "rule-iron",
+            skipped: true,
+            sortOrder: 0,
+            createdAt: "2026-06-30T00:00:00.000Z",
+            updatedAt: "2026-06-30T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(db.prepare("SELECT rule_id, skipped FROM tasks WHERE id = ?").get("occ-1")).toEqual({
+      rule_id: "rule-iron",
+      skipped: 1,
+    });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "tasks",
+          recordId: "occ-1",
+          data: expect.objectContaining({ ruleId: "rule-iron", skipped: true }),
+        }),
+      ]),
+    );
   });
 
   it("rejects force push without a valid confirmation token", async () => {
