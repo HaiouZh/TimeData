@@ -1,5 +1,5 @@
-import type { Recurrence, Task } from "@timedata/shared";
 import { Trash, X } from "@phosphor-icons/react";
+import type { Recurrence, Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
@@ -10,7 +10,13 @@ import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placem
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
 import { subtaskProgress } from "../../lib/tasks/subtasks.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
-import { applyRecurrenceChoice, deleteTaskCascade, toggleTaskDone, updateTask } from "../../lib/tasks.js";
+import {
+  applyRecurrenceChoice,
+  deleteTaskCascade,
+  markOccurrenceSkipped,
+  toggleTaskDone,
+  updateTask,
+} from "../../lib/tasks.js";
 import { getDateString } from "../../lib/time.js";
 import { CustomRecurrencePage } from "./CustomRecurrencePage.js";
 import { InlineChildren } from "./InlineChildren.js";
@@ -141,10 +147,14 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
   }
 
   function handleDelete(): void {
-    if (!id) return;
+    if (!id || !task) return;
     void (async () => {
       try {
-        await deleteTaskCascade(id);
+        if (task.ruleId !== null && !task.done && !task.skipped) {
+          await markOccurrenceSkipped(id);
+        } else {
+          await deleteTaskCascade(id);
+        }
         syncAfterWrite();
         onClose();
       } catch (err) {
@@ -259,8 +269,11 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
             <div className="flex items-start gap-3">
               <Checkbox
                 ariaLabel={`完成 ${task.title}`}
-                checked={task.done}
-                onChange={() => void run(() => toggleTaskDone(task.id))}
+                checked={task.recurrence ? false : task.done}
+                onChange={() => {
+                  if (!task.recurrence) void run(() => toggleTaskDone(task.id));
+                }}
+                disabled={task.recurrence !== null}
                 className="mt-1 shrink-0"
               />
               <div className="min-w-0 flex-1 space-y-1">
@@ -312,9 +325,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
               </div>
             </div>
 
-            {!isChild && task && (
-              <InlineChildren parentId={task.id} mode="draggable" onAfterWrite={syncAfterWrite} />
-            )}
+            {!isChild && task && <InlineChildren parentId={task.id} mode="draggable" onAfterWrite={syncAfterWrite} />}
 
             {!isChild && onTagsChange && task && (
               <div data-testid="tag-editor" className="space-y-2">

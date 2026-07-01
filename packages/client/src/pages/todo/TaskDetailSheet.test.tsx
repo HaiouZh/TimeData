@@ -210,6 +210,21 @@ describe("TaskDetailSheet 展示与关闭", () => {
     await unmount(root);
   });
 
+  it("重复模板详情：复选框 disabled，不能直接完成模板", async () => {
+    const t = await addTask({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const { host, root } = await renderSheet(t.id);
+    const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
+
+    expect(cb?.disabled).toBe(true);
+    await click(cb);
+    await settle();
+
+    const stored = await db.tasks.get(t.id);
+    expect(stored).toMatchObject({ done: false, lastDoneAt: null, completedCount: 0 });
+    expect(await db.tasks.where("ruleId").equals(t.id).count()).toBe(0);
+    await unmount(root);
+  });
+
   it("无子任务 -> 不渲染进度条", async () => {
     const t = await addTask({ title: "光杆" });
     const { host, root } = await renderSheet(t.id);
@@ -491,6 +506,39 @@ describe("TaskDetailSheet 删除", () => {
     const { host, root } = await renderSheet(t.id);
     const del = host.querySelector('button[aria-label="删除任务"]') as HTMLButtonElement;
     expect(del).toBeTruthy();
+    await unmount(root);
+  });
+
+  it("删除 pending occurrence：标记 skipped 留痕，不硬删", async () => {
+    await db.tasks.add({
+      id: "occ:r1:2026-06-14",
+      parentId: null,
+      title: "补铁",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: "2026-06-14T00:00:00.000Z",
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "r1",
+      skipped: false,
+      sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+    const { host, root, onClose } = await renderSheet("occ:r1:2026-06-14");
+
+    await click(host.querySelector('button[aria-label="删除任务"]'));
+    await settle();
+
+    expect(await db.tasks.get("occ:r1:2026-06-14")).toMatchObject({ skipped: true });
+    expect(onClose).toHaveBeenCalled();
+    await expect(db.syncLog.where("recordId").equals("occ:r1:2026-06-14").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
+    );
     await unmount(root);
   });
 });
