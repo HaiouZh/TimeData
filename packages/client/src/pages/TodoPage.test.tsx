@@ -556,3 +556,49 @@ describe("TodoPage", () => {
     await act(async () => root.unmount());
   });
 });
+
+describe("TodoPage occurrence 删除分流", () => {
+  // Task 4 改 listTasks 排除 skipped 后启用
+  it.skip("删除 pending occurrence：标记 skipped 留痕，不硬删", async () => {
+    await db.tasks.add({
+      id: "occ:r1:2026-06-14",
+      parentId: null,
+      title: "补铁",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: "2026-06-14T00:00:00.000Z",
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "r1",
+      skipped: false,
+      sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "补铁");
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="删除 补铁"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitForCondition(() => {
+      const today = host.querySelector('[data-section="today"]') as HTMLElement | null;
+      return !(today?.textContent?.includes("补铁") ?? false);
+    }, "occurrence to leave today after skip");
+
+    const stored = await db.tasks.get("occ:r1:2026-06-14");
+    expect(stored).toMatchObject({ skipped: true });
+    await expect(db.syncLog.where("recordId").equals("occ:r1:2026-06-14").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
+    );
+    await act(async () => root.unmount());
+  });
+});

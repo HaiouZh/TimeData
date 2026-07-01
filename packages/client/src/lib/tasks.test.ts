@@ -9,6 +9,7 @@ import {
   deleteTask,
   deleteTaskCascade,
   listTasks,
+  markOccurrenceSkipped,
   moveTaskToParent,
   persistTaskOrder,
   promoteToRoot,
@@ -752,5 +753,25 @@ describe("bumpTaskWeight", () => {
       tags: ["实验"],
       weight: 1,
     });
+  });
+});
+
+describe("markOccurrenceSkipped", () => {
+  it("occurrence 置 skipped=true + 写 update syncLog", async () => {
+    await db.tasks.add({
+      id: "occ:r1:2026-06-14", parentId: null, title: "补铁", done: false, recurrence: null,
+      lastDoneAt: null, startAt: null, scheduledAt: "2026-06-14T00:00:00.000Z", completedCount: 0,
+      weight: 0, completedAt: null, tags: [], ruleId: "r1", skipped: false, sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+    await markOccurrenceSkipped("occ:r1:2026-06-14", { now: new Date("2026-06-14T09:00:00.000Z") });
+    expect((await db.tasks.get("occ:r1:2026-06-14"))?.skipped).toBe(true);
+    await expect(db.syncLog.where("recordId").equals("occ:r1:2026-06-14").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
+    );
+  });
+  it("对非 occurrence（ruleId=null）抛错", async () => {
+    const t = await addTask({ title: "普通" });
+    await expect(markOccurrenceSkipped(t.id)).rejects.toThrow();
   });
 });

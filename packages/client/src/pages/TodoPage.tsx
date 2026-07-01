@@ -35,6 +35,7 @@ import {
   bumpTaskWeight,
   deleteTask,
   listTasks,
+  markOccurrenceSkipped,
   moveTaskToParent,
   persistTaskOrder,
   promoteToRoot,
@@ -150,7 +151,11 @@ export function TodoPage() {
     syncAfterWrite();
   };
   const remove = async (t: Task) => {
-    await deleteTask(t.id);
+    if (t.ruleId !== null) {
+      await markOccurrenceSkipped(t.id);
+    } else {
+      await deleteTask(t.id);
+    }
     if (detailId === t.id) setDetailId(null);
     syncAfterWrite();
   };

@@ -231,6 +231,25 @@ export async function bumpTaskWeight(id: string, options: { now?: Date } = {}): 
   return putTask(next);
 }
 
+/** occurrence 删·跳：置 skipped=true 留痕（不删行），让 P2 游标能前进。仅对 occurrence（ruleId 非空、recurrence null）有效。 */
+export async function markOccurrenceSkipped(id: string, options: { now?: Date } = {}): Promise<Task> {
+  const existing = await db.tasks.get(id);
+  if (!existing) throw new Error("任务不存在");
+  if (existing.ruleId === null || existing.recurrence !== null) throw new Error("只有 occurrence 可跳过");
+  const updatedAt = (options.now ?? new Date()).toISOString();
+  const next = TaskSchema.parse({
+    ...existing,
+    parentId: existing.parentId ?? null,
+    scheduledAt: existing.scheduledAt ?? null,
+    completedCount: existing.completedCount ?? 0,
+    completedAt: existing.completedAt ?? null,
+    tags: existing.tags ?? [],
+    skipped: true,
+    updatedAt,
+  });
+  return putTask(next);
+}
+
 export async function applyRecurrenceChoice(
   id: string,
   choice: RecurrenceChoice,
