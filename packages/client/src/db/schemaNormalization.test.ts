@@ -31,6 +31,8 @@ const normalizedTask = {
   weight: 0,
   completedAt: null,
   tags: [],
+  ruleId: null,
+  skipped: false,
 };
 const legacyStateField = "tu" + "rn";
 const legacyStateTimeField = `${legacyStateField}At`;
@@ -178,6 +180,8 @@ describe("planNormalization", () => {
           completedCount: 0,
           weight: 0,
           tags: [],
+          ruleId: null,
+          skipped: false,
           sortOrder: 0,
           scheduledAt: null,
           startAt: null,
@@ -246,6 +250,13 @@ describe("runSchemaNormalizationIfNeeded", () => {
     expect(await db.quickNotes.get("n1")).not.toHaveProperty("ghostField");
     expect(await db.syncLog.count()).toBe(0);
     expect(localStorage.getItem(STORAGE_KEYS.schemaNormalizationVersion)).toBe(String(SCHEMA_NORMALIZATION_VERSION));
+  });
+
+  it("归一后补齐 ruleId/skipped 默认值", async () => {
+    await db.tasks.put(legacyTask({}) as never);
+    await runSchemaNormalizationIfNeeded();
+    const task = await db.tasks.get("t1");
+    expect(task).toMatchObject({ ruleId: null, skipped: false });
   });
 
   it("版本相等 -> 不跑", async () => {
