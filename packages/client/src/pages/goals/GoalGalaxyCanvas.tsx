@@ -57,6 +57,7 @@ import { GoalGraphNodeView } from "./GoalGraphNodeView.js";
 import { type GoalIndexItem, GoalIndexPanel } from "./GoalIndexPanel.js";
 import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
 import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
+import { ResizableTrayAside } from "./ResizableTrayAside.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { readDragRef } from "./goalMemberDragData.js";
@@ -1088,13 +1089,9 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         </aside>
       )}
       {wide && trayOpen && (
-        <aside
-          aria-label="未归类托盘"
-          data-drawer="tray"
-          className="absolute right-0 top-0 z-20 h-full w-80 border-l border-border bg-surface-elevated shadow-elev2"
-        >
+        <ResizableTrayAside>
           <GoalUnassignedTray tasks={trayTasks} tracks={trayTracks} steps={steps} boardSignals={boardSignals} />
-        </aside>
+        </ResizableTrayAside>
       )}
       <div
         data-galaxy-controls
