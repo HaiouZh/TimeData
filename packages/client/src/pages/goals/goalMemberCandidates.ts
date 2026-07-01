@@ -3,13 +3,14 @@ import { groupStepsByTrack, latestBoardSignal, latestStep, type TrackBoardSignal
 import { placementForTask } from "../../lib/tasks/placement.js";
 import { filterTasks, type TaskFilter } from "../../lib/tasks/turnTags.js";
 
-export type GoalTaskCandidateGroupKey = "today" | "inbox" | "scheduled" | "recurring" | "completed";
+export type GoalTaskCandidateGroupKey = "today" | "inbox" | "scheduled";
 export type GoalTrackCandidateGroupKey = "active" | "parked" | "concluded";
 
 export interface GoalTaskCandidate {
   task: Task;
   group: GoalTaskCandidateGroupKey;
   overdue: boolean;
+  children: Task[];
 }
 
 export interface GoalTrackCandidate {
@@ -40,15 +41,13 @@ export interface GoalTrackCandidateGroup {
   items: GoalTrackCandidate[];
 }
 
-const TASK_GROUP_ORDER: GoalTaskCandidateGroupKey[] = ["today", "inbox", "scheduled", "recurring", "completed"];
+const TASK_GROUP_ORDER: GoalTaskCandidateGroupKey[] = ["today", "inbox", "scheduled"];
 const TRACK_GROUP_ORDER: GoalTrackCandidateGroupKey[] = ["active", "parked", "concluded"];
 
 const TASK_GROUP_LABEL: Record<GoalTaskCandidateGroupKey, string> = {
   today: "今天",
   inbox: "收件箱",
   scheduled: "已排期",
-  recurring: "重复",
-  completed: "已完成",
 };
 
 const TRACK_GROUP_LABEL: Record<GoalTrackCandidateGroupKey, string> = {
@@ -69,37 +68,39 @@ function compareTaskStable(left: Task, right: Task): number {
   return compareText(left.title, right.title) || left.id.localeCompare(right.id);
 }
 
-function compareUpdatedDesc(left: Task, right: Task): number {
-  return right.updatedAt.localeCompare(left.updatedAt) || compareTaskStable(left, right);
-}
-
-function taskGroup(task: Task, now: Date): Pick<GoalTaskCandidate, "group" | "overdue"> {
+/** 落点映射到托盘三池；重复 / 已完成 / 已耗尽一律返回 null（不进托盘）。 */
+function taskGroup(task: Task, now: Date): { group: GoalTaskCandidateGroupKey; overdue: boolean } | null {
   const placement = placementForTask(task, now);
-  if (placement.pool === "upcoming") return { group: "scheduled", overdue: false };
   if (placement.pool === "today") return { group: "today", overdue: placement.overdue };
-  return { group: placement.pool, overdue: false };
+  if (placement.pool === "inbox") return { group: "inbox", overdue: false };
+  if (placement.pool === "upcoming") return { group: "scheduled", overdue: false };
+  return null;
 }
 
 function compareTaskCandidate(left: GoalTaskCandidate, right: GoalTaskCandidate): number {
-  if (left.group === "today" && right.group === "today") {
-    if (left.overdue !== right.overdue) return left.overdue ? -1 : 1;
-    return left.task.sortOrder - right.task.sortOrder || compareTaskStable(left.task, right.task);
+  const byGroup = TASK_GROUP_ORDER.indexOf(left.group) - TASK_GROUP_ORDER.indexOf(right.group);
+  if (byGroup !== 0) return byGroup;
+  if (left.group === "scheduled") {
+    return (
+      (left.task.scheduledAt ?? "").localeCompare(right.task.scheduledAt ?? "") ||
+      compareTaskStable(left.task, right.task)
+    );
   }
+  // today / inbox：镜像待办页手动顺序（sortOrder 升序），再稳定兜底。
+  return left.task.sortOrder - right.task.sortOrder || compareTaskStable(left.task, right.task);
+}
 
-  if (left.group === "inbox" && right.group === "inbox") {
-    return compareUpdatedDesc(left.task, right.task);
+/** 未完成子任务按 parentId 归组，组内按 sortOrder 升序。 */
+function openChildrenByParent(tasks: readonly Task[]): Map<string, Task[]> {
+  const map = new Map<string, Task[]>();
+  for (const task of tasks) {
+    if (task.parentId === null || task.done) continue;
+    const list = map.get(task.parentId) ?? [];
+    list.push(task);
+    map.set(task.parentId, list);
   }
-
-  if (left.group === "scheduled" && right.group === "scheduled") {
-    return (left.task.scheduledAt ?? "").localeCompare(right.task.scheduledAt ?? "") || compareTaskStable(left.task, right.task);
-  }
-
-  if (left.group === "completed" && right.group === "completed") {
-    return (right.task.completedAt ?? "").localeCompare(left.task.completedAt ?? "") || compareTaskStable(left.task, right.task);
-  }
-
-  // 其余（重复等）按最近更新倒序，避免回落到字母序看着像随机。
-  return compareUpdatedDesc(left.task, right.task);
+  for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder || compareTaskStable(a, b));
+  return map;
 }
 
 function searchTerms(query: string): string[] {
@@ -132,16 +133,20 @@ export function buildGoalTaskCandidates(
   options: GoalTaskCandidateOptions,
 ): GoalTaskCandidate[] {
   const memberKeys = new Set(members.map(memberKey));
-  return filterTasks(
-    tasks.filter((task) => !memberKeys.has(`task:${task.id}`)),
-    options,
-  )
-    .map((task) => ({ task, ...taskGroup(task, options.now) }))
-    .sort(
-      (left, right) =>
-        TASK_GROUP_ORDER.indexOf(left.group) - TASK_GROUP_ORDER.indexOf(right.group) ||
-        compareTaskCandidate(left, right),
-    );
+  const childrenByParent = openChildrenByParent(tasks);
+  const roots = tasks.filter((task) => task.parentId === null && !memberKeys.has(`task:${task.id}`));
+  const candidates: GoalTaskCandidate[] = [];
+  for (const task of filterTasks(roots, options)) {
+    const grouped = taskGroup(task, options.now);
+    if (!grouped) continue;
+    candidates.push({
+      task,
+      group: grouped.group,
+      overdue: grouped.overdue,
+      children: childrenByParent.get(task.id) ?? [],
+    });
+  }
+  return candidates.sort(compareTaskCandidate);
 }
 
 export function taskCandidateGroups(candidates: readonly GoalTaskCandidate[]): GoalTaskCandidateGroup[] {

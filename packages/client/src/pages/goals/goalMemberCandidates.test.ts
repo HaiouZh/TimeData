@@ -60,7 +60,7 @@ function step(input: Partial<TrackStep> & Pick<TrackStep, "id" | "trackId" | "se
 }
 
 describe("goalMemberCandidates", () => {
-  it("任务候选过滤已加入成员并按今天/收件箱/已排期/重复/已完成分组", () => {
+  it("任务候选排除已加入/重复/已完成，只按今天/收件箱/已排期分组", () => {
     const members: GoalMemberRef[] = [{ kind: "task", id: "joined" }];
     const tasks = [
       task({ id: "joined", title: "已加入" }),
@@ -83,16 +83,14 @@ describe("goalMemberCandidates", () => {
       ["today", ["today"]],
       ["inbox", ["inbox"]],
       ["scheduled", ["future"]],
-      ["recurring", ["repeat"]],
-      ["completed", ["done"]],
     ]);
   });
 
-  it("收件箱组按最近更新倒序排列", () => {
+  it("收件箱组按 sortOrder 升序（镜像待办页手动顺序，而非 updatedAt）", () => {
     const tasks = [
-      task({ id: "old", title: "旧", updatedAt: "2026-06-20T00:00:00.000Z", sortOrder: 0 }),
-      task({ id: "new", title: "新", updatedAt: "2026-06-22T00:00:00.000Z", sortOrder: 5 }),
-      task({ id: "mid", title: "中", updatedAt: "2026-06-21T00:00:00.000Z", sortOrder: 3 }),
+      task({ id: "c", title: "丙", sortOrder: 30, updatedAt: "2026-06-22T00:00:00.000Z" }),
+      task({ id: "a", title: "甲", sortOrder: 10, updatedAt: "2026-06-20T00:00:00.000Z" }),
+      task({ id: "b", title: "乙", sortOrder: 20, updatedAt: "2026-06-21T00:00:00.000Z" }),
     ];
 
     const candidates = buildGoalTaskCandidates(tasks, [], {
@@ -104,14 +102,13 @@ describe("goalMemberCandidates", () => {
     });
 
     const inbox = taskCandidateGroups(candidates).find((group) => group.key === "inbox");
-    expect(inbox?.items.map((item) => item.task.id)).toEqual(["new", "mid", "old"]);
+    expect(inbox?.items.map((item) => item.task.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("重复组按最近更新倒序排列", () => {
-    const recurrence = { freq: "daily", interval: 1, basis: "due" } as const;
+  it("已排期组按排期日升序", () => {
     const tasks = [
-      task({ id: "r-old", title: "重复旧", recurrence, startAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z" }),
-      task({ id: "r-new", title: "重复新", recurrence, startAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-22T00:00:00.000Z" }),
+      task({ id: "late", title: "晚", scheduledAt: "2026-06-27T00:00:00.000Z", sortOrder: 1 }),
+      task({ id: "early", title: "早", scheduledAt: "2026-06-25T00:00:00.000Z", sortOrder: 9 }),
     ];
 
     const candidates = buildGoalTaskCandidates(tasks, [], {
@@ -122,8 +119,64 @@ describe("goalMemberCandidates", () => {
       tagMode: "and",
     });
 
-    const recurring = taskCandidateGroups(candidates).find((group) => group.key === "recurring");
-    expect(recurring?.items.map((item) => item.task.id)).toEqual(["r-new", "r-old"]);
+    const scheduled = taskCandidateGroups(candidates).find((group) => group.key === "scheduled");
+    expect(scheduled?.items.map((item) => item.task.id)).toEqual(["early", "late"]);
+  });
+
+  it("只保留根任务并把未完成子任务按 sortOrder 挂到对应根", () => {
+    const tasks = [
+      task({ id: "root", title: "根", sortOrder: 1 }),
+      task({ id: "child-2", title: "子2", parentId: "root", sortOrder: 2 }),
+      task({ id: "child-1", title: "子1", parentId: "root", sortOrder: 1 }),
+      task({ id: "child-done", title: "子完成", parentId: "root", done: true, completedAt: now.toISOString() }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      searchQuery: "",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    expect(candidates.map((item) => item.task.id)).toEqual(["root"]);
+    expect(candidates[0]?.children.map((child) => child.id)).toEqual(["child-1", "child-2"]);
+  });
+
+  it("父不在候选集里的子任务不显示（孤儿丢弃）", () => {
+    const tasks = [
+      task({ id: "orphan-child", title: "孤儿子任务", parentId: "gone" }),
+      task({ id: "root", title: "根" }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      searchQuery: "",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    expect(candidates.map((item) => item.task.id)).toEqual(["root"]);
+    expect(candidates[0]?.children).toEqual([]);
+  });
+
+  it("搜索只按根命中：词只在子任务里时根不露出", () => {
+    const tasks = [
+      task({ id: "root-a", title: "写文档", sortOrder: 1 }),
+      task({ id: "child-a", title: "星图子步骤", parentId: "root-a" }),
+      task({ id: "root-b", title: "写星图", sortOrder: 2 }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      searchQuery: "星图",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    expect(candidates.map((item) => item.task.id)).toEqual(["root-b"]);
   });
 
   it("任务候选复用搜索和标签筛选", () => {
