@@ -45,6 +45,8 @@ const taskRow: TaskRow = {
   scheduled_at: null,
   completed_count: 0,
   weight: 0,
+  rule_id: null,
+  skipped: 0,
   completed_at: "2026-06-16T00:00:00.000Z",
   tags: null,
   created_at: "2026-06-16T00:00:00.000Z",
@@ -87,5 +89,13 @@ describe("rowToTask", () => {
   it("maps task weight and defaults legacy rows to zero", () => {
     expect(rowToTask({ ...taskRow, weight: 4 }).weight).toBe(4);
     expect(rowToTask({ ...taskRow, weight: null } as unknown as TaskRow).weight).toBe(0);
+  });
+
+  it("maps rule_id and skipped", () => {
+    expect(rowToTask({ ...taskRow, rule_id: "r1", skipped: 1 })).toMatchObject({ ruleId: "r1", skipped: true });
+  });
+
+  it("defaults legacy null rows for ruleId/skipped", () => {
+    expect(rowToTask({ ...taskRow, rule_id: null, skipped: null } as unknown as TaskRow)).toMatchObject({ ruleId: null, skipped: false });
   });
 });

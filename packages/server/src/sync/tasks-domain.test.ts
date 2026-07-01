@@ -28,6 +28,8 @@ beforeEach(async () => {
       sort_order INTEGER NOT NULL DEFAULT 0, scheduled_at TEXT, parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
       weight INTEGER NOT NULL DEFAULT 0,
+      rule_id TEXT,
+      skipped INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -89,5 +91,20 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
 
     const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "child-1");
     expect(pulled).toMatchObject({ data: { parentId: "root-1" } });
+  });
+
+  it("persists ruleId/skipped and round-trips them", () => {
+    const c = change("create", "occ-1", "今天这一发");
+    (c as unknown as { data: Record<string, unknown> }).data.ruleId = "rule-1";
+    (c as unknown as { data: Record<string, unknown> }).data.skipped = true;
+
+    expect(applyChange(c).status).toBe("applied");
+    expect(db.prepare("SELECT rule_id, skipped FROM tasks WHERE id='occ-1'").get()).toEqual({
+      rule_id: "rule-1",
+      skipped: 1,
+    });
+
+    const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "occ-1");
+    expect(pulled).toMatchObject({ data: { ruleId: "rule-1", skipped: true } });
   });
 });

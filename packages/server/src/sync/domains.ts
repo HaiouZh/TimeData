@@ -379,6 +379,8 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     parent_id: task.parentId ?? null,
     completed_count: task.completedCount ?? 0,
     weight: task.weight ?? 0,
+    rule_id: task.ruleId ?? null,
+    skipped: task.skipped ? 1 : 0,
     completed_at: task.completedAt ?? null,
     tags: JSON.stringify(task.tags ?? []),
     created_at: task.createdAt,
