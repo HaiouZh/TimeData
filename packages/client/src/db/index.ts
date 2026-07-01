@@ -245,6 +245,33 @@ db.version(13).stores({
   });
 });
 
+db.version(14)
+  .stores({
+    categories: "id, parentId, sortOrder",
+    quickNotes: "id, occurredAt, updatedAt",
+    timeEntries: "id, categoryId, startTime, endTime",
+    tasks: "id, parentId, ruleId, scheduledAt, sortOrder, updatedAt",
+    tracks: "id, status, updatedAt",
+    trackSteps: "id, trackId, [trackId+seq], updatedAt",
+    goals: "id, kind, status, updatedAt",
+    goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt",
+    syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+    autoBackups: "id, createdAt",
+    settings: "key",
+    healthHeartRate: "id, date",
+    healthHrv: "id, date",
+    healthSleep: "id, date",
+    healthStress: "id, date",
+    runs: "id, date",
+    healthCharts: "id, order, updatedAt",
+  })
+  .upgrade(async (tx) => {
+    await tx.table("tasks").toCollection().modify((task: { ruleId?: string | null; skipped?: boolean }) => {
+      if (task.ruleId === undefined) task.ruleId = null;
+      if (task.skipped === undefined) task.skipped = false;
+    });
+  });
+
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();
   if (count > 0) return;

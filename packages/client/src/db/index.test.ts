@@ -62,7 +62,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(13);
+    expect(db.verno).toBe(14);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
     expect(db.quickNotes.schema.idxByName.occurredAt).toBeDefined();
@@ -70,6 +70,7 @@ describe("Dexie database", () => {
     expect(db.tasks.schema.primKey.keyPath).toBe("id");
     expect(db.tasks.schema.idxByName.goalId).toBeUndefined();
     expect(db.tasks.schema.idxByName.parentId).toBeDefined();
+    expect(db.tasks.schema.idxByName.ruleId).toBeDefined();
     expect(db.tasks.schema.idxByName.sortOrder).toBeDefined();
     expect(db.tasks.schema.idxByName.updatedAt).toBeDefined();
     expect(db.healthCharts.schema.primKey.keyPath).toBe("id");
