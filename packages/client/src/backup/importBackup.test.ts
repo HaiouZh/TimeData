@@ -103,6 +103,8 @@ const newTask = {
   scheduledAt: null,
   completedCount: 0,
   weight: 0,
+  ruleId: null,
+  skipped: false,
   sortOrder: 1,
   createdAt: now,
   updatedAt: now,
