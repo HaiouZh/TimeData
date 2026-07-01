@@ -7,9 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
+import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
-import { getSetting } from "../lib/settings/index.js";
 import { TodoPage } from "./TodoPage.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -322,6 +322,8 @@ describe("TodoPage", () => {
   });
 
   it("底栏和输入框隐藏时，收件箱展开的收起按钮不避让已滑出视口的输入框", async () => {
+    const now = new Date("2026-06-20T09:00:00.000Z");
+    vi.spyOn(Date, "now").mockReturnValue(now.getTime());
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this instanceof HTMLFormElement) {
@@ -340,7 +342,7 @@ describe("TodoPage", () => {
       return originalGetBoundingClientRect.call(this);
     });
 
-    await addTask({ title: "今天收件箱", toInbox: true, now: new Date("2026-06-20T09:00:00.000Z") });
+    await addTask({ title: "今天收件箱", toInbox: true, now });
     await addTask({ title: "昨天收件箱", toInbox: true, now: new Date("2026-06-19T09:00:00.000Z") });
     await addTask({ title: "前天收件箱", toInbox: true, now: new Date("2026-06-18T09:00:00.000Z") });
     await addTask({ title: "更早收件箱", toInbox: true, now: new Date("2026-06-17T09:00:00.000Z") });
@@ -480,8 +482,8 @@ describe("TodoPage", () => {
     expect(inbox.textContent).toContain("水下 1 条");
 
     // 展开尾部
-    const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
-      (b) => b.textContent?.includes("水下 1 条"),
+    const tailBtn = Array.from(inbox.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("水下 1 条"),
     ) as HTMLButtonElement;
     expect(tailBtn).toBeTruthy();
     await act(async () => tailBtn.click());
@@ -514,8 +516,8 @@ describe("TodoPage", () => {
 
     const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
     expect(inbox.querySelector('[aria-label^="显示更多"]')).toBeNull();
-    const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
-      (b) => b.textContent?.includes("水下 1 条"),
+    const tailBtn = Array.from(inbox.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("水下 1 条"),
     ) as HTMLButtonElement;
     expect(tailBtn).toBeTruthy();
 
@@ -544,8 +546,8 @@ describe("TodoPage", () => {
     const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
     // 搜索不把水下任务混入默认浮层
     expect(inbox.textContent).not.toContain("沉没搜索词");
-    const tailBtn = Array.from(inbox.querySelectorAll("button")).find(
-      (b) => b.textContent?.includes("水下 1 条"),
+    const tailBtn = Array.from(inbox.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("水下 1 条"),
     ) as HTMLButtonElement;
     expect(tailBtn).not.toBeNull();
 
