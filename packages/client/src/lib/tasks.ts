@@ -499,7 +499,7 @@ export interface TodoBuckets {
   today: Task[]; // 含过期，过期排前
   inbox: Task[];
   scheduled: Task[]; // 一次性未来排期 + 未到期重复，按当前到期日升序
-  recurring: Task[]; // 全部重复任务（去重桶）
+  recurring: Task[]; // P3 后 UI 不再单独渲染重复桶，保留空桶兼容旧调用方
   completed: Task[]; // 全部已完成（今天 + 隔日）+ 耗尽重复，按 completedAt 倒序
 }
 
@@ -534,12 +534,16 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const buckets: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
   for (const t of all) {
     if ((t.parentId ?? null) !== null) continue;
-    if (t.recurrence) buckets.recurring.push(t);
+    if (t.ruleId !== null && t.skipped) continue; // skipped occurrence 不进活跃桶
+    if (t.recurrence) {
+      buckets.scheduled.push(t); // 重复模板退到 scheduled 管理区，不投影 today
+      continue;
+    }
     const p = placementForTask(t, now);
     if (p.pool === "today") buckets.today.push(t);
     else if (p.pool === "inbox") buckets.inbox.push(t);
     else if (p.pool === "upcoming") buckets.scheduled.push(t);
-    else if (p.pool === "recurring") buckets.scheduled.push(t); // 未到期重复
+    else if (p.pool === "recurring") buckets.scheduled.push(t);
     else buckets.completed.push(t); // pool === "completed"：所有已完成 + 耗尽重复
   }
   buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);

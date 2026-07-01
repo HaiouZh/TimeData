@@ -533,7 +533,7 @@ describe("listTasks", () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it("分区：今天、inbox、重复", async () => {
+  it("分区：今天、inbox、重复模板进 scheduled", async () => {
     const now = new Date("2026-06-14T08:00:00.000Z");
     await addTask({ title: "今天", now });
     await addTask({ title: "inbox", toInbox: true, now });
@@ -541,10 +541,11 @@ describe("listTasks", () => {
 
     const buckets = await listTasks(now);
 
-    // 重复任务今天到期，同时出现在 today 和 recurring
-    expect(buckets.today).toHaveLength(2); // "今天" + 重复任务今天到期
+    // P3 后模板不投影 today，只进 scheduled；recurring 保留空桶兼容
+    expect(buckets.today).toHaveLength(1); // 仅 "今天"
     expect(buckets.inbox).toHaveLength(1);
-    expect(buckets.recurring).toHaveLength(1);
+    expect(buckets.recurring).toHaveLength(0);
+    expect(buckets.scheduled.some((t) => t.title === "重复")).toBe(true);
   });
 
   it("带休眠 recurrence 的 child 不进入任何 listTasks bucket", async () => {
@@ -812,5 +813,30 @@ describe("runMaterialization", () => {
 
     const active = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
     expect(active).toHaveLength(1);
+  });
+});
+
+describe("listTasks occurrence 切读", () => {
+  it("occurrence 进 today、模板不进 today（进 scheduled）", async () => {
+    const rule = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 14)), now: new Date("2026-06-14T06:00:00.000Z") });
+    await runMaterialization(new Date("2026-06-14T08:00:00.000Z"));
+    const b = await listTasks(new Date("2026-06-14T08:00:00.000Z"));
+    // 模板不在 today
+    expect(b.today.some((t) => t.id === rule.id)).toBe(false);
+    // occurrence 在 today
+    expect(b.today.some((t) => t.ruleId === rule.id)).toBe(true);
+    // 模板在 scheduled 管理区
+    expect(b.scheduled.some((t) => t.id === rule.id)).toBe(true);
+  });
+  it("skipped occurrence 不进 today/inbox", async () => {
+    await db.tasks.add({
+      id: "occ:r1:2026-06-14", parentId: null, title: "补铁", done: false, recurrence: null,
+      lastDoneAt: null, startAt: null, scheduledAt: "2026-06-14T00:00:00.000Z", completedCount: 0,
+      weight: 0, completedAt: null, tags: [], ruleId: "r1", skipped: true, sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z", updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+    const b = await listTasks(new Date("2026-06-14T08:00:00.000Z"));
+    expect(b.today.some((t) => t.id === "occ:r1:2026-06-14")).toBe(false);
+    expect(b.inbox.some((t) => t.id === "occ:r1:2026-06-14")).toBe(false);
   });
 });

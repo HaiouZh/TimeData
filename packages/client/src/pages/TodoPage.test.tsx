@@ -558,8 +558,7 @@ describe("TodoPage", () => {
 });
 
 describe("TodoPage occurrence 删除分流", () => {
-  // Task 4 改 listTasks 排除 skipped 后启用
-  it.skip("删除 pending occurrence：标记 skipped 留痕，不硬删", async () => {
+  it("删除 pending occurrence：标记 skipped 留痕，不硬删", async () => {
     await db.tasks.add({
       id: "occ:r1:2026-06-14",
       parentId: null,

@@ -27,6 +27,8 @@ function task(overrides: Partial<Task> = {}): Task {
     sortOrder: 0,
     createdAt: "2026-06-01T00:00:00.000Z",
     updatedAt: "2026-06-01T00:00:00.000Z",
+    ruleId: null,
+    skipped: false,
     ...overrides,
   };
 }
@@ -136,6 +138,17 @@ describe("TaskColumn swipe 接线", () => {
 
     const after = await db.tasks.get(child.id);
     expect(after?.done).toBe(true);
+    await unmount(root);
+  });
+
+  it("occurrence 在 today 列无移动动作，只保留删除", async () => {
+    const occurrence = task({ id: "occ:r1:2026-06-14", ruleId: "r1", scheduledAt: "2026-06-14T00:00:00.000Z" });
+    const { host, root } = await renderDom(
+      createElement(TaskColumn, { title: "今天", pool: "today", tasks: [occurrence], emptyText: "空", ...handlers }),
+    );
+    expect(host.textContent).not.toContain("回收件箱");
+    expect(host.textContent).not.toContain("排进今天");
+    expect(host.textContent).toContain("删除");
     await unmount(root);
   });
 });

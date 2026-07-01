@@ -73,7 +73,7 @@ export function TaskList(props: TaskListProps) {
   }
 
   function renderItem(task: Task) {
-    const canSwap = !readOnly && task.recurrence === null;
+    const canSwap = !readOnly && task.recurrence === null && task.ruleId === null;
     const leading =
       canSwap && (pool === "inbox" || pool === "upcoming") ? (
         <LeadingActions>
