@@ -67,7 +67,6 @@ function step(input: Partial<TrackStep> & Pick<TrackStep, "id" | "trackId" | "se
 async function renderTray(props: Partial<ComponentProps<typeof GoalUnassignedTray>> = {}) {
   mounted = await renderDom(
     <GoalUnassignedTray
-      goals={[]}
       tasks={[]}
       tracks={[]}
       steps={[]}
@@ -145,5 +144,18 @@ describe("GoalUnassignedTray", () => {
     expect(row.getAttribute("data-tray-ref")).toBe("task:candidate");
     expect(dataTransfer.effectAllowed).toBe("copy");
     expect(data.get("application/x-goal-member")).toBe(JSON.stringify({ kind: "task", id: "candidate" }));
+  });
+
+  it("有子任务的根默认折叠、点开露出子任务", async () => {
+    const rendered = await renderTray({
+      tasks: [
+        task({ id: "root", title: "父任务" }),
+        task({ id: "child", title: "子条目", parentId: "root" }),
+      ],
+    });
+
+    expect(rendered.host.textContent).not.toContain("子条目");
+    await click(buttonByLabel(rendered.host, "展开子任务 父任务"));
+    expect(rendered.host.textContent).toContain("子条目");
   });
 });
