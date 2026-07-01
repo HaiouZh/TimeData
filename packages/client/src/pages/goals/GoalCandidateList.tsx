@@ -9,6 +9,7 @@ import type {
   GoalTaskCandidateGroupKey,
   GoalTrackCandidate,
   GoalTrackCandidateGroup,
+  GoalTrackCandidateGroupKey,
 } from "./goalMemberCandidates.js";
 import { writeDragRef } from "./goalMemberDragData.js";
 
@@ -28,7 +29,7 @@ const TASK_GROUP_COPY: Record<GoalTaskCandidateGroupKey, string> = {
   scheduled: "已排期",
 };
 
-const TRACK_GROUP_COPY: Record<string, string> = {
+const TRACK_GROUP_COPY: Record<GoalTrackCandidateGroupKey, string> = {
   active: "active",
   parked: "parked",
   concluded: "concluded",
@@ -50,7 +51,7 @@ function taskMeta(candidate: GoalTaskCandidate): string {
 
 function trackMeta(candidate: GoalTrackCandidate): string {
   const signal = candidate.signal ? ` · #${candidate.signal.tag}` : "";
-  return `${TRACK_GROUP_COPY[candidate.track.status]}${signal}`;
+  return `${TRACK_GROUP_COPY[candidate.group]}${signal}`;
 }
 
 export function GoalCandidateList({ tab, taskGroups, trackGroups, emptyLabel, interaction }: GoalCandidateListProps) {
