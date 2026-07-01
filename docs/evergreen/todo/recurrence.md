@@ -3,11 +3,12 @@ type: evergreen
 title: 待办 · 重复规则引擎
 covers:
   - packages/shared/src/recurrence.ts
+  - packages/shared/src/occurrence.ts
   - packages/client/src/lib/tasks/recurrence.ts
   - packages/client/src/lib/tasks/recurrencePresets.ts
   - packages/client/src/components/MonthCalendar.tsx
   - packages/client/src/components/Wheel.tsx
-last-reviewed: 2026-06-27
+last-reviewed: 2026-07-01
 ---
 
 <!-- 复核 2026-06-27（设计语言 P1）：MonthCalendar / Wheel 只迁移 token / typography / Phosphor 图标，重复规则 schema、判定“今天是否待做”和预设门行为均不变。 -->
@@ -81,6 +82,7 @@ last-reviewed: 2026-06-27
 | 入口 | 职责 |
 |---|---|
 | `shared/src/recurrence.ts` | `isDueNow`/`currentDueDateString`/`currentDueDayFor`/`recurrenceSummary`/`isRecurrenceFinishedAfter`（client `lib/tasks/recurrence.ts` 为 re-export 垫片） |
+| `shared/src/occurrence.ts` | occurrence 物化引擎纯函数：`occurrenceId`/`materializeOccurrence`/`isRuleExhausted`/`nextDueDate`/`materializeDue`（P2，零副作用，为 P3 today 切读 / 物化时机提供地基） |
 | `shared/src/taskCompletion.ts` | `completeTask`：非终结衍生+推进 / 终结转化（covers 归 [todo](../todo.md)） |
 | `lib/tasks/recurrencePresets.ts` | 预设↔Recurrence 映射 + `preserveHitDays` |
 | `components/MonthCalendar.tsx` | 月号选择日历 |
