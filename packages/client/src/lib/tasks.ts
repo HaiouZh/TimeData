@@ -49,6 +49,15 @@ async function putTask(next: Task): Promise<Task> {
   return next;
 }
 
+/** 事务内删除某 rule 名下所有活跃 pending occurrence（done=false && skipped=false）。仅在调用方事务内使用。 */
+async function deleteActiveOccurrencesInCurrentTransaction(ruleId: string): Promise<void> {
+  const stale = (await db.tasks.where("ruleId").equals(ruleId).toArray()).filter((o) => !o.done && !o.skipped);
+  for (const o of stale) {
+    await db.tasks.delete(o.id);
+    await recordSyncLog("tasks", o.id, "delete");
+  }
+}
+
 function stableJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(",")}]`;
@@ -193,7 +202,14 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
     updatedAt,
   });
 
-  return putTask(next);
+  if (!resetRecurrenceProgress) return putTask(next);
+  // 重锚：删该 rule 当前活跃 pending occurrence（同事务）+ put 模板
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    await deleteActiveOccurrencesInCurrentTransaction(id);
+    await db.tasks.put(next);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+  });
+  return next;
 }
 
 export async function setTaskTags(id: string, tags: string[], options: { now?: Date } = {}): Promise<Task> {
@@ -283,27 +299,31 @@ export async function applyRecurrenceChoice(
   choice: RecurrenceChoice,
   options: { now?: Date } = {},
 ): Promise<Task> {
-  if (choice.kind === "none") {
-    return updateTask(id, { recurrence: null, startAt: null, now: options.now });
-  }
-
   if (choice.kind === "recurrence") {
     return updateTask(id, { recurrence: choice.recurrence, startAt: choice.startAt, now: options.now });
   }
 
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
-
   const updatedAt = (options.now ?? new Date()).toISOString();
+
   const next = TaskSchema.parse({
     ...existing,
     recurrence: null,
     lastDoneAt: null,
     startAt: null,
-    scheduledAt: normalizeScheduledDate(choice.date),    completedCount: 0,
+    scheduledAt: choice.kind === "scheduled" ? normalizeScheduledDate(choice.date) : null,
+    completedCount: 0,
     updatedAt,
   });
-  return putTask(next);
+
+  // none/scheduled：rule 不再吐 occurrence，同事务清掉其名下活跃 pending
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    await deleteActiveOccurrencesInCurrentTransaction(id);
+    await db.tasks.put(next);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+  });
+  return next;
 }
 
 export async function toggleTaskDone(id: string, options: { now?: Date } = {}): Promise<Task> {

@@ -4,6 +4,7 @@ import { db, resetDb } from "../test/dbReset.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
   addTask,
+  applyRecurrenceChoice,
   bumpTaskWeight,
   createChildTask,
   deleteTask,
@@ -838,5 +839,66 @@ describe("listTasks occurrence 切读", () => {
     const b = await listTasks(new Date("2026-06-14T08:00:00.000Z"));
     expect(b.today.some((t) => t.id === "occ:r1:2026-06-14")).toBe(false);
     expect(b.inbox.some((t) => t.id === "occ:r1:2026-06-14")).toBe(false);
+  });
+});
+
+describe("updateTask 重锚删活跃 occurrence", () => {
+  it("改 rule 重锚：删该 rule 当前活跃 pending occurrence + 写 delete syncLog；历史 done 保留", async () => {
+    const rule = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 2, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 20)), now: new Date("2026-06-20T08:00:00.000Z") });
+    await db.tasks.add({ id: "occ:live", parentId: null, title: "喝水", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 24)), completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: rule.id, skipped: false, sortOrder: 1, createdAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-24T00:00:00.000Z" });
+    await db.tasks.add({ id: "occ:done", parentId: null, title: "喝水", done: true, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 22)), completedCount: 0, weight: 0, completedAt: "2026-06-22T00:00:00.000Z", tags: [], ruleId: rule.id, skipped: false, sortOrder: 2, createdAt: "2026-06-22T00:00:00.000Z", updatedAt: "2026-06-22T00:00:00.000Z" });
+    await updateTask(rule.id, { recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 27)), now: new Date("2026-06-27T08:00:00.000Z") });
+    expect(await db.tasks.get("occ:live")).toBeUndefined();
+    expect(await db.tasks.get("occ:done")).toBeDefined();
+    await expect(db.syncLog.where("recordId").equals("occ:live").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "delete" })]),
+    );
+  });
+  it("规则未变保存：活跃 pending occurrence 不被删", async () => {
+    const recurrence = { freq: "daily", interval: 2, basis: "due" } as const;
+    const startAt = localDateOf(new Date(2026, 5, 20));
+    const rule = await addTask({ title: "喝水", recurrence, startAt, now: new Date("2026-06-20T08:00:00.000Z") });
+    await db.tasks.add({ id: "occ:live2", parentId: null, title: "喝水", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: startAt, completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: rule.id, skipped: false, sortOrder: 1, createdAt: "2026-06-20T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z" });
+    await updateTask(rule.id, { recurrence: { ...recurrence }, startAt, now: new Date("2026-06-27T08:00:00.000Z") });
+    expect(await db.tasks.get("occ:live2")).toBeDefined();
+  });
+});
+
+describe("applyRecurrenceChoice 清孤儿 occurrence", () => {
+  it("none：转普通时同事务清活跃 pending occurrence，历史 skip 保留", async () => {
+    const rule = await addTask({
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 20)),
+      now: new Date("2026-06-20T08:00:00.000Z"),
+    });
+    await db.tasks.add({ id: "occ:none-live", parentId: null, title: "喝水", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 20)), completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: rule.id, skipped: false, sortOrder: 1, createdAt: "2026-06-20T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z" });
+    await db.tasks.add({ id: "occ:none-skip", parentId: null, title: "喝水", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 19)), completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: rule.id, skipped: true, sortOrder: 2, createdAt: "2026-06-19T00:00:00.000Z", updatedAt: "2026-06-19T00:00:00.000Z" });
+
+    const next = await applyRecurrenceChoice(rule.id, { kind: "none" }, { now: new Date("2026-06-21T08:00:00.000Z") });
+
+    expect(next.recurrence).toBeNull();
+    expect(await db.tasks.get("occ:none-live")).toBeUndefined();
+    expect(await db.tasks.get("occ:none-skip")).toBeDefined();
+    await expect(db.syncLog.where("recordId").equals("occ:none-live").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "delete" })]),
+    );
+  });
+  it("scheduled：转一次性日期时同事务清活跃 pending occurrence", async () => {
+    const rule = await addTask({
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 20)),
+      now: new Date("2026-06-20T08:00:00.000Z"),
+    });
+    await db.tasks.add({ id: "occ:scheduled-live", parentId: null, title: "喝水", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 20)), completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: rule.id, skipped: false, sortOrder: 1, createdAt: "2026-06-20T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z" });
+
+    const next = await applyRecurrenceChoice(rule.id, { kind: "scheduled", date: "2026-06-30" }, { now: new Date("2026-06-21T08:00:00.000Z") });
+
+    expect(next).toMatchObject({ recurrence: null, scheduledAt: localDateOf(new Date(2026, 5, 30)) });
+    expect(await db.tasks.get("occ:scheduled-live")).toBeUndefined();
+    await expect(db.syncLog.where("recordId").equals("occ:scheduled-live").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "delete" })]),
+    );
   });
 });
