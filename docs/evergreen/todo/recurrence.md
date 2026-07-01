@@ -64,8 +64,8 @@ last-reviewed: 2026-07-01
 - **逾期保留**：`until` 已过但仍有逾期未完成发生时，留在“今天”区（`placement.ts` 的 `hasOutstandingUntilOccurrence`）。
 - **模板不写 `completedAt`**：活动模板始终 `completedAt=null`，完成事件由衍生快照承载；仅终结转化时模板才写 `completedAt`（见 [todo](../todo.md) §3.1）。
 - **复选框恒不勾选/不划线**：重复模板（含已排期未到期）复选框 `disabled`、点击不触发 `onToggle`（P3：模板退纯管理区，勾选只落在物化出的 occurrence 上）。
-- **重设规则/起始日会重置进度游标 + 删活跃 occurrence**：用户修改 `recurrence` 内容或 `startAt` 时，客户端把活动模板视为重新锚定，清空旧 `lastDoneAt`/`completedCount`，**同事务删除该 rule 名下活跃 pending occurrence**（`deleteActiveOccurrencesInCurrentTransaction`）；规则和起始日未变的保存不清进度、不删 occurrence。转普通（`none`）或转一次性排期（`scheduled`）也同事务清孤儿 occurrence。
-- **occurrence 物化 + today 切读（P3）**：`runMaterialization` 遍历所有重复规则，对没有活跃 pending occurrence 的 rule 调 `materializeDue` 物化一条到库（`db.tasks.add` + `create` syncLog），并发调用合并为模块级 in-flight Promise、写事务内二次检查。物化时机：冷启动 bootstrap、跨日 timer、focus、visibilitychange。`listTasks` 的 today 桶只含 pending occurrence（`ruleId!==null && !skipped`），重复模板退到 scheduled 管理区、不投影 today；skipped occurrence 不进任何活跃桶。
+- **重设规则/起始日会重置游标 + 删活跃 occurrence**：改 `recurrence` 或 `startAt` 视为重新锚定，清空 `lastDoneAt`/`completedCount`，同事务级联删除该 rule 的活跃 pending occurrence 及其 children，再按新规则即时尝试物化；规则/起始日未变则保留进度。转普通（`none`）或一次性排期（`scheduled`）也同事务清孤儿 occurrence。
+- **occurrence 物化 + today 切读（P3）**：`runMaterialization` 遍历重复规则，对无活跃 pending occurrence 的 rule 调 `materializeDue` 写一条 occurrence，并克隆模板当前 children 为 `parentId=occurrence.id` 的 occurrence children（确定性 id `${occ.id}:child:${templateChild.id}`，保留 `done`/`completedAt`/`tags` 快照）；已有活跃 occurrence 但 children 缺失时会补齐。并发调用合并为模块级 in-flight Promise，写事务内二次检查。物化时机：冷启动 bootstrap、跨日 timer、focus、visibilitychange、规则重锚保存后、单发完成/删·跳后即时触发。`listTasks` 的 today 桶只含 pending occurrence（`ruleId!==null && !skipped && !done`），重复模板退 scheduled 管理区、不投影 today；skipped occurrence 不进活跃桶。
 - **单发动作**：勾 occurrence 无需新代码（`recurrence=null` 天然走 `toggleTaskDone` 非重复分支）。删·跳 = `markOccurrenceSkipped`（置 `skipped=true` 留痕、写 update syncLog，不删行让 P2 游标前进）；`TodoPage.remove` 对 `ruleId!==null` 的 occurrence 调 `markOccurrenceSkipped`，普通任务仍调 `deleteTask`。
 - `scheduleTask`/`unscheduleTask` 拒绝重复任务（重复任务的排期由重复规则管理；server 端 schedule 端点对重复任务回 409 `TASK_RECURRING_USE_RULE`）。
 
@@ -85,7 +85,7 @@ last-reviewed: 2026-07-01
 |---|---|
 | `shared/src/recurrence.ts` | `isDueNow`/`currentDueDateString`/`currentDueDayFor`/`recurrenceSummary`/`isRecurrenceFinishedAfter`（client `lib/tasks/recurrence.ts` 为 re-export 垫片） |
 | `shared/src/occurrence.ts` | occurrence 物化引擎纯函数：`occurrenceId`/`materializeOccurrence`/`isRuleExhausted`/`nextDueDate`/`materializeDue`（P2，零副作用，为 P3 today 切读 / 物化时机提供地基） |
-| `lib/tasks.ts`（P3 新增） | `runMaterialization`（遍历 rule → `materializeDue` → 写库，in-flight 合并）、`markOccurrenceSkipped`（删·跳这一发）、`updateTask` 重锚删活跃 occurrence、`applyRecurrenceChoice` none/scheduled 清孤儿 |
+| `lib/tasks.ts`（P3 新增） | `runMaterialization`（遍历 rule → `materializeDue` → 写 occurrence + occurrence children，in-flight 合并）、`markOccurrenceSkipped`（删·跳这一发并即时物化下一发）、`toggleTaskDone`（pending occurrence 完成后即时物化下一发）、`updateTask` 重锚级联删活跃 occurrence 并即时物化、`applyRecurrenceChoice` none/scheduled 清孤儿 |
 | `shared/src/taskCompletion.ts` | `completeTask`：非终结衍生+推进 / 终结转化（covers 归 [todo](../todo.md)） |
 | `lib/tasks/recurrencePresets.ts` | 预设↔Recurrence 映射 + `preserveHitDays` |
 | `components/MonthCalendar.tsx` | 月号选择日历 |

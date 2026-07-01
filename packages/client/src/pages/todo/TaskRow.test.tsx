@@ -10,6 +10,7 @@ import { TaskRow } from "./TaskRow.js";
 
 // 兜底清理：portal/popover 测试若异常路径未 unmount 会污染下一条 document.body 查询。
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = "";
 });
 
@@ -32,6 +33,8 @@ function task(overrides: Partial<Task> = {}): Task {
     completedCount: 0,
     completedAt: null,
     tags: [],
+    ruleId: null,
+    skipped: false,
     sortOrder: 0,
     createdAt: "2026-06-01T00:00:00.000Z",
     updatedAt: "2026-06-01T00:00:00.000Z",
@@ -62,9 +65,7 @@ describe("TaskRow", () => {
   });
 
   it("未归入目标：无归属竖条", async () => {
-    const { host, root } = await render(
-      createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }),
-    );
+    const { host, root } = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
     expect(host.querySelector("[data-in-goal='true']")).toBeNull();
     expect(host.querySelector("[data-testid='goal-linked-bar']")).toBeNull();
     await unmount(root);
@@ -136,6 +137,49 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
+  it("逾期 occurrence 在第二行显示红色应发生日期", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({
+          id: "occ:r1:2026-06-14",
+          ruleId: "r1",
+          scheduledAt: "2026-06-14T00:00:00.000Z",
+        }),
+        pool: "today",
+        overdue: true,
+        ...handlers,
+      }),
+    );
+    const date = host.querySelector(".text-danger");
+    expect(date?.textContent).toBe("6月14日");
+    await unmount(root);
+  });
+
+  it("刚物化的 pending occurrence 行会短暂标记为新出现", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T08:00:00.000Z"));
+
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({
+          id: "occ:r1:2026-06-20",
+          ruleId: "r1",
+          scheduledAt: "2026-06-20T00:00:00.000Z",
+          createdAt: "2026-06-20T07:59:58.000Z",
+        }),
+        pool: "today",
+        ...handlers,
+      }),
+    );
+
+    expect(host.querySelector('[data-fresh-occurrence="true"]')).not.toBeNull();
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(host.querySelector('[data-fresh-occurrence="true"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("已排期一次性任务行显示被动日期摘要", async () => {
     const { host, root } = await render(
       createElement(TaskRow, {
@@ -148,7 +192,7 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("已排期重复任务行显示重复摘要而非日期", async () => {
+  it("已排期重复任务行显示重复摘要和下一发生日", async () => {
     const { host, root } = await render(
       createElement(TaskRow, {
         task: task({
@@ -160,6 +204,33 @@ describe("TaskRow", () => {
       }),
     );
     expect(host.textContent).toContain("每天");
+    expect(host.textContent).toContain("2099年12月31日");
+    await unmount(root);
+  });
+
+  it("重复模板行的下一发生日按 occurrence 游标更新", async () => {
+    const rule = task({
+      id: "rule-1",
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-06-18T00:00:00.000Z",
+    });
+    await db.tasks.add(rule);
+    await db.tasks.add(
+      task({
+        id: "occ:rule-1:2026-06-18",
+        title: "喝水",
+        done: true,
+        ruleId: rule.id,
+        scheduledAt: "2026-06-18T00:00:00.000Z",
+        completedAt: "2026-06-20T09:00:00.000Z",
+      }),
+    );
+
+    const { host, root } = await render(createElement(TaskRow, { task: rule, pool: "upcoming", ...handlers }));
+    await settle();
+    expect(host.textContent).toContain("每天");
+    expect(host.textContent).toContain("6月19日");
     await unmount(root);
   });
 
@@ -180,9 +251,7 @@ describe("TaskRow", () => {
   it("重复模板行：复选框 disabled，点击不触发 onToggle", async () => {
     const onToggle = vi.fn();
     const r = task({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
-    const { host, root } = await render(
-      createElement(TaskRow, { task: r, pool: "upcoming", ...handlers, onToggle }),
-    );
+    const { host, root } = await render(createElement(TaskRow, { task: r, pool: "upcoming", ...handlers, onToggle }));
     const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
     expect(cb?.disabled).toBe(true);
     await click(cb);

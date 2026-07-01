@@ -12,7 +12,7 @@ covers:
   - packages/client/src/pages/dev/StyleguidePage.tsx
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
-last-reviewed: 2026-06-29
+last-reviewed: 2026-07-01
 ---
 
 # 设计语言
@@ -47,7 +47,7 @@ last-reviewed: 2026-06-29
 - **圆角阶梯**：`--radius-ctl`(8) / `--radius-row`(12) / `--radius-card`(16) / `--radius-pill`(999)。裸 `rounded-2xl`/`rounded-3xl` 已全仓 codemod 收敛进该阶梯（统一 `rounded-card`），新代码只用 token 圆角（棘轮 `bare-card-radius`，见 §3）。
 - **边框**：`--color-border` / `--color-border-strong` / `--color-border-hairline`(rgba 8%)。
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
-- **动效**：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-slow`(300ms) + `--ease-standard`(ease-out) / `--ease-emphasized`(cubic-bezier(.2,0,0,1))。交互过渡 / 弹层动画时长就近映射到这组 token；keyframe 与长循环动画（如 `sync-pulse`）属合法多值，保留裸时长、不收 token、不加硬棘轮。
+- **动效**：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-slow`(300ms) + `--ease-standard`/`--ease-emphasized`。交互过渡 / 弹层动画就近映射到这组 token；keyframe 与长循环动画（如 `sync-pulse`）属合法多值，保留裸时长。行级入场提示（如 Todo occurrence 新派生高亮）只复用现有 token/`color-mix`，并尊重 `prefers-reduced-motion`。
 - **z-index 层级**：`--z-sticky`(20) / `--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；组件内部局部 stacking 仍用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
 - **派生软色**用 `color-mix(in srgb, <token> N%, transparent)` 或已有 soft token，不另写裸色。
 

@@ -49,13 +49,88 @@ async function putTask(next: Task): Promise<Task> {
   return next;
 }
 
+async function deleteTaskAndChildrenInCurrentTransaction(taskId: string): Promise<void> {
+  const children = await db.tasks.where("parentId").equals(taskId).toArray();
+  const ids = [taskId, ...children.map((child) => child.id)];
+  await db.tasks.bulkDelete(ids);
+  for (const id of ids) {
+    await recordSyncLog("tasks", id, "delete");
+  }
+}
+
 /** 事务内删除某 rule 名下所有活跃 pending occurrence（done=false && skipped=false）。仅在调用方事务内使用。 */
 async function deleteActiveOccurrencesInCurrentTransaction(ruleId: string): Promise<void> {
   const stale = (await db.tasks.where("ruleId").equals(ruleId).toArray()).filter((o) => !o.done && !o.skipped);
   for (const o of stale) {
-    await db.tasks.delete(o.id);
-    await recordSyncLog("tasks", o.id, "delete");
+    await deleteTaskAndChildrenInCurrentTransaction(o.id);
   }
+}
+
+function occurrenceChildId(occurrenceId: string, templateChildId: string): string {
+  return `${occurrenceId}:child:${templateChildId}`;
+}
+
+function materializeOccurrenceChildren(occurrence: Task, templateChildren: Task[]): Task[] {
+  return templateChildren.map((child, index) =>
+    TaskSchema.parse({
+      id: occurrenceChildId(occurrence.id, child.id),
+      parentId: occurrence.id,
+      title: child.title,
+      done: child.done,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: child.completedAt ?? null,
+      tags: child.tags ?? [],
+      ruleId: null,
+      skipped: false,
+      sortOrder: index,
+      createdAt: occurrence.createdAt,
+      updatedAt: occurrence.updatedAt,
+    }),
+  );
+}
+
+async function ensureOccurrenceChildrenInCurrentTransaction(rule: Task, occurrence: Task): Promise<void> {
+  const templateChildren = await db.tasks.where("parentId").equals(rule.id).sortBy("sortOrder");
+  if (templateChildren.length === 0) return;
+
+  const existing = await db.tasks.where("parentId").equals(occurrence.id).toArray();
+  const existingIds = new Set(existing.map((child) => child.id));
+  const missing = materializeOccurrenceChildren(occurrence, templateChildren).filter(
+    (child) => !existingIds.has(child.id),
+  );
+  for (const child of missing) {
+    await db.tasks.add(child);
+    await recordSyncLog("tasks", child.id, "create", child.updatedAt);
+  }
+}
+
+async function materializeRuleInCurrentTransaction(rule: Task, now: Date): Promise<void> {
+  if (rule.recurrence === null || (rule.parentId ?? null) !== null) return;
+  const forRule = await db.tasks.where("ruleId").equals(rule.id).toArray();
+  const active = forRule.find((o) => !o.done && !o.skipped);
+  if (active) {
+    await ensureOccurrenceChildrenInCurrentTransaction(rule, active);
+    return;
+  }
+
+  const processed = forRule.filter((o) => o.done || o.skipped);
+  const occ = materializeDue(rule, processed, now, await nextTaskSortOrder());
+  if (occ == null) return;
+  await db.tasks.add(occ);
+  await recordSyncLog("tasks", occ.id, "create", occ.updatedAt);
+  await ensureOccurrenceChildrenInCurrentTransaction(rule, occ);
+}
+
+async function materializeNextForOccurrenceInCurrentTransaction(occurrence: Task, now: Date): Promise<void> {
+  if (occurrence.ruleId === null) return;
+  const rule = await db.tasks.get(occurrence.ruleId);
+  if (!rule || rule.recurrence === null || (rule.parentId ?? null) !== null) return;
+  await materializeRuleInCurrentTransaction(rule, now);
 }
 
 function stableJson(value: unknown): string {
@@ -208,6 +283,7 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
     await deleteActiveOccurrencesInCurrentTransaction(id);
     await db.tasks.put(next);
     await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    await materializeRuleInCurrentTransaction(next, now);
   });
   return next;
 }
@@ -252,7 +328,8 @@ export async function markOccurrenceSkipped(id: string, options: { now?: Date } 
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
   if (existing.ruleId === null || existing.recurrence !== null) throw new Error("只有 occurrence 可跳过");
-  const updatedAt = (options.now ?? new Date()).toISOString();
+  const now = options.now ?? new Date();
+  const updatedAt = now.toISOString();
   const next = TaskSchema.parse({
     ...existing,
     parentId: existing.parentId ?? null,
@@ -263,7 +340,12 @@ export async function markOccurrenceSkipped(id: string, options: { now?: Date } 
     skipped: true,
     updatedAt,
   });
-  return putTask(next);
+  await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    await db.tasks.put(next);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    await materializeNextForOccurrenceInCurrentTransaction(next, now);
+  });
+  return next;
 }
 
 let materializationInFlight: Promise<void> | null = null;
@@ -283,13 +365,7 @@ async function runMaterializationOnce(now: Date): Promise<void> {
     await db.transaction("rw", db.tasks, db.syncLog, async () => {
       const freshRule = await db.tasks.get(rule.id);
       if (!freshRule || freshRule.recurrence === null || (freshRule.parentId ?? null) !== null) return;
-      const forRule = await db.tasks.where("ruleId").equals(freshRule.id).toArray();
-      if (forRule.some((o) => !o.done && !o.skipped)) return; // 同时只一条活跃
-      const processed = forRule.filter((o) => o.done || o.skipped);
-      const occ = materializeDue(freshRule, processed, now, await nextTaskSortOrder());
-      if (occ == null) return;
-      await db.tasks.add(occ);
-      await recordSyncLog("tasks", occ.id, "create", occ.updatedAt);
+      await materializeRuleInCurrentTransaction(freshRule, now);
     });
   }
 }
@@ -335,7 +411,8 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   const base = {
     ...existing,
     parentId: existing.parentId ?? null,
-    scheduledAt: existing.scheduledAt ?? null,    completedCount: existing.completedCount ?? 0,
+    scheduledAt: existing.scheduledAt ?? null,
+    completedCount: existing.completedCount ?? 0,
     completedAt: existing.completedAt ?? null,
     tags: existing.tags ?? [],
   };
@@ -352,8 +429,23 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     return putTask(reopened);
   }
 
+  if (!base.recurrence && base.ruleId !== null) {
+    const next = TaskSchema.parse({ ...base, done: true, completedAt: updatedAt, updatedAt });
+    await db.transaction("rw", db.tasks, db.syncLog, async () => {
+      await db.tasks.put(next);
+      await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+      await materializeNextForOccurrenceInCurrentTransaction(next, now);
+    });
+    return next;
+  }
+
   const children = base.recurrence ? await db.tasks.where("parentId").equals(id).sortBy("sortOrder") : [];
-  const { next, occurrence, occurrenceChildren = [], templateChildren = [] } = completeTask(base as Task, {
+  const {
+    next,
+    occurrence,
+    occurrenceChildren = [],
+    templateChildren = [],
+  } = completeTask(base as Task, {
     now,
     genId: uuid,
     occurrenceSortOrder: await nextTaskSortOrder(),
@@ -448,7 +540,8 @@ export async function promoteToRoot(
   const next = TaskSchema.parse({
     ...existing,
     parentId: null,
-    scheduledAt,    completedCount: existing.completedCount ?? 0,
+    scheduledAt,
+    completedCount: existing.completedCount ?? 0,
     completedAt: existing.completedAt ?? null,
     tags: existing.tags ?? [],
     sortOrder,

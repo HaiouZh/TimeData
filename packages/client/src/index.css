@@ -220,6 +220,31 @@ samp {
   overflow-y: visible;
 }
 
+@keyframes todo-occurrence-arrive {
+  from {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    box-shadow: inset 2px 0 0 var(--color-accent);
+    transform: translateY(3px);
+  }
+  to {
+    background: transparent;
+    box-shadow: inset 2px 0 0 transparent;
+    transform: translateY(0);
+  }
+}
+
+.todo-occurrence-fresh {
+  animation: todo-occurrence-arrive var(--duration-slow) var(--ease-emphasized);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent) 65%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-occurrence-fresh {
+    animation: none;
+  }
+}
+
 .ts-collapse-caret {
   transform-origin: center;
 }

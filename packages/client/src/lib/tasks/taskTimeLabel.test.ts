@@ -29,13 +29,17 @@ describe("taskTimeLabel", () => {
     expect(taskTimeLabel({ recurrence: null, scheduledAt: "2025-12-31T00:00:00.000Z" })).toBe("2025年12月31日");
   });
 
-  it("重复 -> recurrence summary 非占位非月日", () => {
+  it("重复 -> recurrence summary + 下一发生日", () => {
     const recurrence: Recurrence = { freq: "daily", interval: 1, basis: "due" };
 
-    const label = taskTimeLabel({ recurrence, scheduledAt: "2026-06-20T00:00:00.000Z" });
+    const label = taskTimeLabel({
+      recurrence,
+      scheduledAt: "2026-06-20T00:00:00.000Z",
+      lastDoneAt: null,
+      startAt: "2026-06-20T00:00:00.000Z",
+    });
 
-    expect(label).toBe(recurrenceSummary(recurrence));
+    expect(label).toBe(`${recurrenceSummary(recurrence)} · 6月20日`);
     expect(label).not.toBe("设定时间");
-    expect(label).not.toBe("6月20日");
   });
 });

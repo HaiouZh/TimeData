@@ -176,6 +176,15 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
 
   const subtaskTotal = childRows.length;
   const subtaskDone = childRows.filter((c) => c.done).length;
+  const processedOccurrences =
+    useLiveQuery(
+      () =>
+        task?.recurrence
+          ? db.tasks.where("ruleId").equals(task.id).toArray()
+          : Promise.resolve([] as Task[]),
+      [task?.id, task?.recurrence !== null],
+      [] as Task[],
+    ) ?? [];
   const todayDate = getDateString(new Date());
   const taskPlacement = task ? placementForTask(task, new Date()) : null;
   const anchorDate =
@@ -184,7 +193,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
       : task?.startAt
         ? getDateString(new Date(task.startAt))
         : todayDate;
-  const nextTimeLabel = task ? taskTimeLabel(task) : "设定时间";
+  const nextTimeLabel = task ? taskTimeLabel(task, processedOccurrences) : "设定时间";
   const customInitial = useMemo(
     () =>
       task

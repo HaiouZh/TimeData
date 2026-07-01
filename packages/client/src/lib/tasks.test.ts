@@ -463,6 +463,26 @@ describe("updateTask", () => {
       completedCount: 2,
     });
   });
+
+  it("普通任务改成今天命中的重复规则后立即物化 pending occurrence", async () => {
+    const now = new Date("2026-07-01T09:00:00.000Z"); // 周三
+    const task = await addTask({ title: "每周三", toInbox: true, now: new Date("2026-07-01T08:00:00.000Z") });
+
+    await updateTask(task.id, {
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [3], basis: "due" },
+      startAt: localDateOf(now),
+      now,
+    });
+
+    const active = (await db.tasks.where("ruleId").equals(task.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(active).toHaveLength(1);
+    expect(active[0]).toMatchObject({
+      title: "每周三",
+      recurrence: null,
+      scheduledAt: localDateOf(now),
+      ruleId: task.id,
+    });
+  });
 });
 
 describe("deleteTask", () => {
@@ -773,9 +793,46 @@ describe("markOccurrenceSkipped", () => {
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
     );
   });
+  it("跳过 pending occurrence 后立即物化下一发", async () => {
+    const rule = await addTask({
+      title: "补铁",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 18)),
+      now: new Date("2026-06-18T06:00:00.000Z"),
+    });
+    await runMaterialization(new Date("2026-06-20T08:00:00.000Z"));
+    const first = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped);
+    expect(first?.scheduledAt).toBe(localDateOf(new Date(2026, 5, 18)));
+
+    await markOccurrenceSkipped(first!.id, { now: new Date("2026-06-20T08:30:00.000Z") });
+
+    const active = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(active).toHaveLength(1);
+    expect(active[0]?.scheduledAt).toBe(localDateOf(new Date(2026, 5, 19)));
+  });
   it("对非 occurrence（ruleId=null）抛错", async () => {
     const t = await addTask({ title: "普通" });
     await expect(markOccurrenceSkipped(t.id)).rejects.toThrow();
+  });
+});
+
+describe("pending occurrence 处理后追平", () => {
+  it("完成 pending occurrence 后立即物化下一发", async () => {
+    const rule = await addTask({
+      title: "喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 18)),
+      now: new Date("2026-06-18T06:00:00.000Z"),
+    });
+    await runMaterialization(new Date("2026-06-20T08:00:00.000Z"));
+    const first = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped);
+    expect(first?.scheduledAt).toBe(localDateOf(new Date(2026, 5, 18)));
+
+    await toggleTaskDone(first!.id, { now: new Date("2026-06-20T09:00:00.000Z") });
+
+    const active = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(active).toHaveLength(1);
+    expect(active[0]?.scheduledAt).toBe(localDateOf(new Date(2026, 5, 19)));
   });
 });
 
@@ -790,6 +847,39 @@ describe("runMaterialization", () => {
     expect(occ).toMatchObject({ ruleId: rule.id, recurrence: null, done: false, skipped: false, scheduledAt: localDateOf(new Date(2026, 5, 14)) });
     await expect(db.syncLog.where("recordId").equals(occ!.id).toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ action: "create" })]),
+    );
+  });
+  it("到期 rule 物化 pending occurrence 时克隆模板 children", async () => {
+    const rule = await addTask({
+      title: "带子项的重复",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 5, 14)),
+      now: new Date("2026-06-14T06:00:00.000Z"),
+    });
+    const doneChild = await createChildTask(rule.id, "已完成子项", new Date("2026-06-14T06:30:00.000Z"));
+    await setTaskTags(doneChild.id, ["keep"], { now: new Date("2026-06-14T06:40:00.000Z") });
+    await toggleTaskDone(doneChild.id, { now: new Date("2026-06-14T07:00:00.000Z") });
+    const todoChild = await createChildTask(rule.id, "未完成子项", new Date("2026-06-14T07:30:00.000Z"));
+    await db.syncLog.clear();
+
+    await runMaterialization(new Date("2026-06-14T08:00:00.000Z"));
+
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped);
+    expect(occ).toBeDefined();
+    const occurrenceChildren = await db.tasks.where("parentId").equals(occ!.id).sortBy("sortOrder");
+    expect(occurrenceChildren.map((child) => [child.id, child.title, child.done, child.completedAt, child.tags])).toEqual([
+      [`${occ!.id}:child:${doneChild.id}`, "已完成子项", true, "2026-06-14T07:00:00.000Z", ["keep"]],
+      [`${occ!.id}:child:${todoChild.id}`, "未完成子项", false, null, []],
+    ]);
+
+    const templateChildren = await db.tasks.where("parentId").equals(rule.id).sortBy("sortOrder");
+    expect(templateChildren.map((child) => child.id)).toEqual([doneChild.id, todoChild.id]);
+    await expect(db.syncLog.toArray()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ recordId: occ!.id, action: "create" }),
+        expect.objectContaining({ recordId: `${occ!.id}:child:${doneChild.id}`, action: "create" }),
+        expect.objectContaining({ recordId: `${occ!.id}:child:${todoChild.id}`, action: "create" }),
+      ]),
     );
   });
   it("已有活跃 pending 时不重复物化（幂等）", async () => {
@@ -846,11 +936,16 @@ describe("updateTask 重锚删活跃 occurrence", () => {
   it("改 rule 重锚：删该 rule 当前活跃 pending occurrence + 写 delete syncLog；历史 done 保留", async () => {
     const rule = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 2, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 20)), now: new Date("2026-06-20T08:00:00.000Z") });
     await db.tasks.add({ id: "occ:live", parentId: null, title: "喝水", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 24)), completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: rule.id, skipped: false, sortOrder: 1, createdAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-24T00:00:00.000Z" });
+    await db.tasks.add({ id: "occ:live:child:c1", parentId: "occ:live", title: "子项", done: false, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: null, completedCount: 0, weight: 0, completedAt: null, tags: [], ruleId: null, skipped: false, sortOrder: 0, createdAt: "2026-06-24T00:00:00.000Z", updatedAt: "2026-06-24T00:00:00.000Z" });
     await db.tasks.add({ id: "occ:done", parentId: null, title: "喝水", done: true, recurrence: null, lastDoneAt: null, startAt: null, scheduledAt: localDateOf(new Date(2026, 5, 22)), completedCount: 0, weight: 0, completedAt: "2026-06-22T00:00:00.000Z", tags: [], ruleId: rule.id, skipped: false, sortOrder: 2, createdAt: "2026-06-22T00:00:00.000Z", updatedAt: "2026-06-22T00:00:00.000Z" });
     await updateTask(rule.id, { recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 27)), now: new Date("2026-06-27T08:00:00.000Z") });
     expect(await db.tasks.get("occ:live")).toBeUndefined();
+    expect(await db.tasks.get("occ:live:child:c1")).toBeUndefined();
     expect(await db.tasks.get("occ:done")).toBeDefined();
     await expect(db.syncLog.where("recordId").equals("occ:live").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "delete" })]),
+    );
+    await expect(db.syncLog.where("recordId").equals("occ:live:child:c1").toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ action: "delete" })]),
     );
   });
