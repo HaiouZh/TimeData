@@ -116,6 +116,8 @@ agent / CLI (task-done/task-tag)
   weight: number;               // 默认 0；翻牌"顶一下"累加，增加抗沉天数
   completedAt: string | null;   // UTC ISO 或 null
   tags: string[];               // 默认 []，每项 NonEmptyTrimmed ≤64，max 50
+  ruleId: string | null;          // 默认 null；occurrence 回指重复规则本体，普通 task / 规则本体恒 null
+  skipped: boolean;               // 默认 false；occurrence 被"删这一发"消解时置 true，普通 task 恒 false
   sortOrder: number;            // int finite
   createdAt: string;            // 严格 UTC ISO（带毫秒+Z）
   updatedAt: string;            // 严格 UTC ISO（服务器分配）
@@ -145,9 +147,11 @@ agent / CLI (task-done/task-tag)
 | recurrence / tags | 同名 | JSON 字符串（recurrence 可 NULL） |
 | last_done_at / start_at / scheduled_at / completed_at | lastDoneAt / startAt / scheduledAt / completedAt | UTC ISO 或 NULL |
 | completed_count / weight / sort_order | completedCount / weight / sortOrder | 整数 |
+| rule_id | ruleId | TEXT 或 NULL（有 `idx_tasks_rule_id` 索引） |
+| skipped | skipped | 0/1 ↔ boolean，默认 0 |
 | created_at / updated_at | createdAt / updatedAt | UTC ISO（updated_at 服务器分配） |
 
-映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引，`ensureTaskWeightColumn` 给旧任务补 `weight=0`），并用 `dropColumnsIfExist` 删除旧目标归属列 `goal_id` 及索引。Dexie `tasks` 索引（v13）`"id, parentId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；目标详情按 `Goal.members` 解引用任务，不再依赖任务侧索引。
+映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引，`ensureTaskWeightColumn` 给旧任务补 `weight=0`），并用 `dropColumnsIfExist` 删除旧目标归属列 `goal_id` 及索引。Dexie `tasks` 索引（v14）`"id, parentId, ruleId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；`ruleId` 入索引供 occurrence 查询；目标详情按 `Goal.members` 解引用任务，不再依赖任务侧索引。
 
 客户端读取 `listTasks` 走 `TaskSchema.safeParse`（parse-on-read）：补默认、剥孤儿、坏行 `console.warn` 跳过；不再手摊默认字段。
 
