@@ -32,6 +32,7 @@
   "src/pages/goals/GoalSidePanel.test.tsx",
   "src/pages/goals/GoalStarNode.test.tsx",
   "src/pages/goals/GoalUnassignedTray.test.tsx",
+  "src/pages/goals/ResizableTrayAside.test.tsx",
   "src/pages/goals/test/reactFlowMock.test.tsx",
   "src/pages/settings/SettingsHealthRangePage.test.tsx",
   "src/pages/settings/SettingsStatsLayoutPage.test.tsx",

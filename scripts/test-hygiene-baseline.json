@@ -106,6 +106,8 @@
   "dirty-in-clean-bucket:pages/goals/GoalUnassignedTray.test.tsx",
   "dirty-in-clean-bucket:pages/goals/GoalsListPage.test.tsx",
   "dirty-in-clean-bucket:pages/goals/GoalsPage.test.tsx",
+  "dirty-in-clean-bucket:pages/goals/ResizableTrayAside.test.tsx",
+  "dirty-in-clean-bucket:pages/goals/goalTrayPrefs.test.ts",
   "dirty-in-clean-bucket:pages/goals/test/reactFlowMock.test.tsx",
   "dirty-in-clean-bucket:pages/goals/useGalaxySettleEngine.test.tsx",
   "dirty-in-clean-bucket:pages/goals/useGoalGraphLayout.test.tsx",
