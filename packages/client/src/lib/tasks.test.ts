@@ -793,7 +793,7 @@ describe("runMaterialization", () => {
     );
   });
   it("已有活跃 pending 时不重复物化（幂等）", async () => {
-    const rule = await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 14)), now: new Date("2026-06-14T06:00:00.000Z") });
+    await addTask({ title: "喝水", recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: localDateOf(new Date(2026, 5, 14)), now: new Date("2026-06-14T06:00:00.000Z") });
     await runMaterialization(new Date("2026-06-14T08:00:00.000Z"));
     const before = await db.tasks.count();
     await runMaterialization(new Date("2026-06-14T10:00:00.000Z"));
