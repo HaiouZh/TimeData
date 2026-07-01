@@ -40,6 +40,7 @@ import {
   persistTaskOrder,
   promoteToRoot,
   reorderChildren,
+  runMaterialization,
   scheduleTask,
   setTaskTags,
   type TodoBuckets,
@@ -207,7 +208,11 @@ export function TodoPage() {
   const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
   useEffect(() => {
     let timer: number | undefined;
-    const refreshGravityNow = () => setGravityNow(currentGravityDate());
+    const refreshGravityNow = () => {
+      const now = currentGravityDate();
+      setGravityNow(now);
+      void runMaterialization(now).catch((error) => console.error("[todo] occurrence materialization failed:", error));
+    };
     const schedule = () => {
       timer = window.setTimeout(() => {
         refreshGravityNow();

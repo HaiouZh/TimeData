@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import { AppUpdateProvider } from "./appUpdate.tsx";
 import { migrateLocalSettingsToDexie, seedDefaultCategories } from "./db/index.ts";
 import { runSchemaNormalizationIfNeeded } from "./db/schemaNormalization.ts";
+import { runMaterialization } from "./lib/tasks.js";
 import "lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css";
 import "@fontsource/tinos/400.css";
 import "@fontsource/tinos/400-italic.css";
@@ -16,6 +17,7 @@ async function bootstrap(): Promise<void> {
     await seedDefaultCategories();
     await migrateLocalSettingsToDexie();
     await runSchemaNormalizationIfNeeded();
+    await runMaterialization();
   } catch (error) {
     console.error("[bootstrap] 初始化失败，仍继续渲染:", error);
   }
