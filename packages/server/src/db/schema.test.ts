@@ -587,6 +587,33 @@ describe("initializeDatabase", () => {
       ensureQuickNotePinnedColumn(db);
     }).not.toThrow();
   });
+
+  it("ensureTaskRuleIdColumn 幂等补 rule_id 列并建索引", async () => {
+    const { ensureTaskRuleIdColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+    ensureTaskRuleIdColumn(db);
+    ensureTaskRuleIdColumn(db);
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    expect(columns.some((c) => c.name === "rule_id")).toBe(true);
+    const idx = db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>;
+    expect(idx.some((i) => i.name === "idx_tasks_rule_id")).toBe(true);
+  });
+
+  it("ensureTaskSkippedColumn 幂等补 skipped 列（默认 0）", async () => {
+    const { ensureTaskSkippedColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+    ensureTaskSkippedColumn(db);
+    ensureTaskSkippedColumn(db);
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string; dflt_value: string | null }>;
+    expect(columns.find((c) => c.name === "skipped")?.dflt_value).toBe("0");
+  });
+
+  it("initializeDatabase 建 tasks 含 rule_id/skipped 列", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+    initializeDatabase();
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    expect(columns.map((c) => c.name)).toEqual(expect.arrayContaining(["rule_id", "skipped"]));
+  });
 });
 
 describe("dropColumnsIfExist", () => {

@@ -38,6 +38,17 @@ export function ensureTaskWeightColumn(db: Database): void {
   if (!names.has("weight")) db.exec("ALTER TABLE tasks ADD COLUMN weight INTEGER NOT NULL DEFAULT 0");
 }
 
+export function ensureTaskRuleIdColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("rule_id")) db.exec("ALTER TABLE tasks ADD COLUMN rule_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_rule_id ON tasks(rule_id)");
+}
+
+export function ensureTaskSkippedColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("skipped")) db.exec("ALTER TABLE tasks ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0");
+}
+
 export function ensureTaskCompletionMetadataColumns(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("completed_at")) db.exec("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
@@ -135,6 +146,8 @@ export function initializeDatabase(): void {
       parent_id TEXT,
       completed_count INTEGER NOT NULL DEFAULT 0,
       weight INTEGER NOT NULL DEFAULT 0,
+      rule_id TEXT,
+      skipped INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
@@ -358,6 +371,8 @@ export function initializeDatabase(): void {
   ensureTaskWeightColumn(db);
   ensureTaskCompletionMetadataColumns(db);
   ensureTaskParentIdColumn(db);
+  ensureTaskRuleIdColumn(db);
+  ensureTaskSkippedColumn(db);
   ensureGoalMembersColumn(db);
   dropColumnsIfExist(db, "tasks", ["goal_id"], ["idx_tasks_goal_id"]);
   dropColumnsIfExist(db, "tracks", ["goal_id"], ["idx_tracks_goal_id"]);
