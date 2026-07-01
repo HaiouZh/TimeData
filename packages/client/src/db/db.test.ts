@@ -7,7 +7,7 @@ afterEach(async () => {
 });
 
 describe("Dexie database", () => {
-  it("opens the current database as a v13 schema", async () => {
+  it("opens the current database as a v14 schema", async () => {
     await db.delete();
 
     await db.open();

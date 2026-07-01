@@ -34,7 +34,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-06-29
+last-reviewed: 2026-07-01
 ---
 
 # 待办任务
@@ -151,7 +151,7 @@ agent / CLI (task-done/task-tag)
 | skipped | skipped | 0/1 ↔ boolean，默认 0 |
 | created_at / updated_at | createdAt / updatedAt | UTC ISO（updated_at 服务器分配） |
 
-映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引，`ensureTaskWeightColumn` 给旧任务补 `weight=0`），并用 `dropColumnsIfExist` 删除旧目标归属列 `goal_id` 及索引。Dexie `tasks` 索引（v14）`"id, parentId, ruleId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；`ruleId` 入索引供 occurrence 查询；目标详情按 `Goal.members` 解引用任务，不再依赖任务侧索引。
+映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` 给旧库补 `parent_id` + 索引，`ensureTaskWeightColumn` 给旧任务补 `weight=0`，`ensureTaskRuleIdColumn` 给旧任务补 `rule_id` + `idx_tasks_rule_id`，`ensureTaskSkippedColumn` 给旧任务补 `skipped=0`），并用 `dropColumnsIfExist` 删除旧目标归属列 `goal_id` 及索引。Dexie `tasks` 索引（v14）`"id, parentId, ruleId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；`ruleId` 入索引供 occurrence 查询；目标详情按 `Goal.members` 解引用任务，不再依赖任务侧索引。
 
 客户端读取 `listTasks` 走 `TaskSchema.safeParse`（parse-on-read）：补默认、剥孤儿、坏行 `console.warn` 跳过；不再手摊默认字段。
 
