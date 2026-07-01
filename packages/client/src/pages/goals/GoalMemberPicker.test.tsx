@@ -155,4 +155,17 @@ describe("GoalMemberPicker", () => {
 
     expect(onQuickCreateTask).toHaveBeenCalledWith("补验收");
   });
+
+  it("有子任务的根默认折叠、点开露出子任务", async () => {
+    const rendered = await renderPicker({
+      tasks: [
+        task({ id: "root", title: "父任务" }),
+        task({ id: "child", title: "子条目", parentId: "root" }),
+      ],
+    });
+
+    expect(rendered.host.textContent).not.toContain("子条目");
+    await click(buttonByLabel(rendered.host, "展开子任务 父任务"));
+    expect(rendered.host.textContent).toContain("子条目");
+  });
 });
