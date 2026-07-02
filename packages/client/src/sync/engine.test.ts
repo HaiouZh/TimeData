@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
+import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 
 const localStorageMock = (() => {
@@ -80,6 +80,24 @@ describe("recordSyncLog", () => {
     await expect(db.syncLog.toArray()).resolves.toMatchObject([
       { tableName: "time_entries", recordId: "entry-1", action: "create", synced: 0 },
     ]);
+  });
+});
+
+describe("pruneSyncedLogs", () => {
+  it("删除超过保留窗口的 synced=1 日志，保留窗口内与未同步的日志", async () => {
+    const now = Date.parse("2026-07-02T00:00:00.000Z");
+    await db.syncLog.bulkAdd([
+      { id: "old-synced", tableName: "tasks", recordId: "a", action: "update",
+        timestamp: "2026-06-20T00:00:00.000Z", synced: 1 },
+      { id: "fresh-synced", tableName: "tasks", recordId: "b", action: "update",
+        timestamp: "2026-07-01T00:00:00.000Z", synced: 1 },
+      { id: "old-unsynced", tableName: "tasks", recordId: "c", action: "update",
+        timestamp: "2026-06-01T00:00:00.000Z", synced: 0 },
+    ]);
+    const deleted = await pruneSyncedLogs(() => now);
+    expect(deleted).toBe(1);
+    const remaining = (await db.syncLog.toArray()).map((l) => l.id).sort();
+    expect(remaining).toEqual(["fresh-synced", "old-unsynced"]);
   });
 });
 
@@ -1846,7 +1864,7 @@ describe("syncPullSinceSeq", () => {
       recordId: "entry-delete-conflict",
       action: "update",
       timestamp: "2026-05-07T12:00:00.000Z",
-      synced: false,
+      synced: 0,
     });
 
     apiFetchMock.mockResolvedValue({
@@ -2035,7 +2053,7 @@ describe("syncPullSinceSeq", () => {
       recordId: "work-code",
       action: "update",
       timestamp: "2026-05-08T01:00:00.000Z",
-      synced: false,
+      synced: 0,
     });
 
     apiFetchMock.mockResolvedValue({
@@ -2264,7 +2282,9 @@ describe("regularSync", () => {
       createdAt: "2026-05-08T09:00:00.000Z",
       updatedAt: "2026-05-08T09:00:00.000Z",
     });
-    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: "2026-05-08T09:00:00.000Z", synced: 0 });
+    // syncLog 的 timestamp 用当前时间，避免落在 pruneSyncedLogs 的 7 天保留窗口之外被随后清理，
+    // 与本测试要验证的“push 后标记 synced”这一断言无关。
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: new Date().toISOString(), synced: 0 });
     setLastSyncedSeq(3);
 
     apiFetchMock

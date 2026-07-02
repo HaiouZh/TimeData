@@ -238,7 +238,7 @@ async function applyPushResponse(
 }
 
 export async function syncPush(): Promise<SyncPushResult> {
-  const unsynced = await db.syncLog.filter((entry) => !entry.synced).toArray();
+  const unsynced = await db.syncLog.where("synced").equals(0).toArray();
   if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
 
   const compacted = compactSyncLogs(unsynced);
@@ -318,7 +318,7 @@ export async function syncPush(): Promise<SyncPushResult> {
 export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
   const response = await fetchSyncPullResponse(buildPullCursor("incremental"));
 
-  const unsyncedLogs = await db.syncLog.filter((entry) => !entry.synced).toArray();
+  const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
   const locallyModifiedById = new Map(unsyncedLogs.map((l) => [`${l.tableName}:${l.recordId}`, l]));
 
   let applied = 0;
@@ -490,7 +490,7 @@ async function getLocalStatus(): Promise<SyncHealthReport["local"]> {
   const timeEntries = await db.timeEntries.toArray();
   const quickNotes = await db.quickNotes.toArray();
   const tasks = await db.tasks.toArray();
-  const unsyncedCount = await db.syncLog.filter((entry) => !entry.synced).count();
+  const unsyncedCount = await db.syncLog.where("synced").equals(0).count();
   const contentHash = await localContentHash(categories, timeEntries, quickNotes, tasks);
   return {
     categoryCount: categories.length,
@@ -626,7 +626,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
   const rec = options.phases;
   try {
     const [unsyncedCount, serverStatus] = await Promise.all([
-      db.syncLog.filter((entry) => !entry.synced).count(),
+      db.syncLog.where("synced").equals(0).count(),
       rec ? rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status")) : apiFetch<SyncStatusResponse>("/api/sync/status"),
     ]);
 
@@ -662,6 +662,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
       rec ? await rec.time("report", () => reportToServer(logs)) : await reportToServer(logs);
       resetConsecutiveSyncFailures();
+      await pruneSyncedLogs();
       return {
         checked: true,
         identical: false,
@@ -690,6 +691,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 
     rec ? await rec.time("report", () => reportToServer(logs)) : await reportToServer(logs);
     resetConsecutiveSyncFailures();
+    await pruneSyncedLogs();
     return {
       checked: true,
       identical: false,
@@ -775,4 +777,16 @@ export async function recordSyncLog(
     timestamp,
     synced: 0,
   });
+}
+
+// 已同步日志仅剩审计残值，保留 7 天便于排障后即清，防止 IndexedDB 无界膨胀。
+export const SYNCED_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function pruneSyncedLogs(now: () => number = Date.now): Promise<number> {
+  const cutoff = new Date(now() - SYNCED_LOG_RETENTION_MS).toISOString();
+  return db.syncLog
+    .where("synced")
+    .equals(1)
+    .filter((log) => log.timestamp < cutoff)
+    .delete();
 }

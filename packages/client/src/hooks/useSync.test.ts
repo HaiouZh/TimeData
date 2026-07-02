@@ -32,7 +32,7 @@ vi.mock("../lib/serverHealth.ts", () => ({
 vi.mock("../db/index.ts", () => ({
   db: {
     syncLog: {
-      filter: () => ({ count: async () => 0 }),
+      where: () => ({ equals: () => ({ count: async () => 0 }) }),
     },
   },
 }));

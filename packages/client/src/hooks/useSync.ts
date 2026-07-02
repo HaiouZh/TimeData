@@ -47,7 +47,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
   const [syncFailureCount, setSyncFailureCount] = useState(getConsecutiveSyncFailureCount());
 
   const refreshSyncStatus = useCallback(async () => {
-    const count = await db.syncLog.filter((entry) => !entry.synced).count();
+    const count = await db.syncLog.where("synced").equals(0).count();
     setUnsyncedCount(count);
     setLastSynced(safeGetItem(STORAGE_KEYS.lastSyncDisplayAt));
   }, []);
