@@ -19,14 +19,23 @@ export default function SyncTimingsPanel() {
 
   const percentiles = timingTotalsPercentiles(entries);
 
+  const metaParts = [
+    latest.reason != null ? latest.reason : null,
+    latest.connection != null ? latest.connection : null,
+  ].filter((part): part is string => part != null);
+
   return (
     <p className="td-text-caption text-ink-2">
       总耗时 {latest.totalMs}ms{phaseText ? `（${phaseText}）` : ""}
+      {latest.waitMs != null && <> · 等待 {latest.waitMs}ms</>}
       {percentiles && (
         <>
           {" · "}
           近{entries.length}次 总耗时 p50 {percentiles.p50}ms / p95 {percentiles.p95}ms
         </>
+      )}
+      {metaParts.length > 0 && (
+        <span className="td-text-caption text-ink-3"> · {metaParts.join(" / ")}</span>
       )}
     </p>
   );

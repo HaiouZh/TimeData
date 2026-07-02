@@ -654,7 +654,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
       void reportToServer(logs); // fire-and-forget：不 await，不计入 syncing 窗口
       resetConsecutiveSyncFailures();
-      await pruneSyncedLogs();
+      void pruneSyncedLogs().catch(() => undefined); // 清理失败不应算作整轮同步失败，也不占同步窗口
       return {
         checked: true,
         identical: false,
@@ -684,7 +684,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 
     void reportToServer(logs);
     resetConsecutiveSyncFailures();
-    await pruneSyncedLogs();
+    void pruneSyncedLogs().catch(() => undefined); // 清理失败不应算作整轮同步失败，也不占同步窗口
     return {
       checked: true,
       identical: false,

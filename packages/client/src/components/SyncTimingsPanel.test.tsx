@@ -71,4 +71,39 @@ describe("SyncTimingsPanel", () => {
 
     await unmount(root);
   });
+
+  it("shows waitMs/reason/connection when present on the latest entry", async () => {
+    recordSyncTiming({
+      at: "2026-07-01T00:00:00.000Z",
+      outcome: "pushed",
+      totalMs: 400,
+      phases: { status: 30, push: 200, pull: 100 },
+      waitMs: 120,
+      reason: "manual",
+      connection: "connected",
+    });
+
+    const { host, root } = await renderDom(createElement(SyncTimingsPanel));
+
+    expect(host.textContent).toContain("等待 120ms");
+    expect(host.textContent).toContain("manual");
+    expect(host.textContent).toContain("connected");
+
+    await unmount(root);
+  });
+
+  it("does not show wait/reason/connection column when absent", async () => {
+    recordSyncTiming({
+      at: "2026-07-01T00:00:00.000Z",
+      outcome: "pushed",
+      totalMs: 400,
+      phases: { status: 30, push: 200, pull: 100 },
+    });
+
+    const { host, root } = await renderDom(createElement(SyncTimingsPanel));
+
+    expect(host.textContent).not.toContain("等待");
+
+    await unmount(root);
+  });
 });

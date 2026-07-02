@@ -2497,6 +2497,75 @@ describe("regularSync", () => {
     expect(logBody.some((item: { action: string }) => item.action === "phase_timings")).toBe(false);
   });
 
+  it("prune 抛错不影响同步轮结果", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-local",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00.000Z",
+      endTime: "2026-05-08T10:00:00.000Z",
+      note: "local",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      updatedAt: "2026-05-08T09:00:00.000Z",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: new Date().toISOString(), synced: 0 });
+    setLastSyncedSeq(3);
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{ tableName: "time_entries", recordId: "entry-local", action: "create", status: "accepted", reasonCode: "applied", message: "Applied", incomingTimestamp: "2026-05-08T09:00:00.000Z" }],
+        backupId: "backup-1",
+        serverTime: "2026-05-08T10:01:00.000Z",
+      })
+      .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 5, changes: [] })
+      .mockResolvedValueOnce({ ok: true });
+
+    const whereSpy = vi.spyOn(db.syncLog, "where");
+    whereSpy.mockImplementation((index: unknown) => {
+      const realResult = whereSpy.getMockImplementation() === undefined ? undefined : undefined;
+      void realResult;
+      const real = Reflect.apply(
+        Object.getPrototypeOf(db.syncLog).where as (this: unknown, ...args: unknown[]) => unknown,
+        db.syncLog,
+        [index],
+      ) as { equals: (value: number) => unknown };
+      if (index !== "synced") return real;
+      return {
+        equals: (value: number) => {
+          if (value === 1) {
+            return {
+              filter: () => ({
+                delete: () => Promise.reject(new Error("boom")),
+              }),
+            };
+          }
+          return real.equals(value);
+        },
+      };
+    });
+
+    try {
+      const result = await regularSync();
+      expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
+      expect(getConsecutiveSyncFailureCount()).toBe(0);
+    } finally {
+      whereSpy.mockRestore();
+    }
+  });
+
 });
 
 
