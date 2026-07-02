@@ -8,6 +8,17 @@ export interface StepDraft {
 }
 
 const COMMON_TAGS = ["决策", "批注", "提醒"];
+// 点记类标签：只是随手留一笔，不表示「开始做一段事」，走 instant 不打断进行中的开口步（TK-03）。
+const POINT_NOTE_TAGS = ["批注", "提醒"];
+
+/**
+ * 判定人手写一步的 mode：带看板信号=状态交接→open；无信号且只是点记(批注/提醒)→instant；
+ * 其余(纯正文推进 / 决策 / 自定义)→open。历时不再作卖点，开口语义只留给真在做一段事的步骤。
+ */
+export function resolveStepMode(signal: string | null, tags: readonly string[]): UserStepMode {
+  if (signal !== null) return "open";
+  return tags.some((tag) => POINT_NOTE_TAGS.includes(tag)) ? "instant" : "open";
+}
 
 function uniqueTags(tags: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -50,10 +61,11 @@ export function StepComposer({
     if (!trimmed || disabled || submitting) return;
     const custom = customTag.trim();
     const mergedTags = uniqueTags([...(signal ? [signal] : []), ...tags, ...(custom ? [custom] : [])]);
+    const mode = resolveStepMode(signal, tags);
     setSubmitting(true);
     try {
       // 写入成功后才清空草稿；失败保留原文并 inline 报错（TK-01）。
-      await onSubmit({ content: trimmed, mode: "open", tags: mergedTags });
+      await onSubmit({ content: trimmed, mode, tags: mergedTags });
       setContent("");
       setSignal(null);
       setTags([]);

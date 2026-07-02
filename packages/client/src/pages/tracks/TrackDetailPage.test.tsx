@@ -170,7 +170,7 @@ describe("TrackDetailPage", () => {
     expect(added).toMatchObject({ source: "user", endedAt: null });
   });
 
-  it("写一步:选常用 tag 后仍追加开口步并闭合上一开口步", async () => {
+  it("写一步:批注类标签走 instant,不打断进行中的开口步 (TK-03)", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "base 期第一周");
@@ -182,9 +182,11 @@ describe("TrackDetailPage", () => {
     const steps = await listTrackSteps(track.id);
     const current = steps.find((s) => s.content === "base 期第一周");
     const note = steps.find((s) => s.content === "这里要回看证据");
-    expect(current?.endedAt).not.toBeNull();
+    // 开口步未被截断
+    expect(current?.endedAt).toBeNull();
     expect(note).toMatchObject({ source: "user", tags: ["批注"] });
-    expect(note?.endedAt).toBeNull();
+    // 瞬时步:endedAt === startedAt
+    expect(note?.endedAt).toBe(note?.startedAt);
   });
 
   it("updates title and summary through the existing updateTrack path", async () => {

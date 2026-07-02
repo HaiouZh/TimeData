@@ -2,7 +2,7 @@
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
-import { StepComposer, type StepDraft } from "./StepComposer.js";
+import { resolveStepMode, StepComposer, type StepDraft } from "./StepComposer.js";
 
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 afterEach(async () => {
@@ -114,6 +114,27 @@ describe("StepComposer", () => {
     expect((host.querySelector('input[aria-label="自定义步骤标签"]') as HTMLInputElement).value).toBe("自定义X");
   });
 
+  it("marks a pure note step as instant so it does not interrupt an open segment", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);
+    const host = mounted.host;
+    await click(buttonByText(host, "#批注"));
+    await type(host, "顺手记一笔");
+    await submit(host);
+    expect(onSubmit).toHaveBeenCalledWith({ content: "顺手记一笔", mode: "instant", tags: ["批注"] });
+  });
+
+  it("keeps a note step with a board signal as open (a real handoff)", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["待我处理"]} />);
+    const host = mounted.host;
+    await click(buttonByText(host, "#提醒"));
+    await click(buttonByText(host, "#待我处理"));
+    await type(host, "提醒并交回");
+    await submit(host);
+    expect(onSubmit).toHaveBeenCalledWith({ content: "提醒并交回", mode: "open", tags: ["待我处理", "提醒"] });
+  });
+
   it("does not submit blank content", async () => {
     const onSubmit = vi.fn();
     mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);
@@ -131,6 +152,15 @@ describe("StepComposer", () => {
     await submit(host);
     expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("要保住的草稿");
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("写不进去");
+  });
+
+  it("resolveStepMode: 信号步→open,纯点记→instant,纯正文/决策→open", () => {
+    expect(resolveStepMode("待我处理", ["批注"])).toBe("open");
+    expect(resolveStepMode(null, ["批注"])).toBe("instant");
+    expect(resolveStepMode(null, ["提醒"])).toBe("instant");
+    expect(resolveStepMode(null, [])).toBe("open");
+    expect(resolveStepMode(null, ["决策"])).toBe("open");
+    expect(resolveStepMode(null, ["批注", "决策"])).toBe("instant");
   });
 
   it("uses inline surface and custom submit label for card writing", async () => {

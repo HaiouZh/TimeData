@@ -83,9 +83,9 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 ## 6. 人手共编(T5)
 
-详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手入口统一为“写一步”：提交时调用 `appendUserStep({mode:"open"})`，开一个 `source="user"`、`endedAt=null` 的当前步，并镜像 agent 自动闭合最新开口步(守卫闭合时间不早于开口步 `startedAt`)。
+详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手写一步的 mode 由 `resolveStepMode(signal, tags)`(StepComposer) 判定：带看板信号=状态交接→`open`，开一个 `source="user"`、`endedAt=null` 的当前步并镜像 agent 自动闭合最新开口步(守卫闭合时间不早于开口步 `startedAt`)；无信号且只是点记(`批注`/`提醒`)→`instant`(`endedAt=startedAt`)，**不打断进行中的开口步**；其余(纯正文推进 / `决策` / 自定义标签)仍走 `open`。
 
-`决策 / 批注 / 提醒` 只是普通快捷标签，不再是特殊步骤性质，也不驱动特殊底色或“决策步”徽标。底层 `appendUserStep(mode:"instant")` 能力和历史瞬时步骤仍可兼容存在，但主 UI 不再让用户先选择“开始做这段 / 记一个点”。
+`决策 / 批注 / 提醒` 是普通快捷标签，不驱动特殊底色或“决策步”徽标。开口语义只留给“真在做一段事”的步骤：步骤历时不再作为设计卖点(见 §8)，随手批注/提醒因此走 `instant`，避免截断 agent 的开口段、也避免点记自己挂成“进行中 N 天”。看板信号单选、检索标签多选，三组并存不互斥(`StepComposer`)。
 
 另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync](sync.md) §1.6),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
 
@@ -109,5 +109,6 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 ## 8. 后续阶段
 
-- 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器、时间统计桥(历时聚合进 Stats)。
+- 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器。
+- **步骤「历时」不作设计卖点**(2026-07-02 决策):`formatStepDuration` 产出的历时仅作展示辅助,不做时间统计桥(历时聚合进 Stats 已放弃);轨道步骤的历时不写入 `time_entries`。开口/瞬时之分因此只服务于时间线可读性(开口步=正在进行的段),不服务于计量。
 - 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。
