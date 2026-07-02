@@ -87,7 +87,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 `决策 / 批注 / 提醒` 是普通快捷标签，不驱动特殊底色或“决策步”徽标。开口语义只留给“真在做一段事”的步骤：步骤历时不再作为设计卖点(见 §8)，随手批注/提醒因此走 `instant`，避免截断 agent 的开口段、也避免点记自己挂成“进行中 N 天”。看板信号单选、检索标签多选，三组并存不互斥(`StepComposer`)。
 
-另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync](sync.md) §1.6),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
+另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。`setTrackStatus` 在状态**真正改变**时写一条 instant 系统步(`source="user"`、`endedAt=startedAt`、content 为 `归档`/`重新推进`/`搁置`)留痕(TK-18),让归档/重新推进在时间线可查;状态未变则不写。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync](sync.md) §1.6),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
 
 产品生命周期收敛为 `推进中 / 已归档`：active 显示 `推进中` 和 `归档` 按钮；归档写底层 `concluded` 并闭合开口步；旧数据里的 `parked` 只兼容读取为 `已归档`，非 active 统一显示 `重新推进`。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
 

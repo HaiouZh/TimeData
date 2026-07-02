@@ -491,9 +491,18 @@ describe("track local data layer", () => {
     expect(updated).toMatchObject({ status: "parked", updatedAt: later.toISOString() });
     expect(closedStep).toBeNull();
     await expect(db.trackSteps.get(open.id)).resolves.toMatchObject({ endedAt: null });
-    await expect(db.syncLog.toArray()).resolves.toMatchObject([
-      { tableName: "tracks", recordId: track.id, action: "update", timestamp: later.toISOString() },
-    ]);
+    // 状态变迁写一条 instant「搁置」系统步（TK-18），但不闭合开口步。
+    const parkedSteps = await listTrackSteps(track.id);
+    const marker = parkedSteps.find((s) => s.content === "搁置");
+    expect(marker).toMatchObject({ source: "user", startedAt: later.toISOString(), endedAt: later.toISOString() });
+    const parkedLogs = await db.syncLog.toArray();
+    expect(parkedLogs).toHaveLength(2);
+    expect(parkedLogs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: "tracks", recordId: track.id, action: "update" }),
+        expect.objectContaining({ tableName: "track_steps", recordId: marker?.id, action: "create" }),
+      ]),
+    );
   });
 
   it("setTrackStatus concluded 顺手闭合开口步,syncLog 先步 update 后轨道 update", async () => {
@@ -513,8 +522,12 @@ describe("track local data layer", () => {
     expect(updated).toMatchObject({ status: "concluded" });
     expect(closedStep).toMatchObject({ id: open.id, endedAt: later.toISOString() });
     await expect(db.trackSteps.get(open.id)).resolves.toMatchObject({ endedAt: later.toISOString() });
+    // 归档写一条 instant「归档」系统步（TK-18）。
+    const concludedSteps = await listTrackSteps(track.id);
+    const marker = concludedSteps.find((s) => s.content === "归档");
+    expect(marker).toMatchObject({ source: "user", startedAt: later.toISOString(), endedAt: later.toISOString() });
     const concludedLogs = await db.syncLog.toArray();
-    expect(concludedLogs).toHaveLength(2);
+    expect(concludedLogs).toHaveLength(3);
     expect(concludedLogs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -529,8 +542,32 @@ describe("track local data layer", () => {
           action: "update",
           timestamp: later.toISOString(),
         }),
+        expect.objectContaining({
+          tableName: "track_steps",
+          recordId: marker?.id,
+          action: "create",
+          timestamp: later.toISOString(),
+        }),
       ]),
     );
+  });
+
+  it("setTrackStatus 归档→重新推进各写一条 instant 系统步留痕 (TK-18)", async () => {
+    const later2 = new Date("2026-06-21T10:00:00.000Z");
+    const track = await addTrack({ title: "生命周期留痕", now });
+
+    await setTrackStatus(track.id, "concluded", { now: later });
+    await setTrackStatus(track.id, "active", { now: later2 });
+
+    const steps = await listTrackSteps(track.id);
+    const archived = steps.find((s) => s.content === "归档");
+    const reopened = steps.find((s) => s.content === "重新推进");
+    expect(archived).toMatchObject({ source: "user", startedAt: later.toISOString(), endedAt: later.toISOString() });
+    expect(reopened).toMatchObject({ source: "user", startedAt: later2.toISOString(), endedAt: later2.toISOString() });
+    // 未真正改变状态时不写系统步。
+    const before = (await listTrackSteps(track.id)).length;
+    await setTrackStatus(track.id, "active", { now: later2 });
+    expect((await listTrackSteps(track.id)).length).toBe(before);
   });
 });
 

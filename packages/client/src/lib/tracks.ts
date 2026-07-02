@@ -313,6 +313,12 @@ export async function closeCurrentStep(trackId: string, options?: { now?: Date }
   return closed;
 }
 
+const STATUS_TRANSITION_LABEL: Record<Track["status"], string> = {
+  active: "重新推进",
+  concluded: "归档",
+  parked: "搁置",
+};
+
 export async function setTrackStatus(
   trackId: string,
   status: Track["status"],
@@ -324,12 +330,12 @@ export async function setTrackStatus(
   await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
     const existing = await db.tracks.get(trackId);
     if (!existing) throw new Error("轨道不存在");
+    const steps = (await db.trackSteps.where("trackId").equals(trackId).toArray()).map((row) =>
+      TrackStepSchema.parse(row),
+    );
 
     let closedStep: TrackStep | null = null;
     if (status === "concluded") {
-      const steps = (await db.trackSteps.where("trackId").equals(trackId).toArray()).map((row) =>
-        TrackStepSchema.parse(row),
-      );
       const open = latestOpenStep(steps);
       if (open) {
         if (timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
@@ -342,6 +348,26 @@ export async function setTrackStatus(
     const next = TrackSchema.parse({ ...existing, refs: existing.refs ?? [], status, updatedAt: timestamp });
     await db.tracks.put(next);
     await recordSyncLog("tracks", next.id, "update", timestamp);
+
+    // 状态变迁写一条 instant 系统步留痕（TK-18）：endedAt=startedAt，不计时、跨设备可见；仅状态真正改变时写。
+    if (existing.status !== status) {
+      const systemStep = TrackStepSchema.parse({
+        id: uuid(),
+        trackId,
+        source: "user",
+        content: STATUS_TRANSITION_LABEL[status],
+        startedAt: timestamp,
+        endedAt: timestamp,
+        refs: [],
+        tags: [],
+        seq: steps.reduce((max, step) => Math.max(max, step.seq + 1), 0),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      await db.trackSteps.add(systemStep);
+      await recordSyncLog("track_steps", systemStep.id, "create", timestamp);
+    }
+
     out = { track: next, closedStep };
   });
 
