@@ -1,6 +1,10 @@
 import { GoalSchema, TaskSchema, TrackSchema, type Goal, type GoalMemberRef, type GoalPrerequisite, type Task, type Track } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
+import {
+  deleteGoalLayoutPinsForGoalInCurrentTransaction,
+  deleteGoalMemberPinInCurrentTransaction,
+} from "./goalLayoutPins.js";
 import { recordSyncLog } from "../sync/engine.js";
 import { buildNewRootTask, insertNewTaskInCurrentTransaction } from "./tasks.js";
 
@@ -180,7 +184,7 @@ export async function removeGoalMember(
   const timestamp = nowIso(options.now);
   let nextGoal: Goal | null = null;
 
-  await db.transaction("rw", db.goals, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.syncLog, async () => {
     const goal = await db.goals.get(goalId);
     if (!goal) throw new Error("目标不存在");
 
@@ -202,6 +206,8 @@ export async function removeGoalMember(
     });
     await db.goals.put(next);
     await recordSyncLog("goals", next.id, "update", timestamp);
+    // 移出成员：同事务回收它在本 Goal 下的布局钉点，不留孤儿。
+    await deleteGoalMemberPinInCurrentTransaction({ goalId, nodeKind: ref.kind, nodeId: ref.id }, options.now);
     nextGoal = next;
   });
 
@@ -269,10 +275,12 @@ export async function listGoalTracks(goalId: string): Promise<Track[]> {
 
 export async function deleteGoal(id: string, options: { now?: Date } = {}): Promise<void> {
   const timestamp = nowIso(options.now);
-  await db.transaction("rw", db.goals, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.syncLog, async () => {
     const goal = await db.goals.get(id);
     if (!goal) throw new Error("目标不存在");
 
+    // 删除 Goal：同事务回收它的 world pin 与全部成员 pin，避免孤儿钉点残留在同步域。
+    await deleteGoalLayoutPinsForGoalInCurrentTransaction(id, options.now);
     await db.goals.delete(id);
     await recordSyncLog("goals", id, "delete", timestamp);
   });

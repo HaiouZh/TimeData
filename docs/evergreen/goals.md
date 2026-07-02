@@ -73,7 +73,7 @@ last-reviewed: 2026-07-02
 
 普通同步和 Backup JSON 都必须保存完整 `Goal.members` 与 typed `prerequisites`。server sync 只强校验 Goal 自身结构，不做跨表存在性强校验，避免历史失效引用阻断同步。force-push 仍不包含 `goals` / `goal_layout_pins` payload，也不再从 tasks/tracks 携带目标归属；覆盖服务器时会清空 `goal_layout_pins` 业务表，避免清空账本后留下无法通过 `/pull` 重发的钉点行。
 
-`goal_layout_pins` 是 Goal 图布局的独立 LWW 同步域，`countsInStatus:false`、priority 73。它只保存用户主动钉住的节点位置，不扩展 `Goal` schema，也不保存自动布局结果。业务身份是真复合键 `(goalId,nodeKind,nodeId)`；同步信封的 `recordId` 由 `encodeGoalLayoutPinKey(goalId,nodeKind,nodeId)` 生成，实体本身没有合成 `id` 字段。SQLite 使用 `PRIMARY KEY (goal_id,node_kind,node_id)`，Dexie 使用 `[goalId+nodeKind+nodeId]`。`nodeKind` 固定为 `goal | task | track`；`goal` 钉点是世界坐标，`task` / `track` 钉点是相对该 Goal 锚点的偏移。删除钉点表示恢复自动布局；未钉节点的位置由布局/仿真计算，不持久化。
+`goal_layout_pins` 是 Goal 图布局的独立 LWW 同步域，`countsInStatus:false`、priority 73。它只保存用户主动钉住的节点位置，不扩展 `Goal` schema，也不保存自动布局结果。业务身份是真复合键 `(goalId,nodeKind,nodeId)`；同步信封的 `recordId` 由 `encodeGoalLayoutPinKey(goalId,nodeKind,nodeId)` 生成，实体本身没有合成 `id` 字段。SQLite 使用 `PRIMARY KEY (goal_id,node_kind,node_id)`，Dexie 使用 `[goalId+nodeKind+nodeId]`。`nodeKind` 固定为 `goal | task | track`；`goal` 钉点是世界坐标，`task` / `track` 钉点是相对该 Goal 锚点的偏移。删除钉点表示恢复自动布局；未钉节点的位置由布局/仿真计算，不持久化。删除 Goal 与移出成员会在同一 Dexie 事务内级联回收对应钉点（`deleteGoal` 清该 Goal 全部 world/成员 pin，`removeGoalMember` 清该成员 pin），逐条写 `goal_layout_pins` delete `syncLog`，不留孤儿钉点。
 
 ## 3. Roll-up
 

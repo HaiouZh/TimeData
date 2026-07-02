@@ -79,3 +79,23 @@ export async function deleteGoalLayoutPin(input: GoalLayoutPinRef & { now?: Date
     await recordSyncLog("goal_layout_pins", recordId, "delete", timestamp);
   });
 }
+
+/** 在调用方事务内删除某 Goal 名下全部布局钉点（world + 成员），逐条记 delete syncLog。
+ *  调用方事务必须已含 db.goalLayoutPins + db.syncLog。 */
+export async function deleteGoalLayoutPinsForGoalInCurrentTransaction(goalId: string, now?: Date): Promise<void> {
+  const timestamp = nowIso(now);
+  const rows = await db.goalLayoutPins.where("goalId").equals(goalId).toArray();
+  for (const row of rows) {
+    await db.goalLayoutPins.delete([row.goalId, row.nodeKind, row.nodeId]);
+    await recordSyncLog("goal_layout_pins", goalLayoutPinKey(row), "delete", timestamp);
+  }
+}
+
+/** 在调用方事务内删除单个成员在某 Goal 下的布局钉点（不存在则 no-op）。 */
+export async function deleteGoalMemberPinInCurrentTransaction(ref: GoalLayoutPinRef, now?: Date): Promise<void> {
+  const timestamp = nowIso(now);
+  const existing = await db.goalLayoutPins.get(keyTuple(ref));
+  if (!existing) return;
+  await db.goalLayoutPins.delete(keyTuple(ref));
+  await recordSyncLog("goal_layout_pins", goalLayoutPinKey(ref), "delete", timestamp);
+}
