@@ -99,8 +99,10 @@ export function TrackListItem({
               surface="inline"
               submitLabel="写入这一步"
               statusTags={statusTags}
-              onSubmit={(draft) => {
-                void Promise.resolve(onSubmitStep(draft)).then(() => setExpanded(false));
+              onSubmit={async (draft) => {
+                // 把 promise 交回 StepComposer 等待：成功才收起，失败保持展开并由内部 inline 报错（TK-01）。
+                await onSubmitStep?.(draft);
+                setExpanded(false);
               }}
             />
           )}

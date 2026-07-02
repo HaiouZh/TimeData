@@ -53,7 +53,7 @@ export default function TracksListPage() {
   return (
     <div className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
-        <NewTrackComposer onCreate={(title) => void create(title)} />
+        <NewTrackComposer onCreate={(title) => create(title)} />
         <TrackStatusFacetPanel facets={facets} selectedTags={selectedTags} onToggle={toggleTag} />
         {visibleItems.length === 0 ? (
           <p className="rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">
@@ -68,7 +68,7 @@ export default function TracksListPage() {
                   steps={byTrack.get(item.track.id) ?? []}
                   signal={item.signal}
                   statusTags={actionTags}
-                  onSubmitStep={(draft) => void addStep(item.track.id, draft)}
+                  onSubmitStep={(draft) => addStep(item.track.id, draft)}
                 />
               </li>
             ))}

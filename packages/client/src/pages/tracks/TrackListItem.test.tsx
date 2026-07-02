@@ -49,7 +49,11 @@ function step(partial: Partial<TrackStep> & { id: string; seq: number }): TrackS
 async function mount(
   item: Track,
   steps: TrackStep[],
-  props: { signal?: TrackBoardSignal | null; statusTags?: readonly string[]; onSubmitStep?: (draft: StepDraft) => void } = {},
+  props: {
+    signal?: TrackBoardSignal | null;
+    statusTags?: readonly string[];
+    onSubmitStep?: (draft: StepDraft) => Promise<void> | void;
+  } = {},
 ) {
   mounted = await renderDom(
     createElement(MemoryRouter, null, createElement(TrackListItem, { track: item, steps, ...props })),
@@ -134,5 +138,22 @@ describe("TrackListItem", () => {
     await click(buttonByText(host, "#agent在做"));
     await submitInlineForm(host);
     expect(submitted).toEqual([{ content: "交给 agent 继续", mode: "open", tags: ["agent在做"] }]);
+  });
+
+  it("keeps the inline writer open and preserves the draft when submit fails", async () => {
+    const host = await mount(track(), [step({ id: "a", seq: 0, content: "旧步骤" })], {
+      statusTags: ["待我处理"],
+      onSubmitStep: () => Promise.reject(new Error("写不进去")),
+    });
+
+    await click(host.querySelector('button[aria-label="写一步"]'));
+    await typeTextarea(host, "交给 agent 继续");
+    await submitInlineForm(host);
+
+    // 失败:composer 不收起、草稿保留、显示 inline 错误(TK-01 收起契约)。
+    const textarea = host.querySelector("textarea") as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+    expect(textarea?.value).toBe("交给 agent 继续");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("写不进去");
   });
 });

@@ -21,6 +21,7 @@ export default function TrackDetailPage() {
   const [editingMeta, setEditingMeta] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [summaryDraft, setSummaryDraft] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const isActive = track != null && track.status === "active";
   const hasOpenStep = currentStepId(steps) !== null;
@@ -38,22 +39,37 @@ export default function TrackDetailPage() {
 
   async function closeStep(): Promise<void> {
     if (!track) return;
-    await closeCurrentStep(track.id);
+    try {
+      await closeCurrentStep(track.id);
+      setActionError(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "闭合失败，请重试");
+    }
   }
 
   async function changeStatus(status: "active" | "concluded"): Promise<void> {
     if (!track || track.status === status) return;
-    await setTrackStatus(track.id, status);
+    try {
+      await setTrackStatus(track.id, status);
+      setActionError(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "状态更新失败，请重试");
+    }
   }
 
   async function saveMeta(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!track) return;
-    await updateTrack(track.id, {
-      title: titleDraft,
-      summary: summaryDraft.trim() ? summaryDraft : null,
-    });
-    setEditingMeta(false);
+    try {
+      await updateTrack(track.id, {
+        title: titleDraft,
+        summary: summaryDraft.trim() ? summaryDraft : null,
+      });
+      setActionError(null);
+      setEditingMeta(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "保存失败，请重试");
+    }
   }
 
   function cancelMetaEdit(): void {
@@ -161,7 +177,15 @@ export default function TrackDetailPage() {
                 )}
               </div>
             </header>
-            {isActive && <StepComposer onSubmit={(draft) => void addStep(draft)} statusTags={actionTags} />}
+            {actionError && (
+              <p
+                role="alert"
+                className="mb-3 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-caption text-danger"
+              >
+                {actionError}
+              </p>
+            )}
+            {isActive && <StepComposer onSubmit={(draft) => addStep(draft)} statusTags={actionTags} />}
             {isActive && hasOpenStep && (
               <button
                 type="button"

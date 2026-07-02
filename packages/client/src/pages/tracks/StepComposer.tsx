@@ -28,7 +28,7 @@ export function StepComposer({
   surface = "card",
   submitLabel = "加入这一步",
 }: {
-  onSubmit: (draft: StepDraft) => void;
+  onSubmit: (draft: StepDraft) => Promise<void> | void;
   disabled?: boolean;
   statusTags?: readonly string[];
   surface?: "card" | "inline";
@@ -37,18 +37,29 @@ export function StepComposer({
   const [content, setContent] = useState("");
   const [tag, setTag] = useState<string | null>(null);
   const [customTag, setCustomTag] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const normalizedStatusTags = uniqueTags(statusTags);
   const normalizedCommonTags = uniqueTags(COMMON_TAGS);
 
-  function submit(event: FormEvent<HTMLFormElement>): void {
+  async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const trimmed = content.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || disabled || submitting) return;
     const trimmedCustomTag = customTag.trim();
-    onSubmit({ content: trimmed, mode: "open", tags: tag ? [tag] : trimmedCustomTag ? [trimmedCustomTag] : [] });
-    setContent("");
-    setTag(null);
-    setCustomTag("");
+    setSubmitting(true);
+    try {
+      // 写入成功后才清空草稿；失败保留原文并 inline 报错（TK-01）。
+      await onSubmit({ content: trimmed, mode: "open", tags: tag ? [tag] : trimmedCustomTag ? [trimmedCustomTag] : [] });
+      setContent("");
+      setTag(null);
+      setCustomTag("");
+      setError(null);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "写入失败，请重试");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function toggle(next: string): void {
@@ -66,7 +77,10 @@ export function StepComposer({
       <div className="mb-2 td-text-caption font-medium text-ink-3">写一步</div>
       <textarea
         value={content}
-        onChange={(event) => setContent(event.target.value)}
+        onChange={(event) => {
+          setContent(event.target.value);
+          if (error) setError(null);
+        }}
         placeholder="写下这一步的进展、结论或需要接手的事..."
         aria-label="步骤内容"
         rows={2}
@@ -119,12 +133,17 @@ export function StepComposer({
         />
         <button
           type="submit"
-          disabled={disabled || content.trim().length === 0}
+          disabled={disabled || submitting || content.trim().length === 0}
           className="ml-auto rounded-ctl bg-accent px-3 py-1.5 td-text-label text-page disabled:bg-surface-hover disabled:text-ink-3"
         >
           {submitLabel}
         </button>
       </div>
+      {error && (
+        <p role="alert" className="mt-2 td-text-caption text-danger">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

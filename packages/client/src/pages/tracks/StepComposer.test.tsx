@@ -97,6 +97,16 @@ describe("StepComposer", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("keeps the draft and shows an inline error when the write fails", async () => {
+    const onSubmit = vi.fn().mockRejectedValue(new Error("写不进去"));
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);
+    const host = mounted.host;
+    await type(host, "要保住的草稿");
+    await submit(host);
+    expect((host.querySelector("textarea") as HTMLTextAreaElement).value).toBe("要保住的草稿");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("写不进去");
+  });
+
   it("uses inline surface and custom submit label for card writing", async () => {
     const submitted: StepDraft[] = [];
     mounted = await renderDom(
