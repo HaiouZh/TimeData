@@ -138,6 +138,8 @@ export interface SyncPushResponse {
   conflicts: number;
   backupId: string | null;
   serverTime: string;
+  latestSeq?: number | null;
+  appliedCount?: number;
 }
 
 export interface SyncBackupResponse {

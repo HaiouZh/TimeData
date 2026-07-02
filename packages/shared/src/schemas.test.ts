@@ -304,6 +304,34 @@ describe("runtime schemas", () => {
       }).tasks,
     ).toEqual([]);
   });
+
+  it("接受 pull 请求携带正整数 limit，拒绝非正/非整 limit", () => {
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0, limit: 500 }).success).toBe(true);
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0 }).success).toBe(true); // limit 可选
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0, limit: 0 }).success).toBe(false);
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0, limit: -5 }).success).toBe(false);
+    expect(SyncPullRequestSchema.safeParse({ sinceSeq: 0, limit: 1.5 }).success).toBe(false);
+  });
+
+  it("接受 pull 响应携带 nextSinceSeq/hasMore 分页字段", () => {
+    expect(SyncPullResponseSchema.safeParse({
+      changes: [], serverTime: "2026-05-13T00:00:00.000Z",
+      latestSeq: 10, nextSinceSeq: 5, hasMore: true,
+    }).success).toBe(true);
+    // nextSinceSeq 允许 null（无 change 时）
+    expect(SyncPullResponseSchema.safeParse({
+      changes: [], serverTime: "2026-05-13T00:00:00.000Z",
+      latestSeq: 0, nextSinceSeq: null, hasMore: false,
+    }).success).toBe(true);
+    // 分页字段整体可选（旧 server 响应仍合法）
+    expect(SyncPullResponseSchema.safeParse({
+      changes: [], serverTime: "2026-05-13T00:00:00.000Z", latestSeq: 0,
+    }).success).toBe(true);
+    // nextSinceSeq 非整应被拒
+    expect(SyncPullResponseSchema.safeParse({
+      changes: [], serverTime: "2026-05-13T00:00:00.000Z", nextSinceSeq: 1.5,
+    }).success).toBe(false);
+  });
 });
 
 describe("SyncChangeSchema", () => {
