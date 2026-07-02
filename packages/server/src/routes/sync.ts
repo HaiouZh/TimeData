@@ -449,21 +449,32 @@ sync.post("/backup", async (c) => {
 });
 
 sync.post("/push", async (c) => {
+  const t0 = performance.now();
   const rawBody: unknown = await c.req.json();
   const parsed = SyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, undefined, { issues: parsed.error.issues });
     return c.json(body, status);
   }
+  const parseMs = performance.now() - t0;
 
   const body = parsed.data;
   const db = getDb();
   const orderedChanges = orderPushChanges(body.changes);
   const validation = validateSyncChanges(db, orderedChanges);
+  const validateMs = performance.now() - t0;
 
   if (!validation.valid) {
     const response = syncPushResponse(validation.outcomes, null);
-    writeSyncLog(db, "push_rejected", response.outcomes, response.outcomes.length);
+    writeSyncLog(
+      db,
+      "push_rejected",
+      {
+        timings: { parseMs: Math.round(parseMs), validateMs: Math.round(validateMs) },
+        outcomes: response.outcomes,
+      },
+      response.outcomes.length,
+    );
     return c.json(response, 409);
   }
 
@@ -497,6 +508,7 @@ sync.post("/push", async (c) => {
       details: backupDetails,
     });
   }
+  const analyzeBackupMs = performance.now() - t0;
   const results: ApplyChangeResult[] = [];
   const applyAll = db.transaction(() => {
     for (const change of orderedChanges) {
@@ -518,10 +530,19 @@ sync.post("/push", async (c) => {
     );
     return c.json(errBody, status);
   }
+  const applyMs = performance.now() - t0;
 
   const outcomes = results.map((result) => outcomeFromApplyResult(result, backup?.id ?? null));
   const response = syncPushResponse(outcomes, backup?.id ?? null);
+  const totalMs = performance.now() - t0;
   writeSyncLog(db, "push_received", {
+    timings: {
+      parseMs: Math.round(parseMs),
+      validateMs: Math.round(validateMs),
+      analyzeBackupMs: Math.round(analyzeBackupMs),
+      applyMs: Math.round(applyMs),
+      totalMs: Math.round(totalMs),
+    },
     backupId: backup?.id ?? null,
     outcomes: response.outcomes,
     seqAnalysis,
@@ -561,6 +582,7 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[
 }
 
 sync.post("/pull", async (c) => {
+  const t0 = performance.now();
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncPullRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -572,15 +594,19 @@ sync.post("/pull", async (c) => {
   const db = getDb();
   // sinceSeq=0 与 null 等价：全量补差。
   const sinceSeq = body.sinceSeq ? body.sinceSeq : null;
+  const readStart = performance.now();
   const changes = readChangesSinceSeq(db, sinceSeq);
+  const readMs = performance.now() - readStart;
 
   const response: SyncPullResponse = {
     changes,
     serverTime: new Date().toISOString(),
     latestSeq: getLatestSeq(),
   };
+  const totalMs = performance.now() - t0;
 
   writeSyncLog(db, "pull_returned", {
+    timings: { readMs: Math.round(readMs), totalMs: Math.round(totalMs) },
     sinceSeq: body.sinceSeq,
     latestSeq: response.latestSeq,
     categoryIds: changes.filter((c) => c.tableName === "categories").map((c) => c.recordId),

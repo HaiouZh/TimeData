@@ -188,6 +188,32 @@ describe("sync route", () => {
     expect(Array.isArray(body.changes)).toBe(true);
   });
 
+  it("records timings in pull_returned detail without changing response shape", async () => {
+    const response = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer test-token" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    // 响应体字段集不因新增计时埋点而变化。
+    expect(Object.keys(body).sort()).toEqual(["changes", "latestSeq", "serverTime"].sort());
+
+    const logRow = db
+      .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
+      .get("pull_returned") as { detail: string };
+    const detail = JSON.parse(logRow.detail);
+    expect(Object.keys(detail)[0]).toBe("timings");
+    expect(typeof detail.timings.readMs).toBe("number");
+    expect(typeof detail.timings.totalMs).toBe("number");
+    expect(detail.timings.readMs).toBeGreaterThanOrEqual(0);
+    expect(detail.timings.totalMs).toBeGreaterThanOrEqual(0);
+    // 既有字段仍在。
+    expect(detail.sinceSeq).toBe(0);
+    expect(detail.latestSeq === null || typeof detail.latestSeq === "number").toBe(true);
+  });
+
   it("creates a protected manual server backup", async () => {
     const response = await app.request("/api/sync/backup", {
       method: "POST",
@@ -983,6 +1009,50 @@ describe("sync route", () => {
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 1 });
   });
 
+  it("records timings in push_rejected detail while keeping outcomes intact", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        changes: [
+          {
+            tableName: "time_entries",
+            recordId: "entry-mismatch",
+            action: "create",
+            data: {
+              id: "entry-different-id",
+              categoryId: "cat-1",
+              startTime: "2026-05-08T09:00:00.000Z",
+              endTime: "2026-05-08T10:00:00.000Z",
+              note: null,
+              createdAt: "2026-05-08T09:00:00.000Z",
+              updatedAt: "2026-05-08T09:00:00.000Z",
+            },
+            timestamp: "2026-05-08T09:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.rejected).toBe(1);
+    expect(body.outcomes[0]).toMatchObject({ status: "rejected", reasonCode: "id_mismatch" });
+
+    const logRow = db
+      .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
+      .get("push_rejected") as { detail: string };
+    const detail = JSON.parse(logRow.detail);
+    expect(Object.keys(detail)[0]).toBe("timings");
+    expect(typeof detail.timings.parseMs).toBe("number");
+    expect(typeof detail.timings.validateMs).toBe("number");
+    expect(detail.timings.parseMs).toBeGreaterThanOrEqual(0);
+    expect(detail.timings.validateMs).toBeGreaterThanOrEqual(0);
+    // 信息不丢：outcomes 仍然可从 detail 中还原。
+    expect(detail.outcomes).toEqual(body.outcomes);
+  });
+
   it("creates a protected unknown-base backup when baseSeq is missing", async () => {
     const res = await app.request("/api/sync/push", {
       method: "POST",
@@ -1065,6 +1135,28 @@ describe("sync route", () => {
     expect(body.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied", recordId: "entry-1" });
     expect(createServerBackupMock).not.toHaveBeenCalled();
     expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
+    // 响应体字段集不因新增计时埋点而变化。
+    expect(Object.keys(body).sort()).toEqual(
+      ["accepted", "backupId", "conflicts", "outcomes", "rejected", "serverTime"].sort(),
+    );
+
+    const logRow = db
+      .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
+      .get("push_received") as { detail: string };
+    const detail = JSON.parse(logRow.detail);
+    expect(detail.timings).toBeDefined();
+    expect(typeof detail.timings.parseMs).toBe("number");
+    expect(typeof detail.timings.validateMs).toBe("number");
+    expect(typeof detail.timings.analyzeBackupMs).toBe("number");
+    expect(typeof detail.timings.applyMs).toBe("number");
+    expect(typeof detail.timings.totalMs).toBe("number");
+    expect(detail.timings.parseMs).toBeGreaterThanOrEqual(0);
+    expect(detail.timings.validateMs).toBeGreaterThanOrEqual(0);
+    expect(detail.timings.analyzeBackupMs).toBeGreaterThanOrEqual(0);
+    expect(detail.timings.applyMs).toBeGreaterThanOrEqual(0);
+    expect(detail.timings.totalMs).toBeGreaterThanOrEqual(0);
+    // timings 必须是 detail 对象的第一个字段，避免被超长内容截断。
+    expect(Object.keys(detail)[0]).toBe("timings");
   });
 
   it("creates a protected sync_overlap_delete backup when a push deletes overlapping entries", async () => {
