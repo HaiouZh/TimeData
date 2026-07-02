@@ -1,3 +1,4 @@
+import { localDateString } from "@timedata/shared";
 import type { GoalOverview } from "../../lib/goalsView.js";
 
 export interface GoalSummaryLines {
@@ -7,7 +8,8 @@ export interface GoalSummaryLines {
 }
 
 function datePart(iso: string): string {
-  return iso.slice(0, 10);
+  // 用设备本地日历日，与候选列表排期日期同口径；避免 UTC 截断把凌晨活动显示成前一天。
+  return localDateString(new Date(iso));
 }
 
 export function goalSummaryLines(overview: GoalOverview): GoalSummaryLines {

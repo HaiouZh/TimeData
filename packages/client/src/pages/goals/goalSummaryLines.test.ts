@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { localDateString } from "@timedata/shared";
 import type { Goal, Task, Track, TrackStep } from "@timedata/shared";
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { goalSummaryLines } from "./goalSummaryLines.js";
@@ -89,6 +90,20 @@ describe("goalSummaryLines", () => {
       frontline: "▸ 3 能推 · 1 等前置",
       completion: "✓ 1 完成 · 共 5 项",
     });
+  });
+
+  it("momentum 日期用本地日历日，不按 UTC 截断", () => {
+    // 凌晨活动：UTC 与东八区跨日。用 localDateString 动态期望，任何测试时区都成立；
+    // UTC 截断实现（iso.slice(0,10)）在 UTC+8 机器上会得到前一天而失败。
+    const dawnActivity = "2026-06-21T16:30:00.000Z";
+    const lines = goalSummaryLines(
+      overview({
+        goal: goal({ members: [{ kind: "task", id: "dawn" }] }),
+        tasks: [task({ id: "dawn", updatedAt: dawnActivity })],
+      }),
+    );
+
+    expect(lines.momentum).toBe(`在动 · 最近 ${localDateString(new Date(dawnActivity))}`);
   });
 
   it("summarizes empty, dormant, never-started, and theme goals", () => {
