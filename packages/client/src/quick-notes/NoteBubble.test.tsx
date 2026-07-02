@@ -147,6 +147,27 @@ describe("NoteBubble", () => {
     await unmount(root);
   });
 
+  it("展开按钮暴露 aria-expanded 状态，折叠内容标记 inert", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(220);
+    const longText = Array.from({ length: 12 }, (_, index) => `第 ${index + 1} 行`).join("\n");
+
+    const { host, root } = await render(createElement(NoteBubble, { note: note(longText) }));
+    const button = host.querySelector("button");
+    expect(button?.getAttribute("aria-expanded")).toBe("false");
+    // 折叠时被裁掉的内容不应参与 Tab 焦点顺序。
+    expect((host.querySelector(".overflow-hidden") as HTMLElement).hasAttribute("inert")).toBe(true);
+
+    await act(async () => {
+      button?.click();
+    });
+    await flush();
+
+    expect(host.querySelector("button")?.getAttribute("aria-expanded")).toBe("true");
+    expect((host.querySelector(".overflow-hidden") as HTMLElement).hasAttribute("inert")).toBe(false);
+
+    await unmount(root);
+  });
+
   it("keeps the expand button out of the parent long-press path", async () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(220);
     const parentPointerDown = vi.fn();

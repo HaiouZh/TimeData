@@ -1308,7 +1308,7 @@
     {
       "file": "packages/client/src/pages/QuickNotesPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "\"relative max-w-full select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus:ring-2 focus:ring-accent\";",
+      "lineText": "\"relative max-w-full [@media(pointer:coarse)]:select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus-visible:ring-2 focus-visible:ring-accent\";",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"

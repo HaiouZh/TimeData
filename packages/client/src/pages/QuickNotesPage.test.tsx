@@ -114,7 +114,7 @@ async function click(element: Element | null) {
 
 async function openMenu(host: HTMLElement, label: string) {
   const bubble = Array.from(host.querySelectorAll('[role="button"]')).find(
-    (element) => element.getAttribute("aria-label") === `速记：${label}`,
+    (element) => element.textContent?.includes(label) ?? false,
   );
   if (!(bubble instanceof HTMLElement)) throw new Error(`missing bubble ${label}`);
   await act(async () => {
@@ -250,7 +250,7 @@ describe("QuickNotesPage", () => {
     });
     const { host, root } = await renderPage();
 
-    await click(host.querySelector('[role="button"][aria-label="速记：只读单击"]'));
+    await click(host.querySelector('[role="button"][aria-label*="只读单击"]'));
 
     expect(input(host).value).toBe("");
     expect(host.textContent).not.toContain("正在编辑");
@@ -388,8 +388,8 @@ describe("QuickNotesPage", () => {
     });
 
     const { host, root } = await renderPage();
-    const pendingBubble = host.querySelector('[role="button"][aria-label="速记：待上传"]');
-    const uploadedBubble = host.querySelector('[role="button"][aria-label="速记：已上传"]');
+    const pendingBubble = host.querySelector('[role="button"][aria-label*="待上传"]');
+    const uploadedBubble = host.querySelector('[role="button"][aria-label*="已上传"]');
 
     expect(pendingBubble?.querySelector('[aria-label="待上传"]')).not.toBeNull();
     expect(uploadedBubble?.querySelector('[aria-label="已上传"]')).not.toBeNull();
@@ -429,7 +429,7 @@ describe("QuickNotesPage", () => {
 
     const { host, root } = await renderPage();
 
-    expect(host.querySelector('[aria-label="速记：钉住我"]')).toBeNull();
+    expect(host.querySelector('[aria-label="速记列表"] [role="button"][aria-label*="钉住我"]')).toBeNull();
 
     await click(host.querySelector('button[aria-label="查看置顶速记，1 条"]'));
 
@@ -575,6 +575,132 @@ describe("QuickNotesPage", () => {
 
     expect(writeText).toHaveBeenCalledWith("复制我");
 
+    await act(async () => root.unmount());
+  });
+
+  it("键盘 Enter 在气泡上打开操作菜单（非选择态）", async () => {
+    await db.quickNotes.add({
+      id: "note-kbd",
+      text: "键盘打开",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    const bubble = Array.from(host.querySelectorAll('[role="button"]')).find((el) =>
+      el.textContent?.includes("键盘打开"),
+    ) as HTMLElement;
+    await act(async () => {
+      bubble.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await flush();
+
+    expect(host.querySelector('[role="menu"][aria-label="速记操作"]')).toBeInstanceOf(HTMLElement);
+    await act(async () => root.unmount());
+  });
+
+  it("键盘 Escape 关闭已打开的操作菜单", async () => {
+    await db.quickNotes.add({
+      id: "note-esc",
+      text: "关我",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    await openMenu(host, "关我");
+    expect(host.querySelector('[role="menu"][aria-label="速记操作"]')).toBeInstanceOf(HTMLElement);
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await flush();
+
+    expect(host.querySelector('[role="menu"][aria-label="速记操作"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("选择态下键盘 Enter 切换该条选中", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "note-sel",
+        text: "选我",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "note-sel2",
+        text: "还有我",
+        occurredAt: "2026-06-01T04:01:00.000Z",
+        createdAt: "2026-06-01T04:01:00.000Z",
+        updatedAt: "2026-06-01T04:01:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    await openMenu(host, "选我");
+    await click(menuItem(host, "选择"));
+
+    const other = Array.from(host.querySelectorAll('[role="button"]')).find((el) =>
+      el.textContent?.includes("还有我"),
+    ) as HTMLElement;
+    await act(async () => {
+      other.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await flush();
+
+    expect(host.textContent).toContain("已选");
+    expect(other.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => root.unmount());
+  });
+
+  it("选择态下点 Markdown 链接只勾选、不跳转", async () => {
+    await db.quickNotes.add({
+      id: "note-link",
+      text: "看[链接](https://example.com)这里",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    await openMenu(host, "链接");
+    await click(menuItem(host, "选择"));
+
+    const link = host.querySelector('a[href="https://example.com"]') as HTMLAnchorElement;
+    const clickEvent = new MouseEvent("click", { bubbles: true, cancelable: true });
+    await act(async () => {
+      link.dispatchEvent(clickEvent);
+    });
+    await flush();
+
+    expect(clickEvent.defaultPrevented).toBe(true);
+    await act(async () => root.unmount());
+  });
+
+  it("桌面有文字选区时右键不劫持为自定义菜单", async () => {
+    await db.quickNotes.add({
+      id: "note-native-menu",
+      text: "选我复制",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    const originalGetSelection = window.getSelection;
+    window.getSelection = (() => ({ toString: () => "选我" })) as unknown as typeof window.getSelection;
+    try {
+      const bubble = Array.from(host.querySelectorAll('[role="button"]')).find((el) =>
+        el.textContent?.includes("选我复制"),
+      ) as HTMLElement;
+      await act(async () => {
+        bubble.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
+      });
+      await flush();
+      expect(host.querySelector('[role="menu"][aria-label="速记操作"]')).toBeNull();
+    } finally {
+      window.getSelection = originalGetSelection;
+    }
     await act(async () => root.unmount());
   });
 

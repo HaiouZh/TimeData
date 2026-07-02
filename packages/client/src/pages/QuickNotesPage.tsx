@@ -19,7 +19,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { punchNow } from "../lib/punch.js";
-import { formatLocalClock, groupQuickNotesForDisplay } from "../lib/quickNoteDisplay.ts";
+import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
 import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
@@ -54,7 +54,7 @@ const STATUS_AUTO_DISMISS_MS = 2400;
 const ACTION_TOAST_DISMISS_MS = 6000;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 const NOTE_CARD_BASE =
-  "relative max-w-full select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus:ring-2 focus:ring-accent";
+  "relative max-w-full [@media(pointer:coarse)]:select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
 const NOTE_CARD_DEFAULT = "border-border bg-surface/90 hover:bg-surface-hover";
 const NOTE_CARD_AGENT = "border-accent/40 bg-accent-soft hover:bg-surface-hover";
 const NOTE_CARD_SELECTED = "ring-2 ring-accent";
@@ -692,6 +692,25 @@ export default function QuickNotesPage() {
   function noteInteractionProps(note: QuickNote) {
     return {
       onClick: selectionMode ? () => toggleSelected(note.id) : undefined,
+      onClickCapture: (event: MouseEvent<HTMLElement>) => {
+        // 选择态下点气泡内的链接只做勾选，不跳转到浏览器。
+        if (selectionMode && event.target instanceof Element && event.target.closest("a")) {
+          event.preventDefault();
+        }
+      },
+      onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        // 焦点在内部链接/展开按钮上时，保留它们自身的键盘行为。
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        if (selectionMode) {
+          toggleSelected(note.id);
+          return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        pressedNoteRef.current = note;
+        setMenu({ note, x: rect.left, y: rect.bottom });
+      },
       onPointerDown: (event: PointerEvent<HTMLElement>) => {
         if (selectionMode) return;
         pressedNoteRef.current = note;
@@ -705,6 +724,9 @@ export default function QuickNotesPage() {
           event.preventDefault();
           return;
         }
+        // 桌面存在文字选区时，让浏览器原生右键菜单（复制 / 复制链接地址）可用。
+        const selection = typeof window !== "undefined" ? (window.getSelection()?.toString().trim() ?? "") : "";
+        if (selection.length > 0) return;
         pressedNoteRef.current = note;
         longPress.onContextMenu(event);
       },
@@ -933,7 +955,7 @@ export default function QuickNotesPage() {
                     key={note.id}
                     role="button"
                     tabIndex={0}
-                    aria-label={`置顶速记：${note.text}`}
+                    aria-label={quickNoteAriaLabel(note)}
                     aria-pressed={selectionMode ? selected : undefined}
                     {...noteInteractionProps(note)}
                     style={{ WebkitTouchCallout: "none" }}
@@ -1039,7 +1061,7 @@ export default function QuickNotesPage() {
                     <div
                       role="button"
                       tabIndex={0}
-                      aria-label={`速记：${note.text}`}
+                      aria-label={quickNoteAriaLabel(note)}
                       aria-pressed={selectionMode ? selected : undefined}
                       {...noteInteractionProps(note)}
                       style={{ WebkitTouchCallout: "none" }}

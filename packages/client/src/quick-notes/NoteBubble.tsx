@@ -47,6 +47,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
       <div className="relative">
         <div
           ref={contentRef}
+          inert={collapsed}
           className="overflow-hidden transition-[max-height] duration-200"
           style={{ maxHeight: collapsed ? COLLAPSED_MAX_PX : undefined }}
         >
@@ -77,6 +78,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
         <div className="mt-1 flex items-center justify-between gap-3">
           <button
             type="button"
+            aria-expanded={expanded}
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.stopPropagation();

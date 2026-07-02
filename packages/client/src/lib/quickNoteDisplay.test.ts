@@ -1,6 +1,6 @@
 import type { QuickNote } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { formatLocalClock, groupQuickNotesForDisplay } from "./quickNoteDisplay.js";
+import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "./quickNoteDisplay.js";
 
 function note(id: string, occurredAt: string): QuickNote {
   return {
@@ -74,5 +74,32 @@ describe("groupQuickNotesForDisplay", () => {
     ]);
 
     expect(items.filter((item) => item.type === "note").map((item) => item.note.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("quickNoteAriaLabel", () => {
+  it("是短摘要而非整条正文：时间 + 内容", () => {
+    const n = { ...note("x", "2026-06-01T04:08:00.000Z"), text: "买牛奶和鸡蛋" };
+    expect(quickNoteAriaLabel(n)).toBe("速记 12:08，买牛奶和鸡蛋");
+  });
+
+  it("超长正文截断加省略号，并折叠空白", () => {
+    const long = "一二三四五六七八九十".repeat(6); // 60 字
+    const n = { ...note("x", "2026-06-01T04:08:00.000Z"), text: `  ${long}\n换行  ` };
+    const label = quickNoteAriaLabel(n);
+    expect(label.startsWith("速记 12:08，")).toBe(true);
+    expect(label.endsWith("…")).toBe(true);
+    expect(label).not.toContain("\n");
+    expect(label.length).toBeLessThan(long.length);
+  });
+
+  it("agent 速记带来源标签", () => {
+    const n = {
+      ...note("x", "2026-06-01T04:08:00.000Z"),
+      text: "周报已生成",
+      source: "agent" as const,
+      sourceLabel: "Hermes",
+    };
+    expect(quickNoteAriaLabel(n)).toBe("速记 12:08，Hermes · 周报已生成");
   });
 });

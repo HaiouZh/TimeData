@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 export interface QuickNoteActionMenuProps {
   x: number;
   y: number;
@@ -29,6 +31,21 @@ export default function QuickNoteActionMenu({
   const left = Math.max(8, Math.min(x, viewportWidth - MENU_WIDTH - 8));
   const top = Math.max(8, Math.min(y, viewportHeight - MENU_HEIGHT - 8));
 
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // 打开时把焦点移入菜单首项，Escape 关闭；关闭由父组件卸载本组件完成。
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   function run(action: () => void) {
     action();
     onClose();
@@ -45,6 +62,7 @@ export default function QuickNoteActionMenu({
       }}
     >
       <div
+        ref={menuRef}
         role="menu"
         aria-label="速记操作"
         className="absolute min-w-[120px] overflow-hidden rounded-ctl border border-border bg-surface-elevated py-1 shadow-elev2"

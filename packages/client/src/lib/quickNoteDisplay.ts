@@ -29,6 +29,20 @@ export function formatLocalClock(occurredAt: string): string {
   return utcToLocalDateTime(occurredAt).slice(11, 16);
 }
 
+const ARIA_TEXT_MAX = 40;
+
+/**
+ * 气泡可访问名：短摘要（时间 + 前若干字，agent 带来源）而非整条正文。
+ * 避免读屏把长笔记/Markdown 源码当一个不可分段的按钮名整段朗读。
+ */
+export function quickNoteAriaLabel(note: QuickNote): string {
+  const time = formatLocalClock(note.occurredAt);
+  const flattened = note.text.trim().replace(/\s+/g, " ");
+  const summary = flattened.length > ARIA_TEXT_MAX ? `${flattened.slice(0, ARIA_TEXT_MAX)}…` : flattened;
+  const who = note.source === "agent" ? `${note.sourceLabel ?? "助手"} · ` : "";
+  return `速记 ${time}，${who}${summary}`;
+}
+
 export function groupQuickNotesForDisplay(
   notes: QuickNote[],
   options: GroupQuickNotesOptions = {},
