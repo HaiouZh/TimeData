@@ -1706,6 +1706,50 @@ describe("pull 分批拉取", () => {
     expect(getLastSyncedSeq()).toBe(1);
   });
 
+  it("分批 pull 在途新增的本地 pending 编辑不被后续批次远端静默覆盖（每批刷新保护映射）", async () => {
+    // 本地已有 cat-x（无 pending），旧时间戳
+    await db.categories.add(categoryChange("cat-x", "2026-05-07T08:00:00.000Z").data);
+    setLastSyncedSeq(0);
+
+    let call = 0;
+    apiFetchMock.mockImplementation(async () => {
+      call += 1;
+      if (call === 1) {
+        return {
+          serverTime: "2026-05-07T13:00:00.000Z",
+          latestSeq: 2,
+          nextSinceSeq: 1,
+          hasMore: true,
+          changes: [categoryChange("cat-other", "2026-05-07T09:00:00.000Z")],
+        };
+      }
+      // 第二批 fetch 前：模拟 pull 在途中用户在本地改了 cat-x（新增 pending + 本地更新）
+      await db.syncLog.add({
+        id: "log-catx-inflight",
+        tableName: "categories",
+        recordId: "cat-x",
+        action: "update",
+        timestamp: "2026-05-07T12:00:00.000Z",
+        synced: 0,
+      });
+      await db.categories.update("cat-x", { updatedAt: "2026-05-07T12:00:00.000Z" });
+      return {
+        serverTime: "2026-05-07T13:00:01.000Z",
+        latestSeq: 2,
+        nextSinceSeq: 2,
+        hasMore: false,
+        changes: [categoryChange("cat-x", "2026-05-07T10:00:00.000Z")], // 远端不同 updatedAt
+      };
+    });
+
+    const { conflicts } = await syncPullSinceSeq();
+
+    // cat-x 在途新增 pending + 远端 update + updatedAt 不同 → manual 域应挂冲突，不静默覆盖
+    expect(conflicts.some((c) => c.recordId === "cat-x")).toBe(true);
+    // 本地 cat-x 保留在途编辑（12:00），未被远端 10:00 覆盖
+    expect((await db.categories.get("cat-x"))?.updatedAt).toBe("2026-05-07T12:00:00.000Z");
+  });
+
   // 批间让出的“继续拉下一批”行为已由上面的多批用例（真 timers）覆盖；
   // 这里只针对 yieldToMainThread 纯函数验证“异步 setTimeout(0) 让出”语义——
   // 不触碰 Dexie，故 fake timers 只冻结这一行 setTimeout，绝不会挂起 fake-indexeddb。

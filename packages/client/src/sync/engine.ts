@@ -217,9 +217,15 @@ async function fetchPullBatches(
     const response = await fetchSyncPullResponse({ sinceSeq: cursor, limit: PULL_PAGE_LIMIT });
     await applyBatch(response);
     lastResponse = response;
-    if (typeof response.nextSinceSeq === "number") {
-      cursor = response.nextSinceSeq;
-      setLastSyncedSeq(cursor); // 逐批推进，绝不中途跳 latestSeq
+    const next = response.nextSinceSeq;
+    if (typeof next === "number" && next > cursor) {
+      cursor = next;
+      // 逐批推进（绝不中途跳 latestSeq），且游标只增不减：repair 从 sinceSeq=0 起步时
+      // 不把已在高位的读数拉回低位（apply 照常全量，游标走 max 语义、断点续传不受损）。
+      if (cursor > (getLastSyncedSeq() ?? 0)) setLastSyncedSeq(cursor);
+    } else if (response.hasMore) {
+      // 防御：服务端反常返回 hasMore=true 但游标无法前进（nextSinceSeq 缺失或不递增）→ 中止避免死循环。
+      break;
     }
     if (!response.hasMore) break;
     await yieldToMainThread();
@@ -365,13 +371,14 @@ export async function syncPush(): Promise<SyncPushResult> {
 export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
   const startSeq = buildPullCursor("incremental").sinceSeq;
 
-  const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
-  const locallyModifiedById = new Map(unsyncedLogs.map((l) => [`${l.tableName}:${l.recordId}`, l]));
-
   let applied = 0;
   const conflicts: SyncConflict[] = [];
 
   const last = await fetchPullBatches(startSeq, async (response) => {
+    // 每批 fetch 后重新读 pending 保护映射：分批网络窗口可横跨多个 RTT，
+    // pull 在途中用户在本地新改的记录必须被最新 pending 快照挡住，避免远端静默覆盖本地编辑。
+    const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
+    const locallyModifiedById = new Map(unsyncedLogs.map((l) => [`${l.tableName}:${l.recordId}`, l]));
     for (const change of response.changes) {
       const domain = CLIENT_SYNC_DOMAINS[change.tableName];
       if (!domain) continue;
