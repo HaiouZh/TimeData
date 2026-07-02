@@ -88,6 +88,32 @@ describe("StepComposer", () => {
     expect((host.querySelector('input[aria-label="自定义步骤标签"]') as HTMLInputElement).value).toBe("");
   });
 
+  it("combines a single board signal with multiple retrieval tags and custom text", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["待我处理", "agent在做"]} />);
+    const host = mounted.host;
+    await click(buttonByText(host, "#agent在做"));
+    await click(buttonByText(host, "#决策"));
+    await click(buttonByText(host, "#提醒"));
+    await typeInput(host, "自定义步骤标签", "复盘");
+    await type(host, "拍板并交给 agent");
+    await submit(host);
+    expect(onSubmit).toHaveBeenCalledWith({
+      content: "拍板并交给 agent",
+      mode: "open",
+      tags: ["agent在做", "决策", "提醒", "复盘"],
+    });
+  });
+
+  it("does not wipe the custom tag input when a preset is selected", async () => {
+    const onSubmit = vi.fn();
+    mounted = await renderDom(<StepComposer onSubmit={onSubmit} statusTags={["待我处理"]} />);
+    const host = mounted.host;
+    await typeInput(host, "自定义步骤标签", "自定义X");
+    await click(buttonByText(host, "#待我处理"));
+    expect((host.querySelector('input[aria-label="自定义步骤标签"]') as HTMLInputElement).value).toBe("自定义X");
+  });
+
   it("does not submit blank content", async () => {
     const onSubmit = vi.fn();
     mounted = await renderDom(<StepComposer onSubmit={onSubmit} />);

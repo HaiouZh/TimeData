@@ -35,7 +35,9 @@ export function StepComposer({
   submitLabel?: string;
 }) {
   const [content, setContent] = useState("");
-  const [tag, setTag] = useState<string | null>(null);
+  // 看板信号单选、检索标签多选，三组并存不再互斥清空（TK-14）。
+  const [signal, setSignal] = useState<string | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -46,13 +48,15 @@ export function StepComposer({
     event.preventDefault();
     const trimmed = content.trim();
     if (!trimmed || disabled || submitting) return;
-    const trimmedCustomTag = customTag.trim();
+    const custom = customTag.trim();
+    const mergedTags = uniqueTags([...(signal ? [signal] : []), ...tags, ...(custom ? [custom] : [])]);
     setSubmitting(true);
     try {
       // 写入成功后才清空草稿；失败保留原文并 inline 报错（TK-01）。
-      await onSubmit({ content: trimmed, mode: "open", tags: tag ? [tag] : trimmedCustomTag ? [trimmedCustomTag] : [] });
+      await onSubmit({ content: trimmed, mode: "open", tags: mergedTags });
       setContent("");
-      setTag(null);
+      setSignal(null);
+      setTags([]);
       setCustomTag("");
       setError(null);
     } catch (submitError) {
@@ -62,9 +66,12 @@ export function StepComposer({
     }
   }
 
-  function toggle(next: string): void {
-    setTag((current) => (current === next ? null : next));
-    setCustomTag("");
+  function toggleSignal(next: string): void {
+    setSignal((current) => (current === next ? null : next));
+  }
+
+  function toggleTag(next: string): void {
+    setTags((current) => (current.includes(next) ? current.filter((item) => item !== next) : [...current, next]));
   }
 
   const formClass =
@@ -95,10 +102,10 @@ export function StepComposer({
               <button
                 key={preset}
                 type="button"
-                aria-pressed={tag === preset}
-                onClick={() => toggle(preset)}
+                aria-pressed={signal === preset}
+                onClick={() => toggleSignal(preset)}
                 className={`rounded-pill px-2.5 py-0.5 td-text-caption transition ${
-                  tag === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
+                  signal === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
                 }`}
               >
                 #{preset}
@@ -111,10 +118,10 @@ export function StepComposer({
           <button
             key={preset}
             type="button"
-            aria-pressed={tag === preset}
-            onClick={() => toggle(preset)}
+            aria-pressed={tags.includes(preset)}
+            onClick={() => toggleTag(preset)}
             className={`rounded-pill px-2.5 py-0.5 td-text-caption transition ${
-              tag === preset ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
+              tags.includes(preset) ? "bg-accent-soft text-accent" : "bg-surface-hover text-ink-2 hover:text-ink"
             }`}
           >
             #{preset}
@@ -122,10 +129,7 @@ export function StepComposer({
         ))}
         <input
           value={customTag}
-          onChange={(event) => {
-            setCustomTag(event.target.value);
-            if (event.target.value.trim()) setTag(null);
-          }}
+          onChange={(event) => setCustomTag(event.target.value)}
           placeholder="自定义标签"
           aria-label="自定义步骤标签"
           disabled={disabled}
