@@ -118,7 +118,7 @@ function ServerStatusCard() {
             <h3 className="text-sm font-medium text-ink">同步信息</h3>
             <button
               type="button"
-              onClick={sync}
+              onClick={() => sync()}
               disabled={syncing}
               className="shrink-0 rounded-ctl bg-accent px-3 py-1.5 text-xs font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
             >

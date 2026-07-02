@@ -124,6 +124,46 @@ describe("useSync", () => {
     });
   });
 
+  it("sync(meta) 透传 waitMs/reason/connection 到落账记录", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.mocked(regularSync).mockResolvedValueOnce({
+      checked: true,
+      identical: true,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(Probe));
+    });
+
+    await act(async () => {
+      await captured.value?.sync({ reason: "bump", waitMs: 250, connection: "connected" });
+    });
+
+    const timings = getSyncTimings();
+    expect(timings).toHaveLength(1);
+    expect(timings[0].reason).toBe("bump");
+    expect(timings[0].waitMs).toBe(250);
+    expect(timings[0].connection).toBe("connected");
+    expect(timings[0].unsyncedAtStart).toBe(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("regularSync 抛错时也落一条 outcome=error 的计时记录", async () => {
     const { regularSync } = await import("../sync/engine.ts");
     vi.mocked(regularSync).mockRejectedValueOnce(new Error("网络请求失败：boom"));

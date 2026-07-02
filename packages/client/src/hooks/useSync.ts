@@ -14,7 +14,9 @@ import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import type { SyncStreamState } from "../lib/syncStream.js";
 import { createPhaseRecorder, recordSyncTiming, type SyncTimingOutcome } from "../sync/phaseTimings.ts";
+import type { SyncExecutorMeta } from "../sync/scheduler.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 
@@ -50,10 +52,11 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setLastSynced(safeGetItem(STORAGE_KEYS.lastSyncDisplayAt));
   }, []);
 
-  const sync = useCallback(async (): Promise<boolean> => {
+  const sync = useCallback(async (meta?: SyncExecutorMeta & { connection?: SyncStreamState }): Promise<boolean> => {
     setSyncing(true);
     setError(null);
     setConflicts([]);
+    const unsyncedAtStart = await db.syncLog.where("synced").equals(0).count();
     const recorder = createPhaseRecorder();
     const startedAt = new Date().toISOString();
     const t0 = performance.now();
@@ -78,6 +81,10 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
         totalMs: Math.round(performance.now() - t0),
         phases: recorder.phases,
         visibility: typeof document !== "undefined" ? document.visibilityState : undefined,
+        unsyncedAtStart,
+        waitMs: meta?.waitMs,
+        reason: meta?.reason,
+        connection: meta?.connection,
       });
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);

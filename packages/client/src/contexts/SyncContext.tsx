@@ -7,10 +7,7 @@ import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { createSyncStream, type SyncStreamMessage, type SyncStreamState } from "../lib/syncStream.js";
 import { getLastSyncedSeq } from "../sync/engine.ts";
-
-export const SYNC_STALE_THROTTLE_MS = 30_000;
-export const SYNC_WRITE_DEBOUNCE_MS = 1500;
-export const SYNC_BUMP_DEBOUNCE_MS = 200;
+import { syncScheduler, type SyncExecutorMeta } from "../sync/scheduler.ts";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "disabled" | "pending";
 
@@ -20,13 +17,6 @@ interface DeriveSyncStatusInput {
   error: string | null;
   unsyncedCount: number;
   lastSynced: string | null;
-}
-
-interface ShouldRunThrottledSyncInput {
-  cloudSyncEnabled: boolean;
-  syncing: boolean;
-  now: number;
-  lastAttemptAt: number | null;
 }
 
 export function deriveSyncStatus({
@@ -44,17 +34,6 @@ export function deriveSyncStatus({
   return "idle";
 }
 
-export function shouldRunThrottledSync({
-  cloudSyncEnabled,
-  syncing,
-  now,
-  lastAttemptAt,
-}: ShouldRunThrottledSyncInput): boolean {
-  if (!cloudSyncEnabled || syncing) return false;
-  if (lastAttemptAt === null) return true;
-  return now - lastAttemptAt >= SYNC_STALE_THROTTLE_MS;
-}
-
 export function shouldPullForBump(remoteSeq: number | null, localSeq: number | null): boolean {
   if (remoteSeq == null) return false;
   if (localSeq == null) return true;
@@ -69,7 +48,9 @@ export interface SyncContextValue extends SyncActions {
   updateApiUrl: (url: string) => void;
   cloudSyncEnabled: boolean;
   setCloudSyncEnabledInContext: (enabled: boolean) => void;
+  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
   syncIfStale: () => Promise<void>;
+  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
   syncAfterWrite: () => void;
   connection: SyncStreamState;
 }
@@ -82,21 +63,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [cloudSyncEnabled, setCloudSyncEnabledState] = useState(getCloudSyncEnabled);
   const [connection, setConnection] = useState<SyncStreamState>("disconnected");
   const liveUnsyncedCount = useLiveQuery(() => db.syncLog.where("synced").equals(0).count(), [], 0);
-  const lastAutoAttemptAtRef = useRef<number | null>(null);
-  const delayedSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const writeSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const bumpSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const failedRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncingRef = useRef(syncState.syncing);
   const syncRef = useRef(syncState.sync);
-  const cloudSyncEnabledRef = useRef(cloudSyncEnabled);
-  const needsConnectionRetryRef = useRef(false);
+  const connectionRef = useRef(connection);
+  const lastRunFailedRef = useRef(false);
 
   useEffect(() => {
-    syncingRef.current = syncState.syncing;
     syncRef.current = syncState.sync;
-    cloudSyncEnabledRef.current = cloudSyncEnabled;
-  }, [cloudSyncEnabled, syncState.sync, syncState.syncing]);
+  }, [syncState.sync]);
+
+  useEffect(() => {
+    connectionRef.current = connection;
+  }, [connection]);
 
   const status = deriveSyncStatus({
     cloudSyncEnabled,
@@ -117,64 +94,21 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setCloudSyncEnabledState(enabled);
   }, []);
 
-  const runSyncIfUnsynced = useCallback(async () => {
-    const count = await db.syncLog.where("synced").equals(0).count();
-    if (count === 0 || syncingRef.current || !cloudSyncEnabledRef.current) return;
+  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
+  const syncIfStale = useCallback(async () => {}, []);
 
-    lastAutoAttemptAtRef.current = Date.now();
-    await syncRef.current();
-  }, []);
+  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
+  const syncAfterWrite = useCallback(() => {}, []);
 
-  const runStaleSyncAttempt = useCallback(async (attemptedAt: number) => {
-    if (syncingRef.current || !cloudSyncEnabledRef.current) return;
-
-    lastAutoAttemptAtRef.current = attemptedAt;
-    const ok = await syncRef.current();
-    needsConnectionRetryRef.current = !ok;
-    return ok;
-  }, []);
-
-  const runStaleSync = useCallback(async ({ retryOnFailure, attemptedAt }: {
-    retryOnFailure: boolean;
-    attemptedAt: number;
-  }) => {
-    const ok = await runStaleSyncAttempt(attemptedAt);
-    if (ok !== false || !retryOnFailure || failedRetryTimerRef.current) return;
-
-    lastAutoAttemptAtRef.current = null;
-    failedRetryTimerRef.current = setTimeout(() => {
-      failedRetryTimerRef.current = null;
-      if (syncingRef.current || !cloudSyncEnabledRef.current) return;
-      void runStaleSyncAttempt(Date.now());
-    }, 0);
-  }, [runStaleSyncAttempt]);
-
-  const syncIfStale = useCallback(async (now = Date.now()) => {
-    const lastAttemptAt = lastAutoAttemptAtRef.current;
-    if (shouldRunThrottledSync({ cloudSyncEnabled, syncing: syncingRef.current, now, lastAttemptAt })) {
-      await runStaleSync({ retryOnFailure: true, attemptedAt: now });
-      return;
-    }
-
-    if (!cloudSyncEnabled || syncingRef.current || lastAttemptAt === null || delayedSyncTimerRef.current) return;
-
-    const delayMs = Math.max(SYNC_STALE_THROTTLE_MS - (now - lastAttemptAt), 0);
-    delayedSyncTimerRef.current = setTimeout(() => {
-      delayedSyncTimerRef.current = null;
-      void runSyncIfUnsynced();
-    }, delayMs);
-  }, [cloudSyncEnabled, runStaleSync, runSyncIfUnsynced]);
-
-  const syncAfterWrite = useCallback(() => {
-    if (!cloudSyncEnabled || syncState.syncing) return;
-    if (writeSyncTimerRef.current) {
-      clearTimeout(writeSyncTimerRef.current);
-    }
-    writeSyncTimerRef.current = setTimeout(() => {
-      writeSyncTimerRef.current = null;
-      void runSyncIfUnsynced();
-    }, SYNC_WRITE_DEBOUNCE_MS);
-  }, [cloudSyncEnabled, runSyncIfUnsynced, syncState.syncing]);
+  useEffect(() => {
+    if (!cloudSyncEnabled || !apiUrl) return;
+    syncScheduler.setExecutor(async (meta: SyncExecutorMeta) => {
+      const ok = await syncRef.current({ ...meta, connection: connectionRef.current });
+      lastRunFailedRef.current = !ok;
+      return ok;
+    });
+    return () => syncScheduler.setExecutor(null);
+  }, [cloudSyncEnabled, apiUrl]);
 
   const handleSyncStreamMessage = useCallback((message: SyncStreamMessage) => {
     if (message.event !== "hello" && message.event !== "bump") return;
@@ -188,22 +122,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
 
     if (!shouldPullForBump(latestSeq, getLastSyncedSeq())) return;
-    if (bumpSyncTimerRef.current) {
-      clearTimeout(bumpSyncTimerRef.current);
-    }
-    bumpSyncTimerRef.current = setTimeout(() => {
-      bumpSyncTimerRef.current = null;
-      if (syncingRef.current || !cloudSyncEnabledRef.current) return;
-      lastAutoAttemptAtRef.current = Date.now();
-      void syncRef.current();
-    }, SYNC_BUMP_DEBOUNCE_MS);
+    syncScheduler.requestSync("bump");
   }, []);
 
   const handleSyncStreamStateChange = useCallback((state: SyncStreamState) => {
     setConnection(state);
-    if (state !== "connected" || !needsConnectionRetryRef.current || failedRetryTimerRef.current) return;
-    void runStaleSyncAttempt(Date.now());
-  }, [runStaleSyncAttempt]);
+    if (state === "connected" && lastRunFailedRef.current) {
+      syncScheduler.requestSync("reconnect");
+    }
+  }, []);
 
   useEffect(() => {
     if (!cloudSyncEnabled || !apiUrl) {
@@ -232,23 +159,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       stream.stop();
     };
   }, [apiUrl, cloudSyncEnabled, handleSyncStreamMessage, handleSyncStreamStateChange]);
-
-  useEffect(() => {
-    return () => {
-      if (delayedSyncTimerRef.current) {
-        clearTimeout(delayedSyncTimerRef.current);
-      }
-      if (writeSyncTimerRef.current) {
-        clearTimeout(writeSyncTimerRef.current);
-      }
-      if (bumpSyncTimerRef.current) {
-        clearTimeout(bumpSyncTimerRef.current);
-      }
-      if (failedRetryTimerRef.current) {
-        clearTimeout(failedRetryTimerRef.current);
-      }
-    };
-  }, []);
 
   const value = useMemo<SyncContextValue>(
     () => ({

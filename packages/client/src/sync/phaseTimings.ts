@@ -32,6 +32,9 @@ export interface SyncTimingEntry {
   phases: Partial<Record<SyncPhaseName, number>>;
   unsyncedAtStart?: number;
   visibility?: string; // document.visibilityState
+  waitMs?: number; // scheduler 侧等待耗时（executor 触发前的排队时长）
+  reason?: string; // SyncRequestReason，来自 scheduler
+  connection?: string; // SyncStreamState，触发时的 SSE 连接状态
 }
 
 export interface TimingsKV {
@@ -57,7 +60,13 @@ function isValidTimingEntry(value: unknown): value is SyncTimingEntry {
   if (typeof entry.at !== "string" || typeof entry.outcome !== "string") return false;
   if (typeof entry.totalMs !== "number" || !Number.isFinite(entry.totalMs)) return false;
   if (typeof entry.phases !== "object" || entry.phases === null) return false;
-  return Object.values(entry.phases).every((ms) => typeof ms === "number" && Number.isFinite(ms));
+  if (!Object.values(entry.phases).every((ms) => typeof ms === "number" && Number.isFinite(ms))) return false;
+  if (entry.waitMs !== undefined && (typeof entry.waitMs !== "number" || !Number.isFinite(entry.waitMs))) {
+    return false;
+  }
+  if (entry.reason !== undefined && typeof entry.reason !== "string") return false;
+  if (entry.connection !== undefined && typeof entry.connection !== "string") return false;
+  return true;
 }
 
 export function getSyncTimings(kv: TimingsKV = defaultKV): SyncTimingEntry[] {

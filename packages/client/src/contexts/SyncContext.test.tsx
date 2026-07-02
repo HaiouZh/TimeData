@@ -3,15 +3,11 @@ import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderDom, unmount } from "../test/domHarness.js";
+import { syncScheduler } from "../sync/scheduler.ts";
 import {
   deriveSyncStatus,
-  SYNC_BUMP_DEBOUNCE_MS,
-  SYNC_STALE_THROTTLE_MS,
-  SYNC_WRITE_DEBOUNCE_MS,
   SyncProvider,
   shouldPullForBump,
-  shouldRunThrottledSync,
   useSyncContext,
 } from "./SyncContext.js";
 import type { SyncStreamMessage } from "../lib/syncStream.js";
@@ -141,6 +137,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  syncScheduler.dispose();
 });
 
 describe("deriveSyncStatus", () => {
@@ -205,37 +202,6 @@ describe("deriveSyncStatus", () => {
         lastSynced: "2026-05-11T00:00:00.000Z",
       }),
     ).toBe("syncing");
-  });
-});
-
-describe("shouldRunThrottledSync", () => {
-  it("blocks disabled and in-flight sync", () => {
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: false, syncing: false, now: 1000, lastAttemptAt: 0 })).toBe(
-      false,
-    );
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: true, now: 1000, lastAttemptAt: 0 })).toBe(false);
-  });
-
-  it("allows the first enabled sync and throttles the next attempt", () => {
-    expect(shouldRunThrottledSync({ cloudSyncEnabled: true, syncing: false, now: 1000, lastAttemptAt: null })).toBe(
-      true,
-    );
-    expect(
-      shouldRunThrottledSync({
-        cloudSyncEnabled: true,
-        syncing: false,
-        now: 1000 + SYNC_STALE_THROTTLE_MS - 1,
-        lastAttemptAt: 1000,
-      }),
-    ).toBe(false);
-    expect(
-      shouldRunThrottledSync({
-        cloudSyncEnabled: true,
-        syncing: false,
-        now: 1000 + SYNC_STALE_THROTTLE_MS,
-        lastAttemptAt: 1000,
-      }),
-    ).toBe(true);
   });
 });
 
@@ -360,195 +326,161 @@ describe("SyncProvider", () => {
     });
   });
 
-  it("flushes a throttled auto sync once at the end of the throttle window when changes remain", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1000);
-    localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    syncDbMock.state.persistedUnsyncedCount = 1;
-    let syncIfStale: () => Promise<void> = async () => undefined;
-
-    function Probe() {
-      syncIfStale = useSyncContext().syncIfStale;
-      return createElement("span", null, "probe");
-    }
-
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
-    await act(async () => {
-      await syncIfStale();
-    });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
-
-    vi.setSystemTime(1100);
-    await act(async () => {
-      await syncIfStale();
-      await syncIfStale();
-    });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_STALE_THROTTLE_MS - 101);
-    });
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("retries a failed stale sync immediately without waiting for local unsynced changes", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1000);
-    localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    mockSyncActions.sync.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    let syncIfStale: () => Promise<void> = async () => undefined;
-
-    function Probe() {
-      syncIfStale = useSyncContext().syncIfStale;
-      return createElement("span", null, "probe");
-    }
-
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
-    await act(async () => {
-      await syncIfStale();
-    });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("retries a failed stale sync when the stream connects later without remounting", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1000);
+  it("registers an executor with the scheduler when cloud sync is enabled with an apiUrl, and unregisters on unmount", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    mockSyncActions.sync.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    let syncIfStale: () => Promise<void> = async () => undefined;
 
-    function Probe() {
-      syncIfStale = useSyncContext().syncIfStale;
-      return createElement("span", null, "probe");
-    }
+    const host = document.createElement("div");
+    const root = createRoot(host);
 
-    const { root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
     await act(async () => {
-      await syncIfStale();
-      await vi.advanceTimersByTimeAsync(0);
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
     });
 
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(2);
+    expect(setExecutorSpy).toHaveBeenCalledWith(expect.any(Function));
 
-    vi.setSystemTime(5000);
+    await act(async () => {
+      root.unmount();
+    });
+
+    expect(setExecutorSpy).toHaveBeenLastCalledWith(null);
+  });
+
+  it("does not register an executor when cloud sync is disabled or apiUrl is empty", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    });
+
+    expect(setExecutorSpy).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("wraps the registered executor to forward meta merged with the current connection state", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    });
+
+    const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
+    expect(registeredExecutor).toBeTypeOf("function");
+
+    await act(async () => {
+      await registeredExecutor?.({ reason: "write", waitMs: 123 });
+    });
+
+    expect(mockSyncActions.sync).toHaveBeenCalledWith({ reason: "write", waitMs: 123, connection: "disconnected" });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("marks the last run as failed when the executor's sync resolves false", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    mockSyncActions.sync.mockResolvedValueOnce(false);
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    });
+
+    const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
+
+    let result: boolean | undefined;
+    await act(async () => {
+      result = await registeredExecutor?.({ reason: "write", waitMs: 0 });
+    });
+
+    expect(result).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("requests a reconnect sync when the stream connects after a previously failed run", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    mockSyncActions.sync.mockResolvedValueOnce(false);
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    });
+
+    const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
+    await act(async () => {
+      await registeredExecutor?.({ reason: "write", waitMs: 0 });
+    });
+
+    requestSyncSpy.mockClear();
+
     await act(async () => {
       syncStreamMock.setState("connected");
     });
 
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(3);
-
-    await unmount(root);
-  });
-
-  it("skips a throttled flush when no unsynced changes remain", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1000);
-    localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    let syncIfStale: () => Promise<void> = async () => undefined;
-
-    function Probe() {
-      syncIfStale = useSyncContext().syncIfStale;
-      return createElement("span", null, "probe");
-    }
-
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
-    await act(async () => {
-      await syncIfStale();
-    });
-
-    syncDbMock.state.persistedUnsyncedCount = 0;
-    vi.setSystemTime(1100);
-    await act(async () => {
-      await syncIfStale();
-      await vi.advanceTimersByTimeAsync(SYNC_STALE_THROTTLE_MS - 100);
-    });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
+    expect(requestSyncSpy).toHaveBeenCalledWith("reconnect");
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it("clears a delayed throttled flush on unmount", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(1000);
+  it("does not request a reconnect sync when the previous run succeeded", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    syncDbMock.state.persistedUnsyncedCount = 1;
-    let syncIfStale: () => Promise<void> = async () => undefined;
-
-    function Probe() {
-      syncIfStale = useSyncContext().syncIfStale;
-      return createElement("span", null, "probe");
-    }
 
     const host = document.createElement("div");
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
-    await act(async () => {
-      await syncIfStale();
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
     });
 
-    vi.setSystemTime(1100);
+    requestSyncSpy.mockClear();
+
     await act(async () => {
-      await syncIfStale();
+      syncStreamMock.setState("connected");
+    });
+
+    expect(requestSyncSpy).not.toHaveBeenCalledWith("reconnect");
+
+    await act(async () => {
       root.unmount();
-      await vi.advanceTimersByTimeAsync(SYNC_STALE_THROTTLE_MS);
     });
-
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
   });
 
-  it("debounces writes into one sync after the write window", async () => {
-    vi.useFakeTimers();
+  it("syncAfterWrite and syncIfStale are deprecated no-ops that do not touch the scheduler", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    syncDbMock.state.persistedUnsyncedCount = 1;
-    let syncAfterWrite: () => void = () => undefined;
+    let context: ReturnType<typeof useSyncContext> | null = null;
 
     function Probe() {
-      syncAfterWrite = useSyncContext().syncAfterWrite;
+      context = useSyncContext();
       return createElement("span", null, "probe");
     }
 
@@ -559,18 +491,15 @@ describe("SyncProvider", () => {
       root.render(createElement(SyncProvider, null, createElement(Probe)));
     });
 
+    requestSyncSpy.mockClear();
+
     await act(async () => {
-      syncAfterWrite();
-      await vi.advanceTimersByTimeAsync(SYNC_WRITE_DEBOUNCE_MS - 1);
-      syncAfterWrite();
-      await vi.advanceTimersByTimeAsync(SYNC_WRITE_DEBOUNCE_MS - 1);
+      context?.syncAfterWrite();
+      await context?.syncIfStale();
     });
+
     expect(mockSyncActions.sync).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
+    expect(requestSyncSpy).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -602,8 +531,8 @@ describe("SyncProvider", () => {
     });
   });
 
-  it("pulls once for multiple remote bumps after debounce", async () => {
-    vi.useFakeTimers();
+  it("forwards a remote bump ahead of the local seq cursor to scheduler.requestSync", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     localStorage.setItem("timedata_last_synced_seq", "1");
@@ -615,21 +544,21 @@ describe("SyncProvider", () => {
       root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
     });
 
+    requestSyncSpy.mockClear();
+
     await act(async () => {
       syncStreamMock.emit({ event: "bump", data: '{"latestSeq":2}' });
-      syncStreamMock.emit({ event: "bump", data: '{"latestSeq":3}' });
-      await vi.advanceTimersByTimeAsync(SYNC_BUMP_DEBOUNCE_MS);
     });
 
-    expect(mockSyncActions.sync).toHaveBeenCalledTimes(1);
+    expect(requestSyncSpy).toHaveBeenCalledWith("bump");
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it("ignores stream echoes at or behind the local seq cursor", async () => {
-    vi.useFakeTimers();
+  it("ignores stream echoes at or behind the local seq cursor without calling requestSync", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     localStorage.setItem("timedata_last_synced_seq", "3");
@@ -641,12 +570,13 @@ describe("SyncProvider", () => {
       root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
     });
 
+    requestSyncSpy.mockClear();
+
     await act(async () => {
       syncStreamMock.emit({ event: "bump", data: '{"latestSeq":3}' });
-      await vi.advanceTimersByTimeAsync(SYNC_BUMP_DEBOUNCE_MS);
     });
 
-    expect(mockSyncActions.sync).not.toHaveBeenCalled();
+    expect(requestSyncSpy).not.toHaveBeenCalledWith("bump");
 
     await act(async () => {
       root.unmount();
