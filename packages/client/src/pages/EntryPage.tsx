@@ -122,7 +122,7 @@ export default function EntryPage() {
     return (
       <div className="p-6 space-y-4 text-center">
         <p className="text-ink-3">没有找到这条记录。</p>
-        <button onClick={() => goBack("/")} className="px-4 py-2 rounded-lg bg-surface-hover text-sm">
+        <button onClick={() => goBack("/")} className="px-4 py-2 rounded-lg bg-surface-hover td-text-caption">
           返回
         </button>
       </div>
@@ -196,7 +196,7 @@ export default function EntryPage() {
   return (
     <div className="min-h-full bg-page">
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-page/95 px-3 py-2 backdrop-blur">
-        <button onClick={() => goBack(fallbackBackPath)} className="px-3 py-1.5 rounded-lg bg-surface-hover text-sm text-ink-2">
+        <button onClick={() => goBack(fallbackBackPath)} className="px-3 py-1.5 rounded-lg bg-surface-hover td-text-caption text-ink-2">
           返回
         </button>
         <h1 className="text-lg font-medium">{existingEntry ? "编辑记录" : "新增记录"}</h1>

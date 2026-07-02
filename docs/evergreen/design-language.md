@@ -16,6 +16,7 @@ last-reviewed: 2026-07-02
 ---
 <!-- 复核 2026-07-02（timeline 修复 A）：ActionToastBar 复用清掉 QuickNotesPage/TimelinePage 两条失效 bare-text-size allowlist；设计语言规则不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：design-language-allowlist 仅随 BackupHistoryPage 删除清理失效条目并同步一条 lineText，未新增豁免；设计语言规则不变。 -->
+<!-- 复核 2026-07-02（timeline 修复 C 收尾）：EntryPage 返回按钮迁移到 td-text-caption，删除 2 条失效 bare-text-size allowlist；设计语言规则不变。 -->
 
 # 设计语言
 
@@ -85,7 +86,7 @@ last-reviewed: 2026-07-02
 - 禁止全局浮层裸高 z-index（`z-30/40/50/60/70`、`z-[…]`）：规则 `bare-zindex`，须用 `z-[var(--z-*)]`；局部 stacking `z-10`/`z-20` 放行（测试文件豁免）。
 - 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。
 
-`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；当前 allowlist 含三类共 588 项：54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板，属业务数据非 UI chrome）；510 项 `typography-debt`（字号语义类迁移前的存量裸字号，`removeBy=typography-migration`）；24 项 `arbitrary-value-debt`（任意值收口前的存量裸尺寸/间距，`removeBy=arbitrary-cleanup`）。后两类是**受控渐进迁移**旧债——新规则即时止血、按子系统逐步清并删对应条目（如轨道页已试点全量迁移）。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` / 裸圆角 / 裸字号 / 裸任意值会直接失败。不得把本轮新代码违规加入 allowlist。
+`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；当前 allowlist 含三类共 586 项：54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板，属业务数据非 UI chrome）；508 项 `typography-debt`（字号语义类迁移前的存量裸字号，`removeBy=typography-migration`）；24 项 `arbitrary-value-debt`（任意值收口前的存量裸尺寸/间距，`removeBy=arbitrary-cleanup`）。后两类是**受控渐进迁移**旧债——新规则即时止血、按子系统逐步清并删对应条目（如轨道页已试点全量迁移）。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` / 裸圆角 / 裸字号 / 裸任意值会直接失败。不得把本轮新代码违规加入 allowlist。
 
 ## 4. 关键不变量 / 坑 / 红线
 

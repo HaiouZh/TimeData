@@ -828,22 +828,6 @@
     {
       "file": "packages/client/src/pages/EntryPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<button onClick={() => navigate(-1)} className=\"px-4 py-2 rounded-lg bg-surface-hover text-sm\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<button onClick={() => navigate(-1)} className=\"px-3 py-1.5 rounded-lg bg-surface-hover text-sm text-ink-2\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/EntryPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<h1 className=\"text-lg font-medium\">{existingEntry ? \"编辑记录\" : \"新增记录\"}</h1>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",

@@ -24,6 +24,7 @@ last-reviewed: 2026-07-02
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
 <!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
+<!-- 复核 2026-07-02（timeline 修复 C 收尾）：EntryPage 返回按钮改用 td-text-caption，仅清理设计语言旧债；时间记录语义见 §8–§9，不新增写入路径。 -->
 
 # 时间轴与记录时间规则
 
