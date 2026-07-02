@@ -39,6 +39,7 @@
   "dirty-in-clean-bucket:components/Icon.test.tsx",
   "dirty-in-clean-bucket:components/MonthCalendar.test.tsx",
   "dirty-in-clean-bucket:components/SyncIndicator.test.tsx",
+  "dirty-in-clean-bucket:components/SyncTimingsPanel.test.tsx",
   "dirty-in-clean-bucket:components/TimeRangeWheelPicker.test.ts",
   "dirty-in-clean-bucket:components/Timeline.test.tsx",
   "dirty-in-clean-bucket:components/app-shell/AppShellNav.test.tsx",

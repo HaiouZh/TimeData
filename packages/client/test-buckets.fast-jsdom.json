@@ -4,6 +4,7 @@
   "src/components/ErrorBoundary.test.tsx",
   "src/components/Icon.test.tsx",
   "src/components/MonthCalendar.test.tsx",
+  "src/components/SyncTimingsPanel.test.tsx",
   "src/components/ui/Checkbox.test.tsx",
   "src/components/ui/ConfirmSheet.test.tsx",
   "src/components/ui/SegmentedControl.test.tsx",
