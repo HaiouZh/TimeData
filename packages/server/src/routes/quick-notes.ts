@@ -3,6 +3,7 @@ import { UtcIsoStringSchema, type SyncChange } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
+import { rowToQuickNote, type QuickNoteRow } from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
 import { listQuickNotesForCli, type QuickNotesQuery } from "../lib/quick-note-service.js";
 import { notifySyncChange } from "../sync/notifier.js";
@@ -22,11 +23,13 @@ const querySchema = z
     format: z.string().optional(),
   })
   .strict();
+const RequestIdSchema = z.string().trim().min(1).max(128);
 const createSchema = z
   .object({
     text: z.string().trim().min(1).max(5000),
     sourceLabel: z.string().trim().min(1).max(64).optional(),
     occurredAt: UtcIsoStringSchema.optional(),
+    requestId: RequestIdSchema.optional(),
   })
   .strict();
 
@@ -67,9 +70,18 @@ quickNotes.post("/", async (c) => {
     return c.json(body, status);
   }
 
+  const db = getDb();
+  const id = parsed.data.requestId ?? randomUUID();
+
+  // requestId 幂等：同一投递重试命中已有记录时返回原记录，不重复落库（对齐 agent-tracks 端点）。
+  const existingRow = db.prepare("SELECT * FROM quick_notes WHERE id = ?").get(id) as QuickNoteRow | undefined;
+  if (existingRow) {
+    return c.json({ ok: true, quickNote: rowToQuickNote(existingRow), idempotent: true });
+  }
+
   const now = new Date().toISOString();
   const quickNote = {
-    id: randomUUID(),
+    id,
     text: parsed.data.text,
     occurredAt: parsed.data.occurredAt ?? now,
     createdAt: now,
@@ -84,14 +96,13 @@ quickNotes.post("/", async (c) => {
     timestamp: now,
     data: quickNote,
   };
-  const db = getDb();
 
   db.transaction(() => {
     applyChange(change);
   })();
   notifySyncChange(getLatestSeq());
 
-  return c.json({ ok: true, quickNote }, 201);
+  return c.json({ ok: true, quickNote, idempotent: false }, 201);
 });
 
 export default quickNotes;

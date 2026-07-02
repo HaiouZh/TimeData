@@ -175,6 +175,30 @@ describe("POST /api/quick-notes", () => {
     }
   });
 
+  it("dedupes repeated agent posts sharing a requestId", async () => {
+    const payload = { text: "周报已生成", requestId: "req-abc" };
+
+    const first = await app.request("/api/quick-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    expect(first.status).toBe(201);
+    const firstBody = (await first.json()) as { ok: boolean; quickNote: { id: string }; idempotent?: boolean };
+    expect(firstBody.idempotent).toBe(false);
+
+    const second = await app.request("/api/quick-notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const secondBody = (await second.json()) as { ok: boolean; quickNote: { id: string }; idempotent?: boolean };
+    expect(secondBody.idempotent).toBe(true);
+    expect(secondBody.quickNote.id).toBe(firstBody.quickNote.id);
+
+    expect(db.prepare("SELECT COUNT(*) AS n FROM quick_notes").get()).toMatchObject({ n: 1 });
+  });
+
   it("rejects caller-supplied source values", async () => {
     const res = await app.request("/api/quick-notes", {
       method: "POST",

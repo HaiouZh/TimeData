@@ -649,6 +649,22 @@ describe("QuickNotesPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("宽屏：输入法组合态回车不发送（IME 候选确认）", async () => {
+    stubScreenWidth(true);
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "组合中");
+    await act(async () => {
+      input(host).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }));
+    });
+    await flush();
+    // IME 组合态的回车用于确认候选，不应把半截文本提交成速记
+    await expect(db.quickNotes.count()).resolves.toBe(0);
+    expect(input(host).value).toBe("组合中");
+
+    await act(async () => root.unmount());
+  });
+
   it("窄屏：回车换行不发送（移动端交给 textarea 默认换行）", async () => {
     stubScreenWidth(false);
     const { host, root } = await renderPage();
@@ -932,6 +948,23 @@ describe("捕捉中心", () => {
     const entries = await db.timeEntries.toArray();
     expect(entries).toHaveLength(1);
     expect(entries[0].categoryId).toBe("cat-work-deep");
+
+    await act(async () => root.unmount());
+  });
+
+  it("打点连点只写一条记录（并发守卫）", async () => {
+    await configurePunchCategory();
+    const { host, root } = await renderPage();
+
+    const punchButton = composerButton(host, "打点（记录到现在）");
+    // 在第一次落库前连点两次：无守卫时两次都读到同一 lastEntry、各写一条重叠记录。
+    await act(async () => {
+      punchButton?.click();
+      punchButton?.click();
+    });
+    await flush();
+
+    await expect(db.timeEntries.count()).resolves.toBe(1);
 
     await act(async () => root.unmount());
   });

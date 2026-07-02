@@ -121,6 +121,7 @@ export default function QuickNotesPage() {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const composeDraftRef = useRef("");
   const saveTodoPendingRef = useRef(false);
+  const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -411,6 +412,8 @@ export default function QuickNotesPage() {
   }
 
   async function handlePunch() {
+    if (punchPendingRef.current) return;
+    punchPendingRef.current = true;
     setError(null);
     try {
       const result = await punchNow();
@@ -428,6 +431,8 @@ export default function QuickNotesPage() {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "打点失败");
+    } finally {
+      punchPendingRef.current = false;
     }
   }
 
@@ -504,7 +509,13 @@ export default function QuickNotesPage() {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey && isWideScreen) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      isWideScreen &&
+      !event.nativeEvent.isComposing &&
+      event.nativeEvent.keyCode !== 229
+    ) {
       event.preventDefault();
       void handleSubmit();
       return;
