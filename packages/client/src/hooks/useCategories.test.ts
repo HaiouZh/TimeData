@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import type { Category, TimeEntry } from "@timedata/shared";
-import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { type AutoBackupRecord, db } from "../db/index.js";
+import { db } from "../db/index.js";
 
 vi.mock("dexie-react-hooks", () => ({
   useLiveQuery: vi.fn(() => []),
@@ -19,7 +17,6 @@ import {
   persistCategoryOrder,
   renameCategory,
   updateCategoryColor,
-  useCategories,
 } from "./useCategories.js";
 
 function category(id: string, parentId: string | null, sortOrder: number): Category;
@@ -55,36 +52,10 @@ function entry(id: string, categoryId: string): TimeEntry {
   };
 }
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-type UpdateCategory = ReturnType<typeof useCategories>["updateCategory"];
-
-async function captureUpdateCategory(): Promise<UpdateCategory> {
-  let updateCategory: UpdateCategory | null = null;
-  const host = document.createElement("div");
-  const root = createRoot(host);
-
-  function Probe() {
-    updateCategory = useCategories().updateCategory;
-    return null;
-  }
-
-  await act(async () => {
-    root.render(createElement(Probe));
-  });
-  await act(async () => {
-    root.unmount();
-  });
-
-  if (!updateCategory) throw new Error("updateCategory not captured");
-  return updateCategory;
-}
-
 beforeEach(async () => {
   await db.categories.clear();
   await db.timeEntries.clear();
   await db.syncLog.clear();
-  await db.autoBackups.clear();
 });
 
 describe("addCategory", () => {
@@ -159,27 +130,6 @@ describe("persistCategoryOrder", () => {
     ]);
     await expect(db.categories.get("sleep-a")).resolves.toMatchObject({ sortOrder: 0 });
     await expect(db.syncLog.where("tableName").equals("categories").count()).resolves.toBe(3);
-  });
-
-  it("updates auto backup sortOrder for reordered categories only", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [category("sleep", null, 0), category("work", null, 1), category("play", null, 2)],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd(backup.categories);
-    await db.autoBackups.add(backup);
-
-    await persistCategoryOrder(null, ["play", "sleep", "work"]);
-
-    await expect(db.autoBackups.get("backup-1")).resolves.toMatchObject({
-      categories: [
-        { id: "sleep", sortOrder: 1 },
-        { id: "work", sortOrder: 2 },
-        { id: "play", sortOrder: 0 },
-      ],
-    });
   });
 
   it("persists child sortOrder only under the requested parent", async () => {
@@ -330,27 +280,6 @@ describe("category color mutations", () => {
     await expect(db.syncLog.count()).resolves.toBe(1);
   });
 
-  it("updates auto backup color for the same category id", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [category("work", null, 0), category("other", null, 1)],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd(backup.categories);
-    await db.autoBackups.add(backup);
-
-    await updateCategoryColor("work", "#a3b18a");
-
-    const saved = await db.categories.get("work");
-    await expect(db.autoBackups.get("backup-1")).resolves.toMatchObject({
-      categories: [
-        { id: "work", color: "#A3B18A", updatedAt: saved?.updatedAt },
-        { id: "other", color: "#4A90D9", updatedAt: "2026-05-08T00:00:00.000Z" },
-      ],
-    });
-  });
-
   it("rejects child category color updates", async () => {
     await db.categories.bulkAdd([category("work", null, 0), category("work-code", "work", 0)]);
 
@@ -391,28 +320,6 @@ describe("category color mutations", () => {
     await expect(db.categories.get("work-code")).resolves.toMatchObject({ color: "#4A90D9" });
     await expect(db.categories.get("old")).resolves.toMatchObject({ color: "#4A90D9" });
     await expect(db.syncLog.where("tableName").equals("categories").count()).resolves.toBe(2);
-  });
-
-  it("updates auto backup colors for palette changes", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [category("life", null, 0), category("work", null, 1), category("work-code", "work", 0)],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd(backup.categories);
-    await db.autoBackups.add(backup);
-
-    await applyCategoryPalette("morandi");
-
-    const colors = CATEGORY_COLOR_PALETTES.morandi.colors;
-    await expect(db.autoBackups.get("backup-1")).resolves.toMatchObject({
-      categories: [
-        { id: "life", color: colors[0] },
-        { id: "work", color: colors[1] },
-        { id: "work-code", color: "#4A90D9" },
-      ],
-    });
   });
 
   it("writes sync logs only for palette colors that changed", async () => {
@@ -475,27 +382,6 @@ describe("archiveCategory", () => {
     ]);
   });
 
-  it("updates auto backup archive state for the same category id", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [category("sleep", null, 0), category("other", null, 1)],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd(backup.categories);
-    await db.autoBackups.add(backup);
-
-    await archiveCategory("sleep");
-
-    const saved = await db.categories.get("sleep");
-    await expect(db.autoBackups.get("backup-1")).resolves.toMatchObject({
-      categories: [
-        { id: "sleep", isArchived: true, updatedAt: saved?.updatedAt },
-        { id: "other", isArchived: false, updatedAt: "2026-05-08T00:00:00.000Z" },
-      ],
-    });
-  });
-
   it("rolls back archived category when sync log creation fails", async () => {
     await db.categories.add(category("sleep", null, 0));
     vi.spyOn(db.syncLog, "add").mockRejectedValueOnce(new Error("sync log failed"));
@@ -507,32 +393,6 @@ describe("archiveCategory", () => {
       updatedAt: "2026-05-08T00:00:00.000Z",
     });
     await expect(db.syncLog.toArray()).resolves.toHaveLength(0);
-  });
-});
-
-describe("updateCategory", () => {
-  it("updates managed auto backup categories for the same id", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [
-        { ...category("sleep", null, 0), name: "睡眠" },
-        { ...category("work", null, 1), name: "工作" },
-      ],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd(backup.categories);
-    await db.autoBackups.add(backup);
-    const updateCategory = await captureUpdateCategory();
-
-    await updateCategory("sleep", { name: "休息", color: "#a3b18a", icon: "moon", sortOrder: 3 });
-
-    await expect(db.autoBackups.get("backup-1")).resolves.toMatchObject({
-      categories: [
-        { id: "sleep", name: "休息", color: "#A3B18A", icon: "moon", sortOrder: 3 },
-        { id: "work", name: "工作" },
-      ],
-    });
   });
 });
 
@@ -592,43 +452,5 @@ describe("renameCategory", () => {
 
     await expect(db.categories.get("work-read")).resolves.toMatchObject({ name: "阅读" });
     await expect(db.syncLog.where("recordId").equals("work-read").count()).resolves.toBe(1);
-  });
-
-  it("updates managed auto backup category names for the same id", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [
-        { ...category("sleep", null, 0), name: "睡眠" },
-        { ...category("work", null, 1), name: "工作" },
-      ],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd(backup.categories);
-    await db.autoBackups.add(backup);
-
-    await renameCategory("sleep", "休息");
-
-    await expect(db.autoBackups.get("backup-1")).resolves.toMatchObject({
-      categories: [
-        { id: "sleep", name: "休息" },
-        { id: "work", name: "工作" },
-      ],
-    });
-  });
-
-  it("leaves auto backups without the renamed category unchanged", async () => {
-    const backup: AutoBackupRecord = {
-      id: "backup-1",
-      createdAt: "2026-05-08T01:00:00.000Z",
-      categories: [{ ...category("work", null, 0), name: "工作" }],
-      timeEntries: [],
-    };
-    await db.categories.bulkAdd([category("sleep", null, 0), backup.categories[0]]);
-    await db.autoBackups.add(backup);
-
-    await renameCategory("sleep", "休息");
-
-    await expect(db.autoBackups.get("backup-1")).resolves.toEqual(backup);
   });
 });

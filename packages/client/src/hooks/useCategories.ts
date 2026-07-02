@@ -52,7 +52,7 @@ interface SyncLogInsert {
 export async function persistCategoryOrder(parentId: string | null, orderedIds: string[]): Promise<void> {
   const now = new Date().toISOString();
 
-  await db.transaction("rw", db.categories, db.syncLog, db.autoBackups, async () => {
+  await db.transaction("rw", db.categories, db.syncLog, async () => {
     const siblings = (
       await db.categories.filter((category) => !category.isArchived && category.parentId === parentId).toArray()
     ).sort(compareCategoryOrder);
@@ -78,7 +78,6 @@ export async function persistCategoryOrder(parentId: string | null, orderedIds: 
     if (updates.length === 0) return;
 
     await db.categories.bulkUpdate(updates);
-    await updateAutoBackupCategoryFieldsBulk(updates.map((update) => ({ id: update.key, patch: update.changes })));
     await db.syncLog.bulkAdd(
       updates.map((update) => ({
         id: uuid(),
@@ -92,49 +91,13 @@ export async function persistCategoryOrder(parentId: string | null, orderedIds: 
   });
 }
 
-type CategoryBackupPatch = Partial<Pick<Category, "name" | "color" | "icon" | "sortOrder" | "isArchived" | "updatedAt">>;
-
-interface CategoryBackupUpdate {
-  key: string;
-  changes: {
-    categories: Category[];
-  };
-}
-
-async function updateAutoBackupCategoryFields(categoryId: string, patch: CategoryBackupPatch): Promise<void> {
-  await updateAutoBackupCategoryFieldsBulk([{ id: categoryId, patch }]);
-}
-
-async function updateAutoBackupCategoryFieldsBulk(patches: Array<{ id: string; patch: CategoryBackupPatch }>): Promise<void> {
-  if (patches.length === 0) return;
-
-  const patchById = new Map(patches.map(({ id, patch }) => [id, patch]));
-  const backups = await db.autoBackups.toArray();
-  const updates = backups
-    .map((backup) => {
-      let changed = false;
-      const categories = backup.categories.map((category) => {
-        const patch = patchById.get(category.id);
-        if (!patch) return category;
-        changed = true;
-        return { ...category, ...patch };
-      });
-      return changed ? { key: backup.id, changes: { categories } } : null;
-    })
-    .filter((update): update is CategoryBackupUpdate => update !== null);
-
-  if (updates.length === 0) return;
-
-  await db.autoBackups.bulkUpdate(updates);
-}
-
 export async function renameCategory(id: string, name: string): Promise<void> {
   const trimmedName = name.trim();
   if (!trimmedName) {
     throw new Error("分类名称不能为空。");
   }
 
-  await db.transaction("rw", db.categories, db.syncLog, db.autoBackups, async () => {
+  await db.transaction("rw", db.categories, db.syncLog, async () => {
     const category = await db.categories.get(id);
     if (!category) {
       throw new Error("分类不存在。");
@@ -155,7 +118,6 @@ export async function renameCategory(id: string, name: string): Promise<void> {
 
     const now = new Date().toISOString();
     await db.categories.update(id, { name: trimmedName, updatedAt: now });
-    await updateAutoBackupCategoryFields(id, { name: trimmedName, updatedAt: now });
     await recordSyncLog("categories", id, "update");
   });
 }
@@ -232,7 +194,7 @@ export async function deleteCategory(id: string): Promise<CategoryDeleteImpact> 
 export async function updateCategoryColor(id: string, color: string): Promise<void> {
   const normalizedColor = normalizeCategoryColor(color);
 
-  await db.transaction("rw", db.categories, db.syncLog, db.autoBackups, async () => {
+  await db.transaction("rw", db.categories, db.syncLog, async () => {
     const category = await db.categories.get(id);
     if (!category) {
       throw new Error("分类不存在。");
@@ -244,7 +206,6 @@ export async function updateCategoryColor(id: string, color: string): Promise<vo
 
     const now = new Date().toISOString();
     await db.categories.update(id, { color: normalizedColor, updatedAt: now });
-    await updateAutoBackupCategoryFields(id, { color: normalizedColor, updatedAt: now });
     await recordSyncLog("categories", id, "update");
   });
 }
@@ -252,7 +213,7 @@ export async function updateCategoryColor(id: string, color: string): Promise<vo
 export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): Promise<void> {
   const now = new Date().toISOString();
 
-  await db.transaction("rw", db.categories, db.syncLog, db.autoBackups, async () => {
+  await db.transaction("rw", db.categories, db.syncLog, async () => {
     const parents = (
       await db.categories.filter((category) => !category.isArchived && category.parentId === null).toArray()
     ).sort(compareCategoryOrder);
@@ -268,7 +229,6 @@ export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): P
     if (updates.length === 0) return;
 
     await db.categories.bulkUpdate(updates);
-    await updateAutoBackupCategoryFieldsBulk(updates.map((update) => ({ id: update.key, patch: update.changes })));
     await db.syncLog.bulkAdd(
       updates.map((update) => ({
         id: uuid(),
@@ -284,9 +244,8 @@ export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): P
 
 export async function archiveCategory(id: string): Promise<void> {
   const now = new Date().toISOString();
-  await db.transaction("rw", db.categories, db.syncLog, db.autoBackups, async () => {
+  await db.transaction("rw", db.categories, db.syncLog, async () => {
     await db.categories.update(id, { isArchived: true, updatedAt: now });
-    await updateAutoBackupCategoryFields(id, { isArchived: true, updatedAt: now });
     await recordSyncLog("categories", id, "update");
   });
 }
@@ -370,10 +329,9 @@ export function useCategories() {
     updates: Partial<Pick<Category, "name" | "color" | "icon" | "sortOrder">>,
   ): Promise<void> {
     const now = new Date().toISOString();
-    await db.transaction("rw", db.categories, db.syncLog, db.autoBackups, async () => {
+    await db.transaction("rw", db.categories, db.syncLog, async () => {
       const normalizedUpdates = "color" in updates && typeof updates.color === "string" ? { ...updates, color: normalizeCategoryColor(updates.color) } : updates;
       await db.categories.update(id, { ...normalizedUpdates, updatedAt: now });
-      await updateAutoBackupCategoryFields(id, { ...normalizedUpdates, updatedAt: now });
       await recordSyncLog("categories", id, "update");
     });
   }
