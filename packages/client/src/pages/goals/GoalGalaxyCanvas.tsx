@@ -32,6 +32,7 @@ import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge }
 import type { GoalGraphEdge, GoalGraphNode } from "../../lib/goalGraphModel.js";
 import { goalPinFromCanvas, memberPinFromCanvas } from "../../lib/goalLayoutCoords.js";
 import { upsertGoalLayoutPin } from "../../lib/goalLayoutPins.js";
+import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import {
   addGoalMember,
   addTaskForGoal,
@@ -453,6 +454,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [opacityTarget, setOpacityTarget] = useState<OpacityTarget>("tether");
   const [prereqOpacity, setPrereqOpacity] = useState(DEFAULT_PREREQUISITE_OPACITY);
   const [engineMode, setEngineMode] = useGalaxyEngineMode();
+  const destination = useTodoDefaultDestination();
   const [liveSettle, setLiveSettle] = useState(true);
   const settleEnabled = engineMode === "settle";
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
@@ -1002,7 +1004,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
   async function quickCreateTask(title: string): Promise<void> {
     if (!addMemberGoalId) return;
-    await addTaskForGoal(addMemberGoalId, { title, toInbox: false });
+    await addTaskForGoal(addMemberGoalId, { title, toInbox: destination === "inbox" });
   }
 
   async function saveGoalMenu(patch: GoalEditPatch): Promise<void> {

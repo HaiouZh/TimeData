@@ -17,6 +17,7 @@ const updateGoalMock = vi.hoisted(() => vi.fn());
 const deleteGoalMock = vi.hoisted(() => vi.fn());
 const settleReheatMock = vi.hoisted(() => vi.fn());
 const settleSetDragPinMock = vi.hoisted(() => vi.fn());
+const todoDefaultDestinationMock = vi.hoisted(() => vi.fn(() => "today"));
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../lib/goalLayoutPins.js", () => ({
@@ -36,6 +37,9 @@ vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
   useTrackActionTags: () => ["待我处理", "agent在做"],
 }));
 vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: () => true }));
+vi.mock("../../lib/settings/todoDefaultDestinationSetting.js", () => ({
+  useTodoDefaultDestination: todoDefaultDestinationMock,
+}));
 vi.mock("./useGalaxySettleEngine.js", () => ({
   useGalaxySettleEngine: () => ({ reheat: settleReheatMock, setDragPin: settleSetDragPinMock }),
 }));
@@ -163,6 +167,7 @@ describe("GoalGalaxyCanvas", () => {
     deleteGoalMock.mockReset().mockResolvedValue(undefined);
     settleReheatMock.mockClear();
     settleSetDragPinMock.mockClear();
+    todoDefaultDestinationMock.mockReset().mockReturnValue("today");
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -1065,6 +1070,31 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(addTaskForGoalMock).toHaveBeenCalledWith("g1", { title: "新任务", toInbox: false });
+    await unmount(root);
+  });
+
+  it("quick-create 尊重默认去向设置（inbox → toInbox:true）", async () => {
+    todoDefaultDestinationMock.mockReturnValue("inbox");
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ members: [] })]}
+        tasks={[]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "添加成员 G1"));
+    const input = document.body.querySelector('input[aria-label="新建任务并加入"]');
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing quick create input");
+    await setInputValue(input, "  待办  ");
+    await click(buttonByText(document.body, "加入"));
+    await flushPromises();
+
+    expect(addTaskForGoalMock).toHaveBeenCalledWith("g1", { title: "待办", toInbox: true });
     await unmount(root);
   });
 
