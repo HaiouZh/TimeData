@@ -16,6 +16,7 @@ import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { fetchServerHealth } from "../lib/serverHealth.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import { createPhaseRecorder, recordSyncTiming, type SyncTimingOutcome } from "../sync/phaseTimings.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 
@@ -55,15 +56,21 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setSyncing(true);
     setError(null);
     setConflicts([]);
+    const recorder = createPhaseRecorder();
+    const startedAt = new Date().toISOString();
+    const t0 = performance.now();
+    let outcome: SyncTimingOutcome = "error";
     try {
-      if (!(await fetchServerHealth())) {
+      const healthy = await recorder.time("health", () => fetchServerHealth());
+      if (!healthy) {
         throw new Error("无法连接服务器");
       }
-      const result = await regularSync({ beforeMutating: createAutoBackup });
+      const result = await regularSync({ beforeMutating: createAutoBackup, phases: recorder });
       setLastResult(result);
       if (result.conflicts.length > 0) {
         setConflicts(result.conflicts);
       }
+      outcome = result.identical ? "identical" : result.pushed > 0 ? "pushed" : "pull_only";
       safeSetItem(STORAGE_KEYS.lastSyncDisplayAt, new Date().toISOString());
       await refreshSyncStatus();
       return true;
@@ -71,6 +78,13 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       setError(e instanceof Error ? e.message : "同步失败");
       return false;
     } finally {
+      recordSyncTiming({
+        at: startedAt,
+        outcome,
+        totalMs: Math.round(performance.now() - t0),
+        phases: recorder.phases,
+        visibility: typeof document !== "undefined" ? document.visibilityState : undefined,
+      });
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);
     }

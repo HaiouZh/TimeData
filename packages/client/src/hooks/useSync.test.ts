@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { shouldAutoSyncOnMount, shouldShowSyncDiagnosticsHint, useSync } from "./useSync.js";
+import { getSyncTimings } from "../sync/phaseTimings.ts";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -115,6 +116,75 @@ describe("useSync", () => {
 
     expect(captured.value?.error).toBeTruthy();
     expect(vi.mocked(regularSync)).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("sync 成功后落一条分段计时记录，含 health 阶段耗时", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.mocked(regularSync).mockResolvedValueOnce({
+      checked: true,
+      identical: true,
+      backupCreated: false,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(Probe));
+    });
+
+    await act(async () => {
+      await captured.value?.sync();
+    });
+
+    const timings = getSyncTimings();
+    expect(timings).toHaveLength(1);
+    expect(timings[0].outcome).not.toBe("error");
+    expect(timings[0].phases.health).toBeTypeOf("number");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("regularSync 抛错时也落一条 outcome=error 的计时记录", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.mocked(regularSync).mockRejectedValueOnce(new Error("网络请求失败：boom"));
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(createElement(Probe));
+    });
+
+    await act(async () => {
+      await captured.value?.sync();
+    });
+
+    expect(captured.value?.error).toBeTruthy();
+
+    const timings = getSyncTimings();
+    expect(timings).toHaveLength(1);
+    expect(timings[0].outcome).toBe("error");
 
     await act(async () => {
       root.unmount();
