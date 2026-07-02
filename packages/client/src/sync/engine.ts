@@ -93,6 +93,14 @@ function buildPullCursor(mode: "incremental" | "repair"): { sinceSeq: number } {
   return { sinceSeq: getLastSyncedSeq() ?? 0 };
 }
 
+// 每批最多拉多少条 change；长离线设备也不会一次性把巨量 change 灌进主线程。
+export const PULL_PAGE_LIMIT = 500;
+
+// 独立函数便于测试 spy，避免真实定时等待进入断言路径。
+export function yieldToMainThread(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 export function getLastSyncedSeq(): number | null {
   const value = safeGetItem(LAST_SYNCED_SEQ_KEY);
   if (!value) return null;
@@ -194,6 +202,29 @@ async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: numbe
   const parsed = SyncPullResponseSchema.safeParse(response);
   if (!parsed.success) throw new Error("Invalid /api/sync/pull response");
   return parsed.data;
+}
+
+// 分批拉取骨架：游标推进（红线：逐批推进，绝不中途跳到 latestSeq）只在此处，
+// 具体 apply 逻辑（repair 跳过策略 / conflict 检测）由调用方以回调注入，杜绝两份游标逻辑漂移。
+// 中途某批失败：异常向上抛，游标已停在上一批成功的 nextSinceSeq，下次从此断点续传。
+async function fetchPullBatches(
+  startSeq: number,
+  applyBatch: (response: SyncPullResponse) => Promise<void>,
+): Promise<SyncPullResponse> {
+  let cursor = startSeq;
+  let lastResponse: SyncPullResponse | undefined;
+  for (;;) {
+    const response = await fetchSyncPullResponse({ sinceSeq: cursor, limit: PULL_PAGE_LIMIT });
+    await applyBatch(response);
+    lastResponse = response;
+    if (typeof response.nextSinceSeq === "number") {
+      cursor = response.nextSinceSeq;
+      setLastSyncedSeq(cursor); // 逐批推进，绝不中途跳 latestSeq
+    }
+    if (!response.hasMore) break;
+    await yieldToMainThread();
+  }
+  return lastResponse;
 }
 
 // parseRemote* and quickNoteNeedsApply moved to clientDomains.ts
@@ -332,7 +363,7 @@ export async function syncPush(): Promise<SyncPushResult> {
 }
 
 export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
-  const response = await fetchSyncPullResponse(buildPullCursor("incremental"));
+  const startSeq = buildPullCursor("incremental").sinceSeq;
 
   const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
   const locallyModifiedById = new Map(unsyncedLogs.map((l) => [`${l.tableName}:${l.recordId}`, l]));
@@ -340,106 +371,108 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
   let applied = 0;
   const conflicts: SyncConflict[] = [];
 
-  for (const change of response.changes) {
-    const domain = CLIENT_SYNC_DOMAINS[change.tableName];
-    if (!domain) continue;
-    const sharedDomain = getSyncDomain(change.tableName);
-    const store = db.table(domain.storeName);
+  const last = await fetchPullBatches(startSeq, async (response) => {
+    for (const change of response.changes) {
+      const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+      if (!domain) continue;
+      const sharedDomain = getSyncDomain(change.tableName);
+      const store = db.table(domain.storeName);
 
-    if (change.action === "delete") {
-      if (domain.applyRemoteDelete) {
-        // Special delete handling (categories cascade):
-        // check if any related records have pending sync logs
-        const impact = await getCategoryDeleteImpact(change.recordId);
-        if (!impact) continue;
-        const pendingCategoryLog = impact.categoryIds
-          .map((id) => locallyModifiedById.get(`categories:${id}`))
-          .find((log): log is SyncLogEntry => Boolean(log));
-        const pendingEntryLog = impact.entryIds
-          .map((id) => locallyModifiedById.get(`time_entries:${id}`))
-          .find((log): log is SyncLogEntry => Boolean(log));
-        const localLog = pendingCategoryLog ?? pendingEntryLog;
-        if (localLog) {
-          conflicts.push({
-            tableName: change.tableName as SyncConflict["tableName"],
-            recordId: change.recordId,
-            local: impact.target as SyncConflict["local"],
-            remote: null,
-            remoteAction: "delete",
-            localLog,
-          });
-        } else {
-          applied += await domain.applyRemoteDelete(change.recordId);
-        }
-      } else {
-        const key = storeKeyForRecordId(domain, change.recordId);
-        const existing = await store.get(key);
-        if (!existing) continue;
-        if (sharedDomain.conflictPolicy === "manual") {
-          const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
+      if (change.action === "delete") {
+        if (domain.applyRemoteDelete) {
+          // Special delete handling (categories cascade):
+          // check if any related records have pending sync logs
+          const impact = await getCategoryDeleteImpact(change.recordId);
+          if (!impact) continue;
+          const pendingCategoryLog = impact.categoryIds
+            .map((id) => locallyModifiedById.get(`categories:${id}`))
+            .find((log): log is SyncLogEntry => Boolean(log));
+          const pendingEntryLog = impact.entryIds
+            .map((id) => locallyModifiedById.get(`time_entries:${id}`))
+            .find((log): log is SyncLogEntry => Boolean(log));
+          const localLog = pendingCategoryLog ?? pendingEntryLog;
           if (localLog) {
             conflicts.push({
               tableName: change.tableName as SyncConflict["tableName"],
               recordId: change.recordId,
-              local: existing as SyncConflict["local"],
+              local: impact.target as SyncConflict["local"],
               remote: null,
               remoteAction: "delete",
               localLog,
             });
           } else {
-            await store.delete(key);
+            applied += await domain.applyRemoteDelete(change.recordId);
+          }
+        } else {
+          const key = storeKeyForRecordId(domain, change.recordId);
+          const existing = await store.get(key);
+          if (!existing) continue;
+          if (sharedDomain.conflictPolicy === "manual") {
+            const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
+            if (localLog) {
+              conflicts.push({
+                tableName: change.tableName as SyncConflict["tableName"],
+                recordId: change.recordId,
+                local: existing as SyncConflict["local"],
+                remote: null,
+                remoteAction: "delete",
+                localLog,
+              });
+            } else {
+              await store.delete(key);
+              applied++;
+            }
+          } else {
+            // lww: skip if local has pending
+            if (!locallyModifiedById.has(`${change.tableName}:${change.recordId}`)) {
+              await store.delete(key);
+              applied++;
+            }
+          }
+        }
+      } else if (change.data) {
+        const remote = parseRemoteRecord(domain, change.data, change.recordId);
+        if (!remote) continue;
+        const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
+        const hasPending = locallyModifiedById.has(`${change.tableName}:${change.recordId}`);
+
+        if (sharedDomain.conflictPolicy === "manual") {
+          if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
+            if (hasPending) {
+              const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
+              conflicts.push({
+                tableName: change.tableName as SyncConflict["tableName"],
+                recordId: change.recordId,
+                local: existing as SyncConflict["local"],
+                remote: remote as SyncConflict["remote"],
+                remoteAction: "update",
+                localLog,
+              });
+            } else {
+              await store.put(remote);
+              applied++;
+            }
+          } else if (!existing) {
+            await store.put(remote);
             applied++;
           }
         } else {
           // lww: skip if local has pending
-          if (!locallyModifiedById.has(`${change.tableName}:${change.recordId}`)) {
-            await store.delete(key);
-            applied++;
-          }
-        }
-      }
-    } else if (change.data) {
-      const remote = parseRemoteRecord(domain, change.data, change.recordId);
-      if (!remote) continue;
-      const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
-      const hasPending = locallyModifiedById.has(`${change.tableName}:${change.recordId}`);
-
-      if (sharedDomain.conflictPolicy === "manual") {
-        if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
-          if (hasPending) {
-            const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
-            conflicts.push({
-              tableName: change.tableName as SyncConflict["tableName"],
-              recordId: change.recordId,
-              local: existing as SyncConflict["local"],
-              remote: remote as SyncConflict["remote"],
-              remoteAction: "update",
-              localLog,
-            });
-          } else {
-            await store.put(remote);
-            applied++;
-          }
-        } else if (!existing) {
-          await store.put(remote);
-          applied++;
-        }
-      } else {
-        // lww: skip if local has pending
-        if (!hasPending) {
-          const shouldApply = domain.needsApply
-            ? domain.needsApply(existing, remote)
-            : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
-          if (shouldApply) {
-            await store.put(remote);
-            applied++;
+          if (!hasPending) {
+            const shouldApply = domain.needsApply
+              ? domain.needsApply(existing, remote)
+              : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+            if (shouldApply) {
+              await store.put(remote);
+              applied++;
+            }
           }
         }
       }
     }
-  }
+  });
 
-  advanceSeqCursor(response);
+  advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
   return { applied, conflicts };
 }
 
@@ -740,47 +773,48 @@ function describeConflicts(conflicts: SyncConflict[]): string {
 
 export async function syncPull(options: { mode?: "incremental" | "repair" } = {}): Promise<number> {
   const mode = options.mode || "incremental";
-
-  const response = await fetchSyncPullResponse(buildPullCursor(mode));
+  const startSeq = buildPullCursor(mode).sinceSeq;
 
   let applied = 0;
 
-  for (const change of response.changes) {
-    const domain = CLIENT_SYNC_DOMAINS[change.tableName];
-    if (!domain) continue;
-    const store = db.table(domain.storeName);
+  const last = await fetchPullBatches(startSeq, async (response) => {
+    for (const change of response.changes) {
+      const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+      if (!domain) continue;
+      const store = db.table(domain.storeName);
 
-    if (change.action === "delete") {
-      if (domain.applyRemoteDelete) {
-        applied += await domain.applyRemoteDelete(change.recordId);
-      } else {
-        const key = storeKeyForRecordId(domain, change.recordId);
-        const existing = await store.get(key);
-        if (existing) {
-          await store.delete(key);
+      if (change.action === "delete") {
+        if (domain.applyRemoteDelete) {
+          applied += await domain.applyRemoteDelete(change.recordId);
+        } else {
+          const key = storeKeyForRecordId(domain, change.recordId);
+          const existing = await store.get(key);
+          if (existing) {
+            await store.delete(key);
+            applied++;
+          }
+        }
+      } else if (change.data) {
+        const remote = parseRemoteRecord(domain, change.data, change.recordId);
+        if (!remote) continue;
+        const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
+
+        if (mode === "repair" && existing && domain.shouldSkipOnRepair?.(existing, remote)) {
+          continue;
+        }
+
+        const shouldApply = domain.needsApply
+          ? domain.needsApply(existing, remote)
+          : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+        if (shouldApply) {
+          await store.put(remote);
           applied++;
         }
       }
-    } else if (change.data) {
-      const remote = parseRemoteRecord(domain, change.data, change.recordId);
-      if (!remote) continue;
-      const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
-
-      if (mode === "repair" && existing && domain.shouldSkipOnRepair?.(existing, remote)) {
-        continue;
-      }
-
-      const shouldApply = domain.needsApply
-        ? domain.needsApply(existing, remote)
-        : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
-      if (shouldApply) {
-        await store.put(remote);
-        applied++;
-      }
     }
-  }
+  });
 
-  advanceSeqCursor(response);
+  advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
   return applied;
 }
 

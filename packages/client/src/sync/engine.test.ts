@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -1018,7 +1018,7 @@ describe("syncPull", () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
-      body: JSON.stringify({ sinceSeq: 21 }),
+      body: JSON.stringify({ sinceSeq: 21, limit: 500 }),
     });
     expect(getLastSyncedSeq()).toBe(22);
   });
@@ -1564,7 +1564,7 @@ describe("syncPull", () => {
     });
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
-      body: JSON.stringify({ sinceSeq: 0 }),
+      body: JSON.stringify({ sinceSeq: 0, limit: 500 }),
     });
   });
 
@@ -1611,6 +1611,122 @@ describe("syncPull", () => {
   });
 });
 
+function categoryChange(recordId: string, timestamp: string) {
+  return {
+    tableName: "categories" as const,
+    recordId,
+    action: "update" as const,
+    data: {
+      id: recordId,
+      name: recordId,
+      parentId: null,
+      color: "#ff0000",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-07T08:00:00.000Z",
+      updatedAt: timestamp,
+    },
+    timestamp,
+  };
+}
+
+describe("pull 分批拉取", () => {
+  it("分批拉取：逐批推进游标，全部 apply，末批收尾到 latestSeq", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        serverTime: "2026-05-07T13:00:00.000Z",
+        latestSeq: 3,
+        nextSinceSeq: 2,
+        hasMore: true,
+        changes: [
+          categoryChange("cat-1", "2026-05-07T09:00:00.000Z"),
+          categoryChange("cat-2", "2026-05-07T09:01:00.000Z"),
+        ],
+      })
+      .mockResolvedValueOnce({
+        serverTime: "2026-05-07T13:00:01.000Z",
+        latestSeq: 3,
+        nextSinceSeq: 3,
+        hasMore: false,
+        changes: [
+          categoryChange("cat-3", "2026-05-07T09:02:00.000Z"),
+        ],
+      });
+
+    await syncPull();
+
+    await expect(db.categories.count()).resolves.toBe(3);
+    expect(getLastSyncedSeq()).toBe(3);
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/pull", {
+      method: "POST",
+      body: JSON.stringify({ sinceSeq: 0, limit: 500 }),
+    });
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", {
+      method: "POST",
+      body: JSON.stringify({ sinceSeq: 2, limit: 500 }),
+    });
+  });
+
+  it("分批中途失败：游标停在已成功批次，可从断点续传", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        serverTime: "2026-05-07T13:00:00.000Z",
+        latestSeq: 3,
+        nextSinceSeq: 2,
+        hasMore: true,
+        changes: [
+          categoryChange("cat-1", "2026-05-07T09:00:00.000Z"),
+          categoryChange("cat-2", "2026-05-07T09:01:00.000Z"),
+        ],
+      })
+      .mockRejectedValueOnce(new Error("boom"));
+
+    await expect(syncPull()).rejects.toThrow("boom");
+
+    expect(getLastSyncedSeq()).toBe(2); // 只推进到批1，不跳到 latestSeq(3)
+    await expect(db.categories.count()).resolves.toBe(2);
+  });
+
+  it("单批（hasMore=false）等价现状：一次请求拉完", async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      latestSeq: 1,
+      nextSinceSeq: 1,
+      hasMore: false,
+      changes: [
+        categoryChange("cat-1", "2026-05-07T09:00:00.000Z"),
+      ],
+    });
+
+    await syncPull();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(getLastSyncedSeq()).toBe(1);
+  });
+
+  // 批间让出的“继续拉下一批”行为已由上面的多批用例（真 timers）覆盖；
+  // 这里只针对 yieldToMainThread 纯函数验证“异步 setTimeout(0) 让出”语义——
+  // 不触碰 Dexie，故 fake timers 只冻结这一行 setTimeout，绝不会挂起 fake-indexeddb。
+  it("yieldToMainThread 经 setTimeout(0) 在下一个宏任务才 resolve（异步让出而非同步）", async () => {
+    vi.useFakeTimers();
+    try {
+      const settled = vi.fn();
+      const pending = yieldToMainThread().then(settled);
+
+      await Promise.resolve(); // flush 微任务：证明未同步 resolve
+      expect(settled).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(0); // 推进一个宏任务
+      await pending;
+      expect(settled).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("syncPullSinceSeq", () => {
   it("uses seq cursor for recent pulls when available", async () => {
     setLastSyncedSeq(31);
@@ -1620,7 +1736,7 @@ describe("syncPullSinceSeq", () => {
 
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
-      body: JSON.stringify({ sinceSeq: 31 }),
+      body: JSON.stringify({ sinceSeq: 31, limit: 500 }),
     });
     expect(getLastSyncedSeq()).toBe(33);
   });
