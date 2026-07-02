@@ -232,6 +232,25 @@ export function formatYearAwareMonthDay(dateStr: string, now: Date = new Date())
   return `${Number(month)}月${Number(day)}日`;
 }
 
+/**
+ * 相对当前时间的人性化标签，供轨道步骤/卡片显示「最后动静多久前」。
+ * <1 分钟→「刚刚」，<1 小时→「N分钟前」，<1 天→「N小时前」，<30 天→「N天前」，
+ * 更早回退到年份感知的日期标签。未来时间（时钟偏差）钳为「刚刚」，非法输入原样返回。
+ */
+export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return iso;
+  const diffMs = now.getTime() - then;
+  if (diffMs < 60_000) return "刚刚";
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) return `${minutes}分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}天前`;
+  return formatYearAwareMonthDay(getDateString(new Date(then)), now);
+}
+
 export interface DaySummary {
   /** 已记录时长（分钟），不含 future。 */
   recordedMinutes: number;

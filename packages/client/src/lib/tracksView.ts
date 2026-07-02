@@ -57,6 +57,13 @@ export function latestStepId(steps: TrackStep[]): string | null {
   return latestStep(steps)?.id ?? null;
 }
 
+// 轨道「最后活动」时刻：取最新一步，闭合步用结束、开口步用开始。用于卡片相对时间。
+export function lastActivityAt(steps: TrackStep[]): string | null {
+  const step = latestStep(steps);
+  if (!step) return null;
+  return step.endedAt ?? step.startedAt;
+}
+
 export function latestStepsForCard(steps: TrackStep[], limit = 3): TrackStep[] {
   return [...steps].sort(byTrackStepOrderDesc).slice(0, limit);
 }

@@ -1,4 +1,5 @@
 import type { TrackStep } from "@timedata/shared";
+import { formatAppDateTime, formatRelativeTime } from "../../lib/time.js";
 import { formatStepDuration, stepSourceText } from "../../lib/tracksView.js";
 import { RefChip } from "./RefChip.js";
 
@@ -19,6 +20,8 @@ export function TrackStepRow({
   const open = step.endedAt === null;
   const duration = formatStepDuration(step.startedAt, step.endedAt, now);
   const durationLabel = open ? `进行中 · 已历时${duration}` : `历时${duration}`;
+  // 步骤的「最后动静」时刻：开口步取开始，闭合步取结束。
+  const activityAt = step.endedAt ?? step.startedAt;
 
   return (
     <li
@@ -30,6 +33,9 @@ export function TrackStepRow({
           {stepSourceText(step)}
         </span>
         <span className="td-duration">{durationLabel}</span>
+        <span data-testid="step-relative-time" title={formatAppDateTime(activityAt)}>
+          {formatRelativeTime(activityAt, now)}
+        </span>
       </div>
       {step.content && <p className="mt-2 whitespace-pre-wrap break-words td-text-body text-ink">{step.content}</p>}
       {(step.tags.length > 0 || step.refs.length > 0) && (

@@ -1,7 +1,9 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { formatRelativeTime } from "../../lib/time.js";
 import {
+  lastActivityAt,
   latestStepsForCard,
   stepSourceText,
   trackProgressSummary,
@@ -34,6 +36,7 @@ export function TrackListItem({
 }: TrackListItemProps) {
   const [expanded, setExpanded] = useState(false);
   const latestSteps = track.status === "active" ? latestStepsForCard(steps) : [];
+  const activityAt = lastActivityAt(steps);
 
   return (
     <article className="rounded-card border border-border bg-surface transition hover:bg-surface-hover">
@@ -54,6 +57,11 @@ export function TrackListItem({
             </span>
             {track.summary && <span className="mt-0.5 block truncate td-text-caption text-ink-2">{track.summary}</span>}
             <span className="td-num td-text-caption mt-0.5 block truncate text-ink-3">{trackProgressSummary(steps, now)}</span>
+            {activityAt && (
+              <span data-testid="track-last-activity" className="td-text-caption mt-0.5 block truncate text-ink-3">
+                最后活动 {formatRelativeTime(activityAt, now)}
+              </span>
+            )}
           </span>
         </span>
         {latestSteps.length > 0 && (

@@ -77,4 +77,11 @@ describe("TrackStepRow", () => {
     expect(duration).not.toBeNull();
     expect(duration?.textContent).toContain("历时");
   });
+
+  it("shows a relative time stamp for the step's last activity", async () => {
+    const host = await mount({ step: step({ id: "rel", endedAt: T }), isCurrent: false, now: NOW });
+    const rel = host.querySelector('[data-testid="step-relative-time"]');
+    expect(rel?.textContent).toContain("2小时前");
+    expect(rel?.getAttribute("title")).toContain("UTC+8");
+  });
 });

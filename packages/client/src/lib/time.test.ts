@@ -7,6 +7,7 @@ import {
   formatDateTimeRange,
   formatMinutesDuration,
   formatMonthDay,
+  formatRelativeTime,
   formatTime,
   formatTimelineTimeRange,
   formatYearAwareMonthDay,
@@ -503,6 +504,38 @@ describe("formatYearAwareMonthDay", () => {
 
   it("非当年（明年）补年份前缀", () => {
     expect(formatYearAwareMonthDay("2027-01-01", new Date("2026-06-28T12:00:00.000Z"))).toBe("2027年1月1日");
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const now = new Date("2026-07-02T12:00:00.000Z");
+
+  it("不足 1 分钟显示「刚刚」", () => {
+    expect(formatRelativeTime("2026-07-02T11:59:30.000Z", now)).toBe("刚刚");
+  });
+
+  it("分钟级", () => {
+    expect(formatRelativeTime("2026-07-02T11:30:00.000Z", now)).toBe("30分钟前");
+  });
+
+  it("小时级", () => {
+    expect(formatRelativeTime("2026-07-02T09:00:00.000Z", now)).toBe("3小时前");
+  });
+
+  it("天级", () => {
+    expect(formatRelativeTime("2026-06-29T12:00:00.000Z", now)).toBe("3天前");
+  });
+
+  it("超过 30 天回退到年份感知日期标签", () => {
+    expect(formatRelativeTime("2026-05-01T12:00:00.000Z", now)).toBe("5月1日");
+  });
+
+  it("未来时间（时钟偏差）钳为「刚刚」", () => {
+    expect(formatRelativeTime("2026-07-02T12:05:00.000Z", now)).toBe("刚刚");
+  });
+
+  it("非法输入原样返回", () => {
+    expect(formatRelativeTime("not-a-date", now)).toBe("not-a-date");
   });
 });
 
