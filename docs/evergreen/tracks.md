@@ -74,7 +74,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 取值/排序/格式化在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
 `currentStepId`/`orderedTimeline`(当前步=最大 seq 的开口步置顶高亮;无开口步纯倒序、不高亮)、
 `trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 http(s) 外链可点)、
-`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`task` 等领域指针先占位不跳,agent 写入见 T2。
+`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`RefChip` 的 `routeForRef`(kind 白名单)把内部实体 ref 渲染成应用内 `Link`：`task→/todo?taskId=`、`goal→/goals/:id`、`track→/tracks/:id`；未知 kind 保持 inert span，外链仍由 `isLinkRef` 的 http(s) 协议白名单单独放行(不放 `javascript:`/`data:`)。人手侧的 refs 反查/编辑器与「升为轨道」入口仍推迟(见 §8)。
 
 ## 6. 人手共编(T5)
 
