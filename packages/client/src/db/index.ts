@@ -7,6 +7,7 @@ import { createDefaultCategories } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { safeGetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import { syncScheduler } from "../sync/scheduler.js";
 
 export const LAST_SYNCED_SEQ_KEY = STORAGE_KEYS.lastSyncedSeq;
 
@@ -309,6 +310,7 @@ export async function migrateLocalSettingsToDexie(): Promise<void> {
       synced: 0,
     });
   });
+  syncScheduler.notifyWrite();
 }
 
 export async function resetLocalDataToDefaults(): Promise<void> {

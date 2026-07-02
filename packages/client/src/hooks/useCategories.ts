@@ -11,7 +11,7 @@ import {
 } from "../lib/categoryColors.ts";
 import { compareCategoryOrder } from "../lib/categorySort.ts";
 import { collectCategoryTreeIds } from "../lib/categoryTree.ts";
-import { recordSyncLog } from "../sync/engine.ts";
+import { recordSyncLog, recordSyncLogs } from "../sync/engine.ts";
 
 interface CategorySortUpdate {
   key: string;
@@ -38,15 +38,6 @@ function requireResolvedCategoryDeleteImpact(impact: ResolvedCategoryDeleteImpac
     throw new Error("分类删除失败。");
   }
   return impact;
-}
-
-interface SyncLogInsert {
-  id: string;
-  tableName: "categories" | "time_entries";
-  recordId: string;
-  action: "delete";
-  timestamp: string;
-  synced: 0;
 }
 
 export async function persistCategoryOrder(parentId: string | null, orderedIds: string[]): Promise<void> {
@@ -78,14 +69,12 @@ export async function persistCategoryOrder(parentId: string | null, orderedIds: 
     if (updates.length === 0) return;
 
     await db.categories.bulkUpdate(updates);
-    await db.syncLog.bulkAdd(
+    await recordSyncLogs(
       updates.map((update) => ({
-        id: uuid(),
         tableName: "categories" as const,
         recordId: update.key,
         action: "update" as const,
         timestamp: now,
-        synced: 0,
       })),
     );
   });
@@ -159,30 +148,24 @@ export async function deleteCategory(id: string): Promise<CategoryDeleteImpact> 
     const resolved = pendingDeleteImpact?.id === id ? pendingDeleteImpact.impact : await resolveCategoryDeleteImpact(id);
     pendingDeleteImpact = null;
     const now = new Date().toISOString();
-    const logs: SyncLogInsert[] = [
+    const logs = [
       ...resolved.entries.map((entry) => ({
-        id: uuid(),
         tableName: "time_entries" as const,
         recordId: entry.id,
         action: "delete" as const,
         timestamp: now,
-        synced: 0 as const,
       })),
       ...resolved.categoryIds.map((categoryId) => ({
-        id: uuid(),
         tableName: "categories" as const,
         recordId: categoryId,
         action: "delete" as const,
         timestamp: now,
-        synced: 0 as const,
       })),
     ];
 
     await db.timeEntries.bulkDelete(resolved.entries.map((entry) => entry.id));
     await db.categories.bulkDelete(resolved.categoryIds);
-    if (logs.length > 0) {
-      await db.syncLog.bulkAdd(logs);
-    }
+    await recordSyncLogs(logs);
 
     impact = resolved;
   });
@@ -229,14 +212,12 @@ export async function applyCategoryPalette(paletteId: CategoryColorPaletteId): P
     if (updates.length === 0) return;
 
     await db.categories.bulkUpdate(updates);
-    await db.syncLog.bulkAdd(
+    await recordSyncLogs(
       updates.map((update) => ({
-        id: uuid(),
         tableName: "categories" as const,
         recordId: update.key,
         action: "update" as const,
         timestamp: now,
-        synced: 0,
       })),
     );
   });

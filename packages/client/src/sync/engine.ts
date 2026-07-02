@@ -5,6 +5,7 @@ import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js"
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
 import type { PhaseRecorder } from "./phaseTimings.ts";
+import { syncScheduler } from "./scheduler.js";
 import {
   getSyncDomain,
   SyncPullResponseSchema,
@@ -768,6 +769,30 @@ export async function recordSyncLog(
     timestamp,
     synced: 0,
   });
+  syncScheduler.notifyWrite();
+}
+
+export async function recordSyncLogs(
+  entries: Array<{
+    tableName: SyncLogEntry["tableName"];
+    recordId: string;
+    action: "create" | "update" | "delete";
+    timestamp?: string;
+  }>,
+): Promise<void> {
+  if (entries.length === 0) return;
+  const fallbackTimestamp = new Date().toISOString();
+  await db.syncLog.bulkAdd(
+    entries.map((entry) => ({
+      id: uuid(),
+      tableName: entry.tableName,
+      recordId: entry.recordId,
+      action: entry.action,
+      timestamp: entry.timestamp ?? fallbackTimestamp,
+      synced: 0,
+    })),
+  );
+  syncScheduler.notifyWrite();
 }
 
 // 已同步日志仅剩审计残值，保留 7 天便于排障后即清，防止 IndexedDB 无界膨胀。

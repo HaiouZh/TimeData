@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GoalLayoutPin, QuickNote, SyncLogEntry, Task } from "@timedata/shared";
 import { db } from "../db/index.js";
 
@@ -20,8 +20,9 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
+import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
+import { syncScheduler } from "./scheduler.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -80,6 +81,54 @@ describe("recordSyncLog", () => {
     await expect(db.syncLog.toArray()).resolves.toMatchObject([
       { tableName: "time_entries", recordId: "entry-1", action: "create", synced: 0 },
     ]);
+  });
+});
+
+describe("写入触发下沉", () => {
+  afterEach(() => {
+    syncScheduler.dispose();
+  });
+
+  it("recordSyncLog 写入后调用 syncScheduler.notifyWrite", async () => {
+    const notifySpy = vi.spyOn(syncScheduler, "notifyWrite");
+
+    await recordSyncLog("tasks", "id-1", "create");
+
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    await expect(db.syncLog.toArray()).resolves.toMatchObject([
+      { tableName: "tasks", recordId: "id-1", action: "create", synced: 0 },
+    ]);
+
+    notifySpy.mockRestore();
+  });
+
+  it("recordSyncLogs 批量写入 N 条并只 notify 一次", async () => {
+    const notifySpy = vi.spyOn(syncScheduler, "notifyWrite");
+
+    await recordSyncLogs([
+      { tableName: "tasks", recordId: "id-1", action: "create" },
+      { tableName: "tasks", recordId: "id-2", action: "update" },
+      { tableName: "tasks", recordId: "id-3", action: "delete" },
+    ]);
+
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    await expect(db.syncLog.count()).resolves.toBe(3);
+    const logs = await db.syncLog.toArray();
+    expect(new Set(logs.map((entry) => entry.id)).size).toBe(3);
+    expect(logs.every((entry) => entry.synced === 0)).toBe(true);
+
+    notifySpy.mockRestore();
+  });
+
+  it("recordSyncLogs 空数组不写不 notify", async () => {
+    const notifySpy = vi.spyOn(syncScheduler, "notifyWrite");
+
+    await recordSyncLogs([]);
+
+    expect(notifySpy).not.toHaveBeenCalled();
+    await expect(db.syncLog.count()).resolves.toBe(0);
+
+    notifySpy.mockRestore();
   });
 });
 
