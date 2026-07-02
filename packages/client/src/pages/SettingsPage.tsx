@@ -23,6 +23,7 @@ import {
   Tag,
 } from "@phosphor-icons/react";
 import { Icon } from "../components/Icon.js";
+import SyncTimingsPanel from "../components/SyncTimingsPanel.js";
 import { SettingsRow, SettingsSection } from "./settings/components/SettingsRows.js";
 
 type ServerConnectionColor = "green" | "gray" | "red" | "yellow";
@@ -142,6 +143,7 @@ function ServerStatusCard() {
               <p className="text-warn">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>
             )}
             {error && <p className="text-danger">{error}</p>}
+            <SyncTimingsPanel />
           </div>
         </div>
       )}
