@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/tracks.js";
@@ -10,6 +10,11 @@ import TracksListPage from "./TracksListPage.js";
 
 const now = new Date("2026-06-21T03:00:00.000Z");
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
+
+function DetailProbe() {
+  const { id } = useParams<{ id: string }>();
+  return createElement("div", null, `DETAIL:${id}`);
+}
 
 beforeEach(async () => {
   localStorage.clear();
@@ -164,6 +169,38 @@ describe("TracksListPage", () => {
     });
     await flush();
     expect((await listTracks()).some((t) => t.title === "崭新轨道")).toBe(true);
+  });
+
+  it("navigates into the new track detail after creating (TK-15)", async () => {
+    mounted = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/tracks"] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, { path: "/tracks", element: createElement(TracksListPage) }),
+          createElement(Route, { path: "/tracks/:id", element: createElement(DetailProbe) }),
+        ),
+      ),
+    );
+    const host = mounted.host;
+    await flush();
+    const input = host.querySelector('input[aria-label="新建轨道标题"]') as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setValue?.call(input, "落点轨道");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      (host.querySelector("form") as HTMLFormElement).dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    await flush();
+    const track = (await listTracks()).find((t) => t.title === "落点轨道");
+    expect(track).toBeDefined();
+    await waitForText(host, `DETAIL:${track?.id}`);
   });
 
   it("shows an empty hint when there are no active tracks", async () => {

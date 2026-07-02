@@ -1,5 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, appendUserStep, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import {
@@ -19,6 +20,7 @@ export default function TracksListPage() {
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const allSteps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const actionTags = useTrackActionTags();
+  const navigate = useNavigate();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { active, archived } = partitionTracks(tracks);
@@ -39,7 +41,10 @@ export default function TracksListPage() {
   }, [facets]);
 
   async function create(title: string): Promise<void> {
-    await addTrack({ title });
+    // 建完直接进详情写第一步；清掉筛选,避免新轨道(无 signal)被 OR 筛选隐身（TK-15）。
+    const track = await addTrack({ title });
+    setSelectedTags([]);
+    navigate(`/tracks/${track.id}`);
   }
 
   async function addStep(trackId: string, draft: StepDraft): Promise<void> {
