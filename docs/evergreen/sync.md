@@ -63,19 +63,24 @@ last-reviewed: 2026-07-02
 客户端入口是 `regularSync()`（`packages/client/src/sync/engine.ts`）。同一 JS context 内如果已有一次 `regularSync()` 尚未结束，新的调用会复用进行中的 promise；这只去重同浏览器上下文里的快速重复触发，不是跨 tab leader election。
 
 ```
-1. 本地未同步计数 + GET /api/sync/status 取云端 latestSeq
-2. unsyncedCount=0 且 latestSeq <= 本地读数：no-op（不 push、不 pull、不创建备份）
-3. unsyncedCount=0 但云端账本更新：先创建本地自动备份，再 syncPullSinceSeq() 补差
-4. unsyncedCount>0：先创建本地自动备份，再 syncPush()（合并、压缩、带分类依赖），然后 syncPullSinceSeq()
-5. resolveConflicts()（UI 决定）keep_local 还是 use_remote
-6. reportToServer() 通过 `/api/admin/sync-logs` 往服务器写一条 sync_logs 摘要（best-effort）
+1. 先查本地未同步计数（Dexie syncLog，走 synced 索引，纯本地）
+2. unsyncedCount>0（写后路径）：直接 syncPush()（合并、压缩、带分类依赖）→ syncPullSinceSeq()，
+   不发 /api/sync/status——status 的唯一用途是 no-op 判定，有待上传时该判定恒为假
+3. unsyncedCount=0：GET /api/sync/status 取云端 latestSeq；
+   latestSeq <= 本地读数 → no-op（不 push、不 pull）；否则 syncPullSinceSeq() 补差
+4. resolveConflicts()（UI 决定）keep_local 还是 use_remote
+5. reportToServer() 通过 `/api/admin/sync-logs` 写一条 sync_logs 摘要
+   （fire-and-forget：不 await、不计入同步窗口，自身吞错）
+6. 成功分支收尾 pruneSyncedLogs()：synced=1 的历史日志按 7 天窗口清理
 ```
+
+写后阻塞链路因此只有 push + pull 两个网络请求；health 前置探活闸门已退役（`lib/serverHealth.ts` 保留给诊断场景，主链不再调用），服务器不可达时由 push/status 请求本身报错走 `setError`。设备端自动快照（autoBackups）已整层退役（见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)），同步前不再创建本地备份。
 
 no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照。`contentHash` 降级为诊断工具：`getSyncHealth()`（设置页同步健康诊断）仍用它做本地与云端的深度体检。
 
 客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量拉取可在调用处设置 `timeoutMs: 30_000`。调用方传入的 `AbortSignal` 会和内部超时信号合并；成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误；204 / 空 body 视为 `undefined`。
 
-客户端 UI 层的同步状态由 `SyncContext` 统一提供，同步指示灯区分 `pending`（本地 Dexie `syncLog.synced=0` 计数大于 0）和 `success` / `idle`。自动触发分两类：首次进入时间轴页 `syncIfStale()` 30 秒节流兜底；写入成功后 `syncAfterWrite()` 1.5 秒防抖。时间轴兜底同步如果在连通性探测阶段失败，会安排一次不依赖本地待上传队列的立即重试；如果立即重试仍失败，则等 SSE 连接状态重新进入 `connected` 后再补跑一次 stale sync，避免 APK 冷启动时网络晚到导致红灯停住且只能靠切页重新触发。写入防抖仍只在本地存在未同步日志时发起。设置页"上次同步"展示时间来自 `STORAGE_KEYS.lastSyncDisplayAt`，纯展示，不参与任何同步判定。
+客户端 UI 层的同步状态由 `SyncContext` 统一提供，同步指示灯区分 `pending`（本地 Dexie `syncLog.synced=0` 计数大于 0）和 `success` / `idle`。自动触发分两类：首次进入时间轴页 `syncIfStale()` 30 秒节流兜底；写入成功后 `syncAfterWrite()` 1.5 秒防抖。时间轴兜底同步如果失败（服务器不可达等），会安排一次不依赖本地待上传队列的立即重试；如果立即重试仍失败，则等 SSE 连接状态重新进入 `connected` 后再补跑一次 stale sync，避免 APK 冷启动时网络晚到导致红灯停住且只能靠切页重新触发。写入防抖仍只在本地存在未同步日志时发起。设置页"上次同步"展示时间来自 `STORAGE_KEYS.lastSyncDisplayAt`，纯展示，不参与任何同步判定。
 
 特殊入口：
 
@@ -203,11 +208,13 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 | Dexie `syncLog` | 客户端 IndexedDB | 待同步队列；`synced=0/1`；未同步项才会被 push |
 | SQLite `sync_logs` | 服务端 | 运维审计；记录每次 push/pull 的摘要 |
 
-客户端每次 `regularSync` 完成调 `reportToServer`（best-effort），POST 到 `/api/admin/sync-logs`，因此走 admin 鉴权、admin 限流和 `X-Confirm` 清空确认所在的同一管理命名空间。主路径动作名：`push`、`pull_since_seq`、`pull_seq_catchup`（无待上传时的补差）、`conflict`。`/api/admin/sync` 读取最近 50 条服务端 `sync_logs`。客户端 cursor key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_SEQ_KEY`），`resetSyncCursors()` 清理读数并顺手清理已退役的 `timedata_last_synced` / `timedata_legacy_snapshot_sync`。
+客户端每轮有实际动作的 `regularSync`（补差或 push+pull）发一次 `reportToServer`——fire-and-forget，不 await、不阻塞同步返回，函数自身吞掉一切错误；POST 到 `/api/admin/sync-logs`，因此走 admin 鉴权、admin 限流和 `X-Confirm` 清空确认所在的同一管理命名空间。主路径动作名：`push`、`pull_since_seq`、`pull_seq_catchup`（无待上传时的补差）、`conflict`。`/api/admin/sync` 读取最近 50 条服务端 `sync_logs`。客户端 cursor key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_SEQ_KEY`），`resetSyncCursors()` 清理读数并顺手清理已退役的 `timedata_last_synced` / `timedata_legacy_snapshot_sync`。
 
-### 分段耗时观测（S0）
+**syncLog 卫生**：未同步查询统一走索引（`where("synced").equals(0)` 或 `[tableName+synced]`），不做全表 `.filter()` 扫描——`synced` 用 `0|1` 数字正是为可索引而设。synced=1 历史行由每轮成功同步收尾的 `pruneSyncedLogs()` 按 7 天窗口清理，防止无界膨胀；no-op 早退分支不清理，保持零写入。
 
-`useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`）给 health/status/backup/push/pull/report 六个阶段计时；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。设置页同步卡片的 `SyncTimingsPanel` 据此展示最近一次各阶段耗时，以及近 N 次总耗时的 p50/p95。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON，不含 report 自身耗时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
+### 分段耗时观测（S0 埋点，S1 收窄）
+
+`useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`，默认单调时钟 `performance.now`，与 `totalMs` 同源）给 status/push/pull 三个阶段计时——写后路径只有 push/pull，补差路径只有 status/pull；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。`getSyncTimings()` 读取时做逐元素 shape 校验，坏元素丢弃；`phases` 允许携带未知阶段键（值须为有限 number），因此 S0 时代带 health/backup/report 旧键的存量数据仍合法、无需迁移。设置页同步卡片的 `SyncTimingsPanel` 据此展示最近一次各阶段耗时，以及近 N 次总耗时的 p50/p95。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
 
 ## 8. 改这块代码前的清单
 

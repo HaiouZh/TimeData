@@ -36,6 +36,7 @@ covers:
   - packages/cli/src/commands/tasks.ts
 last-reviewed: 2026-07-01
 ---
+<!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；tasks schema、occurrence 语义与同步行为不变。 -->
 
 # 待办任务
 

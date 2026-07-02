@@ -20,6 +20,7 @@ last-reviewed: 2026-06-28
 <!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，server schema 新增非同步运维表；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-06-27（设计语言 P3）：HealthStatsPage 视觉收口（删旧死 CSS、范围按钮/页面壳 token 化、图表色走 chartColors 镜像）；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight / todo.gravity.v1 触及 shared schema、Dexie 和 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
+<!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；健康各域 schema、同步语义与备份角色不变。 -->
 
 # 健康数据
 

@@ -13,7 +13,7 @@ covers:
   - packages/server/src/lib/db-rows.ts
   - packages/client/src/db/index.ts
   - packages/client/src/db/schemaNormalization.ts
-last-reviewed: 2026-06-28
+last-reviewed: 2026-07-02
 ---
 
 # 数据模型与契约
@@ -48,8 +48,6 @@ last-reviewed: 2026-06-28
 | `app_metadata` | 全局一次性迁移/重置标记 |
 | `server_config` | 服务端独有配置，例如 Garmin 凭证；不同步客户端 |
 | `api_request_logs` | 服务端 `/api/*` 请求审计运维表；不同步客户端，不保存 body、Authorization 或完整 query |
-
-客户端本地多一张 `autoBackups`，用于滚动自动备份，详见 [backup](backup.md)。
 
 ## 2. Settings 键值契约
 
@@ -215,10 +213,10 @@ JSON 字符串列：`recurrence`、`tasks.tags`、`tracks.refs`、`track_steps.t
 
 ## 10. Dexie schema
 
-当前 Dexie v14：
+当前 Dexie v15：
 
 ```ts
-db.version(14).stores({
+db.version(15).stores({
   categories: "id, parentId, sortOrder",
   quickNotes: "id, occurredAt, updatedAt",
   timeEntries: "id, categoryId, startTime, endTime",
@@ -228,7 +226,7 @@ db.version(14).stores({
   goals: "id, kind, status, updatedAt",
   goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt",
   syncLog: "id, tableName, recordId, synced, [tableName+synced]",
-  autoBackups: "id, createdAt",
+  autoBackups: null,
   settings: "key",
   healthHeartRate: "id, date",
   healthHrv: "id, date",
@@ -239,7 +237,7 @@ db.version(14).stores({
 });
 ```
 
-版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，upgrade hook 给旧 tasks 补 `weight=0`）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）。
+版本历史：v1 初始；v2 `settings`；v3 `quickNotes`；v4 健康表；v5 `tasks`；v6 `tasks.scheduledAt`；v7 `healthCharts`；v8 `tasks.parentId`（子任务=独立 Task，纯 schema 升级无 upgrade 函数）；v9 `tracks` / `trackSteps`（任务轨道数据地基，新表为空，不需要历史归一迁移）；v10 `goals` + 旧 `tasks.goalId` / `tracks.goalId` 索引；v11 移除旧目标归属索引，目标成员关系改由 `Goal.members` JSON 字段承载；v12 `goalLayoutPins`，用 `[goalId+nodeKind+nodeId]` 复合主键保存目标图钉点；v13 `tasks.weight`（想法重力引擎，upgrade hook 给旧 tasks 补 `weight=0`）；v14 `tasks.ruleId` / `tasks.skipped`（occurrence 实体化地基，`ruleId` 建索引，upgrade hook 给旧 tasks 补 `ruleId=null`、`skipped=false`）；v15 物理删除 `autoBackups`（设备端自动快照整层退役，`autoBackups: null`，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）。
 
 ## 11. SQLite schema 迁移边界
 

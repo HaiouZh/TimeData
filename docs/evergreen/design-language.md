@@ -14,6 +14,7 @@ covers:
   - scripts/design-language-allowlist.json
 last-reviewed: 2026-07-01
 ---
+<!-- 复核 2026-07-02（同步提速 S1）：design-language-allowlist 仅随 BackupHistoryPage 删除清理失效条目并同步一条 lineText，未新增豁免；设计语言规则不变。 -->
 
 # 设计语言
 

@@ -14,6 +14,7 @@ covers:
   - packages/mobile/capacitor.config.ts
 last-reviewed: 2026-06-29
 ---
+<!-- 复核 2026-07-02（同步提速 S1）：androidBackNavigation 仅移除已退役的 /settings/data/backup-history 返回路由映射；开发流程、命令与 worktree 约定不变。 -->
 
 # 本地开发指南
 

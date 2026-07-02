@@ -6,7 +6,7 @@ import { db } from "../db/index.js";
 
 export { db };
 
-// 把共享 db 复位成"已开、全表空"——绝不 db.delete()（避免每用例重建 13 版 schema upgrade 吃掉 no-isolate 提速）。
+// 把共享 db 复位成"已开、全表空"——绝不 db.delete()（避免每用例重建整条历史版本 schema upgrade 链吃掉 no-isolate 提速）。
 // db 测试文件用它作 beforeEach/afterEach，即可在 isolate:false 下天然隔离数据态。幂等。
 export async function resetDb(): Promise<void> {
   if (!db.isOpen()) await db.open();

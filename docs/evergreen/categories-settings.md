@@ -14,7 +14,7 @@ covers:
   - packages/client/src/lib/categoryTree.ts
   - packages/server/src/routes/categories.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-06-28
+last-reviewed: 2026-07-02
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
@@ -40,17 +40,17 @@ last-reviewed: 2026-06-28
 
 ### 1.1 分类管理 mutations（`hooks/useCategories.ts`）
 
-每个 mutation 在 `db.transaction("rw", ...)` 内同时改 Dexie `categories` + 写 `syncLog`；rename/color/archive/reorder 还同步 patch 本地 `autoBackups` 里同 ID 分类的可见字段（name/color/icon/sortOrder/isArchived/updatedAt）：
+每个 mutation 在 `db.transaction("rw", ...)` 内同时改 Dexie `categories` + 写 `syncLog`（历史上还级联 patch 本地 `autoBackups` 快照，该层已随设备端自动快照退役删除，见 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)）：
 
-| 操作 | syncLog action | 是否动 autoBackups | 关键 |
-|---|---|---|---|
-| `addCategory(name, parentId, color)` | `categories/create` | **否**（新增不进历史快照） | `sortOrder=未归档兄弟数`，`icon:null`；client 拒同层级未归档重名 |
-| `renameCategory(id, name)` | `categories/update` | 是 | 只改 `name/updatedAt`，不改 `id`，不迁移 `TimeEntry.categoryId` |
-| `updateCategoryColor(id, color)` | `categories/update` | 是 | **子分类抛错**（颜色属一级分类） |
-| `applyCategoryPalette(paletteId)` | 每个变色一级一条 | 是 | 只作用未归档一级分类，循环应用预设色板 |
-| `archiveCategory(id)` | `categories/update` | 是 | `isArchived=true`，行保留、列表过滤隐藏 |
-| `deleteCategory(id)` | `categories/delete` + `time_entries/delete` | **否** | 级联删后代分类 + 关联 TimeEntry；事务后确认 impact |
-| `persistCategoryOrder(parentId, orderedIds)` | 每个变 sortOrder 项一条 | 是 | `orderedIds` 必须等于当前同 parentId 未归档兄弟集合，否则 return |
+| 操作 | syncLog action | 关键 |
+|---|---|---|
+| `addCategory(name, parentId, color)` | `categories/create` | `sortOrder=未归档兄弟数`，`icon:null`；client 拒同层级未归档重名 |
+| `renameCategory(id, name)` | `categories/update` | 只改 `name/updatedAt`，不改 `id`，不迁移 `TimeEntry.categoryId` |
+| `updateCategoryColor(id, color)` | `categories/update` | **子分类抛错**（颜色属一级分类） |
+| `applyCategoryPalette(paletteId)` | 每个变色一级一条 | 只作用未归档一级分类，循环应用预设色板 |
+| `archiveCategory(id)` | `categories/update` | `isArchived=true`，行保留、列表过滤隐藏 |
+| `deleteCategory(id)` | `categories/delete` + `time_entries/delete` | 级联删后代分类 + 关联 TimeEntry；事务后确认 impact |
+| `persistCategoryOrder(parentId, orderedIds)` | 每个变 sortOrder 项一条 | `orderedIds` 必须等于当前同 parentId 未归档兄弟集合，否则 return |
 
 - **排序安全闸**：`persistCategoryOrder` 校验 `orderedIds` 必须等于当前同 parentId 未归档兄弟集合，长度/成员不一致直接 return，只对实际变化项写 syncLog。
 - **删除事务后确认**：`requireResolvedCategoryDeleteImpact(impact)` 在事务闭包外，异常时 impact=null → 抛错，避免返回不完整 `{childCount, entryCount}`；`pendingDeleteImpact` 模块级缓存（预读→删除复用，用后即清）。
