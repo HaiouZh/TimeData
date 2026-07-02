@@ -84,6 +84,7 @@
   "dirty-in-clean-bucket:pages/SettingsPage.test.tsx",
   "dirty-in-clean-bucket:pages/StatsPage.test.tsx",
   "dirty-in-clean-bucket:pages/TimeStatsPage.test.tsx",
+  "dirty-in-clean-bucket:pages/TimelinePage.punch.test.tsx",
   "dirty-in-clean-bucket:pages/TimelinePage.test.tsx",
   "dirty-in-clean-bucket:pages/TodoPage.deeplink.test.tsx",
   "dirty-in-clean-bucket:pages/TodoPage.test.tsx",

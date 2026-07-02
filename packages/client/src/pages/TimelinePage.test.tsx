@@ -41,6 +41,7 @@ vi.mock("../hooks/useEntries.ts", () => ({
     ],
     previousEntry: null,
   }),
+  useEntryMutations: () => ({ deleteEntry: vi.fn() }),
 }));
 
 vi.mock("../lib/overnightDisplaySetting.ts", () => ({
