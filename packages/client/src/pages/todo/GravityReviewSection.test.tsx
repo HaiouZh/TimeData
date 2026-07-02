@@ -36,7 +36,6 @@ const handlers = {
   onDelete: vi.fn(),
   onToToday: vi.fn(),
   onToInbox: vi.fn(),
-  onAfterChildWrite: vi.fn(),
 };
 
 async function openReview(host: HTMLElement): Promise<void> {

@@ -9,9 +9,6 @@ import { addTrack, addTrackStep, getTrack, listTracks, listTrackSteps } from "..
 import { renderDom, unmount } from "../../test/domHarness.js";
 import TrackDetailPage from "./TrackDetailPage.js";
 
-const syncAfterWriteMock = vi.hoisted(() => vi.fn());
-vi.mock("../../contexts/SyncContext.tsx", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
-
 const now = new Date("2026-06-21T03:00:00.000Z");
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 
@@ -21,7 +18,6 @@ beforeEach(async () => {
   await db.trackSteps.clear();
   await db.settings.clear();
   await db.syncLog.clear();
-  syncAfterWriteMock.mockClear();
 });
 afterEach(async () => {
   if (mounted) await unmount(mounted.root);
@@ -166,7 +162,6 @@ describe("TrackDetailPage", () => {
     const added = steps.find((s) => s.content === "我下场盯一段");
     expect(prevOpen?.endedAt).not.toBeNull();
     expect(added).toMatchObject({ source: "user", endedAt: null });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("写一步:选常用 tag 后仍追加开口步并闭合上一开口步", async () => {
@@ -184,7 +179,6 @@ describe("TrackDetailPage", () => {
     expect(current?.endedAt).not.toBeNull();
     expect(note).toMatchObject({ source: "user", tags: ["批注"] });
     expect(note?.endedAt).toBeNull();
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("updates title and summary through the existing updateTrack path", async () => {
@@ -199,7 +193,6 @@ describe("TrackDetailPage", () => {
 
     const updated = await getTrack(track.id);
     expect(updated).toMatchObject({ title: "标签体系退役", summary: "沉淀为 agent 轨道" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("clears summary by saving an empty summary field", async () => {
@@ -235,7 +228,6 @@ describe("TrackDetailPage", () => {
     const steps = await listTrackSteps(track.id);
     expect(steps.find((s) => s.content === "base 期第一周")?.endedAt).not.toBeNull();
     expect(steps.every((s) => s.endedAt !== null)).toBe(true);
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("shows lifecycle as active or archived and archives through concluded", async () => {
@@ -252,7 +244,6 @@ describe("TrackDetailPage", () => {
     const steps = await listTrackSteps(track.id);
     expect(updated?.status).toBe("concluded");
     expect(steps.find((s) => s.content === "base 期第一周")?.endedAt).not.toBeNull();
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("shows old parked tracks as archived and can reopen them", async () => {

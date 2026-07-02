@@ -33,8 +33,6 @@ export interface TaskRowProps {
   onDelete?: (t: Task) => void;
   onToToday?: (t: Task) => void;
   onToInbox?: (t: Task) => void;
-  /** 行写入后回调（InlineChildren 内部触发，宿主可在此调 syncAfterWrite）。 */
-  onAfterChildWrite?: () => void;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
   /** 行内额外动作插槽（如翻牌「顶一下」）；UI 按钮自带 stopPropagation。 */
@@ -74,7 +72,6 @@ export function TaskRow({
   onDelete,
   onToToday,
   onToInbox,
-  onAfterChildWrite,
   childrenModeOverride,
   extraAction,
   indentTargetActive,
@@ -319,7 +316,7 @@ export function TaskRow({
       </div>
       {showInlineChildren && (
         <div className="ml-9 pb-1" onClick={(event) => event.stopPropagation()}>
-          <InlineChildren parentId={task.id} mode={childrenMode} onAfterWrite={onAfterChildWrite} />
+          <InlineChildren parentId={task.id} mode={childrenMode} />
         </div>
       )}
     </div>

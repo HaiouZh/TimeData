@@ -10,8 +10,6 @@ export type InlineChildrenMode = "draggable" | "static" | "readonly";
 export interface InlineChildrenProps {
   parentId: string;
   mode: InlineChildrenMode;
-  /** 写库后回调，宿主可在此触发同步。 */
-  onAfterWrite?: () => void;
 }
 
 /**
@@ -24,30 +22,23 @@ export interface InlineChildrenProps {
  * 新增子任务走「草稿行」：点 +子任务 或在某条子任务上回车，都会在末尾打开一条空白聚焦输入框，
  * 不预填充占位文案；输入为空不落库。不渲染 recurrence/tags/scheduledAt 入口——子任务隐藏高级控件。
  */
-export function InlineChildren({ parentId, mode, onAfterWrite }: InlineChildrenProps) {
+export function InlineChildren({ parentId, mode }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
   const [drafting, setDrafting] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
 
-  function notify(): void {
-    onAfterWrite?.();
-  }
-
   async function handleToggle(child: Task): Promise<void> {
     await toggleTaskDone(child.id);
-    notify();
   }
 
   async function handleTitleCommit(child: Task, nextTitle: string): Promise<void> {
     await updateTask(child.id, { title: nextTitle });
     setEditingChildId(null);
-    notify();
   }
 
   async function handleDelete(child: Task): Promise<void> {
     await deleteTaskCascade(child.id);
     setEditingChildId((current) => (current === child.id ? null : current));
-    notify();
   }
 
   // 草稿解析：空标题不落库（schema 拒空，宿主先拦）；回车提交非空后保持草稿继续录入，失焦或空回车则收起。
@@ -55,7 +46,6 @@ export function InlineChildren({ parentId, mode, onAfterWrite }: InlineChildrenP
     const trimmed = title.trim();
     if (trimmed) {
       await createChildTask(parentId, trimmed);
-      notify();
     }
     if (!(source === "enter" && trimmed)) {
       setDrafting(false);

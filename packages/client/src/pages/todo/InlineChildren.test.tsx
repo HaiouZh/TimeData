@@ -27,12 +27,11 @@ const settle = () =>
   });
 
 async function renderChildren(parentId: string, mode: "draggable" | "static" | "readonly") {
-  const onAfterWrite = vi.fn();
   const { host, root } = await renderDom(
-    createElement(SyncProvider, null, createElement(InlineChildren, { parentId, mode, onAfterWrite })),
+    createElement(SyncProvider, null, createElement(InlineChildren, { parentId, mode })),
   );
   await settle();
-  return { host, root, onAfterWrite };
+  return { host, root };
 }
 
 async function seedParentWithChildren(doneCount = 0): Promise<Task> {
@@ -202,9 +201,9 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
-  it("draggable 勾选子任务 → 落库并触发 onAfterWrite", async () => {
+  it("draggable 勾选子任务 → 落库", async () => {
     const parent = await seedParentWithChildren();
-    const { host, root, onAfterWrite } = await renderChildren(parent.id, "draggable");
+    const { host, root } = await renderChildren(parent.id, "draggable");
 
     const cb = host.querySelector('input[aria-label^="完成子任务"]') as HTMLInputElement;
     await act(async () => {
@@ -214,7 +213,6 @@ describe("InlineChildren mode 行为矩阵", () => {
 
     const children = await db.tasks.where("parentId").equals(parent.id).sortBy("sortOrder");
     expect(children[0].done).toBe(true);
-    expect(onAfterWrite).toHaveBeenCalled();
 
     await unmount(root);
   });
@@ -232,9 +230,9 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
-  it("草稿行输入后失焦 → 落库新子任务并触发 onAfterWrite", async () => {
+  it("草稿行输入后失焦 → 落库新子任务", async () => {
     const parent = await seedParentWithChildren();
-    const { host, root, onAfterWrite } = await renderChildren(parent.id, "draggable");
+    const { host, root } = await renderChildren(parent.id, "draggable");
     await clickAdd(host);
 
     const draft = draftInput(host) as HTMLTextAreaElement;
@@ -247,7 +245,6 @@ describe("InlineChildren mode 行为矩阵", () => {
     const children = await db.tasks.where("parentId").equals(parent.id).toArray();
     expect(children.length).toBe(3);
     expect(children.some((c) => c.title === "新建的子任务")).toBe(true);
-    expect(onAfterWrite).toHaveBeenCalled();
 
     await unmount(root);
   });

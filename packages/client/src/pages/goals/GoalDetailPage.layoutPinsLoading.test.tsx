@@ -12,7 +12,6 @@ import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
 let resolveLayoutPins: ((pins: []) => void) | null = null;
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
-vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: vi.fn() }) }));
 vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: () => true }));
 vi.mock("../../lib/useIsCoarsePointer.js", () => ({ useIsCoarsePointer: () => false }));
 vi.mock("../../lib/settings/todoDefaultDestinationSetting.js", () => ({ useTodoDefaultDestination: () => "today" }));

@@ -1,7 +1,6 @@
 import { MagnifyingGlass, Tag, X } from "@phosphor-icons/react";
 import { type FormEvent, type Ref, useState } from "react";
 import { Icon } from "../../components/Icon.js";
-import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { useTodoDefaultDestination } from "../../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../../lib/tasks.js";
 import { Z } from "../../lib/zLayers.js";
@@ -45,7 +44,6 @@ export function TodoComposer({
   formRef,
 }: TodoComposerProps) {
   const destination = useTodoDefaultDestination();
-  const { syncAfterWrite } = useSyncContext();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +57,6 @@ export function TodoComposer({
     try {
       await addTask({ title: composerText, toInbox: destination === "inbox", tags: includeTags });
       onComposerTextChange("");
-      syncAfterWrite();
     } catch (err) {
       setError((err as Error).message);
     } finally {

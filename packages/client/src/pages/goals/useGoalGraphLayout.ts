@@ -27,7 +27,6 @@ export interface UseGoalGraphLayoutArgs {
   model: GoalGraphModel;
   orientation: GoalGraphOrientation;
   layoutPins: GoalLayoutPin[];
-  onChanged: () => void;
 }
 
 interface ParsedPins {
@@ -275,7 +274,6 @@ export function useGoalGraphLayout({
   model,
   orientation,
   layoutPins,
-  onChanged,
 }: UseGoalGraphLayoutArgs): GoalLayoutController {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const lastKeyRef = useRef<string | null>(null);
@@ -368,26 +366,26 @@ export function useGoalGraphLayout({
 
       const currentAnchor = positionsRef.current[GOAL_NODE_ID] ?? anchorCanvas;
       const coords = ref.nodeKind === "goal" ? goalPinFromCanvas(nextPosition) : memberPinFromCanvas(nextPosition, currentAnchor);
-      void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(onChanged);
+      void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y });
     },
-    [anchorCanvas, goal.id, layoutBoxes, onChanged],
+    [anchorCanvas, goal.id, layoutBoxes],
   );
 
   const restorePin = useCallback(
     (nodeId: string) => {
       const ref = pinRefFromNodeId(nodeId, goal.id);
       if (!ref) return;
-      void deleteGoalLayoutPin(ref).then(onChanged);
+      void deleteGoalLayoutPin(ref);
     },
-    [goal.id, onChanged],
+    [goal.id],
   );
 
   const restoreLayout = useCallback(() => {
     const refs = Object.keys(pins.members)
       .map((nodeId) => memberRefFromNodeId(nodeId, goal.id))
       .filter((ref): ref is GoalLayoutPinRef => ref !== null);
-    void Promise.all(refs.map((ref) => deleteGoalLayoutPin(ref))).then(onChanged);
-  }, [goal.id, onChanged, pins.members]);
+    void Promise.all(refs.map((ref) => deleteGoalLayoutPin(ref)));
+  }, [goal.id, pins.members]);
 
   return { positions: renderedPositions, pinnedIds, boxes: layoutBoxes, onNodeDrag, onNodeDragStop, restorePin, restoreLayout };
 }

@@ -4,16 +4,6 @@ import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import TimelinePage from "./TimelinePage.js";
 
-const syncIfStaleMock = vi.hoisted(() => vi.fn());
-
-vi.mock("../contexts/SyncContext.tsx", () => ({
-  useSyncContext: () => ({
-    syncIfStale: syncIfStaleMock,
-    syncAfterWrite: vi.fn(),
-    status: "success",
-  }),
-}));
-
 vi.mock("../components/DateNav.tsx", () => ({
   default: ({ date }: { date: string }) => createElement("div", null, `日期 ${date}`),
 }));

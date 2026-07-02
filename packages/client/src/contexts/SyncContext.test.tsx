@@ -474,38 +474,6 @@ describe("SyncProvider", () => {
     });
   });
 
-  it("syncAfterWrite and syncIfStale are deprecated no-ops that do not touch the scheduler", async () => {
-    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
-    localStorage.setItem("timedata_cloud_sync_enabled", "true");
-    let context: ReturnType<typeof useSyncContext> | null = null;
-
-    function Probe() {
-      context = useSyncContext();
-      return createElement("span", null, "probe");
-    }
-
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
-
-    requestSyncSpy.mockClear();
-
-    await act(async () => {
-      context?.syncAfterWrite();
-      await context?.syncIfStale();
-    });
-
-    expect(mockSyncActions.sync).not.toHaveBeenCalled();
-    expect(requestSyncSpy).not.toHaveBeenCalled();
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
   it("starts and stops the foreground sync stream with visibility", async () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");

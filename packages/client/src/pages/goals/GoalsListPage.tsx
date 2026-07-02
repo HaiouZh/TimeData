@@ -2,7 +2,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { addGoal, listGoals } from "../../lib/goals.js";
 import { buildGoalOverview } from "../../lib/goalsView.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
-import { useSyncContext } from "../../contexts/SyncContext.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 import { listAllTasksForGoals } from "./goalPageData.js";
 import { GoalListItem } from "./GoalListItem.js";
@@ -13,7 +12,6 @@ export default function GoalsListPage() {
   const tasks = useLiveQuery(() => listAllTasksForGoals(), [], []);
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
-  const { syncAfterWrite } = useSyncContext();
 
   const overviews = goals.map((goal) => buildGoalOverview(goal, tasks, tracks, steps));
   const active = overviews.filter((overview) => overview.goal.status === "active");
@@ -21,7 +19,6 @@ export default function GoalsListPage() {
 
   async function create(input: { title: string; kind: "project" | "theme" }): Promise<void> {
     await addGoal(input);
-    syncAfterWrite();
   }
 
   return (

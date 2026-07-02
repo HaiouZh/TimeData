@@ -9,8 +9,6 @@ import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/track
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import TracksListPage from "./TracksListPage.js";
 
-vi.mock("../../contexts/SyncContext.tsx", () => ({ useSyncContext: () => ({ syncAfterWrite: () => {} }) }));
-
 const now = new Date("2026-06-21T03:00:00.000Z");
 let mounted: Awaited<ReturnType<typeof renderDom>> | null = null;
 

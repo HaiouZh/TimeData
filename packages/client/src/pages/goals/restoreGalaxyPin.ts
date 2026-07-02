@@ -12,15 +12,12 @@ function goalIdsFromAnchorIds(anchorIds: string[]): string[] {
 export async function restoreGalaxyPin({
   nodeId,
   anchorIds,
-  syncAfterWrite,
 }: {
   nodeId: string;
   anchorIds: string[];
-  syncAfterWrite: () => void;
 }): Promise<void> {
   const ref = galaxyPinRef(nodeId, goalIdsFromAnchorIds(anchorIds));
   if (!ref) return;
 
   await deleteGoalLayoutPin(ref);
-  syncAfterWrite();
 }

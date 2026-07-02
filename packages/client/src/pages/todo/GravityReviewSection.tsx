@@ -21,7 +21,6 @@ interface GravityReviewSectionProps {
   onDelete: (task: Task) => void;
   onToToday: (task: Task) => void;
   onToInbox: (task: Task) => void;
-  onAfterChildWrite?: () => void;
 }
 
 export function GravityReviewSection({

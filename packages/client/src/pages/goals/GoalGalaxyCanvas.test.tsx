@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, doubleClick, renderDom, unmount } from "../../test/domHarness.js";
 import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
 
-const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
@@ -20,7 +19,6 @@ const settleReheatMock = vi.hoisted(() => vi.fn());
 const settleSetDragPinMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
-vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
 vi.mock("../../lib/goalLayoutPins.js", () => ({
   upsertGoalLayoutPin: upsertGoalLayoutPinMock,
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,
@@ -154,7 +152,6 @@ async function dropGoalMember(
 
 describe("GoalGalaxyCanvas", () => {
   beforeEach(() => {
-    syncAfterWriteMock.mockClear();
     upsertGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     deleteGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
     toggleTaskDoneMock.mockReset().mockResolvedValue(undefined);
@@ -544,7 +541,6 @@ describe("GoalGalaxyCanvas", () => {
     expect(dataTransfer.dropEffect).toBe("copy");
     expect(getReactFlowMock().screenToFlowPosition).toHaveBeenCalledWith({ x: 0, y: 0 });
     expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -567,7 +563,6 @@ describe("GoalGalaxyCanvas", () => {
     await dropGoalMember(drawer ?? host, { kind: "task", id: "candidate" }, { x: 0, y: 0 });
 
     expect(addGoalMemberMock).not.toHaveBeenCalled();
-    expect(syncAfterWriteMock).not.toHaveBeenCalled();
     await unmount(root);
   });
 
@@ -587,7 +582,6 @@ describe("GoalGalaxyCanvas", () => {
     await dropGoalMember(host.querySelector("[data-galaxy]") ?? host, { kind: "task", id: "candidate" }, { x: 500, y: 500 });
 
     expect(addGoalMemberMock).not.toHaveBeenCalled();
-    expect(syncAfterWriteMock).not.toHaveBeenCalled();
     await unmount(root);
   });
 
@@ -649,7 +643,6 @@ describe("GoalGalaxyCanvas", () => {
         y: startY + 20,
       }),
     );
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -672,7 +665,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(deleteGoalLayoutPinMock).toHaveBeenCalledWith({ goalId: "g1", nodeKind: "goal", nodeId: "g1" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -709,7 +701,6 @@ describe("GoalGalaxyCanvas", () => {
         y: startY + 20 - 100,
       }),
     );
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -761,11 +752,10 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
-  it("restoreGalaxyPin deletes the selected node pin and syncs after write", async () => {
+  it("restoreGalaxyPin deletes the selected node pin", async () => {
     await restoreGalaxyPin({
       nodeId: "task:a",
       anchorIds: ["goal:g1"],
-      syncAfterWrite: syncAfterWriteMock,
     });
 
     expect(deleteGoalLayoutPinMock).toHaveBeenCalledWith({
@@ -773,7 +763,6 @@ describe("GoalGalaxyCanvas", () => {
       nodeKind: "task",
       nodeId: "a",
     });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
   });
 
   it("runs restore-auto from a selected pinned member action", async () => {
@@ -797,7 +786,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(deleteGoalLayoutPinMock).toHaveBeenCalledWith({ goalId: "g1", nodeKind: "task", nodeId: "a" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -822,7 +810,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", [{ blocker: firstRef, blocked: secondRef }]);
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -901,7 +888,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(toggleTaskDoneMock).toHaveBeenCalledWith("a");
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -926,7 +912,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(removeGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "a" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -956,7 +941,6 @@ describe("GoalGalaxyCanvas", () => {
     expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", [
       { blocker: { kind: "task", id: "a" }, blocked: { kind: "task", id: "b" } },
     ]);
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -1009,7 +993,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -1037,7 +1020,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(updateGoalPrerequisitesMock).toHaveBeenCalledWith("g1", []);
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -1059,7 +1041,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -1084,7 +1065,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(addTaskForGoalMock).toHaveBeenCalledWith("g1", { title: "新任务", toInbox: false });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -1124,7 +1104,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(deleteGoalMock).toHaveBeenCalledWith("g1");
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(3);
     await unmount(root);
   });
 
@@ -1145,7 +1124,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(updateGoalMock).toHaveBeenCalledWith("g1", { status: "archived" });
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 
@@ -1170,7 +1148,6 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(deleteGoalMock).toHaveBeenCalledWith("g1");
-    expect(syncAfterWriteMock).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
 

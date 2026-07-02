@@ -1,6 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { useSyncContext } from "../../contexts/SyncContext.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, appendUserStep, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import {
@@ -20,7 +19,6 @@ export default function TracksListPage() {
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const allSteps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const actionTags = useTrackActionTags();
-  const { syncAfterWrite } = useSyncContext();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { active, archived } = partitionTracks(tracks);
@@ -42,12 +40,10 @@ export default function TracksListPage() {
 
   async function create(title: string): Promise<void> {
     await addTrack({ title });
-    syncAfterWrite();
   }
 
   async function addStep(trackId: string, draft: StepDraft): Promise<void> {
     await appendUserStep({ trackId, content: draft.content, mode: draft.mode, tags: draft.tags });
-    syncAfterWrite();
   }
 
   function toggleTag(tag: string): void {

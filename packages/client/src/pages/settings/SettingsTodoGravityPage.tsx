@@ -2,7 +2,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useRef } from "react";
 import { Cards } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
-import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { listTasks, type TodoBuckets } from "../../lib/tasks.js";
 import { splitInboxByGravity } from "../../lib/tasks/gravity.js";
 import { currentGravityDate } from "../../lib/tasks/gravityClock.js";
@@ -21,7 +20,6 @@ const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [],
 export default function SettingsTodoGravityPage() {
   const settings = useTodoGravitySettings();
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
-  const { syncAfterWrite } = useSyncContext();
   const pendingSettingsRef = useRef<Promise<typeof settings> | null>(null);
   const now = currentGravityDate();
   const { sunken } = splitInboxByGravity(buckets.inbox, settings, now);
@@ -34,7 +32,6 @@ export default function SettingsTodoGravityPage() {
         .then(async (base) => {
           const next = sanitizeTodoGravitySettings({ ...base, ...patch });
           await setTodoGravitySettings(next);
-          syncAfterWrite();
           return next;
         });
       pendingSettingsRef.current = nextPromise;
@@ -44,12 +41,12 @@ export default function SettingsTodoGravityPage() {
         })
         .catch(() => undefined);
     },
-    [syncAfterWrite],
+    [],
   );
 
   const restoreDefaults = useCallback(() => {
-    void setTodoGravitySettings(DEFAULT_TODO_GRAVITY_SETTINGS).then(() => syncAfterWrite());
-  }, [syncAfterWrite]);
+    void setTodoGravitySettings(DEFAULT_TODO_GRAVITY_SETTINGS);
+  }, []);
 
   return (
     <SettingsDetailPage title="水位线与翻牌">

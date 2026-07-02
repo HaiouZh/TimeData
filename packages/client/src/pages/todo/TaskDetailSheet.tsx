@@ -4,7 +4,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
-import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { db } from "../../db/index.js";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
@@ -50,7 +49,6 @@ function normalizeTitle(value: string): string {
 
 export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
-  const { syncAfterWrite } = useSyncContext();
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -100,7 +98,6 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
     try {
       await fn();
       setError(null);
-      syncAfterWrite();
     } catch (err) {
       setError((err as Error).message);
     }
@@ -155,7 +152,6 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
         } else {
           await deleteTaskCascade(id);
         }
-        syncAfterWrite();
         onClose();
       } catch (err) {
         setError((err as Error).message);
@@ -334,7 +330,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
               </div>
             </div>
 
-            {!isChild && task && <InlineChildren parentId={task.id} mode="draggable" onAfterWrite={syncAfterWrite} />}
+            {!isChild && task && <InlineChildren parentId={task.id} mode="draggable" />}
 
             {!isChild && onTagsChange && task && (
               <div data-testid="tag-editor" className="space-y-2">

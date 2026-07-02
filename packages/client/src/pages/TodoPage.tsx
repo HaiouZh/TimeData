@@ -17,7 +17,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
-import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
 import { goalLinkedTaskIds } from "../lib/goalUnassigned.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
@@ -98,7 +97,6 @@ export function TodoPage() {
   const [revealChildren, setRevealChildren] = useState<{ id: string; nonce: number } | null>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const [composerHeightPx, setComposerHeightPx] = useState(0);
-  const { syncAfterWrite } = useSyncContext();
   const { hidden: navHidden } = useBottomNav();
   const wide = useIsWideScreen();
   const rootIdsWithChildren =
@@ -149,7 +147,6 @@ export function TodoPage() {
 
   const toggle = async (t: Task) => {
     await toggleTaskDone(t.id);
-    syncAfterWrite();
   };
   const remove = async (t: Task) => {
     if (t.ruleId !== null) {
@@ -158,7 +155,6 @@ export function TodoPage() {
       await deleteTask(t.id);
     }
     if (detailId === t.id) setDetailId(null);
-    syncAfterWrite();
   };
   const openDetail = (t: Task) => setDetailId(t.id);
   const closeDetail = () => {
@@ -172,15 +168,12 @@ export function TodoPage() {
   };
   const moveToInbox = async (t: Task) => {
     await unscheduleTask(t.id);
-    syncAfterWrite();
   };
   const moveToToday = async (t: Task) => {
     await scheduleTask(t.id, localDateString(new Date()));
-    syncAfterWrite();
   };
   const changeTags = async (t: Task, tags: string[]) => {
     await setTaskTags(t.id, tags);
-    syncAfterWrite();
   };
   const toggleTag = (tag: string) => {
     if (notMode) {
@@ -239,13 +232,10 @@ export function TodoPage() {
 
   const bumpWeight = async (t: Task) => {
     await bumpTaskWeight(t.id);
-    syncAfterWrite();
   };
 
   const markSurfaced = async (ids: string[], now: Date): Promise<GravitySurfacedMap> => {
-    const next = await markGravityTasksSurfaced(ids, now, { waterlineDays: gravitySettings.waterlineDays });
-    if (ids.length > 0) syncAfterWrite();
-    return next;
+    return markGravityTasksSurfaced(ids, now, { waterlineDays: gravitySettings.waterlineDays });
   };
 
   const rowHandlers = {
@@ -254,7 +244,6 @@ export function TodoPage() {
     onDelete: remove,
     onToToday: moveToToday,
     onToInbox: moveToInbox,
-    onAfterChildWrite: syncAfterWrite,
     onTagsChange: changeTags,
   };
 
@@ -356,7 +345,6 @@ export function TodoPage() {
           // 父任务容器内重排子任务：children 不在 buckets 里，交给数据层按 parentId 取后回填。
           if (op.containerId.startsWith("parent:")) {
             await reorderChildren(op.containerId.slice("parent:".length), activeId, overId);
-            syncAfterWrite();
             break;
           }
           const containerTasks =
@@ -372,20 +360,17 @@ export function TodoPage() {
           if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
           const ordered = arrayMove(ids, oldIndex, newIndex);
           await persistTaskOrder(ordered);
-          syncAfterWrite();
           break;
         }
         case "move-to-parent": {
           await moveTaskToParent(activeId, op.parentId);
           setRevealChildren((prev) => ({ id: op.parentId, nonce: (prev?.nonce ?? 0) + 1 }));
-          syncAfterWrite();
           break;
         }
         case "promote-to-root": {
           const targetTasks = op.pool === "today" ? f(buckets.today) : f(floatingInbox);
           const sortOrder = targetTasks.length > 0 ? Math.max(...targetTasks.map((t) => t.sortOrder)) + 1 : 0;
           await promoteToRoot(activeId, op.pool, sortOrder);
-          syncAfterWrite();
           break;
         }
         case "schedule-root": {
@@ -394,7 +379,6 @@ export function TodoPage() {
           } else {
             await unscheduleTask(activeId);
           }
-          syncAfterWrite();
           break;
         }
       }

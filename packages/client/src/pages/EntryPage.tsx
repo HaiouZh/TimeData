@@ -2,7 +2,6 @@ import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shar
 import { useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import EntryForm from "../components/EntryForm.tsx";
-import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   findOverlappingEntries,
@@ -60,7 +59,6 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
   const [searchParams] = useSearchParams();
   const existingEntry = useEntry(id);
   const { deleteEntry } = useEntryMutations();
-  const { syncAfterWrite } = useSyncContext();
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   const isEdit = Boolean(id);
@@ -176,7 +174,6 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
       overlapPlan,
     });
 
-    syncAfterWrite();
     navigate(timelinePathForDate(resolveTimelineDateAfterSave(startLocal, endLocal)), { replace: true });
     return { ok: true };
   }
@@ -185,7 +182,6 @@ export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProp
     if (!existingEntry) return;
     const date = utcToLocalDateTime(existingEntry.startTime).slice(0, 10);
     await deleteEntry(existingEntry.id);
-    syncAfterWrite();
     navigate(timelinePathForDate(date), { replace: true });
   }
 

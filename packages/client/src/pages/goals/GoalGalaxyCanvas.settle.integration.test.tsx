@@ -5,7 +5,6 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 
-const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const toggleTaskDoneMock = vi.hoisted(() => vi.fn());
@@ -35,7 +34,6 @@ const createSettleSimMock = vi.hoisted(() =>
 );
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
-vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }) }));
 vi.mock("../../lib/goalLayoutPins.js", () => ({
   upsertGoalLayoutPin: upsertGoalLayoutPinMock,
   deleteGoalLayoutPin: deleteGoalLayoutPinMock,

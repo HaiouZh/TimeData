@@ -17,7 +17,6 @@ import type { Goal, GoalLayoutPin, GoalMemberRef, GoalPrerequisite, Task, Track,
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
-import { useSyncContext } from "../../contexts/SyncContext.js";
 import { computeEdgeRoutings, type HandleBox } from "../../lib/goalEdgeRouting.js";
 import { addPrerequisiteEdge, removePrerequisiteEdge, validatePrerequisiteEdge } from "../../lib/goalGraphEdges.js";
 import type { GoalGraphOrientation } from "../../lib/goalGraphLayout.js";
@@ -164,7 +163,6 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
   const coarse = useIsCoarsePointer();
   const orientation: GoalGraphOrientation = wide ? "horizontal" : "vertical";
   const inlineActions = wide && !coarse;
-  const { syncAfterWrite } = useSyncContext();
   const flow = useReactFlow();
   const nodesInitialized = useNodesInitialized();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -182,7 +180,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
 
   const overview = useMemo(() => buildGoalOverview(goal, tasks, tracks, steps), [goal, steps, tasks, tracks]);
   const model = useMemo(() => buildGoalGraphModel(overview), [overview]);
-  const layout = useGoalGraphLayout({ goal, model, orientation, layoutPins, onChanged: syncAfterWrite });
+  const layout = useGoalGraphLayout({ goal, model, orientation, layoutPins });
   const layoutNodes = useMemo<GoalGraphFlowNode[]>(
     () => {
       const previousNodes = nodeCacheRef.current;
@@ -295,7 +293,6 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     }
 
     await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
-    syncAfterWrite();
     setErrorMessage(null);
     setConnectDraft(null);
   }
@@ -306,12 +303,10 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     const previousMembers = [...(goal.members ?? [])];
     const previousPrerequisites = goal.prerequisites ?? [];
     await removeGoalMember(goal.id, ref);
-    syncAfterWrite();
     setUndo({
       message: "已移出成员",
       onUndo: async () => {
         await updateGoal(goal.id, { members: previousMembers, prerequisites: previousPrerequisites });
-        syncAfterWrite();
       },
     });
   }
@@ -329,7 +324,6 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     }
     if (actionId === "toggle-complete" && ref?.kind === "task") {
       await toggleTaskDone(ref.id);
-      syncAfterWrite();
       return;
     }
     if (actionId === "connect") {
@@ -351,12 +345,10 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     }
     if (actionId === "toggle-archive") {
       await updateGoal(goal.id, { status: goal.status === "archived" ? "active" : "archived" });
-      syncAfterWrite();
       return;
     }
     if (actionId === "delete-goal") {
       await deleteGoal(goal.id);
-      syncAfterWrite();
       onDeletedGoal();
     }
   }
@@ -366,12 +358,10 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
     if (!refs) return;
     const previousPrerequisites = goal.prerequisites ?? [];
     await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, refs.blocker, refs.blocked));
-    syncAfterWrite();
     setUndo({
       message: "已删除前置",
       onUndo: async () => {
         await updateGoalPrerequisites(goal.id, previousPrerequisites);
-        syncAfterWrite();
       },
     });
   }
@@ -399,12 +389,10 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
 
   async function addMember(ref: GoalMemberRef): Promise<void> {
     await addGoalMember(goal.id, ref);
-    syncAfterWrite();
   }
 
   async function quickCreateTask(title: string): Promise<void> {
     await addTaskForGoal(goal.id, { title, toInbox: destination === "inbox" });
-    syncAfterWrite();
   }
 
   function handleMoveEnd(_event: MouseEvent | TouchEvent | null, viewport: Viewport): void {
@@ -559,14 +547,13 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
           goal={goal}
           active={widePanel === "goal-menu"}
           onSave={(patch) => {
-            void updateGoal(goal.id, patch).then(syncAfterWrite);
+            void updateGoal(goal.id, patch);
           }}
           onToggleArchive={() => {
-            void updateGoal(goal.id, { status: goal.status === "archived" ? "active" : "archived" }).then(syncAfterWrite);
+            void updateGoal(goal.id, { status: goal.status === "archived" ? "active" : "archived" });
           }}
           onDelete={() => {
             void deleteGoal(goal.id).then(() => {
-              syncAfterWrite();
               onDeletedGoal();
             });
           }}
@@ -576,14 +563,13 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
         open={goalMenuOpen}
         goal={goal}
         onSave={(patch) => {
-          void updateGoal(goal.id, patch).then(syncAfterWrite);
+          void updateGoal(goal.id, patch);
         }}
         onToggleArchive={() => {
-          void updateGoal(goal.id, { status: goal.status === "archived" ? "active" : "archived" }).then(syncAfterWrite);
+          void updateGoal(goal.id, { status: goal.status === "archived" ? "active" : "archived" });
         }}
         onDelete={() => {
           void deleteGoal(goal.id).then(() => {
-            syncAfterWrite();
             onDeletedGoal();
           });
         }}

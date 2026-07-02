@@ -3,7 +3,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
-import { useSyncContext } from "../../contexts/SyncContext.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { appendUserStep, closeCurrentStep, getTrack, listTrackSteps, setTrackStatus, updateTrack } from "../../lib/tracks.js";
 import { currentStepId } from "../../lib/tracksView.js";
@@ -18,7 +17,6 @@ export default function TrackDetailPage() {
   // ?? null 把三态分开:undefined=查询未落(加载中)、null=查到但不存在、实体=命中。
   const track = useLiveQuery(async () => (await getTrack(id)) ?? null, [id]);
   const steps = useLiveQuery(() => listTrackSteps(id), [id], []);
-  const { syncAfterWrite } = useSyncContext();
   const actionTags = useTrackActionTags();
   const [editingMeta, setEditingMeta] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -36,19 +34,16 @@ export default function TrackDetailPage() {
   async function addStep(draft: StepDraft): Promise<void> {
     if (!track) return;
     await appendUserStep({ trackId: track.id, content: draft.content, mode: draft.mode, tags: draft.tags });
-    syncAfterWrite();
   }
 
   async function closeStep(): Promise<void> {
     if (!track) return;
     await closeCurrentStep(track.id);
-    syncAfterWrite();
   }
 
   async function changeStatus(status: "active" | "concluded"): Promise<void> {
     if (!track || track.status === status) return;
     await setTrackStatus(track.id, status);
-    syncAfterWrite();
   }
 
   async function saveMeta(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -58,7 +53,6 @@ export default function TrackDetailPage() {
       title: titleDraft,
       summary: summaryDraft.trim() ? summaryDraft : null,
     });
-    syncAfterWrite();
     setEditingMeta(false);
   }
 

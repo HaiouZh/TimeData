@@ -22,7 +22,6 @@ import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Icon } from "../../components/Icon.js";
 import { ConfirmSheet } from "../../components/ui/ConfirmSheet.js";
 import { Sheet } from "../../components/ui/Sheet.js";
-import { useSyncContext } from "../../contexts/SyncContext.js";
 import { useGalaxyEngineMode } from "../../lib/galaxyEngineMode.js";
 import { computeEdgeRoutings, type HandleBox, type EdgeRouting } from "../../lib/goalEdgeRouting.js";
 import { goalGalaxyLayout, type XY } from "../../lib/goalGalaxyLayout.js";
@@ -435,7 +434,6 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
 
 function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
-  const { syncAfterWrite } = useSyncContext();
   const wide = useIsWideScreen();
   const boardSignals = useTrackActionTags();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
@@ -531,7 +529,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const nodeCacheRef = useRef<Map<string, GoalGalaxyFlowNode>>(new Map());
   const layoutNodes = useMemo<GoalGalaxyFlowNode[]>(() => {
     const restoreAuto = (nodeId: string, anchorIds: string[]) => {
-      void restoreGalaxyPin({ nodeId, anchorIds, syncAfterWrite });
+      void restoreGalaxyPin({ nodeId, anchorIds });
     };
     const starNodes = model.stars.map(
       (star) =>
@@ -582,7 +580,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     pinnedStarIds,
     selectedNodeId,
     settleEnabled,
-    syncAfterWrite,
   ]);
   const [nodes, setNodes] = useState<GoalGalaxyFlowNode[]>(() => layoutNodes);
   const applySettlePositions = useCallback((positions: Record<string, XY>) => {
@@ -748,13 +745,13 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
     if (ref.nodeKind === "goal") {
       const coords = goalPinFromCanvas(finalPosition);
-      void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
+      void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y });
       return;
     }
 
     const anchor = anchorCanvasById[`goal:${ref.goalId}`] ?? { x: 0, y: 0 };
     const coords = memberPinFromCanvas(finalPosition, anchor);
-    void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y }).then(syncAfterWrite);
+    void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y });
   }
 
   function handleMoveEnd(_event: MouseEvent | TouchEvent | null, nextViewport: Viewport): void {
@@ -807,9 +804,9 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       if (!goalId) return;
 
       event.dataTransfer.dropEffect = "copy";
-      void addGoalMember(goalId, ref).then(syncAfterWrite);
+      void addGoalMember(goalId, ref);
     },
-    [flow, layout.positions, model.stars, nodes, syncAfterWrite],
+    [flow, layout.positions, model.stars, nodes],
   );
 
   function handleLineOpacityChange(value: string): void {
@@ -834,7 +831,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     }
 
     await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
-    syncAfterWrite();
     setConnectDraft(null);
     setErrorMessage(null);
   }
@@ -895,7 +891,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       const goalId = goalIdFromStarNodeId(selectedFlowNode.id);
       const goal = goalId ? goalById.get(goalId) : null;
       if (!goalId || !goal) return;
-      void updateGoal(goalId, { status: goal.status === "archived" ? "active" : "archived" }).then(syncAfterWrite);
+      void updateGoal(goalId, { status: goal.status === "archived" ? "active" : "archived" });
       return;
     }
     if (action.id === "delete-goal") {
@@ -912,7 +908,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       return;
     }
     if (action.id === "toggle-complete" && selectedGraphNode.ref?.kind === "task") {
-      void toggleTaskDone(selectedGraphNode.ref.id).then(syncAfterWrite);
+      void toggleTaskDone(selectedGraphNode.ref.id);
       return;
     }
     if (action.id === "connect") {
@@ -931,7 +927,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       void restoreGalaxyPin({
         nodeId: selectedFlowNode.id,
         anchorIds: anchorIdsForFlowNode(selectedFlowNode),
-        syncAfterWrite,
       });
       return;
     }
@@ -994,7 +989,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (!pending || !ref) return;
 
     await removeGoalMember(pending.goalId, ref);
-    syncAfterWrite();
     setPendingRemoveMember(null);
   }
 
@@ -1004,31 +998,26 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   async function addMember(ref: GoalMemberRef): Promise<void> {
     if (!addMemberGoalId) return;
     await addGoalMember(addMemberGoalId, ref);
-    syncAfterWrite();
   }
 
   async function quickCreateTask(title: string): Promise<void> {
     if (!addMemberGoalId) return;
     await addTaskForGoal(addMemberGoalId, { title, toInbox: false });
-    syncAfterWrite();
   }
 
   async function saveGoalMenu(patch: GoalEditPatch): Promise<void> {
     if (!goalMenuGoalId) return;
     await updateGoal(goalMenuGoalId, patch);
-    syncAfterWrite();
   }
 
   async function toggleGoalArchive(): Promise<void> {
     if (!goalMenuGoal) return;
     await updateGoal(goalMenuGoal.id, { status: goalMenuGoal.status === "archived" ? "active" : "archived" });
-    syncAfterWrite();
   }
 
   async function deleteGoalFromMenu(): Promise<void> {
     if (!goalMenuGoalId) return;
     await deleteGoal(goalMenuGoalId);
-    syncAfterWrite();
     setSelectedNodeId(null);
     setGoalMenuGoalId(null);
   }
@@ -1046,7 +1035,6 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (!goal) return;
 
     await updateGoalPrerequisites(goal.id, nextPrerequisitesWithoutEdge(goal, blocker, blocked));
-    syncAfterWrite();
     setSelectedEdgeId(null);
   }
 

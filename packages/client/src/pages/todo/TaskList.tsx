@@ -35,8 +35,6 @@ export interface TaskListProps {
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
-  /** 行内 children 写入后回调，宿主可在此触发同步。 */
-  onAfterChildWrite?: () => void;
   /** 行内额外动作插槽（如翻牌「顶一下」）。 */
   extraAction?: (task: Task) => ReactNode;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
@@ -62,7 +60,6 @@ export function TaskList(props: TaskListProps) {
         onDelete={props.onDelete}
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
-        onAfterChildWrite={props.onAfterChildWrite}
         extraAction={props.extraAction}
         childrenModeOverride={props.childrenModeOverride}
         indentTargetActive={props.indentTargetId === task.id}

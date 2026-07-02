@@ -14,7 +14,6 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
-import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
@@ -137,7 +136,6 @@ export default function QuickNotesPage() {
 
   const { confirm, dialog } = useConfirm();
   const { hidden: navHidden, setHidden: setNavHidden } = useBottomNav();
-  const { syncAfterWrite } = useSyncContext();
   const { deleteEntry } = useEntryMutations();
   const navigate = useNavigate();
   const timeline = useQuickNoteTimeline();
@@ -421,7 +419,6 @@ export default function QuickNotesPage() {
         return;
       }
       const { entry } = result;
-      syncAfterWrite();
       showActionToast({
         message: `已打点 ${formatTime(entry.startTime)}–${formatTime(entry.endTime)}`,
         actions: [
@@ -436,7 +433,6 @@ export default function QuickNotesPage() {
 
   async function handleUndoPunch(entryId: string) {
     await deleteEntry(entryId);
-    syncAfterWrite();
     setActionToast(null);
   }
 
@@ -459,7 +455,6 @@ export default function QuickNotesPage() {
         setDraftText("");
         stickBottomRef.current = true;
       }
-      syncAfterWrite();
       focusInput();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -478,7 +473,6 @@ export default function QuickNotesPage() {
       const dest = await readTodoDefaultDestination();
       await addTask({ title: text, toInbox: dest === "inbox" });
       setDraftText("");
-      syncAfterWrite();
       focusInput();
       showActionToast({
         message: dest === "inbox" ? "已放入收件箱" : "已加入今天",
@@ -543,7 +537,6 @@ export default function QuickNotesPage() {
 
     await deleteQuickNote(note.id);
     if (editingId === note.id) cancelEditing();
-    syncAfterWrite();
   }
 
   async function handleTogglePin(note: QuickNote) {
@@ -555,7 +548,6 @@ export default function QuickNotesPage() {
     } else if (pinnedNotes.length <= 1) {
       setPinnedOpen(false);
     }
-    syncAfterWrite();
   }
 
   function enterSelection(note: QuickNote) {
@@ -637,7 +629,6 @@ export default function QuickNotesPage() {
     const result = await deleteQuickNotesByIds(ids);
     if (editingId && ids.includes(editingId)) cancelEditing();
     showStatus(`已删除 ${result.deleted} 条。`);
-    if (result.deleted > 0) syncAfterWrite();
     exitSelection();
   }
 
@@ -685,7 +676,6 @@ export default function QuickNotesPage() {
 
     const result = await deleteQuickNotesByRange(jumpDate, jumpDate);
     showStatus(`已删除 ${result.deleted} 条速记。`);
-    if (result.deleted > 0) syncAfterWrite();
   }
 
   function noteInteractionProps(note: QuickNote) {

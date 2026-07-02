@@ -12,7 +12,6 @@ vi.mock("react-router-dom", () => ({
   useSearchParams: () => [searchParamsMock.value, vi.fn()],
 }));
 
-const syncAfterWriteMock = vi.hoisted(() => vi.fn());
 const confirmMock = vi.hoisted(() => vi.fn());
 const entryFormPropsMock = vi.hoisted(() => ({
   value: null as null | {
@@ -23,10 +22,6 @@ const entryFormPropsMock = vi.hoisted(() => ({
       note: string,
     ) => Promise<{ ok: boolean; error?: string } | undefined>;
   },
-}));
-
-vi.mock("../contexts/SyncContext.tsx", () => ({
-  useSyncContext: () => ({ syncAfterWrite: syncAfterWriteMock }),
 }));
 
 const useLatestEntryEndTimeBeforeMock = vi.hoisted(() => vi.fn<(categoryId: string | null) => string | null>(() => null));
@@ -75,7 +70,6 @@ describe("EntryPage default times", () => {
     findOverlappingEntriesMock.mockReset();
     findOverlappingEntriesMock.mockResolvedValue([]);
     planEntryOverlapAdjustmentsMock.mockReset();
-    syncAfterWriteMock.mockReset();
     saveEntryWithOverlapAdjustmentsMock.mockReset();
     saveEntryWithOverlapAdjustmentsMock.mockResolvedValue({});
     entryFormPropsMock.value = null;
@@ -170,7 +164,6 @@ describe("EntryPage default times", () => {
       note: "new",
       overlapPlan: plan,
     });
-    expect(syncAfterWriteMock).toHaveBeenCalledOnce();
   });
 
   it("跨天记录保存后返回结束时间所在日期的时间轴", async () => {
@@ -192,7 +185,6 @@ describe("EntryPage default times", () => {
       note: "overnight",
       overlapPlan: null,
     });
-    expect(syncAfterWriteMock).toHaveBeenCalledOnce();
     expect(navigateMock).toHaveBeenCalledWith("/?date=2026-05-18", { replace: true });
   });
 
@@ -221,7 +213,6 @@ describe("EntryPage default times", () => {
       note: null,
       overlapPlan: null,
     });
-    expect(syncAfterWriteMock).toHaveBeenCalledOnce();
     expect(navigateMock).toHaveBeenCalledWith("/?date=2026-06-16", { replace: true });
   });
 

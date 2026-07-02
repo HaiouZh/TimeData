@@ -4,7 +4,6 @@ import CircularTimeline from "../components/CircularTimeline.tsx";
 import DateNav from "../components/DateNav.tsx";
 import SyncIndicator from "../components/SyncIndicator.tsx";
 import Timeline from "../components/Timeline.tsx";
-import { useSyncContext } from "../contexts/SyncContext.tsx";
 import { useEntries } from "../hooks/useEntries.ts";
 import { useMidnightTick } from "../hooks/useMidnightTick.ts";
 import { getMergeOvernightEnabled } from "../lib/overnightDisplaySetting.ts";
@@ -31,12 +30,7 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
     () => buildTimeSlots(entries, date, 0, { previousEntry, mergeOvernight, now }),
     [date, entries, mergeOvernight, now, previousEntry],
   );
-  const { syncIfStale, syncAfterWrite } = useSyncContext();
   const [punchMessage, setPunchMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    void syncIfStale();
-  }, [syncIfStale]);
 
   useEffect(() => {
     setDate(normalizedQueryDate);
@@ -54,7 +48,6 @@ export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePa
       return;
     }
     setPunchMessage(null);
-    syncAfterWrite();
   }
 
   return (

@@ -33,7 +33,6 @@ const handlers = {
   onDelete: vi.fn(),
   onToToday: vi.fn(),
   onToInbox: vi.fn(),
-  onAfterChildWrite: vi.fn(),
 };
 
 beforeEach(() => {

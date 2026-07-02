@@ -134,7 +134,6 @@ function visualRectsOverlap(
 }
 
 let latestLayout: GoalLayoutController | null = null;
-const onChanged = vi.fn();
 
 function Probe({ layoutPins = [], graphModel = model }: { layoutPins?: GoalLayoutPin[]; graphModel?: GoalGraphModel }) {
   latestLayout = useGoalGraphLayout({
@@ -142,7 +141,6 @@ function Probe({ layoutPins = [], graphModel = model }: { layoutPins?: GoalLayou
     model: graphModel,
     orientation: "horizontal",
     layoutPins,
-    onChanged,
   });
 
   return createElement("span", { "data-probe": "true" });

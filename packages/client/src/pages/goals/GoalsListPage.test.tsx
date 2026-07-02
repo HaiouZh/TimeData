@@ -8,8 +8,6 @@ import { db } from "../../db/index.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import GoalsListPage from "./GoalsListPage.js";
 
-vi.mock("../../contexts/SyncContext.js", () => ({ useSyncContext: () => ({ syncAfterWrite: vi.fn() }) }));
-
 let mountedRoot: Awaited<ReturnType<typeof renderDom>>["root"] | null = null;
 
 beforeEach(async () => {

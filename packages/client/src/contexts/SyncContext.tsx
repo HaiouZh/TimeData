@@ -48,10 +48,6 @@ export interface SyncContextValue extends SyncActions {
   updateApiUrl: (url: string) => void;
   cloudSyncEnabled: boolean;
   setCloudSyncEnabledInContext: (enabled: boolean) => void;
-  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
-  syncIfStale: () => Promise<void>;
-  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
-  syncAfterWrite: () => void;
   connection: SyncStreamState;
 }
 
@@ -93,12 +89,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setCloudSyncEnabled(enabled);
     setCloudSyncEnabledState(enabled);
   }, []);
-
-  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
-  const syncIfStale = useCallback(async () => {}, []);
-
-  /** @deprecated S2 触发已下沉至 syncScheduler，T4 移除 */
-  const syncAfterWrite = useCallback(() => {}, []);
 
   useEffect(() => {
     if (!cloudSyncEnabled || !apiUrl) return;
@@ -168,21 +158,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       updateApiUrl,
       cloudSyncEnabled,
       setCloudSyncEnabledInContext,
-      syncIfStale,
-      syncAfterWrite,
       connection,
     }),
-    [
-      apiUrl,
-      cloudSyncEnabled,
-      connection,
-      setCloudSyncEnabledInContext,
-      status,
-      syncAfterWrite,
-      syncIfStale,
-      syncState,
-      updateApiUrl,
-    ],
+    [apiUrl, cloudSyncEnabled, connection, setCloudSyncEnabledInContext, status, syncState, updateApiUrl],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
