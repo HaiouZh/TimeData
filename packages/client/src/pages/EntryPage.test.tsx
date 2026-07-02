@@ -5,11 +5,13 @@ import EntryPage, { resolveTimelineDateAfterSave } from "./EntryPage.js";
 
 const searchParamsMock = vi.hoisted(() => ({ value: new URLSearchParams("") }));
 const navigateMock = vi.hoisted(() => vi.fn());
+const locationKeyMock = vi.hoisted(() => ({ value: "default" }));
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
   useParams: () => ({}),
   useSearchParams: () => [searchParamsMock.value, vi.fn()],
+  useLocation: () => ({ key: locationKeyMock.value, pathname: "/entries/new" }),
 }));
 
 const confirmMock = vi.hoisted(() => vi.fn());
@@ -21,6 +23,7 @@ const entryFormPropsMock = vi.hoisted(() => ({
       nextEndTime: string,
       note: string,
     ) => Promise<{ ok: boolean; error?: string } | undefined>;
+    onCancel: () => void;
   },
 }));
 
@@ -53,6 +56,7 @@ vi.mock("../components/EntryForm.js", () => ({
       nextEndTime: string,
       note: string,
     ) => Promise<{ ok: boolean; error?: string } | undefined>;
+    onCancel: () => void;
   }) => {
     entryFormPropsMock.value = props;
     return createElement("div", null, `${props.startTime} ${props.endTime}`);
@@ -63,6 +67,7 @@ describe("EntryPage default times", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     searchParamsMock.value = new URLSearchParams("");
+    locationKeyMock.value = "default";
     navigateMock.mockReset();
     useLatestEntryEndTimeBeforeMock.mockReturnValue(null);
     confirmMock.mockReset();
@@ -151,6 +156,27 @@ describe("EntryPage default times", () => {
     const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(html).toContain("2026-05-08T06:45:00 2026-05-08T07:30:00");
+  });
+
+  it("冷入口（location.key=default）取消回锚定日时间轴而不是 no-op", () => {
+    vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
+    searchParamsMock.value = new URLSearchParams("date=2026-05-15");
+    locationKeyMock.value = "default";
+
+    renderToStaticMarkup(createElement(EntryPage));
+    entryFormPropsMock.value?.onCancel();
+
+    expect(navigateMock).toHaveBeenCalledWith("/?date=2026-05-15", { replace: true });
+  });
+
+  it("有历史时取消仍走 navigate(-1)", () => {
+    vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
+    locationKeyMock.value = "abc123";
+
+    renderToStaticMarkup(createElement(EntryPage));
+    entryFormPropsMock.value?.onCancel();
+
+    expect(navigateMock).toHaveBeenCalledWith(-1);
   });
 
   it("falls back to now-60min when previous endTime is not before end", () => {
