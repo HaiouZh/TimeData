@@ -189,10 +189,11 @@ describe("createSyncScheduler", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(executor).not.toHaveBeenCalled();
 
-    // 有 pending 时 flushNow 立即执行，不等待防抖窗口
+    // 有 pending 时 flushNow 立即执行，不等待防抖窗口，reason 标记为 flush
     scheduler.notifyWrite();
     scheduler.flushNow();
     expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor.mock.calls[0][0].reason).toBe("flush");
 
     scheduler.dispose();
   });

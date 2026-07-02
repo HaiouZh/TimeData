@@ -122,6 +122,7 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
     flushNow() {
       if (!executor || running) return;
       if (pendingSince === null && !debounceTimer && !maxWaitTimer) return;
+      pendingReason = "flush";
       fire();
     },
     setExecutor(next) {
