@@ -13,9 +13,11 @@ import {
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
+import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
+import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { punchNow } from "../lib/punch.js";
@@ -51,7 +53,6 @@ const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 const STATUS_AUTO_DISMISS_MS = 2400;
-const ACTION_TOAST_DISMISS_MS = 6000;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 const NOTE_CARD_BASE =
   "relative max-w-full [@media(pointer:coarse)]:select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
@@ -65,11 +66,6 @@ interface MenuTarget {
   note: QuickNote;
   x: number;
   y: number;
-}
-
-interface ActionToast {
-  message: string;
-  actions?: { label: string; onClick: () => void }[];
 }
 
 function normalizeDateParam(value: string | null): string | null {
@@ -96,7 +92,7 @@ export default function QuickNotesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [actionToast, setActionToast] = useState<ActionToast | null>(null);
+  const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
@@ -123,7 +119,6 @@ export default function QuickNotesPage() {
   const saveTodoPendingRef = useRef(false);
   const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const actionToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleRafRef = useRef<number | null>(null);
   const bubbleKeyRef = useRef<string | null>(null);
@@ -180,7 +175,6 @@ export default function QuickNotesPage() {
   useEffect(
     () => () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
-      if (actionToastTimerRef.current) clearTimeout(actionToastTimerRef.current);
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
       if (bubbleRafRef.current !== null && typeof cancelAnimationFrame === "function") {
         cancelAnimationFrame(bubbleRafRef.current);
@@ -402,15 +396,6 @@ export default function QuickNotesPage() {
     }, STATUS_AUTO_DISMISS_MS);
   }
 
-  function showActionToast(toast: ActionToast) {
-    if (actionToastTimerRef.current) clearTimeout(actionToastTimerRef.current);
-    setActionToast(toast);
-    actionToastTimerRef.current = setTimeout(() => {
-      actionToastTimerRef.current = null;
-      setActionToast(null);
-    }, ACTION_TOAST_DISMISS_MS);
-  }
-
   async function handlePunch() {
     if (punchPendingRef.current) return;
     punchPendingRef.current = true;
@@ -438,7 +423,7 @@ export default function QuickNotesPage() {
 
   async function handleUndoPunch(entryId: string) {
     await deleteEntry(entryId);
-    setActionToast(null);
+    clearActionToast();
   }
 
   async function handleSubmit() {
@@ -1160,28 +1145,12 @@ export default function QuickNotesPage() {
           }}
         >
           <div className="mx-auto w-full max-w-3xl">
-            {actionToast && (
-              <div
-                role="status"
-                aria-label="捕捉操作反馈"
-                className="mb-2 flex items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 text-sm text-ink shadow-elev1"
-              >
-                <span className="min-w-0 flex-1 truncate">{actionToast.message}</span>
-                {actionToast.actions?.map((action) => (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={() => {
-                      setActionToast(null);
-                      action.onClick();
-                    }}
-                    className="shrink-0 font-semibold text-accent transition hover:text-accent-ink"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <ActionToastBar
+              toast={actionToast}
+              onDismiss={clearActionToast}
+              ariaLabel="捕捉操作反馈"
+              className="mb-2"
+            />
             {editingId && (
               <div className="mb-2 flex items-center justify-between rounded-card border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-accent-ink">
                 <span className="truncate">正在编辑：{draftText.slice(0, 40)}</span>
