@@ -22,6 +22,8 @@ covers:
 last-reviewed: 2026-06-29
 ---
 
+<!-- 复核 2026-07-02（S2 调度重做）：SettingsPage.tsx 手动同步按钮 onClick 从 `sync` 改为 `() => sync()`（仅签名包装，行为不变，仍不经调度器直调 sync()），部署/自更新相关内容无需改动。 -->
+
 # 部署与自更新
 
 > 部署形态：单进程 Hono + SQLite，跑在 Docker 里。镜像走 GHCR，支持一键自更新。

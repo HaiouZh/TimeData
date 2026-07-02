@@ -10,7 +10,7 @@ covers:
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/**
-last-reviewed: 2026-06-24
+last-reviewed: 2026-07-02
 ---
 
 # 任务轨道
@@ -82,7 +82,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 `决策 / 批注 / 提醒` 只是普通快捷标签，不再是特殊步骤性质，也不驱动特殊底色或“决策步”徽标。底层 `appendUserStep(mode:"instant")` 能力和历史瞬时步骤仍可兼容存在，但主 UI 不再让用户先选择“开始做这段 / 记一个点”。
 
-另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。这些都只写 Dexie + `syncLog`,UI 写入成功后调 `syncAfterWrite()`,由普通本地优先同步推 server;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
+另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync](sync.md) §1.6),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
 
 产品生命周期收敛为 `推进中 / 已归档`：active 显示 `推进中` 和 `归档` 按钮；归档写底层 `concluded` 并闭合开口步；旧数据里的 `parked` 只兼容读取为 `已归档`，非 active 统一显示 `重新推进`。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
 
@@ -96,7 +96,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 看板信号计算在 `packages/shared/src/trackBoardSignals.ts`，client `tracksView.ts` 与 server agent context API 共用同一纯函数：按步骤倒序找最近一条含已配置看板信号的 step；同一步多个信号时按 `boardSignals` 顺序取第一个；无标签步骤和普通检索标签不清空已有信号。
 
-`/tracks` 列表保持扁平，不再按阵营或“该谁了”分组，也不保存本地分组视图偏好。顶部 chip 按配置顺序显示看板信号计数，如 `待我处理 N`、`agent在做 N`；点击 chip 做 OR 筛选。卡片只展示 `#tag` 信号牌、最新 3 步，并可就地“写一步”（`appendUserStep` + `syncAfterWrite()`）。
+`/tracks` 列表保持扁平，不再按阵营或“该谁了”分组，也不保存本地分组视图偏好。顶部 chip 按配置顺序显示看板信号计数，如 `待我处理 N`、`agent在做 N`；点击 chip 做 OR 筛选。卡片只展示 `#tag` 信号牌、最新 3 步，并可就地”写一步”（`appendUserStep`，写入经 `recordSyncLog` 自动调度上传）。
 
 agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，默认开口并打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合上一开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
 

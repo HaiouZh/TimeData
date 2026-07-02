@@ -34,7 +34,7 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-07-01
+last-reviewed: 2026-07-02
 ---
 <!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；tasks schema、occurrence 语义与同步行为不变。 -->
 
@@ -63,7 +63,7 @@ last-reviewed: 2026-07-01
            deleteTask/deleteTaskCascade/persistTaskOrder/bumpTaskWeight
         → putTask(): db.transaction("rw", db.tasks, db.syncLog) 内
            db.tasks.put(next) + recordSyncLog("tasks", id, action, ts)
-        → syncAfterWrite() 触发常规同步
+        → recordSyncLog 内 syncScheduler.notifyWrite() 自动调度（见 sync.md §1.6）
         → POST /api/sync/push → server 通用 LWW 域（无自定义 apply）
            → taskToRow 写 SQLite tasks + 服务器分配 updated_at + recordSeq
         → sync_seq 记账 → notifySyncChange → 其他设备 SSE pull

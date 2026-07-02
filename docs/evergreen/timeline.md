@@ -18,7 +18,7 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
-last-reviewed: 2026-06-28
+last-reviewed: 2026-07-02
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
@@ -129,7 +129,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 **刻度**：三层刻度——144 个 10 分钟微刻度（弱、短），每隔 3 个升级为半点刻度，每隔 6 个升级为整点刻度（最长、最亮）；在 RADIUS 中线位置标 0–23 全部整点数字，0/6/12/18 加粗作为锚点。文字以深色描边压在分段之上避免被分类色淹没。
 
-**中心打点**：中心大圆是固定的打点入口，点击调用 `punchNow`（规则同速记页 header 打点：起点=今天最后一条记录 end，否则今天 0 点，分类取 `设置 → 记录偏好 → 打点分类` 绑定的子分类），成功后 `syncAfterWrite`；未配置或分类失效时不写记录并显示提示。中心仍展示当前选中段的时间范围、标题和时长作为上下文，但不承担编辑/补录跳转——查看、编辑记录与补录空档全部交给下方的 `Timeline` 列表（点记录进编辑页、点空档进新增页并带 `start` / `end` / `date`）。环面仍保留选中态：当槽位变化时默认选中最后一个空档、否则退选最后一条记录、`future` 段永不进入默认选中，用于高亮与指针箭头，但不驱动中心行为。`onEntryOpen` / `onGapOpen` 降为可选 prop、保留兼容但中心已不使用。中心时间范围、时长和下方列表的时间文案使用 `td-time` / `td-duration`，不直接使用 `font-mono`。
+**中心打点**：中心大圆是固定的打点入口，点击调用 `punchNow`（规则同速记页 header 打点：起点=今天最后一条记录 end，否则今天 0 点，分类取 `设置 → 记录偏好 → 打点分类` 绑定的子分类），成功后写入经 `recordSyncLog` 自动调度上传；未配置或分类失效时不写记录并显示提示。中心仍展示当前选中段的时间范围、标题和时长作为上下文，但不承担编辑/补录跳转——查看、编辑记录与补录空档全部交给下方的 `Timeline` 列表（点记录进编辑页、点空档进新增页并带 `start` / `end` / `date`）。环面仍保留选中态：当槽位变化时默认选中最后一个空档、否则退选最后一条记录、`future` 段永不进入默认选中，用于高亮与指针箭头，但不驱动中心行为。`onEntryOpen` / `onGapOpen` 降为可选 prop、保留兼容但中心已不使用。中心时间范围、时长和下方列表的时间文案使用 `td-time` / `td-duration`，不直接使用 `font-mono`。
 
 时间轴页在圆环后直接进入时间流列表，不再保留独立的日覆盖率卡片；覆盖率、时长分析等汇总口径保留在统计页，不作为时间轴页 standalone UI。列表层会隐藏今天末尾直接贴着 `future` 段、且短于 2 分钟的空档，避免刚记录完最新时间段后立刻出现“补记这段”的误导提示；历史日期和两条记录中间的短空档仍正常显示。
 
@@ -191,7 +191,7 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 `TimeRangeWheelPicker` 的滚轮选择行为已抽到共享 `packages/client/src/components/Wheel.tsx`；时间记录页面仍通过 `TimeRangeWheelPicker` 组合时、分两列并保留原有解析规则，共享组件只复用滚动索引、吸附与无框滚轮交互，不改变新增/编辑记录的时间语义。选择器、日期导航、月历、补记空档、`EntryForm` 表面和操作按钮消费 `page/surface/border/ink/accent/danger` token；日期、时钟、时长、日号使用 `td-time` / `td-duration` / `td-num`。`DateNav`、`TimeSlot` 和相邻合并按钮的箭头/加号均经 Phosphor `Icon` 包装，不使用字符箭头或文字加号伪图标。
 
-`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，页面调用 `SyncContext.syncAfterWrite()`，在 1.5 秒防抖窗口后把本地待同步日志推到服务器；进入时间轴页的对账兜底仍由 `syncIfStale()` 走较长节流。
+`useEntryMutations` 是客户端本地写入 `timeEntries` 和 `syncLog` 的边界。`addEntry` 和 `updateEntry` 在写入 IndexedDB 前会再次校验 `endTime > startTime` 且 `endTime` 不晚于当前本地时间，防止绕过表单的未来记录进入本地待同步队列并被同步反复重试。`addEntry` / `updateEntry` / `deleteEntry` 的业务表写入与 `syncLog` 追写同处一个 Dexie transaction；同步日志写入失败时，记录新增、编辑或删除都会整体回滚。新增/编辑记录页如果检测到可自动处理的重叠记录，会在用户确认后调用事务级保存入口：旧记录截断或删除、目标记录写入、对应 `syncLog` 追写都在同一个 Dexie transaction 里完成；如果目标记录保存失败，重叠调整和同步日志一起回滚。记录保存或删除成功后，`syncLog` 写入经 `recordSyncLog` 自动通知模块级调度器 `syncScheduler`（防抖+max-wait 合并触发），无需页面显式调用同步函数；调度器语义见 [sync](sync.md) §1.6。
 
 ## 10. 相邻记录合并
 

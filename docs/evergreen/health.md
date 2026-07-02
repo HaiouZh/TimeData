@@ -16,6 +16,7 @@ last-reviewed: 2026-06-28
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
 <!-- 复核 2026-06-22（目标层 Phase 1）：新增 goals 域与 Dexie v10 触及共享登记簿 / db index covers；健康 6 域 schema、同步语义、备份角色均不变。 -->
+<!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用（触发下沉，见 sync.md），健康域 schema、写入路径和备份角色均不变，无需改动。 -->
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及共享类型、db index 与 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，server schema 新增非同步运维表；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-06-27（设计语言 P3）：HealthStatsPage 视觉收口（删旧死 CSS、范围按钮/页面壳 token 化、图表色走 chartColors 镜像）；健康 6 域 schema、同步语义、备份角色仍不变。 -->

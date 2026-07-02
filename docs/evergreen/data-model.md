@@ -16,6 +16,8 @@ covers:
 last-reviewed: 2026-07-02
 ---
 
+<!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用，属触发下沉（见 sync.md），不改变本文档描述的数据契约、schema 归一或映射约定，无需改动。 -->
+
 # 数据模型与契约
 
 > 本文只保留跨域数据契约、全表索引脉、同步信封、时间/ID/字段映射和迁移约定。
