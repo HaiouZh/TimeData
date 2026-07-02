@@ -168,8 +168,6 @@ describe("CircularTimeline selection", () => {
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
           { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -187,8 +185,6 @@ describe("CircularTimeline selection", () => {
           { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -205,8 +201,6 @@ describe("CircularTimeline selection", () => {
         slots: [
           { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -221,8 +215,6 @@ describe("CircularTimeline selection", () => {
         slots: [
           { startTime: "2026-05-08T03:00:00.000Z", endTime: "2026-05-08T16:00:00.000Z", entry: null, kind: "future", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -240,8 +232,6 @@ describe("CircularTimeline selection", () => {
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
           { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -256,8 +246,6 @@ describe("CircularTimeline selection", () => {
         slots: [
           { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -271,8 +259,7 @@ describe("CircularTimeline selection", () => {
 
   it("switches selection when pointer drags across slots", async () => {
     const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
-    const handleEntryOpen = vi.fn();
-    const handleGapOpen = vi.fn();
+    const handleSelectionChange = vi.fn();
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -286,8 +273,7 @@ describe("CircularTimeline selection", () => {
             { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
             { startTime: "2026-05-08T07:00:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
           ],
-          onEntryOpen: handleEntryOpen,
-          onGapOpen: handleGapOpen,
+          onSelectionChange: handleSelectionChange,
         }),
       );
     });
@@ -319,19 +305,25 @@ describe("CircularTimeline selection", () => {
     expect(container.innerHTML).toContain('data-ring-indicator="true"');
     expect(container.innerHTML).toContain("工作/编程");
     expect(container.innerHTML).toContain("1小时");
+    expect(handleSelectionChange).toHaveBeenCalledTimes(1);
+    expect(handleSelectionChange).toHaveBeenLastCalledWith({ type: "entry", entryId: "entry-1" });
 
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
     });
     expect(container.innerHTML).toContain("待记录");
     expect(container.innerHTML).toContain("00:00 - 06:00");
+    expect(handleSelectionChange).toHaveBeenCalledTimes(2);
+    expect(handleSelectionChange).toHaveBeenLastCalledWith({
+      type: "gap",
+      startTime: "2026-05-08T00:00:00",
+      endTime: "2026-05-08T06:00:00",
+    });
 
     await act(async () => {
       svg.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
     });
-    // 中心点击只打点，拖动选段不再打开编辑（编辑交给下方时间流）
-    expect(handleGapOpen).not.toHaveBeenCalled();
-    expect(handleEntryOpen).not.toHaveBeenCalled();
+    expect(handleSelectionChange).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       root.unmount();
@@ -461,6 +453,37 @@ describe("CircularTimeline selection stability (TL-01)", () => {
     await render(next);
 
     expect(container.innerHTML).toContain("09:00 - 10:00");
+    await act(async () => root.unmount());
+    container.remove();
+  });
+});
+
+describe("CircularTimeline selection callback (TL-08/TL-17)", () => {
+  it("初始默认选中不触发 onSelectionChange", async () => {
+    const handleSelectionChange = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(CircularTimeline, {
+          date: "2026-05-08",
+          slots: [
+            {
+              startTime: "2026-05-08T00:00:00",
+              endTime: "2026-05-08T07:00:00",
+              entry: null,
+              kind: "gap",
+              displayMode: "default",
+            },
+          ],
+          onSelectionChange: handleSelectionChange,
+        }),
+      );
+    });
+
+    expect(handleSelectionChange).not.toHaveBeenCalled();
     await act(async () => root.unmount());
     container.remove();
   });
@@ -614,8 +637,6 @@ describe("CircularTimeline now indicator", () => {
         slots: [
           { startTime: "2026-06-03T00:00:00", endTime: "2026-06-03T07:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 
@@ -629,8 +650,6 @@ describe("CircularTimeline now indicator", () => {
         slots: [
           { startTime: "2026-06-02T00:00:00", endTime: "2026-06-02T07:00:00", entry: null, kind: "gap", displayMode: "default" },
         ],
-        onEntryOpen: () => {},
-        onGapOpen: () => {},
       }),
     );
 

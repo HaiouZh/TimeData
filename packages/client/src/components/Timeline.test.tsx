@@ -166,4 +166,39 @@ describe("Timeline", () => {
     expect(html).toContain("15:30 - 15:31");
     expect(html).toContain("补记这段");
   });
+
+  it("gap 按 startTime 匹配高亮（endTime 不参与）", () => {
+    const gap: TimeSlot = {
+      startTime: "2026-05-08T06:00:00",
+      endTime: "2026-05-08T07:00:00",
+      entry: null,
+      kind: "gap",
+      displayMode: "default",
+    };
+    const html = renderToStaticMarkup(
+      createElement(Timeline, {
+        slots: [gap],
+        onGapClick: () => {},
+        onEntryClick: () => {},
+        highlight: { type: "gap", startTime: "2026-05-08T06:00:00", endTime: "2026-05-08T06:59:00" },
+      }),
+    );
+
+    expect(html).toContain('data-slot-highlighted="true"');
+  });
+
+  it("无 highlight 时不标记", () => {
+    const gap: TimeSlot = {
+      startTime: "2026-05-08T06:00:00",
+      endTime: "2026-05-08T07:00:00",
+      entry: null,
+      kind: "gap",
+      displayMode: "default",
+    };
+    const html = renderToStaticMarkup(
+      createElement(Timeline, { slots: [gap], onGapClick: () => {}, onEntryClick: () => {} }),
+    );
+
+    expect(html).not.toContain('data-slot-highlighted="true"');
+  });
 });

@@ -1,5 +1,5 @@
 import { type TimeEntry, isUtcIso, utcToLocalDateTime } from "@timedata/shared";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCategories } from "../hooks/useCategories.ts";
 import type { TimeSlot } from "../lib/time.ts";
@@ -8,12 +8,15 @@ import { formatDuration, formatTimelineTimeRange, getDateString, toLocalDateTime
 interface CircularTimelineProps {
   date: string;
   slots: TimeSlot[];
-  onEntryOpen?: (entry: TimeEntry) => void;
-  onGapOpen?: (startTime: string, endTime: string) => void;
+  onSelectionChange?: (target: RingSelectionTarget) => void;
   onPunch?: () => void;
   overlay?: ReactNode;
   now?: Date;
 }
+
+export type RingSelectionTarget =
+  | { type: "entry"; entryId: string }
+  | { type: "gap"; startTime: string; endTime: string };
 
 type Selection = { type: "gap"; startTime: string; endTime: string } | { type: "entry"; entry: TimeEntry };
 
@@ -208,11 +211,12 @@ function resolveSelection(selection: Selection | null, slots: TimeSlot[]): Selec
   return slot ? { type: "gap", startTime: slot.startTime, endTime: slot.endTime } : null;
 }
 
-export default function CircularTimeline({ date, slots, onPunch, overlay, now }: CircularTimelineProps) {
+export default function CircularTimeline({ date, slots, onSelectionChange, onPunch, overlay, now }: CircularTimelineProps) {
   const { getCategoryColor, getCategoryPath } = useCategories();
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
+  const lastNotifiedKeyRef = useRef<string | null>(null);
 
   function selectFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -221,17 +225,28 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
     setDragMinutes(minutes);
     const slot = findSlotAtMinutes(slots, date, minutes);
     if (!slot) return;
-    setSelection(
-      slot.entry
-        ? { type: "entry", entry: slot.entry }
-        : { type: "gap", startTime: slot.startTime, endTime: slot.endTime },
-    );
+    const nextSelection: Selection = slot.entry
+      ? { type: "entry", entry: slot.entry }
+      : { type: "gap", startTime: slot.startTime, endTime: slot.endTime };
+    setSelection(nextSelection);
+    const key = selectionKey(nextSelection);
+    if (lastNotifiedKeyRef.current !== key) {
+      lastNotifiedKeyRef.current = key;
+      onSelectionChange?.(
+        slot.entry
+          ? { type: "entry", entryId: slot.entry.id }
+          : { type: "gap", startTime: slot.startTime, endTime: slot.endTime },
+      );
+    }
   }
+
+  const resetKey = `${date}|${selectionResetKey(initialSelection)}`;
 
   useEffect(() => {
     setSelection(null);
     setDragMinutes(null);
-  }, [date, initialSelection ? selectionResetKey(initialSelection) : "none"]);
+    lastNotifiedKeyRef.current = null;
+  }, [resetKey]);
 
   const activeSelection = resolveSelection(selection, slots) ?? initialSelection;
 
@@ -315,7 +330,6 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                     opacity={dimmed ? 0.45 : 1}
                     className={slot.kind === "future" ? "" : "cursor-pointer"}
                     style={{ touchAction: "none" }}
-                    onClick={undefined}
                   />
                 );
               })}

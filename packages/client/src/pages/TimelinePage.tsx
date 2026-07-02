@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
-import CircularTimeline from "../components/CircularTimeline.tsx";
+import CircularTimeline, { type RingSelectionTarget } from "../components/CircularTimeline.tsx";
 import DateNav from "../components/DateNav.tsx";
 import SyncIndicator from "../components/SyncIndicator.tsx";
 import Timeline from "../components/Timeline.tsx";
@@ -24,6 +24,7 @@ export default function TimelinePage() {
   const { deleteEntry } = useEntryMutations();
   const mergeOvernight = getMergeOvernightEnabled();
   const navigate = useNavigate();
+  const [ringSelection, setRingSelection] = useState<RingSelectionTarget | null>(null);
   const slots = useMemo(
     () => buildTimeSlots(entries, date, 0, { previousEntry, mergeOvernight, now }),
     [date, entries, mergeOvernight, now, previousEntry],
@@ -36,6 +37,7 @@ export default function TimelinePage() {
 
   function handleDateChange(nextDate: string) {
     clearToast();
+    setRingSelection(null);
     setDate(nextDate);
     setSearchParams(nextDate === today ? {} : { date: nextDate });
   }
@@ -76,6 +78,7 @@ export default function TimelinePage() {
         date={date}
         slots={slots}
         now={now}
+        onSelectionChange={setRingSelection}
         onPunch={() => void handlePunch()}
         overlay={<SyncIndicator />}
       />
@@ -88,6 +91,7 @@ export default function TimelinePage() {
           )
         }
         onEntryClick={(entry) => navigate(`/entries/${entry.id}/edit`)}
+        highlight={ringSelection}
       />
     </>
   );
