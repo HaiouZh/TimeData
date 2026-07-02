@@ -82,7 +82,7 @@ describe("EntryPage default times", () => {
     );
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-08T00:30:00.000Z");
 
-    const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(useLatestEntryEndTimeBeforeMock).toHaveBeenCalledWith(null);
     expect(html).toContain("2026-05-08T06:00:00 2026-05-08T07:00:00");
@@ -96,7 +96,7 @@ describe("EntryPage default times", () => {
     );
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-16T00:30:00.000Z");
 
-    const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(useLatestEntryEndTimeBeforeMock).toHaveBeenCalledWith(null);
     // start 保留 queryStart（同 date 那天），end 被钉到 date 当天 23:59
@@ -109,7 +109,7 @@ describe("EntryPage default times", () => {
       "date=2026-05-16&start=2026-05-14T16%3A00%3A00fooZ&end=2026-99-99T16%3A00%3A00Z",
     );
 
-    const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(html).toContain("2026-05-16T06:30:00 2026-05-16T07:30:00");
   });
@@ -117,7 +117,7 @@ describe("EntryPage default times", () => {
   it("computes default start and end times from the current clock when no params", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
 
-    const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(html).toContain("2026-05-08T06:30:00 2026-05-08T07:30:00");
   });
@@ -126,7 +126,7 @@ describe("EntryPage default times", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-07T22:45:00.000Z");
 
-    const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(html).toContain("2026-05-08T06:45:00 2026-05-08T07:30:00");
   });
@@ -135,7 +135,7 @@ describe("EntryPage default times", () => {
     vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
     useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-08T00:45:00.000Z");
 
-    const html = renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(html).toContain("2026-05-08T06:30:00 2026-05-08T07:30:00");
   });
@@ -151,7 +151,7 @@ describe("EntryPage default times", () => {
     findOverlappingEntriesMock.mockResolvedValue([overlap]);
     planEntryOverlapAdjustmentsMock.mockReturnValue(plan);
 
-    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    renderToStaticMarkup(createElement(EntryPage));
     await entryFormPropsMock.value?.onSave("cat-work", "2026-05-17T09:00:00", "2026-05-17T11:00:00", "new");
 
     expect(confirmMock).toHaveBeenCalledOnce();
@@ -169,7 +169,7 @@ describe("EntryPage default times", () => {
   it("跨天记录保存后返回结束时间所在日期的时间轴", async () => {
     vi.setSystemTime(new Date("2026-05-18T06:00:00+08:00"));
 
-    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    renderToStaticMarkup(createElement(EntryPage));
     await entryFormPropsMock.value?.onSave(
       "cat-sleep",
       "2026-05-17T22:00:00",
@@ -191,7 +191,7 @@ describe("EntryPage default times", () => {
   it("凌晨补记昨晚时段时整段回退一天再保存", async () => {
     vi.setSystemTime(new Date("2026-06-17T00:14:00+08:00"));
 
-    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    renderToStaticMarkup(createElement(EntryPage));
     const result = await entryFormPropsMock.value?.onSave(
       "cat-work",
       "2026-06-17T23:41:00",
@@ -219,7 +219,7 @@ describe("EntryPage default times", () => {
   it("blocks save with future error when onSave receives a still-future endTime", async () => {
     vi.setSystemTime(new Date("2026-05-20T14:00:00+08:00"));
 
-    renderToStaticMarkup(createElement(EntryPage, { refreshKey: 0 }));
+    renderToStaticMarkup(createElement(EntryPage));
     const result = await entryFormPropsMock.value?.onSave(
       "cat-work",
       "2026-05-20T17:00:00",

@@ -49,11 +49,7 @@ export function resolveTimelineDateAfterSave(startLocal: string, endLocal: strin
   return startDate;
 }
 
-interface EntryPageProps {
-  refreshKey?: number;
-}
-
-export default function EntryPage({ refreshKey: _refreshKey = 0 }: EntryPageProps) {
+export default function EntryPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();

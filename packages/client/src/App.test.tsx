@@ -5,10 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
 import { BottomNavProvider } from "./contexts/BottomNavContext.js";
 
-vi.mock("./hooks/useAppResumeRefresh.ts", () => ({
-  useAppResumeRefresh: () => {},
-}));
-
 vi.mock("./components/AppUpdatePrompt.tsx", () => ({
   default: () => null,
 }));
@@ -18,11 +14,11 @@ vi.mock("./lib/settings/navVisibleTabsSetting.ts", () => ({
 }));
 
 vi.mock("./pages/TimelinePage.tsx", () => ({
-  default: ({ refreshKey }: { refreshKey: number }) => createElement("div", null, `时间轴页面 ${refreshKey}`),
+  default: () => createElement("div", null, "时间轴页面"),
 }));
 
 vi.mock("./pages/EntryPage.tsx", () => ({
-  default: ({ refreshKey }: { refreshKey: number }) => createElement("div", null, `记录页面 ${refreshKey}`),
+  default: () => createElement("div", null, "记录页面"),
 }));
 
 vi.mock("./pages/QuickNotesPage.tsx", () => ({
@@ -146,12 +142,12 @@ describe("AppShell settings routes", () => {
     expect(detailHtml).not.toContain("统计");
   });
 
-  it("passes the resume refresh key to time-sensitive pages", () => {
+  it("renders the timeline and entry pages", () => {
     const timelineHtml = renderAppShell("/");
     const entryHtml = renderAppShell("/entries/new");
 
-    expect(timelineHtml).toContain("时间轴页面 0");
-    expect(entryHtml).toContain("记录页面 0");
+    expect(timelineHtml).toContain("时间轴页面");
+    expect(entryHtml).toContain("记录页面");
   });
 
   it("renders quick notes route and pure-icon bottom navigation entries", () => {

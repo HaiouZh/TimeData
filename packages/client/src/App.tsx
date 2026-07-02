@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
@@ -8,7 +7,6 @@ import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
-import { useAppResumeRefresh } from "./hooks/useAppResumeRefresh.ts";
 import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
@@ -16,7 +14,6 @@ import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
 
 export function AppShell() {
   const location = useLocation();
-  const [resumeRefreshKey, setResumeRefreshKey] = useState(0);
   const isWideScreen = useIsWideScreen();
   const onMainScroll = useHideBottomNavOnScroll();
   const hidesBottomNav =
@@ -27,7 +24,6 @@ export function AppShell() {
 
   useDocumentTitle(location.pathname);
   useFavicon(location.pathname);
-  useAppResumeRefresh(() => setResumeRefreshKey((value) => value + 1));
 
   return (
     <div className="flex h-dvh bg-page text-ink">
@@ -35,7 +31,7 @@ export function AppShell() {
       {isWideScreen && <DesktopSidebar />}
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
-          <AppRoutes refreshKey={resumeRefreshKey} />
+          <AppRoutes />
         </main>
         {!isWideScreen && !hidesBottomNav && <MobileBottomNav />}
       </div>

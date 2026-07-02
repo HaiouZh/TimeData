@@ -10,11 +10,7 @@ import { getMergeOvernightEnabled } from "../lib/overnightDisplaySetting.ts";
 import { punchNow } from "../lib/punch.ts";
 import { buildTimeSlots, getDateString } from "../lib/time.ts";
 
-interface TimelinePageProps {
-  refreshKey?: number;
-}
-
-export default function TimelinePage({ refreshKey: _refreshKey = 0 }: TimelinePageProps) {
+export default function TimelinePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [, setMidnightTick] = useState(0);
   useMidnightTick(() => setMidnightTick((value) => value + 1));

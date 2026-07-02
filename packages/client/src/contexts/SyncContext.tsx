@@ -1,6 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../db/index.ts";
+import { useAppHideFlush } from "../hooks/useAppHideFlush.ts";
+import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { useSync } from "../hooks/useSync.ts";
 import { getCloudSyncEnabled, setCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
@@ -99,6 +101,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     });
     return () => syncScheduler.setExecutor(null);
   }, [cloudSyncEnabled, apiUrl]);
+
+  useAppResumeRefresh(() => syncScheduler.requestSync("resume"));
+  useAppHideFlush(() => syncScheduler.flushNow());
 
   const handleSyncStreamMessage = useCallback((message: SyncStreamMessage) => {
     if (message.event !== "hello" && message.event !== "bump") return;

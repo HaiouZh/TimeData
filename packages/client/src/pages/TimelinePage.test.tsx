@@ -49,7 +49,7 @@ vi.mock("../lib/overnightDisplaySetting.ts", () => ({
 describe("TimelinePage sync indicator", () => {
   it("passes SyncIndicator into the circular timeline overlay", () => {
     const html = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
+      createElement(MemoryRouter, null, createElement(TimelinePage)),
     );
 
     expect(html).toContain('data-sync-indicator="true"');
@@ -58,14 +58,14 @@ describe("TimelinePage sync indicator", () => {
 
   it("passes a punch handler into the circular timeline", () => {
     const html = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
+      createElement(MemoryRouter, null, createElement(TimelinePage)),
     );
     expect(html).toContain('data-has-punch="true"');
   });
 
   it("does not render the standalone day overview coverage card", () => {
     const html = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(TimelinePage, { refreshKey: 0 })),
+      createElement(MemoryRouter, null, createElement(TimelinePage)),
     );
 
     expect(html).not.toContain("已记录");

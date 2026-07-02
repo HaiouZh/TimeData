@@ -499,6 +499,60 @@ describe("SyncProvider", () => {
     });
   });
 
+  it("kicks a resume sync when the document becomes visible", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    });
+
+    requestSyncSpy.mockClear();
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(requestSyncSpy).toHaveBeenCalledWith("resume");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("flushes the scheduler when the document becomes hidden", async () => {
+    const flushNowSpy = vi.spyOn(syncScheduler, "flushNow");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    });
+
+    flushNowSpy.mockClear();
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(flushNowSpy).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("forwards a remote bump ahead of the local seq cursor to scheduler.requestSync", async () => {
     const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
     localStorage.setItem("timedata_api_url", "https://example.com");

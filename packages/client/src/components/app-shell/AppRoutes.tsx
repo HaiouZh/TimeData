@@ -25,22 +25,18 @@ import TimelinePage from "../../pages/TimelinePage.tsx";
 import TrackDetailPage from "../../pages/tracks/TrackDetailPage.tsx";
 import TracksListPage from "../../pages/tracks/TracksListPage.tsx";
 
-interface AppRoutesProps {
-  refreshKey: number;
-}
-
-export function AppRoutes({ refreshKey }: AppRoutesProps) {
+export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<TimelinePage refreshKey={refreshKey} />} />
+      <Route path="/" element={<TimelinePage />} />
       <Route path="/quick-notes" element={<QuickNotesPage />} />
       <Route path="/todo" element={<TodoPage />} />
       <Route path="/tracks" element={<TracksListPage />} />
       <Route path="/goals" element={<GoalsPage />} />
       <Route path="/goals/:id" element={<GoalDetailPage />} />
       <Route path="/tracks/:id" element={<TrackDetailPage />} />
-      <Route path="/entries/new" element={<EntryPage refreshKey={refreshKey} />} />
-      <Route path="/entries/:id/edit" element={<EntryPage refreshKey={refreshKey} />} />
+      <Route path="/entries/new" element={<EntryPage />} />
+      <Route path="/entries/:id/edit" element={<EntryPage />} />
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/stats/time" element={<TimeStatsPage />} />
       <Route path="/stats/health" element={<HealthStatsPage />} />
