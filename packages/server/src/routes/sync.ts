@@ -246,7 +246,12 @@ function writeSyncLog(db: Database, action: string, detail: unknown, recordCount
   );
 }
 
-function syncPushResponse(outcomes: SyncPushOutcome[], backupId: string | null): SyncPushResponse {
+function syncPushResponse(
+  outcomes: SyncPushOutcome[],
+  backupId: string | null,
+  latestSeq: number | null,
+  appliedCount: number,
+): SyncPushResponse {
   return {
     outcomes,
     accepted: outcomes.filter((r) => r.status === "accepted").length,
@@ -254,6 +259,8 @@ function syncPushResponse(outcomes: SyncPushOutcome[], backupId: string | null):
     conflicts: outcomes.filter((r) => r.status === "conflict").length,
     backupId,
     serverTime: new Date().toISOString(),
+    latestSeq,
+    appliedCount,
   };
 }
 
@@ -466,7 +473,7 @@ sync.post("/push", async (c) => {
   const validateMs = performance.now() - validateStart;
 
   if (!validation.valid) {
-    const response = syncPushResponse(validation.outcomes, null);
+    const response = syncPushResponse(validation.outcomes, null, getLatestSeq(), 0);
     writeSyncLog(
       db,
       "push_rejected",
@@ -518,6 +525,7 @@ sync.post("/push", async (c) => {
     }
   });
 
+  const latestSeqBefore = getLatestSeq() ?? 0;
   const applyStart = performance.now();
   try {
     applyAll();
@@ -534,9 +542,11 @@ sync.post("/push", async (c) => {
     return c.json(errBody, status);
   }
   const applyMs = performance.now() - applyStart;
+  const latestSeqAfter = getLatestSeq() ?? 0;
+  const appliedCount = latestSeqAfter - latestSeqBefore;
 
   const outcomes = results.map((result) => outcomeFromApplyResult(result, backup?.id ?? null));
-  const response = syncPushResponse(outcomes, backup?.id ?? null);
+  const response = syncPushResponse(outcomes, backup?.id ?? null, latestSeqAfter, appliedCount);
   const totalMs = performance.now() - t0;
   writeSyncLog(db, "push_received", {
     timings: {
@@ -551,6 +561,7 @@ sync.post("/push", async (c) => {
     seqAnalysis,
     protected: Boolean(backup),
     overriddenRecordIds: protectedOutcomeIds(outcomes),
+    appliedCount,
   }, orderedChanges.length);
   notifySyncChange(getLatestSeq());
   return c.json(response);

@@ -1051,6 +1051,107 @@ describe("sync route", () => {
     expect(detail.timings.validateMs).toBeGreaterThanOrEqual(0);
     // 信息不丢：outcomes 仍然可从 detail 中还原。
     expect(detail.outcomes).toEqual(body.outcomes);
+    // 本用例是该 db 首次 push（校验失败，从未记账），latestSeq 契约允许 null。
+    expect(body.latestSeq).toBeNull();
+    expect(body.appliedCount).toBe(0);
+  });
+
+  it("returns latestSeq and appliedCount for accepted pushes", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "c1",
+            action: "create",
+            timestamp: "2026-05-13T00:00:00.000Z",
+            data: {
+              id: "c1",
+              name: "A",
+              parentId: null,
+              color: "#000000",
+              icon: null,
+              sortOrder: 0,
+              isArchived: false,
+              createdAt: "2026-05-13T00:00:00.000Z",
+              updatedAt: "2026-05-13T00:00:00.000Z",
+            },
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accepted).toBe(1);
+    expect(typeof body.latestSeq).toBe("number");
+    expect(body.appliedCount).toBe(1); // 一条 create → 记一次账
+    expect(body.latestSeq).toBe(body.appliedCount); // baseSeq=0 全新库：latestSeq == appliedCount
+  });
+
+  it("push appliedCount reflects only this push's ledger delta", async () => {
+    // 先推一条占用 seq（另一"设备"）
+    await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "c1",
+            action: "create",
+            timestamp: "2026-05-13T00:00:00.000Z",
+            data: {
+              id: "c1",
+              name: "A",
+              parentId: null,
+              color: "#000000",
+              icon: null,
+              sortOrder: 0,
+              isArchived: false,
+              createdAt: "2026-05-13T00:00:00.000Z",
+              updatedAt: "2026-05-13T00:00:00.000Z",
+            },
+          },
+        ],
+      }),
+    });
+
+    // 再推第二条，appliedCount 只应是 1（本批），latestSeq 是全局累计
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 1,
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "c2",
+            action: "create",
+            timestamp: "2026-05-13T00:01:00.000Z",
+            data: {
+              id: "c2",
+              name: "B",
+              parentId: null,
+              color: "#000000",
+              icon: null,
+              sortOrder: 1,
+              isArchived: false,
+              createdAt: "2026-05-13T00:01:00.000Z",
+              updatedAt: "2026-05-13T00:01:00.000Z",
+            },
+          },
+        ],
+      }),
+    });
+
+    const body = await res.json();
+    expect(body.appliedCount).toBe(1);
+    expect(body.latestSeq).toBe(2);
   });
 
   it("creates a protected unknown-base backup when baseSeq is missing", async () => {
@@ -1135,9 +1236,9 @@ describe("sync route", () => {
     expect(body.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied", recordId: "entry-1" });
     expect(createServerBackupMock).not.toHaveBeenCalled();
     expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
-    // 响应体字段集不因新增计时埋点而变化。
+    // 响应体字段集不因新增计时埋点而变化（latestSeq/appliedCount 是本轮新增的既定契约字段）。
     expect(Object.keys(body).sort()).toEqual(
-      ["accepted", "backupId", "conflicts", "outcomes", "rejected", "serverTime"].sort(),
+      ["accepted", "appliedCount", "backupId", "conflicts", "latestSeq", "outcomes", "rejected", "serverTime"].sort(),
     );
 
     const logRow = db
