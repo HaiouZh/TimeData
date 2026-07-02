@@ -577,10 +577,19 @@ function changeFromTombstoneRow(r: TombstoneRow): SyncChange {
   } as SyncChange;
 }
 
+interface PullPage {
+  changes: SyncChange[];
+  nextSinceSeq: number | null;
+  hasMore: boolean;
+}
+
 // 账本补差：按 sinceSeq 之后每个 record 的最新变更，读取当前业务行或 tombstone。
-function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[] {
+// 游标按 seq 前进（不按 change 数）：即便某条 change 读不到（null，被过滤），
+// nextSinceSeq 仍推进到本批最后一个 seq record 的 id，避免游标卡死。
+function readChangesSinceSeq(db: Database, sinceSeq: number | null, limit?: number): PullPage {
+  const seqRows = getChangesSinceSeq(sinceSeq, limit);
   const changes: SyncChange[] = [];
-  for (const seq of getChangesSinceSeq(sinceSeq)) {
+  for (const seq of seqRows) {
     if (seq.action === "delete") {
       const tombstone = db
         .prepare("SELECT * FROM sync_tombstones WHERE table_name = ? AND record_id = ?")
@@ -592,7 +601,11 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null): SyncChange[
     const change = getServerDomain(seq.tableName).readRecord(db, seq.recordId);
     if (change) changes.push(change);
   }
-  return changes;
+  const lastSeqId = seqRows.length > 0 ? seqRows[seqRows.length - 1].id : null;
+  const hasMore = limit != null && seqRows.length === limit;
+  // 无行时保持 sinceSeq（无可推进）。
+  const nextSinceSeq = lastSeqId ?? sinceSeq ?? null;
+  return { changes, nextSinceSeq, hasMore };
 }
 
 sync.post("/pull", async (c) => {
@@ -609,25 +622,32 @@ sync.post("/pull", async (c) => {
   // sinceSeq=0 与 null 等价：全量补差。
   const sinceSeq = body.sinceSeq ? body.sinceSeq : null;
   const readStart = performance.now();
-  const changes = readChangesSinceSeq(db, sinceSeq);
+  const page = readChangesSinceSeq(db, sinceSeq, body.limit);
   const readMs = performance.now() - readStart;
 
+  const latestSeq = getLatestSeq();
   const response: SyncPullResponse = {
-    changes,
+    changes: page.changes,
     serverTime: new Date().toISOString(),
-    latestSeq: getLatestSeq(),
+    latestSeq,
+    // 不分页（无 limit）时 nextSinceSeq 收敛到 latestSeq，便于客户端一次到位。
+    nextSinceSeq: body.limit != null ? page.nextSinceSeq : latestSeq,
+    hasMore: page.hasMore,
   };
   const totalMs = performance.now() - t0;
 
   writeSyncLog(db, "pull_returned", {
     timings: { readMs: Math.round(readMs), totalMs: Math.round(totalMs) },
     sinceSeq: body.sinceSeq,
+    limit: body.limit ?? null,
     latestSeq: response.latestSeq,
-    categoryIds: changes.filter((c) => c.tableName === "categories").map((c) => c.recordId),
-    entryIds: changes.filter((c) => c.tableName === "time_entries").map((c) => c.recordId),
-    settingKeys: changes.filter((c) => c.tableName === "settings").map((c) => c.recordId),
-    quickNoteIds: changes.filter((c) => c.tableName === "quick_notes").map((c) => c.recordId),
-  }, changes.length);
+    nextSinceSeq: response.nextSinceSeq,
+    hasMore: response.hasMore,
+    categoryIds: page.changes.filter((c) => c.tableName === "categories").map((c) => c.recordId),
+    entryIds: page.changes.filter((c) => c.tableName === "time_entries").map((c) => c.recordId),
+    settingKeys: page.changes.filter((c) => c.tableName === "settings").map((c) => c.recordId),
+    quickNoteIds: page.changes.filter((c) => c.tableName === "quick_notes").map((c) => c.recordId),
+  }, page.changes.length);
 
   return c.json(response);
 });

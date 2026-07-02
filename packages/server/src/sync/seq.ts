@@ -33,10 +33,13 @@ export function getLatestSeq(): number | null {
   return row?.max_id ?? null;
 }
 
-export function getChangesSinceSeq(sinceSeq: number | null): SeqRecord[] {
+export function getChangesSinceSeq(sinceSeq: number | null, limit?: number): SeqRecord[] {
   const db = getDb();
   const condition = sinceSeq != null ? "WHERE id > ?" : "";
-  const params = sinceSeq != null ? [sinceSeq] : [];
+  const limitClause = limit != null ? "LIMIT ?" : "";
+  const params: number[] = [];
+  if (sinceSeq != null) params.push(sinceSeq);
+  if (limit != null) params.push(limit);
   const rows = db
     .prepare(`
     SELECT s.id, s.table_name, s.record_id, s.action
@@ -48,6 +51,7 @@ export function getChangesSinceSeq(sinceSeq: number | null): SeqRecord[] {
       GROUP BY table_name, record_id
     ) latest ON latest.max_id = s.id
     ORDER BY s.id ASC
+    ${limitClause}
   `)
     .all(...params) as Array<{
     id: number;

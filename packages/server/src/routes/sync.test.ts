@@ -197,8 +197,8 @@ describe("sync route", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    // 响应体字段集不因新增计时埋点而变化。
-    expect(Object.keys(body).sort()).toEqual(["changes", "latestSeq", "serverTime"].sort());
+    // 响应体总带分页字段（nextSinceSeq/hasMore）。
+    expect(Object.keys(body).sort()).toEqual(["changes", "hasMore", "latestSeq", "nextSinceSeq", "serverTime"].sort());
 
     const logRow = db
       .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
@@ -212,6 +212,81 @@ describe("sync route", () => {
     // 既有字段仍在。
     expect(detail.sinceSeq).toBe(0);
     expect(detail.latestSeq === null || typeof detail.latestSeq === "number").toBe(true);
+  });
+
+  function pushCategoryCreate(id: string) {
+    return app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        changes: [
+          {
+            tableName: "categories",
+            recordId: id,
+            action: "create",
+            timestamp: "2026-05-13T00:00:00.000Z",
+            data: {
+              id,
+              name: id,
+              parentId: null,
+              color: "#000000",
+              icon: null,
+              sortOrder: 0,
+              isArchived: false,
+              createdAt: "2026-05-13T00:00:00.000Z",
+              updatedAt: "2026-05-13T00:00:00.000Z",
+            },
+          },
+        ],
+      }),
+    });
+  }
+
+  it("paginates pull with limit, advancing nextSinceSeq and hasMore", async () => {
+    for (const id of ["c1", "c2", "c3"]) {
+      const res = await pushCategoryCreate(id);
+      expect(res.status).toBe(200);
+    }
+
+    const r1 = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0, limit: 2 }),
+    });
+    expect(r1.status).toBe(200);
+    const b1 = await r1.json();
+    expect(b1.changes).toHaveLength(2);
+    expect(b1.hasMore).toBe(true);
+    expect(b1.nextSinceSeq).toBe(2);
+
+    const r2 = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: b1.nextSinceSeq, limit: 2 }),
+    });
+    expect(r2.status).toBe(200);
+    const b2 = await r2.json();
+    expect(b2.changes).toHaveLength(1);
+    expect(b2.hasMore).toBe(false);
+    expect(b2.nextSinceSeq).toBe(3);
+  });
+
+  it("pull without limit returns all changes with hasMore false", async () => {
+    for (const id of ["c1", "c2"]) {
+      const res = await pushCategoryCreate(id);
+      expect(res.status).toBe(200);
+    }
+
+    const res = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hasMore).toBe(false);
+    expect(body.nextSinceSeq).toBe(body.latestSeq);
   });
 
   it("creates a protected manual server backup", async () => {
