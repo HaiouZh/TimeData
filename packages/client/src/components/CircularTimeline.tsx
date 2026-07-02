@@ -248,8 +248,9 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
             <svg
               viewBox={`0 0 ${SIZE} ${SIZE}`}
               className="w-full h-full"
-              style={{ touchAction: "none" }}
               onPointerDown={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                if (cartesianToMinutes(event.clientX, event.clientY, rect) === null) return;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 selectFromPointer(event);
               }}
@@ -264,7 +265,11 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                 }
               }}
             >
-              <path d={describeRingSegment(0, DAY_MINUTES)} fill={timelineChromeColors.ringBase} />
+              <path
+                d={describeRingSegment(0, DAY_MINUTES)}
+                fill={timelineChromeColors.ringBase}
+                style={{ touchAction: "none" }}
+              />
               {slots.map((slot, index) => {
                 const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
                 if (end <= start) return null;
@@ -290,6 +295,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                     fill={fill}
                     opacity={dimmed ? 0.45 : 1}
                     className={slot.kind === "future" ? "" : "cursor-pointer"}
+                    style={{ touchAction: "none" }}
                     onClick={undefined}
                   />
                 );

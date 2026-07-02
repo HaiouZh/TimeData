@@ -465,6 +465,77 @@ describe("CircularTimeline selection stability (TL-01)", () => {
   });
 });
 
+describe("CircularTimeline touch dead zone (TL-06)", () => {
+  it("svg 本体不再禁滚，环带 path 才带 touch-action:none", () => {
+    const html = renderToStaticMarkup(
+      createElement(CircularTimeline, {
+        date: "2026-05-08",
+        slots: [
+          {
+            startTime: "2026-05-08T00:00:00",
+            endTime: "2026-05-08T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
+        ],
+      }),
+    );
+    const svgTag = html.slice(html.indexOf("<svg"), html.indexOf(">", html.indexOf("<svg")) + 1);
+
+    expect(svgTag).not.toContain("touch-action");
+    expect(html).toMatch(/<path[^>]*touch-action:\s*none/);
+  });
+
+  it("四角空白处 pointerdown 不捕获指针也不改选中", async () => {
+    const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(CircularTimeline, {
+          date: "2026-05-08",
+          slots: [
+            { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+            {
+              startTime: "2026-05-08T07:00:00",
+              endTime: "2026-05-08T08:00:00",
+              entry: null,
+              kind: "gap",
+              displayMode: "default",
+            },
+          ],
+        }),
+      );
+    });
+    const svg = container.querySelector("svg");
+    if (!svg) throw new Error("svg not found");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 240,
+      bottom: 240,
+      width: 240,
+      height: 240,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const setPointerCapture = vi.fn();
+    Object.assign(svg, { setPointerCapture, hasPointerCapture: vi.fn(() => false), releasePointerCapture: vi.fn() });
+
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 5, clientY: 5, pointerId: 1 }));
+    });
+
+    expect(setPointerCapture).not.toHaveBeenCalled();
+    expect(container.innerHTML).toContain("07:00 - 08:00");
+    await act(async () => root.unmount());
+    container.remove();
+  });
+});
+
 describe("CircularTimeline now indicator", () => {
   beforeEach(() => {
     vi.useFakeTimers();
