@@ -1,7 +1,8 @@
 import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import EntryForm from "../components/EntryForm.tsx";
+import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   findOverlappingEntries,
@@ -58,7 +59,8 @@ export default function EntryPage() {
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   const isEdit = Boolean(id);
-  const now = new Date();
+  const [now, setNow] = useState(() => new Date());
+  useAppResumeRefresh(() => setNow(new Date()));
   const todayStr = getDateString(now);
   const nowLocal = `${toLocalDateTimeString(now).slice(0, 16)}:00`;
 
