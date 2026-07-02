@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSyncStream, nextBackoffMs, parseSseChunk, type SyncStreamMessage } from "./syncStream.js";
+import {
+  createSyncStream,
+  nextBackoffMs,
+  parseSseChunk,
+  STREAM_WATCHDOG_TIMEOUT_MS,
+  type SyncStreamMessage,
+} from "./syncStream.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -33,6 +39,43 @@ function streamingResponse(chunks: string[]): Response {
     }),
     { status: 200, headers: { "Content-Type": "text/event-stream" } },
   );
+}
+
+/**
+ * A stream response whose body never closes and never emits further chunks
+ * beyond what is enqueued via the returned controller. Useful for simulating
+ * a half-dead connection (proxy swallows bytes) under fake timers.
+ *
+ * Mirrors real fetch/undici behavior: aborting `signal` errors the pending
+ * `reader.read()` with an AbortError, matching what a real network abort does.
+ */
+function openEndedStreamingResponse(
+  initialChunks: string[] = [],
+  signal?: AbortSignal,
+): {
+  response: Response;
+  enqueue: (chunk: string) => void;
+} {
+  let controllerRef!: ReadableStreamDefaultController<Uint8Array>;
+  const encoder = new TextEncoder();
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controllerRef = controller;
+        for (const chunk of initialChunks) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+        signal?.addEventListener("abort", () => {
+          controller.error(new DOMException("aborted", "AbortError"));
+        });
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "text/event-stream" } },
+  );
+  return {
+    response,
+    enqueue: (chunk: string) => controllerRef.enqueue(encoder.encode(chunk)),
+  };
 }
 
 beforeEach(() => {
@@ -128,5 +171,88 @@ describe("createSyncStream", () => {
     await vi.advanceTimersByTimeAsync(1300);
     await vi.waitFor(() => expect(messages).toEqual([{ event: "hello", data: '{"latestSeq":3}' }]));
     stream.stop();
+  });
+
+  it("aborts and reconnects after 45s of silence (watchdog)", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    const secondResponse = streamingResponse(['event: hello\ndata: {"latestSeq":9}\n\n']);
+    const fetchMock = vi.fn((_url: string, init?: { signal?: AbortSignal }) => {
+      if (fetchMock.mock.calls.length === 1) {
+        const { response } = openEndedStreamingResponse([], init?.signal);
+        return Promise.resolve(response);
+      }
+      return Promise.resolve(secondResponse);
+    });
+    const states: string[] = [];
+
+    const stream = createSyncStream({
+      fetchImpl: fetchMock,
+      onStateChange: (state) => states.push(state),
+      onMessage: () => undefined,
+    });
+    stream.start();
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await vi.advanceTimersByTimeAsync(STREAM_WATCHDOG_TIMEOUT_MS);
+    expect(states).toContain("disconnected");
+
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    stream.stop();
+  });
+
+  it("resets the watchdog when bytes arrive (heartbeat comments)", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    const { response, enqueue } = openEndedStreamingResponse(['event: hello\ndata: {"latestSeq":1}\n\n']);
+    const fetchMock = vi.fn().mockResolvedValueOnce(response);
+    const states: string[] = [];
+
+    const stream = createSyncStream({
+      fetchImpl: fetchMock,
+      onStateChange: (state) => states.push(state),
+      onMessage: () => undefined,
+    });
+    stream.start();
+
+    await vi.waitFor(() => expect(states).toContain("connected"));
+
+    for (let i = 0; i < 3; i += 1) {
+      enqueue(": ping\n\n");
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(states.at(-1)).toBe("connected");
+
+    stream.stop();
+  });
+
+  it("clears the watchdog on stop() so no reconnect fires afterward", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    const { response } = openEndedStreamingResponse(['event: hello\ndata: {"latestSeq":1}\n\n']);
+    const fetchMock = vi.fn().mockResolvedValueOnce(response);
+    const states: string[] = [];
+
+    const stream = createSyncStream({
+      fetchImpl: fetchMock,
+      onStateChange: (state) => states.push(state),
+      onMessage: () => undefined,
+    });
+    stream.start();
+
+    await vi.waitFor(() => expect(states).toContain("connected"));
+
+    stream.stop();
+    expect(states.at(-1)).toBe("disconnected");
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(states.at(-1)).toBe("disconnected");
   });
 });

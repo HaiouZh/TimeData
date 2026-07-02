@@ -23,6 +23,7 @@ interface CreateSyncStreamOptions {
 
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
+export const STREAM_WATCHDOG_TIMEOUT_MS = 45_000;
 
 export function nextBackoffMs(attempt: number, random = Math.random): number {
   const exponential = Math.min(BACKOFF_BASE_MS * 2 ** Math.max(attempt, 0), BACKOFF_MAX_MS);
@@ -72,12 +73,27 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
   let reconnectAttempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let abortController: AbortController | null = null;
+  let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
   const fetchImpl = options.fetchImpl ?? fetch;
 
   function setState(nextState: SyncStreamState): void {
     if (state === nextState) return;
     state = nextState;
     options.onStateChange(nextState);
+  }
+
+  function clearWatchdog(): void {
+    if (watchdogTimer) {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = null;
+    }
+  }
+
+  function armWatchdog(): void {
+    clearWatchdog();
+    watchdogTimer = setTimeout(() => {
+      abortController?.abort();
+    }, STREAM_WATCHDOG_TIMEOUT_MS);
   }
 
   function scheduleReconnect(): void {
@@ -114,9 +130,11 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
     const decoder = new TextDecoder();
     let rest = "";
 
+    armWatchdog();
     try {
       while (running) {
         const { value, done } = await reader.read();
+        armWatchdog();
         if (done) break;
 
         const parsed = parseSseChunk(rest + decoder.decode(value, { stream: true }));
@@ -144,6 +162,7 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
       // Reconnect below; callers observe the state machine instead of individual transport errors.
     } finally {
       abortController = null;
+      clearWatchdog();
     }
 
     if (running) {
@@ -164,6 +183,7 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
+      clearWatchdog();
       abortController?.abort();
       abortController = null;
       setState("disconnected");
