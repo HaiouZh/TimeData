@@ -174,6 +174,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [confirmRestoreLayout, setConfirmRestoreLayout] = useState(false);
+  const [confirmDeleteGoal, setConfirmDeleteGoal] = useState(false);
   const initialFitDoneRef = useRef<string | null>(null);
   const nodeCacheRef = useRef<Map<string, GoalGraphFlowNode>>(new Map());
   const savedViewport = loadGoalGraphViewport(goal.id);
@@ -348,8 +349,8 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       return;
     }
     if (actionId === "delete-goal") {
-      await deleteGoal(goal.id);
-      onDeletedGoal();
+      // 删除 Goal 级联移除成员归属和全部前置边，破坏性大，先过 ConfirmSheet 确认。
+      setConfirmDeleteGoal(true);
     }
   }
 
@@ -596,6 +597,20 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
         onConfirm={() => {
           layout.restoreLayout();
           setConfirmRestoreLayout(false);
+        }}
+      />
+      <ConfirmSheet
+        open={confirmDeleteGoal}
+        title="删除目标"
+        body="删除后成员归属和全部前置关系将一并移除，无法撤销。"
+        confirmLabel="删除目标"
+        cancelLabel="取消"
+        onCancel={() => setConfirmDeleteGoal(false)}
+        onConfirm={() => {
+          setConfirmDeleteGoal(false);
+          void deleteGoal(goal.id).then(() => {
+            onDeletedGoal();
+          });
         }}
       />
     </div>

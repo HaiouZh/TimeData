@@ -662,4 +662,28 @@ describe("GoalGraphEditor", () => {
     expect(await db.goals.get("goal-1")).toBeUndefined();
     expect(onDeletedGoal).toHaveBeenCalledTimes(1);
   });
+
+  it("图内动作条删除目标先弹确认，确认后才删除", async () => {
+    const goalValue = goal();
+    const onDeletedGoal = vi.fn<() => void>();
+    await seed(goalValue);
+
+    const { host } = await renderEditor({ goal: goalValue, onDeletedGoal });
+
+    // 选中 Goal 锚 → 动作条出现「删除目标」
+    await click(nodeButton(host, "goal"));
+    await click(buttonByText(host, "删除目标"));
+    await tick();
+
+    // 未直删，先出现确认
+    expect(await db.goals.get("goal-1")).toBeTruthy();
+    expect(onDeletedGoal).not.toHaveBeenCalled();
+
+    // 点确认（ConfirmSheet 里的「删除目标」按钮，取最后一个）
+    await click([...document.body.querySelectorAll("button")].filter((button) => button.textContent === "删除目标").at(-1));
+    await tick();
+
+    expect(await db.goals.get("goal-1")).toBeUndefined();
+    expect(onDeletedGoal).toHaveBeenCalledTimes(1);
+  });
 });
