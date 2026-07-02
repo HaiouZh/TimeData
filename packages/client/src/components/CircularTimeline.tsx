@@ -115,13 +115,32 @@ function cartesianToMinutes(
   return (angle / 360) * DAY_MINUTES;
 }
 
-function findSlotAtMinutes(slots: TimeSlot[], date: string, minutes: number): TimeSlot | null {
+const MIN_HIT_MINUTES = 8;
+
+// 短段命中区扩到至少 8 分钟；扩展区重叠时窄段优先，同宽按到实际区间的距离分割。
+export function findSlotAtMinutes(slots: TimeSlot[], date: string, minutes: number): TimeSlot | null {
+  let best: TimeSlot | null = null;
+  let bestWidth = Number.POSITIVE_INFINITY;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
   for (const slot of slots) {
     if (slot.kind === "future") continue;
     const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
-    if (minutes >= start && minutes < end) return slot;
+    const width = end - start;
+    if (width <= 0) continue;
+
+    const pad = Math.max(0, (MIN_HIT_MINUTES - width) / 2);
+    if (minutes < start - pad || minutes >= end + pad) continue;
+
+    const distance = minutes < start ? start - minutes : minutes >= end ? minutes - end : 0;
+    if (width < bestWidth || (width === bestWidth && distance < bestDistance)) {
+      best = slot;
+      bestWidth = width;
+      bestDistance = distance;
+    }
   }
-  return null;
+
+  return best;
 }
 
 export function describeRingSegment(startMinutes: number, endMinutes: number): string {

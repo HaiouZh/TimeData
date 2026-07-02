@@ -12,6 +12,7 @@ import CircularTimeline, {
   chooseInitialSelection,
   clampSlotToDayMinutes,
   describeRingSegment,
+  findSlotAtMinutes,
 } from "./CircularTimeline.js";
 
 vi.mock("../hooks/useCategories.js", () => ({
@@ -533,6 +534,66 @@ describe("CircularTimeline touch dead zone (TL-06)", () => {
     expect(container.innerHTML).toContain("07:00 - 08:00");
     await act(async () => root.unmount());
     container.remove();
+  });
+});
+
+describe("findSlotAtMinutes minimum hit area (TL-07)", () => {
+  const gapA: TimeSlot = {
+    startTime: "2026-05-08T00:00:00",
+    endTime: "2026-05-08T10:00:00",
+    entry: null,
+    kind: "gap",
+    displayMode: "default",
+  };
+  const short = entry("entry-short", "2026-05-08T10:00:00", "2026-05-08T10:05:00");
+  const shortSlot: TimeSlot = {
+    startTime: short.startTime,
+    endTime: short.endTime,
+    entry: short,
+    kind: "entry",
+    displayMode: "default",
+  };
+  const gapB: TimeSlot = {
+    startTime: "2026-05-08T10:05:00",
+    endTime: "2026-05-08T20:00:00",
+    entry: null,
+    kind: "gap",
+    displayMode: "default",
+  };
+  const slots = [gapA, shortSlot, gapB];
+
+  it("5 分钟短段在扩展区内可命中", () => {
+    expect(findSlotAtMinutes(slots, "2026-05-08", 599)).toBe(shortSlot);
+    expect(findSlotAtMinutes(slots, "2026-05-08", 606)).toBe(shortSlot);
+  });
+
+  it("远离短段光环处仍归大段", () => {
+    expect(findSlotAtMinutes(slots, "2026-05-08", 300)).toBe(gapA);
+    expect(findSlotAtMinutes(slots, "2026-05-08", 900)).toBe(gapB);
+  });
+
+  it("相邻两个短段按中线分割", () => {
+    const s1 = entry("entry-s1", "2026-05-08T10:00:00", "2026-05-08T10:04:00");
+    const s2 = entry("entry-s2", "2026-05-08T10:04:00", "2026-05-08T10:08:00");
+    const pair: TimeSlot[] = [
+      { startTime: s1.startTime, endTime: s1.endTime, entry: s1, kind: "entry", displayMode: "default" },
+      { startTime: s2.startTime, endTime: s2.endTime, entry: s2, kind: "entry", displayMode: "default" },
+    ];
+
+    expect(findSlotAtMinutes(pair, "2026-05-08", 603)?.entry?.id).toBe("entry-s1");
+    expect(findSlotAtMinutes(pair, "2026-05-08", 605)?.entry?.id).toBe("entry-s2");
+  });
+
+  it("future 段依旧不可命中", () => {
+    const futureSlot: TimeSlot = {
+      startTime: "2026-05-08T20:00:00",
+      endTime: "2026-05-09T00:00:00",
+      entry: null,
+      kind: "future",
+      displayMode: "default",
+    };
+
+    expect(findSlotAtMinutes([futureSlot], "2026-05-08", 1300)).toBeNull();
   });
 });
 
