@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { addDays, getDateString } from "../lib/time.js";
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import TimelinePage from "./TimelinePage.js";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -30,20 +31,16 @@ describe("TimelinePage 横滑切日 (TL-09)", () => {
   let root: Root | null = null;
 
   async function mount() {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    await act(async () => {
-      root?.render(createElement(MemoryRouter, null, createElement(TimelinePage)));
-    });
+    const rendered = await renderDom(createElement(MemoryRouter, null, createElement(TimelinePage)));
+    host = rendered.host as HTMLDivElement;
+    root = rendered.root;
   }
 
   afterEach(async () => {
     if (root) {
-      await act(async () => root?.unmount());
+      await unmount(root);
       root = null;
     }
-    host?.remove();
   });
 
   async function swipe(target: Element, fromX: number, toX: number, y = 300, pointerType = "touch") {
