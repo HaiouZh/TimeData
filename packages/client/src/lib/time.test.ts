@@ -412,6 +412,27 @@ describe("isValidDateString", () => {
 });
 
 describe("resolveClockRangeAroundEndDate", () => {
+  it("end=24:00 解析为锚定日次日 00:00，start 留在锚定日", () => {
+    expect(resolveClockRangeAroundEndDate("2026-05-15", "22", "00", "24", "00")).toEqual({
+      startTime: "2026-05-15T22:00:00",
+      endTime: "2026-05-16T00:00:00",
+    });
+  });
+
+  it("end=24:00 时 start=00:00 也不回退前一天（整日区间）", () => {
+    expect(resolveClockRangeAroundEndDate("2026-05-15", "00", "00", "24", "00")).toEqual({
+      startTime: "2026-05-15T00:00:00",
+      endTime: "2026-05-16T00:00:00",
+    });
+  });
+
+  it("常规档位行为不变：end<=start 回退前一天", () => {
+    expect(resolveClockRangeAroundEndDate("2026-05-15", "23", "00", "01", "00")).toEqual({
+      startTime: "2026-05-14T23:00:00",
+      endTime: "2026-05-15T01:00:00",
+    });
+  });
+
   it("keeps same-day ranges on the end date when end clock is later", () => {
     expect(resolveClockRangeAroundEndDate("2026-05-08", "07", "30", "08", "15")).toEqual({
       startTime: "2026-05-08T07:30:00",

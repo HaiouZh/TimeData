@@ -398,6 +398,14 @@ export function resolveClockRangeAroundEndDate(
   endHour: string,
   endMinute: string,
 ): ResolvedClockRange {
+  // 24:00 是锚定日的一天终点；按 [start, end) 落库为次日 00:00。
+  if (endHour === "24") {
+    return {
+      startTime: `${anchorDate}T${startHour}:${startMinute}:00`,
+      endTime: `${addDays(anchorDate, 1)}T00:00:00`,
+    };
+  }
+
   const startClock = `${startHour}:${startMinute}`;
   const endClock = `${endHour}:${endMinute}`;
   const startDate = endClock <= startClock ? addDays(anchorDate, -1) : anchorDate;
