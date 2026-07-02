@@ -88,9 +88,8 @@ describe("EntryPage default times", () => {
     expect(html).toContain("2026-05-08T06:00:00 2026-05-08T07:00:00");
   });
 
-  it("clamps default end to the selected date's 23:59 when date param points to a past day", () => {
+  it("keeps the past-day terminal gap's next-midnight end (24:00 semantics) and the query start", () => {
     vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
-    // queryEnd 是次日 00:00（昨天尾部空挡的 dayEnd 转回来）；date=2026-05-15 表示用户在昨天页面点的
     searchParamsMock.value = new URLSearchParams(
       "date=2026-05-15&start=2026-05-14T16%3A00%3A00.000Z&end=2026-05-15T16%3A00%3A00.000Z",
     );
@@ -99,8 +98,31 @@ describe("EntryPage default times", () => {
     const html = renderToStaticMarkup(createElement(EntryPage));
 
     expect(useLatestEntryEndTimeBeforeMock).toHaveBeenCalledWith(null);
-    // start 保留 queryStart（同 date 那天），end 被钉到 date 当天 23:59
-    expect(html).toContain("2026-05-15T00:00:00 2026-05-15T23:59:00");
+    expect(html).toContain("2026-05-15T00:00:00 2026-05-16T00:00:00");
+  });
+
+  it("keeps a 23:59 residual gap's own bounds instead of prefilling an overlapping range", () => {
+    vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
+    searchParamsMock.value = new URLSearchParams(
+      "date=2026-05-15&start=2026-05-15T15%3A59%3A00.000Z&end=2026-05-15T16%3A00%3A00.000Z",
+    );
+    useLatestEntryEndTimeBeforeMock.mockReturnValue("2026-05-15T14:00:00.000Z");
+
+    const html = renderToStaticMarkup(createElement(EntryPage));
+
+    expect(html).toContain("2026-05-15T23:59:00 2026-05-16T00:00:00");
+    expect(useLatestEntryEndTimeBeforeMock).toHaveBeenCalledWith(null);
+  });
+
+  it("does not pass through next-midnight end for today's view", () => {
+    vi.setSystemTime(new Date("2026-05-16T07:30:00+08:00"));
+    searchParamsMock.value = new URLSearchParams(
+      "date=2026-05-16&start=2026-05-16T06%3A00%3A00&end=2026-05-17T00%3A00%3A00",
+    );
+
+    const html = renderToStaticMarkup(createElement(EntryPage));
+
+    expect(html).toContain("2026-05-16T06:00:00 2026-05-16T07:30:00");
   });
 
   it("ignores malformed timezone-aware query values instead of crashing", () => {

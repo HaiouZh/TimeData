@@ -12,7 +12,7 @@ import {
   useLatestEntryEndTimeBefore,
 } from "../hooks/useEntries.ts";
 import { messages } from "../lib/messages.ts";
-import { getDateString, isFutureLocalDateTime, rollBackOvernightRange, toLocalDateTimeString } from "../lib/time.ts";
+import { addDays, getDateString, isFutureLocalDateTime, rollBackOvernightRange, toLocalDateTimeString } from "../lib/time.ts";
 
 function addMinutes(value: string, minutes: number): string {
   const date = new Date(value);
@@ -73,6 +73,9 @@ export default function EntryPage() {
 
   const clampedQueryEnd = (() => {
     if (!queryEnd) return null;
+    // 历史日尾部空档的 end 是次日 00:00（界面显示 24:00）：作为合法边界透传。
+    // 今天不放行，今天的一天终点仍由 now 决定。
+    if (anchorDate !== todayStr && queryEnd === `${addDays(anchorDate, 1)}T00:00:00`) return queryEnd;
     const queryEndDate = queryEnd.slice(0, 10);
     if (queryEndDate === anchorDate && queryEnd <= defaultEndForDate) return queryEnd;
     return null;
