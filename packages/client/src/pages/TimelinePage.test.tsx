@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { addDays, getDateString } from "../lib/time.js";
 import TimelinePage from "./TimelinePage.js";
 
 vi.mock("../components/DateNav.tsx", () => ({
@@ -71,5 +72,35 @@ describe("TimelinePage sync indicator", () => {
     expect(html).not.toContain("已记录");
     expect(html).not.toContain("覆盖 ");
     expect(html).not.toContain("个空档");
+  });
+});
+
+describe("TimelinePage date 参数校验", () => {
+  const today = getDateString(new Date());
+
+  function renderWithDate(dateParam: string) {
+    return renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: [`/?date=${dateParam}`] },
+        createElement(TimelinePage),
+      ),
+    );
+  }
+
+  it("非法月份不崩溃且回退今天", () => {
+    expect(renderWithDate("2026-13-05")).toContain(`日期 ${today}`);
+  });
+
+  it("会被滚动的日期（02-31）回退今天", () => {
+    expect(renderWithDate("2026-02-31")).toContain(`日期 ${today}`);
+  });
+
+  it("未来日期钳到今天", () => {
+    expect(renderWithDate(addDays(today, 5))).toContain(`日期 ${today}`);
+  });
+
+  it("合法历史日期原样通过", () => {
+    expect(renderWithDate("2026-01-15")).toContain("日期 2026-01-15");
   });
 });

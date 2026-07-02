@@ -311,6 +311,15 @@ export function formatAppDateTime(isoString: string): string {
   return `${toLocalDateTimeString(date).replace("T", " ")} UTC+8`;
 }
 
+// ?date= 查询参数的日历有效性校验：正则只挡格式，"2026-13-05" 会解析成 Invalid Date
+// 崩掉 Intl.format，"2026-02-31" 会被 V8 静默滚动到 3 月 3 日——回构造比对拦掉两者。
+export function isValidDateString(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00+08:00`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return getDateString(parsed) === value;
+}
+
 export function formatWeekday(dateStr: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
     timeZone: APP_TIME_ZONE,

@@ -8,7 +8,7 @@ import { useEntries } from "../hooks/useEntries.ts";
 import { useMidnightTick } from "../hooks/useMidnightTick.ts";
 import { getMergeOvernightEnabled } from "../lib/overnightDisplaySetting.ts";
 import { punchNow } from "../lib/punch.ts";
-import { buildTimeSlots, getDateString } from "../lib/time.ts";
+import { buildTimeSlots, getDateString, isValidDateString } from "../lib/time.ts";
 
 export default function TimelinePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -17,7 +17,8 @@ export default function TimelinePage() {
   const now = new Date();
   const today = getDateString(now);
   const queryDate = searchParams.get("date");
-  const normalizedQueryDate = queryDate && /^\d{4}-\d{2}-\d{2}$/.test(queryDate) ? queryDate : today;
+  const normalizedQueryDate =
+    queryDate && isValidDateString(queryDate) ? (queryDate > today ? today : queryDate) : today;
   const [date, setDate] = useState(normalizedQueryDate);
   const { entries, previousEntry } = useEntries(date);
   const mergeOvernight = getMergeOvernightEnabled();

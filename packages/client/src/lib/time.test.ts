@@ -10,6 +10,7 @@ import {
   formatTime,
   formatTimelineTimeRange,
   formatYearAwareMonthDay,
+  isValidDateString,
   isFutureLocalDateTime,
   resolveClockRangeAroundEndDate,
   rollBackOvernightRange,
@@ -384,6 +385,29 @@ describe("calendar date helpers", () => {
     expect(addMonths("2026-03-31", -1)).toBe("2026-02-28"); // 退月也要钳制
     expect(addMonths("2024-03-31", -1)).toBe("2024-02-29"); // 闰年退月
     expect(addMonths("2024-01-31", 1)).toBe("2024-02-29"); // 2024 闰年，钳到 29
+  });
+});
+
+describe("isValidDateString", () => {
+  it("接受合法日历日期（含闰日）", () => {
+    expect(isValidDateString("2026-07-02")).toBe(true);
+    expect(isValidDateString("2024-02-29")).toBe(true);
+  });
+
+  it("拒绝格式不符的输入", () => {
+    expect(isValidDateString("2026-7-2")).toBe(false);
+    expect(isValidDateString("abc")).toBe(false);
+    expect(isValidDateString("")).toBe(false);
+  });
+
+  it("拒绝解析为 Invalid Date 的月份", () => {
+    expect(isValidDateString("2026-13-05")).toBe(false);
+    expect(isValidDateString("2026-00-10")).toBe(false);
+  });
+
+  it("拒绝会被 V8 静默滚动的日期", () => {
+    expect(isValidDateString("2026-02-31")).toBe(false);
+    expect(isValidDateString("2023-02-29")).toBe(false);
   });
 });
 

@@ -24,7 +24,7 @@ import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
 import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../lib/tasks.js";
-import { formatTime, getDateString } from "../lib/time.ts";
+import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
@@ -73,7 +73,7 @@ interface ActionToast {
 }
 
 function normalizeDateParam(value: string | null): string | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  if (!value || !isValidDateString(value)) return null;
   return value;
 }
 
