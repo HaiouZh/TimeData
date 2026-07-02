@@ -1548,14 +1548,6 @@
     {
       "file": "packages/client/src/pages/QuickNotesPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "className=\"mb-2 flex items-center gap-3 rounded-card border border-border-strong bg-surface/95 px-3 py-2 text-sm text-ink shadow-elev1\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/QuickNotesPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<div className=\"mb-2 flex items-center justify-between rounded-card border border-accent/20 bg-accent-soft px-3 py-2 text-xs text-accent-ink\">",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -3613,14 +3605,6 @@
       "file": "packages/client/src/pages/stats/modules/ui.tsx",
       "rule": "bare-text-size",
       "lineText": "{hint && <div className=\"mt-1 text-[11px] leading-snug text-ink-3\">{hint}</div>}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/TimelinePage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "{punchMessage && <p className=\"px-4 pt-2 text-center text-xs text-warn\">{punchMessage}</p>}",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
