@@ -3,7 +3,7 @@ import type { Category, QuickNote, SyncLogEntry, TimeEntry } from "@timedata/sha
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type E2EServer, startE2EServer } from "../../../../server/src/__tests__/e2e/helpers.ts";
 import { db } from "../../db/index.ts";
-import { regularSync, syncPull, syncPush } from "../../sync/engine.ts";
+import { getLastSyncedSeq, PULL_PAGE_LIMIT, regularSync, syncPull, syncPush } from "../../sync/engine.ts";
 import { bindClientToServer, resetClientDb } from "./helpers.ts";
 
 let server: E2EServer | null = null;
@@ -148,6 +148,58 @@ describe("e2e: sync round trip", () => {
       id: localEntry.id,
     });
     expect(await db.syncLog.filter((log) => !log.synced).count()).toBe(0);
+  });
+
+  it("写后无插队仅发一个 push、跳过回声 pull（写后 1 请求）", async () => {
+    // 第一次同步让 client 游标追平 server（baseSeq=null 首次仍会 pull 追平）
+    const first = category({ id: "cat-skip-1", name: "追平" });
+    await db.categories.add(first);
+    await db.syncLog.add(syncLog(first.id, "categories"));
+    await regularSync();
+
+    // 追平后再写一条，统计后续 pull 请求
+    const pullUrls: string[] = [];
+    const bound = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/api/sync/pull")) pullUrls.push(url);
+      return bound(input, init);
+    }) as typeof fetch;
+
+    const second = category({ id: "cat-skip-2", name: "第二条" });
+    await db.categories.add(second);
+    await db.syncLog.add(syncLog(second.id, "categories"));
+    const result = await regularSync();
+
+    expect(result.pushed).toBe(1);
+    expect(pullUrls).toHaveLength(0); // 无插队 → 跳过回声 pull，写后仅 push 一个请求
+    expect(server?.db.prepare("SELECT id FROM categories WHERE id = ?").get(second.id)).toEqual({ id: second.id });
+  });
+
+  it("客户端分批拉取超过单批上限的服务端积压，数据完整且游标追平", async () => {
+    const total = PULL_PAGE_LIMIT + 1; // 恰好跨过一批上限，触发 ≥2 批
+    for (let i = 0; i < total; i++) {
+      insertServerCategory(category({ id: `bulk-${String(i).padStart(4, "0")}`, name: `批量${i}`, sortOrder: i }));
+    }
+
+    const pullUrls: string[] = [];
+    const bound = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/api/sync/pull")) pullUrls.push(url);
+      return bound(input, init);
+    }) as typeof fetch;
+
+    const pulled = await syncPull({ mode: "repair" });
+
+    const serverLatestSeq = (server?.db.prepare("SELECT MAX(id) AS m FROM sync_seq").get() as { m: number }).m;
+    expect(pullUrls.length).toBeGreaterThanOrEqual(2); // 触发了分批（>500 条跨过单批上限）
+    expect(pulled).toBeGreaterThanOrEqual(total); // 我造的 total 条全部 apply（server 另有少量种子数据）
+    await expect(db.categories.count()).resolves.toBeGreaterThanOrEqual(total); // 全部落库
+    expect(getLastSyncedSeq()).toBe(serverLatestSeq); // 游标追平 server 真实 latestSeq
+    // 抽查我造的首尾两条确实落库，确认分批未漏头尾
+    await expect(db.categories.get("bulk-0000")).resolves.toBeDefined();
+    await expect(db.categories.get(`bulk-${String(total - 1).padStart(4, "0")}`)).resolves.toBeDefined();
   });
 
   it("pulls server entries into an empty client", async () => {
