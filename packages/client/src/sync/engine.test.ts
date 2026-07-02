@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -2132,6 +2132,34 @@ describe("syncPullSinceSeq", () => {
   });
 });
 
+describe("canSkipEchoPull", () => {
+  const base = { accepted: 1, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
+
+  it("无插队（latestSeq − baseSeq === appliedCount）且干净 → 可跳过", () => {
+    expect(canSkipEchoPull({ ...base, baseSeq: 5, serverLatestSeq: 6, appliedCount: 1 })).toBe(true);
+  });
+
+  it("有插队（差值 > appliedCount）→ 不可跳过", () => {
+    expect(canSkipEchoPull({ ...base, baseSeq: 5, serverLatestSeq: 8, appliedCount: 1 })).toBe(false);
+  });
+
+  it("旧 server（seq 字段缺失）→ 不可跳过（回退 pull）", () => {
+    expect(canSkipEchoPull({ ...base, baseSeq: 5, serverLatestSeq: null, appliedCount: null })).toBe(false);
+  });
+
+  it("baseSeq 为 null（从未同步）→ 不可跳过", () => {
+    expect(canSkipEchoPull({ ...base, baseSeq: null, serverLatestSeq: 3, appliedCount: 3 })).toBe(false);
+  });
+
+  it("push 含 conflict → 一律 pull（双保险）", () => {
+    expect(canSkipEchoPull({ ...base, conflicts: 1, baseSeq: 5, serverLatestSeq: 6, appliedCount: 1 })).toBe(false);
+  });
+
+  it("push 含 rejected/issues → 一律 pull", () => {
+    expect(canSkipEchoPull({ ...base, rejected: 1, issues: [{} as never], baseSeq: 5, serverLatestSeq: 6, appliedCount: 1 })).toBe(false);
+  });
+});
+
 describe("regularSync", () => {
   it("deduplicates concurrent regularSync calls in one browser context", async () => {
     const fetchCalls: string[] = [];
@@ -2335,6 +2363,106 @@ describe("regularSync", () => {
     expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_since_seq"]);
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0, rejected: 0, pushConflicts: 0 });
     await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("skips the echo pull and advances the cursor directly when push reports no intervening writes", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-local",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00.000Z",
+      endTime: "2026-05-08T10:00:00.000Z",
+      note: "local",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      updatedAt: "2026-05-08T09:00:00.000Z",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: new Date().toISOString(), synced: 0 });
+    setLastSyncedSeq(3);
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{ tableName: "time_entries", recordId: "entry-local", action: "create", status: "accepted", reasonCode: "applied", message: "Applied", incomingTimestamp: "2026-05-08T09:00:00.000Z" }],
+        backupId: "backup-1",
+        serverTime: "2026-05-08T10:01:00.000Z",
+        latestSeq: 4,
+        appliedCount: 1,
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    const result = await regularSync();
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/push", expect.objectContaining({ method: "POST" }));
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/pull", expect.anything());
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    const logBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
+    expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_skipped_no_intervening"]);
+    expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0, rejected: 0, pushConflicts: 0, conflicts: [] });
+    expect(getLastSyncedSeq()).toBe(4);
+    await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
+  });
+
+  it("still pulls when push reports intervening writes (server latestSeq outpaces the push batch)", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-local",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00.000Z",
+      endTime: "2026-05-08T10:00:00.000Z",
+      note: "local",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      updatedAt: "2026-05-08T09:00:00.000Z",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: new Date().toISOString(), synced: 0 });
+    setLastSyncedSeq(3);
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{ tableName: "time_entries", recordId: "entry-local", action: "create", status: "accepted", reasonCode: "applied", message: "Applied", incomingTimestamp: "2026-05-08T09:00:00.000Z" }],
+        backupId: "backup-1",
+        serverTime: "2026-05-08T10:01:00.000Z",
+        latestSeq: 6,
+        appliedCount: 1,
+      })
+      .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 6, changes: [] })
+      .mockResolvedValueOnce({ ok: true });
+
+    const result = await regularSync();
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/push", expect.objectContaining({ method: "POST" }));
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", expect.objectContaining({ method: "POST" }));
+    const pullBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
+    expect(pullBody.sinceSeq).toBe(3);
+    expect(apiFetchMock).toHaveBeenCalledTimes(3);
+    const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
+    expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_since_seq"]);
+    expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0, rejected: 0, pushConflicts: 0 });
+    expect(getLastSyncedSeq()).toBe(6);
   });
 
   it("records phase timings and reports them when pushing then pulling", async () => {

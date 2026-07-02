@@ -49,6 +49,18 @@ export interface SyncPushResult {
   issues: SyncPushOutcome[];
   clientBugIssues: SyncPushOutcome[];
   userActionableIssues: SyncPushOutcome[];
+  baseSeq: number | null;
+  serverLatestSeq: number | null;
+  appliedCount: number | null;
+}
+
+// 写后能否跳过回声 pull：仅当 push 全干净、服务端回执带齐 seq 字段、
+// 且 [baseSeq → latestSeq] 全部增量恰好等于本次 push 记账数（无别的设备插队）。
+export function canSkipEchoPull(result: SyncPushResult): boolean {
+  if (result.rejected > 0 || result.conflicts > 0 || result.issues.length > 0) return false;
+  const { baseSeq, serverLatestSeq, appliedCount } = result;
+  if (baseSeq == null || serverLatestSeq == null || appliedCount == null) return false;
+  return serverLatestSeq - baseSeq === appliedCount;
 }
 
 export interface RegularSyncResult {
@@ -191,6 +203,7 @@ async function applyPushResponse(
   omittedLogIds: string[],
   sourceLogIdsByChangeKey: Map<string, string[]>,
   changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
+  baseSeq: number | null,
 ): Promise<SyncPushResult> {
   const acceptedLogIds: string[] = [];
   const clientBugLogIds: string[] = [];
@@ -233,12 +246,16 @@ async function applyPushResponse(
     issues,
     clientBugIssues,
     userActionableIssues,
+    baseSeq,
+    serverLatestSeq: response.latestSeq ?? null,
+    appliedCount: response.appliedCount ?? null,
   };
 }
 
 export async function syncPush(): Promise<SyncPushResult> {
+  const baseSeq = getLastSyncedSeq();
   const unsynced = await db.syncLog.where("synced").equals(0).toArray();
-  if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
+  if (unsynced.length === 0) return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], baseSeq, serverLatestSeq: null, appliedCount: null };
 
   const compacted = compactSyncLogs(unsynced);
   const changes: SyncChange[] = [];
@@ -295,23 +312,23 @@ export async function syncPush(): Promise<SyncPushResult> {
     if (omittedLogIds.length > 0) {
       await db.syncLog.bulkUpdate(omittedLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
     }
-    return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [] };
+    return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], baseSeq, serverLatestSeq: null, appliedCount: null };
   }
 
   let response: SyncPushResponse;
   try {
     response = await apiFetch<SyncPushResponse>("/api/sync/push", {
       method: "POST",
-      body: JSON.stringify({ changes, baseSeq: getLastSyncedSeq() }),
+      body: JSON.stringify({ changes, baseSeq }),
     });
   } catch (error) {
     if (error instanceof ApiError && error.status === 409 && isSyncPushResponse(error.body)) {
-      return applyPushResponse(error.body, omittedLogIds, sourceLogIdsByChangeKey, changeKey);
+      return applyPushResponse(error.body, omittedLogIds, sourceLogIdsByChangeKey, changeKey, baseSeq);
     }
     throw error;
   }
 
-  return applyPushResponse(response, omittedLogIds, sourceLogIdsByChangeKey, changeKey);
+  return applyPushResponse(response, omittedLogIds, sourceLogIdsByChangeKey, changeKey, baseSeq);
 }
 
 export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
@@ -670,10 +687,22 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
     // 有 pending（写后路径）：跳过 status——它唯一的用途是 no-op 判定，此处恒不成立；
     // 冲突分析在服务端 baseSeq 逻辑里，push 后回声 pull 追平。
     const pushResult = rec ? await rec.time("push", () => syncPush()) : await syncPush();
-    const { applied, conflicts } = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
+
+    let applied = 0;
+    let conflicts: SyncConflict[] = [];
+    let pullSkipped = false;
+    if (canSkipEchoPull(pushResult) && pushResult.serverLatestSeq != null) {
+      setLastSyncedSeq(pushResult.serverLatestSeq); // 无插队：本地即最新，直接推游标
+      pullSkipped = true;
+    } else {
+      const pulled = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
+      applied = pulled.applied;
+      conflicts = pulled.conflicts;
+    }
+
     const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
       { action: "push", record_count: pushResult.accepted },
-      { action: "pull_since_seq", record_count: applied },
+      { action: pullSkipped ? "pull_skipped_no_intervening" : "pull_since_seq", record_count: applied },
     ];
 
     if (conflicts.length > 0) {
