@@ -10,6 +10,9 @@ covers:
   - packages/client/src/lib/settings/trackActionTagsSetting.ts
   - packages/client/src/pages/settings/SettingsTracksPage.tsx
   - packages/client/src/pages/tracks/**
+  - packages/client/src/hooks/useTrackAttentionCount.ts
+  - packages/client/src/contexts/TrackAttentionContext.tsx
+  - packages/client/src/components/app-shell/NavBadge.tsx
 last-reviewed: 2026-07-02
 ---
 
@@ -75,6 +78,8 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 `currentStepId`/`orderedTimeline`(当前步=最大 seq 的开口步置顶高亮;无开口步纯倒序、不高亮)、
 `trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 http(s) 外链可点)、
 `latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`RefChip` 的 `routeForRef`(kind 白名单)把内部实体 ref 渲染成应用内 `Link`：`task→/todo?taskId=`、`goal→/goals/:id`、`track→/tracks/:id`；未知 kind 保持 inert span，外链仍由 `isLinkRef` 的 http(s) 协议白名单单独放行(不放 `javascript:`/`data:`)。人手侧的 refs 反查/编辑器与「升为轨道」入口仍推迟(见 §8)。
+
+导航「轨道」图标带回手 badge(TK-12):`useTrackAttentionCount` 用 `useLiveQuery` 统计当前看板信号命中「待我处理」约定(=第一个配置的看板信号)的 active 轨道数;经 `TrackAttentionContext`(默认 0,Provider 挂在 `App` 默认导出、db 可用层)下发,桌面侧栏 `NavIconLink` 与移动底栏 `MobileIconLink` 用 `NavBadge` 在 `/tracks` 图标上显示计数。纯统计 `countAttentionTracks` 可单测;无 Provider(如只渲染导航的单测)读默认 0、不触 db、不显 badge。
 
 ## 6. 人手共编(T5)
 

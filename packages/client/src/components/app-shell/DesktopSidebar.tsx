@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useTrackAttentionBadge } from "../../contexts/TrackAttentionContext.js";
 import { MORE_NAV_ITEM, findMainNavItem, primaryRouteForPath, type MainNavItem } from "../../lib/navigation/navRegistry.js";
 import { useDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
 import { Icon } from "../Icon.js";
+import { NavBadge } from "./NavBadge.js";
 
-function NavIconLink({ item, activeRoute }: { item: MainNavItem; activeRoute: string }) {
+function NavIconLink({ item, activeRoute, badge = 0 }: { item: MainNavItem; activeRoute: string; badge?: number }) {
   const active = item.to === activeRoute;
   return (
     <NavLink
@@ -18,7 +20,10 @@ function NavIconLink({ item, activeRoute }: { item: MainNavItem; activeRoute: st
           : "text-ink-3 hover:bg-surface-hover hover:text-ink"
       }`}
     >
-      <Icon icon={item.icon} size={22} weight="regular" />
+      <span className="relative">
+        <Icon icon={item.icon} size={22} weight="regular" />
+        <NavBadge count={badge} />
+      </span>
       <span className="td-text-caption leading-none">{item.label}</span>
     </NavLink>
   );
@@ -29,6 +34,7 @@ export function DesktopSidebar() {
   const location = useLocation();
   const activeRoute = primaryRouteForPath(location.pathname);
   const config = useDesktopSidebarConfig();
+  const attentionCount = useTrackAttentionBadge();
 
   const { primaryItems, moreItems } = useMemo(() => {
     const primaryItems: MainNavItem[] = [];
@@ -49,7 +55,12 @@ export function DesktopSidebar() {
     >
       <div className="flex w-full flex-1 flex-col items-center gap-2">
         {primaryItems.map((item) => (
-          <NavIconLink key={item.to} item={item} activeRoute={activeRoute} />
+          <NavIconLink
+            key={item.to}
+            item={item}
+            activeRoute={activeRoute}
+            badge={item.to === "/tracks" ? attentionCount : 0}
+          />
         ))}
         {moreItems.length > 0 && (
           <div className="relative w-full">

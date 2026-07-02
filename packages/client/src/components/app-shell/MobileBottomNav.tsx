@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.js";
+import { useTrackAttentionBadge } from "../../contexts/TrackAttentionContext.js";
 import { MAIN_NAV_ITEMS, MORE_NAV_ITEM, findMainNavItem, type MainNavItem, type MainNavRoute } from "../../lib/navigation/navRegistry.js";
 import { useVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
 import { Icon } from "../Icon.js";
+import { NavBadge } from "./NavBadge.js";
 
-function MobileIconLink({ item, onClick }: { item: MainNavItem; onClick?: () => void }) {
+function MobileIconLink({ item, badge = 0, onClick }: { item: MainNavItem; badge?: number; onClick?: () => void }) {
   return (
     <NavLink
       key={item.to}
@@ -22,7 +24,10 @@ function MobileIconLink({ item, onClick }: { item: MainNavItem; onClick?: () => 
         }`
       }
     >
-      <Icon icon={item.icon} size={23} weight="regular" />
+      <span className="relative">
+        <Icon icon={item.icon} size={23} weight="regular" />
+        <NavBadge count={badge} />
+      </span>
     </NavLink>
   );
 }
@@ -30,6 +35,7 @@ function MobileIconLink({ item, onClick }: { item: MainNavItem; onClick?: () => 
 export function MobileBottomNav() {
   const [open, setOpen] = useState(false);
   const { hidden } = useBottomNav();
+  const attentionCount = useTrackAttentionBadge();
   const visibleTabs = useVisibleTabs();
   const routes = [...visibleTabs, "/settings"] as MainNavRoute[];
   const items = routes.map((route) => findMainNavItem(route)).filter((item) => item !== undefined);
@@ -52,7 +58,7 @@ export function MobileBottomNav() {
       style={{ height: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
     >
       {items.map((item) => (
-        <MobileIconLink key={item.to} item={item} />
+        <MobileIconLink key={item.to} item={item} badge={item.to === "/tracks" ? attentionCount : 0} />
       ))}
       {hiddenItems.length > 0 && (
         <div className="relative flex flex-1 justify-center">

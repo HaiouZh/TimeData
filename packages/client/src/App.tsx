@@ -7,6 +7,7 @@ import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
+import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
 import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
@@ -46,7 +47,9 @@ export default function App() {
       <BrowserRouter>
         <SyncProvider>
           <BottomNavProvider>
-            <AppShell />
+            <TrackAttentionProvider>
+              <AppShell />
+            </TrackAttentionProvider>
           </BottomNavProvider>
         </SyncProvider>
       </BrowserRouter>

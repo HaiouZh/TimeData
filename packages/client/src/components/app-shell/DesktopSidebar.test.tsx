@@ -2,6 +2,7 @@
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { TrackAttentionContext } from "../../contexts/TrackAttentionContext.js";
 import { DESKTOP_NAV_DEFAULT_ITEMS } from "../../lib/navigation/navRegistry.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { DesktopSidebar } from "./DesktopSidebar.js";
@@ -51,6 +52,26 @@ describe("DesktopSidebar", () => {
     expect(host.innerHTML).not.toContain(retiredTextModuleClass);
     expect(host.innerHTML).not.toContain(legacyPrimaryClass);
 
+    await unmount(root);
+  });
+
+  it("shows an attention badge on the tracks tab and nowhere else", async () => {
+    const { host, root } = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/todo"] },
+        createElement(TrackAttentionContext.Provider, { value: 3 }, createElement(DesktopSidebar)),
+      ),
+    );
+    const tracksLink = host.querySelector('a[href="/tracks"]');
+    expect(tracksLink?.querySelector('[data-testid="nav-badge"]')?.textContent).toBe("3");
+    expect(host.querySelector('a[href="/todo"] [data-testid="nav-badge"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("hides the badge when there is nothing awaiting", async () => {
+    const { host, root } = await renderSidebar("/todo");
+    expect(host.querySelector('[data-testid="nav-badge"]')).toBeNull();
     await unmount(root);
   });
 
