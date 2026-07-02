@@ -339,6 +339,132 @@ describe("CircularTimeline selection", () => {
   });
 });
 
+describe("CircularTimeline selection stability (TL-01)", () => {
+  function makeSlots(): TimeSlot[] {
+    const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
+    return [
+      {
+        startTime: "2026-05-08T00:00:00",
+        endTime: "2026-05-08T06:00:00",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+      { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+      {
+        startTime: "2026-05-08T07:00:00",
+        endTime: "2026-05-08T08:00:00",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+    ];
+  }
+
+  const cloneSlots = (slots: TimeSlot[]): TimeSlot[] =>
+    slots.map((slot) => ({ ...slot, entry: slot.entry ? { ...slot.entry } : null }));
+
+  async function mountAndSelectMorningGap() {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const render = (slots: TimeSlot[]) =>
+      act(async () => {
+        root.render(createElement(CircularTimeline, { date: "2026-05-08", slots }));
+      });
+
+    await render(makeSlots());
+
+    const svg = container.querySelector("svg");
+    if (!svg) throw new Error("svg not found");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 240,
+      bottom: 240,
+      width: 240,
+      height: 240,
+      toJSON: () => ({}),
+    } as DOMRect);
+    Object.assign(svg, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
+      svg.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
+    });
+
+    expect(container.innerHTML).toContain("00:00 - 06:00");
+    return { container, root, render };
+  }
+
+  it("等值新引用的 slots 重渲染不重置选中与箭头", async () => {
+    const { container, root, render } = await mountAndSelectMorningGap();
+    const arrowBefore = container.querySelector('[data-ring-indicator="true"]')?.getAttribute("points");
+
+    await render(cloneSlots(makeSlots()));
+
+    expect(container.innerHTML).toContain("00:00 - 06:00");
+    expect(container.querySelector('[data-ring-indicator="true"]')?.getAttribute("points")).toBe(arrowBefore);
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it("选中的末尾空档随时间增长：中心时长跟随、箭头不动", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const grow = (endClock: string): TimeSlot[] => [
+      {
+        startTime: "2026-05-08T06:00:00",
+        endTime: `2026-05-08T${endClock}`,
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+    ];
+
+    await act(async () => {
+      root.render(createElement(CircularTimeline, { date: "2026-05-08", slots: grow("07:00:00") }));
+    });
+    expect(container.innerHTML).toContain("06:00 - 07:00");
+
+    await act(async () => {
+      root.render(createElement(CircularTimeline, { date: "2026-05-08", slots: grow("07:01:00") }));
+    });
+    expect(container.innerHTML).toContain("06:00 - 07:01");
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it("默认目标变化时回到默认选中", async () => {
+    const { container, root, render } = await mountAndSelectMorningGap();
+    const next = makeSlots();
+    const late = entry("entry-2", "2026-05-08T08:00:00", "2026-05-08T09:00:00");
+    next.push(
+      { startTime: late.startTime, endTime: late.endTime, entry: late, kind: "entry", displayMode: "default" },
+      {
+        startTime: "2026-05-08T09:00:00",
+        endTime: "2026-05-08T10:00:00",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
+    );
+
+    await render(next);
+
+    expect(container.innerHTML).toContain("09:00 - 10:00");
+    await act(async () => root.unmount());
+    container.remove();
+  });
+});
+
 describe("CircularTimeline now indicator", () => {
   beforeEach(() => {
     vi.useFakeTimers();

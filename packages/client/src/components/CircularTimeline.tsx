@@ -172,10 +172,27 @@ function selectionKey(selection: Selection | null): string {
   return `gap:${selection.startTime}:${selection.endTime}`;
 }
 
+function selectionResetKey(selection: Selection | null): string {
+  if (!selection) return "none";
+  if (selection.type === "entry") return `entry:${selection.entry.id}`;
+  return `gap:${selection.startTime}`;
+}
+
+function resolveSelection(selection: Selection | null, slots: TimeSlot[]): Selection | null {
+  if (!selection) return null;
+  if (selection.type === "entry") {
+    const slot = slots.find((candidate) => candidate.kind === "entry" && candidate.entry?.id === selection.entry.id);
+    return slot?.entry ? { type: "entry", entry: slot.entry } : null;
+  }
+
+  const slot = slots.find((candidate) => candidate.kind === "gap" && candidate.startTime === selection.startTime);
+  return slot ? { type: "gap", startTime: slot.startTime, endTime: slot.endTime } : null;
+}
+
 export default function CircularTimeline({ date, slots, onPunch, overlay, now }: CircularTimelineProps) {
   const { getCategoryColor, getCategoryPath } = useCategories();
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
-  const [selection, setSelection] = useState<Selection | null>(initialSelection);
+  const [selection, setSelection] = useState<Selection | null>(null);
   const [dragMinutes, setDragMinutes] = useState<number | null>(null);
 
   function selectFromPointer(event: ReactPointerEvent<SVGSVGElement>) {
@@ -193,30 +210,34 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
   }
 
   useEffect(() => {
-    setSelection(initialSelection);
+    setSelection(null);
     setDragMinutes(null);
-  }, [initialSelection]);
+  }, [date, initialSelection ? selectionResetKey(initialSelection) : "none"]);
 
-  const selectedRange = selection
-    ? selection.type === "entry"
-      ? { startTime: selection.entry.startTime, endTime: selection.entry.endTime }
-      : { startTime: selection.startTime, endTime: selection.endTime }
+  const activeSelection = resolveSelection(selection, slots) ?? initialSelection;
+
+  const selectedRange = activeSelection
+    ? activeSelection.type === "entry"
+      ? { startTime: activeSelection.entry.startTime, endTime: activeSelection.entry.endTime }
+      : { startTime: activeSelection.startTime, endTime: activeSelection.endTime }
     : null;
   const selectedMinutes = selectedRange
     ? clampSlotToDayMinutes(date, selectedRange.startTime, selectedRange.endTime)
     : null;
   const selectedColor =
-    selection?.type === "entry" ? getCategoryColor(selection.entry.categoryId) : timelineChromeColors.gapSegment;
+    activeSelection?.type === "entry"
+      ? getCategoryColor(activeSelection.entry.categoryId)
+      : timelineChromeColors.gapSegment;
   const centerTitle =
-    selection?.type === "entry"
-      ? getCategoryPath(selection.entry.categoryId)
-      : selection?.type === "gap"
+    activeSelection?.type === "entry"
+      ? getCategoryPath(activeSelection.entry.categoryId)
+      : activeSelection?.type === "gap"
         ? "待记录"
         : "没有时间段";
   const centerDuration = selectedRange ? formatDuration(selectedRange.startTime, selectedRange.endTime) : "";
   const centerRange = selectedRange ? formatTimelineTimeRange(selectedRange.startTime, selectedRange.endTime) : "";
 
-  const currentSelectionKey = selectionKey(selection);
+  const currentSelectionKey = selectionKey(activeSelection);
 
   return (
     <section className="px-4 pt-4">
@@ -259,7 +280,7 @@ export default function CircularTimeline({ date, slots, onPunch, overlay, now }:
                   fill = timelineChromeColors.gapSegment;
                 }
                 // 有选中段时，把其余可选段压暗，让选中段相对提亮；future 自身已足够克制，不再压。
-                const dimmed = selection !== null && !selected && slot.kind !== "future";
+                const dimmed = activeSelection !== null && !selected && slot.kind !== "future";
                 return (
                   <path
                     key={key}
