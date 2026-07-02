@@ -7,16 +7,14 @@ import SyncIndicator from "../components/SyncIndicator.tsx";
 import Timeline from "../components/Timeline.tsx";
 import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntries, useEntryMutations } from "../hooks/useEntries.ts";
-import { useMidnightTick } from "../hooks/useMidnightTick.ts";
+import { useNowMinute } from "../hooks/useNowMinute.ts";
 import { getMergeOvernightEnabled } from "../lib/overnightDisplaySetting.ts";
 import { punchNow } from "../lib/punch.ts";
 import { buildTimeSlots, formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 
 export default function TimelinePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [, setMidnightTick] = useState(0);
-  useMidnightTick(() => setMidnightTick((value) => value + 1));
-  const now = new Date();
+  const now = useNowMinute();
   const today = getDateString(now);
   const queryDate = searchParams.get("date");
   const normalizedQueryDate =
