@@ -21,10 +21,6 @@ vi.mock("../sync/conflicts.ts", () => ({
   resolveConflicts: vi.fn(),
 }));
 
-vi.mock("../lib/serverHealth.ts", () => ({
-  fetchServerHealth: vi.fn(async () => true),
-}));
-
 vi.mock("../db/index.ts", () => ({
   db: {
     syncLog: {
@@ -90,35 +86,7 @@ describe("useSync", () => {
     });
   });
 
-  it("sync 在服务器连不上时设置错误且跳过 regularSync", async () => {
-    const { regularSync } = await import("../sync/engine.ts");
-    const { fetchServerHealth } = await import("../lib/serverHealth.ts");
-    vi.mocked(fetchServerHealth).mockResolvedValueOnce(false);
-
-    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
-    function Probe() {
-      captured.value = useSync();
-      return createElement("span", null, "probe");
-    }
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(Probe));
-    });
-
-    await act(async () => {
-      await captured.value?.sync();
-    });
-
-    expect(captured.value?.error).toBeTruthy();
-    expect(vi.mocked(regularSync)).not.toHaveBeenCalled();
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it("sync 成功后落一条分段计时记录，含 health 阶段耗时", async () => {
+  it("sync 成功后落一条分段计时记录，不含 health 阶段耗时", async () => {
     const { regularSync } = await import("../sync/engine.ts");
     vi.mocked(regularSync).mockResolvedValueOnce({
       checked: true,
@@ -149,7 +117,7 @@ describe("useSync", () => {
     const timings = getSyncTimings();
     expect(timings).toHaveLength(1);
     expect(timings[0].outcome).not.toBe("error");
-    expect(timings[0].phases.health).toBeTypeOf("number");
+    expect(timings[0].phases.health).toBeUndefined();
 
     await act(async () => {
       root.unmount();

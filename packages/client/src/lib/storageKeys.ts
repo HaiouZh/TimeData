@@ -8,7 +8,6 @@ export const STORAGE_KEYS = {
   cloudSyncEnabled: "timedata_cloud_sync_enabled",
   mergeOvernight: "timedata_merge_overnight",
   sleepCategoryId: "timedata_sleep_category_id",
-  serverHealthy: "timedata_server_healthy",
   schemaNormalizationVersion: "timedata_schema_normalization_version",
   todoWorkbenchSplit: "timedata_todo_workbench_split",
   todoDoneCollapsed: "timedata_todo_done_collapsed",

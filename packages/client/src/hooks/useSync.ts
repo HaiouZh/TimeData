@@ -13,7 +13,6 @@ import { resolveConflicts, type ConflictResolution } from "../sync/conflicts.ts"
 import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
-import { fetchServerHealth } from "../lib/serverHealth.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { createPhaseRecorder, recordSyncTiming, type SyncTimingOutcome } from "../sync/phaseTimings.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
@@ -60,10 +59,6 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     const t0 = performance.now();
     let outcome: SyncTimingOutcome = "error";
     try {
-      const healthy = await recorder.time("health", () => fetchServerHealth());
-      if (!healthy) {
-        throw new Error("无法连接服务器");
-      }
       const result = await regularSync({ phases: recorder });
       setLastResult(result);
       if (result.conflicts.length > 0) {

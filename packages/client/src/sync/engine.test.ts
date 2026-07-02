@@ -2263,13 +2263,6 @@ describe("regularSync", () => {
 
     apiFetchMock
       .mockResolvedValueOnce({
-        categoryCount: 1,
-        entryCount: 0,
-        lastUpdatedAt: "2026-05-08T08:00:00.000Z",
-        latestSeq: 4,
-        serverTime: "2026-05-08T10:00:00.000Z",
-      })
-      .mockResolvedValueOnce({
         accepted: 1,
         rejected: 0,
         conflicts: 0,
@@ -2282,14 +2275,14 @@ describe("regularSync", () => {
 
     const result = await regularSync();
 
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status");
-    expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/push", expect.objectContaining({ method: "POST" }));
-    const pushBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/push", expect.objectContaining({ method: "POST" }));
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body as string);
     expect(pushBody.baseSeq).toBe(3);
-    expect(apiFetchMock).toHaveBeenNthCalledWith(3, "/api/sync/pull", expect.objectContaining({ method: "POST" }));
-    const pullBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", expect.objectContaining({ method: "POST" }));
+    const pullBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
     expect(pullBody.sinceSeq).toBe(3);
-    const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
+    expect(apiFetchMock).toHaveBeenCalledTimes(3);
+    const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
     expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_since_seq"]);
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0, rejected: 0, pushConflicts: 0 });
     await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
@@ -2321,13 +2314,6 @@ describe("regularSync", () => {
 
     apiFetchMock
       .mockResolvedValueOnce({
-        categoryCount: 1,
-        entryCount: 0,
-        lastUpdatedAt: "2026-05-08T08:00:00.000Z",
-        latestSeq: 4,
-        serverTime: "2026-05-08T10:00:00.000Z",
-      })
-      .mockResolvedValueOnce({
         accepted: 1,
         rejected: 0,
         conflicts: 0,
@@ -2342,22 +2328,21 @@ describe("regularSync", () => {
     const result = await regularSync({ phases });
 
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
-    expect(Number.isInteger(phases.phases.status)).toBe(true);
-    expect(phases.phases.status).toBeGreaterThanOrEqual(0);
+    expect(phases.phases.status).toBeUndefined();
     expect(Number.isInteger(phases.phases.push)).toBe(true);
     expect(phases.phases.push).toBeGreaterThanOrEqual(0);
     expect(Number.isInteger(phases.phases.pull)).toBe(true);
     expect(phases.phases.pull).toBeGreaterThanOrEqual(0);
 
-    const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
+    const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
     const timingEntry = logBody.find((item: { action: string }) => item.action === "phase_timings");
     expect(timingEntry).toBeDefined();
     expect(timingEntry.record_count).toBe(0);
     expect(JSON.parse(timingEntry.detail)).toMatchObject({
-      status: phases.phases.status,
       push: phases.phases.push,
       pull: phases.phases.pull,
     });
+    expect(JSON.parse(timingEntry.detail).status).toBeUndefined();
   });
 
   it("records phase timings for the pull-only catch-up path without a push entry", async () => {
@@ -2445,13 +2430,6 @@ describe("regularSync", () => {
 
     apiFetchMock
       .mockResolvedValueOnce({
-        categoryCount: 1,
-        entryCount: 0,
-        lastUpdatedAt: "2026-05-08T08:00:00.000Z",
-        latestSeq: 4,
-        serverTime: "2026-05-08T10:00:00.000Z",
-      })
-      .mockResolvedValueOnce({
         accepted: 1,
         rejected: 0,
         conflicts: 0,
@@ -2465,7 +2443,7 @@ describe("regularSync", () => {
     const result = await regularSync();
 
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
-    const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
+    const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
     expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_since_seq"]);
     expect(logBody.some((item: { action: string }) => item.action === "phase_timings")).toBe(false);
   });

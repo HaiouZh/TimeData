@@ -622,36 +622,36 @@ export async function regularSync(options: RegularSyncOptions = {}): Promise<Reg
 async function runRegularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
   const rec = options.phases;
   try {
-    const [unsyncedCount, serverStatus] = await Promise.all([
-      db.syncLog.where("synced").equals(0).count(),
-      rec ? rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status")) : apiFetch<SyncStatusResponse>("/api/sync/status"),
-    ]);
-
-    // 账本读数比较：无待上传且本地读数不落后于云端账本 = 无需同步。
-    // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
-    const serverSeq = serverStatus.latestSeq ?? 0;
-    const localSeq = getLastSyncedSeq() ?? 0;
-    if (unsyncedCount === 0 && serverSeq <= localSeq) {
-      resetConsecutiveSyncFailures();
-      return {
-        checked: true,
-        identical: true,
-        pushed: 0,
-        rejected: 0,
-        pushConflicts: 0,
-        pushIssues: [],
-        pulled: 0,
-        conflicts: [],
-      };
-    }
+    const unsyncedCount = await db.syncLog.where("synced").equals(0).count();
 
     if (unsyncedCount === 0) {
+      // 无 pending：status 预查仅在此路径保留，承担 no-op 判定。
+      // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
+      const serverStatus = rec
+        ? await rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status"))
+        : await apiFetch<SyncStatusResponse>("/api/sync/status");
+      const serverSeq = serverStatus.latestSeq ?? 0;
+      const localSeq = getLastSyncedSeq() ?? 0;
+      if (serverSeq <= localSeq) {
+        resetConsecutiveSyncFailures();
+        return {
+          checked: true,
+          identical: true,
+          pushed: 0,
+          rejected: 0,
+          pushConflicts: 0,
+          pushIssues: [],
+          pulled: 0,
+          conflicts: [],
+        };
+      }
+
       const { applied, conflicts } = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
       const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
         { action: "pull_seq_catchup", record_count: applied },
       ];
       if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
-      rec ? await rec.time("report", () => reportToServer(logs)) : await reportToServer(logs);
+      void reportToServer(logs); // fire-and-forget：不 await，不计入 syncing 窗口
       resetConsecutiveSyncFailures();
       await pruneSyncedLogs();
       return {
@@ -666,6 +666,8 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       };
     }
 
+    // 有 pending（写后路径）：跳过 status——它唯一的用途是 no-op 判定，此处恒不成立；
+    // 冲突分析在服务端 baseSeq 逻辑里，push 后回声 pull 追平。
     const pushResult = rec ? await rec.time("push", () => syncPush()) : await syncPush();
     const { applied, conflicts } = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
     const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
@@ -679,7 +681,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 
     if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
 
-    rec ? await rec.time("report", () => reportToServer(logs)) : await reportToServer(logs);
+    void reportToServer(logs);
     resetConsecutiveSyncFailures();
     await pruneSyncedLogs();
     return {

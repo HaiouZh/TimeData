@@ -27,20 +27,19 @@ describe("SyncTimingsPanel", () => {
       at: "2026-07-01T00:00:00.000Z",
       outcome: "pushed",
       totalMs: 400,
-      phases: { health: 50, status: 30, push: 200, pull: 100 },
+      phases: { status: 30, push: 200, pull: 100 },
     });
     recordSyncTiming({
       at: "2026-07-02T00:00:00.000Z",
       outcome: "pushed",
       totalMs: 800,
-      phases: { health: 60, status: 40, push: 500, pull: 180 },
+      phases: { status: 40, push: 500, pull: 180 },
     });
 
     const { host, root } = await renderDom(createElement(SyncTimingsPanel));
 
     // 最近一次（第二条，最新在前）总耗时 + 各阶段 ms
     expect(host.textContent).toContain("800");
-    expect(host.textContent).toContain("探活 60");
     expect(host.textContent).toContain("状态 40");
     expect(host.textContent).toContain("推送 500");
     expect(host.textContent).toContain("拉取 180");
@@ -49,6 +48,26 @@ describe("SyncTimingsPanel", () => {
     expect(host.textContent).toContain("近2次");
     expect(host.textContent).toContain("p50");
     expect(host.textContent).toContain("p95");
+
+    await unmount(root);
+  });
+
+  it("silently ignores legacy health/backup/report phase keys from old localStorage entries", async () => {
+    recordSyncTiming({
+      at: "2026-07-01T00:00:00.000Z",
+      outcome: "pushed",
+      // biome-ignore lint/suspicious/noExplicitAny: 模拟历史环形缓冲里已退役的阶段名
+      phases: { health: 50, status: 30, push: 200, pull: 100, report: 5 } as any,
+      totalMs: 400,
+    });
+
+    const { host, root } = await renderDom(createElement(SyncTimingsPanel));
+
+    expect(host.textContent).not.toContain("探活");
+    expect(host.textContent).not.toContain("上报");
+    expect(host.textContent).toContain("状态 30");
+    expect(host.textContent).toContain("推送 200");
+    expect(host.textContent).toContain("拉取 100");
 
     await unmount(root);
   });
