@@ -58,4 +58,27 @@ describe("DateNav", () => {
     });
     expect(onDateChange).toHaveBeenCalledWith("2026-01-15");
   });
+
+  it("非今天时显示回到今天 pill，点击回今天", async () => {
+    const onDateChange = vi.fn();
+    const container = await mount("2026-01-15", onDateChange);
+    const backToToday = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("回到今天"),
+    );
+    if (!backToToday) throw new Error("back to today button not found");
+
+    act(() => {
+      backToToday.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDateChange).toHaveBeenCalledWith("2026-06-03");
+
+    const todayContainer = await mount("2026-06-03", onDateChange);
+    expect(todayContainer.textContent).not.toContain("回到今天");
+  });
+
+  it("日期文字带日历图标线索", async () => {
+    const container = await mount("2026-01-15", () => {});
+    expect(container.querySelector('[data-calendar-hint="true"]')).not.toBeNull();
+  });
 });

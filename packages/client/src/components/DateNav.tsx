@@ -1,4 +1,4 @@
-import { CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { CalendarBlank, CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { addDays, formatMonthDay, formatWeekday, getDateString } from "../lib/time.ts";
 import { Icon } from "./Icon.js";
 
@@ -23,6 +23,9 @@ export default function DateNav({ date, onDateChange }: DateNavProps) {
       <div className="relative rounded-lg px-2 py-1 text-center focus-within:ring-2 focus-within:ring-accent">
         <span className="td-time text-lg font-medium text-ink">{formatMonthDay(date)}</span>
         <span className="ml-2 text-sm text-ink-2">{isToday ? "今天" : weekday}</span>
+        <span data-calendar-hint="true" className="ml-1.5 inline-flex align-middle text-ink-3">
+          <Icon icon={CalendarBlank} size={14} />
+        </span>
         <input
           type="date"
           value={date}
@@ -45,9 +48,20 @@ export default function DateNav({ date, onDateChange }: DateNavProps) {
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
       </div>
-      <button onClick={() => onDateChange(addDays(date, 1))} className={arrowClass} disabled={isToday} aria-label="后一天">
-        <Icon icon={CaretRight} size={18} />
-      </button>
+      <div className="flex items-center">
+        {!isToday && (
+          <button
+            type="button"
+            onClick={() => onDateChange(today)}
+            className="mr-1 min-h-9 rounded-pill border border-accent bg-accent-soft px-3 td-text-caption font-medium text-accent"
+          >
+            回到今天
+          </button>
+        )}
+        <button onClick={() => onDateChange(addDays(date, 1))} className={arrowClass} disabled={isToday} aria-label="后一天">
+          <Icon icon={CaretRight} size={18} />
+        </button>
+      </div>
     </div>
   );
 }
