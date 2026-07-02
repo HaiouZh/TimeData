@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 7128,
+    "chars": 7276,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
@@ -36,7 +36,7 @@
     "covers": 14
   },
   "docs/evergreen/design-language.md": {
-    "chars": 11435,
+    "chars": 11561,
     "covers": 10
   },
   "docs/evergreen/design-language/controls.md": {
@@ -96,7 +96,7 @@
     "covers": 6
   },
   "docs/evergreen/tracks.md": {
-    "chars": 6809,
-    "covers": 8
+    "chars": 7607,
+    "covers": 11
   }
 }
