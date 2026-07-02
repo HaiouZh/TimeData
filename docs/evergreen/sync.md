@@ -19,6 +19,7 @@ covers:
   - packages/client/src/sync/engine.ts
   - packages/client/src/sync/reason.ts
   - packages/client/src/lib/syncStream.ts
+  - packages/client/src/sync/phaseTimings.ts
   - packages/client/src/hooks/useSync.ts
   - packages/client/src/contexts/SyncContext.tsx
   - packages/client/src/lib/api.ts
@@ -35,7 +36,7 @@ covers:
   - packages/shared/src/types.ts:SyncForcePushRequest
   - packages/shared/src/types.ts:SyncForcePushResponse
   - packages/shared/src/types.ts:SyncHealthReport
-last-reviewed: 2026-06-30
+last-reviewed: 2026-07-02
 ---
 
 # 同步机制
@@ -203,6 +204,10 @@ UI 拿到 `SyncConflict[]` 后调 `resolveConflicts(conflicts, resolution)`：
 | SQLite `sync_logs` | 服务端 | 运维审计；记录每次 push/pull 的摘要 |
 
 客户端每次 `regularSync` 完成调 `reportToServer`（best-effort），POST 到 `/api/admin/sync-logs`，因此走 admin 鉴权、admin 限流和 `X-Confirm` 清空确认所在的同一管理命名空间。主路径动作名：`push`、`pull_since_seq`、`pull_seq_catchup`（无待上传时的补差）、`conflict`。`/api/admin/sync` 读取最近 50 条服务端 `sync_logs`。客户端 cursor key 集中在 `packages/client/src/db/index.ts`（`LAST_SYNCED_SEQ_KEY`），`resetSyncCursors()` 清理读数并顺手清理已退役的 `timedata_last_synced` / `timedata_legacy_snapshot_sync`。
+
+### 分段耗时观测（S0）
+
+`useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`）给 health/status/backup/push/pull/report 六个阶段计时；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。设置页同步卡片的 `SyncTimingsPanel` 据此展示最近一次各阶段耗时，以及近 N 次总耗时的 p50/p95。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON，不含 report 自身耗时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
 
 ## 8. 改这块代码前的清单
 
