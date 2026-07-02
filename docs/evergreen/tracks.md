@@ -60,7 +60,7 @@ last-reviewed: 2026-07-02
 `/api/agent/tracks*` 由 scoped auth 保护，可用 master `AUTH_TOKEN` 或窄域 `AGENT_TOKEN`。agent 只能经这些受控端点写轨道，不能直接写 SQLite / IndexedDB / backup / syncLog。分工：server 拥有记账（id/seq/createdAt/updatedAt），agent 拥有语义时间（startedAt/endedAt 可回填）。
 
 - `POST /api/agent/tracks`：建轨道；`requestId` 作为轨道 id，重发返回已有记录。
-- `POST /api/agent/tracks/:id/steps`：追加 `source="agent"` 步；可带 `sourceLabel`、历史 `startedAt/endedAt`、`refs`、`tags`；追加时自动闭合上一条开口当前步（新步 startedAt 早于开口步则 400）。
+- `POST /api/agent/tracks/:id/steps`：追加 `source="agent"` 步；可带 `sourceLabel`、历史 `startedAt/endedAt`、`refs`、`tags`；追加时自动闭合上一条开口当前步（新步 startedAt 早于开口步则 400）。缺失 track 返回 404；非 active track 返回 409 `TRACK_NOT_ACTIVE`（与 `:id/context` 同口径，避免交接步静默落进已归档轨道）。
 - `POST /api/agent/tracks/:id/current-step/close`：只闭合当前步，不前进、不改轨道状态；无开口步 409。
 - `PATCH /api/agent/tracks/:id`：改 `status/title/summary/refs`；`concluded` 自动闭合当前步，`parked`/`active` 保留当前步。
 

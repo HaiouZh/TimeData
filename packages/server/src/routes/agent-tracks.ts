@@ -238,7 +238,12 @@ agentTracks.post("/tracks/:id/steps", async (c) => {
   const parsed = appendStepSchema.safeParse(rawBody);
   if (!parsed.success) return c.json(invalidRequest(parsed.error.issues), 400);
 
-  if (!getTrack(trackId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Track not found" } }, 404);
+  const track = getTrack(trackId);
+  if (!track) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Track not found" } }, 404);
+  // 与 GET /:id/context 口径一致：非 active 轨道不接受续写，避免交接步静默落进已归档轨道（TK-04）。
+  if (track.status !== "active") {
+    return c.json({ ok: false, error: { code: "TRACK_NOT_ACTIVE", message: "Track is not active" } }, 409);
+  }
 
   const stepId = parsed.data.requestId ?? randomUUID();
   const existing = getStep(stepId);

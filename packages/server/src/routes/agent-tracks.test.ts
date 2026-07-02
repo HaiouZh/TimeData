@@ -315,6 +315,19 @@ describe("POST /api/agent/tracks/:id/steps", () => {
     }
   });
 
+  it("returns 409 TRACK_NOT_ACTIVE when appending to a non-active track", async () => {
+    seedTrack("archived-1", { status: "concluded" });
+    const before = syncSeqCount();
+    const res = await post("/api/agent/tracks/archived-1/steps", { content: "交接给你" });
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: { code: "TRACK_NOT_ACTIVE" } });
+    // 非 active 轨道不接受新步:不写 track_steps、不推进 seq。
+    expect(db.prepare("SELECT COUNT(*) AS n FROM track_steps WHERE track_id = ?").get("archived-1")).toMatchObject({
+      n: 0,
+    });
+    expect(syncSeqCount()).toBe(before);
+  });
+
   it("defaults startedAt to now and endedAt to null (开口当前步)", async () => {
     const res = await post("/api/agent/tracks/track-1/steps", { content: "无时间默认" });
     const body = (await res.json()) as { step: { startedAt: string; endedAt: string | null; seq: number } };
