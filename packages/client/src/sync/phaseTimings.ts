@@ -8,7 +8,7 @@ export interface PhaseRecorder {
   readonly phases: Partial<Record<SyncPhaseName, number>>; // 整数 ms
 }
 
-export function createPhaseRecorder(now: () => number = Date.now): PhaseRecorder {
+export function createPhaseRecorder(now: () => number = () => performance.now()): PhaseRecorder {
   const phases: Partial<Record<SyncPhaseName, number>> = {};
   return {
     phases,
@@ -49,12 +49,23 @@ export function recordSyncTiming(entry: SyncTimingEntry, kv: TimingsKV = default
   kv.set(STORAGE_KEYS.syncPhaseTimings, JSON.stringify(next));
 }
 
+// 逐元素 shape 校验：坏元素被丢弃而非传染 UI。phases 允许带未知键（历史 localStorage
+// 数据可能带 health/backup/report 等旧阶段名），未知键的值只要是有限 number 即合法。
+function isValidTimingEntry(value: unknown): value is SyncTimingEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.at !== "string" || typeof entry.outcome !== "string") return false;
+  if (typeof entry.totalMs !== "number" || !Number.isFinite(entry.totalMs)) return false;
+  if (typeof entry.phases !== "object" || entry.phases === null) return false;
+  return Object.values(entry.phases).every((ms) => typeof ms === "number" && Number.isFinite(ms));
+}
+
 export function getSyncTimings(kv: TimingsKV = defaultKV): SyncTimingEntry[] {
   const raw = kv.get(STORAGE_KEYS.syncPhaseTimings);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as SyncTimingEntry[]) : [];
+    return Array.isArray(parsed) ? parsed.filter(isValidTimingEntry) : [];
   } catch {
     return [];
   }

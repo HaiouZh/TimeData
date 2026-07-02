@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import {
   SYNC_TIMINGS_MAX,
   type SyncTimingEntry,
@@ -77,6 +78,29 @@ describe("recordSyncTiming / getSyncTimings", () => {
     kv.set("timedata_sync_phase_timings", "{not json");
 
     expect(getSyncTimings(kv)).toEqual([]);
+  });
+
+  it("数组元素 shape 损坏时丢弃坏元素只留合法项", () => {
+    const kv = createMemoryKV();
+    const good: SyncTimingEntry = {
+      at: "2026-07-02T00:00:00.000Z",
+      outcome: "pushed",
+      totalMs: 120,
+      phases: { push: 60, health: 20 } as SyncTimingEntry["phases"],
+    };
+    kv.set(
+      STORAGE_KEYS.syncPhaseTimings,
+      JSON.stringify([
+        good,
+        { at: "2026-07-02T00:00:01.000Z" }, // 缺 outcome/totalMs/phases
+        { ...good, totalMs: "slow" }, // totalMs 非数字
+        { ...good, phases: null }, // phases 非对象
+        { ...good, phases: { push: "fast" } }, // phase 值非数字
+        "not-an-object",
+      ]),
+    );
+
+    expect(getSyncTimings(kv)).toEqual([good]);
   });
 });
 
