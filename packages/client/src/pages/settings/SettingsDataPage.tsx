@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { exportBackup } from "../../backup/exportBackup.ts";
 import { describeDomainCounts, domainCountsFromBackup } from "../../backup/domainLabels.ts";
 import { downloadBackupFile } from "../../backup/fileDownload.ts";
@@ -84,7 +84,7 @@ export default function SettingsDataPage() {
     if (!cloudSyncEnabled) return;
     const confirmed = await confirm({
       title: "确认替换本地数据",
-      body: "此操作会清空本地所有记录，从服务器重新拉取全部数据。同步前会自动备份当前本地数据。",
+      body: "此操作会清空本地所有记录，从服务器重新拉取全部数据。本地未同步的改动将丢失。",
       danger: true,
     });
     if (!confirmed) return;
@@ -408,18 +408,6 @@ export default function SettingsDataPage() {
             </button>
             <div className="text-xs text-ink-3">恢复会替换本地核心数据，并在恢复前下载当前本地数据的安全备份。</div>
           </div>
-
-          <div className="space-y-2">
-            <Link
-              to="/settings/data/backup-history"
-              className={`inline-flex ${secondaryButtonClassName}`}
-            >
-              查看本地备份记录
-            </Link>
-            <div className="text-xs text-ink-3">
-              这里只展示同步、恢复等操作前创建的本地安全备份，不是云同步日志。
-            </div>
-          </div>
         </div>
       </section>
 
@@ -541,7 +529,7 @@ export default function SettingsDataPage() {
             >
               {syncing ? "同步中…" : "将本地数据替换为云端数据"}
             </button>
-            <div className="text-xs text-ink-3">此操作会先自动备份本地数据，再用云端完整数据覆盖本地。</div>
+            <div className="text-xs text-ink-3">此操作会用云端完整数据覆盖本地，本地未同步的改动将丢失。</div>
           </section>
 
           <section className="space-y-3 rounded-ctl border border-danger/40 bg-danger-soft p-3">

@@ -28,10 +28,6 @@ export function resolveAndroidBackAction(pathname: string): AndroidBackAction {
     return { type: "navigate", to: "/settings", replace: true };
   }
 
-  if (pathname === "/settings/data/backup-history") {
-    return { type: "navigate", to: "/settings/data", replace: true };
-  }
-
   if (/^\/settings\/categories\/[^/]+$/.test(pathname)) {
     return { type: "navigate", to: "/settings/categories", replace: true };
   }

@@ -76,14 +76,6 @@ describe("resolveAndroidBackAction", () => {
     });
   });
 
-  it("returns data settings parent for /settings/data/backup-history", () => {
-    expect(resolveAndroidBackAction("/settings/data/backup-history")).toEqual({
-      type: "navigate",
-      to: "/settings/data",
-      replace: true,
-    });
-  });
-
   it("returns settings parent for /settings/admin-insights", () => {
     expect(resolveAndroidBackAction("/settings/admin-insights")).toEqual({
       type: "navigate",

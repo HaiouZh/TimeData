@@ -1570,70 +1570,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<h3 className=\"text-sm font-medium text-ink-3\">自动备份</h3>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "{loading && <div className=\"text-sm text-ink-3\">正在读取自动备份记录…</div>}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "{!loading && records.length === 0 && <div className=\"text-sm text-ink-3\">暂无自动备份记录</div>}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"text-sm font-medium text-ink\">{formatAppDateTime(record.createdAt)}</div>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"mt-1 text-xs text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "{restoringId === record.id && <div className=\"mt-2 text-xs text-accent-ink\">正在恢复…</div>}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"shrink-0 rounded bg-accent px-3 py-2 text-xs font-medium text-page hover:bg-accent-strong disabled:opacity-40\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/BackupHistoryPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "{status && <div className=\"text-xs text-danger\">{status}</div>}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/settings/components/SettingsRows.tsx",
       "rule": "bare-text-size",
       "lineText": "<div className=\"text-sm font-medium text-ink\">{title}</div>",
@@ -2460,14 +2396,6 @@
     {
       "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<div className=\"text-xs text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<h3 className=\"text-sm font-medium text-ink-2\">速记数据</h3>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -2556,7 +2484,7 @@
     {
       "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<div className=\"text-xs text-ink-3\">此操作会先自动备份本地数据，再用云端完整数据覆盖本地。</div>",
+      "lineText": "<div className=\"text-xs text-ink-3\">此操作会用云端完整数据覆盖本地，本地未同步的改动将丢失。</div>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"

@@ -9,7 +9,6 @@ import { TodoPage } from "../../pages/TodoPage.tsx";
 import StyleguidePage from "../../pages/dev/StyleguidePage.tsx";
 import GoalDetailPage from "../../pages/goals/GoalDetailPage.tsx";
 import GoalsPage from "../../pages/goals/GoalsPage.tsx";
-import BackupHistoryPage from "../../pages/settings/BackupHistoryPage.tsx";
 import SettingsAdminInsightsPage from "../../pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "../../pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "../../pages/settings/SettingsCategoryDetailPage.tsx";
@@ -55,7 +54,6 @@ export function AppRoutes({ refreshKey }: AppRoutesProps) {
       <Route path="/settings/health-range" element={<SettingsHealthRangePage />} />
       <Route path="/settings/stats-layout" element={<SettingsStatsLayoutPage />} />
       <Route path="/settings/data" element={<SettingsDataPage />} />
-      <Route path="/settings/data/backup-history" element={<BackupHistoryPage />} />
       <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
       <Route path="/settings/garmin" element={<SettingsGarminPage />} />
       <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />

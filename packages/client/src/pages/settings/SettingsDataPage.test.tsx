@@ -101,7 +101,6 @@ describe("SettingsDataPage", () => {
     expect(html).toContain("导出完整备份");
     expect(html).toContain("立即在服务器备份");
     expect(html).toContain("从完整备份恢复");
-    expect(html).toContain("查看本地备份记录");
     expect(html).toContain("同步健康诊断");
     expect(html).toContain("将本地数据覆盖到云端");
     expect(html).toContain("数据重置");
@@ -113,12 +112,12 @@ describe("SettingsDataPage", () => {
     const html = renderToStaticMarkup(
       createElement(
         MemoryRouter,
-        { initialEntries: [{ pathname: "/settings/data", state: { dataStatus: "已恢复自动备份" } }] },
+        { initialEntries: [{ pathname: "/settings/data", state: { dataStatus: "已恢复完整备份" } }] },
         createElement(SettingsDataPage),
       ),
     );
 
-    expect(html).toContain("已恢复自动备份");
+    expect(html).toContain("已恢复完整备份");
   });
 
   it("shows remote delete conflict choices", () => {

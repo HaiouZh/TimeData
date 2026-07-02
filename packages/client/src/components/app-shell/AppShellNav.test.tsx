@@ -24,7 +24,6 @@ vi.mock("../../pages/StatsPage.tsx", () => ({ default: () => createElement("div"
 vi.mock("../../pages/TimeStatsPage.tsx", () => ({ default: () => createElement("div", null, "时间统计") }));
 vi.mock("../../pages/HealthStatsPage.tsx", () => ({ default: () => createElement("div", null, "健康统计") }));
 vi.mock("../../pages/SettingsPage.tsx", () => ({ default: () => createElement("div", null, "设置首页") }));
-vi.mock("../../pages/settings/BackupHistoryPage.tsx", () => ({ default: () => createElement("div", null, "备份历史") }));
 vi.mock("../../pages/settings/SettingsAdminInsightsPage.tsx", () => ({ default: () => createElement("div", null, "后台洞察") }));
 vi.mock("../../pages/settings/SettingsCategoriesPage.tsx", () => ({ default: () => createElement("div", null, "分类设置") }));
 vi.mock("../../pages/settings/SettingsCategoryDetailPage.tsx", () => ({ default: () => createElement("div", null, "分类详情") }));
