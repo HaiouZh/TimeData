@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { TrackStep } from "@timedata/shared";
 import { afterEach, describe, expect, it } from "vitest";
-import { renderDom, unmount } from "../../test/domHarness.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TrackStepRow } from "./TrackStepRow.js";
 
 const T = "2026-06-21T00:00:00.000Z";
@@ -83,5 +83,23 @@ describe("TrackStepRow", () => {
     const rel = host.querySelector('[data-testid="step-relative-time"]');
     expect(rel?.textContent).toContain("2小时前");
     expect(rel?.getAttribute("title")).toContain("UTC+8");
+  });
+
+  it("folds long non-current step content behind a 展开 toggle", async () => {
+    const long = "步".repeat(300);
+    const host = await mount({ step: step({ id: "long", endedAt: T, content: long }), isCurrent: false, now: NOW });
+    expect(host.querySelector("p")?.className).toContain("line-clamp-6");
+    const toggle = [...host.querySelectorAll("button")].find((b) => b.textContent === "展开");
+    expect(toggle).not.toBeUndefined();
+    await click(toggle ?? null);
+    expect(host.querySelector("p")?.className).not.toContain("line-clamp-6");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "收起")).toBe(true);
+  });
+
+  it("never folds the current step even if its content is long", async () => {
+    const long = "步".repeat(300);
+    const host = await mount({ step: step({ id: "cur", endedAt: null, content: long }), isCurrent: true, now: NOW });
+    expect(host.querySelector("p")?.className).not.toContain("line-clamp-6");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "展开")).toBe(false);
   });
 });
