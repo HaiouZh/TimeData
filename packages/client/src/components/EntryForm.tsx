@@ -4,7 +4,7 @@ import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useEffect, useState } from "react";
 import { useAdjacentEntriesForRange } from "../hooks/useEntries.ts";
 import { useCategories } from "../hooks/useCategories.ts";
-import { resolveClockRangeAroundEndDate } from "../lib/time.ts";
+import { addDays, resolveClockRangeAroundEndDate } from "../lib/time.ts";
 import CategoryPicker from "./CategoryPicker.tsx";
 import { Icon } from "./Icon.js";
 import TimeRangeWheelPicker, { type DateTimeValue } from "./TimeRangeWheelPicker.tsx";
@@ -33,6 +33,14 @@ function splitDateTime(value: string): DateTimeValue {
   };
 }
 
+export function splitEndDateTime(value: string): DateTimeValue {
+  const parts = splitDateTime(value);
+  if (parts.hour === "00" && parts.minute === "00") {
+    return { date: addDays(parts.date, -1), hour: "24", minute: "00" };
+  }
+  return parts;
+}
+
 export default function EntryForm({
   startTime,
   endTime,
@@ -44,7 +52,7 @@ export default function EntryForm({
   const { parentCategories, getChildren } = useCategories();
   const [categoryId, setCategoryId] = useState(existingEntry?.categoryId || "");
   const [start, setStart] = useState<DateTimeValue>(() => splitDateTime(startTime));
-  const [end, setEnd] = useState<DateTimeValue>(() => splitDateTime(endTime));
+  const [end, setEnd] = useState<DateTimeValue>(() => splitEndDateTime(endTime));
   const [note, setNote] = useState(existingEntry?.note || "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -68,7 +76,7 @@ export default function EntryForm({
   }, [startTime]);
 
   useEffect(() => {
-    setEnd(splitDateTime(endTime));
+    setEnd(splitEndDateTime(endTime));
   }, [endTime]);
 
   useEffect(() => {
@@ -98,7 +106,7 @@ export default function EntryForm({
 
   function handleMergeDown() {
     if (!nextEntry) return;
-    setEnd(splitDateTime(utcToLocalDateTime(nextEntry.endTime)));
+    setEnd(splitEndDateTime(utcToLocalDateTime(nextEntry.endTime)));
     setCategoryId(nextEntry.categoryId);
     if (error) setError("");
   }

@@ -3,7 +3,7 @@ import { localDateTimeToUtc } from "@timedata/shared";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../test/domHarness.js";
-import EntryForm from "./EntryForm.js";
+import EntryForm, { splitEndDateTime } from "./EntryForm.js";
 
 vi.mock("../hooks/useCategories.js", () => ({
   useCategories: () => ({
@@ -66,6 +66,39 @@ describe("EntryForm", () => {
 
     // 不再 shift：传入什么，原样回 onSave。
     expect(onSave).toHaveBeenCalledWith("cat-work", "2026-05-20T09:00:00", "2026-05-20T22:00:00", "");
+    await unmount(root);
+  });
+
+  it("splitEndDateTime 把 T00:00 映射为前一天 24:00，其余原样切分", () => {
+    expect(splitEndDateTime("2026-05-16T00:00:00")).toEqual({
+      date: "2026-05-15",
+      hour: "24",
+      minute: "00",
+    });
+    expect(splitEndDateTime("2026-05-15T23:59:00")).toEqual({
+      date: "2026-05-15",
+      hour: "23",
+      minute: "59",
+    });
+  });
+
+  it("endTime=次日 00:00 时按 24:00 语义原样透传回 onSave", async () => {
+    const onSave = vi.fn().mockResolvedValue({ ok: true });
+
+    const { host, root } = await renderDom(
+      createElement(EntryForm, {
+        startTime: "2026-05-15T22:00:00",
+        endTime: "2026-05-16T00:00:00",
+        onSave,
+        onCancel: () => {},
+      }),
+    );
+
+    const saveButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "保存");
+    if (!saveButton) throw new Error("save button not found");
+    await click(saveButton);
+
+    expect(onSave).toHaveBeenCalledWith("cat-work", "2026-05-15T22:00:00", "2026-05-16T00:00:00", "");
     await unmount(root);
   });
 

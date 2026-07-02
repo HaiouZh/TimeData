@@ -19,6 +19,20 @@ interface TimeRangeWheelPickerProps {
 
 const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+export const END_HOURS = [...HOURS, "24"];
+
+export function endMinuteOptions(hour: string): string[] {
+  return hour === "24" ? ["00"] : MINUTES;
+}
+
+export function normalizeEndClockChange(
+  value: DateTimeValue,
+  patch: Partial<Pick<DateTimeValue, "hour" | "minute">>,
+): DateTimeValue {
+  const next = { ...value, ...patch };
+  if (next.hour === "24") next.minute = "00";
+  return next;
+}
 
 function formatRangeDuration(start: DateTimeValue, end: DateTimeValue): string {
   const range = resolveClockRangeAroundEndDate(end.date, start.hour, start.minute, end.hour, end.minute);
@@ -29,10 +43,14 @@ function TimeGroup({
   label,
   value,
   onChange,
+  hourOptions = HOURS,
+  minuteOptions = MINUTES,
 }: {
   label: string;
   value: DateTimeValue;
   onChange: (value: DateTimeValue) => void;
+  hourOptions?: string[];
+  minuteOptions?: string[];
 }) {
   return (
     <div className="min-w-0 space-y-1">
@@ -41,14 +59,14 @@ function TimeGroup({
         <Wheel
           ariaLabel={`${label}小时`}
           value={value.hour}
-          options={HOURS}
+          options={hourOptions}
           onChange={(hour) => onChange({ ...value, hour })}
         />
         <span className="td-time text-lg font-semibold text-ink-3">:</span>
         <Wheel
           ariaLabel={`${label}分钟`}
           value={value.minute}
-          options={MINUTES}
+          options={minuteOptions}
           onChange={(minute) => onChange({ ...value, minute })}
         />
       </div>
@@ -75,7 +93,13 @@ export default function TimeRangeWheelPicker({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <TimeGroup label="开始" value={start} onChange={onStartChange} />
-        <TimeGroup label="结束" value={end} onChange={onEndChange} />
+        <TimeGroup
+          label="结束"
+          value={end}
+          hourOptions={END_HOURS}
+          minuteOptions={endMinuteOptions(end.hour)}
+          onChange={(next) => onEndChange(normalizeEndClockChange(end, next))}
+        />
       </div>
     </div>
   );
