@@ -21,6 +21,7 @@ vi.mock("../lib/api.js", () => ({
 }));
 
 import { advanceSeqCursor, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, recordRegularSyncFailure, recordSyncLog, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace } from "./engine.js";
+import { createPhaseRecorder } from "./phaseTimings.js";
 
 const localStorageMock = (() => {
   let store = new Map<string, string>();
@@ -2302,8 +2303,183 @@ describe("regularSync", () => {
     await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
   });
 
+  it("records phase timings and reports them when pushing then pulling", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-local",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00.000Z",
+      endTime: "2026-05-08T10:00:00.000Z",
+      note: "local",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      updatedAt: "2026-05-08T09:00:00.000Z",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: "2026-05-08T09:00:00.000Z", synced: 0 });
+    setLastSyncedSeq(3);
 
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 1,
+        entryCount: 0,
+        lastUpdatedAt: "2026-05-08T08:00:00.000Z",
+        latestSeq: 4,
+        serverTime: "2026-05-08T10:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{ tableName: "time_entries", recordId: "entry-local", action: "create", status: "accepted", reasonCode: "applied", message: "Applied", incomingTimestamp: "2026-05-08T09:00:00.000Z" }],
+        backupId: "backup-1",
+        serverTime: "2026-05-08T10:01:00.000Z",
+      })
+      .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 5, changes: [] })
+      .mockResolvedValueOnce({ ok: true });
 
+    const beforeMutating = vi.fn().mockResolvedValue(undefined);
+    const phases = createPhaseRecorder();
+    const result = await regularSync({ beforeMutating, phases });
+
+    expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
+    expect(Number.isInteger(phases.phases.status)).toBe(true);
+    expect(phases.phases.status).toBeGreaterThanOrEqual(0);
+    expect(Number.isInteger(phases.phases.push)).toBe(true);
+    expect(phases.phases.push).toBeGreaterThanOrEqual(0);
+    expect(Number.isInteger(phases.phases.pull)).toBe(true);
+    expect(phases.phases.pull).toBeGreaterThanOrEqual(0);
+
+    const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
+    const timingEntry = logBody.find((item: { action: string }) => item.action === "phase_timings");
+    expect(timingEntry).toBeDefined();
+    expect(timingEntry.record_count).toBe(0);
+    expect(JSON.parse(timingEntry.detail)).toMatchObject({
+      status: phases.phases.status,
+      push: phases.phases.push,
+      pull: phases.phases.pull,
+    });
+  });
+
+  it("records phase timings for the pull-only catch-up path without a push entry", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 1,
+        entryCount: 1,
+        lastUpdatedAt: "2026-05-08T09:30:00.000Z",
+        latestSeq: 7,
+        serverTime: "2026-05-08T10:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        serverTime: "2026-05-08T10:01:00.000Z",
+        latestSeq: 8,
+        changes: [{
+          tableName: "time_entries",
+          recordId: "entry-remote",
+          action: "update",
+          data: {
+            id: "entry-remote",
+            categoryId: "cat-1",
+            startTime: "2026-05-08T09:00:00.000Z",
+            endTime: "2026-05-08T10:00:00.000Z",
+            note: "remote",
+            createdAt: "2026-05-08T09:00:00.000Z",
+            updatedAt: "2026-05-08T09:30:00.000Z",
+          },
+          timestamp: "2026-05-08T09:30:00.000Z",
+        }],
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    const beforeMutating = vi.fn().mockResolvedValue(undefined);
+    const phases = createPhaseRecorder();
+    const result = await regularSync({ beforeMutating, phases });
+
+    expect(result).toMatchObject({ identical: false, pushed: 0, pulled: 1 });
+    expect(phases.phases.status).toBeGreaterThanOrEqual(0);
+    expect(phases.phases.pull).toBeGreaterThanOrEqual(0);
+    expect(phases.phases.push).toBeUndefined();
+
+    const logBody = JSON.parse(apiFetchMock.mock.calls[2][1].body as string);
+    const timingEntry = logBody.find((item: { action: string }) => item.action === "phase_timings");
+    expect(timingEntry).toBeDefined();
+    expect(timingEntry.record_count).toBe(0);
+    const detail = JSON.parse(timingEntry.detail);
+    expect(detail).toMatchObject({ status: phases.phases.status, pull: phases.phases.pull });
+    expect(detail.push).toBeUndefined();
+  });
+
+  it("does not add a phase_timings entry when phases is not provided", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-local",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00.000Z",
+      endTime: "2026-05-08T10:00:00.000Z",
+      note: "local",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      updatedAt: "2026-05-08T09:00:00.000Z",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: "2026-05-08T09:00:00.000Z", synced: 0 });
+    setLastSyncedSeq(3);
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 1,
+        entryCount: 0,
+        lastUpdatedAt: "2026-05-08T08:00:00.000Z",
+        latestSeq: 4,
+        serverTime: "2026-05-08T10:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{ tableName: "time_entries", recordId: "entry-local", action: "create", status: "accepted", reasonCode: "applied", message: "Applied", incomingTimestamp: "2026-05-08T09:00:00.000Z" }],
+        backupId: "backup-1",
+        serverTime: "2026-05-08T10:01:00.000Z",
+      })
+      .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 5, changes: [] })
+      .mockResolvedValueOnce({ ok: true });
+
+    const beforeMutating = vi.fn().mockResolvedValue(undefined);
+    const result = await regularSync({ beforeMutating });
+
+    expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
+    const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
+    expect(logBody.map((item: { action: string }) => item.action)).toEqual(["push", "pull_since_seq"]);
+    expect(logBody.some((item: { action: string }) => item.action === "phase_timings")).toBe(false);
+  });
 
 });
 

@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
+import type { PhaseRecorder } from "./phaseTimings.ts";
 import {
   getSyncDomain,
   SyncPullResponseSchema,
@@ -63,6 +64,7 @@ export interface RegularSyncResult {
 
 export interface RegularSyncOptions {
   beforeMutating?: () => Promise<void>;
+  phases?: PhaseRecorder;
 }
 
 interface CompactedSyncLog extends SyncLog {
@@ -621,10 +623,11 @@ export async function regularSync(options: RegularSyncOptions = {}): Promise<Reg
 }
 
 async function runRegularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
+  const rec = options.phases;
   try {
     const [unsyncedCount, serverStatus] = await Promise.all([
       db.syncLog.filter((entry) => !entry.synced).count(),
-      apiFetch<SyncStatusResponse>("/api/sync/status"),
+      rec ? rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status")) : apiFetch<SyncStatusResponse>("/api/sync/status"),
     ]);
 
     // 账本读数比较：无待上传且本地读数不落后于云端账本 = 无需同步。
@@ -646,13 +649,18 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       };
     }
 
-    if (options.beforeMutating) {
-      await options.beforeMutating();
+    const beforeMutating = options.beforeMutating;
+    if (beforeMutating) {
+      rec ? await rec.time("backup", () => beforeMutating()) : await beforeMutating();
     }
 
     if (unsyncedCount === 0) {
-      const { applied, conflicts } = await syncPullSinceSeq();
-      await reportToServer([{ action: "pull_seq_catchup", record_count: applied }]);
+      const { applied, conflicts } = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
+      const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
+        { action: "pull_seq_catchup", record_count: applied },
+      ];
+      if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
+      rec ? await rec.time("report", () => reportToServer(logs)) : await reportToServer(logs);
       resetConsecutiveSyncFailures();
       return {
         checked: true,
@@ -667,8 +675,8 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       };
     }
 
-    const pushResult = await syncPush();
-    const { applied, conflicts } = await syncPullSinceSeq();
+    const pushResult = rec ? await rec.time("push", () => syncPush()) : await syncPush();
+    const { applied, conflicts } = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
     const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
       { action: "push", record_count: pushResult.accepted },
       { action: "pull_since_seq", record_count: applied },
@@ -678,7 +686,9 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       logs.push({ action: "conflict", detail: describeConflicts(conflicts), record_count: conflicts.length });
     }
 
-    await reportToServer(logs);
+    if (rec) logs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
+
+    rec ? await rec.time("report", () => reportToServer(logs)) : await reportToServer(logs);
     resetConsecutiveSyncFailures();
     return {
       checked: true,
