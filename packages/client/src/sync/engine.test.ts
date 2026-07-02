@@ -2535,8 +2535,6 @@ describe("regularSync", () => {
 
     const whereSpy = vi.spyOn(db.syncLog, "where");
     whereSpy.mockImplementation((index: unknown) => {
-      const realResult = whereSpy.getMockImplementation() === undefined ? undefined : undefined;
-      void realResult;
       const real = Reflect.apply(
         Object.getPrototypeOf(db.syncLog).where as (this: unknown, ...args: unknown[]) => unknown,
         db.syncLog,
