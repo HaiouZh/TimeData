@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import TimelinePage from "./TimelinePage.js";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("../lib/punch.ts", () => ({ punchNow: vi.fn() }));
 vi.mock("../hooks/useEntries.ts", () => ({
@@ -35,21 +34,17 @@ vi.mock("../components/Timeline.tsx", () => ({
 vi.mock("../lib/overnightDisplaySetting.ts", () => ({ getMergeOvernightEnabled: () => false }));
 
 describe("TimelinePage 环面选中联动列表", () => {
-  let host: HTMLDivElement;
+  let host: HTMLElement;
   let root: Root;
 
   beforeEach(async () => {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimelinePage)));
-    });
+    const rendered = await renderDom(createElement(MemoryRouter, null, createElement(TimelinePage)));
+    host = rendered.host;
+    root = rendered.root;
   });
 
   afterEach(async () => {
-    await act(async () => root.unmount());
-    host.remove();
+    await unmount(root);
   });
 
   it("环面选中透传为列表 highlight，切日期清空", async () => {

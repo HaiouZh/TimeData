@@ -293,6 +293,8 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
 
   const resetKey = `${date}|${selectionResetKey(initialSelection)}`;
 
+  // resetKey 是语义重置触发器：effect 内不读取它，但依赖它来区分日期 / 默认选中目标变化。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey intentionally drives selection reset semantics.
   useEffect(() => {
     setSelection(null);
     setDragMinutes(null);

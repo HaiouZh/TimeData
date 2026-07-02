@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+import type { Root } from "../test/domHarness.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 
 vi.mock("./useAppResumeRefresh.ts", () => ({
   useAppResumeRefresh: (onResume: () => void) => {
@@ -23,30 +22,24 @@ function Probe() {
 }
 
 describe("useNowMinute", () => {
-  let host: HTMLDivElement;
-  let root: Root;
+  let rendered: { host: HTMLElement; root: Root } | null = null;
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-02T10:00:30+08:00"));
     observed.length = 0;
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
+    rendered = null;
   });
 
   afterEach(async () => {
-    await act(async () => root.unmount());
-    host.remove();
+    if (rendered) await unmount(rendered.root);
     vi.useRealTimers();
   });
 
   it("重渲染之间引用稳定，不随渲染取新 Date", async () => {
+    rendered = await renderDom(createElement(Probe));
     await act(async () => {
-      root.render(createElement(Probe));
-    });
-    await act(async () => {
-      root.render(createElement(Probe));
+      rendered?.root.render(createElement(Probe));
     });
 
     expect(observed.length).toBeGreaterThanOrEqual(2);
@@ -54,9 +47,7 @@ describe("useNowMinute", () => {
   });
 
   it("跨分钟边界后更新为新的 now", async () => {
-    await act(async () => {
-      root.render(createElement(Probe));
-    });
+    rendered = await renderDom(createElement(Probe));
     const before = observed.at(-1);
 
     await act(async () => {
@@ -69,9 +60,7 @@ describe("useNowMinute", () => {
   });
 
   it("回前台信号触发更新", async () => {
-    await act(async () => {
-      root.render(createElement(Probe));
-    });
+    rendered = await renderDom(createElement(Probe));
     const before = observed.at(-1);
     vi.setSystemTime(new Date("2026-07-02T10:00:45+08:00"));
 
