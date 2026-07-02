@@ -58,7 +58,8 @@ jobs:
       - name: Script tests
         run: pnpm test:scripts
 
-      # 默认 test 只跑 unit；e2e（forks 池、30s timeout）单独跑，避免拖慢日常 test 又不丢覆盖。
+      # client 的 test 跑三桶（unit/unit-clean/unit-clean-jsdom），由下方 client-unit job 分片覆盖；
+      # e2e（forks 池、30s timeout）单独跑，避免拖慢日常 test 又不丢覆盖。
       - name: E2E tests
         run: pnpm --filter @timedata/client test:e2e
 
@@ -110,4 +111,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Client unit tests (shard ${{ matrix.shard }}/4)
-        run: pnpm --filter @timedata/client exec vitest run --project unit --shard=${{ matrix.shard }}/4
+        # 三桶统一分片：unit（isolate:true 慢桶）+ unit-clean / unit-clean-jsdom（isolate:false 快桶）。
+        # 三桶 include 互斥（unit 桶已 exclude 两快桶），并集=client 全部单测，与本地 `pnpm --filter client test` 一致。
+        run: pnpm --filter @timedata/client exec vitest run --project unit --project unit-clean --project unit-clean-jsdom --shard=${{ matrix.shard }}/4
