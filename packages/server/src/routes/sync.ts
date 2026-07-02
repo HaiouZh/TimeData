@@ -452,17 +452,18 @@ sync.post("/push", async (c) => {
   const t0 = performance.now();
   const rawBody: unknown = await c.req.json();
   const parsed = SyncPushRequestSchema.safeParse(rawBody);
+  const parseMs = performance.now() - t0;
   if (!parsed.success) {
     const { body, status } = errorJson(ErrorCode.INVALID_REQUEST, 400, undefined, { issues: parsed.error.issues });
     return c.json(body, status);
   }
-  const parseMs = performance.now() - t0;
 
   const body = parsed.data;
   const db = getDb();
+  const validateStart = performance.now();
   const orderedChanges = orderPushChanges(body.changes);
   const validation = validateSyncChanges(db, orderedChanges);
-  const validateMs = performance.now() - t0;
+  const validateMs = performance.now() - validateStart;
 
   if (!validation.valid) {
     const response = syncPushResponse(validation.outcomes, null);
@@ -478,6 +479,7 @@ sync.post("/push", async (c) => {
     return c.json(response, 409);
   }
 
+  const analyzeBackupStart = performance.now();
   const pushRecords = orderedChanges.map((change) => ({ tableName: change.tableName, recordId: change.recordId }));
   const seqAnalysis = analyzePushBaseSeq(body.baseSeq ?? null, pushRecords);
   let backupReason: string | null = null;
@@ -508,7 +510,7 @@ sync.post("/push", async (c) => {
       details: backupDetails,
     });
   }
-  const analyzeBackupMs = performance.now() - t0;
+  const analyzeBackupMs = performance.now() - analyzeBackupStart;
   const results: ApplyChangeResult[] = [];
   const applyAll = db.transaction(() => {
     for (const change of orderedChanges) {
@@ -516,6 +518,7 @@ sync.post("/push", async (c) => {
     }
   });
 
+  const applyStart = performance.now();
   try {
     applyAll();
   } catch (err) {
@@ -530,7 +533,7 @@ sync.post("/push", async (c) => {
     );
     return c.json(errBody, status);
   }
-  const applyMs = performance.now() - t0;
+  const applyMs = performance.now() - applyStart;
 
   const outcomes = results.map((result) => outcomeFromApplyResult(result, backup?.id ?? null));
   const response = syncPushResponse(outcomes, backup?.id ?? null);

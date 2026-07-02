@@ -1155,6 +1155,10 @@ describe("sync route", () => {
     expect(detail.timings.analyzeBackupMs).toBeGreaterThanOrEqual(0);
     expect(detail.timings.applyMs).toBeGreaterThanOrEqual(0);
     expect(detail.timings.totalMs).toBeGreaterThanOrEqual(0);
+    // 各分段是真实增量而非累计水位：分段之和不应明显超过 totalMs（各段独立 Math.round 可能有 ±1ms 累积误差）。
+    const segmentSum =
+      detail.timings.parseMs + detail.timings.validateMs + detail.timings.analyzeBackupMs + detail.timings.applyMs;
+    expect(segmentSum).toBeLessThanOrEqual(detail.timings.totalMs + 4);
     // timings 必须是 detail 对象的第一个字段，避免被超长内容截断。
     expect(Object.keys(detail)[0]).toBe("timings");
   });
