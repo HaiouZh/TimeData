@@ -140,13 +140,7 @@ export default function EntryPage() {
       const plan = planEntryOverlapAdjustments(overlaps, utcStart, utcEnd);
 
       if (!plan.ok) {
-        await confirm({
-          title: messages.entry.overlapBlockedTitle,
-          body: messages.entry.overlapBlockedBody,
-          confirmLabel: messages.dialog.ok,
-          cancelLabel: messages.dialog.back,
-        });
-        return { ok: true };
+        return { ok: false, error: messages.entry.overlapBlockedBody };
       }
 
       const confirmed = await confirm({

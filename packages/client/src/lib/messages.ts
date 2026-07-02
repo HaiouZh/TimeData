@@ -27,7 +27,6 @@ export const messages = {
 
   /** Entry editing */
   entry: {
-    overlapBlockedTitle: "无法保存",
     overlapBlockedBody: "这段时间会把已有记录切成两段，请先手动调整原记录后再保存。",
     overlapWarnTitle: "时间段与已有记录重叠",
     overlapWarnBody: (count: number): string =>

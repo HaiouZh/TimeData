@@ -166,6 +166,27 @@ describe("EntryPage default times", () => {
     });
   });
 
+  it("切两段阻断时返回 inline 错误而不再弹窗", async () => {
+    vi.setSystemTime(new Date("2026-05-08T07:30:00+08:00"));
+    findOverlappingEntriesMock.mockResolvedValue([{ id: "entry-x" }]);
+    planEntryOverlapAdjustmentsMock.mockReturnValue({ ok: false });
+
+    renderToStaticMarkup(createElement(EntryPage));
+    const result = await entryFormPropsMock.value?.onSave(
+      "cat-1",
+      "2026-05-08T06:00:00",
+      "2026-05-08T07:00:00",
+      "",
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "这段时间会把已有记录切成两段，请先手动调整原记录后再保存。",
+    });
+    expect(confirmMock).not.toHaveBeenCalled();
+    expect(saveEntryWithOverlapAdjustmentsMock).not.toHaveBeenCalled();
+  });
+
   it("跨天记录保存后返回结束时间所在日期的时间轴", async () => {
     vi.setSystemTime(new Date("2026-05-18T06:00:00+08:00"));
 
