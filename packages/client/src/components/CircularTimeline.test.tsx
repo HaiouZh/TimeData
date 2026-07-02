@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { TimeEntry } from "@timedata/shared";
-import { act } from "react";
+import { act, Profiler, type ProfilerOnRenderCallback } from "react";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -257,6 +257,12 @@ describe("CircularTimeline selection", () => {
     expect(html).toContain('data-tick-tier="micro"');
   });
 
+  it("empty slots do not render the retired empty-state copy", () => {
+    const html = renderToStaticMarkup(createElement(CircularTimeline, { date: "2026-05-08", slots: [] }));
+
+    expect(html).not.toContain("今天还没有可显示的时间段。");
+  });
+
   it("switches selection when pointer drags across slots", async () => {
     const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
     const handleSelectionChange = vi.fn();
@@ -484,6 +490,75 @@ describe("CircularTimeline selection callback (TL-08/TL-17)", () => {
     });
 
     expect(handleSelectionChange).not.toHaveBeenCalled();
+    await act(async () => root.unmount());
+    container.remove();
+  });
+});
+
+describe("CircularTimeline drag render stability (TL-13)", () => {
+  it("同一坐标拖动仍停在同一选段时不产生额外 commit", async () => {
+    const handleRender: ProfilerOnRenderCallback = vi.fn();
+    const handleSelectionChange = vi.fn();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(
+          Profiler,
+          { id: "ring", onRender: handleRender },
+          createElement(CircularTimeline, {
+            date: "2026-05-08",
+            slots: [
+              {
+                startTime: "2026-05-08T00:00:00",
+                endTime: "2026-05-08T08:00:00",
+                entry: null,
+                kind: "gap",
+                displayMode: "default",
+              },
+            ],
+            onSelectionChange: handleSelectionChange,
+          }),
+        ),
+      );
+    });
+
+    const svg = container.querySelector("svg");
+    if (!svg) throw new Error("svg not found");
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 240,
+      bottom: 240,
+      width: 240,
+      height: 240,
+      toJSON: () => ({}),
+    } as DOMRect);
+    Object.assign(svg, {
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => true),
+      releasePointerCapture: vi.fn(),
+    });
+
+    handleRender.mockClear();
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
+    });
+    expect(handleSelectionChange).toHaveBeenCalledTimes(1);
+    expect(handleRender).toHaveBeenCalled();
+
+    handleRender.mockClear();
+    await act(async () => {
+      svg.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 120, clientY: 35, pointerId: 1 }));
+    });
+
+    expect(handleSelectionChange).toHaveBeenCalledTimes(1);
+    expect(handleRender).not.toHaveBeenCalled();
+
     await act(async () => root.unmount());
     container.remove();
   });

@@ -27,7 +27,7 @@ export default function TimeSlot({ slot, categoryPath, categoryColor, onClick, h
       <div ref={rootRef} className="mb-1.5" data-slot-highlighted={highlighted ? "true" : undefined}>
         <button
           onClick={onClick}
-          className={`group flex min-h-[56px] w-full flex-col justify-center gap-0.5 rounded-lg border border-dashed border-border bg-surface/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-border-strong hover:bg-surface-hover/60 active:bg-surface-hover${highlighted ? " ring-2 ring-inset ring-accent" : ""}`}
+          className={`group flex min-h-14 w-full flex-col justify-center gap-0.5 rounded-lg border border-dashed border-border bg-surface/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-border-strong hover:bg-surface-hover/60 active:bg-surface-hover${highlighted ? " ring-2 ring-inset ring-accent" : ""}`}
         >
           <span className="td-time text-xs text-ink-2">{timeRange}</span>
           <div className="flex items-center gap-1.5 text-ink-2 transition-colors group-hover:text-ink">

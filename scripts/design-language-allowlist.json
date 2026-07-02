@@ -506,22 +506,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/components/CircularTimeline.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className={isAnchor ? \"td-num fill-ink text-[10px] font-semibold\" : \"td-num fill-ink-2 text-[9px]\"}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/CircularTimeline.tsx",
-      "rule": "bare-text-size",
-      "lineText": "{slots.length === 0 && <p className=\"mt-2 text-center text-xs text-ink-3\">今天还没有可显示的时间段。</p>}",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/components/DateNav.tsx",
       "rule": "bare-text-size",
       "lineText": "\"rounded-lg px-4 py-2.5 text-lg leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3\";",
@@ -4237,14 +4221,6 @@
       "file": "packages/client/src/components/CircularTimeline.tsx",
       "rule": "bare-arbitrary-value",
       "lineText": "<div className=\"relative aspect-square w-full max-w-[372px]\">",
-      "reason": "任意值收口前的存量裸尺寸/间距值",
-      "ownerBatch": "arbitrary-value-debt",
-      "removeBy": "arbitrary-cleanup"
-    },
-    {
-      "file": "packages/client/src/components/TimeSlot.tsx",
-      "rule": "bare-arbitrary-value",
-      "lineText": "className=\"group flex min-h-[56px] w-full flex-col justify-center gap-0.5 rounded-lg border border-dashed border-border bg-surface/40 py-3 pl-3.5 pr-3 text-left transition-colors hover:border-border-strong hover:bg-surface-hover/60 active:bg-surface-hover\"",
       "reason": "任意值收口前的存量裸尺寸/间距值",
       "ownerBatch": "arbitrary-value-debt",
       "removeBy": "arbitrary-cleanup"

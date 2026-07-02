@@ -32,6 +32,7 @@ const ARROW_BASE_RADIUS = INNER_RADIUS - 4;
 const ARROW_HALF_WIDTH_DEG = 6;
 const DAY_MINUTES = 24 * 60;
 const TICK_INDICES = Array.from({ length: 144 }, (_, index) => index);
+const HOUR_LABELS = Array.from({ length: 24 }, (_, index) => index);
 
 const timelineChromeColors = {
   ringBase: "var(--color-border)",
@@ -41,6 +42,56 @@ const timelineChromeColors = {
   textStroke: "var(--color-page)",
   now: "var(--color-danger)",
 } as const;
+
+const TICK_LAYER = TICK_INDICES.map((tick) => {
+  const angle = (tick / TICK_INDICES.length) * 360;
+  const isHour = tick % 6 === 0;
+  const isHalf = !isHour && tick % 3 === 0;
+  const tier = isHour ? "hour" : isHalf ? "half" : "micro";
+  const length = isHour ? 8 : isHalf ? 5 : 3;
+  const strokeWidth = isHour ? 1.5 : isHalf ? 1 : 0.6;
+  const opacity = isHour ? 0.85 : isHalf ? 0.6 : 0.35;
+  const outer = polarToCartesian(angle, OUTER_RADIUS - 2);
+  const inner = polarToCartesian(angle, OUTER_RADIUS - 2 - length);
+  return (
+    <line
+      key={`tick-${tick}`}
+      x1={outer.x}
+      y1={outer.y}
+      x2={inner.x}
+      y2={inner.y}
+      stroke={timelineChromeColors.tick}
+      strokeWidth={strokeWidth}
+      opacity={opacity}
+      data-tick-tier={tier}
+      pointerEvents="none"
+    />
+  );
+});
+
+const HOUR_LABEL_LAYER = HOUR_LABELS.map((hour) => {
+  const angle = (hour / 24) * 360;
+  const label = polarToCartesian(angle, LABEL_RADIUS);
+  const isAnchor = hour === 0 || hour === 6 || hour === 12 || hour === 18;
+  return (
+    <text
+      key={`hour-${hour}`}
+      x={label.x}
+      y={label.y}
+      textAnchor="middle"
+      dominantBaseline="middle"
+      className={isAnchor ? "td-num fill-ink font-semibold" : "td-num fill-ink-2"}
+      fontSize={isAnchor ? 10 : 9}
+      style={{ paintOrder: "stroke" }}
+      stroke={timelineChromeColors.textStroke}
+      strokeWidth="1"
+      strokeLinejoin="round"
+      pointerEvents="none"
+    >
+      {hour}
+    </text>
+  );
+});
 
 function minutesFromClock(value: string): number {
   const hours = Number(value.slice(11, 13));
@@ -228,7 +279,7 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
     const nextSelection: Selection = slot.entry
       ? { type: "entry", entry: slot.entry }
       : { type: "gap", startTime: slot.startTime, endTime: slot.endTime };
-    setSelection(nextSelection);
+    setSelection((prev) => (selectionKey(prev) === selectionKey(nextSelection) ? prev : nextSelection));
     const key = selectionKey(nextSelection);
     if (lastNotifiedKeyRef.current !== key) {
       lastNotifiedKeyRef.current = key;
@@ -272,6 +323,39 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
   const centerRange = selectedRange ? formatTimelineTimeRange(selectedRange.startTime, selectedRange.endTime) : "";
 
   const currentSelectionKey = selectionKey(activeSelection);
+  const segmentLayer = useMemo(
+    () =>
+      slots.map((slot, index) => {
+        const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
+        if (end <= start) return null;
+        const key = slot.entry ? `entry:${slot.entry.id}` : `${slot.kind}:${slot.startTime}:${slot.endTime}:${index}`;
+        const slotKey = slot.entry ? `entry:${slot.entry.id}` : `${slot.kind}:${slot.startTime}:${slot.endTime}`;
+        const selected = currentSelectionKey === slotKey;
+        let fill: string;
+        if (slot.kind === "entry" && slot.entry) {
+          fill = getCategoryColor(slot.entry.categoryId);
+        } else if (slot.kind === "future") {
+          fill = timelineChromeColors.futureSegment;
+        } else {
+          fill = timelineChromeColors.gapSegment;
+        }
+        // 有选中段时，把其余可选段压暗，让选中段相对提亮；future 自身已足够克制，不再压。
+        const dimmed = currentSelectionKey !== "none" && !selected && slot.kind !== "future";
+        return (
+          <path
+            key={key}
+            d={describeRingSegment(start, end)}
+            data-segment-type={slot.kind}
+            data-segment-selected={selected ? "true" : "false"}
+            fill={fill}
+            opacity={dimmed ? 0.45 : 1}
+            className={slot.kind === "future" ? "" : "cursor-pointer"}
+            style={{ touchAction: "none" }}
+          />
+        );
+      }),
+    [currentSelectionKey, date, getCategoryColor, slots],
+  );
 
   return (
     <section className="px-4 pt-4">
@@ -304,82 +388,9 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
                 fill={timelineChromeColors.ringBase}
                 style={{ touchAction: "none" }}
               />
-              {slots.map((slot, index) => {
-                const { start, end } = clampSlotToDayMinutes(date, slot.startTime, slot.endTime);
-                if (end <= start) return null;
-                const key = slot.entry ? `entry:${slot.entry.id}` : `${slot.kind}:${slot.startTime}:${slot.endTime}:${index}`;
-                const slotKey = slot.entry ? `entry:${slot.entry.id}` : `${slot.kind}:${slot.startTime}:${slot.endTime}`;
-                const selected = currentSelectionKey === slotKey;
-                let fill: string;
-                if (slot.kind === "entry" && slot.entry) {
-                  fill = getCategoryColor(slot.entry.categoryId);
-                } else if (slot.kind === "future") {
-                  fill = timelineChromeColors.futureSegment;
-                } else {
-                  fill = timelineChromeColors.gapSegment;
-                }
-                // 有选中段时，把其余可选段压暗，让选中段相对提亮；future 自身已足够克制，不再压。
-                const dimmed = activeSelection !== null && !selected && slot.kind !== "future";
-                return (
-                  <path
-                    key={key}
-                    d={describeRingSegment(start, end)}
-                    data-segment-type={slot.kind}
-                    data-segment-selected={selected ? "true" : "false"}
-                    fill={fill}
-                    opacity={dimmed ? 0.45 : 1}
-                    className={slot.kind === "future" ? "" : "cursor-pointer"}
-                    style={{ touchAction: "none" }}
-                  />
-                );
-              })}
-              {TICK_INDICES.map((tick) => {
-                const angle = (tick / TICK_INDICES.length) * 360;
-                const isHour = tick % 6 === 0;
-                const isHalf = !isHour && tick % 3 === 0;
-                const tier = isHour ? "hour" : isHalf ? "half" : "micro";
-                const length = isHour ? 8 : isHalf ? 5 : 3;
-                const strokeWidth = isHour ? 1.5 : isHalf ? 1 : 0.6;
-                const opacity = isHour ? 0.85 : isHalf ? 0.6 : 0.35;
-                const outer = polarToCartesian(angle, OUTER_RADIUS - 2);
-                const inner = polarToCartesian(angle, OUTER_RADIUS - 2 - length);
-                return (
-                  <line
-                    key={`tick-${tick}`}
-                    x1={outer.x}
-                    y1={outer.y}
-                    x2={inner.x}
-                    y2={inner.y}
-                    stroke={timelineChromeColors.tick}
-                    strokeWidth={strokeWidth}
-                    opacity={opacity}
-                    data-tick-tier={tier}
-                    pointerEvents="none"
-                  />
-                );
-              })}
-              {Array.from({ length: 24 }, (_, index) => index).map((hour) => {
-                const angle = (hour / 24) * 360;
-                const label = polarToCartesian(angle, LABEL_RADIUS);
-                const isAnchor = hour === 0 || hour === 6 || hour === 12 || hour === 18;
-                return (
-                  <text
-                    key={`hour-${hour}`}
-                    x={label.x}
-                    y={label.y}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    className={isAnchor ? "td-num fill-ink text-[10px] font-semibold" : "td-num fill-ink-2 text-[9px]"}
-                    style={{ paintOrder: "stroke" }}
-                    stroke={timelineChromeColors.textStroke}
-                    strokeWidth="1"
-                    strokeLinejoin="round"
-                    pointerEvents="none"
-                  >
-                    {hour}
-                  </text>
-                );
-              })}
+              {segmentLayer}
+              {TICK_LAYER}
+              {HOUR_LABEL_LAYER}
               {selectedMinutes &&
                 selectedMinutes.end > selectedMinutes.start &&
                 (() => {
@@ -486,7 +497,6 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
             </button>
           </div>
         </div>
-        {slots.length === 0 && <p className="mt-2 text-center text-xs text-ink-3">今天还没有可显示的时间段。</p>}
       </div>
     </section>
   );
