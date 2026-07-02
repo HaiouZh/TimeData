@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import CircularTimeline, { type RingSelectionTarget } from "../components/CircularTimeline.tsx";
@@ -19,7 +19,7 @@ export default function TimelinePage() {
   const queryDate = searchParams.get("date");
   const normalizedQueryDate =
     queryDate && isValidDateString(queryDate) ? (queryDate > today ? today : queryDate) : today;
-  const [date, setDate] = useState(normalizedQueryDate);
+  const date = normalizedQueryDate;
   const { entries, previousEntry } = useEntries(date);
   const { deleteEntry } = useEntryMutations();
   const mergeOvernight = getMergeOvernightEnabled();
@@ -31,14 +31,9 @@ export default function TimelinePage() {
   );
   const { toast, showToast, clearToast } = useActionToast();
 
-  useEffect(() => {
-    setDate(normalizedQueryDate);
-  }, [normalizedQueryDate]);
-
   function handleDateChange(nextDate: string) {
     clearToast();
     setRingSelection(null);
-    setDate(nextDate);
     setSearchParams(nextDate === today ? {} : { date: nextDate });
   }
 

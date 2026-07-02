@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { MAIN_NAV_ITEMS } from "../lib/navigation/navRegistry.js";
 import { addDays, getDateString } from "../lib/time.js";
 import TimelinePage from "./TimelinePage.js";
 
@@ -103,5 +104,10 @@ describe("TimelinePage date 参数校验", () => {
 
   it("合法历史日期原样通过", () => {
     expect(renderWithDate("2026-01-15")).toContain("日期 2026-01-15");
+  });
+
+  it("导航注册表的时间轴链接是纯 / （切 tab 必回今天视图）", () => {
+    const timelineItem = MAIN_NAV_ITEMS.find((item) => item.label === "时间轴");
+    expect(timelineItem?.to).toBe("/");
   });
 });

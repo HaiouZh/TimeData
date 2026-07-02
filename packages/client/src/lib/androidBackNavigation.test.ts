@@ -44,6 +44,15 @@ describe("resolveAndroidBackAction", () => {
     expect(resolveAndroidBackAction("/")).toEqual({ type: "exit" });
   });
 
+  it("时间轴带 date 参数时返回键先消费切日历史", () => {
+    expect(resolveAndroidBackAction("/", "?date=2026-05-15")).toEqual({ type: "back", fallbackTo: "/" });
+  });
+
+  it("时间轴无参（今天视图）返回键退出应用", () => {
+    expect(resolveAndroidBackAction("/")).toEqual({ type: "exit" });
+    expect(resolveAndroidBackAction("/", "")).toEqual({ type: "exit" });
+  });
+
   it("returns settings parent for /settings/categories list", () => {
     expect(resolveAndroidBackAction("/settings/categories")).toEqual({
       type: "navigate",

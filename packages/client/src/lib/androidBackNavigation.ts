@@ -9,8 +9,11 @@ type Navigate = {
 };
 type ExitApp = () => void;
 
-export function resolveAndroidBackAction(pathname: string): AndroidBackAction {
-  if (pathname === "/") return { type: "exit" };
+export function resolveAndroidBackAction(pathname: string, search = ""): AndroidBackAction {
+  if (pathname === "/") {
+    if (new URLSearchParams(search).has("date")) return { type: "back", fallbackTo: "/" };
+    return { type: "exit" };
+  }
 
   if (
     pathname === "/settings/data" ||
