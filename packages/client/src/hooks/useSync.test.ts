@@ -21,10 +21,6 @@ vi.mock("../sync/conflicts.ts", () => ({
   resolveConflicts: vi.fn(),
 }));
 
-vi.mock("../backup/autoBackup.ts", () => ({
-  createAutoBackup: vi.fn(),
-}));
-
 vi.mock("../lib/serverHealth.ts", () => ({
   fetchServerHealth: vi.fn(async () => true),
 }));
@@ -127,7 +123,6 @@ describe("useSync", () => {
     vi.mocked(regularSync).mockResolvedValueOnce({
       checked: true,
       identical: true,
-      backupCreated: false,
       pushed: 0,
       rejected: 0,
       pushConflicts: 0,

@@ -3,13 +3,12 @@ import { getSyncTimings, timingTotalsPercentiles, type SyncPhaseName } from "../
 const PHASE_LABELS: Record<SyncPhaseName, string> = {
   health: "探活",
   status: "状态",
-  backup: "备份",
   push: "推送",
   pull: "拉取",
   report: "上报",
 };
 
-const PHASE_ORDER: SyncPhaseName[] = ["health", "status", "backup", "push", "pull", "report"];
+const PHASE_ORDER: SyncPhaseName[] = ["health", "status", "push", "pull", "report"];
 
 export default function SyncTimingsPanel() {
   const entries = getSyncTimings();

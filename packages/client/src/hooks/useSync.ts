@@ -10,7 +10,6 @@ import {
   type SyncConflict,
 } from "../sync/engine.ts";
 import { resolveConflicts, type ConflictResolution } from "../sync/conflicts.ts";
-import { createAutoBackup } from "../backup/autoBackup.ts";
 import { db } from "../db/index.ts";
 import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
@@ -65,7 +64,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       if (!healthy) {
         throw new Error("无法连接服务器");
       }
-      const result = await regularSync({ beforeMutating: createAutoBackup, phases: recorder });
+      const result = await regularSync({ phases: recorder });
       setLastResult(result);
       if (result.conflicts.length > 0) {
         setConflicts(result.conflicts);
@@ -95,7 +94,6 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setError(null);
     setConflicts([]);
     try {
-      await createAutoBackup();
       const count = await syncForceReplace();
       await refreshSyncStatus();
       return count;
@@ -141,7 +139,6 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setSyncing(true);
     setError(null);
     try {
-      await createAutoBackup();
       const result: SyncForcePushResponse = await syncForcePushToServer(confirmToken, confirmationPhrase);
       setForcePushPreparation(null);
       await refreshSyncStatus();

@@ -38,7 +38,6 @@ function defaultSyncState() {
     lastResult: {
       checked: true,
       identical: false,
-      backupCreated: true,
       pushed: 1,
       rejected: 0,
       pushConflicts: 0,
@@ -276,7 +275,6 @@ describe("SettingsPage", () => {
       lastResult: {
         checked: true,
         identical: false,
-        backupCreated: true,
         pushed: 1,
         rejected: 2,
         pushConflicts: 1,
@@ -298,7 +296,6 @@ describe("SettingsPage", () => {
       lastResult: {
         checked: true,
         identical: false,
-        backupCreated: true,
         pushed: 1,
         rejected: 0,
         pushConflicts: 1,
@@ -331,7 +328,6 @@ describe("SettingsPage", () => {
       lastResult: {
         checked: true,
         identical: true,
-        backupCreated: false,
         pushed: 0,
         rejected: 0,
         pushConflicts: 0,

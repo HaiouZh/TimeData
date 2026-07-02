@@ -53,7 +53,6 @@ export interface SyncPushResult {
 export interface RegularSyncResult {
   checked: boolean;
   identical: boolean;
-  backupCreated: boolean;
   pushed: number;
   rejected: number;
   pushConflicts: number;
@@ -63,7 +62,6 @@ export interface RegularSyncResult {
 }
 
 export interface RegularSyncOptions {
-  beforeMutating?: () => Promise<void>;
   phases?: PhaseRecorder;
 }
 
@@ -614,8 +612,7 @@ export function shouldOpenSyncDiagnostics(): boolean {
 let regularSyncInFlight: Promise<RegularSyncResult> | null = null;
 
 export async function regularSync(options: RegularSyncOptions = {}): Promise<RegularSyncResult> {
-  if (regularSyncInFlight && !options.beforeMutating) return regularSyncInFlight;
-  if (regularSyncInFlight) await regularSyncInFlight;
+  if (regularSyncInFlight) return regularSyncInFlight;
   regularSyncInFlight = runRegularSync(options).finally(() => {
     regularSyncInFlight = null;
   });
@@ -639,7 +636,6 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       return {
         checked: true,
         identical: true,
-        backupCreated: false,
         pushed: 0,
         rejected: 0,
         pushConflicts: 0,
@@ -647,11 +643,6 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
         pulled: 0,
         conflicts: [],
       };
-    }
-
-    const beforeMutating = options.beforeMutating;
-    if (beforeMutating) {
-      rec ? await rec.time("backup", () => beforeMutating()) : await beforeMutating();
     }
 
     if (unsyncedCount === 0) {
@@ -666,7 +657,6 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       return {
         checked: true,
         identical: false,
-        backupCreated: Boolean(options.beforeMutating),
         pushed: 0,
         rejected: 0,
         pushConflicts: 0,
@@ -695,7 +685,6 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
     return {
       checked: true,
       identical: false,
-      backupCreated: Boolean(options.beforeMutating),
       pushed: pushResult.accepted,
       rejected: pushResult.rejected,
       pushConflicts: pushResult.conflicts,

@@ -2102,28 +2102,6 @@ describe("regularSync", () => {
     expect(fetchCalls.filter((url) => url.endsWith("/api/sync/status"))).toHaveLength(1);
   });
 
-  it("runs a separate sync when a concurrent call needs beforeMutating", async () => {
-    setLastSyncedSeq(1);
-    let releaseStatus: (() => void) | null = null;
-    const firstStatus = new Promise((resolve) => {
-      releaseStatus = () => resolve({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null, latestSeq: 1, serverTime: "2026-05-17T00:00:00.000Z" });
-    });
-    apiFetchMock
-      .mockReturnValueOnce(firstStatus)
-      .mockResolvedValueOnce({ categoryCount: 0, entryCount: 1, lastUpdatedAt: "2026-05-17T00:00:00.000Z", latestSeq: 2, serverTime: "2026-05-17T00:00:01.000Z" })
-      .mockResolvedValueOnce({ changes: [], serverTime: "2026-05-17T00:00:02.000Z", latestSeq: 2 })
-      .mockResolvedValueOnce({ ok: true });
-
-    const first = regularSync();
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
-    const second = regularSync({ beforeMutating });
-    releaseStatus?.();
-    await Promise.all([first, second]);
-
-    expect(beforeMutating).toHaveBeenCalledOnce();
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === "/api/sync/status")).toHaveLength(2);
-  });
-
   it("returns identical from meta status without pulling a full snapshot", async () => {
     await db.categories.add({
       id: "cat-1",
@@ -2155,11 +2133,9 @@ describe("regularSync", () => {
       serverTime: "2026-05-08T10:00:00.000Z",
     });
 
-    const beforeMutating = vi.fn();
-    const result = await regularSync({ beforeMutating });
+    const result = await regularSync();
 
     expect(result).toMatchObject({ identical: true, pushed: 0, pulled: 0, rejected: 0, pushConflicts: 0 });
-    expect(beforeMutating).not.toHaveBeenCalled();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status");
     expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/pull", expect.anything());
@@ -2197,7 +2173,7 @@ describe("regularSync", () => {
       })
       .mockResolvedValueOnce({ ok: true });
 
-    const result = await regularSync({ beforeMutating: vi.fn().mockResolvedValue(undefined) });
+    const result = await regularSync();
 
     expect(result).toMatchObject({ identical: false, pulled: 1 });
     await expect(db.quickNotes.get("note-remote")).resolves.toMatchObject({ text: "repo" });
@@ -2245,10 +2221,8 @@ describe("regularSync", () => {
       })
       .mockResolvedValueOnce({ ok: true });
 
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
-    const result = await regularSync({ beforeMutating });
+    const result = await regularSync();
 
-    expect(beforeMutating).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status");
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", expect.objectContaining({ method: "POST" }));
     const pullBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
@@ -2306,10 +2280,8 @@ describe("regularSync", () => {
       .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 5, changes: [] })
       .mockResolvedValueOnce({ ok: true });
 
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
-    const result = await regularSync({ beforeMutating });
+    const result = await regularSync();
 
-    expect(beforeMutating).toHaveBeenCalledTimes(1);
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status");
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/push", expect.objectContaining({ method: "POST" }));
     const pushBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
@@ -2366,9 +2338,8 @@ describe("regularSync", () => {
       .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 5, changes: [] })
       .mockResolvedValueOnce({ ok: true });
 
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
     const phases = createPhaseRecorder();
-    const result = await regularSync({ beforeMutating, phases });
+    const result = await regularSync({ phases });
 
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
     expect(Number.isInteger(phases.phases.status)).toBe(true);
@@ -2431,9 +2402,8 @@ describe("regularSync", () => {
       })
       .mockResolvedValueOnce({ ok: true });
 
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
     const phases = createPhaseRecorder();
-    const result = await regularSync({ beforeMutating, phases });
+    const result = await regularSync({ phases });
 
     expect(result).toMatchObject({ identical: false, pushed: 0, pulled: 1 });
     expect(phases.phases.status).toBeGreaterThanOrEqual(0);
@@ -2492,8 +2462,7 @@ describe("regularSync", () => {
       .mockResolvedValueOnce({ serverTime: "2026-05-08T10:02:00.000Z", latestSeq: 5, changes: [] })
       .mockResolvedValueOnce({ ok: true });
 
-    const beforeMutating = vi.fn().mockResolvedValue(undefined);
-    const result = await regularSync({ beforeMutating });
+    const result = await regularSync();
 
     expect(result).toMatchObject({ identical: false, pushed: 1, pulled: 0 });
     const logBody = JSON.parse(apiFetchMock.mock.calls[3][1].body as string);
