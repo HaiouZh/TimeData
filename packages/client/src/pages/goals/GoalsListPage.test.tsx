@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 
 import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/index.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import GoalsListPage from "./GoalsListPage.js";

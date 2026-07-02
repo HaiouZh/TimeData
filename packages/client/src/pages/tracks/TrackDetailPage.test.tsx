@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../db/index.js";
 import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, addTrackStep, getTrack, listTracks, listTrackSteps } from "../../lib/tracks.js";
