@@ -4,7 +4,7 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 7276,
+    "chars": 7279,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
@@ -88,11 +88,11 @@
     "covers": 16
   },
   "docs/evergreen/todo.md": {
-    "chars": 20917,
+    "chars": 21617,
     "covers": 32
   },
   "docs/evergreen/todo/recurrence.md": {
-    "chars": 6750,
+    "chars": 7203,
     "covers": 6
   },
   "docs/evergreen/tracks.md": {
