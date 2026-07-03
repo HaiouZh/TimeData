@@ -137,7 +137,7 @@ agent / CLI (task-done/task-tag)
   - child **不进 `placement`/`listTasks` 任何桶**（含 `recurring`），过滤写在 `listTasks` 循环最顶部 `if (t.parentId !== null) continue`；children 由 `useTaskChildren(parentId)` 按需单独 query。
   - UI 不渲染 child 的高级控件入口（`recurrence`/`tags`/`scheduledAt`）。
 - **child 的 `sortOrder`** 仅在所属 parent 作用域内相对有效（与 root 共享全局空间，绝对值无意义）。
-- **删除级联**：`deleteTaskCascade` 单事务删 root + 所有 direct children，每条写 `tasks/delete` syncLog（一层约束保证无 grandchildren）。
+- **删除级联**：`deleteTaskCascade` 单事务删 root + 所有 direct children，每条写 `tasks/delete` syncLog（一层约束保证无 grandchildren）。对重复模板还连清其名下活跃 pending occurrence 及 children（done/skipped 历史发保留）；对模板子任务还连清活跃发里的确定性 id 镜像子任务（见 [recurrence](todo/recurrence.md) §3 删除级联）。`TodoPage.remove` 非 occurrence 行统一走它（occurrence 走删·跳）。
 
 ### 2.3 SQL `tasks` ↔ JS 映射（`server/src/db/schema.ts`）
 
