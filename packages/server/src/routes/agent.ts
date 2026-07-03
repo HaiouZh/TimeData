@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { completeTask, TaskSchema, type SyncChange, type Task } from "@timedata/shared";
+import { latestOccurrenceForRule, materializeDue, TaskSchema, type SyncChange, type Task } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
@@ -58,26 +58,43 @@ agent.post("/tasks/:id/status", async (c) => {
   }
 
   let occurrence: Task | null = null;
-  let occurrenceChildren: Task[] = [];
-  let templateChildren: Task[] = [];
+  let occurrenceIsNew = false;
   let noteChild: Task | null = null;
   let next: Task;
-  if (done === true && !isChild) {
-    const sortRow = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks").get() as { next: number };
-    const children = (db
-      .prepare("SELECT * FROM tasks WHERE parent_id = ? ORDER BY sort_order, id")
-      .all(id) as TaskRow[]).map(rowToTask);
-    const completed = completeTask(task, {
-      now: nowDate,
-      genId: () => randomUUID(),
-      occurrenceSortOrder: sortRow.next,
-      children,
-    });
-    occurrence = completed.occurrence;
-    occurrenceChildren = completed.occurrenceChildren ?? [];
-    templateChildren = completed.templateChildren ?? [];
+  if (done === true && !isChild && task.recurrence !== null) {
+    // 完成重复模板 = 代理到「最新那一发」（scheduledAt 最大且非 skipped）：有 active 就完成它，
+    // 无 active 先按引擎物化再完成；引擎判无可发（未到期/耗尽）→ 409。模板本体不承载完成态（§9.2）。
+    const occurrences = (db.prepare("SELECT * FROM tasks WHERE rule_id = ?").all(id) as TaskRow[]).map(rowToTask);
+    const latest = latestOccurrenceForRule(id, occurrences);
+    if (latest !== null && !latest.done) {
+      occurrence = TaskSchema.parse({ ...latest, done: true, completedAt: now, updatedAt: now });
+    } else {
+      const sortRow = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks").get() as {
+        next: number;
+      };
+      const due = materializeDue(task, occurrences, nowDate, sortRow.next);
+      if (due === null) {
+        return c.json(
+          {
+            ok: false,
+            error: { code: "RULE_NOT_DUE", message: "Rule has nothing to complete: not due yet or exhausted" },
+          },
+          409,
+        );
+      }
+      occurrence = TaskSchema.parse({ ...due, done: true, completedAt: now, updatedAt: now });
+      occurrenceIsNew = true;
+    }
     next = TaskSchema.parse({
-      ...completed.next,
+      ...task,
+      ...(tags !== undefined ? { tags } : {}),
+      updatedAt: now,
+    });
+  } else if (done === true && !isChild) {
+    next = TaskSchema.parse({
+      ...task,
+      done: true,
+      completedAt: now,
       ...(tags !== undefined ? { tags } : {}),
       updatedAt: now,
     });
@@ -135,13 +152,7 @@ agent.post("/tasks/:id/status", async (c) => {
 
   db.transaction(() => {
     if (occurrence) {
-      applyChange(taskCreate(occurrence));
-    }
-    for (const child of occurrenceChildren) {
-      applyChange(taskCreate(child));
-    }
-    for (const child of templateChildren) {
-      applyChange(taskUpdate(child));
+      applyChange(occurrenceIsNew ? taskCreate(occurrence) : taskUpdate(occurrence));
     }
     if (noteChild) {
       applyChange(taskCreate(noteChild));

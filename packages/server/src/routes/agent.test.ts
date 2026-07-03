@@ -127,7 +127,7 @@ describe("POST /api/agent/tasks/:id/status", () => {
     expect(row.weight).toBe(5);
   });
 
-  it("done=true 重复非终结：衍生一条已完成行 + 模板推进", async () => {
+  it("done=true 重复模板：代理完成「最新那一发」，模板本体不动（§9.2）", async () => {
     seedRecurring();
     const before = (db.prepare("SELECT COUNT(*) AS n FROM tasks").get() as { n: number }).n;
     const res = await app.request("/api/agent/tasks/rec-1/status", {
@@ -143,23 +143,28 @@ describe("POST /api/agent/tasks/:id/status", () => {
       completed_count: number;
       last_done_at: string | null;
     };
-    expect(tpl.done).toBe(0);
+    // 模板不承载完成态：done/游标字段全不动
+    expect(tpl).toMatchObject({ done: 0, completed_count: 0, last_done_at: null });
     expect(tpl.recurrence).not.toBeNull();
-    expect(tpl.completed_count).toBe(1);
-    expect(tpl.last_done_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     const after = (db.prepare("SELECT COUNT(*) AS n FROM tasks").get() as { n: number }).n;
     expect(after).toBe(before + 1);
-    const occ = db.prepare("SELECT done, recurrence, completed_at, title FROM tasks WHERE id != ? AND title = ?").get("rec-1", "跑步") as {
+    // 无 active → 先按引擎物化再完成：确定性 id occurrence（引擎可见），非随机 uuid 游离行
+    const occ = db.prepare("SELECT id, rule_id, done, recurrence, completed_at FROM tasks WHERE rule_id = ?").get("rec-1") as {
+      id: string;
+      rule_id: string;
       done: number;
       recurrence: string | null;
       completed_at: string | null;
-      title: string;
     };
-    expect(occ).toMatchObject({ done: 1, recurrence: null });
+    expect(occ.id.startsWith("occ:rec-1:")).toBe(true);
+    expect(occ).toMatchObject({ rule_id: "rec-1", done: 1, recurrence: null });
     expect(occ.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(db.prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'tasks' ORDER BY id").all()).toEqual(
+      expect.arrayContaining([{ record_id: occ.id, action: "create" }]),
+    );
   });
 
-  it("done=true 重复任务带 children：occurrence children 快照保留，模板 children reset", async () => {
+  it("done=true 重复模板带 children：模板 children 原样不动，完成只落在 occurrence 上", async () => {
     seedRecurring("rec-with-children");
     seedChild({
       id: "child-done",
@@ -178,33 +183,25 @@ describe("POST /api/agent/tasks/:id/status", () => {
     });
 
     expect(res.status).toBe(200);
-    const occurrence = db.prepare("SELECT id FROM tasks WHERE id != ? AND title = ? AND parent_id IS NULL").get(
-      "rec-with-children",
-      "跑步",
-    ) as { id: string };
-    expect(occurrence.id).toBeDefined();
+    const occurrence = db.prepare("SELECT id, done FROM tasks WHERE rule_id = ?").get("rec-with-children") as {
+      id: string;
+      done: number;
+    };
+    expect(occurrence).toMatchObject({ done: 1 });
 
-    const occurrenceChildren = db
-      .prepare("SELECT parent_id, title, done, completed_at FROM tasks WHERE parent_id = ? ORDER BY sort_order")
-      .all(occurrence.id);
-    expect(occurrenceChildren).toEqual([
-      { parent_id: occurrence.id, title: "已完成子项", done: 1, completed_at: "2026-06-16T01:00:00.000Z" },
-      { parent_id: occurrence.id, title: "未完成子项", done: 0, completed_at: null },
-    ]);
+    // server 侧代理只写 occurrence 本体；children 由 client 物化引擎按模板补齐（done=false 起步）
+    expect(db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE parent_id = ?").get(occurrence.id)).toEqual({ n: 0 });
 
+    // 模板 children 原样保留（含历史脏 done=1——投影显示已不读它，不再 reset）
     const templateChildren = db
       .prepare("SELECT id, parent_id, done, completed_at FROM tasks WHERE parent_id = ? ORDER BY sort_order")
       .all("rec-with-children");
     expect(templateChildren).toEqual([
-      { id: "child-done", parent_id: "rec-with-children", done: 0, completed_at: null },
+      { id: "child-done", parent_id: "rec-with-children", done: 1, completed_at: "2026-06-16T01:00:00.000Z" },
       { id: "child-open", parent_id: "rec-with-children", done: 0, completed_at: null },
     ]);
     expect(db.prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'tasks' ORDER BY id").all()).toEqual(
-      expect.arrayContaining([
-        { record_id: occurrence.id, action: "create" },
-        { record_id: "child-done", action: "update" },
-        { record_id: "child-open", action: "update" },
-      ]),
+      expect.arrayContaining([{ record_id: occurrence.id, action: "create" }]),
     );
   });
 
@@ -286,25 +283,30 @@ describe("POST /api/agent/tasks/:id/status", () => {
     });
   });
 
-  it("done=true 重复终结(count:1)：就地转化、不新增行", async () => {
+  it("done=true 重复终结(count:1)：完成最后一发后再勾 → 409 RULE_NOT_DUE", async () => {
     seedRecurring("rec-2", '{"freq":"daily","interval":1,"basis":"due","count":1}');
-    const before = (db.prepare("SELECT COUNT(*) AS n FROM tasks").get() as { n: number }).n;
-    const res = await app.request("/api/agent/tasks/rec-2/status", {
+    const first = await app.request("/api/agent/tasks/rec-2/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ done: true }),
     });
-
-    expect(res.status).toBe(200);
-    const row = db.prepare("SELECT done, recurrence, completed_at FROM tasks WHERE id = ?").get("rec-2") as {
+    expect(first.status).toBe(200);
+    // 模板保留 recurrence 不就地转化；耗尽由账本（done occurrence 计数）承载
+    const tpl = db.prepare("SELECT done, recurrence FROM tasks WHERE id = ?").get("rec-2") as {
       done: number;
       recurrence: string | null;
-      completed_at: string | null;
     };
-    expect(row).toMatchObject({ done: 1, recurrence: null });
-    expect(row.completed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    const after = (db.prepare("SELECT COUNT(*) AS n FROM tasks").get() as { n: number }).n;
-    expect(after).toBe(before);
+    expect(tpl.done).toBe(0);
+    expect(tpl.recurrence).not.toBeNull();
+    expect(db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE rule_id = ? AND done = 1").get("rec-2")).toEqual({ n: 1 });
+
+    const second = await app.request("/api/agent/tasks/rec-2/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: true }),
+    });
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({ ok: false, error: { code: "RULE_NOT_DUE" } });
   });
 
   it("sets tags", async () => {

@@ -198,7 +198,7 @@ describe("toggleTaskDone", () => {
     await expect(db.syncLog.toArray()).resolves.toEqual([]);
   });
 
-  it("recurring task: stamps lastDoneAt instead of done", async () => {
+  it("重复模板 root：完成代理到最新一发，模板本体不动（§9.2）", async () => {
     const task = await addTask({
       title: "跑步",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
@@ -207,11 +207,12 @@ describe("toggleTaskDone", () => {
 
     const after = await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
 
-    expect(after.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 14)));
-    expect(after.done).toBe(false);
+    expect(after.id).not.toBe(task.id);
+    expect(after).toMatchObject({ ruleId: task.id, done: true, completedAt: "2026-06-14T08:00:00.000Z" });
+    await expect(db.tasks.get(task.id)).resolves.toMatchObject({ done: false, lastDoneAt: null, completedCount: 0 });
   });
 
-  it("重复任务非终结完成：衍生一条已完成快照 + 写 create syncLog", async () => {
+  it("重复模板 root 无 active：先物化再完成，产出确定性 id occurrence + create syncLog", async () => {
     const task = await addTask({
       title: "喝水",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
@@ -219,18 +220,12 @@ describe("toggleTaskDone", () => {
     });
     const before = await db.tasks.count();
 
-    const advanced = await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
+    const occ = await toggleTaskDone(task.id, { now: new Date("2026-06-14T08:00:00.000Z") });
 
-    expect(advanced).toMatchObject({
-      id: task.id,
-      done: false,
-      completedCount: 1,
-      lastDoneAt: localDateOf(new Date(2026, 5, 14)),
-    });
-    expect(await db.tasks.count()).toBe(before + 1);
-    const occ = (await db.tasks.toArray()).find((t) => t.id !== task.id && t.title === "喝水");
+    expect(occ.id.startsWith(`occ:${task.id}:`)).toBe(true); // 确定性 id，非随机 uuid
     expect(occ).toMatchObject({ done: true, recurrence: null, completedAt: "2026-06-14T08:00:00.000Z" });
-    await expect(db.syncLog.where("recordId").equals(occ!.id).toArray()).resolves.toEqual(
+    expect(await db.tasks.count()).toBe(before + 1);
+    await expect(db.syncLog.where("recordId").equals(occ.id).toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "create" })]),
     );
   });
@@ -257,22 +252,21 @@ describe("toggleTaskDone", () => {
     expect(await db.tasks.where("parentId").equals(child.id).count()).toBe(0);
   });
 
-  it("root recurring completion snapshots children and resets template children", async () => {
+  it("重复模板 root 完成：物化的 occurrence children 从未完成起步，模板 children 不动", async () => {
     const root = await addTask({
       title: "重复父任务",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
       now: new Date("2026-06-19T06:00:00.000Z"),
     });
     const doneChild = await createChildTask(root.id, "已完成子项", new Date("2026-06-19T06:30:00.000Z"));
-    await toggleTaskDone(doneChild.id, { now: new Date("2026-06-19T07:00:00.000Z") });
+    await toggleTaskDone(doneChild.id, { now: new Date("2026-06-19T07:00:00.000Z") }); // 无 occurrence → no-op
     const todoChild = await createChildTask(root.id, "未完成子项", new Date("2026-06-19T07:30:00.000Z"));
 
     const next = await toggleTaskDone(root.id, { now: new Date("2026-06-19T08:00:00.000Z") });
 
-    const occurrence = (await db.tasks.toArray()).find((task) => task.id !== root.id && task.title === "重复父任务");
-    expect(occurrence).toMatchObject({ done: true, parentId: null, completedAt: "2026-06-19T08:00:00.000Z" });
+    expect(next).toMatchObject({ ruleId: root.id, done: true, parentId: null, completedAt: "2026-06-19T08:00:00.000Z" });
 
-    const occurrenceChildren = await db.tasks.where("parentId").equals(occurrence!.id).sortBy("sortOrder");
+    const occurrenceChildren = await db.tasks.where("parentId").equals(next.id).sortBy("sortOrder");
     expect(occurrenceChildren.map((child) => [child.title, child.done, child.completedAt])).toEqual([
       ["已完成子项", false, null],
       ["未完成子项", false, null],
@@ -283,8 +277,7 @@ describe("toggleTaskDone", () => {
       [doneChild.id, false, null],
       [todoChild.id, false, null],
     ]);
-    expect(next.done).toBe(false);
-    expect(next.completedCount).toBe(1);
+    await expect(db.tasks.get(root.id)).resolves.toMatchObject({ done: false, completedCount: 0 });
   });
 });
 
@@ -413,35 +406,42 @@ describe("independent child task helpers", () => {
 });
 
 describe("终止式重复 toggle", () => {
-  it("COUNT 满 → done 翻真、计数到位", async () => {
+  it("COUNT 满 → 账本判耗尽，模板沉入 completed 桶", async () => {
     const t = await addTask({
       title: "做三次",
       recurrence: { freq: "daily", interval: 1, basis: "due", count: 3 },
       now: new Date("2026-06-01T08:00:00.000Z"),
     });
-    expect(t.completedCount).toBe(0);
     await toggleTaskDone(t.id, { now: new Date("2026-06-01T09:00:00.000Z") });
     await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
-    const t3 = await toggleTaskDone(t.id, { now: new Date("2026-06-03T09:00:00.000Z") });
-    expect(t3.completedCount).toBe(3);
-    expect(t3.done).toBe(true);
+    const occ3 = await toggleTaskDone(t.id, { now: new Date("2026-06-03T09:00:00.000Z") });
+    expect(occ3).toMatchObject({ ruleId: t.id, done: true });
+
+    const doneOccs = (await db.tasks.where("ruleId").equals(t.id).toArray()).filter((o) => o.done);
+    expect(doneOccs).toHaveLength(3);
+    const buckets = await listTasks(new Date("2026-06-03T10:00:00.000Z"));
+    expect(buckets.completed.map((x) => x.id)).toContain(t.id); // 耗尽 → completed
+    expect(buckets.scheduled.map((x) => x.id)).not.toContain(t.id);
+    // 耗尽后再勾 → 无可完成，no-op 返回模板本体
+    const noop = await toggleTaskDone(t.id, { now: new Date("2026-06-04T09:00:00.000Z") });
+    expect(noop).toMatchObject({ id: t.id, done: false });
   });
 
-  it("UNTIL：过期时逐次追平，到 until 当天才 done 翻真", async () => {
+  it("UNTIL：过期时逐次追平，补完最后一发后账本判耗尽", async () => {
     const t = await addTask({
       title: "到月中",
       recurrence: { freq: "daily", interval: 1, basis: "due", until: "2026-06-02T00:00:00.000Z" },
       now: new Date("2026-06-01T08:00:00.000Z"),
     });
     const first = await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
-    expect(first.done).toBe(false);
-    expect(first.recurrence).not.toBeNull();
-    expect(first.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 1)));
+    expect(first).toMatchObject({ ruleId: t.id, done: true }); // 逐次追平：先补最早那发
+    expect(first.scheduledAt).toBe(localDateOf(new Date(2026, 5, 1)));
 
-    const done = await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
-    expect(done.done).toBe(true);
-    expect(done.recurrence).toBeNull();
-    expect(done.lastDoneAt).toBe(localDateOf(new Date(2026, 5, 2)));
+    const second = await toggleTaskDone(t.id, { now: new Date("2026-06-02T09:00:00.000Z") });
+    expect(second).toMatchObject({ ruleId: t.id, done: true });
+    expect(second.scheduledAt).toBe(localDateOf(new Date(2026, 5, 2)));
+    const buckets = await listTasks(new Date("2026-06-02T10:00:00.000Z"));
+    expect(buckets.completed.map((x) => x.id)).toContain(t.id); // until 过 → 耗尽沉底
   });
 
   it("普通池任务 completedCount 恒 0", async () => {
@@ -715,7 +715,7 @@ describe("listTasks", () => {
     expect(occ).toMatchObject({ done: true, recurrence: null, completedAt: "2026-06-14T08:00:00.000Z" });
   });
 
-  it("耗尽重复（count 满）就地转化进 completed，写 completedAt 并按时间排序", async () => {
+  it("耗尽重复（count 满）：模板按账本沉入 completed，完成事实由 occurrence 承载", async () => {
     const t0 = new Date("2026-06-14T06:00:00.000Z");
     const regular = await addTask({ title: "普通", toInbox: true, now: t0 });
     await toggleTaskDone(regular.id, { now: new Date("2026-06-14T08:00:00.000Z") });
@@ -724,16 +724,16 @@ describe("listTasks", () => {
       recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
       now: t0,
     });
-    await toggleTaskDone(oneShot.id, { now: new Date("2026-06-14T09:00:00.000Z") });
+    const occ = await toggleTaskDone(oneShot.id, { now: new Date("2026-06-14T09:00:00.000Z") });
 
     const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
 
-    // 就地转化：原 id 进 completed、写了 completedAt
-    const oneShotAfter = buckets.completed.find((t) => t.id === oneShot.id);
-    expect(oneShotAfter?.completedAt).toBe("2026-06-14T09:00:00.000Z");
-    // 按 completedAt 倒序：oneShot(09:00) 在 regular(08:00) 之前
-    expect(buckets.completed[0]?.id).toBe(oneShot.id);
-    expect(buckets.completed.map((t) => t.id)).toContain(regular.id);
+    // 模板（保留 recurrence、completedAt=null）按账本耗尽沉入 completed，排在有 completedAt 的行之后
+    expect(buckets.completed.map((t) => t.id)).toContain(oneShot.id);
+    expect(buckets.scheduled.map((t) => t.id)).not.toContain(oneShot.id);
+    // 完成事实在 occurrence 上；completedAt 倒序：occ(09:00) → regular(08:00) → 模板(null 沉底)
+    expect(occ).toMatchObject({ ruleId: oneShot.id, done: true, completedAt: "2026-06-14T09:00:00.000Z" });
+    expect(buckets.completed.map((t) => t.id)).toEqual([occ.id, regular.id, oneShot.id]);
   });
 
   it("一次性未来排期 + 未到期重复都进 scheduled，按到期日升序", async () => {

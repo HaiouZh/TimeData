@@ -1,5 +1,4 @@
 import {
-  completeTask,
   isRuleExhausted,
   latestOccurrenceForRule,
   materializeDue,
@@ -501,36 +500,21 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     return next;
   }
 
-  const children = base.recurrence ? await db.tasks.where("parentId").equals(id).sortBy("sortOrder") : [];
-  const {
-    next,
-    occurrence,
-    occurrenceChildren = [],
-    templateChildren = [],
-  } = completeTask(base as Task, {
-    now,
-    genId: uuid,
-    occurrenceSortOrder: await nextTaskSortOrder(),
-    children,
-  });
+  // 重复模板 root：完成语义代理到「最新那一发」——有 active 就完成它（复用 occurrence 分支，
+  // 含完成后即时物化下一发）；无 active 先物化再完成；引擎判无可发（未到期/耗尽）则 no-op。
+  // 模板本体不承载完成态，旧 completeTask 衍生/终结转化路径已退役（§9.2）。
+  if (base.recurrence) {
+    const active = (await db.tasks.where("ruleId").equals(base.id).toArray()).find((o) => !o.done && !o.skipped);
+    if (active) return toggleTaskDone(active.id, { now });
+    await runMaterialization(now);
+    const fresh = (await db.tasks.where("ruleId").equals(base.id).toArray()).find((o) => !o.done && !o.skipped);
+    if (fresh) return toggleTaskDone(fresh.id, { now });
+    return TaskSchema.parse(base);
+  }
 
-  if (!occurrence) return putTask(next);
-
-  await db.transaction("rw", db.tasks, db.syncLog, async () => {
-    await db.tasks.add(occurrence);
-    await recordSyncLog("tasks", occurrence.id, "create", occurrence.updatedAt);
-    for (const child of occurrenceChildren) {
-      await db.tasks.add(child);
-      await recordSyncLog("tasks", child.id, "create", child.updatedAt);
-    }
-    for (const child of templateChildren) {
-      await db.tasks.put(child);
-      await recordSyncLog("tasks", child.id, "update", child.updatedAt);
-    }
-    await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
-  });
-  return next;
+  // 普通池任务（无 recurrence、无 ruleId、未完成）：直接完成。
+  const next = TaskSchema.parse({ ...base, done: true, completedAt: updatedAt, updatedAt });
+  return putTask(next);
 }
 
 export async function scheduleTask(id: string, date: string, options: { now?: Date } = {}): Promise<Task> {
