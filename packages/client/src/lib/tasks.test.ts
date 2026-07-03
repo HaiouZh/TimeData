@@ -1,6 +1,7 @@
 import type { Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
+import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
   addTask,
@@ -104,6 +105,99 @@ describe("toggleTaskDone", () => {
     );
   });
 
+  it("规则模板子任务：勾选写到最新非 skipped occurrence 子任务，模板子任务不变", async () => {
+    const now = new Date("2026-07-03T08:00:00.000Z");
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 1)),
+      now,
+    });
+    const templateChild = await createChildTask(rule.id, "补铁", now);
+    await runMaterialization(new Date("2026-07-01T08:00:00.000Z"));
+    const first = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(first.id, { now: new Date("2026-07-03T08:30:00.000Z") });
+    const latest = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+
+    const updated = await toggleTaskDone(templateChild.id, { now: new Date("2026-07-03T09:00:00.000Z") });
+
+    expect(updated.id).toBe(occurrenceChildId(latest.id, templateChild.id));
+    await expect(db.tasks.get(templateChild.id)).resolves.toMatchObject({ done: false, completedAt: null });
+    await expect(db.tasks.get(occurrenceChildId(latest.id, templateChild.id))).resolves.toMatchObject({
+      done: true,
+      completedAt: "2026-07-03T09:00:00.000Z",
+    });
+    await expect(db.syncLog.where("recordId").equals(occurrenceChildId(latest.id, templateChild.id)).toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "update" })]),
+    );
+  });
+
+  it("规则模板子任务：无 active 时写到最新 done occurrence 子任务", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 1)),
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const templateChild = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await runMaterialization(new Date("2026-07-01T08:20:00.000Z"));
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occ.id, { now: new Date("2026-07-01T09:00:00.000Z") });
+
+    const updated = await toggleTaskDone(templateChild.id, { now: new Date("2026-07-01T10:00:00.000Z") });
+
+    expect(updated.id).toBe(occurrenceChildId(occ.id, templateChild.id));
+    await expect(db.tasks.get(occurrenceChildId(occ.id, templateChild.id))).resolves.toMatchObject({ done: true });
+    await expect(db.tasks.get(templateChild.id)).resolves.toMatchObject({ done: false });
+  });
+
+  it("规则模板子任务：目标 occurrence 子任务缺失时按确定性 id 兜底创建并写 syncLog", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 1)),
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const templateChild = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await runMaterialization(new Date("2026-07-01T08:20:00.000Z"));
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    const targetId = occurrenceChildId(occ.id, templateChild.id);
+    await db.tasks.delete(targetId);
+    await db.syncLog.clear();
+
+    const updated = await toggleTaskDone(templateChild.id, { now: new Date("2026-07-01T09:00:00.000Z") });
+
+    expect(updated.id).toBe(targetId);
+    await expect(db.tasks.get(targetId)).resolves.toMatchObject({
+      id: targetId,
+      parentId: occ.id,
+      title: "补铁",
+      done: true,
+      completedAt: "2026-07-01T09:00:00.000Z",
+      tags: [],
+    });
+    await expect(db.syncLog.where("recordId").equals(targetId).toArray()).resolves.toEqual([
+      expect.objectContaining({ action: "create", timestamp: "2026-07-01T09:00:00.000Z" }),
+    ]);
+  });
+
+  it("规则模板子任务：无可映射 occurrence 时不写库也不改模板", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const templateChild = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await db.syncLog.clear();
+
+    const updated = await toggleTaskDone(templateChild.id, { now: new Date("2026-07-01T09:00:00.000Z") });
+
+    expect(updated.id).toBe(templateChild.id);
+    await expect(db.tasks.get(templateChild.id)).resolves.toMatchObject({ done: false, completedAt: null });
+    await expect(db.syncLog.toArray()).resolves.toEqual([]);
+  });
+
   it("recurring task: stamps lastDoneAt instead of done", async () => {
     const task = await addTask({
       title: "跑步",
@@ -180,7 +274,7 @@ describe("toggleTaskDone", () => {
 
     const occurrenceChildren = await db.tasks.where("parentId").equals(occurrence!.id).sortBy("sortOrder");
     expect(occurrenceChildren.map((child) => [child.title, child.done, child.completedAt])).toEqual([
-      ["已完成子项", true, "2026-06-19T07:00:00.000Z"],
+      ["已完成子项", false, null],
       ["未完成子项", false, null],
     ]);
 
@@ -868,7 +962,7 @@ describe("runMaterialization", () => {
     expect(occ).toBeDefined();
     const occurrenceChildren = await db.tasks.where("parentId").equals(occ!.id).sortBy("sortOrder");
     expect(occurrenceChildren.map((child) => [child.id, child.title, child.done, child.completedAt, child.tags])).toEqual([
-      [`${occ!.id}:child:${doneChild.id}`, "已完成子项", true, "2026-06-14T07:00:00.000Z", ["keep"]],
+      [`${occ!.id}:child:${doneChild.id}`, "已完成子项", false, null, ["keep"]],
       [`${occ!.id}:child:${todoChild.id}`, "未完成子项", false, null, []],
     ]);
 

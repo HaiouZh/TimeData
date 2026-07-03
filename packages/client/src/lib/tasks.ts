@@ -1,7 +1,15 @@
-import { completeTask, materializeDue, type Recurrence, type Task, TaskSchema } from "@timedata/shared";
+import {
+  completeTask,
+  latestOccurrenceForRule,
+  materializeDue,
+  type Recurrence,
+  type Task,
+  TaskSchema,
+} from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
+import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { currentDueDateString } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
@@ -66,24 +74,20 @@ async function deleteActiveOccurrencesInCurrentTransaction(ruleId: string): Prom
   }
 }
 
-function occurrenceChildId(occurrenceId: string, templateChildId: string): string {
-  return `${occurrenceId}:child:${templateChildId}`;
-}
-
 function materializeOccurrenceChildren(occurrence: Task, templateChildren: Task[]): Task[] {
   return templateChildren.map((child, index) =>
     TaskSchema.parse({
       id: occurrenceChildId(occurrence.id, child.id),
       parentId: occurrence.id,
       title: child.title,
-      done: child.done,
+      done: false,
       recurrence: null,
       lastDoneAt: null,
       startAt: null,
       scheduledAt: null,
       completedCount: 0,
       weight: 0,
-      completedAt: child.completedAt ?? null,
+      completedAt: null,
       tags: child.tags ?? [],
       ruleId: null,
       skipped: false,
@@ -417,7 +421,50 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     tags: existing.tags ?? [],
   };
 
-  if ((base.parentId ?? null) !== null) {
+  const parentId = base.parentId ?? null;
+  if (parentId !== null) {
+    const parent = await db.tasks.get(parentId);
+    if (parent?.recurrence !== null && parent?.recurrence !== undefined) {
+      let result: Task = TaskSchema.parse(base);
+      await db.transaction("rw", db.tasks, db.syncLog, async () => {
+        const occurrences = await db.tasks.where("ruleId").equals(parent.id).toArray();
+        const latest = latestOccurrenceForRule(parent.id, occurrences);
+        if (latest == null) return;
+
+        const targetId = occurrenceChildId(latest.id, base.id);
+        const existingTarget = await db.tasks.get(targetId);
+        if (existingTarget) {
+          const completedAt = existingTarget.done ? null : updatedAt;
+          const next = TaskSchema.parse({ ...existingTarget, done: !existingTarget.done, completedAt, updatedAt });
+          await db.tasks.put(next);
+          await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+          result = next;
+          return;
+        }
+
+        const next = TaskSchema.parse({
+          ...base,
+          id: targetId,
+          parentId: latest.id,
+          done: true,
+          recurrence: null,
+          lastDoneAt: null,
+          startAt: null,
+          scheduledAt: null,
+          completedCount: 0,
+          completedAt: updatedAt,
+          ruleId: null,
+          skipped: false,
+          updatedAt,
+          createdAt: updatedAt,
+        });
+        await db.tasks.add(next);
+        await recordSyncLog("tasks", next.id, "create", next.updatedAt);
+        result = next;
+      });
+      return result;
+    }
+
     const completedAt = base.done ? null : updatedAt;
     const next = TaskSchema.parse({ ...base, done: !base.done, completedAt, updatedAt });
     return putTask(next);
