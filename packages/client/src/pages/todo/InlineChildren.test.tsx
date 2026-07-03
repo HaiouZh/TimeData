@@ -3,7 +3,8 @@ import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
-import { addTask, createChildTask, toggleTaskDone } from "../../lib/tasks.js";
+import { addTask, createChildTask, runMaterialization, toggleTaskDone } from "../../lib/tasks.js";
+import { occurrenceChildId } from "../../lib/tasks/occurrenceChildId.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { InlineChildren } from "./InlineChildren.js";
@@ -117,6 +118,75 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(host.querySelector('button[aria-label="添加子任务"]')).not.toBeNull();
     expect(host.querySelectorAll('button[aria-label^="拖动子任务"]').length).toBe(0);
 
+    await unmount(root);
+  });
+
+  it("static 规则行：子任务勾态显示最新 occurrence 对应子任务", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-07-01T00:00:00.000Z",
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const child = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await db.tasks.update(child.id, { done: true, completedAt: "2026-07-01T08:15:00.000Z" });
+    await runMaterialization(new Date("2026-07-01T08:20:00.000Z"));
+
+    const { host, root } = await renderChildren(rule.id, "static");
+    await settle();
+
+    const checkbox = host.querySelector('input[aria-label="完成子任务 补铁"]') as HTMLInputElement | null;
+    expect(checkbox?.checked).toBe(false);
+    expect(childTitle(host).className).not.toContain("line-through");
+    await expect(db.tasks.get(child.id)).resolves.toMatchObject({ done: true });
+    await unmount(root);
+  });
+
+  it("static 规则行：无 occurrence 时子任务复选框置灰且点击不写模板", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2099-07-01T00:00:00.000Z",
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const child = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await db.syncLog.clear();
+
+    const { host, root } = await renderChildren(rule.id, "static");
+    await settle();
+
+    const checkbox = host.querySelector('input[aria-label="完成子任务 补铁"]') as HTMLInputElement | null;
+    expect(checkbox?.disabled).toBe(true);
+    await act(async () => {
+      checkbox?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    await expect(db.tasks.get(child.id)).resolves.toMatchObject({ done: false, completedAt: null });
+    await expect(db.syncLog.toArray()).resolves.toEqual([]);
+    await unmount(root);
+  });
+
+  it("static 规则行：点击子任务写到最新 occurrence，不动模板子任务", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-07-01T00:00:00.000Z",
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const child = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await runMaterialization(new Date("2026-07-01T08:20:00.000Z"));
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+
+    const { host, root } = await renderChildren(rule.id, "static");
+    await settle();
+    await act(async () => {
+      host.querySelector('input[aria-label="完成子任务 补铁"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+
+    await expect(db.tasks.get(occurrenceChildId(occ.id, child.id))).resolves.toMatchObject({ done: true });
+    await expect(db.tasks.get(child.id)).resolves.toMatchObject({ done: false, completedAt: null });
     await unmount(root);
   });
 

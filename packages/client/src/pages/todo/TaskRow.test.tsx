@@ -3,7 +3,7 @@
 import type { Task } from "@timedata/shared";
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addTask, createChildTask, toggleTaskDone } from "../../lib/tasks.js";
+import { addTask, createChildTask, runMaterialization, toggleTaskDone } from "../../lib/tasks.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
@@ -109,6 +109,26 @@ describe("TaskRow", () => {
     await settle();
     expect(noSub.host.querySelector('[data-testid="subtask-caret"]')).toBeNull();
     await unmount(noSub.root);
+  });
+
+  it("重复模板行的子任务计数读最新 occurrence 投影，而不是模板子任务本体", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-07-01T00:00:00.000Z",
+      now: new Date("2026-07-01T08:00:00.000Z"),
+    });
+    const child = await createChildTask(rule.id, "补铁", new Date("2026-07-01T08:10:00.000Z"));
+    await db.tasks.update(child.id, { done: true, completedAt: "2026-07-01T08:15:00.000Z" });
+    await runMaterialization(new Date("2026-07-01T08:20:00.000Z"));
+    const fresh = (await db.tasks.get(rule.id))!;
+
+    const { host, root } = await render(createElement(TaskRow, { task: fresh, pool: "upcoming", ...handlers }));
+    await settle();
+
+    expect(host.textContent).toContain("0/1");
+    await expect(db.tasks.get(child.id)).resolves.toMatchObject({ done: true });
+    await unmount(root);
   });
 
   it("不再渲染旧 parent drop zone", async () => {

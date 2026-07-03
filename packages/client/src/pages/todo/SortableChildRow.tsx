@@ -27,6 +27,10 @@ interface ChildRowBodyProps extends ChildRowCallbacks {
   child: Task;
   readonly: boolean;
   editing?: boolean;
+  /** 覆盖勾态显示；缺省读 child.done。 */
+  doneOverride?: boolean;
+  /** 无可映射 occurrence 时置灰复选框。 */
+  toggleDisabled?: boolean;
 }
 
 function autoGrow(el: HTMLTextAreaElement | null): void {
@@ -81,11 +85,14 @@ function ChildRowBody({
   onEnter,
   onBeginEdit,
   onCancelEdit,
+  doneOverride,
+  toggleDisabled = false,
 }: ChildRowBodyProps) {
   const [draft, setDraft] = useState(child.title);
   const lastExternal = useRef(child.title);
   const skipBlurCommitRef = useRef(false);
   const titleRef = useAutoGrowingTextarea();
+  const effectiveDone = doneOverride ?? child.done;
 
   // 外部（同步/其他端）刷新标题时，仅当用户未在编辑（draft 仍等于上次外部值）才同步。
   useEffect(() => {
@@ -150,14 +157,15 @@ function ChildRowBody({
       {!readonly && (
         <Checkbox
           ariaLabel={`完成子任务 ${child.title}`}
-          checked={child.done}
+          checked={effectiveDone}
           onChange={() => onToggleDone(child)}
+          disabled={toggleDisabled}
           className="shrink-0"
         />
       )}
       {readonly ? (
         <span
-          className={`min-h-8 min-w-0 flex-1 break-words px-1 py-1 text-sm ${child.done ? "text-ink-3 line-through" : "text-ink"}`}
+          className={`min-h-8 min-w-0 flex-1 break-words px-1 py-1 text-sm ${effectiveDone ? "text-ink-3 line-through" : "text-ink"}`}
         >
           {child.title}
         </span>
@@ -180,7 +188,7 @@ function ChildRowBody({
           }}
           onKeyDown={handleEditKey}
           className={`min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm outline-none focus:bg-surface-hover ${
-            child.done ? "text-ink-3 line-through" : "text-ink"
+            effectiveDone ? "text-ink-3 line-through" : "text-ink"
           }`}
         />
       ) : (
@@ -194,7 +202,7 @@ function ChildRowBody({
           }}
           onKeyDown={handleTitleKey}
           className={`min-h-8 min-w-0 flex-1 select-text break-words border-0 bg-transparent px-1 py-1 text-left text-sm font-normal outline-none focus:bg-surface-hover ${
-            child.done ? "text-ink-3 line-through" : "text-ink"
+            effectiveDone ? "text-ink-3 line-through" : "text-ink"
           }`}
         >
           {child.title}
@@ -255,6 +263,8 @@ export function SortableChildRow(props: SortableChildRowProps) {
 export interface StaticChildRowProps extends ChildRowCallbacks {
   child: Task;
   editing?: boolean;
+  doneOverride?: boolean;
+  toggleDisabled?: boolean;
 }
 
 /** static 模式：可编辑但无拖柄（已排期池）。 */

@@ -1,8 +1,12 @@
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
+import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
+import { db } from "../../db/index.js";
 import { createChildTask, deleteTaskCascade, toggleTaskDone, updateTask } from "../../lib/tasks.js";
+import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProjection.js";
 import { NewChildRow, ReadonlyChildRow, SortableChildRow, StaticChildRow } from "./SortableChildRow.js";
+import { useLatestOccurrenceChildren } from "./useLatestOccurrenceChildren.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
 export type InlineChildrenMode = "draggable" | "static" | "readonly";
@@ -26,6 +30,12 @@ export function InlineChildren({ parentId, mode }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
   const [drafting, setDrafting] = useState(false);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
+  const parent = useLiveQuery(() => db.tasks.get(parentId), [parentId]);
+  const isTemplateParent = mode === "static" && parent?.recurrence !== null && parent?.recurrence !== undefined;
+  const { latestOccurrence, occurrenceChildren } = useLatestOccurrenceChildren(isTemplateParent ? parent : null);
+  const projectionByChildId = isTemplateParent
+    ? new Map(projectTemplateChildren(children, latestOccurrence, occurrenceChildren).map((entry) => [entry.child.id, entry]))
+    : null;
 
   async function handleToggle(child: Task): Promise<void> {
     await toggleTaskDone(child.id);
@@ -74,6 +84,8 @@ export function InlineChildren({ parentId, mode }: InlineChildrenProps) {
         onBeginEdit={(c) => setEditingChildId(c.id)}
         onCancelEdit={(c) => setEditingChildId((current) => (current === c.id ? null : current))}
         onEnter={() => setDrafting(true)}
+        doneOverride={projectionByChildId?.get(child.id)?.effectiveDone}
+        toggleDisabled={projectionByChildId != null && projectionByChildId.get(child.id)?.targetOccChildId == null}
       />
     ) : (
       <SortableChildRow

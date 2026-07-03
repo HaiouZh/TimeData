@@ -179,8 +179,8 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const { host, root } = await renderSheet(t.id);
     await settle();
     expect(host.textContent).toContain("每天");
-    expect(host.textContent).toContain("1/2");
-    expect(host.textContent).toContain("已完成 1 个，共 2 个子任务");
+    expect(host.textContent).toContain("0/2");
+    expect(host.textContent).toContain("已完成 0 个，共 2 个子任务");
     await unmount(root);
   });
 

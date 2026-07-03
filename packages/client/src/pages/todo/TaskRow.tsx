@@ -6,12 +6,14 @@ import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
+import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProjection.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { tagColor } from "../../lib/tasks/turnTags.js";
 import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
+import { useLatestOccurrenceChildren } from "./useLatestOccurrenceChildren.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
 export type TaskPool = "today" | "inbox" | "upcoming" | "recurring" | "completed";
@@ -103,7 +105,10 @@ export function TaskRow({
   const isRecurring = task.recurrence !== null;
   const checked = task.recurrence ? false : task.done;
   const childTotal = children.length;
-  const childDone = children.filter((c) => c.done).length;
+  const { latestOccurrence, occurrenceChildren } = useLatestOccurrenceChildren(isRecurring ? task : null);
+  const childDone = isRecurring
+    ? projectTemplateChildren(children, latestOccurrence, occurrenceChildren).filter((entry) => entry.effectiveDone).length
+    : children.filter((c) => c.done).length;
   const overdueDate = overdue
     ? task.recurrence
       ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt)
