@@ -1221,3 +1221,28 @@ describe("listTasks 读口径切账本（§9.1）", () => {
     expect(order).toEqual([ruleB.id, ruleA.id]);
   });
 });
+
+describe("updateTask 重锚清配额（#4 方案 b）", () => {
+  it("count 满耗尽的规则，改规则重锚后配额重置、立即物化新一发", async () => {
+    const day1 = new Date("2026-07-03T08:00:00.000Z");
+    const day3 = new Date("2026-07-05T08:00:00.000Z");
+    const rule = await addTask({
+      title: "只此一次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
+      now: day1,
+    });
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 });
+    expect((await listTasks(day1)).completed.map((t) => t.id)).toContain(rule.id); // 耗尽
+
+    // 改规则（不显式给 startAt）→ 锚推到当下，旧发不再吃配额
+    await updateTask(rule.id, { recurrence: { freq: "daily", interval: 1, basis: "due", count: 2 }, now: day3 });
+
+    const buckets = await listTasks(day3);
+    expect(buckets.scheduled.map((t) => t.id)).toContain(rule.id); // 回到循环
+    const actives = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(actives).toHaveLength(1); // 重锚即时物化了新一发
+    await expect(db.tasks.get(occA.id)).resolves.toBeDefined(); // 历史发保留
+  });
+});

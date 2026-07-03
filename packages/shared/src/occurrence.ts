@@ -51,10 +51,21 @@ export function materializeOccurrence(rule: Task, dueDate: string, now: Date, so
   });
 }
 
-function latestProcessedOccurrence(rule: Task, processed: Task[]): Task | null {
-  const occurrences = processed
+/**
+ * 计入账本的已处理 occurrence：属于该 rule、done||skipped、有 scheduledAt，且**不早于规则锚点**
+ * （`startAt` 的本地日零点）。重锚（改规则/起始日会把 startAt 推到当下）后，锚点之前的历史发
+ * 不再吃 count 配额、也不再推游标——历史行保留作账本事实，只是引擎不再计入（#4 方案 b）。
+ */
+function countedProcessedOccurrences(rule: Task, processed: Task[]): (Task & { scheduledAt: string })[] {
+  const anchor = rule.startAt == null ? null : normalizeScheduledDate(localDateString(new Date(rule.startAt)));
+  return processed
     .filter((o) => o.ruleId === rule.id && (o.done || o.skipped))
-    .filter((o): o is Task & { scheduledAt: string } => o.scheduledAt != null);
+    .filter((o): o is Task & { scheduledAt: string } => o.scheduledAt != null)
+    .filter((o) => anchor == null || o.scheduledAt >= anchor);
+}
+
+function latestProcessedOccurrence(rule: Task, processed: Task[]): Task | null {
+  const occurrences = countedProcessedOccurrences(rule, processed);
   if (occurrences.length === 0) return null;
   // scheduledAt 同为定长 .sssZ，字典序===时间序，直接取 max。
   return occurrences.reduce((a, b) => (b.scheduledAt > a.scheduledAt ? b : a));
@@ -89,7 +100,7 @@ function latestProcessedCursorIso(rule: Task, processed: Task[]): string | null 
 export function isRuleExhausted(rule: Task, processed: Task[]): boolean {
   const recurrence = rule.recurrence;
   if (recurrence == null) return false;
-  const mine = processed.filter((o) => o.ruleId === rule.id && (o.done || o.skipped));
+  const mine = countedProcessedOccurrences(rule, processed);
   // count 腿：已处理条数达 count 即终结（>= 防多设备超发）。skip 计入配额。
   if (recurrence.count != null && mine.length >= recurrence.count) return true;
   // until 腿
@@ -126,7 +137,7 @@ export function nextDueDate(rule: Task, processed: Task[], now: string | Date = 
  */
 export function materializeDue(rule: Task, processed: Task[], now: Date, sortOrder: number): Task | null {
   if (rule.recurrence == null) throw new Error("materializeDue requires a recurring rule");
-  const mine = processed.filter((o) => o.ruleId === rule.id && (o.done || o.skipped));
+  const mine = countedProcessedOccurrences(rule, processed);
   const dueDate = nextDueDate(rule, mine, now);
   if (dueDate == null) return null;
   // 逾期追平闸门：只物化 ≤ 今天的应发生日（未来发等到那天再物化）。定长 YYYY-MM-DD 字典序比较。

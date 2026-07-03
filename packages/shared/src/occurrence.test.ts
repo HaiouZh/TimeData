@@ -273,3 +273,31 @@ describe("latestOccurrenceForRule", () => {
     expect(latestOccurrenceForRule("r1", [occ("r2", "2026-07-01")])).toBeNull();
   });
 });
+
+describe("重锚清配额：锚点前历史发不计入账本（#4 方案 b）", () => {
+  it("startAt 推到新日期后，旧发不吃 count 配额、游标从锚后起算", () => {
+    const rule = baseRule({
+      recurrence: dailyRule({ count: 2 }),
+      startAt: normalizeScheduledDate("2026-07-05"), // 重锚到 07-05
+    });
+    const oldOnes = [occ("r1", "2026-07-01"), occ("r1", "2026-07-02")]; // 锚点前的历史发（本应耗尽 count:2）
+    expect(isRuleExhausted(rule, oldOnes)).toBe(false);
+    expect(nextDueDate(rule, oldOnes, new Date("2026-07-05T08:00:00.000Z"))).toBe("2026-07-05");
+  });
+
+  it("锚点当天的发仍计入（同日重锚不重发、不撞确定性 id）", () => {
+    const rule = baseRule({
+      recurrence: dailyRule({ count: 2 }),
+      startAt: normalizeScheduledDate("2026-07-03"),
+    });
+    const sameDay = [occ("r1", "2026-07-03")];
+    const next = materializeDue(rule, sameDay, new Date("2026-07-03T10:00:00.000Z"), 5);
+    expect(next).toBeNull(); // 今天已做，下一发在明天，不会同日重发撞 id
+    expect(isRuleExhausted(rule, sameDay)).toBe(false); // 1 < 2
+  });
+
+  it("无锚（startAt=null）行为不变：全部历史发计入", () => {
+    const rule = baseRule({ recurrence: dailyRule({ count: 2 }), startAt: null });
+    expect(isRuleExhausted(rule, [occ("r1", "2026-07-01"), occ("r1", "2026-07-02")])).toBe(true);
+  });
+});

@@ -276,7 +276,8 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
     recurrence,
     done: recurrence ? false : existing.done,
     lastDoneAt: recurrence ? (resetRecurrenceProgress ? null : existing.lastDoneAt) : null,
-    startAt: recurrence ? (patch.startAt ?? existing.startAt ?? updatedAt) : null,
+    // 改规则未显式给 startAt 时把锚推到当下：重锚=从今天重新开始，锚点前历史发不再计入账本（#4）。
+    startAt: recurrence ? (patch.startAt ?? (recurrenceChanged ? updatedAt : (existing.startAt ?? updatedAt))) : null,
     scheduledAt: existing.scheduledAt ?? null,
     completedCount: recurrence ? (resetRecurrenceProgress ? 0 : (existing.completedCount ?? 0)) : 0,
     sortOrder: patch.sortOrder ?? existing.sortOrder,
