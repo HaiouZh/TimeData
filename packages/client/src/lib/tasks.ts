@@ -1,7 +1,9 @@
 import {
   completeTask,
+  isRuleExhausted,
   latestOccurrenceForRule,
   materializeDue,
+  nextDueDate,
   type Recurrence,
   type Task,
   TaskSchema,
@@ -710,8 +712,9 @@ function isOverdue(t: Task, now: Date): boolean {
  * 混排时在跨夜边界出现非确定性顺序。一次性任务进 pool==="upcoming" 时 scheduledAt 必非空，
  * 这里不做 `?? now` 兜底（placement 已保证）。
  */
-function scheduledDateKey(t: Task, now: Date): string {
-  if (t.recurrence) return currentDueDateString(t.recurrence, t.lastDoneAt, t.startAt, now);
+function scheduledDateKey(t: Task, now: Date, ruleDueKey?: Map<string, string>): string {
+  // 重复模板：优先账本推进的下一到期日（listTasks 预计算）；无账本上下文时退回模板死游标（legacy 兜底）。
+  if (t.recurrence) return ruleDueKey?.get(t.id) ?? currentDueDateString(t.recurrence, t.lastDoneAt, t.startAt, now);
   const d = new Date(t.scheduledAt as string);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -728,10 +731,25 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     all.push(parsed.data);
   }
   const buckets: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
+  // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
+  const occurrencesByRule = new Map<string, Task[]>();
+  for (const t of all) {
+    if (t.ruleId === null) continue;
+    const list = occurrencesByRule.get(t.ruleId);
+    if (list) list.push(t);
+    else occurrencesByRule.set(t.ruleId, [t]);
+  }
+  const ruleDueKey = new Map<string, string>();
   for (const t of all) {
     if ((t.parentId ?? null) !== null) continue;
     if (t.ruleId !== null && t.skipped) continue; // skipped occurrence 不进活跃桶
     if (t.recurrence) {
+      const occurrences = occurrencesByRule.get(t.id) ?? [];
+      if (isRuleExhausted(t, occurrences)) {
+        buckets.completed.push(t); // 账本判定耗尽的规则沉入完成区，不再僵在 scheduled
+        continue;
+      }
+      ruleDueKey.set(t.id, nextDueDate(t, occurrences, now) ?? "9999-12-31");
       buckets.scheduled.push(t); // 重复模板退到 scheduled 管理区，不投影 today
       continue;
     }
@@ -743,7 +761,7 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     else buckets.completed.push(t); // pool === "completed"：所有已完成 + 耗尽重复
   }
   buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
-  buckets.scheduled.sort((a, b) => scheduledDateKey(a, now).localeCompare(scheduledDateKey(b, now)));
+  buckets.scheduled.sort((a, b) => scheduledDateKey(a, now, ruleDueKey).localeCompare(scheduledDateKey(b, now, ruleDueKey)));
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   return buckets;
 }

@@ -1186,3 +1186,38 @@ describe("toggleTaskDone 撤勾 occurrence 守卫（#5）", () => {
     expect(reopened).toMatchObject({ id: t.id, done: false, completedAt: null });
   });
 });
+
+describe("listTasks 读口径切账本（§9.1）", () => {
+  const day1 = new Date("2026-07-03T08:00:00.000Z");
+
+  it("count 型规则做满（账本耗尽）后进 completed，不再僵在 scheduled", async () => {
+    const rule = await addTask({
+      title: "只此一次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 1 },
+      now: day1,
+    });
+    await runMaterialization(day1);
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occ.id, { now: day1 });
+
+    const buckets = await listTasks(day1);
+
+    expect(buckets.scheduled.map((t) => t.id)).not.toContain(rule.id);
+    expect(buckets.completed.map((t) => t.id)).toContain(rule.id);
+  });
+
+  it("scheduled 排序按账本推进的下一到期日，而非模板死游标", async () => {
+    // ruleA 先建（sortOrder 靠前），今天那发已完成 → 账本口径下一到期=明天
+    const ruleA = await addTask({ title: "A每日", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    const ruleB = await addTask({ title: "B每日", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(ruleA.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 });
+
+    const buckets = await listTasks(day1);
+    const order = buckets.scheduled.filter((t) => t.recurrence).map((t) => t.id);
+
+    // 死游标口径两条 key 相同（都是首个应发生日）会保持插入序 [A,B]；账本口径 A 推到明天 → B 在前
+    expect(order).toEqual([ruleB.id, ruleA.id]);
+  });
+});
