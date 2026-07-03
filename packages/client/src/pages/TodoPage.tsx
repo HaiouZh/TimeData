@@ -32,7 +32,7 @@ import {
 } from "../lib/tasks/workbenchPrefs.js";
 import {
   bumpTaskWeight,
-  deleteTask,
+  deleteTaskCascade,
   listTasks,
   markOccurrenceSkipped,
   moveTaskToParent,
@@ -152,7 +152,8 @@ export function TodoPage() {
     if (t.ruleId !== null) {
       await markOccurrenceSkipped(t.id);
     } else {
-      await deleteTask(t.id);
+      // 级联删除：模板连清子任务+活跃 occurrence；普通父任务连清子任务（旧 deleteTask 会孤儿化两者）
+      await deleteTaskCascade(t.id);
     }
     if (detailId === t.id) setDetailId(null);
   };
