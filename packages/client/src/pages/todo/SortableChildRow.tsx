@@ -165,7 +165,7 @@ function ChildRowBody({
       )}
       {readonly ? (
         <span
-          className={`min-h-8 min-w-0 flex-1 break-words px-1 py-1 text-sm ${effectiveDone ? "text-ink-3 line-through" : "text-ink"}`}
+          className={`min-h-8 min-w-0 flex-1 break-words px-1 py-1 td-text-body ${effectiveDone ? "text-ink-3 line-through" : "text-ink"}`}
         >
           {child.title}
         </span>
@@ -187,7 +187,7 @@ function ChildRowBody({
             commitEdit();
           }}
           onKeyDown={handleEditKey}
-          className={`min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm outline-none focus:bg-surface-hover ${
+          className={`min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 td-text-body outline-none focus:bg-surface-hover ${
             effectiveDone ? "text-ink-3 line-through" : "text-ink"
           }`}
         />
@@ -201,7 +201,7 @@ function ChildRowBody({
             beginEdit();
           }}
           onKeyDown={handleTitleKey}
-          className={`min-h-8 min-w-0 flex-1 select-text break-words border-0 bg-transparent px-1 py-1 text-left text-sm font-normal outline-none focus:bg-surface-hover ${
+          className={`min-h-8 min-w-0 flex-1 select-text break-words border-0 bg-transparent px-1 py-1 text-left td-text-body font-normal outline-none focus:bg-surface-hover ${
             effectiveDone ? "text-ink-3 line-through" : "text-ink"
           }`}
         >

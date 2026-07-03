@@ -40,7 +40,7 @@ TimeData 是个人时间记录 PWA：
 ## 2. 五个包的职责与依赖
 
 ```text
-shared  类型、schema、同步域登记簿、常量、跨端纯函数（completeTask / 重复规则 / 日期助手 / 轨道看板信号 / 目标布局钉点 key helper）
+shared  类型、schema、同步域登记簿、常量、跨端纯函数（occurrence 物化引擎 / 重复规则 / 日期助手 / 轨道看板信号 / 目标布局钉点 key helper）
    ▲
    ├── client  React + Dexie，本地优先 UI 与同步客户端
    ├── server  Hono + SQLite，鉴权、权威校验、同步账本、静态文件
