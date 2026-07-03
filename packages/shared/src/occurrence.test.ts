@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isRuleExhausted,
+  latestOccurrenceForRule,
   materializeDue,
   materializeOccurrence,
   nextDueDate,
@@ -244,5 +245,31 @@ describe("materializeDue", () => {
   });
   it("非重复 rule 传入 → 抛错（防误用）", () => {
     expect(() => materializeDue(baseTask({ recurrence: null }), [], new Date(), 0)).toThrow();
+  });
+});
+
+describe("latestOccurrenceForRule", () => {
+  it("有 active（done=false）时选它：active 通常 scheduledAt 最大", () => {
+    const list = [occ("r1", "2026-07-01"), occ("r1", "2026-07-02", { done: false })];
+    expect(latestOccurrenceForRule("r1", list)?.id).toBe(occurrenceId("r1", "2026-07-02"));
+  });
+
+  it("无 active 时选最新 done 一发", () => {
+    const list = [occ("r1", "2026-07-01"), occ("r1", "2026-07-02")];
+    expect(latestOccurrenceForRule("r1", list)?.id).toBe(occurrenceId("r1", "2026-07-02"));
+  });
+
+  it("skipped 一发被排除，往前取最新非 skipped", () => {
+    const list = [
+      occ("r1", "2026-07-01"),
+      occ("r1", "2026-07-02", { done: false, skipped: true }),
+    ];
+    expect(latestOccurrenceForRule("r1", list)?.id).toBe(occurrenceId("r1", "2026-07-01"));
+  });
+
+  it("全 skipped / 空列表 / 别的 rule 的发 → null", () => {
+    expect(latestOccurrenceForRule("r1", [])).toBeNull();
+    expect(latestOccurrenceForRule("r1", [occ("r1", "2026-07-01", { done: false, skipped: true })])).toBeNull();
+    expect(latestOccurrenceForRule("r1", [occ("r2", "2026-07-01")])).toBeNull();
   });
 });

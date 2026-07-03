@@ -60,6 +60,19 @@ function latestProcessedOccurrence(rule: Task, processed: Task[]): Task | null {
   return occurrences.reduce((a, b) => (b.scheduledAt > a.scheduledAt ? b : a));
 }
 
+/**
+ * 该 rule 名下「最新那一发」：scheduledAt 最大且非 skipped（含 active，与
+ * latestProcessedOccurrence 的 done||skipped 口径不同）。
+ */
+export function latestOccurrenceForRule(ruleId: string, occurrences: Task[]): Task | null {
+  const mine = occurrences
+    .filter((o) => o.ruleId === ruleId && !o.skipped)
+    .filter((o): o is Task & { scheduledAt: string } => o.scheduledAt != null);
+  if (mine.length === 0) return null;
+  // scheduledAt 定长 UtcIso，字典序===时间序。
+  return mine.reduce((a, b) => (b.scheduledAt > a.scheduledAt ? b : a));
+}
+
 /** 该 rule 名下已处理(done||skipped) occurrence 的最新应发生日(scheduledAt UtcIso)；无则 null。 */
 export function latestProcessedDueIso(rule: Task, processed: Task[]): string | null {
   return latestProcessedOccurrence(rule, processed)?.scheduledAt ?? null;
