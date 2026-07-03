@@ -1091,3 +1091,98 @@ describe("applyRecurrenceChoice 清孤儿 occurrence", () => {
     );
   });
 });
+
+describe("deleteTaskCascade 规则级联", () => {
+  const day1 = new Date("2026-07-03T08:00:00.000Z");
+  const day2 = new Date("2026-07-04T08:00:00.000Z");
+
+  it("删规则：连清 active occurrence 及其子任务，done 历史发保留（#3）", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    await createChildTask(rule.id, "补铁", day1);
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 }); // A 变 done 历史发
+    await runMaterialization(day2); // 物化 active B
+    const occB = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    expect(occB.id).not.toBe(occA.id);
+
+    await deleteTaskCascade(rule.id);
+
+    await expect(db.tasks.get(rule.id)).resolves.toBeUndefined();
+    await expect(db.tasks.get(occB.id)).resolves.toBeUndefined(); // active 清掉
+    await expect(db.tasks.where("parentId").equals(occB.id).count()).resolves.toBe(0); // 其子任务清掉
+    await expect(db.tasks.get(occA.id)).resolves.toBeDefined(); // done 历史发留
+    const log = await db.syncLog.where("recordId").equals(occB.id).toArray();
+    expect(log.some((l) => l.action === "delete")).toBe(true);
+  });
+
+  it("删模板子任务：连清 active 发里的镜像子任务，done 发的镜像不动（#6）", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    const c1 = await createChildTask(rule.id, "补铁", day1);
+    const c2 = await createChildTask(rule.id, "拉伸", day1);
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 });
+    await runMaterialization(day2);
+    const occB = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+
+    await deleteTaskCascade(c1.id);
+
+    await expect(db.tasks.get(c1.id)).resolves.toBeUndefined();
+    await expect(db.tasks.get(`${occB.id}:child:${c1.id}`)).resolves.toBeUndefined(); // active 镜像清掉
+    await expect(db.tasks.get(`${occB.id}:child:${c2.id}`)).resolves.toBeDefined(); // 兄弟镜像不动
+    await expect(db.tasks.get(`${occA.id}:child:${c1.id}`)).resolves.toBeDefined(); // done 发镜像留
+  });
+
+  it("普通任务/普通子任务的级联删除行为不变", async () => {
+    const parent = await addTask({ title: "普通父", now: day1 });
+    const child = await createChildTask(parent.id, "普通子", day1);
+    await deleteTaskCascade(parent.id);
+    await expect(db.tasks.get(parent.id)).resolves.toBeUndefined();
+    await expect(db.tasks.get(child.id)).resolves.toBeUndefined();
+  });
+});
+
+describe("toggleTaskDone 撤勾 occurrence 守卫（#5）", () => {
+  const day1 = new Date("2026-07-03T08:00:00.000Z");
+  const day2 = new Date("2026-07-04T08:00:00.000Z");
+
+  it("撤勾 done 发时删掉后来物化的 active 发，避免双 active", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    await createChildTask(rule.id, "补铁", day1);
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 });
+    await runMaterialization(day2);
+    const occB = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+
+    const reopened = await toggleTaskDone(occA.id, { now: day2 });
+
+    expect(reopened).toMatchObject({ id: occA.id, done: false, completedAt: null });
+    await expect(db.tasks.get(occB.id)).resolves.toBeUndefined(); // 后来那发删掉
+    await expect(db.tasks.where("parentId").equals(occB.id).count()).resolves.toBe(0);
+    const actives = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(actives.map((o) => o.id)).toEqual([occA.id]); // 唯一 active
+    const log = await db.syncLog.where("recordId").equals(occB.id).toArray();
+    expect(log.some((l) => l.action === "delete")).toBe(true);
+  });
+
+  it("撤勾时无其他 active（当天撤勾）：只翻回未完成，不多删", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await toggleTaskDone(occA.id, { now: day1 }); // done；下一发在明天，无新 active
+
+    const reopened = await toggleTaskDone(occA.id, { now: day1 });
+
+    expect(reopened).toMatchObject({ id: occA.id, done: false });
+    await expect(db.tasks.where("ruleId").equals(rule.id).count()).resolves.toBe(1);
+  });
+
+  it("普通任务 reopen 行为不变", async () => {
+    const t = await addTask({ title: "普通任务", now: day1 });
+    await toggleTaskDone(t.id, { now: day1 });
+    const reopened = await toggleTaskDone(t.id, { now: day1 });
+    expect(reopened).toMatchObject({ id: t.id, done: false, completedAt: null });
+  });
+});

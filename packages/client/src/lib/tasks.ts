@@ -473,7 +473,19 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   // 非重复且当前已完成 → 翻回未完成；重复任务的勾选只表示“完成一次”，不走撤销。
   if (!base.recurrence && base.done) {
     const reopened = TaskSchema.parse({ ...base, done: false, completedAt: null, updatedAt });
-    return putTask(reopened);
+    if (base.ruleId === null) return putTask(reopened);
+    // 撤勾 occurrence：删同 rule 后来物化的 active 发（它是这发完成的推进产物），避免双 active。
+    await db.transaction("rw", db.tasks, db.syncLog, async () => {
+      const others = (await db.tasks.where("ruleId").equals(base.ruleId as string).toArray()).filter(
+        (o) => o.id !== base.id && !o.done && !o.skipped,
+      );
+      for (const o of others) {
+        await deleteTaskAndChildrenInCurrentTransaction(o.id);
+      }
+      await db.tasks.put(reopened);
+      await recordSyncLog("tasks", reopened.id, "update", reopened.updatedAt);
+    });
+    return reopened;
   }
 
   if (!base.recurrence && base.ruleId !== null) {
@@ -646,6 +658,30 @@ export async function deleteTask(id: string): Promise<void> {
 
 export async function deleteTaskCascade(taskId: string): Promise<void> {
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const task = await db.tasks.get(taskId);
+
+    // 删规则：连清其名下活跃 pending occurrence（done/skipped 历史发留作账本事实）。
+    if (task?.recurrence != null) {
+      await deleteActiveOccurrencesInCurrentTransaction(taskId);
+    }
+
+    // 删模板子任务：连清活跃发里按确定性 id 物化的镜像子任务（done 历史发的不动）。
+    if (task != null && (task.parentId ?? null) !== null) {
+      const parent = await db.tasks.get(task.parentId as string);
+      if (parent?.recurrence != null) {
+        const actives = (await db.tasks.where("ruleId").equals(parent.id).toArray()).filter(
+          (o) => !o.done && !o.skipped,
+        );
+        for (const occ of actives) {
+          const mirrorId = occurrenceChildId(occ.id, taskId);
+          if ((await db.tasks.get(mirrorId)) !== undefined) {
+            await db.tasks.delete(mirrorId);
+            await recordSyncLog("tasks", mirrorId, "delete");
+          }
+        }
+      }
+    }
+
     const children = await db.tasks.where("parentId").equals(taskId).toArray();
     const ids = [taskId, ...children.map((child) => child.id)];
     await db.tasks.bulkDelete(ids);
