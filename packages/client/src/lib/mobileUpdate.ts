@@ -46,7 +46,9 @@ export interface AndroidApkUpdate {
 }
 
 export function getAndroidVersionCodeFromReleaseTag(tagName: string): string | null {
-  const match = tagName.match(/^(?:android-|v)?(\d{8})$/);
+  // 8 位 = 现行 yymmddNN；放宽到 9 位给未来版本号格式升位留门。
+  // 收窄这个正则前要先确认所有已分发 APK 都带着放宽后的解析逻辑。
+  const match = tagName.match(/^(?:android-|v)?(\d{8,9})$/);
   return match?.[1] ?? null;
 }
 

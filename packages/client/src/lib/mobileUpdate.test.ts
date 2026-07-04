@@ -36,8 +36,13 @@ describe("getAndroidVersionCodeFromReleaseTag", () => {
     expect(getAndroidVersionCodeFromReleaseTag("26050803")).toBe("26050803");
   });
 
-  it("rejects seven-digit Android release tags", () => {
+  it("accepts nine-digit Android version codes reserved for future format upgrades", () => {
+    expect(getAndroidVersionCodeFromReleaseTag("android-126050801")).toBe("126050801");
+  });
+
+  it("rejects seven-digit and ten-digit Android release tags", () => {
     expect(getAndroidVersionCodeFromReleaseTag("android-2605081")).toBeNull();
+    expect(getAndroidVersionCodeFromReleaseTag("android-1260508011")).toBeNull();
   });
 
   it("rejects tags that are not Android version codes", () => {

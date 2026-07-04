@@ -17,6 +17,12 @@ on:
 permissions:
   contents: read
 
+# 串行化发布构建：versionCode 的当日序号靠数已发布的 android-* tag，
+# 并发跑会算出重复序号，这里排队（不取消）保证同一时刻只有一个构建。
+concurrency:
+  group: android-apk-release
+  cancel-in-progress: false
+
 jobs:
   build-release-apk:
     runs-on: ubuntu-latest
@@ -31,7 +37,7 @@ jobs:
       - name: Compute version code
         id: version
         run: |
-          TODAY=$(date -u +%y%m%d)
+          TODAY=$(TZ=Asia/Shanghai date +%y%m%d)
           EXISTING=$(git tag -l "android-${TODAY}*" | wc -l)
           SEQ=$(printf "%02d" $((EXISTING + 1)))
           VERSION_CODE="${TODAY}${SEQ}"

@@ -45,6 +45,8 @@ last-reviewed: 2026-07-04
 | `TIMEDATA_RELEASE_KEY_ALIAS` | key alias |
 | `TIMEDATA_RELEASE_KEY_PASSWORD` | key 密码 |
 
+versionCode 为 8 位 `yymmddNN`：北京时间（Asia/Shanghai）日期 + 当日序号（数已有 `android-<日期>*` tag 数 +1）。序号靠 workflow 级 `concurrency`（`android-apk-release` 组，排队不取消）串行化保证不重号。**格式收窄为 8 位是客户端约束**：已分发 APK 的 `mobileUpdate.ts` 用 `\d{8,9}` 解析 release tag（更早的版本只认 `\d{8}`），改动版本号位数前必须先确认所有在用设备都带着能解析新格式的客户端。
+
 workflow 会先检查 `TIMEDATA_RELEASE_KEYSTORE_BASE64` 是否已配置，缺失时在 `Decode release keystore` 步骤明确失败；配置存在后把 keystore 解码到 `packages/mobile/android/timedata-release.keystore`，通过 `ORG_GRADLE_PROJECT_*` 传给 Gradle，并把同一个 versionCode 传给 Gradle 与 Vite（`TIMEDATA_ANDROID_VERSION_CODE`），然后运行 `pnpm build:mobile:release-apk`。构建步骤之后固定执行 `Cleanup release keystore`（`if: always()`），在上传 artifact 或发布 Release 前删除 workspace 内的 `packages/mobile/android/timedata-release.keystore`，即使前面的构建失败也会清理。`packages/mobile` 的 release APK 构建和 `pnpm build:mobile:release-apk` 始终保持一致，文档里的构建步骤以这个脚本为准。产物路径是：
 
 ```text
