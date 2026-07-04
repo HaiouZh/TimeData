@@ -1,0 +1,37 @@
+{
+  // Renovate 配置（替代 dependabot，原生支持 pnpm-workspace.yaml 的 catalog）。
+  // 需要在 GitHub 安装 Renovate App：https://github.com/apps/renovate
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended", ":timezone(Asia/Shanghai)"],
+  labels: ["deps"],
+  prConcurrentLimit: 5,
+  // 等价 dependabot 的 versioning-strategy: increase——始终改 package.json 的
+  // spec 而不是只动 lockfile，否则 pnpm install --frozen-lockfile 会拒绝。
+  rangeStrategy: "bump",
+  // 与 pnpm 11 供应链发布龄闸对齐：包发布满 7 天才提 PR，
+  // 避免再出现 PR 撞 ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION。
+  minimumReleaseAge: "7 days",
+  schedule: ["before 9am on monday"],
+  packageRules: [
+    {
+      matchManagers: ["npm"],
+      matchUpdateTypes: ["patch", "minor"],
+      groupName: "patch-and-minor",
+    },
+    {
+      // Capacitor major 与 Android 工程强耦合，升级要人工评估
+      matchPackageNames: ["@capacitor/{/,}**"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+    {
+      matchManagers: ["github-actions"],
+      labels: ["ci", "deps"],
+      schedule: ["before 9am on the first day of the month"],
+    },
+    {
+      matchManagers: ["dockerfile"],
+      labels: ["docker", "deps"],
+    },
+  ],
+}

@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   TZ: Asia/Shanghai
 
@@ -64,18 +68,18 @@ jobs:
         run: pnpm --filter @timedata/client test:e2e
 
       - name: Docs consistency (strict)
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        if: github.event_name == 'pull_request' && !contains(fromJSON('["dependabot[bot]","renovate[bot]"]'), github.actor)
         run: pnpm check:docs:strict --since=${{ github.event.pull_request.base.sha }}
 
-      - name: Docs consistency (warn, dependabot)
-        if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+      - name: Docs consistency (warn, bot deps PR)
+        if: github.event_name == 'pull_request' && contains(fromJSON('["dependabot[bot]","renovate[bot]"]'), github.actor)
         run: pnpm check:docs --since=${{ github.event.pull_request.base.sha }}
 
       - name: Docs size ratchet
         run: pnpm check:docs:size
 
       - name: Docs coverage ratchet
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+        if: github.event_name == 'pull_request' && !contains(fromJSON('["dependabot[bot]","renovate[bot]"]'), github.actor)
         run: pnpm check:docs:coverage --since=${{ github.event.pull_request.base.sha }}
 
       - name: Docs link integrity

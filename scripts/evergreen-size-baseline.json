@@ -28,11 +28,11 @@
     "covers": 12
   },
   "docs/evergreen/deployment.md": {
-    "chars": 14278,
-    "covers": 17
+    "chars": 14812,
+    "covers": 20
   },
   "docs/evergreen/deployment/android-apk.md": {
-    "chars": 5792,
+    "chars": 5924,
     "covers": 14
   },
   "docs/evergreen/design-language.md": {

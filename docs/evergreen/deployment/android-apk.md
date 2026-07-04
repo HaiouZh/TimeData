@@ -20,6 +20,7 @@ last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-07-04（依赖升级收 dependabot）：packages/mobile 的 @capacitor/android|core|cli 由 ^7.6.5 升 ^7.6.7（patch）；发布流程、签名与 Gradle 配置不变。 -->
+<!-- 复核 2026-07-04（CI 自动化升级）：workflow 内 setup-java v4→v5、setup-android v3→v4、upload-artifact v4→v7（清 Node 20 弃用告警）；构建步骤与签名流程不变。 -->
 
 # 部署 · Android APK 发布
 

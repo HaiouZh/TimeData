@@ -1,0 +1,12 @@
+# gitleaks 配置：在默认规则基础上排除已知误报。
+[extend]
+useDefault = true
+
+[allowlist]
+description = "已核实的误报"
+regexTarget = "match"
+regexes = [
+  # recharts 等图表组件的 JSX 属性 dataKey="rolling3SecondsPerKm" 会被
+  # generic-api-key 规则误判为密钥
+  '''dataKey="[A-Za-z0-9]+"''',
+]
