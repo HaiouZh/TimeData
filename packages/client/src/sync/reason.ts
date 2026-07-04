@@ -11,6 +11,7 @@ const USER_ACTIONABLE = new Set([
 
 export function classifyReasonCode(reasonCode: string): SyncReasonCategory {
   if (reasonCode === "applied") return "applied";
+  if (reasonCode === "stale_change_rejected") return "stale_rejected";
   if (reasonCode === "server_version_newer_or_same") return "conflict";
   if (CLIENT_BUG.has(reasonCode)) return "client_bug";
   if (USER_ACTIONABLE.has(reasonCode)) return "user_actionable";

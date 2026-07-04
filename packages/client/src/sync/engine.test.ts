@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -937,6 +937,65 @@ describe("syncPush", () => {
     expect(result.issues).toHaveLength(1);
     expect(result.issues[0]).toMatchObject({ reasonCode: "server_version_newer_or_same" });
     await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 0 });
+  });
+
+  it("stale_rejected marks source syncLog synced and returns the issue", async () => {
+    await db.settings.add({ key: "theme", value: "light", updatedAt: "2026-07-04T09:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-stale-log",
+      tableName: "settings",
+      recordId: "theme",
+      action: "update",
+      timestamp: "2026-07-04T09:00:00.000Z",
+      synced: 0,
+    });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{
+        tableName: "settings",
+        recordId: "theme",
+        action: "update",
+        status: "conflict",
+        reasonCode: "stale_change_rejected",
+        message: "stale change rejected",
+        incomingTimestamp: "2026-07-04T09:00:00.000Z",
+        serverUpdatedAt: "2026-07-04T10:00:00.000Z",
+      }],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-07-04T10:00:01.000Z",
+      latestSeq: 5,
+      appliedCount: 0,
+    });
+
+    const result = await syncPush();
+
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({ reasonCode: "stale_change_rejected" });
+    await expect(db.syncLog.get("setting-stale-log")).resolves.toMatchObject({ synced: 1 });
+  });
+});
+
+describe("clock skew", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("records the local minus server clock skew", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T10:01:30.000Z"));
+
+    recordClockSkew("2026-07-04T10:00:00.000Z");
+
+    expect(getClockSkewMs()).toBe(90_000);
+  });
+
+  it("ignores invalid serverTime values", () => {
+    recordClockSkew("not-a-date");
+
+    expect(getClockSkewMs()).toBeNull();
   });
 });
 

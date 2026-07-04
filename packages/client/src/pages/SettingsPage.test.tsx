@@ -322,6 +322,15 @@ describe("SettingsPage", () => {
     expect(html).toContain("entry overlaps existing entry server-entry");
   });
 
+  it("shows a clock skew warning when local and server time differ too much", () => {
+    localStorage.setItem("timedata_clock_skew_ms", "90000");
+
+    const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
+
+    expect(html).toContain("本设备时钟与服务器相差约 90 秒");
+    expect(html).toContain("可能导致同步冲突误判");
+  });
+
   it("shows no-op sync text when local and cloud data already match", () => {
     useSyncContextMock.mockReturnValue({
       ...defaultSyncState(),

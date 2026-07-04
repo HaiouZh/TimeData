@@ -8,7 +8,7 @@ import { type AndroidApkUpdate, fetchAndroidApkUpdate, openAndroidApkUpdate } fr
 import { fetchServerVersion, pollServerUpdate, triggerServerUpdate } from "../lib/serverVersion.ts";
 import type { SyncStreamState } from "../lib/syncStream.js";
 import { formatAppDateTime } from "../lib/time.ts";
-import type { RegularSyncResult } from "../sync/engine.ts";
+import { CLOCK_SKEW_WARN_MS, getClockSkewMs, type RegularSyncResult } from "../sync/engine.ts";
 import {
   ArrowsClockwise,
   CaretRight,
@@ -80,6 +80,16 @@ function SyncIssueList({ issues }: { issues: NonNullable<RegularSyncResult["push
   );
 }
 
+function ClockSkewWarning() {
+  const skew = getClockSkewMs();
+  if (skew == null || Math.abs(skew) <= CLOCK_SKEW_WARN_MS) return null;
+  return (
+    <p className="text-warn">
+      本设备时钟与服务器相差约 {Math.round(Math.abs(skew) / 1000)} 秒，可能导致同步冲突误判，请检查系统时间。
+    </p>
+  );
+}
+
 // 状态总览卡：把"服务器连接"与"同步信息"合并为一张卡，连接在上、同步在下。
 function ServerStatusCard() {
   const {
@@ -143,6 +153,7 @@ function ServerStatusCard() {
               <p className="text-warn">发现 {conflicts.length} 条冲突，请到数据设置处理。</p>
             )}
             {error && <p className="text-danger">{error}</p>}
+            <ClockSkewWarning />
             <SyncTimingsPanel />
           </div>
         </div>

@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   // 纯 UI 展示的“上次同步时间”，不参与任何同步判定（cursor 是 lastSyncedSeq）。
   lastSyncDisplayAt: "timedata_last_sync_at",
   syncFailureCount: "timedata_sync_failure_count",
+  clockSkewMs: "timedata_clock_skew_ms",
   cloudSyncEnabled: "timedata_cloud_sync_enabled",
   mergeOvernight: "timedata_merge_overnight",
   sleepCategoryId: "timedata_sleep_category_id",

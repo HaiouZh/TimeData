@@ -112,6 +112,22 @@ export function setLastSyncedSeq(seq: number): void {
   safeSetItem(LAST_SYNCED_SEQ_KEY, String(seq));
 }
 
+// 本地时钟与服务器的偏差（本地 - 服务器，毫秒）。staleGuard 会比较跨端时间戳，偏差过大需提示用户校准系统时间。
+export const CLOCK_SKEW_WARN_MS = 60_000;
+
+export function recordClockSkew(serverTime: string): void {
+  const parsed = new Date(serverTime).getTime();
+  if (!Number.isFinite(parsed)) return;
+  safeSetItem(STORAGE_KEYS.clockSkewMs, String(Date.now() - parsed));
+}
+
+export function getClockSkewMs(): number | null {
+  const raw = safeGetItem(STORAGE_KEYS.clockSkewMs);
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 export function advanceSeqCursor(response: SyncPullResponse | SyncForcePushResponse): void {
   const latestSeq = "latestSeq" in response ? response.latestSeq : null;
   if (typeof latestSeq !== "number") return;
@@ -215,6 +231,7 @@ async function fetchPullBatches(
   let lastResponse: SyncPullResponse | undefined;
   for (;;) {
     const response = await fetchSyncPullResponse({ sinceSeq: cursor, limit: PULL_PAGE_LIMIT });
+    recordClockSkew(response.serverTime);
     await applyBatch(response);
     lastResponse = response;
     const next = response.nextSinceSeq;
@@ -262,6 +279,10 @@ async function applyPushResponse(
         break;
       case "user_actionable":
         userActionableIssues.push(outcome);
+        issues.push(outcome);
+        break;
+      case "stale_rejected":
+        acceptedLogIds.push(...logIds);
         issues.push(outcome);
         break;
       case "conflict":
@@ -360,11 +381,13 @@ export async function syncPush(): Promise<SyncPushResult> {
     });
   } catch (error) {
     if (error instanceof ApiError && error.status === 409 && isSyncPushResponse(error.body)) {
+      recordClockSkew(error.body.serverTime);
       return applyPushResponse(error.body, omittedLogIds, sourceLogIdsByChangeKey, changeKey, baseSeq);
     }
     throw error;
   }
 
+  recordClockSkew(response.serverTime);
   return applyPushResponse(response, omittedLogIds, sourceLogIdsByChangeKey, changeKey, baseSeq);
 }
 
@@ -688,6 +711,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       const serverStatus = rec
         ? await rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status"))
         : await apiFetch<SyncStatusResponse>("/api/sync/status");
+      recordClockSkew(serverStatus.serverTime);
       const serverSeq = serverStatus.latestSeq ?? 0;
       const localSeq = getLastSyncedSeq() ?? 0;
       if (serverSeq <= localSeq) {

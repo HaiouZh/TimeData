@@ -23,6 +23,10 @@ describe("classifyReasonCode", () => {
     expect(classifyReasonCode("server_version_newer_or_same")).toBe("conflict");
   });
 
+  it("stale_change_rejected → stale_rejected", () => {
+    expect(classifyReasonCode("stale_change_rejected")).toBe("stale_rejected");
+  });
+
   it("foreign_key_failed → user_actionable", () => {
     expect(classifyReasonCode("foreign_key_failed")).toBe("user_actionable");
   });
