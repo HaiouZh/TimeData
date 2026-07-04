@@ -4,15 +4,15 @@
     "covers": 2
   },
   "docs/evergreen/architecture.md": {
-    "chars": 7279,
+    "chars": 7497,
     "covers": 16
   },
   "docs/evergreen/backup.md": {
-    "chars": 13587,
+    "chars": 13698,
     "covers": 15
   },
   "docs/evergreen/categories-settings.md": {
-    "chars": 9325,
+    "chars": 9444,
     "covers": 12
   },
   "docs/evergreen/categories-settings/settings-catalog.md": {
@@ -20,19 +20,19 @@
     "covers": 6
   },
   "docs/evergreen/cli.md": {
-    "chars": 10728,
+    "chars": 10844,
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "chars": 12477,
-    "covers": 11
+    "chars": 13013,
+    "covers": 12
   },
   "docs/evergreen/deployment.md": {
     "chars": 14278,
     "covers": 17
   },
   "docs/evergreen/deployment/android-apk.md": {
-    "chars": 5657,
+    "chars": 5792,
     "covers": 14
   },
   "docs/evergreen/design-language.md": {
@@ -44,15 +44,15 @@
     "covers": 5
   },
   "docs/evergreen/development.md": {
-    "chars": 13612,
+    "chars": 13574,
     "covers": 10
   },
   "docs/evergreen/goals.md": {
-    "chars": 12771,
+    "chars": 12863,
     "covers": 22
   },
   "docs/evergreen/health.md": {
-    "chars": 7211,
+    "chars": 7336,
     "covers": 9
   },
   "docs/evergreen/health/charts.md": {
@@ -64,7 +64,7 @@
     "covers": 3
   },
   "docs/evergreen/quick-notes.md": {
-    "chars": 11676,
+    "chars": 11779,
     "covers": 16
   },
   "docs/evergreen/security.md": {
@@ -76,19 +76,19 @@
     "covers": 10
   },
   "docs/evergreen/sync.md": {
-    "chars": 19633,
-    "covers": 36
+    "chars": 20768,
+    "covers": 37
   },
   "docs/evergreen/sync/domain-registry.md": {
-    "chars": 8499,
+    "chars": 9024,
     "covers": 14
   },
   "docs/evergreen/timeline.md": {
-    "chars": 12769,
+    "chars": 12861,
     "covers": 16
   },
   "docs/evergreen/todo.md": {
-    "chars": 21734,
+    "chars": 22095,
     "covers": 32
   },
   "docs/evergreen/todo/recurrence.md": {
