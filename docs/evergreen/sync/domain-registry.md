@@ -16,13 +16,15 @@ covers:
   - packages/server/src/sync/goal-layout-pins-domain.e2e.test.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/sync/clientDomains.test.ts
-last-reviewed: 2026-06-28
+last-reviewed: 2026-07-04
 ---
 
 # 同步 · 域登记簿
 
 > [sync](../sync.md) 的域登记簿子文档：系统认识哪些同步域、shared/server/client 三端登记簿如何保持一致、新增普通 LWW 域和复合键域要改什么。
 > 不讲 push/pull 主流程、冲突 UI、SSE 和 force-push 细节；这些仍在 [sync](../sync.md)。
+
+<!-- 复核 2026-07-04（同步 staleGuard）：新增 reasonCode stale_change_rejected 与 applyChange staleGuard 属于 push 冲突仲裁语义，不新增同步域，也不改变各域登记簿条目。 -->
 
 ## 承上启下
 
@@ -76,7 +78,7 @@ last-reviewed: 2026-06-28
    - `goal_layout_pins.validate`：delete 时也必须能 decode 复合 `recordId`。
    - `settings` / `quick_notes` / `tasks` / `tracks` / `track_steps` / `goals`：无钩子，通用校验即全部。
 
-`applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。
+`applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。push 路由对 `baseSeq` 重叠或 unknown-base 记录启用的 staleGuard 是登记簿分发前的通用守卫，不改变任何域的 `validate` / `apply` 钩子归属。
 
 - **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、health_charts、健康数据域及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
 - **复合键 LWW**（`goal_layout_pins`）：语义仍是 LWW，但不能走单列主键通用 SQL。server 用 `identity` 从 payload 算 `recordId`，custom apply/read 按 `(goal_id,node_kind,node_id)` 读写，delete 仍真删除 + tombstone。

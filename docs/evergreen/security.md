@@ -15,7 +15,7 @@ covers:
   - packages/server/src/routes/syncLog.ts
   - packages/server/src/routes/admin/index.ts
   - packages/server/src/routes/admin/requestLogs.ts
-last-reviewed: 2026-06-30
+last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：force-push 写路径去 turn 列，不影响安全/凭据；复核确认无需改动。 -->
@@ -24,6 +24,7 @@ last-reviewed: 2026-06-30
 <!-- 复核 2026-06-28（待办想法重力）：force-push 的 Task payload 新增 weight；翻牌记忆从 localStorage 迁到 settings key todo.gravity.review.v1（只存任务 id→ISO 时间戳，不存任务文本），走现有 settings LWW 同步；认证、限流、确认 token 机制不变。 -->
 <!-- 复核 2026-06-29（重力 v2）：翻牌「已过目表」从 localStorage 改为 settings blob（todo.gravity.review.v1），不写 Task、不刷新 updatedAt；认证、限流、确认 token 机制不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：storageKeys 仅删除从未被引用的死 key serverHealthy；凭据存储、token 处理与鉴权边界不变。 -->
+<!-- 复核 2026-07-04（同步 staleGuard）：storageKeys 新增 clockSkewMs 只记录本地-服务器时间差毫秒数；sync push 仍走既有鉴权、限流和 body limit，安全边界不变。 -->
 
 # 安全与凭据处理
 

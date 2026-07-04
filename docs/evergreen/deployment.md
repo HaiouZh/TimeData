@@ -19,10 +19,11 @@ covers:
   - .env.example
   - .github/workflows/ci.yml
   - .github/workflows/build.yml
-last-reviewed: 2026-06-29
+last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-07-02（S2 调度重做）：SettingsPage.tsx 手动同步按钮 onClick 从 `sync` 改为 `() => sync()`（仅签名包装，行为不变，仍不经调度器直调 sync()），部署/自更新相关内容无需改动。 -->
+<!-- 复核 2026-07-04（同步 staleGuard）：SettingsPage 仅新增本地/服务器时钟偏差告警；部署拓扑、自更新接口和环境变量不变。 -->
 
 # 部署与自更新
 

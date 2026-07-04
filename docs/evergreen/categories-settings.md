@@ -14,7 +14,7 @@ covers:
   - packages/client/src/lib/categoryTree.ts
   - packages/server/src/routes/categories.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-07-02
+last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
@@ -22,6 +22,7 @@ last-reviewed: 2026-07-02
 <!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，未改变 Category / Setting schema、同步语义或设置 key 契约。 -->
 <!-- 复核 2026-06-27（设计语言 P3）：constants.ts 新增 UNCATEGORIZED_COLOR（无色分类回退色，用户内容色域，详见 data-model §8），未改变 Category / Setting schema、播种规则或设置 key 契约。 -->
 <!-- 复核 2026-06-28（待办想法重力）：新增 todo.gravity.v1 settings key 归 todo 域消费，分类 schema、manual 同步语义和播种规则均不变；完整 key 表见 settings-catalog。 -->
+<!-- 复核 2026-07-04（同步 staleGuard）：分类/settings 仍沿用既有字段和写入入口；重叠 baseSeq 下的 staleGuard 仲裁详见 sync.md，不改变分类层级、排序或设置 key 契约。 -->
 
 # 分类与设置
 

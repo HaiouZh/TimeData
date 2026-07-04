@@ -34,11 +34,13 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/tasks.ts
-last-reviewed: 2026-07-03
+last-reviewed: 2026-07-04
 ---
 <!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；tasks schema、occurrence 语义与同步行为不变。 -->
 
 # 待办任务
+
+<!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 Task 字段、重复规则、子任务或待办页面交互；P2 的完成语义意图化另行规划。 -->
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。

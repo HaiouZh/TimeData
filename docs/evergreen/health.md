@@ -11,7 +11,7 @@ covers:
   - packages/client/src/db/index.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/pages/HealthStatsPage.tsx
-last-reviewed: 2026-06-28
+last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
@@ -22,6 +22,7 @@ last-reviewed: 2026-06-28
 <!-- 复核 2026-06-27（设计语言 P3）：HealthStatsPage 视觉收口（删旧死 CSS、范围按钮/页面壳 token 化、图表色走 chartColors 镜像）；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight / todo.gravity.v1 触及 shared schema、Dexie 和 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；健康各域 schema、同步语义与备份角色不变。 -->
+<!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展不改变健康 6 域 schema、ingest 写入路径、同步登记或备份角色。 -->
 
 # 健康数据
 
