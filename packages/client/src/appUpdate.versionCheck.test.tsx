@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { act, createElement, useContext } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./lib/frontendUpdate.ts", () => ({
@@ -11,8 +10,7 @@ vi.mock("./lib/frontendUpdate.ts", () => ({
 
 import { AppUpdateContext, AppUpdateProvider } from "./appUpdate.js";
 import { hardRefresh, hasFrontendUpdate } from "./lib/frontendUpdate.ts";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { renderDom, unmount } from "./test/domHarness.js";
 
 function setVisibility(state: "visible" | "hidden") {
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
@@ -45,11 +43,7 @@ describe("AppUpdateProvider version check", () => {
 
   it("hard-refreshes when a newer build is detected on visibility", async () => {
     vi.mocked(hasFrontendUpdate).mockResolvedValue(true);
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => root.render(createElement(AppUpdateProvider, null, createElement(Probe))));
+    const { root } = await renderDom(createElement(AppUpdateProvider, null, createElement(Probe)));
     await flush();
 
     setVisibility("visible");
@@ -59,32 +53,24 @@ describe("AppUpdateProvider version check", () => {
     await flush();
 
     expect(vi.mocked(hardRefresh)).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("does not refresh when build is current", async () => {
     vi.mocked(hasFrontendUpdate).mockResolvedValue(false);
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => root.render(createElement(AppUpdateProvider, null, createElement(Probe))));
+    const { root } = await renderDom(createElement(AppUpdateProvider, null, createElement(Probe)));
     await flush();
 
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
     await flush();
 
     expect(vi.mocked(hardRefresh)).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("exposes currentBuildId and a forceRefresh that hard-refreshes", async () => {
     vi.mocked(hasFrontendUpdate).mockResolvedValue(false);
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => root.render(createElement(AppUpdateProvider, null, createElement(Probe))));
+    const { root } = await renderDom(createElement(AppUpdateProvider, null, createElement(Probe)));
     await flush();
 
     expect(captured?.currentBuildId).toBe("current-test");
@@ -92,6 +78,6 @@ describe("AppUpdateProvider version check", () => {
     await flush();
 
     expect(vi.mocked(hardRefresh)).toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

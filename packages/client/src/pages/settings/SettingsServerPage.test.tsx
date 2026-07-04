@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsServerPage from "./SettingsServerPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const updateApiUrlMock = vi.hoisted(() => vi.fn());
 const isNativePlatformMock = vi.hoisted(() => vi.fn(() => false));
@@ -82,12 +80,7 @@ describe("SettingsServerPage", () => {
 
   it("strips Bearer prefix before saving api token", async () => {
     localStorage.setItem("timedata_api_token", "Bearer abc123");
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
 
     const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
     await act(async () => {
@@ -96,18 +89,11 @@ describe("SettingsServerPage", () => {
 
     expect(localStorage.getItem("timedata_api_token")).toBe("abc123");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("clears the saved timer when leaving the page right after saving", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
 
     const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
     await act(async () => {
@@ -133,18 +119,11 @@ describe("SettingsServerPage", () => {
     expect(host.textContent).toContain("保存配置");
     expect(host.textContent).not.toContain("已保存");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("saves api url through sync context", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
 
     const apiInput = host.querySelector('input[type="url"]') as HTMLInputElement;
     apiInput.value = " https://new.example ";
@@ -159,20 +138,13 @@ describe("SettingsServerPage", () => {
 
     expect(updateApiUrlMock).toHaveBeenCalledWith("https://new.example");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("rejects HTTP API URLs on native Android because cleartext is disabled", async () => {
     isNativePlatformMock.mockReturnValue(true);
     localStorage.setItem("timedata_api_url", "http://192.168.1.10:3000");
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsServerPage)));
 
     const saveButton = [...host.querySelectorAll("button")].find((item) => item.textContent === "保存配置");
     await act(async () => {
@@ -183,8 +155,6 @@ describe("SettingsServerPage", () => {
     expect(host.textContent).toContain("Android App 不支持 HTTP 明文地址");
     expect(host.textContent).toContain("HTTPS 反向代理地址");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

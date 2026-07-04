@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
-import type { HealthChartConfig, HealthHeartRate, HealthHrv, HealthRun, HealthSleep, HealthStress } from "@timedata/shared";
+import type {
+  HealthChartConfig,
+  HealthHeartRate,
+  HealthHrv,
+  HealthRun,
+  HealthSleep,
+  HealthStress,
+} from "@timedata/shared";
 import { act, createElement, useEffect, useReducer } from "react";
-import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../test/domHarness.js";
 import HealthStatsPage from "./HealthStatsPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type StoreName = "healthHeartRate" | "healthHrv" | "healthSleep" | "healthStress" | "runs";
 
@@ -59,8 +64,11 @@ vi.mock("../lib/settings/index.ts", () => ({
 }));
 
 vi.mock("../lib/healthCharts.ts", () => ({
-  listHealthChartBlocks: () => [...chartState.blocks].sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt)),
-  putHealthChartBlock: async (input: Omit<HealthChartConfig, "id" | "createdAt" | "updatedAt"> & { id?: string; createdAt?: string }) => {
+  listHealthChartBlocks: () =>
+    [...chartState.blocks].sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt)),
+  putHealthChartBlock: async (
+    input: Omit<HealthChartConfig, "id" | "createdAt" | "updatedAt"> & { id?: string; createdAt?: string },
+  ) => {
     const block = {
       ...input,
       id: input.id ?? `chart-${chartState.blocks.length + 1}`,
@@ -137,12 +145,7 @@ function createStore(name: StoreName) {
 }
 
 async function renderPage() {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(createElement(HealthStatsPage));
-  });
-  return { host, root };
+  return renderDom(createElement(HealthStatsPage));
 }
 
 async function waitForCondition(assertion: () => boolean, message: string): Promise<void> {
@@ -165,7 +168,15 @@ function metricCheckbox(host: HTMLElement, label: string): HTMLInputElement | nu
 
 function seedHealthData() {
   healthState.healthSleep = [
-    { id: "s1", date: "2026-06-13", sleepStart: "23:00", wakeTime: "06:00", adjustmentHours: 0, createdAt: now, updatedAt: now },
+    {
+      id: "s1",
+      date: "2026-06-13",
+      sleepStart: "23:00",
+      wakeTime: "06:00",
+      adjustmentHours: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
   ];
   healthState.healthHrv = [{ id: "h1", date: "2026-06-13", hrvMs: 45, createdAt: now, updatedAt: now }];
   healthState.healthStress = [{ id: "st1", date: "2026-06-13", stress: 30, createdAt: now, updatedAt: now }];
@@ -219,7 +230,10 @@ describe("HealthStatsPage", () => {
     seedHealthData();
     const { host, root } = await renderPage();
 
-    await waitForCondition(() => host.textContent?.includes("健康摘要") ?? false, "Timed out waiting for health blocks");
+    await waitForCondition(
+      () => host.textContent?.includes("健康摘要") ?? false,
+      "Timed out waiting for health blocks",
+    );
 
     expect(host.textContent).toContain("健康统计");
     expect(host.querySelector('[aria-label="健康摘要"]')).not.toBeNull();
@@ -228,39 +242,47 @@ describe("HealthStatsPage", () => {
     expect(host.querySelector('[aria-label="最近跑步"]')).toBeNull();
     expect(host.textContent).toContain("7 h");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("switches the health range", async () => {
     seedHealthData();
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelectorAll(".health-range-button").length >= 3, "Timed out waiting for range buttons");
-    const ninetyDays = [...host.querySelectorAll(".health-range-button")].find((button) => button.textContent === "90天");
+    await waitForCondition(
+      () => host.querySelectorAll(".health-range-button").length >= 3,
+      "Timed out waiting for range buttons",
+    );
+    const ninetyDays = [...host.querySelectorAll(".health-range-button")].find(
+      (button) => button.textContent === "90天",
+    );
 
     await act(async () => {
       ninetyDays?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe("90天");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("renders all default health range presets in the header", async () => {
     seedHealthData();
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelectorAll(".health-range-button").length === 6, "Timed out waiting for all range buttons");
+    await waitForCondition(
+      () => host.querySelectorAll(".health-range-button").length === 6,
+      "Timed out waiting for all range buttons",
+    );
 
     const labels = [...host.querySelectorAll(".health-range-button")].map((button) => button.textContent);
     expect(labels).toEqual(["7天", "30天", "90天", "180天", "365天", "全部"]);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("renders an empty state without health data", async () => {
     const { host, root } = await renderPage();
 
     expect(host.textContent).toContain("暂无健康数据");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("renders block-level all-range summary even when page range has no data", async () => {
@@ -282,45 +304,60 @@ describe("HealthStatsPage", () => {
     ];
     const { host, root } = await renderPage();
 
-    await waitForCondition(() => host.textContent?.includes("HRV 摘要") ?? false, "Timed out waiting for block-level summary");
+    await waitForCondition(
+      () => host.textContent?.includes("HRV 摘要") ?? false,
+      "Timed out waiting for block-level summary",
+    );
 
     expect(host.textContent).not.toContain("暂无健康数据");
     expect(host.textContent).toContain("45 ms");
     expect(host.textContent).not.toContain("睡眠时长");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("挂载后注入预置块并渲染", async () => {
     seedHealthData();
     const { host, root } = await renderPage();
 
-    await waitForCondition(() => host.textContent?.includes("健康摘要") ?? false, "Timed out waiting for seeded health blocks");
+    await waitForCondition(
+      () => host.textContent?.includes("健康摘要") ?? false,
+      "Timed out waiting for seeded health blocks",
+    );
 
     expect(host.textContent).toContain("健康摘要");
     expect(host.textContent).toContain("健康趋势");
     expect(host.textContent).not.toContain("跑步配速");
-    expect(chartState.blocks.map((block) => `${block.view}:${block.source}`)).toEqual(["stat:derived", "chart:healthMetricDaily"]);
+    expect(chartState.blocks.map((block) => `${block.view}:${block.source}`)).toEqual([
+      "stat:derived",
+      "chart:healthMetricDaily",
+    ]);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点击右上角＋打开搭建器", async () => {
     seedHealthData();
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector('[aria-label="添加图表"]') != null, "Timed out waiting for add chart button");
+    await waitForCondition(
+      () => host.querySelector('[aria-label="添加图表"]') != null,
+      "Timed out waiting for add chart button",
+    );
 
     await act(async () => {
       host.querySelector('[aria-label="添加图表"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(host.querySelector('[role="dialog"]')).not.toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("重新打开搭建器时按当前编辑对象重置表单", async () => {
     seedHealthData();
     const { host, root } = await renderPage();
-    await waitForCondition(() => host.querySelector('[aria-label="编辑图表"]') != null, "Timed out waiting for metricChart edit button");
+    await waitForCondition(
+      () => host.querySelector('[aria-label="编辑图表"]') != null,
+      "Timed out waiting for metricChart edit button",
+    );
 
     // 打开“新增”，勾一个预置趋势块没有的指标，污染弹窗内部状态
     await act(async () => {
@@ -345,6 +382,6 @@ describe("HealthStatsPage", () => {
     expect(metricCheckbox(host, "睡眠时长")?.checked).toBe(true);
     expect(metricCheckbox(host, "最高心率")?.checked).toBe(false);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

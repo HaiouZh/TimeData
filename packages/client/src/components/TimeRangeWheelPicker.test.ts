@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../test/domHarness.js";
 import TimeRangeWheelPicker, { wheelIndexFromScrollTop, wheelScrollTopForIndex } from "./TimeRangeWheelPicker.js";
-
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 describe("wheel scroll positioning", () => {
   it("centers the same item that settle reads back", () => {
@@ -22,26 +20,21 @@ describe("TimeRangeWheelPicker", () => {
     document.body.innerHTML = "";
   });
 
-  it("clears pending wheel settle timers when unmounted", () => {
+  it("clears pending wheel settle timers when unmounted", async () => {
     vi.useFakeTimers();
-    const rootElement = document.createElement("div");
-    document.body.append(rootElement);
-    const root = createRoot(rootElement);
     const onStartChange = vi.fn();
     const onEndChange = vi.fn();
 
-    act(() => {
-      root.render(
-        createElement(TimeRangeWheelPicker, {
-          start: { date: "2026-05-15", hour: "09", minute: "00" },
-          end: { date: "2026-05-15", hour: "10", minute: "00" },
-          onStartChange,
-          onEndChange,
-        }),
-      );
-    });
+    const { host, root } = await renderDom(
+      createElement(TimeRangeWheelPicker, {
+        start: { date: "2026-05-15", hour: "09", minute: "00" },
+        end: { date: "2026-05-15", hour: "10", minute: "00" },
+        onStartChange,
+        onEndChange,
+      }),
+    );
 
-    const hourWheel = rootElement.querySelector<HTMLDivElement>("[role='listbox']");
+    const hourWheel = host.querySelector<HTMLDivElement>("[role='listbox']");
     expect(hourWheel).not.toBeNull();
     act(() => {
       hourWheel!.scrollTop = wheelScrollTopForIndex(11 * 24 + 11);
@@ -49,9 +42,7 @@ describe("TimeRangeWheelPicker", () => {
     });
     expect(vi.getTimerCount()).toBeGreaterThan(0);
 
-    act(() => {
-      root.unmount();
-    });
+    await unmount(root);
     expect(vi.getTimerCount()).toBe(0);
 
     act(() => {

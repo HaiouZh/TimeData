@@ -1,11 +1,9 @@
 import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsCategoryDetailPage from "./SettingsCategoryDetailPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const categoriesState = vi.hoisted(() => ({
   categories: [] as Category[],
@@ -99,30 +97,17 @@ describe("SettingsCategoryDetailPage", () => {
   });
 
   it("renders the category name in the detail header", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SettingsCategoryDetailPage));
-    });
+    const { host, root } = await renderDom(createElement(SettingsCategoryDetailPage));
 
     const section = host.querySelector('section[data-title="工作"]');
     expect(section).not.toBeNull();
     expect(host.textContent).toContain("暂无子分类");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("adds a child category under the current parent", async () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SettingsCategoryDetailPage));
-    });
+    const { host, root } = await renderDom(createElement(SettingsCategoryDetailPage));
 
     const openButton = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === "+ 新增");
     expect(openButton).toBeDefined();
@@ -151,20 +136,12 @@ describe("SettingsCategoryDetailPage", () => {
 
     expect(addCategoryMock).toHaveBeenCalledWith("会议", "cat-work", "#4A90D9");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
     host.remove();
   });
 
   it("updates category color through the color editor", async () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SettingsCategoryDetailPage));
-    });
+    const { host, root } = await renderDom(createElement(SettingsCategoryDetailPage));
 
     const openEditor = [...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === "修改");
     expect(openEditor).toBeDefined();
@@ -191,9 +168,7 @@ describe("SettingsCategoryDetailPage", () => {
 
     expect(updateCategoryColorMock).toHaveBeenCalledWith("cat-work", "#D0021B");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
     host.remove();
   });
 });

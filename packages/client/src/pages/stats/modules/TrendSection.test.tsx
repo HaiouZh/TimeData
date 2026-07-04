@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../../db/index.ts";
 import { getSetting } from "../../../lib/settings/index.ts";
+import { renderDom, unmount } from "../../../test/domHarness.js";
 import TrendSection, { buildTrendChartRows } from "./TrendSection.tsx";
 import { makeStatsProps } from "./testFixtures.ts";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const trendChartMockState = vi.hoisted(() => ({
   props: [] as Array<{
@@ -109,10 +107,7 @@ describe("TrendSection", () => {
     );
 
     const row = rows[0];
-    const stackedHours = ["A", "B", "C", "D", "E", "F", "G"].reduce(
-      (sum, key) => sum + Number(row[key]),
-      0,
-    );
+    const stackedHours = ["A", "B", "C", "D", "E", "F", "G"].reduce((sum, key) => sum + Number(row[key]), 0);
 
     expect(stackedHours).toBeCloseTo(24, 8);
     expect(row.A).toBeCloseTo(123 / 60, 8);
@@ -120,12 +115,7 @@ describe("TrendSection", () => {
   });
 
   it("点击近30天后写入 stats.module.trend.v1", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(TrendSection, makeStatsProps()));
-    });
+    const { host, root } = await renderDom(createElement(TrendSection, makeStatsProps()));
 
     const preset30 = [...host.querySelectorAll("button")].find((button) => button.textContent === "近30天");
     await act(async () => {
@@ -134,9 +124,7 @@ describe("TrendSection", () => {
 
     await waitForSetting("stats.module.trend.v1", (raw) => raw?.includes('"days":30') ?? false);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("堆叠面积图固定使用 0 到 24h 的 Y 轴", async () => {
@@ -147,30 +135,20 @@ describe("TrendSection", () => {
     });
 
     const work = category("work");
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(
-        createElement(
-          TrendSection,
-          makeStatsProps({
-            categories: [work],
-            parentCategories: [work],
-            parentNameById: new Map([["work", "工作"]]),
-            baselineEntries: [
-              entry("work-1", "work", "2026-06-01T01:00:00.000Z", "2026-06-01T03:00:00.000Z"),
-            ],
-          }),
-        ),
-      );
-    });
+    const { root } = await renderDom(
+      createElement(
+        TrendSection,
+        makeStatsProps({
+          categories: [work],
+          parentCategories: [work],
+          parentNameById: new Map([["work", "工作"]]),
+          baselineEntries: [entry("work-1", "work", "2026-06-01T01:00:00.000Z", "2026-06-01T03:00:00.000Z")],
+        }),
+      ),
+    );
 
     const startedAt = Date.now();
-    while (
-      Date.now() - startedAt < 1000 &&
-      !trendChartMockState.props.some((props) => props.chart === "area")
-    ) {
+    while (Date.now() - startedAt < 1000 && !trendChartMockState.props.some((props) => props.chart === "area")) {
       // setTimeout(0)：让位给 setting 加载与 React 重渲染的宏任务边界，非真实计时等待。
       await act(async () => {
         await new Promise((resolve) => window.setTimeout(resolve, 0));
@@ -181,8 +159,6 @@ describe("TrendSection", () => {
     expect(areaProps?.yAxisDomain).toEqual([0, 24]);
     expect(areaProps?.yAxisTicks).toEqual([0, 6, 12, 18, 24]);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

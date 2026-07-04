@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
 import type { TimeEntry } from "@timedata/shared";
-import { act, Profiler, type ProfilerOnRenderCallback } from "react";
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
+import { act, createElement, Profiler, type ProfilerOnRenderCallback } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 import type { TimeSlot } from "../lib/time.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import CircularTimeline, {
   chooseInitialSelection,
   clampSlotToDayMinutes,
@@ -38,9 +35,21 @@ describe("CircularTimeline selection", () => {
   it("defaults to the last gap", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const slots: TimeSlot[] = [
-      { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+      {
+        startTime: "2026-05-08T00:00:00",
+        endTime: "2026-05-08T07:00:00",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
       { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
-      { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+      {
+        startTime: "2026-05-08T07:30:00",
+        endTime: "2026-05-08T08:00:00",
+        entry: null,
+        kind: "gap",
+        displayMode: "default",
+      },
     ];
 
     expect(chooseInitialSelection(slots)).toEqual({
@@ -110,7 +119,13 @@ describe("CircularTimeline selection", () => {
         date: "2026-05-08",
         slots: [
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
-          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T07:30:00",
+            endTime: "2026-05-08T08:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -127,9 +142,7 @@ describe("CircularTimeline selection", () => {
 
   it("calls onPunch when the center is clicked", async () => {
     const onPunch = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
     await act(async () => {
       root.render(
         createElement(CircularTimeline, {
@@ -154,7 +167,7 @@ describe("CircularTimeline selection", () => {
     });
     expect(onPunch).toHaveBeenCalledTimes(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 
@@ -164,9 +177,21 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T00:00:00",
+            endTime: "2026-05-08T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
-          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T07:30:00",
+            endTime: "2026-05-08T08:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -182,7 +207,13 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T00:00:00",
+            endTime: "2026-05-08T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
         ],
       }),
@@ -199,7 +230,13 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T00:00:00",
+            endTime: "2026-05-08T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -213,7 +250,13 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T03:00:00.000Z", endTime: "2026-05-08T16:00:00.000Z", entry: null, kind: "future", displayMode: "default" },
+          {
+            startTime: "2026-05-08T03:00:00.000Z",
+            endTime: "2026-05-08T16:00:00.000Z",
+            entry: null,
+            kind: "future",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -228,9 +271,21 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T00:00:00",
+            endTime: "2026-05-08T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
           { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
-          { startTime: "2026-05-08T07:30:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T07:30:00",
+            endTime: "2026-05-08T08:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -244,7 +299,13 @@ describe("CircularTimeline selection", () => {
       createElement(CircularTimeline, {
         date: "2026-05-08",
         slots: [
-          { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-05-08T00:00:00",
+            endTime: "2026-05-08T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -266,18 +327,28 @@ describe("CircularTimeline selection", () => {
   it("switches selection when pointer drags across slots", async () => {
     const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
     const handleSelectionChange = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
 
     await act(async () => {
       root.render(
         createElement(CircularTimeline, {
           date: "2026-05-08",
           slots: [
-            { startTime: "2026-05-08T00:00:00", endTime: "2026-05-08T06:00:00", entry: null, kind: "gap", displayMode: "default" },
+            {
+              startTime: "2026-05-08T00:00:00",
+              endTime: "2026-05-08T06:00:00",
+              entry: null,
+              kind: "gap",
+              displayMode: "default",
+            },
             { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
-            { startTime: "2026-05-08T07:00:00", endTime: "2026-05-08T08:00:00", entry: null, kind: "gap", displayMode: "default" },
+            {
+              startTime: "2026-05-08T07:00:00",
+              endTime: "2026-05-08T08:00:00",
+              entry: null,
+              kind: "gap",
+              displayMode: "default",
+            },
           ],
           onSelectionChange: handleSelectionChange,
         }),
@@ -331,9 +402,7 @@ describe("CircularTimeline selection", () => {
     });
     expect(handleSelectionChange).toHaveBeenCalledTimes(2);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
     container.remove();
   });
 });
@@ -364,9 +433,7 @@ describe("CircularTimeline selection stability (TL-01)", () => {
     slots.map((slot) => ({ ...slot, entry: slot.entry ? { ...slot.entry } : null }));
 
   async function mountAndSelectMorningGap() {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
     const render = (slots: TimeSlot[]) =>
       act(async () => {
         root.render(createElement(CircularTimeline, { date: "2026-05-08", slots }));
@@ -410,14 +477,12 @@ describe("CircularTimeline selection stability (TL-01)", () => {
 
     expect(container.innerHTML).toContain("00:00 - 06:00");
     expect(container.querySelector('[data-ring-indicator="true"]')?.getAttribute("points")).toBe(arrowBefore);
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 
   it("选中的末尾空档随时间增长：中心时长跟随、箭头不动", async () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
     const grow = (endClock: string): TimeSlot[] => [
       {
         startTime: "2026-05-08T06:00:00",
@@ -437,7 +502,7 @@ describe("CircularTimeline selection stability (TL-01)", () => {
       root.render(createElement(CircularTimeline, { date: "2026-05-08", slots: grow("07:01:00") }));
     });
     expect(container.innerHTML).toContain("06:00 - 07:01");
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 
@@ -459,7 +524,7 @@ describe("CircularTimeline selection stability (TL-01)", () => {
     await render(next);
 
     expect(container.innerHTML).toContain("09:00 - 10:00");
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 });
@@ -467,9 +532,7 @@ describe("CircularTimeline selection stability (TL-01)", () => {
 describe("CircularTimeline selection callback (TL-08/TL-17)", () => {
   it("初始默认选中不触发 onSelectionChange", async () => {
     const handleSelectionChange = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
 
     await act(async () => {
       root.render(
@@ -490,7 +553,7 @@ describe("CircularTimeline selection callback (TL-08/TL-17)", () => {
     });
 
     expect(handleSelectionChange).not.toHaveBeenCalled();
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 });
@@ -499,9 +562,7 @@ describe("CircularTimeline drag render stability (TL-13)", () => {
   it("同一坐标拖动仍停在同一选段时不产生额外 commit", async () => {
     const handleRender: ProfilerOnRenderCallback = vi.fn();
     const handleSelectionChange = vi.fn();
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
 
     await act(async () => {
       root.render(
@@ -559,7 +620,7 @@ describe("CircularTimeline drag render stability (TL-13)", () => {
     expect(handleSelectionChange).toHaveBeenCalledTimes(1);
     expect(handleRender).not.toHaveBeenCalled();
 
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 });
@@ -588,9 +649,7 @@ describe("CircularTimeline touch dead zone (TL-06)", () => {
 
   it("四角空白处 pointerdown 不捕获指针也不改选中", async () => {
     const work = entry("entry-1", "2026-05-08T06:00:00", "2026-05-08T07:00:00");
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
+    const { host: container, root } = await renderDom(createElement("div"));
     await act(async () => {
       root.render(
         createElement(CircularTimeline, {
@@ -630,7 +689,7 @@ describe("CircularTimeline touch dead zone (TL-06)", () => {
 
     expect(setPointerCapture).not.toHaveBeenCalled();
     expect(container.innerHTML).toContain("07:00 - 08:00");
-    await act(async () => root.unmount());
+    await unmount(root);
     container.remove();
   });
 });
@@ -710,7 +769,13 @@ describe("CircularTimeline now indicator", () => {
       createElement(CircularTimeline, {
         date: "2026-06-03",
         slots: [
-          { startTime: "2026-06-03T00:00:00", endTime: "2026-06-03T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-06-03T00:00:00",
+            endTime: "2026-06-03T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );
@@ -723,7 +788,13 @@ describe("CircularTimeline now indicator", () => {
       createElement(CircularTimeline, {
         date: "2026-06-02",
         slots: [
-          { startTime: "2026-06-02T00:00:00", endTime: "2026-06-02T07:00:00", entry: null, kind: "gap", displayMode: "default" },
+          {
+            startTime: "2026-06-02T00:00:00",
+            endTime: "2026-06-02T07:00:00",
+            entry: null,
+            kind: "gap",
+            displayMode: "default",
+          },
         ],
       }),
     );

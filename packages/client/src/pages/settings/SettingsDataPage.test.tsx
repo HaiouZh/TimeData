@@ -1,12 +1,10 @@
-import { act, createElement } from "react";
+import { createElement } from "react";
 // @vitest-environment jsdom
-import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsDataPage from "./SettingsDataPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const syncContextMock = vi.hoisted(() => ({
   value: {
@@ -157,19 +155,12 @@ describe("SettingsDataPage", () => {
   it("opens the recovery details when sync diagnostics are needed", async () => {
     syncContextMock.value.needsSyncDiagnostics = true;
     syncContextMock.value.syncFailureCount = 3;
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsDataPage)));
 
     const details = host.querySelector("details");
     expect(details?.open).toBe(true);
     expect(host.textContent).toContain("普通同步已连续失败 3 次");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import { useIsWideScreen } from "./useIsWideScreen.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function installMatchMedia(initialMatches: boolean) {
   let matches = initialMatches;
@@ -41,17 +39,12 @@ function installMatchMedia(initialMatches: boolean) {
 }
 
 async function renderHook(): Promise<{ host: HTMLElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-
   function Probe() {
     const wide = useIsWideScreen();
     return createElement("span", { "data-wide": String(wide) });
   }
 
-  await act(async () => root.render(createElement(Probe)));
-  return { host, root };
+  return renderDom(createElement(Probe));
 }
 
 afterEach(() => {
@@ -67,7 +60,7 @@ describe("useIsWideScreen", () => {
     expect(media.matchMedia).toHaveBeenCalledWith("(min-width: 1024px)");
     expect(host.firstElementChild?.getAttribute("data-wide")).toBe("true");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("订阅 change 并在卸载时清理", async () => {
@@ -80,7 +73,7 @@ describe("useIsWideScreen", () => {
     await act(async () => media.setMatches(true));
     expect(host.firstElementChild?.getAttribute("data-wide")).toBe("true");
 
-    await act(async () => root.unmount());
+    await unmount(root);
     expect(media.mql.removeEventListener).toHaveBeenCalledWith("change", expect.any(Function));
   });
 
@@ -90,6 +83,6 @@ describe("useIsWideScreen", () => {
 
     expect(host.firstElementChild?.getAttribute("data-wide")).toBe("false");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

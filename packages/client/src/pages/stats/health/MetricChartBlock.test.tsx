@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
 import type { ChartBlock as MetricChartBlockConfig } from "@timedata/shared";
-import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
+import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../../test/domHarness.js";
 import { MetricChartBlock } from "./MetricChartBlock.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("recharts", () => ({
   Area: () => createElement("span"),
@@ -15,9 +13,14 @@ vi.mock("recharts", () => ({
   CartesianGrid: () => createElement("span"),
   Legend: () => createElement("span"),
   Line: ({ dataKey, name, yAxisId }: { dataKey?: string; name?: string; yAxisId?: string }) =>
-    createElement("span", { "data-line": String(dataKey ?? ""), "data-name": String(name ?? ""), "data-axis": String(yAxisId ?? "") }),
+    createElement("span", {
+      "data-line": String(dataKey ?? ""),
+      "data-name": String(name ?? ""),
+      "data-axis": String(yAxisId ?? ""),
+    }),
   LineChart: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
-  ReferenceLine: ({ y }: { y?: number }) => createElement("span", { "data-refline": "1", "data-refy": String(y ?? "") }),
+  ReferenceLine: ({ y }: { y?: number }) =>
+    createElement("span", { "data-refline": "1", "data-refy": String(y ?? "") }),
   ResponsiveContainer: ({ children, height }: { children?: React.ReactNode; height?: number }) =>
     createElement("div", { "data-height": String(height ?? "") }, children),
   Tooltip: () => createElement("span"),
@@ -44,17 +47,12 @@ const cfg: MetricChartBlockConfig = {
 };
 
 function renderBlock(element: React.ReactElement) {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-  act(() => {
-    root.render(element);
-  });
-  return { host, root };
+  return renderDom(element);
 }
 
 describe("MetricChartBlock", () => {
-  it("渲染标题", () => {
-    const { host, root } = renderBlock(
+  it("渲染标题", async () => {
+    const { host, root } = await renderBlock(
       <MetricChartBlock
         config={cfg}
         collections={{
@@ -69,19 +67,21 @@ describe("MetricChartBlock", () => {
 
     expect(host.textContent).toContain("我的趋势");
     expect(host.querySelector("[data-height]")?.getAttribute("data-height")).toBe("320");
-    act(() => root.unmount());
+    await unmount(root);
   });
 
-  it("无数据显示空态", () => {
-    const { host, root } = renderBlock(<MetricChartBlock config={cfg} collections={{}} range={{ mode: "all" }} />);
+  it("无数据显示空态", async () => {
+    const { host, root } = await renderBlock(
+      <MetricChartBlock config={cfg} collections={{}} range={{ mode: "all" }} />,
+    );
 
     expect(host.textContent).toContain("暂无数据");
-    act(() => root.unmount());
+    await unmount(root);
   });
 
-  it("勾选滚动窗时渲染滚动均线", () => {
+  it("勾选滚动窗时渲染滚动均线", async () => {
     const rollingCfg: MetricChartBlockConfig = { ...cfg, rollingWindows: [7] };
-    const { host, root } = renderBlock(
+    const { host, root } = await renderBlock(
       <MetricChartBlock
         config={rollingCfg}
         collections={{
@@ -97,12 +97,12 @@ describe("MetricChartBlock", () => {
     const lineKeys = [...host.querySelectorAll("[data-line]")].map((el) => el.getAttribute("data-line"));
     expect(lineKeys).toContain("hrv.value");
     expect(lineKeys).toContain("hrv.value:rolling:7");
-    act(() => root.unmount());
+    await unmount(root);
   });
 
-  it("两个异口径指标 → 双轴（左右两轴 + 序列各自 yAxisId）", () => {
+  it("两个异口径指标 → 双轴（左右两轴 + 序列各自 yAxisId）", async () => {
     const dualCfg: MetricChartBlockConfig = { ...cfg, metricIds: ["hrv.value", "stress.value"], trendMode: "auto" };
-    const { host, root } = renderBlock(
+    const { host, root } = await renderBlock(
       <MetricChartBlock
         config={dualCfg}
         collections={{
@@ -125,16 +125,16 @@ describe("MetricChartBlock", () => {
     expect(lineAxes).toContain("y");
     expect(lineAxes).toContain("y1");
     expect(host.textContent).toContain("双轴");
-    act(() => root.unmount());
+    await unmount(root);
   });
 
-  it("≥3 异口径指标 → 指数化（角标 + 基期参考线）", () => {
+  it("≥3 异口径指标 → 指数化（角标 + 基期参考线）", async () => {
     const indexCfg: MetricChartBlockConfig = {
       ...cfg,
       metricIds: ["hrv.value", "stress.value", "heart_rate.resting"],
       trendMode: "auto",
     };
-    const { host, root } = renderBlock(
+    const { host, root } = await renderBlock(
       <MetricChartBlock
         config={indexCfg}
         collections={{
@@ -177,16 +177,16 @@ describe("MetricChartBlock", () => {
     expect(host.textContent).toContain("指数化");
     const refY = [...host.querySelectorAll("[data-refline]")].map((el) => el.getAttribute("data-refy"));
     expect(refY).toContain("100");
-    act(() => root.unmount());
+    await unmount(root);
   });
 
-  it("同口径多指标(3×bpm) → 单轴，不指数化", () => {
+  it("同口径多指标(3×bpm) → 单轴，不指数化", async () => {
     const sameCfg: MetricChartBlockConfig = {
       ...cfg,
       metricIds: ["heart_rate.resting", "heart_rate.min", "heart_rate.max"],
       trendMode: "auto",
     };
-    const { host, root } = renderBlock(
+    const { host, root } = await renderBlock(
       <MetricChartBlock
         config={sameCfg}
         collections={{
@@ -221,6 +221,6 @@ describe("MetricChartBlock", () => {
     const axes = [...host.querySelectorAll("[data-yaxis]")];
     expect(axes.length).toBe(1);
     expect(host.textContent).not.toContain("指数化");
-    act(() => root.unmount());
+    await unmount(root);
   });
 });

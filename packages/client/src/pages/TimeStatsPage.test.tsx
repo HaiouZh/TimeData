@@ -1,13 +1,11 @@
 import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDateString } from "../lib/time.ts";
+import { renderDom, unmount } from "../test/domHarness.js";
 import TimeStatsPage from "./TimeStatsPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const categoriesState = vi.hoisted(() => ({
   categories: [] as Category[],
@@ -95,12 +93,7 @@ describe("TimeStatsPage", () => {
   });
 
   it("renders empty state and allows period switching", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.textContent).toContain("暂无统计数据");
     for (const title of ["总览", "作息", "异常与空挡", "趋势变化", "结构诊断"]) {
@@ -118,18 +111,11 @@ describe("TimeStatsPage", () => {
     expect(monthButton?.getAttribute("aria-pressed")).toBe("true");
     expect(weekButton?.getAttribute("aria-pressed")).toBe("false");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("初始停在最新周期，下一周期按钮禁用；上一周期后启用", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     const prevButton = host.querySelector('[aria-label="上一周"]') as HTMLButtonElement | null;
     const nextButton = host.querySelector('[aria-label="下一周"]') as HTMLButtonElement | null;
@@ -145,18 +131,11 @@ describe("TimeStatsPage", () => {
     // 翻到上一周期后，可以再往后翻
     expect(nextButton?.disabled).toBe(false);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("回到今天：翻到上一周后出现，点击后回到最新", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     const prevButton = host.querySelector('[aria-label="上一周"]') as HTMLButtonElement | null;
     // 初始最新周期，无"回到今天"
@@ -178,15 +157,11 @@ describe("TimeStatsPage", () => {
     const nextButton = host.querySelector('[aria-label="下一周"]') as HTMLButtonElement | null;
     expect(nextButton?.disabled).toBe(true);
     expect([...host.querySelectorAll("button")].some((button) => button.textContent === "回到今天")).toBe(false);
+    await unmount(root);
   });
 
   it("日模式可翻页，按钮标签随模式变化", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     const dayButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "日");
     await act(async () => {
@@ -203,6 +178,7 @@ describe("TimeStatsPage", () => {
     });
 
     expect(nextDay?.disabled).toBe(false);
+    await unmount(root);
   });
 
   it("工作类超长记录出现在异常区，睡眠分类入口迁到设置页", async () => {
@@ -243,11 +219,7 @@ describe("TimeStatsPage", () => {
       },
     ];
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.querySelector('[aria-label="睡眠分类"]')).toBeNull();
     expect(host.querySelector('a[href="/settings/insights"]')).not.toBeNull();
@@ -270,9 +242,7 @@ describe("TimeStatsPage", () => {
     // 异常区出现超长记录文案
     expect(host.textContent).toContain("疑似忘停");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("总览与作息区展示覆盖率、二级占比和睡眠均值", async () => {
@@ -333,11 +303,7 @@ describe("TimeStatsPage", () => {
       },
     ];
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     const dayButton = [...host.querySelectorAll("button")].find((b) => b.textContent === "日");
     await act(async () => {
@@ -366,9 +332,7 @@ describe("TimeStatsPage", () => {
     expect(host.textContent).toContain("平均入睡");
     expect(host.textContent).toContain("23:00");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("趋势区：预设窗口可切换，折线/堆叠面积可切换", async () => {
@@ -397,11 +361,7 @@ describe("TimeStatsPage", () => {
         updatedAt: `${today}T02:00:00.000Z`,
       },
     ];
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.textContent).toContain("趋势变化");
     const preset30 = [...host.querySelectorAll("button")].find((b) => b.textContent === "近30天") as
@@ -430,9 +390,7 @@ describe("TimeStatsPage", () => {
     });
     expect(trendConfigState.config.chart).toBe("area");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("趋势区：本期有投入时列出父分类，上期无数据走 noBaseline 文案", async () => {
@@ -462,18 +420,12 @@ describe("TimeStatsPage", () => {
       },
     ];
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.textContent).toContain("工作");
     expect(host.textContent).toContain("无对比期数据");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("结构诊断区：渲染深度时间占比与熵，基线不足时提示占比失衡退化", async () => {
@@ -503,72 +455,45 @@ describe("TimeStatsPage", () => {
       },
     ];
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.textContent).toContain("结构诊断");
     expect(host.textContent).toContain("深度时间占比");
     expect(host.textContent).toContain("投入分散度");
     expect(host.textContent).toContain("基线数据不足");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("layout hidden 含 trend 时不渲染趋势模块", async () => {
     layoutState.hidden = ["trend"];
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.textContent).not.toContain("趋势变化");
     expect(host.textContent).toContain("总览");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("layout order 调整后按配置顺序渲染模块", async () => {
     layoutState.order = ["trend", "overview", "routine", "anomalies", "structure"];
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     const trendIndex = host.textContent?.indexOf("趋势变化") ?? -1;
     const overviewIndex = host.textContent?.indexOf("总览") ?? -1;
     expect(trendIndex).toBeGreaterThanOrEqual(0);
     expect(overviewIndex).toBeGreaterThan(trendIndex);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("全部 hidden 时显示空状态", async () => {
     layoutState.hidden = ["overview", "routine", "anomalies", "trend", "structure"];
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(TimeStatsPage)));
 
     expect(host.textContent).toContain("所有统计模块已隐藏。");
     expect(host.querySelector('a[href="/settings/stats-layout"]')).not.toBeNull();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

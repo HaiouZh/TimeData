@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { SPLIT_DEFAULT } from "../../lib/tasks/workbenchPrefs.js";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import { ResizableSplit } from "./ResizableSplit.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const localStorageMock = (() => {
   const store = new Map<string, string>();
@@ -24,13 +22,8 @@ Object.defineProperty(globalThis, "localStorage", {
 });
 
 async function renderSplit() {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () =>
-    root.render(
-      createElement(ResizableSplit, { left: createElement("p", null, "左"), right: createElement("p", null, "右") }),
-    ),
+  const { host, root } = await renderDom(
+    createElement(ResizableSplit, { left: createElement("p", null, "左"), right: createElement("p", null, "右") }),
   );
   const split = host.firstElementChild as HTMLElement;
   vi.spyOn(split, "getBoundingClientRect").mockReturnValue({
@@ -67,7 +60,7 @@ describe("ResizableSplit", () => {
     expect((host.firstElementChild as HTMLElement).style.gridTemplateColumns).toContain("0.7fr");
     expect(localStorage.getItem(STORAGE_KEYS.todoWorkbenchSplit)).toBe("0.7");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("双击分隔条重置为默认比例并保存", async () => {
@@ -82,7 +75,7 @@ describe("ResizableSplit", () => {
     expect((host.firstElementChild as HTMLElement).style.gridTemplateColumns).toContain(`${SPLIT_DEFAULT}fr`);
     expect(localStorage.getItem(STORAGE_KEYS.todoWorkbenchSplit)).toBe(String(SPLIT_DEFAULT));
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("支持键盘调整并保存比例", async () => {
@@ -96,7 +89,7 @@ describe("ResizableSplit", () => {
     expect((host.firstElementChild as HTMLElement).style.gridTemplateColumns).toContain("0.7fr");
     expect(localStorage.getItem(STORAGE_KEYS.todoWorkbenchSplit)).toBe("0.7");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("左右栏默认保留块间距", async () => {
@@ -106,6 +99,6 @@ describe("ResizableSplit", () => {
     expect(sections[0].className).toContain("space-y-4");
     expect(sections[1].className).toContain("space-y-4");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { act, createElement, useEffect } from "react";
-import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
@@ -10,9 +9,8 @@ import { db } from "../db/index.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import { renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(async () => {
   localStorage.clear();
@@ -36,24 +34,18 @@ function HideBottomNavOnMount() {
 }
 
 async function renderPage({ hideBottomNav = false } = {}) {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  await act(async () => {
-    root.render(
+  return renderDom(
+    createElement(
+      MemoryRouter,
+      null,
       createElement(
-        MemoryRouter,
+        BottomNavProvider,
         null,
-        createElement(
-          BottomNavProvider,
-          null,
-          hideBottomNav ? createElement(HideBottomNavOnMount) : null,
-          createElement(SyncProvider, null, createElement(TodoPage)),
-        ),
+        hideBottomNav ? createElement(HideBottomNavOnMount) : null,
+        createElement(SyncProvider, null, createElement(TodoPage)),
       ),
-    );
-  });
-  return { host, root };
+    ),
+  );
 }
 
 async function flushAsync(): Promise<void> {
@@ -125,7 +117,7 @@ describe("TodoPage", () => {
     const marked = inbox.querySelectorAll("[data-in-goal='true']");
     expect(marked).toHaveLength(1);
     expect(marked[0]?.textContent ?? "").toContain("已归目标任务");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("渲染四分区：今天 / 已完成 / 收件箱 / 已排期，且不再出现旧分区名", async () => {
@@ -150,7 +142,7 @@ describe("TodoPage", () => {
     expect(host.querySelector('[data-section="today"]')).not.toBeNull();
     expect(host.querySelector('[data-section="inbox"]')).not.toBeNull();
     expect(today).toBeTruthy();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("默认落点=今天：添加进今天（scheduledAt 非空）", async () => {
@@ -161,7 +153,7 @@ describe("TodoPage", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].scheduledAt).not.toBeNull();
     expect(tasks[0].recurrence).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("默认落点=收件箱：添加进收件箱（scheduledAt 为空）", async () => {
@@ -171,7 +163,7 @@ describe("TodoPage", () => {
     await waitForText(host, "丢收件箱");
     const tasks = await db.tasks.toArray();
     expect(tasks[0].scheduledAt).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   // 回归：收件箱行的「排进今天」(→) 把任务排进今天。曾因 moveToToday 传 localDateOf(ISO)
@@ -200,7 +192,7 @@ describe("TodoPage", () => {
     expect(todaySection?.textContent ?? "").toContain("收件箱条目");
     const inboxSection = host.querySelector('[data-section="inbox"]') as HTMLElement | null;
     expect(inboxSection?.textContent ?? "").not.toContain("收件箱条目");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点任务行打开详情抽屉", async () => {
@@ -215,7 +207,7 @@ describe("TodoPage", () => {
       await new Promise((r) => window.setTimeout(r, 0));
     });
     expect(host.querySelector('[role="dialog"][aria-label="任务详情"]')).not.toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("待办页不再渲染旧 parent drop zone", async () => {
@@ -224,7 +216,7 @@ describe("TodoPage", () => {
     await waitForText(host, "父");
 
     expect(host.querySelector('[data-testid="parent-drop-zone"]')).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("root 行渲染左侧拖拽抓取区", async () => {
@@ -233,7 +225,7 @@ describe("TodoPage", () => {
     await waitForText(host, "可拖任务");
 
     expect(host.querySelector('[data-testid="task-row-grab-area"]')).not.toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("不再渲染注意力区", async () => {
@@ -243,7 +235,7 @@ describe("TodoPage", () => {
     await waitForText(host, "普通任务");
 
     expect(host.querySelector('[data-testid="attention-queue"]')).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("tag 筛选作用于普通任务池", async () => {
@@ -281,7 +273,7 @@ describe("TodoPage", () => {
     expect(inboxSection?.textContent ?? "").toContain("任务 A");
     expect(inboxSection?.textContent ?? "").not.toContain("普通任务 B");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("选含标签→收面板→搜索：标签上下文与关键词叠加（搜索 ∩ 标签）", async () => {
@@ -318,7 +310,7 @@ describe("TodoPage", () => {
     expect(inbox.textContent ?? "").toContain("写工作报告");
     expect(inbox.textContent ?? "").not.toContain("工作杂事");
     expect(inbox.textContent ?? "").not.toContain("生活报告");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("底栏和输入框隐藏时，收件箱展开的收起按钮不避让已滑出视口的输入框", async () => {
@@ -363,7 +355,7 @@ describe("TodoPage", () => {
     expect(collapse).not.toBeNull();
     expect(collapse?.style.bottom).toBe("4px");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("hides sunken inbox tasks from the default inbox list", async () => {
@@ -375,7 +367,7 @@ describe("TodoPage", () => {
     expect(host.querySelector('[data-section="inbox"]')?.textContent).toContain("新想法");
     expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("旧想法");
     expect(host.textContent).toContain("水下 1 条");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("does not let search bring sunken tasks into the default inbox", async () => {
@@ -392,7 +384,7 @@ describe("TodoPage", () => {
     await flushAsync();
 
     expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("旧想法 搜索词");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("bumps a sunken task so it returns to the inbox", async () => {
@@ -412,7 +404,7 @@ describe("TodoPage", () => {
       () => host.querySelector('[data-section="inbox"]')?.textContent?.includes("值得继续") ?? false,
       "bumped task to return to inbox",
     );
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("advances the gravity waterline while the page stays mounted across days", async () => {
@@ -431,7 +423,7 @@ describe("TodoPage", () => {
 
     expect(host.querySelector('[data-section="inbox"]')?.textContent).not.toContain("会跨日下沉");
     expect(host.textContent).toContain("水下 1 条");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("writes todo.gravity.review.v1 to settings on gravity review open without refreshing updatedAt", async () => {
@@ -453,7 +445,7 @@ describe("TodoPage", () => {
     const logs = await db.syncLog.where("recordId").equals("todo.gravity.review.v1").toArray();
     expect(logs.length).toBeGreaterThanOrEqual(1);
     expect(logs[0]).toMatchObject({ tableName: "settings" });
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("shows sunken inbox tail after show-more in inbox", async () => {
@@ -490,7 +482,7 @@ describe("TodoPage", () => {
     await flushAsync();
 
     expect(inbox.textContent).toContain("沉没想法");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("shows sunken tail when floating groups <= 3 without show-more", async () => {
@@ -505,7 +497,7 @@ describe("TodoPage", () => {
     expect(inbox.querySelector('[aria-label^="显示更多"]')).toBeNull();
     // 尾部直接可达
     expect(inbox.textContent).toContain("水下 1 条");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("shows sunken tail when all inbox tasks are underwater", async () => {
@@ -525,7 +517,7 @@ describe("TodoPage", () => {
     await flushAsync();
 
     expect(inbox.textContent).toContain("沉没想法");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("search does not bring sunken tasks into default inbox but tail can show them", async () => {
@@ -555,7 +547,7 @@ describe("TodoPage", () => {
     await flushAsync();
 
     expect(inbox.textContent).toContain("沉没搜索词");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
 
@@ -600,6 +592,6 @@ describe("TodoPage occurrence 删除分流", () => {
     await expect(db.syncLog.where("recordId").equals("occ:r1:2026-06-14").toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
     );
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

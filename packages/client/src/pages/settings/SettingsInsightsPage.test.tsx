@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 import type { Category } from "@timedata/shared";
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsInsightsPage from "./SettingsInsightsPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const categoriesState = vi.hoisted(() => ({
   categories: [] as Category[],
@@ -96,12 +94,7 @@ describe("SettingsInsightsPage", () => {
   });
 
   it("persists sleep category selection through synced setting", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
     const trigger = host.querySelector('[aria-label="睡眠分类"]') as HTMLButtonElement | null;
     await act(async () => {
@@ -123,9 +116,7 @@ describe("SettingsInsightsPage", () => {
 
     expect(host.textContent).toContain("当前使用");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("renders todo default destination control", () => {
@@ -136,11 +127,7 @@ describe("SettingsInsightsPage", () => {
   });
 
   it("persists todo default destination selection", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
     const radiogroup = host.querySelector('[role="radiogroup"][aria-label="新建待办默认落点"]');
     const inboxRadio = [...(radiogroup?.querySelectorAll('[role="radio"]') ?? [])].find((r) =>
@@ -151,15 +138,11 @@ describe("SettingsInsightsPage", () => {
     });
 
     expect(todoDestState.setTodoDefaultDestination).toHaveBeenCalledWith("inbox");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("renders and persists punch category selection from child categories", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsInsightsPage)));
 
     expect(host.textContent).toContain("打点分类");
     const trigger = host.querySelector('[aria-label="打点分类"]') as HTMLButtonElement | null;
@@ -175,6 +158,6 @@ describe("SettingsInsightsPage", () => {
     });
 
     expect(punchCategoryState.setPunchCategoryId).toHaveBeenCalledWith("cat-work-deep");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

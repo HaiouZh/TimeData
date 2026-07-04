@@ -1,11 +1,9 @@
 import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsCategoriesPage from "./SettingsCategoriesPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const categoriesState = vi.hoisted(() => ({
   categories: [] as Category[],
@@ -75,28 +73,15 @@ describe("SettingsCategoriesPage", () => {
   });
 
   it("renders empty state when no parent categories exist", async () => {
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SettingsCategoriesPage));
-    });
+    const { host, root } = await renderDom(createElement(SettingsCategoriesPage));
 
     expect(host.textContent).toContain("暂无分类");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("adds a new top-level category through the add dialog", async () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SettingsCategoriesPage));
-    });
+    const { host, root } = await renderDom(createElement(SettingsCategoriesPage));
 
     const openButton = [...host.querySelectorAll("button")].find(
       (button) => button.textContent?.trim() === "+ 新增分类",
@@ -127,9 +112,7 @@ describe("SettingsCategoriesPage", () => {
 
     expect(addCategoryMock).toHaveBeenCalledWith("健康", null, "#4A90D9");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
     host.remove();
   });
 });

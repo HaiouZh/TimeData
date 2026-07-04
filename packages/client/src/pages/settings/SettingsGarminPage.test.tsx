@@ -1,22 +1,18 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsGarminPage, {
-  type GarminFetchResult,
-  type GarminStatusResponse,
-  type GarminConfigResponse,
-} from "./SettingsGarminPage.js";
-import {
   buildGarminFetchBody,
   formatGarminError,
   formatGarminFetchMessage,
+  type GarminConfigResponse,
+  type GarminFetchResult,
+  type GarminStatusResponse,
   garminStatusLabel,
   validateGarminFetchForm,
 } from "./SettingsGarminPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const syncContextState = vi.hoisted(() => ({
   apiUrl: "https://timedata.example",
@@ -71,12 +67,7 @@ async function flushEffects(): Promise<void> {
 }
 
 async function renderGarminPage() {
-  const host = document.createElement("div");
-  const root = createRoot(host);
-
-  await act(async () => {
-    root.render(createElement(MemoryRouter, null, createElement(SettingsGarminPage)));
-  });
+  const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsGarminPage)));
   await flushEffects();
 
   return { host, root };
@@ -130,9 +121,7 @@ describe("SettingsGarminPage helpers", () => {
     expect(formatGarminError({ code: "script_not_found", message: "missing" })).toBe(
       "服务器未找到 Garmin 抓取脚本，检查部署镜像或脚本路径",
     );
-    expect(formatGarminError({ code: "credentials_missing", message: "missing" })).toBe(
-      "请先保存 Garmin 邮箱和密码",
-    );
+    expect(formatGarminError({ code: "credentials_missing", message: "missing" })).toBe("请先保存 Garmin 邮箱和密码");
   });
 
   it("formats no-op result as already synced to yesterday", () => {
@@ -200,9 +189,7 @@ describe("SettingsGarminPage", () => {
     );
     expect(JSON.parse(String(putCall?.[1]?.body))).toMatchObject({ initialBackfillDays: 14 });
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("sends an empty body for smart manual fetch", async () => {
@@ -219,9 +206,7 @@ describe("SettingsGarminPage", () => {
     );
     expect(JSON.parse(String(fetchCall?.[1]?.body))).toEqual({});
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("sends days for forced recent refetch", async () => {
@@ -245,8 +230,6 @@ describe("SettingsGarminPage", () => {
     );
     expect(JSON.parse(String(fetchCall?.[1]?.body))).toEqual({ days: 10 });
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

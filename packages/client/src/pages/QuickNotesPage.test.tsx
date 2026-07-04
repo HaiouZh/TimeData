@@ -3,7 +3,6 @@ import "fake-indexeddb/auto";
 import type { Category } from "@timedata/shared";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
-import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
@@ -11,9 +10,8 @@ import { db } from "../db/index.js";
 import { setQuickNotePinned } from "../lib/quickNotes.js";
 import { setPunchCategoryId } from "../lib/settings/punchCategorySetting.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
+import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import QuickNotesPage from "./QuickNotesPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function BottomNavStateProbe() {
   const { hidden } = useBottomNav();
@@ -37,20 +35,14 @@ async function flush() {
   });
 }
 
-async function renderPage(initialEntry = "/quick-notes"): Promise<{ host: HTMLDivElement; root: Root }> {
-  const host = document.createElement("div");
-  document.body.appendChild(host);
-  const root = createRoot(host);
-
-  await act(async () => {
-    root.render(
-      createElement(
-        MemoryRouter,
-        { initialEntries: [initialEntry] },
-        createElement(BottomNavProvider, null, createElement(BottomNavStateProbe), createElement(QuickNotesPage)),
-      ),
-    );
-  });
+async function renderPage(initialEntry = "/quick-notes"): Promise<{ host: HTMLElement; root: Root }> {
+  const { host, root } = await renderDom(
+    createElement(
+      MemoryRouter,
+      { initialEntries: [initialEntry] },
+      createElement(BottomNavProvider, null, createElement(BottomNavStateProbe), createElement(QuickNotesPage)),
+    ),
+  );
   await flush();
   return { host, root };
 }
@@ -101,7 +93,10 @@ function stubScreenWidth(wide: boolean) {
     removeListener: () => {},
     dispatchEvent: () => false,
   } as unknown as MediaQueryList;
-  vi.stubGlobal("matchMedia", vi.fn(() => mql));
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => mql),
+  );
 }
 
 async function click(element: Element | null) {
@@ -145,8 +140,10 @@ function composerButton(host: HTMLElement, label: string): HTMLButtonElement {
 
 function markByText(host: HTMLElement, text: string): HTMLElement | null {
   return (
-    Array.from(host.querySelectorAll("mark")).find((element) => element.textContent === text) as HTMLElement | undefined
-  ) ?? null;
+    (Array.from(host.querySelectorAll("mark")).find((element) => element.textContent === text) as
+      | HTMLElement
+      | undefined) ?? null
+  );
 }
 
 function expectNoRetiredQuickNoteChrome(host: HTMLElement) {
@@ -175,10 +172,7 @@ function category(id: string, name: string, parentId: string | null): Category {
 }
 
 async function configurePunchCategory() {
-  await db.categories.bulkAdd([
-    category("cat-work", "工作", null),
-    category("cat-work-deep", "深度", "cat-work"),
-  ]);
+  await db.categories.bulkAdd([category("cat-work", "工作", null), category("cat-work-deep", "深度", "cat-work")]);
   await setPunchCategoryId("cat-work-deep");
   await db.syncLog.clear();
 }
@@ -218,7 +212,7 @@ describe("QuickNotesPage", () => {
     await expect(db.quickNotes.count()).resolves.toBe(1);
     await expect(db.timeEntries.count()).resolves.toBe(0);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("does not send empty text", async () => {
@@ -237,7 +231,7 @@ describe("QuickNotesPage", () => {
 
     await expect(db.quickNotes.count()).resolves.toBe(0);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("does not enter edit mode on a single click of a bubble", async () => {
@@ -255,7 +249,7 @@ describe("QuickNotesPage", () => {
     expect(input(host).value).toBe("");
     expect(host.textContent).not.toContain("正在编辑");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("exposes a native date input on the floating scroll date chip", async () => {
@@ -305,7 +299,7 @@ describe("QuickNotesPage", () => {
     expect((floatingDateInput as HTMLInputElement).value).toBe("2026-06-02");
 
     vi.unstubAllGlobals();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("近底部的滚动驱动重渲染不把滚动位置弹回底部（安卓抖动回归）", async () => {
@@ -358,7 +352,7 @@ describe("QuickNotesPage", () => {
     // 修复后：内容未变 → 不触发吸底 → 停在用户停留的位置 580。
     expect(scrollTopValue).toBe(580);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("passes per-note upload state into bubbles", async () => {
@@ -394,7 +388,7 @@ describe("QuickNotesPage", () => {
     expect(pendingBubble?.querySelector('[aria-label="待上传"]')).not.toBeNull();
     expect(uploadedBubble?.querySelector('[aria-label="已上传"]')).not.toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("keeps selection controls accessible without retired chrome classes", async () => {
@@ -413,7 +407,7 @@ describe("QuickNotesPage", () => {
     expect(host.querySelector('button[aria-label="退出多选"]')).toBeInstanceOf(HTMLButtonElement);
     expectNoRetiredQuickNoteChrome(host);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("opens pinned quick notes from the header without repeating them in the timeline", async () => {
@@ -443,7 +437,7 @@ describe("QuickNotesPage", () => {
 
     expect(host.querySelector('[aria-label="置顶速记"]')).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("expands the bottom input when editing a long note", async () => {
@@ -465,7 +459,7 @@ describe("QuickNotesPage", () => {
     expect(input(host).style.height).toBe("160px");
     expect(input(host).style.overflowY).toBe("auto");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("reserves bottom space from the measured composer height", async () => {
@@ -493,7 +487,7 @@ describe("QuickNotesPage", () => {
     expect(list).toBeInstanceOf(HTMLElement);
     expect((list as HTMLElement).style.paddingBottom).toBe("164px");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("宽屏 composer 不为移动底栏预留底部空隙", async () => {
@@ -505,7 +499,7 @@ describe("QuickNotesPage", () => {
     expect(composer).toBeInstanceOf(HTMLFormElement);
     expect((composer as HTMLFormElement).style.bottom).toBe("0px");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("hides the bottom nav while the composer input is focused", async () => {
@@ -528,7 +522,7 @@ describe("QuickNotesPage", () => {
 
     expect(bottomNavHidden(host)).toBe("false");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("edits a note through the popover menu into the bottom input", async () => {
@@ -555,7 +549,7 @@ describe("QuickNotesPage", () => {
       occurredAt: "2026-06-01T04:00:00.000Z",
     });
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("copies a note through the popover menu", async () => {
@@ -575,7 +569,7 @@ describe("QuickNotesPage", () => {
 
     expect(writeText).toHaveBeenCalledWith("复制我");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("键盘 Enter 在气泡上打开操作菜单（非选择态）", async () => {
@@ -597,7 +591,7 @@ describe("QuickNotesPage", () => {
     await flush();
 
     expect(host.querySelector('[role="menu"][aria-label="速记操作"]')).toBeInstanceOf(HTMLElement);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("键盘 Escape 关闭已打开的操作菜单", async () => {
@@ -618,7 +612,7 @@ describe("QuickNotesPage", () => {
     await flush();
 
     expect(host.querySelector('[role="menu"][aria-label="速记操作"]')).toBeNull();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("选择态下键盘 Enter 切换该条选中", async () => {
@@ -652,7 +646,7 @@ describe("QuickNotesPage", () => {
 
     expect(host.textContent).toContain("已选");
     expect(other.getAttribute("aria-pressed")).toBe("true");
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("选择态下点 Markdown 链接只勾选、不跳转", async () => {
@@ -675,7 +669,7 @@ describe("QuickNotesPage", () => {
     await flush();
 
     expect(clickEvent.defaultPrevented).toBe(true);
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("桌面有文字选区时右键不劫持为自定义菜单", async () => {
@@ -701,7 +695,7 @@ describe("QuickNotesPage", () => {
     } finally {
       window.getSelection = originalGetSelection;
     }
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("auto-dismisses the copied status after a delay", async () => {
@@ -729,7 +723,7 @@ describe("QuickNotesPage", () => {
     expect(host.textContent).not.toContain("已复制");
 
     vi.useRealTimers();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("deletes a note through the popover menu and confirm dialog", async () => {
@@ -751,7 +745,7 @@ describe("QuickNotesPage", () => {
     await expect(db.quickNotes.count()).resolves.toBe(0);
     expect(host.textContent).not.toContain("待删除");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("宽屏：回车发送，Shift+回车不发送", async () => {
@@ -772,7 +766,7 @@ describe("QuickNotesPage", () => {
     await flush();
     await expect(db.quickNotes.count()).resolves.toBe(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("宽屏：输入法组合态回车不发送（IME 候选确认）", async () => {
@@ -788,7 +782,7 @@ describe("QuickNotesPage", () => {
     await expect(db.quickNotes.count()).resolves.toBe(0);
     expect(input(host).value).toBe("组合中");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("窄屏：回车换行不发送（移动端交给 textarea 默认换行）", async () => {
@@ -804,7 +798,7 @@ describe("QuickNotesPage", () => {
     await expect(db.quickNotes.count()).resolves.toBe(0);
     expect(input(host).value).toBe("手机端回车");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("clears a selected date through the cleanup action", async () => {
@@ -835,7 +829,7 @@ describe("QuickNotesPage", () => {
     await expect(db.quickNotes.get("today")).resolves.toBeUndefined();
     await expect(db.quickNotes.get("other")).resolves.toMatchObject({ text: "别天" });
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("opens search mode with an empty-query hint and hides the bottom composer", async () => {
@@ -847,7 +841,7 @@ describe("QuickNotesPage", () => {
     expect(host.textContent).toContain("空格分隔多个词");
     expect(host.querySelector('textarea[aria-label="速记输入"]')).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("shows matching search results with highlights and an empty state for misses", async () => {
@@ -886,7 +880,7 @@ describe("QuickNotesPage", () => {
     expect(host.textContent).toContain("没有匹配的速记");
 
     vi.useRealTimers();
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("closes search mode and restores the bottom composer", async () => {
@@ -898,7 +892,7 @@ describe("QuickNotesPage", () => {
     expect(input(host)).toBeInstanceOf(HTMLTextAreaElement);
     expect(host.querySelector('input[placeholder="搜索速记…"]')).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("keeps secondary toolbar actions while search and punch move into the empty composer", async () => {
@@ -910,7 +904,7 @@ describe("QuickNotesPage", () => {
     expect(composerButton(host, "搜索速记")).toBeInstanceOf(HTMLButtonElement);
     expect(composerButton(host, "打点（记录到现在）")).toBeInstanceOf(HTMLButtonElement);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });
 
@@ -938,7 +932,7 @@ describe("捕捉中心", () => {
     expect(host.textContent).toContain("空格分隔多个词");
     expect(host.querySelector('textarea[aria-label="速记输入"]')).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("有草稿时 composer 左侧存待办、右侧记录速记", async () => {
@@ -962,7 +956,7 @@ describe("捕捉中心", () => {
     await expect(db.tasks.toArray()).resolves.toMatchObject([{ title: "放进任务池", done: false }]);
     expect(input(host).value).toBe("");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("编辑中 composer 左侧取消、右侧保存，并覆盖普通状态按钮", async () => {
@@ -998,7 +992,7 @@ describe("捕捉中心", () => {
     expect(input(host).value).toBe("");
     await expect(db.quickNotes.get("note-edit")).resolves.toMatchObject({ text: "新文本" });
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("空草稿时只有 composer 提供打点入口，顶部不再显示打点按钮", async () => {
@@ -1012,7 +1006,7 @@ describe("捕捉中心", () => {
     );
     expect(host.textContent).not.toContain("当前窗口");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点「待办」把输入文本存成池任务并清空输入", async () => {
@@ -1027,7 +1021,7 @@ describe("捕捉中心", () => {
     expect(tasks[0]).toMatchObject({ title: "买牛奶", done: false });
     expect(input(host).value).toBe("");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("连续点「待办」只保存一条任务", async () => {
@@ -1045,7 +1039,7 @@ describe("捕捉中心", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0]).toMatchObject({ title: "只存一次" });
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("存为待办成功反馈内嵌在 composer 内", async () => {
@@ -1061,7 +1055,7 @@ describe("捕捉中心", () => {
     expect(feedback?.textContent).toContain("已加入今天");
     expect(feedback?.textContent).toContain("去待办");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("点「打点」建一条已配置分类的时间记录", async () => {
@@ -1075,7 +1069,7 @@ describe("捕捉中心", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].categoryId).toBe("cat-work-deep");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("打点连点只写一条记录（并发守卫）", async () => {
@@ -1092,7 +1086,7 @@ describe("捕捉中心", () => {
 
     await expect(db.timeEntries.count()).resolves.toBe(1);
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("打点成功反馈内嵌在 composer 内，不再底部浮层覆盖列表", async () => {
@@ -1108,7 +1102,7 @@ describe("捕捉中心", () => {
     expect(feedback?.textContent).toContain("已打点");
     expect(feedback?.textContent).toContain("撤销");
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 
   it("速记「待办」按钮按默认落点：inbox 时新任务无排期", async () => {
@@ -1125,6 +1119,6 @@ describe("捕捉中心", () => {
     expect(tasks).toHaveLength(1);
     expect(tasks[0].scheduledAt).toBeNull();
 
-    await act(async () => root.unmount());
+    await unmount(root);
   });
 });

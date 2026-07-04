@@ -1,18 +1,11 @@
 // @vitest-environment jsdom
 import { act, createElement, useState } from "react";
-import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { syncScheduler } from "../sync/scheduler.ts";
-import {
-  deriveSyncStatus,
-  SyncProvider,
-  shouldPullForBump,
-  useSyncContext,
-} from "./SyncContext.js";
 import type { SyncStreamMessage } from "../lib/syncStream.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { syncScheduler } from "../sync/scheduler.ts";
+import { renderDom, unmount } from "../test/domHarness.js";
+import { deriveSyncStatus, SyncProvider, shouldPullForBump, useSyncContext } from "./SyncContext.js";
 
 const mockSyncConflicts: unknown[] = [];
 
@@ -45,14 +38,16 @@ const syncStreamMock = vi.hoisted(() => {
   return {
     start,
     stop,
-    create: vi.fn((options: {
-      onMessage: (message: SyncStreamMessage) => void;
-      onStateChange: (state: "connecting" | "connected" | "disconnected") => void;
-    }) => {
-      onMessage = options.onMessage;
-      onStateChange = options.onStateChange;
-      return { start, stop, getConnectionState: () => "disconnected" };
-    }),
+    create: vi.fn(
+      (options: {
+        onMessage: (message: SyncStreamMessage) => void;
+        onStateChange: (state: "connecting" | "connected" | "disconnected") => void;
+      }) => {
+        onMessage = options.onMessage;
+        onStateChange = options.onStateChange;
+        return { start, stop, getConnectionState: () => "disconnected" };
+      },
+    ),
     emit(message: SyncStreamMessage) {
       onMessage?.(message);
     },
@@ -244,12 +239,7 @@ describe("SyncProvider", () => {
       );
     }
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(Wrapper));
-    });
+    const { host, root } = await renderDom(createElement(Wrapper));
 
     const initialValue = seenValues.at(-1);
 
@@ -259,9 +249,7 @@ describe("SyncProvider", () => {
 
     expect(seenValues.at(-1)).toBe(initialValue);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("updates api url in localStorage and context", async () => {
@@ -275,12 +263,7 @@ describe("SyncProvider", () => {
       return createElement("span", null, context.apiUrl || "empty");
     }
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
 
     expect(latestApiUrl).toBe("");
 
@@ -291,9 +274,7 @@ describe("SyncProvider", () => {
     expect(localStorage.getItem("timedata_api_url")).toBe("https://new.example");
     expect(latestApiUrl).toBe("https://new.example");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("uses live unsynced count for the provided status", async () => {
@@ -308,12 +289,7 @@ describe("SyncProvider", () => {
       return createElement("span", null, latestStatus);
     }
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement(Probe)));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
 
     const liveQuery = syncDbMock.useLiveQuery.mock.calls.at(-1)?.[0] as (() => Promise<number>) | undefined;
     await expect(liveQuery?.()).resolves.toBe(2);
@@ -321,9 +297,7 @@ describe("SyncProvider", () => {
     expect(syncDbMock.equals).toHaveBeenCalledWith(0);
     expect(latestStatus).toBe("pending");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("registers an executor with the scheduler when cloud sync is enabled with an apiUrl, and unregisters on unmount", async () => {
@@ -331,18 +305,11 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     expect(setExecutorSpy).toHaveBeenCalledWith(expect.any(Function));
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
 
     expect(setExecutorSpy).toHaveBeenLastCalledWith(null);
   });
@@ -350,18 +317,11 @@ describe("SyncProvider", () => {
   it("does not register an executor when cloud sync is disabled or apiUrl is empty", async () => {
     const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     expect(setExecutorSpy).not.toHaveBeenCalled();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("wraps the registered executor to forward meta merged with the current connection state", async () => {
@@ -369,12 +329,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
     expect(registeredExecutor).toBeTypeOf("function");
@@ -385,9 +340,7 @@ describe("SyncProvider", () => {
 
     expect(mockSyncActions.sync).toHaveBeenCalledWith({ reason: "write", waitMs: 123, connection: "disconnected" });
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("marks the last run as failed when the executor's sync resolves false", async () => {
@@ -396,12 +349,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     mockSyncActions.sync.mockResolvedValueOnce(false);
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
 
@@ -412,9 +360,7 @@ describe("SyncProvider", () => {
 
     expect(result).toBe(false);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("requests a reconnect sync when the stream connects after a previously failed run", async () => {
@@ -424,12 +370,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     mockSyncActions.sync.mockResolvedValueOnce(false);
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
     await act(async () => {
@@ -444,9 +385,7 @@ describe("SyncProvider", () => {
 
     expect(requestSyncSpy).toHaveBeenCalledWith("reconnect");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("does not request a reconnect sync when the previous run succeeded", async () => {
@@ -454,12 +393,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 
@@ -469,21 +403,14 @@ describe("SyncProvider", () => {
 
     expect(requestSyncSpy).not.toHaveBeenCalledWith("reconnect");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("starts and stops the foreground sync stream with visibility", async () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     expect(syncStreamMock.create).toHaveBeenCalledTimes(1);
     expect(syncStreamMock.start).toHaveBeenCalledTimes(1);
@@ -494,9 +421,7 @@ describe("SyncProvider", () => {
     });
     expect(syncStreamMock.stop).toHaveBeenCalled();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("kicks a resume sync when the document becomes visible", async () => {
@@ -504,14 +429,9 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
 
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 
@@ -522,9 +442,7 @@ describe("SyncProvider", () => {
 
     expect(requestSyncSpy).toHaveBeenCalledWith("resume");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("flushes the scheduler when the document becomes hidden", async () => {
@@ -532,12 +450,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     flushNowSpy.mockClear();
 
@@ -548,9 +461,7 @@ describe("SyncProvider", () => {
 
     expect(flushNowSpy).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("forwards a remote bump ahead of the local seq cursor to scheduler.requestSync", async () => {
@@ -559,12 +470,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     localStorage.setItem("timedata_last_synced_seq", "1");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 
@@ -574,9 +480,7 @@ describe("SyncProvider", () => {
 
     expect(requestSyncSpy).toHaveBeenCalledWith("bump");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("ignores stream echoes at or behind the local seq cursor without calling requestSync", async () => {
@@ -585,12 +489,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     localStorage.setItem("timedata_last_synced_seq", "3");
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(SyncProvider, null, createElement("span", null, "probe")));
-    });
+    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 
@@ -600,8 +499,6 @@ describe("SyncProvider", () => {
 
     expect(requestSyncSpy).not.toHaveBeenCalledWith("bump");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

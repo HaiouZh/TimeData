@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
-import { createElement, useState } from "react";
-import { createRoot } from "react-dom/client";
-import { act } from "react";
+import { act, createElement, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { shouldAutoSyncOnMount, shouldShowSyncDiagnosticsHint, useSync } from "./useSync.js";
 import { getSyncTimings } from "../sync/phaseTimings.ts";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+import { renderDom, unmount } from "../test/domHarness.js";
+import { shouldAutoSyncOnMount, shouldShowSyncDiagnosticsHint, useSync } from "./useSync.js";
 
 vi.mock("../sync/engine.ts", () => ({
   getConsecutiveSyncFailureCount: () => 0,
@@ -66,12 +63,7 @@ describe("useSync", () => {
       return createElement("div", { "data-unrelated": unrelated }, createElement(Probe));
     }
 
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(Wrapper));
-    });
+    const { root } = await renderDom(createElement(Wrapper));
 
     const initialValue = seenValues.at(-1);
 
@@ -81,9 +73,7 @@ describe("useSync", () => {
 
     expect(seenValues.at(-1)).toBe(initialValue);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("sync 成功后落一条分段计时记录，不含 health 阶段耗时", async () => {
@@ -104,11 +94,7 @@ describe("useSync", () => {
       captured.value = useSync();
       return createElement("span", null, "probe");
     }
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(Probe));
-    });
+    const { root } = await renderDom(createElement(Probe));
 
     await act(async () => {
       await captured.value?.sync();
@@ -119,9 +105,7 @@ describe("useSync", () => {
     expect(timings[0].outcome).not.toBe("error");
     expect(timings[0].phases.health).toBeUndefined();
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("sync(meta) 透传 waitMs/reason/connection 到落账记录", async () => {
@@ -142,11 +126,7 @@ describe("useSync", () => {
       captured.value = useSync();
       return createElement("span", null, "probe");
     }
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(Probe));
-    });
+    const { root } = await renderDom(createElement(Probe));
 
     await act(async () => {
       await captured.value?.sync({ reason: "bump", waitMs: 250, connection: "connected" });
@@ -159,9 +139,7 @@ describe("useSync", () => {
     expect(timings[0].connection).toBe("connected");
     expect(timings[0].unsyncedAtStart).toBe(0);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("regularSync 抛错时也落一条 outcome=error 的计时记录", async () => {
@@ -173,11 +151,7 @@ describe("useSync", () => {
       captured.value = useSync();
       return createElement("span", null, "probe");
     }
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(Probe));
-    });
+    const { root } = await renderDom(createElement(Probe));
 
     await act(async () => {
       await captured.value?.sync();
@@ -189,8 +163,6 @@ describe("useSync", () => {
     expect(timings).toHaveLength(1);
     expect(timings[0].outcome).toBe("error");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });

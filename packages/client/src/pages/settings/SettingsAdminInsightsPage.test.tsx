@@ -11,13 +11,11 @@ import type {
   AdminSyncResponse,
 } from "@timedata/shared";
 import { act, createElement } from "react";
-import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsAdminInsightsPage from "./SettingsAdminInsightsPage.js";
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const fetchAdminSummary = vi.hoisted(() => vi.fn());
 const fetchAdminEntries = vi.hoisted(() => vi.fn());
@@ -253,12 +251,7 @@ describe("SettingsAdminInsightsPage", () => {
   it("renders successful admin insight sections when one endpoint fails", async () => {
     mockSuccessfulAdminInsights();
     fetchAdminEntries.mockRejectedValue(new Error("最近记录接口 404"));
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
     expect(host.textContent).toContain("部分服务端洞察加载失败：最近记录接口 404");
     expect(host.textContent).toContain("时间记录");
@@ -276,20 +269,13 @@ describe("SettingsAdminInsightsPage", () => {
     expect(host.textContent).toContain("/api/agent/tasks/task-1/status");
     expect(host.textContent).toContain("auth_failed");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("filters request audit logs independently", async () => {
     mockSuccessfulAdminInsights();
     fetchAdminRequestLogs.mockResolvedValue({ limit: 100, logs: [] });
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
     expect(host.querySelector("select")).toBeNull();
 
@@ -307,19 +293,12 @@ describe("SettingsAdminInsightsPage", () => {
     });
     expect(host.textContent).toContain("暂无请求审计记录。");
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 
   it("updates backup config, triggers daily backup, and deletes backups", async () => {
     mockSuccessfulAdminInsights();
-    const host = document.createElement("div");
-    const root = createRoot(host);
-
-    await act(async () => {
-      root.render(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
-    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
     const retentionInput = host.querySelector("input[aria-label='备份保留天数']");
     expect(retentionInput).not.toBeNull();
@@ -352,15 +331,15 @@ describe("SettingsAdminInsightsPage", () => {
     await act(async () => {
       deleteButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    const confirmButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "删除备份");
+    const confirmButton = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "删除备份",
+    );
     await act(async () => {
       confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(deleteAdminBackup).toHaveBeenCalledWith("backup-1");
     expect(fetchAdminBackups).toHaveBeenCalledTimes(3);
 
-    await act(async () => {
-      root.unmount();
-    });
+    await unmount(root);
   });
 });
