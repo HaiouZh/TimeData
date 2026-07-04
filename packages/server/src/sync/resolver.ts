@@ -6,8 +6,39 @@ import { recordSeq } from "./seq.js";
 
 export type { ApplyChangeResult } from "./domains.js";
 
-export function applyChange(change: SyncChange): ApplyChangeResult {
+export interface ApplyChangeOptions {
+  /** 仅对冲突记录启用：来包时间戳 <= 服务器现存行或 tombstone 时间戳时拒收。 */
+  staleGuard?: boolean;
+}
+
+function serverTimestampFor(db: Database, change: SyncChange): string | null {
+  const existing = getServerDomain(change.tableName).readRecord(db, change.recordId);
+  if (existing) return existing.timestamp;
+  const tombstone = db
+    .prepare("SELECT deleted_at FROM sync_tombstones WHERE table_name = ? AND record_id = ?")
+    .get(change.tableName, change.recordId) as { deleted_at: string } | undefined;
+  return tombstone?.deleted_at ?? null;
+}
+
+function rejectIfStale(db: Database, change: SyncChange): ApplyChangeResult | null {
+  const serverTs = serverTimestampFor(db, change);
+  if (serverTs == null || change.timestamp > serverTs) return null;
+  return applyResult(
+    change,
+    "skipped",
+    `stale change rejected: incoming ${change.timestamp} <= server ${serverTs}`,
+    serverTs,
+    undefined,
+    "stale_change_rejected",
+  );
+}
+
+export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}): ApplyChangeResult {
   const db = getDb();
+  if (options.staleGuard) {
+    const stale = rejectIfStale(db, change);
+    if (stale) return stale;
+  }
   const domain = getServerDomain(change.tableName);
   const serverNow = new Date().toISOString();
   const lww = domain.lww;

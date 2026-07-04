@@ -3,10 +3,11 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange) => {
+let applyChange: (change: SyncChange, options?: { staleGuard?: boolean }) => {
   status: string;
   reason: string;
   skipReason?: string;
+  serverUpdatedAt?: string;
   overriddenRecordIds?: string[];
 };
 let getChangesSinceSeq: (sinceSeq: number | null) => Array<{ tableName: string; recordId: string; action: string }>;
@@ -573,6 +574,111 @@ describe("applyChange", () => {
 
     expect(db.prepare("SELECT pinned FROM quick_notes WHERE id = ?").get("note-pin")).toMatchObject({
       pinned: 0,
+    });
+  });
+
+  describe("staleGuard", () => {
+    function settingChange(value: string, timestamp: string): SyncChange {
+      return {
+        tableName: "settings",
+        recordId: "theme",
+        action: "update",
+        data: { key: "theme", value, updatedAt: timestamp },
+        timestamp,
+      } as SyncChange;
+    }
+
+    it("rejects an update older than the current server row", () => {
+      db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+        "theme",
+        "dark",
+        "2026-07-04T10:00:00.000Z",
+      );
+
+      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"), { staleGuard: true });
+
+      expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
+      expect(result.serverUpdatedAt).toBe("2026-07-04T10:00:00.000Z");
+      expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("theme")).toMatchObject({ value: "dark" });
+    });
+
+    it("rejects an update with the same timestamp to prevent replay", () => {
+      db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+        "theme",
+        "dark",
+        "2026-07-04T10:00:00.000Z",
+      );
+
+      const result = applyChange(settingChange("light", "2026-07-04T10:00:00.000Z"), { staleGuard: true });
+
+      expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
+    });
+
+    it("applies an update newer than the current server row", () => {
+      db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+        "theme",
+        "dark",
+        "2026-07-04T10:00:00.000Z",
+      );
+
+      const result = applyChange(settingChange("light", "2026-07-04T11:00:00.000Z"), { staleGuard: true });
+
+      expect(result.status).toBe("applied");
+      expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("theme")).toMatchObject({ value: "light" });
+    });
+
+    it("rejects an update older than a tombstone and does not resurrect the row", () => {
+      db.prepare("INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)").run(
+        "settings",
+        "theme",
+        "2026-07-04T10:00:00.000Z",
+      );
+
+      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"), { staleGuard: true });
+
+      expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
+      expect(
+        db.prepare("SELECT 1 FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get("settings", "theme"),
+      ).toBeTruthy();
+      expect(db.prepare("SELECT 1 FROM settings WHERE key = ?").get("theme")).toBeUndefined();
+    });
+
+    it("rejects a delete older than the current server row", () => {
+      db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+        "theme",
+        "dark",
+        "2026-07-04T10:00:00.000Z",
+      );
+
+      const result = applyChange(
+        { tableName: "settings", recordId: "theme", action: "delete", data: null, timestamp: "2026-07-04T09:00:00.000Z" } as SyncChange,
+        { staleGuard: true },
+      );
+
+      expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
+      expect(db.prepare("SELECT 1 FROM settings WHERE key = ?").get("theme")).toBeTruthy();
+    });
+
+    it("allows the guard when the target has neither row nor tombstone", () => {
+      const result = applyChange(
+        { tableName: "settings", recordId: "theme", action: "delete", data: null, timestamp: "2026-07-04T09:00:00.000Z" } as SyncChange,
+        { staleGuard: true },
+      );
+
+      expect(result.status).toBe("applied");
+    });
+
+    it("keeps legacy behavior when staleGuard is not enabled", () => {
+      db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)").run(
+        "theme",
+        "dark",
+        "2026-07-04T10:00:00.000Z",
+      );
+
+      const result = applyChange(settingChange("light", "2026-07-04T09:00:00.000Z"));
+
+      expect(result.status).toBe("applied");
+      expect(db.prepare("SELECT value FROM settings WHERE key = ?").get("theme")).toMatchObject({ value: "light" });
     });
   });
 });

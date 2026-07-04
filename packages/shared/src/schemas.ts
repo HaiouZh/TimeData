@@ -44,6 +44,7 @@ export const SyncLogEntrySchema = z.object({
 export const SyncChangeSchema = buildSyncChangeSchema(UtcIsoStringSchema) as z.ZodType<SyncChange>;
 
 export const SyncPushReasonCodeSchema = z.enum([
+  "stale_change_rejected",
   "missing_payload",
   "invalid_shape",
   "id_mismatch",
