@@ -1,5 +1,5 @@
 import type { QuickNote } from "@timedata/shared";
-import { localDateTimeToUtc } from "@timedata/shared";
+import { localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -25,6 +25,7 @@ export interface QuickNoteTimeline {
   loadOlder: () => Promise<void>;
   loadNewer: () => Promise<void>;
   jumpToDate: (localDate: string) => Promise<void>;
+  jumpToNote: (note: { occurredAt: string }) => Promise<void>;
   resetToLatest: () => Promise<void>;
 }
 
@@ -110,6 +111,24 @@ export function useQuickNoteTimeline(
     [pageSize],
   );
 
+  const jumpToNote = useCallback(
+    async (note: { occurredAt: string }) => {
+      const requestSeq = ++requestSeqRef.current;
+      const localDate = utcToLocalDateTime(note.occurredAt).slice(0, 10);
+      const oldestUtc = localDateTimeToUtc(`${localDate}T00:00:00`);
+      const batch = await listQuickNotesFrom(oldestUtc, pageSize);
+      const tailUtc = batch.length > 0 ? batch[batch.length - 1].occurredAt : note.occurredAt;
+      // 从当天 00:00 固定取一窗时，目标可能在窗外；窗口上界至少扩到目标。
+      const coverUtc = tailUtc >= note.occurredAt ? tailUtc : note.occurredAt;
+      const newestUtc = (await hasNotesNewerThan(coverUtc)) ? coverUtc : null;
+      const nextHasOlder = await hasNotesOlderThan(oldestUtc);
+      if (requestSeq !== requestSeqRef.current) return;
+      setWindowState({ oldestUtc, newestUtc });
+      setHasOlder(nextHasOlder);
+    },
+    [pageSize],
+  );
+
   useEffect(() => {
     let cancelled = false;
     const requestSeq = ++requestSeqRef.current;
@@ -148,6 +167,7 @@ export function useQuickNoteTimeline(
     loadOlder,
     loadNewer,
     jumpToDate,
+    jumpToNote,
     resetToLatest,
   };
 }

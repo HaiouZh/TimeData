@@ -9,6 +9,8 @@ export type QuickNoteDisplayItem =
 export interface GroupQuickNotesOptions {
   /** 本地「今天」(YYYY-MM-DD)，用于生成今天/昨天标签；默认取当前本地日期。 */
   today?: string;
+  /** 输出顺序；desc 用于搜索结果（新的在上），默认 asc（主时间线）。 */
+  order?: "asc" | "desc";
 }
 
 /** 把 YYYY-MM-DD 渲染成 今天/昨天/6月1日/2025年12月31日 这类人性化日期标签。 */
@@ -49,6 +51,7 @@ export function groupQuickNotesForDisplay(
 ): QuickNoteDisplayItem[] {
   const today = options.today ?? getDateString(new Date());
   const sorted = [...notes].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
+  if (options.order === "desc") sorted.reverse();
   const items: QuickNoteDisplayItem[] = [];
   let previousDate: string | null = null;
 

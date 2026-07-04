@@ -62,11 +62,14 @@ const COMPOSER_BOTTOM_GAP_PX = 16;
 const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 const STATUS_AUTO_DISMISS_MS = 2400;
 const BUBBLE_HIDE_DELAY_MS = 1200;
+const SEARCH_RESULT_PAGE_SIZE = 100;
+const SEARCH_FOCUS_HIGHLIGHT_MS = 1500;
 const NOTE_CARD_BASE =
   "relative max-w-full [@media(pointer:coarse)]:select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
 const NOTE_CARD_DEFAULT = "border-border bg-surface/90 hover:bg-surface-hover";
 const NOTE_CARD_AGENT = "border-accent/40 bg-accent-soft hover:bg-surface-hover";
 const NOTE_CARD_SELECTED = "ring-2 ring-accent";
+const NOTE_CARD_LOCATED = "ring-2 ring-inset ring-accent";
 const MENU_PANEL_CLASS = "overflow-hidden rounded-card border border-border bg-surface-elevated py-1 shadow-elev2";
 const MENU_ITEM_CLASS = "block w-full px-4 py-3 text-left text-sm text-ink-2 transition hover:bg-surface-hover hover:text-ink";
 
@@ -106,6 +109,9 @@ export default function QuickNotesPage() {
   const [composerInsetPx, setComposerInsetPx] = useState(DEFAULT_COMPOSER_INSET_PX);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchLimit, setSearchLimit] = useState(SEARCH_RESULT_PAGE_SIZE);
+  const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
+  const [highlightNoteId, setHighlightNoteId] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [bubbleDate, setBubbleDate] = useState<{ label: string; localDate: string } | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
@@ -128,6 +134,7 @@ export default function QuickNotesPage() {
   const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bubbleRafRef = useRef<number | null>(null);
   const bubbleKeyRef = useRef<string | null>(null);
   const pressedNoteRef = useRef<QuickNote | null>(null);
@@ -161,6 +168,12 @@ export default function QuickNotesPage() {
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
   const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
+  const visibleSearchResults = useMemo(() => searchResults.slice(0, searchLimit), [searchResults, searchLimit]);
+  const searchDisplayItems = useMemo(
+    () => groupQuickNotesForDisplay(visibleSearchResults, { today, order: "desc" }),
+    [visibleSearchResults, today],
+  );
+  const searchHiddenCount = searchResults.length - visibleSearchResults.length;
   const hasQuery = searchTerms.length > 0;
   const hasDraft = draftText.trim().length > 0;
   const jumpDateLabel = formatJumpDateLabel(jumpDate, today);
@@ -188,6 +201,7 @@ export default function QuickNotesPage() {
     () => () => {
       if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
       if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
       if (bubbleRafRef.current !== null && typeof cancelAnimationFrame === "function") {
         cancelAnimationFrame(bubbleRafRef.current);
       }
@@ -227,6 +241,22 @@ export default function QuickNotesPage() {
       setSearchOpen(false);
     }
   }, [selectionMode]);
+
+  useEffect(() => {
+    if (!focusNoteId) return;
+    if (!timeline.notes.some((note) => note.id === focusNoteId)) return;
+    const element = scrollRef.current?.querySelector(`[data-note-id="${focusNoteId}"][role="button"]`);
+    if (!(element instanceof HTMLElement)) return;
+
+    element.scrollIntoView({ block: "center" });
+    setFocusNoteId(null);
+    setHighlightNoteId(focusNoteId);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      highlightTimerRef.current = null;
+      setHighlightNoteId(null);
+    }, SEARCH_FOCUS_HIGHLIGHT_MS);
+  }, [focusNoteId, timeline.notes]);
 
   // 只在列表内容（新增 / 加载更多 / 删除）或搜索、最新窗口状态变化时校正滚动位置。
   // 不能每次 render 都跑：否则滚动驱动的 setState（日期气泡、导航显隐、atBottom）会反复
@@ -382,9 +412,9 @@ export default function QuickNotesPage() {
     searchInputRef.current?.focus();
   }
 
-  function closeSearch(options: { resetTimeline?: boolean } = {}) {
+  function closeSearch(options: { resetTimeline?: boolean; preserveQuery?: boolean } = {}) {
     setSearchOpen(false);
-    setSearchQuery("");
+    if (!options.preserveQuery) setSearchQuery("");
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
       setJumpDate(today);
@@ -395,9 +425,17 @@ export default function QuickNotesPage() {
 
   function handleResultClick(note: QuickNote) {
     const localDate = getDateString(new Date(note.occurredAt));
-    closeSearch({ resetTimeline: false });
-    if (note.pinned) setPinnedOpen(true);
-    handleJumpDateChange(localDate);
+    closeSearch({ resetTimeline: false, preserveQuery: true });
+    if (note.pinned) {
+      setPinnedOpen(true);
+      handleJumpDateChange(localDate);
+      return;
+    }
+    setJumpDate(localDate);
+    setSearchParams(localDate === today ? {} : { date: localDate });
+    stickBottomRef.current = false;
+    setFocusNoteId(note.id);
+    void timeline.jumpToNote(note);
   }
 
   // 轻提示（已复制 / 已导出 / 已清理）几秒后自动消失，避免一直挂在底部直到切换页面。
@@ -843,7 +881,10 @@ export default function QuickNotesPage() {
               type="search"
               aria-label="搜索速记"
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setSearchLimit(SEARCH_RESULT_PAGE_SIZE);
+              }}
               placeholder="搜索速记…"
               className="min-w-0 flex-1 bg-transparent text-base text-ink placeholder:text-ink-3 outline-none"
             />
@@ -1015,27 +1056,55 @@ export default function QuickNotesPage() {
                 没有匹配的速记
               </div>
             ) : (
-              searchResults.map((note) => {
-                const isAgentNote = note.source === "agent";
-                return (
-                  <button
-                    key={note.id}
-                    type="button"
-                    onClick={() => handleResultClick(note)}
-                    className={`w-full text-left ${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
-                  >
-                    <time className="td-time float-right ml-2 text-[11px] text-ink-3">
-                      {formatLocalClock(note.occurredAt)}
-                    </time>
-                    {isAgentNote && (
-                      <div className="mb-1 text-[11px] font-semibold text-accent-ink">
-                        {note.sourceLabel ?? "助手"}
+              <>
+                {searchDisplayItems.map((item) => {
+                  if (item.type === "date") {
+                    return (
+                      <div key={item.key} data-search-date={item.localDate} className="flex items-center gap-3 pt-1">
+                        <div className="h-px flex-1 bg-border" />
+                        <div className="rounded-full border border-border bg-surface px-3 py-1 td-text-caption font-medium text-ink-3">
+                          {item.label}
+                        </div>
+                        <div className="h-px flex-1 bg-border" />
                       </div>
-                    )}
-                    <HighlightedText text={note.text} terms={searchTerms} />
-                  </button>
-                );
-              })
+                    );
+                  }
+
+                  const note = item.note;
+                  const isAgentNote = note.source === "agent";
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      data-note-id={note.id}
+                      onClick={() => handleResultClick(note)}
+                      className={`w-full text-left ${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
+                    >
+                      <time className="td-time float-right ml-2 text-[11px] text-ink-3">
+                        {formatLocalClock(note.occurredAt)}
+                      </time>
+                      {isAgentNote && (
+                        <div className="mb-1 text-[11px] font-semibold text-accent-ink">
+                          {note.sourceLabel ?? "助手"}
+                        </div>
+                      )}
+                      <HighlightedText text={note.text} terms={searchTerms} />
+                    </button>
+                  );
+                })}
+                {searchHiddenCount > 0 && (
+                  <div className="flex justify-center pb-1">
+                    <button
+                      type="button"
+                      aria-label="加载更多搜索结果"
+                      onClick={() => setSearchLimit((limit) => limit + SEARCH_RESULT_PAGE_SIZE)}
+                      className="rounded-full border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
+                    >
+                      加载更多（还有 {searchHiddenCount} 条）
+                    </button>
+                  </div>
+                )}
+              </>
             )
           ) : (
             <>
@@ -1044,7 +1113,7 @@ export default function QuickNotesPage() {
                   <button
                     type="button"
                     onClick={() => void timeline.loadOlder()}
-                    className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
+                    className="rounded-full border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-3 transition hover:border-accent hover:text-ink-2"
                   >
                     加载更早
                   </button>
@@ -1069,7 +1138,7 @@ export default function QuickNotesPage() {
                   return (
                     <div key={item.key} data-date-label={item.label} data-local-date={item.localDate} className="flex items-center gap-3 pt-1">
                       <div className="h-px flex-1 bg-border" />
-                      <div className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-ink-3">
+                      <div className="rounded-full border border-border bg-surface px-3 py-1 td-text-caption font-medium text-ink-3">
                         {item.label}
                       </div>
                       <div className="h-px flex-1 bg-border" />
@@ -1086,13 +1155,14 @@ export default function QuickNotesPage() {
                     <div
                       role="button"
                       tabIndex={0}
+                      data-note-id={note.id}
                       aria-label={quickNoteAriaLabel(note)}
                       aria-pressed={selectionMode ? selected : undefined}
                       {...noteInteractionProps(note)}
                       style={{ WebkitTouchCallout: "none" }}
                       className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT} ${
                         selected ? NOTE_CARD_SELECTED : ""
-                      }`}
+                      } ${highlightNoteId === note.id ? NOTE_CARD_LOCATED : ""}`}
                     >
                       {selectionMode && (
                         <span

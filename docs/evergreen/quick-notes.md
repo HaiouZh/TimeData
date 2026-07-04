@@ -30,6 +30,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 quick_notes 字段、agent 投递入口、LWW 映射或独立备份格式。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：op 仅 tasks upsert 可携带；quick_notes 字段、agent 投递入口、LWW 映射和独立备份格式不变。 -->
 <!-- 复核 2026-07-04（QuickNote A 批数据安全）：清理/导出入口补目标日期文案、空日反馈、非今天确认；范围清理跳过 pinned，quick_notes schema、同步域和独立备份格式不变。 -->
+<!-- 复核 2026-07-04（QuickNote C 批搜索体验）：搜索结果按天倒序分组、初始渲染 100 条并可加载更多；点结果经 timeline.jumpToNote 锚定窗口、滚动到主线卡片并 1.5s 内侧高亮且保留搜索词。quick_notes schema、同步域和写入边界不变。 -->
 
 # 速记
 
@@ -128,7 +129,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 7. **单条上传状态从 syncLog 推导，不是 QuickNote 字段**：`useUnsyncedQuickNoteIds` 读 `syncLog(tableName="quick_notes", synced=0)`，待上传显示时钟、已同步显示单勾。agent 速记本地无 pending，恒显单勾。
 8. **本地 mutation 必须与 syncLog 同事务**；窗口查询/搜索/置顶列表查询只读、不写 syncLog。
 9. **`updateQuickNote` 保留 source/sourceLabel/pinned**：编辑只改 text/occurredAt/updatedAt。
-10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；退出搜索/点「最新」会把 `jumpDate` 与 URL `?date=` 归位到今天；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；更多操作菜单的导出/清理文案带目标日期（今天写「今天」，历史日写 `M月D日`），清理前预取可删条数，非今天显示警示，置顶只说明保留且不删除，空日不弹确认。长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
+10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；搜索结果按本地日倒序分组，初始最多渲染 100 条并用「加载更多」继续展开；点非置顶结果会保留搜索词、锚定目标所在时间线窗口、滚动到主线卡片并 1.5 秒内侧高亮，点置顶结果仍展开置顶区并跳到日期；退出搜索/点「最新」会把 `jumpDate` 与 URL `?date=` 归位到今天；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；更多操作菜单的导出/清理文案带目标日期（今天写「今天」，历史日写 `M月D日`），清理前预取可删条数，非今天显示警示，置顶只说明保留且不删除，空日不弹确认。长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 
@@ -138,9 +139,9 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 |---|---|
 | `pages/QuickNotesPage.tsx` | 速记页主体：时间线、搜索、置顶区、composer（记录/待办/打点）、多选批量、日期跳转/浮层、底部 Tab 隐藏、actionToast。composer 回车按屏宽分流（`useIsWideScreen`）：宽屏(≥1024px)发送、窄屏（手机）换行交给 textarea 默认行为、靠「记录」按钮发送；宽屏不套移动底栏 bottom offset，窄屏只在底栏可见时避让 |
 | `lib/quickNotes.ts` | 域 CRUD + 按日期/范围/窗口/置顶列表查询，全部同事务 syncLog |
-| `lib/quickNoteDisplay.ts` | 展示分组 `groupQuickNotesForDisplay` + `formatLocalClock` |
-| `quick-notes/useQuickNoteTimeline.ts` | 时间线 hook：最新窗口 + 向上懒加载 + 向下补差 + 日期跳转 |
-| `quick-notes/{searchQuickNotes,searchTerms,highlightMatches,HighlightedText}.*` | 搜索：分词 AND 子串、只读扫描、倒序 + `<mark>` 高亮 |
+| `lib/quickNoteDisplay.ts` | 展示分组 `groupQuickNotesForDisplay`（主线升序、搜索倒序）+ `formatLocalClock` |
+| `quick-notes/useQuickNoteTimeline.ts` | 时间线 hook：最新窗口 + 向上懒加载 + 向下补差 + 日期跳转 + 按目标速记锚定窗口 |
+| `quick-notes/{searchQuickNotes,searchTerms,highlightMatches,HighlightedText}.*` | 搜索：分词 AND 子串、只读扫描、倒序 + `<mark>` 高亮；页面层负责按天分组、100 条截断与定位 |
 | `quick-notes/{NoteBubble,QuickNoteContent,QuickNoteActionMenu,NoteMeta,looksLikeMarkdown}.*` | 气泡 + 保守 Markdown 正文 + 长按菜单 + 时间/上传状态 |
 | `quick-notes/{useUnsyncedQuickNoteIds,jumpToLatest,jumpDateLabel,currentDate,clipboard}.*` | 上传状态 hook / 回到最新 / 菜单日期短标签 / 滚动日期胶囊 / 复制 |
 | `quick-notes/{importQuickNotes,exportQuickNotes,schema,fileDownload,deleteQuickNotesRange,deleteQuickNotesByIds}.*` | JSON 合并导入 / JSON·Markdown 导出 / `QuickNotesFileSchema` / 下载 / 范围删 / 多选批量删 |

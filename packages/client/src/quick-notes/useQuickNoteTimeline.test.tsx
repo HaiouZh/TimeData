@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
+import { localDateTimeToUtc } from "@timedata/shared";
 import { addQuickNote } from "../lib/quickNotes.js";
 import { resetDb } from "../test/dbReset.js";
 import { renderDom, unmount } from "../test/domHarness.js";
@@ -14,8 +15,8 @@ async function flush() {
   });
 }
 
-function Harness() {
-  const timeline = useQuickNoteTimeline(2);
+function Harness({ pageSize = 2 }: { pageSize?: number }) {
+  const timeline = useQuickNoteTimeline(pageSize);
   return createElement(
     "div",
     null,
@@ -26,11 +27,19 @@ function Harness() {
     createElement("button", { "data-testid": "older", onClick: () => void timeline.loadOlder() }, "older"),
     createElement("button", { "data-testid": "newer", onClick: () => void timeline.loadNewer() }, "newer"),
     createElement("button", { "data-testid": "jump", onClick: () => void timeline.jumpToDate("2026-06-02") }, "jump"),
+    createElement(
+      "button",
+      {
+        "data-testid": "jump-note",
+        onClick: () => void timeline.jumpToNote({ occurredAt: localDateTimeToUtc("2026-06-05T05:00:00") }),
+      },
+      "jump-note",
+    ),
   );
 }
 
-async function renderHarness() {
-  const { host, root } = await renderDom(createElement(Harness));
+async function renderHarness(pageSize = 2) {
+  const { host, root } = await renderDom(createElement(Harness, { pageSize }));
   await flush();
   return { host, root };
 }
@@ -96,6 +105,23 @@ describe("useQuickNoteTimeline", () => {
 
     await clickTestId(host, "newer");
     await waitForText(host, "texts", "note-2,note-3,note-4,note-5");
+
+    await unmount(root);
+  });
+
+  it("jumpToNote 保证窗口覆盖目标（当天条数超过一窗时锚定到目标）", async () => {
+    await resetDb();
+    const day = "2026-06-05";
+    for (let index = 0; index < 5; index++) {
+      await addQuickNote(`n${index}`, {
+        occurredAt: localDateTimeToUtc(`${day}T0${index + 1}:00:00`),
+      });
+    }
+    const { host, root } = await renderHarness(3);
+
+    await clickTestId(host, "jump-note");
+
+    expect(text(host, "texts")).toContain("n4");
 
     await unmount(root);
   });

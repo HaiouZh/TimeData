@@ -75,6 +75,25 @@ describe("groupQuickNotesForDisplay", () => {
 
     expect(items.filter((item) => item.type === "note").map((item) => item.note.id)).toEqual(["a", "b"]);
   });
+
+  it("order desc 时按从新到旧输出且每天只插一条分隔", () => {
+    const items = groupQuickNotesForDisplay(
+      [
+        note("a", "2026-06-01T04:01:00.000Z"),
+        note("b", "2026-06-01T05:00:00.000Z"),
+        note("c", "2026-06-02T04:00:00.000Z"),
+      ],
+      { today: "2026-06-10", order: "desc" },
+    );
+
+    expect(items.map((item) => item.key)).toEqual([
+      "date:2026-06-02",
+      "note:c",
+      "date:2026-06-01",
+      "note:b",
+      "note:a",
+    ]);
+  });
 });
 
 describe("quickNoteAriaLabel", () => {
