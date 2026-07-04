@@ -124,6 +124,7 @@ type SyncChange =
 | `missing_category` | 分类不存在 |
 | `archived_category` | 分类已 archived |
 | `overlap` | 时间段重叠 |
+| `stale_change_rejected` | `baseSeq` 重叠或 unknown-base 路径上，来包时间戳不晚于服务器现存行 / tombstone，服务端拒收过期变更 |
 | `server_version_newer_or_same` | 兼容保留码 |
 | `foreign_key_failed` | 外键约束失败 |
 
