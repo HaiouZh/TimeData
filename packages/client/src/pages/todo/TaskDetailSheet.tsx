@@ -196,10 +196,8 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
       ? getDateString(new Date(task.startAt))
       : todayDate;
   const nextTimeLabel = recurrenceTarget ? taskTimeLabel(recurrenceTarget, ruleOccurrences) : "设定时间";
-  // 规则模板勾选=代理完成最新一发；仅到期（有活跃 pending 或下一发 ≤ 今天）可勾，不开提前打卡。
-  const ruleDueReady = task?.recurrence
-    ? pendingOccurrence != null || (nextDue != null && nextDue <= todayDate)
-    : false;
+  // 规则模板勾选=代理完成最新一发；未到期时也允许人工提前完成，无下一发（耗尽）才置灰。
+  const ruleCanComplete = task?.recurrence ? pendingOccurrence != null || nextDue != null : false;
   const customInitial = useMemo(
     () =>
       recurrenceTarget
@@ -290,9 +288,9 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
                 ariaLabel={`完成 ${task.title}`}
                 checked={task.recurrence ? false : task.done}
                 onChange={() => {
-                  if (!task.recurrence || ruleDueReady) void run(() => toggleTaskDone(task.id));
+                  if (!task.recurrence || ruleCanComplete) void run(() => toggleTaskDone(task.id));
                 }}
-                disabled={task.recurrence !== null && !ruleDueReady}
+                disabled={task.recurrence !== null && !ruleCanComplete}
                 className="mt-1 shrink-0"
               />
               <div className="min-w-0 flex-1 space-y-1">

@@ -104,8 +104,8 @@ export function TaskRow({
       [] as Task[],
     ) ?? [];
   const isRecurring = task.recurrence !== null;
-  // 规则行勾选=代理完成「最新一发」：到期（有活跃 pending，或账本推的下一发 ≤ 今天）才可勾；
-  // 未到期不开提前打卡。勾完最新一发会即时物化下一发，用短暂已勾反馈盖住"勾了弹回"。
+  // 规则行勾选=代理完成「最新一发」；未到期时也允许人工提前完成，无下一发（耗尽）才置灰。
+  // 勾完最新一发会即时物化下一发，用短暂已勾反馈盖住"勾了弹回"。
   const [ruleJustCompleted, setRuleJustCompleted] = useState(false);
   const ruleFlashTimer = useRef<number | null>(null);
   useEffect(
@@ -114,14 +114,11 @@ export function TaskRow({
     },
     [],
   );
-  const ruleDueReady =
+  const checked = task.recurrence ? ruleJustCompleted : task.done;
+  const ruleCanComplete =
     isRecurring &&
     (processedOccurrences.some((o) => !o.done && !o.skipped) ||
-      (() => {
-        const due = nextDueDate(task, processedOccurrences, new Date());
-        return due != null && due <= getDateString(new Date());
-      })());
-  const checked = task.recurrence ? ruleJustCompleted : task.done;
+      nextDueDate(task, processedOccurrences, new Date()) != null);
   const childTotal = children.length;
   const { latestOccurrence, occurrenceChildren } = useLatestOccurrenceChildren(isRecurring ? task : null);
   const childDone = isRecurring
@@ -234,13 +231,13 @@ export function TaskRow({
                   onToggle(task);
                   return;
                 }
-                if (!ruleDueReady || ruleJustCompleted) return;
+                if (!ruleCanComplete) return;
                 setRuleJustCompleted(true);
                 if (ruleFlashTimer.current != null) window.clearTimeout(ruleFlashTimer.current);
                 ruleFlashTimer.current = window.setTimeout(() => setRuleJustCompleted(false), RULE_COMPLETE_FLASH_MS);
                 onToggle(task);
               }}
-              disabled={isRecurring && !ruleDueReady}
+              disabled={isRecurring && !ruleCanComplete}
               className="shrink-0"
             />
           </div>

@@ -230,7 +230,7 @@ describe("TaskDetailSheet 展示与关闭", () => {
     await unmount(root);
   });
 
-  it("未到期重复模板详情：复选框 disabled，点击不产生 occurrence", async () => {
+  it("未到期重复模板详情：复选框可点，点击提前完成下一发", async () => {
     const t = await addTask({
       title: "远期规则",
       recurrence: { freq: "daily", interval: 1, basis: "due" },
@@ -239,11 +239,22 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const { host, root } = await renderSheet(t.id);
     const cb = host.querySelector('input[aria-label="完成 远期规则"]') as HTMLInputElement | null;
 
-    expect(cb?.disabled).toBe(true);
+    expect(cb?.disabled).toBe(false);
     await click(cb);
     await settle();
 
-    expect(await db.tasks.where("ruleId").equals(t.id).count()).toBe(0);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if ((await db.tasks.where("ruleId").equals(t.id).toArray()).some((o) => o.done)) break;
+      await settle();
+    }
+    const occurrences = await db.tasks.where("ruleId").equals(t.id).toArray();
+    expect(occurrences).toEqual([
+      expect.objectContaining({
+        done: true,
+        scheduledAt: normalizeScheduledDate("2099-12-31"),
+        completedAt: expect.any(String),
+      }),
+    ]);
     await unmount(root);
   });
 

@@ -14,6 +14,7 @@ last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-07-04（tasks 完成语义 op）：task-done 仍调用同一受控 agent API；服务端内部 tasks change 额外附完成语义 op，CLI 命令面、参数和输出契约不变。 -->
+<!-- 复核 2026-07-04（重复规则提前完成）：提前完成只开放给 client 人工入口；CLI task-done 仍经 agent API，未到期重复规则保持 409 RULE_NOT_DUE。 -->
 
 # CLI（受控 API 客户端）
 

@@ -2,6 +2,7 @@ import {
   isRuleExhausted,
   latestOccurrenceForRule,
   materializeDue,
+  materializeOccurrence,
   nextDueDate,
   type Recurrence,
   type Task,
@@ -131,6 +132,51 @@ async function materializeRuleInCurrentTransaction(rule: Task, now: Date): Promi
   await db.tasks.add(occ);
   await recordSyncLog("tasks", occ.id, "create", occ.updatedAt);
   await ensureOccurrenceChildrenInCurrentTransaction(rule, occ);
+}
+
+async function materializeNextRuleOccurrenceInCurrentTransaction(rule: Task, now: Date): Promise<Task | null> {
+  if (rule.recurrence === null || (rule.parentId ?? null) !== null) return null;
+  const forRule = await db.tasks.where("ruleId").equals(rule.id).toArray();
+  const active = forRule.find((o) => !o.done && !o.skipped);
+  if (active) {
+    await ensureOccurrenceChildrenInCurrentTransaction(rule, active);
+    return active;
+  }
+
+  const dueDate = nextDueDate(
+    rule,
+    forRule.filter((o) => o.done || o.skipped),
+    now,
+  );
+  if (dueDate == null) return null;
+
+  const occurrence = materializeOccurrence(rule, dueDate, now, await nextTaskSortOrder());
+  const existing = await db.tasks.get(occurrence.id);
+  if (existing) {
+    if (!existing.done && !existing.skipped) {
+      await ensureOccurrenceChildrenInCurrentTransaction(rule, existing);
+      return existing;
+    }
+    return null;
+  }
+
+  await db.tasks.add(occurrence);
+  await recordSyncLog("tasks", occurrence.id, "create", occurrence.updatedAt);
+  await ensureOccurrenceChildrenInCurrentTransaction(rule, occurrence);
+  return occurrence;
+}
+
+async function completeNextRuleOccurrenceInCurrentTransaction(rule: Task, now: Date): Promise<Task | null> {
+  const occurrence = await materializeNextRuleOccurrenceInCurrentTransaction(rule, now);
+  if (occurrence == null || occurrence.done || occurrence.skipped) return null;
+
+  const wasDue = occurrence.scheduledAt != null && occurrence.scheduledAt <= localDateOf(now);
+  const updatedAt = now.toISOString();
+  const next = TaskSchema.parse({ ...occurrence, done: true, completedAt: updatedAt, updatedAt });
+  await db.tasks.put(next);
+  await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(occurrence, next, next.updatedAt));
+  if (wasDue) await materializeRuleInCurrentTransaction(rule, now);
+  return next;
 }
 
 async function materializeNextForOccurrenceInCurrentTransaction(occurrence: Task, now: Date): Promise<void> {
@@ -503,14 +549,17 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
   }
 
   // 重复模板 root：完成语义代理到「最新那一发」——有 active 就完成它（复用 occurrence 分支，
-  // 含完成后即时物化下一发）；无 active 先物化再完成；引擎判无可发（未到期/耗尽）则 no-op。
+  // 含完成后即时物化下一发）；无 active 先补到期发，仍无则按 nextDueDate 强制物化下一发。
+  // 引擎判耗尽时 no-op；提前完成只开放给 client 人工入口，server agent 仍保持未到期 409。
   // 模板本体不承载完成态，旧 completeTask 衍生/终结转化路径已退役（§9.2）。
   if (base.recurrence) {
-    const active = (await db.tasks.where("ruleId").equals(base.id).toArray()).find((o) => !o.done && !o.skipped);
-    if (active) return toggleTaskDone(active.id, { now });
-    await runMaterialization(now);
-    const fresh = (await db.tasks.where("ruleId").equals(base.id).toArray()).find((o) => !o.done && !o.skipped);
-    if (fresh) return toggleTaskDone(fresh.id, { now });
+    let completed: Task | null = null;
+    await db.transaction("rw", db.tasks, db.syncLog, async () => {
+      const rule = await db.tasks.get(base.id);
+      if (!rule || rule.recurrence === null || (rule.parentId ?? null) !== null) return;
+      completed = await completeNextRuleOccurrenceInCurrentTransaction(rule, now);
+    });
+    if (completed) return completed;
     return TaskSchema.parse(base);
   }
 

@@ -300,7 +300,7 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("未到期规则行（下一发在未来）：复选框 disabled，点击不触发 onToggle", async () => {
+  it("未到期规则行（下一发在未来）：复选框可点并触发 onToggle", async () => {
     const onToggle = vi.fn();
     const r = task({
       title: "刮胡子",
@@ -310,9 +310,10 @@ describe("TaskRow", () => {
     const { host, root } = await render(createElement(TaskRow, { task: r, pool: "upcoming", ...handlers, onToggle }));
     await settle();
     const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
-    expect(cb?.disabled).toBe(true);
+    expect(cb?.disabled).toBe(false);
     await click(cb);
-    expect(onToggle).not.toHaveBeenCalled();
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect((host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement).checked).toBe(true);
     await unmount(root);
   });
 

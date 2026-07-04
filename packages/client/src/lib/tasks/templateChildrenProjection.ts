@@ -11,7 +11,7 @@ export interface ProjectedTemplateChild {
 
 /**
  * 规则行子任务投影：模板子任务给结构/标题，完成态代理到「最新那一发」的对应子任务。
- * 纯函数无 IO；latestOccurrence 由调用方按 scheduledAt 最大且非 skipped 选出。
+ * 纯函数无 IO；latestOccurrence 由调用方按“active 优先，否则最新非 skipped 已处理发”选出。
  */
 export function projectTemplateChildren(
   templateChildren: Task[],

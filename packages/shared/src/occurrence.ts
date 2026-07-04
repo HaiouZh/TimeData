@@ -51,17 +51,77 @@ export function materializeOccurrence(rule: Task, dueDate: string, now: Date, so
   });
 }
 
+function processedCursorIso(rule: Task, occurrence: Task & { scheduledAt: string }): string {
+  if (rule.recurrence?.basis === "completion" && occurrence.done && occurrence.completedAt != null) {
+    return occurrence.completedAt;
+  }
+  return occurrence.scheduledAt;
+}
+
+function latestProcessedCursorIsoFromCounted(rule: Task, occurrences: (Task & { scheduledAt: string })[]): string | null {
+  if (occurrences.length === 0) return null;
+  const latest = occurrences.reduce((a, b) => {
+    const aCursor = processedCursorIso(rule, a);
+    const bCursor = processedCursorIso(rule, b);
+    if (bCursor > aCursor) return b;
+    if (bCursor === aCursor && b.scheduledAt > a.scheduledAt) return b;
+    return a;
+  });
+  return processedCursorIso(rule, latest);
+}
+
+function isAfterUntil(dueDate: string, until: string | null | undefined): boolean {
+  return until != null && normalizeScheduledDate(dueDate) > until;
+}
+
+function skipProcessedDueDates(rule: Task, dueDate: string, processed: (Task & { scheduledAt: string })[]): string {
+  if (rule.recurrence == null) return dueDate;
+  const processedDueDates = new Set(processed.map((o) => o.scheduledAt.slice(0, 10)));
+  const seenDueDates = new Set<string>();
+  let next = dueDate;
+  while (processedDueDates.has(next) && !seenDueDates.has(next)) {
+    seenDueDates.add(next);
+    next = currentDueDateString(rule.recurrence, normalizeScheduledDate(next), rule.startAt);
+  }
+  return next;
+}
+
 /**
- * 计入账本的已处理 occurrence：属于该 rule、done||skipped、有 scheduledAt，且**不早于规则锚点**
+ * 计入账本的已处理 occurrence：属于该 rule、done||skipped、有 scheduledAt，且通常**不早于规则锚点**
  * （`startAt` 的本地日零点）。重锚（改规则/起始日会把 startAt 推到当下）后，锚点之前的历史发
  * 不再吃 count 配额、也不再推游标——历史行保留作账本事实，只是引擎不再计入（#4 方案 b）。
+ *
+ * completion basis 的人工提前完成可能让后续应发生日早于锚点；只要它能从锚点后的已处理发继续推导
+ * 出来，就仍计入当前账本，避免提前完成链条在锚点前卡死。
  */
 function countedProcessedOccurrences(rule: Task, processed: Task[]): (Task & { scheduledAt: string })[] {
   const anchor = rule.startAt == null ? null : normalizeScheduledDate(localDateString(new Date(rule.startAt)));
-  return processed
+  const mine = processed
     .filter((o) => o.ruleId === rule.id && (o.done || o.skipped))
-    .filter((o): o is Task & { scheduledAt: string } => o.scheduledAt != null)
-    .filter((o) => anchor == null || o.scheduledAt >= anchor);
+    .filter((o): o is Task & { scheduledAt: string } => o.scheduledAt != null);
+  if (anchor == null) return mine;
+
+  const counted = mine.filter((o) => o.scheduledAt >= anchor);
+  if (rule.recurrence?.basis !== "completion" || counted.length === 0) return counted;
+
+  const countedIds = new Set(counted.map((o) => o.id));
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const cursor = latestProcessedCursorIsoFromCounted(rule, counted);
+    if (cursor == null) break;
+    const dueDate = skipProcessedDueDates(rule, currentDueDateString(rule.recurrence, cursor, rule.startAt), counted);
+    const dueIso = normalizeScheduledDate(dueDate);
+    const matches = mine.filter((o) => !countedIds.has(o.id) && o.scheduledAt === dueIso);
+    if (matches.length === 0) continue;
+    for (const match of matches) {
+      counted.push(match);
+      countedIds.add(match.id);
+    }
+    changed = true;
+  }
+
+  return counted;
 }
 
 function latestProcessedOccurrence(rule: Task, processed: Task[]): Task | null {
@@ -72,16 +132,18 @@ function latestProcessedOccurrence(rule: Task, processed: Task[]): Task | null {
 }
 
 /**
- * 该 rule 名下「最新那一发」：scheduledAt 最大且非 skipped（含 active，与
- * latestProcessedOccurrence 的 done||skipped 口径不同）。
+ * 该 rule 名下当前可代理的一发：有 active pending 时优先 active；无 active 时回看 scheduledAt
+ * 最大且非 skipped 的已处理发（与 latestProcessedOccurrence 的 done||skipped 口径不同）。
  */
 export function latestOccurrenceForRule(ruleId: string, occurrences: Task[]): Task | null {
   const mine = occurrences
     .filter((o) => o.ruleId === ruleId && !o.skipped)
     .filter((o): o is Task & { scheduledAt: string } => o.scheduledAt != null);
   if (mine.length === 0) return null;
+  const active = mine.filter((o) => !o.done);
+  const candidates = active.length > 0 ? active : mine;
   // scheduledAt 定长 UtcIso，字典序===时间序。
-  return mine.reduce((a, b) => (b.scheduledAt > a.scheduledAt ? b : a));
+  return candidates.reduce((a, b) => (b.scheduledAt > a.scheduledAt ? b : a));
 }
 
 /** 该 rule 名下已处理(done||skipped) occurrence 的最新应发生日(scheduledAt UtcIso)；无则 null。 */
@@ -90,10 +152,8 @@ export function latestProcessedDueIso(rule: Task, processed: Task[]): string | n
 }
 
 function latestProcessedCursorIso(rule: Task, processed: Task[]): string | null {
-  const latest = latestProcessedOccurrence(rule, processed);
-  if (latest == null) return null;
-  if (rule.recurrence?.basis === "completion" && latest.done && latest.completedAt != null) return latest.completedAt;
-  return latest.scheduledAt;
+  const occurrences = countedProcessedOccurrences(rule, processed);
+  return latestProcessedCursorIsoFromCounted(rule, occurrences);
 }
 
 /** 重复规则是否已终结（count 满 或 until 过）——引擎不应再产下一个 occurrence。 */
@@ -108,7 +168,12 @@ export function isRuleExhausted(rule: Task, processed: Task[]): boolean {
     const latestIso = latestProcessedCursorIso(rule, processed);
     if (latestIso != null) {
       // 完成最新应发生日后是否再无发生
-      return isRecurrenceFinishedAfter(recurrence, rule.startAt, latestIso);
+      if (isRecurrenceFinishedAfter(recurrence, rule.startAt, latestIso)) return true;
+      if (recurrence.basis === "completion") {
+        const nextDue = skipProcessedDueDates(rule, currentDueDateString(recurrence, latestIso, rule.startAt), mine);
+        return isAfterUntil(nextDue, recurrence.until);
+      }
+      return false;
     }
     // 空序列：首发是否已越过 until（本地零点 UtcIso 定长，字典序比较）
     const firstDueIso = normalizeScheduledDate(currentDueDateString(recurrence, null, rule.startAt));
@@ -125,9 +190,20 @@ export function isRuleExhausted(rule: Task, processed: Task[]): boolean {
 export function nextDueDate(rule: Task, processed: Task[], now: string | Date = new Date()): string | null {
   const recurrence = rule.recurrence;
   if (recurrence == null) return null;
-  if (isRuleExhausted(rule, processed)) return null;
+  const mine = countedProcessedOccurrences(rule, processed);
+  if (isRuleExhausted(rule, mine)) return null;
   const latestIso = latestProcessedCursorIso(rule, processed);
-  return currentDueDateString(recurrence, latestIso, rule.startAt, now);
+  let dueDate = currentDueDateString(recurrence, latestIso, rule.startAt, now);
+  if (recurrence.basis !== "completion") return dueDate;
+
+  const processedDueDates = new Set(mine.map((o) => o.scheduledAt.slice(0, 10)));
+  const seenDueDates = new Set<string>();
+  while (processedDueDates.has(dueDate) && !seenDueDates.has(dueDate)) {
+    seenDueDates.add(dueDate);
+    dueDate = currentDueDateString(recurrence, normalizeScheduledDate(dueDate), rule.startAt, now);
+  }
+  if (isAfterUntil(dueDate, recurrence.until)) return null;
+  return dueDate;
 }
 
 /**

@@ -203,6 +203,21 @@ describe("nextDueDate", () => {
     ];
     expect(nextDueDate(rule, processed)).toBe("2026-06-13");
   });
+  it("completion basis：提前完成后跳过已处理应发生日，避免重复吐同一发", () => {
+    const rule = baseRule({
+      recurrence: dailyRule({ interval: 3, basis: "completion" }),
+      startAt: localDateOf(new Date(2026, 6, 10)),
+    });
+    const processed = [
+      occ(rule.id, "2026-07-10", {
+        completedAt: "2026-07-08T09:00:00.000Z",
+      }),
+      occ(rule.id, "2026-07-11", {
+        completedAt: "2026-07-08T09:05:00.000Z",
+      }),
+    ];
+    expect(nextDueDate(rule, processed, new Date("2026-07-08T10:00:00.000Z"))).toBe("2026-07-14");
+  });
   it("completion basis：skipped occurrence 无 completedAt，按 scheduledAt 推进", () => {
     const rule = baseRule({
       recurrence: dailyRule({ interval: 3, basis: "completion" }),
@@ -252,6 +267,11 @@ describe("latestOccurrenceForRule", () => {
   it("有 active（done=false）时选它：active 通常 scheduledAt 最大", () => {
     const list = [occ("r1", "2026-07-01"), occ("r1", "2026-07-02", { done: false })];
     expect(latestOccurrenceForRule("r1", list)?.id).toBe(occurrenceId("r1", "2026-07-02"));
+  });
+
+  it("有 active 时优先 active，即使提前完成让它的 scheduledAt 早于已完成发", () => {
+    const list = [occ("r1", "2026-07-10"), occ("r1", "2026-07-08", { done: false })];
+    expect(latestOccurrenceForRule("r1", list)?.id).toBe(occurrenceId("r1", "2026-07-08"));
   });
 
   it("无 active 时选最新 done 一发", () => {

@@ -1,4 +1,4 @@
-import type { Task } from "@timedata/shared";
+import { occurrenceId, type Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
@@ -231,6 +231,138 @@ describe("toggleTaskDone", () => {
     await expect(db.syncLog.where("recordId").equals(occ.id).toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "create" })]),
     );
+  });
+
+  it("未到期 due 规则 root：提前物化下一发并完成，游标仍按应发生日推进", async () => {
+    const task = await addTask({
+      title: "周五整理",
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [5], basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+
+    const occ = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+
+    expect(occ).toMatchObject({
+      id: occurrenceId(task.id, "2026-07-10"),
+      ruleId: task.id,
+      done: true,
+      scheduledAt: localDateOf(new Date(2026, 6, 10)),
+      completedAt: "2026-07-08T09:00:00.000Z",
+    });
+    const buckets = await listTasks(new Date("2026-07-08T10:00:00.000Z"));
+    expect(buckets.scheduled.find((t) => t.id === task.id)?.id).toBe(task.id);
+  });
+
+  it("未到期 completion 规则 root：提前完成后按实际完成时刻推进整条链", async () => {
+    const task = await addTask({
+      title: "间隔三天",
+      recurrence: { freq: "daily", interval: 3, basis: "completion" },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+
+    const first = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+    const second = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:05:00.000Z") });
+
+    expect(first).toMatchObject({
+      id: occurrenceId(task.id, "2026-07-10"),
+      done: true,
+      scheduledAt: localDateOf(new Date(2026, 6, 10)),
+      completedAt: "2026-07-08T09:00:00.000Z",
+    });
+    expect(second).toMatchObject({
+      id: occurrenceId(task.id, "2026-07-11"),
+      done: true,
+      scheduledAt: localDateOf(new Date(2026, 6, 11)),
+      completedAt: "2026-07-08T09:05:00.000Z",
+    });
+  });
+
+  it("未到期 due 规则 root 连点两下：连续消耗两发", async () => {
+    const task = await addTask({
+      title: "每周五",
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [5], basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+
+    const first = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+    const second = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:05:00.000Z") });
+
+    expect(first.id).toBe(occurrenceId(task.id, "2026-07-10"));
+    expect(second.id).toBe(occurrenceId(task.id, "2026-07-17"));
+    const done = (await db.tasks.where("ruleId").equals(task.id).toArray()).filter((o) => o.done);
+    expect(done.map((o) => o.scheduledAt)).toEqual([
+      localDateOf(new Date(2026, 6, 10)),
+      localDateOf(new Date(2026, 6, 17)),
+    ]);
+  });
+
+  it("未到期 count 规则提前点到耗尽：模板沉入完成区", async () => {
+    const task = await addTask({
+      title: "做两次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", count: 2 },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+
+    await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+    await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:05:00.000Z") });
+
+    const buckets = await listTasks(new Date("2026-07-08T10:00:00.000Z"));
+    expect(buckets.completed.map((t) => t.id)).toContain(task.id);
+    expect(buckets.scheduled.map((t) => t.id)).not.toContain(task.id);
+  });
+
+  it("提前完成后撤勾 occurrence：游标回退并清掉推进出的 active", async () => {
+    const task = await addTask({
+      title: "每周五",
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [5], basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+    const first = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+    const second = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:05:00.000Z") });
+
+    const reopened = await toggleTaskDone(second.id, { now: new Date("2026-07-08T09:10:00.000Z") });
+
+    expect(reopened).toMatchObject({ id: second.id, done: false, completedAt: null });
+    await expect(db.tasks.get(first.id)).resolves.toMatchObject({ done: true });
+    const actives = (await db.tasks.where("ruleId").equals(task.id).toArray()).filter((o) => !o.done && !o.skipped);
+    expect(actives.map((o) => o.id)).toEqual([second.id]);
+  });
+
+  it("未到期 until 规则提前完成最后一发后耗尽", async () => {
+    const task = await addTask({
+      title: "到一次",
+      recurrence: { freq: "daily", interval: 1, basis: "due", until: localDateOf(new Date(2026, 6, 10)) },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+
+    const occ = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+
+    expect(occ.id).toBe(occurrenceId(task.id, "2026-07-10"));
+    const buckets = await listTasks(new Date("2026-07-08T10:00:00.000Z"));
+    expect(buckets.completed.map((t) => t.id)).toContain(task.id);
+  });
+
+  it("提前完成后到期日再物化：确定性 id 幂等，不产生第二发", async () => {
+    const task = await addTask({
+      title: "周五整理",
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [5], basis: "due" },
+      startAt: localDateOf(new Date(2026, 6, 10)),
+      now: new Date("2026-07-04T08:00:00.000Z"),
+    });
+    const occ = await toggleTaskDone(task.id, { now: new Date("2026-07-08T09:00:00.000Z") });
+
+    await runMaterialization(new Date("2026-07-10T09:00:00.000Z"));
+
+    const occurrences = await db.tasks.where("ruleId").equals(task.id).toArray();
+    expect(occ.id).toBe(occurrenceId(task.id, "2026-07-10"));
+    expect(occurrences.filter((o) => o.id === occ.id)).toHaveLength(1);
+    expect(occurrences.filter((o) => o.scheduledAt === localDateOf(new Date(2026, 6, 10)))).toHaveLength(1);
   });
 
   it("child task toggle ignores dormant recurrence and does not create occurrence", async () => {

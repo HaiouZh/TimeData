@@ -42,6 +42,7 @@ last-reviewed: 2026-07-04
 
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 Task 字段、重复规则、子任务或待办页面交互；P2 的完成语义意图化另行规划。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：Task 字段和待办页面交互不变；同步层给完成字段增加 op 授权，防止无意图的标题/排序快照翻回勾选。 -->
+<!-- 复核 2026-07-04（重复规则提前完成）：client 人工入口可提前完成未到期规则；server agent 未到期仍 409。 -->
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
@@ -83,7 +84,7 @@ agent / CLI (task-done/task-tag)
         → routes/agent.ts: statusSchema 严格校验（至少一个字段）
         → 读当前 task，按 root / child 分流后构造 next：
             · root done=true 非重复 → 就地完成(done+completedAt)
-            · root done=true 重复模板 → 代理到「最新那一发」：有 active 完成它(update)；
+            · root done=true 重复模板 → 代理到当前可代理 occurrence：有 active 完成它(update)；
                                 无 active 先 materializeDue 物化再完成(create 确定性 id occurrence)；
                                 无可发(未到期/耗尽) → 409 RULE_NOT_DUE；模板本体不动
             · root done=false → done=false 【不清 completedAt】
@@ -167,7 +168,7 @@ agent / CLI (task-done/task-tag)
 
 ## 3. 关键不变量 / 坑 / 红线
 
-1. **完成走「最新那一发」代理，模板不承载完成态（§9.2）**：非重复任务就地完成（`done=true` + `completedAt=now`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复模板的完成（client `toggleTaskDone` root / server agent `done=true`）代理到该 rule 最新非 skipped occurrence——有 active 完成它、无 active 先按引擎物化再完成、无可发则 no-op（client）/409（server）。模板的 `done`/`lastDoneAt`/`completedCount` 永不推进（纯遗留字段）；耗尽由账本判定（`isRuleExhausted`），耗尽模板保留 `recurrence`、由 `listTasks` 沉入 completed。旧 shared `completeTask`（衍生快照/终结转化）已退役删除。落点判据：普通任务仍是 `done`（`placement.ts`），模板是账本。细节见 [todo/recurrence](todo/recurrence.md) §3。
+1. **完成走 occurrence 代理，模板不承载完成态（§9.2）**：非重复任务就地完成（`done=true` + `completedAt=now`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复模板完成代理到该 rule 的 occurrence——有 active 完成它，无 active 先按引擎物化到期发。client 人工入口在下一发未到期时会继续强制物化下一发并完成，允许提前消耗配额；server agent `done=true` 不提前完成，未到期/耗尽仍 409 `RULE_NOT_DUE`。模板的 `done`/`lastDoneAt`/`completedCount` 永不推进（纯遗留字段）；耗尽由账本判定（`isRuleExhausted`），耗尽模板保留 `recurrence`、由 `listTasks` 沉入 completed。旧 shared `completeTask`（衍生快照/终结转化）已退役删除。落点判据：普通任务仍是 `done`（`placement.ts`），模板是账本。细节见 [todo/recurrence](todo/recurrence.md) §3。
 2. **"取消完成"两端仍不对称（root only）**：agent root `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 root reopen 会清 `completedAt=null`（且对 occurrence 会连删后来物化的 active 发防双 active）。child 是例外：agent child `done=true/false` 走轻量路径并与客户端子任务勾选对齐（true 写 now，false 清 `completedAt=null`）。撤销完成的 root 语义两端不一致，改前先确认。
 3. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。
 4. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供标签来源去重。P3 后 `today` 只读 pending occurrence（`ruleId!==null && !skipped && !done`），重复模板不再投影到今天，退到 `scheduled` 规则管理区；`scheduled` = 一次性未来排期 + 重复模板，按下一发生日升序，行内显示重复摘要与下一发生日；`completed` 收纳普通完成任务、done occurrence 与账本判耗尽的模板（`completedAt=null` 沉底），按 `completedAt` 倒序、**无日期过滤**；`scheduled` 内规则的下一发生日与耗尽判定读 occurrence 账本（`nextDueDate`/`isRuleExhausted`，§9.1），不再读模板死游标。改 `recurrence` 或 `startAt` 视为重锚：`startAt` 移到新值或当下，同事务级联删旧活跃 occurrence 及其 children、即时物化；锚点前历史发保留但不再计入配额/游标（#4 方案 b，见 [todo/recurrence](todo/recurrence.md) §3）；规则/起始日未变则保留进度。
@@ -186,12 +187,12 @@ agent / CLI (task-done/task-tag)
 | 入口 | 职责 |
 |---|---|
 | `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet`；gravity 水位线拆 `floatingInbox`/`sunkenInbox` + 渲染 `GravityReviewSection`，并在本地跨日/focus/visibility 恢复时刷新水位；支持 `/todo?taskId=<id>` 作为打开任务详情的 deep link，参数变化会切换抽屉目标，关闭抽屉只移除 `taskId` 并保留其他 query 参数，行点击仍只走本地打开状态、不写 URL |
-| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框、左 2/5 root 拖拽抓取区、`CaretDown`/`CaretRight` 或 grip 纯指示、`rowClickZone` 派发展开/打开、meta 第二行、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、缩进候选父高亮与落定后展开、刚物化 pending occurrence 短暂入场高亮（让追平下一发可被看见）；桌面细指针行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列）；可选 `extraAction` 行内插槽供翻牌区渲染「顶一下」 |
+| `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框（重复模板有下一发即可点，含未到期提前完成；耗尽才置灰）、左 2/5 root 拖拽抓取区、`CaretDown`/`CaretRight` 或 grip 纯指示、`rowClickZone` 派发展开/打开、meta 第二行、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、缩进候选父高亮与落定后展开、刚物化 pending occurrence 短暂入场高亮（让追平下一发可被看见）；桌面细指针行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列）；可选 `extraAction` 行内插槽供翻牌区渲染「顶一下」 |
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩，不保留旧 swipe 宽度）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不再各持 `DndContext` |
-| `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（普通任务 cascade；pending occurrence 删·跳）、重复预设 overlay；重复模板复选框禁用、只作规则管理；逾期重复模板打开重复设置时用今天作为锚点；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件 |
+| `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（普通任务 cascade；pending occurrence 删·跳）、重复预设 overlay；重复模板复选框有下一发即可代理完成（含未到期提前完成；耗尽置灰），逾期重复模板打开重复设置时用今天作为锚点；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,useLatestOccurrenceChildren,todoDnd}.*` | children 列表（三 mode；static 重复模板行用 `useLatestOccurrenceChildren` + `projectTemplateChildren` 把勾态投影到最新非 skipped occurrence child，无目标发置灰；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 编辑态回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录；子任务标题默认是可跨行选择复制的 `span` 文本，无行尾编辑按钮，空选区点击或标题获焦后 Enter/F2 才进入编辑；编辑态 textarea 按内容与宽度变化自动增高、不保留内部滚动条，blur/Enter 提交，Escape 取消）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
 | `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按 `TodoPage` 计算出的底部避让值上移；当窄屏下滑把底栏和 composer 隐藏后，不再避让已不可见的输入栏；可选 `expandedFooter` 尾部插槽，在列表已完全展开、天然 ≤ `initialGroups` 或列表为空但有 footer 时渲染，供 Inbox 挂水下找回尾部）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`TodoPage` 传入当前移动底栏 offset 与隐藏状态，宽屏不套移动底栏避让；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时 `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠；折叠 caret 等交互图标经 Phosphor `Icon` 包装 |
-| `lib/tasks.ts` | 核心 CRUD + `listTasks`（P3：today 读 pending occurrence、重复模板退 scheduled、skipped 排除、`recurring` 空桶兼容）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对普通 child 走非重复路径、对重复模板 child 代理到最新非 skipped occurrence child、对 pending occurrence 完成后即时物化下一发、对重复模板 root 代理完成最新一发（无 active 先物化，无可发 no-op）、对普通 root 就地完成；`bumpTaskWeight` 累加 `weight` 并写 syncLog；`markOccurrenceSkipped` 删·跳这一发（skipped 留痕）并即时物化下一发；`runMaterialization` 遍历 rule 物化当前 occurrence + occurrence children（in-flight 合并 + 事务内二次检查，children 从 `done=false`/`completedAt=null` 起步）；`updateTask` 重锚时同事务级联删活跃 pending occurrence 并即时尝试物化新 occurrence；`applyRecurrenceChoice` none/scheduled 同事务清孤儿 |
+| `lib/tasks.ts` | 核心 CRUD + `listTasks`（P3：today 读 pending occurrence、重复模板退 scheduled、skipped 排除、`recurring` 空桶兼容）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对普通 child 走非重复路径、对重复模板 child 代理到当前可代理 occurrence child、对 pending occurrence 完成后即时物化下一发、对重复模板 root 代理完成下一发（无 active 且未到期时 client 强制物化下一发；耗尽 no-op）、对普通 root 就地完成；`bumpTaskWeight` 累加 `weight` 并写 syncLog；`markOccurrenceSkipped` 删·跳这一发（skipped 留痕）并即时物化下一发；`runMaterialization` 遍历 rule 物化当前 occurrence + occurrence children（in-flight 合并 + 事务内二次检查，children 从 `done=false`/`completedAt=null` 起步）；`updateTask` 重锚时同事务级联删活跃 pending occurrence 并即时尝试物化新 occurrence；`applyRecurrenceChoice` none/scheduled 同事务清孤儿 |
 | `lib/tasks/{gravity,gravityReviewStorage,gravityClock}.ts` | 想法重力纯函数（`isTaskSunken`/`splitInboxByGravity`/`pickGravityReviewBatch`；抽卡按久未露面、`weight`、创建时间排序）+ 翻牌轮换记忆（settings key `todo.gravity.review.v1`，`useGravitySurfacedMap`/`markGravityTasksSurfaced`，写时 merge + prune `max(90, waterlineDays*4)` 天）+ 共享重力日期 helper（`currentGravityDate`/`msUntilNextLocalDay`，TodoPage 与设置页共用同一口径） |
 | `pages/todo/GravityReviewSection.tsx` | 翻牌折叠复查区：展开时抽 `drawM` 张水下任务、最多顶 `pickN` 张、不注册 DnD；`↑ 顶一下` 经 `extraAction` 插槽渲染，顶过的卡在本轮额度内即时移出并补抽；展示即标记——`drawBatch()` 发牌后调 `onMarkSurfaced(ids, now)` 写 settings review key，并维护本会话已标记 set 避重 |
 | `pages/todo/SunkenInboxTail.tsx` | Inbox 展开链条尾部的水下完整列表找回入口：默认收起「水下 X 条」，展开后按日期分组渲染完整 `sunkenInbox`，不注册 `sortable/containerId`；可选 `extraAction` 供「顶一下」只 bump weight |
@@ -210,7 +211,7 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 | 入口 | 职责 |
 |---|---|
 | `routes/tasks.ts` | `GET /`（只读查询，只返回 root tasks）+ `POST /:id/schedule`（排期直写，重复 409，**不走 applyChange**） |
-| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`；重复模板 `done=true` 代理完成最新一发——active 则 update，无 active 经 `materializeDue` create 确定性 id occurrence，无可发回 409 `RULE_NOT_DUE`；普通 root 就地完成；child `done` 只轻量更新自身 done/completedAt；root `note` 建独立 child Task，child `note` 409 拒绝） |
+| `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`；重复模板 `done=true` 代理完成当前可代理 occurrence——active 则 update，无 active 经 `materializeDue` create 到期 occurrence，未到期/耗尽回 409 `RULE_NOT_DUE`，故意不开放提前完成；普通 root 就地完成；child `done` 只轻量更新自身 done/completedAt；root `note` 建独立 child Task，child `note` 409 拒绝） |
 | `sync/domains.ts` | `tasks` 通用 LWW 注册 + `taskToRow`/`readTaskRecord` |
 | `db/schema.ts` / `lib/db-rows.ts` | 建表/列迁移 + `rowToTask` |
 | `cli/src/commands/tasks.ts` | `tasks` / `task-*` 命令（server API 封装） |

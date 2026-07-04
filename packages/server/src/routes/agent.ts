@@ -63,7 +63,7 @@ agent.post("/tasks/:id/status", async (c) => {
   let noteChild: Task | null = null;
   let next: Task;
   if (done === true && !isChild && task.recurrence !== null) {
-    // 完成重复模板 = 代理到「最新那一发」（scheduledAt 最大且非 skipped）：有 active 就完成它，
+    // 完成重复模板 = 代理到当前可代理 occurrence：有 active 就完成它，
     // 无 active 先按引擎物化再完成；引擎判无可发（未到期/耗尽）→ 409。模板本体不承载完成态（§9.2）。
     const occurrences = (db.prepare("SELECT * FROM tasks WHERE rule_id = ?").all(id) as TaskRow[]).map(rowToTask);
     const latest = latestOccurrenceForRule(id, occurrences);

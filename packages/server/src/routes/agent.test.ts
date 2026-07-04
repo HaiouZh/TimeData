@@ -309,6 +309,21 @@ describe("POST /api/agent/tasks/:id/status", () => {
     expect(await second.json()).toMatchObject({ ok: false, error: { code: "RULE_NOT_DUE" } });
   });
 
+  it("done=true 未到期重复规则：agent 不提前完成，仍回 409 RULE_NOT_DUE", async () => {
+    seedRecurring("rec-future", '{"freq":"daily","interval":1,"basis":"due"}');
+    db.prepare("UPDATE tasks SET start_at = ? WHERE id = ?").run("2099-12-31T00:00:00.000Z", "rec-future");
+
+    const res = await app.request("/api/agent/tasks/rec-future/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: true }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: "RULE_NOT_DUE" } });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE rule_id = ?").get("rec-future")).toEqual({ n: 0 });
+  });
+
   it("sets tags", async () => {
     db.prepare("UPDATE tasks SET weight = ? WHERE id = ?").run(6, "task-1");
 
