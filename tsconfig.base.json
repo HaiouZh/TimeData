@@ -18,7 +18,6 @@
     "paths": {
       "@timedata/shared": ["./packages/shared/src/index.ts"],
       "@timedata/shared/*": ["./packages/shared/src/*"]
-    },
-    "baseUrl": "."
+    }
   }
 }

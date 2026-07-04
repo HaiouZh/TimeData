@@ -12,9 +12,10 @@ covers:
   - packages/client/src/lib/androidBackNavigation.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-06-29
+last-reviewed: 2026-07-04
 ---
 <!-- 复核 2026-07-02（同步提速 S1）：androidBackNavigation 仅移除已退役的 /settings/data/backup-history 返回路由映射；开发流程、命令与 worktree 约定不变。 -->
+<!-- 复核 2026-07-04（依赖升级收 dependabot）：catalog typescript ^6.0.3、@types/node ^26、patch/minor 批量升级（vite/tailwind/dexie/hono/capacitor 等）；tsconfig.base.json 删除 TS6 弃用的 baseUrl（paths 本就相对 tsconfig 解析，语义不变）；开发流程与命令不变。 -->
 
 # 本地开发指南
 
