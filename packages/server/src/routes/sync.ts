@@ -489,6 +489,10 @@ sync.post("/push", async (c) => {
   const analyzeBackupStart = performance.now();
   const pushRecords = orderedChanges.map((change) => ({ tableName: change.tableName, recordId: change.recordId }));
   const seqAnalysis = analyzePushBaseSeq(body.baseSeq ?? null, pushRecords);
+  const staleGuardKeys = new Set(
+    seqAnalysis.overlappingRecords.map((record) => `${record.tableName}:${record.recordId}`),
+  );
+  const staleGuardAll = seqAnalysis.strategy === "unknown_base";
   let backupReason: string | null = null;
   let backupOperation: string | null = null;
   let backupDetails: Record<string, unknown> | null = null;
@@ -521,7 +525,11 @@ sync.post("/push", async (c) => {
   const results: ApplyChangeResult[] = [];
   const applyAll = db.transaction(() => {
     for (const change of orderedChanges) {
-      results.push(applyChange(change));
+      results.push(
+        applyChange(change, {
+          staleGuard: staleGuardAll || staleGuardKeys.has(`${change.tableName}:${change.recordId}`),
+        }),
+      );
     }
   });
 

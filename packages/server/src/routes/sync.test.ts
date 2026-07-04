@@ -2002,7 +2002,7 @@ describe("sync route", () => {
     );
   });
 
-  it("creates a protected local-wins backup for non-fast-forward overlapping pushes", async () => {
+  it("creates a protected backup and rejects stale non-fast-forward overlapping pushes", async () => {
     db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
       "cat-overlap",
       "server name",
@@ -2048,7 +2048,13 @@ describe("sync route", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "sync_local_wins-backup-1" });
+    expect(body).toMatchObject({ accepted: 0, rejected: 0, conflicts: 1, backupId: "sync_local_wins-backup-1" });
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "cat-overlap",
+      status: "conflict",
+      reasonCode: "stale_change_rejected",
+      serverUpdatedAt: "2026-05-08T12:00:00.000Z",
+    });
     expect(createServerBackupMock).toHaveBeenCalledWith("sync_local_wins", {
       protected: true,
       reason: "local_wins_non_fast_forward",
@@ -2061,7 +2067,154 @@ describe("sync route", () => {
     });
     expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
     expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-overlap")).toMatchObject({
-      name: "local name",
+      name: "server name",
+    });
+  });
+
+  it("allows a non-fast-forward overlapping push when the incoming timestamp is newer", async () => {
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-overlap-newer",
+      "server name",
+      "#4A90D9",
+      "2026-05-08T08:00:00.000Z",
+      "2026-05-08T12:00:00.000Z",
+    );
+    const baseSeq = db
+      .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+      .run("categories", "cat-overlap-newer", "create").lastInsertRowid as number;
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+      "categories",
+      "cat-overlap-newer",
+      "update",
+    );
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq,
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "cat-overlap-newer",
+            action: "update",
+            data: {
+              id: "cat-overlap-newer",
+              name: "local newer name",
+              parentId: null,
+              color: "#22c55e",
+              icon: null,
+              sortOrder: 0,
+              isArchived: false,
+              createdAt: "2026-05-08T08:00:00.000Z",
+              updatedAt: "2099-01-01T00:00:00.000Z",
+            },
+            timestamp: "2099-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: "sync_local_wins-backup-1" });
+    expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-overlap-newer")).toMatchObject({
+      name: "local newer name",
+    });
+  });
+
+  it("does not compare timestamps for fast-forward pushes", async () => {
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-fast-forward",
+      "server name",
+      "#4A90D9",
+      "2026-05-08T08:00:00.000Z",
+      "2026-05-08T12:00:00.000Z",
+    );
+    const baseSeq = db
+      .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+      .run("categories", "cat-fast-forward", "create").lastInsertRowid as number;
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq,
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "cat-fast-forward",
+            action: "update",
+            data: {
+              id: "cat-fast-forward",
+              name: "fast-forward name",
+              parentId: null,
+              color: "#22c55e",
+              icon: null,
+              sortOrder: 0,
+              isArchived: false,
+              createdAt: "2026-05-08T08:00:00.000Z",
+              updatedAt: "2026-05-08T10:00:00.000Z",
+            },
+            timestamp: "2026-05-08T10:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 0, conflicts: 0, backupId: null });
+    expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-fast-forward")).toMatchObject({
+      name: "fast-forward name",
+    });
+  });
+
+  it("enables staleGuard for unknown-base pushes", async () => {
+    db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+      "cat-unknown-base",
+      "server name",
+      "#4A90D9",
+      "2026-05-08T08:00:00.000Z",
+      "2026-05-08T12:00:00.000Z",
+    );
+
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        changes: [
+          {
+            tableName: "categories",
+            recordId: "cat-unknown-base",
+            action: "update",
+            data: {
+              id: "cat-unknown-base",
+              name: "local stale name",
+              parentId: null,
+              color: "#22c55e",
+              icon: null,
+              sortOrder: 0,
+              isArchived: false,
+              createdAt: "2026-05-08T08:00:00.000Z",
+              updatedAt: "2026-05-08T10:00:00.000Z",
+            },
+            timestamp: "2026-05-08T10:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 0, rejected: 0, conflicts: 1, backupId: "backup-1" });
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "cat-unknown-base",
+      status: "conflict",
+      reasonCode: "stale_change_rejected",
+    });
+    expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-unknown-base")).toMatchObject({
+      name: "server name",
     });
   });
 
