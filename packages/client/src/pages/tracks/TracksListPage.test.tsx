@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
 import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/tracks.js";
+import { db } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import TracksListPage from "./TracksListPage.js";
 
@@ -50,7 +49,9 @@ async function waitForCondition(predicate: () => boolean, label: string): Promis
 }
 
 async function renderList() {
-  mounted = await renderDom(createElement(MemoryRouter, { initialEntries: ["/tracks"] }, createElement(TracksListPage)));
+  mounted = await renderDom(
+    createElement(MemoryRouter, { initialEntries: ["/tracks"] }, createElement(TracksListPage)),
+  );
   await flush();
   return mounted.host;
 }

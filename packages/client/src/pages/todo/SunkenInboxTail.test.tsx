@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
-import "fake-indexeddb/auto";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@timedata/shared";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { SunkenInboxTail } from "./SunkenInboxTail.js";
 
@@ -41,9 +40,7 @@ beforeEach(() => {
 
 describe("SunkenInboxTail", () => {
   it("renders null when sunkenTasks is empty", async () => {
-    const { host, root } = await renderDom(
-      <SunkenInboxTail sunkenTasks={[]} stickyBottomOffsetPx={0} {...handlers} />,
-    );
+    const { host, root } = await renderDom(<SunkenInboxTail sunkenTasks={[]} stickyBottomOffsetPx={0} {...handlers} />);
     expect(host.children.length).toBe(0);
     await unmount(root);
   });

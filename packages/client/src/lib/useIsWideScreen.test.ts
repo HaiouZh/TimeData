@@ -24,7 +24,8 @@ function installMatchMedia(initialMatches: boolean) {
     dispatchEvent: vi.fn(),
   } as unknown as MediaQueryList;
   const matchMedia = vi.fn(() => mql);
-  Object.defineProperty(window, "matchMedia", { value: matchMedia, configurable: true });
+  // stubGlobal 而非 defineProperty(window)：桶 afterEach 的 unstubAllGlobals 能自动复位，isolate:false 下不跨文件泄漏。
+  vi.stubGlobal("matchMedia", matchMedia);
 
   return {
     matchMedia,
@@ -78,7 +79,7 @@ describe("useIsWideScreen", () => {
   });
 
   it("无 matchMedia 时安全返回 false", async () => {
-    Object.defineProperty(window, "matchMedia", { value: undefined, configurable: true });
+    vi.stubGlobal("matchMedia", undefined);
     const { host, root } = await renderHook();
 
     expect(host.firstElementChild?.getAttribute("data-wide")).toBe("false");

@@ -1,24 +1,22 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 
 import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db, resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import GoalsListPage from "./GoalsListPage.js";
 
 let mountedRoot: Awaited<ReturnType<typeof renderDom>>["root"] | null = null;
 
 beforeEach(async () => {
-  await db.delete();
-  await db.open();
+  await resetDb();
 });
 
 afterEach(async () => {
   if (mountedRoot) await unmount(mountedRoot);
   mountedRoot = null;
-  await db.delete();
+  await resetDb();
 });
 
 async function waitForText(host: HTMLElement, text: string): Promise<void> {
@@ -57,9 +55,7 @@ describe("GoalsListPage", () => {
     await waitForText(host, "还没开始推进");
     await waitForText(host, "还没有成员");
     await waitForText(host, "✓ 0 完成");
-    await expect(db.goals.toArray()).resolves.toEqual([
-      expect.objectContaining({ members: [], prerequisites: [] }),
-    ]);
+    await expect(db.goals.toArray()).resolves.toEqual([expect.objectContaining({ members: [], prerequisites: [] })]);
   });
 
   it("renders theme activity without project completion ratio", async () => {

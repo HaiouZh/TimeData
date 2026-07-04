@@ -1,13 +1,12 @@
-import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
+import { db } from "../../test/dbReset.js";
 import { getSetting, setSetting } from "../settings/index.js";
 import {
-  TODO_GRAVITY_REVIEW_SETTING_KEY,
   markGravityTasksSurfaced,
   parseGravitySurfacedMap,
   readGravitySurfacedMap,
   sanitizeGravitySurfacedMap,
+  TODO_GRAVITY_REVIEW_SETTING_KEY,
 } from "./gravityReviewStorage.ts";
 
 beforeEach(async () => {
@@ -63,10 +62,7 @@ describe("readGravitySurfacedMap", () => {
   });
 
   it("reads back a stored map", async () => {
-    await setSetting(
-      TODO_GRAVITY_REVIEW_SETTING_KEY,
-      JSON.stringify({ a: "2026-06-28T00:00:00.000Z" }),
-    );
+    await setSetting(TODO_GRAVITY_REVIEW_SETTING_KEY, JSON.stringify({ a: "2026-06-28T00:00:00.000Z" }));
     expect(await readGravitySurfacedMap()).toEqual({ a: "2026-06-28T00:00:00.000Z" });
   });
 });
@@ -137,10 +133,7 @@ describe("markGravityTasksSurfaced", () => {
     const withinHorizon = new Date(now.getTime() - (horizonDays - 5) * 86400000).toISOString();
     const beyondHorizon = new Date(now.getTime() - (horizonDays + 5) * 86400000).toISOString();
 
-    await setSetting(
-      TODO_GRAVITY_REVIEW_SETTING_KEY,
-      JSON.stringify({ keep: withinHorizon, drop: beyondHorizon }),
-    );
+    await setSetting(TODO_GRAVITY_REVIEW_SETTING_KEY, JSON.stringify({ keep: withinHorizon, drop: beyondHorizon }));
 
     await markGravityTasksSurfaced(["fresh"], now, { waterlineDays: 50 });
 

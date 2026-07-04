@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import type { Category } from "@timedata/shared";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
-import { db } from "../db/index.js";
 import { setQuickNotePinned } from "../lib/quickNotes.js";
 import { setPunchCategoryId } from "../lib/settings/punchCategorySetting.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
+import { db } from "../test/dbReset.js";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 

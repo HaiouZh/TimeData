@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-import "fake-indexeddb/auto";
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { db } from "../../db/index.js";
 import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
-import { addTrack, addTrackStep, getTrack, listTracks, listTrackSteps } from "../../lib/tracks.js";
+import { addTrack, addTrackStep, getTrack, listTrackSteps, listTracks } from "../../lib/tracks.js";
+import { db } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import TrackDetailPage from "./TrackDetailPage.js";
 
@@ -44,7 +43,11 @@ async function renderDetail(id: string) {
     createElement(
       MemoryRouter,
       { initialEntries: [`/tracks/${id}`] },
-      createElement(Routes, null, createElement(Route, { path: "/tracks/:id", element: createElement(TrackDetailPage) })),
+      createElement(
+        Routes,
+        null,
+        createElement(Route, { path: "/tracks/:id", element: createElement(TrackDetailPage) }),
+      ),
     ),
   );
   await flush();
@@ -78,7 +81,10 @@ async function seedTrack() {
 }
 
 function buttonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
-  return [...host.querySelectorAll("button")].find((b) => b.textContent === text || b.getAttribute("aria-label") === text) ?? null;
+  return (
+    [...host.querySelectorAll("button")].find((b) => b.textContent === text || b.getAttribute("aria-label") === text) ??
+    null
+  );
 }
 
 async function typeInput(host: HTMLElement, label: string, value: string): Promise<void> {

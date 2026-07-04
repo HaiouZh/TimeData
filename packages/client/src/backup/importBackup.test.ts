@@ -1,35 +1,13 @@
-import "fake-indexeddb/auto";
 import type { Category, Goal, SyncLogEntry, Task, TimeEntry, Track, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { LAST_SYNCED_SEQ_KEY, db } from "../db/index.js";
+import { LAST_SYNCED_SEQ_KEY } from "../db/index.js";
+import { db } from "../test/dbReset.js";
 import { importBackup } from "./importBackup.js";
 import { BACKUP_FORMAT, type BackupDocument } from "./schema.js";
 
 const now = "2026-05-07T12:00:00.000Z";
 const legacyStateField = "tu" + "rn";
 const legacyStateTimeField = `${legacyStateField}At`;
-
-const localStorageMock = (() => {
-  let store = new Map<string, string>();
-
-  return {
-    clear: () => {
-      store = new Map<string, string>();
-    },
-    getItem: (key: string) => store.get(key) ?? null,
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-  };
-})();
-
-Object.defineProperty(globalThis, "localStorage", {
-  value: localStorageMock,
-  configurable: true,
-});
 
 const oldCategory: Category = {
   id: "old-cat",

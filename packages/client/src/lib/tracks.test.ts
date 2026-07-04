@@ -1,7 +1,6 @@
-import "fake-indexeddb/auto";
 import type { SyncLogEntry, TrackStep } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db/index.js";
+import { db } from "../test/dbReset.js";
 import {
   addTrack,
   addTrackStep,
@@ -11,8 +10,8 @@ import {
   deleteTrackStep,
   getTrack,
   listAllTrackSteps,
-  listTracks,
   listTrackSteps,
+  listTracks,
   planUserStep,
   setTrackStatus,
   updateTrack,

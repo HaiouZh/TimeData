@@ -1,25 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch, buildApiUrl } from "./api.js";
 
-const localStorageMock = (() => {
-  let store = new Map<string, string>();
-
-  return {
-    clear: () => {
-      store = new Map<string, string>();
-    },
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-  };
-})();
-
-Object.defineProperty(globalThis, "localStorage", {
-  value: localStorageMock,
-  configurable: true,
-});
-
 describe("buildApiUrl", () => {
   it("does not create double slashes when base URL has a trailing slash", () => {
     expect(buildApiUrl("https://timedata.yanzhou.icu/", "/api/sync/pull")).toBe(
