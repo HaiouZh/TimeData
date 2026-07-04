@@ -56,6 +56,8 @@ function goal(overrides: Partial<Goal> = {}): Goal {
     status: "active",
     members: [],
     prerequisites: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   } as Goal;
 }
@@ -709,6 +711,60 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("恒星被碰撞推挤后，拖停成员写 pin 以渲染星位为锚", async () => {
+    const g1 = goal({ id: "g1", title: "甲", createdAt: "2026-01-01T00:00:00.000Z" });
+    const g2 = goal({
+      id: "g2",
+      title: "乙",
+      createdAt: "2026-01-02T00:00:00.000Z",
+      members: [{ kind: "task", id: "a" }],
+    });
+    const seatOfG2 = { x: -265, y: 243 };
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[g1, g2]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[
+          {
+            goalId: "g1",
+            nodeKind: "goal",
+            nodeId: "g1",
+            x: seatOfG2.x,
+            y: seatOfG2.y,
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const star = host.querySelector('[data-node-id="goal:g2"]');
+    const starRendered = {
+      x: Number(star?.getAttribute("data-node-x")),
+      y: Number(star?.getAttribute("data-node-y")),
+    };
+    expect(starRendered).not.toEqual(seatOfG2);
+    const member = host.querySelector('[data-node-id="task:a"]');
+    const memberStart = {
+      x: Number(member?.getAttribute("data-node-x")),
+      y: Number(member?.getAttribute("data-node-y")),
+    };
+
+    await click(host.querySelector('[data-rf-drag-stop-node-id="task:a"]'));
+
+    expect(upsertGoalLayoutPinMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        goalId: "g2",
+        nodeKind: "task",
+        nodeId: "a",
+        x: memberStart.x + 10 - starRendered.x,
+        y: memberStart.y + 20 - starRendered.y,
+      }),
+    );
+    await unmount(root);
+  });
+
   it("renders pinned badges for pinned stars and members", async () => {
     const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
     const layoutPins: GoalLayoutPin[] = [
@@ -729,6 +785,31 @@ describe("GoalGalaxyCanvas", () => {
 
     expect(host.querySelectorAll('[aria-label="恢复自动布局"]')).toHaveLength(2);
     await unmount(root);
+  });
+
+  it("settle 模式下隐藏图钉角标与恢复自动按钮", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const layoutPins: GoalLayoutPin[] = [
+      { goalId: "g1", nodeKind: "goal", nodeId: "g1", x: 100, y: 100, updatedAt: "2026-01-01T00:00:00.000Z" },
+      { goalId: "g1", nodeKind: "task", nodeId: "a", x: 30, y: -10, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ];
+
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={layoutPins}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(host.querySelector('[aria-label="恢复自动布局"]')).toBeNull();
+    expect(host.querySelector('[aria-label="已固定位置"]')).toBeNull();
+    await unmount(root);
+    localStorage.clear();
   });
 
   it("does not show a pinned badge or restore action for bridge members with scoped member pins", async () => {
@@ -1260,6 +1341,31 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("编辑目标时不重跑 fitView，也不移动其他未钉恒星", async () => {
+    resetReactFlowMock();
+    const g1 = goal({ id: "g1", title: "甲", createdAt: "2026-01-01T00:00:00.000Z" });
+    const g2 = goal({ id: "g2", title: "乙", createdAt: "2026-01-02T00:00:00.000Z" });
+    const props = { tasks: [], tracks: [], steps: [], layoutPins: [], onNavigate: vi.fn() };
+    const { host, root } = await renderDom(<GoalGalaxyCanvas goals={[g1, g2]} {...props} />);
+    const fitCalls = getReactFlowMock().fitView.mock.calls.length;
+    const g2x = host.querySelector('[data-node-id="goal:g2"]')?.getAttribute("data-node-x");
+    const g2y = host.querySelector('[data-node-id="goal:g2"]')?.getAttribute("data-node-y");
+
+    await act(async () => {
+      root.render(
+        <GoalGalaxyCanvas
+          goals={[g2, { ...g1, updatedAt: "2099-01-01T00:00:00.000Z" }]}
+          {...props}
+        />,
+      );
+    });
+
+    expect(getReactFlowMock().fitView.mock.calls.length).toBe(fitCalls);
+    expect(host.querySelector('[data-node-id="goal:g2"]')?.getAttribute("data-node-x")).toBe(g2x);
+    expect(host.querySelector('[data-node-id="goal:g2"]')?.getAttribute("data-node-y")).toBe(g2y);
+    await unmount(root);
+  });
+
   it("fits after the initial LOD pass renders expanded member nodes", async () => {
     resetReactFlowMock();
     const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
@@ -1536,6 +1642,27 @@ describe("GoalGalaxyCanvas", () => {
     await click(host.querySelector('[data-rf-drag-stop-node-id="task:a"]'));
 
     expect(upsertGoalLayoutPinMock).not.toHaveBeenCalled();
+    await unmount(root);
+    localStorage.clear();
+  });
+
+  it("settle 模式拖停显示不保存位置提示", async () => {
+    localStorage.setItem("timedata_galaxy_engine", "settle");
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-rf-drag-stop-node-id="task:a"]'));
+
+    expect(host.textContent).toContain("灵动模式不保存位置");
     await unmount(root);
     localStorage.clear();
   });

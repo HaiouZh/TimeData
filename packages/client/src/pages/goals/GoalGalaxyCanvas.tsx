@@ -59,6 +59,7 @@ import { GoalStarNode, type GoalStarNodeData } from "./GoalStarNode.js";
 import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
 import { ResizableTrayAside } from "./ResizableTrayAside.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
+import { seatOrderedActiveGoals } from "./galaxySeatOrder.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
 import { readDragRef } from "./goalMemberDragData.js";
 import { type GoalStarHitTarget, hitTestGoalStar } from "./goalStarHitTest.js";
@@ -243,7 +244,7 @@ function splitPins(
   const anchorCanvasById: Record<string, XY> = {};
   const memberPinByNodeId: Record<string, { goalId: string; x: number; y: number }> = {};
 
-  for (const [index, goal] of goals.filter((goal) => goal.status === "active").entries()) {
+  for (const [index, goal] of seatOrderedActiveGoals(goals).entries()) {
     anchorCanvasById[`goal:${goal.id}`] = fallbackStarPosition(index);
   }
 
@@ -456,11 +457,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [engineMode, setEngineMode] = useGalaxyEngineMode();
   const destination = useTodoDefaultDestination();
   const [liveSettle, setLiveSettle] = useState(true);
+  const [settleHint, setSettleHint] = useState<string | null>(null);
   const settleEnabled = engineMode === "settle";
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
   const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
-  const activeGoalKey = activeGoalIds.join("\n");
+  const activeGoalKey = useMemo(() => [...activeGoalIds].sort().join("\n"), [activeGoalIds]);
   const activeGoalCount = activeGoalIds.length;
   useEffect(() => {
     setLodByGoalId((current) => {
@@ -543,7 +545,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           selected: star.nodeId === selectedNodeId,
           data: {
             star,
-            pinned: pinnedStarIds.has(star.nodeId),
+            pinned: !settleEnabled && pinnedStarIds.has(star.nodeId),
             lively: settleEnabled,
             handles: <GalaxyStarHandles />,
             onRestoreAuto: () => restoreAuto(star.nodeId, []),
@@ -551,7 +553,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         }) satisfies GoalGalaxyFlowNode,
     );
     const memberNodes = model.nodes.map((node) => {
-      const pinned = node.anchorIds.length === 1 && pinnedMemberIds.has(`${node.anchorIds[0]}|${node.id}`);
+      const pinned = !settleEnabled && node.anchorIds.length === 1 && pinnedMemberIds.has(`${node.anchorIds[0]}|${node.id}`);
       return {
         id: node.id,
         type: "goal-galaxy-member",
@@ -625,6 +627,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   }, [layoutNodes, layoutPositionKeyValue, settleEnabled]);
   useEffect(() => {
     if (settleEnabled) setLiveSettle(true);
+    else setSettleHint(null);
   }, [settleEnabled]);
   const edges = useMemo<GoalGalaxyFlowEdge[]>(() => {
     const handleBoxById = new Map<string, HandleBox>();
@@ -731,6 +734,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   function handleNodeDragStop(node: GoalGalaxyFlowNode): void {
     if (settleEnabled) {
       settle.setDragPin(node.id, null);
+      setSettleHint("灵动模式不保存位置，切回静态模式后恢复布局");
       if (node.type === "goal-star") {
         for (const currentNode of nodes) {
           if (currentNode.type === "goal-galaxy-member" && currentNode.data.anchorIds.includes(node.id)) {
@@ -751,7 +755,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       return;
     }
 
-    const anchor = anchorCanvasById[`goal:${ref.goalId}`] ?? { x: 0, y: 0 };
+    const starNodeId = `goal:${ref.goalId}`;
+    const anchor =
+      nodes.find((candidate) => candidate.id === starNodeId)?.position ??
+      layout.positions[starNodeId] ??
+      anchorCanvasById[starNodeId] ??
+      { x: 0, y: 0 };
     const coords = memberPinFromCanvas(finalPosition, anchor);
     void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y });
   }
@@ -1172,6 +1181,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       {errorMessage && (
         <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
           {errorMessage}
+        </div>
+      )}
+      {settleHint && !errorMessage && (
+        <div className="td-text-body absolute bottom-3 right-3 z-10 rounded-card border border-border bg-surface px-3 py-2 text-ink-2">
+          {settleHint}
         </div>
       )}
       <ConfirmSheet
