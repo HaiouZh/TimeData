@@ -268,10 +268,47 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("重复模板行：复选框 disabled，点击不触发 onToggle", async () => {
+  it("到期规则行：复选框可勾，点击触发 onToggle 并短暂显示已勾反馈", async () => {
     const onToggle = vi.fn();
-    const r = task({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const rule = await addTask({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await runMaterialization();
+    const fresh = (await db.tasks.get(rule.id))!;
+    const { host, root } = await render(
+      createElement(TaskRow, { task: fresh, pool: "upcoming", ...handlers, onToggle }),
+    );
+    await settle();
+    const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
+    expect(cb?.disabled).toBe(false);
+    expect(cb?.checked).toBe(false);
+    await click(cb);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect((host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement).checked).toBe(true);
+    await unmount(root);
+  });
+
+  it("到期但尚未物化的规则行：复选框同样可勾（勾选会先物化再完成）", async () => {
+    const onToggle = vi.fn();
+    const rule = await addTask({ title: "补铁", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    const { host, root } = await render(
+      createElement(TaskRow, { task: rule, pool: "upcoming", ...handlers, onToggle }),
+    );
+    await settle();
+    const cb = host.querySelector('input[aria-label="完成 补铁"]') as HTMLInputElement | null;
+    expect(cb?.disabled).toBe(false);
+    await click(cb);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("未到期规则行（下一发在未来）：复选框 disabled，点击不触发 onToggle", async () => {
+    const onToggle = vi.fn();
+    const r = task({
+      title: "刮胡子",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2099-12-31T00:00:00.000Z",
+    });
     const { host, root } = await render(createElement(TaskRow, { task: r, pool: "upcoming", ...handlers, onToggle }));
+    await settle();
     const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
     expect(cb?.disabled).toBe(true);
     await click(cb);

@@ -1,15 +1,15 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { ArrowLeft, ArrowRight, CaretDown, CaretRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
-import type { Task } from "@timedata/shared";
+import { nextDueDate, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
-import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProjection.js";
 import { currentDueDateString } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
+import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProjection.js";
 import { tagColor } from "../../lib/tasks/turnTags.js";
 import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
@@ -46,6 +46,7 @@ export interface TaskRowProps {
 }
 
 const FRESH_OCCURRENCE_MS = 4000;
+const RULE_COMPLETE_FLASH_MS = 1000;
 
 type FreshOccurrenceInput = Pick<Task, "createdAt" | "done" | "recurrence" | "ruleId" | "skipped">;
 
@@ -103,11 +104,29 @@ export function TaskRow({
       [] as Task[],
     ) ?? [];
   const isRecurring = task.recurrence !== null;
-  const checked = task.recurrence ? false : task.done;
+  // 规则行勾选=代理完成「最新一发」：到期（有活跃 pending，或账本推的下一发 ≤ 今天）才可勾；
+  // 未到期不开提前打卡。勾完最新一发会即时物化下一发，用短暂已勾反馈盖住"勾了弹回"。
+  const [ruleJustCompleted, setRuleJustCompleted] = useState(false);
+  const ruleFlashTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (ruleFlashTimer.current != null) window.clearTimeout(ruleFlashTimer.current);
+    },
+    [],
+  );
+  const ruleDueReady =
+    isRecurring &&
+    (processedOccurrences.some((o) => !o.done && !o.skipped) ||
+      (() => {
+        const due = nextDueDate(task, processedOccurrences, new Date());
+        return due != null && due <= getDateString(new Date());
+      })());
+  const checked = task.recurrence ? ruleJustCompleted : task.done;
   const childTotal = children.length;
   const { latestOccurrence, occurrenceChildren } = useLatestOccurrenceChildren(isRecurring ? task : null);
   const childDone = isRecurring
-    ? projectTemplateChildren(children, latestOccurrence, occurrenceChildren).filter((entry) => entry.effectiveDone).length
+    ? projectTemplateChildren(children, latestOccurrence, occurrenceChildren).filter((entry) => entry.effectiveDone)
+        .length
     : children.filter((c) => c.done).length;
   const overdueDate = overdue
     ? task.recurrence
@@ -211,9 +230,17 @@ export function TaskRow({
               ariaLabel={`完成 ${task.title}`}
               checked={checked}
               onChange={() => {
-                if (!isRecurring) onToggle(task);
+                if (!isRecurring) {
+                  onToggle(task);
+                  return;
+                }
+                if (!ruleDueReady || ruleJustCompleted) return;
+                setRuleJustCompleted(true);
+                if (ruleFlashTimer.current != null) window.clearTimeout(ruleFlashTimer.current);
+                ruleFlashTimer.current = window.setTimeout(() => setRuleJustCompleted(false), RULE_COMPLETE_FLASH_MS);
+                onToggle(task);
               }}
-              disabled={isRecurring}
+              disabled={isRecurring && !ruleDueReady}
               className="shrink-0"
             />
           </div>

@@ -210,17 +210,39 @@ describe("TaskDetailSheet 展示与关闭", () => {
     await unmount(root);
   });
 
-  it("重复模板详情：复选框 disabled，不能直接完成模板", async () => {
+  it("到期重复模板详情：勾复选框代理完成最新一发（未物化则先物化），模板本体不承载完成态", async () => {
     const t = await addTask({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
     const { host, root } = await renderSheet(t.id);
     const cb = host.querySelector('input[aria-label="完成 刮胡子"]') as HTMLInputElement | null;
+
+    expect(cb?.disabled).toBe(false);
+    await click(cb);
+    await settle();
+
+    const stored = await waitForTask(t.id, () => true);
+    expect(stored).toMatchObject({ done: false });
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if ((await db.tasks.where("ruleId").equals(t.id).toArray()).some((o) => o.done)) break;
+      await settle();
+    }
+    const occurrences = await db.tasks.where("ruleId").equals(t.id).toArray();
+    expect(occurrences.some((o) => o.done)).toBe(true);
+    await unmount(root);
+  });
+
+  it("未到期重复模板详情：复选框 disabled，点击不产生 occurrence", async () => {
+    const t = await addTask({
+      title: "远期规则",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: normalizeScheduledDate("2099-12-31"),
+    });
+    const { host, root } = await renderSheet(t.id);
+    const cb = host.querySelector('input[aria-label="完成 远期规则"]') as HTMLInputElement | null;
 
     expect(cb?.disabled).toBe(true);
     await click(cb);
     await settle();
 
-    const stored = await db.tasks.get(t.id);
-    expect(stored).toMatchObject({ done: false, lastDoneAt: null, completedCount: 0 });
     expect(await db.tasks.where("ruleId").equals(t.id).count()).toBe(0);
     await unmount(root);
   });
