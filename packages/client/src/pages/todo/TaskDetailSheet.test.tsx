@@ -381,7 +381,7 @@ describe("TaskDetailSheet 自动保存", () => {
     await unmount(root);
   });
 
-  it("逾期重复任务从预设改为每天时，用今天重新锚定起始日", async () => {
+  it("逾期重复任务从预设改为每天时，锚定到未完成的那一发（不吞掉逾期）", async () => {
     const today = getDateString(new Date());
     const yesterday = addDays(today, -1);
     const task = await addTask({
@@ -399,8 +399,9 @@ describe("TaskDetailSheet 自动保存", () => {
 
     const saved = await waitForTask(task.id, (current) => current?.recurrence?.interval === 1);
     expect(saved?.recurrence).toMatchObject({ freq: "daily", interval: 1, basis: "due" });
-    expect(saved?.startAt).toBe(normalizeScheduledDate(today));
-    expect(placementForTask(saved!, new Date())).toEqual({ pool: "today", overdue: false });
+    // 锚点=账本推出的未完成一发（昨天），逾期那发仍计入，不因改规则被吞
+    expect(saved?.startAt).toBe(normalizeScheduledDate(yesterday));
+    expect(placementForTask(saved!, new Date())).toEqual({ pool: "today", overdue: true });
 
     await unmount(root);
   });
@@ -483,6 +484,84 @@ describe("TaskDetailSheet 自动保存", () => {
     });
     await settle();
     expect((await db.tasks.get(t.id))?.title).toBe("关闭前改的");
+    await unmount(root);
+  });
+});
+
+describe("TaskDetailSheet 重复规则编辑目标与锚点", () => {
+  function occurrenceRow(ruleId: string, date: string, over: Partial<Task> = {}): Task {
+    const scheduledAt = normalizeScheduledDate(date);
+    return {
+      id: `occ:${ruleId}:${date}`,
+      parentId: null,
+      title: "占位",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId,
+      skipped: false,
+      sortOrder: 0,
+      createdAt: scheduledAt,
+      updatedAt: scheduledAt,
+      ...over,
+    } as Task;
+  }
+
+  it("从 occurrence 打开：徽章与预设门反映规则本身，改动写回规则而非 occurrence", async () => {
+    const today = getDateString(new Date());
+    const rule = await addTask({
+      title: "每周汇报",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: normalizeScheduledDate(addDays(today, -10)),
+    });
+    const occDate = addDays(today, -2);
+    await db.tasks.add(occurrenceRow(rule.id, occDate, { title: "每周汇报" }));
+    const occId = `occ:${rule.id}:${occDate}`;
+
+    const { host, root } = await renderSheet(occId);
+    await settle();
+    // 徽章显示规则摘要（而非 occurrence 的单日日期）
+    expect(badgeOf(host).textContent).toContain(recurrenceSummary(rule.recurrence!));
+
+    await click(badgeOf(host));
+    const weekdaysBtn = await waitForElement(host, 'button[aria-label="工作日"]');
+    await click(weekdaysBtn);
+    await settle();
+
+    const savedRule = await waitForTask(rule.id, (t) => t?.recurrence?.freq === "weekly");
+    expect(savedRule?.recurrence).toMatchObject({ freq: "weekly", byWeekday: [1, 2, 3, 4, 5] });
+    // occurrence 自身不被改成规则
+    const savedOcc = await db.tasks.get(occId);
+    expect(savedOcc?.recurrence ?? null).toBeNull();
+    await unmount(root);
+  });
+
+  it("规则锚点跳到未完成的最近一发（pending occurrence 的应发生日），而非原始 startAt", async () => {
+    const today = getDateString(new Date());
+    const startDate = addDays(today, -10);
+    const pendingDate = addDays(today, -2);
+    const rule = await addTask({
+      title: "补铁",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: normalizeScheduledDate(startDate),
+    });
+    await db.tasks.add(occurrenceRow(rule.id, pendingDate, { title: "补铁" }));
+
+    const { host, root } = await renderSheet(rule.id);
+    await settle();
+    await click(badgeOf(host));
+    await settle();
+
+    const pendingDay = Number(pendingDate.slice(8, 10));
+    const startDay = Number(startDate.slice(8, 10));
+    expect(host.querySelector(`button[aria-label="每月${pendingDay}号"]`)).not.toBeNull();
+    expect(host.querySelector(`button[aria-label="每月${startDay}号"]`)).toBeNull();
     await unmount(root);
   });
 });

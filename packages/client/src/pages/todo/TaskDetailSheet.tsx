@@ -1,11 +1,11 @@
 import { Trash, X } from "@phosphor-icons/react";
-import type { Recurrence, Task } from "@timedata/shared";
+import { nextDueDate, type Recurrence, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
-import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
+import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
 import { subtaskProgress } from "../../lib/tasks/subtasks.js";
 import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
@@ -172,30 +172,40 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
 
   const subtaskTotal = childRows.length;
   const subtaskDone = childRows.filter((c) => c.done).length;
-  const processedOccurrences =
+  // 从 occurrence 打开时，重复编辑的目标是它的规则模板（occurrence 自身 recurrence 恒为 null）。
+  const rule = useLiveQuery(() => (task?.ruleId ? db.tasks.get(task.ruleId) : undefined), [task?.ruleId]);
+  const recurrenceTarget = (task?.ruleId ? rule : task) ?? task ?? null;
+  const ruleOccurrences =
     useLiveQuery(
       () =>
-        task?.recurrence
-          ? db.tasks.where("ruleId").equals(task.id).toArray()
+        recurrenceTarget?.recurrence
+          ? db.tasks.where("ruleId").equals(recurrenceTarget.id).toArray()
           : Promise.resolve([] as Task[]),
-      [task?.id, task?.recurrence !== null],
+      [recurrenceTarget?.id, recurrenceTarget?.recurrence !== null],
       [] as Task[],
     ) ?? [];
   const todayDate = getDateString(new Date());
-  const taskPlacement = task ? placementForTask(task, new Date()) : null;
-  const anchorDate =
-    task?.recurrence && taskPlacement?.pool === "today" && taskPlacement.overdue
-      ? todayDate
-      : task?.startAt
-        ? getDateString(new Date(task.startAt))
-        : todayDate;
-  const nextTimeLabel = task ? taskTimeLabel(task, processedOccurrences) : "设定时间";
+  // 锚点=未完成的最近一发：优先活跃 pending occurrence 的应发生日，否则按账本推下一发。
+  const pendingOccurrence = ruleOccurrences.find((o) => !o.done && !o.skipped) ?? null;
+  const nextDue = recurrenceTarget?.recurrence ? nextDueDate(recurrenceTarget, ruleOccurrences, new Date()) : null;
+  const anchorDate = recurrenceTarget?.recurrence
+    ? pendingOccurrence?.scheduledAt
+      ? getDateString(new Date(pendingOccurrence.scheduledAt))
+      : (nextDue ?? todayDate)
+    : task?.startAt
+      ? getDateString(new Date(task.startAt))
+      : todayDate;
+  const nextTimeLabel = recurrenceTarget ? taskTimeLabel(recurrenceTarget, ruleOccurrences) : "设定时间";
   const customInitial = useMemo(
     () =>
-      task
-        ? recurrenceToCustomInput(task.recurrence ?? DEFAULT_RECURRENCE, task.startAt, anchorDate)
+      recurrenceTarget
+        ? recurrenceToCustomInput(
+            recurrenceTarget.recurrence ?? DEFAULT_RECURRENCE,
+            recurrenceTarget.recurrence ? null : recurrenceTarget.startAt,
+            anchorDate,
+          )
         : recurrenceToCustomInput(DEFAULT_RECURRENCE, null, todayDate),
-    [anchorDate, task, todayDate],
+    [anchorDate, recurrenceTarget, todayDate],
   );
 
   const closeRef = useRef(handleClose);
@@ -383,26 +393,26 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
           </div>
         )}
       </div>
-      {task && overlay === "preset" && (
+      {recurrenceTarget && overlay === "preset" && (
         <RecurrencePresetSheet
-          current={task.recurrence}
-          scheduledAt={task.scheduledAt ?? null}
+          current={recurrenceTarget.recurrence}
+          scheduledAt={recurrenceTarget.scheduledAt ?? null}
           anchor={anchorDate}
           onChoose={(choice) => {
             setOverlay("none");
-            void run(() => applyRecurrenceChoice(task.id, choice));
+            void run(() => applyRecurrenceChoice(recurrenceTarget.id, choice));
           }}
           onCustom={() => setOverlay("custom")}
           onClose={() => setOverlay("none")}
         />
       )}
-      {task && overlay === "custom" && (
+      {recurrenceTarget && overlay === "custom" && (
         <CustomRecurrencePage
           initial={customInitial}
           onBack={() => setOverlay("preset")}
           onComplete={(recurrence, startDate) => {
             setOverlay("none");
-            void run(() => updateTask(task.id, { recurrence, startAt: normalizeScheduledDate(startDate) }));
+            void run(() => updateTask(recurrenceTarget.id, { recurrence, startAt: normalizeScheduledDate(startDate) }));
           }}
         />
       )}
