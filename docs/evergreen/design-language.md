@@ -12,11 +12,12 @@ covers:
   - packages/client/src/pages/dev/StyleguidePage.tsx
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
-last-reviewed: 2026-07-02
+last-reviewed: 2026-07-04
 ---
 <!-- 复核 2026-07-02（timeline 修复 A）：ActionToastBar 复用清掉 QuickNotesPage/TimelinePage 两条失效 bare-text-size allowlist；设计语言规则不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：design-language-allowlist 仅随 BackupHistoryPage 删除清理失效条目并同步一条 lineText，未新增豁免；设计语言规则不变。 -->
 <!-- 复核 2026-07-02（timeline 修复 C 收尾）：EntryPage 返回按钮迁移到 td-text-caption，删除 2 条失效 bare-text-size allowlist；设计语言规则不变。 -->
+<!-- 复核 2026-07-04（Goal Plan C）：GoalGalaxyCanvas 错误提示与 GoalGraphToolbar 摘要迁移到语义排版，删除 2 条失效 bare-text-size allowlist；设计语言规则不变。 -->
 
 # 设计语言
 

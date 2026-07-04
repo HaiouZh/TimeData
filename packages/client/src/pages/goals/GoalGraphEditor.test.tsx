@@ -551,6 +551,47 @@ describe("GoalGraphEditor", () => {
     expect((await db.goals.get("goal-1"))?.prerequisites).toEqual([{ blocker: members[0], blocked: members[1] }]);
   });
 
+  it("连前置校验失败时错误显示在 ConnectSheet 内部", async () => {
+    const members: GoalMemberRef[] = [
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ];
+    const goalValue = goal({ members, prerequisites: [{ blocker: members[0], blocked: members[1] }] });
+    const first = task("t1", { title: "A" });
+    const second = task("t2", { title: "B" });
+    await seed(goalValue, [first, second]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
+
+    await click(nodeButton(host, "task:t1"));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(buttonByText(document.body, "让它先于别人"));
+    await click(buttonByLabel(document.body, "选择前置目标 B"));
+    await tick();
+
+    const sheetError = document.body.querySelector("[data-connect-sheet-error]");
+    expect(sheetError?.textContent).toContain("这条前置已存在");
+  });
+
+  it("React Flow select changes sync selected node state", async () => {
+    const members: GoalMemberRef[] = [{ kind: "task", id: "task-1" }];
+    const goalValue = goal({ members });
+    const taskValue = task("task-1", { title: "写说明" });
+    await seed(goalValue, [taskValue]);
+
+    await renderEditor({ goal: goalValue, tasks: [taskValue] });
+
+    act(() => {
+      getReactFlowMock().fireNodesChange([{ id: "task:task-1", type: "select", selected: true }]);
+    });
+    expect(buttonByLabel(document.body, "移除成员 写说明")).toBeInstanceOf(HTMLButtonElement);
+
+    act(() => {
+      getReactFlowMock().fireNodesChange([{ id: "task:task-1", type: "select", selected: false }]);
+    });
+    expect(document.body.querySelector('button[aria-label="移除成员 写说明"]')).toBeNull();
+  });
+
   it("删前置边后可撤销", async () => {
     const members: GoalMemberRef[] = [
       { kind: "task", id: "task-1" },

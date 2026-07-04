@@ -1,10 +1,28 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { GoalGraphToolbar } from "./GoalGraphToolbar.js";
 
+const coarsePointerMock = vi.hoisted(() => vi.fn(() => false));
+
+vi.mock("../../lib/useIsCoarsePointer.js", () => ({ useIsCoarsePointer: coarsePointerMock }));
+
+function toolbarProps() {
+  return {
+    summary: { ready: 3, blocked: 2, completed: 1 },
+    onAddMember: vi.fn<() => void>(),
+    onFitView: vi.fn<() => void>(),
+    onBackToGalaxy: vi.fn<() => void>(),
+    onOpenGoalMenu: vi.fn<() => void>(),
+  };
+}
+
 describe("GoalGraphToolbar", () => {
+  beforeEach(() => {
+    coarsePointerMock.mockReturnValue(false);
+  });
+
   it("shows graph summary and routes the three toolbar actions independently", async () => {
     const onAddMember = vi.fn<() => void>();
     const onFitView = vi.fn<() => void>();
@@ -74,6 +92,28 @@ describe("GoalGraphToolbar", () => {
     await click(host.querySelector('button[aria-label="恢复自动布局"]'));
 
     expect(onRestoreLayout).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("uses a 44px target for coarse pointers", async () => {
+    coarsePointerMock.mockReturnValue(true);
+    const { host, root } = await renderDom(createElement(GoalGraphToolbar, toolbarProps()));
+
+    const button = host.querySelector('button[aria-label="添加成员"]');
+    expect(button?.className).toContain("h-11");
+    expect(button?.className).toContain("w-11");
+    expect(button?.parentElement?.className).toContain("gap-2");
+    await unmount(root);
+  });
+
+  it("keeps compact targets for fine pointers", async () => {
+    coarsePointerMock.mockReturnValue(false);
+    const { host, root } = await renderDom(createElement(GoalGraphToolbar, toolbarProps()));
+
+    const button = host.querySelector('button[aria-label="添加成员"]');
+    expect(button?.className).toContain("h-8");
+    expect(button?.className).toContain("w-8");
+    expect(button?.parentElement?.className).toContain("gap-1");
     await unmount(root);
   });
 });

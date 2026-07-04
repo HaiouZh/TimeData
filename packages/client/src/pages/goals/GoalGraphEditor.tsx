@@ -213,6 +213,12 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
   }, [layoutNodes]);
 
   const onNodesChange = useCallback((changes: NodeChange<GoalGraphFlowNode>[]) => {
+    for (const change of changes) {
+      if (change.type !== "select") continue;
+      if (change.selected) setSelectedNodeId(change.id);
+      else setSelectedNodeId((current) => (current === change.id ? null : current));
+    }
+
     setNodes((current) => {
       const goalBefore = current.find((node) => node.id === GOAL_NODE_ID)?.position;
       const next = applyNodeChanges(changes, current);
@@ -508,7 +514,11 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
         open={Boolean(connectDraft)}
         draft={connectDraft}
         nodes={model.nodes}
-        onClose={() => setConnectDraft(null)}
+        errorMessage={errorMessage}
+        onClose={() => {
+          setConnectDraft(null);
+          setErrorMessage(null);
+        }}
         onDirection={(direction) => setConnectDraft((draft) => (draft ? { ...draft, direction } : draft))}
         onTarget={(node) => void connectToTarget(node)}
       />
@@ -653,6 +663,7 @@ function ConnectSheet({
   open,
   draft,
   nodes,
+  errorMessage,
   onClose,
   onDirection,
   onTarget,
@@ -660,6 +671,7 @@ function ConnectSheet({
   open: boolean;
   draft: ConnectDraft | null;
   nodes: GoalGraphNodeModel[];
+  errorMessage: string | null;
   onClose: () => void;
   onDirection: (direction: ConnectDraft["direction"]) => void;
   onTarget: (node: GoalGraphNodeModel) => void;
@@ -685,6 +697,15 @@ function ConnectSheet({
             让它等待别人
           </button>
         </div>
+        {errorMessage && (
+          <p
+            data-connect-sheet-error
+            role="alert"
+            className="rounded-row border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger"
+          >
+            {errorMessage}
+          </p>
+        )}
         {draft?.direction && (
           <div className="grid gap-2">
             {candidates.map((node) => (

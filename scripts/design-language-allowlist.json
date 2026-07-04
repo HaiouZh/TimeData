@@ -972,14 +972,6 @@
     {
       "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
       "rule": "bare-text-size",
-      "lineText": "<div className=\"absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGalaxyCanvas.tsx",
-      "rule": "bare-text-size",
       "lineText": "className=\"min-h-11 rounded-ctl border border-border px-3 text-left text-sm text-ink\"",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -1101,14 +1093,6 @@
       "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
       "rule": "bare-text-size",
       "lineText": "className=\"pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left text-xs leading-relaxed text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphToolbar.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"whitespace-nowrap px-1 text-xs text-ink-2\">",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"

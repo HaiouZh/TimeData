@@ -78,6 +78,70 @@ describe("GoalGraphUndoToast", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("does not restart the timeout when only onDismiss changes", async () => {
+    const dismissed = vi.fn();
+    const { root } = await renderDom(
+      createElement(GoalGraphUndoToast, {
+        open: true,
+        message: "已移出成员",
+        onDismiss: () => dismissed(),
+      }),
+    );
+    mountedRoot = root;
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+    await act(async () => {
+      root.render(
+        createElement(GoalGraphUndoToast, {
+          open: true,
+          message: "已移出成员",
+          onDismiss: () => dismissed(),
+        }),
+      );
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(dismissed).toHaveBeenCalledTimes(1);
+  });
+
+  it("restarts the timeout when the message changes", async () => {
+    const onDismiss = vi.fn();
+    const { root } = await renderDom(
+      createElement(GoalGraphUndoToast, {
+        open: true,
+        message: "已移出成员",
+        onDismiss,
+      }),
+    );
+    mountedRoot = root;
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    await act(async () => {
+      root.render(
+        createElement(GoalGraphUndoToast, {
+          open: true,
+          message: "已删除前置",
+          onDismiss,
+        }),
+      );
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("can be closed by owner state after undo action", async () => {
     const onAction = vi.fn();
     function StatefulToast() {

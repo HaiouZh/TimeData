@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const DEFAULT_DURATION_MS = 5000;
 
@@ -19,12 +19,20 @@ export function GoalGraphUndoToast({
   onDismiss,
   durationMs = DEFAULT_DURATION_MS,
 }: GoalGraphUndoToastProps) {
+  const onDismissRef = useRef(onDismiss);
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  });
+
   useEffect(() => {
     if (!open) return undefined;
 
-    const timeoutId = window.setTimeout(onDismiss, durationMs);
+    // message 是 toast 的身份键：换一条撤销才重置计时；onDismiss 引用变化不重置。
+    void message;
+    const timeoutId = window.setTimeout(() => onDismissRef.current(), durationMs);
     return () => window.clearTimeout(timeoutId);
-  }, [durationMs, onDismiss, open]);
+  }, [durationMs, message, open]);
 
   if (!open) return null;
 

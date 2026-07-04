@@ -2,7 +2,7 @@
 import type { Task, Track, TrackStep } from "@timedata/shared";
 import { act } from "react";
 import type { ComponentProps } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { GoalUnassignedTray } from "./GoalUnassignedTray.js";
 
@@ -144,6 +144,20 @@ describe("GoalUnassignedTray", () => {
     expect(row.getAttribute("data-tray-ref")).toBe("task:candidate");
     expect(dataTransfer.effectAllowed).toBe("copy");
     expect(data.get("application/x-goal-member")).toBe(JSON.stringify({ kind: "task", id: "candidate" }));
+  });
+
+  it("click interaction turns task rows into add buttons", async () => {
+    const onSelect = vi.fn();
+    const rendered = await renderTray({
+      tasks: [task({ id: "candidate", title: "写星图" })],
+      interaction: { mode: "click", onSelect },
+    });
+
+    const row = buttonByLabel(rendered.host, "添加任务 写星图");
+    expect(row.draggable).toBe(false);
+    await click(row);
+
+    expect(onSelect).toHaveBeenCalledWith({ kind: "task", id: "candidate" });
   });
 
   it("有子任务的根默认折叠、点开露出子任务", async () => {

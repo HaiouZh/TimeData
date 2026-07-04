@@ -45,6 +45,7 @@ import { buildGoalOverview } from "../../lib/goalsView.js";
 import { unassignedTasks, unassignedTracks } from "../../lib/goalUnassigned.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { toggleTaskDone } from "../../lib/tasks.js";
+import { useIsCoarsePointer } from "../../lib/useIsCoarsePointer.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { buildGalaxySettleInput } from "./buildGalaxySettleInput.js";
 import { GoalAddMemberSheet } from "./GoalAddMemberSheet.js";
@@ -100,6 +101,7 @@ type GraphGoalLike = Pick<Goal, "members" | "prerequisites">;
 type BridgeRouteChoice = { goalIds: string[]; nodeTitle: string } | null;
 
 const ADD_MEMBER_ACTION: GoalAction = { id: "add-member", label: "添加成员", tone: "primary" };
+const OPEN_GOAL_ACTION: GoalAction = { id: "open", label: "打开目标", tone: "primary" };
 
 const REASON_COPY = {
   "self-reference": "不能连接自己",
@@ -437,6 +439,7 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
 function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
   const wide = useIsWideScreen();
+  const coarse = useIsCoarsePointer();
   const boardSignals = useTrackActionTags();
   const [viewport, setViewport] = useState<GalaxyViewport>(() => flow.getViewport?.() ?? DEFAULT_VIEWPORT);
   const [lodByGoalId, setLodByGoalId] = useState<Record<string, ClusterLod>>({});
@@ -449,6 +452,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
   const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
+  const [assignRef, setAssignRef] = useState<GoalMemberRef | null>(null);
   const [indexOpen, setIndexOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
   const [tetherOpacity, setTetherOpacity] = useState(DEFAULT_TETHER_OPACITY);
@@ -461,7 +465,8 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
   const settleEnabled = engineMode === "settle";
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
-  const activeGoalIds = useMemo(() => goals.filter((goal) => goal.status === "active").map((goal) => goal.id), [goals]);
+  const activeGoals = useMemo(() => goals.filter((goal) => goal.status === "active"), [goals]);
+  const activeGoalIds = useMemo(() => activeGoals.map((goal) => goal.id), [activeGoals]);
   const activeGoalKey = useMemo(() => [...activeGoalIds].sort().join("\n"), [activeGoalIds]);
   const activeGoalCount = activeGoalIds.length;
   useEffect(() => {
@@ -705,6 +710,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
 
   const onNodesChange = useCallback(
     (changes: NodeChange<GoalGalaxyFlowNode>[]) => {
+      for (const change of changes) {
+        if (change.type !== "select") continue;
+        if (change.selected) setSelectedNodeId(change.id);
+        else setSelectedNodeId((current) => (current === change.id ? null : current));
+      }
+
       const settlePins: Array<{ id: string; position: XY }> = [];
       setNodes((current) => applyGalaxyNodeChanges(current, changes));
       if (settleEnabled) {
@@ -860,7 +871,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     const actions = actionsForNode(selectedGraphNode, {
       pinned: selectedFlowNode.data.pinned === true,
     });
-    return selectedGraphNode.kind === "goal" ? [ADD_MEMBER_ACTION, ...actions] : actions;
+    return selectedGraphNode.kind === "goal" ? [OPEN_GOAL_ACTION, ADD_MEMBER_ACTION, ...actions] : actions;
   }, [selectedFlowNode, selectedGraphNode]);
   const selectedGraphEdge = useMemo<GoalGraphEdge | null>(() => {
     if (!selectedEdgeId) return null;
@@ -891,6 +902,11 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     if (action.id === "add-member") {
       const goalId = goalIdFromStarNodeId(selectedFlowNode.id);
       if (goalId) setAddMemberGoalId(goalId);
+      return;
+    }
+    if (action.id === "open" && selectedGraphNode.kind === "goal") {
+      const goalId = goalIdFromStarNodeId(selectedFlowNode.id);
+      if (goalId) onNavigate(`/goals/${goalId}`);
       return;
     }
     if (action.id === "edit-goal") {
@@ -931,6 +947,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         return;
       }
       setConnectDraft({ goalId: owningGoalIds[0], node: selectedGraphNode });
+      setSelectedNodeId(null);
       setErrorMessage(null);
       return;
     }
@@ -1011,6 +1028,13 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     await addGoalMember(addMemberGoalId, ref);
   }
 
+  async function assignToGoal(goalId: string): Promise<void> {
+    if (!assignRef) return;
+    await addGoalMember(goalId, assignRef);
+    setAssignRef(null);
+    setErrorMessage(null);
+  }
+
   async function quickCreateTask(title: string): Promise<void> {
     if (!addMemberGoalId) return;
     await addTaskForGoal(addMemberGoalId, { title, toInbox: destination === "inbox" });
@@ -1089,12 +1113,18 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       )}
       {wide && trayOpen && (
         <ResizableTrayAside>
-          <GoalUnassignedTray tasks={trayTasks} tracks={trayTracks} steps={steps} boardSignals={boardSignals} />
+          <GoalUnassignedTray
+            tasks={trayTasks}
+            tracks={trayTracks}
+            steps={steps}
+            boardSignals={boardSignals}
+            interaction={coarse ? { mode: "click", onSelect: setAssignRef } : { mode: "drag" }}
+          />
         </ResizableTrayAside>
       )}
       <div
         data-galaxy-controls
-        className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-2"
+        className="pointer-events-none absolute left-3 top-3 z-10 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2"
       >
         <GoalGalaxyHud rollup={rollup} />
         {wide && (
@@ -1167,6 +1197,22 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
           onLiveChange={setLiveSettle}
         />
       </div>
+      {connectDraft && (
+        <div
+          data-connect-hint
+          className="absolute left-1/2 top-3 z-[var(--z-popover)] flex -translate-x-1/2 items-center gap-3 rounded-pill border border-accent bg-surface-elevated px-4 py-2 td-text-body text-ink shadow-elev1"
+        >
+          <span>为「{connectDraft.node.title}」连前置：点击目标节点完成连接</span>
+          <button
+            type="button"
+            aria-label="取消连前置"
+            onClick={() => setConnectDraft(null)}
+            className="rounded-ctl border border-border px-2 py-0.5 td-text-caption text-ink-2 hover:bg-surface-hover"
+          >
+            取消
+          </button>
+        </div>
+      )}
       <GoalGalaxyActionBar
         node={selectedGraphNode}
         actions={selectedNodeActions}
@@ -1179,12 +1225,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         onClose={clearSelection}
       />
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
+        <div className="absolute bottom-3 right-3 z-[var(--z-popover)] rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger">
           {errorMessage}
         </div>
       )}
       {settleHint && !errorMessage && (
-        <div className="td-text-body absolute bottom-3 right-3 z-10 rounded-card border border-border bg-surface px-3 py-2 text-ink-2">
+        <div className="td-text-body absolute bottom-3 right-3 z-[var(--z-popover)] rounded-card border border-border bg-surface px-3 py-2 text-ink-2">
           {settleHint}
         </div>
       )}
@@ -1237,6 +1283,21 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
               </button>
             );
           })}
+        </div>
+      </Sheet>
+      <Sheet open={assignRef !== null} onClose={() => setAssignRef(null)} title="加入哪个目标">
+        <div className="grid gap-2 px-4 pb-4">
+          {activeGoals.map((goal) => (
+            <button
+              key={goal.id}
+              type="button"
+              aria-label={`加入 ${goal.title}`}
+              onClick={() => void assignToGoal(goal.id)}
+              className="min-h-11 rounded-ctl border border-border px-3 text-left td-text-body text-ink"
+            >
+              {goal.title}
+            </button>
+          ))}
         </div>
       </Sheet>
     </div>

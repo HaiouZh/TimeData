@@ -2,7 +2,7 @@ import type { GoalMemberRef, Task, Track, TrackStep } from "@timedata/shared";
 import { useMemo, useState } from "react";
 import { allTags } from "../../lib/tasks/turnTags.js";
 import { TagFilterPanel } from "../todo/TagFilterPanel.js";
-import { GoalCandidateList } from "./GoalCandidateList.js";
+import { GoalCandidateList, type GoalCandidateInteraction } from "./GoalCandidateList.js";
 import {
   buildGoalTaskCandidates,
   buildGoalTrackCandidates,
@@ -15,6 +15,7 @@ export interface GoalUnassignedTrayProps {
   tracks: Track[];
   steps: TrackStep[];
   boardSignals: readonly string[];
+  interaction?: GoalCandidateInteraction;
 }
 
 type TrayTab = "tasks" | "tracks";
@@ -27,7 +28,7 @@ function toggleListValue(values: string[], value: string): string[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
-export function GoalUnassignedTray({ tasks, tracks, steps, boardSignals }: GoalUnassignedTrayProps) {
+export function GoalUnassignedTray({ tasks, tracks, steps, boardSignals, interaction }: GoalUnassignedTrayProps) {
   const [tab, setTab] = useState<TrayTab>("tasks");
   const [searchQuery, setSearchQuery] = useState("");
   const [includeTags, setIncludeTags] = useState<string[]>([]);
@@ -123,7 +124,7 @@ export function GoalUnassignedTray({ tasks, tracks, steps, boardSignals }: GoalU
           taskGroups={taskGroups}
           trackGroups={trackGroups}
           emptyLabel="没有未归类项"
-          interaction={{ mode: "drag" }}
+          interaction={interaction ?? { mode: "drag" }}
         />
       </div>
     </div>

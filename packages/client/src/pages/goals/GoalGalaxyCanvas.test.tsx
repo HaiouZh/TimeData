@@ -18,6 +18,7 @@ const deleteGoalMock = vi.hoisted(() => vi.fn());
 const settleReheatMock = vi.hoisted(() => vi.fn());
 const settleSetDragPinMock = vi.hoisted(() => vi.fn());
 const todoDefaultDestinationMock = vi.hoisted(() => vi.fn(() => "today"));
+const coarsePointerMock = vi.hoisted(() => vi.fn(() => false));
 
 vi.mock("@xyflow/react", async () => await import("./test/reactFlowMock.js"));
 vi.mock("../../lib/goalLayoutPins.js", () => ({
@@ -37,6 +38,7 @@ vi.mock("../../lib/settings/trackActionTagsSetting.js", () => ({
   useTrackActionTags: () => ["待我处理", "agent在做"],
 }));
 vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: () => true }));
+vi.mock("../../lib/useIsCoarsePointer.js", () => ({ useIsCoarsePointer: coarsePointerMock }));
 vi.mock("../../lib/settings/todoDefaultDestinationSetting.js", () => ({
   useTodoDefaultDestination: todoDefaultDestinationMock,
 }));
@@ -170,6 +172,7 @@ describe("GoalGalaxyCanvas", () => {
     settleReheatMock.mockClear();
     settleSetDragPinMock.mockClear();
     todoDefaultDestinationMock.mockReset().mockReturnValue("today");
+    coarsePointerMock.mockReset().mockReturnValue(false);
   });
 
   it("renders one star for each active goal and opens the focused editor on double click", async () => {
@@ -920,6 +923,44 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("opens the selected goal star from the action list", async () => {
+    const onNavigate = vi.fn();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal({ title: "G1" })]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={onNavigate} />,
+    );
+
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await click(buttonByLabel(document.body, "打开目标 G1"));
+
+    expect(onNavigate).toHaveBeenCalledWith("/goals/g1");
+    await unmount(root);
+  });
+
+  it("React Flow select changes open and close node actions", async () => {
+    const goalValue = goal({ members: [{ kind: "task", id: "a" }] });
+    const { root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    act(() => {
+      getReactFlowMock().fireNodesChange([{ id: "task:a", type: "select", selected: true }]);
+    });
+    expect(buttonByLabel(document.body, "移除成员 A")).toBeInstanceOf(HTMLButtonElement);
+
+    act(() => {
+      getReactFlowMock().fireNodesChange([{ id: "task:a", type: "select", selected: false }]);
+    });
+    expect(document.body.querySelector('button[aria-label="移除成员 A"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("opens task and track sources from selected member actions", async () => {
     const onNavigate = vi.fn();
     const goalValue = goal({
@@ -1030,6 +1071,36 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("closes the action list and shows a cancelable hint while choosing a prerequisite target", async () => {
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "task", id: "b" },
+      ],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+
+    expect(document.body.querySelector('button[aria-label="移除成员 A"]')).toBeNull();
+    const hint = host.querySelector("[data-connect-hint]");
+    expect(hint?.textContent).toContain("点击目标节点完成连接");
+
+    await click(buttonByLabel(hint ?? host, "取消连前置"));
+    expect(host.querySelector("[data-connect-hint]")).toBeNull();
+    await unmount(root);
+  });
+
   it("rejects a prerequisite target outside the selected member goal", async () => {
     const goals = [
       goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
@@ -1127,6 +1198,37 @@ describe("GoalGalaxyCanvas", () => {
     await flushPromises();
 
     expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
+    await unmount(root);
+  });
+
+  it("click-adds an unassigned task through a goal picker for coarse pointers", async () => {
+    coarsePointerMock.mockReturnValue(true);
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "目标一" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(buttonByLabel(host, "未归类"));
+    await click(buttonByLabel(host, "添加任务 候选任务"));
+    await click(buttonByLabel(document.body, "加入 目标一"));
+    await flushPromises();
+
+    expect(addGoalMemberMock).toHaveBeenCalledWith("g1", { kind: "task", id: "candidate" });
+    await unmount(root);
+  });
+
+  it("wraps the galaxy controls on narrow widths", async () => {
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas goals={[goal()]} tasks={[]} tracks={[]} steps={[]} layoutPins={[]} onNavigate={vi.fn()} />,
+    );
+
+    expect(host.querySelector("[data-galaxy-controls]")?.className).toContain("flex-wrap");
     await unmount(root);
   });
 
