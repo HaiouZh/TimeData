@@ -1,6 +1,6 @@
 import type { TimeEntry } from "@timedata/shared";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addQuickNote } from "../lib/quickNotes.js";
+import { addQuickNote, setQuickNotePinned } from "../lib/quickNotes.js";
 import { db, resetDb } from "../test/dbReset.js";
 import { deleteQuickNotesByRange } from "./deleteQuickNotesRange.js";
 
@@ -44,5 +44,26 @@ describe("deleteQuickNotesByRange", () => {
       .filter((log) => log.tableName === "quick_notes" && log.action === "delete")
       .toArray();
     expect(deleteLogs.map((log) => log.recordId).sort()).toEqual([inFirstDay.id, inSecondDay.id].sort());
+  });
+
+  it("keeps pinned notes when clearing a day", async () => {
+    const plain = await addQuickNote("plain", {
+      occurredAt: "2026-06-01T03:00:00.000Z",
+      now: new Date("2026-06-01T04:00:00.000Z"),
+    });
+    const pinned = await addQuickNote("keep me", {
+      occurredAt: "2026-06-01T05:00:00.000Z",
+      now: new Date("2026-06-01T06:00:00.000Z"),
+    });
+    await setQuickNotePinned(pinned.id, true);
+
+    await expect(deleteQuickNotesByRange("2026-06-01", "2026-06-01")).resolves.toEqual({ deleted: 1 });
+
+    await expect(db.quickNotes.get(plain.id)).resolves.toBeUndefined();
+    await expect(db.quickNotes.get(pinned.id)).resolves.toMatchObject({ text: "keep me", pinned: true });
+    const deleteLogs = await db.syncLog
+      .filter((log) => log.tableName === "quick_notes" && log.action === "delete")
+      .toArray();
+    expect(deleteLogs.map((log) => log.recordId)).toEqual([plain.id]);
   });
 });

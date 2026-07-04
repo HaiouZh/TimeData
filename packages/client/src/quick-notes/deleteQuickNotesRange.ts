@@ -10,7 +10,7 @@ export async function deleteQuickNotesByRange(
   fromDate: string,
   toDate: string,
 ): Promise<DeleteQuickNotesRangeResult> {
-  const notes = await listQuickNotesByRange(fromDate, toDate);
+  const notes = (await listQuickNotesByRange(fromDate, toDate)).filter((note) => note.pinned !== true);
   const ids = notes.map((note) => note.id);
   const deletedAt = new Date().toISOString();
 
