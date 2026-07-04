@@ -108,7 +108,7 @@
 | 架构决策（ADR） | `docs/adr/**` | 仅追加，不改既有条目；新决策写新 ADR |
 | 本地过程文档 | `docs_local/**`（不进 Git） | 沉淀后才同步到 evergreen 或 ADR |
 
-- AI 生成的 spec / plan / review / 审查 / 历史归档默认写入 `docs_local/{specs,plans,reviews,archive,ideas,scratch}/`。
+- AI 生成的 spec / plan / review / 审查 / 历史归档默认写入 `docs_local/{specs,plans,reviews,archive,ideas,report,scratch}/`。
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
 - 长期文档头部 `covers:` 字段声明管辖代码路径。改代码后回头看 `covers` 是否命中，命中即改对应段落，并更新 `last-reviewed`。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
@@ -123,9 +123,9 @@
 - 提交：约定式风格、简洁、分组。每个 worktree 尽量 1 个 commit；TDD 多步实现可保留每步一 commit。
 - **提交信息不写 `Co-Authored-By` 或任何 AI 署名行**（覆盖 harness 默认）。
 - 不删 / 重命名意外文件；阻碍时询问，否则忽略。
-- 用户说 `commit`：只提交本次变更。`commit all`：分组提交所有变更。`push`：可先 `git pull --rebase`。
 - 不主动推送至远端，除非用户明确要求。用户为在 GitHub 上测代码而要 push 时，只推要测的代码，别夹带纯规划 / 草稿文档。
 - 默认 `main`，保持线性 history（不用 merge commit）。
+- **“通用槽 / 槽位 / 固定槽位 / 槽位实施”均表示 worktree**：用户说这类表述时，先进入 `.worktrees/slot-*` 的独立 worktree 开/切任务分支再实施；不得在主仓库根目录的 `main` 工作区直接改代码。若当前 cwd 是主仓库根目录，先停下切到空闲固定槽位，并确认槽位内无未提交工作。
 - **worktree 合 main**：在 main 仓库 `git cherry-pick <base>..<branch>`（base = worktree 基底 commit，≈当时 origin/main），不用 merge / `--no-ff`。
 - 推送前在最新 `origin/main` 上变基；变基后重跑验收命令。
 - **开 worktree 一律复用固定槽位，不要用 `git worktree add` 新建 per-branch 目录**（Windows 提效）：隔离任务用 `.worktrees/slot-*`，`git switch -C <分支> main` + `pnpm install --frozen-lockfile --prefer-offline`（多为校验补链），别每任务重建 / 删整棵 `node_modules`。`superpowers:using-git-worktrees` skill 默认走 per-branch `git worktree add`、与此约定冲突，**别用它**；本机可在 `.claude/settings.json`（`.claude/` 不入库）用 `skillOverrides` off + `permissions.deny` 禁用该 skill 兜底。不共享 main 的 `node_modules`（pnpm 软链会串到 main 的 workspace 包）；pnpm store 同盘已全局共享。切槽位前先确保里面的活已提交。机制见 [`development`](docs/evergreen/development.md)。
@@ -142,4 +142,4 @@
 
 ------
 
-*Last reviewed: 2026-06-27*
+*Last reviewed: 2026-07-04*
