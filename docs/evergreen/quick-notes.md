@@ -29,6 +29,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；quick_notes 字段、LWW 语义与独立备份格式不变。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 quick_notes 字段、agent 投递入口、LWW 映射或独立备份格式。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：op 仅 tasks upsert 可携带；quick_notes 字段、agent 投递入口、LWW 映射和独立备份格式不变。 -->
+<!-- 复核 2026-07-04（QuickNote A 批数据安全）：清理/导出入口补目标日期文案、空日反馈、非今天确认；范围清理跳过 pinned，quick_notes schema、同步域和独立备份格式不变。 -->
 
 # 速记
 
@@ -52,9 +53,9 @@ last-reviewed: 2026-07-04
 - **新增** `addQuickNote(text)`：生成 UUID，`normalizeText` trim 后非空，`occurredAt` 缺省 = `createdAt` = now；不设 `source/sourceLabel/pinned`（用户自记 source 缺省等同 user）。
 - **编辑** `updateQuickNote(id, {text})`：只改 `text/occurredAt/updatedAt`，**保留** existing 的 `source/sourceLabel/pinned`（不清空 agent 速记标记）。
 - **置顶** `setQuickNotePinned(id, pinned)`：只改 `pinned/updatedAt`。
-- **删除** `deleteQuickNote` / `deleteQuickNotesByRange` / `deleteQuickNotesByIds`：同事务 `bulkDelete` + 逐条 `recordSyncLog("delete")`。
+- **删除** `deleteQuickNote` / `deleteQuickNotesByRange` / `deleteQuickNotesByIds`：同事务 `bulkDelete` + 逐条 `recordSyncLog("delete")`；`deleteQuickNotesByRange` 只清普通速记，跳过 `pinned === true`，返回 `{deleted}` 仅计实际删除数。
 - **JSON 合并导入**：入口在设置 → 数据页（`SettingsDataPage.tsx`，**不在速记页**）→ `importQuickNotes`（`quick-notes/importQuickNotes.ts`）按 `QuickNotesFileSchema` 校验，按 id 合并：不存在则 add，`incoming.updatedAt > existing.updatedAt` 则 update，否则 kept，返回 `{inserted, updated, kept}`。
-- **导出**：`exportQuickNotes` 产 JSON（独立备份格式 `timedata.quick-notes.backup`，`quick-notes/schema.ts`，`timeFormat:"utc"`，与主 `timedata.backup` 是两套契约）或 Markdown（同分钟/间隔 ≤5min `MARKDOWN_TIME_GAP_MS` 不重复 `## HH:mm` 时间标题）。下载经 `fileDownload.ts`（Blob / 原生 Filesystem+Share）。
+- **导出**：`exportQuickNotes` 产 JSON（独立备份格式 `timedata.quick-notes.backup`，`quick-notes/schema.ts`，`timeFormat:"utc"`，与主 `timedata.backup` 是两套契约）或 Markdown（同分钟/间隔 ≤5min `MARKDOWN_TIME_GAP_MS` 不重复 `## HH:mm` 时间标题）。速记页按当前 `jumpDate` 导出：空日只提示不生成文件，Markdown 成功提示带条数；下载经 `fileDownload.ts`（Blob / 原生 Filesystem+Share）。
 
 写入经 `recordSyncLog` 自动调度上传（`syncScheduler.notifyWrite()`，见 [sync](sync.md) §1.6），无需页面显式触发同步。服务端 `quick_notes` 走**通用 LWW 路径**（`sync/domains.ts`），**无自定义 validate/apply/crossValidate**——只有 `QuickNoteSchema` 运行时校验，没有重叠/分类业务校验。
 
@@ -127,7 +128,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 7. **单条上传状态从 syncLog 推导，不是 QuickNote 字段**：`useUnsyncedQuickNoteIds` 读 `syncLog(tableName="quick_notes", synced=0)`，待上传显示时钟、已同步显示单勾。agent 速记本地无 pending，恒显单勾。
 8. **本地 mutation 必须与 syncLog 同事务**；窗口查询/搜索/置顶列表查询只读、不写 syncLog。
 9. **`updateQuickNote` 保留 source/sourceLabel/pinned**：编辑只改 text/occurredAt/updatedAt。
-10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
+10. **速记页 UI 要点**：聊天式连续时间线，最新窗口（`QUICK_NOTE_PAGE_SIZE=50`）向上懒加载；搜索 200ms debounce、空格分词 AND、只读扫描 Dexie，入口在 composer 空草稿左按钮；退出搜索/点「最新」会把 `jumpDate` 与 URL `?date=` 归位到今天；置顶区从 header 钉子展开，主线过滤 pinned；composer 空草稿右按钮打点、有草稿左右分别存待办/记录、编辑中左右分别取消/保存；agent 气泡用动作蓝 soft 形态 + sourceLabel 标题；长按/右键开复制/编辑/置顶/选择/删除菜单，选择态支持批量复制/导出/删除；更多操作菜单的导出/清理文案带目标日期（今天写「今天」，历史日写 `M月D日`），清理前预取可删条数，非今天显示警示，置顶只说明保留且不删除，空日不弹确认。长文本按渲染高度折叠（`COLLAPSED_MAX_PX=168` + ResizeObserver）。页面壳、气泡、菜单、Markdown chrome 和搜索高亮全部消费 [design-language](design-language.md) 的 `page/surface/border/ink/accent` token；业务时间、日期和数量使用 `td-time` / `td-num`，当前是 Times New Roman / Tinos + tabular nums；交互图标统一经 Phosphor `Icon`，不使用散装字符图标。
 
 ## 4. 模块速查（代码入口 + 路由 + 测试）
 
@@ -141,7 +142,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 | `quick-notes/useQuickNoteTimeline.ts` | 时间线 hook：最新窗口 + 向上懒加载 + 向下补差 + 日期跳转 |
 | `quick-notes/{searchQuickNotes,searchTerms,highlightMatches,HighlightedText}.*` | 搜索：分词 AND 子串、只读扫描、倒序 + `<mark>` 高亮 |
 | `quick-notes/{NoteBubble,QuickNoteContent,QuickNoteActionMenu,NoteMeta,looksLikeMarkdown}.*` | 气泡 + 保守 Markdown 正文 + 长按菜单 + 时间/上传状态 |
-| `quick-notes/{useUnsyncedQuickNoteIds,jumpToLatest,currentDate,clipboard}.*` | 上传状态 hook / 回到最新 / 滚动日期胶囊 / 复制 |
+| `quick-notes/{useUnsyncedQuickNoteIds,jumpToLatest,jumpDateLabel,currentDate,clipboard}.*` | 上传状态 hook / 回到最新 / 菜单日期短标签 / 滚动日期胶囊 / 复制 |
 | `quick-notes/{importQuickNotes,exportQuickNotes,schema,fileDownload,deleteQuickNotesRange,deleteQuickNotesByIds}.*` | JSON 合并导入 / JSON·Markdown 导出 / `QuickNotesFileSchema` / 下载 / 范围删 / 多选批量删 |
 
 ### 4.2 服务端 / CLI
@@ -155,7 +156,7 @@ TrackStep 也有 `source: "user" | "agent"` 与 `sourceLabel?`，但那只是复
 
 ### 4.3 测试
 
-**client**：`pages/QuickNotesPage.test.tsx`、`lib/quickNotes.test.ts`、`lib/quickNoteDisplay.test.ts`、`quick-notes/{clipboard,currentDate,deleteQuickNotesByIds,deleteQuickNotesRange,highlightMatches,HighlightedText,jumpToLatest,looksLikeMarkdown,NoteBubble,NoteMeta,QuickNoteActionMenu,QuickNoteContent,searchQuickNotes,searchTerms,useQuickNoteTimeline,useUnsyncedQuickNoteIds}.test.{ts,tsx}`（导入导出测试见子文档）
+**client**：`pages/QuickNotesPage.test.tsx`、`lib/quickNotes.test.ts`、`lib/quickNoteDisplay.test.ts`、`quick-notes/{clipboard,currentDate,deleteQuickNotesByIds,deleteQuickNotesRange,highlightMatches,HighlightedText,jumpDateLabel,jumpToLatest,looksLikeMarkdown,NoteBubble,NoteMeta,QuickNoteActionMenu,QuickNoteContent,searchQuickNotes,searchTerms,useQuickNoteTimeline,useUnsyncedQuickNoteIds}.test.{ts,tsx}`（导入导出测试见子文档）
 **server**：`routes/quick-notes.test.ts`、`routes/sync.test.ts`、`sync/*.test.ts`、`db/*.test.ts`
 **shared**：`schemas.test.ts`（QuickNoteSchema 专项） ｜ **cli**：`commands/notes.test.ts` ｜ **e2e**：`__tests__/e2e/sync-roundtrip.e2e.test.ts`
 
