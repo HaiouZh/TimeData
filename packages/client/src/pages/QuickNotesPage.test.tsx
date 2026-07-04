@@ -2,19 +2,30 @@
 import type { Category } from "@timedata/shared";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useSearchParams } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
-import { setQuickNotePinned } from "../lib/quickNotes.js";
+import { addQuickNote, setQuickNotePinned } from "../lib/quickNotes.js";
 import { setPunchCategoryId } from "../lib/settings/punchCategorySetting.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
+import { getDateString } from "../lib/time.js";
 import { db } from "../test/dbReset.js";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import QuickNotesPage from "./QuickNotesPage.js";
 
+vi.mock("../quick-notes/fileDownload.ts", () => ({
+  downloadQuickNotesJson: vi.fn(async () => {}),
+  downloadQuickNotesMarkdown: vi.fn(async () => {}),
+}));
+
 function BottomNavStateProbe() {
   const { hidden } = useBottomNav();
   return createElement("span", { "data-testid": "bottom-nav-hidden" }, String(hidden));
+}
+
+function SearchParamsProbe() {
+  const [params] = useSearchParams();
+  return createElement("span", { "data-testid": "date-param" }, params.get("date") ?? "");
 }
 
 async function act(callback: () => Promise<void> | void) {
@@ -39,7 +50,13 @@ async function renderPage(initialEntry = "/quick-notes"): Promise<{ host: HTMLEl
     createElement(
       MemoryRouter,
       { initialEntries: [initialEntry] },
-      createElement(BottomNavProvider, null, createElement(BottomNavStateProbe), createElement(QuickNotesPage)),
+      createElement(
+        BottomNavProvider,
+        null,
+        createElement(BottomNavStateProbe),
+        createElement(SearchParamsProbe),
+        createElement(QuickNotesPage),
+      ),
     ),
   );
   await flush();
@@ -120,6 +137,13 @@ async function openMenu(host: HTMLElement, label: string) {
 function menuItem(host: HTMLElement, text: string): HTMLButtonElement | null {
   const match = Array.from(host.querySelectorAll('button[role="menuitem"]')).find(
     (button) => button.textContent === text,
+  );
+  return (match as HTMLButtonElement) ?? null;
+}
+
+function menuItemContaining(host: HTMLElement, text: string): HTMLButtonElement | null {
+  const match = Array.from(host.querySelectorAll('button[role="menuitem"]')).find(
+    (button) => button.textContent?.includes(text) ?? false,
   );
   return (match as HTMLButtonElement) ?? null;
 }
@@ -820,15 +844,155 @@ describe("QuickNotesPage", () => {
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
 
     await click(host.querySelector('button[aria-label="更多操作"]'));
-    await click(menuItem(host, "清理当天"));
+    await click(menuItem(host, "清理 6月1日"));
 
-    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除当天速记");
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除 6月1日 的速记");
     await click(lastButtonByText(host, "删除"));
 
     await expect(db.quickNotes.get("today")).resolves.toBeUndefined();
     await expect(db.quickNotes.get("other")).resolves.toMatchObject({ text: "别天" });
 
     await unmount(root);
+  });
+
+  it("退出搜索后 jumpDate 与 URL 归位到今天", async () => {
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+    try {
+      expect(host.querySelector('[data-testid="date-param"]')?.textContent).toBe("2026-06-01");
+
+      await click(composerButton(host, "搜索速记"));
+      await click(host.querySelector('button[aria-label="退出搜索"]'));
+
+      expect(host.querySelector('[data-testid="date-param"]')?.textContent).toBe("");
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent);
+      expect(items).toContain("清理今天");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("更多操作菜单文案带目标日期", async () => {
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent);
+      expect(items).toContain("导出 6月1日 Markdown");
+      expect(items).toContain("导出 6月1日 JSON");
+      expect(items).toContain("清理 6月1日");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("更多操作菜单文案将当前日期标为今天", async () => {
+    const { host, root } = await renderPage();
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent);
+      expect(items).toContain("导出今天 Markdown");
+      expect(items).toContain("导出今天 JSON");
+      expect(items).toContain("清理今天");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("清理确认框显示条数与置顶保留说明", async () => {
+    await addQuickNote("a", {
+      occurredAt: "2026-06-01T03:00:00.000Z",
+      now: new Date("2026-06-01T04:00:00.000Z"),
+    });
+    await addQuickNote("b", {
+      occurredAt: "2026-06-01T03:10:00.000Z",
+      now: new Date("2026-06-01T04:00:00.000Z"),
+    });
+    const pinned = await addQuickNote("pin", {
+      occurredAt: "2026-06-01T03:20:00.000Z",
+      now: new Date("2026-06-01T04:00:00.000Z"),
+    });
+    await setQuickNotePinned(pinned.id, true);
+
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      await click(menuItemContaining(host, "清理"));
+
+      expect(host.textContent).toContain("将删除 2 条速记");
+      expect(host.textContent).toContain("另有 1 条置顶会保留");
+      expect(host.textContent).toContain("这不是今天");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("目标日为今天时确认框不出现非今天警示", async () => {
+    const today = getDateString(new Date());
+    await addQuickNote("today", { occurredAt: `${today}T03:00:00.000Z`, now: new Date(`${today}T04:00:00.000Z`) });
+
+    const { host, root } = await renderPage();
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      await click(menuItemContaining(host, "清理"));
+
+      expect(host.textContent).toContain("将删除 1 条速记");
+      expect(host.textContent).not.toContain("这不是今天");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("目标日无可删速记时不弹确认框只提示", async () => {
+    const pinned = await addQuickNote("pin", {
+      occurredAt: "2026-06-01T03:20:00.000Z",
+      now: new Date("2026-06-01T04:00:00.000Z"),
+    });
+    await setQuickNotePinned(pinned.id, true);
+
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      await click(menuItemContaining(host, "清理"));
+
+      expect(host.textContent).toContain("6月1日 没有可清理的速记");
+      expect(host.querySelector('[role="dialog"]')).toBeNull();
+      expect(host.textContent).not.toContain("将删除");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("空日导出不生成文件只提示", async () => {
+    const downloads = await import("../quick-notes/fileDownload.ts");
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      await click(menuItemContaining(host, "Markdown"));
+
+      expect(host.textContent).toContain("6月1日 没有速记，未导出");
+      expect(downloads.downloadQuickNotesMarkdown).not.toHaveBeenCalled();
+      expect(downloads.downloadQuickNotesJson).not.toHaveBeenCalled();
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("Markdown 导出成功提示带条数", async () => {
+    const downloads = await import("../quick-notes/fileDownload.ts");
+    const today = getDateString(new Date());
+    await addQuickNote("a", { occurredAt: `${today}T03:00:00.000Z`, now: new Date(`${today}T04:00:00.000Z`) });
+    await addQuickNote("b", { occurredAt: `${today}T03:10:00.000Z`, now: new Date(`${today}T04:00:00.000Z`) });
+
+    const { host, root } = await renderPage();
+    try {
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      await click(menuItemContaining(host, "Markdown"));
+
+      expect(host.textContent).toContain("已导出 2 条速记 Markdown");
+      expect(downloads.downloadQuickNotesMarkdown).toHaveBeenCalledTimes(1);
+    } finally {
+      await unmount(root);
+    }
   });
 
   it("opens search mode with an empty-query hint and hides the bottom composer", async () => {

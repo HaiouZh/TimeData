@@ -23,7 +23,15 @@ import { useLongPress } from "../hooks/useLongPress.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
-import { addQuickNote, deleteQuickNote, listPinnedQuickNotes, setQuickNotePinned, updateQuickNote } from "../lib/quickNotes.ts";
+import {
+  addQuickNote,
+  deleteQuickNote,
+  listPinnedQuickNotes,
+  listQuickNotesByDate,
+  listQuickNotesByRange,
+  setQuickNotePinned,
+  updateQuickNote,
+} from "../lib/quickNotes.ts";
 import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask } from "../lib/tasks.js";
 import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
@@ -34,11 +42,11 @@ import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts
 import {
   exportQuickNotesJsonByDate,
   exportQuickNotesJsonForNotes,
-  exportQuickNotesMarkdownByDate,
   quickNotesMarkdown,
 } from "../quick-notes/exportQuickNotes.ts";
 import { downloadQuickNotesJson, downloadQuickNotesMarkdown } from "../quick-notes/fileDownload.ts";
 import HighlightedText from "../quick-notes/HighlightedText.tsx";
+import { formatJumpDateLabel } from "../quick-notes/jumpDateLabel.ts";
 import { shouldShowJumpToLatest } from "../quick-notes/jumpToLatest.ts";
 import NoteBubble from "../quick-notes/NoteBubble.tsx";
 import QuickNoteActionMenu from "../quick-notes/QuickNoteActionMenu.tsx";
@@ -155,6 +163,10 @@ export default function QuickNotesPage() {
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
   const hasQuery = searchTerms.length > 0;
   const hasDraft = draftText.trim().length > 0;
+  const jumpDateLabel = formatJumpDateLabel(jumpDate, today);
+  const exportMarkdownLabel = jumpDateLabel === "今天" ? "导出今天 Markdown" : `导出 ${jumpDateLabel} Markdown`;
+  const exportJsonLabel = jumpDateLabel === "今天" ? "导出今天 JSON" : `导出 ${jumpDateLabel} JSON`;
+  const deleteDateLabel = jumpDateLabel === "今天" ? "清理今天" : `清理 ${jumpDateLabel}`;
 
   const longPress = useLongPress(({ x, y }) => {
     const note = pressedNoteRef.current;
@@ -375,6 +387,8 @@ export default function QuickNotesPage() {
     setSearchQuery("");
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
+      setJumpDate(today);
+      setSearchParams({});
       void timeline.resetToLatest();
     }
   }
@@ -641,6 +655,10 @@ export default function QuickNotesPage() {
     setStatus(null);
     try {
       const backup = await exportQuickNotesJsonByDate(jumpDate);
+      if (backup.notes.length === 0) {
+        showStatus(`${jumpDateLabel} 没有速记，未导出。`);
+        return;
+      }
       await downloadQuickNotesJson(backup);
       showStatus(`已导出 ${backup.notes.length} 条速记 JSON。`);
     } catch (err) {
@@ -652,18 +670,40 @@ export default function QuickNotesPage() {
     setError(null);
     setStatus(null);
     try {
-      const markdown = await exportQuickNotesMarkdownByDate(jumpDate);
+      const notes = await listQuickNotesByDate(jumpDate);
+      if (notes.length === 0) {
+        showStatus(`${jumpDateLabel} 没有速记，未导出。`);
+        return;
+      }
+      const markdown = quickNotesMarkdown(`速记 ${jumpDate}`, notes);
       await downloadQuickNotesMarkdown(markdown, jumpDate);
-      showStatus("已导出速记 Markdown。");
+      showStatus(`已导出 ${notes.length} 条速记 Markdown。`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出失败");
     }
   }
 
   async function handleDeleteDate() {
+    const dayNotes = await listQuickNotesByRange(jumpDate, jumpDate);
+    const pinnedCount = dayNotes.filter((note) => note.pinned === true).length;
+    const deletableCount = dayNotes.length - pinnedCount;
+    if (deletableCount === 0) {
+      showStatus(`${jumpDateLabel} 没有可清理的速记。`);
+      return;
+    }
+
     const confirmed = await confirm({
-      title: "删除当天速记？",
-      body: `${jumpDate} 的速记会被删除，不影响时间记录。建议先导出需要保留的内容。`,
+      title: `删除 ${jumpDateLabel} 的速记？`,
+      body: (
+        <div className="space-y-1">
+          {jumpDate !== today && <p className="font-medium text-danger">这不是今天，你正要删除 {jumpDateLabel}（{jumpDate}）的记录。</p>}
+          <p>
+            将删除 <strong>{deletableCount}</strong> 条速记
+            {pinnedCount > 0 ? `（另有 ${pinnedCount} 条置顶会保留）` : ""}，不影响时间记录。
+          </p>
+          <p>建议先导出需要保留的内容。</p>
+        </div>
+      ),
       confirmLabel: "删除",
       cancelLabel: "取消",
       danger: true,
@@ -891,7 +931,7 @@ export default function QuickNotesPage() {
                       }}
                       className={MENU_ITEM_CLASS}
                     >
-                      导出 Markdown
+                      {exportMarkdownLabel}
                     </button>
                     <button
                       type="button"
@@ -902,7 +942,7 @@ export default function QuickNotesPage() {
                       }}
                       className={MENU_ITEM_CLASS}
                     >
-                      导出 JSON
+                      {exportJsonLabel}
                     </button>
                     <div className="my-1 h-px bg-border" />
                     <button
@@ -914,7 +954,7 @@ export default function QuickNotesPage() {
                       }}
                       className="block w-full px-4 py-3 text-left text-sm font-medium text-danger transition hover:bg-danger-soft"
                     >
-                      清理当天
+                      {deleteDateLabel}
                     </button>
                   </div>
                 </>
@@ -1098,6 +1138,8 @@ export default function QuickNotesPage() {
         <button
           type="button"
           onClick={() => {
+            setJumpDate(today);
+            setSearchParams({});
             stickBottomRef.current = true;
             setAtBottom(true);
             if (!timeline.atLatest) {
