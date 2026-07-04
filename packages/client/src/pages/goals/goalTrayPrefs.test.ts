@@ -9,17 +9,6 @@ import {
   saveTrayWidth,
 } from "./goalTrayPrefs.js";
 
-const localStorageMock = (() => {
-  const store = new Map<string, string>();
-  return {
-    clear: () => store.clear(),
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => store.set(key, value),
-    removeItem: (key: string) => store.delete(key),
-  };
-})();
-
-Object.defineProperty(globalThis, "localStorage", { value: localStorageMock, configurable: true });
 
 afterEach(() => localStorage.clear());
 
