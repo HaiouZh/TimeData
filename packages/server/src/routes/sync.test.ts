@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SyncChange, Task, TaskCompletionOp } from "@timedata/shared";
 import { createEntryFromCliInput } from "../lib/entry-service.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 let db: Database.Database;
@@ -150,6 +151,54 @@ afterEach(() => {
   vi.doUnmock("../db/connection.js");
   vi.doUnmock("../sync/backup.js");
 });
+
+function taskData(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "task-1",
+    parentId: null,
+    title: "任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    weight: 0,
+    completedAt: null,
+    tags: [],
+    ruleId: null,
+    skipped: false,
+    sortOrder: 0,
+    createdAt: "2026-07-04T00:00:00.000Z",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function taskChange(action: "create" | "update", data: Task, op?: TaskCompletionOp): SyncChange {
+  return {
+    tableName: "tasks",
+    recordId: data.id,
+    action,
+    data,
+    timestamp: data.updatedAt,
+    ...(op ? { op } : {}),
+  } as SyncChange;
+}
+
+function latestSeq(): number {
+  const row = db.prepare("SELECT MAX(id) AS seq FROM sync_seq").get() as { seq: number | null };
+  return row.seq ?? 0;
+}
+
+function pushChanges(changes: SyncChange[], baseSeq: number | null = latestSeq()): Promise<Response> {
+  return app.request("/api/sync/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ baseSeq, changes }),
+  });
+}
+
 describe("sync route", () => {
   it("returns 400 for malformed sync pull requests", async () => {
     const response = await app.request("/api/sync/pull", {
@@ -1443,6 +1492,56 @@ describe("sync route", () => {
           tableName: "tasks",
           recordId: "task-count",
           data: expect.objectContaining({ completedCount: 2, recurrence: expect.objectContaining({ count: 3 }) }),
+        }),
+      ]),
+    );
+  });
+
+  it("tasks 完成语义 op：A 勾选后 B 无 op 改标题不翻回 done", async () => {
+    const createRes = await pushChanges([taskChange("create", taskData())], 0);
+    expect(createRes.status).toBe(200);
+
+    const completedAt = "2026-07-04T01:00:00.000Z";
+    const completeRes = await pushChanges([
+      taskChange(
+        "update",
+        taskData({ done: true, completedAt, updatedAt: completedAt }),
+        { type: "complete", at: completedAt },
+      ),
+    ]);
+    expect(completeRes.status).toBe(200);
+
+    const titleAt = "2026-07-04T02:00:00.000Z";
+    const titleRes = await pushChanges([
+      taskChange("update", taskData({ title: "B 改的标题", updatedAt: titleAt })),
+    ]);
+    expect(titleRes.status).toBe(200);
+    await expect(titleRes.json()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+
+    const row = db.prepare("SELECT title, done, completed_at FROM tasks WHERE id = ?").get("task-1") as {
+      title: string;
+      done: number;
+      completed_at: string | null;
+    };
+    expect(row).toEqual({
+      title: "B 改的标题",
+      done: 1,
+      completed_at: completedAt,
+    });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: 0 }),
+    });
+    expect(pullRes.status).toBe(200);
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "tasks",
+          recordId: "task-1",
+          data: expect.objectContaining({ title: "B 改的标题", done: true, completedAt }),
         }),
       ]),
     );

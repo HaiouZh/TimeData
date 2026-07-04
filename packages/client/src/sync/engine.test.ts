@@ -655,6 +655,53 @@ describe("syncPush", () => {
     await expect(db.syncLog.get("task-log-1")).resolves.toMatchObject({ synced: 1 });
   });
 
+  it("pushes task completion op from syncLog into the change payload", async () => {
+    await db.tasks.add({
+      id: "task-complete",
+      title: "跑步",
+      done: true,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      sortOrder: 0,
+      completedAt: "2026-07-04T01:00:00.000Z",
+      createdAt: "2026-07-04T00:00:00.000Z",
+      updatedAt: "2026-07-04T01:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "task-complete-log",
+      tableName: "tasks",
+      recordId: "task-complete",
+      action: "update",
+      timestamp: "2026-07-04T01:00:00.000Z",
+      synced: 0,
+      op: { type: "complete", at: "2026-07-04T01:00:00.000Z" },
+    });
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "tasks",
+          recordId: "task-complete",
+          action: "update",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "applied",
+          incomingTimestamp: "2026-07-04T01:00:00.000Z",
+        },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-07-04T01:01:00.000Z",
+    });
+
+    await expect(syncPush()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    expect(pushBody.changes[0].op).toEqual({ type: "complete", at: "2026-07-04T01:00:00.000Z" });
+    await expect(db.syncLog.get("task-complete-log")).resolves.toMatchObject({ synced: 1 });
+  });
+
   it("handles 409 push outcomes without losing accepted sync logs", async () => {
     const acceptedLogId = "entry-accepted-create-00";
     const conflictLogId = "entry-conflict-create-30";
@@ -3076,6 +3123,56 @@ describe("compactSyncLogs", () => {
       recordId: "entry-1",
       action: "delete",
       omitFromPush: true,
+    });
+  });
+
+  it("保留组内最后一条 op，即使最后一条日志本身无 op", () => {
+    const compacted = compactSyncLogs([
+      {
+        ...log("task-1", "update", "01", "tasks"),
+        op: { type: "complete", at: "2026-05-06T00:01:00.000Z" },
+      },
+      log("task-1", "update", "02", "tasks"),
+    ]);
+
+    expect(compacted).toHaveLength(1);
+    expect(compacted[0]).toMatchObject({
+      recordId: "task-1",
+      action: "update",
+      timestamp: "2026-05-06T00:02:00.000Z",
+      op: { type: "complete", at: "2026-05-06T00:01:00.000Z" },
+    });
+  });
+
+  it("多条 op 压缩时取时间序最后一个", () => {
+    const compacted = compactSyncLogs([
+      {
+        ...log("task-1", "update", "01", "tasks"),
+        op: { type: "complete", at: "2026-05-06T00:01:00.000Z" },
+      },
+      {
+        ...log("task-1", "update", "02", "tasks"),
+        op: { type: "reopen", at: "2026-05-06T00:02:00.000Z" },
+      },
+    ]);
+
+    expect(compacted[0].op).toEqual({ type: "reopen", at: "2026-05-06T00:02:00.000Z" });
+  });
+
+  it("create 和带 op 的 update 压缩成 create 时保留 op", () => {
+    const compacted = compactSyncLogs([
+      log("task-1", "create", "01", "tasks"),
+      {
+        ...log("task-1", "update", "02", "tasks"),
+        op: { type: "complete", at: "2026-05-06T00:02:00.000Z" },
+      },
+    ]);
+
+    expect(compacted).toHaveLength(1);
+    expect(compacted[0]).toMatchObject({
+      recordId: "task-1",
+      action: "create",
+      op: { type: "complete", at: "2026-05-06T00:02:00.000Z" },
     });
   });
 });

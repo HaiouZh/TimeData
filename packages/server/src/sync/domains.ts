@@ -73,8 +73,9 @@ export interface ServerDomainHooks {
   apply?: (db: Database, change: SyncChange, serverNow: string) => ApplyChangeResult;
   /** 从 upsert payload 计算 sync recordId；复合键域用它替代 payload.id。 */
   identity?: (data: unknown) => string;
-  /** 通用 LWW 路径所需的表/主键列映射（apply 缺省时必填） */
-  lww?: { idColumn: string; toRow: (data: unknown) => Record<string, string | number | null> };
+  /** 通用 LWW 路径所需的表/主键列映射（apply 缺省时必填）。
+   *  guardedColumns：完成语义等意图字段，来包无 op 时不进 ON CONFLICT DO UPDATE SET。 */
+  lww?: { idColumn: string; toRow: (data: unknown) => Record<string, string | number | null>; guardedColumns?: string[] };
   /** 按主键读当前行并转成 update SyncChange；pull seq 补差用，行不存在返回 null */
   readRecord: (db: Database, recordId: string) => SyncChange | null;
 }
@@ -507,7 +508,14 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   },
   settings: { lww: { idColumn: "key", toRow: settingToRow }, readRecord: readSettingRecord },
   quick_notes: { lww: { idColumn: "id", toRow: quickNoteToRow }, readRecord: readQuickNoteRecord },
-  tasks: { lww: { idColumn: "id", toRow: taskToRow }, readRecord: readTaskRecord },
+  tasks: {
+    lww: {
+      idColumn: "id",
+      toRow: taskToRow,
+      guardedColumns: ["done", "completed_at", "skipped", "last_done_at", "completed_count"],
+    },
+    readRecord: readTaskRecord,
+  },
   health_heart_rate: simpleLwwDomain<HealthHeartRateRow>("health_heart_rate", healthHeartRateToRow, rowToHealthHeartRate),
   health_hrv: simpleLwwDomain<HealthHrvRow>("health_hrv", healthHrvToRow, rowToHealthHrv),
   health_sleep: simpleLwwDomain<HealthSleepRow>("health_sleep", healthSleepToRow, rowToHealthSleep),

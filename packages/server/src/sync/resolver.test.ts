@@ -1,4 +1,4 @@
-import type { SyncChange } from "@timedata/shared";
+import type { SyncChange, Task, TaskCompletionOp } from "@timedata/shared";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -57,6 +57,26 @@ beforeEach(async () => {
       pinned INTEGER NOT NULL DEFAULT 0
     );
 
+    CREATE TABLE tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0,
+      recurrence TEXT,
+      last_done_at TEXT,
+      start_at TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      scheduled_at TEXT,
+      parent_id TEXT,
+      completed_count INTEGER NOT NULL DEFAULT 0,
+      weight INTEGER NOT NULL DEFAULT 0,
+      rule_id TEXT,
+      skipped INTEGER NOT NULL DEFAULT 0,
+      completed_at TEXT,
+      tags TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,
@@ -96,6 +116,40 @@ afterEach(() => {
   db.close();
   vi.doUnmock("../db/connection.js");
 });
+
+function taskData(overrides: Partial<Task> = {}): Task {
+  return {
+    id: "task-1",
+    parentId: null,
+    title: "任务",
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    weight: 0,
+    completedAt: null,
+    tags: [],
+    ruleId: null,
+    skipped: false,
+    sortOrder: 0,
+    createdAt: "2026-07-04T00:00:00.000Z",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function taskChange(action: "create" | "update", data: Task, op?: TaskCompletionOp): SyncChange {
+  return {
+    tableName: "tasks",
+    recordId: data.id,
+    action,
+    data,
+    timestamp: data.updatedAt,
+    ...(op ? { op } : {}),
+  } as SyncChange;
+}
 
 describe("applyChange", () => {
   it("does not create placeholder categories for entry sync", () => {
@@ -574,6 +628,88 @@ describe("applyChange", () => {
 
     expect(db.prepare("SELECT pinned FROM quick_notes WHERE id = ?").get("note-pin")).toMatchObject({
       pinned: 0,
+    });
+  });
+
+  describe("tasks 完成语义守卫列", () => {
+    it("无 op 的 update 不覆盖 done/completed_at/skipped，其余列照常覆盖", () => {
+      applyChange(taskChange("create", taskData()));
+      applyChange(
+        taskChange(
+          "update",
+          taskData({ done: true, completedAt: "2026-07-04T01:00:00.000Z", updatedAt: "2026-07-04T01:00:00.000Z" }),
+          { type: "complete", at: "2026-07-04T01:00:00.000Z" },
+        ),
+      );
+
+      const result = applyChange(taskChange("update", taskData({ title: "改了标题", updatedAt: "2026-07-04T02:00:00.000Z" })));
+
+      expect(result.status).toBe("applied");
+      const row = db.prepare("SELECT title, done, completed_at FROM tasks WHERE id = ?").get("task-1") as
+        | { title: string; done: number; completed_at: string | null }
+        | undefined;
+      expect(row).toMatchObject({
+        title: "改了标题",
+        done: 1,
+        completed_at: "2026-07-04T01:00:00.000Z",
+      });
+    });
+
+    it("带 op 的 update 可以写完成字段", () => {
+      applyChange(taskChange("create", taskData()));
+      applyChange(
+        taskChange(
+          "update",
+          taskData({ done: true, completedAt: "2026-07-04T01:00:00.000Z", updatedAt: "2026-07-04T01:00:00.000Z" }),
+          { type: "complete", at: "2026-07-04T01:00:00.000Z" },
+        ),
+      );
+      applyChange(
+        taskChange("update", taskData({ updatedAt: "2026-07-04T02:00:00.000Z" }), {
+          type: "reopen",
+          at: "2026-07-04T02:00:00.000Z",
+        }),
+      );
+
+      expect(db.prepare("SELECT done, completed_at FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
+        done: 0,
+        completed_at: null,
+      });
+    });
+
+    it("无 op 的 create 撞现存行同样不写完成字段", () => {
+      applyChange(
+        taskChange(
+          "update",
+          taskData({ done: true, completedAt: "2026-07-04T01:00:00.000Z", updatedAt: "2026-07-04T01:00:00.000Z" }),
+          { type: "complete", at: "2026-07-04T01:00:00.000Z" },
+        ),
+      );
+      applyChange(taskChange("create", taskData({ title: "重放的旧 create", updatedAt: "2026-07-04T02:00:00.000Z" })));
+
+      expect(db.prepare("SELECT done, title FROM tasks WHERE id = ?").get("task-1")).toMatchObject({
+        done: 1,
+        title: "重放的旧 create",
+      });
+    });
+
+    it("带 op 的 create 撞现存行可写完成字段", () => {
+      applyChange(taskChange("create", taskData()));
+      applyChange(
+        taskChange(
+          "create",
+          taskData({ done: true, completedAt: "2026-07-04T01:00:00.000Z", updatedAt: "2026-07-04T01:00:00.000Z" }),
+          { type: "complete", at: "2026-07-04T01:00:00.000Z" },
+        ),
+      );
+
+      expect(db.prepare("SELECT done FROM tasks WHERE id = ?").get("task-1")).toMatchObject({ done: 1 });
+    });
+
+    it("行不存在时无 op 的 create 全列写入", () => {
+      applyChange(taskChange("create", taskData({ skipped: true })));
+
+      expect(db.prepare("SELECT skipped FROM tasks WHERE id = ?").get("task-1")).toMatchObject({ skipped: 1 });
     });
   });
 

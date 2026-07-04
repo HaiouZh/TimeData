@@ -26,6 +26,7 @@ import type {
   TimeEntry,
   SyncLogEntry,
   SyncPushOutcome,
+  TaskCompletionOp,
 } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
@@ -170,15 +171,16 @@ function compactLogGroup(logs: SyncLog[]): CompactedSyncLog | null {
   const first = ordered[0];
   const last = ordered[ordered.length - 1];
   const sourceLogIds = ordered.map((log) => log.id);
+  const op = [...ordered].reverse().find((log) => log.op)?.op;
 
   if (!first || !last) return null;
   if (first.action === "create" && last.action === "delete") {
     return { ...last, sourceLogIds, omitFromPush: true };
   }
   if (first.action === "create" && last.action !== "delete") {
-    return { ...last, sourceLogIds, action: "create" };
+    return { ...last, sourceLogIds, action: "create", ...(op ? { op } : {}) };
   }
-  return { ...last, sourceLogIds };
+  return { ...last, sourceLogIds, ...(op ? { op } : {}) };
 }
 
 export function compactSyncLogs(logs: SyncLog[]): CompactedSyncLog[] {
@@ -363,6 +365,7 @@ export async function syncPush(): Promise<SyncPushResult> {
       action: log.action,
       data,
       timestamp: log.timestamp,
+      ...(log.op ? { op: log.op } : {}),
     } as SyncChange);
   }
 
@@ -854,6 +857,7 @@ export async function recordSyncLog(
   recordId: string,
   action: "create" | "update" | "delete",
   timestamp = new Date().toISOString(),
+  op?: TaskCompletionOp,
 ): Promise<void> {
   await db.syncLog.add({
     id: uuid(),
@@ -862,6 +866,7 @@ export async function recordSyncLog(
     action,
     timestamp,
     synced: 0,
+    ...(op ? { op } : {}),
   });
   syncScheduler.notifyWrite();
 }

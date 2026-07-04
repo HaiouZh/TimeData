@@ -84,7 +84,11 @@ function applyLwwChange(
   const row: Record<string, string | number | null> = { ...lww.toRow(change.data), updated_at: serverNow };
   const columns = Object.keys(row);
   const placeholders = columns.map(() => "?").join(", ");
-  const updatable = columns.filter((column) => column !== lww.idColumn && column !== "created_at");
+  const hasOp = (change as { op?: unknown }).op != null;
+  const guarded = !hasOp && lww.guardedColumns ? new Set(lww.guardedColumns) : null;
+  const updatable = columns.filter(
+    (column) => column !== lww.idColumn && column !== "created_at" && !(guarded?.has(column) ?? false),
+  );
   const setClause = updatable.map((column) => `${column} = excluded.${column}`).join(", ");
 
   db.prepare(`

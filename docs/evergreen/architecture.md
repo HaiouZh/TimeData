@@ -18,8 +18,10 @@ covers:
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
   - packages/mobile/android/app/src/main/AndroidManifest.xml
-last-reviewed: 2026-07-02
+last-reviewed: 2026-07-04
 ---
+
+<!-- 复核 2026-07-04（tasks 完成语义 op）：shared/index.ts 新导出 taskCompletion 纯 helper，服务五包既有依赖方向；不改变包职责、启动顺序或写入边界。 -->
 
 # 架构总览
 

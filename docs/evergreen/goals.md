@@ -24,10 +24,11 @@ covers:
   - packages/client/src/lib/galaxyEngineMode.ts
   - packages/client/src/lib/goalUnassigned.ts
   - packages/client/src/pages/goals/**
-last-reviewed: 2026-07-02
+last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared Task schema 与 tasks 同步域映射；Goal.members 仍只引用 Task/Track 身份，不消费 weight，也不改变目标 roll-up。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：Task 完成字段同步守卫不改变 Goal.members 引用、项目完成度读取口径或目标布局钉点同步域。 -->
 
 # 目标层
 

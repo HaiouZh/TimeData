@@ -10,8 +10,10 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
   - docs/TimeData-CLI-AI.md
-last-reviewed: 2026-06-25
+last-reviewed: 2026-07-04
 ---
+
+<!-- 复核 2026-07-04（tasks 完成语义 op）：task-done 仍调用同一受控 agent API；服务端内部 tasks change 额外附完成语义 op，CLI 命令面、参数和输出契约不变。 -->
 
 # CLI（受控 API 客户端）
 

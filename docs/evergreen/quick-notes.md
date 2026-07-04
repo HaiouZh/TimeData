@@ -28,6 +28,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight / todo.gravity.v1 触及 shared schema、Dexie 和 server schema covers；quick_notes 字段、LWW 语义、独立备份格式仍不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；quick_notes 字段、LWW 语义与独立备份格式不变。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 quick_notes 字段、agent 投递入口、LWW 映射或独立备份格式。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：op 仅 tasks upsert 可携带；quick_notes 字段、agent 投递入口、LWW 映射和独立备份格式不变。 -->
 
 # 速记
 

@@ -102,6 +102,20 @@ describe("SyncLogEntrySchema", () => {
     ).toBe(true);
   });
 
+  it("accepts optional task completion op", () => {
+    const parsed = SyncLogEntrySchema.parse({
+      id: "log-task-2",
+      tableName: "tasks",
+      recordId: "task-1",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      synced: 0,
+      op: { type: "skip", at: "2026-07-04T00:00:00.000Z" },
+    });
+
+    expect(parsed.op?.type).toBe("skip");
+  });
+
   it("accepts tracks and track_steps as synced tables", () => {
     expect(
       SyncLogEntrySchema.safeParse({
@@ -422,6 +436,45 @@ describe("SyncChangeSchema", () => {
         timestamp: "2026-06-01T04:03:00.000Z",
       }).success,
     ).toBe(true);
+  });
+
+  it("tasks upsert 接受并保留可选 op", () => {
+    const parsed = SyncChangeSchema.parse({
+      tableName: "tasks",
+      recordId: "task-1",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      data: task,
+      op: { type: "complete", at: "2026-07-04T00:00:00.000Z" },
+    }) as { op?: { type: string } };
+
+    expect(parsed.op?.type).toBe("complete");
+  });
+
+  it("非 tasks 域的 op 被 strip", () => {
+    const parsed = SyncChangeSchema.parse({
+      tableName: "settings",
+      recordId: "sleep.categoryId",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      data: { key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-07-04T00:00:00.000Z" },
+      op: { type: "complete", at: "2026-07-04T00:00:00.000Z" },
+    }) as { op?: unknown };
+
+    expect(parsed.op).toBeUndefined();
+  });
+
+  it("op.type 非法值被拒", () => {
+    const result = SyncChangeSchema.safeParse({
+      tableName: "tasks",
+      recordId: "task-1",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      data: task,
+      op: { type: "toggle", at: "2026-07-04T00:00:00.000Z" },
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects quick note upserts without valid quick note data", () => {

@@ -23,6 +23,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-06-25（设置页信息架构）：SettingsDataPage 只收束到 design token 视觉壳，备份导出、恢复、自动备份和强制覆盖语义均不变。 -->
 <!-- 复核 2026-06-27（设计语言 P1）：quick-notes 展示组件只迁移 token / typography / Phosphor 图标，Quick Notes 独立备份 JSON、Markdown 导出、导入合并和 syncLog 语义均不变。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：sync push 的 unknown_base / non-fast-forward 仍会先创建受保护服务端备份；新增 stale_change_rejected 只影响是否应用变更，不改变备份格式或恢复流程。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：tasks 完成字段守卫只影响同步 upsert 撞行时的 SET 列表，不改变 Backup JSON、force-push 范围或恢复流程。 -->
 
 # 备份与恢复
 

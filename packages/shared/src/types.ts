@@ -65,6 +65,12 @@ export type SyncForcePushPrepareRequest = z.infer<typeof SyncForcePushPrepareReq
 
 export type SyncForcePushRequest = z.infer<typeof SyncForcePushRequestSchema>;
 
+/** tasks 完成语义 op：客户端有意改完成字段时附带；服务端凭它决定守卫列是否进 SET。 */
+export interface TaskCompletionOp {
+  type: "complete" | "reopen" | "skip" | "amend";
+  at: string;
+}
+
 interface SyncUpsertChange<Table extends string, Data> {
   tableName: Table;
   recordId: string;
@@ -91,7 +97,7 @@ export type SyncChange =
   | SyncDeleteChange<"settings">
   | SyncUpsertChange<"quick_notes", QuickNote>
   | SyncDeleteChange<"quick_notes">
-  | SyncUpsertChange<"tasks", Task>
+  | (SyncUpsertChange<"tasks", Task> & { op?: TaskCompletionOp })
   | SyncDeleteChange<"tasks">
   | SyncUpsertChange<"health_heart_rate", HealthHeartRate>
   | SyncDeleteChange<"health_heart_rate">

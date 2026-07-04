@@ -5,6 +5,7 @@ covers:
   - packages/shared/src/types.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/entitySchemas.ts
+  - packages/shared/src/taskCompletion.ts
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
@@ -13,10 +14,11 @@ covers:
   - packages/server/src/lib/db-rows.ts
   - packages/client/src/db/index.ts
   - packages/client/src/db/schemaNormalization.ts
-last-reviewed: 2026-07-02
+last-reviewed: 2026-07-04
 ---
 
 <!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用，属触发下沉（见 sync.md），不改变本文档描述的数据契约、schema 归一或映射约定，无需改动。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：SyncLogEntry / tasks SyncChange 新增可选 op 授权标志，Dexie syncLog 不新增索引、不升版本；Task 实体字段和 SQLite tasks 表结构不变。 -->
 
 # 数据模型与契约
 
@@ -80,10 +82,11 @@ type SyncLogEntry = {
   action: "create" | "update" | "delete";
   timestamp: string;
   synced: 0 | 1;
+  op?: TaskCompletionOp; // 仅 tasks 域使用：完成语义写入授权标志
 };
 ```
 
-`tableName` 来自 `packages/shared/src/syncDomains.ts` 的封闭登记簿，当前包括 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`、`tracks`、`track_steps`、`goals`、`goal_layout_pins`、`health_charts` 与健康原始数据域。Dexie 使用 `[tableName+synced]` 复合索引。同步实体写入与对应 `syncLog` 追写必须在同一个 transaction 内完成；轨道父子删除由客户端数据层显式写每条 `track_steps/delete`，不能依赖数据库级联。
+`tableName` 来自 `packages/shared/src/syncDomains.ts` 的封闭登记簿，当前包括 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`、`tracks`、`track_steps`、`goals`、`goal_layout_pins`、`health_charts` 与健康原始数据域。Dexie 使用 `[tableName+synced]` 复合索引；`op` 不是索引字段，加入后无需升 Dexie 版本。同步实体写入与对应 `syncLog` 追写必须在同一个 transaction 内完成；轨道父子删除由客户端数据层显式写每条 `track_steps/delete`，不能依赖数据库级联。
 
 ## 4. SyncChange / SyncPushOutcome
 
@@ -94,6 +97,8 @@ type SyncChange =
   | { tableName: T; action: "create" | "update"; recordId: string; data: Entity; timestamp: string }
   | { tableName: T; action: "delete"; recordId: string; data: null; timestamp: string };
 ```
+
+`tasks` upsert 成员额外允许可选 `op?: TaskCompletionOp`，其余域的 `op` 仍由运行时 schema 剥离。`TaskCompletionOp` 是完成语义授权标志（`complete` / `reopen` / `skip` / `amend`），只控制服务器是否允许这次 tasks 快照覆盖完成字段；不改变 Task 实体 schema 或业务表结构。详见 [sync](sync.md) §2.2.1 与 [ADR 0018](../adr/0018-tasks-completion-op.md)。
 
 服务端对每条 change 输出一个 `SyncPushOutcome`：
 

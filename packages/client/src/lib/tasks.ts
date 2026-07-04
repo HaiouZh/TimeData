@@ -11,6 +11,7 @@ import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
+import { completionOp } from "./tasks/completionOp.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { currentDueDateString } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
@@ -52,8 +53,9 @@ async function nextChildSortOrder(parentId: string): Promise<number> {
 
 async function putTask(next: Task): Promise<Task> {
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
+    const prev = await db.tasks.get(next.id);
     await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(prev, next, next.updatedAt));
   });
   return next;
 }
@@ -288,7 +290,7 @@ export async function updateTask(id: string, patch: UpdateTaskPatch): Promise<Ta
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await deleteActiveOccurrencesInCurrentTransaction(id);
     await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(existing, next, next.updatedAt));
     await materializeRuleInCurrentTransaction(next, now);
   });
   return next;
@@ -348,7 +350,7 @@ export async function markOccurrenceSkipped(id: string, options: { now?: Date } 
   });
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(existing, next, next.updatedAt));
     await materializeNextForOccurrenceInCurrentTransaction(next, now);
   });
   return next;
@@ -403,7 +405,7 @@ export async function applyRecurrenceChoice(
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await deleteActiveOccurrencesInCurrentTransaction(id);
     await db.tasks.put(next);
-    await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+    await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(existing, next, next.updatedAt));
   });
   return next;
 }
@@ -439,7 +441,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
           const completedAt = existingTarget.done ? null : updatedAt;
           const next = TaskSchema.parse({ ...existingTarget, done: !existingTarget.done, completedAt, updatedAt });
           await db.tasks.put(next);
-          await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+          await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(existingTarget, next, next.updatedAt));
           result = next;
           return;
         }
@@ -461,7 +463,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
           createdAt: updatedAt,
         });
         await db.tasks.add(next);
-        await recordSyncLog("tasks", next.id, "create", next.updatedAt);
+        await recordSyncLog("tasks", next.id, "create", next.updatedAt, completionOp(undefined, next, next.updatedAt));
         result = next;
       });
       return result;
@@ -485,7 +487,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
         await deleteTaskAndChildrenInCurrentTransaction(o.id);
       }
       await db.tasks.put(reopened);
-      await recordSyncLog("tasks", reopened.id, "update", reopened.updatedAt);
+      await recordSyncLog("tasks", reopened.id, "update", reopened.updatedAt, completionOp(base, reopened, reopened.updatedAt));
     });
     return reopened;
   }
@@ -494,7 +496,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
     const next = TaskSchema.parse({ ...base, done: true, completedAt: updatedAt, updatedAt });
     await db.transaction("rw", db.tasks, db.syncLog, async () => {
       await db.tasks.put(next);
-      await recordSyncLog("tasks", next.id, "update", next.updatedAt);
+      await recordSyncLog("tasks", next.id, "update", next.updatedAt, completionOp(base, next, next.updatedAt));
       await materializeNextForOccurrenceInCurrentTransaction(next, now);
     });
     return next;

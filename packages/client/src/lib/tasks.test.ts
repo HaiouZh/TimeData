@@ -100,9 +100,12 @@ describe("toggleTaskDone", () => {
 
     expect(undone.done).toBe(false);
     expect(undone.completedAt).toBeNull();
-    await expect(db.syncLog.where("recordId").equals(task.id).toArray()).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
-    );
+    const logs = await db.syncLog.where("recordId").equals(task.id).toArray();
+    const updates = logs.filter((log) => log.action === "update").sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    expect(updates).toEqual([
+      expect.objectContaining({ tableName: "tasks", action: "update", op: { type: "complete", at: "2026-06-14T08:00:00.000Z" } }),
+      expect.objectContaining({ tableName: "tasks", action: "update", op: { type: "reopen", at: "2026-06-14T09:00:00.000Z" } }),
+    ]);
   });
 
   it("规则模板子任务：勾选写到最新非 skipped occurrence 子任务，模板子任务不变", async () => {
@@ -770,6 +773,7 @@ describe("persistTaskOrder", () => {
     expect(after.map((t) => t.id)).toEqual([c.id, a.id, b.id]);
     const logs = await db.syncLog.where("tableName").equals("tasks").toArray();
     expect(logs.every((log) => log.action === "update")).toBe(true);
+    expect(logs.every((log) => log.op === undefined)).toBe(true);
     expect(logs.length).toBe(3);
   });
 
@@ -884,7 +888,13 @@ describe("markOccurrenceSkipped", () => {
     await markOccurrenceSkipped("occ:r1:2026-06-14", { now: new Date("2026-06-14T09:00:00.000Z") });
     expect((await db.tasks.get("occ:r1:2026-06-14"))?.skipped).toBe(true);
     await expect(db.syncLog.where("recordId").equals("occ:r1:2026-06-14").toArray()).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "tasks",
+          action: "update",
+          op: { type: "skip", at: "2026-06-14T09:00:00.000Z" },
+        }),
+      ]),
     );
   });
   it("跳过 pending occurrence 后立即物化下一发", async () => {

@@ -23,6 +23,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-06-27（设计语言 P3）：constants.ts 新增 UNCATEGORIZED_COLOR（无色分类回退色，用户内容色域，详见 data-model §8），未改变 Category / Setting schema、播种规则或设置 key 契约。 -->
 <!-- 复核 2026-06-28（待办想法重力）：新增 todo.gravity.v1 settings key 归 todo 域消费，分类 schema、manual 同步语义和播种规则均不变；完整 key 表见 settings-catalog。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：分类/settings 仍沿用既有字段和写入入口；重叠 baseSeq 下的 staleGuard 仲裁详见 sync.md，不改变分类层级、排序或设置 key 契约。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：guardedColumns 仅配置在 tasks 域；分类/settings 字段、manual/LWW 策略、排序和 settings key 契约均不变。 -->
 
 # 分类与设置
 

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { latestOccurrenceForRule, materializeDue, TaskSchema, type SyncChange, type Task } from "@timedata/shared";
+import { completionOp, latestOccurrenceForRule, materializeDue, TaskSchema, type SyncChange, type Task } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
@@ -58,6 +58,7 @@ agent.post("/tasks/:id/status", async (c) => {
   }
 
   let occurrence: Task | null = null;
+  let occurrencePrev: Task | undefined;
   let occurrenceIsNew = false;
   let noteChild: Task | null = null;
   let next: Task;
@@ -67,6 +68,7 @@ agent.post("/tasks/:id/status", async (c) => {
     const occurrences = (db.prepare("SELECT * FROM tasks WHERE rule_id = ?").all(id) as TaskRow[]).map(rowToTask);
     const latest = latestOccurrenceForRule(id, occurrences);
     if (latest !== null && !latest.done) {
+      occurrencePrev = latest;
       occurrence = TaskSchema.parse({ ...latest, done: true, completedAt: now, updatedAt: now });
     } else {
       const sortRow = db.prepare("SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM tasks").get() as {
@@ -135,29 +137,37 @@ agent.post("/tasks/:id/status", async (c) => {
     });
   }
 
-  const taskCreate = (task: Task): SyncChange => ({
-    tableName: "tasks",
-    action: "create",
-    recordId: task.id,
-    timestamp: now,
-    data: task,
-  });
-  const taskUpdate = (task: Task): SyncChange => ({
-    tableName: "tasks",
-    action: "update",
-    recordId: task.id,
-    timestamp: now,
-    data: task,
-  });
+  const taskCreate = (task: Task): SyncChange => {
+    const op = completionOp(undefined, task, now);
+    return {
+      tableName: "tasks",
+      action: "create",
+      recordId: task.id,
+      timestamp: now,
+      data: task,
+      ...(op ? { op } : {}),
+    };
+  };
+  const taskUpdate = (prev: Task | undefined, task: Task): SyncChange => {
+    const op = completionOp(prev, task, now);
+    return {
+      tableName: "tasks",
+      action: "update",
+      recordId: task.id,
+      timestamp: now,
+      data: task,
+      ...(op ? { op } : {}),
+    };
+  };
 
   db.transaction(() => {
     if (occurrence) {
-      applyChange(occurrenceIsNew ? taskCreate(occurrence) : taskUpdate(occurrence));
+      applyChange(occurrenceIsNew ? taskCreate(occurrence) : taskUpdate(occurrencePrev, occurrence));
     }
     if (noteChild) {
       applyChange(taskCreate(noteChild));
     }
-    applyChange(taskUpdate(next));
+    applyChange(taskUpdate(task, next));
   })();
   notifySyncChange(getLatestSeq());
 

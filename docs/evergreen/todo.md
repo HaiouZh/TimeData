@@ -41,6 +41,7 @@ last-reviewed: 2026-07-04
 # 待办任务
 
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 Task 字段、重复规则、子任务或待办页面交互；P2 的完成语义意图化另行规划。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：Task 字段和待办页面交互不变；同步层给完成字段增加 op 授权，防止无意图的标题/排序快照翻回勾选。 -->
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
@@ -64,14 +65,14 @@ last-reviewed: 2026-07-04
            setTaskTurn/setTaskTags/createChildTask/promoteToRoot/moveTaskToParent/
            deleteTask/deleteTaskCascade/persistTaskOrder/bumpTaskWeight
         → putTask(): db.transaction("rw", db.tasks, db.syncLog) 内
-           db.tasks.put(next) + recordSyncLog("tasks", id, action, ts)
+           db.tasks.put(next) + recordSyncLog("tasks", id, action, ts, completionOp?)
         → recordSyncLog 内 syncScheduler.notifyWrite() 自动调度（见 sync.md §1.6）
         → POST /api/sync/push → server 通用 LWW 域（无自定义 apply）
            → taskToRow 写 SQLite tasks + 服务器分配 updated_at + recordSeq
         → sync_seq 记账 → notifySyncChange → 其他设备 SSE pull
 ```
 
-所有本地写入（含 `persistTaskOrder` 批量重排）都在同一个 Dexie transaction 内同时写 `tasks` 与 `syncLog`；同步日志失败时业务写入回滚。`updated_at` 由服务器记账时分配，设备时钟漂移不影响同步正确性。客户端校验只为体验，服务端用登记簿 schema 重新解析并按 LWW 写入。
+所有本地写入（含 `persistTaskOrder` 批量重排）都在同一个 Dexie transaction 内同时写 `tasks` 与 `syncLog`；同步日志失败时业务写入回滚。`putTask` 会读 prev 行并用 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount` 的 diff 推导可选 `completionOp`，完成、撤勾、跳过和重复规则重锚这类完成语义写入会随 syncLog 上行；改标题、改排序、改标签、改权重等非完成语义写入不附 `op`。服务端收到无 `op` 的 tasks upsert 时保留现存完成字段，只更新非守卫列，避免旧快照把另一设备的勾选翻回。`updated_at` 由服务器记账时分配，设备时钟漂移不影响同步正确性。客户端校验只为体验，服务端用登记簿 schema 重新解析并按 LWW + 完成字段守卫写入。
 
 ### 1.2 agent / CLI 回写任务状态（封闭动作集合）
 

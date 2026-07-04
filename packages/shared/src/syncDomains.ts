@@ -164,12 +164,29 @@ export function getSyncDomain(table: string, registry: readonly SyncDomainConfig
   return domain;
 }
 
+/** tasks 完成语义 op：授权本变更写入完成字段（done/completedAt/skipped/lastDoneAt/completedCount）。type 仅作审计。 */
+export function buildTaskCompletionOpSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeAny {
+  return z.object({
+    type: z.enum(["complete", "reopen", "skip", "amend"]),
+    at: timestampSchema,
+  });
+}
+
 /** 按登记簿生成 SyncChange 的运行时校验（每域 upsert + delete 两个成员的判别联合）。 */
 export function buildSyncChangeSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeAny {
   const base = z.object({ recordId: z.string().min(1), timestamp: timestampSchema });
-  const members = SYNC_DOMAINS.flatMap((domain) => [
-    base.extend({ tableName: z.literal(domain.table), action: z.enum(["create", "update"]), data: domain.dataSchema }),
-    base.extend({ tableName: z.literal(domain.table), action: z.literal("delete"), data: z.null() }),
-  ]);
+  const opSchema = buildTaskCompletionOpSchema(timestampSchema);
+  const members = SYNC_DOMAINS.flatMap((domain) => {
+    const upsert = base.extend({
+      tableName: z.literal(domain.table),
+      action: z.enum(["create", "update"]),
+      data: domain.dataSchema,
+    });
+    return [
+      // 只有 tasks 承载完成语义 op；其余域来包带 op 会被 zod strip，行为等同现状。
+      domain.table === "tasks" ? upsert.extend({ op: opSchema.optional() }) : upsert,
+      base.extend({ tableName: z.literal(domain.table), action: z.literal("delete"), data: z.null() }),
+    ];
+  });
   return z.union(members as never as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);
 }

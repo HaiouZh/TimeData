@@ -26,6 +26,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
 <!-- 复核 2026-07-02（timeline 修复 C 收尾）：EntryPage 返回按钮改用 td-text-caption，仅清理设计语言旧债；时间记录语义见 §8–§9，不新增写入路径。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 TimeEntry 字段、时间范围校验或时间轴写入路径。 -->
+<!-- 复核 2026-07-04（tasks 完成语义 op）：tasks 专用 op 不改变 TimeEntry schema、时间范围校验、重叠覆盖或时间轴写入路径。 -->
 
 # 时间轴与记录时间规则
 
