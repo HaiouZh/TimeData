@@ -486,12 +486,22 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
                 );
               })()}
             </svg>
+            {/* 四角打点热区：角块边长 17% 时距圆环外沿留 ≈8 SVG 单位缓冲带，防误触（见 plan 几何依据）。 */}
+            {(["left-0 top-0", "right-0 top-0", "left-0 bottom-0", "right-0 bottom-0"] as const).map((corner) => (
+              <button
+                key={corner}
+                type="button"
+                onClick={() => onPunch?.()}
+                aria-label="打点（记录到现在）"
+                className={`absolute ${corner} h-[17%] w-[17%] rounded-card transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-ink/10`}
+              />
+            ))}
             <button
               type="button"
               onClick={() => onPunch?.()}
               className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95"
               style={{ containerType: "inline-size" }}
-              aria-label="打点（记录到现在）"
+              aria-label="显示选中时段"
             >
               <span className="td-time text-[8cqw] leading-none text-ink-2">{centerRange}</span>
               <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-ink">{centerTitle}</span>

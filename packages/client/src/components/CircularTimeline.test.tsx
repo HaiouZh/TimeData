@@ -4,7 +4,7 @@ import { act, createElement, Profiler, type ProfilerOnRenderCallback } from "rea
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TimeSlot } from "../lib/time.js";
-import { renderDom, unmount } from "../test/domHarness.js";
+import { click, renderDom, unmount } from "../test/domHarness.js";
 import CircularTimeline, {
   chooseInitialSelection,
   clampSlotToDayMinutes,
@@ -800,5 +800,34 @@ describe("CircularTimeline now indicator", () => {
     );
 
     expect(html).not.toContain('data-now-indicator="true"');
+  });
+});
+
+describe("CircularTimeline 四角打点热区", () => {
+  const slots: TimeSlot[] = [
+    {
+      startTime: "2026-05-08T00:00:00",
+      endTime: "2026-05-08T07:00:00",
+      entry: null,
+      kind: "gap",
+      displayMode: "default",
+    },
+  ];
+
+  it("四个角落按钮都触发 onPunch", async () => {
+    const onPunch = vi.fn();
+    const { host, root } = await renderDom(
+      <CircularTimeline date="2026-05-08" slots={slots} onPunch={onPunch} />,
+    );
+    try {
+      const corners = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
+      expect(corners).toHaveLength(4);
+      for (const corner of corners) {
+        await click(corner);
+      }
+      expect(onPunch).toHaveBeenCalledTimes(4);
+    } finally {
+      await unmount(root);
+    }
   });
 });
