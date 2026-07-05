@@ -43,7 +43,7 @@ export function GoalGalaxyActionBar({
 
   if (wide && !coarse) {
     return (
-      <div className="absolute bottom-3 left-3 z-[var(--z-popover)] flex flex-wrap gap-2 rounded-card border border-border bg-surface-elevated p-2 shadow-elev1">
+      <div className="absolute bottom-3 left-3 z-[var(--z-dropdown)] flex flex-wrap gap-2 rounded-card border border-border bg-surface-elevated p-2 shadow-elev1">
         {buttons}
       </div>
     );
@@ -83,7 +83,7 @@ export function GoalGalaxyEdgeActionBar({
 
   if (wide && !coarse) {
     return (
-      <div className="absolute bottom-3 left-3 z-[var(--z-popover)] flex flex-wrap gap-2 rounded-card border border-border bg-surface-elevated p-2 shadow-elev1">
+      <div className="absolute bottom-3 left-3 z-[var(--z-dropdown)] flex flex-wrap gap-2 rounded-card border border-border bg-surface-elevated p-2 shadow-elev1">
         {buttons}
       </div>
     );

@@ -1200,7 +1200,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
       {connectDraft && (
         <div
           data-connect-hint
-          className="absolute left-1/2 top-3 z-[var(--z-popover)] flex -translate-x-1/2 items-center gap-3 rounded-pill border border-accent bg-surface-elevated px-4 py-2 td-text-body text-ink shadow-elev1"
+          className="absolute left-1/2 top-3 z-[var(--z-dropdown)] flex -translate-x-1/2 items-center gap-3 rounded-pill border border-accent bg-surface-elevated px-4 py-2 td-text-body text-ink shadow-elev1"
         >
           <span>为「{connectDraft.node.title}」连前置：点击目标节点完成连接</span>
           <button
@@ -1225,12 +1225,12 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         onClose={clearSelection}
       />
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-[var(--z-popover)] rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger">
+        <div className="absolute bottom-3 right-3 z-[var(--z-dropdown)] rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger">
           {errorMessage}
         </div>
       )}
       {settleHint && !errorMessage && (
-        <div className="td-text-body absolute bottom-3 right-3 z-[var(--z-popover)] rounded-card border border-border bg-surface px-3 py-2 text-ink-2">
+        <div className="td-text-body absolute bottom-3 right-3 z-[var(--z-dropdown)] rounded-card border border-border bg-surface px-3 py-2 text-ink-2">
           {settleHint}
         </div>
       )}
