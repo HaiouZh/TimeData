@@ -10,6 +10,7 @@ interface CircularTimelineProps {
   slots: TimeSlot[];
   onSelectionChange?: (target: RingSelectionTarget) => void;
   onPunch?: () => void;
+  onCenterAction?: (target: RingSelectionTarget) => void;
   overlay?: ReactNode;
   now?: Date;
 }
@@ -262,7 +263,7 @@ function resolveSelection(selection: Selection | null, slots: TimeSlot[]): Selec
   return slot ? { type: "gap", startTime: slot.startTime, endTime: slot.endTime } : null;
 }
 
-export default function CircularTimeline({ date, slots, onSelectionChange, onPunch, overlay, now }: CircularTimelineProps) {
+export default function CircularTimeline({ date, slots, onSelectionChange, onPunch, onCenterAction, overlay, now }: CircularTimelineProps) {
   const { getCategoryColor, getCategoryPath } = useCategories();
   const initialSelection = useMemo(() => chooseInitialSelection(slots), [slots]);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -323,6 +324,14 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
         : "没有时间段";
   const centerDuration = selectedRange ? formatDuration(selectedRange.startTime, selectedRange.endTime) : "";
   const centerRange = selectedRange ? formatTimelineTimeRange(selectedRange.startTime, selectedRange.endTime) : "";
+
+  const centerTarget: RingSelectionTarget | null = activeSelection
+    ? activeSelection.type === "entry"
+      ? { type: "entry", entryId: activeSelection.entry.id }
+      : { type: "gap", startTime: activeSelection.startTime, endTime: activeSelection.endTime }
+    : null;
+  const centerLabel =
+    activeSelection?.type === "entry" ? "查看并编辑该记录" : activeSelection?.type === "gap" ? "补录该时间段" : "没有时间段";
 
   const currentSelectionKey = selectionKey(activeSelection);
   const segmentLayer = useMemo(
@@ -498,10 +507,11 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
             ))}
             <button
               type="button"
-              onClick={() => onPunch?.()}
-              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95"
+              onClick={() => centerTarget && onCenterAction?.(centerTarget)}
+              disabled={!centerTarget}
+              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95 disabled:opacity-60 disabled:active:scale-100"
               style={{ containerType: "inline-size" }}
-              aria-label="打点（记录到现在）"
+              aria-label={centerLabel}
             >
               <span className="td-time text-[8cqw] leading-none text-ink-2">{centerRange}</span>
               <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-ink">{centerTitle}</span>

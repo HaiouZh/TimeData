@@ -112,7 +112,7 @@ describe("CircularTimeline selection", () => {
     expect(path.match(/A 62 62/g)?.length).toBe(2);
   });
 
-  it("renders the center as range / category / duration while clicking punches", () => {
+  it("renders the center with selection-aware aria-label and content", () => {
     const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
     const html = renderToStaticMarkup(
       createElement(CircularTimeline, {
@@ -130,8 +130,8 @@ describe("CircularTimeline selection", () => {
       }),
     );
 
-    // 中心点击触发打点，但显示恢复为选段的时间段 / 分类 / 时长
-    expect(html).toContain('aria-label="打点（记录到现在）"');
+    // 中心按钮显示选段的时间段 / 分类 / 时长，aria-label 反映当前选段状态
+    expect(html).toContain('aria-label="补录该时间段"');
     const rangeIdx = html.indexOf("07:30 - 08:00");
     const titleIdx = html.indexOf("待记录");
     const durationIdx = html.indexOf("30分钟");
@@ -140,33 +140,19 @@ describe("CircularTimeline selection", () => {
     expect(durationIdx).toBeGreaterThan(titleIdx);
   });
 
-  it("calls onPunch when the center is clicked", async () => {
-    const onPunch = vi.fn();
+  it("center button is disabled when no selection exists without onCenterAction", async () => {
     const { host: container, root } = await renderDom(createElement("div"));
     await act(async () => {
       root.render(
         createElement(CircularTimeline, {
           date: "2026-05-08",
-          slots: [
-            {
-              startTime: "2026-05-08T00:00:00",
-              endTime: "2026-05-08T07:00:00",
-              entry: null,
-              kind: "gap",
-              displayMode: "default",
-            },
-          ],
-          onPunch,
+          slots: [],
         }),
       );
     });
 
-    const buttons = Array.from(container.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
-    const center = buttons[buttons.length - 1] as HTMLButtonElement;
-    await act(async () => {
-      center.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(onPunch).toHaveBeenCalledTimes(1);
+    const center = container.querySelector<HTMLButtonElement>('button[aria-label="没有时间段"]');
+    expect(center?.disabled).toBe(true);
 
     await unmount(root);
     container.remove();
@@ -804,6 +790,75 @@ describe("CircularTimeline now indicator", () => {
   });
 });
 
+describe("CircularTimeline 中心详细操作", () => {
+  const gapSlot: TimeSlot = {
+    startTime: "2026-05-08T07:30:00",
+    endTime: "2026-05-08T08:00:00",
+    entry: null,
+    kind: "gap",
+    displayMode: "default",
+  };
+
+  it("默认选中空档时点中心回调 gap 目标，且不触发 onPunch", async () => {
+    const onCenterAction = vi.fn();
+    const onPunch = vi.fn();
+    const { host, root } = await renderDom(
+      <CircularTimeline
+        date="2026-05-08"
+        slots={[gapSlot]}
+        onCenterAction={onCenterAction}
+        onPunch={onPunch}
+      />,
+    );
+    try {
+      await click(host.querySelector('button[aria-label="补录该时间段"]'));
+      expect(onCenterAction).toHaveBeenCalledWith({
+        type: "gap",
+        startTime: "2026-05-08T07:30:00",
+        endTime: "2026-05-08T08:00:00",
+      });
+      expect(onPunch).not.toHaveBeenCalled();
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("选中记录段时点中心回调 entry 目标", async () => {
+    const work = entry("entry-1", "2026-05-08T07:00:00", "2026-05-08T07:30:00");
+    const onCenterAction = vi.fn();
+    const { host, root } = await renderDom(
+      <CircularTimeline
+        date="2026-05-08"
+        slots={[
+          { startTime: work.startTime, endTime: work.endTime, entry: work, kind: "entry", displayMode: "default" },
+        ]}
+        onCenterAction={onCenterAction}
+      />,
+    );
+    try {
+      await click(host.querySelector('button[aria-label="查看并编辑该记录"]'));
+      expect(onCenterAction).toHaveBeenCalledWith({ type: "entry", entryId: "entry-1" });
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("没有可选段时中心按钮禁用", async () => {
+    const onCenterAction = vi.fn();
+    const { host, root } = await renderDom(
+      <CircularTimeline date="2026-05-08" slots={[]} onCenterAction={onCenterAction} />,
+    );
+    try {
+      const center = host.querySelector<HTMLButtonElement>('button[aria-label="没有时间段"]');
+      expect(center?.disabled).toBe(true);
+      await click(center);
+      expect(onCenterAction).not.toHaveBeenCalled();
+    } finally {
+      await unmount(root);
+    }
+  });
+});
+
 describe("CircularTimeline 四角打点热区", () => {
   const slots: TimeSlot[] = [
     {
@@ -821,8 +876,7 @@ describe("CircularTimeline 四角打点热区", () => {
       <CircularTimeline date="2026-05-08" slots={slots} onPunch={onPunch} />,
     );
     try {
-      const all = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
-      const corners = all.slice(0, -1);
+      const corners = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
       expect(corners).toHaveLength(4);
       for (const corner of corners) {
         await click(corner);
