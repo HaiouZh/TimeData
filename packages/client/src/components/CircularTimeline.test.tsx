@@ -161,7 +161,8 @@ describe("CircularTimeline selection", () => {
       );
     });
 
-    const center = container.querySelector('button[aria-label="打点（记录到现在）"]') as HTMLButtonElement;
+    const buttons = Array.from(container.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
+    const center = buttons[buttons.length - 1] as HTMLButtonElement;
     await act(async () => {
       center.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -820,7 +821,8 @@ describe("CircularTimeline 四角打点热区", () => {
       <CircularTimeline date="2026-05-08" slots={slots} onPunch={onPunch} />,
     );
     try {
-      const corners = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
+      const all = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
+      const corners = all.slice(0, -1);
       expect(corners).toHaveLength(4);
       for (const corner of corners) {
         await click(corner);

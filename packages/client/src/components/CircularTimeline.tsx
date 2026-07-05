@@ -501,7 +501,7 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
               onClick={() => onPunch?.()}
               className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95"
               style={{ containerType: "inline-size" }}
-              aria-label="显示选中时段"
+              aria-label="打点（记录到现在）"
             >
               <span className="td-time text-[8cqw] leading-none text-ink-2">{centerRange}</span>
               <span className="line-clamp-2 text-[13cqw] font-medium leading-tight text-ink">{centerTitle}</span>
