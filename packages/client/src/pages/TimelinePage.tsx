@@ -90,6 +90,18 @@ export default function TimelinePage() {
     clearToast();
   }
 
+  function gapEntryUrl(startTime: string, endTime: string): string {
+    return `/entries/new?date=${encodeURIComponent(date)}&start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`;
+  }
+
+  function handleCenterAction(target: RingSelectionTarget) {
+    if (target.type === "entry") {
+      navigate(`/entries/${target.entryId}/edit`);
+      return;
+    }
+    navigate(gapEntryUrl(target.startTime, target.endTime));
+  }
+
   return (
     <div
       data-testid="swipe-area"
@@ -107,17 +119,14 @@ export default function TimelinePage() {
           now={now}
           onSelectionChange={setRingSelection}
           onPunch={() => void handlePunch()}
+          onCenterAction={handleCenterAction}
           overlay={<SyncIndicator />}
         />
       </div>
       <ActionToastBar toast={toast} onDismiss={clearToast} ariaLabel="打点反馈" className="mx-4 mt-2" />
       <Timeline
         slots={slots}
-        onGapClick={(startTime, endTime) =>
-          navigate(
-            `/entries/new?date=${encodeURIComponent(date)}&start=${encodeURIComponent(startTime)}&end=${encodeURIComponent(endTime)}`,
-          )
-        }
+        onGapClick={(startTime, endTime) => navigate(gapEntryUrl(startTime, endTime))}
         onEntryClick={(entry) => navigate(`/entries/${entry.id}/edit`)}
         highlight={ringSelection}
       />

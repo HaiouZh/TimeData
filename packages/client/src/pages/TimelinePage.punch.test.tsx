@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { TimeEntry } from "@timedata/shared";
+import type { RingSelectionTarget } from "../components/CircularTimeline.js";
 import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -35,10 +36,27 @@ vi.mock("../components/DateNav.tsx", () => ({
 }));
 
 vi.mock("../components/CircularTimeline.tsx", () => ({
-  default: ({ onPunch }: { onPunch?: () => void }) => (
-    <button type="button" onClick={onPunch}>
-      打点
-    </button>
+  default: ({
+    onPunch,
+    onCenterAction,
+  }: {
+    onPunch?: () => void;
+    onCenterAction?: (target: RingSelectionTarget) => void;
+  }) => (
+    <div>
+      <button type="button" onClick={onPunch}>
+        打点
+      </button>
+      <button
+        type="button"
+        onClick={() => onCenterAction?.({ type: "gap", startTime: "2026-05-13T09:00", endTime: "2026-05-13T10:30" })}
+      >
+        中心空档
+      </button>
+      <button type="button" onClick={() => onCenterAction?.({ type: "entry", entryId: "entry-9" })}>
+        中心记录
+      </button>
+    </div>
   ),
 }));
 
@@ -197,6 +215,35 @@ describe("TimelinePage 打点反馈", () => {
     } finally {
       await unmount(root);
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("TimelinePage 中心详细操作", () => {
+  beforeEach(() => {
+    navigateMock.mockReset();
+  });
+
+  it("中心点记录段跳编辑页", async () => {
+    const { host, root } = await renderTimeline();
+    try {
+      await click(getButton(host, "中心记录"));
+      expect(navigateMock).toHaveBeenCalledWith("/entries/entry-9/edit");
+    } finally {
+      await unmount(root);
+    }
+  });
+
+  it("中心点空档跳预填补录页", async () => {
+    const { host, root } = await renderTimeline();
+    try {
+      await click(getButton(host, "中心空档"));
+      const url = navigateMock.mock.calls.at(-1)?.[0] as string;
+      expect(url).toMatch(/^\/entries\/new\?date=/);
+      expect(url).toContain(`start=${encodeURIComponent("2026-05-13T09:00")}`);
+      expect(url).toContain(`end=${encodeURIComponent("2026-05-13T10:30")}`);
+    } finally {
+      await unmount(root);
     }
   });
 });
