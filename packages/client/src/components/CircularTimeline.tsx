@@ -372,6 +372,14 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
     <section className="px-4 pt-4">
       <div className="rounded-card border border-border bg-surface/80 p-3">
         <div className="flex justify-center">
+          {/* 宽屏下正方形两侧的空白也是打点热区；窄屏 flex-1 收缩为 0 不占位。tabIndex=-1：与四角按钮同动作，不重复进 Tab 序。 */}
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => onPunch?.()}
+            aria-label="打点（记录到现在）"
+            className="flex-1 self-stretch rounded-card transition focus-visible:outline-none active:bg-ink/10"
+          />
           <div className="relative aspect-square w-full max-w-[372px]">
             {overlay}
             <svg
@@ -518,6 +526,13 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
               <span className="td-duration text-[17cqw] font-semibold leading-none text-ink">{centerDuration}</span>
             </button>
           </div>
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => onPunch?.()}
+            aria-label="打点（记录到现在）"
+            className="flex-1 self-stretch rounded-card transition focus-visible:outline-none active:bg-ink/10"
+          />
         </div>
       </div>
     </section>

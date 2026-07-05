@@ -870,18 +870,18 @@ describe("CircularTimeline 四角打点热区", () => {
     },
   ];
 
-  it("四个角落按钮都触发 onPunch", async () => {
+  it("四个角落与两侧宽屏热区条都触发 onPunch", async () => {
     const onPunch = vi.fn();
     const { host, root } = await renderDom(
       <CircularTimeline date="2026-05-08" slots={slots} onPunch={onPunch} />,
     );
     try {
-      const corners = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
-      expect(corners).toHaveLength(4);
-      for (const corner of corners) {
-        await click(corner);
+      const zones = Array.from(host.querySelectorAll('button[aria-label="打点（记录到现在）"]'));
+      expect(zones).toHaveLength(6);
+      for (const zone of zones) {
+        await click(zone);
       }
-      expect(onPunch).toHaveBeenCalledTimes(4);
+      expect(onPunch).toHaveBeenCalledTimes(6);
     } finally {
       await unmount(root);
     }
