@@ -29,6 +29,7 @@ last-reviewed: 2026-07-04
 
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared Task schema 与 tasks 同步域映射；Goal.members 仍只引用 Task/Track 身份，不消费 weight，也不改变目标 roll-up。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：Task 完成字段同步守卫不改变 Goal.members 引用、项目完成度读取口径或目标布局钉点同步域。 -->
+<!-- 复核 2026-07-04（tracks 并发时间语义）：tracks.status 守卫、track_steps 宿主闸和 TrackStep.editedAt 不改变 Goal schema、Goal.members 引用口径、项目完成度读取或目标布局钉点同步域。 -->
 
 # 目标层
 

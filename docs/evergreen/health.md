@@ -24,6 +24,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；健康各域 schema、同步语义与备份角色不变。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展不改变健康 6 域 schema、ingest 写入路径、同步登记或备份角色。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：shared SyncChange/SyncLogEntry 新增 tasks 专用 op；健康 6 域 schema、ingest 写入路径、LWW 映射和备份角色不变。 -->
+<!-- 复核 2026-07-04（tracks 并发时间语义）：shared SyncChange/reasonCode 与 server sync domains 增加 tracks.status 守卫、track_steps 宿主闸和 TrackStep.editedAt；健康 6 域 schema、ingest 写入路径、LWW 映射和备份角色不变。 -->
 
 # 健康数据
 

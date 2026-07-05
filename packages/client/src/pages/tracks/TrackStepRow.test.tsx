@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { TrackStep } from "@timedata/shared";
-import { afterEach, describe, expect, it } from "vitest";
+import { act } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TrackStepRow } from "./TrackStepRow.js";
 
@@ -29,9 +30,24 @@ function step(partial: Partial<TrackStep> & { id: string }): TrackStep {
   };
 }
 
-async function mount(props: { step: TrackStep; isCurrent: boolean; now: Date }) {
+async function mount(props: {
+  step: TrackStep;
+  isCurrent: boolean;
+  now: Date;
+  onEdit?: (id: string, content: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+}) {
   mounted = await renderDom(<TrackStepRow {...props} />);
   return mounted.host;
+}
+
+async function typeTextarea(host: HTMLElement, label: string, value: string): Promise<void> {
+  await act(async () => {
+    const textarea = host.querySelector(`textarea[aria-label="${label}"]`) as HTMLTextAreaElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    setValue?.call(textarea, value);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 describe("TrackStepRow", () => {
@@ -101,5 +117,52 @@ describe("TrackStepRow", () => {
     const host = await mount({ step: step({ id: "cur", endedAt: null, content: long }), isCurrent: true, now: NOW });
     expect(host.querySelector("p")?.className).not.toContain("line-clamp-6");
     expect([...host.querySelectorAll("button")].some((b) => b.textContent === "展开")).toBe(false);
+  });
+
+  it("user 步渲染编辑/删除按钮，agent 步不渲染", async () => {
+    const onEdit = vi.fn(async () => undefined);
+    const onDelete = vi.fn(async () => undefined);
+    const user = await mount({ step: step({ id: "u", source: "user" }), isCurrent: false, now: NOW, onEdit, onDelete });
+
+    expect(user.querySelector('button[aria-label="编辑步骤"]')).not.toBeNull();
+    expect(user.querySelector('button[aria-label="删除步骤"]')).not.toBeNull();
+
+    if (mounted) await unmount(mounted.root);
+    const agent = await mount({ step: step({ id: "a", source: "agent" }), isCurrent: false, now: NOW, onEdit, onDelete });
+    expect(agent.querySelector('button[aria-label="编辑步骤"]')).toBeNull();
+    expect(agent.querySelector('button[aria-label="删除步骤"]')).toBeNull();
+  });
+
+  it("编辑保存调 onEdit(id, 新内容)", async () => {
+    const onEdit = vi.fn(async () => undefined);
+    const host = await mount({ step: step({ id: "u", source: "user", content: "旧内容" }), isCurrent: false, now: NOW, onEdit });
+
+    await click(host.querySelector('button[aria-label="编辑步骤"]'));
+    await typeTextarea(host, "编辑步骤内容", "新内容");
+    await click([...host.querySelectorAll("button")].find((button) => button.textContent === "保存"));
+
+    expect(onEdit).toHaveBeenCalledWith("u", "新内容");
+  });
+
+  it("删除需确认后调 onDelete", async () => {
+    const onDelete = vi.fn(async () => undefined);
+    const host = await mount({ step: step({ id: "u", source: "user" }), isCurrent: false, now: NOW, onDelete });
+    const deleteButton = host.querySelector('button[aria-label="删除步骤"]');
+
+    await click(deleteButton);
+    expect(onDelete).not.toHaveBeenCalled();
+    await click(host.querySelector('button[aria-label="确认删除步骤"]'));
+
+    expect(onDelete).toHaveBeenCalledWith("u");
+  });
+
+  it("editedAt 存在时显示已编辑", async () => {
+    const host = await mount({
+      step: step({ id: "edited", source: "user", editedAt: "2026-06-21T01:00:00.000Z" }),
+      isCurrent: false,
+      now: NOW,
+    });
+
+    expect(host.textContent).toContain("已编辑");
   });
 });

@@ -90,7 +90,8 @@ beforeEach(async () => {
       tags TEXT NOT NULL DEFAULT '[]',
       seq INTEGER NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      edited_at TEXT
     );
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,

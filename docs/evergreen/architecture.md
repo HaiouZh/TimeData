@@ -23,6 +23,7 @@ last-reviewed: 2026-07-04
 
 <!-- 复核 2026-07-04（依赖升级收 dependabot）：pnpm-workspace.yaml catalog typescript 升 ^6.0.3；包结构、依赖方向与同步边界不变。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：shared/index.ts 新导出 taskCompletion 纯 helper，服务五包既有依赖方向；不改变包职责、启动顺序或写入边界。 -->
+<!-- 复核 2026-07-04（tracks 并发时间语义）：shared/index.ts 新导出轨道排序/status op 纯 helper；五包依赖方向、启动顺序、写入边界和受控 API 入口不变。 -->
 
 # 架构总览
 

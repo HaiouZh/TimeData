@@ -172,10 +172,19 @@ export function buildTaskCompletionOpSchema(timestampSchema: z.ZodTypeAny): z.Zo
   });
 }
 
+/** tracks status op：授权本变更写入 status 守卫列。 */
+export function buildTrackStatusOpSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeAny {
+  return z.object({
+    type: z.literal("status"),
+    at: timestampSchema,
+  });
+}
+
 /** 按登记簿生成 SyncChange 的运行时校验（每域 upsert + delete 两个成员的判别联合）。 */
 export function buildSyncChangeSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeAny {
   const base = z.object({ recordId: z.string().min(1), timestamp: timestampSchema });
-  const opSchema = buildTaskCompletionOpSchema(timestampSchema);
+  const taskOpSchema = buildTaskCompletionOpSchema(timestampSchema);
+  const trackStatusOpSchema = buildTrackStatusOpSchema(timestampSchema);
   const members = SYNC_DOMAINS.flatMap((domain) => {
     const upsert = base.extend({
       tableName: z.literal(domain.table),
@@ -183,8 +192,12 @@ export function buildSyncChangeSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeA
       data: domain.dataSchema,
     });
     return [
-      // 只有 tasks 承载完成语义 op；其余域来包带 op 会被 zod strip，行为等同现状。
-      domain.table === "tasks" ? upsert.extend({ op: opSchema.optional() }) : upsert,
+      // 只有 tasks/tracks 承载语义 op；其余域来包带 op 会被 zod strip，行为等同现状。
+      domain.table === "tasks"
+        ? upsert.extend({ op: taskOpSchema.optional() })
+        : domain.table === "tracks"
+          ? upsert.extend({ op: trackStatusOpSchema.optional() })
+          : upsert,
       base.extend({ tableName: z.literal(domain.table), action: z.literal("delete"), data: z.null() }),
     ];
   });

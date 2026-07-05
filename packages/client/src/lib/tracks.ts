@@ -1,4 +1,13 @@
-import { TrackSchema, TrackStepSchema, type Ref, type Track, type TrackStep } from "@timedata/shared";
+import {
+  TrackSchema,
+  TrackStepSchema,
+  compareTrackStepsBySemanticTime,
+  listOpenSteps,
+  trackStatusOp,
+  type Ref,
+  type Track,
+  type TrackStep,
+} from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
@@ -55,7 +64,7 @@ export interface PlanUserStepInput {
 }
 
 export interface PlanUserStepResult {
-  closed: TrackStep | null;
+  closed: TrackStep[];
   created: TrackStep;
 }
 
@@ -69,7 +78,12 @@ export interface AppendUserStepInput {
 
 export interface SetTrackStatusResult {
   track: Track;
-  closedStep: TrackStep | null;
+  closedSteps: TrackStep[];
+}
+
+function closeOpenStep(step: TrackStep, endedAt: string, updatedAt: string): TrackStep {
+  const clampedEndedAt = endedAt < step.startedAt ? step.startedAt : endedAt;
+  return TrackStepSchema.parse({ ...step, endedAt: clampedEndedAt, updatedAt });
 }
 
 function nowIso(now?: Date): string {
@@ -85,26 +99,6 @@ function trimRequired(value: string, message: string): string {
 async function nextStepSeq(trackId: string): Promise<number> {
   const steps = await db.trackSteps.where("trackId").equals(trackId).toArray();
   return steps.reduce((max, step) => Math.max(max, step.seq + 1), 0);
-}
-
-function latestOpenStep(steps: TrackStep[]): TrackStep | null {
-  let current: TrackStep | null = null;
-  for (const step of steps) {
-    if (step.endedAt !== null) continue;
-    if (
-      current === null ||
-      step.seq > current.seq ||
-      (step.seq === current.seq && step.startedAt > current.startedAt) ||
-      (step.seq === current.seq && step.startedAt === current.startedAt && step.id > current.id)
-    ) {
-      current = step;
-    }
-  }
-  return current;
-}
-
-function byTrackStepOrder(a: TrackStep, b: TrackStep): number {
-  return a.seq - b.seq || a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
 }
 
 function warnInvalidTrack(row: unknown, issues: unknown): void {
@@ -165,7 +159,7 @@ export async function updateTrack(id: string, patch: UpdateTrackPatch): Promise<
   const next = TrackSchema.parse(candidate);
   await db.transaction("rw", db.tracks, db.syncLog, async () => {
     await db.tracks.put(next);
-    await recordSyncLog("tracks", next.id, "update", next.updatedAt);
+    await recordSyncLog("tracks", next.id, "update", next.updatedAt, trackStatusOp(existing, next, next.updatedAt));
   });
 
   return next;
@@ -204,13 +198,17 @@ export async function updateTrackStep(id: string, patch: UpdateTrackStepPatch): 
   const existing = await db.trackSteps.get(id);
   if (!existing) throw new Error("轨道步骤不存在");
 
+  const updatedAt = nowIso(patch.now);
   let candidate: TrackStep = {
     ...existing,
     refs: existing.refs ?? [],
     tags: existing.tags ?? [],
-    updatedAt: nowIso(patch.now),
+    updatedAt,
   };
-  if (patch.content !== undefined) candidate.content = patch.content;
+  if (patch.content !== undefined) {
+    if (patch.content !== existing.content) candidate.editedAt = updatedAt;
+    candidate.content = patch.content;
+  }
   if (patch.startedAt !== undefined) candidate.startedAt = patch.startedAt;
   if (patch.endedAt !== undefined) candidate.endedAt = patch.endedAt;
   if (patch.refs !== undefined) candidate.refs = patch.refs;
@@ -234,14 +232,8 @@ export async function updateTrackStep(id: string, patch: UpdateTrackStepPatch): 
 export function planUserStep(steps: TrackStep[], input: PlanUserStepInput): PlanUserStepResult {
   const seq = steps.reduce((max, step) => Math.max(max, step.seq + 1), 0);
 
-  let closed: TrackStep | null = null;
-  if (input.mode === "open") {
-    const open = latestOpenStep(steps);
-    if (open) {
-      if (input.timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
-      closed = TrackStepSchema.parse({ ...open, endedAt: input.timestamp, updatedAt: input.timestamp });
-    }
-  }
+  const closed =
+    input.mode === "open" ? listOpenSteps(steps).map((open) => closeOpenStep(open, input.timestamp, input.timestamp)) : [];
 
   const created = TrackStepSchema.parse({
     id: input.id,
@@ -279,9 +271,9 @@ export async function appendUserStep(input: AppendUserStepInput): Promise<PlanUs
       tags: input.tags ?? [],
       timestamp,
     });
-    if (result.closed) {
-      await db.trackSteps.put(result.closed);
-      await recordSyncLog("track_steps", result.closed.id, "update", timestamp);
+    for (const closed of result.closed) {
+      await db.trackSteps.put(closed);
+      await recordSyncLog("track_steps", closed.id, "update", timestamp);
     }
     await db.trackSteps.add(result.created);
     await recordSyncLog("track_steps", result.created.id, "create", timestamp);
@@ -291,9 +283,9 @@ export async function appendUserStep(input: AppendUserStepInput): Promise<PlanUs
   return result;
 }
 
-export async function closeCurrentStep(trackId: string, options?: { now?: Date }): Promise<TrackStep> {
+export async function closeCurrentStep(trackId: string, options?: { now?: Date }): Promise<TrackStep[]> {
   const timestamp = nowIso(options?.now);
-  let closed: TrackStep | null = null;
+  let closedSteps: TrackStep[] | null = null;
 
   await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
     const track = await db.tracks.get(trackId);
@@ -301,16 +293,17 @@ export async function closeCurrentStep(trackId: string, options?: { now?: Date }
     const steps = (await db.trackSteps.where("trackId").equals(trackId).toArray()).map((row) =>
       TrackStepSchema.parse(row),
     );
-    const open = latestOpenStep(steps);
-    if (!open) throw new Error("轨道没有进行中的步骤");
-    if (timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
-    closed = TrackStepSchema.parse({ ...open, endedAt: timestamp, updatedAt: timestamp });
-    await db.trackSteps.put(closed);
-    await recordSyncLog("track_steps", closed.id, "update", timestamp);
+    const openSteps = listOpenSteps(steps);
+    if (openSteps.length === 0) throw new Error("轨道没有进行中的步骤");
+    closedSteps = openSteps.map((open) => closeOpenStep(open, timestamp, timestamp));
+    for (const closed of closedSteps) {
+      await db.trackSteps.put(closed);
+      await recordSyncLog("track_steps", closed.id, "update", timestamp);
+    }
   });
 
-  if (!closed) throw new Error("闭合失败");
-  return closed;
+  if (!closedSteps) throw new Error("闭合失败");
+  return closedSteps;
 }
 
 const STATUS_TRANSITION_LABEL: Record<Track["status"], string> = {
@@ -334,20 +327,18 @@ export async function setTrackStatus(
       TrackStepSchema.parse(row),
     );
 
-    let closedStep: TrackStep | null = null;
+    let closedSteps: TrackStep[] = [];
     if (status === "concluded") {
-      const open = latestOpenStep(steps);
-      if (open) {
-        if (timestamp < open.startedAt) throw new Error("闭合时间不能早于开口步开始时间");
-        closedStep = TrackStepSchema.parse({ ...open, endedAt: timestamp, updatedAt: timestamp });
-        await db.trackSteps.put(closedStep);
-        await recordSyncLog("track_steps", closedStep.id, "update", timestamp);
+      closedSteps = listOpenSteps(steps).map((open) => closeOpenStep(open, timestamp, timestamp));
+      for (const closed of closedSteps) {
+        await db.trackSteps.put(closed);
+        await recordSyncLog("track_steps", closed.id, "update", timestamp);
       }
     }
 
     const next = TrackSchema.parse({ ...existing, refs: existing.refs ?? [], status, updatedAt: timestamp });
     await db.tracks.put(next);
-    await recordSyncLog("tracks", next.id, "update", timestamp);
+    await recordSyncLog("tracks", next.id, "update", timestamp, trackStatusOp(existing, next, timestamp));
 
     // 状态变迁写一条 instant 系统步留痕（TK-18）：endedAt=startedAt，不计时、跨设备可见；仅状态真正改变时写。
     if (existing.status !== status) {
@@ -368,7 +359,7 @@ export async function setTrackStatus(
       await recordSyncLog("track_steps", systemStep.id, "create", timestamp);
     }
 
-    out = { track: next, closedStep };
+    out = { track: next, closedSteps };
   });
 
   if (!out) throw new Error("状态更新失败");
@@ -412,7 +403,7 @@ export async function listTrackSteps(trackId: string): Promise<TrackStep[]> {
     steps.push(parsed.data);
   }
 
-  return steps.sort(byTrackStepOrder);
+  return steps.sort(compareTrackStepsBySemanticTime);
 }
 
 export async function listAllTrackSteps(): Promise<TrackStep[]> {
@@ -426,12 +417,12 @@ export async function listAllTrackSteps(): Promise<TrackStep[]> {
     }
     steps.push(parsed.data);
   }
-  return steps.sort(byTrackStepOrder);
+  return steps.sort(compareTrackStepsBySemanticTime);
 }
 
 export async function deleteTrack(id: string): Promise<void> {
   await db.transaction("rw", db.tracks, db.trackSteps, db.syncLog, async () => {
-    const steps = (await db.trackSteps.where("trackId").equals(id).toArray()).sort(byTrackStepOrder);
+    const steps = (await db.trackSteps.where("trackId").equals(id).toArray()).sort(compareTrackStepsBySemanticTime);
     await db.trackSteps.bulkDelete(steps.map((step) => step.id));
     for (const step of steps) {
       await recordSyncLog("track_steps", step.id, "delete");

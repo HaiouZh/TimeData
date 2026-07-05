@@ -1,4 +1,5 @@
 import type { TrackStep } from "./types.js";
+import { compareTrackStepsBySemanticTimeDesc } from "./trackStepOrder.js";
 
 export const TRACK_ACTION_TAGS_KEY = "track.actionTags.v2";
 export const LEGACY_TRACK_ACTION_TAGS_KEY = "track.actionTags.v1";
@@ -79,21 +80,13 @@ export function parseTrackBoardSignalsFromSettings(rawV2: string | null, rawV1: 
   return [...DEFAULT_TRACK_BOARD_SIGNALS];
 }
 
-function byTrackStepOrderAsc(a: TrackStep, b: TrackStep): number {
-  return a.seq - b.seq || a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
-}
-
-function byTrackStepOrderDesc(a: TrackStep, b: TrackStep): number {
-  return -byTrackStepOrderAsc(a, b);
-}
-
 export function latestTrackBoardSignal(
   steps: readonly TrackStep[],
   boardSignals: readonly string[],
 ): TrackBoardSignal | null {
   const normalizedSignals = uniqueTrackBoardSignals(boardSignals);
   if (normalizedSignals.length === 0) return null;
-  for (const step of [...steps].sort(byTrackStepOrderDesc)) {
+  for (const step of [...steps].sort(compareTrackStepsBySemanticTimeDesc)) {
     const stepTags = new Set(uniqueTrackBoardSignals(step.tags));
     for (const tag of normalizedSignals) {
       if (stepTags.has(tag)) return { tag, stepId: step.id };

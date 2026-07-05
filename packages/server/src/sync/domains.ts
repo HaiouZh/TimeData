@@ -69,6 +69,8 @@ export interface ServerDomainHooks {
   validate?: (db: Database, change: SyncChange, ctx: ValidateContext) => SyncPushOutcome | null;
   /** 同批次跨记录校验（如 entries 互相重叠）；返回 null 表示通过 */
   crossValidate?: (change: SyncChange, previousChanges: SyncChange[]) => SyncPushOutcome | null;
+  /** 写入前守卫；返回非 null 表示拒收且不落库。 */
+  guard?: (db: Database, change: SyncChange) => ApplyChangeResult | null;
   /** 自定义写入；缺省走通用 LWW upsert/delete + tombstone */
   apply?: (db: Database, change: SyncChange, serverNow: string) => ApplyChangeResult;
   /** 从 upsert payload 计算 sync recordId；复合键域用它替代 payload.id。 */
@@ -434,6 +436,33 @@ function readTaskRecord(db: Database, recordId: string): SyncChange | null {
   return row ? updateChange("tasks", row.id, rowToTask(row), row.updated_at) : null;
 }
 
+function readTrackRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM tracks WHERE id = ?").get(recordId) as TrackRow | undefined;
+  return row ? updateChange("tracks", row.id, rowToTrack(row), row.updated_at) : null;
+}
+
+function readTrackStepRecord(db: Database, recordId: string): SyncChange | null {
+  const row = db.prepare("SELECT * FROM track_steps WHERE id = ?").get(recordId) as TrackStepRow | undefined;
+  return row ? updateChange("track_steps", row.id, rowToTrackStep(row), row.updated_at) : null;
+}
+
+function guardTrackStepHost(db: Database, change: SyncChange): ApplyChangeResult | null {
+  if (change.action === "delete") return null;
+  const trackId = (change.data as { trackId?: unknown }).trackId;
+  if (typeof trackId === "string") {
+    const host = db.prepare("SELECT id FROM tracks WHERE id = ?").get(trackId);
+    if (host) return null;
+  }
+  return applyResult(
+    change,
+    "skipped",
+    `host track ${typeof trackId === "string" ? trackId : "?"} not found`,
+    undefined,
+    undefined,
+    "orphan_step_rejected",
+  );
+}
+
 function validateGoalLayoutPinChange(_db: Database, change: SyncChange): SyncPushOutcome | null {
   try {
     decodeGoalLayoutPinKey(change.recordId);
@@ -522,8 +551,15 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
   health_stress: simpleLwwDomain<HealthStressRow>("health_stress", healthStressToRow, rowToHealthStress),
   runs: simpleLwwDomain<HealthRunRow>("runs", healthRunToRow, rowToHealthRun),
   health_charts: simpleLwwDomain<HealthChartRow>("health_charts", healthChartToRow, rowToHealthChart),
-  tracks: simpleLwwDomain<TrackRow>("tracks", (data) => trackToRow(data as never), rowToTrack),
-  track_steps: simpleLwwDomain<TrackStepRow>("track_steps", (data) => trackStepToRow(data as never), rowToTrackStep),
+  tracks: {
+    lww: { idColumn: "id", toRow: (data) => trackToRow(data as never), guardedColumns: ["status"] },
+    readRecord: readTrackRecord,
+  },
+  track_steps: {
+    lww: { idColumn: "id", toRow: (data) => trackStepToRow(data as never) },
+    guard: guardTrackStepHost,
+    readRecord: readTrackStepRecord,
+  },
   goals: simpleLwwDomain<GoalRow>("goals", (data) => goalToRow(data as never), rowToGoal),
   goal_layout_pins: {
     identity: (data) => {

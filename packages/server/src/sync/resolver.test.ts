@@ -1,4 +1,4 @@
-import type { SyncChange, Task, TaskCompletionOp } from "@timedata/shared";
+import type { SyncChange, Task, TaskCompletionOp, Track, TrackStatusOp, TrackStep } from "@timedata/shared";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -77,6 +77,32 @@ beforeEach(async () => {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE tracks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE track_steps (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      source_label TEXT,
+      content TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      refs TEXT NOT NULL DEFAULT '[]',
+      tags TEXT NOT NULL DEFAULT '[]',
+      seq INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      edited_at TEXT
+    );
+
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,
@@ -148,6 +174,56 @@ function taskChange(action: "create" | "update", data: Task, op?: TaskCompletion
     data,
     timestamp: data.updatedAt,
     ...(op ? { op } : {}),
+  } as SyncChange;
+}
+
+function trackData(overrides: Partial<Track> = {}): Track {
+  return {
+    id: "track-1",
+    title: "轨道",
+    status: "active",
+    refs: [],
+    createdAt: "2026-07-04T00:00:00.000Z",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function trackStepData(overrides: Partial<TrackStep> = {}): TrackStep {
+  return {
+    id: "step-1",
+    trackId: "track-1",
+    source: "agent",
+    content: "步骤",
+    startedAt: "2026-07-04T00:00:00.000Z",
+    endedAt: null,
+    refs: [],
+    tags: [],
+    seq: 0,
+    createdAt: "2026-07-04T00:00:00.000Z",
+    updatedAt: "2026-07-04T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function trackChange(action: "create" | "update", data: Track, op?: TrackStatusOp): SyncChange {
+  return {
+    tableName: "tracks",
+    recordId: data.id,
+    action,
+    data,
+    timestamp: data.updatedAt,
+    ...(op ? { op } : {}),
+  } as SyncChange;
+}
+
+function trackStepChange(action: "create" | "update", data: TrackStep): SyncChange {
+  return {
+    tableName: "track_steps",
+    recordId: data.id,
+    action,
+    data,
+    timestamp: data.updatedAt,
   } as SyncChange;
 }
 
@@ -710,6 +786,78 @@ describe("applyChange", () => {
       applyChange(taskChange("create", taskData({ skipped: true })));
 
       expect(db.prepare("SELECT skipped FROM tasks WHERE id = ?").get("task-1")).toMatchObject({ skipped: 1 });
+    });
+  });
+
+  describe("tracks status 守卫列", () => {
+    it("无 op 的 tracks update 不覆盖 status，其余列照常覆盖", () => {
+      applyChange(trackChange("create", trackData()));
+      applyChange(
+        trackChange(
+          "update",
+          trackData({ status: "concluded", updatedAt: "2026-07-04T01:00:00.000Z" }),
+          { type: "status", at: "2026-07-04T01:00:00.000Z" },
+        ),
+      );
+
+      const result = applyChange(trackChange("update", trackData({ title: "改了标题", updatedAt: "2026-07-04T02:00:00.000Z" })));
+
+      expect(result.status).toBe("applied");
+      expect(db.prepare("SELECT title, status FROM tracks WHERE id = ?").get("track-1")).toMatchObject({
+        title: "改了标题",
+        status: "concluded",
+      });
+    });
+
+    it("带 op 的 tracks update 可以写 status", () => {
+      applyChange(trackChange("create", trackData()));
+      applyChange(
+        trackChange(
+          "update",
+          trackData({ status: "concluded", updatedAt: "2026-07-04T01:00:00.000Z" }),
+          { type: "status", at: "2026-07-04T01:00:00.000Z" },
+        ),
+      );
+
+      expect(db.prepare("SELECT status FROM tracks WHERE id = ?").get("track-1")).toMatchObject({
+        status: "concluded",
+      });
+    });
+
+    it("行不存在时无 op 的 create 全列写入", () => {
+      applyChange(trackChange("create", trackData({ status: "parked" })));
+
+      expect(db.prepare("SELECT status FROM tracks WHERE id = ?").get("track-1")).toMatchObject({ status: "parked" });
+    });
+  });
+
+  describe("track_steps 宿主轨道闸", () => {
+    it("宿主轨道不存在时 step create 被拒收 orphan_step_rejected", () => {
+      const result = applyChange(trackStepChange("create", trackStepData({ trackId: "ghost" })));
+
+      expect(result).toMatchObject({ status: "skipped", skipReason: "orphan_step_rejected" });
+      expect(db.prepare("SELECT id FROM track_steps WHERE id = ?").get("step-1")).toBeUndefined();
+    });
+
+    it("宿主已删时 step update 同样被拒", () => {
+      applyChange(trackChange("create", trackData()));
+      applyChange(trackStepChange("create", trackStepData()));
+      applyChange({ tableName: "tracks", recordId: "track-1", action: "delete", data: null, timestamp: "2026-07-04T01:00:00.000Z" } as SyncChange);
+
+      const result = applyChange(trackStepChange("update", trackStepData({ updatedAt: "2026-07-04T02:00:00.000Z" })));
+
+      expect(result).toMatchObject({ status: "skipped", skipReason: "orphan_step_rejected" });
+    });
+
+    it("宿主存在时 step create 正常 applied", () => {
+      applyChange(trackChange("create", trackData()));
+
+      const result = applyChange(trackStepChange("create", trackStepData()));
+
+      expect(result.status).toBe("applied");
+      expect(db.prepare("SELECT track_id FROM track_steps WHERE id = ?").get("step-1")).toMatchObject({
+        track_id: "track-1",
+      });
     });
   });
 

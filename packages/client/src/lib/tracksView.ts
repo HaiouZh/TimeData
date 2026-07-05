@@ -1,5 +1,9 @@
 import {
+  compareTrackStepsBySemanticTime,
+  compareTrackStepsBySemanticTimeDesc,
   latestTrackBoardSignal,
+  latestOpenStep as latestOpenTrackStep,
+  latestTrackStep,
   uniqueTrackBoardSignals,
   type Ref,
   type Track,
@@ -10,14 +14,6 @@ import { formatMinutesDuration } from "./time.js";
 
 const MS_PER_DAY = 86_400_000;
 
-function byTrackStepOrderAsc(a: TrackStep, b: TrackStep): number {
-  return a.seq - b.seq || a.startedAt.localeCompare(b.startedAt) || a.id.localeCompare(b.id);
-}
-
-function byTrackStepOrderDesc(a: TrackStep, b: TrackStep): number {
-  return -byTrackStepOrderAsc(a, b);
-}
-
 export function groupStepsByTrack(steps: TrackStep[]): Map<string, TrackStep[]> {
   const grouped = new Map<string, TrackStep[]>();
   for (const step of steps) {
@@ -25,32 +21,16 @@ export function groupStepsByTrack(steps: TrackStep[]): Map<string, TrackStep[]> 
     if (list) list.push(step);
     else grouped.set(step.trackId, [step]);
   }
-  for (const list of grouped.values()) list.sort(byTrackStepOrderAsc);
+  for (const list of grouped.values()) list.sort(compareTrackStepsBySemanticTime);
   return grouped;
 }
 
 export function currentStepId(steps: TrackStep[]): string | null {
-  let current: TrackStep | null = null;
-  for (const step of steps) {
-    if (step.endedAt !== null) continue;
-    if (current === null || step.seq > current.seq) current = step;
-  }
-  return current?.id ?? null;
+  return latestOpenTrackStep(steps)?.id ?? null;
 }
 
 export function latestStep(steps: TrackStep[]): TrackStep | null {
-  let latest: TrackStep | null = null;
-  for (const step of steps) {
-    if (
-      latest === null ||
-      step.seq > latest.seq ||
-      (step.seq === latest.seq && step.startedAt > latest.startedAt) ||
-      (step.seq === latest.seq && step.startedAt === latest.startedAt && step.id > latest.id)
-    ) {
-      latest = step;
-    }
-  }
-  return latest;
+  return latestTrackStep(steps);
 }
 
 export function latestStepId(steps: TrackStep[]): string | null {
@@ -65,7 +45,7 @@ export function lastActivityAt(steps: TrackStep[]): string | null {
 }
 
 export function latestStepsForCard(steps: TrackStep[], limit = 3): TrackStep[] {
-  return [...steps].sort(byTrackStepOrderDesc).slice(0, limit);
+  return [...steps].sort(compareTrackStepsBySemanticTimeDesc).slice(0, limit);
 }
 
 export function orderedTimeline(steps: TrackStep[]): TrackStep[] {
@@ -73,7 +53,7 @@ export function orderedTimeline(steps: TrackStep[]): TrackStep[] {
   return [...steps].sort((a, b) => {
     if (a.id === currentId) return -1;
     if (b.id === currentId) return 1;
-    return -byTrackStepOrderAsc(a, b);
+    return compareTrackStepsBySemanticTimeDesc(a, b);
   });
 }
 

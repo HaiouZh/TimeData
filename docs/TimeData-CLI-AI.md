@@ -213,24 +213,24 @@ TIMEDATA_TOKEN="$AGENT_TOKEN" timedata task-tag --id <taskId> --tags "agent,idea
 | 方法 | 路径 | body（✱必填 / 其余可选） | 行为 |
 |---|---|---|---|
 | POST | `/tracks` | `title`✱、`summary`、`refs`、`status`、`requestId` | 建轨道。`requestId` 作轨道 id 幂等，重发返回已有记录并标 `idempotent:true`。默认 `status:"active"`。 |
-| POST | `/tracks/:id/steps` | `content`✱、`sourceLabel`、`startedAt`、`endedAt`、`refs`、`tags`、`requestId` | append `source="agent"` 步；**自动闭合上一开口步**（把它的 `endedAt` 设为新步 `startedAt`）。 |
-| POST | `/tracks/:id/current-step/close` | `endedAt` | 只闭合当前开口步，不前进、不改轨道状态。 |
-| PATCH | `/tracks/:id` | `title`/`summary`/`status`/`refs`（至少一项）、`closedAt` | 改状态或元信息；`status:"concluded"` 顺手闭合开口步。 |
+| POST | `/tracks/:id/steps` | `content`✱、`sourceLabel`、`startedAt`、`endedAt`、`refs`、`tags`、`requestId` | append `source="agent"` 步；自动闭合全部旧开口步并返回 `closedSteps`。 |
+| POST | `/tracks/:id/current-step/close` | `endedAt` | 闭合全部当前开口步，不前进、不改轨道状态。 |
+| PATCH | `/tracks/:id` | `title`/`summary`/`status`/`refs`（至少一项）、`closedAt` | 改状态或元信息；`status:"concluded"` 顺手闭合全部开口步。 |
 
 字段说明：
 
-- `startedAt` / `endedAt` 是 UTC ISO（`...Z`，毫秒精度）。省略 `startedAt` 用 server 当前时刻；`endedAt` 省略或 `null` 表示开口当前步。
+- `startedAt` / `endedAt` 是 UTC ISO（`...Z`，毫秒精度）。省略 `startedAt` 用 server 当前时刻；`endedAt` 省略或 `null` 表示开口当前步。`startedAt` 可回填历史，但不能超过 server 当前时间 5 分钟。
 - `refs` 是 `{ kind, id, label? }` 数组（如 `{"kind":"commit","id":"abc123"}` / `{"kind":"url","id":"https://..."}`），指向各领域的数据，轨道只存指针不存内容。
 - `tags` 用于分类、phase 分组、步骤检索与看板信号聚合（见末尾说明）。
 - `requestId` 同时是幂等键：建轨道时作轨道 id，append 步骤时作步骤 id。
 
-判断成功看 `ok`。成功体形状例：`{ "ok": true, "track": {...}, "idempotent": false }`（建轨道）、`{ "ok": true, "step": {...}, "closedStep": {...}|null, "idempotent": false }`（append）。
+判断成功看 `ok`。成功体形状例：`{ "ok": true, "track": {...}, "idempotent": false }`（建轨道）、`{ "ok": true, "step": {...}, "closedSteps": [...], "idempotent": false }`（append）。
 
 错误码（顶层 `error.code`）：
 
 | 错误码 | HTTP | 含义 / 处理 |
 |---|---:|---|
-| `INVALID_REQUEST` | 400 | body 不合法，或 `endedAt` 早于 `startedAt` / 开口步起点。修正参数后重试。 |
+| `INVALID_REQUEST` | 400 | body 不合法，或单步 `endedAt` 早于 `startedAt`，或 `startedAt` 超过 server 当前时间 5 分钟。修正参数后重试。 |
 | `NOT_FOUND` | 404 | 轨道 id 不存在。先建轨道或核对 id。 |
 | `CONFLICT` | 409 | `requestId` 已属于别的轨道；或 close 时该轨道无开口步。 |
 | `AUTH_FAILED` | 401 | 按 `/api/agent/*` 通用规则处理，不要猜 token。 |
@@ -250,7 +250,7 @@ curl -X POST "$BASE/tracks/track-refactor-auth/steps" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"sourceLabel":"codex","content":"梳理 token 校验路径","refs":[{"kind":"commit","id":"abc123"}]}'
 
-# 再 append 一步 -> 自动闭合上一步；打 待我处理 把接力棒交回人
+# 再 append 一步 -> 自动闭合全部旧开口步；打 待我处理 把接力棒交回人
 curl -X POST "$BASE/tracks/track-refactor-auth/steps" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"sourceLabel":"codex","content":"AGENT_TOKEN 作用域拆分已完成，等你处理","tags":["待我处理"]}'

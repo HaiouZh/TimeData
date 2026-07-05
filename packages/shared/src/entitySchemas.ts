@@ -258,6 +258,7 @@ export const TrackStepSchema = z
     seq: NonNegativeIntSchema,
     createdAt: UtcIsoStringSchema,
     updatedAt: UtcIsoStringSchema,
+    editedAt: UtcIsoStringSchema.optional(),
   })
   .refine((step) => step.endedAt === null || step.endedAt >= step.startedAt, {
     path: ["endedAt"],

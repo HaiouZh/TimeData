@@ -203,6 +203,7 @@ describe("initializeDatabase", () => {
       ["seq", "INTEGER", 1, 0],
       ["created_at", "TEXT", 1, 0],
       ["updated_at", "TEXT", 1, 0],
+      ["edited_at", "TEXT", 0, 0],
     ]);
 
     const stepForeignKeys = db.prepare("PRAGMA foreign_key_list(track_steps)").all();

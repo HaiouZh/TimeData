@@ -41,35 +41,42 @@ function track(id: string, status: "active" | "concluded" | "parked") {
 }
 
 describe("tracksView pure helpers", () => {
-  it("groupStepsByTrack groups by trackId keeping seq ascending", () => {
+  it("groupStepsByTrack groups by trackId keeping semantic time ascending", () => {
     const grouped = groupStepsByTrack([
-      step({ id: "b", seq: 1, trackId: "t1" }),
-      step({ id: "a", seq: 0, trackId: "t1" }),
+      step({ id: "backfill", seq: 9, trackId: "t1", startedAt: "2026-06-20T00:00:00.000Z" }),
+      step({ id: "today", seq: 1, trackId: "t1", startedAt: "2026-06-21T00:00:00.000Z" }),
       step({ id: "c", seq: 0, trackId: "t2" }),
     ]);
-    expect(grouped.get("t1")?.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(grouped.get("t1")?.map((s) => s.id)).toEqual(["backfill", "today"]);
     expect(grouped.get("t2")?.map((s) => s.id)).toEqual(["c"]);
   });
 
-  it("currentStepId picks the open step with the largest seq, else null", () => {
+  it("currentStepId picks the latest semantic-time open step, else null", () => {
     expect(
       currentStepId([
         step({ id: "a", seq: 0, endedAt: T }),
-        step({ id: "b", seq: 1, endedAt: null }),
-        step({ id: "c", seq: 2, endedAt: null }),
+        step({ id: "b", seq: 9, endedAt: null, startedAt: "2026-06-21T00:00:00.000Z" }),
+        step({ id: "c", seq: 2, endedAt: null, startedAt: "2026-06-22T00:00:00.000Z" }),
       ]),
     ).toBe("c");
     expect(currentStepId([step({ id: "a", seq: 9, endedAt: T })])).toBeNull();
   });
 
-  it("latestStep picks the largest seq regardless of endedAt", () => {
+  it("currentStepId 与 shared latestOpenStep 同口径：同 seq 撞车取 startedAt/id 较大", () => {
+    const a = step({ id: "a", seq: 1, startedAt: "2026-07-01T00:00:00.000Z", endedAt: null });
+    const b = step({ id: "b", seq: 1, startedAt: "2026-07-01T01:00:00.000Z", endedAt: null });
+
+    expect(currentStepId([a, b])).toBe("b");
+  });
+
+  it("latestStep picks the latest semantic-time step regardless of endedAt", () => {
     const steps = [
-      step({ id: "open", seq: 1, endedAt: null, startedAt: "2026-06-21T01:00:00.000Z" }),
-      step({ id: "instant", seq: 2, endedAt: "2026-06-21T02:00:00.000Z", startedAt: "2026-06-21T02:00:00.000Z" }),
+      step({ id: "backfill", seq: 9, endedAt: null, startedAt: "2026-06-21T01:00:00.000Z" }),
+      step({ id: "today", seq: 2, endedAt: "2026-06-22T02:00:00.000Z", startedAt: "2026-06-22T02:00:00.000Z" }),
     ];
-    expect(latestStepId(steps)).toBe("instant");
-    expect(latestStep(steps)?.id).toBe("instant");
-    expect(currentStepId(steps)).toBe("open");
+    expect(latestStepId(steps)).toBe("today");
+    expect(latestStep(steps)?.id).toBe("today");
+    expect(currentStepId(steps)).toBe("backfill");
   });
 
   it("latestBoardSignal is sticky and ignores later unconfigured tags", () => {
@@ -155,12 +162,30 @@ describe("tracksView pure helpers", () => {
   it("latestStepsForCard returns the newest steps for compact cards", () => {
     expect(
       latestStepsForCard([
-        step({ id: "a", seq: 0 }),
-        step({ id: "b", seq: 1 }),
-        step({ id: "c", seq: 2 }),
-        step({ id: "d", seq: 3 }),
+        step({ id: "a", seq: 0, startedAt: "2026-06-21T00:00:00.000Z" }),
+        step({ id: "b", seq: 9, startedAt: "2026-06-20T00:00:00.000Z" }),
+        step({ id: "c", seq: 2, startedAt: "2026-06-22T00:00:00.000Z" }),
+        step({ id: "d", seq: 3, startedAt: "2026-06-23T00:00:00.000Z" }),
       ]).map((s) => s.id),
-    ).toEqual(["d", "c", "b"]);
+    ).toEqual(["d", "c", "a"]);
+  });
+
+  it("latestStepsForCard/orderedTimeline 按语义时间：昨天回填步不在顶部", () => {
+    const backfill = step({
+      id: "b",
+      seq: 9,
+      startedAt: "2026-07-01T00:00:00.000Z",
+      endedAt: "2026-07-01T01:00:00.000Z",
+    });
+    const today = step({
+      id: "t",
+      seq: 3,
+      startedAt: "2026-07-02T00:00:00.000Z",
+      endedAt: "2026-07-02T01:00:00.000Z",
+    });
+
+    expect(latestStepsForCard([backfill, today])[0].id).toBe("t");
+    expect(orderedTimeline([backfill, today])[0].id).toBe("t");
   });
 
   it("orderedTimeline sorts descending so the current step is on top", () => {

@@ -40,6 +40,10 @@ export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}
     if (stale) return stale;
   }
   const domain = getServerDomain(change.tableName);
+  if (domain.guard) {
+    const rejected = domain.guard(db, change);
+    if (rejected) return rejected;
+  }
   const serverNow = new Date().toISOString();
   const lww = domain.lww;
   if (!domain.apply && !lww) throw new Error(`Sync domain ${change.tableName} has neither apply hook nor lww mapping`);

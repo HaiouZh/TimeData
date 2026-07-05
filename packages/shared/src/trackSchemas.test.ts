@@ -91,6 +91,25 @@ describe("track schemas", () => {
     expect(Object.hasOwn(parsed, rejectedRuntimeKey)).toBe(false);
   });
 
+  it("TrackStepSchema accepts optional editedAt", () => {
+    const parsed = TrackStepSchema.parse({
+      id: "step-1",
+      trackId: "track-1",
+      source: "user",
+      content: "改过的内容",
+      startedAt: ts,
+      endedAt: ts,
+      refs: [],
+      tags: [],
+      seq: 0,
+      createdAt: ts,
+      updatedAt: ts,
+      editedAt: "2026-06-21T01:00:00.000Z",
+    });
+
+    expect(parsed.editedAt).toBe("2026-06-21T01:00:00.000Z");
+  });
+
   it("TrackStepSchema accepts instant spans and rejects reversed spans", () => {
     const base = {
       id: "step-1",

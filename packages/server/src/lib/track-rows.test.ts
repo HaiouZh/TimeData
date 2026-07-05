@@ -99,6 +99,7 @@ describe("track rows", () => {
       seq: 2,
       createdAt: now,
       updatedAt: now,
+      editedAt: "2026-06-21T00:10:00.000Z",
     });
 
     expect(row).toEqual({
@@ -113,6 +114,7 @@ describe("track rows", () => {
       tags: JSON.stringify(["phase:T1", "等我"]),
       seq: 2,
       created_at: now,
+      edited_at: "2026-06-21T00:10:00.000Z",
     });
     expect(rowToTrackStep({ ...row, updated_at: now })).toEqual({
       id: "step-1",
@@ -127,6 +129,7 @@ describe("track rows", () => {
       seq: 2,
       createdAt: now,
       updatedAt: now,
+      editedAt: "2026-06-21T00:10:00.000Z",
     });
   });
 
@@ -145,6 +148,7 @@ describe("track rows", () => {
         seq: 0,
         created_at: now,
         updated_at: now,
+        edited_at: null,
       }),
     ).toEqual({
       id: "step-1",

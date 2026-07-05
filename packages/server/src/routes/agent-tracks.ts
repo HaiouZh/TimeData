@@ -5,8 +5,10 @@ import {
   TRACK_ACTION_TAGS_KEY,
   TrackSchema,
   TrackStepSchema,
+  trackStatusOp,
   type SyncChange,
   type Track,
+  type TrackStatusOp,
   type TrackStep,
   UtcIsoStringSchema,
   latestTrackBoardSignal,
@@ -26,13 +28,14 @@ const RequestIdSchema = z.string().trim().min(1).max(128);
 const SourceLabelSchema = z.string().trim().min(1).max(64);
 const ContentSchema = z.string().max(20_000);
 const RefsSchema = z.array(RefSchema).max(100);
+const FUTURE_STARTED_AT_GRACE_MS = 5 * 60_000;
 
 function invalidRequest(details: unknown, message = "Invalid track ingest body") {
   return { ok: false as const, error: { code: "INVALID_REQUEST", message, details } };
 }
 
-function trackChange(action: "create" | "update", track: Track, now: string): SyncChange {
-  return { tableName: "tracks", action, recordId: track.id, timestamp: now, data: track };
+function trackChange(action: "create" | "update", track: Track, now: string, op?: TrackStatusOp): SyncChange {
+  return { tableName: "tracks", action, recordId: track.id, timestamp: now, data: track, ...(op ? { op } : {}) };
 }
 
 function stepChange(action: "create" | "update", step: TrackStep, now: string): SyncChange {
@@ -85,7 +88,7 @@ function listTrackStepsAsc(trackId: string): TrackStep[] {
     .prepare(`
       SELECT * FROM track_steps
       WHERE track_id = ?
-      ORDER BY seq ASC, started_at ASC, id ASC
+      ORDER BY started_at ASC, seq ASC, id ASC
     `)
     .all(trackId) as TrackStepRow[];
   return rows.map(rowToTrackStep);
@@ -109,16 +112,15 @@ function notFoundTrack() {
   return { ok: false as const, error: { code: "NOT_FOUND", message: "Track not found" } };
 }
 
-function latestOpenStep(trackId: string): TrackStep | null {
-  const row = getDb()
+function listOpenSteps(trackId: string): TrackStep[] {
+  const rows = getDb()
     .prepare(`
       SELECT * FROM track_steps
       WHERE track_id = ? AND ended_at IS NULL
-      ORDER BY seq DESC, started_at DESC, id DESC
-      LIMIT 1
+      ORDER BY started_at ASC, seq ASC, id ASC
     `)
-    .get(trackId) as TrackStepRow | undefined;
-  return row ? rowToTrackStep(row) : null;
+    .all(trackId) as TrackStepRow[];
+  return rows.map(rowToTrackStep);
 }
 
 function nextStepSeq(trackId: string): number {
@@ -128,9 +130,9 @@ function nextStepSeq(trackId: string): number {
   return row.next;
 }
 
-function closeStep(step: TrackStep, endedAt: string, updatedAt: string): TrackStep | { error: string } {
-  if (endedAt < step.startedAt) return { error: "endedAt cannot be before the open step startedAt" };
-  return TrackStepSchema.parse({ ...step, endedAt, updatedAt });
+function closeStep(step: TrackStep, endedAt: string, updatedAt: string): TrackStep {
+  const clampedEndedAt = endedAt < step.startedAt ? step.startedAt : endedAt;
+  return TrackStepSchema.parse({ ...step, endedAt: clampedEndedAt, updatedAt });
 }
 
 const createTrackSchema = z
@@ -251,12 +253,15 @@ agentTracks.post("/tracks/:id/steps", async (c) => {
     if (existing.trackId !== trackId) {
       return c.json({ ok: false, error: { code: "CONFLICT", message: "Step requestId belongs to another track" } }, 409);
     }
-    return c.json({ ok: true, step: existing, closedStep: null, idempotent: true });
+    return c.json({ ok: true, step: existing, closedSteps: [], closedStep: null, idempotent: true });
   }
 
   const now = new Date().toISOString();
   const startedAt = parsed.data.startedAt ?? now;
   const endedAt = parsed.data.endedAt ?? null;
+  if (new Date(startedAt).getTime() > Date.now() + FUTURE_STARTED_AT_GRACE_MS) {
+    return c.json(invalidRequest({ startedAt }, "startedAt cannot be in the future"), 400);
+  }
   if (endedAt !== null && endedAt < startedAt) {
     return c.json(invalidRequest({ startedAt, endedAt }, "endedAt cannot be before startedAt"), 400);
   }
@@ -276,18 +281,14 @@ agentTracks.post("/tracks/:id/steps", async (c) => {
   });
 
   const changes: SyncChange[] = [];
-  let closedStep: TrackStep | null = null;
-  const openStep = latestOpenStep(trackId);
-  if (openStep) {
-    const closed = closeStep(openStep, startedAt, now);
-    if ("error" in closed) return c.json({ ok: false, error: { code: "INVALID_REQUEST", message: closed.error } }, 400);
-    closedStep = closed;
-    changes.push(stepChange("update", closedStep, now));
+  const closedSteps = listOpenSteps(trackId).map((openStep) => closeStep(openStep, startedAt, now));
+  for (const closed of closedSteps) {
+    changes.push(stepChange("update", closed, now));
   }
   changes.push(stepChange("create", step, now));
 
   applyChangesAndNotify(changes);
-  return c.json({ ok: true, step, closedStep, idempotent: false }, 201);
+  return c.json({ ok: true, step, closedSteps, closedStep: closedSteps.at(-1) ?? null, idempotent: false }, 201);
 });
 
 agentTracks.post("/tracks/:id/current-step/close", async (c) => {
@@ -298,15 +299,14 @@ agentTracks.post("/tracks/:id/current-step/close", async (c) => {
 
   if (!getTrack(trackId)) return c.json({ ok: false, error: { code: "NOT_FOUND", message: "Track not found" } }, 404);
 
-  const openStep = latestOpenStep(trackId);
-  if (!openStep) return c.json({ ok: false, error: { code: "CONFLICT", message: "Track has no open step" } }, 409);
+  const openSteps = listOpenSteps(trackId);
+  if (openSteps.length === 0) return c.json({ ok: false, error: { code: "CONFLICT", message: "Track has no open step" } }, 409);
 
   const now = new Date().toISOString();
-  const closed = closeStep(openStep, parsed.data.endedAt ?? now, now);
-  if ("error" in closed) return c.json({ ok: false, error: { code: "INVALID_REQUEST", message: closed.error } }, 400);
+  const closedSteps = openSteps.map((openStep) => closeStep(openStep, parsed.data.endedAt ?? now, now));
 
-  applyChangesAndNotify([stepChange("update", closed, now)]);
-  return c.json({ ok: true, closedStep: closed });
+  applyChangesAndNotify(closedSteps.map((closed) => stepChange("update", closed, now)));
+  return c.json({ ok: true, closedSteps, closedStep: closedSteps.at(-1) ?? null });
 });
 
 agentTracks.patch("/tracks/:id", async (c) => {
@@ -336,20 +336,17 @@ agentTracks.patch("/tracks/:id", async (c) => {
   );
 
   const changes: SyncChange[] = [];
-  let closedStep: TrackStep | null = null;
+  let closedSteps: TrackStep[] = [];
   if (parsed.data.status === "concluded") {
-    const openStep = latestOpenStep(id);
-    if (openStep) {
-      const closed = closeStep(openStep, parsed.data.closedAt ?? now, now);
-      if ("error" in closed) return c.json({ ok: false, error: { code: "INVALID_REQUEST", message: closed.error } }, 400);
-      closedStep = closed;
-      changes.push(stepChange("update", closedStep, now));
+    closedSteps = listOpenSteps(id).map((openStep) => closeStep(openStep, parsed.data.closedAt ?? now, now));
+    for (const closed of closedSteps) {
+      changes.push(stepChange("update", closed, now));
     }
   }
-  changes.push(trackChange("update", nextTrack, now));
+  changes.push(trackChange("update", nextTrack, now, trackStatusOp(current, nextTrack, now)));
 
   applyChangesAndNotify(changes);
-  return c.json({ ok: true, track: nextTrack, closedStep });
+  return c.json({ ok: true, track: nextTrack, closedSteps, closedStep: closedSteps.at(-1) ?? null });
 });
 
 export default agentTracks;

@@ -155,7 +155,7 @@ describe("TrackDetailPage", () => {
     expect(host.textContent).toContain("轨道不存在");
   });
 
-  it("开口执行:加一步闭合上一开口步、成当前步并触发 sync", async () => {
+  it("开口执行:加一步闭合全部开口步、成当前步并触发 sync", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "base 期第一周");
@@ -201,6 +201,44 @@ describe("TrackDetailPage", () => {
 
     const updated = await getTrack(track.id);
     expect(updated).toMatchObject({ title: "标签体系退役", summary: "沉淀为 agent 轨道" });
+  });
+
+  it("编辑 user 步会更新内容并打 editedAt", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "决定开练");
+
+    const userItem = [...host.querySelectorAll("li")].find((item) => item.textContent?.includes("决定开练"));
+    await act(async () => {
+      userItem?.querySelector('button[aria-label="编辑步骤"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await typeInput(host, "编辑步骤内容", "决定改练节奏跑");
+    await clickButton(host, "保存");
+
+    const steps = await listTrackSteps(track.id);
+    const edited = steps.find((s) => s.content === "决定改练节奏跑");
+    expect(edited?.editedAt).toBeDefined();
+  });
+
+  it("删除 user 步需确认，agent 步不显示入口", async () => {
+    const track = await seedTrack();
+    const host = await renderDetail(track.id);
+    await waitForText(host, "决定开练");
+
+    const agentItem = [...host.querySelectorAll("li")].find((item) => item.textContent?.includes("base 期第一周"));
+    expect(agentItem?.querySelector('button[aria-label="删除步骤"]')).toBeNull();
+
+    const userItem = [...host.querySelectorAll("li")].find((item) => item.textContent?.includes("决定开练"));
+    await act(async () => {
+      userItem?.querySelector('button[aria-label="删除步骤"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    await act(async () => {
+      userItem?.querySelector('button[aria-label="确认删除步骤"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+
+    expect((await listTrackSteps(track.id)).some((s) => s.content === "决定开练")).toBe(false);
   });
 
   it("clears summary by saving an empty summary field", async () => {
@@ -274,5 +312,31 @@ describe("TrackDetailPage", () => {
     expect(host.querySelector('textarea[aria-label="步骤内容"]')).toBeNull();
     expect(buttonByText(host, "闭合当前步")).toBeNull();
     expect(buttonByText(host, "重新推进")).not.toBeNull();
+  });
+
+  it("删除轨道需确认并跳回 /tracks", async () => {
+    const track = await seedTrack();
+    mounted = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: [`/tracks/${track.id}`] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, { path: "/tracks/:id", element: createElement(TrackDetailPage) }),
+          createElement(Route, { path: "/tracks", element: createElement("p", null, "轨道列表") }),
+        ),
+      ),
+    );
+    await flush();
+    const host = mounted.host;
+    await waitForText(host, "全马破三");
+
+    await clickButton(host, "删除轨道");
+    expect(await getTrack(track.id)).toBeDefined();
+    await clickButton(host, "确认删除轨道");
+
+    await waitForText(host, "轨道列表");
+    expect(await getTrack(track.id)).toBeUndefined();
   });
 });

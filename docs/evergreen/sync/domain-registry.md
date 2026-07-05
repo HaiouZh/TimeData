@@ -26,6 +26,7 @@ last-reviewed: 2026-07-04
 
 <!-- 复核 2026-07-04（同步 staleGuard）：新增 reasonCode stale_change_rejected 与 applyChange staleGuard 属于 push 冲突仲裁语义，不新增同步域，也不改变各域登记簿条目。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：tasks 仍是既有 LWW 域，未新增同步域；server LWW 映射仅增加 guardedColumns，用于无 op 的 upsert 撞行时保留完成语义列。 -->
+<!-- 复核 2026-07-04（tracks 并发时间语义）：tracks / track_steps 仍是既有 LWW 域，未新增同步域；tracks 增加 status guardedColumns，track_steps 增加宿主轨道闸。 -->
 
 ## 承上启下
 
@@ -55,7 +56,7 @@ last-reviewed: 2026-07-04
 | `settings` | lww | 零钩子，`countsInStatus=false`，承载睡眠分类、打点分类、导航可见入口等 UI 偏好 |
 | `quick_notes` | lww | 零钩子 |
 | `tasks` | lww | 零钩子，`countsInStatus=false`；服务端配置完成语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `done` / `completed_at` / `skipped` / `last_done_at` / `completed_count` |
-| `tracks` | lww | `countsInStatus=false` |
+| `tracks` | lww | `countsInStatus=false`；服务端配置状态语义 `guardedColumns`，无 `op` 的 upsert 撞现存行时不覆盖 `status` |
 | `track_steps` | lww | `countsInStatus=false` |
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
@@ -81,7 +82,7 @@ last-reviewed: 2026-07-04
 
 `applyChange` 按登记簿分发：有 `apply` 钩子走钩子，否则走通用 LWW 路径。**所有路径的 `updated_at` / `deleted_at` 都取服务器当前时间 `serverNow`，不取 `change.timestamp`**。push 路由对 `baseSeq` 重叠或 unknown-base 记录启用的 staleGuard 是登记簿分发前的通用守卫，不改变任何域的 `validate` / `apply` 钩子归属。
 
-- **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、health_charts、健康数据域及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`，目前仅 tasks 用于保护完成语义字段。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
+- **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、health_charts、健康数据域及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`，目前 tasks 用于保护完成语义字段，tracks 用于保护 `status`。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
 - **复合键 LWW**（`goal_layout_pins`）：语义仍是 LWW，但不能走单列主键通用 SQL。server 用 `identity` 从 payload 算 `recordId`，custom apply/read 按 `(goal_id,node_kind,node_id)` 读写，delete 仍真删除 + tombstone。
 - **categories 钩子**：delete = 级联删除目标分类、后代分类与关联 entries，每条都写 tombstone + delete seq；upsert 正常写入。
 - **time_entries 钩子**：upsert 前先删除与该记录时间段重叠的旧远端记录（写 tombstone + delete seq，outcome 带 `overriddenRecordIds` 和 `backupId`，对应备份标受保护 `local_override_overlap`）；分类不存在时 skip 并带结构化 `skipReason`。

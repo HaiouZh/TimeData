@@ -8,7 +8,17 @@ const MAX_VISIBLE = 25;
 const HEAD_COUNT = 12;
 const TAIL_COUNT = 3;
 
-export function TrackTimeline({ steps, now = new Date() }: { steps: TrackStep[]; now?: Date }) {
+export function TrackTimeline({
+  steps,
+  now = new Date(),
+  onEditStep,
+  onDeleteStep,
+}: {
+  steps: TrackStep[];
+  now?: Date;
+  onEditStep?: (id: string, content: string) => Promise<void>;
+  onDeleteStep?: (id: string) => Promise<void>;
+}) {
   const [showAll, setShowAll] = useState(false);
   if (steps.length === 0) {
     return <p className="rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>;
@@ -23,7 +33,14 @@ export function TrackTimeline({ steps, now = new Date() }: { steps: TrackStep[];
   return (
     <ol className="flex flex-col gap-2" aria-label="轨道时间线">
       {head.map((step) => (
-        <TrackStepRow key={step.id} step={step} isCurrent={step.id === currentId} now={now} />
+        <TrackStepRow
+          key={step.id}
+          step={step}
+          isCurrent={step.id === currentId}
+          now={now}
+          onEdit={onEditStep}
+          onDelete={onDeleteStep}
+        />
       ))}
       {folded && (
         <li>
@@ -37,7 +54,14 @@ export function TrackTimeline({ steps, now = new Date() }: { steps: TrackStep[];
         </li>
       )}
       {tail.map((step) => (
-        <TrackStepRow key={step.id} step={step} isCurrent={step.id === currentId} now={now} />
+        <TrackStepRow
+          key={step.id}
+          step={step}
+          isCurrent={step.id === currentId}
+          now={now}
+          onEdit={onEditStep}
+          onDelete={onDeleteStep}
+        />
       ))}
     </ol>
   );

@@ -60,6 +60,11 @@ export function ensureGoalMembersColumn(db: Database): void {
   if (!names.has("members")) db.exec("ALTER TABLE goals ADD COLUMN members TEXT NOT NULL DEFAULT '[]'");
 }
 
+export function ensureTrackStepEditedAtColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(track_steps)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("edited_at")) db.exec("ALTER TABLE track_steps ADD COLUMN edited_at TEXT");
+}
+
 function quoteIdentifier(identifier: string): string {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`Invalid SQLite identifier: ${identifier}`);
@@ -198,7 +203,8 @@ export function initializeDatabase(): void {
       tags TEXT NOT NULL DEFAULT '[]',
       seq INTEGER NOT NULL,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      edited_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS sync_logs (
@@ -374,6 +380,7 @@ export function initializeDatabase(): void {
   ensureTaskRuleIdColumn(db);
   ensureTaskSkippedColumn(db);
   ensureGoalMembersColumn(db);
+  ensureTrackStepEditedAtColumn(db);
   dropColumnsIfExist(db, "tasks", ["goal_id"], ["idx_tasks_goal_id"]);
   dropColumnsIfExist(db, "tracks", ["goal_id"], ["idx_tracks_goal_id"]);
   // 退役 turn（M2，2026-06-20）：摘掉 tasks 表的 turn/turn_at 列。明文列名是合法墓碑，

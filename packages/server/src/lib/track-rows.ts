@@ -23,6 +23,7 @@ export interface TrackStepRow {
   seq: number;
   created_at: string;
   updated_at: string;
+  edited_at: string | null;
 }
 
 export function trackToRow(data: Track): Record<string, string | number | null> {
@@ -61,6 +62,7 @@ export function trackStepToRow(data: TrackStep): Record<string, string | number 
     tags: JSON.stringify(data.tags ?? []),
     seq: data.seq,
     created_at: data.createdAt,
+    edited_at: data.editedAt ?? null,
   };
 }
 
@@ -78,5 +80,6 @@ export function rowToTrackStep(row: TrackStepRow): TrackStep {
     seq: row.seq,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(row.edited_at !== null ? { editedAt: row.edited_at } : {}),
   };
 }

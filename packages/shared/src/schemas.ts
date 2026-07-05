@@ -8,7 +8,12 @@ import {
   TimeEntrySchema,
   UtcIsoStringSchema,
 } from "./entitySchemas.js";
-import { SYNC_TABLE_NAMES, buildSyncChangeSchema, buildTaskCompletionOpSchema } from "./syncDomains.js";
+import {
+  SYNC_TABLE_NAMES,
+  buildSyncChangeSchema,
+  buildTaskCompletionOpSchema,
+  buildTrackStatusOpSchema,
+} from "./syncDomains.js";
 import type { SyncChange } from "./types.js";
 
 export {
@@ -38,7 +43,7 @@ export const SyncLogEntrySchema = z.object({
   action: z.enum(["create", "update", "delete"]),
   timestamp: UtcIsoStringSchema,
   synced: z.union([z.literal(0), z.literal(1)]),
-  op: buildTaskCompletionOpSchema(UtcIsoStringSchema).optional(),
+  op: z.union([buildTaskCompletionOpSchema(UtcIsoStringSchema), buildTrackStatusOpSchema(UtcIsoStringSchema)]).optional(),
 });
 
 // 运行时成员按登记簿生成；静态类型 SyncChange 在 types.ts 手工维护判别联合，二者由 schemas.test.ts 对齐。
@@ -46,6 +51,7 @@ export const SyncChangeSchema = buildSyncChangeSchema(UtcIsoStringSchema) as z.Z
 
 export const SyncPushReasonCodeSchema = z.enum([
   "stale_change_rejected",
+  "orphan_step_rejected",
   "missing_payload",
   "invalid_shape",
   "id_mismatch",

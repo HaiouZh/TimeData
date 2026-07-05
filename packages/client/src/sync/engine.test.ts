@@ -3144,6 +3144,24 @@ describe("compactSyncLogs", () => {
     });
   });
 
+  it("tracks 压缩不把旧 status op 透传给后续普通 meta 更新", () => {
+    const compacted = compactSyncLogs([
+      {
+        ...log("track-1", "update", "01", "tracks"),
+        op: { type: "status", at: "2026-05-06T00:01:00.000Z" },
+      },
+      log("track-1", "update", "02", "tracks"),
+    ]);
+
+    expect(compacted).toHaveLength(1);
+    expect(compacted[0]).toMatchObject({
+      recordId: "track-1",
+      action: "update",
+      timestamp: "2026-05-06T00:02:00.000Z",
+    });
+    expect(compacted[0].op).toBeUndefined();
+  });
+
   it("多条 op 压缩时取时间序最后一个", () => {
     const compacted = compactSyncLogs([
       {

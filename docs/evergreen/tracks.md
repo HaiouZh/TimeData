@@ -13,7 +13,7 @@ covers:
   - packages/client/src/hooks/useTrackAttentionCount.ts
   - packages/client/src/contexts/TrackAttentionContext.tsx
   - packages/client/src/components/app-shell/NavBadge.tsx
-last-reviewed: 2026-07-02
+last-reviewed: 2026-07-04
 ---
 
 # 任务轨道
@@ -31,7 +31,7 @@ last-reviewed: 2026-07-02
 
 `Ref = { kind, id, label? }` 是开放指针。轨道不拥有被指向领域的数据；能排序、求和、上图的数据留在各自领域，轨道只保存叙事骨架、时间跨度、顺序、来源和指针。
 
-`Track` 只有 `active` / `concluded` / `parked` 三态，没有 done，也不保存 Goal 归属。Goal 对轨道的组织关系只存在于 `Goal.members`，不改变轨道状态机、不参与 agent ingest payload。`TrackStep` 是步骤日志，`endedAt=null` 表示当前步；`endedAt` 允许等于 `startedAt`，表示瞬时步骤。`content` 是宽松字符串，允许空串，便于纯指针步骤。
+`Track` 只有 `active` / `concluded` / `parked` 三态，没有 done，也不保存 Goal 归属。Goal 对轨道的组织关系只存在于 `Goal.members`，不改变轨道状态机、不参与 agent ingest payload。`TrackStep` 是步骤日志，`endedAt=null` 表示开口步；`endedAt` 允许等于 `startedAt`，表示瞬时步骤。步骤排序和“当前步”裁决统一用语义时间 `(startedAt, seq, id)`，`seq` 只在同刻写入时做稳定裁决。`content` 是宽松字符串，允许空串；`editedAt` 只在人手编辑步骤正文时写入，用于展示编辑痕迹。
 
 结构化领域字段不得回流到轨道 spine。新增领域先放到自己的域，再由 `refs`、`tags` 或对应领域自己的关系字段连接；不要给 `Track` / `TrackStep` 开通用 JSON 后门。目标层是组织视图，必须从 Goal 侧引用 Track，而不是给 Track spine 加目标归属字段。
 
@@ -46,7 +46,7 @@ last-reviewed: 2026-07-02
 | `tracks` | 70 | 71 | 父轨道先创建、后删除 |
 | `track_steps` | 71 | 70 | 步骤后创建、先删除 |
 
-`countsInStatus=false` 只表示不进 `/api/sync/status` 的公开业务计数；服务端 commit hash 和 seq 账本仍会覆盖这些同步域。
+`countsInStatus=false` 只表示不进 `/api/sync/status` 的公开业务计数；服务端 commit hash 和 seq 账本仍会覆盖这些同步域。`track_steps` 有宿主轨道闸：非 delete 写入若找不到对应 `tracks` 行会以 `orphan_step_rejected` 跳过，避免离线旧步骤复活孤儿。`tracks.status` 是守卫列，只有带 `op:{type:"status"}` 的 tracks upsert 能覆盖现有状态；普通标题/摘要快照不会把已归档轨道顶回 active。
 
 ## 3. 客户端数据层
 
@@ -55,6 +55,8 @@ last-reviewed: 2026-07-02
 - `addTrack` / `updateTrack` / `addTrackStep` / `updateTrackStep` 写入前都走 shared Zod schema。
 - `listTracks` / `listTrackSteps` parse-on-read；坏行 `console.warn` 后跳过，未知字段被 schema strip。
 - `addTrackStep` 要求轨道存在；未传 `seq` 时取同轨道当前最大序号加 1。
+- `appendUserStep`、`closeCurrentStep`、`setTrackStatus(concluded)` 都幂等闭合该轨道全部开口步；闭合时间取 `max(闭合时刻, step.startedAt)`，不再因本机/agent 时钟偏差把合法闭合变成错误。
+- `updateTrackStep` 只在正文 `content` 实际变化时写 `editedAt`；改 tags/refs/endedAt 不会误打编辑痕迹。
 - `deleteTrack` 必须手工先删该轨道步骤，并逐条写 `syncLog(tableName="track_steps", action="delete")`，再删轨道并写 `tracks/delete`。
 - Dexie stores：`tracks: "id, status, updatedAt"`；`trackSteps: "id, trackId, [trackId+seq], updatedAt"`。
 
@@ -63,33 +65,33 @@ last-reviewed: 2026-07-02
 `/api/agent/tracks*` 由 scoped auth 保护，可用 master `AUTH_TOKEN` 或窄域 `AGENT_TOKEN`。agent 只能经这些受控端点写轨道，不能直接写 SQLite / IndexedDB / backup / syncLog。分工：server 拥有记账（id/seq/createdAt/updatedAt），agent 拥有语义时间（startedAt/endedAt 可回填）。
 
 - `POST /api/agent/tracks`：建轨道；`requestId` 作为轨道 id，重发返回已有记录。
-- `POST /api/agent/tracks/:id/steps`：追加 `source="agent"` 步；可带 `sourceLabel`、历史 `startedAt/endedAt`、`refs`、`tags`；追加时自动闭合上一条开口当前步（新步 startedAt 早于开口步则 400）。缺失 track 返回 404；非 active track 返回 409 `TRACK_NOT_ACTIVE`（与 `:id/context` 同口径，避免交接步静默落进已归档轨道）。
-- `POST /api/agent/tracks/:id/current-step/close`：只闭合当前步，不前进、不改轨道状态；无开口步 409。
-- `PATCH /api/agent/tracks/:id`：改 `status/title/summary/refs`；`concluded` 自动闭合当前步，`parked`/`active` 保留当前步。
+- `POST /api/agent/tracks/:id/steps`：追加 `source="agent"` 步；可带 `sourceLabel`、历史 `startedAt/endedAt`、`refs`、`tags`；追加时自动闭合全部开口步并在响应返回 `closedSteps`。`startedAt` 允许回填历史，但不得超过 server 当前时间 5 分钟；单步自身 `endedAt < startedAt` 仍 400。缺失 track 返回 404；非 active track 返回 409 `TRACK_NOT_ACTIVE`（与 `:id/context` 同口径，避免交接步静默落进已归档轨道）。
+- `POST /api/agent/tracks/:id/current-step/close`：闭合全部开口步，不前进、不改轨道状态；无开口步 409；响应返回 `closedSteps`。
+- `PATCH /api/agent/tracks/:id`：改 `status/title/summary/refs`；`concluded` 自动闭合全部开口步，`parked`/`active` 保留开口步；状态变更写 tracks status op。
 
 这些端点与任务 agent 回写一样走 `applyChange()` + `sync_seq` + `notifySyncChange()`，前台客户端经普通 sync stream 秒级感知。不写 TimeEntry、不扩 force-push；人手共编入口见 §6。
 
-agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 active tracks、每条最近 3 步、`stepCount`、`latestBoardSignal` 与当前 `boardSignals`；`GET /api/agent/tracks/:id/context` 返回单条 active track 的全量 steps（`seq ASC, startedAt ASC, id ASC`）、`stepCount`、`latestBoardSignal` 与 `boardSignals`。两个端点只读，不写 `sync_seq`、不触发 `notifySyncChange()`，也不返回 `bestMatch` / `score` / recommendation。缺失 track 返回 404；非 active track 详情返回 409 `TRACK_NOT_ACTIVE`。
+agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 active tracks、每条最近 3 步、`stepCount`、`latestBoardSignal` 与当前 `boardSignals`；`GET /api/agent/tracks/:id/context` 返回单条 active track 的全量 steps（`startedAt ASC, seq ASC, id ASC`）、`stepCount`、`latestBoardSignal` 与 `boardSignals`。两个端点只读，不写 `sync_seq`、不触发 `notifySyncChange()`，也不返回 `bestMatch` / `score` / recommendation。缺失 track 返回 404；非 active track 详情返回 409 `TRACK_NOT_ACTIVE`。
 
 ## 5. 监控面(T3)
 
 `/tracks` 列表与 `/tracks/:id` 详情是轨道的独立看板面(不进今天视图),页面用 `useLiveQuery` 读取、吃 sync 后变化。
 取值/排序/格式化在 `lib/tracksView.ts` 纯函数:`partitionTracks`(active vs 归档)、
-`currentStepId`/`orderedTimeline`(当前步=最大 seq 的开口步置顶高亮;无开口步纯倒序、不高亮)、
+`currentStepId`/`orderedTimeline`(当前步=语义时间最大的开口步置顶高亮;无开口步纯语义时间倒序、不高亮)、
 `trackProgressSummary`/`formatStepDuration`(历时跨天显「N天」)、`isLinkRef`(只有 http(s) 外链可点)、
-`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip。`RefChip` 的 `routeForRef`(kind 白名单)把内部实体 ref 渲染成应用内 `Link`：`task→/todo?taskId=`、`goal→/goals/:id`、`track→/tracks/:id`；未知 kind 保持 inert span，外链仍由 `isLinkRef` 的 http(s) 协议白名单单独放行(不放 `javascript:`/`data:`)。人手侧的 refs 反查/编辑器与「升为轨道」入口仍推迟(见 §8)。
+`latestBoardSignal`/`boardItemsForTracks`/`collectStatusFacetsFromItems`/`filterBoardItemsByStatusTags`(从已配置看板信号派生顶部 chip 与 OR 筛选)。列表顶部最简新建走 `addTrack`，active 轨道保持扁平列表，归档轨道折叠；详情倒序时间线显示 source、content、历时、tags、refs chip，user 步提供就地编辑/删除，正文编辑后显示“已编辑”。`RefChip` 的 `routeForRef`(kind 白名单)把内部实体 ref 渲染成应用内 `Link`：`task→/todo?taskId=`、`goal→/goals/:id`、`track→/tracks/:id`；未知 kind 保持 inert span，外链仍由 `isLinkRef` 的 http(s) 协议白名单单独放行(不放 `javascript:`/`data:`)。人手侧的 refs 反查/编辑器与「升为轨道」入口仍推迟(见 §8)。
 
 导航「轨道」图标带回手 badge(TK-12):`useTrackAttentionCount` 用 `useLiveQuery` 统计当前看板信号命中「待我处理」约定(=第一个配置的看板信号)的 active 轨道数;经 `TrackAttentionContext`(默认 0,Provider 挂在 `App` 默认导出、db 可用层)下发,桌面侧栏 `NavIconLink` 与移动底栏 `MobileIconLink` 用 `NavBadge` 在 `/tracks` 图标上显示计数。纯统计 `countAttentionTracks` 可单测;无 Provider(如只渲染导航的单测)读默认 0、不触 db、不显 badge。
 
 ## 6. 人手共编(T5)
 
-详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手写一步的 mode 由 `resolveStepMode(signal, tags)`(StepComposer) 判定：带看板信号=状态交接→`open`，开一个 `source="user"`、`endedAt=null` 的当前步并镜像 agent 自动闭合最新开口步(守卫闭合时间不早于开口步 `startedAt`)；无信号且只是点记(`批注`/`提醒`)→`instant`(`endedAt=startedAt`)，**不打断进行中的开口步**；其余(纯正文推进 / `决策` / 自定义标签)仍走 `open`。
+详情页是轻量共编入口,只写 `track_steps` / `tracks`,不编辑 agent 原文、不加领域字段、不写 `TimeEntry`。人手写一步的 mode 由 `resolveStepMode(signal, tags)`(StepComposer) 判定：带看板信号=状态交接→`open`，开一个 `source="user"`、`endedAt=null` 的当前步并闭合全部旧开口步；无信号且只是点记(`批注`/`提醒`)→`instant`(`endedAt=startedAt`)，**不打断进行中的开口步**；其余(纯正文推进 / `决策` / 自定义标签)仍走 `open`。
 
 `决策 / 批注 / 提醒` 是普通快捷标签，不驱动特殊底色或“决策步”徽标。开口语义只留给“真在做一段事”的步骤：步骤历时不再作为设计卖点(见 §8)，随手批注/提醒因此走 `instant`，避免截断 agent 的开口段、也避免点记自己挂成“进行中 N 天”。看板信号单选、检索标签多选，三组并存不互斥(`StepComposer`)。
 
-另有 `closeCurrentStep`(只闭合最新开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合开口步,镜像 T2 的 `PATCH`)。`setTrackStatus` 在状态**真正改变**时写一条 instant 系统步(`source="user"`、`endedAt=startedAt`、content 为 `归档`/`重新推进`/`搁置`)留痕(TK-18),让归档/重新推进在时间线可查;状态未变则不写。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync](sync.md) §1.6),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
+另有 `closeCurrentStep`(闭合全部开口步、不前进;无开口步报错)与 `setTrackStatus`(切 active/concluded/parked;`concluded` 顺手闭合全部开口步,镜像 T2 的 `PATCH`)。`setTrackStatus` 在状态**真正改变**时写一条 instant 系统步(`source="user"`、`endedAt=startedAt`、content 为 `归档`/`重新推进`/`搁置`)留痕(TK-18),让归档/重新推进在时间线可查;状态未变则不写。这些都只写 Dexie + `syncLog`,写入经 `recordSyncLog` 自动调度上传(见 [sync](sync.md) §1.6),不需要 UI 手动触发;数据层不按状态拦写入,改由详情页只对 `active` 显示加步/闭合入口。
 
-产品生命周期收敛为 `推进中 / 已归档`：active 显示 `推进中` 和 `归档` 按钮；归档写底层 `concluded` 并闭合开口步；旧数据里的 `parked` 只兼容读取为 `已归档`，非 active 统一显示 `重新推进`。批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器均推迟。
+产品生命周期收敛为 `推进中 / 已归档`：active 显示 `推进中` 和 `归档` 按钮；归档写底层 `concluded` 并闭合开口步；旧数据里的 `parked` 只兼容读取为 `已归档`，非 active 统一显示 `重新推进`。user 步可就地编辑正文或删除，agent 步只读；轨道本身可从详情页二次确认后删除，删除时显式写每条步骤 tombstone。批注串联到具体步(`ref{kind:"track_step"}`)、自由 refs/tags 编辑器仍推迟。
 
 ## 7. 看板信号与步骤检索标签
 
@@ -97,18 +99,18 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 看板信号配置写 `track.actionTags.v2`。新写入是 JSON 字符串数组；未配置时种子为 `待我处理 / agent在做`。旧 `track.actionTags.v1` 只作读时影子源；早期 v2 的 `{tag,court}` 数组兼容读取但只消费 `tag` 文本并忽略 `court`。读到旧默认 `[等我,待决策,卡住,agent在做]` 时归一为新默认两件套；显式 `[]` 仍表示没有看板信号。
 
-每条 active 轨道的当前看板信号 = 按步骤倒序查找最近一条带已配置看板信号的 step；同一步有多个信号时按配置顺序取第一个。无标签步骤和普通检索标签步骤不会清掉已有信号。比如 `agent在做` 之后补一条 `决策` 或无标签步骤，列表仍显示 `agent在做`，直到后续步骤写入新的已配置看板信号。
+每条 active 轨道的当前看板信号 = 按语义时间倒序查找最近一条带已配置看板信号的 step；同一步有多个信号时按配置顺序取第一个。无标签步骤和普通检索标签步骤不会清掉已有信号。比如 `agent在做` 之后补一条 `决策` 或无标签步骤，列表仍显示 `agent在做`，直到后续步骤写入新的已配置看板信号。
 
-看板信号计算在 `packages/shared/src/trackBoardSignals.ts`，client `tracksView.ts` 与 server agent context API 共用同一纯函数：按步骤倒序找最近一条含已配置看板信号的 step；同一步多个信号时按 `boardSignals` 顺序取第一个；无标签步骤和普通检索标签不清空已有信号。
+看板信号计算在 `packages/shared/src/trackBoardSignals.ts`，client `tracksView.ts` 与 server agent context API 共用同一纯函数：按语义时间倒序找最近一条含已配置看板信号的 step；同一步多个信号时按 `boardSignals` 顺序取第一个；无标签步骤和普通检索标签不清空已有信号。语义时间比较器在 `packages/shared/src/trackStepOrder.ts`，client/server 的当前步、最新步和看板信号都走同一口径。
 
 `/tracks` 列表保持扁平，不再按阵营或“该谁了”分组，也不保存本地分组视图偏好。顶部 chip 按配置顺序显示看板信号计数，如 `待我处理 N`、`agent在做 N`；点击 chip 做 OR 筛选。卡片只展示 `#tag` 信号牌、最新 3 步，并可就地”写一步”（`appendUserStep`，写入经 `recordSyncLog` 自动调度上传）。
 
-agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，默认开口并打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合上一开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
+agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，默认开口并打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合全部旧开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
 
 本地续写协议的单一事实源是 `.claude/skills/track-step/SKILL.md`（平台无关，任何能跑 shell/Node 的 agent 通用；技术契约见同目录 `references/api.md`，执行器 `scripts/td-track.mjs`）。该目录是本地 AI state，被 `.gitignore` 忽略；evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
 
 ## 8. 后续阶段
 
-- 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、历史步编辑/删除、自由 refs/tags 编辑器。
+- 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、自由 refs/tags 编辑器。
 - **步骤「历时」不作设计卖点**(2026-07-02 决策):`formatStepDuration` 产出的历时仅作展示辅助,不做时间统计桥(历时聚合进 Stats 已放弃);轨道步骤的历时不写入 `time_entries`。开口/瞬时之分因此只服务于时间线可读性(开口步=正在进行的段),不服务于计量。
 - 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。

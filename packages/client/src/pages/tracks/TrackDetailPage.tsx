@@ -1,10 +1,20 @@
 import { ArrowLeft, Check, PencilSimple, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
-import { appendUserStep, closeCurrentStep, getTrack, listTrackSteps, setTrackStatus, updateTrack } from "../../lib/tracks.js";
+import {
+  appendUserStep,
+  closeCurrentStep,
+  deleteTrack,
+  deleteTrackStep,
+  getTrack,
+  listTrackSteps,
+  setTrackStatus,
+  updateTrack,
+  updateTrackStep,
+} from "../../lib/tracks.js";
 import { currentStepId } from "../../lib/tracksView.js";
 import { RefChip } from "./RefChip.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
@@ -14,6 +24,7 @@ const STATUS_LABEL: Record<string, string> = { active: "推进中", concluded: "
 
 export default function TrackDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   // ?? null 把三态分开:undefined=查询未落(加载中)、null=查到但不存在、实体=命中。
   const track = useLiveQuery(async () => (await getTrack(id)) ?? null, [id]);
   const steps = useLiveQuery(() => listTrackSteps(id), [id], []);
@@ -22,6 +33,7 @@ export default function TrackDetailPage() {
   const [titleDraft, setTitleDraft] = useState("");
   const [summaryDraft, setSummaryDraft] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmingDeleteTrack, setConfirmingDeleteTrack] = useState(false);
 
   const isActive = track != null && track.status === "active";
   const hasOpenStep = currentStepId(steps) !== null;
@@ -54,6 +66,39 @@ export default function TrackDetailPage() {
       setActionError(null);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "状态更新失败，请重试");
+    }
+  }
+
+  async function editStep(stepId: string, content: string): Promise<void> {
+    try {
+      await updateTrackStep(stepId, { content });
+      setActionError(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "步骤保存失败，请重试");
+    }
+  }
+
+  async function removeStep(stepId: string): Promise<void> {
+    try {
+      await deleteTrackStep(stepId);
+      setActionError(null);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "步骤删除失败，请重试");
+    }
+  }
+
+  async function removeTrack(): Promise<void> {
+    if (!track) return;
+    if (!confirmingDeleteTrack) {
+      setConfirmingDeleteTrack(true);
+      return;
+    }
+    try {
+      await deleteTrack(track.id);
+      setActionError(null);
+      navigate("/tracks");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "轨道删除失败，请重试");
     }
   }
 
@@ -141,6 +186,15 @@ export default function TrackDetailPage() {
                     >
                       <Icon icon={PencilSimple} size={16} />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => void removeTrack()}
+                      className={`inline-flex h-8 shrink-0 items-center justify-center rounded-ctl bg-surface-elevated px-2 td-text-caption text-ink-2 hover:text-danger ${
+                        confirmingDeleteTrack ? "text-danger" : ""
+                      }`}
+                    >
+                      {confirmingDeleteTrack ? "确认删除轨道" : "删除轨道"}
+                    </button>
                     <span className="rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
                       {STATUS_LABEL[track.status] ?? track.status}
                     </span>
@@ -195,7 +249,7 @@ export default function TrackDetailPage() {
                 闭合当前步
               </button>
             )}
-            <TrackTimeline steps={steps} />
+            <TrackTimeline steps={steps} onEditStep={editStep} onDeleteStep={removeStep} />
           </>
         )}
       </div>

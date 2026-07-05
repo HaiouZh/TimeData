@@ -10,5 +10,7 @@ export * from "./recurrence.js";
 export * from "./taskDates.js";
 export * from "./taskCompletion.js";
 export * from "./trackBoardSignals.js";
+export * from "./trackStepOrder.js";
+export * from "./trackStatusOp.js";
 export * from "./goalLayoutPins.js";
 export * from "./occurrence.js";

@@ -31,6 +31,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-07-04（tasks 完成语义 op）：op 仅 tasks upsert 可携带；quick_notes 字段、agent 投递入口、LWW 映射和独立备份格式不变。 -->
 <!-- 复核 2026-07-04（QuickNote A 批数据安全）：清理/导出入口补目标日期文案、空日反馈、非今天确认；范围清理跳过 pinned，quick_notes schema、同步域和独立备份格式不变。 -->
 <!-- 复核 2026-07-04（QuickNote C 批搜索体验）：搜索结果按天倒序分组、初始渲染 100 条并可加载更多；点结果经 timeline.jumpToNote 锚定窗口、滚动到主线卡片并 1.5s 内侧高亮且保留搜索词。quick_notes schema、同步域和写入边界不变。 -->
+<!-- 复核 2026-07-04（tracks 并发时间语义）：TrackStep.editedAt、tracks.status op 与 orphan_step_rejected 只服务轨道域；quick_notes 字段、agent 投递入口、LWW 映射和独立备份格式不变。 -->
 
 # 速记
 

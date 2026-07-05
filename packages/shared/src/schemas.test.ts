@@ -11,6 +11,7 @@ import {
   SyncLogEntrySchema,
   SyncPullRequestSchema,
   SyncPullResponseSchema,
+  SyncPushReasonCodeSchema,
   SyncStatusResponseSchema,
   TimeEntrySchema,
   UtcIsoStringSchema,
@@ -116,6 +117,20 @@ describe("SyncLogEntrySchema", () => {
     expect(parsed.op?.type).toBe("skip");
   });
 
+  it("accepts optional track status op", () => {
+    const parsed = SyncLogEntrySchema.parse({
+      id: "log-track-2",
+      tableName: "tracks",
+      recordId: "track-1",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      synced: 0,
+      op: { type: "status", at: "2026-07-04T00:00:00.000Z" },
+    });
+
+    expect(parsed.op?.type).toBe("status");
+  });
+
   it("accepts tracks and track_steps as synced tables", () => {
     expect(
       SyncLogEntrySchema.safeParse({
@@ -137,6 +152,10 @@ describe("SyncLogEntrySchema", () => {
         synced: 0,
       }).success,
     ).toBe(true);
+  });
+
+  it("accepts track orphan rejection as a push reason code", () => {
+    expect(SyncPushReasonCodeSchema.parse("orphan_step_rejected")).toBe("orphan_step_rejected");
   });
 });
 
@@ -451,7 +470,27 @@ describe("SyncChangeSchema", () => {
     expect(parsed.op?.type).toBe("complete");
   });
 
-  it("非 tasks 域的 op 被 strip", () => {
+  it("tracks upsert 接受并保留 status op", () => {
+    const parsed = SyncChangeSchema.parse({
+      tableName: "tracks",
+      recordId: "track-1",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      data: {
+        id: "track-1",
+        title: "T1",
+        status: "concluded",
+        refs: [],
+        createdAt: "2026-07-04T00:00:00.000Z",
+        updatedAt: "2026-07-04T00:00:00.000Z",
+      },
+      op: { type: "status", at: "2026-07-04T00:00:00.000Z" },
+    }) as { op?: { type: string } };
+
+    expect(parsed.op?.type).toBe("status");
+  });
+
+  it("非 tasks/tracks 域的 op 被 strip", () => {
     const parsed = SyncChangeSchema.parse({
       tableName: "settings",
       recordId: "sleep.categoryId",
@@ -472,6 +511,26 @@ describe("SyncChangeSchema", () => {
       timestamp: "2026-07-04T00:00:00.000Z",
       data: task,
       op: { type: "toggle", at: "2026-07-04T00:00:00.000Z" },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("tracks op.type 非 status 被拒", () => {
+    const result = SyncChangeSchema.safeParse({
+      tableName: "tracks",
+      recordId: "track-1",
+      action: "update",
+      timestamp: "2026-07-04T00:00:00.000Z",
+      data: {
+        id: "track-1",
+        title: "T1",
+        status: "concluded",
+        refs: [],
+        createdAt: "2026-07-04T00:00:00.000Z",
+        updatedAt: "2026-07-04T00:00:00.000Z",
+      },
+      op: { type: "complete", at: "2026-07-04T00:00:00.000Z" },
     });
 
     expect(result.success).toBe(false);

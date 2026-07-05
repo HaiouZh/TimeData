@@ -139,7 +139,7 @@ TimeData 现有三种备份/可恢复文件：
 
 ## 3. 校验（`validateBackup`）
 
-恢复前必跑。`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema`、各 bundled 域 schema 与 `UtcIsoStringSchema` 严格校验分类、记录、任务、轨道、目标、目标布局钉点和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。任务记录经 `TaskSchema` 归一化，旧记录缺少 `completedCount`、`weight`、`completedAt`、`tags`、`ruleId` 或 `skipped` 时分别按 0、0、`null`、`[]`、`null`、`false` 恢复；`recurrence.count` 与 `recurrence.until` 同时存在会被拒绝。轨道记录经 `TrackSchema` / `TrackStepSchema` 归一化，`refs` / `tags` 缺省为空数组；目标记录经 `GoalSchema` 归一化，`members` / `prerequisites` 缺省为空数组，并拒绝重复成员、前置边引用非成员、自环、重复边和环；目标布局钉点经 `GoalLayoutPinSchema` 校验，并按 `(goalId,nodeKind,nodeId)` 检查重复。
+恢复前必跑。`validateBackup` 用 shared 包的 `CategorySchema`、`TimeEntrySchema`、各 bundled 域 schema 与 `UtcIsoStringSchema` 严格校验分类、记录、任务、轨道、目标、目标布局钉点和时间字段。正常通过 TimeData 客户端导出的备份文件不会受影响；手工编辑过的备份如果时间字段不带毫秒、不带 `Z` 或带时区偏移，会被拒绝，建议改成 `2026-05-19T03:00:00.000Z` 这种 `.sssZ` 格式后重试。任务记录经 `TaskSchema` 归一化，旧记录缺少 `completedCount`、`weight`、`completedAt`、`tags`、`ruleId` 或 `skipped` 时分别按 0、0、`null`、`[]`、`null`、`false` 恢复；`recurrence.count` 与 `recurrence.until` 同时存在会被拒绝。轨道记录经 `TrackSchema` / `TrackStepSchema` 归一化，`refs` / `tags` 缺省为空数组，`editedAt` 如存在会随 `domains.track_steps` 保留；目标记录经 `GoalSchema` 归一化，`members` / `prerequisites` 缺省为空数组，并拒绝重复成员、前置边引用非成员、自环、重复边和环；目标布局钉点经 `GoalLayoutPinSchema` 校验，并按 `(goalId,nodeKind,nodeId)` 检查重复。
 
 `packages/client/src/backup/validateBackup.ts` 检查：
 

@@ -71,6 +71,12 @@ export interface TaskCompletionOp {
   at: string;
 }
 
+/** tracks status 语义 op：客户端/agent 有意改 status 时附带；服务端凭它决定守卫列是否进 SET。 */
+export interface TrackStatusOp {
+  type: "status";
+  at: string;
+}
+
 interface SyncUpsertChange<Table extends string, Data> {
   tableName: Table;
   recordId: string;
@@ -111,7 +117,7 @@ export type SyncChange =
   | SyncDeleteChange<"runs">
   | SyncUpsertChange<"health_charts", HealthChartConfig>
   | SyncDeleteChange<"health_charts">
-  | SyncUpsertChange<"tracks", Track>
+  | (SyncUpsertChange<"tracks", Track> & { op?: TrackStatusOp })
   | SyncDeleteChange<"tracks">
   | SyncUpsertChange<"track_steps", TrackStep>
   | SyncDeleteChange<"track_steps">
@@ -244,7 +250,7 @@ export type SyncReasonCategory =
   | "applied"
   | "client_bug" // missing_payload / invalid_shape / id_mismatch — 客户端 bug，标 synced + 上报
   | "user_actionable" // archived_category / missing_category / overlap / invalid_time_range — 用户处理
-  | "stale_rejected" // stale_change_rejected — 冲突记录的过期变更被服务端拒收，客户端放弃本地主张、标 synced
+  | "stale_rejected" // stale_change_rejected / orphan_step_rejected — 服务端拒收过期或孤儿变更，客户端放弃本地主张、标 synced
   | "conflict" // server_version_newer_or_same — 进入冲突流程
   | "unknown";
 

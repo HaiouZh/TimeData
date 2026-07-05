@@ -26,7 +26,6 @@ import type {
   TimeEntry,
   SyncLogEntry,
   SyncPushOutcome,
-  TaskCompletionOp,
 } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
 
@@ -171,7 +170,7 @@ function compactLogGroup(logs: SyncLog[]): CompactedSyncLog | null {
   const first = ordered[0];
   const last = ordered[ordered.length - 1];
   const sourceLogIds = ordered.map((log) => log.id);
-  const op = [...ordered].reverse().find((log) => log.op)?.op;
+  const op = last.tableName === "tracks" ? last.op : [...ordered].reverse().find((log) => log.op)?.op;
 
   if (!first || !last) return null;
   if (first.action === "create" && last.action === "delete") {
@@ -857,7 +856,7 @@ export async function recordSyncLog(
   recordId: string,
   action: "create" | "update" | "delete",
   timestamp = new Date().toISOString(),
-  op?: TaskCompletionOp,
+  op?: SyncLogEntry["op"],
 ): Promise<void> {
   await db.syncLog.add({
     id: uuid(),
