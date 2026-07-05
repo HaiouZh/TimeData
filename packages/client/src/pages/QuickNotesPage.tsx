@@ -414,6 +414,7 @@ export default function QuickNotesPage() {
 
   function closeSearch(options: { resetTimeline?: boolean; preserveQuery?: boolean } = {}) {
     setSearchOpen(false);
+    setSearchLimit(SEARCH_RESULT_PAGE_SIZE);
     if (!options.preserveQuery) setSearchQuery("");
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
@@ -423,7 +424,7 @@ export default function QuickNotesPage() {
     }
   }
 
-  function handleResultClick(note: QuickNote) {
+  async function handleResultClick(note: QuickNote) {
     const localDate = getDateString(new Date(note.occurredAt));
     closeSearch({ resetTimeline: false, preserveQuery: true });
     if (note.pinned) {
@@ -434,8 +435,8 @@ export default function QuickNotesPage() {
     setJumpDate(localDate);
     setSearchParams(localDate === today ? {} : { date: localDate });
     stickBottomRef.current = false;
+    await timeline.jumpToNote(note);
     setFocusNoteId(note.id);
-    void timeline.jumpToNote(note);
   }
 
   // 轻提示（已复制 / 已导出 / 已清理）几秒后自动消失，避免一直挂在底部直到切换页面。
@@ -1077,7 +1078,7 @@ export default function QuickNotesPage() {
                       key={item.key}
                       type="button"
                       data-note-id={note.id}
-                      onClick={() => handleResultClick(note)}
+                      onClick={() => void handleResultClick(note)}
                       className={`w-full text-left ${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
                     >
                       <time className="td-time float-right ml-2 text-[11px] text-ink-3">

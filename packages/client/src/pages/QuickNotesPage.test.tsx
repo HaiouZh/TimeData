@@ -1122,6 +1122,37 @@ describe("QuickNotesPage", () => {
     }
   });
 
+  it("加载更多后点结果关闭搜索，再保词重开仍只先渲染 100 条", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn();
+    for (let index = 0; index < 120; index++) {
+      await addQuickNote(`葡萄 ${index}`, {
+        occurredAt: new Date(Date.UTC(2026, 5, 3, 0, 0, index)).toISOString(),
+      });
+    }
+    const { host, root } = await renderPage();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      await click(composerButton(host, "搜索速记"));
+      await typeIntoSearch(searchInput(host), "葡萄");
+      await waitForSearchDebounce();
+      await click(host.querySelector('button[aria-label="加载更多搜索结果"]'));
+      expect(searchResultButtons(host)).toHaveLength(120);
+
+      await click(searchResultButtons(host)[0]);
+      await click(composerButton(host, "搜索速记"));
+
+      expect(searchInput(host).value).toBe("葡萄");
+      expect(searchResultButtons(host)).toHaveLength(100);
+      expect(host.querySelector('button[aria-label="加载更多搜索结果"]')).not.toBeNull();
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      vi.useRealTimers();
+      await unmount(root);
+    }
+  });
+
   it("点搜索结果滚动高亮到那条且保留搜索词", async () => {
     const originalScrollIntoView = Element.prototype.scrollIntoView;
     const scrollSpy = vi.fn();
@@ -1144,6 +1175,34 @@ describe("QuickNotesPage", () => {
 
       await click(composerButton(host, "搜索速记"));
       expect(searchInput(host).value).toBe("西瓜");
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      vi.useRealTimers();
+      await unmount(root);
+    }
+  });
+
+  it("搜索结果定位等待时间线跳转后再滚动最终卡片", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollSpy = vi.fn(function (this: Element) {
+      expect(this.getAttribute("data-note-id")).toBe(target.id);
+    });
+    Element.prototype.scrollIntoView = scrollSpy;
+    const target = await addQuickNote("哈密瓜 目标", { occurredAt: "2026-05-22T04:00:00.000Z" });
+    await addQuickNote("哈密瓜 当前窗口", {});
+    const { host, root } = await renderPage();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      await click(composerButton(host, "搜索速记"));
+      await typeIntoSearch(searchInput(host), "哈密瓜");
+      await waitForSearchDebounce();
+      await click(host.querySelector(`button[data-note-id="${target.id}"]`));
+
+      const card = host.querySelector(`[data-note-id="${target.id}"][role="button"]`);
+      expect(card).not.toBeNull();
+      expect(scrollSpy).toHaveBeenCalledTimes(1);
+      expect(card?.className).toContain("ring-inset");
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       vi.useRealTimers();
