@@ -27,6 +27,7 @@ import {
   type GanttWindow,
 } from "../../lib/tracksGantt.js";
 import { formatStepDuration, stepSourceText } from "../../lib/tracksView.js";
+import { clampNameWidth, loadNameWidth, NAME_WIDTH_MAX, NAME_WIDTH_MIN, saveNameWidth } from "./trackGanttPrefs.js";
 
 const LANE_HEIGHT = 28;
 const BAR_HEIGHT = 10;
@@ -83,6 +84,24 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
 
   const [hover, setHover] = useState<HoverInfo | null>(null);
   const dragState = useRef<{ pointerId: number; lastX: number } | null>(null);
+
+  const [nameWidth, setNameWidth] = useState(() => loadNameWidth());
+  const nameColRef = useRef<HTMLDivElement | null>(null);
+  const namePointerId = useRef<number | null>(null);
+
+  function applyNameWidth(clientX: number): void {
+    const left = nameColRef.current?.getBoundingClientRect().left;
+    if (left === undefined) return;
+    setNameWidth(clampNameWidth(clientX - left));
+  }
+  function finishNameDrag(event: ReactPointerEvent<HTMLDivElement>): void {
+    if (namePointerId.current !== event.pointerId) return;
+    namePointerId.current = null;
+    saveNameWidth(clampNameWidth(nameWidth));
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
 
   function onWheel(event: ReactWheelEvent<HTMLDivElement>): void {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -165,7 +184,7 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
         </span>
       </div>
       <div className="flex min-h-0 flex-1 overflow-y-auto">
-        <div className="w-32 shrink-0 border-r border-border">
+        <div ref={nameColRef} className="shrink-0" style={{ width: nameWidth }}>
           <div className="h-5" />
           {lanes.map((lane) => (
             <button
@@ -178,6 +197,47 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
               {lane.track.title}
             </button>
           ))}
+        </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整轨道名列宽"
+          aria-valuemin={NAME_WIDTH_MIN}
+          aria-valuemax={NAME_WIDTH_MAX}
+          aria-valuenow={Math.round(nameWidth)}
+          tabIndex={0}
+          className="group flex w-1.5 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            namePointerId.current = event.pointerId;
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            applyNameWidth(event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (namePointerId.current === event.pointerId) applyNameWidth(event.clientX);
+          }}
+          onPointerUp={finishNameDrag}
+          onPointerCancel={finishNameDrag}
+          onKeyDown={(event) => {
+            const step = event.shiftKey ? 32 : 12;
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              setNameWidth((w) => {
+                const next = clampNameWidth(w - step);
+                saveNameWidth(next);
+                return next;
+              });
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              setNameWidth((w) => {
+                const next = clampNameWidth(w + step);
+                saveNameWidth(next);
+                return next;
+              });
+            }
+          }}
+        >
+          <div className="my-1 w-px rounded-pill bg-border transition-colors group-hover:bg-accent" />
         </div>
         <div ref={plotRef} className="relative min-w-0 flex-1">
           <div className="relative h-5 overflow-hidden">

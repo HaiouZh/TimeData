@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import {
   clampGanttWidth,
+  clampNameWidth,
   GANTT_WIDTH_DEFAULT,
   GANTT_WIDTH_MIN,
   ganttWidthMax,
   LIST_MIN_WIDTH,
   loadGanttWidth,
+  loadNameWidth,
+  NAME_WIDTH_DEFAULT,
+  NAME_WIDTH_MAX,
+  NAME_WIDTH_MIN,
   saveGanttWidth,
+  saveNameWidth,
 } from "./trackGanttPrefs.js";
 
 beforeEach(() => localStorage.clear());
@@ -40,5 +46,19 @@ describe("load / save", () => {
   it("脏存储值回默认", () => {
     localStorage.setItem(STORAGE_KEYS.trackGanttWidth, "not-a-number");
     expect(loadGanttWidth(1440)).toBe(GANTT_WIDTH_DEFAULT);
+  });
+});
+
+describe("轨道名列宽", () => {
+  it("clamp 在 [96, 360]，非法回默认", () => {
+    expect(clampNameWidth(10)).toBe(NAME_WIDTH_MIN);
+    expect(clampNameWidth(9999)).toBe(NAME_WIDTH_MAX);
+    expect(clampNameWidth(Number.NaN)).toBe(NAME_WIDTH_DEFAULT);
+  });
+  it("save 后 load 还原，无存储回默认", () => {
+    expect(loadNameWidth()).toBe(NAME_WIDTH_DEFAULT);
+    saveNameWidth(240);
+    expect(localStorage.getItem(STORAGE_KEYS.trackGanttNameWidth)).toBe("240");
+    expect(loadNameWidth()).toBe(240);
   });
 });

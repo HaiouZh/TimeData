@@ -24,3 +24,23 @@ export function loadGanttWidth(viewportWidth: number): number {
 export function saveGanttWidth(px: number, viewportWidth: number): void {
   safeSetItem(STORAGE_KEYS.trackGanttWidth, String(clampGanttWidth(px, viewportWidth)));
 }
+
+// 甘特内部轨道名列的宽度偏好（列右缘手柄拖拽）。
+export const NAME_WIDTH_MIN = 96;
+export const NAME_WIDTH_MAX = 360;
+export const NAME_WIDTH_DEFAULT = 176;
+
+export function clampNameWidth(px: number): number {
+  if (!Number.isFinite(px)) return NAME_WIDTH_DEFAULT;
+  return Math.min(NAME_WIDTH_MAX, Math.max(NAME_WIDTH_MIN, Math.round(px)));
+}
+
+export function loadNameWidth(): number {
+  const raw = safeGetItem(STORAGE_KEYS.trackGanttNameWidth);
+  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? clampNameWidth(parsed) : NAME_WIDTH_DEFAULT;
+}
+
+export function saveNameWidth(px: number): void {
+  safeSetItem(STORAGE_KEYS.trackGanttNameWidth, String(clampNameWidth(px)));
+}
