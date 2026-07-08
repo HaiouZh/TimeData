@@ -96,16 +96,19 @@ export interface GanttLane {
 
 const parseMs = (isoText: string): number => new Date(isoText).getTime();
 
-// 段的"执行者"：信号优先、回退写入者——步子带含 agent 字样的标签（如 #agent在做）视为 agent 在干，
-// 覆盖手记"交给 agent"场景；否则按 step.source（谁写入这一步）。
-export function stepExecutor(step: Pick<TrackStep, "source" | "tags">): "user" | "agent" {
-  return step.tags.some((tag) => /agent/i.test(tag)) ? "agent" : step.source;
+// 段的"执行者"：信号优先、回退写入者——步子带任一"agent 执行信号"标签（可在 /settings/tracks 配置，
+// 默认 agent在做）视为 agent 在干，覆盖手记"交给 agent"场景；否则按 step.source（谁写入这一步）。
+export function stepExecutor(
+  step: Pick<TrackStep, "source" | "tags">,
+  agentExecTags: readonly string[],
+): "user" | "agent" {
+  return step.tags.some((tag) => agentExecTags.includes(tag)) ? "agent" : step.source;
 }
 
-function laneSegments(steps: TrackStep[], nowMs: number): GanttSegment[] {
+function laneSegments(steps: TrackStep[], nowMs: number, agentExecTags: readonly string[]): GanttSegment[] {
   const segments = steps.map((step): GanttSegment => {
     const startMs = parseMs(step.startedAt);
-    const source = stepExecutor(step);
+    const source = stepExecutor(step, agentExecTags);
     if (step.endedAt === null) {
       // 时钟漂移防御：未来开口步退化为点，不画负长条
       if (startMs >= nowMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
@@ -125,10 +128,15 @@ function laneAfterglow(segments: GanttSegment[], nowMs: number): { startMs: numb
   return { startMs: lastEnd, endMs: Math.min(lastEnd + AFTERGLOW_MS, nowMs) };
 }
 
-export function ganttLanes(tracks: Track[], stepsByTrack: Map<string, TrackStep[]>, nowMs: number): GanttLane[] {
+export function ganttLanes(
+  tracks: Track[],
+  stepsByTrack: Map<string, TrackStep[]>,
+  nowMs: number,
+  agentExecTags: readonly string[] = [],
+): GanttLane[] {
   const lanes = tracks.map((track): GanttLane => {
     const steps = stepsByTrack.get(track.id) ?? [];
-    const segments = laneSegments(steps, nowMs);
+    const segments = laneSegments(steps, nowMs, agentExecTags);
     // 与 tracksView.lastActivityAt 同语义：闭合步取结束、开口步取开始
     const lastActivityMs =
       steps.length === 0 ? null : Math.max(...steps.map((s) => parseMs(s.endedAt ?? s.startedAt)));

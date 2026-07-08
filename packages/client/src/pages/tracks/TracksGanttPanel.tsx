@@ -26,6 +26,7 @@ import {
   type GanttSegment,
   type GanttWindow,
 } from "../../lib/tracksGantt.js";
+import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.js";
 import { formatStepDuration, stepSourceText } from "../../lib/tracksView.js";
 import { clampNameWidth, loadNameWidth, NAME_WIDTH_MAX, NAME_WIDTH_MIN, saveNameWidth } from "./trackGanttPrefs.js";
 
@@ -61,7 +62,11 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
   const nowMs = now ? now.getTime() : tickMs;
   const nowDate = useMemo(() => new Date(nowMs), [nowMs]);
 
-  const lanes = useMemo(() => ganttLanes(tracks, stepsByTrack, nowMs), [tracks, stepsByTrack, nowMs]);
+  const agentExecTags = useAgentExecTags();
+  const lanes = useMemo(
+    () => ganttLanes(tracks, stepsByTrack, nowMs, agentExecTags),
+    [tracks, stepsByTrack, nowMs, agentExecTags],
+  );
   const stats = useMemo(() => concurrencyStats(lanes, nowMs), [lanes, nowMs]);
   const minStartMs = useMemo(() => earliestSegmentDayMs(lanes, nowMs), [lanes, nowMs]);
 

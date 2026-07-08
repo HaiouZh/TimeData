@@ -4,11 +4,18 @@ import {
   setTrackActionTags,
   useTrackActionTags,
 } from "../../lib/settings/trackActionTagsSetting.js";
+import {
+  readAgentExecTags,
+  setAgentExecTags,
+  useAgentExecTags,
+} from "../../lib/settings/trackAgentExecTagsSetting.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 export function SettingsTracksPage() {
   const tags = useTrackActionTags();
   const [draft, setDraft] = useState("");
+  const execTags = useAgentExecTags();
+  const [execDraft, setExecDraft] = useState("");
 
   async function add(raw: string) {
     const trimmed = raw.trim();
@@ -21,6 +28,19 @@ export function SettingsTracksPage() {
   async function remove(tag: string) {
     const current = await readTrackActionTags();
     await setTrackActionTags(current.filter((item) => item !== tag));
+  }
+
+  async function addExec(raw: string) {
+    const trimmed = raw.trim().replace(/^#/, "");
+    setExecDraft("");
+    const current = await readAgentExecTags();
+    if (!trimmed || current.includes(trimmed)) return;
+    await setAgentExecTags([...current, trimmed]);
+  }
+
+  async function removeExec(tag: string) {
+    const current = await readAgentExecTags();
+    await setAgentExecTags(current.filter((item) => item !== tag));
   }
 
   return (
@@ -62,6 +82,55 @@ export function SettingsTracksPage() {
                   type="button"
                   aria-label={`删除 ${tag}`}
                   onClick={() => void remove(tag)}
+                  className="text-ink-3 transition hover:text-ink"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <section className="mt-6 space-y-3">
+        <h2 className="td-text-label text-ink">甘特执行者信号</h2>
+        <p className="td-text-body text-ink-3">
+          步骤带这些标签时，并发甘特把该段按 agent 执行者着色（无论谁记录）。清空则只按写入者区分。
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void addExec(execDraft);
+          }}
+          className="flex gap-2"
+        >
+          <input
+            value={execDraft}
+            onChange={(e) => setExecDraft(e.target.value)}
+            placeholder="如:agent在做"
+            aria-label="新增甘特执行者信号"
+            className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 td-text-body text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+          />
+          <button
+            type="submit"
+            className="shrink-0 rounded-ctl bg-accent px-3 td-text-label text-page transition hover:bg-accent-hover"
+          >
+            添加
+          </button>
+        </form>
+        {execTags.length === 0 ? (
+          <p className="td-text-body text-ink-3">未配置；甘特只按谁写入这一步区分颜色。</p>
+        ) : (
+          <ul className="space-y-2">
+            {execTags.map((tag) => (
+              <li
+                key={tag}
+                className="flex items-center justify-between gap-2 rounded-card border border-border bg-surface-elevated p-2"
+              >
+                <span className="td-text-body text-ink-2">#{tag}</span>
+                <button
+                  type="button"
+                  aria-label={`删除执行者信号 ${tag}`}
+                  onClick={() => void removeExec(tag)}
                   className="text-ink-3 transition hover:text-ink"
                 >
                   ×

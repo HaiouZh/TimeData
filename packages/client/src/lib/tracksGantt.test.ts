@@ -165,10 +165,10 @@ function makeStep(
   };
 }
 
-function lanesOf(entries: Array<[Track, TrackStep[]]>) {
+function lanesOf(entries: Array<[Track, TrackStep[]]>, agentExecTags: readonly string[] = ["agent在做"]) {
   const tracks = entries.map(([t]) => t);
   const byTrack = new Map(entries.map(([t, s]) => [t.id, s] as const));
-  return ganttLanes(tracks, byTrack, NOW);
+  return ganttLanes(tracks, byTrack, NOW, agentExecTags);
 }
 
 describe("ganttLanes", () => {
@@ -187,13 +187,18 @@ describe("ganttLanes", () => {
     expect(lane.segments.map((s) => s.kind)).toEqual(["bar", "point", "running"]);
     expect(lane.segments[2].endMs).toBe(NOW);
   });
-  it("执行者着色：信号优先（含 agent 字样的标签→agent），回退写入者", () => {
+  it("执行者着色：配置的 agent 执行信号优先，回退写入者", () => {
     const t = makeTrack("a");
     const delegated = { ...makeStep("a", NOW - 4 * HOUR, NOW - 3 * HOUR, "user"), tags: ["agent在做"] };
     const mine = makeStep("a", NOW - 2 * HOUR, NOW - HOUR, "user");
     const agentWritten = makeStep("a", NOW - HOUR, null, "agent");
     const [lane] = lanesOf([[t, [delegated, mine, agentWritten]]]);
     expect(lane.segments.map((s) => s.source)).toEqual(["agent", "user", "agent"]);
+    // 换配置：改名信号后按新配置判；空配置只看写入者
+    const [renamed] = lanesOf([[t, [delegated]]], ["机器人在做"]);
+    expect(renamed.segments[0].source).toBe("user");
+    const [plain] = lanesOf([[t, [delegated]]], []);
+    expect(plain.segments[0].source).toBe("user");
   });
 
   it("未来开口步（时钟漂移）退化为点", () => {
