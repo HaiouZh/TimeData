@@ -91,6 +91,20 @@ describe("TracksGanttPanel", () => {
     expect(host.textContent).toContain("已1小时");
   });
 
+  it("带等待信号的开口步画空心等待条，现状栏显示已等", async () => {
+    const a = makeTrack("a");
+    const wait = { ...makeStep("a", 5 * HOUR, null), tags: ["待我处理"] };
+    const { host } = await mount([a], new Map([["a", [wait]]]));
+    const seg = host.querySelector('[data-testid="gantt-seg"][data-waiting="true"]');
+    expect(seg).not.toBeNull();
+    expect(seg?.getAttribute("fill")).toBe("transparent");
+    // 等待是持续状态：超2h也不画陈旧虚线尾迹
+    expect(host.querySelector('[data-testid="gantt-stale-tail"]')).toBeNull();
+    const status = host.querySelector('[data-testid="gantt-now-status"]');
+    expect(status?.getAttribute("data-kind")).toBe("waiting");
+    expect(status?.textContent).toContain("已等");
+  });
+
   it("僵尸开口步画实头+虚线尾迹", async () => {
     const a = makeTrack("a");
     const { host } = await mount([a], new Map([["a", [makeStep("a", 72 * HOUR, null)]]]));

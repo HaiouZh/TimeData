@@ -29,6 +29,7 @@ import {
   type GanttSegment,
   type GanttWindow,
 } from "../../lib/tracksGantt.js";
+import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { useAgentExecTags } from "../../lib/settings/trackAgentExecTagsSetting.js";
 import { formatStepDuration, stepSourceText } from "../../lib/tracksView.js";
 import { clampNameWidth, loadNameWidth, NAME_WIDTH_MAX, NAME_WIDTH_MIN, saveNameWidth } from "./trackGanttPrefs.js";
@@ -66,9 +67,12 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
   const nowDate = useMemo(() => new Date(nowMs), [nowMs]);
 
   const agentExecTags = useAgentExecTags();
+  // 等待信号约定 = 第一个配置的看板信号（与导航 badge 的「待我处理」约定同源）。
+  const actionTags = useTrackActionTags();
+  const waitingTags = useMemo(() => (actionTags.length > 0 ? [actionTags[0]] : []), [actionTags]);
   const lanes = useMemo(
-    () => ganttLanes(tracks, stepsByTrack, nowMs, agentExecTags),
-    [tracks, stepsByTrack, nowMs, agentExecTags],
+    () => ganttLanes(tracks, stepsByTrack, nowMs, agentExecTags, waitingTags),
+    [tracks, stepsByTrack, nowMs, agentExecTags, waitingTags],
   );
   const stats = useMemo(() => concurrencyStats(lanes, nowMs), [lanes, nowMs]);
   const minStartMs = useMemo(() => earliestSegmentDayMs(lanes, nowMs), [lanes, nowMs]);
@@ -263,15 +267,20 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                       />
                     )}
                     {visibleSegments(lane.segments, win).map((seg) => {
+                      // 等待段（带等待信号）：空心条，长度=接力空档；等待是持续状态，不参与陈旧截断。
+                      const waiting = seg.waiting === true;
                       // 陈旧开口步：实头只画到 staleSinceMs，之后到此刻是半透明虚线尾迹（"口没闭但很久没动静"）。
-                      const stale = seg.kind === "running" && seg.staleSinceMs != null;
+                      const stale = !waiting && seg.kind === "running" && seg.staleSinceMs != null;
                       const headSeg = stale ? { ...seg, endMs: seg.staleSinceMs as number } : seg;
                       const shape = segmentShape(headSeg, win, plotWidth);
                       const common = {
                         "data-testid": "gantt-seg",
                         "data-kind": seg.kind,
                         "data-step": seg.stepId,
-                        fill: SOURCE_FILL[seg.source],
+                        "data-waiting": waiting ? "true" : undefined,
+                        fill: waiting ? "transparent" : SOURCE_FILL[seg.source],
+                        stroke: waiting ? SOURCE_FILL[seg.source] : undefined,
+                        strokeWidth: waiting ? 1.5 : undefined,
                         className: "cursor-pointer",
                         onClick: () => navigate(`/tracks/${lane.track.id}#step-${seg.stepId}`),
                         onMouseEnter: (event: ReactMouseEvent) => hoverSeg(lane, seg, event),
@@ -287,7 +296,7 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                             width={shape.width}
                             height={BAR_HEIGHT}
                             rx={2}
-                            opacity={seg.kind === "running" ? 0.9 : 1}
+                            opacity={seg.kind === "running" && !waiting ? 0.9 : 1}
                           />
                         ) : (
                           <circle key={seg.stepId} {...common} cx={shape.cx} cy={y + LANE_HEIGHT / 2} r={DOT_RADIUS} />
@@ -410,17 +419,20 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
   );
 }
 
-// 现状点：进行中=实心执行者色 / 刚动过=半透明 / 开着没动静=空心描边 / 停着=灰。
+// 现状点：进行中=实心执行者色 / 等接手=空心描边 / 刚动过=半透明 / 开着没动静=空心弱化 / 停着=灰。
 function statusDotStyle(status: LaneNowStatus, source: "user" | "agent"): CSSProperties {
   const fill = SOURCE_FILL[source];
   if (status.kind === "running") return { background: fill };
+  if (status.kind === "waiting") return { border: `1.5px solid ${fill}`, background: "transparent" };
   if (status.kind === "recent") return { background: fill, opacity: 0.45 };
-  if (status.kind === "stale-open") return { border: `1.5px solid ${fill}`, background: "transparent" };
+  if (status.kind === "stale-open")
+    return { border: `1.5px solid ${fill}`, background: "transparent", opacity: 0.5 };
   return { background: "var(--color-ink-3)", opacity: 0.5 };
 }
 
 function statusLabel(status: LaneNowStatus, now: Date): string {
   if (status.kind === "running") return `已${formatStepDuration(new Date(status.sinceMs).toISOString(), null, now)}`;
+  if (status.kind === "waiting") return `已等${formatStepDuration(new Date(status.sinceMs).toISOString(), null, now)}`;
   if (status.kind === "recent") return formatRelativeTime(new Date(status.sinceMs).toISOString(), now);
   if (status.kind === "stale-open")
     return `${formatStepDuration(new Date(status.sinceMs).toISOString(), null, now)}没动静`;

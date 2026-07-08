@@ -162,7 +162,7 @@ function makeStep(
 function lanesOf(entries: Array<[Track, TrackStep[]]>, agentExecTags: readonly string[] = ["agent在做"]) {
   const tracks = entries.map(([t]) => t);
   const byTrack = new Map(entries.map(([t, s]) => [t.id, s] as const));
-  return ganttLanes(tracks, byTrack, NOW, agentExecTags);
+  return ganttLanes(tracks, byTrack, NOW, agentExecTags, ["待我处理"]);
 }
 
 describe("ganttLanes", () => {
@@ -330,7 +330,23 @@ describe("concurrencyStats", () => {
   });
 });
 
+describe("等待段", () => {
+  it("带等待信号的步 waiting=true（开口/闭合都算），普通步不算", () => {
+    const t = makeTrack("a");
+    const handoff = { ...makeStep("a", NOW - 3 * HOUR, NOW - HOUR), tags: ["待我处理"] };
+    const openWait = { ...makeStep("a", NOW - HOUR, null), tags: ["待我处理"] };
+    const work = makeStep("a", NOW - 5 * HOUR, NOW - 4 * HOUR);
+    const [lane] = lanesOf([[t, [work, handoff, openWait]]]);
+    expect(lane.segments.map((s) => s.waiting)).toEqual([false, true, true]);
+  });
+});
+
 describe("laneNowStatus", () => {
+  it("等待中的开口步 → waiting（优先于陈旧判定），sinceMs=开步时刻", () => {
+    const openWait = { ...makeStep("a", NOW - 5 * HOUR, null), tags: ["待我处理"] };
+    const [lane] = lanesOf([[makeTrack("a"), [openWait]]]);
+    expect(laneNowStatus(lane, NOW)).toEqual({ kind: "waiting", sinceMs: NOW - 5 * HOUR });
+  });
   it.each([
     ["新鲜开口步 → running", [makeStep("a", NOW - HOUR, null)], "running"],
     ["陈旧开口步 → stale-open", [makeStep("a", NOW - 3 * DAY, null)], "stale-open"],

@@ -81,6 +81,9 @@ export interface GanttSegment {
   // 仅 running 段：开步超过 AFTERGLOW_MS 没动静时为"实头截止时刻"（start+2h），
   // 渲染成实头+虚线尾迹（"口没闭但很久没动静"）；新鲜开口步为 null，实条画到此刻。
   staleSinceMs?: number | null;
+  // 等待段：步子带"等待信号"（约定=第一个配置的看板信号,如 待我处理）。语义是"等人接手"
+  // 而非干活，渲染为空心条——它的长度就是接力空档，无需人工闭合步骤。
+  waiting?: boolean;
 }
 
 export interface GanttLane {
@@ -101,19 +104,25 @@ export function stepExecutor(
   return step.tags.some((tag) => agentExecTags.includes(tag)) ? "agent" : step.source;
 }
 
-function laneSegments(steps: TrackStep[], nowMs: number, agentExecTags: readonly string[]): GanttSegment[] {
+function laneSegments(
+  steps: TrackStep[],
+  nowMs: number,
+  agentExecTags: readonly string[],
+  waitingTags: readonly string[],
+): GanttSegment[] {
   const segments = steps.map((step): GanttSegment => {
     const startMs = parseMs(step.startedAt);
     const source = stepExecutor(step, agentExecTags);
+    const waiting = step.tags.some((tag) => waitingTags.includes(tag));
     if (step.endedAt === null) {
       // 时钟漂移防御：未来开口步退化为点，不画负长条
-      if (startMs >= nowMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
+      if (startMs >= nowMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source, waiting };
       const staleSinceMs = nowMs - startMs > AFTERGLOW_MS ? startMs + AFTERGLOW_MS : null;
-      return { kind: "running", startMs, endMs: nowMs, stepId: step.id, source, staleSinceMs };
+      return { kind: "running", startMs, endMs: nowMs, stepId: step.id, source, staleSinceMs, waiting };
     }
     const endMs = parseMs(step.endedAt);
-    if (endMs <= startMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
-    return { kind: "bar", startMs, endMs, stepId: step.id, source };
+    if (endMs <= startMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source, waiting };
+    return { kind: "bar", startMs, endMs, stepId: step.id, source, waiting };
   });
   return segments.sort((a, b) => a.startMs - b.startMs);
 }
@@ -130,10 +139,11 @@ export function ganttLanes(
   stepsByTrack: Map<string, TrackStep[]>,
   nowMs: number,
   agentExecTags: readonly string[] = [],
+  waitingTags: readonly string[] = [],
 ): GanttLane[] {
   const lanes = tracks.map((track): GanttLane => {
     const steps = stepsByTrack.get(track.id) ?? [];
-    const segments = laneSegments(steps, nowMs, agentExecTags);
+    const segments = laneSegments(steps, nowMs, agentExecTags, waitingTags);
     // 与 tracksView.lastActivityAt 同语义：闭合步取结束、开口步取开始
     const lastActivityMs =
       steps.length === 0 ? null : Math.max(...steps.map((s) => parseMs(s.endedAt ?? s.startedAt)));
@@ -174,6 +184,7 @@ export function autoFitWindow(lanes: GanttLane[], nowMs: number): GanttWindow {
 // recent=刚收尾(余晖人群) / idle=停着(sinceMs=最后动静,无步为 null)。
 export type LaneNowStatus =
   | { kind: "running"; sinceMs: number }
+  | { kind: "waiting"; sinceMs: number }
   | { kind: "stale-open"; sinceMs: number }
   | { kind: "recent"; sinceMs: number }
   | { kind: "idle"; sinceMs: number | null };
@@ -182,6 +193,8 @@ export function laneNowStatus(lane: GanttLane, _nowMs: number): LaneNowStatus {
   const running = lane.segments.filter((s) => s.kind === "running");
   if (running.length > 0) {
     const latest = running[running.length - 1];
+    // 等待中的开口步优先于新鲜/陈旧之分：它在等人接手，不是在干活也不算失联。
+    if (latest.waiting) return { kind: "waiting", sinceMs: latest.startMs };
     return latest.staleSinceMs == null
       ? { kind: "running", sinceMs: latest.startMs }
       : { kind: "stale-open", sinceMs: latest.startMs };
