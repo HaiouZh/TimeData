@@ -13,11 +13,13 @@ export function TrackTimeline({
   now = new Date(),
   onEditStep,
   onDeleteStep,
+  highlightStepId = null,
 }: {
   steps: TrackStep[];
   now?: Date;
   onEditStep?: (id: string, content: string) => Promise<void>;
   onDeleteStep?: (id: string) => Promise<void>;
+  highlightStepId?: string | null;
 }) {
   const [showAll, setShowAll] = useState(false);
   if (steps.length === 0) {
@@ -25,7 +27,14 @@ export function TrackTimeline({
   }
   const currentId = currentStepId(steps);
   const ordered = orderedTimeline(steps);
-  const folded = !showAll && ordered.length > MAX_VISIBLE;
+  const wouldFold = !showAll && ordered.length > MAX_VISIBLE;
+  // 锚点定位的目标步若落在折叠隐藏区，自动全量展开——否则 scrollIntoView 找不到节点。
+  const highlightHidden =
+    highlightStepId !== null &&
+    wouldFold &&
+    !ordered.slice(0, HEAD_COUNT).some((s) => s.id === highlightStepId) &&
+    !ordered.slice(ordered.length - TAIL_COUNT).some((s) => s.id === highlightStepId);
+  const folded = wouldFold && !highlightHidden;
   const head = folded ? ordered.slice(0, HEAD_COUNT) : ordered;
   const tail = folded ? ordered.slice(ordered.length - TAIL_COUNT) : [];
   const hiddenCount = folded ? ordered.length - HEAD_COUNT - TAIL_COUNT : 0;
@@ -38,6 +47,7 @@ export function TrackTimeline({
           step={step}
           isCurrent={step.id === currentId}
           now={now}
+          highlighted={step.id === highlightStepId}
           onEdit={onEditStep}
           onDelete={onDeleteStep}
         />
@@ -59,6 +69,7 @@ export function TrackTimeline({
           step={step}
           isCurrent={step.id === currentId}
           now={now}
+          highlighted={step.id === highlightStepId}
           onEdit={onEditStep}
           onDelete={onDeleteStep}
         />

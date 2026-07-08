@@ -34,6 +34,7 @@ async function mount(props: {
   step: TrackStep;
   isCurrent: boolean;
   now: Date;
+  highlighted?: boolean;
   onEdit?: (id: string, content: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
 }) {
@@ -51,6 +52,17 @@ async function typeTextarea(host: HTMLElement, label: string, value: string): Pr
 }
 
 describe("TrackStepRow", () => {
+  it("行带锚点 id，highlighted 时有高亮环", async () => {
+    const host = await mount({ step: step({ id: "s-anchor" }), isCurrent: false, now: NOW, highlighted: true });
+    const li = host.querySelector("#step-s-anchor");
+    expect(li).not.toBeNull();
+    expect(li?.className).toContain("ring-accent");
+    if (mounted) await unmount(mounted.root);
+    const plain = await mount({ step: step({ id: "s-plain" }), isCurrent: false, now: NOW });
+    expect(plain.querySelector("#step-s-plain")).not.toBeNull();
+    expect(plain.querySelector("#step-s-plain")?.className).not.toContain("ring-accent");
+  });
+
   it("shows sourceLabel for agent steps and 我 for user steps", async () => {
     const a = await mount({ step: step({ id: "a", source: "agent", sourceLabel: "codex" }), isCurrent: false, now: NOW });
     expect(a.textContent).toContain("codex");

@@ -35,6 +35,18 @@ describe("TrackTimeline", () => {
     expect(mounted.host.textContent).not.toContain("显示其余");
   });
 
+  it("highlightStepId 命中折叠隐藏区时自动展开全部", async () => {
+    mounted = await renderDom(<TrackTimeline steps={makeSteps(30)} now={NOW} highlightStepId="s15" />);
+    const host = mounted.host;
+    expect(host.querySelector("#step-s15")).not.toBeNull();
+    expect(host.textContent).not.toContain("显示其余");
+  });
+
+  it("无 highlightStepId 时折叠行为不变", async () => {
+    mounted = await renderDom(<TrackTimeline steps={makeSteps(30)} now={NOW} />);
+    expect(mounted.host.textContent).toContain("显示其余");
+  });
+
   it("folds the middle of a long timeline and expands on click", async () => {
     mounted = await renderDom(<TrackTimeline steps={makeSteps(30)} now={NOW} />);
     const host = mounted.host;

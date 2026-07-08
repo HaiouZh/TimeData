@@ -1,7 +1,7 @@
 import { ArrowLeft, Check, PencilSimple, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import {
@@ -37,6 +37,14 @@ export default function TrackDetailPage() {
 
   const isActive = track != null && track.status === "active";
   const hasOpenStep = currentStepId(steps) !== null;
+  const location = useLocation();
+  const highlightStepId = location.hash.startsWith("#step-") ? location.hash.slice("#step-".length) : null;
+
+  useEffect(() => {
+    if (!highlightStepId || steps.length === 0) return;
+    // jsdom 无 scrollIntoView 实现，可选调用
+    document.getElementById(`step-${highlightStepId}`)?.scrollIntoView?.({ block: "center" });
+  }, [highlightStepId, steps.length]);
 
   useEffect(() => {
     if (!track || editingMeta) return;
@@ -249,7 +257,12 @@ export default function TrackDetailPage() {
                 闭合当前步
               </button>
             )}
-            <TrackTimeline steps={steps} onEditStep={editStep} onDeleteStep={removeStep} />
+            <TrackTimeline
+              steps={steps}
+              highlightStepId={highlightStepId}
+              onEditStep={editStep}
+              onDeleteStep={removeStep}
+            />
           </>
         )}
       </div>

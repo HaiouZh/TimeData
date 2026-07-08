@@ -18,12 +18,14 @@ export function TrackStepRow({
   step,
   isCurrent,
   now,
+  highlighted = false,
   onEdit,
   onDelete,
 }: {
   step: TrackStep;
   isCurrent: boolean;
   now: Date;
+  highlighted?: boolean;
   onEdit?: (id: string, content: string) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
 }) {
@@ -59,8 +61,9 @@ export function TrackStepRow({
 
   return (
     <li
+      id={`step-${step.id}`}
       data-current={isCurrent ? "true" : "false"}
-      className={`rounded-card border p-3 transition ${rowClass(isCurrent)}`}
+      className={`rounded-card border p-3 transition ${rowClass(isCurrent)}${highlighted ? " ring-1 ring-accent" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-2 td-text-caption text-ink-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
