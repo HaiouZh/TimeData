@@ -1,14 +1,21 @@
+import type { Track, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import {
   AFTERGLOW_MS,
+  autoFitWindow,
   axisTicks,
   clampWindow,
+  concurrencyStats,
+  earliestSegmentDayMs,
   GANTT_MAX_SPAN_MS,
   GANTT_MIN_SPAN_MS,
+  ganttLanes,
   panWindow,
   presetWindow,
+  segmentShape,
   startOfLocalDay,
   timeToX,
+  visibleSegments,
   xToMs,
   zoomWindow,
 } from "./tracksGantt.js";
@@ -119,5 +126,196 @@ describe("axisTicks", () => {
 describe("常量", () => {
   it("余晖 2 小时", () => {
     expect(AFTERGLOW_MS).toBe(2 * HOUR);
+  });
+});
+
+const iso = (ms: number) => new Date(ms).toISOString();
+
+function makeTrack(id: string, partial: Partial<Track> = {}): Track {
+  return { id, title: id, status: "active", refs: [], createdAt: iso(NOW - 10 * DAY), updatedAt: iso(NOW), ...partial };
+}
+
+let seqCounter = 0;
+function makeStep(
+  trackId: string,
+  startMs: number,
+  endMs: number | null,
+  source: "user" | "agent" = "user",
+): TrackStep {
+  seqCounter += 1;
+  return {
+    id: `s${seqCounter}`,
+    trackId,
+    source,
+    content: "",
+    startedAt: iso(startMs),
+    endedAt: endMs === null ? null : iso(endMs),
+    refs: [],
+    tags: [],
+    seq: seqCounter,
+    createdAt: iso(startMs),
+    updatedAt: iso(startMs),
+  };
+}
+
+function lanesOf(entries: Array<[Track, TrackStep[]]>) {
+  const tracks = entries.map(([t]) => t);
+  const byTrack = new Map(entries.map(([t, s]) => [t.id, s] as const));
+  return ganttLanes(tracks, byTrack, NOW);
+}
+
+describe("ganttLanes", () => {
+  it("闭合步=bar、瞬时步=point、开口步=running 延伸到此刻", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([
+      [
+        t,
+        [
+          makeStep("a", NOW - 5 * HOUR, NOW - 4 * HOUR),
+          makeStep("a", NOW - 3 * HOUR, NOW - 3 * HOUR),
+          makeStep("a", NOW - HOUR, null),
+        ],
+      ],
+    ]);
+    expect(lane.segments.map((s) => s.kind)).toEqual(["bar", "point", "running"]);
+    expect(lane.segments[2].endMs).toBe(NOW);
+  });
+  it("未来开口步（时钟漂移）退化为点", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([[t, [makeStep("a", NOW + HOUR, null)]]]);
+    expect(lane.segments[0].kind).toBe("point");
+  });
+  it("排序：最后活动降序，空轨道垫底按创建降序", () => {
+    const hot = makeTrack("hot");
+    const cold = makeTrack("cold");
+    const emptyNew = makeTrack("empty-new", { createdAt: iso(NOW - DAY) });
+    const emptyOld = makeTrack("empty-old", { createdAt: iso(NOW - 5 * DAY) });
+    const lanes = lanesOf([
+      [emptyOld, []],
+      [cold, [makeStep("cold", NOW - 2 * DAY, NOW - 2 * DAY + HOUR)]],
+      [emptyNew, []],
+      [hot, [makeStep("hot", NOW - HOUR, null)]],
+    ]);
+    expect(lanes.map((l) => l.track.id)).toEqual(["hot", "cold", "empty-new", "empty-old"]);
+  });
+  it("排序沿用 lastActivityAt 语义：开口步按开始时间", () => {
+    const openOld = makeTrack("open-old");
+    const closedNew = makeTrack("closed-new");
+    const lanes = lanesOf([
+      [openOld, [makeStep("open-old", NOW - 2 * DAY, null)]],
+      [closedNew, [makeStep("closed-new", NOW - HOUR, NOW - HOUR + 600_000)]],
+    ]);
+    expect(lanes.map((l) => l.track.id)).toEqual(["closed-new", "open-old"]);
+  });
+});
+
+describe("余晖", () => {
+  it("最新一步刚收尾 → 余晖到 min(收尾+2h, 此刻)", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([[t, [makeStep("a", NOW - 3 * HOUR, NOW - HOUR)]]]);
+    expect(lane.afterglow).toEqual({ startMs: NOW - HOUR, endMs: NOW });
+  });
+  it("有 running 步不画余晖", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([
+      [t, [makeStep("a", NOW - 3 * HOUR, NOW - HOUR), makeStep("a", NOW - 0.5 * HOUR, null)]],
+    ]);
+    expect(lane.afterglow).toBeNull();
+  });
+  it("收尾超过 2h 不画余晖", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([[t, [makeStep("a", NOW - 5 * HOUR, NOW - 3 * HOUR)]]]);
+    expect(lane.afterglow).toBeNull();
+  });
+  it("无步无余晖", () => {
+    const [lane] = lanesOf([[makeTrack("a"), []]]);
+    expect(lane.afterglow).toBeNull();
+  });
+});
+
+describe("visibleSegments", () => {
+  it("只留与窗口相交的段", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([
+      [t, [makeStep("a", NOW - 10 * HOUR, NOW - 9 * HOUR), makeStep("a", NOW - 2 * HOUR, NOW - HOUR)]],
+    ]);
+    const w = { startMs: NOW - 3 * HOUR, endMs: NOW };
+    expect(visibleSegments(lane.segments, w)).toHaveLength(1);
+  });
+});
+
+describe("autoFitWindow / earliestSegmentDayMs", () => {
+  it("无任何步 → 最近 6h", () => {
+    const w = autoFitWindow(lanesOf([[makeTrack("a"), []]]), NOW);
+    expect(w).toEqual({ startMs: NOW - 6 * HOUR, endMs: NOW });
+  });
+  it("覆盖各泳道最新一步的开始，取整到小时，右缘=此刻", () => {
+    const a = makeTrack("a");
+    const b = makeTrack("b");
+    const lanes = lanesOf([
+      [a, [makeStep("a", NOW - 30 * HOUR, NOW - 29 * HOUR)]],
+      [b, [makeStep("b", NOW - 2 * HOUR, null)]],
+    ]);
+    const w = autoFitWindow(lanes, NOW);
+    expect(w.endMs).toBe(NOW);
+    expect(w.startMs).toBeLessThanOrEqual(NOW - 30 * HOUR);
+    expect(Math.floor(w.startMs / HOUR) * HOUR).toBe(w.startMs);
+    expect(w.endMs - w.startMs).toBeLessThanOrEqual(GANTT_MAX_SPAN_MS);
+  });
+  it("超旧活动被 7d 上限截断", () => {
+    const a = makeTrack("a");
+    const lanes = lanesOf([[a, [makeStep("a", NOW - 30 * DAY, NOW - 30 * DAY + HOUR)]]]);
+    const w = autoFitWindow(lanes, NOW);
+    expect(w.endMs - w.startMs).toBe(GANTT_MAX_SPAN_MS);
+  });
+  it("earliestSegmentDayMs = 最早步的本地零点；无步取此刻零点", () => {
+    const a = makeTrack("a");
+    const lanes = lanesOf([[a, [makeStep("a", NOW - 30 * DAY, NOW - 30 * DAY + HOUR)]]]);
+    expect(earliestSegmentDayMs(lanes, NOW)).toBe(startOfLocalDay(NOW - 30 * DAY));
+    expect(earliestSegmentDayMs(lanesOf([[makeTrack("b"), []]]), NOW)).toBe(startOfLocalDay(NOW));
+  });
+});
+
+describe("concurrencyStats", () => {
+  it("running=有开口步的泳道数, active24h=24h 内有动静的泳道数", () => {
+    const lanes = lanesOf([
+      [makeTrack("r"), [makeStep("r", NOW - HOUR, null)]],
+      [makeTrack("recent"), [makeStep("recent", NOW - 3 * HOUR, NOW - 2 * HOUR)]],
+      [makeTrack("stale"), [makeStep("stale", NOW - 3 * DAY, NOW - 3 * DAY + HOUR)]],
+      [makeTrack("empty"), []],
+    ]);
+    expect(concurrencyStats(lanes, NOW)).toEqual({ running: 1, active24h: 2 });
+  });
+});
+
+describe("segmentShape", () => {
+  const w = { startMs: NOW - 10 * HOUR, endMs: NOW };
+  it("长条出 rect", () => {
+    const seg = {
+      kind: "bar" as const,
+      startMs: NOW - 5 * HOUR,
+      endMs: NOW - 2 * HOUR,
+      stepId: "s",
+      source: "user" as const,
+    };
+    expect(segmentShape(seg, w, 1000)).toMatchObject({ shape: "rect" });
+  });
+  it("瞬时/过窄退化为 dot", () => {
+    const point = {
+      kind: "point" as const,
+      startMs: NOW - HOUR,
+      endMs: NOW - HOUR,
+      stepId: "s",
+      source: "user" as const,
+    };
+    expect(segmentShape(point, w, 1000).shape).toBe("dot");
+    const sliver = {
+      kind: "bar" as const,
+      startMs: NOW - HOUR,
+      endMs: NOW - HOUR + 60_000,
+      stepId: "s",
+      source: "user" as const,
+    };
+    expect(segmentShape(sliver, w, 100).shape).toBe("dot");
   });
 });
