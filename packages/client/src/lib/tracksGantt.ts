@@ -85,6 +85,9 @@ export interface GanttSegment {
   endMs: number;
   stepId: string;
   source: "user" | "agent";
+  // 仅 running 段：开步超过 AFTERGLOW_MS 没动静时为"实头截止时刻"（start+2h），
+  // 渲染成实头+虚线尾迹（"口没闭但很久没动静"）；新鲜开口步为 null，实条画到此刻。
+  staleSinceMs?: number | null;
 }
 
 export interface GanttLane {
@@ -112,7 +115,8 @@ function laneSegments(steps: TrackStep[], nowMs: number, agentExecTags: readonly
     if (step.endedAt === null) {
       // 时钟漂移防御：未来开口步退化为点，不画负长条
       if (startMs >= nowMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
-      return { kind: "running", startMs, endMs: nowMs, stepId: step.id, source };
+      const staleSinceMs = nowMs - startMs > AFTERGLOW_MS ? startMs + AFTERGLOW_MS : null;
+      return { kind: "running", startMs, endMs: nowMs, stepId: step.id, source, staleSinceMs };
     }
     const endMs = parseMs(step.endedAt);
     if (endMs <= startMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
@@ -155,13 +159,19 @@ export function visibleSegments(segments: GanttSegment[], w: GanttWindow): Gantt
 }
 
 const AUTO_FIT_MIN_LOOKBACK_MS = 6 * HOUR_MS;
+// auto-fit 只迁就最近 48h 内有动静的泳道；全员不活跃时退最近 24h——
+// 僵尸开口步（挂了几天没闭合）不再把默认视野拉爆到一周。
+const AUTO_FIT_RECENT_MS = 48 * HOUR_MS;
+const AUTO_FIT_FALLBACK_LOOKBACK_MS = 24 * HOUR_MS;
 
-// auto-fit：右缘=此刻，左缘回溯到能露出每条泳道最新一步的开始（下限 6h、上限 7d），epoch 整点取整。
+// auto-fit：右缘=此刻+留白，左缘回溯到能露出"最近活跃泳道"最新一步的开始（下限 6h、上限 7d），epoch 整点取整。
 export function autoFitWindow(lanes: GanttLane[], nowMs: number): GanttWindow {
   const latestStarts = lanes
-    .filter((l) => l.segments.length > 0)
+    .filter(
+      (l) => l.segments.length > 0 && l.lastActivityMs !== null && nowMs - l.lastActivityMs <= AUTO_FIT_RECENT_MS,
+    )
     .map((l) => l.segments[l.segments.length - 1].startMs);
-  if (latestStarts.length === 0) return withHeadroom(nowMs - AUTO_FIT_MIN_LOOKBACK_MS, nowMs);
+  if (latestStarts.length === 0) return withHeadroom(nowMs - AUTO_FIT_FALLBACK_LOOKBACK_MS, nowMs);
   const rawLeft = Math.min(...latestStarts);
   const clamped = Math.max(nowMs - GANTT_MAX_SPAN_MS, Math.min(rawLeft, nowMs - AUTO_FIT_MIN_LOOKBACK_MS));
   return withHeadroom(Math.floor(clamped / HOUR_MS) * HOUR_MS, nowMs);

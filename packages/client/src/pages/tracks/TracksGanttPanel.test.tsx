@@ -76,6 +76,19 @@ describe("TracksGanttPanel", () => {
     expect(host.querySelector('[data-testid="gantt-now-line"]')).not.toBeNull();
   });
 
+  it("僵尸开口步画实头+虚线尾迹", async () => {
+    const a = makeTrack("a");
+    const { host } = await mount([a], new Map([["a", [makeStep("a", 72 * HOUR, null)]]]));
+    expect(host.querySelector('[data-testid="gantt-stale-tail"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="gantt-seg"][data-kind="running"]')).not.toBeNull();
+  });
+
+  it("新鲜开口步无虚线尾迹", async () => {
+    const a = makeTrack("a");
+    const { host } = await mount([a], new Map([["a", [makeStep("a", HOUR, null)]]]));
+    expect(host.querySelector('[data-testid="gantt-stale-tail"]')).toBeNull();
+  });
+
   it("刚收尾的泳道画余晖", async () => {
     const a = makeTrack("a");
     const { host } = await mount([a], new Map([["a", [makeStep("a", 3 * HOUR, HOUR)]]]));

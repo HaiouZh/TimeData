@@ -314,7 +314,10 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                       />
                     )}
                     {visibleSegments(lane.segments, win).map((seg) => {
-                      const shape = segmentShape(seg, win, plotWidth);
+                      // 陈旧开口步：实头只画到 staleSinceMs，之后到此刻是半透明虚线尾迹（"口没闭但很久没动静"）。
+                      const stale = seg.kind === "running" && seg.staleSinceMs != null;
+                      const headSeg = stale ? { ...seg, endMs: seg.staleSinceMs as number } : seg;
+                      const shape = segmentShape(headSeg, win, plotWidth);
                       const common = {
                         "data-testid": "gantt-seg",
                         "data-kind": seg.kind,
@@ -325,19 +328,38 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                         onMouseEnter: (event: ReactMouseEvent) => hoverSeg(lane, seg, event),
                         onMouseLeave: () => setHover(null),
                       };
-                      return shape.shape === "rect" ? (
-                        <rect
-                          key={seg.stepId}
-                          {...common}
-                          x={shape.x}
-                          y={barY}
-                          width={shape.width}
-                          height={BAR_HEIGHT}
-                          rx={2}
-                          opacity={seg.kind === "running" ? 0.9 : 1}
-                        />
-                      ) : (
-                        <circle key={seg.stepId} {...common} cx={shape.cx} cy={y + LANE_HEIGHT / 2} r={DOT_RADIUS} />
+                      const head =
+                        shape.shape === "rect" ? (
+                          <rect
+                            key={seg.stepId}
+                            {...common}
+                            x={shape.x}
+                            y={barY}
+                            width={shape.width}
+                            height={BAR_HEIGHT}
+                            rx={2}
+                            opacity={seg.kind === "running" ? 0.9 : 1}
+                          />
+                        ) : (
+                          <circle key={seg.stepId} {...common} cx={shape.cx} cy={y + LANE_HEIGHT / 2} r={DOT_RADIUS} />
+                        );
+                      if (!stale) return head;
+                      return (
+                        <g key={seg.stepId}>
+                          {head}
+                          <line
+                            data-testid="gantt-stale-tail"
+                            x1={timeToX(win, plotWidth, seg.staleSinceMs as number)}
+                            x2={timeToX(win, plotWidth, seg.endMs)}
+                            y1={y + LANE_HEIGHT / 2}
+                            y2={y + LANE_HEIGHT / 2}
+                            stroke={SOURCE_FILL[seg.source]}
+                            strokeWidth={1.5}
+                            strokeDasharray="2 4"
+                            opacity={0.55}
+                            pointerEvents="none"
+                          />
+                        </g>
                       );
                     })}
                   </g>

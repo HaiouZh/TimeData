@@ -187,6 +187,13 @@ describe("ganttLanes", () => {
     expect(lane.segments.map((s) => s.kind)).toEqual(["bar", "point", "running"]);
     expect(lane.segments[2].endMs).toBe(NOW);
   });
+  it("开口步的新鲜/陈旧：2h 内 staleSinceMs=null，超 2h = start+2h", () => {
+    const t = makeTrack("a");
+    const [lane] = lanesOf([[t, [makeStep("a", NOW - HOUR, null)]]]);
+    expect(lane.segments[0].staleSinceMs).toBeNull();
+    const [zombie] = lanesOf([[t, [makeStep("a", NOW - 12 * DAY, null)]]]);
+    expect(zombie.segments[0].staleSinceMs).toBe(NOW - 12 * DAY + AFTERGLOW_MS);
+  });
   it("执行者着色：配置的 agent 执行信号优先，回退写入者", () => {
     const t = makeTrack("a");
     const delegated = { ...makeStep("a", NOW - 4 * HOUR, NOW - 3 * HOUR, "user"), tags: ["agent在做"] };
@@ -266,9 +273,26 @@ describe("visibleSegments", () => {
 });
 
 describe("autoFitWindow / earliestSegmentDayMs", () => {
-  it("无任何步 → 最近 6h + 留白", () => {
+  it("无任何步 → 退最近 24h + 留白", () => {
     const w = autoFitWindow(lanesOf([[makeTrack("a"), []]]), NOW);
-    expect(w).toEqual({ startMs: NOW - 6 * HOUR, endMs: NOW + 6 * HOUR * FUTURE_HEADROOM_RATIO });
+    expect(w).toEqual({ startMs: NOW - 24 * HOUR, endMs: NOW + 24 * HOUR * FUTURE_HEADROOM_RATIO });
+  });
+  it("全员不活跃（只剩僵尸开口步/超旧步）→ 退最近 24h，不被拉爆到一周", () => {
+    const lanes = lanesOf([
+      [makeTrack("zombie"), [makeStep("zombie", NOW - 6 * DAY, null)]],
+      [makeTrack("old"), [makeStep("old", NOW - 5 * DAY, NOW - 5 * DAY + HOUR)]],
+    ]);
+    const w = autoFitWindow(lanes, NOW);
+    expect(w.startMs).toBe(NOW - 24 * HOUR);
+  });
+  it("僵尸泳道不参与取景，最近活跃的泳道决定左缘", () => {
+    const lanes = lanesOf([
+      [makeTrack("zombie"), [makeStep("zombie", NOW - 6 * DAY, null)]],
+      [makeTrack("fresh"), [makeStep("fresh", NOW - 3 * HOUR, NOW - 2 * HOUR)]],
+    ]);
+    const w = autoFitWindow(lanes, NOW);
+    // 左缘由 fresh 决定（含 6h 下限），远小于 6 天
+    expect(NOW - w.startMs).toBeLessThanOrEqual(6 * HOUR);
   });
   it("覆盖各泳道最新一步的开始，取整到小时，此刻在窗口内且非右缘", () => {
     const a = makeTrack("a");
@@ -282,9 +306,9 @@ describe("autoFitWindow / earliestSegmentDayMs", () => {
     expect(w.startMs).toBeLessThanOrEqual(NOW - 30 * HOUR);
     expect(Math.floor(w.startMs / HOUR) * HOUR).toBe(w.startMs);
   });
-  it("超旧活动回溯被 7d 上限截断", () => {
+  it("最近活跃但跨度超长（30天长条刚收尾）回溯被 7d 上限截断", () => {
     const a = makeTrack("a");
-    const lanes = lanesOf([[a, [makeStep("a", NOW - 30 * DAY, NOW - 30 * DAY + HOUR)]]]);
+    const lanes = lanesOf([[a, [makeStep("a", NOW - 30 * DAY, NOW - HOUR)]]]);
     const w = autoFitWindow(lanes, NOW);
     expect(NOW - w.startMs).toBe(GANTT_MAX_SPAN_MS);
   });
