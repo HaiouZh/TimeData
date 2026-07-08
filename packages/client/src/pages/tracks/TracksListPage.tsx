@@ -1,7 +1,8 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
+import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { addTrack, appendUserStep, listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import {
   boardItemsForTracks,
@@ -15,12 +16,16 @@ import { NewTrackComposer } from "./NewTrackComposer.js";
 import type { StepDraft } from "./StepComposer.js";
 import { TrackListItem } from "./TrackListItem.js";
 import { TrackStatusFacetPanel } from "./TrackStatusFacetPanel.js";
+import { TracksGanttAside } from "./TracksGanttAside.js";
+
+const TracksGanttPanel = lazy(() => import("./TracksGanttPanel.js"));
 
 export default function TracksListPage() {
   const tracks = useLiveQuery(() => listTracks(), [], []);
   const allSteps = useLiveQuery(() => listAllTrackSteps(), [], []);
   const actionTags = useTrackActionTags();
   const navigate = useNavigate();
+  const isWideScreen = useIsWideScreen();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { active, archived } = partitionTracks(tracks);
@@ -55,7 +60,7 @@ export default function TracksListPage() {
     setSelectedTags((current) => (current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]));
   }
 
-  return (
+  const listContent = (
     <div className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
         <NewTrackComposer onCreate={(title) => create(title)} />
@@ -93,6 +98,18 @@ export default function TracksListPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+
+  if (!isWideScreen) return listContent;
+  return (
+    <div className="flex min-h-full bg-page text-ink">
+      <div className="min-w-0 flex-1">{listContent}</div>
+      <TracksGanttAside>
+        <Suspense fallback={<p className="p-4 td-text-caption text-ink-3">正在加载甘特…</p>}>
+          <TracksGanttPanel tracks={active} stepsByTrack={byTrack} />
+        </Suspense>
+      </TracksGanttAside>
     </div>
   );
 }

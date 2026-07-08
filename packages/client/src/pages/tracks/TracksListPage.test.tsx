@@ -208,6 +208,12 @@ describe("TracksListPage", () => {
     expect(host.textContent).toContain("还没有进行中的轨道");
   });
 
+  it("窄屏不渲染甘特（jsdom 无 matchMedia，useIsWideScreen 天然 false）", async () => {
+    const host = await renderList();
+    expect(host.querySelector('[data-testid="tracks-gantt"]')).toBeNull();
+    expect(host.querySelector('[aria-label="并发甘特面板"]')).toBeNull();
+  });
+
   it("filters active tracks by selected board signal tags with OR semantics", async () => {
     await seedTrackWithStep("待我确认的轨道", ["待我处理"]);
     await seedTrackWithStep("agent 执行中", ["agent在做"]);
