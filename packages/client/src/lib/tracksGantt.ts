@@ -21,13 +21,18 @@ export function startOfLocalDay(ms: number): number {
   return d.getTime();
 }
 
+// 未来留白：数据上没有未来，但视觉上让此刻线落在窗口约 90% 处，
+// 进行中条的右端/余晖才不会挤在边缘看不见。
+export const FUTURE_HEADROOM_RATIO = 0.1;
+
 export function clampWindow(w: GanttWindow, nowMs: number, minStartMs: number): GanttWindow {
   const span = Math.min(GANTT_MAX_SPAN_MS, Math.max(GANTT_MIN_SPAN_MS, w.endMs - w.startMs));
-  let end = Math.min(w.endMs, nowMs);
+  const maxEnd = nowMs + span * FUTURE_HEADROOM_RATIO;
+  let end = Math.min(w.endMs, maxEnd);
   let start = end - span;
   if (start < minStartMs) {
     start = minStartMs;
-    end = Math.min(nowMs, start + span);
+    end = Math.min(maxEnd, start + span);
   }
   return { startMs: start, endMs: end };
 }
@@ -50,11 +55,15 @@ export function panWindow(w: GanttWindow, deltaMs: number, nowMs: number, minSta
   return clampWindow({ startMs: w.startMs + deltaMs, endMs: w.endMs + deltaMs }, nowMs, minStartMs);
 }
 
+function withHeadroom(startMs: number, nowMs: number): GanttWindow {
+  return { startMs, endMs: nowMs + (nowMs - startMs) * FUTURE_HEADROOM_RATIO };
+}
+
 export function presetWindow(preset: "today" | "3d" | "7d", nowMs: number): GanttWindow {
-  if (preset === "3d") return { startMs: nowMs - 3 * DAY_MS, endMs: nowMs };
-  if (preset === "7d") return { startMs: nowMs - 7 * DAY_MS, endMs: nowMs };
+  if (preset === "3d") return withHeadroom(nowMs - 3 * DAY_MS, nowMs);
+  if (preset === "7d") return withHeadroom(nowMs - 7 * DAY_MS, nowMs);
   const start = Math.min(startOfLocalDay(nowMs), nowMs - GANTT_MIN_SPAN_MS);
-  return { startMs: start, endMs: nowMs };
+  return withHeadroom(start, nowMs);
 }
 
 export function timeToX(w: GanttWindow, width: number, tMs: number): number {
@@ -137,10 +146,10 @@ export function autoFitWindow(lanes: GanttLane[], nowMs: number): GanttWindow {
   const latestStarts = lanes
     .filter((l) => l.segments.length > 0)
     .map((l) => l.segments[l.segments.length - 1].startMs);
-  if (latestStarts.length === 0) return { startMs: nowMs - AUTO_FIT_MIN_LOOKBACK_MS, endMs: nowMs };
+  if (latestStarts.length === 0) return withHeadroom(nowMs - AUTO_FIT_MIN_LOOKBACK_MS, nowMs);
   const rawLeft = Math.min(...latestStarts);
   const clamped = Math.max(nowMs - GANTT_MAX_SPAN_MS, Math.min(rawLeft, nowMs - AUTO_FIT_MIN_LOOKBACK_MS));
-  return { startMs: Math.floor(clamped / HOUR_MS) * HOUR_MS, endMs: nowMs };
+  return withHeadroom(Math.floor(clamped / HOUR_MS) * HOUR_MS, nowMs);
 }
 
 // 平移/缩放的左边界：最早一步所在天的本地零点；无步退到今天零点。
@@ -154,9 +163,9 @@ export function concurrencyStats(lanes: GanttLane[], nowMs: number): { running: 
   let running = 0;
   let active24h = 0;
   for (const lane of lanes) {
-    const hasRunning = lane.segments.some((s) => s.kind === "running");
-    if (hasRunning) running += 1;
-    if (hasRunning || (lane.lastActivityMs !== null && nowMs - lane.lastActivityMs <= DAY_MS)) active24h += 1;
+    if (lane.segments.some((s) => s.kind === "running")) running += 1;
+    // 活跃只看最后动静时间：陈旧开口步（挂了很多天没闭合）不算 24h 活跃。
+    if (lane.lastActivityMs !== null && nowMs - lane.lastActivityMs <= DAY_MS) active24h += 1;
   }
   return { running, active24h };
 }

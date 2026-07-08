@@ -7,6 +7,7 @@ import {
   clampWindow,
   concurrencyStats,
   earliestSegmentDayMs,
+  FUTURE_HEADROOM_RATIO,
   GANTT_MAX_SPAN_MS,
   GANTT_MIN_SPAN_MS,
   ganttLanes,
@@ -27,9 +28,9 @@ const NOW = new Date(2026, 6, 8, 12, 0, 0).getTime();
 const MIN_START = startOfLocalDay(NOW - 30 * DAY);
 
 describe("clampWindow", () => {
-  it("右缘不越过此刻", () => {
+  it("右缘最多越过此刻 10% 跨度的留白", () => {
     const w = clampWindow({ startMs: NOW - HOUR, endMs: NOW + HOUR }, NOW, MIN_START);
-    expect(w.endMs).toBe(NOW);
+    expect(w.endMs).toBe(NOW + 2 * HOUR * FUTURE_HEADROOM_RATIO);
     expect(w.endMs - w.startMs).toBe(2 * HOUR);
   });
   it("跨度夹在 [1h, 7d]", () => {
@@ -63,10 +64,10 @@ describe("zoomWindow", () => {
 });
 
 describe("panWindow", () => {
-  it("向右平移被此刻挡住", () => {
+  it("向右平移被此刻+留白挡住", () => {
     const w = { startMs: NOW - 2 * HOUR, endMs: NOW - HOUR };
     const panned = panWindow(w, 5 * HOUR, NOW, MIN_START);
-    expect(panned.endMs).toBe(NOW);
+    expect(panned.endMs).toBe(NOW + HOUR * FUTURE_HEADROOM_RATIO);
   });
   it("向左平移被 minStartMs 挡住", () => {
     const w = { startMs: MIN_START + HOUR, endMs: MIN_START + 3 * HOUR };
@@ -76,19 +77,25 @@ describe("panWindow", () => {
 });
 
 describe("presetWindow", () => {
-  it("today = 本地零点到此刻", () => {
+  it("today = 本地零点到此刻+留白", () => {
     const w = presetWindow("today", NOW);
     expect(w.startMs).toBe(startOfLocalDay(NOW));
-    expect(w.endMs).toBe(NOW);
+    expect(w.endMs).toBe(NOW + (NOW - startOfLocalDay(NOW)) * FUTURE_HEADROOM_RATIO);
   });
-  it("凌晨的 today 保底 1h 跨度", () => {
+  it("凌晨的 today 保底 1h 回溯", () => {
     const earlyNow = startOfLocalDay(NOW) + 10 * 60_000; // 00:10
     const w = presetWindow("today", earlyNow);
-    expect(w.endMs - w.startMs).toBe(GANTT_MIN_SPAN_MS);
+    expect(earlyNow - w.startMs).toBe(GANTT_MIN_SPAN_MS);
   });
-  it("3d / 7d 右缘=此刻", () => {
-    expect(presetWindow("3d", NOW)).toEqual({ startMs: NOW - 3 * DAY, endMs: NOW });
-    expect(presetWindow("7d", NOW)).toEqual({ startMs: NOW - 7 * DAY, endMs: NOW });
+  it("3d / 7d 右缘=此刻+留白", () => {
+    expect(presetWindow("3d", NOW)).toEqual({
+      startMs: NOW - 3 * DAY,
+      endMs: NOW + 3 * DAY * FUTURE_HEADROOM_RATIO,
+    });
+    expect(presetWindow("7d", NOW)).toEqual({
+      startMs: NOW - 7 * DAY,
+      endMs: NOW + 7 * DAY * FUTURE_HEADROOM_RATIO,
+    });
   });
 });
 
@@ -245,11 +252,11 @@ describe("visibleSegments", () => {
 });
 
 describe("autoFitWindow / earliestSegmentDayMs", () => {
-  it("无任何步 → 最近 6h", () => {
+  it("无任何步 → 最近 6h + 留白", () => {
     const w = autoFitWindow(lanesOf([[makeTrack("a"), []]]), NOW);
-    expect(w).toEqual({ startMs: NOW - 6 * HOUR, endMs: NOW });
+    expect(w).toEqual({ startMs: NOW - 6 * HOUR, endMs: NOW + 6 * HOUR * FUTURE_HEADROOM_RATIO });
   });
-  it("覆盖各泳道最新一步的开始，取整到小时，右缘=此刻", () => {
+  it("覆盖各泳道最新一步的开始，取整到小时，此刻在窗口内且非右缘", () => {
     const a = makeTrack("a");
     const b = makeTrack("b");
     const lanes = lanesOf([
@@ -257,16 +264,15 @@ describe("autoFitWindow / earliestSegmentDayMs", () => {
       [b, [makeStep("b", NOW - 2 * HOUR, null)]],
     ]);
     const w = autoFitWindow(lanes, NOW);
-    expect(w.endMs).toBe(NOW);
+    expect(w.endMs).toBeGreaterThan(NOW);
     expect(w.startMs).toBeLessThanOrEqual(NOW - 30 * HOUR);
     expect(Math.floor(w.startMs / HOUR) * HOUR).toBe(w.startMs);
-    expect(w.endMs - w.startMs).toBeLessThanOrEqual(GANTT_MAX_SPAN_MS);
   });
-  it("超旧活动被 7d 上限截断", () => {
+  it("超旧活动回溯被 7d 上限截断", () => {
     const a = makeTrack("a");
     const lanes = lanesOf([[a, [makeStep("a", NOW - 30 * DAY, NOW - 30 * DAY + HOUR)]]]);
     const w = autoFitWindow(lanes, NOW);
-    expect(w.endMs - w.startMs).toBe(GANTT_MAX_SPAN_MS);
+    expect(NOW - w.startMs).toBe(GANTT_MAX_SPAN_MS);
   });
   it("earliestSegmentDayMs = 最早步的本地零点；无步取此刻零点", () => {
     const a = makeTrack("a");
@@ -285,6 +291,10 @@ describe("concurrencyStats", () => {
       [makeTrack("empty"), []],
     ]);
     expect(concurrencyStats(lanes, NOW)).toEqual({ running: 1, active24h: 2 });
+  });
+  it("陈旧开口步（12天前开着没闭合）算 running 但不算 24h 活跃", () => {
+    const lanes = lanesOf([[makeTrack("zombie"), [makeStep("zombie", NOW - 12 * DAY, null)]]]);
+    expect(concurrencyStats(lanes, NOW)).toEqual({ running: 1, active24h: 0 });
   });
 });
 
