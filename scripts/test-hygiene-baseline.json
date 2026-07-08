@@ -123,6 +123,7 @@
   "dirty-in-clean-bucket:pages/tracks/TrackStatusFacetPanel.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/TrackStepRow.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/TrackTimeline.test.tsx",
+  "dirty-in-clean-bucket:pages/tracks/TracksGanttPanel.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/TracksListPage.test.tsx",
   "dirty-in-clean-bucket:quick-notes/HighlightedText.test.tsx",
   "dirty-in-clean-bucket:quick-notes/NoteBubble.test.tsx",
