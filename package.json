@@ -33,7 +33,8 @@
     "check:docs:links": "node scripts/check-evergreen-docs.mjs --mode=links",
     "check:design": "node scripts/check-design-language.mjs",
     "check:ui": "node scripts/check-no-native-controls.mjs",
-    "check:test": "node scripts/check-test-hygiene.mjs"
+    "check:test": "node scripts/check-test-hygiene.mjs",
+    "check:roadmap": "python scripts/check_roadmap.py docs_local"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.1",

@@ -8,6 +8,7 @@
 
 - 仓库：`https://github.com/HaiouZh/TimeData`
 - **任何深入修改前先读** [`docs/evergreen/architecture.md`](docs/evergreen/architecture.md)：五个包的关系、数据流、启动顺序、关键约定，并按主题链向各 evergreen 子文档；冷启动时它也是文档地图，能查到哪块功能该看哪份代码。
+- **进行中的事看 `docs_local/ROADMAP.md`**（本机文件，不入 Git）：活主题、当前 design/plan 链接、下一步；按当前任务从地图/ROADMAP 挑相关文档下钻，不要预读全部文档。
 
 ------
 
@@ -68,6 +69,7 @@
 - 开发：`pnpm dev:client` / `pnpm dev:server`。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
   - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」。本地预览改用 `pnpm --filter @timedata/client exec vite --host 127.0.0.1`，再开 `http://127.0.0.1:5173`（别用 `localhost`，可能解析回旧的 IPv6 实例）。
 - 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。
+- ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
 
 ------
