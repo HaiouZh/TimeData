@@ -299,7 +299,7 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
             >
               <p className="td-text-caption truncate text-ink">{hover.lane.track.title}</p>
               <p className="td-text-caption text-ink-2">
-                {hoverStep ? stepSourceText(hoverStep) : ""} · {formatAppDateTime(new Date(hover.seg.startMs))} ·{" "}
+                {hoverStep ? stepSourceText(hoverStep) : ""} · {formatAppDateTime(new Date(hover.seg.startMs).toISOString())} ·{" "}
                 {hover.seg.kind === "running"
                   ? `进行中 · 已历时${formatStepDuration(new Date(hover.seg.startMs).toISOString(), null, nowDate)}`
                   : `历时${formatStepDuration(
