@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   CliUsageError,
+  evaluateDocSync,
   evaluateLinks,
   evaluateSizes,
   getAddedFiles,
@@ -66,23 +67,81 @@ test("getChangedFiles invokes git ls-files without shell parsing for HEAD", () =
   );
 });
 
-test("evaluateSizes flags a doc that grew beyond baseline chars", () => {
-  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 16000 }];
-  const baseline = { "docs/evergreen/a.md": { chars: 15000, covers: 1 } };
+test("evaluateDocSync strict uses contracts, not covers", () => {
+  const docs = [
+    {
+      filePath: "docs/evergreen/sync.md",
+      title: "同步机制",
+      covers: ["packages/server/src/sync/**"],
+      contracts: ["packages/shared/src/syncDomains.ts"],
+    },
+  ];
 
-  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+  // 改域内普通文件：命中 covers、不命中 contracts → strict 放行。
+  const helperChange = evaluateDocSync(docs, ["packages/server/src/sync/notifier.ts"], {
+    field: "contracts",
+  });
+  assert.equal(helperChange.hits.length, 0);
+  assert.equal(helperChange.unmatched, 0);
 
-  assert.equal(res.ok, false);
-  assert.equal(res.violations[0].kind, "grew-chars");
+  // warn 仍看 covers → 提示该文档。
+  const helperWarn = evaluateDocSync(docs, ["packages/server/src/sync/notifier.ts"], { field: "covers" });
+  assert.equal(helperWarn.hits.length, 1);
+
+  // 改契约文件、未同步文档 → strict 记为未更新。
+  const contractChange = evaluateDocSync(docs, ["packages/shared/src/syncDomains.ts"], {
+    field: "contracts",
+  });
+  assert.equal(contractChange.hits.length, 1);
+  assert.equal(contractChange.unmatched, 1);
+
+  // 改契约文件 + 同批改了文档 → strict 放行。
+  const contractSynced = evaluateDocSync(
+    docs,
+    ["packages/shared/src/syncDomains.ts", "docs/evergreen/sync.md"],
+    { field: "contracts" },
+  );
+  assert.equal(contractSynced.unmatched, 0);
 });
 
-test("evaluateSizes allows a doc that shrank below baseline", () => {
-  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 }];
-  const baseline = { "docs/evergreen/a.md": { chars: 15000, covers: 1 } };
+test("evaluateDocSync treats a doc with no contracts as a strict no-op", () => {
+  const docs = [{ filePath: "docs/evergreen/cli.md", title: "CLI", covers: ["packages/cli/**"], contracts: [] }];
+
+  const res = evaluateDocSync(docs, ["packages/cli/src/index.ts"], { field: "contracts" });
+
+  assert.equal(res.hits.length, 0);
+  assert.equal(res.unmatched, 0);
+});
+
+test("evaluateSizes does NOT ratchet char growth under the hard cap", () => {
+  // 正文可自由增长：远超旧「基线」字符数，只要不过 hard cap 就放行。
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 24000 }];
+  const baseline = { "docs/evergreen/a.md": { covers: 1 } };
 
   const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
 
   assert.equal(res.ok, true);
+});
+
+test("evaluateSizes flags a doc that exceeds the hard cap (too-long)", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 25001 }];
+  const baseline = { "docs/evergreen/a.md": { covers: 1 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.equal(res.violations[0].kind, "too-long");
+  assert.equal(res.violations[0].limit, 25000);
+});
+
+test("evaluateSizes flags a doc whose covers grew past baseline", () => {
+  const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x", "y"], chars: 9000 }];
+  const baseline = { "docs/evergreen/a.md": { covers: 1 } };
+
+  const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
+
+  assert.equal(res.ok, false);
+  assert.equal(res.violations[0].kind, "grew-covers");
 });
 
 test("evaluateSizes fails a doc missing from an empty baseline", () => {
@@ -113,7 +172,7 @@ test("evaluateSizes fails when an evergreen doc is missing from a non-empty base
     { filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 },
     { filePath: "docs/evergreen/new.md", covers: ["x"], chars: 1000 },
   ];
-  const baseline = { "docs/evergreen/a.md": { chars: 9000, covers: 1 } };
+  const baseline = { "docs/evergreen/a.md": { covers: 1 } };
 
   const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
 
@@ -129,8 +188,8 @@ test("evaluateSizes fails when an evergreen doc is missing from a non-empty base
 test("evaluateSizes fails when baseline contains a removed evergreen doc", () => {
   const docs = [{ filePath: "docs/evergreen/a.md", covers: ["x"], chars: 9000 }];
   const baseline = {
-    "docs/evergreen/a.md": { chars: 9000, covers: 1 },
-    "docs/evergreen/removed.md": { chars: 1000, covers: 0 },
+    "docs/evergreen/a.md": { covers: 1 },
+    "docs/evergreen/removed.md": { covers: 0 },
   };
 
   const res = evaluateSizes(docs, baseline, { softChars: 15000, hardChars: 25000 });
@@ -140,7 +199,7 @@ test("evaluateSizes fails when baseline contains a removed evergreen doc", () =>
     filePath: "docs/evergreen/removed.md",
     kind: "stale-baseline",
     current: 0,
-    limit: 1000,
+    limit: 0,
   });
 });
 

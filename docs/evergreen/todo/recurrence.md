@@ -8,6 +8,9 @@ covers:
   - packages/client/src/lib/tasks/recurrencePresets.ts
   - packages/client/src/components/MonthCalendar.tsx
   - packages/client/src/components/Wheel.tsx
+contracts:
+  - packages/shared/src/recurrence.ts
+  - packages/shared/src/occurrence.ts
 last-reviewed: 2026-07-04
 ---
 

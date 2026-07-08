@@ -13,6 +13,9 @@ covers:
   - packages/client/src/hooks/useTrackAttentionCount.ts
   - packages/client/src/contexts/TrackAttentionContext.tsx
   - packages/client/src/components/app-shell/NavBadge.tsx
+contracts:
+  - packages/shared/src/trackBoardSignals.ts
+  - packages/server/src/routes/agent-tracks.ts
 last-reviewed: 2026-07-08
 ---
 

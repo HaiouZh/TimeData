@@ -16,6 +16,12 @@ covers:
   - packages/server/src/sync/goal-layout-pins-domain.e2e.test.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/sync/clientDomains.test.ts
+contracts:
+  - packages/shared/src/syncDomains.ts
+  - packages/shared/src/schemas.ts:SyncChangeSchema
+  - packages/shared/src/types.ts:SyncChange
+  - packages/server/src/sync/domains.ts
+  - packages/client/src/sync/clientDomains.ts
 last-reviewed: 2026-07-04
 ---
 

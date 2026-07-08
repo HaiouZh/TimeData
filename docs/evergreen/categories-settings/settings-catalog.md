@@ -8,6 +8,8 @@ covers:
   - packages/client/src/lib/settings/punchCategorySetting.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsNavPage.tsx
+contracts:
+  - packages/client/src/lib/settings/index.ts
 last-reviewed: 2026-06-29
 ---
 

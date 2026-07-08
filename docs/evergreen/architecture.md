@@ -18,6 +18,8 @@ covers:
   - packages/cli/src/index.ts
   - packages/mobile/capacitor.config.ts
   - packages/mobile/android/app/src/main/AndroidManifest.xml
+contracts:
+  - packages/client/src/components/app-shell/AppRoutes.tsx
 last-reviewed: 2026-07-04
 ---
 

@@ -24,6 +24,11 @@ covers:
   - packages/client/src/lib/galaxyEngineMode.ts
   - packages/client/src/lib/goalUnassigned.ts
   - packages/client/src/pages/goals/**
+contracts:
+  - packages/shared/src/entitySchemas.ts
+  - packages/shared/src/goalLayoutPins.ts
+  - packages/shared/src/syncDomains.ts
+  - packages/server/src/sync/domains.ts
 last-reviewed: 2026-07-04
 ---
 

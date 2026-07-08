@@ -15,6 +15,9 @@ covers:
   - packages/server/src/routes/syncLog.ts
   - packages/server/src/routes/admin/index.ts
   - packages/server/src/routes/admin/requestLogs.ts
+contracts:
+  - packages/server/src/middleware/auth.ts
+  - packages/client/src/lib/storageKeys.ts
 last-reviewed: 2026-07-04
 ---
 

@@ -67,7 +67,7 @@
 - 构建：`pnpm build`（不含 mobile）。
 - 开发：`pnpm dev:client` / `pnpm dev:server`。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
   - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」。本地预览改用 `pnpm --filter @timedata/client exec vite --host 127.0.0.1`，再开 `http://127.0.0.1:5173`（别用 `localhost`，可能解析回旧的 IPv6 实例）。
-- 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（体量棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。
+- 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
 
 ------
@@ -110,7 +110,7 @@
 
 - AI 生成的 spec / plan / review / 审查 / 历史归档默认写入 `docs_local/{specs,plans,reviews,archive,ideas,report,scratch}/`。
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
-- 长期文档头部 `covers:` 字段声明管辖代码路径。改代码后回头看 `covers` 是否命中，命中即改对应段落，并更新 `last-reviewed`。
+- 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是 `covers` 里「改它文档必错」的契约子集，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「模块速查」或各文档 frontmatter 查**。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。

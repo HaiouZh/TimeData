@@ -5,6 +5,8 @@ covers:
   - packages/server/src/garmin/**
   - packages/server/src/routes/ingest.ts
   - packages/client/src/pages/settings/SettingsGarminPage.tsx
+contracts:
+  - packages/server/src/routes/ingest.ts
 last-reviewed: 2026-06-27
 ---
 

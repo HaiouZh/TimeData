@@ -18,6 +18,10 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
+contracts:
+  - packages/shared/src/types.ts:TimeEntry
+  - packages/shared/src/entitySchemas.ts
+  - packages/client/src/lib/time.ts
 last-reviewed: 2026-07-04
 ---
 

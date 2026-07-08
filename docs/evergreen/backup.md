@@ -17,6 +17,9 @@ covers:
   - packages/server/src/routes/sync.ts
   - packages/shared/src/admin-schemas.ts
   - packages/shared/src/types.ts
+contracts:
+  - packages/shared/src/admin-schemas.ts
+  - packages/server/src/routes/admin/backupConfig.ts
 last-reviewed: 2026-07-04
 ---
 

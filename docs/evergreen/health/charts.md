@@ -10,6 +10,8 @@ covers:
   - packages/client/src/pages/stats/health/**
   - packages/client/src/lib/settings/healthRangeSetting.ts
   - packages/client/src/pages/settings/SettingsHealthRangePage.tsx
+contracts:
+  - packages/shared/src/chartSchemas.ts
 last-reviewed: 2026-06-27
 ---
 

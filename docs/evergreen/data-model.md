@@ -14,6 +14,14 @@ covers:
   - packages/server/src/lib/db-rows.ts
   - packages/client/src/db/index.ts
   - packages/client/src/db/schemaNormalization.ts
+contracts:
+  - packages/shared/src/types.ts
+  - packages/shared/src/schemas.ts
+  - packages/shared/src/entitySchemas.ts
+  - packages/shared/src/syncDomains.ts
+  - packages/shared/src/constants.ts
+  - packages/server/src/db/schema.ts
+  - packages/client/src/db/index.ts
 last-reviewed: 2026-07-04
 ---
 

@@ -12,6 +12,10 @@ covers:
   - packages/client/src/pages/dev/StyleguidePage.tsx
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
+contracts:
+  - packages/client/src/index.css
+  - scripts/design-language-allowlist.json
+  - packages/client/src/lib/navigation/navRegistry.ts
 last-reviewed: 2026-07-04
 ---
 <!-- 复核 2026-07-02（timeline 修复 A）：ActionToastBar 复用清掉 QuickNotesPage/TimelinePage 两条失效 bare-text-size allowlist；设计语言规则不变。 -->

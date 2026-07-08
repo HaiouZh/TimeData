@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Check that long-lived (evergreen / ADR) docs stay in sync with the code they cover.
-// Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale|size] [--since=<rev>] [--write-size-baseline]
+// covers = 纯归属声明（coverage / 查代码去哪篇）；contracts = covers 里「改它文档必错」的契约子集，只有它触发 strict。
+// Usage: node scripts/check-evergreen-docs.mjs [--mode=warn|strict|stale|size|coverage|links] [--since=<rev>] [--write-size-baseline]
 // Zero external deps. Glob syntax: **/, **, *, ?, optional ":Symbol" suffix is stripped.
 
 import { execFileSync } from "node:child_process";
@@ -64,10 +65,10 @@ function printHelp() {
       "Usage: node scripts/check-evergreen-docs.mjs [options]",
       "",
       "Options:",
-      "  --mode=warn      (default) print impacted docs, exit 0",
-      "  --mode=strict    exit 1 if any covered doc was not updated",
+      "  --mode=warn      (default) print docs whose covers were touched, exit 0",
+      "  --mode=strict    exit 1 if a changed file hits a doc's contracts but that doc was not updated",
       `  --mode=stale     warn about docs whose last-reviewed is older than ${STALE_DAYS} days`,
-      "  --mode=size      enforce evergreen docs size ratchet",
+      `  --mode=size      fail if a doc exceeds hard cap (${SIZE_CAPS.hardChars} chars, split it) or covers grew past baseline`,
       "  --mode=coverage  fail if newly-added source files have no owning doc (uses --since)",
       "  --mode=links     fail if any internal .md link points to a missing doc",
       "  --since=<rev>    compare against <rev> (default: HEAD; e.g. origin/main for CI)",
@@ -165,6 +166,9 @@ function readDoc(rel) {
     type: fm.type ?? "",
     title: fm.title ?? path.basename(rel, ".md"),
     covers: Array.isArray(fm.covers) ? fm.covers : [],
+    // contracts：covers 里「改这个文件、不改文档，文档一定错」的契约级子集（schema / 登记簿 / API 面）。
+    // strict 只认它；covers 是纯归属声明，不触发 strict。
+    contracts: Array.isArray(fm.contracts) ? fm.contracts : [],
     lastReviewed: fm["last-reviewed"] ?? null,
     chars: content.length,
     links: parseMarkdownLinks(stripCode(content)),
@@ -287,23 +291,36 @@ function isDocFile(f) {
   return f.startsWith("docs/evergreen/") || f.startsWith("docs/adr/") || f === "README.md" || f === "CLAUDE.md";
 }
 
-function modeWarnOrStrict(docs, changed, strict) {
+// 纯函数：给定改动集与判定字段（covers / contracts），算出命中的文档及是否同步更新。
+// warn 用 covers（软提示，列出可能受影响的文档），strict 用 contracts（改契约必改文档）。
+export function evaluateDocSync(docs, changed, { field }) {
   const codeChanged = changed.filter(isCodeFile);
   const docsChanged = new Set(changed.filter(isDocFile));
   const hits = [];
   for (const f of codeChanged) {
-    const md = docs.filter((d) => matchesAny(f, d.covers));
+    const md = docs.filter((d) => matchesAny(f, d[field] ?? []));
     if (md.length > 0) hits.push({ file: f, docs: md });
   }
+  const unmatched = hits.flatMap((hit) => hit.docs).filter((doc) => !docsChanged.has(doc.filePath)).length;
+  return { codeChanged, docsChanged, hits, unmatched };
+}
+
+function modeWarnOrStrict(docs, changed, strict) {
+  const field = strict ? "contracts" : "covers";
+  const { codeChanged, docsChanged, hits } = evaluateDocSync(docs, changed, { field });
   if (codeChanged.length === 0) {
     console.log("（没有代码改动需要检查。）");
     return 0;
   }
   if (hits.length === 0) {
-    console.log(`✓ 检查了 ${codeChanged.length} 个改动的代码文件，没有命中任何长期文档的 covers。`);
+    console.log(`✓ 检查了 ${codeChanged.length} 个改动的代码文件，没有命中任何长期文档的 ${field}。`);
     return 0;
   }
-  console.log("📚 本次代码改动可能影响以下长期文档：\n");
+  console.log(
+    strict
+      ? "📚 本次代码改动命中以下长期文档的 contracts（改契约必同步文档）：\n"
+      : "📚 本次代码改动可能影响以下长期文档：\n",
+  );
   console.log("| 改动的代码 | 相关 evergreen 文档 | 状态 |");
   console.log("|---|---|---|");
   let unmatched = 0;
@@ -370,26 +387,29 @@ function isEvergreenDoc(d) {
   return d.filePath.startsWith("docs/evergreen/") && d.type !== "adr";
 }
 
-export function evaluateSizes(docs, baseline, _caps) {
+// size 不再对字符数做「只降不升」棘轮——正文随便写、随便加长都放行。
+// 只守两件事：① 单文档字符数超 hard cap（膨胀 → 提示拆子文档）；② covers 管辖范围只增不减要过基线（防悄悄扩管辖）。
+export function evaluateSizes(docs, baseline, caps) {
+  const hardChars = caps?.hardChars ?? SIZE_CAPS.hardChars;
   const violations = [];
   const currentEvergreenPaths = new Set(docs.filter(isEvergreenDoc).map((d) => d.filePath));
   for (const d of docs) {
     if (!isEvergreenDoc(d)) continue;
     const base = baseline[d.filePath];
-    if (base) {
-      if (d.chars > base.chars) {
-        violations.push({ filePath: d.filePath, kind: "grew-chars", current: d.chars, limit: base.chars });
-      }
-      if (d.covers.length > base.covers) {
-        violations.push({ filePath: d.filePath, kind: "grew-covers", current: d.covers.length, limit: base.covers });
-      }
+    if (!base) {
+      violations.push({ filePath: d.filePath, kind: "missing-baseline", current: d.chars, limit: 0 });
       continue;
     }
-    violations.push({ filePath: d.filePath, kind: "missing-baseline", current: d.chars, limit: 0 });
+    if (d.covers.length > base.covers) {
+      violations.push({ filePath: d.filePath, kind: "grew-covers", current: d.covers.length, limit: base.covers });
+    }
+    if (d.chars > hardChars) {
+      violations.push({ filePath: d.filePath, kind: "too-long", current: d.chars, limit: hardChars });
+    }
   }
   for (const [filePath, base] of Object.entries(baseline)) {
     if (!currentEvergreenPaths.has(filePath)) {
-      violations.push({ filePath, kind: "stale-baseline", current: 0, limit: base.chars });
+      violations.push({ filePath, kind: "stale-baseline", current: 0, limit: base.covers });
     }
   }
   return {
@@ -399,11 +419,12 @@ export function evaluateSizes(docs, baseline, _caps) {
 }
 
 function buildSizeBaseline(docs) {
+  // 基线只记 covers 数（管辖范围棘轮）与文档存在性；字符数不再入基线——正文长度由 hard cap 绝对上限守，不做棘轮。
   return Object.fromEntries(
     docs
       .filter(isEvergreenDoc)
       .sort((a, b) => a.filePath.localeCompare(b.filePath))
-      .map((d) => [d.filePath, { chars: d.chars, covers: d.covers.length }]),
+      .map((d) => [d.filePath, { covers: d.covers.length }]),
   );
 }
 
@@ -423,8 +444,8 @@ function writeSizeBaseline(docs) {
 
 function formatSizeViolationKind(kind) {
   switch (kind) {
-    case "grew-chars":
-      return "字符数超过基线";
+    case "too-long":
+      return "文档过长（超 hard cap，建议拆子文档）";
     case "grew-covers":
       return "covers 数超过基线";
     case "missing-baseline":
@@ -444,17 +465,36 @@ function modeSize(docs) {
     return 1;
   }
   const res = evaluateSizes(docs, baseline, SIZE_CAPS);
+  // soft cap 软提示：接近上限先预警，不失败——给「快到该拆了」一个提前量。
+  const approaching = docs
+    .filter(isEvergreenDoc)
+    .filter((d) => d.chars > SIZE_CAPS.softChars && d.chars <= SIZE_CAPS.hardChars)
+    .sort((a, b) => b.chars - a.chars);
+  if (approaching.length > 0) {
+    console.log(`ℹ️ 以下文档已过 soft cap（${SIZE_CAPS.softChars} 字符），逼近 hard cap（${SIZE_CAPS.hardChars}），留意是否该拆子文档：`);
+    for (const d of approaching) console.log(`   ${d.filePath}（${d.chars} 字符）`);
+    console.log("");
+  }
   if (res.violations.length === 0) {
-    console.log(`✓ evergreen 文档体量未超过基线（soft ${SIZE_CAPS.softChars} / hard ${SIZE_CAPS.hardChars} 字符）。`);
+    console.log(`✓ evergreen 文档体量检查通过（无文档超 hard cap ${SIZE_CAPS.hardChars} 字符、无 covers 越基线）。`);
     return 0;
   }
-  console.log("📏 evergreen 文档体量棘轮检查：\n");
-  console.log("| 文档 | 类型 | 当前 | 限制 |");
+  console.log("📏 evergreen 文档体量检查：\n");
+  console.log("| 文档 | 问题 | 当前 | 限制 |");
   console.log("|---|---|---:|---:|");
   for (const v of res.violations) {
     console.log(`| \`${v.filePath}\` | ✗ ${formatSizeViolationKind(v.kind)} | ${v.current} | ${v.limit} |`);
   }
-  console.error("\n✗ 文档体量超过棘轮。请下沉/拆分内容，或确认合理增长后重写基线。");
+  if (res.violations.some((v) => v.kind === "too-long")) {
+    console.error(
+      `\n✗ 有文档超过 hard cap（${SIZE_CAPS.hardChars} 字符）。字符数本身不做棘轮（正文可自由增长），` +
+        "但单个文档过长说明该拆了：把一个独立子簇外提成子文档。",
+    );
+    console.error("  怎么判断该不该拆、拆到哪：见 docs/evergreen/_docs-guide.md §3「毕业阈值」。");
+  }
+  if (res.violations.some((v) => v.kind !== "too-long")) {
+    console.error("\n✗ covers 管辖范围越基线 / 基线缺项或含已删文档：重写基线 `--write-size-baseline` 并在提交信息说明。");
+  }
   return 1;
 }
 

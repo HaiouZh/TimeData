@@ -18,6 +18,11 @@ covers:
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/notes.ts
   - packages/cli/src/lib/format.ts
+contracts:
+  - packages/shared/src/types.ts:QuickNote
+  - packages/shared/src/entitySchemas.ts
+  - packages/shared/src/syncDomains.ts
+  - packages/server/src/sync/domains.ts
 last-reviewed: 2026-07-04
 ---
 

@@ -11,6 +11,10 @@ covers:
   - packages/client/src/db/index.ts
   - packages/client/src/sync/clientDomains.ts
   - packages/client/src/pages/HealthStatsPage.tsx
+contracts:
+  - packages/shared/src/healthSchemas.ts
+  - packages/shared/src/syncDomains.ts
+  - packages/server/src/sync/domains.ts
 last-reviewed: 2026-07-04
 ---
 

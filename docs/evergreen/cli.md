@@ -10,6 +10,8 @@ covers:
   - packages/server/src/routes/agent.ts
   - packages/server/src/routes/tasks.ts
   - docs/TimeData-CLI-AI.md
+contracts:
+  - docs/TimeData-CLI-AI.md
 last-reviewed: 2026-07-04
 ---
 

@@ -14,6 +14,10 @@ covers:
   - packages/client/src/lib/categoryTree.ts
   - packages/server/src/routes/categories.ts
   - packages/server/src/sync/domains.ts
+contracts:
+  - packages/shared/src/types.ts:Category
+  - packages/shared/src/entitySchemas.ts
+  - packages/shared/src/constants.ts
 last-reviewed: 2026-07-04
 ---
 

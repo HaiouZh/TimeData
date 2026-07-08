@@ -7,6 +7,8 @@ covers:
   - packages/client/src/hooks/useConfirm.tsx
   - scripts/check-no-native-controls.mjs
   - scripts/check-design-language.mjs
+contracts:
+  - packages/client/src/components/ui/**
 last-reviewed: 2026-06-27
 ---
 

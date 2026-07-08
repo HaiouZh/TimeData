@@ -22,6 +22,11 @@ covers:
   - .github/workflows/secret-scan.yml
   - renovate.json5
   - .gitleaks.toml
+contracts:
+  - docker-compose.yml
+  - Dockerfile
+  - packages/server/Dockerfile
+  - .env.example
 last-reviewed: 2026-07-04
 ---
 

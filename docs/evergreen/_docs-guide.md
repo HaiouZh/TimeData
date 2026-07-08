@@ -4,6 +4,8 @@ title: 文档组织规则
 covers:
   - scripts/check-evergreen-docs.mjs
   - scripts/check-evergreen-docs.test.mjs
+contracts:
+  - scripts/check-evergreen-docs.mjs
 last-reviewed: 2026-06-18
 ---
 
@@ -39,6 +41,21 @@ last-reviewed: 2026-06-18
 
 这样每个普通文件有唯一主题落点（查得到、不发散），跨主题关系只用一行链接表达（不稀释重点）。
 
+## 1.3 `covers` 归属 vs `contracts` 契约点（谁触发 strict）
+
+frontmatter 里两个字段分工不同，别混用：
+
+| 字段 | 含义 | 触发 strict？ | 谁消费 |
+|---|---|---|---|
+| `covers` | **纯归属声明**：这片 glob 下的代码归本文档讲 | **否** | coverage（新代码必有主人）、warn（软提示可能受影响的文档）、size（covers 数走棘轮） |
+| `contracts` | `covers` 里挑出的「**改这个文件、不改文档，文档一定错**」的契约级子集（schema / 登记簿 / API 面 / token 定义） | **是** | strict（改契约文件却没同步文档就报红） |
+
+为什么要拆：`covers` 为了 coverage 铺得很宽（常含整目录 `**`），若拿它触发 strict，改域里任何一个 helper、改个措辞都逼你动文档——假阳性。`contracts` 把「碰它文档必错」的那一小撮单独拎出来，strict 只认它，从「碰这个域就逼改文档」收窄成「碰真正的契约点才逼改文档」。
+
+判据一句话：**「改这个文件而不改文档，文档一定错」才进 `contracts`**。典型进 `contracts` 的：`*Schemas.ts`、`syncDomains.ts` / `sync/domains.ts`（域登记簿）、`db/schema.ts`、`types.ts` 里被文档钉死字段的类型、API 路由契约、`index.css` token、控件目录 `ui/**`。纯实现文件、内部 helper 只进 `covers` 不进 `contracts`。
+
+一份文档**可以没有 `contracts`**（如 development、stats-insights）——说明它没有「改某文件必错」的硬契约点，strict 对它天然是 no-op，这是诚实状态，不是漏配。共享契约文件（`syncDomains.ts`、`entitySchemas.ts` 等）可同时进多份文档的 `contracts`，等价于「改它 → 复查所有把它当契约的文档」，有意为之。
+
 ## 1.1 三层结构：地图 → 主题文档 → 子文档
 
 evergreen 文档分三层，逐层只索引下一层，避免任何单层膨胀：
@@ -65,6 +82,8 @@ type: evergreen
 title: <主题>
 covers:
   - <本主题端到端代码路径>
+contracts:          # 可选：covers 里「改它文档必错」的契约子集（schema/登记簿/API 面），触发 strict；见 §1.3
+  - <schema / 登记簿 / API 面>
 last-reviewed: YYYY-MM-DD
 ---
 
@@ -96,21 +115,20 @@ last-reviewed: YYYY-MM-DD
 
 这些数字是治理参考值，不是机械铁律。三条一起满足，才说明拆出去会降低维护成本。
 
-**外提动作**：把子簇移到 `docs/evergreen/<主题>/<子主题>.md`（子目录，见 §1.1），迁走对应 `covers:`，在子文档顶部回链主题文档，在主题文档的“子文档索引”小节登记。然后 `--write-size-baseline` 重写基线（新增子文档 + 缩小后的主题文档都要落基线）。architecture 登记簿**不**新增子文档条目——它只认主题文档。
+**外提动作**：把子簇移到 `docs/evergreen/<主题>/<子主题>.md`（子目录，见 §1.1），迁走对应 `covers:`，在子文档顶部回链主题文档，在主题文档的“子文档索引”小节登记。然后 `--write-size-baseline` 重写基线（新增子文档要落基线、母文档迁走的 covers 数也要更新）。architecture 登记簿**不**新增子文档条目——它只认主题文档。
 
 健康域是这套切法的样例：[health](health.md)（主题）索引 [health/garmin-ingest](health/garmin-ingest.md)（抓取/导入管道）与 [health/charts](health/charts.md)（视图块配置/渲染）。
 
-## 4. 体量棘轮
+## 4. 体量闸：字符走绝对上限，covers 走棘轮
 
-`pnpm check:docs:size` 负责长期文档体量棘轮：
+`pnpm check:docs:size` 守两件事，**字符数不做棘轮**——正文想写多长写多长，只在单个文档真的膨胀到上限时才拦：
 
-- 现有文档先写入 `scripts/evergreen-size-baseline.json` 作为基线。
-- 已在基线里的文档若字符数或 `covers:` 数量超过基线会报错。
-- 基线必须覆盖当前全部 evergreen 文档；新增、删除或重命名 evergreen 文档后不更新基线会失败。
-- 新文档必须先写入基线；soft / hard cap 只作为是否继续拆分的人工判断线。
-- ADR 不参与体量棘轮；ADR 是决策记录，只追加，不在这里做拆分治理。
+- **字符数 = 绝对上限（cap），不是基线棘轮**。写作、补充、加例子随便加，不会因为「比上次长」而失败。只有单文档超过 **hard cap（约 25000 字符）** 才报错，含义是「这篇太长了，该拆」——不是让你压字数，而是让你把一个独立子簇外提成子文档（见 §3 毕业阈值）。过 **soft cap（约 15000 字符）** 只软提示、不失败，给「快到该拆了」一个提前量。
+- **`covers` 数 = 棘轮（只增要过基线）**。`scripts/evergreen-size-baseline.json` 只记每篇文档的 `covers` 数与存在性；某文档 `covers` 数比基线大会报错——防止一篇文档悄悄把越来越多代码划进自己管辖。基线**不再记字符数**。
+- 基线必须覆盖当前全部 evergreen 文档；新增 / 删除 / 重命名 evergreen 文档后不更新基线会失败（缺项 / 含已删文档都报）。
+- ADR 不参与体量闸；ADR 是决策记录，只追加。
 
-需要接受一次合理增长时，先确认增长来自真实职责扩展，再重写基线并在 PR 里说明原因。
+合理扩大 `covers` 管辖时（真实职责扩展），跑 `--write-size-baseline` 重写基线并在提交信息说明原因。字符增长不需要重写基线。
 
 ## 5. 检查脚本闭环
 
@@ -118,10 +136,10 @@ last-reviewed: YYYY-MM-DD
 
 | 命令 | 守什么 | 失败条件 |
 |---|---|---|
-| `check:docs:strict --since=<base>` | **改了被覆盖的代码 → 同步对应文档** | 改动命中某文档 covers 但该文档没一起改 |
+| `check:docs:strict --since=<base>` | **改了契约点 → 同步对应文档** | 改动命中某文档 `contracts`（非 `covers`）但该文档没一起改；见 §1.3 |
 | `check:docs:coverage --since=<base>` | **加了源码 → 必须有文档认领** | 新增 `packages/*/src/**` 文件不匹配任何 covers，且非豁免（测试/`.d.ts`/mock/夹具/story） |
-| `check:docs:size` | **文档别再膨胀** | 字符/`covers` 超基线，或基线漏项/含已删文档 |
+| `check:docs:size` | **单文档别膨胀到该拆** | 字符数超 hard cap（≈25k，提示拆子文档；字符不做棘轮），或 `covers` 数超基线，或基线漏项/含已删文档 |
 | `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 `[..](x.md)` 指向不存在的 .md |
 | `check:docs:stale` | **last-reviewed 别过期** | 超 180 天或缺字段 |
 
-闭环含义：**新代码必有主人（coverage）→ 改代码点名文档（strict）→ 文档不膨胀（size）→ 三层互链不断（links）**。新增源码若暂不值得专门文档，要么归进最贴近主题的 covers，要么确属测试/类型/夹具时加进脚本的 `COVERAGE_EXEMPTS`。
+闭环含义：**新代码必有主人（coverage）→ 改契约点名文档（strict，认 `contracts`）→ 文档不膨胀（size）→ 三层互链不断（links）**。新增源码若暂不值得专门文档，要么归进最贴近主题的 covers，要么确属测试/类型/夹具时加进脚本的 `COVERAGE_EXEMPTS`。
