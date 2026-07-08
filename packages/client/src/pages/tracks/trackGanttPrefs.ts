@@ -3,10 +3,11 @@ import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 
 export const GANTT_WIDTH_MIN = 360;
 export const GANTT_WIDTH_DEFAULT = 560;
-export const GANTT_WIDTH_HARD_MAX = 960;
+// 左栏列表的可读底线：甘特最多吃到 视口宽 − 此值，无绝对像素硬顶。
+export const LIST_MIN_WIDTH = 420;
 
 export function ganttWidthMax(viewportWidth: number): number {
-  return Math.max(GANTT_WIDTH_MIN, Math.min(GANTT_WIDTH_HARD_MAX, Math.round(viewportWidth * 0.7)));
+  return Math.max(GANTT_WIDTH_MIN, Math.round(viewportWidth) - LIST_MIN_WIDTH);
 }
 
 export function clampGanttWidth(px: number, viewportWidth: number): number {

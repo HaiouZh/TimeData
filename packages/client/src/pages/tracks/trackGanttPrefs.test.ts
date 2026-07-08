@@ -3,9 +3,9 @@ import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import {
   clampGanttWidth,
   GANTT_WIDTH_DEFAULT,
-  GANTT_WIDTH_HARD_MAX,
   GANTT_WIDTH_MIN,
   ganttWidthMax,
+  LIST_MIN_WIDTH,
   loadGanttWidth,
   saveGanttWidth,
 } from "./trackGanttPrefs.js";
@@ -13,10 +13,10 @@ import {
 beforeEach(() => localStorage.clear());
 
 describe("clampGanttWidth", () => {
-  it("上限 = min(960, 视口70%)", () => {
-    expect(ganttWidthMax(2000)).toBe(GANTT_WIDTH_HARD_MAX);
-    expect(ganttWidthMax(1000)).toBe(700);
-    expect(clampGanttWidth(5000, 1000)).toBe(700);
+  it("上限 = 视口宽 − 左栏底线（无绝对像素硬顶）", () => {
+    expect(ganttWidthMax(2000)).toBe(2000 - LIST_MIN_WIDTH);
+    expect(ganttWidthMax(1000)).toBe(1000 - LIST_MIN_WIDTH);
+    expect(clampGanttWidth(5000, 1000)).toBe(1000 - LIST_MIN_WIDTH);
   });
   it("下限 360，非法值回默认", () => {
     expect(clampGanttWidth(10, 1440)).toBe(GANTT_WIDTH_MIN);
@@ -35,7 +35,7 @@ describe("load / save", () => {
     saveGanttWidth(900, 2000);
     expect(localStorage.getItem(STORAGE_KEYS.trackGanttWidth)).toBe("900");
     expect(loadGanttWidth(2000)).toBe(900);
-    expect(loadGanttWidth(1000)).toBe(700);
+    expect(loadGanttWidth(1000)).toBe(1000 - LIST_MIN_WIDTH);
   });
   it("脏存储值回默认", () => {
     localStorage.setItem(STORAGE_KEYS.trackGanttWidth, "not-a-number");
