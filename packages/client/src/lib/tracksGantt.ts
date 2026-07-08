@@ -21,18 +21,15 @@ export function startOfLocalDay(ms: number): number {
   return d.getTime();
 }
 
-// 未来留白：数据上没有未来，但视觉上让此刻线落在窗口约 90% 处，
-// 进行中条的右端/余晖才不会挤在边缘看不见。
-export const FUTURE_HEADROOM_RATIO = 0.1;
-
+// 窗口右缘严格 ≤ 此刻：数据上没有未来；"现在"的焦点交给画布右侧的现状栏，
+// 不再用时间留白制造呼吸空间（时间比例的留白会随缩放膨胀成大块假未来）。
 export function clampWindow(w: GanttWindow, nowMs: number, minStartMs: number): GanttWindow {
   const span = Math.min(GANTT_MAX_SPAN_MS, Math.max(GANTT_MIN_SPAN_MS, w.endMs - w.startMs));
-  const maxEnd = nowMs + span * FUTURE_HEADROOM_RATIO;
-  let end = Math.min(w.endMs, maxEnd);
+  let end = Math.min(w.endMs, nowMs);
   let start = end - span;
   if (start < minStartMs) {
     start = minStartMs;
-    end = Math.min(maxEnd, start + span);
+    end = Math.min(nowMs, start + span);
   }
   return { startMs: start, endMs: end };
 }
@@ -55,15 +52,11 @@ export function panWindow(w: GanttWindow, deltaMs: number, nowMs: number, minSta
   return clampWindow({ startMs: w.startMs + deltaMs, endMs: w.endMs + deltaMs }, nowMs, minStartMs);
 }
 
-function withHeadroom(startMs: number, nowMs: number): GanttWindow {
-  return { startMs, endMs: nowMs + (nowMs - startMs) * FUTURE_HEADROOM_RATIO };
-}
-
 export function presetWindow(preset: "today" | "3d" | "7d", nowMs: number): GanttWindow {
-  if (preset === "3d") return withHeadroom(nowMs - 3 * DAY_MS, nowMs);
-  if (preset === "7d") return withHeadroom(nowMs - 7 * DAY_MS, nowMs);
+  if (preset === "3d") return { startMs: nowMs - 3 * DAY_MS, endMs: nowMs };
+  if (preset === "7d") return { startMs: nowMs - 7 * DAY_MS, endMs: nowMs };
   const start = Math.min(startOfLocalDay(nowMs), nowMs - GANTT_MIN_SPAN_MS);
-  return withHeadroom(start, nowMs);
+  return { startMs: start, endMs: nowMs };
 }
 
 export function timeToX(w: GanttWindow, width: number, tMs: number): number {
@@ -171,10 +164,30 @@ export function autoFitWindow(lanes: GanttLane[], nowMs: number): GanttWindow {
       (l) => l.segments.length > 0 && l.lastActivityMs !== null && nowMs - l.lastActivityMs <= AUTO_FIT_RECENT_MS,
     )
     .map((l) => l.segments[l.segments.length - 1].startMs);
-  if (latestStarts.length === 0) return withHeadroom(nowMs - AUTO_FIT_FALLBACK_LOOKBACK_MS, nowMs);
+  if (latestStarts.length === 0) return { startMs: nowMs - AUTO_FIT_FALLBACK_LOOKBACK_MS, endMs: nowMs };
   const rawLeft = Math.min(...latestStarts);
   const clamped = Math.max(nowMs - GANTT_MAX_SPAN_MS, Math.min(rawLeft, nowMs - AUTO_FIT_MIN_LOOKBACK_MS));
-  return withHeadroom(Math.floor(clamped / HOUR_MS) * HOUR_MS, nowMs);
+  return { startMs: Math.floor(clamped / HOUR_MS) * HOUR_MS, endMs: nowMs };
+}
+
+// 泳道"此刻状态"：现状栏用。running=新鲜开口步 / stale-open=开着但超2h没动静 /
+// recent=刚收尾(余晖人群) / idle=停着(sinceMs=最后动静,无步为 null)。
+export type LaneNowStatus =
+  | { kind: "running"; sinceMs: number }
+  | { kind: "stale-open"; sinceMs: number }
+  | { kind: "recent"; sinceMs: number }
+  | { kind: "idle"; sinceMs: number | null };
+
+export function laneNowStatus(lane: GanttLane, _nowMs: number): LaneNowStatus {
+  const running = lane.segments.filter((s) => s.kind === "running");
+  if (running.length > 0) {
+    const latest = running[running.length - 1];
+    return latest.staleSinceMs == null
+      ? { kind: "running", sinceMs: latest.startMs }
+      : { kind: "stale-open", sinceMs: latest.startMs };
+  }
+  if (lane.afterglow) return { kind: "recent", sinceMs: lane.afterglow.startMs };
+  return { kind: "idle", sinceMs: lane.lastActivityMs };
 }
 
 // 平移/缩放的左边界：最早一步所在天的本地零点；无步退到今天零点。

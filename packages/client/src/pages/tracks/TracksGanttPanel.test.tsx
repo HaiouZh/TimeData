@@ -76,6 +76,21 @@ describe("TracksGanttPanel", () => {
     expect(host.querySelector('[data-testid="gantt-now-line"]')).not.toBeNull();
   });
 
+  it("右侧现状栏：每条泳道一格，进行中/停着分别有状态文案", async () => {
+    const a = makeTrack("a");
+    const b = makeTrack("b");
+    const { host } = await mount(
+      [a, b],
+      new Map([["a", [makeStep("a", HOUR, null)]]]),
+    );
+    const cells = host.querySelectorAll('[data-testid="gantt-now-status"]');
+    expect(cells).toHaveLength(2);
+    const kinds = [...cells].map((c) => c.getAttribute("data-kind"));
+    expect(kinds).toContain("running");
+    expect(kinds).toContain("idle");
+    expect(host.textContent).toContain("已1小时");
+  });
+
   it("僵尸开口步画实头+虚线尾迹", async () => {
     const a = makeTrack("a");
     const { host } = await mount([a], new Map([["a", [makeStep("a", 72 * HOUR, null)]]]));

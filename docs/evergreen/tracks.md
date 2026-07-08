@@ -111,7 +111,7 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 ## 8. 并发甘特（宽屏监控面）
 
-/tracks 宽屏（≥1024px）为双栏：左=列表操作区，右=可拖宽甘特（`TracksGanttAside`，宽度偏好 `timedata_track_gantt_width`）。甘特泳道=active 轨道（空轨道占道），闭合步=条、瞬时步=点、开口步延伸到"此刻"线；最新步刚收尾的泳道画 2h 渐隐余晖；颜色按执行者（我=data-teal，agent=data-purple；执行者=信号优先回退写入者：步子带「agent 执行信号」(设置页可配,默认 agent在做,存 track.agentExecTags.v1)视为 agent 在干，否则看谁写入）。窗口右缘最多越过此刻 10% 跨度的视觉留白（track 无未来数据，此刻线落在约 90% 处）。开口步 2h 内画实条延到此刻，超 2h 画"实头(2h)+半透明虚线尾迹"表示口没闭但没动静。进页 auto-fit 只迁就最近 48h 活跃的泳道（僵尸开口步不拉爆视野），全员不活跃退最近 24h，滚轮锚点缩放 clamp [1h,7d]、拖拽平移，窗口态不持久化。工具条常驻「进行中 N · 24h 活跃 M」（活跃只看最后动静时间，陈旧开口步算进行中但不算活跃）。点击段跳 `/tracks/:id#step-<stepId>`，详情页据 hash 高亮该步并滚动定位（目标步在折叠隐藏区时时间线自动全量展开）。纯函数层在 `packages/client/src/lib/tracksGantt.ts`（node 快桶单测），组件 `TracksGanttPanel` 为薄壳。窄屏无甘特入口。
+/tracks 宽屏（≥1024px）为双栏：左=列表操作区，右=可拖宽甘特（`TracksGanttAside`，宽度偏好 `timedata_track_gantt_width`）。甘特泳道=active 轨道（空轨道占道），闭合步=条、瞬时步=点、开口步延伸到"此刻"线；最新步刚收尾的泳道画 2h 渐隐余晖；颜色按执行者（我=data-teal，agent=data-purple；执行者=信号优先回退写入者：步子带「agent 执行信号」(设置页可配,默认 agent在做,存 track.agentExecTags.v1)视为 agent 在干，否则看谁写入）。布局为「时间画布在左、名字+现状栏在右」：画布右端严格=此刻（track 无未来数据、无时间留白），紧邻的现状栏（可拖宽）每泳道一格显示当前状态（laneNowStatus：●进行中·已X / ◐刚动过·X前 / ○开着X没动静 / —停着·X），看此刻并发=竖扫现状栏而非辨认画布边缘。开口步 2h 内画实条延到此刻，超 2h 画"实头(2h)+半透明虚线尾迹"表示口没闭但没动静。进页 auto-fit 只迁就最近 48h 活跃的泳道（僵尸开口步不拉爆视野），全员不活跃退最近 24h，滚轮锚点缩放 clamp [1h,7d]、拖拽平移，窗口态不持久化。工具条常驻「进行中 N · 24h 活跃 M」（活跃只看最后动静时间，陈旧开口步算进行中但不算活跃）。点击段跳 `/tracks/:id#step-<stepId>`，详情页据 hash 高亮该步并滚动定位（目标步在折叠隐藏区时时间线自动全量展开）。纯函数层在 `packages/client/src/lib/tracksGantt.ts`（node 快桶单测），组件 `TracksGanttPanel` 为薄壳。窄屏无甘特入口。
 
 ## 9. 后续阶段
 

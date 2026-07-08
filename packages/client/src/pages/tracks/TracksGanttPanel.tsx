@@ -1,5 +1,6 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import {
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
@@ -9,13 +10,15 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { formatAppDateTime } from "../../lib/time.js";
+import { formatAppDateTime, formatRelativeTime } from "../../lib/time.js";
 import {
   autoFitWindow,
   axisTicks,
   concurrencyStats,
   earliestSegmentDayMs,
   ganttLanes,
+  laneNowStatus,
+  type LaneNowStatus,
   panWindow,
   presetWindow,
   segmentShape,
@@ -94,10 +97,11 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
   const nameColRef = useRef<HTMLDivElement | null>(null);
   const namePointerId = useRef<number | null>(null);
 
+  // 现状栏靠右停靠：宽度 = 面板右缘 − 指针横坐标。
   function applyNameWidth(clientX: number): void {
-    const left = nameColRef.current?.getBoundingClientRect().left;
-    if (left === undefined) return;
-    setNameWidth(clampNameWidth(clientX - left));
+    const right = nameColRef.current?.getBoundingClientRect().right;
+    if (right === undefined) return;
+    setNameWidth(clampNameWidth(right - clientX));
   }
   function finishNameDrag(event: ReactPointerEvent<HTMLDivElement>): void {
     if (namePointerId.current !== event.pointerId) return;
@@ -189,61 +193,6 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
         </span>
       </div>
       <div className="flex min-h-0 flex-1 overflow-y-auto">
-        <div ref={nameColRef} className="shrink-0" style={{ width: nameWidth }}>
-          <div className="h-5" />
-          {lanes.map((lane) => (
-            <button
-              key={lane.track.id}
-              type="button"
-              onClick={() => navigate(`/tracks/${lane.track.id}`)}
-              className="block h-7 w-full truncate px-2 text-left td-text-caption leading-7 text-ink-2 hover:text-accent"
-              title={lane.track.title}
-            >
-              {lane.track.title}
-            </button>
-          ))}
-        </div>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="调整轨道名列宽"
-          aria-valuemin={NAME_WIDTH_MIN}
-          aria-valuemax={NAME_WIDTH_MAX}
-          aria-valuenow={Math.round(nameWidth)}
-          tabIndex={0}
-          className="group flex w-1.5 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            namePointerId.current = event.pointerId;
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-            applyNameWidth(event.clientX);
-          }}
-          onPointerMove={(event) => {
-            if (namePointerId.current === event.pointerId) applyNameWidth(event.clientX);
-          }}
-          onPointerUp={finishNameDrag}
-          onPointerCancel={finishNameDrag}
-          onKeyDown={(event) => {
-            const step = event.shiftKey ? 32 : 12;
-            if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              setNameWidth((w) => {
-                const next = clampNameWidth(w - step);
-                saveNameWidth(next);
-                return next;
-              });
-            } else if (event.key === "ArrowRight") {
-              event.preventDefault();
-              setNameWidth((w) => {
-                const next = clampNameWidth(w + step);
-                saveNameWidth(next);
-                return next;
-              });
-            }
-          }}
-        >
-          <div className="my-1 w-px rounded-pill bg-border transition-colors group-hover:bg-accent" />
-        </div>
         <div ref={plotRef} className="relative min-w-0 flex-1">
           <div className="relative h-5 overflow-hidden">
             {ticks.map((tick) => (
@@ -368,8 +317,8 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
               {nowInWindow && (
                 <line
                   data-testid="gantt-now-line"
-                  x1={timeToX(win, plotWidth, nowMs)}
-                  x2={timeToX(win, plotWidth, nowMs)}
+                  x1={Math.min(timeToX(win, plotWidth, nowMs), plotWidth - 1)}
+                  x2={Math.min(timeToX(win, plotWidth, nowMs), plotWidth - 1)}
                   y1={0}
                   y2={height}
                   stroke="var(--color-accent)"
@@ -399,7 +348,81 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
             </div>
           )}
         </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整现状栏宽度"
+          aria-valuemin={NAME_WIDTH_MIN}
+          aria-valuemax={NAME_WIDTH_MAX}
+          aria-valuenow={Math.round(nameWidth)}
+          tabIndex={0}
+          className="group flex w-1.5 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            namePointerId.current = event.pointerId;
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            applyNameWidth(event.clientX);
+          }}
+          onPointerMove={(event) => {
+            if (namePointerId.current === event.pointerId) applyNameWidth(event.clientX);
+          }}
+          onPointerUp={finishNameDrag}
+          onPointerCancel={finishNameDrag}
+          onKeyDown={(event) => {
+            const step = event.shiftKey ? 32 : 12;
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+              event.preventDefault();
+              const delta = event.key === "ArrowLeft" ? step : -step;
+              setNameWidth((w) => {
+                const next = clampNameWidth(w + delta);
+                saveNameWidth(next);
+                return next;
+              });
+            }
+          }}
+        >
+          <div className="my-1 w-px rounded-pill bg-border transition-colors group-hover:bg-accent" />
+        </div>
+        <div ref={nameColRef} className="shrink-0 border-l border-border" style={{ width: nameWidth }}>
+          <div className="h-5" />
+          {lanes.map((lane) => {
+            const status = laneNowStatus(lane, nowMs);
+            const laneSource = lane.segments.at(-1)?.source ?? "user";
+            return (
+              <button
+                key={lane.track.id}
+                type="button"
+                onClick={() => navigate(`/tracks/${lane.track.id}`)}
+                className="flex h-7 w-full items-center gap-1.5 px-2 text-left td-text-caption leading-7 text-ink-2 hover:text-accent"
+                title={lane.track.title}
+              >
+                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-pill" style={statusDotStyle(status, laneSource)} />
+                <span className="min-w-0 flex-1 truncate">{lane.track.title}</span>
+                <span data-testid="gantt-now-status" data-kind={status.kind} className="td-num shrink-0 text-ink-3">
+                  {statusLabel(status, nowDate)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
+}
+
+// 现状点：进行中=实心执行者色 / 刚动过=半透明 / 开着没动静=空心描边 / 停着=灰。
+function statusDotStyle(status: LaneNowStatus, source: "user" | "agent"): CSSProperties {
+  const fill = SOURCE_FILL[source];
+  if (status.kind === "running") return { background: fill };
+  if (status.kind === "recent") return { background: fill, opacity: 0.45 };
+  if (status.kind === "stale-open") return { border: `1.5px solid ${fill}`, background: "transparent" };
+  return { background: "var(--color-ink-3)", opacity: 0.5 };
+}
+
+function statusLabel(status: LaneNowStatus, now: Date): string {
+  if (status.kind === "running") return `已${formatStepDuration(new Date(status.sinceMs).toISOString(), null, now)}`;
+  if (status.kind === "recent") return formatRelativeTime(new Date(status.sinceMs).toISOString(), now);
+  if (status.kind === "stale-open")
+    return `${formatStepDuration(new Date(status.sinceMs).toISOString(), null, now)}没动静`;
+  return status.sinceMs === null ? "—" : formatRelativeTime(new Date(status.sinceMs).toISOString(), now);
 }
