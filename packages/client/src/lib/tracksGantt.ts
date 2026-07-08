@@ -96,17 +96,24 @@ export interface GanttLane {
 
 const parseMs = (isoText: string): number => new Date(isoText).getTime();
 
+// 段的"执行者"：信号优先、回退写入者——步子带含 agent 字样的标签（如 #agent在做）视为 agent 在干，
+// 覆盖手记"交给 agent"场景；否则按 step.source（谁写入这一步）。
+export function stepExecutor(step: Pick<TrackStep, "source" | "tags">): "user" | "agent" {
+  return step.tags.some((tag) => /agent/i.test(tag)) ? "agent" : step.source;
+}
+
 function laneSegments(steps: TrackStep[], nowMs: number): GanttSegment[] {
   const segments = steps.map((step): GanttSegment => {
     const startMs = parseMs(step.startedAt);
+    const source = stepExecutor(step);
     if (step.endedAt === null) {
       // 时钟漂移防御：未来开口步退化为点，不画负长条
-      if (startMs >= nowMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source: step.source };
-      return { kind: "running", startMs, endMs: nowMs, stepId: step.id, source: step.source };
+      if (startMs >= nowMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
+      return { kind: "running", startMs, endMs: nowMs, stepId: step.id, source };
     }
     const endMs = parseMs(step.endedAt);
-    if (endMs <= startMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source: step.source };
-    return { kind: "bar", startMs, endMs, stepId: step.id, source: step.source };
+    if (endMs <= startMs) return { kind: "point", startMs, endMs: startMs, stepId: step.id, source };
+    return { kind: "bar", startMs, endMs, stepId: step.id, source };
   });
   return segments.sort((a, b) => a.startMs - b.startMs);
 }
