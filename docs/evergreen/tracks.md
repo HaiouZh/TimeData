@@ -13,7 +13,7 @@ covers:
   - packages/client/src/hooks/useTrackAttentionCount.ts
   - packages/client/src/contexts/TrackAttentionContext.tsx
   - packages/client/src/components/app-shell/NavBadge.tsx
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-08
 ---
 
 # 任务轨道
@@ -109,7 +109,11 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 本地续写协议的单一事实源是 `.claude/skills/track-step/SKILL.md`（平台无关，任何能跑 shell/Node 的 agent 通用；技术契约见同目录 `references/api.md`，执行器 `scripts/td-track.mjs`）。该目录是本地 AI state，被 `.gitignore` 忽略；evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
 
-## 8. 后续阶段
+## 8. 并发甘特（宽屏监控面）
+
+/tracks 宽屏（≥1024px）为双栏：左=列表操作区，右=可拖宽甘特（`TracksGanttAside`，宽度偏好 `timedata_track_gantt_width`）。甘特泳道=active 轨道（空轨道占道），闭合步=条、瞬时步=点、开口步延伸到"此刻"线；最新步刚收尾的泳道画 2h 渐隐余晖；颜色按执行者（我=data-teal，agent=data-purple）。窗口右缘钉死此刻（track 无未来），进页 auto-fit 最近活动，滚轮锚点缩放 clamp [1h,7d]、拖拽平移，窗口态不持久化。工具条常驻「进行中 N · 24h 活跃 M」。点击段跳 `/tracks/:id#step-<stepId>`，详情页据 hash 高亮该步并滚动定位（目标步在折叠隐藏区时时间线自动全量展开）。纯函数层在 `packages/client/src/lib/tracksGantt.ts`（node 快桶单测），组件 `TracksGanttPanel` 为薄壳。窄屏无甘特入口。
+
+## 9. 后续阶段
 
 - 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、自由 refs/tags 编辑器。
 - **步骤「历时」不作设计卖点**(2026-07-02 决策):`formatStepDuration` 产出的历时仅作展示辅助,不做时间统计桥(历时聚合进 Stats 已放弃);轨道步骤的历时不写入 `time_entries`。开口/瞬时之分因此只服务于时间线可读性(开口步=正在进行的段),不服务于计量。
