@@ -11,6 +11,7 @@ import { formatAppDateTime } from "../lib/time.ts";
 import { CLOCK_SKEW_WARN_MS, getClockSkewMs, type RegularSyncResult } from "../sync/engine.ts";
 import {
   ArrowsClockwise,
+  BookOpen,
   CaretRight,
   Cards,
   ChartBar,
@@ -319,6 +320,12 @@ export default function SettingsPage() {
           icon={<Icon icon={Cards} size={20} />}
           title="水位线与翻牌"
           subtitle="调整收件箱沉下去的节奏和翻牌数量"
+        />
+        <SettingsRow
+          to="/settings/diary"
+          icon={<Icon icon={BookOpen} size={20} />}
+          title="日记"
+          subtitle="配置日记文件的路径模板"
         />
       </SettingsSection>
 

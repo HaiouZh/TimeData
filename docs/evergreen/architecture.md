@@ -154,6 +154,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 | [backup](backup.md) | 域 | Backup 格式、导出/导入、服务端备份、恢复边界 |
 | [timeline](timeline.md) | 域 | 时间记录、时间轴、跨夜、时间选择、相邻合并 |
 | [quick-notes](quick-notes.md) | 域 | 速记表、聊天式速记页、CLI 只读、agent 投递 |
+| [diary](diary.md) | 域 | 日记 vault 文件、路径模板展开与安全校验、mtime 并发守卫、有序列表续号 |
 | [todo](todo.md) | 域 | 待办任务、重复规则、子任务、agent 状态回写 |
 | [tracks](tracks.md) | 域 | 任务轨道、轨道步骤、状态线数据地基、agent ingest |
 | [goals](goals.md) | 域 | 目标层、Task/Track 成员引用、项目完成度、主题 7 天活跃度、前置关系 |

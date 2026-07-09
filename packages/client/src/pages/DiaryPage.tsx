@@ -2,6 +2,7 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
+import { useConfirm } from "../hooks/useConfirm.tsx";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 
@@ -13,6 +14,7 @@ function todayDateString(): string {
 export default function DiaryPage() {
   const navigate = useNavigate();
   const today = useRef(todayDateString()).current;
+  const { confirm, dialog } = useConfirm();
 
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
@@ -90,7 +92,11 @@ export default function DiaryPage() {
   }
 
   async function handleReload() {
-    if (dirty && !window.confirm("将丢弃当前修改，加载服务器版本？")) return;
+    if (
+      dirty &&
+      !(await confirm({ title: "丢弃当前修改？", body: "将丢弃当前修改，加载服务器版本。", danger: true }))
+    )
+      return;
     setError(null);
     const doc = await fetchDiary(today);
     setContent(doc.content);
@@ -99,18 +105,19 @@ export default function DiaryPage() {
     setConflict(false);
   }
 
-  function handleBack() {
-    if (dirty && !window.confirm("有未保存的修改，确定离开？")) return;
+  async function handleBack() {
+    if (dirty && !(await confirm({ title: "确定离开？", body: "有未保存的修改，确定离开？", danger: true }))) return;
     navigate(-1);
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
+      {dialog}
       <header className="sticky top-0 z-[var(--z-dropdown)] flex shrink-0 items-center gap-3 border-b border-border bg-page/95 px-4 py-3 backdrop-blur">
         <button
           type="button"
           aria-label="返回"
-          onClick={handleBack}
+          onClick={() => void handleBack()}
           className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
         >
           <Icon icon={ArrowLeft} size={16} />
@@ -121,7 +128,7 @@ export default function DiaryPage() {
           aria-label="保存"
           disabled={!dirty || saving}
           onClick={() => void handleSave()}
-          className="rounded-xl bg-accent px-3 py-1.5 text-sm font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+          className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
         >
           保存
         </button>
@@ -133,14 +140,14 @@ export default function DiaryPage() {
           <button
             type="button"
             onClick={() => void handleReload()}
-            className="rounded-xl border border-danger/40 bg-surface px-3 py-1 text-sm font-medium text-danger"
+            className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
           >
             刷新重载
           </button>
           <button
             type="button"
             onClick={() => void handleSave({ force: true })}
-            className="rounded-xl bg-danger px-3 py-1 text-sm font-medium text-page"
+            className="rounded-xl bg-danger px-3 py-1 td-text-body font-medium text-page"
           >
             仍然覆盖
           </button>

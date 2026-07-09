@@ -12,6 +12,7 @@ import SettingsAdminInsightsPage from "../../pages/settings/SettingsAdminInsight
 import SettingsCategoriesPage from "../../pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "../../pages/settings/SettingsCategoryDetailPage.tsx";
 import SettingsDataPage from "../../pages/settings/SettingsDataPage.tsx";
+import SettingsDiaryPage from "../../pages/settings/SettingsDiaryPage.tsx";
 import SettingsGarminPage from "../../pages/settings/SettingsGarminPage.tsx";
 import SettingsHealthRangePage from "../../pages/settings/SettingsHealthRangePage.tsx";
 import SettingsInsightsPage from "../../pages/settings/SettingsInsightsPage.tsx";
@@ -57,6 +58,7 @@ export function AppRoutes() {
       <Route path="/settings/data" element={<SettingsDataPage />} />
       <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
       <Route path="/settings/garmin" element={<SettingsGarminPage />} />
+      <Route path="/settings/diary" element={<SettingsDiaryPage />} />
       <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />
       <Route path="/dev/styleguide" element={<StyleguidePage />} />
     </Routes>
