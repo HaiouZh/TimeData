@@ -135,7 +135,7 @@ describe("TracksListPage", () => {
     expect(host.textContent).toContain("agent在做 0");
     expect(host.textContent).toContain("#待我处理");
     expect(host.textContent).toContain("base 到 build");
-    expect(host.textContent).toContain("当前:第1步");
+    expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("base 期");
     expect(host.textContent).not.toContain("按该谁了分组");
     expect(host.querySelector(`a[href="/tracks/${track.id}"]`)).not.toBeNull();
   });

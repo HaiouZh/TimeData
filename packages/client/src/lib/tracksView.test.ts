@@ -11,11 +11,9 @@ import {
   latestBoardSignal,
   latestStep,
   latestStepId,
-  latestStepsForCard,
   orderedTimeline,
   partitionTracks,
   stepSourceText,
-  trackProgressSummary,
 } from "./tracksView.js";
 
 const T = "2026-06-21T00:00:00.000Z";
@@ -159,18 +157,7 @@ describe("tracksView pure helpers", () => {
     ]);
   });
 
-  it("latestStepsForCard returns the newest steps for compact cards", () => {
-    expect(
-      latestStepsForCard([
-        step({ id: "a", seq: 0, startedAt: "2026-06-21T00:00:00.000Z" }),
-        step({ id: "b", seq: 9, startedAt: "2026-06-20T00:00:00.000Z" }),
-        step({ id: "c", seq: 2, startedAt: "2026-06-22T00:00:00.000Z" }),
-        step({ id: "d", seq: 3, startedAt: "2026-06-23T00:00:00.000Z" }),
-      ]).map((s) => s.id),
-    ).toEqual(["d", "c", "a"]);
-  });
-
-  it("latestStepsForCard/orderedTimeline 按语义时间：昨天回填步不在顶部", () => {
+  it("orderedTimeline 按语义时间：昨天回填步不在顶部", () => {
     const backfill = step({
       id: "b",
       seq: 9,
@@ -184,7 +171,6 @@ describe("tracksView pure helpers", () => {
       endedAt: "2026-07-02T01:00:00.000Z",
     });
 
-    expect(latestStepsForCard([backfill, today])[0].id).toBe("t");
     expect(orderedTimeline([backfill, today])[0].id).toBe("t");
   });
 
@@ -222,32 +208,6 @@ describe("tracksView pure helpers", () => {
     expect(formatStepDuration("2026-06-21T00:00:00.000Z", null, now)).toBe("4天");
     expect(formatStepDuration("2026-06-21T00:00:00.000Z", "2026-06-22T03:00:00.000Z", now)).toBe("1天3小时");
     expect(formatStepDuration("2026-06-21T00:00:00.000Z", "2026-06-21T02:30:00.000Z", now)).toBe("2小时30分钟");
-  });
-
-  it("trackProgressSummary describes current open step, closed steps, or empty", () => {
-    const now = new Date("2026-06-21T02:00:00.000Z");
-    expect(
-      trackProgressSummary(
-        [step({ id: "a", seq: 0, endedAt: T }), step({ id: "b", seq: 1, startedAt: T, endedAt: null })],
-        now,
-      ),
-    ).toBe("当前:第2步 · 已历时2小时");
-    expect(trackProgressSummary([step({ id: "a", seq: 0, endedAt: T })], now)).toBe("共1步");
-    expect(trackProgressSummary([], now)).toBe("尚无步骤");
-  });
-
-  it("trackProgressSummary 按开口步 seq 计数,不被后追加的即时点抬高", () => {
-    const now = new Date("2026-06-21T02:00:00.000Z");
-    expect(
-      trackProgressSummary(
-        [
-          step({ id: "a", seq: 0, endedAt: T }),
-          step({ id: "b", seq: 1, startedAt: T, endedAt: null }),
-          step({ id: "note", seq: 2, endedAt: T, tags: ["批注"] }),
-        ],
-        now,
-      ),
-    ).toBe("当前:第2步 · 已历时2小时");
   });
 
   it("isLinkRef only treats http(s) ids as external links", () => {

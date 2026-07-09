@@ -44,10 +44,6 @@ export function lastActivityAt(steps: TrackStep[]): string | null {
   return step.endedAt ?? step.startedAt;
 }
 
-export function latestStepsForCard(steps: TrackStep[], limit = 3): TrackStep[] {
-  return [...steps].sort(compareTrackStepsBySemanticTimeDesc).slice(0, limit);
-}
-
 export function orderedTimeline(steps: TrackStep[]): TrackStep[] {
   const currentId = currentStepId(steps);
   return [...steps].sort((a, b) => {
@@ -76,16 +72,6 @@ export function formatStepDuration(startedAt: string, endedAt: string | null, no
     return hours > 0 ? `${days}天${hours}小时` : `${days}天`;
   }
   return formatMinutesDuration(ms / 60_000);
-}
-
-export function trackProgressSummary(steps: TrackStep[], now: Date): string {
-  if (steps.length === 0) return "尚无步骤";
-  const openId = currentStepId(steps);
-  if (openId === null) return `共${steps.length}步`;
-  const open = steps.find((s) => s.id === openId);
-  const elapsed = open ? formatStepDuration(open.startedAt, null, now) : "";
-  const stepNumber = open ? open.seq + 1 : steps.length;
-  return `当前:第${stepNumber}步 · 已历时${elapsed}`;
 }
 
 // 外链判定:仅 id 为 http(s) 才算可点外链。kind 不参与放行——url 型 ref 的 id 同样须带 http(s) 协议。

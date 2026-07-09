@@ -51,6 +51,8 @@ async function mount(
   steps: TrackStep[],
   props: {
     signal?: TrackBoardSignal | null;
+    stalledDays?: number | null;
+    selected?: boolean;
     statusTags?: readonly string[];
     onSubmitStep?: (draft: StepDraft) => Promise<void> | void;
   } = {},
@@ -83,28 +85,33 @@ async function submitInlineForm(host: HTMLElement): Promise<void> {
 }
 
 describe("TrackListItem", () => {
-  it("shows active track summary and the latest three steps", async () => {
+  it("卡片主体=最新步内容，不再显示 当前:第N步/已历时", async () => {
     const host = await mount(track(), [
       step({ id: "a", seq: 0, content: "旧步骤" }),
-      step({ id: "b", seq: 1, content: "开始处理", sourceLabel: "claude", tags: ["agent在做"] }),
-      step({ id: "c", seq: 2, content: "等你确认", sourceLabel: "codex", tags: ["待我处理"] }),
-      step({ id: "d", seq: 3, content: "补充证据", source: "user", tags: ["批注"] }),
+      step({ id: "b", seq: 1, content: "初具雏形，等确认", source: "user", sourceLabel: "codex" }),
     ]);
     expect(host.textContent).toContain("轨道派活");
     expect(host.textContent).toContain("把轨道变成接力线");
-    expect(host.textContent).toContain("补充证据");
-    expect(host.textContent).toContain("等你确认");
-    expect(host.textContent).toContain("开始处理");
+    expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("初具雏形");
     expect(host.textContent).not.toContain("旧步骤");
-    expect(host.textContent).toContain("我");
-    expect(host.textContent).toContain("codex");
-    expect(host.textContent).toContain("#待我处理");
+    expect(host.textContent).not.toContain("当前:第");
+    expect(host.textContent).not.toContain("已历时");
   });
 
-  it("does not show step stream for archived tracks", async () => {
+  it("stalledDays 传入时最后动静位显示 N 天没动静", async () => {
+    const host = await mount(track(), [step({ id: "a", seq: 0, content: "最近一步" })], { stalledDays: 13 });
+    expect(host.querySelector('[data-testid="track-last-activity"]')?.textContent).toContain("13 天没动静");
+  });
+
+  it("selected 时卡片带 accent 边框", async () => {
+    const host = await mount(track(), [step({ id: "a", seq: 0, content: "最近一步" })], { selected: true });
+    expect(host.querySelector("article")?.className).toContain("border-accent");
+  });
+
+  it("shows current frame for archived tracks too (状态卡不区分活跃/归档隐藏内容)", async () => {
     const host = await mount(track({ status: "concluded" }), [step({ id: "a", seq: 0, content: "已完成步骤" })]);
     expect(host.textContent).toContain("轨道派活");
-    expect(host.textContent).not.toContain("已完成步骤");
+    expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("已完成步骤");
   });
 
   it("shows the provided board signal badge and no badge when signal is null", async () => {
