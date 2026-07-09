@@ -154,6 +154,11 @@ describe("DiaryPage", () => {
 
     expect(el.value).toBe("1. x\n2. ");
 
+    // 光标经 requestAnimationFrame 恢复到新 marker 之后
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(el.selectionStart).toBe("1. x\n2. ".length);
+    expect(el.selectionEnd).toBe("1. x\n2. ".length);
+
     await unmount(root);
   });
 });

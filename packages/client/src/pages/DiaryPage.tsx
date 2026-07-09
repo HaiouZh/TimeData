@@ -54,6 +54,8 @@ export default function DiaryPage() {
   }, [dirty]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    // IME 候选确认的 Enter 不参与续号
+    if (event.nativeEvent.isComposing) return;
     if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.currentTarget;
     const result = applyEnterInOrderedList(target.value, target.selectionStart, target.selectionEnd);
@@ -88,6 +90,7 @@ export default function DiaryPage() {
   }
 
   async function handleReload() {
+    if (dirty && !window.confirm("将丢弃当前修改，加载服务器版本？")) return;
     setError(null);
     const doc = await fetchDiary(today);
     setContent(doc.content);
