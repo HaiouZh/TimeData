@@ -163,6 +163,40 @@ describe("TracksGanttPanel", () => {
     expect(tooltip?.textContent).toContain("agent");
   });
 
+  it("新鲜开口步在 now 线画活头脉冲", async () => {
+    const a = makeTrack("a");
+    const { host } = await mount([a], new Map([["a", [makeStep("a", HOUR, null)]]]));
+    expect(host.querySelector('[data-testid="gantt-live-head"]')).not.toBeNull();
+  });
+
+  it("僵尸开口步与等待步不画活头", async () => {
+    const a = makeTrack("a");
+    const b = makeTrack("b");
+    const wait = { ...makeStep("b", HOUR, null), tags: ["待我处理"] };
+    const { host } = await mount(
+      [a, b],
+      new Map([
+        ["a", [makeStep("a", 72 * HOUR, null)]],
+        ["b", [wait]],
+      ]),
+    );
+    expect(host.querySelector('[data-testid="gantt-live-head"]')).toBeNull();
+  });
+
+  it("瞬时步画菱形标记，热区仍是 gantt-seg 可点", async () => {
+    const a = makeTrack("a");
+    const instant = makeStep("a", 3 * HOUR, 3 * HOUR); // startedAt == endedAt → point 段
+    const { host } = await mount([a], new Map([["a", [instant]]]));
+    expect(host.querySelector('[data-testid="gantt-diamond"]')).not.toBeNull();
+    const hit = host.querySelector('[data-testid="gantt-seg"]');
+    expect(hit?.tagName.toLowerCase()).toBe("circle");
+    expect(hit?.getAttribute("fill")).toBe("transparent");
+    await click(hit);
+    expect(host.querySelector('[data-testid="location-probe"]')?.textContent).toContain(
+      `/tracks/a#step-${instant.id}`,
+    );
+  });
+
   it("快捷档按钮存在：今天/3天/周/回到现在", async () => {
     const { host } = await mount([makeTrack("a")], new Map());
     for (const label of ["今天", "3天", "周", "回到现在"]) {

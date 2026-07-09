@@ -36,7 +36,6 @@ import { clampNameWidth, loadNameWidth, NAME_WIDTH_MAX, NAME_WIDTH_MIN, saveName
 
 const LANE_HEIGHT = 28;
 const BAR_HEIGHT = 10;
-const DOT_RADIUS = 3.5;
 const SOURCE_FILL: Record<"user" | "agent", string> = {
   user: "var(--color-data-teal)",
   agent: "var(--color-data-purple)",
@@ -273,24 +272,29 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                       const stale = !waiting && seg.kind === "running" && seg.staleSinceMs != null;
                       const headSeg = stale ? { ...seg, endMs: seg.staleSinceMs as number } : seg;
                       const shape = segmentShape(headSeg, win, plotWidth);
+                      const cy = y + LANE_HEIGHT / 2;
+                      // 活头：只给"正在跑"的新鲜开口步——等待不是在跑，陈旧已有虚线尾迹语义。
+                      const live = seg.kind === "running" && !waiting && seg.staleSinceMs == null;
                       const common = {
                         "data-testid": "gantt-seg",
                         "data-kind": seg.kind,
                         "data-step": seg.stepId,
                         "data-waiting": waiting ? "true" : undefined,
-                        fill: waiting ? "transparent" : SOURCE_FILL[seg.source],
-                        stroke: waiting ? SOURCE_FILL[seg.source] : undefined,
-                        strokeWidth: waiting ? 1.5 : undefined,
                         className: "cursor-pointer",
                         onClick: () => navigate(`/tracks/${lane.track.id}#step-${seg.stepId}`),
                         onMouseEnter: (event: ReactMouseEvent) => hoverSeg(lane, seg, event),
                         onMouseLeave: () => setHover(null),
                       };
+                      const fillProps = {
+                        fill: waiting ? "transparent" : SOURCE_FILL[seg.source],
+                        stroke: waiting ? SOURCE_FILL[seg.source] : undefined,
+                        strokeWidth: waiting ? 1.5 : undefined,
+                      };
                       const head =
                         shape.shape === "rect" ? (
                           <rect
-                            key={seg.stepId}
                             {...common}
+                            {...fillProps}
                             x={shape.x}
                             y={barY}
                             width={shape.width}
@@ -299,24 +303,51 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                             opacity={seg.kind === "running" && !waiting ? 0.9 : 1}
                           />
                         ) : (
-                          <circle key={seg.stepId} {...common} cx={shape.cx} cy={y + LANE_HEIGHT / 2} r={DOT_RADIUS} />
+                          <>
+                            {/* 菱形是纯视觉，交互全在透明大热区上——热区半径远大于旧 r=3.5 圆点 */}
+                            <path
+                              aria-hidden="true"
+                              data-testid="gantt-diamond"
+                              {...fillProps}
+                              d={`M ${shape.cx} ${cy - 4.5} L ${shape.cx + 4.5} ${cy} L ${shape.cx} ${cy + 4.5} L ${shape.cx - 4.5} ${cy} Z`}
+                              pointerEvents="none"
+                            />
+                            <circle {...common} cx={shape.cx} cy={cy} r={9} fill="transparent" />
+                          </>
                         );
-                      if (!stale) return head;
+                      const headX = shape.shape === "rect" ? Math.min(shape.x + shape.width, plotWidth - 1) : 0;
                       return (
                         <g key={seg.stepId}>
                           {head}
-                          <line
-                            data-testid="gantt-stale-tail"
-                            x1={timeToX(win, plotWidth, seg.staleSinceMs as number)}
-                            x2={timeToX(win, plotWidth, seg.endMs)}
-                            y1={y + LANE_HEIGHT / 2}
-                            y2={y + LANE_HEIGHT / 2}
-                            stroke={SOURCE_FILL[seg.source]}
-                            strokeWidth={1.5}
-                            strokeDasharray="2 4"
-                            opacity={0.55}
-                            pointerEvents="none"
-                          />
+                          {stale && (
+                            <line
+                              data-testid="gantt-stale-tail"
+                              x1={timeToX(win, plotWidth, seg.staleSinceMs as number)}
+                              x2={timeToX(win, plotWidth, seg.endMs)}
+                              y1={cy}
+                              y2={cy}
+                              stroke={SOURCE_FILL[seg.source]}
+                              strokeWidth={1.5}
+                              strokeDasharray="2 4"
+                              opacity={0.55}
+                              pointerEvents="none"
+                            />
+                          )}
+                          {live && shape.shape === "rect" && (
+                            <g pointerEvents="none" aria-hidden="true">
+                              <circle
+                                data-testid="gantt-live-head"
+                                cx={headX}
+                                cy={cy}
+                                r={4}
+                                fill={SOURCE_FILL[seg.source]}
+                                opacity={0.6}
+                                className="motion-safe:animate-ping"
+                                style={{ transformBox: "fill-box", transformOrigin: "center" }}
+                              />
+                              <circle cx={headX} cy={cy} r={2.5} fill={SOURCE_FILL[seg.source]} />
+                            </g>
+                          )}
                         </g>
                       );
                     })}
