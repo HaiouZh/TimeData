@@ -106,7 +106,7 @@ agent 续写上下文另有只读 API：`GET /api/agent/tracks/context` 返回 a
 
 看板信号计算在 `packages/shared/src/trackBoardSignals.ts`，client `tracksView.ts` 与 server agent context API 共用同一纯函数：按语义时间倒序找最近一条含已配置看板信号的 step；同一步多个信号时按 `boardSignals` 顺序取第一个；无标签步骤和普通检索标签不清空已有信号。语义时间比较器在 `packages/shared/src/trackStepOrder.ts`，client/server 的当前步、最新步和看板信号都走同一口径。
 
-`/tracks` 列表保持扁平，不再按阵营或“该谁了”分组，也不保存本地分组视图偏好。顶部 chip 按配置顺序显示看板信号计数，如 `待我处理 N`、`agent在做 N`；点击 chip 做 OR 筛选。卡片只展示 `#tag` 信号牌、最新 3 步，并可就地”写一步”（`appendUserStep`，写入经 `recordSyncLog` 自动调度上传）。
+`/tracks` 列表的分组、统计带与状态卡展示见 §8（调度台按判定优先级分组，不再是扁平列表+顶部 chip OR 筛选）。
 
 agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；人手可先 append 一步打 `agent在做`。agent 完成或需要人接手后经 `/api/agent/tracks/:id/steps` append 一步，默认开口并打 `待我处理` 或用户当前配置中的等价看板信号。append 自动闭合全部旧开口步；该步成为看板当前信号，直到后续步骤写入新的已配置看板信号。
 
