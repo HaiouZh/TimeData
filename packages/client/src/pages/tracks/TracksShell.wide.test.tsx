@@ -9,7 +9,7 @@ import { click, renderDom, unmount } from "../../test/domHarness.js";
 
 vi.mock("../../lib/useIsWideScreen.js", () => ({ useIsWideScreen: () => true }));
 
-import { addTrack } from "../../lib/tracks.js";
+import { addTrack, appendUserStep } from "../../lib/tracks.js";
 import TrackDetailPage from "./TrackDetailPage.js";
 import TracksListPage from "./TracksListPage.js";
 import TracksShell from "./TracksShell.js";
@@ -64,35 +64,37 @@ async function mountShell(initial: string) {
   return mounted;
 }
 
-describe("TracksShell 宽屏 master-detail", () => {
-  it("/tracks：左列列表 + 右侧甘特常驻", async () => {
+describe("TracksShell 宽屏 master-detail（调度台常驻）", () => {
+  it("/tracks：左列调度台 + 右栏空态提示", async () => {
     await addTrack({ title: "写周报" });
     const { host } = await mountShell("/tracks");
-    await waitFor(() => host.querySelector('[data-testid="tracks-gantt"]') !== null, "甘特面板");
-    expect(host.querySelector('[aria-label="并发甘特面板"]')).not.toBeNull();
-    expect(host.querySelector('input[aria-label="新建轨道标题"]')).not.toBeNull();
+    await waitFor(() => host.querySelector('[data-testid="dispatch-stats"]') !== null, "调度台统计带");
+    expect(host.querySelector('[aria-label="轨道调度台"]')).not.toBeNull();
+    expect(host.textContent).toContain("从左侧选一条轨道查看");
   });
 
-  it("点现状栏轨道名：左列就地切详情，甘特不卸载", async () => {
+  it("点状态卡：右栏出详情，调度台仍在、选中卡高亮", async () => {
     const track = await addTrack({ title: "写周报" });
+    await appendUserStep({ trackId: track.id, content: "初具雏形，下一步优化", mode: "instant", tags: [] });
     const { host } = await mountShell("/tracks");
-    await waitFor(() => host.querySelector('button[title="写周报"]') !== null, "现状栏轨道名");
-    await click(host.querySelector('button[title="写周报"]'));
-    await waitFor(() => host.querySelector("h1") !== null, "详情标题");
+    await waitFor(() => host.querySelector(`a[href="/tracks/${track.id}"]`) !== null, "状态卡链接");
+    await click(host.querySelector(`a[href="/tracks/${track.id}"]`));
+    await waitFor(
+      () => host.querySelector('[data-testid="current-frame-card"]') !== null,
+      "当前帧卡（步骤数据落定）",
+    );
     expect(host.querySelector("h1")?.textContent).toBe("写周报");
-    // 列表 composer 让位给详情
-    expect(host.querySelector('input[aria-label="新建轨道标题"]')).toBeNull();
-    // 甘特仍在场（未整页跳转），且选中泳道有高亮
-    expect(host.querySelector('[data-testid="tracks-gantt"]')).not.toBeNull();
-    expect(host.textContent).toContain(track.title);
-    expect(host.querySelector('[data-testid="gantt-lane-active"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="current-frame-card"]')?.textContent).toContain("初具雏形");
+    // 调度台仍在场，选中卡 accent 边框
+    expect(host.querySelector('[aria-label="轨道调度台"]')).not.toBeNull();
+    await waitFor(() => host.querySelector("article")?.className.includes("border-accent") === true, "选中卡高亮");
   });
 
-  it("/tracks/:id 直达：宽屏同样是详情 + 甘特双栏", async () => {
+  it("/tracks/:id 直达：左调度台 + 右详情", async () => {
     const track = await addTrack({ title: "写周报" });
     const { host } = await mountShell(`/tracks/${track.id}`);
     await waitFor(() => host.querySelector("h1") !== null, "详情标题");
     expect(host.querySelector("h1")?.textContent).toBe("写周报");
-    await waitFor(() => host.querySelector('[data-testid="tracks-gantt"]') !== null, "甘特面板");
+    await waitFor(() => host.querySelector('[aria-label="轨道调度台"]') !== null, "调度台");
   });
 });

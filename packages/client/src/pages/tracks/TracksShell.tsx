@@ -1,35 +1,24 @@
-import { useLiveQuery } from "dexie-react-hooks";
-import { lazy, Suspense, useMemo } from "react";
-import { Outlet, useMatch } from "react-router-dom";
-import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
-import { groupStepsByTrack, partitionTracks } from "../../lib/tracksView.js";
+import { Outlet } from "react-router-dom";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
-import { TracksGanttAside } from "./TracksGanttAside.js";
+import { TracksBoard } from "./TracksBoard.js";
 
-const TracksGanttPanel = lazy(() => import("./TracksGanttPanel.js"));
-
-// tracks 布局壳：宽屏=左列（列表/详情随路由切）+ 右侧甘特常驻；窄屏=纯透传。
-// 数据只为甘特而查：窄屏 bail 返回空数组不触 db；列表页保留自身查询（两份轻量观察者，表小可接受）。
+// tracks 布局壳：宽屏=左列调度台常驻 + 右栏随路由（/tracks=空态、/tracks/:id=详情）；窄屏=纯透传。
+// 数据装载在 TracksBoard 与详情页各自内部，壳只管布局。
 export default function TracksShell() {
   const isWideScreen = useIsWideScreen();
-  const tracks = useLiveQuery(() => (isWideScreen ? listTracks() : []), [isWideScreen], []);
-  const allSteps = useLiveQuery(() => (isWideScreen ? listAllTrackSteps() : []), [isWideScreen], []);
-  // 左列正在看哪条轨道：甘特泳道高亮联动用。
-  const selectedTrackId = useMatch("/tracks/:id")?.params.id ?? null;
-  const { active } = partitionTracks(tracks);
-  const byTrack = useMemo(() => groupStepsByTrack(allSteps), [allSteps]);
-
   if (!isWideScreen) return <Outlet />;
   return (
     <div className="flex min-h-full bg-page text-ink">
+      <aside
+        aria-label="轨道调度台"
+        className="sticky top-0 h-dvh shrink-0 overflow-y-auto border-r border-border"
+        style={{ width: 400 }}
+      >
+        <TracksBoard />
+      </aside>
       <div className="min-w-0 flex-1">
         <Outlet />
       </div>
-      <TracksGanttAside>
-        <Suspense fallback={<p className="p-4 td-text-caption text-ink-3">正在加载甘特…</p>}>
-          <TracksGanttPanel tracks={active} stepsByTrack={byTrack} selectedTrackId={selectedTrackId} />
-        </Suspense>
-      </TracksGanttAside>
     </div>
   );
 }

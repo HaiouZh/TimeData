@@ -66,7 +66,6 @@
   "src/pages/tracks/TrackListItem.test.tsx",
   "src/pages/tracks/TrackStepRow.test.tsx",
   "src/pages/tracks/TrackTimeline.test.tsx",
-  "src/pages/tracks/TracksGanttPanel.test.tsx",
   "src/pages/tracks/TracksListPage.test.tsx",
   "src/quick-notes/HighlightedText.test.tsx",
   "src/quick-notes/NoteBubble.test.tsx",
