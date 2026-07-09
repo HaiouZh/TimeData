@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 import type { Track, TrackStep } from "@timedata/shared";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
-import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { click, renderDom, unmount } from "../../test/domHarness.js";
 import type { TrackBoardSignal } from "../../lib/tracksView.js";
+import { click, renderDom, unmount } from "../../test/domHarness.js";
 import type { StepDraft } from "./StepComposer.js";
 import { TrackListItem } from "./TrackListItem.js";
 
@@ -51,6 +50,7 @@ async function mount(
   steps: TrackStep[],
   props: {
     signal?: TrackBoardSignal | null;
+    badgeTone?: "warn" | "purple" | "default";
     stalledDays?: number | null;
     selected?: boolean;
     statusTags?: readonly string[];
@@ -129,6 +129,31 @@ describe("TrackListItem", () => {
     });
     expect(noSignal.textContent).not.toContain("#待我处理");
     expect(noSignal.textContent).not.toContain("其他");
+  });
+
+  it("badgeTone 决定信号徽章语义色：warn/purple/默认 accent", async () => {
+    const warn = await mount(track(), [step({ id: "a", seq: 0, tags: ["待我处理"] })], {
+      signal: { tag: "待我处理", stepId: "a" },
+      badgeTone: "warn",
+    });
+    expect(warn.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-warn");
+
+    await unmount(mounted?.root);
+    mounted = null;
+
+    const purple = await mount(track(), [step({ id: "b", seq: 0, tags: ["agent在做"] })], {
+      signal: { tag: "agent在做", stepId: "b" },
+      badgeTone: "purple",
+    });
+    expect(purple.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-data-purple");
+
+    await unmount(mounted?.root);
+    mounted = null;
+
+    const fallback = await mount(track(), [step({ id: "c", seq: 0, tags: ["复盘"] })], {
+      signal: { tag: "复盘", stepId: "c" },
+    });
+    expect(fallback.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-accent");
   });
 
   it("keeps inline writer outside the detail link and delegates submit to parent", async () => {

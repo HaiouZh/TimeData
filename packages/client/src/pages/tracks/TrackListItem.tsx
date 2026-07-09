@@ -7,11 +7,21 @@ import { StepComposer, type StepDraft } from "./StepComposer.js";
 
 const STATUS_DOT: Record<string, string> = { active: "bg-accent", concluded: "bg-ink-3", parked: "bg-ink-3" };
 
+export type TrackBadgeTone = "warn" | "purple" | "default";
+
+// 信号徽章按调度组语义着色：等我接=警示、agent 在跑=紫系（同甘特 agent 泳道色）、其余=动作蓝。
+const BADGE_TONE_CLASSES: Record<TrackBadgeTone, string> = {
+  warn: "border-warn/40 bg-warn-soft text-warn",
+  purple: "border-data-purple/40 bg-data-purple/10 text-data-purple",
+  default: "border-accent/30 bg-accent-soft text-accent",
+};
+
 export interface TrackListItemProps {
   track: Track;
   steps: TrackStep[];
   now?: Date;
   signal?: TrackBoardSignal | null;
+  badgeTone?: TrackBadgeTone;
   stalledDays?: number | null;
   selected?: boolean;
   statusTags?: readonly string[];
@@ -24,6 +34,7 @@ export function TrackListItem({
   steps,
   now = new Date(),
   signal,
+  badgeTone = "default",
   stalledDays = null,
   selected = false,
   statusTags = [],
@@ -49,7 +60,10 @@ export function TrackListItem({
             <span className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="min-w-0 flex-1 truncate td-text-body text-ink">{track.title}</span>
               {signal && (
-                <span className="inline-flex shrink-0 items-center rounded-pill border border-accent/30 bg-accent-soft px-2 py-0.5 td-text-caption text-accent">
+                <span
+                  data-testid="track-signal-badge"
+                  className={`inline-flex shrink-0 items-center rounded-pill border px-2 py-0.5 td-text-caption ${BADGE_TONE_CLASSES[badgeTone]}`}
+                >
                   #{signal.tag}
                 </span>
               )}

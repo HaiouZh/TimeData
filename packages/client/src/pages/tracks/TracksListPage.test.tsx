@@ -185,6 +185,16 @@ describe("TracksListPage", () => {
       el.getAttribute("data-testid"),
     );
     expect(groups).toEqual(["dispatch-group-awaiting-me", "dispatch-group-agent-running", "dispatch-group-stalled"]);
+
+    // 视觉分层：等我接=警示色、agent 在跑=紫系，组头与卡片信号徽章同语义。
+    const awaitingGroup = host.querySelector('[data-testid="dispatch-group-awaiting-me"]');
+    expect(awaitingGroup?.querySelector("h2")?.className).toContain("text-warn");
+    expect(awaitingGroup?.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-warn");
+    const agentGroup = host.querySelector('[data-testid="dispatch-group-agent-running"]');
+    expect(agentGroup?.querySelector("h2")?.className).toContain("text-data-purple");
+    expect(agentGroup?.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-data-purple");
+    const stalledGroup = host.querySelector('[data-testid="dispatch-group-stalled"]');
+    expect(stalledGroup?.querySelector("h2")?.className).toContain("text-ink-3");
   });
 
   it("看板信号 facet 面板已退役", async () => {

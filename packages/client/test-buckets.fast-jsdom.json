@@ -64,7 +64,6 @@
   "src/pages/tracks/StepComposer.test.tsx",
   "src/pages/tracks/TrackDetailPage.test.tsx",
   "src/pages/tracks/TrackListItem.test.tsx",
-  "src/pages/tracks/TrackStatusFacetPanel.test.tsx",
   "src/pages/tracks/TrackStepRow.test.tsx",
   "src/pages/tracks/TrackTimeline.test.tsx",
   "src/pages/tracks/TracksGanttPanel.test.tsx",
