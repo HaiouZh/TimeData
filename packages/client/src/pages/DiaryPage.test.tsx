@@ -132,11 +132,36 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
-  it("enabled=false 显示未配置提示、无 textarea", async () => {
+  it("enabled=false 显示未配置提示、无 textarea、不调用 fetchDiary", async () => {
     fetchDiaryConfig.mockResolvedValue({ enabled: false, template: "" });
     const { host, root } = await renderPage();
 
     expect(host.textContent).toContain("DIARY_VAULT_DIR");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).not.toContain("正在加载");
+    expect(fetchDiary).not.toHaveBeenCalled();
+
+    await unmount(root);
+  });
+
+  it("enabled=true 但 template 为空 显示去配模板提示、不调用 fetchDiary", async () => {
+    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "" });
+    const { host, root } = await renderPage();
+
+    expect(host.textContent).toContain("还没有配置日记模板");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).not.toContain("正在加载");
+    expect(fetchDiary).not.toHaveBeenCalled();
+
+    await unmount(root);
+  });
+
+  it("fetchDiaryConfig reject（离线）显示加载失败态、不卡 loading", async () => {
+    fetchDiaryConfig.mockRejectedValue(new Error("网络断开"));
+    const { host, root } = await renderPage();
+
+    expect(host.textContent).not.toContain("正在加载");
+    expect(host.textContent).toContain("加载失败");
     expect(host.querySelector("textarea")).toBeNull();
 
     await unmount(root);

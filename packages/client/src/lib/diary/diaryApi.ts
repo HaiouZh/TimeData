@@ -21,7 +21,11 @@ export interface DiaryDoc {
 }
 
 function isConflict(err: unknown): err is ApiError {
-  return err instanceof ApiError && err.status === 409;
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    (err.body as { error?: unknown } | null)?.error === "diary-conflict"
+  );
 }
 
 function extractMtime(err: ApiError): number | null {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../api.js";
 import {
   DiaryConflictError,
   fetchDiary,
@@ -55,6 +56,13 @@ describe("diaryApi", () => {
     mockFetch(500, { error: "server-error" });
     await expect(saveDiary("2026-07-09", { content: "x", baseMtime: 1 })).rejects.not.toBeInstanceOf(
       DiaryConflictError,
+    );
+  });
+
+  it("saveDiary 遇 409 diary-no-template 原样上抛 ApiError，不误判为冲突", async () => {
+    mockFetch(409, { error: "diary-no-template" });
+    await expect(saveDiary("2026-07-09", { content: "x", baseMtime: 1 })).rejects.toSatisfy(
+      (e: unknown) => e instanceof ApiError && !(e instanceof DiaryConflictError),
     );
   });
 });

@@ -25,20 +25,32 @@ export default function DiaryPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [config, doc] = await Promise.all([fetchDiaryConfig(), fetchDiary(today)]);
-      if (cancelled) return;
-      setEnabled(config.enabled);
-      setTemplate(config.template);
-      setContent(doc.content);
-      setBaseMtime(doc.mtime);
-      setDirty(false);
-      setLoading(false);
+      try {
+        const config = await fetchDiaryConfig();
+        if (cancelled) return;
+        setEnabled(config.enabled);
+        setTemplate(config.template);
+        if (!config.enabled || config.template === "") {
+          setLoading(false);
+          return; // 未挂载 vault / 未配模板：不调 fetchDiary，直接走对应提示分支
+        }
+        const doc = await fetchDiary(today);
+        if (cancelled) return;
+        setContent(doc.content);
+        setBaseMtime(doc.mtime);
+        setDirty(false);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadFailed(true);
+        setError(err instanceof Error ? err.message : "加载失败");
+        setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -160,6 +172,10 @@ export default function DiaryPage() {
 
       {loading ? (
         <div className="flex flex-1 items-center justify-center td-text-body text-ink-3">正在加载...</div>
+      ) : loadFailed ? (
+        <div className="flex flex-1 items-center justify-center px-6 text-center td-text-body text-ink-3">
+          加载失败，请检查网络后重试
+        </div>
       ) : !enabled ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center td-text-body text-ink-3">
           服务器未配置日记 vault（DIARY_VAULT_DIR）
@@ -174,7 +190,6 @@ export default function DiaryPage() {
         </div>
       ) : (
         <textarea
-          ref={textareaRef}
           aria-label="日记正文"
           value={content}
           onChange={(event) => {
