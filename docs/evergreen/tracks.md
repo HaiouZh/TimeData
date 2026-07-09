@@ -16,7 +16,7 @@ covers:
 contracts:
   - packages/shared/src/trackBoardSignals.ts
   - packages/server/src/routes/agent-tracks.ts
-last-reviewed: 2026-07-08
+last-reviewed: 2026-07-09
 ---
 
 # 任务轨道
@@ -112,9 +112,9 @@ agent 接力协议：派活时给 agent `trackId` 和当前看板信号词表；
 
 本地续写协议的单一事实源是 `.claude/skills/track-step/SKILL.md`（平台无关，任何能跑 shell/Node 的 agent 通用；技术契约见同目录 `references/api.md`，执行器 `scripts/td-track.mjs`）。该目录是本地 AI state，被 `.gitignore` 忽略；evergreen 只记录指针和端点契约，不复制协议正文。协议要求 agent 被用户显式召回后先读 context、保守匹配已有 active track、命中后写 step、未命中时回报建议新建标题，且写入或未写入都必须给回执。
 
-## 8. 并发甘特（宽屏监控面）
+## 8. 状态卡与调度台（含宽屏 master-detail）
 
-tracks 栏目宽屏（≥1024px）为 master-detail 双栏：布局壳 `TracksShell` 包住 /tracks 与 /tracks/:id 两条路由，左列随路由切列表/详情（`<Outlet/>`），右=可拖宽甘特常驻（`TracksGanttAside`，宽度偏好 `timedata_track_gantt_width`）——点泳道/段左列就地切详情，甘特不卸载、缩放窗口不重置；左列在看的轨道其泳道画高亮底色、现状栏名字转 accent（`selectedTrackId`，壳从路由 useMatch 得出）。壳的数据只为甘特而查（窄屏 bail 不触 db），列表页保留自身查询。窄屏壳纯透传（列表/详情各自整页）。甘特泳道=active 轨道（空轨道占道），闭合步=条、瞬时步=菱形标记（配透明大热区,r=9）、开口步延伸到"此刻"线（保底最小宽度 `RUNNING_MIN_PX`=12px 右缘锚定,不被线性比例尺压成小点；新鲜开口步右端贴此刻线画呼吸脉冲活头,motion-safe 尊重 reduced-motion；等待/陈旧步不加活头）；最新步刚收尾的泳道画 2h 渐隐余晖；颜色按执行者（我=data-teal，agent=data-purple；执行者=信号优先回退写入者：步子带「agent 执行信号」(设置页可配,默认 agent在做,存 track.agentExecTags.v1)视为 agent 在干，否则看谁写入）。布局为「时间画布在左、名字+现状栏在右」：画布右端严格=此刻（track 无未来数据、无时间留白），紧邻的现状栏（可拖宽）每泳道一格显示当前状态（laneNowStatus：●进行中·已X / ○已等X(等待) / ◐刚动过·X前 / ○开着X没动静 / —停着·X），看此刻并发=竖扫现状栏而非辨认画布边缘。开口步 2h 内画实条延到此刻，超 2h 画"实头(2h)+半透明虚线尾迹"表示口没闭但没动静。带"等待信号"（约定=第一个配置的看板信号,同导航badge口径）的步画空心条=接力空档（等待是持续状态,不参与陈旧截断）。进页 auto-fit 只迁就最近 48h 活跃的泳道（僵尸开口步不拉爆视野），全员不活跃退最近 24h，滚轮锚点缩放 clamp [1h,7d]、拖拽平移，窗口态不持久化。工具条常驻「进行中 N · 24h 活跃 M」（活跃只看最后动静时间，陈旧开口步算进行中但不算活跃）。点击段跳 `/tracks/:id#step-<stepId>`，详情页据 hash 高亮该步并滚动定位（目标步在折叠隐藏区时时间线自动全量展开）。纯函数层在 `packages/client/src/lib/tracksGantt.ts`（node 快桶单测），组件 `TracksGanttPanel` 为薄壳。窄屏无甘特入口。
+track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；当前帧 = 最新一步的投影（写新步=覆盖当前帧、编辑最新步=修正当前帧），零 schema 改动。/tracks 顶部统计带「等我接 N · agent 在跑 M · 停滞 K」答"此刻几条在并发"；每条 active 轨道一张状态卡（标题+最新步内容 2-3 行+信号徽章+最后动静，计时弱化不显历时/步数），按调度语义分组：判定优先级=等我接（信号命中 actionTags[0]，停滞不豁免、卡上标"N 天没动静"）> 停滞（最后动静>7 天，无步轨道用 createdAt 兜底）> agent在跑（信号命中 agentExecTags）> 推进中；显示序=等我接→agent在跑→推进中→停滞（沉底弱化），组内最后动静倒序，空组不渲染。信号口径=`latestTrackBoardSignal`（最近一个带信号的步，同导航 badge / goals 候选——中途补无信号步不清除信号）。纯函数层 `packages/client/src/lib/tracksDispatch.ts`（node 快桶单测）。详情页倒置：顶部当前帧卡（最新步全文+就地编辑/删除，只显示"X 前"）→ StepComposer（写入即成为新当前帧）→ 闭合当前步（次要）→「历史 N 步」默认折叠（hash 锚点命中历史步时自动展开；折叠/中段折叠语义在 TrackTimeline 内不变）。宽屏（≥1024px）`TracksShell`：左列调度台常驻（400px、独立滚动）+ 右栏随路由（/tracks=空态提示、/tracks/:id=详情），选中卡 accent 边框；窄屏壳纯透传。并发甘特（2026-07-08~09）已整体退役：甘特回答"什么时候有动静"、适合规划未来的并发，本场景要的是"此刻横切面"，由调度台分组+统计带承接。
 
 ## 9. 后续阶段
 

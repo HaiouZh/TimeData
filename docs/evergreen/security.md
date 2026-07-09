@@ -28,6 +28,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-06-29（重力 v2）：翻牌「已过目表」从 localStorage 改为 settings blob（todo.gravity.review.v1），不写 Task、不刷新 updatedAt；认证、限流、确认 token 机制不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：storageKeys 仅删除从未被引用的死 key serverHealthy；凭据存储、token 处理与鉴权边界不变。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：storageKeys 新增 clockSkewMs 只记录本地-服务器时间差毫秒数；sync push 仍走既有鉴权、限流和 body limit，安全边界不变。 -->
+<!-- 复核 2026-07-09（tracks 调度台）：storageKeys 仅随并发甘特退役删除 trackGanttWidth / trackGanttNameWidth 两个本地 UI 偏好 key；凭据存储、token 处理与鉴权边界不变。 -->
 
 # 安全与凭据处理
 
