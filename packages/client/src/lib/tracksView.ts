@@ -1,10 +1,9 @@
 import {
   compareTrackStepsBySemanticTime,
   compareTrackStepsBySemanticTimeDesc,
-  latestTrackBoardSignal,
   latestOpenStep as latestOpenTrackStep,
+  latestTrackBoardSignal,
   latestTrackStep,
-  uniqueTrackBoardSignals,
   type Ref,
   type Track,
   type TrackBoardSignal,
@@ -86,12 +85,6 @@ export function stepSourceText(step: TrackStep): string {
   return step.sourceLabel ?? "agent";
 }
 
-export interface TrackStatusFacet {
-  tag: string;
-  count: number;
-  suggested: boolean;
-}
-
 export type { TrackBoardSignal };
 
 export interface TrackBoardItem {
@@ -112,28 +105,4 @@ export function boardItemsForTracks(
     track,
     signal: latestBoardSignal(stepsByTrack.get(track.id) ?? [], boardSignals),
   }));
-}
-
-export function collectStatusFacetsFromItems(items: readonly TrackBoardItem[], boardSignals: readonly string[]): TrackStatusFacet[] {
-  const counts = new Map<string, number>();
-
-  for (const item of items) {
-    const signal = item.signal;
-    if (!signal) continue;
-    counts.set(signal.tag, (counts.get(signal.tag) ?? 0) + 1);
-  }
-
-  return uniqueTrackBoardSignals(boardSignals).map((tag) => ({
-    tag,
-    count: counts.get(tag) ?? 0,
-    suggested: true,
-  }));
-}
-
-export function filterBoardItemsByStatusTags(items: readonly TrackBoardItem[], selectedTags: readonly string[]): TrackBoardItem[] {
-  const selected = new Set(uniqueTrackBoardSignals(selectedTags));
-  return items.filter((item) => {
-    if (selected.size === 0) return true;
-    return item.signal ? selected.has(item.signal.tag) : false;
-  });
 }

@@ -2,7 +2,6 @@
 import { act, createElement } from "react";
 import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { addTrack, addTrackStep, listTracks, updateTrack } from "../../lib/tracks.js";
 import { db } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
@@ -44,27 +43,12 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   throw new Error(`Timed out waiting for ${text}`);
 }
 
-async function waitForCondition(predicate: () => boolean, label: string): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
-    if (predicate()) return;
-    await flush();
-  }
-  throw new Error(`Timed out waiting for ${label}`);
-}
-
 async function renderList() {
   mounted = await renderDom(
     createElement(MemoryRouter, { initialEntries: ["/tracks"] }, createElement(TracksListPage)),
   );
   await flush();
   return mounted.host;
-}
-
-function facetButton(host: HTMLElement, label: string): HTMLButtonElement {
-  const button = [...host.querySelectorAll("button")].find((item) => item.textContent?.trim() === label);
-  if (!(button instanceof HTMLButtonElement)) throw new Error(`Missing facet button: ${label}`);
-  return button;
 }
 
 function trackCardsText(host: HTMLElement): string {
@@ -112,8 +96,55 @@ async function seedTrackWithStep(title: string, tags: string[]) {
   return track;
 }
 
+// TracksBoard 的分组/停滞判定按真实 Date.now() 计时（非该文件其它用例的固定 `now`），
+// 造数须用相对真实当下的时间戳，8 天前才会真正落进「停滞」组。
+async function seedDispatchScenario(): Promise<void> {
+  const nowMs = Date.now();
+  const recentIso = new Date(nowMs - 60 * 60 * 1000).toISOString();
+  const staleIso = new Date(nowMs - 8 * 24 * 60 * 60 * 1000).toISOString();
+
+  await addTrack({ title: "等我处理的轨道" });
+  const awaiting = (await listTracks()).find((item) => item.title === "等我处理的轨道");
+  if (!awaiting) throw new Error("missing awaiting track");
+  await addTrackStep({
+    trackId: awaiting.id,
+    source: "agent",
+    content: "等我确认",
+    startedAt: recentIso,
+    endedAt: recentIso,
+    tags: ["待我处理"],
+    seq: 0,
+  });
+
+  await addTrack({ title: "agent 在跑的轨道" });
+  const running = (await listTracks()).find((item) => item.title === "agent 在跑的轨道");
+  if (!running) throw new Error("missing running track");
+  await addTrackStep({
+    trackId: running.id,
+    source: "agent",
+    content: "agent 执行中",
+    startedAt: recentIso,
+    endedAt: null,
+    tags: ["agent在做"],
+    seq: 0,
+  });
+
+  await addTrack({ title: "停滞的轨道" });
+  const stalled = (await listTracks()).find((item) => item.title === "停滞的轨道");
+  if (!stalled) throw new Error("missing stalled track");
+  await addTrackStep({
+    trackId: stalled.id,
+    source: "user",
+    content: "很久没动静",
+    startedAt: staleIso,
+    endedAt: staleIso,
+    tags: [],
+    seq: 0,
+  });
+}
+
 describe("TracksListPage", () => {
-  it("lists active tracks with board signal facets, latest steps, and links to detail", async () => {
+  it("lists active tracks with latest steps and links to detail", async () => {
     await addTrack({ title: "全马破三", now });
     const [track] = await listTracks();
     await updateTrack(track.id, { summary: "base 到 build", now });
@@ -129,15 +160,38 @@ describe("TracksListPage", () => {
     });
     const host = await renderList();
     await waitForText(host, "全马破三");
-    await waitForText(host, "看板信号");
     await waitForText(host, "base 期");
-    expect(host.textContent).toContain("待我处理 1");
-    expect(host.textContent).toContain("agent在做 0");
     expect(host.textContent).toContain("#待我处理");
     expect(host.textContent).toContain("base 到 build");
     expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("base 期");
-    expect(host.textContent).not.toContain("按该谁了分组");
     expect(host.querySelector(`a[href="/tracks/${track.id}"]`)).not.toBeNull();
+  });
+
+  it("统计带显示 等我接/agent在跑/停滞 计数", async () => {
+    await seedDispatchScenario();
+    const host = await renderList();
+    await waitForText(host, "等我处理的轨道");
+    const stats = host.querySelector('[data-testid="dispatch-stats"]');
+    expect(stats?.textContent).toContain("等我接 1");
+    expect(stats?.textContent).toContain("agent 在跑 1");
+    expect(stats?.textContent).toContain("停滞 1");
+  });
+
+  it("卡片按分组落位：等我接组在最上，停滞组沉底", async () => {
+    await seedDispatchScenario();
+    const host = await renderList();
+    await waitForText(host, "等我处理的轨道");
+    const groups = [...host.querySelectorAll('[data-testid^="dispatch-group-"]')].map((el) =>
+      el.getAttribute("data-testid"),
+    );
+    expect(groups).toEqual(["dispatch-group-awaiting-me", "dispatch-group-agent-running", "dispatch-group-stalled"]);
+  });
+
+  it("看板信号 facet 面板已退役", async () => {
+    await seedDispatchScenario();
+    const host = await renderList();
+    await waitForText(host, "等我处理的轨道");
+    expect(host.textContent).not.toContain("看板信号");
   });
 
   it("tucks concluded/parked tracks into a collapsed archive section", async () => {
@@ -214,103 +268,7 @@ describe("TracksListPage", () => {
     expect(host.querySelector('[aria-label="并发甘特面板"]')).toBeNull();
   });
 
-  it("filters active tracks by selected board signal tags with OR semantics", async () => {
-    await seedTrackWithStep("待我确认的轨道", ["待我处理"]);
-    await seedTrackWithStep("agent 执行中", ["agent在做"]);
-    await seedTrackWithStep("普通推进", ["复盘"]);
-
-    const host = await renderList();
-    await waitForText(host, "待我确认的轨道");
-    expect(trackCardsText(host)).toContain("agent 执行中");
-    expect(trackCardsText(host)).toContain("普通推进");
-    await waitForText(host, "待我处理 1");
-    await waitForText(host, "agent在做 1");
-    await click(facetButton(host, "待我处理 1"));
-    await waitForCondition(
-      () =>
-        facetButton(host, "待我处理 1").getAttribute("aria-pressed") === "true" &&
-        trackCardsText(host).includes("待我确认的轨道") &&
-        !trackCardsText(host).includes("agent 执行中") &&
-        !trackCardsText(host).includes("普通推进"),
-      "待我处理 facet filtering",
-    );
-    await click(facetButton(host, "agent在做 1"));
-    await waitForCondition(
-      () =>
-        facetButton(host, "agent在做 1").getAttribute("aria-pressed") === "true" &&
-        trackCardsText(host).includes("待我确认的轨道") &&
-        trackCardsText(host).includes("agent 执行中") &&
-        !trackCardsText(host).includes("普通推进"),
-      "OR board signal filtering",
-    );
-  });
-
-  it("shows an empty active hint when selected board signal tags match nothing", async () => {
-    await seedTrackWithStep("进行中无行动标签", []);
-    const host = await renderList();
-    await waitForText(host, "进行中无行动标签");
-    await click(facetButton(host, "待我处理 0"));
-    await waitForText(host, "没有命中这些看板信号的进行中轨道");
-    expect(trackCardsText(host)).not.toContain("进行中无行动标签");
-  });
-
-  it("keeps a board signal after later ordinary tag or untagged steps", async () => {
-    await addTrack({ title: "agent 执行中", now });
-    const [track] = await listTracks();
-    await addTrackStep({
-      trackId: track.id,
-      source: "user",
-      content: "派给 agent",
-      startedAt: "2026-06-21T01:00:00.000Z",
-      endedAt: null,
-      tags: ["agent在做"],
-      seq: 0,
-      now,
-    });
-    await addTrackStep({
-      trackId: track.id,
-      source: "user",
-      content: "补充一个决策点",
-      startedAt: "2026-06-21T02:00:00.000Z",
-      endedAt: "2026-06-21T02:00:00.000Z",
-      tags: ["决策"],
-      seq: 1,
-      now,
-    });
-    await addTrackStep({
-      trackId: track.id,
-      source: "user",
-      content: "无标签补充",
-      startedAt: "2026-06-21T02:30:00.000Z",
-      endedAt: "2026-06-21T02:30:00.000Z",
-      tags: [],
-      seq: 2,
-      now,
-    });
-    const host = await renderList();
-    await waitForText(host, "agent在做 1");
-    await click(facetButton(host, "agent在做 1"));
-    await waitForCondition(() => trackCardsText(host).includes("agent 执行中"), "sticky agent signal");
-  });
-
-  it("clears selected board-signal filters when the configured signal disappears", async () => {
-    await setTrackActionTags(["待我处理", "agent在做"]);
-    await seedTrackWithStep("需要我处理", ["待我处理"]);
-
-    const host = await renderList();
-    await waitForText(host, "待我处理 1");
-    await click(facetButton(host, "待我处理 1"));
-    await waitForCondition(() => trackCardsText(host).includes("需要我处理"), "filter applied");
-
-    await act(async () => {
-      await setTrackActionTags(["agent在做"]);
-    });
-
-    await waitForText(host, "agent在做 0");
-    await waitForCondition(() => trackCardsText(host).includes("需要我处理"), "stale selected filter cleared");
-  });
-
-  it("writes an inline card step through the list page and refreshes board signal without navigation", async () => {
+  it("writes an inline card step through the list page and refreshes its board signal without navigation", async () => {
     await seedTrackWithStep("待处理轨道", ["待我处理"]);
     const host = await renderList();
     await waitForText(host, "待处理轨道");
@@ -318,7 +276,7 @@ describe("TracksListPage", () => {
     await typeTextarea(host, "交给 agent 继续");
     await clickButton(host, "#agent在做");
     await submitInlineForm(host);
-    await waitForText(host, "agent在做 1");
+    await waitForText(host, "#agent在做");
     expect(trackCardsText(host)).toContain("待处理轨道");
   });
 });

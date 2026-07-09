@@ -2,9 +2,7 @@ import type { Ref, TrackStep } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
 import {
   boardItemsForTracks,
-  collectStatusFacetsFromItems,
   currentStepId,
-  filterBoardItemsByStatusTags,
   formatStepDuration,
   groupStepsByTrack,
   isLinkRef,
@@ -109,52 +107,9 @@ describe("tracksView pure helpers", () => {
       "plain",
       "mine",
     ]);
-    expect(boardItemsForTracks(tracks, groupStepsByTrack(steps), BOARD_SIGNALS).map((item) => item.signal?.tag ?? null)).toEqual([
-      "agent在做",
-      null,
-      "待我处理",
-    ]);
-  });
-
-  it("collectStatusFacetsFromItems counts configured sticky board signals only", () => {
-    const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("p1", "parked")];
-    const steps = [
-      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["agent在做"] }),
-      step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
-      step({ id: "a2-new", trackId: "a2", seq: 0, tags: ["待我处理", "批注"] }),
-      step({ id: "a3-new", trackId: "a3", seq: 0, tags: ["决策"] }),
-      step({ id: "p1-new", trackId: "p1", seq: 0, tags: ["待我处理"] }),
-    ];
-    const items = boardItemsForTracks(
-      tracks.filter((item) => item.status === "active"),
-      groupStepsByTrack(steps),
-      BOARD_SIGNALS,
-    );
-    expect(collectStatusFacetsFromItems(items, BOARD_SIGNALS)).toEqual([
-      { tag: "待我处理", count: 1, suggested: true },
-      { tag: "agent在做", count: 1, suggested: true },
-    ]);
-  });
-
-  it("filterBoardItemsByStatusTags uses OR against sticky board signals", () => {
-    const tracks = [track("a1", "active"), track("a2", "active"), track("a3", "active"), track("c1", "concluded")];
-    const steps = [
-      step({ id: "a1-old", trackId: "a1", seq: 0, tags: ["agent在做"] }),
-      step({ id: "a1-new", trackId: "a1", seq: 1, tags: [] }),
-      step({ id: "a2", trackId: "a2", seq: 0, tags: ["待我处理"] }),
-      step({ id: "a3", trackId: "a3", seq: 0, tags: ["复盘"] }),
-      step({ id: "c1", trackId: "c1", seq: 0, tags: ["待我处理"] }),
-    ];
-    const items = boardItemsForTracks(
-      tracks.filter((item) => item.status === "active"),
-      groupStepsByTrack(steps),
-      BOARD_SIGNALS,
-    );
-    expect(filterBoardItemsByStatusTags(items, []).map((item) => item.track.id)).toEqual(["a1", "a2", "a3"]);
-    expect(filterBoardItemsByStatusTags(items, ["待我处理", "agent在做"]).map((item) => item.track.id)).toEqual([
-      "a1",
-      "a2",
-    ]);
+    expect(
+      boardItemsForTracks(tracks, groupStepsByTrack(steps), BOARD_SIGNALS).map((item) => item.signal?.tag ?? null),
+    ).toEqual(["agent在做", null, "待我处理"]);
   });
 
   it("orderedTimeline 按语义时间：昨天回填步不在顶部", () => {
