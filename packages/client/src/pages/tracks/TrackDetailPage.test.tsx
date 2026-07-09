@@ -38,6 +38,17 @@ async function waitForText(host: HTMLElement, text: string): Promise<void> {
   throw new Error(`Timed out waiting for ${text}`);
 }
 
+// 等到顶部当前帧卡的内容包含指定文本——waitForText 会被历史区/其他节点的同名文本抢跑，卡片断言必须盯卡片本体。
+async function waitForCardText(host: HTMLElement, text: string): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    if (card?.textContent?.includes(text)) return;
+    await flush();
+  }
+  throw new Error(`Timed out waiting for current-frame-card text ${text}`);
+}
+
 async function renderDetail(id: string) {
   mounted = await renderDom(
     createElement(
@@ -274,6 +285,53 @@ describe("TrackDetailPage", () => {
     const added = steps.find((s) => s.content === "我下场盯一段");
     expect(prevOpen?.endedAt).not.toBeNull();
     expect(added).toMatchObject({ source: "user", endedAt: null });
+
+    // 端到端：写入后新步立刻成为顶部当前帧卡的内容
+    await waitForCardText(host, "我下场盯一段");
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    expect(card?.textContent).toContain("我下场盯一段");
+    expect(card?.textContent).not.toContain("base 期第一周");
+  });
+
+  it("当前帧卡删除 user 步需两段确认，删除后前一步顶上当前帧", async () => {
+    const track = await seedTrack();
+    await addTrackStep({
+      trackId: track.id,
+      source: "user",
+      content: "误记的一步待删除",
+      startedAt: "2026-06-21T02:00:00.000Z",
+      endedAt: null,
+      seq: 2,
+      now,
+    });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "误记的一步待删除");
+
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    expect(card?.textContent).toContain("误记的一步待删除");
+
+    // 第一段：点删除只进入确认态，步骤仍在
+    await act(async () => {
+      card
+        ?.querySelector('button[aria-label="删除步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect((await listTrackSteps(track.id)).some((s) => s.content === "误记的一步待删除")).toBe(true);
+
+    // 第二段：确认删除后，前一步（base 期第一周）顶上当前帧卡
+    await act(async () => {
+      host
+        .querySelector('[data-testid="current-frame-card"] button[aria-label="确认删除步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flush();
+
+    expect((await listTrackSteps(track.id)).some((s) => s.content === "误记的一步待删除")).toBe(false);
+    await waitForCardText(host, "base 期第一周");
+    const nextCard = host.querySelector('[data-testid="current-frame-card"]');
+    expect(nextCard?.textContent).toContain("base 期第一周");
+    expect(nextCard?.textContent).not.toContain("误记的一步待删除");
   });
 
   it("写一步:批注类标签走 instant,不打断进行中的开口步 (TK-03)", async () => {
