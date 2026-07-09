@@ -889,6 +889,36 @@ describe("listTasks", () => {
 
     expect(buckets.scheduled.map((t) => t.title)).toEqual(["近", "周计划", "远"]);
   });
+
+  it("scheduled 水位线：下一发在 7 天内（含逾期）在水上，更远的给出切点下标", async () => {
+    const seedNow = new Date("2026-06-14T06:00:00.000Z");
+    const within = await addTask({ title: "七天内", toInbox: true, now: seedNow });
+    await scheduleTask(within.id, "2026-06-21", { now: seedNow }); // 今天+7，压线在水上
+    const beyond = await addTask({ title: "八天后", toInbox: true, now: seedNow });
+    await scheduleTask(beyond.id, "2026-06-22", { now: seedNow });
+    await addTask({
+      title: "远期规则",
+      recurrence: { freq: "monthly", interval: 1, basis: "due", byMonthday: [10] },
+      startAt: "2026-07-10T00:00:00.000Z",
+      now: seedNow,
+    });
+
+    const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
+
+    expect(buckets.scheduled.map((t) => t.title)).toEqual(["七天内", "八天后", "远期规则"]);
+    expect(buckets.scheduledSunkenFromIndex).toBe(1);
+  });
+
+  it("scheduled 水位线：全部近期时切点=长度，空桶时=0", async () => {
+    const seedNow = new Date("2026-06-14T06:00:00.000Z");
+    const empty = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
+    expect(empty.scheduledSunkenFromIndex).toBe(0);
+
+    const soon = await addTask({ title: "明天", toInbox: true, now: seedNow });
+    await scheduleTask(soon.id, "2026-06-15", { now: seedNow });
+    const buckets = await listTasks(new Date("2026-06-14T10:00:00.000Z"));
+    expect(buckets.scheduledSunkenFromIndex).toBe(1);
+  });
 });
 
 describe("persistTaskOrder", () => {

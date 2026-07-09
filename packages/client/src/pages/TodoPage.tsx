@@ -56,6 +56,7 @@ import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { GravityReviewSection } from "./todo/GravityReviewSection.js";
 import { SunkenInboxTail, makeSunkenExtraAction } from "./todo/SunkenInboxTail.js";
+import { SunkenScheduledTail } from "./todo/SunkenScheduledTail.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
@@ -71,7 +72,14 @@ import {
   type TodoPool,
 } from "./todo/todoDnd.js";
 
-const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
+const EMPTY: TodoBuckets = {
+  today: [],
+  inbox: [],
+  scheduled: [],
+  recurring: [],
+  completed: [],
+  scheduledSunkenFromIndex: 0,
+};
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
 export function TodoPage() {
@@ -478,6 +486,12 @@ export function TodoPage() {
   );
 
   const scheduledFiltered = f(buckets.scheduled);
+  // 7 天水位线：过滤激活时失效（命中即显示），否则水下折叠进 SunkenScheduledTail。
+  const scheduledFilterActive = composerText.trim() !== "" || includeTags.length > 0 || excludeTags.length > 0;
+  const scheduledSurface = scheduledFilterActive
+    ? scheduledFiltered
+    : buckets.scheduled.slice(0, buckets.scheduledSunkenFromIndex);
+  const scheduledSunken = scheduledFilterActive ? [] : buckets.scheduled.slice(buckets.scheduledSunkenFromIndex);
   const scheduledBlock = (
     <CollapsibleSection
       title="已排期"
@@ -489,7 +503,8 @@ export function TodoPage() {
         <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">没有已排期任务</p>
       ) : (
         <div className="rounded-card bg-surface p-1.5">
-          <TaskList pool="upcoming" tasks={scheduledFiltered} {...rowHandlers} />
+          {scheduledSurface.length > 0 && <TaskList pool="upcoming" tasks={scheduledSurface} {...rowHandlers} />}
+          <SunkenScheduledTail sunkenTasks={scheduledSunken} {...rowHandlers} />
         </div>
       )}
     </CollapsibleSection>

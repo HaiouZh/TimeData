@@ -15,7 +15,14 @@ import {
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 import { SettingsNumberRow, SettingsSection, SettingsToggleRow } from "./components/SettingsRows.js";
 
-const EMPTY: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
+const EMPTY: TodoBuckets = {
+  today: [],
+  inbox: [],
+  scheduled: [],
+  recurring: [],
+  completed: [],
+  scheduledSunkenFromIndex: 0,
+};
 
 export default function SettingsTodoGravityPage() {
   const settings = useTodoGravitySettings();

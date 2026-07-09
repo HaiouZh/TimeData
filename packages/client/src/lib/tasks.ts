@@ -733,6 +733,8 @@ export interface TodoBuckets {
   today: Task[]; // 含过期，过期排前
   inbox: Task[];
   scheduled: Task[]; // 一次性未来排期 + 未到期重复，按当前到期日升序
+  /** 水位线切点：scheduled 中第一个下一发生日超出「今天+7 天」的下标；全近期=length，空桶=0。 */
+  scheduledSunkenFromIndex: number;
   recurring: Task[]; // P3 后 UI 不再单独渲染重复桶，保留空桶兼容旧调用方
   completed: Task[]; // 全部已完成（今天 + 隔日）+ 耗尽重复，按 completedAt 倒序
 }
@@ -751,7 +753,10 @@ function isOverdue(t: Task, now: Date): boolean {
 function scheduledDateKey(t: Task, now: Date, ruleDueKey?: Map<string, string>): string {
   // 重复模板：优先账本推进的下一到期日（listTasks 预计算）；无账本上下文时退回模板死游标（legacy 兜底）。
   if (t.recurrence) return ruleDueKey?.get(t.id) ?? currentDueDateString(t.recurrence, t.lastDoneAt, t.startAt, now);
-  const d = new Date(t.scheduledAt as string);
+  return localYmd(new Date(t.scheduledAt as string));
+}
+
+function localYmd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -766,7 +771,14 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     }
     all.push(parsed.data);
   }
-  const buckets: TodoBuckets = { today: [], inbox: [], scheduled: [], recurring: [], completed: [] };
+  const buckets: TodoBuckets = {
+    today: [],
+    inbox: [],
+    scheduled: [],
+    recurring: [],
+    completed: [],
+    scheduledSunkenFromIndex: 0,
+  };
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
   const occurrencesByRule = new Map<string, Task[]>();
   for (const t of all) {
@@ -798,6 +810,12 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   }
   buckets.today.sort((a, b) => Number(isOverdue(b, now)) - Number(isOverdue(a, now)) || a.sortOrder - b.sortOrder);
   buckets.scheduled.sort((a, b) => scheduledDateKey(a, now, ruleDueKey).localeCompare(scheduledDateKey(b, now, ruleDueKey)));
+  // 水位线：下一发生日 ≤ 今天+7（本地日历，与排序键同口径）在水上，其余折叠为水下。
+  const horizon = new Date(now);
+  horizon.setDate(horizon.getDate() + 7);
+  const horizonKey = localYmd(horizon);
+  const sunkenFrom = buckets.scheduled.findIndex((t) => scheduledDateKey(t, now, ruleDueKey) > horizonKey);
+  buckets.scheduledSunkenFromIndex = sunkenFrom === -1 ? buckets.scheduled.length : sunkenFrom;
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
   return buckets;
 }

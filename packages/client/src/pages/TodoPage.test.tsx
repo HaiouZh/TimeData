@@ -145,6 +145,55 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
+  it("已排期水位线：7 天内在水上，更远折叠成「更远还有 N 条」，点开可见", async () => {
+    const ymd = (offsetDays: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const near = await addTask({ title: "近期排期", toInbox: true });
+    await scheduleTask(near.id, ymd(2));
+    const far = await addTask({ title: "远期排期", toInbox: true });
+    await scheduleTask(far.id, ymd(30));
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "近期排期");
+    expect(host.textContent).not.toContain("远期排期");
+    await waitForText(host, "更远还有 1 条");
+
+    const btn = Array.from(host.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("更远还有 1 条"),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await waitForText(host, "远期排期");
+    await unmount(root);
+  });
+
+  it("已排期水位线：搜索过滤激活时水下命中直接显示", async () => {
+    const ymd = (offsetDays: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const far = await addTask({ title: "远期独有词", toInbox: true });
+    await scheduleTask(far.id, ymd(30));
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "更远还有 1 条");
+    expect(host.textContent).not.toContain("远期独有词");
+
+    const input = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "远期独有词");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await waitForText(host, "远期独有词");
+    await unmount(root);
+  });
+
   it("默认落点=今天：添加进今天（scheduledAt 非空）", async () => {
     const { host, root } = await renderPage();
     await typeAndAdd(host, "默认今天");
@@ -449,11 +498,12 @@ describe("TodoPage", () => {
   });
 
   it("shows sunken inbox tail after show-more in inbox", async () => {
-    // 4 floating date groups + 1 sunken task
-    await addTask({ title: "今天任务", toInbox: true, now: new Date("2026-06-28T09:00:00.000Z") });
-    await addTask({ title: "昨天任务", toInbox: true, now: new Date("2026-06-27T09:00:00.000Z") });
-    await addTask({ title: "前天任务", toInbox: true, now: new Date("2026-06-26T09:00:00.000Z") });
-    await addTask({ title: "更早任务", toInbox: true, now: new Date("2026-06-25T09:00:00.000Z") });
+    // 4 floating date groups + 1 sunken task（相对真实 now 取日期，避免写死日期随时间漂移出分组窗口）
+    const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+    await addTask({ title: "今天任务", toInbox: true, now: daysAgo(0) });
+    await addTask({ title: "昨天任务", toInbox: true, now: daysAgo(1) });
+    await addTask({ title: "前天任务", toInbox: true, now: daysAgo(2) });
+    await addTask({ title: "更早任务", toInbox: true, now: daysAgo(3) });
     await addTask({ title: "沉没想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
 
     const { host, root } = await renderPage();
