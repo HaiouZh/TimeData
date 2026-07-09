@@ -217,6 +217,46 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  it("脏状态按 Ctrl+S 触发保存并阻止浏览器默认行为", async () => {
+    saveDiary.mockResolvedValue({ mtime: 200 });
+    const { host, root } = await renderPage();
+
+    await typeInto(textarea(host), "1. y");
+    let defaultPrevented = false;
+    await act(async () => {
+      const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true });
+      window.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(true);
+    expect(saveDiary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), {
+      content: "1. y",
+      baseMtime: 100,
+    });
+
+    await unmount(root);
+  });
+
+  it("非脏状态按 Cmd+S 不触发保存但仍阻止默认行为", async () => {
+    const { host, root } = await renderPage();
+
+    let defaultPrevented = false;
+    await act(async () => {
+      const event = new KeyboardEvent("keydown", { key: "s", metaKey: true, bubbles: true, cancelable: true });
+      window.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(true);
+    expect(saveDiary).not.toHaveBeenCalled();
+    expect(host.querySelector("textarea")).not.toBeNull();
+
+    await unmount(root);
+  });
+
   it("有序列表行末按 Enter 续号", async () => {
     const { host, root } = await renderPage();
     const el = textarea(host);

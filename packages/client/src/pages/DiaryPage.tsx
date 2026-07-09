@@ -103,6 +103,24 @@ export default function DiaryPage() {
     }
   }
 
+  // latest-ref：让 mount-once 的快捷键监听拿到最新的 dirty/saving/handleSave 闭包
+  const shortcutSaveRef = useRef<() => void>(() => {});
+  shortcutSaveRef.current = () => {
+    if (dirty && !saving) void handleSave();
+  };
+
+  useEffect(() => {
+    function handleShortcut(event: globalThis.KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== "s") return;
+      // 在日记页一律拦掉浏览器"保存网页"对话框，无改动时保存为 no-op
+      event.preventDefault();
+      shortcutSaveRef.current();
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
   async function handleReload() {
     if (
       dirty &&
