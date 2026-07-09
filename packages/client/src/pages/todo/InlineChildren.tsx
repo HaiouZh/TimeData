@@ -115,7 +115,7 @@ export function InlineChildren({ parentId, mode }: InlineChildrenProps) {
         type="button"
         aria-label="添加子任务"
         onClick={() => setDrafting(true)}
-        className="min-h-8 text-xs text-ink-3 hover:text-ink-2"
+        className="min-h-8 select-none td-text-caption text-ink-3 hover:text-ink-2"
       >
         + 子任务
       </button>

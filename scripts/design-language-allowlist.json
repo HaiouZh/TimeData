@@ -3802,14 +3802,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/todo/InlineChildren.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-8 text-xs text-ink-3 hover:text-ink-2\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/todo/RecurrencePresetList.tsx",
       "rule": "bare-text-size",
       "lineText": "className=\"flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left text-sm text-ink transition-colors hover:bg-surface-hover\"",

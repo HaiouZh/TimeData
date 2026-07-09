@@ -96,8 +96,6 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(host.querySelectorAll('textarea[aria-label="子任务标题"]').length).toBe(0);
     const titles = host.querySelectorAll('[data-testid^="child-title-"]');
     expect(titles.length).toBe(2);
-    expect(titles[0].tagName.toLowerCase()).toBe("button");
-    expect((titles[0] as HTMLButtonElement).type).toBe("button");
     expect(titles[0].textContent).toBe("子任务0");
     expect(host.textContent).toContain("子任务1");
     expect(host.querySelectorAll('button[aria-label^="拖动子任务"]').length).toBe(2);
@@ -471,6 +469,32 @@ describe("InlineChildren mode 行为矩阵", () => {
     expect(host.querySelector('[aria-label="编辑重复与时间"]')).toBeNull();
     expect(host.querySelector(`[data-testid="${legacyBadgeId}"]`)).toBeNull();
     expect(host.querySelector('[data-testid="tag-chip"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("展示态标题是可跨行选取的文字节点而非按钮", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    const title = childTitle(host);
+    // 按钮会截断浏览器选区，跨子任务划选复制要求标题是普通文字节点
+    expect(title.tagName.toLowerCase()).not.toBe("button");
+    expect(title.className).toContain("select-text");
+    // 键盘可达性不丢：可聚焦，Enter/F2 进编辑（行为由上方既有用例覆盖）
+    expect(title.tabIndex).toBe(0);
+
+    await unmount(root);
+  });
+
+  it("行内非文字控件不混入选区：拖柄与新增按钮标记 select-none", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    const dragHandle = host.querySelector('button[aria-label^="拖动子任务"]') as HTMLElement;
+    expect(dragHandle.className).toContain("select-none");
+    const addBtn = host.querySelector('button[aria-label="添加子任务"]') as HTMLElement;
+    expect(addBtn.className).toContain("select-none");
 
     await unmount(root);
   });

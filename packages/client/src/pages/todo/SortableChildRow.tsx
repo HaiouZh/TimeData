@@ -192,8 +192,10 @@ function ChildRowBody({
           }`}
         />
       ) : (
-        <button
-          type="button"
+        // biome-ignore lint/a11y/useSemanticElements: 按钮元素会截断浏览器选区，跨子任务划选复制要求标题是真文字节点
+        <span
+          role="button"
+          tabIndex={0}
           data-testid={`child-title-${child.id}`}
           aria-label={`编辑子任务 ${child.title}`}
           onClick={() => {
@@ -201,12 +203,12 @@ function ChildRowBody({
             beginEdit();
           }}
           onKeyDown={handleTitleKey}
-          className={`min-h-8 min-w-0 flex-1 select-text break-words border-0 bg-transparent px-1 py-1 text-left td-text-body font-normal outline-none focus:bg-surface-hover ${
+          className={`min-h-8 min-w-0 flex-1 cursor-text select-text break-words px-1 py-1 text-left td-text-body font-normal outline-none focus:bg-surface-hover ${
             effectiveDone ? "text-ink-3 line-through" : "text-ink"
           }`}
         >
           {child.title}
-        </button>
+        </span>
       )}
       {!readonly && (
         <button
