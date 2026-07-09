@@ -142,6 +142,56 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  it("脏状态点返回弹 ConfirmSheet，点取消不导航、编辑内容仍在", async () => {
+    const { host, root } = await renderPage();
+
+    await typeInto(textarea(host), "1. dirty");
+    await click(host.querySelector('button[aria-label="返回"]'));
+
+    // ConfirmSheet 出现
+    const dialog = host.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(host.textContent).toContain("有未保存的修改");
+
+    const cancelButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "取消");
+    await click(cancelButton ?? null);
+
+    // 未导航：编辑页与本地编辑内容原样保留
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(textarea(host).value).toBe("1. dirty");
+
+    await unmount(root);
+  });
+
+  it("冲突条点「刷新重载」弹 ConfirmSheet，点取消保留本地编辑且不再次 fetchDiary", async () => {
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(150));
+    const { host, root } = await renderPage();
+
+    await typeInto(textarea(host), "1. local edit");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    // 进入冲突态后点「刷新重载」
+    const reloadButton = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "刷新重载",
+    );
+    expect(reloadButton).toBeInstanceOf(HTMLButtonElement);
+    const fetchCallsBefore = fetchDiary.mock.calls.length;
+    await click(reloadButton ?? null);
+
+    // ConfirmSheet 出现，点取消
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(host.textContent).toContain("将丢弃当前修改");
+    const cancelButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "取消");
+    await click(cancelButton ?? null);
+
+    // 本地编辑内容原样保留，fetchDiary 未被再次调用
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(textarea(host).value).toBe("1. local edit");
+    expect(fetchDiary.mock.calls.length).toBe(fetchCallsBefore);
+
+    await unmount(root);
+  });
+
   it("有序列表行末按 Enter 续号", async () => {
     const { host, root } = await renderPage();
     const el = textarea(host);
