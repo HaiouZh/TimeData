@@ -142,6 +142,30 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
+  it("static 规则行：当日发完成后、下一发未物化 → 子任务显示全新未勾且置灰", async () => {
+    const rule = await addTask({
+      title: "晨间例行",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: "2026-07-09T00:00:00.000Z",
+      now: new Date("2026-07-09T08:00:00.000Z"),
+    });
+    const child = await createChildTask(rule.id, "补铁", new Date("2026-07-09T08:10:00.000Z"));
+    await runMaterialization(new Date("2026-07-09T08:20:00.000Z"));
+    const occ = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    // 勾完当日发的子任务和主任务；下一发在 07-10，尚未物化
+    await toggleTaskDone(occurrenceChildId(occ.id, child.id), { now: new Date("2026-07-09T09:00:00.000Z") });
+    await toggleTaskDone(occ.id, { now: new Date("2026-07-09T09:01:00.000Z") });
+
+    const { host, root } = await renderChildren(rule.id, "static");
+    await settle();
+
+    const checkbox = host.querySelector('input[aria-label="完成子任务 补铁"]') as HTMLInputElement | null;
+    expect(checkbox?.checked).toBe(false);
+    expect(checkbox?.disabled).toBe(true);
+    expect(childTitle(host).className).not.toContain("line-through");
+    await unmount(root);
+  });
+
   it("static 规则行：无 occurrence 时子任务复选框置灰且点击不写模板", async () => {
     const rule = await addTask({
       title: "晨间例行",

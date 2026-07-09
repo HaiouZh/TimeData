@@ -21,6 +21,15 @@ const settle = () =>
     await new Promise((r) => setTimeout(r, 0));
   });
 
+// liveQuery 送达拍数不定，按条件轮询代替单拍 settle。
+async function waitForText(host: HTMLElement, text: string): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (host.textContent?.includes(text)) return;
+    await settle();
+  }
+  throw new Error(`Timed out waiting for ${text}`);
+}
+
 function task(overrides: Partial<Task> = {}): Task {
   return {
     id: "t1",
@@ -250,7 +259,7 @@ describe("TaskRow", () => {
     const { host, root } = await render(createElement(TaskRow, { task: rule, pool: "upcoming", ...handlers }));
     await settle();
     expect(host.textContent).toContain("每天");
-    expect(host.textContent).toContain("6月19日");
+    await waitForText(host, "6月19日");
     await unmount(root);
   });
 
