@@ -24,6 +24,7 @@ import { SettingsTracksPage } from "../../pages/settings/SettingsTracksPage.tsx"
 import TimelinePage from "../../pages/TimelinePage.tsx";
 import TrackDetailPage from "../../pages/tracks/TrackDetailPage.tsx";
 import TracksListPage from "../../pages/tracks/TracksListPage.tsx";
+import TracksShell from "../../pages/tracks/TracksShell.tsx";
 
 export function AppRoutes() {
   return (
@@ -31,10 +32,12 @@ export function AppRoutes() {
       <Route path="/" element={<TimelinePage />} />
       <Route path="/quick-notes" element={<QuickNotesPage />} />
       <Route path="/todo" element={<TodoPage />} />
-      <Route path="/tracks" element={<TracksListPage />} />
+      <Route element={<TracksShell />}>
+        <Route path="/tracks" element={<TracksListPage />} />
+        <Route path="/tracks/:id" element={<TrackDetailPage />} />
+      </Route>
       <Route path="/goals" element={<GoalsPage />} />
       <Route path="/goals/:id" element={<GoalDetailPage />} />
-      <Route path="/tracks/:id" element={<TrackDetailPage />} />
       <Route path="/entries/new" element={<EntryPage />} />
       <Route path="/entries/:id/edit" element={<EntryPage />} />
       <Route path="/stats" element={<StatsPage />} />
