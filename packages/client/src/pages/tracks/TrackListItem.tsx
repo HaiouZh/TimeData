@@ -9,7 +9,7 @@ const STATUS_DOT: Record<string, string> = { active: "bg-accent", concluded: "bg
 
 export type TrackBadgeTone = "warn" | "purple" | "default";
 
-// 信号徽章按调度组语义着色：等我接=警示、agent 在跑=紫系（同甘特 agent 泳道色）、其余=动作蓝。
+// 信号徽章按调度组语义着色：等我接=警示、agent 在跑=紫系（agent 语义色沿用 --color-data-purple 惯例）、其余=动作蓝。
 const BADGE_TONE_CLASSES: Record<TrackBadgeTone, string> = {
   warn: "border-warn/40 bg-warn-soft text-warn",
   purple: "border-data-purple/40 bg-data-purple/10 text-data-purple",

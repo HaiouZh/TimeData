@@ -92,9 +92,9 @@ export function SettingsTracksPage() {
         )}
       </section>
       <section className="mt-6 space-y-3">
-        <h2 className="td-text-label text-ink">甘特执行者信号</h2>
+        <h2 className="td-text-label text-ink">agent 执行信号</h2>
         <p className="td-text-body text-ink-3">
-          步骤带这些标签时，并发甘特把该段按 agent 执行者着色（无论谁记录）。清空则只按写入者区分。
+          步骤带这些标签时，调度台把该轨道归入「agent 在跑」分组（无论谁记录）。清空则只按写入者区分。
         </p>
         <form
           onSubmit={(e) => {
@@ -107,7 +107,7 @@ export function SettingsTracksPage() {
             value={execDraft}
             onChange={(e) => setExecDraft(e.target.value)}
             placeholder="如:agent在做"
-            aria-label="新增甘特执行者信号"
+            aria-label="新增 agent 执行信号"
             className="min-h-10 flex-1 rounded-ctl border border-border bg-surface px-3 td-text-body text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <button

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { getSetting, setSetting, useSetting } from "./index.js";
 
-// 甘特执行者信号：步骤带这些标签时，甘特按 agent 执行者着色（无论谁写入这一步）。
+// agent 执行信号：步骤带这些标签时，调度台把该轨道归入「agent 在跑」分组（无论谁写入这一步）。
 // 显式 [] = 不按信号判执行者、只看写入者；未配置 = 默认 agent在做。
 export const TRACK_AGENT_EXEC_TAGS_KEY = "track.agentExecTags.v1";
 export const DEFAULT_AGENT_EXEC_TAGS: readonly string[] = ["agent在做"];
