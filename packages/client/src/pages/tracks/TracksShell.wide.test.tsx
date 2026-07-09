@@ -82,9 +82,10 @@ describe("TracksShell 宽屏 master-detail", () => {
     expect(host.querySelector("h1")?.textContent).toBe("写周报");
     // 列表 composer 让位给详情
     expect(host.querySelector('input[aria-label="新建轨道标题"]')).toBeNull();
-    // 甘特仍在场（未整页跳转）
+    // 甘特仍在场（未整页跳转），且选中泳道有高亮
     expect(host.querySelector('[data-testid="tracks-gantt"]')).not.toBeNull();
     expect(host.textContent).toContain(track.title);
+    expect(host.querySelector('[data-testid="gantt-lane-active"]')).not.toBeNull();
   });
 
   it("/tracks/:id 直达：宽屏同样是详情 + 甘特双栏", async () => {

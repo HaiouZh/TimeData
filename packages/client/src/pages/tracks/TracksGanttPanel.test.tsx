@@ -48,12 +48,16 @@ function LocationProbe() {
   return createElement("output", { "data-testid": "location-probe" }, `${location.pathname}${location.hash}`);
 }
 
-async function mount(tracks: Track[], stepsByTrack: Map<string, TrackStep[]>) {
+async function mount(
+  tracks: Track[],
+  stepsByTrack: Map<string, TrackStep[]>,
+  selectedTrackId: string | null = null,
+) {
   mounted = await renderDom(
     createElement(
       MemoryRouter,
       { initialEntries: ["/tracks"] },
-      createElement(TracksGanttPanel, { tracks, stepsByTrack, now: NOW }),
+      createElement(TracksGanttPanel, { tracks, stepsByTrack, now: NOW, selectedTrackId }),
       createElement(LocationProbe),
     ),
   );
@@ -195,6 +199,22 @@ describe("TracksGanttPanel", () => {
     expect(host.querySelector('[data-testid="location-probe"]')?.textContent).toContain(
       `/tracks/a#step-${instant.id}`,
     );
+  });
+
+  it("selectedTrackId 命中的泳道有高亮底色，现状栏名字转 accent", async () => {
+    const a = makeTrack("a");
+    const b = makeTrack("b");
+    const { host } = await mount([a, b], new Map(), "b");
+    expect(host.querySelectorAll('[data-testid="gantt-lane-active"]')).toHaveLength(1);
+    const names = [...host.querySelectorAll('[data-testid="gantt-lane-name"]')];
+    const selected = names.find((n) => n.getAttribute("title") === "轨道b");
+    expect(selected?.className).toContain("text-accent");
+  });
+
+  it("未传 selectedTrackId 时无泳道高亮", async () => {
+    const a = makeTrack("a");
+    const { host } = await mount([a], new Map());
+    expect(host.querySelector('[data-testid="gantt-lane-active"]')).toBeNull();
   });
 
   it("快捷档按钮存在：今天/3天/周/回到现在", async () => {

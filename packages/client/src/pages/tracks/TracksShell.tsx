@@ -14,6 +14,8 @@ export default function TracksShell() {
   const isWideScreen = useIsWideScreen();
   const tracks = useLiveQuery(() => (isWideScreen ? listTracks() : []), [isWideScreen], []);
   const allSteps = useLiveQuery(() => (isWideScreen ? listAllTrackSteps() : []), [isWideScreen], []);
+  // 左列正在看哪条轨道：甘特泳道高亮联动用。
+  const selectedTrackId = useMatch("/tracks/:id")?.params.id ?? null;
   const { active } = partitionTracks(tracks);
   const byTrack = useMemo(() => groupStepsByTrack(allSteps), [allSteps]);
 
@@ -25,7 +27,7 @@ export default function TracksShell() {
       </div>
       <TracksGanttAside>
         <Suspense fallback={<p className="p-4 td-text-caption text-ink-3">正在加载甘特…</p>}>
-          <TracksGanttPanel tracks={active} stepsByTrack={byTrack} />
+          <TracksGanttPanel tracks={active} stepsByTrack={byTrack} selectedTrackId={selectedTrackId} />
         </Suspense>
       </TracksGanttAside>
     </div>

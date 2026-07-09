@@ -52,9 +52,15 @@ export interface TracksGanttPanelProps {
   tracks: Track[];
   stepsByTrack: Map<string, TrackStep[]>;
   now?: Date;
+  selectedTrackId?: string | null;
 }
 
-export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGanttPanelProps) {
+export default function TracksGanttPanel({
+  tracks,
+  stepsByTrack,
+  now,
+  selectedTrackId = null,
+}: TracksGanttPanelProps) {
   const navigate = useNavigate();
   const [tickMs, setTickMs] = useState(() => Date.now());
   useEffect(() => {
@@ -243,6 +249,17 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
                 const glowSource = lane.segments.at(-1)?.source ?? "user";
                 return (
                   <g key={lane.track.id} data-testid="gantt-lane">
+                    {selectedTrackId === lane.track.id && (
+                      <rect
+                        data-testid="gantt-lane-active"
+                        x={0}
+                        y={y}
+                        width={plotWidth}
+                        height={LANE_HEIGHT}
+                        fill="var(--color-surface-hover)"
+                        pointerEvents="none"
+                      />
+                    )}
                     <line
                       x1={0}
                       x2={plotWidth}
@@ -432,8 +449,11 @@ export default function TracksGanttPanel({ tracks, stepsByTrack, now }: TracksGa
               <button
                 key={lane.track.id}
                 type="button"
+                data-testid="gantt-lane-name"
                 onClick={() => navigate(`/tracks/${lane.track.id}`)}
-                className="flex h-7 w-full items-center gap-1.5 px-2 text-left td-text-caption leading-7 text-ink-2 hover:text-accent"
+                className={`flex h-7 w-full items-center gap-1.5 px-2 text-left td-text-caption leading-7 hover:text-accent ${
+                  selectedTrackId === lane.track.id ? "bg-surface-hover text-accent" : "text-ink-2"
+                }`}
                 title={lane.track.title}
               >
                 <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-pill" style={statusDotStyle(status, laneSource)} />
