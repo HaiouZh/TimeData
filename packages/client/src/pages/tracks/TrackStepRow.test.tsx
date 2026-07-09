@@ -63,13 +63,15 @@ describe("TrackStepRow", () => {
     expect(plain.querySelector("#step-s-plain")?.className).not.toContain("ring-accent");
   });
 
-  it("shows sourceLabel for agent steps and 我 for user steps", async () => {
+  it("shows sourceLabel chip for agent steps but no source chip for user steps (TK 我 去重)", async () => {
     const a = await mount({ step: step({ id: "a", source: "agent", sourceLabel: "codex" }), isCurrent: false, now: NOW });
     expect(a.textContent).toContain("codex");
     expect(a.textContent).toContain("推进了一步");
+    expect(a.querySelector('[data-source="agent"]')).not.toBeNull();
     if (mounted) await unmount(mounted.root);
     const b = await mount({ step: step({ id: "b", source: "user", sourceLabel: undefined }), isCurrent: false, now: NOW });
-    expect(b.querySelector('[data-source="user"]')?.textContent).toContain("我");
+    expect(b.querySelector('[data-source="user"]')).toBeNull();
+    expect(b.textContent).not.toContain("我");
   });
 
   it("renders 决策 as an ordinary retrieval tag without a special badge", async () => {
@@ -100,10 +102,35 @@ describe("TrackStepRow", () => {
   });
 
   it("renders the duration label with a tabular number role", async () => {
-    const host = await mount({ step: step({ id: "dur" }), isCurrent: false, now: NOW });
+    const host = await mount({
+      step: step({ id: "dur", startedAt: T, endedAt: "2026-06-21T00:05:00.000Z" }),
+      isCurrent: false,
+      now: NOW,
+    });
     const duration = host.querySelector(".td-duration");
     expect(duration).not.toBeNull();
     expect(duration?.textContent).toContain("历时");
+  });
+
+  it("不显示瞬时/短历时闭合步的历时 label（<1 分钟）", async () => {
+    const host = await mount({
+      step: step({ id: "instant", startedAt: T, endedAt: T }),
+      isCurrent: false,
+      now: NOW,
+    });
+    expect(host.querySelector(".td-duration")).toBeNull();
+    expect(host.textContent).not.toContain("历时");
+  });
+
+  it("开口步仍显示进行中历时，即便刚开始不到 1 分钟", async () => {
+    const host = await mount({
+      step: step({ id: "open-fresh", startedAt: NOW.toISOString(), endedAt: null }),
+      isCurrent: true,
+      now: NOW,
+    });
+    const duration = host.querySelector(".td-duration");
+    expect(duration).not.toBeNull();
+    expect(duration?.textContent).toContain("进行中");
   });
 
   it("shows a relative time stamp for the step's last activity", async () => {

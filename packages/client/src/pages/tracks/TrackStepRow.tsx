@@ -32,6 +32,9 @@ export function TrackStepRow({
   const open = step.endedAt === null;
   const duration = formatStepDuration(step.startedAt, step.endedAt, now);
   const durationLabel = open ? `进行中 · 已历时${duration}` : `历时${duration}`;
+  // 瞬时/短历时的闭合步（<1 分钟）不值得单独展示历时——通常是回填/补记，显示「历时0分钟」反而是噪音。
+  const isNegligibleDuration =
+    !open && new Date(step.endedAt as string).getTime() - new Date(step.startedAt).getTime() < 60_000;
   // 步骤的「最后动静」时刻：开口步取开始，闭合步取结束。
   const activityAt = step.endedAt ?? step.startedAt;
   const [expanded, setExpanded] = useState(false);
@@ -67,10 +70,12 @@ export function TrackStepRow({
     >
       <div className="flex flex-wrap items-center gap-2 td-text-caption text-ink-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
-            {stepSourceText(step)}
-          </span>
-          <span className="td-duration">{durationLabel}</span>
+          {step.source !== "user" && (
+            <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
+              {stepSourceText(step)}
+            </span>
+          )}
+          {!isNegligibleDuration && <span className="td-duration">{durationLabel}</span>}
           <span data-testid="step-relative-time" title={formatAppDateTime(activityAt)}>
             {formatRelativeTime(activityAt, now)}
           </span>

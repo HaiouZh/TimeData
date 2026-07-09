@@ -26,6 +26,8 @@ export interface TrackListItemProps {
   selected?: boolean;
   statusTags?: readonly string[];
   onSubmitStep?: (draft: StepDraft) => Promise<void> | void;
+  /** 归档区降噪：收成单行，隐去来源 chip/summary/信号徽章/写一步 footer（TK 归档卡去噪）。 */
+  compact?: boolean;
 }
 
 // 状态卡：主体 = 当前帧（最新步内容）。计时弱化——只显示最后动静，不显示历时/步数。
@@ -39,10 +41,44 @@ export function TrackListItem({
   selected = false,
   statusTags = [],
   onSubmitStep,
+  compact = false,
 }: TrackListItemProps) {
   const [expanded, setExpanded] = useState(false);
   const latest = latestStep(steps);
   const activityAt = lastActivityAt(steps);
+
+  if (compact) {
+    return (
+      <article
+        className={`rounded-card border bg-surface transition hover:bg-surface-hover ${
+          selected ? "border-accent" : "border-border"
+        }`}
+      >
+        <Link
+          to={`/tracks/${track.id}`}
+          className="flex items-center gap-2 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <span
+            aria-hidden="true"
+            className={`h-2 w-2 shrink-0 rounded-pill ${STATUS_DOT[track.status] ?? "bg-ink-3"}`}
+          />
+          <span className="w-2/5 shrink-0 truncate td-text-body text-ink">{track.title}</span>
+          <span data-testid="track-current-frame" className="min-w-0 flex-1 truncate td-text-caption text-ink-3">
+            {latest ? latest.content || "无内容步骤" : "尚无步骤"}
+          </span>
+          {activityAt !== null || stalledDays !== null ? (
+            <span data-testid="track-last-activity" className="shrink-0 td-text-caption text-ink-3">
+              {stalledDays !== null
+                ? `${stalledDays} 天没动静`
+                : activityAt !== null
+                  ? formatRelativeTime(activityAt, now)
+                  : ""}
+            </span>
+          ) : null}
+        </Link>
+      </article>
+    );
+  }
 
   return (
     <article
@@ -79,12 +115,14 @@ export function TrackListItem({
             </span>
             {latest ? (
               <span className="mt-1.5 flex items-start gap-1.5">
-                <span
-                  data-source={latest.source}
-                  className="shrink-0 rounded-pill bg-surface-elevated px-1.5 py-0.5 td-text-caption text-ink-3"
-                >
-                  {stepSourceText(latest)}
-                </span>
+                {latest.source !== "user" && (
+                  <span
+                    data-source={latest.source}
+                    className="shrink-0 rounded-pill bg-surface-elevated px-1.5 py-0.5 td-text-caption text-ink-3"
+                  >
+                    {stepSourceText(latest)}
+                  </span>
+                )}
                 <span data-testid="track-current-frame" className="line-clamp-3 min-w-0 td-text-caption text-ink-2">
                   {latest.content || "无内容步骤"}
                 </span>
@@ -100,12 +138,12 @@ export function TrackListItem({
       </Link>
       {track.status === "active" && onSubmitStep && (
         <div>
-          <div className="flex justify-end border-t border-border px-3 py-2">
+          <div className="flex justify-end px-3 pb-2 pt-0">
             <button
               type="button"
               aria-label="写一步"
               onClick={() => setExpanded((current) => !current)}
-              className="rounded-ctl border border-border px-3 py-1.5 td-text-label text-ink-2 transition hover:border-accent hover:text-accent"
+              className="td-text-label text-ink-3 transition hover:text-accent"
             >
               写一步
             </button>

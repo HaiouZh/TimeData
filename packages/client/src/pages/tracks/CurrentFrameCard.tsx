@@ -50,9 +50,11 @@ export function CurrentFrameCard({
     >
       <div className="flex flex-wrap items-center gap-2 td-text-caption text-ink-3">
         <span className="font-medium text-ink-2">当前帧 · 第{step.seq + 1}步</span>
-        <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
-          {stepSourceText(step)}
-        </span>
+        {step.source !== "user" && (
+          <span data-source={step.source} className="rounded-pill bg-surface-elevated px-2 py-0.5 text-ink-2">
+            {stepSourceText(step)}
+          </span>
+        )}
         <span title={formatAppDateTime(activityAt)}>{formatRelativeTime(activityAt, now)}</span>
         {step.editedAt && <span title={formatAppDateTime(step.editedAt)}>已编辑</span>}
         {(canEdit || canDelete) && (

@@ -55,6 +55,7 @@ async function mount(
     selected?: boolean;
     statusTags?: readonly string[];
     onSubmitStep?: (draft: StepDraft) => Promise<void> | void;
+    compact?: boolean;
   } = {},
 ) {
   mounted = await renderDom(
@@ -187,5 +188,20 @@ describe("TrackListItem", () => {
     expect(textarea).not.toBeNull();
     expect(textarea?.value).toBe("交给 agent 继续");
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("写不进去");
+  });
+
+  it("compact=true 时收成单行：无来源 chip、无 summary、无信号徽章、无写一步按钮", async () => {
+    const host = await mount(track(), [step({ id: "a", seq: 0, content: "归档前最后一步", source: "user" })], {
+      compact: true,
+      signal: { tag: "复盘", stepId: "a" },
+      onSubmitStep: () => undefined,
+    });
+
+    expect(host.textContent).toContain("轨道派活");
+    expect(host.querySelector('[data-testid="track-current-frame"]')?.textContent).toContain("归档前最后一步");
+    expect(host.querySelector('[data-source]')).toBeNull();
+    expect(host.textContent).not.toContain("把轨道变成接力线");
+    expect(host.querySelector('[data-testid="track-signal-badge"]')).toBeNull();
+    expect(buttonByText(host, "写一步")).toBeNull();
   });
 });

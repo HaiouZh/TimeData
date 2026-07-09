@@ -99,6 +99,7 @@ export function TracksBoard() {
                       track={track}
                       steps={byTrack.get(track.id) ?? []}
                       selected={track.id === selectedTrackId}
+                      compact
                     />
                   </li>
                 ))}

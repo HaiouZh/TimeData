@@ -139,7 +139,7 @@ export default function TrackDetailPage() {
 
   return (
     <div className="min-h-full bg-page text-ink">
-      <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-24">
         <Link to="/tracks" className="mb-3 inline-flex items-center gap-1 td-text-label text-ink-3 hover:text-ink">
           <Icon icon={ArrowLeft} size={16} />
           轨道
