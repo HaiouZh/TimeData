@@ -125,7 +125,7 @@
   "dirty-in-clean-bucket:pages/tracks/TrackTimeline.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/TracksGanttPanel.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/TracksListPage.test.tsx",
-  "dirty-in-clean-bucket:pages/tracks/TracksListPage.wide.test.tsx",
+  "dirty-in-clean-bucket:pages/tracks/TracksShell.wide.test.tsx",
   "dirty-in-clean-bucket:quick-notes/HighlightedText.test.tsx",
   "dirty-in-clean-bucket:quick-notes/NoteBubble.test.tsx",
   "dirty-in-clean-bucket:quick-notes/NoteMeta.test.tsx",

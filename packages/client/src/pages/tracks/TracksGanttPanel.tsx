@@ -323,7 +323,6 @@ export default function TracksGanttPanel({
                           <>
                             {/* 菱形是纯视觉，交互全在透明大热区上——热区半径远大于旧 r=3.5 圆点 */}
                             <path
-                              aria-hidden="true"
                               data-testid="gantt-diamond"
                               {...fillProps}
                               d={`M ${shape.cx} ${cy - 4.5} L ${shape.cx + 4.5} ${cy} L ${shape.cx} ${cy + 4.5} L ${shape.cx - 4.5} ${cy} Z`}
@@ -351,7 +350,7 @@ export default function TracksGanttPanel({
                             />
                           )}
                           {live && shape.shape === "rect" && (
-                            <g pointerEvents="none" aria-hidden="true">
+                            <g pointerEvents="none">
                               <circle
                                 data-testid="gantt-live-head"
                                 cx={headX}
