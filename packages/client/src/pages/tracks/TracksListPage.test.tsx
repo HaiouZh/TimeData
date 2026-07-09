@@ -170,7 +170,8 @@ describe("TracksListPage", () => {
   it("统计带显示 等我接/agent在跑/停滞 计数", async () => {
     await seedDispatchScenario();
     const host = await renderList();
-    await waitForText(host, "等我处理的轨道");
+    // 统计带依赖 steps 的 useLiveQuery 结算，锚点必须等 steps 派生文本，不能等卡片标题（tracks 查询先到会读到 0/0/0）。
+    await waitForText(host, "等我接 1");
     const stats = host.querySelector('[data-testid="dispatch-stats"]');
     expect(stats?.textContent).toContain("等我接 1");
     expect(stats?.textContent).toContain("agent 在跑 1");
@@ -180,7 +181,8 @@ describe("TracksListPage", () => {
   it("卡片按分组落位：等我接组在最上，停滞组沉底", async () => {
     await seedDispatchScenario();
     const host = await renderList();
-    await waitForText(host, "等我处理的轨道");
+    // 分组同样依赖 steps 结算：等停滞组出现（steps 派生）再断言组序。
+    await waitForText(host, "等我接 1");
     const groups = [...host.querySelectorAll('[data-testid^="dispatch-group-"]')].map((el) =>
       el.getAttribute("data-testid"),
     );
