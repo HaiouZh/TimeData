@@ -6,7 +6,7 @@ describe("sanitizeAgentExecTags", () => {
     expect(sanitizeAgentExecTags(["#agent在做", "agent在做", " ", "codex跑批"])).toEqual(["agent在做", "codex跑批"]);
     expect(sanitizeAgentExecTags(["a".repeat(65)])).toEqual([]);
   });
-  it("显式空数组保留为空（只按写入者）", () => {
+  it("显式空数组保留为空（不归「agent 在跑」组）", () => {
     expect(sanitizeAgentExecTags([])).toEqual([]);
   });
   it("非数组回默认", () => {

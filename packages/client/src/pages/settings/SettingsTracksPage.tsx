@@ -94,7 +94,7 @@ export function SettingsTracksPage() {
       <section className="mt-6 space-y-3">
         <h2 className="td-text-label text-ink">agent 执行信号</h2>
         <p className="td-text-body text-ink-3">
-          步骤带这些标签时，调度台把该轨道归入「agent 在跑」分组（无论谁记录）。清空则只按写入者区分。
+          步骤带这些标签时，调度台把该轨道归入「agent 在跑」分组（无论谁记录）。清空则不再归出该分组。
         </p>
         <form
           onSubmit={(e) => {
@@ -118,7 +118,7 @@ export function SettingsTracksPage() {
           </button>
         </form>
         {execTags.length === 0 ? (
-          <p className="td-text-body text-ink-3">未配置；甘特只按谁写入这一步区分颜色。</p>
+          <p className="td-text-body text-ink-3">未配置；调度台不再单独归出「agent 在跑」分组。</p>
         ) : (
           <ul className="space-y-2">
             {execTags.map((tag) => (
