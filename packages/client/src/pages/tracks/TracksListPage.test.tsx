@@ -272,10 +272,10 @@ describe("TracksListPage", () => {
     expect(host.textContent).toContain("还没有进行中的轨道");
   });
 
-  it("窄屏不渲染甘特（jsdom 无 matchMedia，useIsWideScreen 天然 false）", async () => {
+  it("窄屏 /tracks 渲染调度台整页而非宽屏空态（jsdom 无 matchMedia，useIsWideScreen 天然 false）", async () => {
     const host = await renderList();
-    expect(host.querySelector('[data-testid="tracks-gantt"]')).toBeNull();
-    expect(host.querySelector('[aria-label="并发甘特面板"]')).toBeNull();
+    expect(host.querySelector('[data-testid="dispatch-stats"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("从左侧选一条轨道查看");
   });
 
   it("writes an inline card step through the list page and refreshes its board signal without navigation", async () => {
