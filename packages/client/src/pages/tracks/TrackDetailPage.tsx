@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, PencilSimple, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
@@ -15,7 +15,9 @@ import {
   updateTrack,
   updateTrackStep,
 } from "../../lib/tracks.js";
-import { currentStepId } from "../../lib/tracksView.js";
+import { currentStepId, latestStep } from "../../lib/tracksView.js";
+import { CollapsibleSection } from "../todo/CollapsibleSection.js";
+import { CurrentFrameCard } from "./CurrentFrameCard.js";
 import { RefChip } from "./RefChip.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";
 import { TrackTimeline } from "./TrackTimeline.js";
@@ -39,6 +41,9 @@ export default function TrackDetailPage() {
   const hasOpenStep = currentStepId(steps) !== null;
   const location = useLocation();
   const highlightStepId = location.hash.startsWith("#step-") ? location.hash.slice("#step-".length) : null;
+  const latest = latestStep(steps);
+  const history = useMemo(() => steps.filter((s) => s.id !== latest?.id), [steps, latest?.id]);
+  const historyHighlighted = highlightStepId !== null && history.some((s) => s.id === highlightStepId);
 
   useEffect(() => {
     if (!highlightStepId || steps.length === 0) return;
@@ -247,6 +252,11 @@ export default function TrackDetailPage() {
                 {actionError}
               </p>
             )}
+            {latest ? (
+              <CurrentFrameCard step={latest} onEdit={editStep} onDelete={removeStep} />
+            ) : (
+              <p className="mb-3 rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>
+            )}
             {isActive && <StepComposer onSubmit={(draft) => addStep(draft)} statusTags={actionTags} />}
             {isActive && hasOpenStep && (
               <button
@@ -257,12 +267,16 @@ export default function TrackDetailPage() {
                 闭合当前步
               </button>
             )}
-            <TrackTimeline
-              steps={steps}
-              highlightStepId={highlightStepId}
-              onEditStep={editStep}
-              onDeleteStep={removeStep}
-            />
+            {history.length > 0 && (
+              <CollapsibleSection title="历史" count={history.length} defaultOpen={historyHighlighted}>
+                <TrackTimeline
+                  steps={history}
+                  highlightStepId={highlightStepId}
+                  onEditStep={editStep}
+                  onDeleteStep={removeStep}
+                />
+              </CollapsibleSection>
+            )}
           </>
         )}
       </div>

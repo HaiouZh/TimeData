@@ -124,8 +124,19 @@ async function submitComposer(host: HTMLElement): Promise<void> {
   await flush();
 }
 
+async function openHistory(host: HTMLElement): Promise<void> {
+  await act(async () => {
+    const details = host.querySelector("details");
+    if (details) {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+    }
+  });
+  await flush();
+}
+
 describe("TrackDetailPage", () => {
-  it("renders title, summary and a reverse timeline with the current step on top", async () => {
+  it("renders title, summary, and puts the current step in the top current-frame card", async () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "全马破三");
@@ -134,11 +145,106 @@ describe("TrackDetailPage", () => {
     expect(host.textContent).toContain("全马破三");
     expect(host.textContent).toContain("base→build→peak");
 
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    expect(card?.textContent).toContain("base 期第一周");
+
+    await openHistory(host);
     const items = [...host.querySelectorAll("li")];
-    expect(items.length).toBe(2);
-    expect(items[0]?.textContent).toContain("base 期第一周");
-    expect(items[0]?.getAttribute("data-current")).toBe("true");
-    expect(items[1]?.textContent).toContain("决定开练");
+    expect(items.length).toBe(1);
+    expect(items[0]?.textContent).toContain("决定开练");
+  });
+
+  it("当前帧卡置顶显示最新步全文，不显示历时", async () => {
+    const track = await seedTrack();
+    await addTrackStep({
+      trackId: track.id,
+      source: "user",
+      content: "初具雏形，先跑个 15k 看反馈",
+      startedAt: "2026-06-21T02:00:00.000Z",
+      endedAt: null,
+      seq: 2,
+      now,
+    });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "初具雏形");
+
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    expect(card?.textContent).toContain("初具雏形");
+    expect(card?.textContent).not.toContain("已历时");
+    expect(card?.textContent).not.toContain("历时");
+  });
+
+  it("历史步默认折叠且计数不含当前帧，展开后可见旧步", async () => {
+    const track = await seedTrack();
+    await addTrackStep({
+      trackId: track.id,
+      source: "user",
+      content: "初具雏形，先跑个 15k 看反馈",
+      startedAt: "2026-06-21T02:00:00.000Z",
+      endedAt: null,
+      seq: 2,
+      now,
+    });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "初具雏形");
+
+    const details = host.querySelector("details");
+    expect(details?.open).toBe(false);
+    expect(host.textContent).toContain("历史");
+    expect(details?.textContent).toContain("2");
+
+    await openHistory(host);
+    expect(host.textContent).toContain("决定开练");
+  });
+
+  it("hash 锚点命中历史步时历史区默认展开", async () => {
+    const track = await seedTrack();
+    const steps = await listTrackSteps(track.id);
+    const oldStep = steps.find((s) => s.content === "决定开练");
+    mounted = await renderDom(
+      createElement(
+        MemoryRouter,
+        { initialEntries: [`/tracks/${track.id}#step-${oldStep?.id}`] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, { path: "/tracks/:id", element: createElement(TrackDetailPage) }),
+        ),
+      ),
+    );
+    await flush();
+    const host = mounted.host;
+    await waitForText(host, "base 期第一周");
+
+    expect(host.querySelector("details")?.open).toBe(true);
+  });
+
+  it("当前帧卡可就地编辑（user 步）", async () => {
+    const track = await seedTrack();
+    await addTrackStep({
+      trackId: track.id,
+      source: "user",
+      content: "初具雏形，先跑个 15k 看反馈",
+      startedAt: "2026-06-21T02:00:00.000Z",
+      endedAt: null,
+      seq: 2,
+      now,
+    });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "初具雏形");
+
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    await act(async () => {
+      card
+        ?.querySelector('button[aria-label="编辑步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await typeInput(host, "编辑步骤内容", "初具雏形，跑量已回稳");
+    await clickButton(host, "保存");
+
+    await waitForText(host, "初具雏形，跑量已回稳");
+    const updatedCard = host.querySelector('[data-testid="current-frame-card"]');
+    expect(updatedCard?.textContent).toContain("初具雏形，跑量已回稳");
   });
 
   it("shows an empty hint when the track has no steps", async () => {
@@ -207,10 +313,13 @@ describe("TrackDetailPage", () => {
     const track = await seedTrack();
     const host = await renderDetail(track.id);
     await waitForText(host, "决定开练");
+    await openHistory(host);
 
     const userItem = [...host.querySelectorAll("li")].find((item) => item.textContent?.includes("决定开练"));
     await act(async () => {
-      userItem?.querySelector('button[aria-label="编辑步骤"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      userItem
+        ?.querySelector('button[aria-label="编辑步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     await typeInput(host, "编辑步骤内容", "决定改练节奏跑");
     await clickButton(host, "保存");
@@ -225,16 +334,22 @@ describe("TrackDetailPage", () => {
     const host = await renderDetail(track.id);
     await waitForText(host, "决定开练");
 
-    const agentItem = [...host.querySelectorAll("li")].find((item) => item.textContent?.includes("base 期第一周"));
-    expect(agentItem?.querySelector('button[aria-label="删除步骤"]')).toBeNull();
+    const agentCard = host.querySelector('[data-testid="current-frame-card"]');
+    expect(agentCard?.textContent).toContain("base 期第一周");
+    expect(agentCard?.querySelector('button[aria-label="删除步骤"]')).toBeNull();
 
+    await openHistory(host);
     const userItem = [...host.querySelectorAll("li")].find((item) => item.textContent?.includes("决定开练"));
     await act(async () => {
-      userItem?.querySelector('button[aria-label="删除步骤"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      userItem
+        ?.querySelector('button[aria-label="删除步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     await flush();
     await act(async () => {
-      userItem?.querySelector('button[aria-label="确认删除步骤"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      userItem
+        ?.querySelector('button[aria-label="确认删除步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
     await flush();
 
