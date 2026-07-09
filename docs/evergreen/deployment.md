@@ -64,6 +64,7 @@ last-reviewed: 2026-07-04
 │  ./data/backups/*.db   sync push 备份       │
 │  ./data/update.log     自更新日志           │
 │  ./data/update-status.json  自更新状态       │
+│  ./vault/              Obsidian vault(日记) │
 │                                             │
 │  docker-compose.yml + .env                  │
 └─────────────────────────────────────────────┘
@@ -92,6 +93,7 @@ last-reviewed: 2026-07-04
 | `WATCHTOWER_TOKEN` | 生产必填 | Watchtower HTTP API token；`/api/update` 用它触发内部 Watchtower 更新。缺失时 `/api/update` 返回 503 `SELF_UPDATE_DISABLED` |
 | `TIMEDATA_IMAGE_TAG` | 否 | TimeData 镜像 tag，默认 `latest`，可 pin 到指定版本；生产环境建议在 `.env` 中固定为已验证的提交 tag，例如 `TIMEDATA_IMAGE_TAG=sha-abcdef1` |
 | `UPDATE_STATE_DIR` | 否 | 自更新状态文件目录，默认 `/app/data`；一般不需要配置 |
+| `DIARY_VAULT_DIR` | 否 | 日记功能的 vault 目录（容器内路径）。compose 默认把宿主机 `${DIARY_VAULT_HOST_DIR:-./vault}` 挂载到 `/app/vault` 并注入该变量；显式设为空则日记 API 返回未启用。vault 内容从 PC 同步到宿主机目录由部署方自理 |
 
 `AUTH_TOKEN` 缺失时：auth 中间件默认对受保护的 `/api/*` 返回 HTTP 500，不再按 `NODE_ENV` 区分开发/生产。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，才会放行所有 `/api/*` 并且每个进程只输出一次警告；这个旁路只用于本地开发，不能用于生产部署。
 

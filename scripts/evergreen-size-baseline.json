@@ -35,6 +35,9 @@
   "docs/evergreen/development.md": {
     "covers": 10
   },
+  "docs/evergreen/diary.md": {
+    "covers": 5
+  },
   "docs/evergreen/goals.md": {
     "covers": 22
   },
