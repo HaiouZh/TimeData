@@ -1,14 +1,13 @@
 import { Route, Routes } from "react-router-dom";
+import DiaryPage from "../../pages/DiaryPage.tsx";
+import StyleguidePage from "../../pages/dev/StyleguidePage.tsx";
 import EntryPage from "../../pages/EntryPage.tsx";
+import GoalDetailPage from "../../pages/goals/GoalDetailPage.tsx";
+import GoalsPage from "../../pages/goals/GoalsPage.tsx";
 import HealthStatsPage from "../../pages/HealthStatsPage.tsx";
 import QuickNotesPage from "../../pages/QuickNotesPage.tsx";
 import SettingsPage from "../../pages/SettingsPage.tsx";
 import StatsPage from "../../pages/StatsPage.tsx";
-import TimeStatsPage from "../../pages/TimeStatsPage.tsx";
-import { TodoPage } from "../../pages/TodoPage.tsx";
-import StyleguidePage from "../../pages/dev/StyleguidePage.tsx";
-import GoalDetailPage from "../../pages/goals/GoalDetailPage.tsx";
-import GoalsPage from "../../pages/goals/GoalsPage.tsx";
 import SettingsAdminInsightsPage from "../../pages/settings/SettingsAdminInsightsPage.tsx";
 import SettingsCategoriesPage from "../../pages/settings/SettingsCategoriesPage.tsx";
 import SettingsCategoryDetailPage from "../../pages/settings/SettingsCategoryDetailPage.tsx";
@@ -22,6 +21,8 @@ import SettingsStatsLayoutPage from "../../pages/settings/SettingsStatsLayoutPag
 import SettingsTodoGravityPage from "../../pages/settings/SettingsTodoGravityPage.tsx";
 import { SettingsTracksPage } from "../../pages/settings/SettingsTracksPage.tsx";
 import TimelinePage from "../../pages/TimelinePage.tsx";
+import TimeStatsPage from "../../pages/TimeStatsPage.tsx";
+import { TodoPage } from "../../pages/TodoPage.tsx";
 import TrackDetailPage from "../../pages/tracks/TrackDetailPage.tsx";
 import TracksListPage from "../../pages/tracks/TracksListPage.tsx";
 import TracksShell from "../../pages/tracks/TracksShell.tsx";
@@ -31,6 +32,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<TimelinePage />} />
       <Route path="/quick-notes" element={<QuickNotesPage />} />
+      <Route path="/diary" element={<DiaryPage />} />
       <Route path="/todo" element={<TodoPage />} />
       <Route element={<TracksShell />}>
         <Route path="/tracks" element={<TracksListPage />} />

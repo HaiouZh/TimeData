@@ -1,4 +1,15 @@
-import { ArrowDown, Check, DotsThree, MagnifyingGlass, NotePencil, Plus, PushPin, Timer, X } from "@phosphor-icons/react";
+import {
+  ArrowDown,
+  Check,
+  DotsThree,
+  MagnifyingGlass,
+  Notebook,
+  NotePencil,
+  Plus,
+  PushPin,
+  Timer,
+  X,
+} from "@phosphor-icons/react";
 import type { QuickNote } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -11,7 +22,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
@@ -918,6 +929,14 @@ export default function QuickNotesPage() {
                 className="td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
               />
             </label>
+
+            <Link
+              to="/diary"
+              aria-label="日记"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
+            >
+              <Icon icon={Notebook} size={16} />
+            </Link>
 
             {pinnedNotes.length > 0 && (
               <button
