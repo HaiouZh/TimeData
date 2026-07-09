@@ -161,6 +161,7 @@ function ChildRowBody({
           onChange={() => onToggleDone(child)}
           disabled={toggleDisabled}
           className="shrink-0"
+          dense
         />
       )}
       {readonly ? (
@@ -170,27 +171,30 @@ function ChildRowBody({
           {child.title}
         </span>
       ) : editing ? (
-        <textarea
-          aria-label="子任务标题"
-          value={draft}
-          rows={1}
-          ref={titleRef}
-          onChange={(event) => {
-            setDraft(event.currentTarget.value);
-            autoGrow(event.currentTarget);
-          }}
-          onBlur={() => {
-            if (skipBlurCommitRef.current) {
-              skipBlurCommitRef.current = false;
-              return;
-            }
-            commitEdit();
-          }}
-          onKeyDown={handleEditKey}
-          className={`min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 td-text-body outline-none focus:bg-surface-hover ${
-            effectiveDone ? "text-ink-3 line-through" : "text-ink"
-          }`}
-        />
+        // 与展示态同高同心（紧凑档 min-h-8 对齐复选框热区），进出编辑不跳动
+        <span className="flex min-h-8 min-w-0 flex-1 items-center">
+          <textarea
+            aria-label="子任务标题"
+            value={draft}
+            rows={1}
+            ref={titleRef}
+            onChange={(event) => {
+              setDraft(event.currentTarget.value);
+              autoGrow(event.currentTarget);
+            }}
+            onBlur={() => {
+              if (skipBlurCommitRef.current) {
+                skipBlurCommitRef.current = false;
+                return;
+              }
+              commitEdit();
+            }}
+            onKeyDown={handleEditKey}
+            className={`min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 td-text-body outline-none focus:bg-surface-hover ${
+              effectiveDone ? "text-ink-3 line-through" : "text-ink"
+            }`}
+          />
+        </span>
       ) : (
         // biome-ignore lint/a11y/useSemanticElements: 按钮元素会截断浏览器选区，跨子任务划选复制要求标题是真文字节点
         <span
@@ -203,7 +207,7 @@ function ChildRowBody({
             beginEdit();
           }}
           onKeyDown={handleTitleKey}
-          className={`min-h-8 min-w-0 flex-1 cursor-text select-text break-words px-1 py-1 text-left td-text-body font-normal outline-none focus:bg-surface-hover ${
+          className={`flex min-h-8 min-w-0 flex-1 cursor-text select-text items-center break-words px-1 py-1 text-left td-text-body font-normal outline-none focus:bg-surface-hover ${
             effectiveDone ? "text-ink-3 line-through" : "text-ink"
           }`}
         >
@@ -215,7 +219,7 @@ function ChildRowBody({
           type="button"
           aria-label={`删除子任务 ${child.title}`}
           onClick={() => onDelete(child)}
-          className="shrink-0 rounded-ctl px-1 py-1 text-ink-3 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 group-focus-within:opacity-100"
+          className="flex min-h-8 shrink-0 items-center rounded-ctl px-1 text-ink-3 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 group-focus-within:opacity-100"
         >
           <Icon icon={Trash} size={14} />
         </button>
@@ -244,7 +248,12 @@ export function SortableChildRow(props: SortableChildRowProps) {
   };
 
   return (
-    <li ref={setNodeRef} style={style} className="group flex items-start gap-1">
+    <li
+      ref={setNodeRef}
+      style={style}
+      // 拖拽中高亮选中框：ring 用 inset，外侧 box-shadow 会被滑动容器 overflow 裁掉
+      className={`group flex items-start gap-1 rounded-lg ${isDragging ? "bg-surface-hover ring-1 ring-inset ring-accent" : ""}`}
+    >
       <div className="min-w-0 flex-1">
         <ChildRowBody {...props} readonly={false} />
       </div>
@@ -252,7 +261,8 @@ export function SortableChildRow(props: SortableChildRowProps) {
         ref={setActivatorNodeRef}
         type="button"
         aria-label={`拖动子任务 ${child.title}`}
-        className="shrink-0 cursor-grab touch-none select-none rounded px-2 py-1 text-ink-3 opacity-80 hover:bg-surface-hover hover:text-ink-2 group-hover:opacity-100 active:cursor-grabbing"
+        // my-0.5 补齐 ChildRowBody 容器的 py-0.5，使中线与复选框/标题一致
+        className="my-0.5 flex min-h-8 shrink-0 cursor-grab touch-none select-none items-center rounded px-2 text-ink-3 opacity-80 hover:bg-surface-hover hover:text-ink-2 group-hover:opacity-100 active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >

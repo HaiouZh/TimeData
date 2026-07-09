@@ -487,6 +487,19 @@ describe("InlineChildren mode 行为矩阵", () => {
     await unmount(root);
   });
 
+  it("子任务行用紧凑档：复选框热区与标题同为 min-h-8 对齐", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+
+    const checkboxLabel = host.querySelector('input[aria-label^="完成子任务"]')?.closest("label") as HTMLElement;
+    expect(checkboxLabel.className).toContain("min-h-8");
+    expect(checkboxLabel.className).not.toContain("min-h-11");
+    const title = childTitle(host);
+    expect(title.className).toContain("min-h-8");
+
+    await unmount(root);
+  });
+
   it("行内非文字控件不混入选区：拖柄与新增按钮标记 select-none", async () => {
     const parent = await seedParentWithChildren();
     const { host, root } = await renderChildren(parent.id, "draggable");

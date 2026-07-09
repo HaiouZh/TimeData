@@ -9,11 +9,15 @@ export interface CheckboxProps {
   ariaLabel?: string;
   disabled?: boolean;
   className?: string;
+  /** 紧凑档：热区 min-h-8，用于子任务等高密度列表；默认 min-h-11 触控热区。 */
+  dense?: boolean;
 }
 
-export function Checkbox({ checked, onChange, label, ariaLabel, disabled, className }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, ariaLabel, disabled, className, dense }: CheckboxProps) {
   return (
-    <label className={`inline-flex min-h-11 cursor-pointer items-center gap-2 ${disabled ? "opacity-40" : ""} ${className ?? ""}`}>
+    <label
+      className={`inline-flex ${dense ? "min-h-8" : "min-h-11"} cursor-pointer items-center gap-2 ${disabled ? "opacity-40" : ""} ${className ?? ""}`}
+    >
       <input
         type="checkbox"
         aria-label={label ? undefined : ariaLabel}

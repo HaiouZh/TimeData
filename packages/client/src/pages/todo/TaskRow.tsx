@@ -183,7 +183,7 @@ export function TaskRow({
       } ${freshOccurrence ? "todo-occurrence-fresh" : ""}`}
     >
       <div
-        className="relative flex items-center gap-1.5 px-2 py-2"
+        className="relative flex items-center gap-1.5 px-2 py-1"
         role="link"
         tabIndex={0}
         aria-label={`打开 ${task.title}`}
