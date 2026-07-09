@@ -13,6 +13,7 @@ import {
   laneNowStatus,
   panWindow,
   presetWindow,
+  RUNNING_MIN_PX,
   segmentShape,
   startOfLocalDay,
   timeToX,
@@ -394,5 +395,47 @@ describe("segmentShape", () => {
       source: "user" as const,
     };
     expect(segmentShape(sliver, w, 100).shape).toBe("dot");
+  });
+  it("running 段吃最小宽度保底，右缘锚定在 endMs 投影", () => {
+    const seg = {
+      kind: "running" as const,
+      startMs: NOW - 60_000,
+      endMs: NOW,
+      stepId: "s",
+      source: "user" as const,
+    };
+    const shape = segmentShape(seg, w, 1000);
+    expect(shape.shape).toBe("rect");
+    if (shape.shape !== "rect") throw new Error("unreachable");
+    expect(shape.width).toBe(RUNNING_MIN_PX);
+    expect(shape.x + shape.width).toBeCloseTo(timeToX(w, 1000, NOW), 5);
+  });
+  it("running 保底条贴窗口左缘时 x clamp 到 0 不越界", () => {
+    const seg = {
+      kind: "running" as const,
+      startMs: w.startMs,
+      endMs: w.startMs + 60_000,
+      stepId: "s",
+      source: "user" as const,
+    };
+    const shape = segmentShape(seg, w, 1000);
+    expect(shape.shape).toBe("rect");
+    if (shape.shape !== "rect") throw new Error("unreachable");
+    expect(shape.x).toBe(0);
+    expect(shape.width).toBe(RUNNING_MIN_PX);
+  });
+  it("足够宽的 running 段宽度按真实投影，不被保底覆盖", () => {
+    const seg = {
+      kind: "running" as const,
+      startMs: NOW - 5 * HOUR,
+      endMs: NOW,
+      stepId: "s",
+      source: "user" as const,
+    };
+    const shape = segmentShape(seg, w, 1000);
+    expect(shape.shape).toBe("rect");
+    if (shape.shape !== "rect") throw new Error("unreachable");
+    expect(shape.width).toBeCloseTo(500, 5); // 5h / 10h 窗口 × 1000px
+    expect(shape.x).toBeCloseTo(500, 5);
   });
 });

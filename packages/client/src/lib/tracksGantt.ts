@@ -9,6 +9,7 @@ export const GANTT_MIN_SPAN_MS = HOUR_MS;
 export const GANTT_MAX_SPAN_MS = 7 * DAY_MS;
 export const AFTERGLOW_MS = 2 * HOUR_MS;
 export const POINT_MIN_PX = 6;
+export const RUNNING_MIN_PX = 12;
 
 export interface GanttWindow {
   startMs: number;
@@ -226,7 +227,14 @@ export type SegmentShape = { shape: "rect"; x: number; width: number } | { shape
 export function segmentShape(seg: GanttSegment, w: GanttWindow, width: number): SegmentShape {
   const x1 = timeToX(w, width, seg.startMs);
   const x2 = timeToX(w, width, seg.endMs);
-  if (seg.kind === "point" || x2 - x1 < POINT_MIN_PX) return { shape: "dot", cx: (x1 + x2) / 2 };
+  if (seg.kind === "point") return { shape: "dot", cx: (x1 + x2) / 2 };
+  if (seg.kind === "running") {
+    // 开口步保底宽度：右缘锚定在 endMs（此刻/实头截止），向左补足，左缘不越 0——
+    // 新开的步不再被线性比例尺压成小点。
+    const barWidth = Math.min(width, Math.max(x2 - x1, RUNNING_MIN_PX));
+    return { shape: "rect", x: Math.max(0, x2 - barWidth), width: barWidth };
+  }
+  if (x2 - x1 < POINT_MIN_PX) return { shape: "dot", cx: (x1 + x2) / 2 };
   return { shape: "rect", x: x1, width: x2 - x1 };
 }
 
