@@ -20,6 +20,12 @@ describe("applyEnterInOrderedList", () => {
   it("非列表行返回 null", () => {
     expect(applyEnterInOrderedList("普通行", 3, 3)).toBeNull();
   });
+  it("跨行选区按光标前后文本判定续号", () => {
+    const v = "1. ab\n2. cd";
+    const r = applyEnterInOrderedList(v, 5, 8); // 选中 "\n2."
+    // beforeLine = "1. ab" 续 "2. "；选区后余文 " cd" 带到新行
+    expect(r).toEqual({ value: "1. ab\n2.  cd", cursor: 9 });
+  });
   it("有选区时先删除选区再续号", () => {
     const v = "1. abcd";
     const r = applyEnterInOrderedList(v, 5, 7); // 选中 "cd"
