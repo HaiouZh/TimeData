@@ -253,7 +253,7 @@ export default function TrackDetailPage() {
               </p>
             )}
             {latest ? (
-              <CurrentFrameCard step={latest} onEdit={editStep} onDelete={removeStep} />
+              <CurrentFrameCard key={latest.id} step={latest} onEdit={editStep} onDelete={removeStep} />
             ) : (
               <p className="mb-3 rounded-card bg-surface px-3 py-6 td-text-body text-center text-ink-3">尚无步骤</p>
             )}

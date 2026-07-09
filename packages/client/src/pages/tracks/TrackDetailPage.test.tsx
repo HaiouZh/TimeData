@@ -258,6 +258,48 @@ describe("TrackDetailPage", () => {
     expect(updatedCard?.textContent).toContain("初具雏形，跑量已回稳");
   });
 
+  it("最新步在编辑态中途换步（模拟 SSE 写入新步）会重挂卡片、退出编辑态", async () => {
+    const track = await seedTrack();
+    await addTrackStep({
+      trackId: track.id,
+      source: "user",
+      content: "初具雏形，先跑个 15k 看反馈",
+      startedAt: "2026-06-21T02:00:00.000Z",
+      endedAt: null,
+      seq: 2,
+      now,
+    });
+    const host = await renderDetail(track.id);
+    await waitForText(host, "初具雏形");
+
+    const card = host.querySelector('[data-testid="current-frame-card"]');
+    await act(async () => {
+      card
+        ?.querySelector('button[aria-label="编辑步骤"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(host.querySelector('textarea[aria-label="编辑步骤内容"]')).not.toBeNull();
+
+    // 模拟 agent 经 SSE 到达写入一条新步，用户尚未看到、编辑态还留在旧步上
+    await addTrackStep({
+      trackId: track.id,
+      source: "agent",
+      sourceLabel: "coach",
+      content: "agent 同步写入的新进展",
+      startedAt: "2026-06-21T03:00:00.000Z",
+      endedAt: null,
+      seq: 3,
+      now,
+    });
+    await waitForCardText(host, "agent 同步写入的新进展");
+
+    // 编辑态归零：不再残留旧步草稿输入框
+    expect(host.querySelector('textarea[aria-label="编辑步骤内容"]')).toBeNull();
+    const updatedCard = host.querySelector('[data-testid="current-frame-card"]');
+    expect(updatedCard?.textContent).toContain("agent 同步写入的新进展");
+    expect(updatedCard?.querySelector('button[aria-label="删除步骤"]')).toBeNull();
+  });
+
   it("shows an empty hint when the track has no steps", async () => {
     await addTrack({ title: "空轨道", now });
     const [track] = await listTracks();
