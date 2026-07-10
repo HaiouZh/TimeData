@@ -16,7 +16,7 @@ contracts:
   - packages/client/src/index.css
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 <!-- 复核 2026-07-02（timeline 修复 A）：ActionToastBar 复用清掉 QuickNotesPage/TimelinePage 两条失效 bare-text-size allowlist；设计语言规则不变。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：design-language-allowlist 仅随 BackupHistoryPage 删除清理失效条目并同步一条 lineText，未新增豁免；设计语言规则不变。 -->
@@ -101,7 +101,7 @@ last-reviewed: 2026-07-04
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。
 5. **recharts 不解析 CSS `var()`**：图表配色（数据色 + chrome 的 axis/grid/tooltip 背景边框文字/cursor）须把 token 镜像成 JS 常量，统一出自 `pages/stats/health/chartColors.ts`（`DATA_PALETTE` + `CHART_CHROME`），TimeStats 的 `InsightCharts` 与 Health 图表都消费它；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源仍是 `index.css` token。详见 [health/charts](health/charts.md)。
 6. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。
-7. **主导航：移动纯图标 / 桌面图标+文字**：移动底栏主导航用 Phosphor 纯图标（仅 `aria-label`）；桌面侧栏主导航图标下方配 `td-text-caption` 文字标签（aside `w-20`，"更多"按钮同款），这是设计审查 C1 的可读性收口——**仅桌面，移动底栏维持纯图标不变**。图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色；主导航按钮必须有 `aria-label`。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。轨道回手计数以 `NavBadge`（`bg-accent`/`text-page` 圆点，`td-text-caption`，>9 显「9+」）叠在 `/tracks` 图标右上角，计数为 0 时不渲染；两端复用同一 `NavBadge`，不引裸色。
+7. **主导航：移动纯图标 / 桌面图标+文字**：移动底栏主导航用 Phosphor 纯图标（仅 `aria-label`），只渲染 `nav.visibleTabs.v1` 选中的入口并固定保留设置，不提供三点菜单；未选入口由设置的“更多功能”子页承接。桌面侧栏主导航图标下方配 `td-text-caption` 文字标签（aside `w-20`，"更多"按钮同款），这是设计审查 C1 的可读性收口——**仅桌面，移动底栏维持纯图标不变**。图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色；主导航按钮必须有 `aria-label`。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。轨道回手计数以 `NavBadge`（`bg-accent`/`text-page` 圆点，`td-text-caption`，>9 显「9+」）叠在 `/tracks` 图标右上角，计数为 0 时不渲染；两端复用同一 `NavBadge`，不引裸色。
 8. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` / `SettingsNumberRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。`SettingsNumberRow` 的 `−`/`+` 按钮和 `input[type=number]` 消费 `surface-hover`/`border`/`ink`/`accent` token，不引入裸色。
 9. **z-index 走层级 token**：全局浮层（粘顶头 / 下拉 / 遮罩 / 弹层 / 全屏接管）用 `z-[var(--z-*)]`，内联 `style.zIndex` 用 `lib/zLayers.ts` 的 `Z`；组件内部局部 stacking 保留 `z-10`/`z-20`，不升 token。新全局浮层选层级按语义对号入座，不另造数值。
 10. **本轮视觉收口决策（2026-06-29）**：维持单一暗色主题（不搭换肤机制、不引 `[data-theme]`、不出亮色）、单一品牌蓝动作色；动效 / z-index / 任意值已 token 化并加棘轮；字号按棘轮渐进迁移（试点轨道页）。视觉一致性靠单测 + `/dev/styleguide` 预览页人工验收，不做像素快照。
@@ -112,7 +112,7 @@ last-reviewed: 2026-07-04
 |---|---|
 | 全部颜色/圆角/边框/阴影/字体 token + 全局样式 | `packages/client/src/index.css`（Tailwind v4 `@theme static`） |
 | 设计语言棘轮 + 旧债 allowlist | `scripts/check-design-language.mjs`、`scripts/design-language-allowlist.json` |
-| 主导航图标映射与纯图标壳 | `packages/client/src/lib/navigation/navRegistry.ts`、`components/app-shell/{MobileBottomNav,DesktopSidebar}.tsx`；移动底栏的更多菜单是底栏附属层，底栏隐藏时同步收起，不作为独立悬浮菜单保留 |
+| 主导航图标映射与纯图标壳 | `packages/client/src/lib/navigation/navRegistry.ts`、`components/app-shell/{MobileBottomNav,DesktopSidebar}.tsx`；移动底栏无三点菜单，未选入口在 `/settings/more` 显示，桌面侧栏仍可配置更多收纳 |
 | 设置详情页外壳与设置首页行组件 | `packages/client/src/pages/settings/SettingsDetailPage.tsx`、`packages/client/src/pages/settings/components/SettingsRows.tsx` |
 | 字体引入（GB 屏显子集 + Tinos） | `packages/client/src/main.tsx`（covers 归 [architecture](architecture.md)）；守序测试 `fontLoading.test.ts` |
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |

@@ -52,8 +52,10 @@ export function SettingsNavPage() {
     <SettingsDetailPage title="导航">
       <section className="space-y-2">
         <div>
-          <h3 className="text-base font-semibold text-ink">移动底栏</h3>
-          <p className="mt-1 text-sm text-ink-3">控制窄屏与 APK 底部纯图标导航显示哪些入口。</p>
+          <h3 className="td-text-body font-semibold text-ink">手机底栏</h3>
+          <p className="td-text-label mt-1 text-ink-3">
+            开启后显示在手机底栏；关闭后显示在“设置 &gt; 更多功能”。
+          </p>
         </div>
         {CONFIGURABLE_TABS.map((tab) => {
           const navItem = findMainNavItem(tab);

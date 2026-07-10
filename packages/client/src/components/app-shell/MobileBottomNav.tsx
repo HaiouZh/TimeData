@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../../contexts/BottomNavContext.js";
 import { useTrackAttentionBadge } from "../../contexts/TrackAttentionContext.js";
-import { MAIN_NAV_ITEMS, MORE_NAV_ITEM, findMainNavItem, type MainNavItem, type MainNavRoute } from "../../lib/navigation/navRegistry.js";
+import { findMainNavItem, type MainNavItem, type MainNavRoute } from "../../lib/navigation/navRegistry.js";
 import { useVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
 import { Icon } from "../Icon.js";
 import { NavBadge } from "./NavBadge.js";
 
-function MobileIconLink({ item, badge = 0, onClick }: { item: MainNavItem; badge?: number; onClick?: () => void }) {
+function MobileIconLink({ item, badge = 0 }: { item: MainNavItem; badge?: number }) {
   return (
     <NavLink
       key={item.to}
@@ -15,7 +14,6 @@ function MobileIconLink({ item, badge = 0, onClick }: { item: MainNavItem; badge
       end={item.to === "/"}
       aria-label={item.ariaLabel}
       title={item.label}
-      onClick={onClick}
       className={({ isActive }) =>
         `flex flex-1 items-center justify-center rounded-row transition-colors ${
           isActive
@@ -33,21 +31,11 @@ function MobileIconLink({ item, badge = 0, onClick }: { item: MainNavItem; badge
 }
 
 export function MobileBottomNav() {
-  const [open, setOpen] = useState(false);
   const { hidden } = useBottomNav();
   const attentionCount = useTrackAttentionBadge();
   const visibleTabs = useVisibleTabs();
   const routes = [...visibleTabs, "/settings"] as MainNavRoute[];
   const items = routes.map((route) => findMainNavItem(route)).filter((item) => item !== undefined);
-  const hiddenItems = useMemo(() => {
-    const visibleRoutes = new Set(routes);
-    return MAIN_NAV_ITEMS.filter((item) => !visibleRoutes.has(item.to));
-  }, [routes]);
-  const showMoreMenu = open && !hidden;
-
-  useEffect(() => {
-    if (hidden && open) setOpen(false);
-  }, [hidden, open]);
 
   return (
     <nav
@@ -60,36 +48,6 @@ export function MobileBottomNav() {
       {items.map((item) => (
         <MobileIconLink key={item.to} item={item} badge={item.to === "/tracks" ? attentionCount : 0} />
       ))}
-      {hiddenItems.length > 0 && (
-        <div className="relative flex flex-1 justify-center">
-          <button
-            type="button"
-            aria-label={MORE_NAV_ITEM.ariaLabel}
-            title={MORE_NAV_ITEM.label}
-            aria-expanded={showMoreMenu}
-            onClick={() => setOpen((value) => !value)}
-            className="flex h-full w-full items-center justify-center text-ink-3 transition-colors hover:text-ink-2"
-          >
-            <Icon icon={MORE_NAV_ITEM.icon} size={23} weight="regular" />
-          </button>
-          {showMoreMenu && (
-            <div className="fixed bottom-14 right-1 z-[var(--z-dropdown)] min-w-36 rounded-card border border-border bg-surface-elevated p-1 shadow-elev2">
-              {hiddenItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  aria-label={item.ariaLabel}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-row px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink"
-                >
-                  <Icon icon={item.icon} size={18} weight="regular" />
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </nav>
   );
 }

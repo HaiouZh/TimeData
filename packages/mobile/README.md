@@ -109,13 +109,15 @@ If sync says it cannot connect, first confirm the displayed URL uses the correct
 
 1. Launch the Android app.
 2. Confirm TimeData opens to the timeline page.
-3. Tap bottom navigation tabs: `时间轴`, `统计`, `分类`, `设置`.
-4. Add one time entry.
-5. Kill and reopen the app.
-6. Confirm the entry remains, proving IndexedDB persistence in WebView.
-7. Open Settings.
-8. Configure API 地址 and Token.
-9. Tap `立即同步` and confirm sync succeeds.
-10. Export a full Backup JSON file.
-11. Restore from that Backup JSON file.
-12. Confirm categories and time entries match the backup.
+3. Confirm the bottom navigation contains only the entries enabled in `设置 → 导航`, plus `设置`, and has no three-dot menu.
+4. Disable one phone bottom-bar entry in `设置 → 导航`; confirm it disappears from the bottom bar and appears in `设置 → 更多功能`.
+5. Re-enable that entry and confirm it moves back to the bottom bar.
+6. Add one time entry.
+7. Kill and reopen the app.
+8. Confirm the entry remains, proving IndexedDB persistence in WebView.
+9. Open Settings.
+10. Configure API 地址 and Token.
+11. Tap `立即同步` and confirm sync succeeds.
+12. Export a full Backup JSON file.
+13. Restore from that Backup JSON file.
+14. Confirm categories and time entries match the backup.

@@ -442,14 +442,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/components/app-shell/MobileBottomNav.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"flex items-center gap-2 rounded-row px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/components/AppUpdatePrompt.tsx",
       "rule": "bare-text-size",
       "lineText": "<div className=\"text-sm font-medium text-ink\">发现新版本</div>",
@@ -2821,22 +2813,6 @@
       "file": "packages/client/src/pages/settings/SettingsInsightsPage.tsx",
       "rule": "bare-text-size",
       "lineText": "<p className=\"text-xs text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<h3 className=\"text-base font-semibold text-ink\">移动底栏</h3>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsNavPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<p className=\"mt-1 text-sm text-ink-3\">控制窄屏与 APK 底部纯图标导航显示哪些入口。</p>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"

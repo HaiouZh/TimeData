@@ -5,6 +5,7 @@ describe("resolveAndroidBackAction", () => {
   it("returns settings parent for settings detail pages", () => {
     expect(resolveAndroidBackAction("/settings/data")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/server")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/more")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/nav")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/tracks")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/insights")).toEqual({ type: "navigate", to: "/settings", replace: true });

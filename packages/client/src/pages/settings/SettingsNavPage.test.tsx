@@ -76,10 +76,11 @@ describe("SettingsNavPage", () => {
     await unmount(root);
   });
 
-  it("renders separate mobile and desktop navigation sections", async () => {
+  it("renders separate mobile and desktop navigation sections with the new mobile placement semantics", async () => {
     const { host, root } = await renderPage();
 
-    expect(host.textContent).toContain("移动底栏");
+    expect(host.textContent).toContain("手机底栏");
+    expect(host.textContent).toContain("关闭后显示在“设置 > 更多功能”");
     expect(host.textContent).toContain("桌面侧栏");
     expect(host.textContent).toContain("记录");
     expect(host.textContent).toContain("更多");

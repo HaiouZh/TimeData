@@ -8,9 +8,10 @@ covers:
   - packages/client/src/lib/settings/punchCategorySetting.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsNavPage.tsx
+  - packages/client/src/pages/settings/SettingsMorePage.tsx
 contracts:
   - packages/client/src/lib/settings/index.ts
-last-reviewed: 2026-06-29
+last-reviewed: 2026-07-10
 ---
 
 # 设置 · 同步键值表
@@ -40,7 +41,7 @@ last-reviewed: 2026-06-29
 |---|---|---|---|
 | `sleep.categoryId` | 顶层分类 ID 或 null | `lib/sleepCategorySetting.ts` | [stats-insights](../stats-insights.md)（睡眠口径） |
 | `punch.categoryId.v1` | 子分类 ID 或 null（须未归档子分类） | `lib/settings/punchCategorySetting.ts` | [timeline](../timeline.md)（打点） |
-| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/,/todo,/tracks,/goals,/stats/time,/stats/health]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 底部导航可见入口 |
+| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/,/todo,/tracks,/goals,/stats/time,/stats/health]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 导航入口归属：数组内显示在底栏，数组外显示在 `/settings/more` |
 | `nav.desktopSidebar.v1` | JSON `{items:{to,placement}[]}`；`to` ⊆ 主导航 route，`placement=primary\|more`；缺失/坏值按 registry 默认补齐 | `lib/settings/desktopSidebarSetting.ts` | 宽屏桌面侧栏排序与更多收纳 |
 | `health.range.presets` | 逗号串 `7,30,90,180,365,all` | `lib/settings/healthRangeSetting.ts`（covers 归 [health/charts](../health/charts.md)） | [health](../health.md) |
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
@@ -59,8 +60,8 @@ last-reviewed: 2026-06-29
 1. **settings 是跨域共享键值表**：一个 key 一个 value 一个 updatedAt；不同 key 归不同消费域，**covers 按 key 包装文件分摊到各域**，不要把 `lib/settings/**` 整目录塞进一份文档。
 2. **`punch.categoryId.v1` 要求有效未归档子分类**：未配置或分类失效时打点不写 `time_entries`（动作在 [timeline](../timeline.md)）。
 3. **`sleep.categoryId` 当前 UI 只允许选一级分类**：只定义统计睡眠口径（[stats-insights](../stats-insights.md) 消费）。
-4. **`nav.visibleTabs.v1` 旧值归一化**：读取时 `/stats` → `/stats/time`，`/settings` 固定保留。
-5. **桌面与移动导航配置解耦**：`nav.visibleTabs.v1` 只控制窄屏 / APK 底部导航可见入口；`nav.desktopSidebar.v1` 只控制宽屏左侧侧栏排序和更多收纳，二者互不迁移。
+4. **`nav.visibleTabs.v1` 旧值归一化**：读取时 `/stats` → `/stats/time`，`/settings` 固定保留在底栏；未选入口不再进入移动端三点菜单，而由 `/settings/more` 动态列出。
+5. **桌面与移动导航配置解耦**：`nav.visibleTabs.v1` 只控制窄屏 / APK 入口在“手机底栏”或“设置 > 更多功能”之间的归属；`nav.desktopSidebar.v1` 只控制宽屏左侧侧栏排序和更多收纳，二者互不迁移。
 6. **LWW 后写赢**：settings 无 manual 冲突，跨设备后写覆盖；改设置语义时注意多设备并发覆盖。
 
 ## 4. 模块速查
@@ -69,12 +70,13 @@ last-reviewed: 2026-06-29
 |---|---|
 | `lib/settings/index.ts` | `getSetting`/`setSetting`/`useSetting` + syncLog 同事务 |
 | `lib/settings/desktopSidebarSetting.ts` | 桌面侧栏排序 + 更多收纳设置 + sanitize |
-| `lib/settings/navVisibleTabsSetting.ts` | 底部导航可见入口设置 + sanitize |
+| `lib/settings/navVisibleTabsSetting.ts` | 手机底栏 / 更多功能入口归属设置 + sanitize |
 | `lib/settings/punchCategorySetting.ts` | 打点分类 ID 设置（`punch.categoryId.v1`） |
 | `lib/sleepCategorySetting.ts` | 睡眠分类 ID 设置（`sleep.categoryId`，旧路径在 `lib/`） |
-| `pages/settings/SettingsNavPage.tsx` | 移动底栏开关 + 桌面侧栏排序/收纳页 |
+| `pages/settings/SettingsNavPage.tsx` | 手机底栏 / 更多功能归属开关 + 桌面侧栏排序/收纳页 |
+| `pages/settings/SettingsMorePage.tsx` | 动态列出未配置进手机底栏的功能入口 |
 
-**测试**：`lib/settings/{desktopSidebarSetting,index,navVisibleTabsSetting,punchCategorySetting}.test.ts`、`lib/sleepCategorySetting.test.ts`、`pages/settings/SettingsNavPage.test.tsx`。
+**测试**：`lib/settings/{desktopSidebarSetting,index,navVisibleTabsSetting,punchCategorySetting}.test.ts`、`lib/sleepCategorySetting.test.ts`、`pages/settings/{SettingsNavPage,SettingsMorePage}.test.tsx`。
 
 ## 深水细节
 

@@ -65,6 +65,10 @@ vi.mock("./pages/settings/SettingsInsightsPage.tsx", () => ({
   default: () => createElement("div", null, "数据洞察设置页"),
 }));
 
+vi.mock("./pages/settings/SettingsMorePage.tsx", () => ({
+  default: () => createElement("div", null, "更多功能页"),
+}));
+
 vi.mock("./pages/settings/SettingsNavPage.tsx", () => ({
   SettingsNavPage: () => createElement("div", null, "底部导航设置页"),
 }));
@@ -128,6 +132,14 @@ describe("AppShell settings routes", () => {
     const html = renderAppShell("/settings/nav");
 
     expect(html).toContain("底部导航设置页");
+    expect(html).not.toContain("时间轴");
+    expect(html).not.toContain("统计");
+  });
+
+  it("renders settings more route without bottom navigation", () => {
+    const html = renderAppShell("/settings/more");
+
+    expect(html).toContain("更多功能页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });

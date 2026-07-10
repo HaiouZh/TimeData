@@ -151,8 +151,10 @@ describe("SettingsPage", () => {
     expect(html).toContain("数据设置");
     expect(html).toContain("数据洞察");
     expect(html).toContain("统计页面布局");
+    expect(html).toContain("更多功能");
+    expect(html).toContain('href="/settings/more"');
     expect(html).toContain("导航");
-    expect(html).toContain("配置移动底栏与桌面侧栏");
+    expect(html).toContain("配置手机底栏入口与桌面侧栏");
     expect(html).toContain('href="/settings/insights"');
     expect(html).toContain('href="/settings/stats-layout"');
     expect(html).toContain('href="/settings/nav"');
@@ -171,6 +173,7 @@ describe("SettingsPage", () => {
     expect(html).toContain('href="/settings/server"');
     expect(html).toContain('href="/settings/categories"');
     expect(html).toContain('href="/settings/health-range"');
+    expect(html).toContain('href="/settings/more"');
     expect(html).toContain('href="/settings/nav"');
     expect(html).toContain('href="/settings/tracks"');
     expect(html).toContain('href="/settings/data"');

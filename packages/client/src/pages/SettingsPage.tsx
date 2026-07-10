@@ -21,6 +21,7 @@ import {
   HardDrives,
   Moon,
   Signpost,
+  SquaresFour,
   Tag,
 } from "@phosphor-icons/react";
 import { Icon } from "../components/Icon.js";
@@ -346,10 +347,16 @@ export default function SettingsPage() {
 
       <SettingsSection title="导航与界面">
         <SettingsRow
+          to="/settings/more"
+          icon={<Icon icon={SquaresFour} size={20} />}
+          title="更多功能"
+          subtitle="打开未显示在手机底栏的功能"
+        />
+        <SettingsRow
           to="/settings/nav"
           icon={<Icon icon={DeviceMobile} size={20} />}
           title="导航"
-          subtitle="配置移动底栏与桌面侧栏"
+          subtitle="配置手机底栏入口与桌面侧栏"
         />
       </SettingsSection>
 

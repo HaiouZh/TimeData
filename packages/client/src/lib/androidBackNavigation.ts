@@ -19,6 +19,7 @@ export function resolveAndroidBackAction(pathname: string, search = ""): Android
     pathname === "/settings/data" ||
     pathname === "/settings/server" ||
     pathname === "/settings/categories" ||
+    pathname === "/settings/more" ||
     pathname === "/settings/nav" ||
     pathname === "/settings/tracks" ||
     pathname === "/settings/insights" ||
