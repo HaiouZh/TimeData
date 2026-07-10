@@ -4,7 +4,11 @@
 
 ## 快速部署
 
-前置条件：安装了 Docker 和 Docker Compose 的 Linux 服务器。
+前置条件：
+
+- Docker Engine 25 或更高版本
+- Docker Compose v2
+- Linux 服务器
 
 ```bash
 # 1. 克隆仓库
@@ -30,7 +34,7 @@ docker compose up -d
 
 镜像自动从 GHCR 拉取，无需本地构建。服务默认监听 `3000` 端口。
 
-默认部署包含两个长期容器：`timedata` 运行应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器不挂载 `/var/run/docker.sock`，也不安装 docker CLI；网页“一键更新”只会通过内部网络触发 Watchtower 的受鉴权 HTTP API。容器启动时会自动修复 `./data` 的写入权限，通常不需要手动 `chown` 数据目录。
+默认部署包含两个长期容器：`timedata` 运行应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器不挂载 `/var/run/docker.sock`，也不安装 docker CLI；网页“一键更新”只会通过内部网络触发 Watchtower 的受鉴权 HTTP API。默认 Compose 固定使用 Watchtower `1.7.1`，并通过 `DOCKER_API_VERSION=1.44` 兼容 Docker Engine 25+。容器启动时会自动修复 `./data` 的写入权限，通常不需要手动 `chown` 数据目录。
 
 ## 环境变量
 
@@ -59,6 +63,8 @@ push 到 main 后，GitHub Actions 自动构建镜像并推送到 GHCR。
 3. 服务端通过 `WATCHTOWER_URL` 调用内部 `watchtower` 容器的 `POST /v1/update`，并用 `WATCHTOWER_TOKEN` 做 Bearer 鉴权。
 4. Watchtower 只处理带 `com.centurylinklabs.watchtower.enable=true` label 的容器；默认只有 `timedata` 带这个 label。
 5. Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec 重新创建 `timedata`。更新状态写入 `data/update-status.json`，网页会轮询 `/api/update/status` 展示结果和 `data/update.log` 尾部。
+
+如果 `timedata-watchtower` 持续重启或“一键更新”提示无法连接 Watchtower，先运行 `docker compose logs --tail=100 watchtower` 和 `docker version`。默认部署要求 Docker Engine 25+；日志不应出现 `client version 1.25 is too old`。
 
 ## 客户端配置
 

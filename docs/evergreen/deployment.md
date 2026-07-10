@@ -27,7 +27,7 @@ contracts:
   - Dockerfile
   - packages/server/Dockerfile
   - .env.example
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 <!-- 复核 2026-07-02（S2 调度重做）：SettingsPage.tsx 手动同步按钮 onClick 从 `sync` 改为 `() => sync()`（仅签名包装，行为不变，仍不经调度器直调 sync()），部署/自更新相关内容无需改动。 -->
@@ -37,6 +37,7 @@ last-reviewed: 2026-07-04
 
 > 部署形态：单进程 Hono + SQLite，跑在 Docker 里。镜像走 GHCR，支持一键自更新。
 > 用户视角的部署步骤在 [`README.md`](../../README.md)。本文档讲**机制**，不重复操作步骤。
+> 官方 Compose 部署基线：Docker Engine 25+、Docker Compose v2。
 
 ## 1. 运行时拓扑
 
@@ -70,7 +71,7 @@ last-reviewed: 2026-07-04
 └─────────────────────────────────────────────┘
 ```
 
-默认部署有两个长期容器：`timedata` 跑应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器以非 root 用户运行，不挂载 `/var/run/docker.sock`，也不安装 docker CLI；自更新只通过内部网络触发 Watchtower 的受鉴权 HTTP API。Docker socket 权限集中在 `watchtower` 容器内，应用进程即便被攻陷也无法直接调用 Docker Engine API。
+默认部署有两个长期容器：`timedata` 跑应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。Compose 固定使用 `containrrr/watchtower:1.7.1`，并显式注入 `DOCKER_API_VERSION=1.44`，避免 Watchtower 默认 Docker API `1.25` 被新版 Docker Engine 拒绝；因此官方部署基线是 Docker Engine 25+。应用容器以非 root 用户运行，不挂载 `/var/run/docker.sock`，也不安装 docker CLI；自更新只通过内部网络触发 Watchtower 的受鉴权 HTTP API。Docker socket 权限集中在 `watchtower` 容器内，应用进程即便被攻陷也无法直接调用 Docker Engine API。
 
 ## 2. 关键环境变量
 
@@ -193,6 +194,15 @@ Watchtower 拉取镜像、比较 digest，并在有新镜像时用旧容器 spec
 5. **状态语义是触发结果**：服务端的 `succeeded` 表示 Watchtower 已接受 `/v1/update` 请求，不保证新容器已经完成健康启动；部署排查仍以 `data/update.log` 和 `docker compose ps` 为准。
 6. **缺配置 fail closed**：`WATCHTOWER_URL` 或 `WATCHTOWER_TOKEN` 缺失时 `/api/update` 返回 503 `SELF_UPDATE_DISABLED`，不会跑空触发，也不会留下假成功状态。
 7. 更新状态写到 `/app/data/update-status.json`，前端轮询 `/api/update/status` 获取进度和日志尾部。
+
+如果 `timedata-watchtower` 持续重启，先执行：
+
+```bash
+docker compose logs --tail=100 watchtower
+docker version
+```
+
+默认配置下 Watchtower 应使用 Docker API `1.44`；日志不应出现 `client version 1.25 is too old`。同时确认宿主机满足 Docker Engine 25+，且 `watchtower` 仍未向 host 暴露端口。
 
 ### 5.1 更新状态（`/api/update/status`）
 
