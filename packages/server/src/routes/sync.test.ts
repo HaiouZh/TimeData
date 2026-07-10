@@ -1353,7 +1353,7 @@ describe("sync route", () => {
         expect.objectContaining({
           recordId: "note-valid",
           status: "accepted",
-          reasonCode: "applied",
+          reasonCode: "validated",
         }),
         expect.objectContaining({
           recordId: "entry-invalid",

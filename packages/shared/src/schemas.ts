@@ -42,7 +42,8 @@ export const SyncLogEntrySchema = z.object({
   recordId: z.string(),
   action: z.enum(["create", "update", "delete"]),
   timestamp: UtcIsoStringSchema,
-  synced: z.union([z.literal(0), z.literal(1)]),
+  // 0=待上传 1=已同步/已放弃 2=隔离（服务端持续拒收的死信，不再自动重发，等用户修正或重新入队）
+  synced: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   op: z.union([buildTaskCompletionOpSchema(UtcIsoStringSchema), buildTrackStatusOpSchema(UtcIsoStringSchema)]).optional(),
 });
 
@@ -62,6 +63,7 @@ export const SyncPushReasonCodeSchema = z.enum([
   "server_version_newer_or_same",
   "foreign_key_failed",
   "applied",
+  "validated",
 ]);
 
 export const SyncPushRequestSchema = z.object({

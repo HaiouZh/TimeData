@@ -30,6 +30,7 @@ last-reviewed: 2026-07-10
 > [sync](../sync.md) 的域登记簿子文档：系统认识哪些同步域、shared/server/client 三端登记簿如何保持一致、新增普通 LWW 域和复合键域要改什么。
 > 不讲 push/pull 主流程、冲突 UI、SSE 和 force-push 细节；这些仍在 [sync](../sync.md)。
 
+<!-- 复核 2026-07-10（validated reasonCode + syncLog 死信位）：新增 reasonCode "validated" 与 syncLog.synced=2 属于 push 回执/客户端 outbox 语义（见 sync.md 与 data-model.md），不新增同步域，也不改变各域登记簿条目。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：新增 reasonCode stale_change_rejected 与 applyChange staleGuard 属于 push 冲突仲裁语义，不新增同步域，也不改变各域登记簿条目。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：tasks 仍是既有 LWW 域，未新增同步域；server LWW 映射仅增加 guardedColumns，用于无 op 的 upsert 撞行时保留完成语义列。 -->
 <!-- 复核 2026-07-04（tracks 并发时间语义）：tracks / track_steps 仍是既有 LWW 域，未新增同步域；tracks 增加 status guardedColumns，track_steps 增加宿主轨道闸。 -->

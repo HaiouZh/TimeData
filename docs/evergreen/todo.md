@@ -46,6 +46,8 @@ last-reviewed: 2026-07-10
 > 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
+<!-- 复核 2026-07-10（validated reasonCode + syncLog 死信位）：shared schemas 本轮改动只涉及 push 回执 reasonCode 与 syncLog.synced 死信位（见 sync.md / data-model.md），Task 字段契约与待办语义无变化。 -->
+
 ## 承上启下
 
 - **上游**：用户在 Web `TodoPage` 新增/编辑/勾选/排序；速记页 composer 「存待办」调 `addTask`；授权 agent / CLI 经 `POST /api/agent/tasks/:id/status` 回写状态；CLI 经 `POST /api/tasks/:id/schedule` 排期。

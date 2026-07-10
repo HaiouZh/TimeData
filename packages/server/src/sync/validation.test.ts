@@ -254,7 +254,7 @@ describe("validateSyncChanges", () => {
     })], { now: new Date("2026-05-08T10:00:00.000Z") });
 
     expect(result.valid).toBe(true);
-    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied" });
+    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "validated" });
   });
 
   it("rejects an entry that references a missing category", () => {
@@ -404,7 +404,7 @@ describe("validateSyncChanges", () => {
     })]);
 
     expect(result.valid).toBe(true);
-    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied" });
+    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "validated" });
   });
 
   it("accepts an entry when the server version is newer or same timestamp", () => {
@@ -416,7 +416,7 @@ describe("validateSyncChanges", () => {
     const result = validateSyncChanges(db, [entryChange()]);
 
     expect(result.valid).toBe(true);
-    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied" });
+    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "validated" });
   });
 
   it("rejects time entries with non-UTC startTime/endTime (no Z suffix)", () => {
@@ -478,7 +478,7 @@ describe("validateSyncChanges", () => {
     const result = validateSyncChanges(db, [entryChange()], { now: "2026-05-08T10:00:00.000Z" });
 
     expect(result.valid).toBe(true);
-    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "applied" });
+    expect(result.outcomes[0]).toMatchObject({ status: "accepted", reasonCode: "validated" });
   });
 
   it("rejects a batch when two incoming local entries overlap each other", () => {
@@ -521,8 +521,8 @@ describe("validateSyncChanges", () => {
 
     expect(result.valid).toBe(true);
     expect(result.outcomes).toEqual([
-      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
-      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
+      expect.objectContaining({ status: "accepted", reasonCode: "validated" }),
+      expect.objectContaining({ status: "accepted", reasonCode: "validated" }),
     ]);
   });
 
@@ -559,8 +559,8 @@ describe("validateSyncChanges", () => {
 
     expect(result.valid).toBe(true);
     expect(result.outcomes).toEqual([
-      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
-      expect.objectContaining({ status: "accepted", reasonCode: "applied" }),
+      expect.objectContaining({ status: "accepted", reasonCode: "validated" }),
+      expect.objectContaining({ status: "accepted", reasonCode: "validated" }),
     ]);
   });
 

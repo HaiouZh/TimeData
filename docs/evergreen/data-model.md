@@ -89,7 +89,7 @@ type SyncLogEntry = {
   recordId: string;
   action: "create" | "update" | "delete";
   timestamp: string;
-  synced: 0 | 1;
+  synced: 0 | 1 | 2; // 0=待上传 1=已同步/已放弃 2=死信隔离（服务端确定性拒收，不再自动重发）
   op?: TaskCompletionOp | TrackStatusOp; // tasks 完成语义 / tracks.status 写入授权标志
 };
 ```
@@ -129,7 +129,8 @@ type SyncChange =
 
 | reasonCode | 含义 |
 |---|---|
-| `applied` | 接受并已写入 |
+| `applied` | 接受并已写入（仅出现在 200 响应） |
+| `validated` | 仅通过校验、未写入（仅出现在 409 原子拒绝批的 accepted outcome，不得据此确认日志） |
 | `missing_payload` | create/update 没带 data |
 | `invalid_shape` | 字段类型或格式错误 |
 | `id_mismatch` | payload identity 与 `recordId` 不一致；普通域是 `data.id !== recordId`，复合键域由 helper 计算 |

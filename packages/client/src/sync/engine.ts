@@ -98,6 +98,10 @@ function buildPullCursor(mode: "incremental" | "repair"): { sinceSeq: number } {
 // 每批最多拉多少条 change；长离线设备也不会一次性把巨量 change 灌进主线程。
 export const PULL_PAGE_LIMIT = 500;
 
+// syncLog.synced 死信位：服务端确定性拒收（非 client_bug/stale）的日志隔离于此，
+// 不参与 push/pending 统计，避免每轮同步重复引爆原子 409。
+export const SYNC_LOG_QUARANTINED = 2;
+
 // 独立函数便于测试 spy，避免真实定时等待进入断言路径。
 export function yieldToMainThread(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -393,6 +397,8 @@ async function applyAtomicRejectedPushResponse(
     changes.map((change) => changeKey(change.tableName, change.recordId, change.action)),
   );
   const clientBugLogIds: string[] = [];
+  const staleRejectedLogIds: string[] = [];
+  const quarantineLogIds: string[] = [];
   const clientBugIssues: SyncPushOutcome[] = [];
   const userActionableIssues: SyncPushOutcome[] = [];
   const issues: SyncPushOutcome[] = [];
@@ -409,15 +415,26 @@ async function applyAtomicRejectedPushResponse(
     if (category === "client_bug") {
       clientBugLogIds.push(...logIds);
       clientBugIssues.push(outcome);
+    } else if (category === "stale_rejected") {
+      // 服务端拒收过期/孤儿主张：放弃本地主张，与 200 路径同语义。
+      staleRejectedLogIds.push(...logIds);
+      issues.push(outcome);
     } else {
+      // 服务端会持续拒收同一载荷——隔离为死信（synced=2），不再逐轮重发引爆 409 拆批；
+      // 用户修正记录会产生新日志（synced=0），自然重新进入上传队列。
+      quarantineLogIds.push(...logIds);
       if (category === "user_actionable") userActionableIssues.push(outcome);
       issues.push(outcome);
     }
   }
 
-  if (clientBugLogIds.length > 0) {
-    const uniqueLogIds = [...new Set(clientBugLogIds)];
-    await db.syncLog.bulkUpdate(uniqueLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
+  const markSynced = [...new Set([...clientBugLogIds, ...staleRejectedLogIds])];
+  if (markSynced.length > 0) {
+    await db.syncLog.bulkUpdate(markSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
+  }
+  const markQuarantined = [...new Set(quarantineLogIds)].filter((id) => !markSynced.includes(id));
+  if (markQuarantined.length > 0) {
+    await db.syncLog.bulkUpdate(markQuarantined.map((id) => ({ key: id, changes: { synced: SYNC_LOG_QUARANTINED } })));
   }
 
   const retryChanges = changes.filter((change) => retryKeys.has(changeKey(change.tableName, change.recordId, change.action)));
@@ -1135,14 +1152,27 @@ export async function recordSyncLogs(
   syncScheduler.notifyWrite();
 }
 
-// 已同步日志仅剩审计残值，保留 7 天便于排障后即清，防止 IndexedDB 无界膨胀。
+// 已同步/已隔离日志仅剩审计残值，保留 7 天便于排障后即清，防止 IndexedDB 无界膨胀。
 export const SYNCED_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function pruneSyncedLogs(now: () => number = Date.now): Promise<number> {
   const cutoff = new Date(now() - SYNCED_LOG_RETENTION_MS).toISOString();
   return db.syncLog
     .where("synced")
-    .equals(1)
+    .anyOf(1, SYNC_LOG_QUARANTINED)
     .filter((log) => log.timestamp < cutoff)
     .delete();
+}
+
+export async function getQuarantinedSyncLogs(): Promise<SyncLogEntry[]> {
+  return db.syncLog.where("synced").equals(SYNC_LOG_QUARANTINED).toArray();
+}
+
+/** 把隔离的死信日志重新放回上传队列（用户修正服务端拒因后手动重试的出口）。 */
+export async function requeueQuarantinedSyncLogs(ids?: string[]): Promise<number> {
+  const targets = ids ?? (await getQuarantinedSyncLogs()).map((log) => log.id);
+  if (targets.length === 0) return 0;
+  await db.syncLog.bulkUpdate(targets.map((id) => ({ key: id, changes: { synced: 0 } })));
+  syncScheduler.notifyWrite();
+  return targets.length;
 }

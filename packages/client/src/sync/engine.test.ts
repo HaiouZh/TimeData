@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -147,6 +147,20 @@ describe("pruneSyncedLogs", () => {
     expect(deleted).toBe(1);
     const remaining = (await db.syncLog.toArray()).map((l) => l.id).sort();
     expect(remaining).toEqual(["fresh-synced", "old-unsynced"]);
+  });
+
+  it("同窗口回收 synced=2 的隔离死信日志", async () => {
+    const now = Date.parse("2026-07-02T00:00:00.000Z");
+    await db.syncLog.bulkAdd([
+      { id: "old-quarantined", tableName: "tasks", recordId: "a", action: "update",
+        timestamp: "2026-06-20T00:00:00.000Z", synced: 2 },
+      { id: "fresh-quarantined", tableName: "tasks", recordId: "b", action: "update",
+        timestamp: "2026-07-01T00:00:00.000Z", synced: 2 },
+    ]);
+    const deleted = await pruneSyncedLogs(() => now);
+    expect(deleted).toBe(1);
+    const remaining = (await db.syncLog.toArray()).map((l) => l.id).sort();
+    expect(remaining).toEqual(["fresh-quarantined"]);
   });
 });
 
@@ -794,7 +808,66 @@ describe("syncPush", () => {
       expect.objectContaining({ tableName: "time_entries", recordId: "entry-accepted", action: "create" }),
     ]);
     await expect(db.syncLog.get(acceptedLogId)).resolves.toMatchObject({ synced: 1 });
-    await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 0 });
+    // 服务端会持续拒收同一载荷：隔离为死信，不再逐轮重发（用户修正后产生新日志重新入队）。
+    await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 2 });
+  });
+
+  it("原子 409 的死信日志被隔离后不再进入下一轮 push，可手动重新入队", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00",
+      updatedAt: "2026-05-08T08:00:00",
+    });
+    await db.timeEntries.add({
+      id: "entry-bad",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00",
+      endTime: "2026-05-08T10:00:00",
+      note: null,
+      createdAt: "2026-05-08T09:00:00",
+      updatedAt: "2026-05-08T09:00:00",
+    });
+    await db.syncLog.add({ id: "bad-log", tableName: "time_entries", recordId: "entry-bad", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
+
+    apiFetchMock.mockRejectedValueOnce(new ApiErrorMock(409, "Conflict", "", {
+      outcomes: [
+        { tableName: "categories", recordId: "cat-1", action: "create", status: "accepted", reasonCode: "validated", message: "passed validation", incomingTimestamp: "2026-05-08T08:00:00" },
+        { tableName: "time_entries", recordId: "entry-bad", action: "create", status: "rejected", reasonCode: "overlap", message: "overlap", incomingTimestamp: "2026-05-08T09:00:00" },
+      ],
+      accepted: 1,
+      rejected: 1,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-05-08T09:01:00.000Z",
+    })).mockResolvedValue({
+      outcomes: [],
+      accepted: 0,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-05-08T09:02:00.000Z",
+      latestSeq: 5,
+      appliedCount: 0,
+    });
+
+    await syncPush();
+    await expect(db.syncLog.get("bad-log")).resolves.toMatchObject({ synced: 2 });
+    await expect(getQuarantinedSyncLogs()).resolves.toHaveLength(1);
+
+    // 死信不再参与下一轮 push：没有其他 pending 时直接 no-op、零请求。
+    apiFetchMock.mockClear();
+    await syncPush();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    // 手动重新入队后恢复 pending。
+    await expect(requeueQuarantinedSyncLogs()).resolves.toBe(1);
+    await expect(db.syncLog.get("bad-log")).resolves.toMatchObject({ synced: 0 });
   });
 
   it("keeps rejected push logs unsynced", async () => {

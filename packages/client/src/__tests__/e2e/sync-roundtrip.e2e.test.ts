@@ -245,7 +245,8 @@ describe("e2e: sync round trip", () => {
     ]);
     await expect(db.syncLog.get("log-cat-conflict")).resolves.toMatchObject({ synced: 1 });
     await expect(db.syncLog.get("log-entry-first")).resolves.toMatchObject({ synced: 1 });
-    await expect(db.syncLog.get("log-entry-overlap")).resolves.toMatchObject({ synced: 0 });
+    // overlap 属服务端确定性拒收：隔离为死信（synced=2），不再逐轮重发引爆原子 409。
+    await expect(db.syncLog.get("log-entry-overlap")).resolves.toMatchObject({ synced: 2 });
   });
 
   it("applies server tombstone deletes during pull", async () => {
