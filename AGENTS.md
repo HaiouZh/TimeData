@@ -92,6 +92,7 @@
 - 优先行为测试，不靠 grep 文档字符串。
 - 未经明确批准不改基线 / 快照 / 忽略来消除失败。
 - 交付前本地通过 `pnpm test` 与 `pnpm check:docs`。无法运行时（环境受限）显式说明跳过的检查。
+- 合并 / push 前本地补跑 CI 同集棘轮：`check:docs:strict`、`check:docs:size`（covers 涨了要显式重写基线）、`check:test`、`check:ui`、`check:design`、`check:roadmap`——CI 跑的比日常交付清单多，漏跑 `check:docs:size` 已两次导致 push 后 CI 红。
 - **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页测只留烟测 + 真正跨组件协作的流程，别把单组件/单函数行为又在整页重测一遍。
 - **去冗余分级举证**：删任何测试前须先确认"同一行为已在更低层覆盖"（看的是同一行为，不是同一函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）blast radius 大，须**正面贴出低层覆盖证据**且优先 merge 不 delete；其余域低层确证覆盖即可删。
 - **无效测试定义（可删）**：只测实现细节非行为（如断言具体 className 串）、永远绿（断言已删除代码"不存在"）、grep 文档字符串、无人看的快照。
