@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { resetDatabaseToDefaults } from "../db/reset.js";
 import { createTokenStore } from "../lib/confirm-token.js";
 import { createServerBackup } from "../sync/backup.js";
+import { notifySyncChange } from "../sync/notifier.js";
+import { getLatestSeq } from "../sync/seq.js";
 
 const RESET_PHRASE = "RESET_DATA" as const;
 const resetTokens = createTokenStore<{ requestedAt: string }>(5 * 60 * 1000);
@@ -33,11 +35,16 @@ data.post("/reset", async (c) => {
     return c.json({ error: "Invalid or expired token" }, 403);
   }
 
+  const seqBeforeBackup = getLatestSeq() ?? 0;
   const backup = await createServerBackup("data_reset", {
     protected: true,
     reason: "manual_data_reset",
   });
+  if ((getLatestSeq() ?? 0) !== seqBeforeBackup) {
+    return c.json({ error: "Server data changed while the safety backup was being created. Retry reset." }, 409);
+  }
   const result = resetDatabaseToDefaults();
+  notifySyncChange(getLatestSeq());
   return c.json({ ...result, backupId: backup.id });
 });
 

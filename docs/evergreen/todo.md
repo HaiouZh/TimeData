@@ -36,7 +36,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-08
+last-reviewed: 2026-07-10
 ---
 
 # 待办任务
@@ -100,7 +100,7 @@ agent / CLI (task-done/task-tag)
 
 - `GET /api/tasks?kind=pool|recurring&done=0|1`（`routes/tasks.ts`）：严格 querySchema，SQL 层只取 `parent_id IS NULL` 的 root tasks，`ORDER BY sort_order, created_at, id`，`rowToTask` 映射后按 kind/done 过滤；受 `AUTH_TOKEN` 保护。
 - `POST /api/tasks/:id/schedule { scheduledDate: "YYYY-MM-DD" | null }`（`routes/tasks.ts`）：CLI `task-schedule`/`task-unschedule` 调用，受 `AUTH_TOKEN` 保护；重复任务 409 `TASK_RECURRING_USE_RULE`。
-  - **红线**：这条端点**直接 `UPDATE tasks SET scheduled_at, updated_at` + `recordSeq`，不走 `applyChange`/LWW 域**——即它**绕过了 LWW 的 schema 校验/冲突路径**。对比 agent 端点反而走 `applyChange`。这是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），改 tasks 写入逻辑时三条通道都要照顾。
+  - **红线**：这条端点仍直接 `UPDATE tasks SET scheduled_at, updated_at`，不走 `applyChange`/LWW 域，因此绕过 LWW 的 schema 校验/冲突路径；但业务 UPDATE 与 `recordSeqWithDb` 已在同一个 SQLite transaction 内，记账失败会整体回滚，提交后再广播 SSE bump。这是 tasks 的第三条 server 写入通道（受控、AUTH_TOKEN、server 权威写），改 tasks 写入逻辑时三条通道都要照顾。
 
 ## 2. Schema / 契约（字段级）
 
@@ -167,7 +167,7 @@ agent / CLI (task-done/task-tag)
 
 1. **完成走 occurrence 代理，模板不承载完成态**：非重复任务就地完成（`done=true` + `completedAt=now`），取消完成（仅客户端 `toggleTaskDone` 翻回）清 `completedAt=null`；重复模板完成代理到该 rule 的 occurrence——有 active 完成它，无 active 先按引擎物化到期发。client 人工入口在下一发未到期时会继续强制物化下一发并完成，允许提前消耗配额；server agent `done=true` 不提前完成，未到期/耗尽仍 409 `RULE_NOT_DUE`。模板的 `done`/`lastDoneAt`/`completedCount` 永不推进（纯遗留字段）；耗尽由账本判定（`isRuleExhausted`），耗尽模板保留 `recurrence`、由 `listTasks` 沉入 completed。落点判据：普通任务是 `done`（`placement.ts`），模板是账本。细节见 [todo/recurrence](todo/recurrence.md) §3。
 2. **"取消完成"两端不对称（root only）**：agent root `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 root reopen 会清 `completedAt=null`（且对 occurrence 会连删后来物化的 active 发防双 active）。child 是例外：agent child `done=true/false` 走轻量路径并与客户端子任务勾选对齐（true 写 now，false 清 `completedAt=null`）。撤销完成的 root 语义两端不一致，改前先确认。
-3. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的直写+recordSeq），机制不同。
+3. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的事务内直写+记账），机制不同；schedule 必须保持提交后 SSE 通知。
 4. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供标签来源去重。`today` 只读 pending occurrence（`ruleId!==null && !skipped && !done`），重复模板不投影到今天，归入 `scheduled` 规则管理区；`scheduled` = 一次性未来排期 + 重复模板，按下一发生日升序，行内显示重复摘要与下一发生日，`listTasks` 同时给出 7 天水位线切点 `scheduledSunkenFromIndex`（第一个下一发生日超出「今天+7 天」的下标，本地日历口径与排序键一致），UI 把切点后的行折叠进 `SunkenScheduledTail`「更远还有 N 条」（搜索/标签过滤激活时水位线失效、命中即显示）；`completed` 收纳普通完成任务、done occurrence 与账本判耗尽的模板（`completedAt=null` 沉底），按 `completedAt` 倒序、**无日期过滤**；`scheduled` 内规则的下一发生日与耗尽判定读 occurrence 账本（`nextDueDate`/`isRuleExhausted`），不读模板游标。改 `recurrence` 或 `startAt` 视为重锚：`startAt` 移到新值或当下，同事务级联删旧活跃 occurrence 及其 children、即时物化；锚点前历史发保留但不计入配额/游标；规则/起始日未变则保留进度（见 [todo/recurrence](todo/recurrence.md) §3）。
 5. **DnD 拓扑：顶层单一 `DndContext`，可拖区只有今天 / 收件箱 / 某 root 的 children**。
    - **拓扑**：`TodoPage` 顶层一个 `DndContext`，下挂 droppable/SortableContext 命名空间 `pool:today` / `pool:inbox` / `parent:<rootId>`；收件箱跨天只建**一个** SortableContext（按天分段只是 DOM 展示）。`upcoming` / `completed` / `recurring` **不参与拖拽**——每个任务在可拖范围内只渲染一次，draggable id 全局唯一。root 行拖拽 activator 在行左 2/5 区域（复选框独立 `stopPropagation`，右侧标题区保留打开详情/选词）。
@@ -215,7 +215,7 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 
 | 入口 | 职责 |
 |---|---|
-| `routes/tasks.ts` | `GET /`（只读查询，只返回 root tasks）+ `POST /:id/schedule`（排期直写，重复 409，**不走 applyChange**） |
+| `routes/tasks.ts` | `GET /`（只读查询，只返回 root tasks）+ `POST /:id/schedule`（排期事务内直写+记账、提交后 SSE，重复 409，**不走 applyChange**） |
 | `routes/agent.ts` | `POST /tasks/:id/status`（封闭动作，走 `applyChange` + `notifySyncChange`；重复模板 `done=true` 代理完成当前可代理 occurrence——active 则 update，无 active 经 `materializeDue` create 到期 occurrence，未到期/耗尽回 409 `RULE_NOT_DUE`，故意不开放提前完成；普通 root 就地完成；child `done` 只轻量更新自身 done/completedAt；root `note` 建独立 child Task，child `note` 409 拒绝） |
 | `sync/domains.ts` | `tasks` 通用 LWW 注册 + `taskToRow`/`readTaskRecord` |
 | `db/schema.ts` / `lib/db-rows.ts` | 建表/列迁移 + `rowToTask` |

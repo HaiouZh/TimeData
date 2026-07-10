@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  createSyncScheduler,
+  nextSyncRetryDelayMs,
   SYNC_FALLBACK_INTERVAL_MS,
+  SYNC_RETRY_BASE_MS,
+  SYNC_RETRY_MAX_MS,
   SYNC_SCHEDULE_DEBOUNCE_MS,
   SYNC_SCHEDULE_MAX_WAIT_MS,
-  createSyncScheduler,
   type SyncExecutorMeta,
 } from "./scheduler.ts";
 
@@ -139,8 +142,14 @@ describe("createSyncScheduler", () => {
     scheduler.dispose();
   });
 
-  it("执行失败（resolve false / reject）不立即补跑", async () => {
-    const executor = vi.fn(async () => false);
+  it("执行失败后按上限指数退避，成功后复位", async () => {
+    const executor = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
     const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
     scheduler.setExecutor(executor);
     await vi.advanceTimersByTimeAsync(0);
@@ -149,9 +158,84 @@ describe("createSyncScheduler", () => {
     await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
     expect(executor).toHaveBeenCalledTimes(1);
 
+    await vi.advanceTimersByTimeAsync(SYNC_RETRY_BASE_MS - 1);
+    expect(executor).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(executor).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(SYNC_RETRY_BASE_MS * 2);
+    expect(executor).toHaveBeenCalledTimes(3);
+
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(executor).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(SYNC_RETRY_BASE_MS);
+    expect(executor).toHaveBeenCalledTimes(5);
+
+    scheduler.dispose();
+  });
+
+  it("失败结果尊重 retryAfterMs，且 pull-only（unsynced=0）也会重试", async () => {
+    const executor = vi.fn().mockResolvedValueOnce({ ok: false, retryAfterMs: 12_000 }).mockResolvedValueOnce(true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.requestSync("bump");
     await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
     expect(executor).toHaveBeenCalledTimes(1);
 
+    await vi.advanceTimersByTimeAsync(11_999);
+    expect(executor).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(executor).toHaveBeenCalledTimes(2);
+    expect(executor.mock.calls[1][0].reason).toBe("bump");
+
+    scheduler.dispose();
+  });
+
+  it("Retry-After 窗口内的 fallback/reconnect 不提前请求，hidden flush 可破例一次", async () => {
+    const executor = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, retryAfterMs: 90_000 })
+      .mockResolvedValueOnce({ ok: false, retryAfterMs: 90_000 })
+      .mockResolvedValueOnce(true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(executor).toHaveBeenCalledTimes(1);
+
+    scheduler.requestSync("reconnect");
+    await vi.advanceTimersByTimeAsync(SYNC_FALLBACK_INTERVAL_MS);
+    expect(executor).toHaveBeenCalledTimes(1);
+
+    scheduler.flushNow();
+    expect(executor).toHaveBeenCalledTimes(2);
+    expect(executor.mock.calls[1][0].reason).toBe("flush");
+
+    scheduler.flushNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(executor).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(executor).toHaveBeenCalledTimes(3);
+
+    scheduler.dispose();
+  });
+
+  it("executor reject 也进入退避重试", async () => {
+    const executor = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS + SYNC_RETRY_BASE_MS);
+
+    expect(executor).toHaveBeenCalledTimes(2);
     scheduler.dispose();
   });
 
@@ -178,7 +262,7 @@ describe("createSyncScheduler", () => {
     scheduler.dispose();
   });
 
-  it("flushNow 跳过防抖立即执行；running 中或无 pending 时为 no-op", async () => {
+  it("flushNow 跳过防抖立即执行；无 pending/outbox/retry 时为 no-op", async () => {
     const executor = vi.fn(async () => true);
     const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
     scheduler.setExecutor(executor);
@@ -198,7 +282,49 @@ describe("createSyncScheduler", () => {
     scheduler.dispose();
   });
 
-  it("flushNow 在 running 中为 no-op", async () => {
+  it("flushNow 会检查真实 outbox，即使没有 scheduler pending 也立即执行", async () => {
+    const executor = vi.fn(async () => true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 2 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    executor.mockClear();
+
+    scheduler.flushNow();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor.mock.calls[0][0].reason).toBe("flush");
+    scheduler.dispose();
+  });
+
+  it("连续 hidden/pagehide 只共享一次 outbox 预检并执行一轮 flush", async () => {
+    let resolveFlushCheck: ((count: number) => void) | null = null;
+    const flushCheck = new Promise<number>((resolve) => {
+      resolveFlushCheck = resolve;
+    });
+    const getUnsyncedCount = vi
+      .fn<() => Promise<number>>()
+      .mockResolvedValueOnce(0)
+      .mockReturnValueOnce(flushCheck);
+    const executor = vi.fn(async () => true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.flushNow();
+    scheduler.flushNow();
+    expect(getUnsyncedCount).toHaveBeenCalledTimes(2);
+
+    resolveFlushCheck?.(1);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(executor.mock.calls[0][0].reason).toBe("flush");
+    scheduler.dispose();
+  });
+
+  it("flushNow 在 running 中发现新 outbox 时安排结束后补跑", async () => {
     let resolveRun: ((v: boolean) => void) | null = null;
     const gate = new Promise<boolean>((resolve) => {
       resolveRun = resolve;
@@ -209,7 +335,8 @@ describe("createSyncScheduler", () => {
       if (callCount === 1) return gate;
       return true;
     });
-    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    let unsyncedCount = 0;
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => unsyncedCount });
     scheduler.setExecutor(executor);
     await vi.advanceTimersByTimeAsync(0);
 
@@ -217,13 +344,31 @@ describe("createSyncScheduler", () => {
     scheduler.flushNow();
     expect(executor).toHaveBeenCalledTimes(1);
 
-    // 运行期间再次写入并尝试 flushNow：running 为真，flushNow 应为 no-op
-    scheduler.notifyWrite();
+    unsyncedCount = 1;
     scheduler.flushNow();
+    await vi.advanceTimersByTimeAsync(0);
     expect(executor).toHaveBeenCalledTimes(1);
 
     resolveRun?.(true);
     await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(executor).toHaveBeenCalledTimes(2);
+    expect(executor.mock.calls[1][0].reason).toBe("flush");
+    scheduler.dispose();
+  });
+
+  it("flushNow 会兑现已到期的 retry-needed", async () => {
+    const executor = vi.fn().mockResolvedValueOnce({ ok: false, retryAfterMs: 0 }).mockResolvedValueOnce(true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    await vi.advanceTimersByTimeAsync(SYNC_RETRY_BASE_MS);
+    scheduler.flushNow();
+    expect(executor).toHaveBeenCalledTimes(2);
+
     scheduler.dispose();
   });
 
@@ -267,5 +412,86 @@ describe("createSyncScheduler", () => {
     scheduler.dispose();
     await vi.advanceTimersByTimeAsync(SYNC_FALLBACK_INTERVAL_MS * 3);
     expect(executor).not.toHaveBeenCalled();
+  });
+
+  it("旧 executor 晚结束不会清掉新 generation 的 running 状态", async () => {
+    let resolveOld: ((value: boolean) => void) | null = null;
+    const oldRun = new Promise<boolean>((resolve) => {
+      resolveOld = resolve;
+    });
+    let resolveNew: ((value: boolean) => void) | null = null;
+    const newRun = new Promise<boolean>((resolve) => {
+      resolveNew = resolve;
+    });
+    const oldExecutor = vi.fn(() => oldRun);
+    const newExecutor = vi.fn().mockReturnValueOnce(newRun).mockResolvedValueOnce(true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(oldExecutor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(oldExecutor).toHaveBeenCalledTimes(1);
+
+    scheduler.setExecutor(null);
+    scheduler.setExecutor(newExecutor);
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(newExecutor).toHaveBeenCalledTimes(1);
+
+    resolveOld?.(false);
+    await vi.advanceTimersByTimeAsync(0);
+    scheduler.requestSync("write");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(newExecutor).toHaveBeenCalledTimes(1);
+
+    resolveNew?.(true);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(newExecutor).toHaveBeenCalledTimes(2);
+    scheduler.dispose();
+  });
+
+  it("旧 generation 的异步 outbox 预检不会给新 executor 安排 startup", async () => {
+    let resolveOldCheck: ((count: number) => void) | null = null;
+    const oldCheck = new Promise<number>((resolve) => {
+      resolveOldCheck = resolve;
+    });
+    let resolveNewCheck: ((count: number) => void) | null = null;
+    const newCheck = new Promise<number>((resolve) => {
+      resolveNewCheck = resolve;
+    });
+    const getUnsyncedCount = vi
+      .fn<() => Promise<number>>()
+      .mockReturnValueOnce(oldCheck)
+      .mockReturnValueOnce(newCheck);
+    const oldExecutor = vi.fn(async () => true);
+    const newExecutor = vi.fn(async () => true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount });
+
+    scheduler.setExecutor(oldExecutor);
+    scheduler.setExecutor(null);
+    scheduler.setExecutor(newExecutor);
+
+    resolveNewCheck?.(1);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(newExecutor).toHaveBeenCalledTimes(1);
+
+    resolveOldCheck?.(1);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(newExecutor).toHaveBeenCalledTimes(1);
+    expect(oldExecutor).not.toHaveBeenCalled();
+    scheduler.dispose();
+  });
+});
+
+describe("nextSyncRetryDelayMs", () => {
+  it("指数增长并封顶 60s，Retry-After 可延后重试", () => {
+    expect(nextSyncRetryDelayMs(0)).toBe(SYNC_RETRY_BASE_MS);
+    expect(nextSyncRetryDelayMs(3)).toBe(8_000);
+    expect(nextSyncRetryDelayMs(20)).toBe(SYNC_RETRY_MAX_MS);
+    expect(nextSyncRetryDelayMs(0, 12_000)).toBe(12_000);
   });
 });

@@ -178,6 +178,52 @@ describe("POST /api/tasks/:id/schedule", () => {
     expect(db.prepare("SELECT weight FROM tasks WHERE id = ?").get("weighted")).toEqual({ weight: 7 });
   });
 
+  it("recordSeq 失败时排期业务写入随事务回滚", async () => {
+    db.exec(`
+      CREATE TRIGGER fail_task_schedule_seq
+      BEFORE INSERT ON sync_seq
+      WHEN NEW.table_name = 'tasks' AND NEW.record_id = 't1'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected task seq failure');
+      END;
+    `);
+
+    const before = db.prepare("SELECT scheduled_at, updated_at FROM tasks WHERE id = ?").get("t1");
+    const res = await app.request("/api/tasks/t1/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledDate: "2026-06-15" }),
+    });
+
+    expect(res.status).toBe(500);
+    expect(db.prepare("SELECT scheduled_at, updated_at FROM tasks WHERE id = ?").get("t1")).toEqual(before);
+    expect(
+      db.prepare("SELECT id FROM sync_seq WHERE table_name = 'tasks' AND record_id = 't1'").get(),
+    ).toBeUndefined();
+  });
+
+  it("排期提交成功后向同步流广播最新 seq", async () => {
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+    const seen: Array<number | null> = [];
+    const listener = (seq: number | null) => seen.push(seq);
+    addSyncStreamListener(listener);
+
+    try {
+      const res = await app.request("/api/tasks/t1/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scheduledDate: "2026-06-15" }),
+      });
+
+      expect(res.status).toBe(200);
+      const latest = db.prepare("SELECT MAX(id) AS seq FROM sync_seq").get() as { seq: number | null };
+      expect(latest.seq).not.toBeNull();
+      expect(seen).toEqual([latest.seq]);
+    } finally {
+      removeSyncStreamListener(listener);
+    }
+  });
+
   it("非法日期 → 400 INVALID_REQUEST", async () => {
     const res = await app.request("/api/tasks/t1/schedule", {
       method: "POST",

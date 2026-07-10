@@ -100,4 +100,36 @@ describe("analyzePushBaseSeq", () => {
       overlappingRecords: [{ tableName: "quick_notes", recordId: "note-1", serverSeq }],
     });
   });
+
+  it("treats an updated descendant from the expanded impact set as overlapping", () => {
+    const baseSeq = recordSeq("categories", "parent", "create");
+    const serverSeq = recordSeq("categories", "child", "update");
+
+    const analysis = analyzePushBaseSeq(baseSeq, [
+      { tableName: "categories", recordId: "parent" },
+      { tableName: "categories", recordId: "child" },
+    ]);
+
+    expect(analysis).toEqual({
+      strategy: "local_wins_non_fast_forward",
+      cloudAheadCount: 1,
+      overlappingRecords: [{ tableName: "categories", recordId: "child", serverSeq }],
+    });
+  });
+
+  it("treats an updated overlap deletion target as overlapping", () => {
+    const baseSeq = recordSeq("time_entries", "incoming", "create");
+    const serverSeq = recordSeq("time_entries", "remote-overlap", "update");
+
+    const analysis = analyzePushBaseSeq(baseSeq, [
+      { tableName: "time_entries", recordId: "incoming" },
+      { tableName: "time_entries", recordId: "remote-overlap" },
+    ]);
+
+    expect(analysis).toEqual({
+      strategy: "local_wins_non_fast_forward",
+      cloudAheadCount: 1,
+      overlappingRecords: [{ tableName: "time_entries", recordId: "remote-overlap", serverSeq }],
+    });
+  });
 });

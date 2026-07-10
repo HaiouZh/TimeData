@@ -1,3 +1,4 @@
+import { createDefaultCategories } from "@timedata/shared";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
@@ -165,15 +166,26 @@ describe("runUtcResetIfNeeded", () => {
     expect((db.prepare("SELECT COUNT(*) as n FROM tracks").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM goal_layout_pins").get() as { n: number }).n).toBe(0);
     expect((db.prepare("SELECT COUNT(*) as n FROM sync_logs").get() as { n: number }).n).toBe(0);
-    expect((db.prepare("SELECT COUNT(*) as n FROM sync_tombstones").get() as { n: number }).n).toBe(0);
+    expect(
+      db.prepare("SELECT record_id FROM sync_tombstones WHERE table_name = 'time_entries' AND record_id = 'e1'").get(),
+    ).toEqual({ record_id: "e1" });
     // 默认分类已重建
     expect((db.prepare("SELECT COUNT(*) as n FROM categories").get() as { n: number }).n).toBeGreaterThan(0);
+    const categorySeq = db
+      .prepare("SELECT record_id, action FROM sync_seq WHERE table_name = 'categories' AND action != 'delete' ORDER BY id")
+      .all() as Array<{ record_id: string; action: string }>;
+    expect(categorySeq.map((row) => row.record_id).sort()).toEqual(
+      createDefaultCategories(result.resetAt).map((category) => category.id).sort(),
+    );
+    expect(
+      db.prepare("SELECT action FROM sync_seq WHERE table_name = 'time_entries' AND record_id = 'e1' ORDER BY id DESC").get(),
+    ).toEqual({ action: "delete" });
     // 标记已写入
     const flag = db.prepare("SELECT value FROM app_metadata WHERE key = ?").get("utc_reset_v1") as
       | { value: string }
       | undefined;
     expect(flag?.value).toBeTruthy();
-    expect(getCommitHash(db).latestSeq).toBeNull();
+    expect(getCommitHash(db).latestSeq).toBeGreaterThan(0);
   });
 
   it("does NOT run reset on subsequent calls (idempotent)", () => {
@@ -196,5 +208,35 @@ describe("runUtcResetIfNeeded", () => {
     expect(result.ran).toBe(false);
     // 新数据没有被清空
     expect((db.prepare("SELECT COUNT(*) as n FROM time_entries").get() as { n: number }).n).toBe(1);
+  });
+
+  it("rolls back business deletes and the migration marker when ledger recording fails", () => {
+    const db = makeTestDb();
+    const now = "2026-05-14T00:00:00.000Z";
+    db.prepare(`
+      INSERT INTO categories (id, name, color, created_at, updated_at)
+      VALUES ('custom-cat', '自定义', '#000000', ?, ?)
+    `).run(now, now);
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, created_at, updated_at)
+      VALUES ('entry-rollback', 'custom-cat', ?, ?, ?, ?)
+    `).run(now, "2026-05-14T01:00:00.000Z", now, now);
+    db.exec(`
+      CREATE TRIGGER fail_utc_reset_seq
+      BEFORE INSERT ON sync_seq
+      BEGIN
+        SELECT RAISE(ABORT, 'injected seq failure');
+      END;
+    `);
+
+    expect(() => runUtcResetIfNeeded(db)).toThrow("injected seq failure");
+
+    expect(db.prepare("SELECT id FROM categories WHERE id = 'custom-cat'").get()).toEqual({ id: "custom-cat" });
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = 'entry-rollback'").get()).toEqual({
+      id: "entry-rollback",
+    });
+    expect(db.prepare("SELECT value FROM app_metadata WHERE key = 'utc_reset_v1'").get()).toBeUndefined();
+    expect((db.prepare("SELECT COUNT(*) as n FROM sync_tombstones").get() as { n: number }).n).toBe(0);
+    expect((db.prepare("SELECT COUNT(*) as n FROM sync_seq").get() as { n: number }).n).toBe(0);
   });
 });

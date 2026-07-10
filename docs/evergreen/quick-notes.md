@@ -23,7 +23,7 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
@@ -37,6 +37,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-07-04（QuickNote A 批数据安全）：清理/导出入口补目标日期文案、空日反馈、非今天确认；范围清理跳过 pinned，quick_notes schema、同步域和独立备份格式不变。 -->
 <!-- 复核 2026-07-04（QuickNote C 批搜索体验）：搜索结果按天倒序分组、初始渲染 100 条并可加载更多；点结果经 timeline.jumpToNote 锚定窗口、滚动到主线卡片并 1.5s 内侧高亮且保留搜索词。quick_notes schema、同步域和写入边界不变。 -->
 <!-- 复核 2026-07-04（tracks 并发时间语义）：TrackStep.editedAt、tracks.status op 与 orphan_step_rejected 只服务轨道域；quick_notes 字段、agent 投递入口、LWW 映射和独立备份格式不变。 -->
+<!-- 复核 2026-07-10（同步原子性收口）：server 通用 resolver 改为复用调用方 SQLite transaction 记账；quick_notes 字段、agent 投递、LWW 映射和独立备份格式不变。 -->
 
 # 速记
 

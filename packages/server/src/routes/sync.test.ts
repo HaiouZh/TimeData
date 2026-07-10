@@ -628,6 +628,11 @@ describe("sync route", () => {
   });
 
   it("backs up and replaces server data during confirmed force push", async () => {
+    const oldCursor = Number(
+      db
+        .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+        .run("categories", "cat-1", "create").lastInsertRowid,
+    );
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -681,7 +686,12 @@ describe("sync route", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ importedCategories: 2, importedTimeEntries: 1, backupId: "backup-1", latestSeq: 3 });
+    expect(body).toMatchObject({
+      importedCategories: 2,
+      importedTimeEntries: 1,
+      backupId: "backup-1",
+      latestSeq: oldCursor + 4,
+    });
     expect(createServerBackupMock).toHaveBeenCalledWith(
       "sync_force_push",
       expect.objectContaining({
@@ -690,19 +700,104 @@ describe("sync route", () => {
       }),
     );
     expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
-    expect(db.prepare("SELECT COUNT(*) as count FROM sync_seq").get()).toMatchObject({ count: 3 });
+    expect(db.prepare("SELECT COUNT(*) as count FROM sync_seq").get()).toMatchObject({ count: oldCursor + 4 });
     expect(db.prepare("SELECT COUNT(*) as count FROM categories").get()).toMatchObject({ count: 2 });
     expect(db.prepare("SELECT COUNT(*) as count FROM time_entries").get()).toMatchObject({ count: 1 });
     expect(db.prepare("SELECT name FROM categories WHERE id = ?").get("cat-1")).toBeUndefined();
+    expect(
+      db.prepare("SELECT action FROM sync_seq WHERE table_name = ? AND record_id = ? ORDER BY id DESC LIMIT 1").get(
+        "categories",
+        "cat-1",
+      ),
+    ).toEqual({ action: "delete" });
+    expect(
+      db.prepare("SELECT deleted_at FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get(
+        "categories",
+        "cat-1",
+      ),
+    ).toEqual({ deleted_at: expect.any(String) });
     expect(db.prepare("SELECT note FROM time_entries WHERE id = ?").get("entry-local")).toMatchObject({
       note: "本地恢复后的记录",
     });
     expect(db.prepare("SELECT action FROM sync_logs WHERE action = ?").get("force_push_applied")).toMatchObject({
       action: "force_push_applied",
     });
+
+    const pullRes = await app.request("/api/sync/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sinceSeq: oldCursor }),
+    });
+    expect(pullRes.status).toBe(200);
+    const pullBody = await pullRes.json();
+    expect(pullBody.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tableName: "categories",
+          recordId: "cat-1",
+          action: "delete",
+          data: null,
+        }),
+      ]),
+    );
   });
 
-  it("clears goal layout pins during confirmed force push", async () => {
+  it("force-push deleting a parent category relies on one cascade instead of duplicate child and entry deletes", async () => {
+    const now = "2026-07-10T00:00:00.000Z";
+    db.prepare(
+      "INSERT INTO categories (id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run("force-parent", "父分类", null, "#64748b", null, 0, 0, now, now);
+    db.prepare(
+      "INSERT INTO categories (id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run("force-child", "子分类", "force-parent", "#22c55e", null, 0, 0, now, now);
+    db.prepare(
+      "INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "force-child-entry",
+      "force-child",
+      "2026-07-10T01:00:00.000Z",
+      "2026-07-10T02:00:00.000Z",
+      null,
+      now,
+      now,
+    );
+    const oldCursor = latestSeq();
+
+    const prepareRes = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null }),
+    });
+    const prepareBody = await prepareRes.json();
+
+    const res = await app.request("/api/sync/force-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmToken: prepareBody.confirmToken,
+        confirmationPhrase: "OVERWRITE_SERVER",
+        categories: [],
+        timeEntries: [],
+        quickNotes: [],
+        tasks: [],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(
+      db
+        .prepare(
+          "SELECT table_name, record_id, action FROM sync_seq WHERE id > ? AND record_id IN (?, ?, ?) ORDER BY id",
+        )
+        .all(oldCursor, "force-parent", "force-child", "force-child-entry"),
+    ).toEqual([
+      { table_name: "categories", record_id: "force-parent", action: "delete" },
+      { table_name: "time_entries", record_id: "force-child-entry", action: "delete" },
+      { table_name: "categories", record_id: "force-child", action: "delete" },
+    ]);
+  });
+
+  it("preserves non-covered rows, seq, and tombstones during confirmed force push", async () => {
     const recordId = "goal-1|goal|goal-1";
     db.prepare(
       "INSERT INTO goal_layout_pins (goal_id, node_kind, node_id, x, y, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -713,10 +808,16 @@ describe("sync route", () => {
       "create",
     );
     db.prepare("INSERT INTO sync_tombstones (table_name, record_id, deleted_at) VALUES (?, ?, ?)").run(
-      "goal_layout_pins",
-      recordId,
+      "goals",
+      "goal-deleted",
       "2026-06-24T00:05:00.000Z",
     );
+    db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+      "goals",
+      "goal-deleted",
+      "delete",
+    );
+    const oldLatestSeq = latestSeq();
 
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
@@ -737,16 +838,33 @@ describe("sync route", () => {
     });
 
     expect(res.status).toBe(200);
-    expect(db.prepare("SELECT COUNT(*) as count FROM goal_layout_pins").get()).toMatchObject({ count: 0 });
+    expect(db.prepare("SELECT x, y FROM goal_layout_pins WHERE goal_id = ?").get("goal-1")).toEqual({
+      x: 100,
+      y: 200,
+    });
     expect(
-      db.prepare("SELECT COUNT(*) as count FROM sync_tombstones WHERE table_name = ?").get("goal_layout_pins"),
-    ).toMatchObject({ count: 0 });
+      db.prepare("SELECT deleted_at FROM sync_tombstones WHERE table_name = ? AND record_id = ?").get(
+        "goals",
+        "goal-deleted",
+      ),
+    ).toEqual({ deleted_at: "2026-06-24T00:05:00.000Z" });
     expect(
-      db.prepare("SELECT COUNT(*) as count FROM sync_seq WHERE table_name = ?").get("goal_layout_pins"),
-    ).toMatchObject({ count: 0 });
+      db.prepare("SELECT action FROM sync_seq WHERE table_name = ? AND record_id = ? ORDER BY id").all(
+        "goal_layout_pins",
+        recordId,
+      ),
+    ).toEqual([{ action: "create" }]);
+    expect(
+      db.prepare("SELECT action FROM sync_seq WHERE table_name = ? AND record_id = ? ORDER BY id").all(
+        "goals",
+        "goal-deleted",
+      ),
+    ).toEqual([{ action: "delete" }]);
+    expect(latestSeq()).toBeGreaterThan(oldLatestSeq);
   });
 
   it("force-push imports settings when provided and reports their count", async () => {
+    const seqBefore = latestSeq();
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -768,14 +886,20 @@ describe("sync route", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ importedCategories: 0, importedTimeEntries: 0, importedSettings: 1, latestSeq: 1 });
+    expect(body).toMatchObject({
+      importedCategories: 0,
+      importedTimeEntries: 0,
+      importedSettings: 1,
+      latestSeq: seqBefore + 2,
+    });
     expect(db.prepare("SELECT value, updated_at FROM settings WHERE key = ?").get("sleep.categoryId")).toMatchObject({
       value: "cat-1",
-      updated_at: "2026-05-30T00:00:00.000Z",
+      updated_at: expect.any(String),
     });
   });
 
   it("force-push imports quick notes independently from categories and entries", async () => {
+    const seqBefore = latestSeq();
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -812,7 +936,7 @@ describe("sync route", () => {
       importedCategories: 0,
       importedTimeEntries: 0,
       importedQuickNotes: 1,
-      latestSeq: 1,
+      latestSeq: seqBefore + 2,
     });
     expect(db.prepare("SELECT text, occurred_at, source, source_label, pinned FROM quick_notes WHERE id = ?").get("note-force")).toMatchObject({
       text: "repo",
@@ -824,6 +948,7 @@ describe("sync route", () => {
   });
 
   it("force-push imports tasks independently from categories and entries", async () => {
+    const seqBefore = latestSeq();
     const prepareRes = await app.request("/api/sync/force-push/prepare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -887,7 +1012,7 @@ describe("sync route", () => {
       importedTimeEntries: 0,
       importedQuickNotes: 0,
       importedTasks: 2,
-      latestSeq: 2,
+      latestSeq: seqBefore + 3,
     });
     expect(
       db
@@ -907,10 +1032,9 @@ describe("sync route", () => {
     expect(db.prepare("SELECT parent_id FROM tasks WHERE id = ?").get("task-force-child")).toMatchObject({
       parent_id: "task-force",
     });
-    expect(db.prepare("SELECT table_name, record_id FROM sync_seq WHERE id = 1").get()).toMatchObject({
-      table_name: "tasks",
-      record_id: "task-force",
-    });
+    expect(
+      db.prepare("SELECT action FROM sync_seq WHERE table_name = ? AND record_id = ?").get("tasks", "task-force"),
+    ).toEqual({ action: "create" });
   });
 
   it("force-push imports task ruleId/skipped fields", async () => {
@@ -1180,6 +1304,70 @@ describe("sync route", () => {
     expect(body.appliedCount).toBe(0);
   });
 
+  it("atomically rejects a mixed valid/invalid batch without applying accepted validation outcomes", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        changes: [
+          {
+            tableName: "quick_notes",
+            recordId: "note-valid",
+            action: "create",
+            data: {
+              id: "note-valid",
+              text: "这条仅通过校验，整批拒绝时不能落库",
+              occurredAt: "2026-05-08T01:00:00.000Z",
+              createdAt: "2026-05-08T01:00:00.000Z",
+              updatedAt: "2026-05-08T01:00:00.000Z",
+              source: "user",
+              pinned: false,
+            },
+            timestamp: "2026-05-08T01:00:00.000Z",
+          },
+          {
+            tableName: "time_entries",
+            recordId: "entry-invalid",
+            action: "create",
+            data: {
+              id: "different-id",
+              categoryId: "cat-1",
+              startTime: "2026-05-08T02:00:00.000Z",
+              endTime: "2026-05-08T03:00:00.000Z",
+              note: null,
+              createdAt: "2026-05-08T02:00:00.000Z",
+              updatedAt: "2026-05-08T02:00:00.000Z",
+            },
+            timestamp: "2026-05-08T02:00:00.000Z",
+          },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 1, rejected: 1, conflicts: 0, appliedCount: 0, latestSeq: null });
+    expect(body.outcomes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recordId: "note-valid",
+          status: "accepted",
+          reasonCode: "applied",
+        }),
+        expect.objectContaining({
+          recordId: "entry-invalid",
+          status: "rejected",
+          reasonCode: "id_mismatch",
+        }),
+      ]),
+    );
+    expect(db.prepare("SELECT id FROM quick_notes WHERE id = ?").get("note-valid")).toBeUndefined();
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-invalid")).toBeUndefined();
+    expect(db.prepare("SELECT * FROM sync_seq").all()).toEqual([]);
+    expect(db.prepare("SELECT * FROM sync_tombstones").all()).toEqual([]);
+  });
+
   it("returns latestSeq and appliedCount for accepted pushes", async () => {
     const res = await app.request("/api/sync/push", {
       method: "POST",
@@ -1434,11 +1622,326 @@ describe("sync route", () => {
       "sync_overlap_delete",
       expect.objectContaining({
         protected: true,
-        reason: "overlap_delete",
-        details: { predictedDeletedRecordIds: ["entry-existing"] },
+        reason: "implicit_delete",
+        details: expect.objectContaining({
+          predictedDeletedRecordIds: ["entry-existing"],
+          implicitImpactRecords: expect.arrayContaining([
+            { tableName: "time_entries", recordId: "entry-existing" },
+          ]),
+        }),
       }),
     );
     expect(markServerBackupProtectedMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["子分类", "categories", "cat-child"],
+    ["子分类下的记录", "time_entries", "entry-child"],
+  ] as const)(
+    "baseSeq 后%s更新时拒绝旧的父分类删除且保留整棵树",
+    async (_label, updatedTable, updatedRecordId) => {
+      db.prepare(
+        "INSERT INTO categories (id, name, parent_id, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cat-child",
+        "子分类",
+        "cat-1",
+        "#22c55e",
+        "2026-07-10T08:00:00.000Z",
+        updatedTable === "categories" ? "2026-07-10T12:00:00.000Z" : "2026-07-10T08:00:00.000Z",
+      );
+      db.prepare(`
+        INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "entry-child",
+        "cat-child",
+        "2026-07-10T09:00:00.000Z",
+        "2026-07-10T10:00:00.000Z",
+        "服务器上的新内容",
+        "2026-07-10T09:00:00.000Z",
+        updatedTable === "time_entries" ? "2026-07-10T12:00:00.000Z" : "2026-07-10T09:00:00.000Z",
+      );
+      const baseSeq = Number(
+        db
+          .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+          .run("categories", "cat-1", "create").lastInsertRowid,
+      );
+      const serverSeq = Number(
+        db
+          .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+          .run(updatedTable, updatedRecordId, "update").lastInsertRowid,
+      );
+
+      const res = await pushChanges(
+        [
+          {
+            tableName: "categories",
+            recordId: "cat-1",
+            action: "delete",
+            data: null,
+            timestamp: "2026-07-10T10:00:00.000Z",
+          } as SyncChange,
+        ],
+        baseSeq,
+      );
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toMatchObject({ accepted: 0, rejected: 0, conflicts: 1, appliedCount: 0 });
+      expect(body.outcomes[0]).toMatchObject({
+        recordId: "cat-1",
+        status: "conflict",
+        reasonCode: "stale_change_rejected",
+        serverUpdatedAt: "2026-07-10T12:00:00.000Z",
+      });
+      expect(createServerBackupMock).toHaveBeenCalledWith(
+        "sync_local_wins",
+        expect.objectContaining({
+          protected: true,
+          reason: "local_wins_non_fast_forward",
+          details: expect.objectContaining({
+            baseSeq,
+            overlappingRecords: [{ tableName: updatedTable, recordId: updatedRecordId, serverSeq }],
+          }),
+        }),
+      );
+      expect(db.prepare("SELECT id FROM categories ORDER BY id").all()).toEqual([
+        { id: "cat-1" },
+        { id: "cat-child" },
+      ]);
+      expect(db.prepare("SELECT note FROM time_entries WHERE id = ?").get("entry-child")).toEqual({
+        note: "服务器上的新内容",
+      });
+      expect(db.prepare("SELECT * FROM sync_tombstones").all()).toEqual([]);
+      expect(db.prepare("SELECT COUNT(*) AS count FROM sync_seq").get()).toEqual({ count: 2 });
+    },
+  );
+
+  it("rejects an old incoming entry when its overlap deletion target changed after baseSeq", async () => {
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-overlap-newer",
+      "cat-1",
+      "2026-05-08T09:00:00.000Z",
+      "2026-05-08T10:00:00.000Z",
+      "服务器上的新内容",
+      "2026-05-08T09:00:00.000Z",
+      "2026-05-08T12:00:00.000Z",
+    );
+    const baseSeq = Number(
+      db
+        .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+        .run("time_entries", "entry-overlap-newer", "create").lastInsertRowid,
+    );
+    const serverSeq = Number(
+      db
+        .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+        .run("time_entries", "entry-overlap-newer", "update").lastInsertRowid,
+    );
+
+    const res = await pushChanges(
+      [
+        {
+          tableName: "time_entries",
+          recordId: "entry-incoming-old",
+          action: "create",
+          data: {
+            id: "entry-incoming-old",
+            categoryId: "cat-1",
+            startTime: "2026-05-08T09:30:00.000Z",
+            endTime: "2026-05-08T10:30:00.000Z",
+            note: "旧设备来包",
+            createdAt: "2026-05-08T09:30:00.000Z",
+            updatedAt: "2026-05-08T10:00:00.000Z",
+          },
+          timestamp: "2026-05-08T10:00:00.000Z",
+        } as SyncChange,
+      ],
+      baseSeq,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ accepted: 0, rejected: 0, conflicts: 1, appliedCount: 0 });
+    expect(body.outcomes[0]).toMatchObject({
+      recordId: "entry-incoming-old",
+      status: "conflict",
+      reasonCode: "stale_change_rejected",
+      serverUpdatedAt: "2026-05-08T12:00:00.000Z",
+    });
+    expect(createServerBackupMock).toHaveBeenCalledWith(
+      "sync_local_wins",
+      expect.objectContaining({
+        details: expect.objectContaining({
+          overlappingRecords: [
+            { tableName: "time_entries", recordId: "entry-overlap-newer", serverSeq },
+          ],
+        }),
+      }),
+    );
+    expect(db.prepare("SELECT note FROM time_entries WHERE id = ?").get("entry-overlap-newer")).toEqual({
+      note: "服务器上的新内容",
+    });
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-incoming-old")).toBeUndefined();
+    expect(db.prepare("SELECT * FROM sync_tombstones").all()).toEqual([]);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM sync_seq").get()).toEqual({ count: 2 });
+  });
+
+  it("freezes staleGuard timestamps so earlier changes cannot reject a later entry in the same push", async () => {
+    const insertEntry = db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    insertEntry.run(
+      "entry-a",
+      "cat-1",
+      "2026-05-08T06:00:00.000Z",
+      "2026-05-08T07:00:00.000Z",
+      "A old",
+      "2026-05-08T06:00:00.000Z",
+      "2026-05-08T08:00:00.000Z",
+    );
+    insertEntry.run(
+      "entry-b",
+      "cat-1",
+      "2026-05-08T07:00:00.000Z",
+      "2026-05-08T08:00:00.000Z",
+      "B old",
+      "2026-05-08T07:00:00.000Z",
+      "2026-05-08T08:00:00.000Z",
+    );
+
+    const response = await pushChanges(
+      [
+        {
+          tableName: "time_entries",
+          recordId: "entry-a",
+          action: "update",
+          data: {
+            id: "entry-a",
+            categoryId: "cat-1",
+            startTime: "2026-05-08T07:00:00.000Z",
+            endTime: "2026-05-08T08:00:00.000Z",
+            note: "A moved",
+            createdAt: "2026-05-08T06:00:00.000Z",
+            updatedAt: "2026-05-08T10:00:00.000Z",
+          },
+          timestamp: "2026-05-08T10:00:00.000Z",
+        } as SyncChange,
+        {
+          tableName: "time_entries",
+          recordId: "entry-b",
+          action: "update",
+          data: {
+            id: "entry-b",
+            categoryId: "cat-1",
+            startTime: "2026-05-08T08:00:00.000Z",
+            endTime: "2026-05-08T09:00:00.000Z",
+            note: "B moved",
+            createdAt: "2026-05-08T07:00:00.000Z",
+            updatedAt: "2026-05-08T10:00:00.000Z",
+          },
+          timestamp: "2026-05-08T10:00:00.000Z",
+        } as SyncChange,
+      ],
+      null,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      accepted: 2,
+      rejected: 0,
+      conflicts: 0,
+    });
+    expect(db.prepare("SELECT id, start_time, end_time, note FROM time_entries ORDER BY id").all()).toEqual([
+      {
+        id: "entry-a",
+        start_time: "2026-05-08T07:00:00.000Z",
+        end_time: "2026-05-08T08:00:00.000Z",
+        note: "A moved",
+      },
+      {
+        id: "entry-b",
+        start_time: "2026-05-08T08:00:00.000Z",
+        end_time: "2026-05-08T09:00:00.000Z",
+        note: "B moved",
+      },
+    ]);
+    expect(
+      db.prepare("SELECT 1 FROM sync_tombstones WHERE table_name = 'time_entries' AND record_id = ?").get("entry-b"),
+    ).toBeUndefined();
+  });
+
+  it("rolls back business rows, seq, and tombstones when the nth apply fails", async () => {
+    db.prepare(`
+      INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "entry-rollback-remote",
+      "cat-1",
+      "2026-05-08T09:00:00.000Z",
+      "2026-05-08T10:00:00.000Z",
+      "必须保留",
+      "2026-05-08T09:00:00.000Z",
+      "2026-05-08T09:00:00.000Z",
+    );
+    db.exec(`
+      CREATE TRIGGER fail_second_change_seq
+      BEFORE INSERT ON sync_seq
+      WHEN NEW.table_name = 'settings' AND NEW.record_id = 'rollback-setting'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected nth apply failure');
+      END;
+    `);
+
+    const res = await pushChanges(
+      [
+        {
+          tableName: "time_entries",
+          recordId: "entry-rollback-incoming",
+          action: "create",
+          data: {
+            id: "entry-rollback-incoming",
+            categoryId: "cat-1",
+            startTime: "2026-05-08T09:30:00.000Z",
+            endTime: "2026-05-08T10:30:00.000Z",
+            note: "事务中第一条",
+            createdAt: "2026-05-08T09:30:00.000Z",
+            updatedAt: "2026-05-08T09:30:00.000Z",
+          },
+          timestamp: "2026-05-08T09:30:00.000Z",
+        } as SyncChange,
+        {
+          tableName: "settings",
+          recordId: "rollback-setting",
+          action: "create",
+          data: {
+            key: "rollback-setting",
+            value: "should-not-persist",
+            updatedAt: "2026-05-08T10:00:00.000Z",
+          },
+          timestamp: "2026-05-08T10:00:00.000Z",
+        } as SyncChange,
+      ],
+      0,
+    );
+
+    expect(res.status).toBe(500);
+    expect(db.prepare("SELECT note FROM time_entries WHERE id = ?").get("entry-rollback-remote")).toEqual({
+      note: "必须保留",
+    });
+    expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("entry-rollback-incoming")).toBeUndefined();
+    expect(db.prepare("SELECT key FROM settings WHERE key = ?").get("rollback-setting")).toBeUndefined();
+    expect(db.prepare("SELECT * FROM sync_seq").all()).toEqual([]);
+    expect(db.prepare("SELECT * FROM sync_tombstones").all()).toEqual([]);
+    expect(
+      db.prepare("SELECT action FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1").get(
+        "push_failed_after_backup",
+      ),
+    ).toEqual({ action: "push_failed_after_backup" });
   });
 
   it("同步往返保留 completedCount 与 recurrence.count", async () => {

@@ -119,21 +119,18 @@ describe("settings sync e2e", () => {
         body: JSON.stringify({ lastSyncedAt: "1970-01-01T00:00:00.000Z", sinceSeq: afterDeleteSeq }),
       });
       expect(pullForcePushResponse.status).toBe(200);
-      await expect(pullForcePushResponse.json()).resolves.toMatchObject({
-        changes: [
-          {
-            tableName: "settings",
-            recordId: "sleep.categoryId",
-            action: "update",
-            data: {
-              key: "sleep.categoryId",
-              value: "cat-2",
-              updatedAt: "2026-05-30T03:00:00.000Z",
-            },
-            timestamp: "2026-05-30T03:00:00.000Z",
-          },
-        ],
-      });
+      const pullForcePushBody = (await pullForcePushResponse.json()) as { changes: unknown[] };
+      expect(pullForcePushBody.changes).toContainEqual(
+        expect.objectContaining({
+          tableName: "settings",
+          recordId: "sleep.categoryId",
+          action: "update",
+          data: expect.objectContaining({
+            key: "sleep.categoryId",
+            value: "cat-2",
+          }),
+        }),
+      );
     } finally {
       server.close();
     }

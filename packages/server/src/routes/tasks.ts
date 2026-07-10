@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDb } from "../db/connection.js";
 import { rowToTask, type TaskRow } from "../lib/db-rows.js";
-import { recordSeq } from "../sync/seq.js";
+import { notifySyncChange } from "../sync/notifier.js";
+import { getLatestSeq, recordSeqWithDb } from "../sync/seq.js";
 
 const tasks = new Hono();
 
@@ -81,10 +82,13 @@ tasks.post("/:id/schedule", async (c) => {
   const now = new Date().toISOString();
   const scheduledAt = parsed.data.scheduledDate === null ? null : localDateToUtcIso(parsed.data.scheduledDate);
 
-  db.prepare("UPDATE tasks SET scheduled_at = ?, updated_at = ? WHERE id = ?").run(scheduledAt, now, id);
-  recordSeq("tasks", id, "update");
+  db.transaction(() => {
+    db.prepare("UPDATE tasks SET scheduled_at = ?, updated_at = ? WHERE id = ?").run(scheduledAt, now, id);
+    recordSeqWithDb(db, "tasks", id, "update");
+  })();
 
   const updated = rowToTask(db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as TaskRow);
+  notifySyncChange(getLatestSeq());
   return c.json({ ok: true, task: updated });
 });
 

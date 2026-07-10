@@ -3,7 +3,7 @@ import { act, createElement, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSyncTimings } from "../sync/phaseTimings.ts";
 import { renderDom, unmount } from "../test/domHarness.js";
-import { shouldAutoSyncOnMount, shouldShowSyncDiagnosticsHint, useSync } from "./useSync.js";
+import { getSyncRetryAfterMs, shouldAutoSyncOnMount, shouldShowSyncDiagnosticsHint, useSync } from "./useSync.js";
 
 vi.mock("../sync/engine.ts", () => ({
   getConsecutiveSyncFailureCount: () => 0,
@@ -44,6 +44,17 @@ describe("shouldAutoSyncOnMount", () => {
     expect(shouldAutoSyncOnMount("https://example.com", false)).toBe(false);
     expect(shouldAutoSyncOnMount("", true)).toBe(false);
     expect(shouldAutoSyncOnMount(null, true)).toBe(false);
+  });
+});
+
+describe("getSyncRetryAfterMs", () => {
+  it("reads the current server rate-limit response body", () => {
+    expect(getSyncRetryAfterMs({ status: 429, body: { retryAfterSec: 7 } })).toBe(7_000);
+  });
+
+  it("accepts Retry-After seconds or date when headers are available", () => {
+    expect(getSyncRetryAfterMs({ headers: { get: () => "5" } }, 1_000)).toBe(5_000);
+    expect(getSyncRetryAfterMs({ headers: { get: () => "Thu, 01 Jan 1970 00:00:06 GMT" } }, 1_000)).toBe(5_000);
   });
 });
 
@@ -163,6 +174,29 @@ describe("useSync", () => {
     expect(timings).toHaveLength(1);
     expect(timings[0].outcome).toBe("error");
 
+    await unmount(root);
+  });
+
+  it("429 失败把服务端 retryAfterSec 作为内部 executor 结果返回", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.mocked(regularSync).mockRejectedValueOnce({
+      status: 429,
+      body: { error: "rate_limited", retryAfterSec: 9 },
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const { root } = await renderDom(createElement(Probe));
+
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await captured.value?.sync();
+    });
+
+    expect(outcome).toEqual({ ok: false, retryAfterMs: 9_000 });
     await unmount(root);
   });
 });

@@ -8,6 +8,7 @@ export class ApiError extends Error {
     public readonly statusText: string,
     public readonly details: string,
     public readonly body: unknown,
+    public readonly headers: Headers = new Headers(),
   ) {
     super(`API error: ${status} ${statusText}${details ? ` - ${details.slice(0, 200)}` : ""}`);
   }
@@ -104,7 +105,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     } catch {
       body = null;
     }
-    throw new ApiError(res.status, res.statusText, details, body);
+    throw new ApiError(res.status, res.statusText, details, body, new Headers(res.headers));
   }
   const bodyText = await res.text();
   if (!bodyText) {

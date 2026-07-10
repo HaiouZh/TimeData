@@ -239,7 +239,7 @@ describe("SyncProvider", () => {
       );
     }
 
-    const { host, root } = await renderDom(createElement(Wrapper));
+    const { root } = await renderDom(createElement(Wrapper));
 
     const initialValue = seenValues.at(-1);
 
@@ -263,7 +263,7 @@ describe("SyncProvider", () => {
       return createElement("span", null, context.apiUrl || "empty");
     }
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
 
     expect(latestApiUrl).toBe("");
 
@@ -289,7 +289,7 @@ describe("SyncProvider", () => {
       return createElement("span", null, latestStatus);
     }
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement(Probe)));
 
     const liveQuery = syncDbMock.useLiveQuery.mock.calls.at(-1)?.[0] as (() => Promise<number>) | undefined;
     await expect(liveQuery?.()).resolves.toBe(2);
@@ -305,7 +305,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     expect(setExecutorSpy).toHaveBeenCalledWith(expect.any(Function));
 
@@ -317,7 +317,7 @@ describe("SyncProvider", () => {
   it("does not register an executor when cloud sync is disabled or apiUrl is empty", async () => {
     const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     expect(setExecutorSpy).not.toHaveBeenCalled();
 
@@ -329,7 +329,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
     expect(registeredExecutor).toBeTypeOf("function");
@@ -343,13 +343,31 @@ describe("SyncProvider", () => {
     await unmount(root);
   });
 
+  it("preserves structured retry outcomes from useSync", async () => {
+    const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    mockSyncActions.sync.mockResolvedValueOnce({ ok: false, retryAfterMs: 8_000 });
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
+
+    let result: unknown;
+    await act(async () => {
+      result = await registeredExecutor?.({ reason: "bump", waitMs: 0 });
+    });
+
+    expect(result).toEqual({ ok: false, retryAfterMs: 8_000 });
+    await unmount(root);
+  });
+
   it("marks the last run as failed when the executor's sync resolves false", async () => {
     const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     mockSyncActions.sync.mockResolvedValueOnce(false);
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
 
@@ -370,7 +388,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     mockSyncActions.sync.mockResolvedValueOnce(false);
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     const registeredExecutor = setExecutorSpy.mock.calls.at(-1)?.[0];
     await act(async () => {
@@ -393,7 +411,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 
@@ -410,7 +428,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     expect(syncStreamMock.create).toHaveBeenCalledTimes(1);
     expect(syncStreamMock.start).toHaveBeenCalledTimes(1);
@@ -450,7 +468,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     flushNowSpy.mockClear();
 
@@ -470,7 +488,7 @@ describe("SyncProvider", () => {
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     localStorage.setItem("timedata_last_synced_seq", "1");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 
@@ -483,13 +501,47 @@ describe("SyncProvider", () => {
     await unmount(root);
   });
 
+  it("forwards a hello ahead of the local seq cursor to scheduler.requestSync", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "3");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    await act(async () => {
+      syncStreamMock.emit({ event: "hello", data: '{"latestSeq":4}' });
+    });
+
+    expect(requestSyncSpy).toHaveBeenCalledWith("bump");
+    await unmount(root);
+  });
+
+  it("ignores a hello at or behind the local seq cursor", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "3");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    await act(async () => {
+      syncStreamMock.emit({ event: "hello", data: '{"latestSeq":3}' });
+    });
+
+    expect(requestSyncSpy).not.toHaveBeenCalledWith("bump");
+    await unmount(root);
+  });
+
   it("ignores stream echoes at or behind the local seq cursor without calling requestSync", async () => {
     const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
     localStorage.setItem("timedata_api_url", "https://example.com");
     localStorage.setItem("timedata_cloud_sync_enabled", "true");
     localStorage.setItem("timedata_last_synced_seq", "3");
 
-    const { host, root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
 
     requestSyncSpy.mockClear();
 

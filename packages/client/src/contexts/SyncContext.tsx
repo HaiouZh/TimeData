@@ -9,7 +9,7 @@ import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { createSyncStream, type SyncStreamMessage, type SyncStreamState } from "../lib/syncStream.js";
 import { getLastSyncedSeq } from "../sync/engine.ts";
-import { syncScheduler, type SyncExecutorMeta } from "../sync/scheduler.ts";
+import { type SyncExecutorMeta, syncExecutorSucceeded, syncScheduler } from "../sync/scheduler.ts";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "disabled" | "pending";
 
@@ -95,9 +95,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!cloudSyncEnabled || !apiUrl) return;
     syncScheduler.setExecutor(async (meta: SyncExecutorMeta) => {
-      const ok = await syncRef.current({ ...meta, connection: connectionRef.current });
-      lastRunFailedRef.current = !ok;
-      return ok;
+      const outcome = await syncRef.current({ ...meta, connection: connectionRef.current });
+      lastRunFailedRef.current = !syncExecutorSucceeded(outcome);
+      return outcome;
     });
     return () => syncScheduler.setExecutor(null);
   }, [cloudSyncEnabled, apiUrl]);

@@ -2,6 +2,7 @@ import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
+import type { Table } from "dexie";
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
 import type { PhaseRecorder } from "./phaseTimings.ts";
@@ -40,6 +41,7 @@ export interface SyncConflict {
   remote: Category | Setting | TimeEntry | null;
   remoteAction: "update" | "delete";
   localLog?: SyncLogEntry;
+  sourceLogIds?: string[];
 }
 
 export interface SyncPushResult {
@@ -105,10 +107,13 @@ export function getLastSyncedSeq(): number | null {
   const value = safeGetItem(LAST_SYNCED_SEQ_KEY);
   if (!value) return null;
   const seq = Number(value);
-  return Number.isFinite(seq) ? seq : null;
+  return Number.isSafeInteger(seq) && seq >= 0 ? seq : null;
 }
 
 export function setLastSyncedSeq(seq: number): void {
+  if (!Number.isSafeInteger(seq) || seq < 0) {
+    throw new Error(`Invalid sync sequence cursor: ${seq}`);
+  }
   safeSetItem(LAST_SYNCED_SEQ_KEY, String(seq));
 }
 
@@ -143,24 +148,68 @@ interface CategoryDeleteImpact {
   entryIds: string[];
 }
 
-async function getCategoryDeleteImpact(categoryId: string): Promise<CategoryDeleteImpact | null> {
-  const categories = await db.categories.toArray();
-  const target = categories.find((category) => category.id === categoryId);
-  if (!target) return null;
+type PendingLogsByRecord = Map<string, SyncLogEntry[]>;
 
-  const categoryIds = [target.id];
-  for (let index = 0; index < categoryIds.length; index++) {
-    const parentId = categoryIds[index];
-    for (const category of categories) {
-      if (category.parentId === parentId) {
-        categoryIds.push(category.id);
+function syncRecordKey(tableName: string, recordId: string): string {
+  return `${tableName}:${recordId}`;
+}
+
+function groupPendingLogs(logs: SyncLogEntry[]): PendingLogsByRecord {
+  const grouped = new Map<string, SyncLogEntry[]>();
+  for (const log of logs) {
+    const key = syncRecordKey(log.tableName, log.recordId);
+    const current = grouped.get(key);
+    if (current) current.push(log);
+    else grouped.set(key, [log]);
+  }
+  return grouped;
+}
+
+function pendingLogsForRecord(
+  pendingByRecord: PendingLogsByRecord,
+  tableName: string,
+  recordId: string,
+): SyncLogEntry[] {
+  return pendingByRecord.get(syncRecordKey(tableName, recordId)) ?? [];
+}
+
+async function getCategoryDeleteImpacts(categoryIds: string[]): Promise<Map<string, CategoryDeleteImpact>> {
+  if (categoryIds.length === 0) return new Map();
+
+  const [categories, entries] = await Promise.all([
+    db.categories.toArray(),
+    db.timeEntries.toArray(),
+  ]);
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const childrenByParent = new Map<string, string[]>();
+  for (const category of categories) {
+    if (!category.parentId) continue;
+    const children = childrenByParent.get(category.parentId);
+    if (children) children.push(category.id);
+    else childrenByParent.set(category.parentId, [category.id]);
+  }
+
+  const impacts = new Map<string, CategoryDeleteImpact>();
+  for (const categoryId of categoryIds) {
+    const target = categoriesById.get(categoryId);
+    if (!target) continue;
+
+    const impactedIds = new Set<string>([categoryId]);
+    const queue = [categoryId];
+    for (let index = 0; index < queue.length; index++) {
+      for (const childId of childrenByParent.get(queue[index]) ?? []) {
+        if (impactedIds.has(childId)) continue;
+        impactedIds.add(childId);
+        queue.push(childId);
       }
     }
+    impacts.set(categoryId, {
+      target,
+      categoryIds: [...impactedIds],
+      entryIds: entries.filter((entry) => impactedIds.has(entry.categoryId)).map((entry) => entry.id),
+    });
   }
-  const categoryIdSet = new Set(categoryIds);
-  const entries = await db.timeEntries.filter((entry) => categoryIdSet.has(entry.categoryId)).toArray();
-
-  return { target, categoryIds, entryIds: entries.map((entry) => entry.id) };
+  return impacts;
 }
 
 // applyRemoteCategoryDelete moved to clientDomains.ts
@@ -170,7 +219,7 @@ function compactLogGroup(logs: SyncLog[]): CompactedSyncLog | null {
   const first = ordered[0];
   const last = ordered[ordered.length - 1];
   const sourceLogIds = ordered.map((log) => log.id);
-  const op = last.tableName === "tracks" ? last.op : [...ordered].reverse().find((log) => log.op)?.op;
+  const op = [...ordered].reverse().find((log) => log.op)?.op;
 
   if (!first || !last) return null;
   if (first.action === "create" && last.action === "delete") {
@@ -221,6 +270,31 @@ async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: numbe
   return parsed.data;
 }
 
+function pullBatchTables(response: SyncPullResponse): Table[] {
+  const tables = new Map<string, Table>();
+  tables.set("syncLog", db.syncLog);
+  for (const change of response.changes) {
+    const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+    if (domain) tables.set(domain.storeName, db.table(domain.storeName));
+    if (change.tableName === "categories" && change.action === "delete") {
+      tables.set("categories", db.categories);
+      tables.set("timeEntries", db.timeEntries);
+    }
+  }
+  return [...tables.values()];
+}
+
+function validatePullPageProgress(response: SyncPullResponse, cursor: number): void {
+  if (!response.hasMore) return;
+  const next = response.nextSinceSeq;
+  if (typeof next !== "number" || next <= cursor) {
+    throw new Error("Invalid /api/sync/pull pagination: hasMore requires an advancing nextSinceSeq");
+  }
+  if (typeof response.latestSeq === "number" && next > response.latestSeq) {
+    throw new Error("Invalid /api/sync/pull pagination: nextSinceSeq exceeds latestSeq");
+  }
+}
+
 // 分批拉取骨架：游标推进（红线：逐批推进，绝不中途跳到 latestSeq）只在此处，
 // 具体 apply 逻辑（repair 跳过策略 / conflict 检测）由调用方以回调注入，杜绝两份游标逻辑漂移。
 // 中途某批失败：异常向上抛，游标已停在上一批成功的 nextSinceSeq，下次从此断点续传。
@@ -233,6 +307,7 @@ async function fetchPullBatches(
   for (;;) {
     const response = await fetchSyncPullResponse({ sinceSeq: cursor, limit: PULL_PAGE_LIMIT });
     recordClockSkew(response.serverTime);
+    validatePullPageProgress(response, cursor);
     await applyBatch(response);
     lastResponse = response;
     const next = response.nextSinceSeq;
@@ -241,9 +316,6 @@ async function fetchPullBatches(
       // 逐批推进（绝不中途跳 latestSeq），且游标只增不减：repair 从 sinceSeq=0 起步时
       // 不把已在高位的读数拉回低位（apply 照常全量，游标走 max 语义、断点续传不受损）。
       if (cursor > (getLastSyncedSeq() ?? 0)) setLastSyncedSeq(cursor);
-    } else if (response.hasMore) {
-      // 防御：服务端反常返回 hasMore=true 但游标无法前进（nextSinceSeq 缺失或不递增）→ 中止避免死循环。
-      break;
     }
     if (!response.hasMore) break;
     await yieldToMainThread();
@@ -255,7 +327,6 @@ async function fetchPullBatches(
 
 async function applyPushResponse(
   response: SyncPushResponse,
-  omittedLogIds: string[],
   sourceLogIdsByChangeKey: Map<string, string[]>,
   changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
   baseSeq: number | null,
@@ -293,7 +364,7 @@ async function applyPushResponse(
     }
   }
 
-  const logIdsToMarkSynced = [...new Set([...omittedLogIds, ...acceptedLogIds, ...clientBugLogIds])];
+  const logIdsToMarkSynced = [...new Set([...acceptedLogIds, ...clientBugLogIds])];
   if (logIdsToMarkSynced.length > 0) {
     await db.syncLog.bulkUpdate(logIdsToMarkSynced.map((id) => ({ key: id, changes: { synced: 1 } })));
   }
@@ -309,6 +380,89 @@ async function applyPushResponse(
     serverLatestSeq: response.latestSeq ?? null,
     appliedCount: response.appliedCount ?? null,
   };
+}
+
+async function applyAtomicRejectedPushResponse(
+  response: SyncPushResponse,
+  changes: SyncChange[],
+  sourceLogIdsByChangeKey: Map<string, string[]>,
+  changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
+  baseSeq: number | null,
+): Promise<SyncPushResult> {
+  const retryKeys = new Set(
+    changes.map((change) => changeKey(change.tableName, change.recordId, change.action)),
+  );
+  const clientBugLogIds: string[] = [];
+  const clientBugIssues: SyncPushOutcome[] = [];
+  const userActionableIssues: SyncPushOutcome[] = [];
+  const issues: SyncPushOutcome[] = [];
+
+  for (const outcome of response.outcomes) {
+    const key = changeKey(outcome.tableName, outcome.recordId, outcome.action);
+    if (outcome.status === "accepted") {
+      continue;
+    }
+    retryKeys.delete(key);
+
+    const category = classifyReasonCode(outcome.reasonCode);
+    const logIds = sourceLogIdsByChangeKey.get(key) ?? [];
+    if (category === "client_bug") {
+      clientBugLogIds.push(...logIds);
+      clientBugIssues.push(outcome);
+    } else {
+      if (category === "user_actionable") userActionableIssues.push(outcome);
+      issues.push(outcome);
+    }
+  }
+
+  if (clientBugLogIds.length > 0) {
+    const uniqueLogIds = [...new Set(clientBugLogIds)];
+    await db.syncLog.bulkUpdate(uniqueLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
+  }
+
+  const retryChanges = changes.filter((change) => retryKeys.has(changeKey(change.tableName, change.recordId, change.action)));
+  if (retryChanges.length === changes.length) {
+    throw new Error("Invalid /api/sync/push 409 response: atomic rejection contains no rejected change");
+  }
+
+  let retryResult: SyncPushResult | null = null;
+  if (retryChanges.length > 0) {
+    retryResult = await submitPushBatch(retryChanges, sourceLogIdsByChangeKey, changeKey, baseSeq);
+  }
+
+  return {
+    accepted: retryResult?.accepted ?? 0,
+    rejected: response.rejected + (retryResult?.rejected ?? 0),
+    conflicts: response.conflicts + (retryResult?.conflicts ?? 0),
+    issues: [...issues, ...(retryResult?.issues ?? [])],
+    clientBugIssues: [...clientBugIssues, ...(retryResult?.clientBugIssues ?? [])],
+    userActionableIssues: [...userActionableIssues, ...(retryResult?.userActionableIssues ?? [])],
+    baseSeq,
+    serverLatestSeq: retryResult?.serverLatestSeq ?? response.latestSeq ?? null,
+    appliedCount: retryResult?.appliedCount ?? response.appliedCount ?? 0,
+  };
+}
+
+async function submitPushBatch(
+  changes: SyncChange[],
+  sourceLogIdsByChangeKey: Map<string, string[]>,
+  changeKey: (tableName: SyncChange["tableName"], recordId: string, action: SyncChange["action"]) => string,
+  baseSeq: number | null,
+): Promise<SyncPushResult> {
+  try {
+    const response = await apiFetch<SyncPushResponse>("/api/sync/push", {
+      method: "POST",
+      body: JSON.stringify({ changes, baseSeq }),
+    });
+    recordClockSkew(response.serverTime);
+    return applyPushResponse(response, sourceLogIdsByChangeKey, changeKey, baseSeq);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409 && isSyncPushResponse(error.body)) {
+      recordClockSkew(error.body.serverTime);
+      return applyAtomicRejectedPushResponse(error.body, changes, sourceLogIdsByChangeKey, changeKey, baseSeq);
+    }
+    throw error;
+  }
 }
 
 export async function syncPush(): Promise<SyncPushResult> {
@@ -375,22 +529,11 @@ export async function syncPush(): Promise<SyncPushResult> {
     return { accepted: 0, rejected: 0, conflicts: 0, issues: [], clientBugIssues: [], userActionableIssues: [], baseSeq, serverLatestSeq: null, appliedCount: null };
   }
 
-  let response: SyncPushResponse;
-  try {
-    response = await apiFetch<SyncPushResponse>("/api/sync/push", {
-      method: "POST",
-      body: JSON.stringify({ changes, baseSeq }),
-    });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 409 && isSyncPushResponse(error.body)) {
-      recordClockSkew(error.body.serverTime);
-      return applyPushResponse(error.body, omittedLogIds, sourceLogIdsByChangeKey, changeKey, baseSeq);
-    }
-    throw error;
+  const result = await submitPushBatch(changes, sourceLogIdsByChangeKey, changeKey, baseSeq);
+  if (omittedLogIds.length > 0) {
+    await db.syncLog.bulkUpdate(omittedLogIds.map((id) => ({ key: id, changes: { synced: 1 } })));
   }
-
-  recordClockSkew(response.serverTime);
-  return applyPushResponse(response, omittedLogIds, sourceLogIdsByChangeKey, changeKey, baseSeq);
+  return result;
 }
 
 export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
@@ -398,110 +541,156 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
 
   let applied = 0;
   const conflicts: SyncConflict[] = [];
+  const protectedCascadeRecords = new Set<string>();
 
   const last = await fetchPullBatches(startSeq, async (response) => {
-    // 每批 fetch 后重新读 pending 保护映射：分批网络窗口可横跨多个 RTT，
-    // pull 在途中用户在本地新改的记录必须被最新 pending 快照挡住，避免远端静默覆盖本地编辑。
-    const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
-    const locallyModifiedById = new Map(unsyncedLogs.map((l) => [`${l.tableName}:${l.recordId}`, l]));
-    for (const change of response.changes) {
-      const domain = CLIENT_SYNC_DOMAINS[change.tableName];
-      if (!domain) continue;
-      const sharedDomain = getSyncDomain(change.tableName);
-      const store = db.table(domain.storeName);
+    const batchConflicts: SyncConflict[] = [];
+    let batchApplied = 0;
+    await db.transaction("rw", pullBatchTables(response), async () => {
+      // pending 检查和远端 apply 同处一个事务；并发本地写入只能发生在事务之前或之后。
+      const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
+      const pendingByRecord = groupPendingLogs(unsyncedLogs);
+      const categoryDeleteIds = response.changes
+        .filter((change) => change.tableName === "categories" && change.action === "delete")
+        .map((change) => change.recordId);
+      const categoryDeleteImpacts = await getCategoryDeleteImpacts(categoryDeleteIds);
+      const blockedCategoryDeletes = new Map<string, {
+        impact: CategoryDeleteImpact;
+        localLog: SyncLogEntry;
+        sourceLogIds: string[];
+      }>();
 
-      if (change.action === "delete") {
-        if (domain.applyRemoteDelete) {
-          // Special delete handling (categories cascade):
-          // check if any related records have pending sync logs
-          const impact = await getCategoryDeleteImpact(change.recordId);
-          if (!impact) continue;
-          const pendingCategoryLog = impact.categoryIds
-            .map((id) => locallyModifiedById.get(`categories:${id}`))
-            .find((log): log is SyncLogEntry => Boolean(log));
-          const pendingEntryLog = impact.entryIds
-            .map((id) => locallyModifiedById.get(`time_entries:${id}`))
-            .find((log): log is SyncLogEntry => Boolean(log));
-          const localLog = pendingCategoryLog ?? pendingEntryLog;
-          if (localLog) {
-            conflicts.push({
-              tableName: change.tableName as SyncConflict["tableName"],
-              recordId: change.recordId,
-              local: impact.target as SyncConflict["local"],
-              remote: null,
-              remoteAction: "delete",
-              localLog,
-            });
-          } else {
-            applied += await domain.applyRemoteDelete(change.recordId);
+      for (const [categoryId, impact] of categoryDeleteImpacts) {
+        if (protectedCascadeRecords.has(syncRecordKey("categories", categoryId))) continue;
+        const nestedUnderAnotherDelete = [...categoryDeleteImpacts.entries()].some(
+          ([otherId, otherImpact]) => otherId !== categoryId && otherImpact.categoryIds.includes(categoryId),
+        );
+        if (nestedUnderAnotherDelete) continue;
+        const sourceLogIds = [
+          ...impact.categoryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "categories", id).map((log) => log.id)),
+          ...impact.entryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).map((log) => log.id)),
+        ];
+        if (sourceLogIds.length === 0) continue;
+        const localLog = unsyncedLogs.find((log) => sourceLogIds.includes(log.id));
+        if (!localLog) continue;
+        blockedCategoryDeletes.set(categoryId, { impact, localLog, sourceLogIds });
+        for (const id of impact.categoryIds) protectedCascadeRecords.add(syncRecordKey("categories", id));
+        for (const id of impact.entryIds) protectedCascadeRecords.add(syncRecordKey("time_entries", id));
+      }
+
+      for (const change of response.changes) {
+        const blockedCategoryDelete = change.tableName === "categories" && change.action === "delete"
+          ? blockedCategoryDeletes.get(change.recordId)
+          : undefined;
+        if (blockedCategoryDelete) {
+          batchConflicts.push({
+            tableName: "categories",
+            recordId: change.recordId,
+            local: blockedCategoryDelete.impact.target,
+            remote: null,
+            remoteAction: "delete",
+            localLog: blockedCategoryDelete.localLog,
+            sourceLogIds: blockedCategoryDelete.sourceLogIds,
+          });
+          continue;
+        }
+        if (protectedCascadeRecords.has(syncRecordKey(change.tableName, change.recordId))) continue;
+
+        const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+        if (!domain) continue;
+        const sharedDomain = getSyncDomain(change.tableName);
+        const store = db.table(domain.storeName);
+        const pendingLogs = pendingLogsForRecord(pendingByRecord, change.tableName, change.recordId);
+        const localLog = pendingLogs.at(-1);
+        const sourceLogIds = pendingLogs.map((log) => log.id);
+
+        if (change.action === "delete") {
+          if (domain.applyRemoteDelete) {
+            const impact = categoryDeleteImpacts.get(change.recordId);
+            if (!impact) continue;
+            const cascadeSourceLogIds = [
+              ...impact.categoryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "categories", id).map((log) => log.id)),
+              ...impact.entryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).map((log) => log.id)),
+            ];
+            const cascadeLocalLog = unsyncedLogs.find((log) => cascadeSourceLogIds.includes(log.id));
+            if (cascadeLocalLog) {
+              batchConflicts.push({
+                tableName: change.tableName as SyncConflict["tableName"],
+                recordId: change.recordId,
+                local: impact.target as SyncConflict["local"],
+                remote: null,
+                remoteAction: "delete",
+                localLog: cascadeLocalLog,
+                sourceLogIds: cascadeSourceLogIds,
+              });
+            } else {
+              batchApplied += await domain.applyRemoteDelete(change.recordId);
+            }
+            continue;
           }
-        } else {
+
           const key = storeKeyForRecordId(domain, change.recordId);
           const existing = await store.get(key);
           if (!existing) continue;
           if (sharedDomain.conflictPolicy === "manual") {
-            const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
             if (localLog) {
-              conflicts.push({
+              batchConflicts.push({
                 tableName: change.tableName as SyncConflict["tableName"],
                 recordId: change.recordId,
                 local: existing as SyncConflict["local"],
                 remote: null,
                 remoteAction: "delete",
                 localLog,
+                sourceLogIds,
               });
             } else {
               await store.delete(key);
-              applied++;
+              batchApplied++;
             }
-          } else {
-            // lww: skip if local has pending
-            if (!locallyModifiedById.has(`${change.tableName}:${change.recordId}`)) {
-              await store.delete(key);
-              applied++;
-            }
+          } else if (!localLog) {
+            await store.delete(key);
+            batchApplied++;
           }
+          continue;
         }
-      } else if (change.data) {
+
+        if (!change.data) continue;
         const remote = parseRemoteRecord(domain, change.data, change.recordId);
         if (!remote) continue;
         const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
-        const hasPending = locallyModifiedById.has(`${change.tableName}:${change.recordId}`);
 
         if (sharedDomain.conflictPolicy === "manual") {
-          if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
-            if (hasPending) {
-              const localLog = locallyModifiedById.get(`${change.tableName}:${change.recordId}`);
-              conflicts.push({
+          if (localLog) {
+            if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
+              batchConflicts.push({
                 tableName: change.tableName as SyncConflict["tableName"],
                 recordId: change.recordId,
                 local: existing as SyncConflict["local"],
                 remote: remote as SyncConflict["remote"],
                 remoteAction: "update",
                 localLog,
+                sourceLogIds,
               });
-            } else {
-              await store.put(remote);
-              applied++;
             }
-          } else if (!existing) {
-            await store.put(remote);
-            applied++;
+            continue;
           }
-        } else {
-          // lww: skip if local has pending
-          if (!hasPending) {
-            const shouldApply = domain.needsApply
-              ? domain.needsApply(existing, remote)
-              : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
-            if (shouldApply) {
-              await store.put(remote);
-              applied++;
-            }
+          if (!existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
+            await store.put(remote);
+            batchApplied++;
+          }
+        } else if (!localLog) {
+          const shouldApply = domain.needsApply
+            ? domain.needsApply(existing, remote)
+            : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+          if (shouldApply) {
+            await store.put(remote);
+            batchApplied++;
           }
         }
       }
-    }
+    });
+    applied += batchApplied;
+    conflicts.push(...batchConflicts);
   });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
@@ -633,28 +822,54 @@ export async function prepareForcePush(): Promise<SyncForcePushPrepareResponse> 
 }
 
 export async function syncForcePushToServer(confirmToken: string, confirmationPhrase: "OVERWRITE_SERVER"): Promise<SyncForcePushResponse> {
-  const [categories, timeEntries, settings, quickNotes, tasks] = await Promise.all([
-    db.categories.toArray(),
-    db.timeEntries.toArray(),
-    db.settings.toArray(),
-    db.quickNotes.toArray(),
-    db.tasks.toArray(),
+  const forcePushTables = new Set<SyncLogEntry["tableName"]>([
+    "categories",
+    "time_entries",
+    "settings",
+    "quick_notes",
+    "tasks",
   ]);
+  const snapshot = await db.transaction(
+    "r",
+    [db.categories, db.timeEntries, db.settings, db.quickNotes, db.tasks, db.syncLog],
+    async () => {
+      const [categories, timeEntries, settings, quickNotes, tasks, pendingLogs] = await Promise.all([
+        db.categories.toArray(),
+        db.timeEntries.toArray(),
+        db.settings.toArray(),
+        db.quickNotes.toArray(),
+        db.tasks.toArray(),
+        db.syncLog.where("synced").equals(0).toArray(),
+      ]);
+      return {
+        categories,
+        timeEntries,
+        settings,
+        quickNotes,
+        tasks,
+        sourceLogIds: pendingLogs.filter((log) => forcePushTables.has(log.tableName)).map((log) => log.id),
+      };
+    },
+  );
 
   const response = await apiFetch<SyncForcePushResponse>("/api/sync/force-push", {
     method: "POST",
     body: JSON.stringify({
       confirmToken,
       confirmationPhrase,
-      categories,
-      timeEntries,
-      settings,
-      quickNotes,
-      tasks,
+      categories: snapshot.categories,
+      timeEntries: snapshot.timeEntries,
+      settings: snapshot.settings,
+      quickNotes: snapshot.quickNotes,
+      tasks: snapshot.tasks,
     }),
   });
 
-  await db.syncLog.clear();
+  if (snapshot.sourceLogIds.length > 0) {
+    await db.syncLog.bulkUpdate(
+      snapshot.sourceLogIds.map((id) => ({ key: id, changes: { synced: 1 } })),
+    );
+  }
   advanceSeqCursor(response);
   return response;
 }
@@ -716,7 +931,10 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       recordClockSkew(serverStatus.serverTime);
       const serverSeq = serverStatus.latestSeq ?? 0;
       const localSeq = getLastSyncedSeq() ?? 0;
-      if (serverSeq <= localSeq) {
+      if (serverSeq < localSeq) {
+        throw new Error(`同步账本异常：服务器序号 ${serverSeq} 低于本地序号 ${localSeq}，请先执行全量拉取或检查服务器数据恢复状态。`);
+      }
+      if (serverSeq === localSeq) {
         resetConsecutiveSyncFailures();
         return {
           checked: true,
@@ -809,42 +1027,66 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
   const startSeq = buildPullCursor(mode).sinceSeq;
 
   let applied = 0;
+  const protectedCascadeRecords = new Set<string>();
 
   const last = await fetchPullBatches(startSeq, async (response) => {
-    for (const change of response.changes) {
-      const domain = CLIENT_SYNC_DOMAINS[change.tableName];
-      if (!domain) continue;
-      const store = db.table(domain.storeName);
+    let batchApplied = 0;
+    await db.transaction("rw", pullBatchTables(response), async () => {
+      const pendingByRecord = groupPendingLogs(await db.syncLog.where("synced").equals(0).toArray());
+      const categoryDeleteIds = response.changes
+        .filter((change) => change.tableName === "categories" && change.action === "delete")
+        .map((change) => change.recordId);
+      const categoryDeleteImpacts = await getCategoryDeleteImpacts(categoryDeleteIds);
 
-      if (change.action === "delete") {
-        if (domain.applyRemoteDelete) {
-          applied += await domain.applyRemoteDelete(change.recordId);
-        } else {
-          const key = storeKeyForRecordId(domain, change.recordId);
-          const existing = await store.get(key);
-          if (existing) {
-            await store.delete(key);
-            applied++;
+      for (const impact of categoryDeleteImpacts.values()) {
+        const hasPending = impact.categoryIds.some(
+          (id) => pendingLogsForRecord(pendingByRecord, "categories", id).length > 0,
+        ) || impact.entryIds.some(
+          (id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).length > 0,
+        );
+        if (!hasPending) continue;
+        for (const id of impact.categoryIds) protectedCascadeRecords.add(syncRecordKey("categories", id));
+        for (const id of impact.entryIds) protectedCascadeRecords.add(syncRecordKey("time_entries", id));
+      }
+
+      for (const change of response.changes) {
+        const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+        if (!domain) continue;
+        if (protectedCascadeRecords.has(syncRecordKey(change.tableName, change.recordId))) continue;
+        if (pendingLogsForRecord(pendingByRecord, change.tableName, change.recordId).length > 0) continue;
+        const store = db.table(domain.storeName);
+
+        if (change.action === "delete") {
+          if (domain.applyRemoteDelete) {
+            batchApplied += await domain.applyRemoteDelete(change.recordId);
+          } else {
+            const key = storeKeyForRecordId(domain, change.recordId);
+            const existing = await store.get(key);
+            if (existing) {
+              await store.delete(key);
+              batchApplied++;
+            }
+          }
+        } else if (change.data) {
+          const remote = parseRemoteRecord(domain, change.data, change.recordId);
+          if (!remote) continue;
+          const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
+
+          if (mode === "repair" && existing && domain.shouldSkipOnRepair?.(existing, remote)) {
+            continue;
+          }
+
+          const shouldApply = domain.needsApply
+            ? domain.needsApply(existing, remote)
+            : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+          if (shouldApply) {
+            await store.put(remote);
+            batchApplied++;
           }
         }
-      } else if (change.data) {
-        const remote = parseRemoteRecord(domain, change.data, change.recordId);
-        if (!remote) continue;
-        const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
-
-        if (mode === "repair" && existing && domain.shouldSkipOnRepair?.(existing, remote)) {
-          continue;
-        }
-
-        const shouldApply = domain.needsApply
-          ? domain.needsApply(existing, remote)
-          : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
-        if (shouldApply) {
-          await store.put(remote);
-          applied++;
-        }
       }
-    }
+    });
+    applied += batchApplied;
   });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq

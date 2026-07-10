@@ -22,7 +22,7 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 # 同步 · 域登记簿
@@ -90,8 +90,8 @@ last-reviewed: 2026-07-04
 
 - **通用 LWW**（settings、quick_notes、tasks、tracks、track_steps、goals、health_charts、健康数据域及未来的零钩子域）：delete = 真删除 + tombstone upsert；upsert = 删 tombstone + `INSERT ... ON CONFLICT DO UPDATE`（列来自域的 `toRow()`，主键与 `created_at` 只在插入时写）。域可以声明 `guardedColumns`：来包无 `op` 时这些列不进 `DO UPDATE SET`，目前 tasks 用于保护完成语义字段，tracks 用于保护 `status`。`track_steps.track_id` 不建 SQL 外键，轨道删除必须由客户端或未来服务端受控入口显式发每条步骤删除。
 - **复合键 LWW**（`goal_layout_pins`）：语义仍是 LWW，但不能走单列主键通用 SQL。server 用 `identity` 从 payload 算 `recordId`，custom apply/read 按 `(goal_id,node_kind,node_id)` 读写，delete 仍真删除 + tombstone。
-- **categories 钩子**：delete = 级联删除目标分类、后代分类与关联 entries，每条都写 tombstone + delete seq；upsert 正常写入。
-- **time_entries 钩子**：upsert 前先删除与该记录时间段重叠的旧远端记录（写 tombstone + delete seq，outcome 带 `overriddenRecordIds` 和 `backupId`，对应备份标受保护 `local_override_overlap`）；分类不存在时 skip 并带结构化 `skipReason`。
+- **categories 钩子**：delete = 级联删除目标分类、后代分类与关联 entries，每条都写 tombstone + delete seq；根分类先记账，再记关联 entries/后代分类，分页客户端可先建立整树冲突保护；upsert 清旧 tombstone 后正常写入。
+- **time_entries 钩子**：upsert 先清该 record 的旧 tombstone，再删除与该记录时间段重叠的旧远端记录（写 tombstone + delete seq，outcome 带 `overriddenRecordIds` 和 `backupId`）；分类不存在时 skip 并带结构化 `skipReason`。分类级联与 overlap 的隐式影响集合同时进入 baseSeq 冲突分析和 staleGuard。
 - 只有 `status === "applied"` 的变更才记账（skipped 不占 seq）。
 
 待办域的重复规则、tags、排序、完成状态、想法重力 `weight`，以及子任务（独立 `Task` 行，靠 `parentId` 指向 root）的 create/update/delete、重复完成代理写入的 occurrence（确定性 id）及其 children，都仍是既有 `tasks/create`/`tasks/update`/`tasks/delete` change：客户端 helper 通过 Dexie transaction 写 `tasks` + 本地 `syncLog`，授权 agent 回写（含 `note` 建 child）构造 change 后走 `applyChange()` + `sync_seq` + SSE 通知。完成语义字段额外通过 `op` 授权写入：无 `op` 的 tasks upsert 仍可更新标题、排序、tags、weight 等非守卫列，但不能在撞现存行时覆盖 `done` / `completedAt` / `skipped` / `lastDoneAt` / `completedCount`。这**不新增同步域、不动 `SyncPushReasonCode` 与登记簿条目数**；静态 `SyncChange` 的 tasks upsert 成员允许可选 `op`。`parentId` 的一层结构约束**只在 force-push 全量快照兜底校验**（`forcePushValidation`：自引用 / 缺失父 / 二层嵌套三种负样本），普通增量 push 故意不挡（依赖客户端 helper，单用户威胁模型取舍）；字段语义与展示桶见 [todo](../todo.md)。

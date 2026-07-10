@@ -3,6 +3,7 @@ import {
   createSyncStream,
   nextBackoffMs,
   parseSseChunk,
+  STREAM_CONNECT_TIMEOUT_MS,
   STREAM_WATCHDOG_TIMEOUT_MS,
   type SyncStreamMessage,
 } from "./syncStream.js";
@@ -185,6 +186,35 @@ describe("createSyncStream", () => {
     stream.stop();
   });
 
+  it("aborts a fetch that never returns response headers and reconnects", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    const fetchMock = vi.fn((_url: string, init?: { signal?: AbortSignal }) => {
+      if (fetchMock.mock.calls.length === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        });
+      }
+      return Promise.resolve(streamingResponse(['event: hello\ndata: {"latestSeq":9}\n\n']));
+    });
+    const states: string[] = [];
+
+    const stream = createSyncStream({
+      fetchImpl: fetchMock,
+      onStateChange: (state) => states.push(state),
+      onMessage: () => undefined,
+    });
+    stream.start();
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(STREAM_CONNECT_TIMEOUT_MS);
+    expect(states).toContain("disconnected");
+
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    stream.stop();
+  });
+
   it("resets the watchdog when bytes arrive (heartbeat comments)", async () => {
     vi.useFakeTimers();
     localStorage.setItem("timedata_api_url", "https://example.com");
@@ -235,5 +265,36 @@ describe("createSyncStream", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(states.at(-1)).toBe("disconnected");
+  });
+
+  it("ignores an old run that settles after stop/start and keeps the new run connected", async () => {
+    vi.useFakeTimers();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    let rejectOld!: (reason?: unknown) => void;
+    const oldFetch = new Promise<Response>((_resolve, reject) => {
+      rejectOld = reject;
+    });
+    const { response: currentResponse } = openEndedStreamingResponse(['event: hello\ndata: {"latestSeq":2}\n\n']);
+    const fetchMock = vi.fn().mockReturnValueOnce(oldFetch).mockResolvedValueOnce(currentResponse);
+    const states: string[] = [];
+
+    const stream = createSyncStream({
+      fetchImpl: fetchMock,
+      onStateChange: (state) => states.push(state),
+      onMessage: () => undefined,
+    });
+    stream.start();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    stream.stop();
+    stream.start();
+    await vi.waitFor(() => expect(states.at(-1)).toBe("connected"));
+
+    rejectOld(new Error("old run failed late"));
+    await vi.advanceTimersByTimeAsync(40_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(states.at(-1)).toBe("connected");
+    stream.stop();
   });
 });

@@ -92,7 +92,8 @@ describe("server sync domains", () => {
 
 describe("time entry overlap prediction", () => {
   it("predicts overlapping deletions without mutating", async () => {
-    const { findOverlappingEntryIds, predictOverlappingDeletions } = await import("./domains.js");
+    const { findOverlappingEntryIds, predictChangeImpactRecords, predictOverlappingDeletions } =
+      await import("./domains.js");
     const db = getDb();
     db.prepare(
       "INSERT INTO categories (id,name,parent_id,color,icon,sort_order,is_archived,created_at,updated_at) VALUES ('c','c',NULL,'#808080',NULL,0,0,?,?)",
@@ -126,6 +127,51 @@ describe("time entry overlap prediction", () => {
       },
     ];
     expect(predictOverlappingDeletions(db, changes as never)).toEqual(["e1"]);
+    expect(predictChangeImpactRecords(db, changes[0] as never)).toEqual([
+      { tableName: "time_entries", recordId: "e2" },
+      { tableName: "time_entries", recordId: "e1" },
+    ]);
     expect(db.prepare("SELECT COUNT(*) AS c FROM time_entries").get()).toEqual({ c: 1 });
+  });
+});
+
+describe("push impact expansion", () => {
+  it("expands a parent category delete to descendants and their entries without mutating", async () => {
+    const { predictChangeImpactRecords } = await import("./domains.js");
+    const db = getDb();
+    const timestamp = "2026-07-10T00:00:00.000Z";
+    db.prepare(
+      "INSERT INTO categories (id,name,parent_id,color,icon,sort_order,is_archived,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+    ).run("parent", "父分类", null, "#808080", null, 0, 0, timestamp, timestamp);
+    db.prepare(
+      "INSERT INTO categories (id,name,parent_id,color,icon,sort_order,is_archived,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+    ).run("child", "子分类", "parent", "#808080", null, 0, 0, timestamp, timestamp);
+    db.prepare(
+      "INSERT INTO time_entries (id,category_id,start_time,end_time,note,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
+    ).run(
+      "child-entry",
+      "child",
+      "2026-07-10T01:00:00.000Z",
+      "2026-07-10T02:00:00.000Z",
+      null,
+      timestamp,
+      timestamp,
+    );
+
+    const impacts = predictChangeImpactRecords(db, {
+      tableName: "categories",
+      recordId: "parent",
+      action: "delete",
+      data: null,
+      timestamp,
+    } as never);
+
+    expect(impacts).toEqual([
+      { tableName: "categories", recordId: "parent" },
+      { tableName: "categories", recordId: "child" },
+      { tableName: "time_entries", recordId: "child-entry" },
+    ]);
+    expect(db.prepare("SELECT id FROM categories ORDER BY id").all()).toEqual([{ id: "child" }, { id: "parent" }]);
+    expect(db.prepare("SELECT id FROM time_entries").all()).toEqual([{ id: "child-entry" }]);
   });
 });

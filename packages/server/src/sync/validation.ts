@@ -102,7 +102,7 @@ export function validateSyncChanges(
         hooks.crossValidate?.(change, previousChanges) ??
         validateGenericChange(change, domain, hooks.identity, idField) ??
         hooks.validate?.(db, change, ctx) ??
-        changeOutcome(change, "accepted", "applied", `${change.tableName} change can be applied`);
+        changeOutcome(change, "accepted", "applied", `${change.tableName} change passed validation`);
     }
 
     if (result.status === "accepted") previousChanges.push(change);

@@ -39,7 +39,7 @@ import {
   rowToGoalLayoutPin,
 } from "../lib/goal-layout-pin-rows.js";
 import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
-import { recordSeq } from "./seq.js";
+import { recordSeqWithDb } from "./seq.js";
 
 export interface ApplyChangeResult {
   recordId: string;
@@ -51,6 +51,7 @@ export interface ApplyChangeResult {
   incomingTimestamp: string;
   skipReason?: SyncPushOutcome["reasonCode"];
   overriddenRecordIds?: string[];
+  primarySeqRecorded?: boolean;
 }
 
 export interface ValidateContext {
@@ -138,6 +139,37 @@ export function getCategoryParentInfo(
 
 // ---- categories 域钩子 ----
 
+export interface SyncImpactRecord {
+  tableName: SyncChange["tableName"];
+  recordId: string;
+}
+
+function collectCategoryCascadeIds(db: Database, rootId: string): { categoryIds: string[]; entryIds: string[] } {
+  const categoryIds: string[] = [];
+  const seen = new Set<string>();
+  const queue = [rootId];
+
+  for (let index = 0; index < queue.length; index++) {
+    const categoryId = queue[index];
+    if (seen.has(categoryId)) continue;
+    seen.add(categoryId);
+    categoryIds.push(categoryId);
+    const children = db
+      .prepare("SELECT id FROM categories WHERE parent_id = ? ORDER BY sort_order, id")
+      .all(categoryId) as Array<{ id: string }>;
+    queue.push(...children.map((row) => row.id));
+  }
+
+  const entryIds: string[] = [];
+  const selectEntries = db.prepare("SELECT id FROM time_entries WHERE category_id = ? ORDER BY id");
+  for (const categoryId of categoryIds) {
+    const entries = selectEntries.all(categoryId) as Array<{ id: string }>;
+    entryIds.push(...entries.map((row) => row.id));
+  }
+
+  return { categoryIds, entryIds };
+}
+
 function validateCategoryChange(db: Database, change: SyncChange, ctx: ValidateContext): SyncPushOutcome | null {
   if (change.action === "delete") return null;
 
@@ -157,14 +189,7 @@ function validateCategoryChange(db: Database, change: SyncChange, ctx: ValidateC
 
 function applyCategoryChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {
   if (change.action === "delete") {
-    const categoryIds = [change.recordId];
-    for (let index = 0; index < categoryIds.length; index++) {
-      const parentId = categoryIds[index];
-      const childRows = db
-        .prepare("SELECT id FROM categories WHERE parent_id = ? ORDER BY sort_order, id")
-        .all(parentId) as Array<{ id: string }>;
-      categoryIds.push(...childRows.map((row) => row.id));
-    }
+    const { categoryIds, entryIds } = collectCategoryCascadeIds(db, change.recordId);
 
     const insertEntryTombstone = db.prepare(`
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at)
@@ -176,27 +201,30 @@ function applyCategoryChange(db: Database, change: SyncChange, serverNow: string
       VALUES ('categories', ?, ?)
       ON CONFLICT(table_name, record_id) DO UPDATE SET deleted_at = excluded.deleted_at
     `);
-    const cascadedEntryIds: string[] = [];
+    insertCategoryTombstone.run(change.recordId, serverNow);
+    recordSeqWithDb(db, "categories", change.recordId, "delete");
 
-    for (const categoryId of [...categoryIds].reverse()) {
-      const entries = db
-        .prepare("SELECT id FROM time_entries WHERE category_id = ? ORDER BY id")
-        .all(categoryId) as Array<{ id: string }>;
-      for (const entry of entries) {
-        db.prepare("DELETE FROM time_entries WHERE id = ?").run(entry.id);
-        insertEntryTombstone.run(entry.id, serverNow);
-        recordSeq("time_entries", entry.id, "delete");
-        cascadedEntryIds.push(entry.id);
-      }
-      db.prepare("DELETE FROM categories WHERE id = ?").run(categoryId);
-      insertCategoryTombstone.run(categoryId, serverNow);
-      recordSeq("categories", categoryId, "delete");
+    for (const entryId of entryIds) {
+      db.prepare("DELETE FROM time_entries WHERE id = ?").run(entryId);
+      insertEntryTombstone.run(entryId, serverNow);
+      recordSeqWithDb(db, "time_entries", entryId, "delete");
     }
 
-    return applyResult(change, "applied", "deleted category", undefined, cascadedEntryIds);
+    for (const categoryId of [...categoryIds].reverse()) {
+      db.prepare("DELETE FROM categories WHERE id = ?").run(categoryId);
+      if (categoryId === change.recordId) continue;
+      insertCategoryTombstone.run(categoryId, serverNow);
+      recordSeqWithDb(db, "categories", categoryId, "delete");
+    }
+
+    return {
+      ...applyResult(change, "applied", "deleted category", undefined, entryIds),
+      primarySeqRecorded: true,
+    };
   }
 
   const data = change.data as Category;
+  db.prepare("DELETE FROM sync_tombstones WHERE table_name = 'categories' AND record_id = ?").run(change.recordId);
 
   const existing = db.prepare("SELECT updated_at FROM categories WHERE id = ?").get(change.recordId) as
     | Pick<CategoryRow, "updated_at">
@@ -304,10 +332,41 @@ function deleteOverlappingEntries(db: Database, data: TimeEntry, deletedAt: stri
   for (const id of ids) {
     db.prepare("DELETE FROM time_entries WHERE id = ?").run(id);
     insertTombstone.run(id, deletedAt);
-    recordSeq("time_entries", id, "delete");
+    recordSeqWithDb(db, "time_entries", id, "delete");
   }
 
   return ids;
+}
+
+export function predictChangeImpactRecords(db: Database, change: SyncChange): SyncImpactRecord[] {
+  const records: SyncImpactRecord[] = [{ tableName: change.tableName, recordId: change.recordId }];
+
+  if (change.tableName === "categories" && change.action === "delete") {
+    const cascade = collectCategoryCascadeIds(db, change.recordId);
+    records.push(
+      ...cascade.categoryIds.map((recordId): SyncImpactRecord => ({ tableName: "categories", recordId })),
+      ...cascade.entryIds.map((recordId): SyncImpactRecord => ({ tableName: "time_entries", recordId })),
+    );
+  } else if (change.tableName === "time_entries" && change.action !== "delete" && change.data) {
+    records.push(
+      ...findOverlappingEntryIds(db, change.data as TimeEntry).map(
+        (recordId): SyncImpactRecord => ({ tableName: "time_entries", recordId }),
+      ),
+    );
+  }
+
+  const unique = new Map(records.map((record) => [`${record.tableName}:${record.recordId}`, record]));
+  return [...unique.values()];
+}
+
+export function expandPushImpactRecords(db: Database, changes: SyncChange[]): SyncImpactRecord[] {
+  const unique = new Map<string, SyncImpactRecord>();
+  for (const change of changes) {
+    for (const record of predictChangeImpactRecords(db, change)) {
+      unique.set(`${record.tableName}:${record.recordId}`, record);
+    }
+  }
+  return [...unique.values()];
 }
 
 function applyEntryChange(db: Database, change: SyncChange, serverNow: string): ApplyChangeResult {
@@ -327,6 +386,7 @@ function applyEntryChange(db: Database, change: SyncChange, serverNow: string): 
   // 分类不存在时 skip（可能是顺序依赖尚未应用），路由层会将 skipped 映射为 conflict/server_version_newer_or_same。
   if (!category) return applyResult(change, "skipped", "missing category", undefined, undefined, "missing_category");
 
+  db.prepare("DELETE FROM sync_tombstones WHERE table_name = 'time_entries' AND record_id = ?").run(change.recordId);
   const overriddenRecordIds = deleteOverlappingEntries(db, data, serverNow);
   const existing = db.prepare("SELECT updated_at FROM time_entries WHERE id = ?").get(change.recordId) as
     | Pick<EntryRow, "updated_at">

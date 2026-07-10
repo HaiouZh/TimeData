@@ -2,26 +2,62 @@ import type { SyncChange } from "@timedata/shared";
 import type { Database } from "better-sqlite3";
 import { getDb } from "../db/connection.js";
 import { type ApplyChangeResult, type ServerDomainHooks, applyResult, getServerDomain } from "./domains.js";
-import { recordSeq } from "./seq.js";
+import { recordSeqWithDb } from "./seq.js";
 
 export type { ApplyChangeResult } from "./domains.js";
 
 export interface ApplyChangeOptions {
   /** 仅对冲突记录启用：来包时间戳 <= 服务器现存行或 tombstone 时间戳时拒收。 */
   staleGuard?: boolean;
+  /** 隐式受影响记录（分类级联、时间重叠删除）也参与 staleGuard。 */
+  staleAgainst?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
+  /** 本批 apply 开始前冻结的服务器时间戳，避免同批前序变更产生的 tombstone 误伤后序变更。 */
+  staleServerTimestamps?: ReadonlyMap<string, string | null>;
+  /** 复用调用方事务中的连接，避免写业务表和记账分叉。 */
+  db?: Database;
 }
 
-function serverTimestampFor(db: Database, change: SyncChange): string | null {
-  const existing = getServerDomain(change.tableName).readRecord(db, change.recordId);
+function recordKey(record: { tableName: SyncChange["tableName"]; recordId: string }): string {
+  return `${record.tableName}:${record.recordId}`;
+}
+
+function serverTimestampFor(
+  db: Database,
+  record: { tableName: SyncChange["tableName"]; recordId: string },
+): string | null {
+  const existing = getServerDomain(record.tableName).readRecord(db, record.recordId);
   if (existing) return existing.timestamp;
   const tombstone = db
     .prepare("SELECT deleted_at FROM sync_tombstones WHERE table_name = ? AND record_id = ?")
-    .get(change.tableName, change.recordId) as { deleted_at: string } | undefined;
+    .get(record.tableName, record.recordId) as { deleted_at: string } | undefined;
   return tombstone?.deleted_at ?? null;
 }
 
-function rejectIfStale(db: Database, change: SyncChange): ApplyChangeResult | null {
-  const serverTs = serverTimestampFor(db, change);
+export function captureServerTimestamps(
+  db: Database,
+  records: Array<{ tableName: SyncChange["tableName"]; recordId: string }>,
+): ReadonlyMap<string, string | null> {
+  return new Map(records.map((record) => [recordKey(record), serverTimestampFor(db, record)]));
+}
+
+function rejectIfStale(
+  db: Database,
+  change: SyncChange,
+  staleAgainst: Array<{ tableName: SyncChange["tableName"]; recordId: string }> = [],
+  staleServerTimestamps?: ReadonlyMap<string, string | null>,
+): ApplyChangeResult | null {
+  const records = [
+    { tableName: change.tableName, recordId: change.recordId },
+    ...staleAgainst,
+  ];
+  let serverTs: string | null = null;
+  for (const record of records) {
+    const key = recordKey(record);
+    const candidate = staleServerTimestamps?.has(key)
+      ? staleServerTimestamps.get(key) ?? null
+      : serverTimestampFor(db, record);
+    if (candidate != null && (serverTs == null || candidate > serverTs)) serverTs = candidate;
+  }
   if (serverTs == null || change.timestamp > serverTs) return null;
   return applyResult(
     change,
@@ -34,9 +70,9 @@ function rejectIfStale(db: Database, change: SyncChange): ApplyChangeResult | nu
 }
 
 export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}): ApplyChangeResult {
-  const db = getDb();
+  const db = options.db ?? getDb();
   if (options.staleGuard) {
-    const stale = rejectIfStale(db, change);
+    const stale = rejectIfStale(db, change, options.staleAgainst, options.staleServerTimestamps);
     if (stale) return stale;
   }
   const domain = getServerDomain(change.tableName);
@@ -52,8 +88,8 @@ export function applyChange(change: SyncChange, options: ApplyChangeOptions = {}
     : applyLwwChange(db, change, lww as NonNullable<ServerDomainHooks["lww"]>, serverNow);
 
   // 只有成功写入才推进 seq cursor，skipped 的变更不占 seq 位置（供上游判断应用顺序）。
-  if (changeResult.status === "applied") {
-    recordSeq(change.tableName, change.recordId, change.action);
+  if (changeResult.status === "applied" && !changeResult.primarySeqRecorded) {
+    recordSeqWithDb(db, change.tableName, change.recordId, change.action);
   }
 
   return changeResult;

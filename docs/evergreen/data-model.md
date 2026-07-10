@@ -22,7 +22,7 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 <!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用，属触发下沉（见 sync.md），不改变本文档描述的数据契约、schema 归一或映射约定，无需改动。 -->
@@ -90,7 +90,7 @@ type SyncLogEntry = {
   action: "create" | "update" | "delete";
   timestamp: string;
   synced: 0 | 1;
-  op?: TaskCompletionOp; // 仅 tasks 域使用：完成语义写入授权标志
+  op?: TaskCompletionOp | TrackStatusOp; // tasks 完成语义 / tracks.status 写入授权标志
 };
 ```
 
@@ -146,7 +146,7 @@ type SyncChange =
 
 ## 5. 全量同步兜底契约
 
-全量推送兜底当前只覆盖核心同步表：`categories`、`timeEntries`、可选 `settings`、`quickNotes`、`tasks`。服务端在导入前校验分类/记录/速记/任务的 ID 唯一性、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠等规则；健康原始数据、`health_charts`、`tracks`、`track_steps`、`goals` 与 `goal_layout_pins` 当前不在 force-push 契约内，但覆盖流程会清空 `goal_layout_pins` 业务表，避免留下不可 pull 的钉点行。目标成员关系只存在于 `Goal.members`，因此 force-push 的 tasks payload 不携带目标归属。
+全量推送兜底当前只覆盖核心同步表：`categories`、`timeEntries`、可选 `settings`、`quickNotes`、`tasks`。服务端在导入前校验分类/记录/速记/任务的 ID 唯一性、父分类存在、记录引用分类存在、时间范围合法、记录之间不重叠等规则；随后把快照转成五域 create/update/delete 差异，经正常 resolver 追加只增账本。健康原始数据、`health_charts`、`tracks`、`track_steps`、`goals` 与 `goal_layout_pins` 不在 force-push 契约内，业务行、tombstone 与 seq 均保持原样。目标成员关系只存在于 `Goal.members`，因此 force-push 的 tasks payload 不携带目标归属。
 
 共享类型：
 
@@ -161,7 +161,7 @@ type SyncChange =
 
 ## 6. 增量同步序列契约
 
-服务端 `sync_seq` 是同步 cursor 的权威来源。每次 `applyChange()` 成功写入同步实体后追加一行；CLI `log` 成功创建时间记录后也追加 `time_entries/create` 序列；force-push 覆盖核心同步表时清空并重建这些表对应的序列。
+服务端 `sync_seq` 是同步 cursor 的权威来源，只增不减。每次 `applyChange()` 成功写入同步实体后追加一行；CLI 受控写入口与业务写入同事务记账；force-push、手动 data reset、一次性 UTC reset 也通过 create/update/delete 差异继续追加账本，不能清空重编号。
 
 - `SyncPushRequest.baseSeq?: number | null`：客户端上次观察到的服务端序列。
 - `SyncPullRequest.sinceSeq: number | null`：pull 唯一 cursor；0 或 null 表示全量。

@@ -29,14 +29,18 @@ import type { CountRow, MaxRow, TombstoneRow } from "../lib/db-rows.js";
 import { errorJson, ErrorCode } from "../lib/errors.js";
 import { createServerBackup } from "../sync/backup.js";
 import type { Database } from "better-sqlite3";
-import { getServerDomain, predictOverlappingDeletions } from "../sync/domains.js";
-import { applyChange, type ApplyChangeResult } from "../sync/resolver.js";
+import {
+  getServerDomain,
+  predictChangeImpactRecords,
+  predictOverlappingDeletions,
+} from "../sync/domains.js";
+import { applyChange, captureServerTimestamps, type ApplyChangeResult } from "../sync/resolver.js";
 import { orderPushChanges } from "../sync/order.js";
 import { validateSyncChanges } from "../sync/validation.js";
 import { analyzePushBaseSeq } from "../sync/conflict.js";
 import { validateForcePushBusinessRules } from "../sync/forcePushValidation.js";
-import { getChangesSinceSeq, getLatestSeq, recordSeqWithDb } from "../sync/seq.js";
-import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
+import { getChangesSinceSeq, getLatestSeq } from "../sync/seq.js";
+import { getCommitHash } from "../sync/state.js";
 import { addSyncStreamListener, notifySyncChange, removeSyncStreamListener, type SyncStreamListener } from "../sync/notifier.js";
 
 const FORCE_PUSH_CONFIRMATION_PHRASE = "OVERWRITE_SERVER" as const;
@@ -84,114 +88,113 @@ function validateForcePushPayload(body: SyncForcePushRequest): string | null {
   return validateForcePushBusinessRules(body.categories, body.timeEntries, body.quickNotes, body.tasks);
 }
 
-function replaceServerData(
+function forcePushChanges(
   db: Database,
   categories: Category[],
   timeEntries: TimeEntry[],
   quickNotes: QuickNote[],
   tasks: Task[],
   settings?: Setting[],
-): void {
-  db.prepare("DELETE FROM sync_tombstones").run();
-  db.prepare("DELETE FROM sync_seq").run();
-  db.prepare("DELETE FROM goal_layout_pins").run();
-  db.prepare("DELETE FROM tasks").run();
-  db.prepare("DELETE FROM quick_notes").run();
-  db.prepare("DELETE FROM time_entries").run();
-  db.prepare("DELETE FROM categories").run();
-  if (settings !== undefined) {
-    db.prepare("DELETE FROM settings").run();
+): SyncChange[] {
+  const forcedAt = new Date().toISOString();
+  const changes: SyncChange[] = [];
+
+  function appendChange<RecordType>(
+    tableName: SyncChange["tableName"],
+    recordId: string,
+    action: "create" | "update",
+    record: RecordType,
+    opOf?: (record: RecordType) => Record<string, unknown> | undefined,
+  ): void {
+    changes.push({
+      tableName,
+      recordId,
+      action,
+      data: record,
+      timestamp: forcedAt,
+      ...(opOf?.(record) ?? {}),
+    } as SyncChange);
   }
 
-  const insertCategory = db.prepare(`
-    INSERT INTO categories (id, name, parent_id, color, icon, sort_order, is_archived, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertEntry = db.prepare(`
-    INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertSetting = db.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)");
-  const insertQuickNote = db.prepare(`
-    INSERT INTO quick_notes (id, text, occurred_at, created_at, updated_at, source, source_label, pinned)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const insertTask = db.prepare(`
-    INSERT INTO tasks (id, title, done, recurrence, last_done_at, start_at, sort_order, scheduled_at, parent_id, completed_count, weight, rule_id, skipped, completed_at, tags, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const orderedCategories = [...categories].sort((a, b) => {
-    if (a.parentId === null && b.parentId !== null) return -1;
-    if (a.parentId !== null && b.parentId === null) return 1;
-    return a.sortOrder - b.sortOrder;
-  });
-
-  for (const category of orderedCategories) {
-    insertCategory.run(
-      category.id,
-      category.name,
-      category.parentId,
-      category.color,
-      category.icon,
-      category.sortOrder,
-      category.isArchived ? 1 : 0,
-      category.createdAt,
-      category.updatedAt,
+  function appendSnapshot<RecordType>(
+    tableName: SyncChange["tableName"],
+    idColumn: string,
+    records: RecordType[],
+    recordIdOf: (record: RecordType) => string,
+    opOf?: (record: RecordType) => Record<string, unknown> | undefined,
+  ): void {
+    const existingIds = new Set(
+      (db.prepare(`SELECT ${idColumn} AS id FROM ${tableName}`).all() as Array<{ id: string }>).map((row) => row.id),
     );
-    recordSeqWithDb(db, "categories", category.id, "create");
-  }
+    const incomingIds = new Set(records.map(recordIdOf));
 
-  for (const entry of timeEntries) {
-    insertEntry.run(entry.id, entry.categoryId, entry.startTime, entry.endTime, entry.note, entry.createdAt, entry.updatedAt);
-    recordSeqWithDb(db, "time_entries", entry.id, "create");
-  }
-
-  for (const note of quickNotes) {
-    insertQuickNote.run(
-      note.id,
-      note.text,
-      note.occurredAt,
-      note.createdAt,
-      note.updatedAt,
-      note.source ?? null,
-      note.sourceLabel ?? null,
-      note.pinned ? 1 : 0,
-    );
-    recordSeqWithDb(db, "quick_notes", note.id, "create");
-  }
-
-  for (const task of tasks) {
-    insertTask.run(
-      task.id,
-      task.title,
-      task.done ? 1 : 0,
-      task.recurrence ? JSON.stringify(task.recurrence) : null,
-      task.lastDoneAt,
-      task.startAt,
-      task.sortOrder,
-      task.scheduledAt ?? null,
-      task.parentId ?? null,
-      task.completedCount ?? 0,
-      task.weight ?? 0,
-      task.ruleId ?? null,
-      task.skipped ? 1 : 0,
-      task.completedAt ?? null,
-      JSON.stringify(task.tags ?? []),
-      task.createdAt,
-      task.updatedAt,
-    );
-    recordSeqWithDb(db, "tasks", task.id, "create");
-  }
-
-  if (settings !== undefined) {
-    for (const setting of settings) {
-      insertSetting.run(setting.key, setting.value, setting.updatedAt);
-      recordSeqWithDb(db, "settings", setting.key, "create");
+    for (const recordId of existingIds) {
+      if (incomingIds.has(recordId)) continue;
+      changes.push({ tableName, recordId, action: "delete", data: null, timestamp: forcedAt } as SyncChange);
+    }
+    for (const record of records) {
+      const recordId = recordIdOf(record);
+      appendChange(tableName, recordId, existingIds.has(recordId) ? "update" : "create", record, opOf);
     }
   }
 
-  computeAndPersistCommitHash(db);
+  const existingCategories = db
+    .prepare("SELECT id, parent_id FROM categories")
+    .all() as Array<{ id: string; parent_id: string | null }>;
+  const incomingCategoryIds = new Set(categories.map((category) => category.id));
+  const deletedCategoryIds = new Set(
+    existingCategories.filter((category) => !incomingCategoryIds.has(category.id)).map((category) => category.id),
+  );
+  for (const category of existingCategories) {
+    if (!deletedCategoryIds.has(category.id)) continue;
+    if (category.parent_id && deletedCategoryIds.has(category.parent_id)) continue;
+    changes.push({
+      tableName: "categories",
+      recordId: category.id,
+      action: "delete",
+      data: null,
+      timestamp: forcedAt,
+    });
+  }
+  const existingCategoryIds = new Set(existingCategories.map((category) => category.id));
+  for (const category of categories) {
+    appendChange(
+      "categories",
+      category.id,
+      existingCategoryIds.has(category.id) ? "update" : "create",
+      category,
+    );
+  }
+
+  const existingEntries = db
+    .prepare("SELECT id, category_id FROM time_entries")
+    .all() as Array<{ id: string; category_id: string }>;
+  const incomingEntryIds = new Set(timeEntries.map((entry) => entry.id));
+  for (const entry of existingEntries) {
+    if (incomingEntryIds.has(entry.id) || deletedCategoryIds.has(entry.category_id)) continue;
+    changes.push({
+      tableName: "time_entries",
+      recordId: entry.id,
+      action: "delete",
+      data: null,
+      timestamp: forcedAt,
+    });
+  }
+  const existingEntryIds = new Set(existingEntries.map((entry) => entry.id));
+  for (const entry of timeEntries) {
+    appendChange(
+      "time_entries",
+      entry.id,
+      existingEntryIds.has(entry.id) ? "update" : "create",
+      entry,
+    );
+  }
+
+  if (settings !== undefined) appendSnapshot("settings", "key", settings, (setting) => setting.key);
+  appendSnapshot("quick_notes", "id", quickNotes, (note) => note.id);
+  appendSnapshot("tasks", "id", tasks, (task) => task.id, () => ({ op: { type: "amend", at: forcedAt } }));
+
+  return orderPushChanges(changes);
 }
 
 // SyncStatusResponse 的字段名是公开契约，登记簿表名经映射输出，本轮不改响应形状。
@@ -303,15 +306,28 @@ sync.get("/status", (c) => {
 
 sync.get("/stream", (c) => {
   return streamSSE(c, async (stream) => {
-    await stream.writeSSE({ event: "hello", data: JSON.stringify({ latestSeq: getLatestSeq() }) });
-
+    let ready = false;
+    let pendingLatestSeq: number | null = null;
     const listener: SyncStreamListener = (latestSeq) => {
+      if (!ready) {
+        pendingLatestSeq =
+          pendingLatestSeq == null || (latestSeq != null && latestSeq > pendingLatestSeq)
+            ? latestSeq
+            : pendingLatestSeq;
+        return;
+      }
       void stream.writeSSE({ event: "bump", data: JSON.stringify({ latestSeq }) }).catch(() => undefined);
     };
     addSyncStreamListener(listener);
     stream.onAbort(() => removeSyncStreamListener(listener));
 
     try {
+      const helloLatestSeq = getLatestSeq();
+      await stream.writeSSE({ event: "hello", data: JSON.stringify({ latestSeq: helloLatestSeq }) });
+      ready = true;
+      if (pendingLatestSeq != null && pendingLatestSeq > (helloLatestSeq ?? 0)) {
+        await stream.writeSSE({ event: "bump", data: JSON.stringify({ latestSeq: pendingLatestSeq }) });
+      }
       while (true) {
         await stream.sleep(STREAM_HEARTBEAT_MS);
         await stream.write(": ping\n\n");
@@ -389,6 +405,7 @@ sync.post("/force-push", async (c) => {
     return c.json(errBody, status);
   }
 
+  const seqBeforeBackup = getLatestSeq() ?? 0;
   const backup = await createServerBackup("sync_force_push", {
     protected: true,
     reason: "force_push_overwrite",
@@ -401,12 +418,42 @@ sync.post("/force-push", async (c) => {
       importedTasks: body.tasks.length,
     },
   });
-  const replaceAll = db.transaction(() => {
-    replaceServerData(db, body.categories, body.timeEntries, body.quickNotes, body.tasks, body.settings);
+
+  if ((getLatestSeq() ?? 0) !== seqBeforeBackup) {
+    writeSyncLog(db, "force_push_rejected", {
+      reason: "server_changed_during_backup",
+      backupId: backup.id,
+      seqBeforeBackup,
+      latestSeq: getLatestSeq(),
+    });
+    const { body: errBody, status } = errorJson(
+      ErrorCode.CONFLICT,
+      409,
+      "Server data changed while the safety backup was being created. Prepare force-push again.",
+      { backupId: backup.id },
+    );
+    return c.json(errBody, status);
+  }
+
+  const applyForcePush = db.transaction(() => {
+    const changes = forcePushChanges(
+      db,
+      body.categories,
+      body.timeEntries,
+      body.quickNotes,
+      body.tasks,
+      body.settings,
+    );
+    for (const change of changes) {
+      const result = applyChange(change, { db });
+      if (result.status !== "applied") {
+        throw new Error(`force-push could not apply ${change.tableName}:${change.recordId}: ${result.reason}`);
+      }
+    }
   });
 
   try {
-    replaceAll();
+    applyForcePush();
   } catch (err) {
     const message = (err as Error).message;
     console.error("[sync/force-push] apply failed:", message);
@@ -487,8 +534,15 @@ sync.post("/push", async (c) => {
   }
 
   const analyzeBackupStart = performance.now();
-  const pushRecords = orderedChanges.map((change) => ({ tableName: change.tableName, recordId: change.recordId }));
-  const seqAnalysis = analyzePushBaseSeq(body.baseSeq ?? null, pushRecords);
+  const impactRecordsByChange = orderedChanges.map((change) => predictChangeImpactRecords(db, change));
+  const pushRecords = [
+    ...new Map(
+      impactRecordsByChange
+        .flat()
+        .map((record) => [`${record.tableName}:${record.recordId}`, record]),
+    ).values(),
+  ];
+  const seqAnalysis = analyzePushBaseSeq(body.baseSeq ?? null, pushRecords, db);
   const staleGuardKeys = new Set(
     seqAnalysis.overlappingRecords.map((record) => `${record.tableName}:${record.recordId}`),
   );
@@ -505,29 +559,66 @@ sync.post("/push", async (c) => {
     backupOperation = "sync_unknown_base";
     backupDetails = seqAnalysisBackupDetails(null, seqAnalysis, orderedChanges);
   } else {
-    const predictedDeletedRecordIds = predictOverlappingDeletions(db, orderedChanges);
-    if (predictedDeletedRecordIds.length > 0) {
-      backupReason = "overlap_delete";
+    const explicitKeys = new Set(
+      orderedChanges.map((change) => `${change.tableName}:${change.recordId}`),
+    );
+    const implicitImpactRecords = pushRecords.filter(
+      (record) => !explicitKeys.has(`${record.tableName}:${record.recordId}`),
+    );
+    if (implicitImpactRecords.length > 0) {
+      backupReason = "implicit_delete";
       backupOperation = "sync_overlap_delete";
-      backupDetails = { predictedDeletedRecordIds };
+      backupDetails = {
+        implicitImpactRecords,
+        predictedDeletedRecordIds: predictOverlappingDeletions(db, orderedChanges),
+      };
     }
   }
 
   let backup: { id: string } | null = null;
+  const seqBeforeBackup = getLatestSeq() ?? 0;
   if (backupOperation) {
     backup = await createServerBackup(backupOperation, {
       protected: true,
       reason: backupReason,
       details: backupDetails,
     });
+    if ((getLatestSeq() ?? 0) !== seqBeforeBackup) {
+      writeSyncLog(db, "push_retry_after_backup_race", {
+        backupId: backup.id,
+        baseSeq: body.baseSeq ?? null,
+        seqBeforeBackup,
+        latestSeq: getLatestSeq(),
+      }, orderedChanges.length);
+      const { body: errBody, status } = errorJson(
+        ErrorCode.CONFLICT,
+        409,
+        "Server data changed while the safety backup was being created. Retry sync.",
+        { backupId: backup.id },
+      );
+      return c.json(errBody, status);
+    }
   }
   const analyzeBackupMs = performance.now() - analyzeBackupStart;
+  const staleServerTimestamps =
+    staleGuardAll || staleGuardKeys.size > 0
+      ? captureServerTimestamps(db, pushRecords)
+      : undefined;
   const results: ApplyChangeResult[] = [];
   const applyAll = db.transaction(() => {
-    for (const change of orderedChanges) {
+    for (const [index, change] of orderedChanges.entries()) {
+      const impactRecords = impactRecordsByChange[index];
+      const touchesOverlappingRecord = impactRecords.some((record) =>
+        staleGuardKeys.has(`${record.tableName}:${record.recordId}`),
+      );
       results.push(
         applyChange(change, {
-          staleGuard: staleGuardAll || staleGuardKeys.has(`${change.tableName}:${change.recordId}`),
+          db,
+          staleGuard: staleGuardAll || touchesOverlappingRecord,
+          staleAgainst: impactRecords.filter(
+            (record) => record.tableName !== change.tableName || record.recordId !== change.recordId,
+          ),
+          staleServerTimestamps,
         }),
       );
     }

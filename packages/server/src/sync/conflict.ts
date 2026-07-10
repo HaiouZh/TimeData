@@ -1,4 +1,5 @@
 import type { SyncChange } from "@timedata/shared";
+import type { Database } from "better-sqlite3";
 import { getDb } from "../db/connection.js";
 
 export type PushSeqStrategy =
@@ -22,12 +23,16 @@ export interface PushSeqAnalysis {
   overlappingRecords: OverlappingRecord[];
 }
 
-export function analyzePushBaseSeq(baseSeq: number | null, pushRecords: PushSeqRecord[]): PushSeqAnalysis {
+export function analyzePushBaseSeq(
+  baseSeq: number | null,
+  pushRecords: PushSeqRecord[],
+  db: Database = getDb(),
+): PushSeqAnalysis {
   if (baseSeq == null) {
     return { strategy: "unknown_base", cloudAheadCount: 0, overlappingRecords: [] };
   }
 
-  const rows = getDb()
+  const rows = db
     .prepare(`
     SELECT table_name, record_id, MAX(id) as seq
     FROM sync_seq

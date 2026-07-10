@@ -22,7 +22,7 @@ contracts:
   - packages/shared/src/types.ts:TimeEntry
   - packages/shared/src/entitySchemas.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
@@ -63,7 +63,7 @@ type TimeEntry = {
 - `startTime` / `endTime` / `createdAt` / `updatedAt` 都是严格 UTC ISO 字符串。
 - `endTime > startTime`。客户端 mutation 会先拦截，服务端同步校验会把 schema 的 `endTime` refine 映射成 `invalid_time_range`。
 - `endTime` 不能晚于服务端当前 UTC；客户端也会拒绝本地未来结束时间，避免待同步队列反复失败。
-- 记录区间按半开 `[start, end)` 判断。客户端保存前查重叠并可在单事务内裁剪/删除旧记录；CLI `/api/entries` 创建会拒绝重叠；同步 apply 会删除与 incoming 记录重叠的旧远端记录并写 tombstone + seq。
+- 记录区间按半开 `[start, end)` 判断。客户端保存前查重叠并可在单事务内裁剪/删除旧记录；CLI `/api/entries` 创建会拒绝重叠；同步 apply 会先清 incoming 同 ID 的旧 tombstone，再删除与它重叠的旧远端记录并写 tombstone + seq。预计被删除的重叠记录会进入 baseSeq 冲突分析与 staleGuard，避免用过时分析覆盖另一设备的新写入。
 - `note` 是字符串或 `null`，空白备注在 UI 层归一为空值；备注不参与统计口径。
 - SQLite 表名是 `time_entries`，字段是 `category_id/start_time/end_time/note/created_at/updated_at`；Dexie 表名是 `timeEntries`，索引是 `id, categoryId, startTime, endTime`。
 - 任务轨道步骤也有 `startedAt -> endedAt` 历时，但那是状态线跨度，不写入 `time_entries`，也不参与本时间轴的分类统计口径。

@@ -40,6 +40,25 @@ describe("apiFetch", () => {
     await expect(apiFetch("/api/sync/push", { method: "POST" })).rejects.toBeInstanceOf(ApiError);
   });
 
+  it("preserves Retry-After response headers on ApiError", async () => {
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, {
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { "Retry-After": "120" },
+      }),
+    );
+
+    await expect(apiFetch("/api/sync/status")).rejects.toMatchObject({
+      status: 429,
+      headers: expect.any(Headers),
+    });
+    await apiFetch("/api/sync/status").catch((error: ApiError) => {
+      expect(error.headers.get("Retry-After")).toBe("120");
+    });
+  });
+
   it("aborts after timeoutMs when no caller signal is provided", async () => {
     localStorage.setItem("timedata_api_url", "https://example.com");
     vi.spyOn(globalThis, "fetch").mockImplementation(

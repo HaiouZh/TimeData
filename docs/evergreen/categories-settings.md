@@ -18,7 +18,7 @@ contracts:
   - packages/shared/src/types.ts:Category
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/constants.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
@@ -67,8 +67,8 @@ last-reviewed: 2026-07-04
 
 `applyCategoryChange` / `validateCategoryChange`（`server/src/sync/domains.ts`）：
 
-- **upsert**：先校验自引用（`parentId===id` → `invalid_shape`）、父分类存在、父 `parentId===null`（拒第三级）。**仅 upsert 校验，delete 不校验层级**。**服务端不校验重名**——重名唯一性只是 client 体验约束，server 接受同层级重名 upsert（“服务端是权威”原则的一个例外）。`updated_at` 由服务器分配。
-- **delete**：服务器**自行级联**——从 `recordId` BFS 收集所有后代（`categoryTree.ts:collectCategoryTreeIds`），逆序删其下 `time_entries`（tombstone + `recordSeq`）再删分类（tombstone + `recordSeq`），返回 `overriddenRecordIds = cascadedEntryIds`。
+- **upsert**：先校验自引用（`parentId===id` → `invalid_shape`）、父分类存在、父 `parentId===null`（拒第三级）。**仅 upsert 校验，delete 不校验层级**。**服务端不校验重名**——重名唯一性只是 client 体验约束，server 接受同层级重名 upsert（“服务端是权威”原则的一个例外）。应用前清同 ID 旧 tombstone，`updated_at` 由服务器分配。
+- **delete**：服务器**自行级联**——从 `recordId` BFS 收集所有后代和关联 `time_entries`；根分类先写 tombstone + seq，再删除 entries 和后代分类并逐条记账，返回 `overriddenRecordIds = cascadedEntryIds`。根记录先出现在账本中，让分页客户端先建立整树 pending 保护；完整影响集合也进入 baseSeq 冲突分析与 staleGuard。
 - `categories` 域 `conflictPolicy:"manual"`、`countsInStatus:true`、`upsertPriority:10`/`deletePriority:50`（保证分类 upsert 先于 entries 外键依赖，categories delete 最后级联安全）。
 - `GET /api/categories`（`routes/categories.ts`）返回未归档分类只读列表；真正写入来自 `/api/sync/push` 的域钩子。
 
@@ -122,7 +122,7 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 4. **颜色属于一级分类**：`updateCategoryColor` 子分类抛错；`getCategoryColor` 子分类回溯父色；一键配色只遍历未归档一级分类循环应用色板（classic/morandi/macaron 各 14 色）。
 5. **归档 ≠ 删除**：归档软删（行保留、`isArchived=true`、列表隐藏）；直接删除真删 + 级联 + tombstone。
 6. **重名是 client 体验约束、server 不校验**：`addCategory`/`renameCategory` 在 client 拒同层级未归档重名；`validateCategoryChange` 不查重名，server 接受同层级重名 upsert。
-7. **categories delete 的双重 seq 冗余**：client 发 N 条 `categories/delete` + M 条 `time_entries/delete`，server 处理父级 delete 时又自行级联 + recordSeq；tombstone/delete 幂等，但 seq 有重复写入。
+7. **分类整树是一个冲突单元**：服务端根 delete seq 先于级联后代；客户端 pull 跨分页保留整树保护集合。树内任一记录有 pending 时，不得先删后代、最后才发现祖先冲突。
 8. **`useCategories` 缓存**：`categoryById`/`childrenByParentId` Map；`getCategoryPath`（“父名 · 子名”，未找到“未知”）/`getCategoryColor`（未找到 `#808080`）/`getChildren` O(1)。
 9. **`punch.ts` 不归本域**：打点动作 `punchNow` 写 `time_entries`（归 [timeline](timeline.md)）；本域/子文档只拥有其分类设置 `punchCategorySetting.ts`。
 10. **目标层不改变 Category 语义**：Goal 新增 shared schema / sync 登记簿分支会命中本域 covers，但分类两级树、排序、归档、级联删除都不变；底部导航新增 `/goals` 的 settings key 取值见 [settings-catalog](categories-settings/settings-catalog.md)。

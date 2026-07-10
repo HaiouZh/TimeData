@@ -15,7 +15,7 @@ contracts:
   - packages/shared/src/healthSchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-10
 ---
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
@@ -29,6 +29,7 @@ last-reviewed: 2026-07-04
 <!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展不改变健康 6 域 schema、ingest 写入路径、同步登记或备份角色。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：shared SyncChange/SyncLogEntry 新增 tasks 专用 op；健康 6 域 schema、ingest 写入路径、LWW 映射和备份角色不变。 -->
 <!-- 复核 2026-07-04（tracks 并发时间语义）：shared SyncChange/reasonCode 与 server sync domains 增加 tracks.status 守卫、track_steps 宿主闸和 TrackStep.editedAt；健康 6 域 schema、ingest 写入路径、LWW 映射和备份角色不变。 -->
+<!-- 复核 2026-07-10（同步原子性收口）：server 通用 resolver 改为复用调用方 SQLite transaction 记账；健康 6 域的 schema、LWW 策略、写入入口和备份角色不变。 -->
 
 # 健康数据
 

@@ -316,7 +316,7 @@ describe("getSyncHealth", () => {
 });
 
 describe("syncForcePushToServer", () => {
-  it("prepares then uploads all local data and clears local syncLog", async () => {
+  it("只确认快照边界内五个覆盖域的日志，保留请求期间新日志和未覆盖域日志", async () => {
     await db.categories.add({
       id: "cat-1",
       name: "Work",
@@ -338,6 +338,7 @@ describe("syncForcePushToServer", () => {
       updatedAt: "2026-05-08T09:00:00",
     });
     await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
+    await db.syncLog.add({ id: "excluded-log", tableName: "tracks", recordId: "track-1", action: "update", timestamp: "2026-05-08T09:01:00.000Z", synced: 0 });
     await db.settings.add({ key: "sleep.categoryId", value: "cat-1", updatedAt: "2026-05-08T08:30:00.000Z" });
     await db.quickNotes.add({
       id: "note-1",
@@ -365,7 +366,16 @@ describe("syncForcePushToServer", () => {
         confirmationPhrase: "OVERWRITE_SERVER",
         serverStatus: { categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null, serverTime: "2026-05-08T12:00:00.000Z" },
       })
-      .mockResolvedValueOnce({
+      .mockImplementationOnce(async () => {
+        await db.syncLog.add({
+          id: "during-request-log",
+          tableName: "tasks",
+          recordId: "task-during-request",
+          action: "create",
+          timestamp: "2026-05-08T12:00:30.000Z",
+          synced: 0,
+        });
+        return {
         importedCategories: 1,
         importedTimeEntries: 1,
         importedQuickNotes: 1,
@@ -373,6 +383,7 @@ describe("syncForcePushToServer", () => {
         backupId: "sync_force_push-1",
         serverTime: "2026-05-08T12:01:00.000Z",
         latestSeq: 42,
+        };
       });
 
     const prepared = await prepareForcePush();
@@ -415,7 +426,9 @@ describe("syncForcePushToServer", () => {
       },
     ]);
     expect(result).toMatchObject({ importedCategories: 1, importedTimeEntries: 1, importedQuickNotes: 1, importedTasks: 1, backupId: "sync_force_push-1" });
-    expect(await db.syncLog.count()).toBe(0);
+    await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 1 });
+    await expect(db.syncLog.get("excluded-log")).resolves.toMatchObject({ synced: 0 });
+    await expect(db.syncLog.get("during-request-log")).resolves.toMatchObject({ synced: 0 });
     expect(localStorage.getItem("timedata_last_synced_seq")).toBe("42");
   });
 });
@@ -702,7 +715,7 @@ describe("syncPush", () => {
     await expect(db.syncLog.get("task-complete-log")).resolves.toMatchObject({ synced: 1 });
   });
 
-  it("handles 409 push outcomes without losing accepted sync logs", async () => {
+  it("原子 409 不误确认，剔除问题项后立即重试合法子批", async () => {
     const acceptedLogId = "entry-accepted-create-00";
     const conflictLogId = "entry-conflict-create-30";
 
@@ -754,11 +767,32 @@ describe("syncPush", () => {
       serverTime: "2026-05-08T09:31:00.000Z",
     };
     const error = new ApiErrorMock(409, "Conflict", "", pushResponse);
-    apiFetchMock.mockRejectedValue(error);
+    apiFetchMock
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce({
+        outcomes: [
+          { tableName: "time_entries", recordId: "entry-accepted", action: "create", status: "accepted", reasonCode: "applied", message: "applied", incomingTimestamp: "2026-05-08T09:00:00" },
+        ],
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        backupId: null,
+        serverTime: "2026-05-08T09:32:00.000Z",
+        latestSeq: 11,
+        appliedCount: 1,
+      });
 
     const result = await syncPush();
 
     expect(result).toMatchObject({ accepted: 1, rejected: 0, conflicts: 1, issues: [expect.objectContaining({ recordId: "entry-conflict", reasonCode: "overlap" })] });
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    const retryBody = JSON.parse(apiFetchMock.mock.calls[1][1].body);
+    expect(firstBody.changes).toHaveLength(3);
+    expect(retryBody.changes).toEqual([
+      expect.objectContaining({ tableName: "categories", recordId: "cat-1" }),
+      expect.objectContaining({ tableName: "time_entries", recordId: "entry-accepted", action: "create" }),
+    ]);
     await expect(db.syncLog.get(acceptedLogId)).resolves.toMatchObject({ synced: 1 });
     await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 0 });
   });
@@ -1715,6 +1749,86 @@ describe("syncPull", () => {
       note: "本机较新记录",
     });
   });
+
+  it("repair 遇到分类树内 pending 时整棵树保持不动", async () => {
+    await db.categories.bulkAdd([
+      {
+        id: "repair-root",
+        name: "父分类",
+        parentId: null,
+        color: "#64748b",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-07T08:00:00.000Z",
+        updatedAt: "2026-05-07T08:00:00.000Z",
+      },
+      {
+        id: "repair-child",
+        name: "子分类",
+        parentId: "repair-root",
+        color: "#22c55e",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-07T08:00:00.000Z",
+        updatedAt: "2026-05-07T09:00:00.000Z",
+      },
+    ]);
+    await db.timeEntries.add({
+      id: "repair-entry",
+      categoryId: "repair-child",
+      startTime: "2026-05-07T10:00:00.000Z",
+      endTime: "2026-05-07T11:00:00.000Z",
+      note: "本地待同步",
+      createdAt: "2026-05-07T10:00:00.000Z",
+      updatedAt: "2026-05-07T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "repair-entry-pending",
+      tableName: "time_entries",
+      recordId: "repair-entry",
+      action: "update",
+      timestamp: "2026-05-07T12:00:00.000Z",
+      synced: 0,
+    });
+    apiFetchMock.mockResolvedValue({
+      serverTime: "2026-05-07T13:00:00.000Z",
+      latestSeq: 3,
+      nextSinceSeq: 3,
+      hasMore: false,
+      changes: [
+        {
+          tableName: "categories",
+          recordId: "repair-root",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-07T13:00:00.000Z",
+        },
+        {
+          tableName: "time_entries",
+          recordId: "repair-entry",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-07T13:00:00.000Z",
+        },
+        {
+          tableName: "categories",
+          recordId: "repair-child",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-07T13:00:00.000Z",
+        },
+      ],
+    });
+
+    await expect(syncPull({ mode: "repair" })).resolves.toBe(0);
+
+    await expect(db.categories.get("repair-root")).resolves.toMatchObject({ id: "repair-root" });
+    await expect(db.categories.get("repair-child")).resolves.toMatchObject({ id: "repair-child" });
+    await expect(db.timeEntries.get("repair-entry")).resolves.toMatchObject({ note: "本地待同步" });
+    await expect(db.syncLog.get("repair-entry-pending")).resolves.toMatchObject({ synced: 0 });
+  });
 });
 
 function categoryChange(recordId: string, timestamp: string) {
@@ -1854,6 +1968,96 @@ describe("pull 分批拉取", () => {
     expect(conflicts.some((c) => c.recordId === "cat-x")).toBe(true);
     // 本地 cat-x 保留在途编辑（12:00），未被远端 10:00 覆盖
     expect((await db.categories.get("cat-x"))?.updatedAt).toBe("2026-05-07T12:00:00.000Z");
+  });
+
+  it("分类级联冲突跨页保持保护，后续页的子分类和记录墓碑不会先删本地数据", async () => {
+    await db.categories.bulkAdd([
+      {
+        id: "tree-root",
+        name: "父分类",
+        parentId: null,
+        color: "#64748b",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-07T08:00:00.000Z",
+        updatedAt: "2026-05-07T08:00:00.000Z",
+      },
+      {
+        id: "tree-child",
+        name: "子分类",
+        parentId: "tree-root",
+        color: "#22c55e",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: "2026-05-07T08:00:00.000Z",
+        updatedAt: "2026-05-07T09:00:00.000Z",
+      },
+    ]);
+    await db.timeEntries.add({
+      id: "tree-entry",
+      categoryId: "tree-child",
+      startTime: "2026-05-07T10:00:00.000Z",
+      endTime: "2026-05-07T11:00:00.000Z",
+      note: "本地待同步",
+      createdAt: "2026-05-07T10:00:00.000Z",
+      updatedAt: "2026-05-07T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "tree-entry-pending",
+      tableName: "time_entries",
+      recordId: "tree-entry",
+      action: "update",
+      timestamp: "2026-05-07T12:00:00.000Z",
+      synced: 0,
+    });
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        serverTime: "2026-05-07T13:00:00.000Z",
+        latestSeq: 3,
+        nextSinceSeq: 1,
+        hasMore: true,
+        changes: [{
+          tableName: "categories",
+          recordId: "tree-root",
+          action: "delete",
+          data: null,
+          timestamp: "2026-05-07T13:00:00.000Z",
+        }],
+      })
+      .mockResolvedValueOnce({
+        serverTime: "2026-05-07T13:00:01.000Z",
+        latestSeq: 3,
+        nextSinceSeq: 3,
+        hasMore: false,
+        changes: [
+          {
+            tableName: "time_entries",
+            recordId: "tree-entry",
+            action: "delete",
+            data: null,
+            timestamp: "2026-05-07T13:00:00.000Z",
+          },
+          {
+            tableName: "categories",
+            recordId: "tree-child",
+            action: "delete",
+            data: null,
+            timestamp: "2026-05-07T13:00:00.000Z",
+          },
+        ],
+      });
+
+    const result = await syncPullSinceSeq();
+
+    expect(result.applied).toBe(0);
+    expect(result.conflicts).toHaveLength(1);
+    await expect(db.categories.get("tree-root")).resolves.toMatchObject({ id: "tree-root" });
+    await expect(db.categories.get("tree-child")).resolves.toMatchObject({ id: "tree-child" });
+    await expect(db.timeEntries.get("tree-entry")).resolves.toMatchObject({ note: "本地待同步" });
+    await expect(db.syncLog.get("tree-entry-pending")).resolves.toMatchObject({ synced: 0 });
   });
 
   // 批间让出的“继续拉下一批”行为已由上面的多批用例（真 timers）覆盖；
@@ -3144,7 +3348,7 @@ describe("compactSyncLogs", () => {
     });
   });
 
-  it("tracks 压缩不把旧 status op 透传给后续普通 meta 更新", () => {
+  it("tracks 压缩保留组内最后一个 status op，后续普通 meta 更新不会吞掉状态变更", () => {
     const compacted = compactSyncLogs([
       {
         ...log("track-1", "update", "01", "tracks"),
@@ -3158,8 +3362,8 @@ describe("compactSyncLogs", () => {
       recordId: "track-1",
       action: "update",
       timestamp: "2026-05-06T00:02:00.000Z",
+      op: { type: "status", at: "2026-05-06T00:01:00.000Z" },
     });
-    expect(compacted[0].op).toBeUndefined();
   });
 
   it("多条 op 压缩时取时间序最后一个", () => {

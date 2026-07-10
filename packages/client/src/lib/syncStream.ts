@@ -23,6 +23,7 @@ interface CreateSyncStreamOptions {
 
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
+export const STREAM_CONNECT_TIMEOUT_MS = 15_000;
 export const STREAM_WATCHDOG_TIMEOUT_MS = 45_000;
 
 export function nextBackoffMs(attempt: number, random = Math.random): number {
@@ -68,60 +69,90 @@ function readToken(): string {
 }
 
 export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHandle {
-  let running = false;
   let state: SyncStreamState = "disconnected";
-  let reconnectAttempt = 0;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let abortController: AbortController | null = null;
-  let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  let generationId = 0;
+  let activeGeneration: StreamGeneration | null = null;
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  function setState(nextState: SyncStreamState): void {
+  interface StreamRun {
+    controller: AbortController;
+    connectTimer: ReturnType<typeof setTimeout> | null;
+    watchdogTimer: ReturnType<typeof setTimeout> | null;
+  }
+
+  interface StreamGeneration {
+    id: number;
+    active: boolean;
+    reconnectAttempt: number;
+    reconnectTimer: ReturnType<typeof setTimeout> | null;
+    run: StreamRun | null;
+  }
+
+  function isCurrent(generation: StreamGeneration, run?: StreamRun): boolean {
+    return generation.active && activeGeneration === generation && (run === undefined || generation.run === run);
+  }
+
+  function setState(nextState: SyncStreamState, generation?: StreamGeneration): void {
+    if (generation && !isCurrent(generation)) return;
     if (state === nextState) return;
     state = nextState;
     options.onStateChange(nextState);
   }
 
-  function clearWatchdog(): void {
-    if (watchdogTimer) {
-      clearTimeout(watchdogTimer);
-      watchdogTimer = null;
+  function clearRunTimers(run: StreamRun): void {
+    if (run.connectTimer) {
+      clearTimeout(run.connectTimer);
+      run.connectTimer = null;
+    }
+    if (run.watchdogTimer) {
+      clearTimeout(run.watchdogTimer);
+      run.watchdogTimer = null;
     }
   }
 
-  function armWatchdog(): void {
-    clearWatchdog();
-    watchdogTimer = setTimeout(() => {
-      abortController?.abort();
+  function armWatchdog(generation: StreamGeneration, run: StreamRun): void {
+    if (run.watchdogTimer) clearTimeout(run.watchdogTimer);
+    run.watchdogTimer = setTimeout(() => {
+      if (isCurrent(generation, run)) run.controller.abort();
     }, STREAM_WATCHDOG_TIMEOUT_MS);
   }
 
-  function scheduleReconnect(): void {
-    if (!running || reconnectTimer) return;
-    const delayMs = nextBackoffMs(reconnectAttempt);
-    reconnectAttempt += 1;
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null;
-      void run();
+  function scheduleReconnect(generation: StreamGeneration): void {
+    if (!isCurrent(generation) || generation.reconnectTimer) return;
+    const delayMs = nextBackoffMs(generation.reconnectAttempt);
+    generation.reconnectAttempt += 1;
+    generation.reconnectTimer = setTimeout(() => {
+      generation.reconnectTimer = null;
+      if (isCurrent(generation)) void runGeneration(generation);
     }, delayMs);
   }
 
-  async function readLoop(): Promise<void> {
+  async function readLoop(generation: StreamGeneration, run: StreamRun): Promise<void> {
     const apiUrl = readApiUrl();
     if (!apiUrl) return;
 
-    abortController = new AbortController();
-    setState("connecting");
+    setState("connecting", generation);
     const headers = new Headers();
     const token = readToken();
     if (token) {
       headers.set("Authorization", `Bearer ${token}`);
     }
 
+    run.connectTimer = setTimeout(() => {
+      if (isCurrent(generation, run)) run.controller.abort();
+    }, STREAM_CONNECT_TIMEOUT_MS);
     const response = await fetchImpl(buildApiUrl(apiUrl, "/api/sync/stream"), {
       headers,
-      signal: abortController.signal,
+      signal: run.controller.signal,
     });
+    if (run.connectTimer) {
+      clearTimeout(run.connectTimer);
+      run.connectTimer = null;
+    }
+    if (!isCurrent(generation, run)) {
+      await response.body?.cancel().catch(() => undefined);
+      return;
+    }
     if (!response.ok || !response.body) {
       throw new Error(`Sync stream failed: ${response.status}`);
     }
@@ -130,11 +161,12 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
     const decoder = new TextDecoder();
     let rest = "";
 
-    armWatchdog();
+    armWatchdog(generation, run);
     try {
-      while (running) {
+      while (isCurrent(generation, run)) {
         const { value, done } = await reader.read();
-        armWatchdog();
+        if (!isCurrent(generation, run)) break;
+        armWatchdog(generation, run);
         if (done) break;
 
         const parsed = parseSseChunk(rest + decoder.decode(value, { stream: true }));
@@ -142,10 +174,10 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
 
         for (const event of parsed.events) {
           if (event.event === "hello") {
-            reconnectAttempt = 0;
-            setState("connected");
+            generation.reconnectAttempt = 0;
+            setState("connected", generation);
           }
-          options.onMessage(event);
+          if (isCurrent(generation, run)) options.onMessage(event);
         }
       }
     } finally {
@@ -153,39 +185,58 @@ export function createSyncStream(options: CreateSyncStreamOptions): SyncStreamHa
     }
   }
 
-  async function run(): Promise<void> {
-    if (!running) return;
+  async function runGeneration(generation: StreamGeneration): Promise<void> {
+    if (!isCurrent(generation)) return;
+    const run: StreamRun = {
+      controller: new AbortController(),
+      connectTimer: null,
+      watchdogTimer: null,
+    };
+    generation.run = run;
 
     try {
-      await readLoop();
+      await readLoop(generation, run);
     } catch {
       // Reconnect below; callers observe the state machine instead of individual transport errors.
     } finally {
-      abortController = null;
-      clearWatchdog();
+      clearRunTimers(run);
+      if (generation.run === run) generation.run = null;
     }
 
-    if (running) {
-      setState("disconnected");
-      scheduleReconnect();
+    if (isCurrent(generation)) {
+      setState("disconnected", generation);
+      scheduleReconnect(generation);
     }
   }
 
   return {
     start() {
-      if (running) return;
-      running = true;
-      void run();
+      if (activeGeneration?.active) return;
+      const generation: StreamGeneration = {
+        id: ++generationId,
+        active: true,
+        reconnectAttempt: 0,
+        reconnectTimer: null,
+        run: null,
+      };
+      activeGeneration = generation;
+      void runGeneration(generation);
     },
     stop() {
-      running = false;
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
+      const generation = activeGeneration;
+      activeGeneration = null;
+      if (generation) {
+        generation.active = false;
+        if (generation.reconnectTimer) {
+          clearTimeout(generation.reconnectTimer);
+          generation.reconnectTimer = null;
+        }
+        if (generation.run) {
+          clearRunTimers(generation.run);
+          generation.run.controller.abort();
+          generation.run = null;
+        }
       }
-      clearWatchdog();
-      abortController?.abort();
-      abortController = null;
       setState("disconnected");
     },
     getConnectionState() {

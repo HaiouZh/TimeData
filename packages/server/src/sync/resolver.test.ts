@@ -3,7 +3,15 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let db: Database.Database;
-let applyChange: (change: SyncChange, options?: { staleGuard?: boolean }) => {
+let applyChange: (
+  change: SyncChange,
+  options?: {
+    staleGuard?: boolean;
+    staleAgainst?: Array<{ tableName: SyncChange["tableName"]; recordId: string }>;
+    staleServerTimestamps?: ReadonlyMap<string, string | null>;
+    db?: Database.Database;
+  },
+) => {
   status: string;
   reason: string;
   skipReason?: string;
@@ -545,9 +553,9 @@ describe("applyChange", () => {
       db.prepare("SELECT id FROM categories WHERE id IN (?, ?, ?)").all("parent-cat", "child-cat", "grandchild-cat"),
     ).toEqual([]);
     expect(getChangesSinceSeq(baseSeq.max_id)).toEqual([
+      { id: expect.any(Number), tableName: "categories", recordId: "parent-cat", action: "delete" },
       { id: expect.any(Number), tableName: "categories", recordId: "grandchild-cat", action: "delete" },
       { id: expect.any(Number), tableName: "categories", recordId: "child-cat", action: "delete" },
-      { id: expect.any(Number), tableName: "categories", recordId: "parent-cat", action: "delete" },
     ]);
   });
 
@@ -941,6 +949,62 @@ describe("applyChange", () => {
 
       expect(result).toMatchObject({ status: "skipped", skipReason: "stale_change_rejected" });
       expect(db.prepare("SELECT 1 FROM settings WHERE key = ?").get("theme")).toBeTruthy();
+    });
+
+    it("rejects an old incoming entry when an overlap deletion target is newer", () => {
+      db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+        "cat-1",
+        "工作",
+        "#4A90D9",
+        "2026-07-04T00:00:00.000Z",
+        "2026-07-04T00:00:00.000Z",
+      );
+      db.prepare(`
+        INSERT INTO time_entries (id, category_id, start_time, end_time, note, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "remote-overlap",
+        "cat-1",
+        "2026-07-04T09:00:00.000Z",
+        "2026-07-04T10:00:00.000Z",
+        "server newer",
+        "2026-07-04T09:00:00.000Z",
+        "2026-07-04T12:00:00.000Z",
+      );
+
+      const result = applyChange(
+        {
+          tableName: "time_entries",
+          recordId: "incoming",
+          action: "create",
+          data: {
+            id: "incoming",
+            categoryId: "cat-1",
+            startTime: "2026-07-04T09:30:00.000Z",
+            endTime: "2026-07-04T10:30:00.000Z",
+            note: "old incoming",
+            createdAt: "2026-07-04T09:30:00.000Z",
+            updatedAt: "2026-07-04T10:00:00.000Z",
+          },
+          timestamp: "2026-07-04T10:00:00.000Z",
+        } as SyncChange,
+        {
+          staleGuard: true,
+          staleAgainst: [{ tableName: "time_entries", recordId: "remote-overlap" }],
+        },
+      );
+
+      expect(result).toMatchObject({
+        status: "skipped",
+        skipReason: "stale_change_rejected",
+        serverUpdatedAt: "2026-07-04T12:00:00.000Z",
+      });
+      expect(db.prepare("SELECT note FROM time_entries WHERE id = ?").get("remote-overlap")).toEqual({
+        note: "server newer",
+      });
+      expect(db.prepare("SELECT id FROM time_entries WHERE id = ?").get("incoming")).toBeUndefined();
+      expect(db.prepare("SELECT * FROM sync_tombstones").all()).toEqual([]);
+      expect(db.prepare("SELECT * FROM sync_seq").all()).toEqual([]);
     });
 
     it("allows the guard when the target has neither row nor tombstone", () => {

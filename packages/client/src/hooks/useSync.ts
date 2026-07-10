@@ -16,7 +16,7 @@ import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import type { SyncStreamState } from "../lib/syncStream.js";
 import { createPhaseRecorder, recordSyncTiming, type SyncTimingOutcome } from "../sync/phaseTimings.ts";
-import type { SyncExecutorMeta } from "../sync/scheduler.ts";
+import type { SyncExecutorMeta, SyncExecutorOutcome } from "../sync/scheduler.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 
@@ -26,6 +26,41 @@ export function shouldAutoSyncOnMount(apiUrl: string | null, cloudSyncEnabled: b
 
 export function shouldShowSyncDiagnosticsHint(failureCount: number): boolean {
   return failureCount >= SYNC_DIAGNOSTIC_FAILURE_THRESHOLD;
+}
+
+function retryDelayFromSeconds(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value * 1_000 : undefined;
+}
+
+function retryDelayFromMilliseconds(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+function retryDelayFromHeader(value: unknown, now = Date.now()): number | undefined {
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, at - now) : undefined;
+}
+
+export function getSyncRetryAfterMs(error: unknown, now = Date.now()): number | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const candidate = error as {
+    retryAfterMs?: unknown;
+    retryAfterSec?: unknown;
+    body?: unknown;
+    headers?: { get?: (name: string) => string | null };
+  };
+  const body = candidate.body && typeof candidate.body === "object"
+    ? candidate.body as { retryAfterMs?: unknown; retryAfterSec?: unknown }
+    : null;
+
+  return retryDelayFromMilliseconds(candidate.retryAfterMs)
+    ?? retryDelayFromMilliseconds(body?.retryAfterMs)
+    ?? retryDelayFromSeconds(candidate.retryAfterSec)
+    ?? retryDelayFromSeconds(body?.retryAfterSec)
+    ?? retryDelayFromHeader(candidate.headers?.get?.("Retry-After"), now);
 }
 
 interface UseSyncOptions {
@@ -52,7 +87,9 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     setLastSynced(safeGetItem(STORAGE_KEYS.lastSyncDisplayAt));
   }, []);
 
-  const sync = useCallback(async (meta?: SyncExecutorMeta & { connection?: SyncStreamState }): Promise<boolean> => {
+  const sync = useCallback(async (
+    meta?: SyncExecutorMeta & { connection?: SyncStreamState },
+  ): Promise<SyncExecutorOutcome> => {
     setSyncing(true);
     setError(null);
     setConflicts([]);
@@ -73,7 +110,8 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       return true;
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "同步失败");
-      return false;
+      const retryAfterMs = getSyncRetryAfterMs(e);
+      return retryAfterMs === undefined ? false : { ok: false, retryAfterMs };
     } finally {
       recordSyncTiming({
         at: startedAt,
