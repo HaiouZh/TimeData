@@ -34,7 +34,7 @@ docker compose up -d
 
 镜像自动从 GHCR 拉取，无需本地构建。服务默认监听 `3000` 端口。
 
-默认部署包含两个长期容器：`timedata` 运行应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器不挂载 `/var/run/docker.sock`，也不安装 docker CLI；网页“一键更新”只会通过内部网络触发 Watchtower 的受鉴权 HTTP API。默认 Compose 固定使用 Watchtower `1.7.1`，并通过 `DOCKER_API_VERSION=1.44` 兼容 Docker Engine 25+。容器启动时会自动修复 `./data` 的写入权限，通常不需要手动 `chown` 数据目录。
+默认部署包含两个长期容器：`timedata` 运行应用服务，`watchtower` 负责按需更新带 label 的 TimeData 容器。应用容器不挂载 `/var/run/docker.sock`，也不安装 docker CLI；网页“一键更新”只会通过内部网络触发 Watchtower 的受鉴权 HTTP API。默认 Compose 固定使用 Watchtower `1.7.1`，并通过 `DOCKER_API_VERSION=1.44` 兼容 Docker Engine 25+。容器启动时会自动修复 `./data` 和已配置日记 vault 的写入权限，通常不需要手动 `chown` 挂载目录。
 
 ## 环境变量
 

@@ -18,7 +18,7 @@ services:
       - WATCHTOWER_TOKEN=${WATCHTOWER_TOKEN}
       - UPDATE_REPO=${UPDATE_REPO:-HaiouZh/TimeData}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - DIARY_VAULT_DIR=${DIARY_VAULT_DIR:-/app/vault}
+      - DIARY_VAULT_DIR=${DIARY_VAULT_DIR-/app/vault}
     depends_on:
       - watchtower
     labels:

@@ -3,8 +3,8 @@ type: evergreen
 title: 部署与自更新
 covers:
   - docker-compose.yml
-  - Dockerfile
   - packages/server/Dockerfile
+  - packages/server/docker-entrypoint.sh
   - packages/server/src/lib/version.ts
   - packages/server/src/lib/update.ts
   - packages/server/src/routes/version.ts
@@ -24,8 +24,8 @@ covers:
   - .gitleaks.toml
 contracts:
   - docker-compose.yml
-  - Dockerfile
   - packages/server/Dockerfile
+  - packages/server/docker-entrypoint.sh
   - .env.example
 last-reviewed: 2026-07-10
 ---
@@ -94,9 +94,11 @@ last-reviewed: 2026-07-10
 | `WATCHTOWER_TOKEN` | 生产必填 | Watchtower HTTP API token；`/api/update` 用它触发内部 Watchtower 更新。缺失时 `/api/update` 返回 503 `SELF_UPDATE_DISABLED` |
 | `TIMEDATA_IMAGE_TAG` | 否 | TimeData 镜像 tag，默认 `latest`，可 pin 到指定版本；生产环境建议在 `.env` 中固定为已验证的提交 tag，例如 `TIMEDATA_IMAGE_TAG=sha-abcdef1` |
 | `UPDATE_STATE_DIR` | 否 | 自更新状态文件目录，默认 `/app/data`；一般不需要配置 |
-| `DIARY_VAULT_DIR` | 否 | 日记功能的 vault 目录（容器内路径）。compose 默认把宿主机 `${DIARY_VAULT_HOST_DIR:-./vault}` 挂载到 `/app/vault` 并注入该变量；显式设为空则日记 API 返回未启用。vault 内容从 PC 同步到宿主机目录由部署方自理 |
+| `DIARY_VAULT_DIR` | 否 | 日记功能的 vault 目录（容器内路径）。compose 在变量未定义时注入 `/app/vault`，显式设为空时保留空值并让日记 API 返回未启用；宿主机 `${DIARY_VAULT_HOST_DIR:-./vault}` 仍挂载到 `/app/vault`。vault 内容从 PC 同步到宿主机目录由部署方自理；容器启动时会递归校正固定挂载根 `/app/vault` 为应用 UID/GID 1000 可写 |
 
 `AUTH_TOKEN` 缺失时：auth 中间件默认对受保护的 `/api/*` 返回 HTTP 500，不再按 `NODE_ENV` 区分开发/生产。只有显式设置 `ALLOW_UNAUTHENTICATED_DEV=1` 时，才会放行所有 `/api/*` 并且每个进程只输出一次警告；这个旁路只用于本地开发，不能用于生产部署。
+
+日记 vault 与 `data/` 一样由 entrypoint 在降权前修复所有权。entrypoint 只创建并改权固定挂载根 `/app/vault`；`DIARY_VAULT_DIR` 的子目录由降权后的应用按需创建。自动改权只接受最近存在祖先解析后仍位于 `/app/vault` 子树、且不含 `.` / `..` 路径段的配置；误配路径只告警，不在挂载根外创建目录或递归改权。宿主机挂载文件系统若不支持 `chown`，启动日志会出现 `[diary] warning`，保存返回 503 `diary-vault-not-writable`；此时需要在宿主机让挂载目录对 UID/GID 1000 可写，或按所用网络文件系统配置等效权限。
 
 受保护业务路由包括 `/api/categories`、`/api/entries`、`/api/quick-notes`、`/api/sync/*`、`/api/export`、`/api/update`、`/api/data/*` 和 `/api/admin/*`；只有 `/api/health` 与 `/api/version` 在 auth middleware 前注册。`/api/agent/*` 在全局 auth 前单独挂 scoped auth，接受 `AUTH_TOKEN` 或 `AGENT_TOKEN`，但只暴露封闭的 agent 动作集合。
 

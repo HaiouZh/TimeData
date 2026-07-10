@@ -9,12 +9,26 @@ const diary = new Hono();
 
 const vaultDir = () => process.env.DIARY_VAULT_DIR?.trim() || null;
 
-diary.get("/config", (c) =>
-  c.json({ enabled: vaultDir() !== null, template: getServerConfig(TEMPLATE_KEY) ?? "" }),
-);
+function vaultWriteError(err: unknown): Response | null {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (!code || !["EACCES", "EPERM", "EROFS"].includes(code)) return null;
+  return Response.json(
+    {
+      error: "diary-vault-not-writable",
+      message: "服务器日记 vault 无写权限，请检查挂载目录所有权",
+    },
+    { status: 503 },
+  );
+}
+
+diary.get("/config", (c) => c.json({ enabled: vaultDir() !== null, template: getServerConfig(TEMPLATE_KEY) ?? "" }));
 
 diary.put("/config", async (c) => {
-  const { template } = (await c.req.json()) as { template?: string };
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return c.json({ error: "请求体必须是有效 JSON 对象" }, 400);
+  }
+  const { template } = rawBody as { template?: unknown };
   if (typeof template !== "string") return c.json({ error: "缺少 template" }, 400);
   try {
     // 用固定日期校验模板语法本身是否合法
@@ -61,22 +75,46 @@ diary.get("/:date", (c) => {
 diary.put("/:date", async (c) => {
   const r = resolveTargetFile(c.req.param("date"));
   if ("err" in r) return r.err;
-  const body = (await c.req.json()) as { content?: string; baseMtime?: number | null; force?: boolean };
+  const rawBody: unknown = await c.req.json().catch(() => null);
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return c.json({ error: "请求体必须是有效 JSON 对象" }, 400);
+  }
+  const body = rawBody as { content?: unknown; baseMtime?: number | null; force?: boolean };
   if (typeof body.content !== "string") return c.json({ error: "缺少 content" }, 400);
+  if (
+    body.baseMtime !== undefined &&
+    body.baseMtime !== null &&
+    (typeof body.baseMtime !== "number" || !Number.isFinite(body.baseMtime))
+  ) {
+    return c.json({ error: "baseMtime 必须是有限数字或 null" }, 400);
+  }
+  if (body.force !== undefined && typeof body.force !== "boolean") {
+    return c.json({ error: "force 必须是布尔值" }, 400);
+  }
 
   let current: number | null = null;
   try {
     current = Math.floor(fs.statSync(r.file).mtimeMs);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      const response = vaultWriteError(err);
+      if (response) return response;
+      throw err;
+    }
   }
   if (!body.force && current !== (body.baseMtime ?? null)) {
     return c.json({ error: "diary-conflict", mtime: current }, 409);
   }
 
-  fs.mkdirSync(path.dirname(r.file), { recursive: true });
-  fs.writeFileSync(r.file, body.content, "utf8");
-  return c.json({ mtime: Math.floor(fs.statSync(r.file).mtimeMs) });
+  try {
+    fs.mkdirSync(path.dirname(r.file), { recursive: true });
+    fs.writeFileSync(r.file, body.content, "utf8");
+    return c.json({ mtime: Math.floor(fs.statSync(r.file).mtimeMs) });
+  } catch (err) {
+    const response = vaultWriteError(err);
+    if (response) return response;
+    throw err;
+  }
 });
 
 export default diary;

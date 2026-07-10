@@ -33,6 +33,14 @@ function extractMtime(err: ApiError): number | null {
   return typeof body?.mtime === "number" ? body.mtime : null;
 }
 
+function isVaultNotWritable(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 503 &&
+    (err.body as { error?: unknown } | null)?.error === "diary-vault-not-writable"
+  );
+}
+
 export const fetchDiaryConfig = () => apiFetch<DiaryConfig>("/api/diary/config");
 
 export const saveDiaryTemplate = async (template: string): Promise<void> => {
@@ -52,6 +60,9 @@ export async function saveDiary(
     });
   } catch (err) {
     if (isConflict(err)) throw new DiaryConflictError(extractMtime(err));
+    if (isVaultNotWritable(err)) {
+      throw new Error("服务器日记 vault 无写权限，请检查 DIARY_VAULT_HOST_DIR 挂载目录的所有权");
+    }
     throw err;
   }
 }

@@ -65,4 +65,14 @@ describe("diaryApi", () => {
       (e: unknown) => e instanceof ApiError && !(e instanceof DiaryConflictError),
     );
   });
+
+  it("saveDiary 遇 vault 权限错误时抛出中文运维提示", async () => {
+    mockFetch(503, {
+      error: "diary-vault-not-writable",
+      message: "服务器日记 vault 无写权限，请检查挂载目录所有权",
+    });
+    await expect(saveDiary("2026-07-09", { content: "x", baseMtime: 1 })).rejects.toThrow(
+      "服务器日记 vault 无写权限，请检查 DIARY_VAULT_HOST_DIR 挂载目录的所有权",
+    );
+  });
 });

@@ -56,3 +56,10 @@ test("tooling resolves pnpm version from the root packageManager", () => {
   assert.match(serverDockerfile, /packageManager\.split\('@'\)\[1\]/);
   assert.doesNotMatch(serverDockerfile, /npm install -g pnpm@\d/);
 });
+
+test("compose preserves an explicitly empty DIARY_VAULT_DIR to disable diary", () => {
+  const compose = fs.readFileSync(path.join(REPO_ROOT, "docker-compose.yml"), "utf8");
+
+  assert.match(compose, /DIARY_VAULT_DIR=\$\{DIARY_VAULT_DIR-\/app\/vault\}/);
+  assert.doesNotMatch(compose, /DIARY_VAULT_DIR=\$\{DIARY_VAULT_DIR:-\/app\/vault\}/);
+});

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type Database from "better-sqlite3";
 import type { Hono } from "hono";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupRouteTestDb, setupRouteTestApp } from "../__tests__/helpers.js";
 
 let app: Hono;
@@ -19,6 +19,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   delete process.env.DIARY_VAULT_DIR;
   fs.rmSync(vault, { recursive: true, force: true });
   cleanupRouteTestDb(db);
@@ -54,6 +55,16 @@ describe("diary config", () => {
     delete process.env.DIARY_VAULT_DIR;
     const res = await app.request("/api/diary/config");
     expect((await res.json()).enabled).toBe(false);
+  });
+
+  it("损坏 JSON 返回 400", async () => {
+    const res = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: '{"template":"x\n"}',
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "请求体必须是有效 JSON 对象" });
   });
 });
 
@@ -114,5 +125,54 @@ describe("diary read/write", () => {
     const res = await app.request("/api/diary/2026-07-09");
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("diary-no-template");
+  });
+
+  it("vault 无写权限返回可诊断的 503", async () => {
+    await putConfig();
+    vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {
+      const error = new Error("permission denied") as NodeJS.ErrnoException;
+      error.code = "EACCES";
+      throw error;
+    });
+
+    const res = await app.request("/api/diary/2026-07-09", {
+      method: "PUT",
+      body: JSON.stringify({ content: "x", baseMtime: null }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({
+      error: "diary-vault-not-writable",
+      message: "服务器日记 vault 无写权限，请检查挂载目录所有权",
+    });
+  });
+
+  it.each([
+    ["损坏 JSON", '{"content":"x\n"}'],
+    ["null 请求体", "null"],
+  ])("%s 返回 400", async (_label, body) => {
+    await putConfig();
+    const res = await app.request("/api/diary/2026-07-09", {
+      method: "PUT",
+      body,
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "请求体必须是有效 JSON 对象" });
+  });
+
+  it.each([
+    ["字符串 baseMtime", { content: "x", baseMtime: "1" }, "baseMtime 必须是有限数字或 null"],
+    ["字符串 force", { content: "x", baseMtime: null, force: "false" }, "force 必须是布尔值"],
+  ])("%s 返回 400", async (_label, body, error) => {
+    await putConfig();
+    const res = await app.request("/api/diary/2026-07-09", {
+      method: "PUT",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error });
   });
 });
