@@ -111,7 +111,7 @@
 | 架构决策（ADR） | `docs/adr/**` | 仅追加，不改既有条目；新决策写新 ADR |
 | 本地过程文档 | `docs_local/**`（不进 Git） | 沉淀后才同步到 evergreen 或 ADR |
 
-- AI 生成的 spec / plan / review / 审查 / 历史归档默认写入 `docs_local/{specs,plans,reviews,archive,ideas,report,scratch}/`。
+- AI 生成的过程文档按角色写入 `docs_local/`：活工作件进 `specs/`（含 metaspec，文件名带 `-metaspec`）和 `plans/`；想法 / 路线图 / 审查报告等分析类进 `notes/`；常青理解文档进 `green/`；收工归档进 `archive/{specs,plans,reviews,reports}/`（活目录只放活的，死了就搬）。旧目录 `ideas/`、`reviews/`、`report/`、`metaSpec/`、`scratch/`、`domain/` 已于 2026-07-12 退役，不要再写入。
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
 - 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是 `covers` 里「改它文档必错」的契约子集，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
