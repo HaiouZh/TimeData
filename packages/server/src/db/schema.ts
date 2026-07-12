@@ -238,6 +238,15 @@ export function initializeDatabase(): void {
       PRIMARY KEY (table_name, record_id)
     );
 
+    -- 删除任务死因归档：只写不读，服务端 delete 生效前整行快照（spec: 2026-07-12-删除任务死因归档）。
+    CREATE TABLE IF NOT EXISTS deleted_tasks_archive (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      delete_reason TEXT NOT NULL DEFAULT 'unknown',
+      deleted_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sync_seq (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name TEXT NOT NULL,
@@ -279,6 +288,7 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_api_request_logs_token_tier ON api_request_logs(token_tier);
     CREATE INDEX IF NOT EXISTS idx_sync_tombstones_deleted_at ON sync_tombstones(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_sync_seq_table_record ON sync_seq(table_name, record_id);
+    CREATE INDEX IF NOT EXISTS idx_deleted_tasks_archive_deleted_at ON deleted_tasks_archive(deleted_at);
   `);
 
   db.exec(`

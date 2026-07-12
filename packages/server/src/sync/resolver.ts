@@ -106,6 +106,7 @@ function applyLwwChange(
   const table = change.tableName;
 
   if (change.action === "delete") {
+    lww.archiveDelete?.(db, change, serverNow);
     db.prepare(`DELETE FROM ${table} WHERE ${lww.idColumn} = ?`).run(change.recordId);
     db.prepare(`
       INSERT INTO sync_tombstones (table_name, record_id, deleted_at)

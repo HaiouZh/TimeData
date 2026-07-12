@@ -78,7 +78,13 @@ export interface ServerDomainHooks {
   identity?: (data: unknown) => string;
   /** 通用 LWW 路径所需的表/主键列映射（apply 缺省时必填）。
    *  guardedColumns：完成语义等意图字段，来包无 op 时不进 ON CONFLICT DO UPDATE SET。 */
-  lww?: { idColumn: string; toRow: (data: unknown) => Record<string, string | number | null>; guardedColumns?: string[] };
+  lww?: {
+    idColumn: string;
+    toRow: (data: unknown) => Record<string, string | number | null>;
+    guardedColumns?: string[];
+    /** delete 生效前的钩子：整行快照进归档表（如 tasks 域的死因归档），不参与同步域。 */
+    archiveDelete?: (db: Database, change: SyncChange, serverNow: string) => void;
+  };
   /** 按主键读当前行并转成 update SyncChange；pull seq 补差用，行不存在返回 null */
   readRecord: (db: Database, recordId: string) => SyncChange | null;
 }
@@ -602,6 +608,15 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
       idColumn: "id",
       toRow: taskToRow,
       guardedColumns: ["done", "completed_at", "skipped", "last_done_at", "completed_count"],
+      archiveDelete: (db, change, serverNow) => {
+        const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(change.recordId);
+        if (!row) return; // 回声删除/重复删：行已不在，不归档
+        const reason = (change as { deleteReason?: string }).deleteReason ?? "unknown";
+        db.prepare(`
+          INSERT INTO deleted_tasks_archive (task_id, payload, delete_reason, deleted_at)
+          VALUES (?, ?, ?, ?)
+        `).run(change.recordId, JSON.stringify(row), reason, serverNow);
+      },
     },
     readRecord: readTaskRecord,
   },

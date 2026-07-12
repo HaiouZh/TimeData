@@ -37,6 +37,13 @@ beforeEach(async () => {
     CREATE TABLE sync_tombstones (table_name TEXT NOT NULL, record_id TEXT NOT NULL, deleted_at TEXT NOT NULL, PRIMARY KEY (table_name, record_id));
     CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE sync_seq (id INTEGER PRIMARY KEY AUTOINCREMENT, table_name TEXT NOT NULL, record_id TEXT NOT NULL, action TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE deleted_tasks_archive (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      delete_reason TEXT NOT NULL DEFAULT 'unknown',
+      deleted_at TEXT NOT NULL
+    );
   `);
   vi.resetModules();
   vi.doMock("../db/connection.js", () => ({ getDb: () => db }));
@@ -106,5 +113,60 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
 
     const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "occ-1");
     expect(pulled).toMatchObject({ data: { ruleId: "rule-1", skipped: true } });
+  });
+
+  it("delete 生效前把整行快照进 deleted_tasks_archive", () => {
+    expect(applyChange(change("create", "arch-1", "样本任务")).status).toBe("applied");
+    const deleteChange = {
+      tableName: "tasks", recordId: "arch-1", action: "delete", data: null,
+      timestamp: "2026-06-15T00:00:00.000Z", deleteReason: "user",
+    } as unknown as SyncChange;
+    expect(applyChange(deleteChange).status).toBe("applied");
+
+    const row = db.prepare("SELECT * FROM deleted_tasks_archive WHERE task_id = ?").get("arch-1") as {
+      delete_reason: string;
+      payload: string;
+    };
+    expect(row.delete_reason).toBe("user");
+    const payload = JSON.parse(row.payload);
+    expect(payload.title).toBe("样本任务");
+    expect(payload.created_at).toBeTruthy();
+  });
+
+  it("缺省 deleteReason 记 unknown", () => {
+    expect(applyChange(change("create", "arch-2", "无因任务")).status).toBe("applied");
+    expect(applyChange(change("delete", "arch-2")).status).toBe("applied");
+
+    const row = db.prepare("SELECT * FROM deleted_tasks_archive WHERE task_id = ?").get("arch-2") as {
+      delete_reason: string;
+    };
+    expect(row.delete_reason).toBe("unknown");
+  });
+
+  it("回声删除（行不存在）不写归档", () => {
+    expect(applyChange(change("delete", "ghost")).status).toBe("applied");
+    const count = db.prepare("SELECT COUNT(*) c FROM deleted_tasks_archive WHERE task_id='ghost'").get() as {
+      c: number;
+    };
+    expect(count.c).toBe(0);
+  });
+
+  it("staleGuard 拒绝的 delete 不写归档", () => {
+    const t2 = { ...change("create", "arch-3", "陈旧任务"), timestamp: "2026-06-16T00:00:00.000Z" } as SyncChange;
+    (t2 as unknown as { data: Record<string, unknown> }).data.updatedAt = "2026-06-16T00:00:00.000Z";
+    expect(applyChange(t2).status).toBe("applied");
+
+    const staleDelete = {
+      tableName: "tasks", recordId: "arch-3", action: "delete", data: null,
+      timestamp: "2026-06-15T00:00:00.000Z",
+    } as unknown as SyncChange;
+    const result = applyChange(staleDelete, { staleGuard: true });
+    expect(result.status).toBe("skipped");
+
+    const count = db.prepare("SELECT COUNT(*) c FROM deleted_tasks_archive WHERE task_id='arch-3'").get() as {
+      c: number;
+    };
+    expect(count.c).toBe(0);
+    expect(db.prepare("SELECT id FROM tasks WHERE id='arch-3'").get()).toBeDefined();
   });
 });
