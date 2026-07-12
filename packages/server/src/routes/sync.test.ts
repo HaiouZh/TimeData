@@ -113,6 +113,13 @@ function createSchema() {
     CREATE TABLE IF NOT EXISTS track_steps (id TEXT PRIMARY KEY, track_id TEXT NOT NULL, source TEXT NOT NULL, source_label TEXT, content TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT, refs TEXT NOT NULL DEFAULT '[]', tags TEXT NOT NULL DEFAULT '[]', seq INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, edited_at TEXT);
     CREATE TABLE IF NOT EXISTS goals (id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL, note TEXT, members TEXT NOT NULL DEFAULT '[]', prerequisites TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS goal_layout_pins (goal_id TEXT NOT NULL, node_kind TEXT NOT NULL, node_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (goal_id, node_kind, node_id));
+    CREATE TABLE IF NOT EXISTS deleted_tasks_archive (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      delete_reason TEXT NOT NULL DEFAULT 'unknown',
+      deleted_at TEXT NOT NULL
+    );
 
   `);
 }
@@ -183,6 +190,17 @@ function taskChange(action: "create" | "update", data: Task, op?: TaskCompletion
     data,
     timestamp: data.updatedAt,
     ...(op ? { op } : {}),
+  } as SyncChange;
+}
+
+function taskDeleteChange(recordId: string, timestamp: string, deleteReason?: string): SyncChange {
+  return {
+    tableName: "tasks",
+    recordId,
+    action: "delete",
+    data: null,
+    timestamp,
+    ...(deleteReason ? { deleteReason } : {}),
   } as SyncChange;
 }
 
@@ -1998,6 +2016,42 @@ describe("sync route", () => {
         }),
       ]),
     );
+  });
+
+  it("push 删除 occurrence 任务经路由整链归档死因、tasks 行消失、tombstone 留痕", async () => {
+    const createRes = await pushChanges([taskChange("create", taskData({ id: "task-occ-del" }))], 0);
+    expect(createRes.status).toBe(200);
+
+    const deleteRes = await pushChanges([
+      taskDeleteChange("task-occ-del", "2026-07-04T01:00:00.000Z", "occurrence"),
+    ]);
+    expect(deleteRes.status).toBe(200);
+    await expect(deleteRes.json()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+
+    expect(db.prepare("SELECT id FROM tasks WHERE id = ?").get("task-occ-del")).toBeUndefined();
+    expect(
+      db.prepare("SELECT deleted_at FROM sync_tombstones WHERE table_name = 'tasks' AND record_id = ?").get(
+        "task-occ-del",
+      ),
+    ).toEqual({ deleted_at: expect.any(String) });
+
+    const archiveRows = db
+      .prepare("SELECT delete_reason, payload FROM deleted_tasks_archive WHERE task_id = ?")
+      .all("task-occ-del") as { delete_reason: string; payload: string }[];
+    expect(archiveRows).toHaveLength(1);
+    expect(archiveRows[0].delete_reason).toBe("occurrence");
+    expect(JSON.parse(archiveRows[0].payload)).toMatchObject({ id: "task-occ-del" });
+
+    // 重复推同一条 delete（重试/回声）：tombstone 幂等覆盖，归档不应重复写入
+    const repeatRes = await pushChanges([
+      taskDeleteChange("task-occ-del", "2026-07-04T01:00:00.000Z", "occurrence"),
+    ]);
+    expect(repeatRes.status).toBe(200);
+
+    const archiveRowsAfterRepeat = db
+      .prepare("SELECT id FROM deleted_tasks_archive WHERE task_id = ?")
+      .all("task-occ-del");
+    expect(archiveRowsAfterRepeat).toHaveLength(1);
   });
 
   it("tasks 完成语义 op：A 勾选后 B 无 op 改标题不翻回 done", async () => {
