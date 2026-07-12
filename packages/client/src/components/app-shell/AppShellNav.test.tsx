@@ -104,6 +104,8 @@ describe("AppShell responsive navigation", () => {
     installMatchMedia(true);
     const { host, root } = await render("/tracks/track-1");
 
+    await waitForDom(() => host.textContent?.includes("轨道详情") ?? false);
+
     expect(host.textContent).toContain("轨道详情");
     expect(host.querySelector('aside[aria-label="桌面主导航"]')).not.toBeNull();
     expect(host.querySelector('nav[aria-label="主导航"]')).toBeNull();

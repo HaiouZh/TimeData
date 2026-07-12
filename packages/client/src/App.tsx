@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
@@ -32,7 +33,9 @@ export function AppShell() {
       {isWideScreen && <DesktopSidebar />}
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-none" onScroll={isWideScreen ? undefined : onMainScroll}>
-          <AppRoutes />
+          <Suspense fallback={null}>
+            <AppRoutes />
+          </Suspense>
         </main>
         {!isWideScreen && !hidesBottomNav && <MobileBottomNav />}
       </div>

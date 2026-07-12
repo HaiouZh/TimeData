@@ -1,33 +1,40 @@
+import { lazy } from "react";
 import { Route, Routes } from "react-router-dom";
-import DiaryPage from "../../pages/DiaryPage.tsx";
-import StyleguidePage from "../../pages/dev/StyleguidePage.tsx";
-import EntryPage from "../../pages/EntryPage.tsx";
-import GoalDetailPage from "../../pages/goals/GoalDetailPage.tsx";
-import GoalsPage from "../../pages/goals/GoalsPage.tsx";
-import HealthStatsPage from "../../pages/HealthStatsPage.tsx";
-import QuickNotesPage from "../../pages/QuickNotesPage.tsx";
-import SettingsPage from "../../pages/SettingsPage.tsx";
-import StatsPage from "../../pages/StatsPage.tsx";
-import SettingsAdminInsightsPage from "../../pages/settings/SettingsAdminInsightsPage.tsx";
-import SettingsCategoriesPage from "../../pages/settings/SettingsCategoriesPage.tsx";
-import SettingsCategoryDetailPage from "../../pages/settings/SettingsCategoryDetailPage.tsx";
-import SettingsDataPage from "../../pages/settings/SettingsDataPage.tsx";
-import SettingsDiaryPage from "../../pages/settings/SettingsDiaryPage.tsx";
-import SettingsGarminPage from "../../pages/settings/SettingsGarminPage.tsx";
-import SettingsHealthRangePage from "../../pages/settings/SettingsHealthRangePage.tsx";
-import SettingsInsightsPage from "../../pages/settings/SettingsInsightsPage.tsx";
-import SettingsMorePage from "../../pages/settings/SettingsMorePage.tsx";
-import { SettingsNavPage } from "../../pages/settings/SettingsNavPage.tsx";
-import SettingsServerPage from "../../pages/settings/SettingsServerPage.tsx";
-import SettingsStatsLayoutPage from "../../pages/settings/SettingsStatsLayoutPage.tsx";
-import SettingsTodoGravityPage from "../../pages/settings/SettingsTodoGravityPage.tsx";
-import { SettingsTracksPage } from "../../pages/settings/SettingsTracksPage.tsx";
 import TimelinePage from "../../pages/TimelinePage.tsx";
-import TimeStatsPage from "../../pages/TimeStatsPage.tsx";
-import { TodoPage } from "../../pages/TodoPage.tsx";
-import TrackDetailPage from "../../pages/tracks/TrackDetailPage.tsx";
-import TracksListPage from "../../pages/tracks/TracksListPage.tsx";
-import TracksShell from "../../pages/tracks/TracksShell.tsx";
+
+// 除首屏时间轴外全部路由懒加载：recharts/@xyflow/markdown 等重依赖只在进入对应页面时才加载。
+const DiaryPage = lazy(() => import("../../pages/DiaryPage.tsx"));
+const StyleguidePage = lazy(() => import("../../pages/dev/StyleguidePage.tsx"));
+const EntryPage = lazy(() => import("../../pages/EntryPage.tsx"));
+const GoalDetailPage = lazy(() => import("../../pages/goals/GoalDetailPage.tsx"));
+const GoalsPage = lazy(() => import("../../pages/goals/GoalsPage.tsx"));
+const HealthStatsPage = lazy(() => import("../../pages/HealthStatsPage.tsx"));
+const QuickNotesPage = lazy(() => import("../../pages/QuickNotesPage.tsx"));
+const SettingsPage = lazy(() => import("../../pages/SettingsPage.tsx"));
+const StatsPage = lazy(() => import("../../pages/StatsPage.tsx"));
+const SettingsAdminInsightsPage = lazy(() => import("../../pages/settings/SettingsAdminInsightsPage.tsx"));
+const SettingsCategoriesPage = lazy(() => import("../../pages/settings/SettingsCategoriesPage.tsx"));
+const SettingsCategoryDetailPage = lazy(() => import("../../pages/settings/SettingsCategoryDetailPage.tsx"));
+const SettingsDataPage = lazy(() => import("../../pages/settings/SettingsDataPage.tsx"));
+const SettingsDiaryPage = lazy(() => import("../../pages/settings/SettingsDiaryPage.tsx"));
+const SettingsGarminPage = lazy(() => import("../../pages/settings/SettingsGarminPage.tsx"));
+const SettingsHealthRangePage = lazy(() => import("../../pages/settings/SettingsHealthRangePage.tsx"));
+const SettingsInsightsPage = lazy(() => import("../../pages/settings/SettingsInsightsPage.tsx"));
+const SettingsMorePage = lazy(() => import("../../pages/settings/SettingsMorePage.tsx"));
+const SettingsNavPage = lazy(() =>
+  import("../../pages/settings/SettingsNavPage.tsx").then((m) => ({ default: m.SettingsNavPage })),
+);
+const SettingsServerPage = lazy(() => import("../../pages/settings/SettingsServerPage.tsx"));
+const SettingsStatsLayoutPage = lazy(() => import("../../pages/settings/SettingsStatsLayoutPage.tsx"));
+const SettingsTodoGravityPage = lazy(() => import("../../pages/settings/SettingsTodoGravityPage.tsx"));
+const SettingsTracksPage = lazy(() =>
+  import("../../pages/settings/SettingsTracksPage.tsx").then((m) => ({ default: m.SettingsTracksPage })),
+);
+const TimeStatsPage = lazy(() => import("../../pages/TimeStatsPage.tsx"));
+const TodoPage = lazy(() => import("../../pages/TodoPage.tsx").then((m) => ({ default: m.TodoPage })));
+const TrackDetailPage = lazy(() => import("../../pages/tracks/TrackDetailPage.tsx"));
+const TracksListPage = lazy(() => import("../../pages/tracks/TracksListPage.tsx"));
+const TracksShell = lazy(() => import("../../pages/tracks/TracksShell.tsx"));
 
 export function AppRoutes() {
   return (
