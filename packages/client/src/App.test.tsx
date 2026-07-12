@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { prerender } from "react-dom/static";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
@@ -73,14 +73,28 @@ vi.mock("./pages/settings/SettingsNavPage.tsx", () => ({
   SettingsNavPage: () => createElement("div", null, "底部导航设置页"),
 }));
 
-function renderAppShell(initialEntry: string) {
-  return renderToStaticMarkup(
+async function readStreamToString(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let html = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    html += decoder.decode(value, { stream: true });
+  }
+  return html + decoder.decode();
+}
+
+// prerender 会等 Suspense/lazy 解析完再吐 HTML，路由懒加载后 renderToStaticMarkup 只能渲出 fallback。
+async function renderAppShell(initialEntry: string): Promise<string> {
+  const { prelude } = await prerender(
     createElement(
       MemoryRouter,
       { initialEntries: [initialEntry] },
       createElement(BottomNavProvider, null, createElement(AppShell)),
     ),
   );
+  return readStreamToString(prelude);
 }
 
 function installMobileMatchMedia() {
@@ -104,49 +118,49 @@ beforeEach(() => {
 });
 
 describe("AppShell settings routes", () => {
-  it("renders settings data route without bottom navigation", () => {
-    const html = renderAppShell("/settings/data");
+  it("renders settings data route without bottom navigation", async () => {
+    const html = await renderAppShell("/settings/data");
 
     expect(html).toContain("数据设置页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });
 
-  it("renders settings server route without bottom navigation", () => {
-    const html = renderAppShell("/settings/server");
+  it("renders settings server route without bottom navigation", async () => {
+    const html = await renderAppShell("/settings/server");
 
     expect(html).toContain("服务器配置页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });
 
-  it("renders settings insights route without bottom navigation", () => {
-    const html = renderAppShell("/settings/insights");
+  it("renders settings insights route without bottom navigation", async () => {
+    const html = await renderAppShell("/settings/insights");
 
     expect(html).toContain("数据洞察设置页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });
 
-  it("renders settings nav route without bottom navigation", () => {
-    const html = renderAppShell("/settings/nav");
+  it("renders settings nav route without bottom navigation", async () => {
+    const html = await renderAppShell("/settings/nav");
 
     expect(html).toContain("底部导航设置页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });
 
-  it("renders settings more route without bottom navigation", () => {
-    const html = renderAppShell("/settings/more");
+  it("renders settings more route without bottom navigation", async () => {
+    const html = await renderAppShell("/settings/more");
 
     expect(html).toContain("更多功能页");
     expect(html).not.toContain("时间轴");
     expect(html).not.toContain("统计");
   });
 
-  it("renders category settings routes without bottom navigation", () => {
-    const listHtml = renderAppShell("/settings/categories");
-    const detailHtml = renderAppShell("/settings/categories/category-1");
+  it("renders category settings routes without bottom navigation", async () => {
+    const listHtml = await renderAppShell("/settings/categories");
+    const detailHtml = await renderAppShell("/settings/categories/category-1");
 
     expect(listHtml).toContain("分类列表页");
     expect(detailHtml).toContain("分类详情页");
@@ -154,16 +168,16 @@ describe("AppShell settings routes", () => {
     expect(detailHtml).not.toContain("统计");
   });
 
-  it("renders the timeline and entry pages", () => {
-    const timelineHtml = renderAppShell("/");
-    const entryHtml = renderAppShell("/entries/new");
+  it("renders the timeline and entry pages", async () => {
+    const timelineHtml = await renderAppShell("/");
+    const entryHtml = await renderAppShell("/entries/new");
 
     expect(timelineHtml).toContain("时间轴页面");
     expect(entryHtml).toContain("记录页面");
   });
 
-  it("renders quick notes route and pure-icon bottom navigation entries", () => {
-    const html = renderAppShell("/quick-notes");
+  it("renders quick notes route and pure-icon bottom navigation entries", async () => {
+    const html = await renderAppShell("/quick-notes");
 
     expect(html).toContain("速记页面");
     expect(html).toContain('aria-label="记录"');
@@ -176,15 +190,15 @@ describe("AppShell settings routes", () => {
     expect(html).not.toContain(">时间轴</a>");
   });
 
-  it("renders todo route and bottom navigation entry", () => {
-    const html = renderAppShell("/todo");
+  it("renders todo route and bottom navigation entry", async () => {
+    const html = await renderAppShell("/todo");
 
     expect(html).toContain("待办页面");
     expect(html).toContain("待办");
   });
 
-  it("renders separate time and health stats routes", () => {
-    expect(renderAppShell("/stats/time")).toContain("时间统计页面");
-    expect(renderAppShell("/stats/health")).toContain("健康统计页面");
+  it("renders separate time and health stats routes", async () => {
+    expect(await renderAppShell("/stats/time")).toContain("时间统计页面");
+    expect(await renderAppShell("/stats/health")).toContain("健康统计页面");
   });
 });
