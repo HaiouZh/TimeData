@@ -137,6 +137,7 @@
   "dirty-in-clean-bucket:quick-notes/useQuickNoteTimeline.test.tsx",
   "dirty-in-clean-bucket:quick-notes/useUnsyncedQuickNoteIds.test.tsx",
   "dirty-in-clean-bucket:sync/engine.test.ts",
+  "dirty-in-clean-bucket:startup.test.ts",
   "dirty-in-clean-bucket:test/domHarness.test.tsx",
   "real-timer-wait:components/AndroidBackButtonHandler.test.tsx"
 ]
