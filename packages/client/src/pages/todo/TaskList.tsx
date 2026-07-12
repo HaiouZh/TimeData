@@ -97,7 +97,7 @@ export function TaskList(props: TaskListProps) {
     return (
       <SwipeableListItem
         key={task.id}
-        className="min-w-0 max-w-full mb-[3px] last:mb-0"
+        className="min-w-0 max-w-full mb-1 last:mb-0"
         leadingActions={leading}
         trailingActions={trailing}
         blockSwipe={!isCoarsePointer}
