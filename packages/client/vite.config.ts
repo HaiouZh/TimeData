@@ -73,6 +73,26 @@ export default defineConfig(({ mode }) => {
       __TIMEDATA_BUILD_ID__: JSON.stringify(buildId),
     },
     plugins,
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                // 框架层：极少升级，独立 chunk 让业务改动不刷缓存
+                name: "vendor-react",
+                test: /node_modules[\\/](?:react|react-dom|scheduler|react-router|react-router-dom)[\\/]/,
+              },
+              {
+                // 数据层：dexie/zod 全局必需
+                name: "vendor-data",
+                test: /node_modules[\\/](?:dexie|dexie-react-hooks|zod)[\\/]/,
+              },
+            ],
+          },
+        },
+      },
+    },
     resolve: {
       alias: isMobile
         ? {
