@@ -10,6 +10,7 @@ import {
 } from "./entitySchemas.js";
 import {
   SYNC_TABLE_NAMES,
+  TASK_DELETE_REASONS,
   buildSyncChangeSchema,
   buildTaskCompletionOpSchema,
   buildTrackStatusOpSchema,
@@ -45,6 +46,7 @@ export const SyncLogEntrySchema = z.object({
   // 0=待上传 1=已同步/已放弃 2=隔离（服务端持续拒收的死信，不再自动重发，等用户修正或重新入队）
   synced: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   op: z.union([buildTaskCompletionOpSchema(UtcIsoStringSchema), buildTrackStatusOpSchema(UtcIsoStringSchema)]).optional(),
+  deleteReason: z.enum(TASK_DELETE_REASONS).optional(),
 });
 
 // 运行时成员按登记簿生成；静态类型 SyncChange 在 types.ts 手工维护判别联合，二者由 schemas.test.ts 对齐。

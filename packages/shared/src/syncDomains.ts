@@ -172,6 +172,9 @@ export function buildTaskCompletionOpSchema(timestampSchema: z.ZodTypeAny): z.Zo
   });
 }
 
+/** tasks delete 死因标记：user=用户主动删；cascade=父项级联；occurrence=重复待办实例跳过态清理；mirror=镜像同步产生的删除。 */
+export const TASK_DELETE_REASONS = ["user", "cascade", "occurrence", "mirror"] as const;
+
 /** tracks status op：授权本变更写入 status 守卫列。 */
 export function buildTrackStatusOpSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeAny {
   return z.object({
@@ -198,7 +201,15 @@ export function buildSyncChangeSchema(timestampSchema: z.ZodTypeAny): z.ZodTypeA
         : domain.table === "tracks"
           ? upsert.extend({ op: trackStatusOpSchema.optional() })
           : upsert,
-      base.extend({ tableName: z.literal(domain.table), action: z.literal("delete"), data: z.null() }),
+      // 只有 tasks 的 delete 承载死因标记；其余域来包带 deleteReason 会被 zod strip。
+      domain.table === "tasks"
+        ? base.extend({
+            tableName: z.literal(domain.table),
+            action: z.literal("delete"),
+            data: z.null(),
+            deleteReason: z.enum(TASK_DELETE_REASONS).optional(),
+          })
+        : base.extend({ tableName: z.literal(domain.table), action: z.literal("delete"), data: z.null() }),
     ];
   });
   return z.union(members as never as [z.ZodTypeAny, z.ZodTypeAny, ...z.ZodTypeAny[]]);

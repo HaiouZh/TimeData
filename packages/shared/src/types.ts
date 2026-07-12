@@ -26,6 +26,9 @@ import type {
 } from "./schemas.js";
 import type { HealthChartConfig } from "./chartSchemas.js";
 import type { HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun } from "./healthSchemas.js";
+import type { TASK_DELETE_REASONS } from "./syncDomains.js";
+
+export type TaskDeleteReason = (typeof TASK_DELETE_REASONS)[number];
 
 export type Category = z.infer<typeof CategorySchema>;
 
@@ -104,7 +107,7 @@ export type SyncChange =
   | SyncUpsertChange<"quick_notes", QuickNote>
   | SyncDeleteChange<"quick_notes">
   | (SyncUpsertChange<"tasks", Task> & { op?: TaskCompletionOp })
-  | SyncDeleteChange<"tasks">
+  | (SyncDeleteChange<"tasks"> & { deleteReason?: TaskDeleteReason })
   | SyncUpsertChange<"health_heart_rate", HealthHeartRate>
   | SyncDeleteChange<"health_heart_rate">
   | SyncUpsertChange<"health_hrv", HealthHrv>

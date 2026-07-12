@@ -536,6 +536,42 @@ describe("SyncChangeSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts optional deleteReason on tasks delete", () => {
+    const parsed = SyncChangeSchema.parse({
+      tableName: "tasks",
+      recordId: "t1",
+      action: "delete",
+      data: null,
+      timestamp: "2026-07-04T00:00:00.000Z",
+      deleteReason: "user",
+    }) as { deleteReason?: string };
+    expect(parsed.deleteReason).toBe("user");
+  });
+
+  it("rejects unknown deleteReason value on tasks delete", () => {
+    const result = SyncChangeSchema.safeParse({
+      tableName: "tasks",
+      recordId: "t1",
+      action: "delete",
+      data: null,
+      timestamp: "2026-07-04T00:00:00.000Z",
+      deleteReason: "oops",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("strips deleteReason on non-tasks delete", () => {
+    const parsed = SyncChangeSchema.parse({
+      tableName: "goals",
+      recordId: "g1",
+      action: "delete",
+      data: null,
+      timestamp: "2026-07-04T00:00:00.000Z",
+      deleteReason: "user",
+    }) as { deleteReason?: string };
+    expect(parsed.deleteReason).toBeUndefined();
+  });
+
   it("rejects quick note upserts without valid quick note data", () => {
     expect(
       SyncChangeSchema.safeParse({
