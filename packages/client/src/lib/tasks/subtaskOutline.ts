@@ -1,3 +1,5 @@
+import { subtaskProgress } from "./subtasks.js";
+
 /**
  * 子任务分段进度描边的 dasharray 几何：描边贴着复选框圆角方形轮廓走（贴边、非外扩），
  * 组件用 SVG <rect rx> + pathLength 归一化到 100，段与缺口全靠 stroke-dasharray。
@@ -19,12 +21,13 @@ export interface OutlineDashes {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function subtaskOutlineDashes(total: number, done: number): OutlineDashes | null {
-  if (total <= 0) return null;
-  const clamped = Math.max(0, Math.min(done, total));
+  const ratio = subtaskProgress(done, total);
+  if (ratio == null) return null;
+  const clamped = Math.round(ratio * total);
   if (total > CONTINUOUS_THRESHOLD) {
     return {
       track: `${OUTLINE_PATH_LENGTH} 0`,
-      done: clamped === 0 ? null : `${r2((clamped / total) * OUTLINE_PATH_LENGTH)} ${OUTLINE_PATH_LENGTH}`,
+      done: clamped === 0 ? null : `${r2(ratio * OUTLINE_PATH_LENGTH)} ${OUTLINE_PATH_LENGTH}`,
       offset: 0,
     };
   }
@@ -36,6 +39,8 @@ export function subtaskOutlineDashes(total: number, done: number): OutlineDashes
   return {
     track: pair,
     done: clamped === 0 ? null : `${Array.from({ length: clamped }, () => pair).join(" ")} 0 ${OUTLINE_PATH_LENGTH}`,
-    offset: r2(gap / 2),
+    // 负 offset 让缺口跨段边界居中（含路径起点）；正 offset 会把首段推过路径起点，
+    // done 层（图案总长 > pathLength、不回卷）点不亮跨起点部分，全完成时描边露灰缝。
+    offset: r2(-gap / 2),
   };
 }

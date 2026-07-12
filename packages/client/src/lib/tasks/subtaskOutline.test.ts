@@ -11,7 +11,18 @@ describe("subtaskOutlineDashes", () => {
     const d = subtaskOutlineDashes(5, 2)!;
     expect(d.track).toBe("15 5");
     expect(d.done).toBe("15 5 15 5 0 100");
-    expect(d.offset).toBe(2.5);
+    expect(d.offset).toBe(-2.5);
+  });
+
+  it("offset 为负半缺口：缺口跨段边界居中，done 层不因图案不回卷而漏亮首段", () => {
+    // 回归：正 offset 会把首段推过路径起点，done 层（图案含 0 100 截断、总长>100）
+    // 点不亮跨起点部分，全完成时描边在路径起点处露灰缝。
+    for (const total of [2, 5, 12]) {
+      const d = subtaskOutlineDashes(total, total)!;
+      const [, gap] = d.track.split(" ").map(Number);
+      expect(d.offset).toBe(-gap / 2);
+      expect(d.offset).toBeLessThan(0);
+    }
   });
 
   it("0 完成时 done 为 null", () => {
