@@ -82,6 +82,44 @@ describe("recordSyncLog", () => {
       { tableName: "time_entries", recordId: "entry-1", action: "create", synced: 0 },
     ]);
   });
+
+  it("recordSyncLog stores deleteReason and push carries it on delete change", async () => {
+    await recordSyncLog("tasks", "task-del-1", "delete", undefined, undefined, "user");
+    const logs = await db.syncLog.where("recordId").equals("task-del-1").toArray();
+    expect(logs[0].deleteReason).toBe("user");
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [
+        {
+          tableName: "tasks",
+          recordId: "task-del-1",
+          action: "delete",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "applied",
+          incomingTimestamp: logs[0].timestamp,
+        },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: null,
+      serverTime: "2026-07-12T00:01:00.000Z",
+    });
+
+    await expect(syncPush()).resolves.toMatchObject({ accepted: 1, rejected: 0, conflicts: 0 });
+    const pushBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    expect(pushBody.changes).toEqual([
+      {
+        tableName: "tasks",
+        recordId: "task-del-1",
+        action: "delete",
+        data: null,
+        timestamp: logs[0].timestamp,
+        deleteReason: "user",
+      },
+    ]);
+  });
 });
 
 describe("写入触发下沉", () => {

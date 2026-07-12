@@ -516,6 +516,7 @@ export async function syncPush(): Promise<SyncPushResult> {
         action: "delete",
         data: null,
         timestamp: log.timestamp,
+        ...(log.deleteReason ? { deleteReason: log.deleteReason } : {}),
       } as SyncChange);
       continue;
     }
@@ -1116,6 +1117,7 @@ export async function recordSyncLog(
   action: "create" | "update" | "delete",
   timestamp = new Date().toISOString(),
   op?: SyncLogEntry["op"],
+  deleteReason?: SyncLogEntry["deleteReason"],
 ): Promise<void> {
   await db.syncLog.add({
     id: uuid(),
@@ -1125,6 +1127,7 @@ export async function recordSyncLog(
     timestamp,
     synced: 0,
     ...(op ? { op } : {}),
+    ...(deleteReason ? { deleteReason } : {}),
   });
   syncScheduler.notifyWrite();
 }
