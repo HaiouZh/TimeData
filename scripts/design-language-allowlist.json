@@ -3946,14 +3946,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/todo/TaskRow.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"mt-0.5 flex items-center gap-2 text-xs text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/todo/TodoComposer.tsx",
       "rule": "bare-text-size",
       "lineText": "className=\"min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-sm text-ink outline-none focus:border-accent\"",

@@ -1,14 +1,14 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { ArrowLeft, ArrowRight, CaretDown, CaretRight, DotsSixVertical, Repeat, Trash } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, CalendarBlank, CaretDown, CaretRight, DotsSixVertical, ListChecks, Repeat, Trash } from "@phosphor-icons/react";
 import { nextDueDate, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
-import { currentDueDateString } from "../../lib/tasks/recurrence.js";
+import { currentDueDateString, recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
-import { taskTimeLabel } from "../../lib/tasks/taskTimeLabel.js";
+import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProjection.js";
 import { tagColor } from "../../lib/tasks/turnTags.js";
 import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
@@ -135,6 +135,12 @@ export function TaskRow({
         : null
     : null;
   const passiveScheduled = pool === "upcoming" && !overdue;
+  const passiveDueLabel = passiveScheduled ? taskDueDateLabel(task, processedOccurrences) : null;
+  const dateChip = overdueDate
+    ? { label: formatYearAwareMonthDay(overdueDate), danger: true }
+    : passiveDueLabel
+      ? { label: passiveDueLabel, danger: false }
+      : null;
   const hasMeta =
     isRecurring || childTotal > 0 || overdueDate !== null || passiveScheduled || (task.tags ?? []).length > 0;
   const canSwapPool = task.recurrence === null && pool !== "completed";
@@ -261,24 +267,47 @@ export function TaskRow({
             {task.title}
           </span>
           {hasMeta && (
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-3">
-              {isRecurring && (
-                <span data-icon="repeat" aria-hidden="true">
-                  <Icon icon={Repeat} size={14} />
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 td-text-caption text-ink-3">
+              {task.recurrence && (
+                <span
+                  data-testid="repeat-chip"
+                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px text-ink-2"
+                >
+                  <span data-icon="repeat" aria-hidden="true" className="text-accent">
+                    <Icon icon={Repeat} size={12} />
+                  </span>
+                  {recurrenceSummary(task.recurrence)}
+                </span>
+              )}
+              {dateChip && (
+                <span
+                  data-testid="date-chip"
+                  className={`inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px ${
+                    dateChip.danger ? "text-danger" : "text-ink-2"
+                  }`}
+                >
+                  <span aria-hidden="true">
+                    <Icon icon={CalendarBlank} size={12} />
+                  </span>
+                  {dateChip.label}
                 </span>
               )}
               {childTotal > 0 && (
-                <span>
+                <span
+                  data-testid="subtask-chip"
+                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px text-ink-2"
+                >
+                  <span aria-hidden="true">
+                    <Icon icon={ListChecks} size={12} />
+                  </span>
                   {childDone}/{childTotal}
                 </span>
               )}
-              {overdueDate && <span className="text-danger">{formatYearAwareMonthDay(overdueDate)}</span>}
-              {passiveScheduled && <span>{taskTimeLabel(task, processedOccurrences)}</span>}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
                 <span
                   key={tag}
                   data-testid="tag-chip"
-                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-0.5 text-ink-2"
+                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px text-ink-2"
                 >
                   <span
                     data-tag-dot

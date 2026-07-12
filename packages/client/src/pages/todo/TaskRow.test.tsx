@@ -750,3 +750,30 @@ describe("子任务分段进度描边", () => {
     await unmount(root);
   });
 });
+
+describe("meta 胶囊", () => {
+  it("重复任务渲染重复胶囊：图标着 accent + 规则摘要文字（非 upcoming 池也有）", async () => {
+    const r = task({ recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: "2026-06-01T00:00:00.000Z" });
+    const { host, root } = await render(createElement(TaskRow, { task: r, pool: "recurring", ...handlers }));
+    const chip = host.querySelector('[data-testid="repeat-chip"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toContain("每天");
+    expect(chip?.querySelector('[data-icon="repeat"]')?.className).toContain("text-accent");
+    await unmount(root);
+  });
+
+  it("逾期日期渲染在日期胶囊内且整体 danger", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ id: "occ:r1:2026-06-14", ruleId: "r1", scheduledAt: "2026-06-14T00:00:00.000Z" }),
+        pool: "today",
+        overdue: true,
+        ...handlers,
+      }),
+    );
+    const chip = host.querySelector('[data-testid="date-chip"]');
+    expect(chip?.className).toContain("text-danger");
+    expect(chip?.textContent).toBe("6月14日");
+    await unmount(root);
+  });
+});
