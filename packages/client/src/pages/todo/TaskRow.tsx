@@ -13,6 +13,7 @@ import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProject
 import { tagColor } from "../../lib/tasks/turnTags.js";
 import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
+import { SubtaskOutline } from "./SubtaskOutline.js";
 import { useLatestOccurrenceChildren } from "./useLatestOccurrenceChildren.js";
 import { useTaskChildren } from "./useTaskChildren.js";
 
@@ -125,6 +126,7 @@ export function TaskRow({
     ? projectTemplateChildren(children, latestOccurrence, occurrenceChildren).filter((entry) => entry.effectiveDone)
         .length
     : children.filter((c) => c.done).length;
+  const outlineActive = childTotal > 0 && !checked;
   const overdueDate = overdue
     ? task.recurrence
       ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt)
@@ -239,7 +241,9 @@ export function TaskRow({
               }}
               disabled={isRecurring && !ruleCanComplete}
               className="shrink-0"
+              frameless={outlineActive}
             />
+            {outlineActive && <SubtaskOutline total={childTotal} done={childDone} />}
           </div>
           <span
             data-testid={childTotal > 0 ? "subtask-caret" : "task-row-left-indicator"}

@@ -704,3 +704,49 @@ describe("TaskRow", () => {
     });
   });
 });
+
+describe("子任务分段进度描边", () => {
+  it("有子任务且未完成：复选框边框变分段描边，点亮层反映完成数", async () => {
+    const parent = await addTask({ title: "父" });
+    await createChildTask(parent.id, "子1");
+    const c2 = await createChildTask(parent.id, "子2");
+    await toggleTaskDone(c2.id);
+    const fresh = (await db.tasks.get(parent.id))!;
+
+    const { host, root } = await render(createElement(TaskRow, { task: fresh, pool: "inbox", ...handlers }));
+    await settle();
+    const outline = host.querySelector('[data-testid="subtask-outline"]');
+    expect(outline).not.toBeNull();
+    const track = outline!.querySelector("rect.stroke-border, rect[class*='stroke-border']");
+    const lit = outline!.querySelector("rect[class*='stroke-accent']");
+    expect(track).not.toBeNull();
+    expect(lit).not.toBeNull();
+    // 2 段中 1 段完成：unit=50、gap=6、seg=44 -> done 显式列表一组
+    expect(lit?.getAttribute("stroke-dasharray")).toBe("44 6 0 100");
+    // 复选框自带边框被隐藏，缺口处露行底色
+    const box = host.querySelector('input[type="checkbox"] + span') as HTMLElement;
+    expect(box.className).toContain("border-transparent");
+    await unmount(root);
+  });
+
+  it("无子任务不渲染描边，复选框保留自带边框", async () => {
+    const { host, root } = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
+    await settle();
+    expect(host.querySelector('[data-testid="subtask-outline"]')).toBeNull();
+    const box = host.querySelector('input[type="checkbox"] + span') as HTMLElement;
+    expect(box.className).not.toContain("border-transparent");
+    await unmount(root);
+  });
+
+  it("任务已完成不渲染描边", async () => {
+    const parent = await addTask({ title: "父" });
+    await createChildTask(parent.id, "子1");
+    await db.tasks.update(parent.id, { done: true });
+    const fresh = (await db.tasks.get(parent.id))!;
+
+    const { host, root } = await render(createElement(TaskRow, { task: fresh, pool: "completed", ...handlers }));
+    await settle();
+    expect(host.querySelector('[data-testid="subtask-outline"]')).toBeNull();
+    await unmount(root);
+  });
+});
