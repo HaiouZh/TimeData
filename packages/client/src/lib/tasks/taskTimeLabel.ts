@@ -17,3 +17,16 @@ export function taskTimeLabel(task: TaskTimeLabelInput, processedOccurrences: Ta
   if (task.scheduledAt) return formatYearAwareMonthDay(getDateString(new Date(task.scheduledAt)));
   return "设定时间";
 }
+
+/** 只返回日期部分（重复=下一应发生日/耗尽 null；非重复=排期日或"设定时间"），供 TaskRow 日期胶囊用。 */
+export function taskDueDateLabel(task: TaskTimeLabelInput, processedOccurrences: Task[] = []): string | null {
+  if (task.recurrence) {
+    const dueDate =
+      processedOccurrences.length > 0
+        ? nextDueDate(task as Task, processedOccurrences)
+        : currentDueDateString(task.recurrence, task.lastDoneAt ?? null, task.startAt ?? null);
+    return dueDate == null ? null : formatYearAwareMonthDay(dueDate);
+  }
+  if (task.scheduledAt) return formatYearAwareMonthDay(getDateString(new Date(task.scheduledAt)));
+  return "设定时间";
+}

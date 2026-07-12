@@ -1,7 +1,7 @@
 import type { Recurrence } from "@timedata/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recurrenceSummary } from "./recurrence.js";
-import { taskTimeLabel } from "./taskTimeLabel.js";
+import { taskDueDateLabel, taskTimeLabel } from "./taskTimeLabel.js";
 
 describe("taskTimeLabel", () => {
   beforeEach(() => {
@@ -41,5 +41,26 @@ describe("taskTimeLabel", () => {
 
     expect(label).toBe(`${recurrenceSummary(recurrence)} · 6月20日`);
     expect(label).not.toBe("设定时间");
+  });
+});
+
+describe("taskDueDateLabel", () => {
+  it("重复任务只返回日期部分，不含重复摘要", () => {
+    const label = taskDueDateLabel({
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      scheduledAt: null,
+      lastDoneAt: null,
+      startAt: "2099-12-31T00:00:00.000Z",
+    });
+    expect(label).toBe("2099年12月31日");
+    expect(label).not.toContain("每天");
+  });
+
+  it("非重复已排期返回日期串", () => {
+    expect(taskDueDateLabel({ recurrence: null, scheduledAt: "2026-06-20T00:00:00.000Z" })).toBe("6月20日");
+  });
+
+  it("非重复未排期返回设定时间", () => {
+    expect(taskDueDateLabel({ recurrence: null, scheduledAt: null })).toBe("设定时间");
   });
 });
