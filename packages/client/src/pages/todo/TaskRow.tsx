@@ -49,6 +49,13 @@ export interface TaskRowProps {
 const FRESH_OCCURRENCE_MS = 4000;
 const RULE_COMPLETE_FLASH_MS = 1000;
 
+/**
+ * meta 胶囊统一底盘。底色用 surface-elevated 而非 surface-hover：后者与行 hover/缩进高亮同色，
+ * 悬停时胶囊边界会整体隐形。文字色由各胶囊追加（text-ink-2 / 逾期 text-danger），
+ * 不放进底盘避免同属性 utility 冲突。
+ */
+const META_CHIP_CLASS = "inline-flex items-center gap-1 rounded-pill bg-surface-elevated px-1.5 py-px";
+
 type FreshOccurrenceInput = Pick<Task, "createdAt" | "done" | "recurrence" | "ruleId" | "skipped">;
 
 function childModeForPool(pool: TaskPool): InlineChildrenMode {
@@ -126,7 +133,9 @@ export function TaskRow({
     ? projectTemplateChildren(children, latestOccurrence, occurrenceChildren).filter((entry) => entry.effectiveDone)
         .length
     : children.filter((c) => c.done).length;
-  const outlineActive = childTotal > 0 && !checked;
+  // 耗尽规则（不可勾）不画描边：描边在 Checkbox 的 label 外，不吃 disabled 的 opacity-40，
+  // frameless 又藏掉调暗的边框，否则禁用复选框会顶着一圈全亮描边、看似可点。
+  const outlineActive = childTotal > 0 && !checked && (!isRecurring || ruleCanComplete);
   const overdueDate = overdue
     ? task.recurrence
       ? currentDueDateString(task.recurrence, task.lastDoneAt, task.startAt)
@@ -141,8 +150,8 @@ export function TaskRow({
     : passiveDueLabel
       ? { label: passiveDueLabel, danger: false }
       : null;
-  const hasMeta =
-    isRecurring || childTotal > 0 || overdueDate !== null || passiveScheduled || (task.tags ?? []).length > 0;
+  // isRecurring 兜住"重复但耗尽无日期"的场景（此时 dateChip 为 null 但 repeat 胶囊仍要渲染）。
+  const hasMeta = isRecurring || childTotal > 0 || dateChip !== null || (task.tags ?? []).length > 0;
   const canSwapPool = task.recurrence === null && pool !== "completed";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
   const showInlineChildren = expanded && childTotal > 0;
@@ -269,10 +278,7 @@ export function TaskRow({
           {hasMeta && (
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 td-text-caption text-ink-3">
               {task.recurrence && (
-                <span
-                  data-testid="repeat-chip"
-                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px text-ink-2"
-                >
+                <span data-testid="repeat-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
                   <span data-icon="repeat" aria-hidden="true" className="text-accent">
                     <Icon icon={Repeat} size={12} />
                   </span>
@@ -282,9 +288,8 @@ export function TaskRow({
               {dateChip && (
                 <span
                   data-testid="date-chip"
-                  className={`inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px ${
-                    dateChip.danger ? "text-danger" : "text-ink-2"
-                  }`}
+                  data-danger={dateChip.danger ? "true" : undefined}
+                  className={`${META_CHIP_CLASS} ${dateChip.danger ? "text-danger" : "text-ink-2"}`}
                 >
                   <span aria-hidden="true">
                     <Icon icon={CalendarBlank} size={12} />
@@ -293,10 +298,7 @@ export function TaskRow({
                 </span>
               )}
               {childTotal > 0 && (
-                <span
-                  data-testid="subtask-chip"
-                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px text-ink-2"
-                >
+                <span data-testid="subtask-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
                   <span aria-hidden="true">
                     <Icon icon={ListChecks} size={12} />
                   </span>
@@ -304,11 +306,7 @@ export function TaskRow({
                 </span>
               )}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
-                <span
-                  key={tag}
-                  data-testid="tag-chip"
-                  className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-1.5 py-px text-ink-2"
-                >
+                <span key={tag} data-testid="tag-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
                   <span
                     data-tag-dot
                     aria-hidden="true"

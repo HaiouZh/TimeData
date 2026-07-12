@@ -97,7 +97,7 @@ export function TaskList(props: TaskListProps) {
     return (
       <SwipeableListItem
         key={task.id}
-        className="min-w-0 max-w-full mb-1 last:mb-0"
+        className="min-w-0 max-w-full"
         leadingActions={leading}
         trailingActions={trailing}
         blockSwipe={!isCoarsePointer}
@@ -115,7 +115,9 @@ export function TaskList(props: TaskListProps) {
   }
 
   const list = (
-    <SwipeableList className="min-w-0 overflow-x-clip" type={ListType.IOS} fullSwipe={false} threshold={0.3}>
+    // 行缝声明在容器（space-y）而非逐项 margin：不依赖库把 className 挂到直接子元素
+    // 尾部无兄弟节点的 DOM 假设，也省掉 last: 补丁。
+    <SwipeableList className="min-w-0 space-y-1 overflow-x-clip" type={ListType.IOS} fullSwipe={false} threshold={0.3}>
       {tasks.map((task) => renderItem(task))}
     </SwipeableList>
   );

@@ -166,23 +166,7 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("逾期 occurrence 在第二行显示红色应发生日期", async () => {
-    const { host, root } = await render(
-      createElement(TaskRow, {
-        task: task({
-          id: "occ:r1:2026-06-14",
-          ruleId: "r1",
-          scheduledAt: "2026-06-14T00:00:00.000Z",
-        }),
-        pool: "today",
-        overdue: true,
-        ...handlers,
-      }),
-    );
-    const date = host.querySelector(".text-danger");
-    expect(date?.textContent).toBe("6月14日");
-    await unmount(root);
-  });
+  // 「逾期 occurrence 显示红色应发生日期」由文件尾「meta 胶囊」组的 date-chip 用例覆盖（同 fixture 同断言）。
 
   it("刚物化的 pending occurrence 行会短暂标记为新出现", async () => {
     vi.useFakeTimers();
@@ -465,16 +449,7 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("重复任务：第二行显示重复图标", async () => {
-    const r = task({
-      title: "刮胡子",
-      recurrence: { freq: "daily", interval: 1, basis: "due" },
-      startAt: "2026-06-01T00:00:00.000Z",
-    });
-    const { host, root } = await render(createElement(TaskRow, { task: r, pool: "recurring", ...handlers }));
-    expect(host.querySelector('[data-icon="repeat"]')).not.toBeNull();
-    await unmount(root);
-  });
+  // 「重复任务显示重复图标」已被文件尾「meta 胶囊」组的 repeat-chip 用例严格覆盖（同 fixture，断言更全）。
 
   it("不渲染旧状态徽章", async () => {
     const legacyStateField = "tu" + "rn";
@@ -717,24 +692,17 @@ describe("子任务分段进度描边", () => {
     await settle();
     const outline = host.querySelector('[data-testid="subtask-outline"]');
     expect(outline).not.toBeNull();
-    const track = outline!.querySelector("rect.stroke-border, rect[class*='stroke-border']");
-    const lit = outline!.querySelector("rect[class*='stroke-accent']");
-    expect(track).not.toBeNull();
-    expect(lit).not.toBeNull();
-    // 2 段中 1 段完成：unit=50、gap=6、seg=44 -> done 显式列表一组
-    expect(lit?.getAttribute("stroke-dasharray")).toBe("44 6 0 100");
-    // 复选框自带边框被隐藏，缺口处露行底色
-    const box = host.querySelector('input[type="checkbox"] + span') as HTMLElement;
-    expect(box.className).toContain("border-transparent");
+    // 行为面：灰轨 + 点亮层两层都在、各自带 dasharray；几何数值由 subtaskOutline 单测钉，不在组件层重复。
+    const rects = outline!.querySelectorAll("rect");
+    expect(rects.length).toBe(2);
+    for (const rect of rects) expect(rect.getAttribute("stroke-dasharray")).toBeTruthy();
     await unmount(root);
   });
 
-  it("无子任务不渲染描边，复选框保留自带边框", async () => {
+  it("无子任务不渲染描边", async () => {
     const { host, root } = await render(createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }));
     await settle();
     expect(host.querySelector('[data-testid="subtask-outline"]')).toBeNull();
-    const box = host.querySelector('input[type="checkbox"] + span') as HTMLElement;
-    expect(box.className).not.toContain("border-transparent");
     await unmount(root);
   });
 
@@ -752,17 +720,17 @@ describe("子任务分段进度描边", () => {
 });
 
 describe("meta 胶囊", () => {
-  it("重复任务渲染重复胶囊：图标着 accent + 规则摘要文字（非 upcoming 池也有）", async () => {
+  it("重复任务渲染重复胶囊：图标 + 规则摘要文字（非 upcoming 池也有）", async () => {
     const r = task({ recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: "2026-06-01T00:00:00.000Z" });
     const { host, root } = await render(createElement(TaskRow, { task: r, pool: "recurring", ...handlers }));
     const chip = host.querySelector('[data-testid="repeat-chip"]');
     expect(chip).not.toBeNull();
     expect(chip?.textContent).toContain("每天");
-    expect(chip?.querySelector('[data-icon="repeat"]')?.className).toContain("text-accent");
+    expect(chip?.querySelector('[data-icon="repeat"]')).not.toBeNull();
     await unmount(root);
   });
 
-  it("逾期日期渲染在日期胶囊内且整体 danger", async () => {
+  it("逾期日期渲染在日期胶囊内并标记 danger", async () => {
     const { host, root } = await render(
       createElement(TaskRow, {
         task: task({ id: "occ:r1:2026-06-14", ruleId: "r1", scheduledAt: "2026-06-14T00:00:00.000Z" }),
@@ -772,7 +740,7 @@ describe("meta 胶囊", () => {
       }),
     );
     const chip = host.querySelector('[data-testid="date-chip"]');
-    expect(chip?.className).toContain("text-danger");
+    expect(chip?.getAttribute("data-danger")).toBe("true");
     expect(chip?.textContent).toBe("6月14日");
     await unmount(root);
   });

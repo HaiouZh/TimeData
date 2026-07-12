@@ -220,14 +220,16 @@ samp {
   overflow-y: visible;
 }
 
+/* 本类无层级、会压过 utilities 层的行常驻 bg-surface，故 accent 一律混在 surface 上
+   而不是 transparent 上：否则 fresh 窗口内行底掉回 page 深底、比邻行更暗，结束时再跳变。 */
 @keyframes todo-occurrence-arrive {
   from {
-    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+    background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface));
     box-shadow: inset 2px 0 0 var(--color-accent);
     transform: translateY(3px);
   }
   to {
-    background: transparent;
+    background: var(--color-surface);
     box-shadow: inset 2px 0 0 transparent;
     transform: translateY(0);
   }
@@ -235,7 +237,7 @@ samp {
 
 .todo-occurrence-fresh {
   animation: todo-occurrence-arrive var(--duration-slow) var(--ease-emphasized);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent) 65%, transparent);
 }
 
