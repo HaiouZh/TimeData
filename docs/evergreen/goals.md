@@ -29,8 +29,9 @@ contracts:
   - packages/shared/src/goalLayoutPins.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-12
 ---
+<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/syncDomains.ts、server/src/sync/domains.ts 为 tasks 域新增 archiveDelete 钩子与 deleteReason 字段，goals 域未受影响。 -->
 
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared Task schema 与 tasks 同步域映射；Goal.members 仍只引用 Task/Track 身份，不消费 weight，也不改变目标 roll-up。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：Task 完成字段同步守卫不改变 Goal.members 引用、项目完成度读取口径或目标布局钉点同步域。 -->

@@ -18,8 +18,9 @@ contracts:
   - packages/shared/src/types.ts:Category
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/constants.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-12
 ---
+<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/types.ts 为 tasks delete change 新增可选 deleteReason 字段，categories/settings 契约未受影响。 -->
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
 <!-- 复核 2026-07-02（S2 调度重做）：useCategories.ts 内部把手拼 syncLog bulkAdd 换成 recordSyncLogs helper，触发同步的方式改为自动调度（见 sync.md），但本文档描述的分类/设置字段、mutation 语义、排序安全闸均不变，无需改动。 -->

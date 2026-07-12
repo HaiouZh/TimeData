@@ -22,8 +22,9 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-12
 ---
+<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts 新增 tasks-only 可选 deleteReason 枚举、server/src/db/schema.ts 新增只写不读的 deleted_tasks_archive 表；不改动本文档描述的数据模型/契约，纯审计侧写。 -->
 
 <!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用，属触发下沉（见 sync.md），不改变本文档描述的数据契约、schema 归一或映射约定，无需改动。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：SyncLogEntry / tasks SyncChange 新增可选 op 授权标志，Dexie syncLog 不新增索引、不升版本；Task 实体字段和 SQLite tasks 表结构不变。 -->

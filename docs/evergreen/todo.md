@@ -36,8 +36,9 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-12
 ---
+<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts/syncDomains.ts 新增 tasks delete change 可选 deleteReason 枚举字段，仅服务端归档消费，不改动待办数据契约/语义。 -->
 
 # 待办任务
 

@@ -22,8 +22,9 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-12
 ---
+<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts/syncDomains.ts、server/src/sync/domains.ts、shared/src/types.ts 为 tasks 域新增可选 deleteReason 字段与服务端 archiveDelete 钩子，不新增/改变运行时同步域数量或登记簿结构。 -->
 
 # 同步 · 域登记簿
 
