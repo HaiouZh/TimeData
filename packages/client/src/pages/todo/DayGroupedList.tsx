@@ -32,7 +32,7 @@ export function DayGroupedList({
   }
 
   return (
-    <div className="rounded-card bg-surface p-1.5">
+    <div className="rounded-card p-1.5">
       {visible.map((segment) => (
         <div key={segment.key}>
           <div className="flex items-center gap-2 px-2 pt-2 pb-1">

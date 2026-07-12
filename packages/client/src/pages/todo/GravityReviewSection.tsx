@@ -106,7 +106,7 @@ export function GravityReviewSection({
         {batch.length === 0 ? (
           <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">水下暂时没有可翻的任务</p>
         ) : (
-          <div className="rounded-card bg-surface p-1.5">
+          <div className="rounded-card p-1.5">
             <TaskList
               pool="inbox"
               tasks={batch}

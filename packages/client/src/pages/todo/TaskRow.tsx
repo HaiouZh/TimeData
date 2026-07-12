@@ -186,7 +186,7 @@ export function TaskRow({
     <div
       data-in-goal={inGoal ? "true" : undefined}
       data-fresh-occurrence={freshOccurrence ? "true" : undefined}
-      className={`group w-full rounded-row transition hover:bg-surface-hover ${
+      className={`group w-full rounded-row bg-surface transition hover:bg-surface-hover ${
         indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
       } ${freshOccurrence ? "todo-occurrence-fresh" : ""}`}
     >

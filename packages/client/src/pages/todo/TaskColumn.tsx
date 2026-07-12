@@ -18,7 +18,7 @@ export function TaskColumn(props: TaskColumnProps) {
       {tasks.length === 0 ? (
         <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">{emptyText}</p>
       ) : (
-        <div className="rounded-card bg-surface p-1.5">
+        <div className="rounded-card p-1.5">
           <TaskList pool={pool} tasks={tasks} {...listProps} />
         </div>
       )}

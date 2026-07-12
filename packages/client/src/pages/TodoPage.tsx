@@ -502,7 +502,7 @@ export function TodoPage() {
       {scheduledFiltered.length === 0 ? (
         <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">没有已排期任务</p>
       ) : (
-        <div className="rounded-card bg-surface p-1.5">
+        <div className="rounded-card p-1.5">
           {scheduledSurface.length > 0 && <TaskList pool="upcoming" tasks={scheduledSurface} {...rowHandlers} />}
           <SunkenScheduledTail sunkenTasks={scheduledSunken} {...rowHandlers} />
         </div>

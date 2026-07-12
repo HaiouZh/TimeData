@@ -36,7 +36,7 @@ export function SunkenInboxTail({
   const segments = groupInboxByDay(sunkenTasks);
 
   return (
-    <div className="mt-1 rounded-card bg-surface p-1.5">
+    <div className="mt-1 rounded-card p-1.5">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
