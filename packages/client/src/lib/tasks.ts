@@ -6,6 +6,7 @@ import {
   nextDueDate,
   type Recurrence,
   type Task,
+  type TaskDeleteReason,
   TaskSchema,
 } from "@timedata/shared";
 import { v4 as uuid } from "uuid";
@@ -61,12 +62,17 @@ async function putTask(next: Task): Promise<Task> {
   return next;
 }
 
-async function deleteTaskAndChildrenInCurrentTransaction(taskId: string): Promise<void> {
+async function deleteTaskAndChildrenInCurrentTransaction(
+  taskId: string,
+  reason: TaskDeleteReason,
+): Promise<void> {
   const children = await db.tasks.where("parentId").equals(taskId).toArray();
+  const childReason: TaskDeleteReason = reason === "user" ? "cascade" : reason;
   const ids = [taskId, ...children.map((child) => child.id)];
   await db.tasks.bulkDelete(ids);
-  for (const id of ids) {
-    await recordSyncLog("tasks", id, "delete");
+  await recordSyncLog("tasks", taskId, "delete", undefined, undefined, reason);
+  for (const child of children) {
+    await recordSyncLog("tasks", child.id, "delete", undefined, undefined, childReason);
   }
 }
 
@@ -74,7 +80,7 @@ async function deleteTaskAndChildrenInCurrentTransaction(taskId: string): Promis
 async function deleteActiveOccurrencesInCurrentTransaction(ruleId: string): Promise<void> {
   const stale = (await db.tasks.where("ruleId").equals(ruleId).toArray()).filter((o) => !o.done && !o.skipped);
   for (const o of stale) {
-    await deleteTaskAndChildrenInCurrentTransaction(o.id);
+    await deleteTaskAndChildrenInCurrentTransaction(o.id, "occurrence");
   }
 }
 
@@ -530,7 +536,7 @@ export async function toggleTaskDone(id: string, options: { now?: Date } = {}): 
         (o) => o.id !== base.id && !o.done && !o.skipped,
       );
       for (const o of others) {
-        await deleteTaskAndChildrenInCurrentTransaction(o.id);
+        await deleteTaskAndChildrenInCurrentTransaction(o.id, "occurrence");
       }
       await db.tasks.put(reopened);
       await recordSyncLog("tasks", reopened.id, "update", reopened.updatedAt, completionOp(base, reopened, reopened.updatedAt));
@@ -690,7 +696,7 @@ export async function moveTaskToParent(taskId: string, newParentId: string, now:
 export async function deleteTask(id: string): Promise<void> {
   await db.transaction("rw", db.tasks, db.syncLog, async () => {
     await db.tasks.delete(id);
-    await recordSyncLog("tasks", id, "delete");
+    await recordSyncLog("tasks", id, "delete", undefined, undefined, "user");
   });
 }
 
@@ -714,18 +720,13 @@ export async function deleteTaskCascade(taskId: string): Promise<void> {
           const mirrorId = occurrenceChildId(occ.id, taskId);
           if ((await db.tasks.get(mirrorId)) !== undefined) {
             await db.tasks.delete(mirrorId);
-            await recordSyncLog("tasks", mirrorId, "delete");
+            await recordSyncLog("tasks", mirrorId, "delete", undefined, undefined, "mirror");
           }
         }
       }
     }
 
-    const children = await db.tasks.where("parentId").equals(taskId).toArray();
-    const ids = [taskId, ...children.map((child) => child.id)];
-    await db.tasks.bulkDelete(ids);
-    for (const id of ids) {
-      await recordSyncLog("tasks", id, "delete");
-    }
+    await deleteTaskAndChildrenInCurrentTransaction(taskId, "user");
   });
 }
 

@@ -538,6 +538,18 @@ describe("independent child task helpers", () => {
       ]),
     );
   });
+
+  it("deleteTaskCascade 打 user/cascade 死因标记", async () => {
+    const parent = await addTask({ title: "父任务" });
+    const child = await createChildTask(parent.id, "子任务");
+    await db.syncLog.clear();
+
+    await deleteTaskCascade(parent.id);
+
+    const logs = await db.syncLog.filter((l) => l.action === "delete").toArray();
+    expect(logs.find((l) => l.recordId === parent.id)?.deleteReason).toBe("user");
+    expect(logs.find((l) => l.recordId === child.id)?.deleteReason).toBe("cascade");
+  });
 });
 
 describe("终止式重复 toggle", () => {
@@ -1288,6 +1300,22 @@ describe("deleteTaskCascade 规则级联", () => {
     expect(log.some((l) => l.action === "delete")).toBe(true);
   });
 
+  it("删规则清旧发打 occurrence 死因标记", async () => {
+    const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
+    await createChildTask(rule.id, "补铁", day1);
+    await runMaterialization(day1);
+    const occA = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    const occAChild = await db.tasks.where("parentId").equals(occA.id).first();
+    await db.syncLog.clear();
+
+    await deleteTaskCascade(rule.id);
+
+    const logs = await db.syncLog.filter((l) => l.action === "delete").toArray();
+    expect(logs.find((l) => l.recordId === occA.id)?.deleteReason).toBe("occurrence");
+    expect(logs.find((l) => l.recordId === occAChild?.id)?.deleteReason).toBe("occurrence");
+    expect(logs.find((l) => l.recordId === rule.id)?.deleteReason).toBe("user");
+  });
+
   it("删模板子任务：连清 active 发里的镜像子任务，done 发的镜像不动（#6）", async () => {
     const rule = await addTask({ title: "晨间例行", recurrence: { freq: "daily", interval: 1, basis: "due" }, now: day1 });
     const c1 = await createChildTask(rule.id, "补铁", day1);
@@ -1297,6 +1325,7 @@ describe("deleteTaskCascade 规则级联", () => {
     await toggleTaskDone(occA.id, { now: day1 });
     await runMaterialization(day2);
     const occB = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((o) => !o.done && !o.skipped)!;
+    await db.syncLog.clear();
 
     await deleteTaskCascade(c1.id);
 
@@ -1304,6 +1333,8 @@ describe("deleteTaskCascade 规则级联", () => {
     await expect(db.tasks.get(`${occB.id}:child:${c1.id}`)).resolves.toBeUndefined(); // active 镜像清掉
     await expect(db.tasks.get(`${occB.id}:child:${c2.id}`)).resolves.toBeDefined(); // 兄弟镜像不动
     await expect(db.tasks.get(`${occA.id}:child:${c1.id}`)).resolves.toBeDefined(); // done 发镜像留
+    const logs = await db.syncLog.filter((l) => l.action === "delete").toArray();
+    expect(logs.find((l) => l.recordId === `${occB.id}:child:${c1.id}`)?.deleteReason).toBe("mirror");
   });
 
   it("普通任务/普通子任务的级联删除行为不变", async () => {
