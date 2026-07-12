@@ -75,7 +75,10 @@ export function TaskList(props: TaskListProps) {
       canSwap && (pool === "inbox" || pool === "upcoming") ? (
         <LeadingActions>
           <SwipeAction onClick={() => props.onToToday(task)}>
-            <div className="flex h-full items-center bg-accent-strong px-4 text-sm font-medium text-page">排进今天</div>
+            {/* 行卡片化后动作色块跟随行圆角，避免直角块贴圆角卡透出底色缺口 */}
+            <div className="flex h-full items-center rounded-row bg-accent-strong px-4 td-text-label font-medium text-page">
+              排进今天
+            </div>
           </SwipeAction>
         </LeadingActions>
       ) : undefined;
@@ -83,13 +86,13 @@ export function TaskList(props: TaskListProps) {
       <TrailingActions>
         {canSwap && pool === "today" && (
           <SwipeAction onClick={() => props.onToInbox(task)}>
-            <div className="flex h-full items-center bg-surface-elevated px-4 text-sm font-medium text-ink">
+            <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
               回收件箱
             </div>
           </SwipeAction>
         )}
         <SwipeAction destructive onClick={() => props.onDelete(task)}>
-          <div className="flex h-full items-center bg-danger px-4 text-sm font-medium text-page">删除</div>
+          <div className="flex h-full items-center rounded-row bg-danger px-4 td-text-label font-medium text-page">删除</div>
         </SwipeAction>
       </TrailingActions>
     );

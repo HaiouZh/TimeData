@@ -3914,30 +3914,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/todo/TaskList.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"flex h-full items-center bg-accent-strong px-4 text-sm font-medium text-page\">排进今天</div>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/todo/TaskList.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"flex h-full items-center bg-surface-elevated px-4 text-sm font-medium text-ink\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/todo/TaskList.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"flex h-full items-center bg-danger px-4 text-sm font-medium text-page\">删除</div>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/todo/TaskRow.tsx",
       "rule": "bare-text-size",
       "lineText": "<span className={`select-text break-words text-sm ${checked ? \"text-ink-3 line-through\" : \"text-ink\"}`}>",
