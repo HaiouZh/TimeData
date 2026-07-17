@@ -314,6 +314,18 @@ describe("SyncProvider", () => {
     expect(setExecutorSpy).toHaveBeenLastCalledWith(null);
   });
 
+  it("挂载注册 executor 后无条件请求一次 startup 同步（冷启动首拉不依赖 SSE hello）", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+
+    expect(requestSyncSpy).toHaveBeenCalledWith("startup");
+
+    await unmount(root);
+  });
+
   it("does not register an executor when cloud sync is disabled or apiUrl is empty", async () => {
     const setExecutorSpy = vi.spyOn(syncScheduler, "setExecutor");
 

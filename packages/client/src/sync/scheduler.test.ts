@@ -226,6 +226,24 @@ describe("createSyncScheduler", () => {
     scheduler.dispose();
   });
 
+  it("退避窗口内 resume 破例安排同步（用户打开 app 优先于退避等待）", async () => {
+    const executor = vi.fn().mockResolvedValueOnce({ ok: false, retryAfterMs: 90_000 }).mockResolvedValueOnce(true);
+    const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });
+    scheduler.setExecutor(executor);
+    await vi.advanceTimersByTimeAsync(0);
+
+    scheduler.requestSync("bump");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(executor).toHaveBeenCalledTimes(1);
+
+    scheduler.requestSync("resume");
+    await vi.advanceTimersByTimeAsync(SYNC_SCHEDULE_DEBOUNCE_MS);
+    expect(executor).toHaveBeenCalledTimes(2);
+    expect(executor.mock.calls[1][0].reason).toBe("resume");
+
+    scheduler.dispose();
+  });
+
   it("executor reject 也进入退避重试", async () => {
     const executor = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(true);
     const scheduler = createSyncScheduler({ getUnsyncedCount: async () => 0 });

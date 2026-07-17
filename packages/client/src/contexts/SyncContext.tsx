@@ -99,6 +99,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastRunFailedRef.current = !syncExecutorSucceeded(outcome);
       return outcome;
     });
+    // 冷启动首拉不押注 SSE hello：注册即无条件踢一次同步（高延迟链路上 hello 可能几十秒不到甚至不来）
+    syncScheduler.requestSync("startup");
     return () => syncScheduler.setExecutor(null);
   }, [cloudSyncEnabled, apiUrl]);
 

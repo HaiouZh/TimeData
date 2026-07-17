@@ -110,7 +110,8 @@ export function createSyncScheduler(deps: SyncSchedulerDeps = {}): SyncScheduler
     if (pendingSince === null) pendingSince = now();
     pendingReason ??= reason;
     if (!executor) return; // bootstrap/关闭期：只留脏标记，setExecutor 时兑现
-    if (retryNeeded && retryNotBefore !== null && now() < retryNotBefore) return;
+    // resume=用户回到前台，破例穿过退避窗口；其余触发不提前打失败中的服务器
+    if (reason !== "resume" && retryNeeded && retryNotBefore !== null && now() < retryNotBefore) return;
     clearRetryTimer();
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(fire, SYNC_SCHEDULE_DEBOUNCE_MS);
