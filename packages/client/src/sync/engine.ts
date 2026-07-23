@@ -279,10 +279,10 @@ async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: numbe
   return parsed.data;
 }
 
-function pullBatchTables(response: SyncPullResponse): Table[] {
+function pullBatchTables(changes: SyncChange[]): Table[] {
   const tables = new Map<string, Table>();
   tables.set("syncLog", db.syncLog);
-  for (const change of response.changes) {
+  for (const change of changes) {
     const domain = CLIENT_SYNC_DOMAINS[change.tableName];
     if (domain) tables.set(domain.storeName, db.table(domain.storeName));
     if (change.tableName === "categories" && change.action === "delete") {
@@ -561,6 +561,158 @@ export async function syncPush(): Promise<SyncPushResult> {
   return result;
 }
 
+async function applyPullChangesBatch(
+  changes: SyncChange[],
+  protectedCascadeRecords: Set<string>,
+): Promise<{ applied: number; conflicts: SyncConflict[] }> {
+  const batchConflicts: SyncConflict[] = [];
+  let batchApplied = 0;
+  await db.transaction("rw", pullBatchTables(changes), async () => {
+    // pending 检查和远端 apply 同处一个事务；并发本地写入只能发生在事务之前或之后。
+    const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
+    const pendingByRecord = groupPendingLogs(unsyncedLogs);
+    const categoryDeleteIds = changes
+      .filter((change) => change.tableName === "categories" && change.action === "delete")
+      .map((change) => change.recordId);
+    const categoryDeleteImpacts = await getCategoryDeleteImpacts(categoryDeleteIds);
+    const blockedCategoryDeletes = new Map<string, {
+      impact: CategoryDeleteImpact;
+      localLog: SyncLogEntry;
+      sourceLogIds: string[];
+    }>();
+
+    for (const [categoryId, impact] of categoryDeleteImpacts) {
+      if (protectedCascadeRecords.has(syncRecordKey("categories", categoryId))) continue;
+      const nestedUnderAnotherDelete = [...categoryDeleteImpacts.entries()].some(
+        ([otherId, otherImpact]) => otherId !== categoryId && otherImpact.categoryIds.includes(categoryId),
+      );
+      if (nestedUnderAnotherDelete) continue;
+      const sourceLogIds = [
+        ...impact.categoryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "categories", id).map((log) => log.id)),
+        ...impact.entryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).map((log) => log.id)),
+      ];
+      if (sourceLogIds.length === 0) continue;
+      const localLog = unsyncedLogs.find((log) => sourceLogIds.includes(log.id));
+      if (!localLog) continue;
+      blockedCategoryDeletes.set(categoryId, { impact, localLog, sourceLogIds });
+      for (const id of impact.categoryIds) protectedCascadeRecords.add(syncRecordKey("categories", id));
+      for (const id of impact.entryIds) protectedCascadeRecords.add(syncRecordKey("time_entries", id));
+    }
+
+    for (const change of changes) {
+      const blockedCategoryDelete = change.tableName === "categories" && change.action === "delete"
+        ? blockedCategoryDeletes.get(change.recordId)
+        : undefined;
+      if (blockedCategoryDelete) {
+        batchConflicts.push({
+          tableName: "categories",
+          recordId: change.recordId,
+          local: blockedCategoryDelete.impact.target,
+          remote: null,
+          remoteAction: "delete",
+          localLog: blockedCategoryDelete.localLog,
+          sourceLogIds: blockedCategoryDelete.sourceLogIds,
+        });
+        continue;
+      }
+      if (protectedCascadeRecords.has(syncRecordKey(change.tableName, change.recordId))) continue;
+
+      const domain = CLIENT_SYNC_DOMAINS[change.tableName];
+      if (!domain) continue;
+      const sharedDomain = getSyncDomain(change.tableName);
+      const store = db.table(domain.storeName);
+      const pendingLogs = pendingLogsForRecord(pendingByRecord, change.tableName, change.recordId);
+      const localLog = pendingLogs.at(-1);
+      const sourceLogIds = pendingLogs.map((log) => log.id);
+
+      if (change.action === "delete") {
+        if (domain.applyRemoteDelete) {
+          const impact = categoryDeleteImpacts.get(change.recordId);
+          if (!impact) continue;
+          const cascadeSourceLogIds = [
+            ...impact.categoryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "categories", id).map((log) => log.id)),
+            ...impact.entryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).map((log) => log.id)),
+          ];
+          const cascadeLocalLog = unsyncedLogs.find((log) => cascadeSourceLogIds.includes(log.id));
+          if (cascadeLocalLog) {
+            batchConflicts.push({
+              tableName: change.tableName as SyncConflict["tableName"],
+              recordId: change.recordId,
+              local: impact.target as SyncConflict["local"],
+              remote: null,
+              remoteAction: "delete",
+              localLog: cascadeLocalLog,
+              sourceLogIds: cascadeSourceLogIds,
+            });
+          } else {
+            batchApplied += await domain.applyRemoteDelete(change.recordId);
+          }
+          continue;
+        }
+
+        const key = storeKeyForRecordId(domain, change.recordId);
+        const existing = await store.get(key);
+        if (!existing) continue;
+        if (sharedDomain.conflictPolicy === "manual") {
+          if (localLog) {
+            batchConflicts.push({
+              tableName: change.tableName as SyncConflict["tableName"],
+              recordId: change.recordId,
+              local: existing as SyncConflict["local"],
+              remote: null,
+              remoteAction: "delete",
+              localLog,
+              sourceLogIds,
+            });
+          } else {
+            await store.delete(key);
+            batchApplied++;
+          }
+        } else if (!localLog) {
+          await store.delete(key);
+          batchApplied++;
+        }
+        continue;
+      }
+
+      if (!change.data) continue;
+      const remote = parseRemoteRecord(domain, change.data, change.recordId);
+      if (!remote) continue;
+      const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
+
+      if (sharedDomain.conflictPolicy === "manual") {
+        if (localLog) {
+          if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
+            batchConflicts.push({
+              tableName: change.tableName as SyncConflict["tableName"],
+              recordId: change.recordId,
+              local: existing as SyncConflict["local"],
+              remote: remote as SyncConflict["remote"],
+              remoteAction: "update",
+              localLog,
+              sourceLogIds,
+            });
+          }
+          continue;
+        }
+        if (!existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
+          await store.put(remote);
+          batchApplied++;
+        }
+      } else if (!localLog) {
+        const shouldApply = domain.needsApply
+          ? domain.needsApply(existing, remote)
+          : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
+        if (shouldApply) {
+          await store.put(remote);
+          batchApplied++;
+        }
+      }
+    }
+  });
+  return { applied: batchApplied, conflicts: batchConflicts };
+}
+
 export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
   const startSeq = buildPullCursor("incremental").sinceSeq;
 
@@ -569,153 +721,9 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
   const protectedCascadeRecords = new Set<string>();
 
   const last = await fetchPullBatches(startSeq, async (response) => {
-    const batchConflicts: SyncConflict[] = [];
-    let batchApplied = 0;
-    await db.transaction("rw", pullBatchTables(response), async () => {
-      // pending 检查和远端 apply 同处一个事务；并发本地写入只能发生在事务之前或之后。
-      const unsyncedLogs = await db.syncLog.where("synced").equals(0).toArray();
-      const pendingByRecord = groupPendingLogs(unsyncedLogs);
-      const categoryDeleteIds = response.changes
-        .filter((change) => change.tableName === "categories" && change.action === "delete")
-        .map((change) => change.recordId);
-      const categoryDeleteImpacts = await getCategoryDeleteImpacts(categoryDeleteIds);
-      const blockedCategoryDeletes = new Map<string, {
-        impact: CategoryDeleteImpact;
-        localLog: SyncLogEntry;
-        sourceLogIds: string[];
-      }>();
-
-      for (const [categoryId, impact] of categoryDeleteImpacts) {
-        if (protectedCascadeRecords.has(syncRecordKey("categories", categoryId))) continue;
-        const nestedUnderAnotherDelete = [...categoryDeleteImpacts.entries()].some(
-          ([otherId, otherImpact]) => otherId !== categoryId && otherImpact.categoryIds.includes(categoryId),
-        );
-        if (nestedUnderAnotherDelete) continue;
-        const sourceLogIds = [
-          ...impact.categoryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "categories", id).map((log) => log.id)),
-          ...impact.entryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).map((log) => log.id)),
-        ];
-        if (sourceLogIds.length === 0) continue;
-        const localLog = unsyncedLogs.find((log) => sourceLogIds.includes(log.id));
-        if (!localLog) continue;
-        blockedCategoryDeletes.set(categoryId, { impact, localLog, sourceLogIds });
-        for (const id of impact.categoryIds) protectedCascadeRecords.add(syncRecordKey("categories", id));
-        for (const id of impact.entryIds) protectedCascadeRecords.add(syncRecordKey("time_entries", id));
-      }
-
-      for (const change of response.changes) {
-        const blockedCategoryDelete = change.tableName === "categories" && change.action === "delete"
-          ? blockedCategoryDeletes.get(change.recordId)
-          : undefined;
-        if (blockedCategoryDelete) {
-          batchConflicts.push({
-            tableName: "categories",
-            recordId: change.recordId,
-            local: blockedCategoryDelete.impact.target,
-            remote: null,
-            remoteAction: "delete",
-            localLog: blockedCategoryDelete.localLog,
-            sourceLogIds: blockedCategoryDelete.sourceLogIds,
-          });
-          continue;
-        }
-        if (protectedCascadeRecords.has(syncRecordKey(change.tableName, change.recordId))) continue;
-
-        const domain = CLIENT_SYNC_DOMAINS[change.tableName];
-        if (!domain) continue;
-        const sharedDomain = getSyncDomain(change.tableName);
-        const store = db.table(domain.storeName);
-        const pendingLogs = pendingLogsForRecord(pendingByRecord, change.tableName, change.recordId);
-        const localLog = pendingLogs.at(-1);
-        const sourceLogIds = pendingLogs.map((log) => log.id);
-
-        if (change.action === "delete") {
-          if (domain.applyRemoteDelete) {
-            const impact = categoryDeleteImpacts.get(change.recordId);
-            if (!impact) continue;
-            const cascadeSourceLogIds = [
-              ...impact.categoryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "categories", id).map((log) => log.id)),
-              ...impact.entryIds.flatMap((id) => pendingLogsForRecord(pendingByRecord, "time_entries", id).map((log) => log.id)),
-            ];
-            const cascadeLocalLog = unsyncedLogs.find((log) => cascadeSourceLogIds.includes(log.id));
-            if (cascadeLocalLog) {
-              batchConflicts.push({
-                tableName: change.tableName as SyncConflict["tableName"],
-                recordId: change.recordId,
-                local: impact.target as SyncConflict["local"],
-                remote: null,
-                remoteAction: "delete",
-                localLog: cascadeLocalLog,
-                sourceLogIds: cascadeSourceLogIds,
-              });
-            } else {
-              batchApplied += await domain.applyRemoteDelete(change.recordId);
-            }
-            continue;
-          }
-
-          const key = storeKeyForRecordId(domain, change.recordId);
-          const existing = await store.get(key);
-          if (!existing) continue;
-          if (sharedDomain.conflictPolicy === "manual") {
-            if (localLog) {
-              batchConflicts.push({
-                tableName: change.tableName as SyncConflict["tableName"],
-                recordId: change.recordId,
-                local: existing as SyncConflict["local"],
-                remote: null,
-                remoteAction: "delete",
-                localLog,
-                sourceLogIds,
-              });
-            } else {
-              await store.delete(key);
-              batchApplied++;
-            }
-          } else if (!localLog) {
-            await store.delete(key);
-            batchApplied++;
-          }
-          continue;
-        }
-
-        if (!change.data) continue;
-        const remote = parseRemoteRecord(domain, change.data, change.recordId);
-        if (!remote) continue;
-        const existing = await store.get(storeKeyForRecordId(domain, change.recordId));
-
-        if (sharedDomain.conflictPolicy === "manual") {
-          if (localLog) {
-            if (existing && (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
-              batchConflicts.push({
-                tableName: change.tableName as SyncConflict["tableName"],
-                recordId: change.recordId,
-                local: existing as SyncConflict["local"],
-                remote: remote as SyncConflict["remote"],
-                remoteAction: "update",
-                localLog,
-                sourceLogIds,
-              });
-            }
-            continue;
-          }
-          if (!existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt) {
-            await store.put(remote);
-            batchApplied++;
-          }
-        } else if (!localLog) {
-          const shouldApply = domain.needsApply
-            ? domain.needsApply(existing, remote)
-            : !existing || (existing as { updatedAt: string }).updatedAt !== (remote as { updatedAt: string }).updatedAt;
-          if (shouldApply) {
-            await store.put(remote);
-            batchApplied++;
-          }
-        }
-      }
-    });
-    applied += batchApplied;
-    conflicts.push(...batchConflicts);
+    const batch = await applyPullChangesBatch(response.changes, protectedCascadeRecords);
+    applied += batch.applied;
+    conflicts.push(...batch.conflicts);
   });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
@@ -1056,7 +1064,7 @@ export async function syncPull(options: { mode?: "incremental" | "repair" } = {}
 
   const last = await fetchPullBatches(startSeq, async (response) => {
     let batchApplied = 0;
-    await db.transaction("rw", pullBatchTables(response), async () => {
+    await db.transaction("rw", pullBatchTables(response.changes), async () => {
       const pendingByRecord = groupPendingLogs(await db.syncLog.where("synced").equals(0).toArray());
       const categoryDeleteIds = response.changes
         .filter((change) => change.tableName === "categories" && change.action === "delete")
