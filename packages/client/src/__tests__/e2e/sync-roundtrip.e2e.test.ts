@@ -1,9 +1,17 @@
 import "fake-indexeddb/auto";
-import type { Category, QuickNote, SyncLogEntry, TimeEntry } from "@timedata/shared";
+import type { Category, QuickNote, SyncChange, SyncLogEntry, SyncStreamBump, TimeEntry } from "@timedata/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type E2EServer, startE2EServer } from "../../../../server/src/__tests__/e2e/helpers.ts";
 import { db } from "../../db/index.ts";
-import { getLastSyncedSeq, PULL_PAGE_LIMIT, regularSync, syncPull, syncPush } from "../../sync/engine.ts";
+import {
+  clearBumpStash,
+  getLastSyncedSeq,
+  PULL_PAGE_LIMIT,
+  regularSync,
+  stashBumpPayload,
+  syncPull,
+  syncPush,
+} from "../../sync/engine.ts";
 import { bindClientToServer, resetClientDb } from "./helpers.ts";
 
 let server: E2EServer | null = null;
@@ -113,6 +121,7 @@ beforeEach(async () => {
   await resetClientDb();
   server = await startE2EServer();
   restoreFetch = bindClientToServer(server.app);
+  clearBumpStash(); // 单槽 stash 是模块级状态，跨测试文件/用例不清会串味
 });
 
 afterEach(async () => {
@@ -121,6 +130,7 @@ afterEach(async () => {
   server?.close();
   server = null;
   await resetClientDb();
+  clearBumpStash();
 });
 
 describe("e2e: sync round trip", () => {
@@ -341,6 +351,74 @@ describe("e2e: sync round trip", () => {
     } finally {
       controller.abort();
       await reader.cancel().catch(() => undefined);
+    }
+  });
+
+  it("bump 载荷跨设备直达：B 端就地 apply 且不发 pull/status", async () => {
+    // 直接挂服务端 notifier（同一进程内 vi.resetModules() 后的模块实例，与路由内部共用），
+    // 绕开 SSE 文本流，直接拿到结构化 bump 载荷。
+    const { addSyncStreamListener, removeSyncStreamListener } = await import("../../../../server/src/sync/notifier.ts");
+    const received: SyncStreamBump[] = [];
+    const listener = (bump: SyncStreamBump) => received.push(bump);
+    addSyncStreamListener(listener);
+
+    try {
+      // 垫一条无关基线并追平，让本次 push 的 fromSeq 落在非零值上（贴近真实场景）；
+      // 用 syncPush()（非 regularSync()）避免"设备 A"自身游标随本次 push 前移——
+      // 与"设备 B"共用同一本地 db/游标时，才能真实复现"B 停在 fromSeq"的起点。
+      insertServerCategory(category({ id: "cat-baseline", name: "基线" }));
+      await regularSync();
+      const baselineSeq = getLastSyncedSeq();
+
+      const localCategory = category({ id: "cat-bump-e2e", name: "跨设备直达" });
+      const localEntry = entry({ id: "entry-bump-e2e", categoryId: localCategory.id });
+      await db.categories.add(localCategory);
+      await db.timeEntries.add(localEntry);
+      await db.syncLog.bulkAdd([syncLog(localCategory.id, "categories"), syncLog(localEntry.id, "time_entries")]);
+
+      const push = await syncPush();
+      expect(push).toMatchObject({ accepted: 2, rejected: 0, conflicts: 0 });
+
+      const bump = received.at(-1)!;
+      expect(bump.fromSeq).toBe(baselineSeq);
+      expect(typeof bump.latestSeq).toBe("number");
+      expect(bump.changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ tableName: "categories", recordId: localCategory.id }),
+          expect.objectContaining({ tableName: "time_entries", recordId: localEntry.id }),
+        ]),
+      );
+
+      // 设备 B：本地还没见过这两条（清掉本地写入 + syncLog），游标停在 fromSeq——
+      // 与"设备 A push 前"完全一致的起点，才是 bump 快路径要求的"游标连续"。
+      await db.categories.delete(localCategory.id);
+      await db.timeEntries.delete(localEntry.id);
+      await db.syncLog.clear();
+      expect(getLastSyncedSeq()).toBe(baselineSeq);
+
+      const pullUrls: string[] = [];
+      const statusUrls: string[] = [];
+      const bound = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.includes("/api/sync/pull")) pullUrls.push(url);
+        if (url.includes("/api/sync/status")) statusUrls.push(url);
+        return bound(input, init);
+      }) as typeof fetch;
+
+      const changes = bump.changes as SyncChange[];
+      stashBumpPayload({ fromSeq: bump.fromSeq!, latestSeq: bump.latestSeq!, changes });
+      const result = await regularSync();
+
+      expect(pullUrls).toHaveLength(0); // 就地 apply：零网络，不发 pull
+      expect(statusUrls).toHaveLength(0); // 也不经预查 status
+      expect(result.pulled).toBe(2);
+      await expect(db.categories.get(localCategory.id)).resolves.toMatchObject({ name: "跨设备直达" });
+      await expect(db.timeEntries.get(localEntry.id)).resolves.toBeDefined();
+      expect(getLastSyncedSeq()).toBe(bump.latestSeq);
+    } finally {
+      removeSyncStreamListener(listener);
+      clearBumpStash();
     }
   });
 });
