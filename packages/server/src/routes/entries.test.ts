@@ -126,7 +126,7 @@ describe("entries route", () => {
   it("broadcasts a sync bump after creating an entry through POST", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
 
     try {

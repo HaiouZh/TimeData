@@ -323,15 +323,16 @@ sync.get("/stream", (c) => {
   return streamSSE(c, async (stream) => {
     let ready = false;
     let pendingLatestSeq: number | null = null;
-    const listener: SyncStreamListener = (latestSeq) => {
+    const listener: SyncStreamListener = (bump) => {
       if (!ready) {
+        // hello 前的缓冲只保留最高 latestSeq、丢载荷：补发退化为纯 bump，客户端走 pull 追平。
         pendingLatestSeq =
-          pendingLatestSeq == null || (latestSeq != null && latestSeq > pendingLatestSeq)
-            ? latestSeq
+          pendingLatestSeq == null || (bump.latestSeq != null && bump.latestSeq > pendingLatestSeq)
+            ? bump.latestSeq
             : pendingLatestSeq;
         return;
       }
-      void stream.writeSSE({ event: "bump", data: JSON.stringify({ latestSeq }) }).catch(() => undefined);
+      void stream.writeSSE({ event: "bump", data: JSON.stringify(bump) }).catch(() => undefined);
     };
     addSyncStreamListener(listener);
     stream.onAbort(() => removeSyncStreamListener(listener));

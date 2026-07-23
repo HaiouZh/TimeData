@@ -143,7 +143,7 @@ describe("POST /api/quick-notes", () => {
   it("creates an agent note and notifies sync stream listeners", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
 
     try {

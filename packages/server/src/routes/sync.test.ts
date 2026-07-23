@@ -536,10 +536,95 @@ describe("sync route", () => {
     await res.body?.cancel().catch(() => undefined);
   });
 
+  // 与 T1（schemas.test.ts SyncStreamBumpSchema）同形状的 quick_notes 夹具。
+  function streamFixtureChange(): SyncChange {
+    return {
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "update",
+      data: {
+        id: "note-1",
+        text: "突然想到一个词",
+        occurredAt: "2026-06-01T04:01:30.123Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+      timestamp: "2026-06-01T04:02:00.000Z",
+    } as SyncChange;
+  }
+
+  it("bump 带载荷时 SSE data 序列化 fromSeq/changes", async () => {
+    const { notifySyncChange } = await import("../sync/notifier.js");
+    const controller = new AbortController();
+    const res = await app.request("/api/sync/stream", { signal: controller.signal });
+    const reader = res.body!.getReader();
+
+    const helloChunk = await reader.read();
+    expect(new TextDecoder().decode(helloChunk.value)).toContain("event: hello");
+    // 让出一个宏任务，确保 hello 写出完成、ready 已置位（否则会落进 pre-ready 缓冲分支）。
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    notifySyncChange(7, { fromSeq: 5, changes: [streamFixtureChange()] });
+
+    const bumpChunk = await reader.read();
+    const text = new TextDecoder().decode(bumpChunk.value);
+    expect(text).toContain("event: bump");
+    const data = JSON.parse(text.split("data: ")[1].split("\n")[0]) as {
+      latestSeq: number;
+      fromSeq: number;
+      changes: unknown[];
+    };
+    expect(data.latestSeq).toBe(7);
+    expect(data.fromSeq).toBe(5);
+    expect(data.changes.length).toBe(1);
+
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+  });
+
+  it("纯 bump 的 SSE data 与现状逐字一致", async () => {
+    const { notifySyncChange } = await import("../sync/notifier.js");
+    const controller = new AbortController();
+    const res = await app.request("/api/sync/stream", { signal: controller.signal });
+    const reader = res.body!.getReader();
+
+    const helloChunk = await reader.read();
+    expect(new TextDecoder().decode(helloChunk.value)).toContain("event: hello");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    notifySyncChange(9);
+
+    const bumpChunk = await reader.read();
+    const text = new TextDecoder().decode(bumpChunk.value);
+    expect(text).toBe(`event: bump\ndata: ${JSON.stringify({ latestSeq: 9 })}\n\n`);
+
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+  });
+
+  it("hello 前到达的带载荷 bump 只补发纯 bump（退化）", async () => {
+    const { notifySyncChange } = await import("../sync/notifier.js");
+    const controller = new AbortController();
+    const res = await app.request("/api/sync/stream", { signal: controller.signal });
+    // 在读第一帧（hello）之前就到达：listener 已注册但 ready 仍是 false，走 pre-ready 缓冲分支。
+    notifySyncChange(7, { fromSeq: 5, changes: [streamFixtureChange()] });
+
+    const reader = res.body!.getReader();
+    const helloChunk = await reader.read();
+    expect(new TextDecoder().decode(helloChunk.value)).toContain("event: hello");
+
+    const bumpChunk = await reader.read();
+    const text = new TextDecoder().decode(bumpChunk.value);
+    expect(text).toBe(`event: bump\ndata: ${JSON.stringify({ latestSeq: 7 })}\n\n`);
+
+    controller.abort();
+    await reader.cancel().catch(() => undefined);
+  });
+
   it("broadcasts a sync bump after a successful push commits", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
 
     try {

@@ -66,7 +66,7 @@ describe("POST /api/agent/tasks/:id/status", () => {
   it("creates note child, records seq and notifies listeners", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
 
     try {

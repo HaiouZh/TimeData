@@ -229,7 +229,7 @@ describe("POST /api/agent/tracks", () => {
   it("creates a track via applyChange, records seq and notifies listeners", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
     try {
       const res = await post("/api/agent/tracks", {
@@ -292,7 +292,7 @@ describe("POST /api/agent/tracks/:id/steps", () => {
     seedTrackStep({ id: "open-step", startedAt: "2026-06-21T02:00:00.000Z", seq: 0 });
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
     try {
       const res = await post("/api/agent/tracks/track-1/steps", {
@@ -444,7 +444,7 @@ describe("POST /api/agent/tracks/:id/current-step/close", () => {
     seedTrackStep({ id: "future-open", startedAt: "2026-06-21T04:00:00.000Z", seq: 2 });
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
     try {
       const res = await post("/api/agent/tracks/track-1/current-step/close", {

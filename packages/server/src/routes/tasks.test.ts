@@ -205,7 +205,7 @@ describe("POST /api/tasks/:id/schedule", () => {
   it("排期提交成功后向同步流广播最新 seq", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
-    const listener = (seq: number | null) => seen.push(seq);
+    const listener = (bump: { latestSeq: number | null }) => seen.push(bump.latestSeq);
     addSyncStreamListener(listener);
 
     try {
