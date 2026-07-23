@@ -472,9 +472,11 @@ async function submitPushBatch(
   baseSeq: number | null,
 ): Promise<SyncPushResult> {
   try {
+    const requestId = crypto.randomUUID(); // 每批独立幂等键；409 拆批走递归自然换新
     const response = await apiFetch<SyncPushResponse>("/api/sync/push", {
       method: "POST",
-      body: JSON.stringify({ changes, baseSeq }),
+      body: JSON.stringify({ changes, baseSeq, requestId }),
+      hedge: SYNC_HEDGE,
     });
     recordClockSkew(response.serverTime);
     return applyPushResponse(response, sourceLogIdsByChangeKey, changeKey, baseSeq);

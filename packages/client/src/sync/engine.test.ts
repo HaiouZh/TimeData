@@ -850,6 +850,81 @@ describe("syncPush", () => {
     await expect(db.syncLog.get(conflictLogId)).resolves.toMatchObject({ synced: 2 });
   });
 
+  it("409 拆批重试的子批使用新 requestId", async () => {
+    const acceptedLogId = "entry-accepted-create-00";
+    const conflictLogId = "entry-conflict-create-30";
+
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00",
+      updatedAt: "2026-05-08T08:00:00",
+    });
+    await db.timeEntries.bulkAdd([
+      {
+        id: "entry-accepted",
+        categoryId: "cat-1",
+        startTime: "2026-05-08T09:00:00",
+        endTime: "2026-05-08T10:00:00",
+        note: null,
+        createdAt: "2026-05-08T09:00:00",
+        updatedAt: "2026-05-08T09:00:00",
+      },
+      {
+        id: "entry-conflict",
+        categoryId: "cat-1",
+        startTime: "2026-05-08T09:30:00",
+        endTime: "2026-05-08T10:30:00",
+        note: null,
+        createdAt: "2026-05-08T09:30:00",
+        updatedAt: "2026-05-08T09:30:00",
+      },
+    ]);
+    await db.syncLog.bulkAdd([
+      { id: acceptedLogId, tableName: "time_entries", recordId: "entry-accepted", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 },
+      { id: conflictLogId, tableName: "time_entries", recordId: "entry-conflict", action: "create", timestamp: "2026-05-08T09:30:00", synced: 0 },
+    ]);
+
+    const pushResponse = {
+      outcomes: [
+        { tableName: "time_entries", recordId: "entry-accepted", action: "create", status: "accepted", reasonCode: "applied", message: "applied", incomingTimestamp: "2026-05-08T09:00:00" },
+        { tableName: "time_entries", recordId: "entry-conflict", action: "create", status: "conflict", reasonCode: "overlap", message: "entry overlaps existing entry server-entry", incomingTimestamp: "2026-05-08T09:30:00" },
+      ],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 1,
+      backupId: null,
+      serverTime: "2026-05-08T09:31:00.000Z",
+    };
+    const error = new ApiErrorMock(409, "Conflict", "", pushResponse);
+    apiFetchMock
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce({
+        outcomes: [
+          { tableName: "time_entries", recordId: "entry-accepted", action: "create", status: "accepted", reasonCode: "applied", message: "applied", incomingTimestamp: "2026-05-08T09:00:00" },
+        ],
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        backupId: null,
+        serverTime: "2026-05-08T09:32:00.000Z",
+        latestSeq: 11,
+        appliedCount: 1,
+      });
+
+    await syncPush();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(apiFetchMock.mock.calls[0][1].body);
+    const retryBody = JSON.parse(apiFetchMock.mock.calls[1][1].body);
+    expect(retryBody.requestId).not.toBe(firstBody.requestId);
+  });
+
   it("原子 409 的死信日志被隔离后不再进入下一轮 push，可手动重新入队", async () => {
     await db.categories.add({
       id: "cat-1",
@@ -1005,6 +1080,47 @@ describe("syncPush", () => {
 
     const body = JSON.parse(apiFetchMock.mock.calls[0][1].body);
     expect(body.baseSeq).toBe(9);
+  });
+
+  it("push 携带 requestId 与对冲选项", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00",
+      updatedAt: "2026-05-08T08:00:00",
+    });
+    await db.timeEntries.add({
+      id: "entry-1",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00",
+      endTime: "2026-05-08T10:00:00",
+      note: null,
+      createdAt: "2026-05-08T09:00:00",
+      updatedAt: "2026-05-08T09:00:00",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-1", action: "create", timestamp: "2026-05-08T09:00:00", synced: 0 });
+
+    apiFetchMock.mockResolvedValue({
+      outcomes: [{ tableName: "time_entries", recordId: "entry-1", action: "create", status: "accepted", reasonCode: "applied", message: "applied", incomingTimestamp: "2026-05-08T09:00:00" }],
+      accepted: 1,
+      rejected: 0,
+      conflicts: 0,
+      backupId: "backup-1",
+      serverTime: "2026-05-08T09:01:00.000Z",
+    });
+
+    await syncPush();
+
+    const pushCall = apiFetchMock.mock.calls.find(([path]) => path === "/api/sync/push");
+    const body = JSON.parse(pushCall[1].body);
+    expect(typeof body.requestId).toBe("string");
+    expect(body.requestId.length).toBeGreaterThan(0);
+    expect(pushCall[1]).toMatchObject({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } });
   });
 
   it("client_bug reasonCode marks syncLog synced to stop retrying", async () => {
