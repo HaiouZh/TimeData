@@ -9,7 +9,7 @@
 - **仅 `/api/sync/push` 构造带数据的 bump**：`notifySyncChange(latestSeq, payload?)` 新增可选 `payload: { fromSeq, changes }`；push 成功 apply 后，用 `buildBumpPayload(db, latestSeqBefore, latestSeqAfter)` 读出本次 push 造成的 `(fromSeq, latestSeqAfter]` 区间 changes 一并广播。除 push 外的写路径（force-push、agent 写入等）继续只传 `latestSeq`，`notifySyncChange` 退化为纯 bump——不放大改动面。
 - **上限即退化，不做分片**：`BUMP_MAX_CHANGES = 50` 条、`BUMP_MAX_BYTES = 32 * 1024` 字节（序列化后），任一超限直接放弃 `payload`、退化为纯 `{ latestSeq }`。SSE 是通知通道不是搬运通道；超限场景本就少见（单次 push 极少超过 50 条），退化后收端走现状的 pull 补齐，不引入分片/续传复杂度。
 - **契约纯增量、旧新互不知**：`SyncStreamBumpSchema`（`packages/shared/src/schemas.ts`）定义 `{ latestSeq, fromSeq?, changes? }`；旧客户端只读 `latestSeq`，新字段对它透明。客户端 `SyncContext` 解析 SSE 消息时用该 schema 校验，`safeParse` 失败（畸形/旧协议）一律退化为纯 bump 处理，不丢事件、不抛错。
-- **客户端单槽 stash + 游标连续才就地 apply**：`engine.ts` 暴露 `stashBumpPayload`/`clearBumpStash`，`SyncContext` 收到带 `fromSeq`+`changes` 的 bump 就存入模块级单槽（新覆盖旧，不排队）。仅当 `regularSync()` 判定本地无 pending（`unsyncedCount === 0`）且 `stash.fromSeq === 本地游标` 时，才在零网络下直接调用与 pull 共用的 `applyPullChangesBatch` 就地写入、游标推进到 `stash.latestSeq`；`stash` 一律无条件取出即清（`takeBumpStash`），不匹配、有 pending、apply 抛错等任何分支都自然退化为现状的 status 预查 + pull 链路，不产生游标跳跃或数据丢失风险。
+- **客户端单槽 stash + 游标连续才就地 apply**：`engine.ts` 暴露 `stashBumpPayload`/`clearBumpStash`，`SyncContext` 收到带 `fromSeq`+`changes` 的 bump 就存入模块级单槽（新覆盖旧，不排队）。仅当 `regularSync()` 判定本地无 pending（`unsyncedCount === 0`）且 `stash.fromSeq === 本地游标` 时，才在零网络下直接调用与 pull 共用的 `applyPullChangesBatch` 就地写入、游标推进到 `stash.latestSeq`。无 pending 分支内 `stash` 一律无条件取出即清（`takeBumpStash`）：不匹配、apply 抛错都自然退化为现状的 status 预查 + pull 链路；有 pending 的那一轮走写后 push 路径、stash 原地排队（不取不清）等下一轮无 pending 再判定——各分支均不产生游标跳跃或数据丢失风险。
 
 ## 后果
 - 跨设备热同步在无插队场景下免去 pull 往返：另一设备写完 → 本设备收到 SSE → 直接落库，全程零额外请求（比对：之前是"收到 bump → 发 pull → 落库"）。
