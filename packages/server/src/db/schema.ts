@@ -216,6 +216,14 @@ export function initializeDatabase(): void {
       record_count INTEGER DEFAULT 0
     );
 
+    -- push 幂等回放表：同 requestId 二次 push 命中此表直接回放原响应，不重复 apply（spec: 弱网同步提速 Phase 1）。
+    CREATE TABLE IF NOT EXISTS sync_push_requests (
+      request_id TEXT PRIMARY KEY,
+      status_code INTEGER NOT NULL,
+      response_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
     CREATE TABLE IF NOT EXISTS api_request_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       timestamp TEXT NOT NULL,

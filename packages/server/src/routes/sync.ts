@@ -267,6 +267,20 @@ function syncPushResponse(
   };
 }
 
+// push 幂等：并发窗口说明——正常路径 parse 后到响应之间无 await、better-sqlite3 同步执行，
+// 同 requestId 的重复请求天然串行，第二个请求总会命中回放表（无需内存锁）；
+// 唯一有 await 窗口的是危险备份路径（createServerBackup），但该窗口已有 seq 竞态守卫（push_retry_after_backup_race）
+// 兜底会拒收成 409，且备份路径本就不落回放行——所以此处不加内存锁（YAGNI）。
+function prunePushRequestReplays(db: Database): void {
+  db.prepare("DELETE FROM sync_push_requests WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')").run();
+}
+
+function storePushRequestReplay(db: Database, requestId: string | undefined, statusCode: 200 | 409, response: SyncPushResponse): void {
+  if (!requestId) return;
+  db.prepare("INSERT OR IGNORE INTO sync_push_requests (request_id, status_code, response_json) VALUES (?, ?, ?)")
+    .run(requestId, statusCode, JSON.stringify(response));
+}
+
 function seqAnalysisBackupDetails(
   baseSeq: number | null,
   analysis: ReturnType<typeof analyzePushBaseSeq>,
@@ -514,6 +528,19 @@ sync.post("/push", async (c) => {
 
   const body = parsed.data;
   const db = getDb();
+
+  // 幂等命中：同 requestId 直接回放原响应，不重复校验/apply、不产生新 seq。
+  if (body.requestId) {
+    prunePushRequestReplays(db);
+    const cached = db
+      .prepare("SELECT status_code, response_json FROM sync_push_requests WHERE request_id = ?")
+      .get(body.requestId) as { status_code: number; response_json: string } | undefined;
+    if (cached) {
+      writeSyncLog(db, "push_replayed", { requestId: body.requestId, statusCode: cached.status_code }, 0);
+      return c.json(JSON.parse(cached.response_json) as SyncPushResponse, cached.status_code === 409 ? 409 : 200);
+    }
+  }
+
   const validateStart = performance.now();
   const orderedChanges = orderPushChanges(body.changes);
   const validation = validateSyncChanges(db, orderedChanges);
@@ -530,6 +557,7 @@ sync.post("/push", async (c) => {
       },
       response.outcomes.length,
     );
+    storePushRequestReplay(db, body.requestId, 409, response);
     return c.json(response, 409);
   }
 
@@ -662,6 +690,7 @@ sync.post("/push", async (c) => {
     overriddenRecordIds: protectedOutcomeIds(outcomes),
     appliedCount,
   }, orderedChanges.length);
+  storePushRequestReplay(db, body.requestId, 200, response);
   notifySyncChange(getLatestSeq());
   return c.json(response);
 });

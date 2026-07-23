@@ -98,6 +98,13 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE sync_push_requests (
+      request_id TEXT PRIMARY KEY,
+      status_code INTEGER NOT NULL,
+      response_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+
     CREATE TABLE sync_state (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -209,11 +216,16 @@ function latestSeq(): number {
   return row.seq ?? 0;
 }
 
-function pushChanges(changes: SyncChange[], baseSeq: number | null = latestSeq()): Promise<Response> {
+function pushChanges(
+  changes: SyncChange[],
+  baseSeq: number | null = latestSeq(),
+  requestId?: string,
+): Promise<Response> {
   return app.request("/api/sync/push", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ baseSeq, changes }),
+    // requestId 省略时 JSON.stringify 会丢弃该键，天然覆盖"不带 requestId"的旧路径。
+    body: JSON.stringify({ baseSeq, changes, requestId }),
   });
 }
 
@@ -2907,5 +2919,125 @@ describe("sync route", () => {
       .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
       .get("push_received") as { detail: string };
     expect(logRow.detail.length).toBeLessThanOrEqual(4096);
+  });
+});
+
+describe("push requestId 幂等", () => {
+  // 幂等契约：同 requestId 二次 push 命中回放表直接返回原响应，不重复 apply、不产生新 seq；
+  // 校验 409 与成功 200 都回放（状态码也回放）；备份竞态 409 与 500 路径不落回放行，
+  // 客户端应带同 requestId 重试并真正重新执行那两条路径。
+  function categoryCreateChange(id: string, timestamp = "2026-07-01T00:00:00.000Z") {
+    return {
+      tableName: "categories",
+      recordId: id,
+      action: "create",
+      timestamp,
+      data: {
+        id,
+        name: id,
+        parentId: null,
+        color: "#123456",
+        icon: null,
+        sortOrder: 0,
+        isArchived: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    };
+  }
+
+  // 引用一个数据库与本批都不存在的分类，validateEntryChange 会在校验阶段拒收 → 409（不进入 apply）。
+  function missingCategoryEntryChange(id: string, timestamp = "2026-07-01T00:00:00.000Z") {
+    return {
+      tableName: "time_entries",
+      recordId: id,
+      action: "create",
+      timestamp,
+      data: {
+        id,
+        categoryId: "missing-category-does-not-exist",
+        startTime: timestamp,
+        endTime: "2026-07-01T01:00:00.000Z",
+        note: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    };
+  }
+
+  function pushRequestRowCount(): number {
+    return (db.prepare("SELECT COUNT(*) AS n FROM sync_push_requests").get() as { n: number }).n;
+  }
+
+  it("同 requestId 重放：返回原响应、不重复 apply、seq 不再推进", async () => {
+    const change = categoryCreateChange("cat-idem-1") as unknown as SyncChange;
+
+    const first = await pushChanges([change], 0, "req-idem-1");
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    const seqAfterFirst = latestSeq();
+
+    // 完全相同 body 再发一次（category 域每次 apply 都无条件覆盖并记 seq，天然能暴露"是否重复 apply"）。
+    const replay = await pushChanges([change], 0, "req-idem-1");
+    expect(replay.status).toBe(200);
+    const replayBody = await replay.json();
+
+    expect(replayBody).toEqual(firstBody);
+    expect(latestSeq()).toBe(seqAfterFirst);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM categories WHERE id = ?").get("cat-idem-1") as { n: number }).n).toBe(1);
+    expect(pushRequestRowCount()).toBe(1);
+  });
+
+  it("重放响应保留原 latestSeq——期间他人推进 seq 也不变（客户端 canSkipEchoPull 会因此走回 pull，安全）", async () => {
+    const change = categoryCreateChange("cat-idem-2") as unknown as SyncChange;
+
+    const first = await pushChanges([change], 0, "req-idem-2");
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+
+    // 另一 requestId 推进 seq（不带 requestId 走旧路径）。
+    const other = await pushChanges([categoryCreateChange("cat-idem-2-other") as unknown as SyncChange], latestSeq());
+    expect(other.status).toBe(200);
+    expect(latestSeq()).toBeGreaterThan(firstBody.latestSeq);
+
+    const replay = await pushChanges([change], 0, "req-idem-2");
+    expect(replay.status).toBe(200);
+    const replayBody = await replay.json();
+
+    expect(replayBody.latestSeq).toBe(firstBody.latestSeq);
+    expect(replayBody).toEqual(firstBody);
+  });
+
+  it("校验 409 同样回放", async () => {
+    const change = missingCategoryEntryChange("entry-idem-1") as unknown as SyncChange;
+
+    const first = await pushChanges([change], 0, "req-idem-3");
+    expect(first.status).toBe(409);
+    const firstBody = await first.json();
+
+    const replay = await pushChanges([change], 0, "req-idem-3");
+    expect(replay.status).toBe(409);
+    const replayBody = await replay.json();
+
+    expect(replayBody).toEqual(firstBody);
+    expect((db.prepare("SELECT COUNT(*) AS n FROM time_entries").get() as { n: number }).n).toBe(0);
+  });
+
+  it("不带 requestId 完全走旧路径且不落回放行", async () => {
+    const res = await pushChanges([categoryCreateChange("cat-idem-4") as unknown as SyncChange], 0);
+    expect(res.status).toBe(200);
+    expect(pushRequestRowCount()).toBe(0);
+  });
+
+  it("TTL：超 24h 的回放行在下一次带 requestId 的 push 时被清理", async () => {
+    db.prepare(`
+      INSERT INTO sync_push_requests (request_id, status_code, response_json, created_at)
+      VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'))
+    `).run("stale-req", 200, JSON.stringify({ ok: true }));
+
+    const res = await pushChanges([categoryCreateChange("cat-idem-5") as unknown as SyncChange], 0, "req-idem-5");
+    expect(res.status).toBe(200);
+
+    expect(db.prepare("SELECT 1 FROM sync_push_requests WHERE request_id = ?").get("stale-req")).toBeUndefined();
   });
 });

@@ -71,6 +71,7 @@ export const SyncPushReasonCodeSchema = z.enum([
 export const SyncPushRequestSchema = z.object({
   changes: z.array(SyncChangeSchema),
   baseSeq: SeqSchema.nullable().optional(),
+  requestId: z.string().trim().min(1).max(128).optional(), // 幂等键：同 id 重放原响应（对齐 agent-tracks 的 RequestIdSchema 约束）
 });
 
 // 账本模型：pull 只认 seq cursor；sinceSeq=0 或 null 表示全量。timestamp cursor（since/lastSyncedAt）已退役。
