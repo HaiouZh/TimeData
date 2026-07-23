@@ -106,4 +106,20 @@ describe("SyncTimingsPanel", () => {
 
     await unmount(root);
   });
+
+  it("shows the transport protocol when present on the latest entry", async () => {
+    recordSyncTiming({
+      at: "2026-07-01T00:00:00.000Z",
+      outcome: "pushed",
+      totalMs: 400,
+      phases: { status: 30, push: 200, pull: 100 },
+      protocol: "h2",
+    });
+
+    const { host, root } = await renderDom(createElement(SyncTimingsPanel));
+
+    expect(host.textContent).toContain("h2");
+
+    await unmount(root);
+  });
 });

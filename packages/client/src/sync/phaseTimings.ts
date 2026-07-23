@@ -35,6 +35,7 @@ export interface SyncTimingEntry {
   waitMs?: number; // scheduler 侧等待耗时（executor 触发前的排队时长）
   reason?: string; // SyncRequestReason，来自 scheduler
   connection?: string; // SyncStreamState，触发时的 SSE 连接状态
+  protocol?: string; // nextHopProtocol（h2/h3/http/1.1），resource timing 缺失时 undefined
 }
 
 export interface TimingsKV {
@@ -66,7 +67,28 @@ function isValidTimingEntry(value: unknown): value is SyncTimingEntry {
   }
   if (entry.reason !== undefined && typeof entry.reason !== "string") return false;
   if (entry.connection !== undefined && typeof entry.connection !== "string") return false;
+  if (entry.protocol !== undefined && typeof entry.protocol !== "string") return false;
   return true;
+}
+
+// 从浏览器 Resource Timing API 里读取最近一条 /api/sync/ 请求的传输层协议
+// (nextHopProtocol，如 h2/h3/http/1.1)。仅用于观测，任何异常/API 缺失都兜底
+// 返回 undefined —— 绝不能因为埋点失败影响同步主流程。
+export function readSyncTransportProtocol(): string | undefined {
+  try {
+    if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") {
+      return undefined;
+    }
+    const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+      if (entries[i].name.includes("/api/sync/") && entries[i].nextHopProtocol) {
+        return entries[i].nextHopProtocol;
+      }
+    }
+  } catch {
+    // 观测缺失不影响同步
+  }
+  return undefined;
 }
 
 export function getSyncTimings(kv: TimingsKV = defaultKV): SyncTimingEntry[] {

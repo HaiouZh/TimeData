@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import {
   SYNC_TIMINGS_MAX,
@@ -6,6 +6,7 @@ import {
   type TimingsKV,
   createPhaseRecorder,
   getSyncTimings,
+  readSyncTransportProtocol,
   recordSyncTiming,
   timingTotalsPercentiles,
 } from "./phaseTimings.js";
@@ -60,6 +61,27 @@ describe("createPhaseRecorder", () => {
   });
 });
 
+describe("readSyncTransportProtocol", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("取最近一条 /api/sync/ 资源的 nextHopProtocol", () => {
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      { name: "https://x/api/other", nextHopProtocol: "http/1.1" },
+      { name: "https://x/api/sync/pull", nextHopProtocol: "h2" },
+    ] as unknown as PerformanceResourceTiming[]);
+
+    expect(readSyncTransportProtocol()).toBe("h2");
+  });
+
+  it("无匹配资源或 API 缺失时返回 undefined 且不抛", () => {
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([]);
+
+    expect(readSyncTransportProtocol()).toBeUndefined();
+  });
+});
+
 describe("recordSyncTiming / getSyncTimings", () => {
   it("环形缓冲最多留 20 条，最新在前", () => {
     const kv = createMemoryKV();
@@ -97,6 +119,34 @@ describe("recordSyncTiming / getSyncTimings", () => {
         { ...good, phases: null }, // phases 非对象
         { ...good, phases: { push: "fast" } }, // phase 值非数字
         "not-an-object",
+      ]),
+    );
+
+    expect(getSyncTimings(kv)).toEqual([good]);
+  });
+
+  it("protocol 字段随 entry 落盘并通过 shape 校验", () => {
+    const kv = createMemoryKV();
+    recordSyncTiming(makeEntry({ protocol: "h3" }), kv);
+
+    expect(getSyncTimings(kv)[0].protocol).toBe("h3");
+  });
+
+  it("protocol 非 string 的坏元素被丢弃", () => {
+    const kv = createMemoryKV();
+    const good: SyncTimingEntry = {
+      at: "2026-07-02T00:00:00.000Z",
+      outcome: "pushed",
+      totalMs: 120,
+      phases: { push: 60 },
+      protocol: "h2",
+    };
+    kv.set(
+      STORAGE_KEYS.syncPhaseTimings,
+      JSON.stringify([
+        good,
+        // biome-ignore lint/suspicious/noExplicitAny: 模拟 localStorage 里 protocol 字段被污染成非字符串
+        { ...good, protocol: 42 } as any,
       ]),
     );
 

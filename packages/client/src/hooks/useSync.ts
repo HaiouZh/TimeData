@@ -15,7 +15,12 @@ import { getCloudSyncEnabled } from "../lib/cloudSyncSetting.ts";
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import type { SyncStreamState } from "../lib/syncStream.js";
-import { createPhaseRecorder, recordSyncTiming, type SyncTimingOutcome } from "../sync/phaseTimings.ts";
+import {
+  createPhaseRecorder,
+  readSyncTransportProtocol,
+  recordSyncTiming,
+  type SyncTimingOutcome,
+} from "../sync/phaseTimings.ts";
 import type { SyncExecutorMeta, SyncExecutorOutcome } from "../sync/scheduler.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
@@ -123,6 +128,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
         waitMs: meta?.waitMs,
         reason: meta?.reason,
         connection: meta?.connection,
+        protocol: readSyncTransportProtocol(),
       });
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);

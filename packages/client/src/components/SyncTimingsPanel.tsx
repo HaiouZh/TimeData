@@ -20,6 +20,7 @@ export default function SyncTimingsPanel() {
   const percentiles = timingTotalsPercentiles(entries);
 
   const metaParts = [
+    latest.protocol != null ? latest.protocol : null,
     latest.reason != null ? latest.reason : null,
     latest.connection != null ? latest.connection : null,
   ].filter((part): part is string => part != null);
