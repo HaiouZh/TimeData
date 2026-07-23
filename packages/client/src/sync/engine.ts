@@ -34,6 +34,10 @@ const LAST_SYNCED_SEQ_KEY = STORAGE_KEYS.lastSyncedSeq;
 const SYNC_FAILURE_COUNT_KEY = STORAGE_KEYS.syncFailureCount;
 type SyncLog = SyncLogEntry;
 
+// 对冲策略归 engine（api.ts 只提供机制）：仅幂等同步请求启用；≈热连接 p75 的 3 倍。
+export const SYNC_HEDGE_DELAY_MS = 1500;
+const SYNC_HEDGE = { delayMs: SYNC_HEDGE_DELAY_MS } as const;
+
 export interface SyncConflict {
   tableName: "categories" | "time_entries" | "settings";
   recordId: string;
@@ -267,6 +271,7 @@ async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: numbe
   const response = await apiFetch<unknown>("/api/sync/pull", {
     method: "POST",
     body: JSON.stringify(body),
+    hedge: SYNC_HEDGE,
     ...options,
   });
   const parsed = SyncPullResponseSchema.safeParse(response);
@@ -944,8 +949,8 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       // 无 pending：status 预查仅在此路径保留，承担 no-op 判定。
       // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
       const serverStatus = rec
-        ? await rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status"))
-        : await apiFetch<SyncStatusResponse>("/api/sync/status");
+        ? await rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status", { hedge: SYNC_HEDGE }))
+        : await apiFetch<SyncStatusResponse>("/api/sync/status", { hedge: SYNC_HEDGE });
       recordClockSkew(serverStatus.serverTime);
       const serverSeq = serverStatus.latestSeq ?? 0;
       const localSeq = getLastSyncedSeq() ?? 0;

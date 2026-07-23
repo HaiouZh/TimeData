@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -1270,6 +1270,7 @@ describe("syncPull", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
       body: JSON.stringify({ sinceSeq: 21, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
     });
     expect(getLastSyncedSeq()).toBe(22);
   });
@@ -1816,6 +1817,7 @@ describe("syncPull", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
       body: JSON.stringify({ sinceSeq: 0, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
     });
   });
 
@@ -1993,10 +1995,12 @@ describe("pull 分批拉取", () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/pull", {
       method: "POST",
       body: JSON.stringify({ sinceSeq: 0, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
     });
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", {
       method: "POST",
       body: JSON.stringify({ sinceSeq: 2, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
     });
   });
 
@@ -2202,6 +2206,7 @@ describe("syncPullSinceSeq", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", {
       method: "POST",
       body: JSON.stringify({ sinceSeq: 31, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
     });
     expect(getLastSyncedSeq()).toBe(33);
   });
@@ -2760,6 +2765,31 @@ describe("regularSync", () => {
     expect(fetchCalls.filter((url) => url.endsWith("/api/sync/status"))).toHaveLength(1);
   });
 
+  it("pull 与 status 请求携带对冲选项", async () => {
+    // 无 pending：走 status→pull 路径（对齐上方 no-op/catchup 用例的准备方式）。
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 0,
+        entryCount: 0,
+        quickNoteCount: 0,
+        lastUpdatedAt: null,
+        latestSeq: 5,
+        serverTime: "2026-05-17T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        changes: [],
+        latestSeq: 5,
+        nextSinceSeq: 5,
+        hasMore: false,
+        serverTime: "2026-05-17T00:00:01.000Z",
+      });
+
+    await regularSync();
+
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
+  });
+
   it("returns identical from meta status without pulling a full snapshot", async () => {
     await db.categories.add({
       id: "cat-1",
@@ -2795,7 +2825,7 @@ describe("regularSync", () => {
 
     expect(result).toMatchObject({ identical: true, pushed: 0, pulled: 0, rejected: 0, pushConflicts: 0 });
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status");
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", { hedge: { delayMs: SYNC_HEDGE_DELAY_MS } });
     expect(apiFetchMock).not.toHaveBeenCalledWith("/api/sync/pull", expect.anything());
     expect(getLastSyncedSeq()).toBe(7);
   });
@@ -2881,7 +2911,7 @@ describe("regularSync", () => {
 
     const result = await regularSync();
 
-    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status");
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", { hedge: { delayMs: SYNC_HEDGE_DELAY_MS } });
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", expect.objectContaining({ method: "POST" }));
     const pullBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
     expect(pullBody.sinceSeq).toBe(0);
