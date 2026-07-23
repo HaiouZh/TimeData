@@ -13,6 +13,7 @@ import {
   SyncPullResponseSchema,
   SyncPushReasonCodeSchema,
   SyncStatusResponseSchema,
+  SyncStreamBumpSchema,
   TimeEntrySchema,
   UtcIsoStringSchema,
 } from "./schemas.js";
@@ -673,5 +674,46 @@ describe("SyncStatusResponseSchema / SyncPullResponseSchema serverTime 收紧", 
       changes: [],
       serverTime: "2026-05-19T03:00:00Z",
     }).success).toBe(false);
+  });
+});
+
+describe("SyncStreamBumpSchema", () => {
+  it("接受纯 bump（现状形状）", () => {
+    expect(SyncStreamBumpSchema.safeParse({ latestSeq: 5 }).success).toBe(true);
+    expect(SyncStreamBumpSchema.safeParse({ latestSeq: null }).success).toBe(true);
+  });
+
+  it("接受带载荷的 bump", () => {
+    const result = SyncStreamBumpSchema.safeParse({
+      latestSeq: 7,
+      fromSeq: 5,
+      changes: [
+        {
+          tableName: "quick_notes",
+          recordId: "note-1",
+          action: "update",
+          data: quickNote,
+          timestamp: "2026-06-01T04:02:00.000Z",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("changes 含非法条目时整体拒绝", () => {
+    const result = SyncStreamBumpSchema.safeParse({
+      latestSeq: 7,
+      fromSeq: 5,
+      changes: [{ tableName: "nonsense", recordId: "x", action: "explode" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("容忍未知字段（非 strict，向后兼容）", () => {
+    expect(SyncStreamBumpSchema.safeParse({ latestSeq: 5, futureField: 1 }).success).toBe(true);
+  });
+
+  it("缺 latestSeq 拒绝", () => {
+    expect(SyncStreamBumpSchema.safeParse({ fromSeq: 5 }).success).toBe(false);
   });
 });

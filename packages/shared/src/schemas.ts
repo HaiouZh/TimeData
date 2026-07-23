@@ -114,3 +114,12 @@ export const SyncPullResponseSchema = z.object({
   nextSinceSeq: SeqSchema.nullable().optional(),
   hasMore: z.boolean().optional(),
 });
+
+// SSE bump 载荷：纯增量契约——旧客户端只读 latestSeq；fromSeq+changes 成对出现时收端可就地 apply（ADR 0021）。
+export const SyncStreamBumpSchema = z.object({
+  latestSeq: SeqSchema.nullable(),
+  fromSeq: SeqSchema.optional(),
+  changes: z.array(SyncChangeSchema).optional(),
+});
+
+export type SyncStreamBump = z.infer<typeof SyncStreamBumpSchema>;
