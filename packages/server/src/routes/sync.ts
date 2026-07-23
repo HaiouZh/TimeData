@@ -319,6 +319,7 @@ sync.get("/status", (c) => {
 });
 
 sync.get("/stream", (c) => {
+  c.header("X-Accel-Buffering", "no"); // nginx 读上游头关闭代理缓冲，SSE 逐条直达
   return streamSSE(c, async (stream) => {
     let ready = false;
     let pendingLatestSeq: number | null = null;

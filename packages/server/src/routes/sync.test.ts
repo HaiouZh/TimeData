@@ -526,6 +526,16 @@ describe("sync route", () => {
     await reader!.cancel().catch(() => undefined);
   });
 
+  it("stream 响应声明 X-Accel-Buffering: no（关闭 nginx 代理缓冲）", async () => {
+    const controller = new AbortController();
+    const res = await app.request("/api/sync/stream", { signal: controller.signal });
+
+    expect(res.headers.get("x-accel-buffering")).toBe("no");
+
+    controller.abort();
+    await res.body?.cancel().catch(() => undefined);
+  });
+
   it("broadcasts a sync bump after a successful push commits", async () => {
     const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
     const seen: Array<number | null> = [];
