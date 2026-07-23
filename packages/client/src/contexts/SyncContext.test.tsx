@@ -61,6 +61,15 @@ vi.mock("../lib/syncStream.js", () => ({
   createSyncStream: syncStreamMock.create,
 }));
 
+const engineStashMock = vi.hoisted(() => ({
+  stashBumpPayload: vi.fn(),
+}));
+
+vi.mock("../sync/engine.ts", async () => {
+  const actual = await vi.importActual<typeof import("../sync/engine.ts")>("../sync/engine.ts");
+  return { ...actual, stashBumpPayload: engineStashMock.stashBumpPayload };
+});
+
 const mockSyncActions = {
   sync: vi.fn(),
   forceReplace: vi.fn(),
@@ -562,6 +571,144 @@ describe("SyncProvider", () => {
     });
 
     expect(requestSyncSpy).not.toHaveBeenCalledWith("bump");
+
+    await unmount(root);
+  });
+
+  it("bump 带合法载荷：stash + requestSync", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "5");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    const change = {
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "update",
+      data: {
+        id: "note-1",
+        text: "突然想到一个词",
+        occurredAt: "2026-06-01T04:01:30.123Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+      timestamp: "2026-06-01T04:02:00.000Z",
+    };
+
+    await act(async () => {
+      syncStreamMock.emit({ event: "bump", data: JSON.stringify({ latestSeq: 6, fromSeq: 5, changes: [change] }) });
+    });
+
+    expect(engineStashMock.stashBumpPayload).toHaveBeenCalledTimes(1);
+    expect(engineStashMock.stashBumpPayload).toHaveBeenCalledWith({ fromSeq: 5, latestSeq: 6, changes: [change] });
+    expect(requestSyncSpy).toHaveBeenCalledWith("bump");
+
+    await unmount(root);
+  });
+
+  it("纯 bump（现状）：不 stash、只 requestSync", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "5");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    await act(async () => {
+      syncStreamMock.emit({ event: "bump", data: '{"latestSeq":6}' });
+    });
+
+    expect(engineStashMock.stashBumpPayload).not.toHaveBeenCalled();
+    expect(requestSyncSpy).toHaveBeenCalledWith("bump");
+
+    await unmount(root);
+  });
+
+  it("载荷 schema 不认：退化纯 bump，不丢事件", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "5");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    const unknownChange = {
+      tableName: "unknown_domain",
+      recordId: "x",
+      action: "update",
+      data: {},
+      timestamp: "2026-06-01T04:02:00.000Z",
+    };
+
+    await act(async () => {
+      syncStreamMock.emit({
+        event: "bump",
+        data: JSON.stringify({ latestSeq: 6, fromSeq: 5, changes: [unknownChange] }),
+      });
+    });
+
+    expect(engineStashMock.stashBumpPayload).not.toHaveBeenCalled();
+    expect(requestSyncSpy).toHaveBeenCalledWith("bump");
+
+    await unmount(root);
+  });
+
+  it("latestSeq 不高于本地游标：忽略（现状）", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "5");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    await act(async () => {
+      syncStreamMock.emit({ event: "bump", data: '{"latestSeq":5}' });
+    });
+
+    expect(engineStashMock.stashBumpPayload).not.toHaveBeenCalled();
+    expect(requestSyncSpy).not.toHaveBeenCalledWith("bump");
+
+    await unmount(root);
+  });
+
+  it("hello 事件即使带 changes 也不 stash", async () => {
+    const requestSyncSpy = vi.spyOn(syncScheduler, "requestSync");
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    localStorage.setItem("timedata_cloud_sync_enabled", "true");
+    localStorage.setItem("timedata_last_synced_seq", "5");
+
+    const { root } = await renderDom(createElement(SyncProvider, null, createElement("span", null, "probe")));
+    requestSyncSpy.mockClear();
+
+    const change = {
+      tableName: "quick_notes",
+      recordId: "note-1",
+      action: "update",
+      data: {
+        id: "note-1",
+        text: "突然想到一个词",
+        occurredAt: "2026-06-01T04:01:30.123Z",
+        createdAt: "2026-06-01T04:02:00.000Z",
+        updatedAt: "2026-06-01T04:02:00.000Z",
+      },
+      timestamp: "2026-06-01T04:02:00.000Z",
+    };
+
+    await act(async () => {
+      syncStreamMock.emit({
+        event: "hello",
+        data: JSON.stringify({ latestSeq: 6, fromSeq: 5, changes: [change] }),
+      });
+    });
+
+    expect(engineStashMock.stashBumpPayload).not.toHaveBeenCalled();
+    expect(requestSyncSpy).toHaveBeenCalledWith("bump");
 
     await unmount(root);
   });

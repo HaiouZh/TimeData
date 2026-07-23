@@ -1,5 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { SyncStreamBumpSchema } from "@timedata/shared";
 import { db } from "../db/index.ts";
 import { useAppHideFlush } from "../hooks/useAppHideFlush.ts";
 import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
@@ -8,7 +9,7 @@ import { getCloudSyncEnabled, setCloudSyncEnabled } from "../lib/cloudSyncSettin
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { createSyncStream, type SyncStreamMessage, type SyncStreamState } from "../lib/syncStream.js";
-import { getLastSyncedSeq } from "../sync/engine.ts";
+import { getLastSyncedSeq, stashBumpPayload } from "../sync/engine.ts";
 import { type SyncExecutorMeta, syncExecutorSucceeded, syncScheduler } from "../sync/scheduler.ts";
 
 export type SyncStatus = "idle" | "syncing" | "success" | "error" | "disabled" | "pending";
@@ -112,8 +113,23 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     let latestSeq: number | null = null;
     try {
-      const parsed = JSON.parse(message.data) as { latestSeq?: unknown };
-      latestSeq = typeof parsed.latestSeq === "number" ? parsed.latestSeq : null;
+      const raw = JSON.parse(message.data) as { latestSeq?: unknown };
+      latestSeq = typeof raw.latestSeq === "number" ? raw.latestSeq : null;
+      // 载荷解析失败只放弃快路径、不丢通知：新旧版本窗口里 changes 可能含本端不认的域。
+      const parsed = SyncStreamBumpSchema.safeParse(raw);
+      if (
+        message.event === "bump"
+        && parsed.success
+        && parsed.data.fromSeq != null
+        && parsed.data.changes != null
+        && typeof parsed.data.latestSeq === "number"
+      ) {
+        stashBumpPayload({
+          fromSeq: parsed.data.fromSeq,
+          latestSeq: parsed.data.latestSeq,
+          changes: parsed.data.changes,
+        });
+      }
     } catch {
       return;
     }
