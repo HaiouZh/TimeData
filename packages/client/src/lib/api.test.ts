@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, apiFetch, buildApiUrl } from "./api.js";
 
 describe("buildApiUrl", () => {
@@ -131,5 +131,88 @@ describe("apiFetch", () => {
     expect(headers.get("Content-Type")).toBe("application/json");
     expect(headers.get("Authorization")).toBe("Bearer tk");
     expect(headers.get("X-Custom")).toBe("v");
+  });
+});
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+// 挂死但响应 abort 的 fetch mock（真 fetch 收到 abort 会 reject，普通 mock 不会——超时/abort 用例必须用它）
+const hangingAbortableFetch = (_input: unknown, init?: RequestInit): Promise<Response> =>
+  new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+  });
+
+describe("apiFetch hedging", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("timedata_api_url", "https://example.com");
+    vi.restoreAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("首枪在 delayMs 内成功则只发一枪", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: 1 }));
+    await expect(apiFetch("/api/sync/status", { hedge: { delayMs: 1500 } })).resolves.toEqual({ ok: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("delayMs 内响应头未到→第二枪并发，先回者胜、输家被 abort", async () => {
+    let firstSignal: AbortSignal | null = null;
+    vi.spyOn(globalThis, "fetch")
+      .mockImplementationOnce((_input, init) => {
+        firstSignal = (init?.signal as AbortSignal) ?? null;
+        return new Promise<Response>(() => {});
+      })
+      .mockImplementationOnce(async () => jsonResponse({ winner: 2 }));
+    const promise = apiFetch<{ winner: number }>("/api/sync/pull", { method: "POST", body: "{}", hedge: { delayMs: 1500 } });
+    await vi.advanceTimersByTimeAsync(1500);
+    await expect(promise).resolves.toEqual({ winner: 2 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(firstSignal?.aborted).toBe(true);
+  });
+
+  it("首枪网络错误→不等 delayMs 立即补枪", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(jsonResponse({ ok: 2 }));
+    await expect(apiFetch("/api/sync/status", { hedge: { delayMs: 1500 } })).resolves.toEqual({ ok: 2 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("两枪都网络错误→按现有文案报网络失败，共 2 枪", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    await expect(apiFetch("/api/sync/status", { hedge: { delayMs: 1500 } })).rejects.toThrow(/请求失败|failed/i);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("对冲下总超时仍按 timeoutMs 生效", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(hangingAbortableFetch);
+    const promise = apiFetch("/api/sync/status", { hedge: { delayMs: 1500 }, timeoutMs: 15_000 });
+    const assertion = expect(promise).rejects.toThrow(/超时|timeout/i);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("调用方 signal abort 原样抛且不补枪", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(hangingAbortableFetch);
+    const controller = new AbortController();
+    const promise = apiFetch("/api/sync/status", { hedge: { delayMs: 1500 }, signal: controller.signal });
+    const assertion = expect(promise).rejects.toMatchObject({ name: "AbortError" });
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    await assertion;
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("不带 hedge：网络错误只发一枪（现状回归）", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("fetch failed"));
+    await expect(apiFetch("/api/sync/status")).rejects.toThrow();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

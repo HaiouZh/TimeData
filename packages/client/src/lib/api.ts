@@ -32,9 +32,12 @@ function describeFetchFailure(url: string): Error {
 
 export interface ApiFetchOptions extends RequestInit {
   timeoutMs?: number;
+  /** 对冲：delayMs 内响应头未到并发第二枪，网络错误立即补枪；共 2 枪。仅限幂等请求 + 字符串 body。 */
+  hedge?: { delayMs: number };
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const HEDGE_MAX_ATTEMPTS = 2;
 
 function combineSignals(signals: Array<AbortSignal | null | undefined>): AbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
@@ -58,7 +61,7 @@ function combineSignals(signals: Array<AbortSignal | null | undefined>): AbortSi
 }
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { timeoutMs: requestedTimeoutMs, signal: callerSignal, ...fetchOptions } = options;
+  const { timeoutMs: requestedTimeoutMs, hedge, signal: callerSignal, ...fetchOptions } = options;
   const url = buildApiUrl(getApiBase(), path);
   const headers = new Headers(fetchOptions.headers);
   if (!headers.has("Content-Type")) {
@@ -70,17 +73,70 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const controller = new AbortController();
+  const totalController = new AbortController();
   const timeoutMs = requestedTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   let timedOut = false;
-  const timer = setTimeout(() => {
+  const totalTimer = setTimeout(() => {
     timedOut = true;
-    controller.abort();
+    totalController.abort();
   }, timeoutMs);
+
+  // 竞速多枪：先到的响应头定胜负，输家 abort；HTTP 状态错误算"有响应"，照走下方 ApiError 路径。
+  const raceAttempts = (): Promise<Response> =>
+    new Promise<Response>((resolve, reject) => {
+      const maxAttempts = hedge ? HEDGE_MAX_ATTEMPTS : 1;
+      const controllers: AbortController[] = [];
+      let launched = 0;
+      let failures = 0;
+      let settled = false;
+      let hedgeTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const settle = (finish: () => void): void => {
+        if (settled) return;
+        settled = true;
+        if (hedgeTimer) clearTimeout(hedgeTimer);
+        finish();
+      };
+
+      const launch = (): void => {
+        if (settled || launched >= maxAttempts) return;
+        launched += 1;
+        const controller = new AbortController();
+        controllers.push(controller);
+        fetch(url, {
+          ...fetchOptions,
+          headers,
+          signal: combineSignals([callerSignal, totalController.signal, controller.signal]),
+        }).then(
+          (response) => {
+            settle(() => {
+              for (const other of controllers) {
+                if (other !== controller) other.abort();
+              }
+              resolve(response);
+            });
+          },
+          (error: unknown) => {
+            failures += 1;
+            if (settled) return;
+            if (!timedOut && !callerSignal?.aborted && launched < maxAttempts) {
+              launch(); // 快重试：不等 TCP 重传长尾
+              return;
+            }
+            if (failures >= launched) settle(() => reject(error));
+          },
+        );
+      };
+
+      launch();
+      if (hedge) {
+        hedgeTimer = setTimeout(launch, hedge.delayMs);
+      }
+    });
 
   let res: Response;
   try {
-    res = await fetch(url, { ...fetchOptions, headers, signal: combineSignals([callerSignal, controller.signal]) });
+    res = await raceAttempts();
   } catch (error) {
     if (timedOut) {
       throw new Error(messages.network.timeout(timeoutMs, url));
@@ -93,7 +149,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     }
     throw describeFetchFailure(url);
   } finally {
-    clearTimeout(timer);
+    clearTimeout(totalTimer);
   }
 
   if (!res.ok) {
