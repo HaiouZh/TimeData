@@ -62,6 +62,7 @@ last-reviewed: 2026-07-12
 | `server_config` | 服务端独有配置，例如 Garmin 凭证；不同步客户端 |
 | `api_request_logs` | 服务端 `/api/*` 请求审计运维表；不同步客户端，不保存 body、Authorization 或完整 query |
 | `deleted_tasks_archive` | tasks 域 delete 生效前的整行快照归档，只写不读，不进同步域，用于删除死因分析 |
+| `sync_push_requests` | push `requestId` 幂等回放表：(requestId → status_code, 原响应 JSON)，TTL 24h 惰性清理；见 [ADR 0020](../adr/0020-sync-push-request-idempotency.md) |
 
 ## 2. Settings 键值契约
 
