@@ -20,7 +20,7 @@ vi.mock("../lib/api.js", () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { advanceSeqCursor, canSkipEchoPull, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS } from "./engine.js";
+import { advanceSeqCursor, canSkipEchoPull, clearBumpStash, compactSyncLogs, getClockSkewMs, getConsecutiveSyncFailureCount, getLastSyncedSeq, getQuarantinedSyncLogs, getSyncHealth, localContentHash, prepareForcePush, pruneSyncedLogs, requeueQuarantinedSyncLogs, recordClockSkew, recordRegularSyncFailure, recordSyncLog, recordSyncLogs, regularSync, resetConsecutiveSyncFailures, setLastSyncedSeq, shouldOpenSyncDiagnostics, stashBumpPayload, syncForcePushToServer, syncPush, syncPull, syncPullSinceSeq, syncForceReplace, yieldToMainThread, SYNC_HEDGE_DELAY_MS } from "./engine.js";
 import { createPhaseRecorder } from "./phaseTimings.js";
 import { syncScheduler } from "./scheduler.js";
 
@@ -3421,6 +3421,236 @@ describe("regularSync", () => {
 
 });
 
+describe("bump 载荷就地 apply", () => {
+  beforeEach(() => {
+    clearBumpStash();
+  });
+
+  afterEach(() => {
+    clearBumpStash();
+  });
+
+  it("游标连续：本地 apply、推游标、零网络请求", async () => {
+    setLastSyncedSeq(5);
+    stashBumpPayload({
+      fromSeq: 5,
+      latestSeq: 6,
+      changes: [{
+        tableName: "quick_notes",
+        recordId: "note-bump",
+        action: "update",
+        data: {
+          id: "note-bump",
+          text: "from bump",
+          occurredAt: "2026-07-10T00:00:00.000Z",
+          createdAt: "2026-07-10T00:00:00.000Z",
+          updatedAt: "2026-07-10T00:00:00.000Z",
+        },
+        timestamp: "2026-07-10T00:00:00.000Z",
+      }],
+    });
+
+    // 整轮除 /api/admin/sync-logs 上报外不该再打任何同步网络请求；命中即抛，
+    // 让断言失败点直接落在越界调用上，而不是事后靠调用计数猜测。
+    apiFetchMock.mockImplementation((url: unknown) => {
+      if (String(url).endsWith("/api/admin/sync-logs")) return Promise.resolve({ ok: true });
+      throw new Error(`unexpected network call: ${url}`);
+    });
+
+    const result = await regularSync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/admin/sync-logs", expect.objectContaining({ method: "POST" }));
+    await expect(db.quickNotes.get("note-bump")).resolves.toMatchObject({ text: "from bump" });
+    expect(getLastSyncedSeq()).toBe(6);
+    expect(result).toMatchObject({ pulled: 1, conflicts: [], identical: false });
+  });
+
+  it("游标不连续：清 stash、走现状 status 路径", async () => {
+    setLastSyncedSeq(3);
+    stashBumpPayload({ fromSeq: 5, latestSeq: 6, changes: [] });
+    apiFetchMock.mockResolvedValue({
+      categoryCount: 0,
+      entryCount: 0,
+      quickNoteCount: 0,
+      lastUpdatedAt: null,
+      latestSeq: 3,
+      serverTime: "2026-07-10T00:00:00.000Z",
+    });
+
+    const result = await regularSync();
+
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
+    expect(result).toMatchObject({ identical: true });
+
+    // stash 已被 take 清空：即便游标随后恰好推进到原 stash.fromSeq，也不会补吃一次
+    // 陈旧载荷——第二轮仍必须走网络判定，不能悄悄命中快路径。
+    apiFetchMock.mockClear();
+    setLastSyncedSeq(5);
+    apiFetchMock.mockResolvedValue({
+      categoryCount: 0,
+      entryCount: 0,
+      quickNoteCount: 0,
+      lastUpdatedAt: null,
+      latestSeq: 5,
+      serverTime: "2026-07-10T00:00:01.000Z",
+    });
+
+    const result2 = await regularSync();
+
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.anything());
+    expect(result2).toMatchObject({ identical: true });
+  });
+
+  it("有 pending 时不消费 stash", async () => {
+    await db.categories.add({
+      id: "cat-1",
+      name: "Work",
+      parentId: null,
+      color: "#3366ff",
+      icon: null,
+      sortOrder: 1,
+      isArchived: false,
+      createdAt: "2026-05-08T08:00:00.000Z",
+      updatedAt: "2026-05-08T08:00:00.000Z",
+    });
+    await db.timeEntries.add({
+      id: "entry-local",
+      categoryId: "cat-1",
+      startTime: "2026-05-08T09:00:00.000Z",
+      endTime: "2026-05-08T10:00:00.000Z",
+      note: "local",
+      createdAt: "2026-05-08T09:00:00.000Z",
+      updatedAt: "2026-05-08T09:00:00.000Z",
+    });
+    await db.syncLog.add({ id: "log-1", tableName: "time_entries", recordId: "entry-local", action: "create", timestamp: new Date().toISOString(), synced: 0 });
+    setLastSyncedSeq(3);
+    // 游标命中 stash.fromSeq，但有 pending：不该被快路径吃掉，必须正常走 push。
+    stashBumpPayload({ fromSeq: 3, latestSeq: 4, changes: [] });
+
+    apiFetchMock
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{ tableName: "time_entries", recordId: "entry-local", action: "create", status: "accepted", reasonCode: "applied", message: "Applied", incomingTimestamp: "2026-05-08T09:00:00.000Z" }],
+        backupId: "backup-1",
+        serverTime: "2026-05-08T10:01:00.000Z",
+        latestSeq: 4,
+        appliedCount: 1,
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    const result = await regularSync();
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/push", expect.objectContaining({ method: "POST" }));
+    expect(result).toMatchObject({ pushed: 1 });
+    const logBody = JSON.parse(apiFetchMock.mock.calls[1][1].body as string);
+    expect(logBody.map((item: { action: string }) => item.action)).not.toContain("bump_payload_applied");
+  });
+
+  it("单槽覆盖：后到 bump 覆盖前一个", async () => {
+    setLastSyncedSeq(5);
+    stashBumpPayload({ fromSeq: 5, latestSeq: 6, changes: [] });
+    stashBumpPayload({ fromSeq: 6, latestSeq: 7, changes: [] });
+
+    apiFetchMock.mockResolvedValueOnce({
+      categoryCount: 0,
+      entryCount: 0,
+      quickNoteCount: 0,
+      lastUpdatedAt: null,
+      latestSeq: 5,
+      serverTime: "2026-07-10T00:00:00.000Z",
+    });
+
+    const result = await regularSync();
+
+    // 新 stash.fromSeq=6 与游标 5 不匹配（旧槽已被覆盖，不再是 5）→ 退化 status 路径。
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/status", expect.anything());
+    expect(result).toMatchObject({ identical: true });
+  });
+
+  it("apply 冲突走既有 conflicts 管道", async () => {
+    await db.timeEntries.add({
+      id: "entry-1",
+      categoryId: "cat-local",
+      startTime: "2026-05-07T09:00:00.000Z",
+      endTime: "2026-05-07T10:00:00.000Z",
+      note: "local version",
+      createdAt: "2026-05-07T08:00:00.000Z",
+      updatedAt: "2026-05-07T12:00:00.000Z",
+    });
+    await db.syncLog.add({
+      id: "log-1",
+      tableName: "time_entries",
+      recordId: "entry-1",
+      action: "update",
+      timestamp: "2026-05-07T12:00:00.000Z",
+      synced: 0,
+    });
+    setLastSyncedSeq(5);
+    stashBumpPayload({
+      fromSeq: 5,
+      latestSeq: 6,
+      changes: [{
+        tableName: "time_entries",
+        recordId: "entry-1",
+        action: "update",
+        data: {
+          id: "entry-1",
+          categoryId: "cat-remote",
+          startTime: "2026-05-07T09:00:00.000Z",
+          endTime: "2026-05-07T11:00:00.000Z",
+          note: "remote version",
+          createdAt: "2026-05-07T08:00:00.000Z",
+          updatedAt: "2026-05-07T12:30:00.000Z",
+        },
+        timestamp: "2026-05-07T12:30:00.000Z",
+      }],
+    });
+
+    // 快路径的“无 pending”判定只看外层一次快照；真实并发下，判定通过后到
+    // applyPullChangesBatch 自身事务开始前仍可能落一条新写入（引擎里就地 apply
+    // 分支注释所说的这层竞态）。这里用已存在的 pending 记录复现它：外层查询打桩成
+    // 0（放行进入快路径），内层事务自己重新查到的真实 pending 命中既有 conflicts 管道。
+    let whereCallCount = 0;
+    const whereSpy = vi.spyOn(db.syncLog, "where");
+    whereSpy.mockImplementation((index: unknown) => {
+      const real = Reflect.apply(
+        Object.getPrototypeOf(db.syncLog).where as (this: unknown, ...args: unknown[]) => unknown,
+        db.syncLog,
+        [index],
+      ) as { equals: (value: number) => { count: () => Promise<number> } };
+      if (index !== "synced") return real;
+      whereCallCount += 1;
+      const isFirstCall = whereCallCount === 1;
+      return {
+        equals: (value: number) => {
+          const collection = real.equals(value);
+          if (isFirstCall) collection.count = async () => 0;
+          return collection;
+        },
+      };
+    });
+
+    apiFetchMock.mockImplementation((url: unknown) => {
+      if (String(url).endsWith("/api/admin/sync-logs")) return Promise.resolve({ ok: true });
+      throw new Error(`unexpected network call: ${url}`);
+    });
+
+    try {
+      const result = await regularSync();
+
+      expect(result.conflicts).toHaveLength(1);
+      expect(result.conflicts[0]).toMatchObject({ tableName: "time_entries", recordId: "entry-1" });
+      expect(result.pulled).toBe(0);
+      await expect(db.timeEntries.get("entry-1")).resolves.toMatchObject({ categoryId: "cat-local" });
+      await expect(db.syncLog.get("log-1")).resolves.toMatchObject({ synced: 0 });
+    } finally {
+      whereSpy.mockRestore();
+    }
+  });
+});
 
 describe("syncForceReplace", () => {
   it("clears local data and replaces with server data", async () => {

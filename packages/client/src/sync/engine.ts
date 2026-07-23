@@ -125,6 +125,30 @@ export function setLastSyncedSeq(seq: number): void {
   safeSetItem(LAST_SYNCED_SEQ_KEY, String(seq));
 }
 
+// SSE bump 载荷暂存：单槽、新覆盖旧、取出即清。只在无 pending 的 regularSync 里消费；
+// 任何不匹配/失败都退化为现状 status+pull（stash 已清，自然走老路）。
+export interface BumpStashPayload {
+  fromSeq: number;
+  latestSeq: number;
+  changes: SyncChange[];
+}
+
+let bumpStash: BumpStashPayload | null = null;
+
+export function stashBumpPayload(payload: BumpStashPayload): void {
+  bumpStash = payload;
+}
+
+export function clearBumpStash(): void {
+  bumpStash = null;
+}
+
+function takeBumpStash(): BumpStashPayload | null {
+  const stash = bumpStash;
+  bumpStash = null;
+  return stash;
+}
+
 // 本地时钟与服务器的偏差（本地 - 服务器，毫秒）。staleGuard 会比较跨端时间戳，偏差过大需提示用户校准系统时间。
 export const CLOCK_SKEW_WARN_MS = 60_000;
 
@@ -956,6 +980,36 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
     const unsyncedCount = await db.syncLog.where("synced").equals(0).count();
 
     if (unsyncedCount === 0) {
+      // bump 载荷快路径：游标连续则就地 apply，整轮零网络请求。
+      // 与 pull 共用 applyPullChangesBatch（同一套冲突检测/级联保护/Dexie 事务），
+      // 与 pull 同处 runRegularSync = 同一把 syncing 互斥。
+      // take 是无条件的：不匹配也会清空 stash，避免过期载荷在游标偶然追平时被误吃。
+      // apply 抛错时 stash 已清，异常沿下方 catch（recordRegularSyncFailure）上抛，
+      // scheduler 退避重试自然落到本函数下一轮的 status+pull——无需额外补偿。
+      const stash = takeBumpStash();
+      if (stash && stash.fromSeq === (getLastSyncedSeq() ?? 0)) {
+        const applyStash = async () => applyPullChangesBatch(stash.changes, new Set<string>());
+        const { applied, conflicts } = rec ? await rec.time("bumpApply", applyStash) : await applyStash();
+        if (stash.latestSeq > (getLastSyncedSeq() ?? 0)) setLastSyncedSeq(stash.latestSeq);
+        const bumpLogs: Array<{ action: string; detail?: string; record_count?: number }> = [
+          { action: "bump_payload_applied", record_count: applied },
+        ];
+        if (rec) bumpLogs.push({ action: "phase_timings", detail: JSON.stringify(rec.phases), record_count: 0 });
+        void reportToServer(bumpLogs);
+        resetConsecutiveSyncFailures();
+        void pruneSyncedLogs().catch(() => undefined);
+        return {
+          checked: true,
+          identical: false,
+          pushed: 0,
+          rejected: 0,
+          pushConflicts: 0,
+          pushIssues: [],
+          pulled: applied,
+          conflicts,
+        };
+      }
+
       // 无 pending：status 预查仅在此路径保留，承担 no-op 判定。
       // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
       const serverStatus = rec

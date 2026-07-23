@@ -4,9 +4,10 @@ const PHASE_LABELS: Record<SyncPhaseName, string> = {
   status: "状态",
   push: "推送",
   pull: "拉取",
+  bumpApply: "就地应用",
 };
 
-const PHASE_ORDER: SyncPhaseName[] = ["status", "push", "pull"];
+const PHASE_ORDER: SyncPhaseName[] = ["status", "push", "pull", "bumpApply"];
 
 export default function SyncTimingsPanel() {
   const entries = getSyncTimings();

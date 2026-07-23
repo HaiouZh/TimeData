@@ -1,7 +1,7 @@
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 
-export type SyncPhaseName = "status" | "push" | "pull";
+export type SyncPhaseName = "status" | "push" | "pull" | "bumpApply";
 
 export interface PhaseRecorder {
   time<T>(phase: SyncPhaseName, fn: () => Promise<T>): Promise<T>; // 异常照抛，仍记耗时
