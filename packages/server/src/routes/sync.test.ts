@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SyncChange, Task, TaskCompletionOp } from "@timedata/shared";
+import type { SyncChange, SyncStreamBump, Task, TaskCompletionOp } from "@timedata/shared";
 import { createEntryFromCliInput } from "../lib/entry-service.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
 let db: Database.Database;
@@ -660,6 +660,244 @@ describe("sync route", () => {
     } finally {
       removeSyncStreamListener(listener);
     }
+  });
+
+  describe("push bump 载荷", () => {
+    it("push 成功后 bump 携带本次区间的 changes", async () => {
+      const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+      const received: SyncStreamBump[] = [];
+      const listener = (bump: SyncStreamBump) => received.push(bump);
+      addSyncStreamListener(listener);
+
+      try {
+        // 垫一条无关的既有 seq，让本次 push 的 fromSeq 落在非零值上（覆盖 fromSeq===0 之外的分支）。
+        db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+          "categories",
+          "cat-1",
+          "update",
+        );
+        const beforeSeq = latestSeq();
+
+        const res = await pushChanges(
+          [
+            {
+              tableName: "categories",
+              recordId: "cat-bump-1",
+              action: "create",
+              data: {
+                id: "cat-bump-1",
+                name: "bump-1",
+                parentId: null,
+                color: "#111111",
+                icon: null,
+                sortOrder: 0,
+                isArchived: false,
+                createdAt: "2026-07-23T00:00:00.000Z",
+                updatedAt: "2026-07-23T00:00:00.000Z",
+              },
+              timestamp: "2026-07-23T00:00:00.000Z",
+            },
+            {
+              tableName: "categories",
+              recordId: "cat-bump-2",
+              action: "create",
+              data: {
+                id: "cat-bump-2",
+                name: "bump-2",
+                parentId: null,
+                color: "#222222",
+                icon: null,
+                sortOrder: 1,
+                isArchived: false,
+                createdAt: "2026-07-23T00:00:01.000Z",
+                updatedAt: "2026-07-23T00:00:01.000Z",
+              },
+              timestamp: "2026-07-23T00:00:01.000Z",
+            },
+          ] as SyncChange[],
+          beforeSeq,
+        );
+
+        expect(res.status).toBe(200);
+        const afterSeq = latestSeq();
+        const bump = received.at(-1)!;
+        expect(bump.fromSeq).toBe(beforeSeq);
+        expect(bump.latestSeq).toBe(afterSeq);
+        expect(bump.changes).toHaveLength(afterSeq - beforeSeq);
+        expect(bump.changes?.map((change) => change.recordId).sort()).toEqual(["cat-bump-1", "cat-bump-2"]);
+      } finally {
+        removeSyncStreamListener(listener);
+      }
+    });
+
+    it("超条数上限退化纯 bump", async () => {
+      const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+      const received: SyncStreamBump[] = [];
+      const listener = (bump: SyncStreamBump) => received.push(bump);
+      addSyncStreamListener(listener);
+
+      try {
+        const changes: SyncChange[] = Array.from({ length: 51 }, (_, index) => ({
+          tableName: "quick_notes",
+          recordId: `qn-bulk-${index}`,
+          action: "create",
+          data: {
+            id: `qn-bulk-${index}`,
+            text: `note-${index}`,
+            occurredAt: "2026-07-23T00:00:00.000Z",
+            createdAt: "2026-07-23T00:00:00.000Z",
+            updatedAt: "2026-07-23T00:00:00.000Z",
+          },
+          timestamp: "2026-07-23T00:00:00.000Z",
+        })) as SyncChange[];
+
+        const res = await pushChanges(changes, 0);
+
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body).toMatchObject({ accepted: 51, appliedCount: 51 });
+        const bump = received.at(-1)!;
+        expect(bump.latestSeq).toBe(51);
+        expect(bump.fromSeq).toBeUndefined();
+        expect(bump.changes).toBeUndefined();
+      } finally {
+        removeSyncStreamListener(listener);
+      }
+    });
+
+    it("超字节上限退化纯 bump", async () => {
+      const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+      const received: SyncStreamBump[] = [];
+      const listener = (bump: SyncStreamBump) => received.push(bump);
+      addSyncStreamListener(listener);
+
+      try {
+        const bigText = "x".repeat(40 * 1024);
+        const res = await pushChanges(
+          [
+            {
+              tableName: "quick_notes",
+              recordId: "qn-big",
+              action: "create",
+              data: {
+                id: "qn-big",
+                text: bigText,
+                occurredAt: "2026-07-23T00:00:00.000Z",
+                createdAt: "2026-07-23T00:00:00.000Z",
+                updatedAt: "2026-07-23T00:00:00.000Z",
+              },
+              timestamp: "2026-07-23T00:00:00.000Z",
+            } as SyncChange,
+          ],
+          0,
+        );
+
+        expect(res.status).toBe(200);
+        const bump = received.at(-1)!;
+        expect(bump.latestSeq).toBe(1);
+        expect(bump.fromSeq).toBeUndefined();
+        expect(bump.changes).toBeUndefined();
+      } finally {
+        removeSyncStreamListener(listener);
+      }
+    });
+
+    it("全部 conflict（appliedCount=0）时纯 bump", async () => {
+      const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+      const received: SyncStreamBump[] = [];
+      const listener = (bump: SyncStreamBump) => received.push(bump);
+      addSyncStreamListener(listener);
+
+      try {
+        db.prepare("INSERT INTO categories (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(
+          "cat-conflict",
+          "server name",
+          "#4A90D9",
+          "2026-05-08T08:00:00.000Z",
+          "2026-05-08T12:00:00.000Z",
+        );
+        const baseSeq = Number(
+          db
+            .prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)")
+            .run("categories", "cat-conflict", "create").lastInsertRowid,
+        );
+        db.prepare("INSERT INTO sync_seq (table_name, record_id, action) VALUES (?, ?, ?)").run(
+          "categories",
+          "cat-conflict",
+          "update",
+        );
+        const beforeLatestSeq = latestSeq();
+
+        const res = await pushChanges(
+          [
+            {
+              tableName: "categories",
+              recordId: "cat-conflict",
+              action: "update",
+              data: {
+                id: "cat-conflict",
+                name: "stale local name",
+                parentId: null,
+                color: "#22c55e",
+                icon: null,
+                sortOrder: 0,
+                isArchived: false,
+                createdAt: "2026-05-08T08:00:00.000Z",
+                updatedAt: "2026-05-08T10:00:00.000Z",
+              },
+              timestamp: "2026-05-08T10:00:00.000Z",
+            } as SyncChange,
+          ],
+          baseSeq,
+        );
+
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body).toMatchObject({ accepted: 0, conflicts: 1, appliedCount: 0 });
+        expect(latestSeq()).toBe(beforeLatestSeq);
+
+        const bump = received.at(-1)!;
+        expect(bump.latestSeq).toBe(beforeLatestSeq);
+        expect(bump.fromSeq).toBeUndefined();
+        expect(bump.changes).toBeUndefined();
+      } finally {
+        removeSyncStreamListener(listener);
+      }
+    });
+
+    it("force-push 后 bump 保持纯 bump（现状）", async () => {
+      const { addSyncStreamListener, removeSyncStreamListener } = await import("../sync/notifier.js");
+      const received: SyncStreamBump[] = [];
+      const listener = (bump: SyncStreamBump) => received.push(bump);
+      addSyncStreamListener(listener);
+
+      try {
+        const prepareRes = await app.request("/api/sync/force-push/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ categoryCount: 0, entryCount: 0, lastUpdatedAt: null }),
+        });
+        const prepareBody = await prepareRes.json();
+
+        const res = await app.request("/api/sync/force-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confirmToken: prepareBody.confirmToken,
+            confirmationPhrase: "OVERWRITE_SERVER",
+            categories: [],
+            timeEntries: [],
+          }),
+        });
+
+        expect(res.status).toBe(200);
+        const bump = received.at(-1)!;
+        expect("changes" in bump).toBe(false);
+        expect("fromSeq" in bump).toBe(false);
+      } finally {
+        removeSyncStreamListener(listener);
+      }
+    });
   });
 
   it("creates a short-lived force-push confirmation token", async () => {

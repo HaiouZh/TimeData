@@ -693,7 +693,7 @@ sync.post("/push", async (c) => {
     appliedCount,
   }, orderedChanges.length);
   storePushRequestReplay(db, body.requestId, 200, response);
-  notifySyncChange(getLatestSeq());
+  notifySyncChange(getLatestSeq(), buildBumpPayload(db, latestSeqBefore, latestSeqAfter));
   return c.json(response);
 });
 
@@ -736,6 +736,24 @@ function readChangesSinceSeq(db: Database, sinceSeq: number | null, limit?: numb
   // 无行时保持 sinceSeq（无可推进）。
   const nextSinceSeq = lastSeqId ?? sinceSeq ?? null;
   return { changes, nextSinceSeq, hasMore };
+}
+
+// bump 载荷上限：SSE 是通知通道不是搬运通道，超限退化纯 bump 走 pull（design §C）。
+const BUMP_MAX_CHANGES = 50;
+const BUMP_MAX_BYTES = 32 * 1024;
+
+// push 专用：构造 (fromSeq, latestSeqAfter] 区间载荷。调用点必须处于 applyAll 之后、
+// 同一同步段内（无 await 插队），保证区间恰好等于本次 push 的增量。
+function buildBumpPayload(
+  db: Database,
+  fromSeq: number,
+  latestSeqAfter: number,
+): { fromSeq: number; changes: SyncChange[] } | undefined {
+  if (latestSeqAfter <= fromSeq) return undefined; // 无新 seq（全 conflict 等）
+  const page = readChangesSinceSeq(db, fromSeq === 0 ? null : fromSeq, BUMP_MAX_CHANGES + 1);
+  if (page.hasMore) return undefined; // 读满 51 条 = 超条数上限
+  if (JSON.stringify(page.changes).length > BUMP_MAX_BYTES) return undefined;
+  return { fromSeq, changes: page.changes };
 }
 
 sync.post("/pull", async (c) => {
