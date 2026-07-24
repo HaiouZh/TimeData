@@ -32,6 +32,7 @@ const normalizedTask = {
   completedAt: null,
   tags: [],
   ruleId: null,
+  sessionId: null,
   skipped: false,
 };
 const legacyStateField = "tu" + "rn";
@@ -181,6 +182,7 @@ describe("planNormalization", () => {
           weight: 0,
           tags: [],
           ruleId: null,
+          sessionId: null,
           skipped: false,
           sortOrder: 0,
           scheduledAt: null,
