@@ -12,6 +12,7 @@ const DOMAIN_LABELS: Record<string, string> = {
   runs: "跑步",
   tracks: "轨道",
   track_steps: "轨道步骤",
+  sessions: "手头会话",
 };
 
 function labelFor(table: string): string {

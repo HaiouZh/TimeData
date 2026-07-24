@@ -82,6 +82,7 @@ const newTask = {
   completedCount: 0,
   weight: 0,
   ruleId: null,
+  sessionId: null,
   skipped: false,
   sortOrder: 1,
   createdAt: now,
