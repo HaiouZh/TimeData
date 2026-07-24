@@ -27,9 +27,13 @@ const settle = () =>
     await new Promise((r) => setTimeout(r, 0));
   });
 
-async function renderChildren(parentId: string, mode: "draggable" | "static" | "readonly") {
+async function renderChildren(
+  parentId: string,
+  mode: "draggable" | "static" | "readonly",
+  extraProps?: { autoDraft?: boolean; onEmptyDismiss?: () => void },
+) {
   const { host, root } = await renderDom(
-    createElement(SyncProvider, null, createElement(InlineChildren, { parentId, mode })),
+    createElement(SyncProvider, null, createElement(InlineChildren, { parentId, mode, ...extraProps })),
   );
   await settle();
   return { host, root };
@@ -518,6 +522,57 @@ describe("InlineChildren mode 行为矩阵", () => {
 
     expect(host.querySelector('button[aria-label="添加子任务"]')).not.toBeNull();
     expect(host.querySelectorAll("li").length).toBe(1); // 只有 add 按钮
+
+    await unmount(root);
+  });
+
+  it("autoDraft: 挂载即出现草稿输入框，无需点添加按钮", async () => {
+    const parent = await addTask({ title: "空父任务" });
+    const { host, root } = await renderChildren(parent.id, "draggable", { autoDraft: true });
+
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="添加子任务"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("autoDraft 空内容失焦：草稿消失且触发 onEmptyDismiss", async () => {
+    const parent = await addTask({ title: "空父任务" });
+    let dismissed = 0;
+    const { host, root } = await renderChildren(parent.id, "draggable", {
+      autoDraft: true,
+      onEmptyDismiss: () => {
+        dismissed += 1;
+      },
+    });
+    const input = host.querySelector('textarea[aria-label="新子任务标题"]') as HTMLTextAreaElement;
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await settle();
+
+    expect(dismissed).toBe(1);
+
+    await unmount(root);
+  });
+
+  it("已有子任务时草稿收起不触发 onEmptyDismiss", async () => {
+    const parent = await addTask({ title: "父任务" });
+    await createChildTask(parent.id, "已有子任务");
+    let dismissed = 0;
+    const { host, root } = await renderChildren(parent.id, "draggable", {
+      autoDraft: true,
+      onEmptyDismiss: () => {
+        dismissed += 1;
+      },
+    });
+    const input = host.querySelector('textarea[aria-label="新子任务标题"]') as HTMLTextAreaElement;
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await settle();
+
+    expect(dismissed).toBe(0);
 
     await unmount(root);
   });

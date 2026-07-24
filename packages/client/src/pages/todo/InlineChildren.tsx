@@ -14,6 +14,10 @@ export type InlineChildrenMode = "draggable" | "static" | "readonly";
 export interface InlineChildrenProps {
   parentId: string;
   mode: InlineChildrenMode;
+  /** 挂载即进入草稿态（空任务左区展开直达输入）。仅初值，后续内部自治。 */
+  autoDraft?: boolean;
+  /** 草稿收起且当前无任何子任务时回调——宿主用它收回空展开态。 */
+  onEmptyDismiss?: () => void;
 }
 
 /**
@@ -26,9 +30,9 @@ export interface InlineChildrenProps {
  * 新增子任务走「草稿行」：点 +子任务 或在某条子任务上回车，都会在末尾打开一条空白聚焦输入框，
  * 不预填充占位文案；输入为空不落库。不渲染 recurrence/tags/scheduledAt 入口——子任务隐藏高级控件。
  */
-export function InlineChildren({ parentId, mode }: InlineChildrenProps) {
+export function InlineChildren({ parentId, mode, autoDraft = false, onEmptyDismiss }: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
-  const [drafting, setDrafting] = useState(false);
+  const [drafting, setDrafting] = useState(autoDraft);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const parent = useLiveQuery(() => db.tasks.get(parentId), [parentId]);
   const isTemplateParent = mode === "static" && parent?.recurrence !== null && parent?.recurrence !== undefined;
@@ -59,6 +63,7 @@ export function InlineChildren({ parentId, mode }: InlineChildrenProps) {
     }
     if (!(source === "enter" && trimmed)) {
       setDrafting(false);
+      if (!trimmed && children.length === 0) onEmptyDismiss?.();
     }
   }
 
