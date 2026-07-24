@@ -627,6 +627,49 @@ describe("TaskRow", () => {
     });
   });
 
+  describe("抓到手头 overlay 入口", () => {
+    it("桌面 + inbox 池 + 传 onToHand：显示「抓到手头」按钮并回传该 task", async () => {
+      const onToHand = vi.fn();
+      const rowTask = task({ title: "写周报" });
+      const { host, root } = await renderDom(
+        <TaskRow task={rowTask} pool="inbox" coarsePointer={false} onToggle={noop} onEdit={noop} onToHand={onToHand} />,
+      );
+
+      const grabButton = host.querySelector('[aria-label="抓到手头 写周报"]');
+      expect(grabButton).not.toBeNull();
+      await click(grabButton);
+      expect(onToHand).toHaveBeenCalledWith(expect.objectContaining({ id: rowTask.id }));
+
+      await unmount(root);
+    });
+
+    it("重复模板行不渲染「抓到手头」按钮", async () => {
+      const onToHand = vi.fn();
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task({ recurrence: { freq: "daily", interval: 1, basis: "due" } })}
+          pool="inbox"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={noop}
+          onToHand={onToHand}
+        />,
+      );
+
+      expect(host.querySelector('[aria-label^="抓到手头"]')).toBeNull();
+      await unmount(root);
+    });
+
+    it("不传 onToHand 不渲染「抓到手头」按钮（向后兼容）", async () => {
+      const { host, root } = await renderDom(
+        <TaskRow task={task()} pool="inbox" coarsePointer={false} onToggle={noop} onEdit={noop} />,
+      );
+
+      expect(host.querySelector('[aria-label^="抓到手头"]')).toBeNull();
+      await unmount(root);
+    });
+  });
+
   describe("extraAction 插槽", () => {
     it("renders an extra action and stops row activation when clicked", async () => {
       const onEdit = vi.fn();

@@ -1,10 +1,11 @@
-import { Trash, X } from "@phosphor-icons/react";
+import { HandGrabbing, Trash, X } from "@phosphor-icons/react";
 import { nextDueDate, type Recurrence, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
+import { getActiveSession, grabTaskToHand, releaseTaskFromHand } from "../../lib/sessions.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
 import { subtaskProgress } from "../../lib/tasks/subtasks.js";
@@ -49,6 +50,7 @@ function normalizeTitle(value: string): string {
 
 export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
+  const activeSession = useLiveQuery(() => getActiveSession(), []) ?? null;
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -142,6 +144,15 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
     setTags(updated);
     onTagsChange(task, updated);
   }
+
+  const inHand = activeSession !== null && task?.sessionId === activeSession.id;
+  const canGrab = task ? (task.parentId ?? null) === null && task.recurrence === null && !task.done : false;
+
+  const handleHand = async () => {
+    if (!task) return;
+    if (inHand) await releaseTaskFromHand(task.id);
+    else await grabTaskToHand(task.id);
+  };
 
   function handleDelete(): void {
     if (!id || !task) return;
@@ -383,6 +394,16 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
             )}
 
             <div className="flex justify-end">
+              {canGrab && (
+                <button
+                  type="button"
+                  aria-label={inHand ? "移出手头" : "抓到手头"}
+                  onClick={() => void handleHand()}
+                  className="flex h-11 w-11 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-accent"
+                >
+                  <Icon icon={HandGrabbing} size={18} />
+                </button>
+              )}
               <button
                 type="button"
                 aria-label="删除任务"

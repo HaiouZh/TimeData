@@ -35,6 +35,7 @@ export interface TaskListProps {
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
+  onToHand?: (t: Task) => void;
   /** 行内额外动作插槽（如翻牌「顶一下」）。 */
   extraAction?: (task: Task) => ReactNode;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
@@ -60,6 +61,7 @@ export function TaskList(props: TaskListProps) {
         onDelete={props.onDelete}
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
+        onToHand={props.onToHand}
         extraAction={props.extraAction}
         childrenModeOverride={props.childrenModeOverride}
         indentTargetActive={props.indentTargetId === task.id}
@@ -88,6 +90,13 @@ export function TaskList(props: TaskListProps) {
           <SwipeAction onClick={() => props.onToInbox(task)}>
             <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
               回收件箱
+            </div>
+          </SwipeAction>
+        )}
+        {props.onToHand && task.recurrence === null && pool !== "completed" && (
+          <SwipeAction onClick={() => props.onToHand?.(task)}>
+            <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
+              抓到手头
             </div>
           </SwipeAction>
         )}

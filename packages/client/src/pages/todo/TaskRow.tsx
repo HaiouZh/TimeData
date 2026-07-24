@@ -1,5 +1,16 @@
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
-import { ArrowLeft, ArrowRight, CalendarBlank, CaretDown, CaretRight, DotsSixVertical, ListChecks, Repeat, Trash } from "@phosphor-icons/react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarBlank,
+  CaretDown,
+  CaretRight,
+  DotsSixVertical,
+  HandGrabbing,
+  ListChecks,
+  Repeat,
+  Trash,
+} from "@phosphor-icons/react";
 import { nextDueDate, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
@@ -36,6 +47,7 @@ export interface TaskRowProps {
   onDelete?: (t: Task) => void;
   onToToday?: (t: Task) => void;
   onToInbox?: (t: Task) => void;
+  onToHand?: (t: Task) => void;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
   /** 行内额外动作插槽（如翻牌「顶一下」）；UI 按钮自带 stopPropagation。 */
@@ -83,6 +95,7 @@ export function TaskRow({
   onDelete,
   onToToday,
   onToInbox,
+  onToHand,
   childrenModeOverride,
   extraAction,
   indentTargetActive,
@@ -153,6 +166,7 @@ export function TaskRow({
   // isRecurring 兜住"重复但耗尽无日期"的场景（此时 dateChip 为 null 但 repeat 胶囊仍要渲染）。
   const hasMeta = isRecurring || childTotal > 0 || dateChip !== null || (task.tags ?? []).length > 0;
   const canSwapPool = task.recurrence === null && pool !== "completed";
+  const canGrab = task.recurrence === null && pool !== "completed";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
   const showInlineChildren = expanded && childTotal > 0;
   const extraActionNode = extraAction?.(task);
@@ -350,6 +364,19 @@ export function TaskRow({
                 className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
               >
                 <Icon icon={ArrowLeft} size={16} />
+              </button>
+            )}
+            {canGrab && onToHand && (
+              <button
+                type="button"
+                aria-label={`抓到手头 ${task.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToHand(task);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-accent"
+              >
+                <Icon icon={HandGrabbing} size={16} />
               </button>
             )}
             {extraActionNode}

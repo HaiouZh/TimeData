@@ -53,6 +53,7 @@ import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClo
 import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
 import {
   endActiveSession,
+  grabTaskToHand,
   healActiveSessions,
   listResumableSessions,
   releaseTaskFromHand,
@@ -262,6 +263,7 @@ export function TodoPage() {
   };
 
   const releaseFromHand = (t: Task) => void releaseTaskFromHand(t.id);
+  const grabToHand = (t: Task) => void grabTaskToHand(t.id);
   const endHand = () => void endActiveSession();
   const resumeHand = (sessionId: string) => void resumeSession(sessionId);
 
@@ -271,6 +273,7 @@ export function TodoPage() {
     onDelete: remove,
     onToToday: moveToToday,
     onToInbox: moveToInbox,
+    onToHand: grabToHand,
     onTagsChange: changeTags,
   };
 

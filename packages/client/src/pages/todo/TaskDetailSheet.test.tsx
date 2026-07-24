@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { normalizeScheduledDate, placementForTask } from "../../lib/tasks/placement.js";
 import { recurrenceSummary } from "../../lib/tasks/recurrence.js";
+import { grabTaskToHand } from "../../lib/sessions.js";
 import { addTask, createChildTask, setTaskTags, toggleTaskDone } from "../../lib/tasks.js";
 import { addDays, getDateString } from "../../lib/time.js";
 import { db, resetDb } from "../../test/dbReset.js";
@@ -651,6 +652,31 @@ describe("TaskDetailSheet 删除", () => {
     await expect(db.syncLog.where("recordId").equals("occ:r1:2026-06-14").toArray()).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ tableName: "tasks", action: "update" })]),
     );
+    await unmount(root);
+  });
+});
+
+describe("TaskDetailSheet 抓到手头", () => {
+  it("普通任务详情渲染「抓到手头」按钮；child 任务不渲染", async () => {
+    const t = await addTask({ title: "写周报" });
+    const { host, root } = await renderSheet(t.id);
+    expect(host.querySelector('button[aria-label="抓到手头"]')).not.toBeNull();
+    await unmount(root);
+
+    const parent = await addTask({ title: "父任务" });
+    const child = await createChildTask(parent.id, "子任务");
+    const { host: childHost, root: childRoot } = await renderSheet(child.id);
+    expect(childHost.querySelector('button[aria-label="抓到手头"]')).toBeNull();
+    expect(childHost.querySelector('button[aria-label="移出手头"]')).toBeNull();
+    await unmount(childRoot);
+  });
+
+  it("任务 sessionId 指向活跃场：渲染「移出手头」按钮", async () => {
+    const t = await addTask({ title: "手头任务" });
+    await grabTaskToHand(t.id);
+    const { host, root } = await renderSheet(t.id);
+    await settle();
+    expect(host.querySelector('button[aria-label="移出手头"]')).not.toBeNull();
     await unmount(root);
   });
 });
