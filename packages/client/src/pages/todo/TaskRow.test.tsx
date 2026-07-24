@@ -422,7 +422,7 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("点左 2/5 抓取区:无子任务时打开详情", async () => {
+  it("点左 2/5 抓取区:无子任务时展开草稿输入框，不打开详情", async () => {
     const onEdit = vi.fn();
     const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
     const rowTask = task({ title: "X" });
@@ -431,7 +431,8 @@ describe("TaskRow", () => {
     );
 
     await click(host.querySelector('[data-testid="task-row-grab-area"]'));
-    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: rowTask.id }));
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).not.toBeNull();
     await unmount(root);
   });
 
@@ -720,6 +721,68 @@ describe("TaskRow", () => {
       expect(host.querySelector('button[aria-label="顶一下 移动端想法"]')).not.toBeNull();
       await unmount(root);
     });
+  });
+});
+
+describe("childless 左区展开直达草稿", () => {
+  async function clickRowAt(host: HTMLElement, ratio: number): Promise<void> {
+    const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
+    row.getBoundingClientRect = () =>
+      ({ width: 300, height: 40, top: 0, left: 0, right: 300, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+    await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 300 * ratio })));
+  }
+
+  it("无子任务：左区点击展开草稿输入框而非开抽屉", async () => {
+    const onEdit = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ title: "无子任务的任务" }), pool: "inbox", ...handlers, onEdit }),
+    );
+    await clickRowAt(host, 0.2);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("无子任务：右区点击仍开抽屉", async () => {
+    const onEdit = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ title: "无子任务的任务" }), pool: "inbox", ...handlers, onEdit }),
+    );
+    await clickRowAt(host, 0.8);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("无子任务：草稿空失焦后展开区收回", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ title: "无子任务的任务" }), pool: "inbox", ...handlers }),
+    );
+    await clickRowAt(host, 0.2);
+    const input = host.querySelector('textarea[aria-label="新子任务标题"]') as HTMLTextAreaElement;
+    expect(input).not.toBeNull();
+    await act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("readonly 模式无子任务：左区点击仍开抽屉", async () => {
+    const onEdit = vi.fn();
+    const { host, root } = await render(
+      createElement(TaskRow, {
+        task: task({ title: "已完成快照", done: true }),
+        pool: "completed",
+        childrenModeOverride: "readonly",
+        ...handlers,
+        onEdit,
+      }),
+    );
+    await clickRowAt(host, 0.2);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).toBeNull();
+    await unmount(root);
   });
 });
 

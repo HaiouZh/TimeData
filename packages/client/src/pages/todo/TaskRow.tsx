@@ -168,7 +168,8 @@ export function TaskRow({
   const canSwapPool = task.recurrence === null && pool !== "completed";
   const canGrab = task.recurrence === null && pool !== "completed";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
-  const showInlineChildren = expanded && childTotal > 0;
+  const canInlineCompose = childTotal === 0 && childrenMode !== "readonly";
+  const showInlineChildren = expanded && (childTotal > 0 || canInlineCompose);
   const extraActionNode = extraAction?.(task);
 
   useEffect(() => {
@@ -196,11 +197,17 @@ export function TaskRow({
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
-    // 有子任务时左 2/5 命中区展开，其余打开抽屉；无子任务整行恒打开抽屉（加子任务也走抽屉）。
+    // 左 2/5 统一进入子任务层：有子任务切换展开；无子任务直达草稿行；readonly 快照无子任务保持开抽屉。
     const rect = event.currentTarget.getBoundingClientRect();
-    if (rowClickZone(event.clientX - rect.left, rect.width, childTotal > 0) === "expand") {
-      setExpanded((value) => !value);
-      return;
+    if (rowClickZone(event.clientX - rect.left, rect.width) === "expand") {
+      if (childTotal > 0) {
+        setExpanded((value) => !value);
+        return;
+      }
+      if (canInlineCompose) {
+        setExpanded(true);
+        return;
+      }
     }
     onEdit(task);
   }
@@ -244,6 +251,7 @@ export function TaskRow({
               event.stopPropagation();
               if (window.getSelection()?.toString()) return;
               if (childTotal > 0) setExpanded((value) => !value);
+              else if (canInlineCompose) setExpanded(true);
               else onEdit(task);
             }}
             {...dragHandle.attributes}
@@ -280,8 +288,8 @@ export function TaskRow({
             className="shrink-0 text-ink-3"
           >
             <Icon
-              icon={childTotal > 0 ? (expanded ? CaretDown : CaretRight) : DotsSixVertical}
-              size={childTotal > 0 ? 12 : 14}
+              icon={childTotal > 0 || (expanded && canInlineCompose) ? (expanded ? CaretDown : CaretRight) : DotsSixVertical}
+              size={childTotal > 0 || (expanded && canInlineCompose) ? 12 : 14}
             />
           </span>
         </div>
@@ -403,7 +411,12 @@ export function TaskRow({
       </div>
       {showInlineChildren && (
         <div className="ml-9 pb-1" onClick={(event) => event.stopPropagation()}>
-          <InlineChildren parentId={task.id} mode={childrenMode} />
+          <InlineChildren
+            parentId={task.id}
+            mode={childrenMode}
+            autoDraft={childTotal === 0 || undefined}
+            onEmptyDismiss={childTotal === 0 ? () => setExpanded(false) : undefined}
+          />
         </div>
       )}
     </div>
