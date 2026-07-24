@@ -108,12 +108,17 @@ export async function listResumableSessions(limit = 5): Promise<ResumableSession
     .slice(0, limit);
 }
 
-/** 续场 = 散当前活跃场 → 开新场 → 旧场未完任务批量改指新场（done 留旧场，旧场归档不可变）。 */
+/**
+ * 续场 = 散当前活跃场 → 开新场 → 旧场未完任务批量改指新场（done 留旧场，旧场归档不可变）。
+ * 若传入的 sessionId 恰是当前活跃场自身（跨设备竞态下持有 stale 可续列表），幂等 no-op：
+ * 不散场、不建新场、不迁移、零写，直接返回原场——避免产生双活跃僵尸场；多 null 残留交 healActiveSessions 收敛。
+ */
 export async function resumeSession(sessionId: string, options: { now?: Date } = {}): Promise<Session> {
   const ts = nowIso(options.now);
   return db.transaction("rw", db.sessions, db.tasks, db.syncLog, async () => {
     const source = await db.sessions.get(sessionId);
     if (!source) throw new Error("会话不存在");
+    if (source.endedAt === null) return SessionSchema.parse(source);
 
     const active = await getActiveSession();
     if (active && active.id !== sessionId) {

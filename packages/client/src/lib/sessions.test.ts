@@ -219,4 +219,24 @@ describe("resumeSession", () => {
     const resumable = await listResumableSessions();
     expect(resumable.some((r) => r.session.id === "s-x")).toBe(false);
   });
+
+  it("对活跃场自身幂等 no-op：传入的 sessionId 恰是当前活跃场时不新建场、不迁移、零写", async () => {
+    await db.tasks.add(makeTask({ id: "t1" }));
+    const grabbed = await grabTaskToHand("t1", { now: new Date("2026-07-24T08:00:00.000Z") });
+    const activeId = grabbed.sessionId as string;
+
+    const before = await db.syncLog.count();
+    const resumed = await resumeSession(activeId, { now: new Date("2026-07-24T09:00:00.000Z") });
+    const after = await db.syncLog.count();
+
+    expect(resumed.id).toBe(activeId);
+    expect(after).toBe(before);
+
+    const sessions = await db.sessions.toArray();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].endedAt).toBeNull();
+
+    const task = await db.tasks.get("t1");
+    expect(task?.sessionId).toBe(activeId);
+  });
 });
