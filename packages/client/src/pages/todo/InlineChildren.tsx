@@ -108,11 +108,7 @@ export function InlineChildren({ parentId, mode, autoDraft = false, onEmptyDismi
   );
 
   // 稳定 key：新增子任务时草稿行不随行数变化而重挂载，保住焦点与软键盘。
-  const draftRow = drafting ? (
-    <li key="__draft__">
-      <NewChildRow onResolve={(t, s) => void resolveDraft(t, s)} />
-    </li>
-  ) : null;
+  const draftRow = drafting ? <NewChildRow key="__draft__" onResolve={(t, s) => void resolveDraft(t, s)} /> : null;
 
   const addButton = !drafting ? (
     <li key="__add__">
