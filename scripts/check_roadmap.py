@@ -18,10 +18,11 @@ REQUIRED_SECTIONS = ["现在在哪", "主题总览", "冰箱", "阶段完成定�
 MUST_HAVE_SECTION = {"设计中", "排队", "进行中"}  # 这些状态的主题必须开五件套小节
 MUST_NOT_SECTION = {"构想"}  # 构想不得开小节（rules.md §2），只占总览表一行/构想附注
 ACTIVE_DOC_DIRS = ("specs", "plans")  # 孤儿检查范围：活目录只放活的（rules.md §3）
+ARCHIVE_TOPIC_DIR = "archive/roadmap"  # 一主题一文件的归档页目录（ADR 式），每份须挂进 ROADMAP-archive 索引表
 LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
 ARCHIVE_GUIDANCE = (
-    "归档四联动：①小节压缩成索引进 ROADMAP-archive ②spec/plan 搬 archive/{specs,plans}/ "
-    "③链接改归档后路径 ④grep 旧路径验残链零命中（rules.md §3）"
+    "归档四联动：①建 archive/roadmap/<完成日>-<slug>.md 承接小节正文，ROADMAP-archive 索引表加一行、总览表删行 "
+    "②spec/plan 搬 archive/{specs,plans}/ ③链接改归档后路径 ④跑本脚本验残链与索引登记（rules.md §3）"
 )
 
 TOPIC_TITLE_RE = re.compile(r"^主题[：:]\s*(.+)$")
@@ -150,11 +151,19 @@ def check(root: Path):
         if slug not in topics:
             report("error", "consistency", f"小节「## 主题：{slug}」未在主题总览表登记")
 
-    # 链接目标存在（ROADMAP + archive）
+    # 链接目标存在（ROADMAP + archive 索引 + 各归档主题页）
     check_links(roadmap, report)
     archive = root / "ROADMAP-archive.md"
     if archive.is_file():
         check_links(archive, report)
+        archive_text = archive.read_text(encoding="utf-8")
+        topic_dir = root / ARCHIVE_TOPIC_DIR
+        for f in sorted(topic_dir.glob("*.md")) if topic_dir.is_dir() else []:
+            check_links(f, report)
+            if f.name not in archive_text:
+                report("error", "archive-index",
+                       f"{ARCHIVE_TOPIC_DIR}/{f.name} 未登记进 ROADMAP-archive.md 索引表"
+                       "——归档页挂不上索引 = 后人 grep 不到（rules.md §3）")
 
     # 活目录孤儿：specs/plans 下未被 ROADMAP 引用的文件 = 漏归档候选
     for d in ACTIVE_DOC_DIRS:

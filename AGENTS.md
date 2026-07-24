@@ -108,10 +108,10 @@
 | 类型 | 位置 | 改了代码该怎么做 |
 |---|---|---|
 | 长期文档（evergreen） | `docs/evergreen/**`、`README.md`、本文件 | 必须同步修改 |
-| 架构决策（ADR） | `docs/adr/**` | 仅追加，不改既有条目；新决策写新 ADR |
+| 架构决策（ADR） | `docs/adr/**` | 仅追加，不改既有条目；新决策写新 ADR，并在 [`adr/README`](docs/adr/README.md) 索引表追加一行（含与旧 ADR 的修订关系） |
 | 本地过程文档 | `docs_local/**`（不进 Git） | 沉淀后才同步到 evergreen 或 ADR |
 
-- AI 生成的过程文档按角色写入 `docs_local/`：活工作件进 `specs/`（含 metaspec，文件名带 `-metaspec`）和 `plans/`；想法 / 路线图 / 审查报告等分析类进 `notes/`；常青理解文档进 `green/`；收工归档进 `archive/{specs,plans,reviews,reports}/`（活目录只放活的，死了就搬）。
+- AI 生成的过程文档按角色写入 `docs_local/`：活工作件进 `specs/`（含 metaspec，文件名带 `-metaspec`）和 `plans/`；想法 / 路线图 / 审查报告等分析类进 `notes/`；常青理解文档进 `green/`；收工归档进 `archive/{specs,plans,reviews,reports}/`（活目录只放活的，死了就搬）；主题整体收工另建 `archive/roadmap/<完成日>-<slug>.md` 并挂进 `ROADMAP-archive.md` 索引表（`pnpm check:roadmap` 机检）。
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
 - 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是 `covers` 里「改它文档必错」的契约子集，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
