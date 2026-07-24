@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 import type {
-  Category, Goal, GoalLayoutPin, QuickNote, Setting, Task, TimeEntry, SyncLogEntry, Track, TrackStep,
+  Category, Goal, GoalLayoutPin, QuickNote, Session, Setting, Task, TimeEntry, SyncLogEntry, Track, TrackStep,
   HealthHeartRate, HealthHrv, HealthSleep, HealthStress, HealthRun, HealthChartConfig,
 } from "@timedata/shared";
 import { createDefaultCategories } from "@timedata/shared";
@@ -35,6 +35,7 @@ export const db = new Dexie("timedata") as Dexie & {
   trackSteps: EntityTable<TrackStep, "id">;
   goals: EntityTable<Goal, "id">;
   goalLayoutPins: Table<GoalLayoutPin, [string, GoalLayoutPin["nodeKind"], string]>;
+  sessions: EntityTable<Session, "id">;
 };
 
 db.version(1).stores({
@@ -283,6 +284,32 @@ db.version(15).stores({
   runs: "id, date",
   healthCharts: "id, order, updatedAt",
 });
+
+db.version(16)
+  .stores({
+    categories: "id, parentId, sortOrder",
+    quickNotes: "id, occurredAt, updatedAt",
+    timeEntries: "id, categoryId, startTime, endTime",
+    tasks: "id, parentId, ruleId, sessionId, scheduledAt, sortOrder, updatedAt",
+    tracks: "id, status, updatedAt",
+    trackSteps: "id, trackId, [trackId+seq], updatedAt",
+    goals: "id, kind, status, updatedAt",
+    goalLayoutPins: "[goalId+nodeKind+nodeId], goalId, nodeKind, nodeId, updatedAt",
+    syncLog: "id, tableName, recordId, synced, [tableName+synced]",
+    settings: "key",
+    healthHeartRate: "id, date",
+    healthHrv: "id, date",
+    healthSleep: "id, date",
+    healthStress: "id, date",
+    runs: "id, date",
+    healthCharts: "id, order, updatedAt",
+    sessions: "id, startedAt, updatedAt",
+  })
+  .upgrade(async (tx) => {
+    await tx.table("tasks").toCollection().modify((task: { sessionId?: string | null }) => {
+      if (task.sessionId === undefined) task.sessionId = null;
+    });
+  });
 
 export async function seedDefaultCategories(): Promise<void> {
   const count = await db.categories.count();

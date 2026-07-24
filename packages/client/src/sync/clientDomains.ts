@@ -6,6 +6,7 @@ import {
   goalLayoutPinKey,
   GoalSchema,
   QuickNoteSchema,
+  SessionSchema,
   SettingSchema,
   TaskSchema,
   TimeEntrySchema,
@@ -226,6 +227,12 @@ export const CLIENT_SYNC_DOMAINS: Record<string, ClientDomainConfig> = {
     schema: GoalLayoutPinSchema,
     keyOf: (record) => goalLayoutPinKey(record as GoalLayoutPin),
     keyFromRecordId: goalLayoutPinStoreKey,
+    backup: "bundled",
+  },
+  sessions: {
+    table: "sessions",
+    storeName: "sessions",
+    schema: SessionSchema,
     backup: "bundled",
   },
 };

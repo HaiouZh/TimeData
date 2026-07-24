@@ -62,7 +62,7 @@ describe("Dexie database", () => {
     await seedDefaultCategories();
 
     expect(await db.categories.count()).toBeGreaterThan(0);
-    expect(db.verno).toBe(15);
+    expect(db.verno).toBe(16);
     expect(db.tables.some((table) => table.name === "autoBackups")).toBe(false);
     expect(db.settings.schema.primKey.keyPath).toBe("key");
     expect(db.quickNotes.schema.primKey.keyPath).toBe("id");
@@ -72,8 +72,13 @@ describe("Dexie database", () => {
     expect(db.tasks.schema.idxByName.goalId).toBeUndefined();
     expect(db.tasks.schema.idxByName.parentId).toBeDefined();
     expect(db.tasks.schema.idxByName.ruleId).toBeDefined();
+    expect(db.tasks.schema.idxByName.sessionId).toBeDefined();
     expect(db.tasks.schema.idxByName.sortOrder).toBeDefined();
     expect(db.tasks.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.sessions.schema.primKey.keyPath).toBe("id");
+    expect(db.sessions.schema.idxByName.startedAt).toBeDefined();
+    expect(db.sessions.schema.idxByName.updatedAt).toBeDefined();
+    expect(db.sessions.schema.idxByName.endedAt).toBeUndefined();
     expect(db.healthCharts.schema.primKey.keyPath).toBe("id");
     expect(db.healthCharts.schema.idxByName.order).toBeDefined();
     expect(db.healthCharts.schema.idxByName.updatedAt).toBeDefined();

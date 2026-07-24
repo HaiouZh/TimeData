@@ -155,3 +155,11 @@ describe("goal layout pins client domain", () => {
     expect(BACKUP_BUNDLED_DOMAINS.map((item) => item.table)).toContain("goal_layout_pins");
   });
 });
+
+describe("sessions client domain", () => {
+  it("registers sessions domain with bundled backup", () => {
+    const domain = getClientDomain("sessions");
+    expect(domain).toMatchObject({ table: "sessions", storeName: "sessions" });
+    expect(BACKUP_BUNDLED_DOMAINS.map((item) => item.table)).toContain("sessions");
+  });
+});
