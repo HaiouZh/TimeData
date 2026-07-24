@@ -10,6 +10,7 @@ interface SunkenScheduledTailProps {
   onDelete: (t: Task) => void;
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
+  onToHand?: (t: Task) => void;
 }
 
 /**
