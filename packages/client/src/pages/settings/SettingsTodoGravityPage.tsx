@@ -22,6 +22,8 @@ const EMPTY: TodoBuckets = {
   recurring: [],
   completed: [],
   scheduledSunkenFromIndex: 0,
+  atHand: [],
+  handSession: null,
 };
 
 export default function SettingsTodoGravityPage() {

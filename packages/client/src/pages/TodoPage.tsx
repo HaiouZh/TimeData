@@ -79,6 +79,8 @@ const EMPTY: TodoBuckets = {
   recurring: [],
   completed: [],
   scheduledSunkenFromIndex: 0,
+  atHand: [],
+  handSession: null,
 };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 

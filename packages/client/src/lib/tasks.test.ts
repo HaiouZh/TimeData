@@ -1,6 +1,7 @@
 import { occurrenceId, type Task } from "@timedata/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDb } from "../test/dbReset.js";
+import { endActiveSession, grabTaskToHand } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { localDateOf } from "./tasks/placement.js";
 import {
@@ -1447,5 +1448,65 @@ describe("updateTask 重锚清配额（#4 方案 b）", () => {
     const actives = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
     expect(actives).toHaveLength(1); // 重锚即时物化了新一发
     await expect(db.tasks.get(occA.id)).resolves.toBeDefined(); // 历史发保留
+  });
+});
+
+describe("listTasks atHand 投影", () => {
+  it("活跃场任务进 atHand 且未完的不再进原桶", async () => {
+    const t = await addTask({ title: "抓我", toInbox: true });
+    await grabTaskToHand(t.id, { now: new Date("2026-07-24T01:00:00.000Z") });
+    const buckets = await listTasks(new Date("2026-07-24T02:00:00.000Z"));
+    expect(buckets.atHand.map((x) => x.id)).toEqual([t.id]);
+    expect(buckets.inbox.map((x) => x.id)).not.toContain(t.id);
+    expect(buckets.handSession).not.toBeNull();
+  });
+  it("本场 done 任务同时出现在 atHand 与 completed", async () => {
+    const t = await addTask({ title: "抓完", toInbox: true });
+    await grabTaskToHand(t.id);
+    await toggleTaskDone(t.id);
+    const buckets = await listTasks();
+    expect(buckets.atHand.map((x) => x.id)).toContain(t.id);
+    expect(buckets.completed.map((x) => x.id)).toContain(t.id);
+  });
+  it("散场后任务自然回原桶", async () => {
+    const t = await addTask({ title: "回家", toInbox: true });
+    await grabTaskToHand(t.id);
+    await endActiveSession();
+    const buckets = await listTasks();
+    expect(buckets.atHand).toEqual([]);
+    expect(buckets.handSession).toBeNull();
+    expect(buckets.inbox.map((x) => x.id)).toContain(t.id);
+  });
+  it("指向已散场的 sessionId 不影响分桶（历史归属）", async () => {
+    const t = await addTask({ title: "历史", scheduledAt: "2026-08-01T00:00:00.000Z" });
+    await grabTaskToHand(t.id);
+    await endActiveSession();
+    const buckets = await listTasks(new Date("2026-07-24T02:00:00.000Z"));
+    expect(buckets.scheduled.map((x) => x.id)).toContain(t.id);
+  });
+  it("手头 occurrence 完成后物化的下一发不继承 sessionId", async () => {
+    const now = new Date("2026-07-24T07:00:00.000Z"); // 2026-07-24 是周五
+    await addTask({
+      title: "每周五一发",
+      recurrence: { freq: "weekly", interval: 1, byWeekday: [5], basis: "due", time: "06:00" },
+      startAt: "2026-07-24T00:00:00.000Z",
+      now,
+    });
+    await runMaterialization(now);
+    const occ = (await db.tasks.toArray()).find((t) => t.ruleId !== null && !t.done && !t.skipped);
+    expect(occ).toBeDefined();
+
+    await grabTaskToHand(occ!.id, { now });
+    await toggleTaskDone(occ!.id, { now });
+    // 完成当发时下一发（下周五）尚未到期，materializeDue 逾期追平闸门不即时物化；
+    // 显式推进到下一到期日再跑一次账本物化，逼出下一发校验 sessionId 不继承（不改分桶/物化引擎语义）。
+    await runMaterialization(new Date("2026-07-31T07:00:00.000Z"));
+
+    const rows = await db.tasks.toArray();
+    const doneOcc = rows.find((t) => t.id === occ!.id);
+    const nextOcc = rows.find((t) => t.ruleId !== null && !t.done && !t.skipped && t.id !== occ!.id);
+    expect(doneOcc?.sessionId).not.toBeNull(); // 战果保留归属
+    expect(nextOcc).toBeDefined(); // 下一到期日物化出新一发
+    expect(nextOcc!.sessionId).toBeNull(); // 下一发不继承
   });
 });

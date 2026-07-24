@@ -5,6 +5,7 @@ import {
   materializeOccurrence,
   nextDueDate,
   type Recurrence,
+  type Session,
   type Task,
   type TaskDeleteReason,
   TaskSchema,
@@ -12,6 +13,7 @@ import {
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
+import { getActiveSession } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { completionOp } from "./tasks/completionOp.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
@@ -738,6 +740,9 @@ export interface TodoBuckets {
   scheduledSunkenFromIndex: number;
   recurring: Task[]; // P3 后 UI 不再单独渲染重复桶，保留空桶兼容旧调用方
   completed: Task[]; // 全部已完成（今天 + 隔日）+ 耗尽重复，按 completedAt 倒序
+  /** 手头：活跃会话抓住的 root（含本场 done，按 sortOrder）；未完的不再进 today/inbox/scheduled。 */
+  atHand: Task[];
+  handSession: Session | null;
 }
 
 function isOverdue(t: Task, now: Date): boolean {
@@ -762,6 +767,9 @@ function localYmd(d: Date): string {
 }
 
 export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
+  const handSession = await getActiveSession();
+  const handSessionId = handSession?.id ?? null;
+  const atHand: Task[] = [];
   const rows = await db.tasks.orderBy("sortOrder").toArray();
   const all: Task[] = [];
   for (const row of rows) {
@@ -779,6 +787,8 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     recurring: [],
     completed: [],
     scheduledSunkenFromIndex: 0,
+    atHand,
+    handSession,
   };
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
   const occurrencesByRule = new Map<string, Task[]>();
@@ -792,6 +802,10 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   for (const t of all) {
     if ((t.parentId ?? null) !== null) continue;
     if (t.ruleId !== null && t.skipped) continue; // skipped occurrence 不进活跃桶
+    if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) === handSessionId) {
+      atHand.push(t);
+      if (!t.done) continue; // 未完只在手头；done 继续走 placement 落 completed（战果双显）
+    }
     if (t.recurrence) {
       const occurrences = occurrencesByRule.get(t.id) ?? [];
       if (isRuleExhausted(t, occurrences)) {
