@@ -22,8 +22,9 @@ contracts:
   - packages/shared/src/types.ts:TimeEntry
   - packages/shared/src/entitySchemas.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-07-12
+last-reviewed: 2026-07-24
 ---
+<!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、types.ts 新增 SessionSchema 与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；TimeEntry schema、重叠校验、CLI/server 写入语义均不变。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/types.ts 为 tasks delete change 新增可选 deleteReason 字段，timeline/entry 契约未受影响。 -->
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->

@@ -36,15 +36,16 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-12
+last-reviewed: 2026-07-24
 ---
+<!-- 复核 2026-07-24（手头软会话）：entitySchemas.ts 新增 `Task.sessionId` 反挂字段、syncDomains.ts 新增 `sessions` LWW 域；字段契约见本文 §2.1/§2.3，投影/生命周期语义见子文档 todo/at-hand.md，不在本文重复。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts/syncDomains.ts 新增 tasks delete change 可选 deleteReason 枚举字段，仅服务端归档消费，不改动待办数据契约/语义。 -->
 
 # 待办任务
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
-> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)。
+> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
 <!-- 复核 2026-07-10（validated reasonCode + syncLog 死信位）：shared schemas 本轮改动只涉及 push 回执 reasonCode 与 syncLog.synced 死信位（见 sync.md / data-model.md），Task 字段契约与待办语义无变化。 -->
@@ -124,6 +125,7 @@ agent / CLI (task-done/task-tag)
   completedAt: string | null;   // UTC ISO 或 null
   tags: string[];               // 默认 []，每项 NonEmptyTrimmed ≤64，max 50
   ruleId: string | null;          // 默认 null；occurrence 回指重复规则本体，普通 task / 规则本体恒 null
+  sessionId: string | null;       // 默认 null；反挂"手头"活跃/历史 session（见 todo/at-hand），历史归属指针不随散场清空
   skipped: boolean;               // 默认 false；occurrence 被"删这一发"消解时置 true，普通 task 恒 false
   sortOrder: number;            // int finite
   createdAt: string;            // 严格 UTC ISO（带毫秒+Z）
@@ -155,10 +157,11 @@ agent / CLI (task-done/task-tag)
 | last_done_at / start_at / scheduled_at / completed_at | lastDoneAt / startAt / scheduledAt / completedAt | UTC ISO 或 NULL |
 | completed_count / weight / sort_order | completedCount / weight / sortOrder | 整数 |
 | rule_id | ruleId | TEXT 或 NULL（有 `idx_tasks_rule_id` 索引） |
+| session_id | sessionId | TEXT 或 NULL（有 `idx_tasks_session_id` 索引；见 [todo/at-hand](todo/at-hand.md)） |
 | skipped | skipped | 0/1 ↔ boolean，默认 0 |
 | created_at / updated_at | createdAt / updatedAt | UTC ISO（updated_at 服务器分配） |
 
-映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` / `ensureTaskWeightColumn` / `ensureTaskRuleIdColumn` / `ensureTaskSkippedColumn` 给旧库补列与索引），并用 `dropColumnsIfExist` 删除废弃列 `goal_id` 及索引。Dexie `tasks` 索引（v14）`"id, parentId, ruleId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；`ruleId` 入索引供 occurrence 查询；目标详情按 `Goal.members` 解引用任务，不依赖任务侧索引。
+映射：`rowToTask`（`lib/db-rows.ts`）、`taskToRow`（`sync/domains.ts`，不写 `updated_at`）。启动时幂等 `ALTER TABLE` 补列（`ensureTaskParentIdColumn` / `ensureTaskWeightColumn` / `ensureTaskRuleIdColumn` / `ensureTaskSkippedColumn` / `ensureTaskSessionIdColumn` 给旧库补列与索引），并用 `dropColumnsIfExist` 删除废弃列 `goal_id` 及索引。Dexie `tasks` 索引（v16）`"id, parentId, ruleId, sessionId, scheduledAt, sortOrder, updatedAt"`（`client/src/db/index.ts`），`weight` 不建索引；`parentId` 入索引供 `db.tasks.where("parentId")` 拉 children；`ruleId` 入索引供 occurrence 查询；`sessionId` 入索引供 [todo/at-hand](todo/at-hand.md) 按场取未完任务/迁移；目标详情按 `Goal.members` 解引用任务，不依赖任务侧索引。
 
 客户端读取 `listTasks` 走 `TaskSchema.safeParse`（parse-on-read）：补默认、剥孤儿、坏行 `console.warn` 跳过；不手摊默认字段。
 
@@ -191,6 +194,7 @@ agent / CLI (task-done/task-tag)
 9. **`tasks` 不引用分类/时间/速记/目标等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；目标组织关系属于 [goals](goals.md)，不回流到 Task schema。
 10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 同步字段 + `updatedAt` 时间衰减，`TodoPage` 出桶后把 inbox 拆浮起/水下；`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知。水位线 / 翻牌复查 / 已过目记忆 / 水下找回尾部 / 设置见 [todo/gravity](todo/gravity.md)。
+12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。详见 [todo/at-hand](todo/at-hand.md)。
 
 ## 4. 模块速查
 
@@ -198,17 +202,18 @@ agent / CLI (task-done/task-tag)
 
 | 入口 | 职责 |
 |---|---|
-| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet`；重力水位线拆 `floatingInbox`/`sunkenInbox` + 渲染翻牌区（见 [todo/gravity](todo/gravity.md)）；支持 `/todo?taskId=<id>` 作为打开任务详情的 deep link，参数变化会切换抽屉目标，关闭抽屉只移除 `taskId` 并保留其他 query 参数，行点击仍只走本地打开状态、不写 URL |
+| `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet`；重力水位线拆 `floatingInbox`/`sunkenInbox` + 渲染翻牌区（见 [todo/gravity](todo/gravity.md)）；渲染 `AtHandSection`（`buckets.atHand`/`handSession`）并把 `rowHandlers.onToHand` 透传给各列表，`useEffect` 依 `buckets.handSession?.id` 触发 `healActiveSessions`（见 [todo/at-hand](todo/at-hand.md)）；支持 `/todo?taskId=<id>` 作为打开任务详情的 deep link，参数变化会切换抽屉目标，关闭抽屉只移除 `taskId` 并保留其他 query 参数，行点击仍只走本地打开状态、不写 URL |
 | `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框（重复模板有下一发即可点，含未到期提前完成；耗尽才置灰）、左 2/5 root 拖拽抓取区、`CaretDown`/`CaretRight` 或 grip 纯指示、`rowClickZone` 派发展开/打开、meta 第二行、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、缩进候选父高亮与落定后展开、刚物化 pending occurrence 短暂入场高亮；桌面细指针行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列）；可选 `extraAction` 行内插槽（翻牌区「顶一下」经它渲染） |
 | `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（普通任务 cascade；pending occurrence 删·跳）、重复预设 overlay；重复模板复选框有下一发即可代理完成（含未到期提前完成；耗尽置灰），逾期重复模板打开重复设置时用今天作为锚点；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,useLatestOccurrenceChildren,todoDnd}.*` | children 列表（三 mode；static 重复模板行用 `useLatestOccurrenceChildren` + `projectTemplateChildren` 把勾态投影到最新非 skipped occurrence child，无目标发置灰；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 编辑态回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录；子任务标题默认是可跨行选择复制的 `span` 文本，无行尾编辑按钮，空选区点击或标题获焦后 Enter/F2 才进入编辑；编辑态 textarea 按内容与宽度变化自动增高、不保留内部滚动条，blur/Enter 提交，Escape 取消）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
 | `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按 `TodoPage` 计算出的底部避让值上移；窄屏下滑把底栏和 composer 隐藏后，不避让已不可见的输入栏；可选 `expandedFooter` 尾部插槽，在列表已完全展开、天然 ≤ `initialGroups` 或列表为空但有 footer 时渲染，供 Inbox 挂水下找回尾部）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`TodoPage` 传入当前移动底栏 offset 与隐藏状态，宽屏不套移动底栏避让；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时 `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠；折叠 caret 等交互图标经 Phosphor `Icon` 包装 |
-| `lib/tasks.ts` | 核心 CRUD + `listTasks`（today 读 pending occurrence、重复模板归 scheduled、skipped 排除）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对普通 child 走非重复路径、对重复模板 child 代理到当前可代理 occurrence child、对 pending occurrence 完成后即时物化下一发、对重复模板 root 代理完成下一发（无 active 且未到期时 client 强制物化下一发；耗尽 no-op）、对普通 root 就地完成；`bumpTaskWeight` 累加 `weight` 并写 syncLog；`markOccurrenceSkipped` 删·跳这一发（skipped 留痕）并即时物化下一发；`runMaterialization` 遍历 rule 物化当前 occurrence + occurrence children（in-flight 合并 + 事务内二次检查，children 从 `done=false`/`completedAt=null` 起步）；`updateTask` 重锚时同事务级联删活跃 pending occurrence 并即时尝试物化新 occurrence；`applyRecurrenceChoice` none/scheduled 同事务清孤儿 |
+| `lib/tasks.ts` | 核心 CRUD + `listTasks`（today 读 pending occurrence、重复模板归 scheduled、skipped 排除、atHand 排他投影见 [todo/at-hand](todo/at-hand.md)）/`putTask`；child helper `createChildTask`/`promoteToRoot`/`moveTaskToParent`/`deleteTaskCascade`；`toggleTaskDone` 对普通 child 走非重复路径、对重复模板 child 代理到当前可代理 occurrence child、对 pending occurrence 完成后即时物化下一发、对重复模板 root 代理完成下一发（无 active 且未到期时 client 强制物化下一发；耗尽 no-op）、对普通 root 就地完成；`bumpTaskWeight` 累加 `weight` 并写 syncLog；`markOccurrenceSkipped` 删·跳这一发（skipped 留痕）并即时物化下一发；`runMaterialization` 遍历 rule 物化当前 occurrence + occurrence children（in-flight 合并 + 事务内二次检查，children 从 `done=false`/`completedAt=null` 起步）；`updateTask` 重锚时同事务级联删活跃 pending occurrence 并即时尝试物化新 occurrence；`applyRecurrenceChoice` none/scheduled 同事务清孤儿 |
 | `lib/tasks/{placement,taskSort,taskRowZone,taskTimeLabel,inboxGrouping,workbenchPrefs,turnTags,subtasks}.ts` | 落点 / 排序 / 点击分区 / 时间标签 / 收件箱+完成分组 / 折叠态+双栏比例 / tag 聚合(allTags)/三轴过滤(filterTasks)/取色(tagColor) / `subtaskProgress`（m/n 进度比例，children 数量喂入） |
 | `lib/settings/todoDefaultDestinationSetting.ts` | composer 默认目标（`todo.defaultDestination.v1`，Dexie 同步） |
 | 重复规则 | → [todo/recurrence](todo/recurrence.md) |
 | 想法重力（水位线/翻牌/`GravityReviewSection`/`SunkenInboxTail`/设置页） | → [todo/gravity](todo/gravity.md) |
+| 手头软会话（`lib/sessions.ts` 生命周期 / `AtHandSection.tsx` 卡片 / atHand 排他投影） | → [todo/at-hand](todo/at-hand.md) |
 
 Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾选等交互图标只改变视觉 glyph，统一经 Phosphor `Icon` 包装；按钮语义由现有文本与 `aria-label`（如 `删除标签 ${tag}`）承载，不改变任务 schema、同步或 recurrence 语义。
 
@@ -226,7 +231,7 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 
 ### 4.3 测试
 
-**client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskColumn,TaskDetailSheet,DayGroupedList,SunkenInboxTail,TagFilterPanel,ResizableSplit,TodoComposer,InlineChildren,TodoListSections}.test.{ts,tsx}`、`pages/todo/todoDnd.test.ts`（二元缩进、横向预览夹取、落点矩阵）、`lib/tasks.test.ts`、`sync/clientDomains.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks}.test.ts`（重力相关见 [todo/gravity](todo/gravity.md)）
+**client**：`pages/TodoPage.test.tsx`、`pages/todo/{TaskRow,TaskColumn,TaskDetailSheet,DayGroupedList,SunkenInboxTail,TagFilterPanel,ResizableSplit,TodoComposer,InlineChildren,TodoListSections}.test.{ts,tsx}`、`pages/todo/todoDnd.test.ts`（二元缩进、横向预览夹取、落点矩阵）、`lib/tasks.test.ts`、`sync/clientDomains.test.ts`、`lib/tasks/{inboxGrouping,taskTimeLabel,workbenchPrefs,taskRowZone,taskSort,turnTags,placement,subtasks}.test.ts`（重力相关见 [todo/gravity](todo/gravity.md)；手头相关见 [todo/at-hand](todo/at-hand.md)）
 **server**：`routes/tasks.test.ts`（GET + POST schedule）、`routes/agent.test.ts`（POST status）、`sync/tasks-domain.test.ts`、`sync/domains.test.ts`、`db/schema.test.ts`、`lib/db-rows.test.ts`
 **shared**：`entitySchemas.test.ts`、`schemas.test.ts`、`taskCompletion.test.ts`、`recurrence.test.ts` ｜ **cli**：`commands/tasks.test.ts`
 
@@ -240,3 +245,4 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 |---|---|
 | [todo/recurrence](todo/recurrence.md) | 重复规则引擎：Recurrence schema、occurrence 物化、终止条件、预设门、删除级联 |
 | [todo/gravity](todo/gravity.md) | 想法重力：水位线浮沉、翻牌复查、已过目记忆、水下找回尾部、设置页 |
+| [todo/at-hand](todo/at-hand.md) | 手头软会话：`Session` schema、sessions 域登记、抓/移/散/续生命周期、atHand 排他投影、自愈规则 |

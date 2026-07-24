@@ -18,8 +18,9 @@ contracts:
   - packages/shared/src/types.ts:Category
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/constants.ts
-last-reviewed: 2026-07-12
+last-reviewed: 2026-07-24
 ---
+<!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、types.ts 新增 SessionSchema 与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；Category / Setting schema、manual 同步语义、播种规则均不变。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/types.ts 为 tasks delete change 新增可选 deleteReason 字段，categories/settings 契约未受影响。 -->
 
 <!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->

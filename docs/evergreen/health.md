@@ -15,8 +15,9 @@ contracts:
   - packages/shared/src/healthSchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/sync/domains.ts
-last-reviewed: 2026-07-12
+last-reviewed: 2026-07-24
 ---
+<!-- 复核 2026-07-24（手头软会话）：shared/src/syncDomains.ts、server/src/sync/domains.ts 新增 sessions LWW 域与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；健康 6 域 schema、同步语义、备份角色均不变。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/syncDomains.ts、server/src/sync/domains.ts 为 tasks 域新增 archiveDelete 钩子与 deleteReason 字段，health 域未受影响。 -->
 
 <!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
