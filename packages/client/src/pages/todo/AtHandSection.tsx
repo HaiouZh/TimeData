@@ -37,14 +37,20 @@ export function AtHandSection({
   if (session === null) {
     return (
       <section data-section="todo-at-hand" className="rounded-card bg-surface p-1.5">
-        {resumable.map(({ session: s, pendingCount }) => (
+        {resumable.map(({ session: s, pendingCount, pendingTitles }) => (
           <div key={s.id} className="flex items-center gap-2 px-2 py-1.5">
-            <span className="flex-1 td-text-label text-ink-2">
-              {sessionDateLabel(s.startedAt)} 的一场 · 还有 {pendingCount} 条未完
-            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate td-text-label text-ink-2">
+                {pendingTitles.join("、")}
+                {pendingCount > pendingTitles.length ? " …" : ""}
+              </p>
+              <p className="td-text-caption text-ink-3">
+                {sessionDateLabel(s.startedAt)} · 还有 {pendingCount} 条未完
+              </p>
+            </div>
             <button
               type="button"
-              className="rounded-ctl px-2 py-1 td-text-label text-accent hover:bg-surface-elevated"
+              className="shrink-0 rounded-ctl px-2 py-1 td-text-label text-accent hover:bg-surface-elevated"
               onClick={() => onResume(s.id)}
             >
               续场

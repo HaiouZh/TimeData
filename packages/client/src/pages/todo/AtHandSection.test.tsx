@@ -93,15 +93,20 @@ describe("AtHandSection", () => {
     await unmount(root);
   });
 
-  it("无活跃场且有可续场：每场一行「还有 N 条未完」+ 续场按钮，点击调 onResume(sessionId)", async () => {
+  it("无活跃场且有可续场：每场一行标题预览+「还有 N 条未完」+ 续场按钮，点击调 onResume(sessionId)", async () => {
     const onResume = vi.fn();
     const resumable: ResumableSession[] = [
-      { session: session({ id: "s-old", startedAt: "2026-07-20T08:00:00.000Z", endedAt: "2026-07-20T10:00:00.000Z" }), pendingCount: 3 },
+      {
+        session: session({ id: "s-old", startedAt: "2026-07-20T08:00:00.000Z", endedAt: "2026-07-20T10:00:00.000Z" }),
+        pendingCount: 3,
+        pendingTitles: ["修水管", "报销发票", "买菜"],
+      },
     ];
     const { host, root } = await renderDom(
       <AtHandSection atHand={[]} session={null} resumable={resumable} {...handlers} onResume={onResume} />,
     );
 
+    expect(host.textContent).toContain("修水管、报销发票、买菜");
     expect(host.textContent).toContain("还有 3 条未完");
     const resumeBtn = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "续场");
     expect(resumeBtn).toBeTruthy();

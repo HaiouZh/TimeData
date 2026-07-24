@@ -180,6 +180,10 @@ describe("listResumableSessions", () => {
     expect(all.map((r) => r.session.id)).toEqual(["s-d", "s-a"]);
     expect(all.find((r) => r.session.id === "s-a")?.pendingCount).toBe(2);
     expect(all.find((r) => r.session.id === "s-d")?.pendingCount).toBe(1);
+    // 标题预览：按 sortOrder 前 3 条，匿名会话靠内容辨识主题
+    const aTitles = all.find((r) => r.session.id === "s-a")?.pendingTitles ?? [];
+    expect(aTitles).toHaveLength(2);
+    expect(aTitles.every((t) => typeof t === "string" && t.length > 0)).toBe(true);
 
     const limited = await listResumableSessions(1);
     expect(limited.map((r) => r.session.id)).toEqual(["s-d"]);

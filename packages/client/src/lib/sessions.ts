@@ -89,6 +89,8 @@ export async function endActiveSession(options: { now?: Date } = {}): Promise<vo
 export interface ResumableSession {
   session: Session;
   pendingCount: number;
+  /** 未完任务标题预览（按 sortOrder 前 3 条）：匿名会话靠内容辨识主题，续场行展示用。 */
+  pendingTitles: string[];
 }
 
 /** 已散且仍有未完任务的场，endedAt 倒序取前 limit 个（续场入口数据源）。 */
@@ -96,12 +98,21 @@ export async function listResumableSessions(limit = 5): Promise<ResumableSession
   const closed = (await db.sessions.filter((s) => s.endedAt !== null).toArray()) as Session[];
   const result: ResumableSession[] = [];
   for (const session of closed) {
-    const pendingCount = await db.tasks
+    const pending = await db.tasks
       .where("sessionId")
       .equals(session.id)
       .filter((t) => !t.done && !t.skipped)
-      .count();
-    if (pendingCount > 0) result.push({ session, pendingCount });
+      .toArray();
+    if (pending.length > 0) {
+      result.push({
+        session,
+        pendingCount: pending.length,
+        pendingTitles: pending
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .slice(0, 3)
+          .map((t) => t.title),
+      });
+    }
   }
   return result
     .sort((a, b) => (b.session.endedAt ?? "").localeCompare(a.session.endedAt ?? ""))
