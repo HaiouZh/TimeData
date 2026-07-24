@@ -1,5 +1,6 @@
 import { HandGrabbing, X } from "@phosphor-icons/react";
 import type { Session, Task } from "@timedata/shared";
+import type { ReactNode } from "react";
 import { Icon } from "../../components/Icon.js";
 import type { ResumableSession } from "../../lib/sessions.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
@@ -21,6 +22,31 @@ function sessionDateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
 
+function AtHandRowsSurface({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-card p-1.5">
+      <div className="min-w-0 space-y-1 overflow-x-clip">{children}</div>
+    </div>
+  );
+}
+
+function AtHandHeading({ count, action }: { count: number; action?: ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center justify-between px-2">
+      <h2 className="flex items-center gap-1.5 td-text-label font-medium text-ink">
+        <span className="text-ink-3">
+          <Icon icon={HandGrabbing} size={16} />
+        </span>
+        <span>手头</span>
+      </h2>
+      <div className="flex items-center gap-2">
+        <span className="td-text-caption text-ink-3">{count}</span>
+        {action}
+      </div>
+    </div>
+  );
+}
+
 export function AtHandSection({
   atHand,
   session,
@@ -36,27 +62,30 @@ export function AtHandSection({
 
   if (session === null) {
     return (
-      <section data-section="todo-at-hand" className="rounded-card bg-surface p-1.5">
-        {resumable.map(({ session: s, pendingCount, pendingTitles }) => (
-          <div key={s.id} className="flex items-center gap-2 px-2 py-1.5">
-            <div className="min-w-0 flex-1">
-              <p className="truncate td-text-label text-ink-2">
-                {pendingTitles.join("、")}
-                {pendingCount > pendingTitles.length ? " …" : ""}
-              </p>
-              <p className="td-text-caption text-ink-3">
-                {sessionDateLabel(s.startedAt)} · 还有 {pendingCount} 条未完
-              </p>
+      <section data-section="todo-at-hand">
+        <AtHandHeading count={resumable.length} />
+        <AtHandRowsSurface>
+          {resumable.map(({ session: s, pendingCount, pendingTitles }) => (
+            <div key={s.id} className="flex items-center gap-2 rounded-row bg-surface px-2 py-1.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate td-text-label text-ink-2">
+                  {pendingTitles.join("、")}
+                  {pendingCount > pendingTitles.length ? " …" : ""}
+                </p>
+                <p className="td-text-caption text-ink-3">
+                  {sessionDateLabel(s.startedAt)} · 还有 {pendingCount} 条未完
+                </p>
+              </div>
+              <button
+                type="button"
+                className="shrink-0 rounded-ctl px-2 py-1 td-text-label text-accent hover:bg-surface-elevated"
+                onClick={() => onResume(s.id)}
+              >
+                续场
+              </button>
             </div>
-            <button
-              type="button"
-              className="shrink-0 rounded-ctl px-2 py-1 td-text-label text-accent hover:bg-surface-elevated"
-              onClick={() => onResume(s.id)}
-            >
-              续场
-            </button>
-          </div>
-        ))}
+          ))}
+        </AtHandRowsSurface>
       </section>
     );
   }
@@ -78,24 +107,23 @@ export function AtHandSection({
   );
 
   return (
-    <section data-section="todo-at-hand" className="rounded-card bg-surface p-1.5">
-      <div className="flex items-center gap-1.5 px-2 py-2">
-        <span className="text-ink-3">
-          <Icon icon={HandGrabbing} size={16} />
-        </span>
-        <span className="flex-1 td-text-label font-medium text-ink-2">手头</span>
-        <button
-          type="button"
-          className="rounded-ctl px-2 py-1 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-ink"
-          onClick={onEndSession}
-        >
-          散场
-        </button>
-      </div>
+    <section data-section="todo-at-hand">
+      <AtHandHeading
+        count={pending.length}
+        action={
+          <button
+            type="button"
+            className="rounded-ctl px-2 py-1 td-text-label text-ink-3 hover:bg-surface-elevated hover:text-ink"
+            onClick={onEndSession}
+          >
+            散场
+          </button>
+        }
+      />
       {pending.length === 0 ? (
-        <p className="rounded-card bg-surface px-3 py-4 text-center td-text-label text-ink-3">手头空了，抓点活或散场</p>
+        <p className="rounded-card bg-surface px-3 py-6 text-center td-text-label text-ink-3">手头空了，抓点活或散场</p>
       ) : (
-        <div className="space-y-1">
+        <AtHandRowsSurface>
           {pending.map((task) => (
             <TaskRow
               key={task.id}
@@ -108,18 +136,20 @@ export function AtHandSection({
               inGoal={goalLinkedIds?.has(task.id)}
             />
           ))}
-        </div>
+        </AtHandRowsSurface>
       )}
       {doneCount > 0 && (
-        <CollapsibleSection title="本场已完成" count={doneCount} defaultOpen={false}>
-          <div className="space-y-1">
-            {atHand
-              .filter((t) => t.done)
-              .map((task) => (
-                <TaskRow key={task.id} task={task} pool="completed" onToggle={onToggle} onEdit={onEdit} />
-              ))}
-          </div>
-        </CollapsibleSection>
+        <div className="mt-2">
+          <CollapsibleSection title="本场已完成" count={doneCount} defaultOpen={false}>
+            <AtHandRowsSurface>
+              {atHand
+                .filter((t) => t.done)
+                .map((task) => (
+                  <TaskRow key={task.id} task={task} pool="completed" onToggle={onToggle} onEdit={onEdit} />
+                ))}
+            </AtHandRowsSurface>
+          </CollapsibleSection>
+        </div>
       )}
     </section>
   );

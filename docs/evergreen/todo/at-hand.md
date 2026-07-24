@@ -18,7 +18,7 @@ last-reviewed: 2026-07-24
 
 ## 承上启下
 
-- **上游**：`TaskRow` 行尾 overlay 按钮 / `TaskList` 滑出菜单「抓到手头」/ `TaskDetailSheet` 抽屉按钮三处入口调 `grabTaskToHand`；`AtHandSection` 顶部卡「散场」调 `endActiveSession`，行内「移出手头」调 `releaseTaskFromHand`，无活跃场时的「续场」调 `resumeSession`。`TodoPage` 把同一份 `rowHandlers.onToHand` 透传给今天/收件箱列表、翻牌复查区（`GravityReviewSection`）和水下找回尾部（`SunkenInboxTail`/`SunkenScheduledTail`），三者共享同一套抓取入口（见 §7.3）。
+- **上游**：`TaskRow` 行尾 overlay 按钮 / `TaskList` 滑出菜单「抓到手头」/ `TaskDetailSheet` 抽屉按钮三处入口调 `grabTaskToHand`；`AtHandSection` 顶部区「散场」调 `endActiveSession`，行内「移出手头」调 `releaseTaskFromHand`，无活跃场时的「续场」调 `resumeSession`。`TodoPage` 把同一份 `rowHandlers.onToHand` 透传给今天/收件箱列表、翻牌复查区（`GravityReviewSection`）和水下找回尾部（`SunkenInboxTail`/`SunkenScheduledTail`），三者共享同一套抓取入口（见 §7.3）。
 - **下游**：`lib/tasks.ts: listTasks()` 出桶时读 `getActiveSession()` 做排他投影（见 §4）；`TodoPage` 用 `useEffect` 在 `buckets.handSession?.id` 变化时触发 `healActiveSessions()`。
 - **契约**：`Session` schema 见本文 §3；生命周期动作签名（`grabTaskToHand` / `releaseTaskFromHand` / `endActiveSession` / `resumeSession` / `getActiveSession` / `healActiveSessions`）落在 `lib/sessions.ts`，本文 §2/§5/§6 描述其语义合同。
 - **邻居**：[todo](../todo.md)（`Task.sessionId` 字段落在 Task schema 里、四分区落点、模块速查）、[todo/gravity](gravity.md)（重力只作用于排他投影之后的 inbox）、[sync/domain-registry](../sync/domain-registry.md)（`sessions` 域登记）、[data-model](../data-model.md)（Dexie v16 / SQL 映射）。
@@ -128,7 +128,7 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 | 入口 | 职责 |
 |---|---|
 | `lib/sessions.ts` | 生命周期：`getActiveSession`（纯读）/ `healActiveSessions`（显式自愈）/ `grabTaskToHand` / `releaseTaskFromHand` / `endActiveSession` / `listResumableSessions` / `resumeSession` |
-| `pages/todo/AtHandSection.tsx` | 手头卡 UI：活跃场（未完列表 + 「本场已完成」折叠 + 散场按钮）/ 无活跃场时的续场行列表 / 全无隐藏 |
+| `pages/todo/AtHandSection.tsx` | 手头区 UI：沿用待办区「独立标题行 + 等宽行面板」骨架；活跃场显示未完列表 / 「本场已完成」折叠 / 散场按钮，无活跃场时显示续场行列表，全无则隐藏 |
 | `server/src/lib/session-rows.ts` | `sessionToRow` / `rowToSession`：SQL ↔ JS 映射，不写 `updated_at` |
 | `pages/TodoPage.tsx`（归 [todo](../todo.md) covers） | 接线：`buckets.atHand`/`handSession` 渲染 `AtHandSection`；`rowHandlers.onToHand` 透传给 `TaskRow`/`TaskList`/`TaskDetailSheet`/`GravityReviewSection`/`SunkenInboxTail`/`SunkenScheduledTail`；`useEffect` 触发 `healActiveSessions` |
 | `lib/tasks.ts: listTasks()`（归 [todo](../todo.md) covers） | `TodoBuckets.atHand`/`handSession` 字段与 §4 的排他投影判定 |

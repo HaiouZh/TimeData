@@ -64,6 +64,7 @@ describe("AtHandSection", () => {
       />,
     );
 
+    expect(host.querySelector("h2")?.textContent).toBe("手头");
     expect(host.textContent).toContain("买菜");
     const collapsible = host.querySelector("details");
     expect(collapsible?.textContent).toContain("本场已完成");
@@ -106,6 +107,7 @@ describe("AtHandSection", () => {
       <AtHandSection atHand={[]} session={null} resumable={resumable} {...handlers} onResume={onResume} />,
     );
 
+    expect(host.querySelector("h2")?.textContent).toBe("手头");
     expect(host.textContent).toContain("修水管、报销发票、买菜");
     expect(host.textContent).toContain("还有 3 条未完");
     const resumeBtn = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "续场");
@@ -117,9 +119,7 @@ describe("AtHandSection", () => {
   });
 
   it("无活跃场且无可续场：整区隐藏（host.innerHTML 为空）", async () => {
-    const { host, root } = await renderDom(
-      <AtHandSection atHand={[]} session={null} resumable={[]} {...handlers} />,
-    );
+    const { host, root } = await renderDom(<AtHandSection atHand={[]} session={null} resumable={[]} {...handlers} />);
 
     expect(host.innerHTML).toBe("");
 

@@ -245,4 +245,4 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 |---|---|
 | [todo/recurrence](todo/recurrence.md) | 重复规则引擎：Recurrence schema、occurrence 物化、终止条件、预设门、删除级联 |
 | [todo/gravity](todo/gravity.md) | 想法重力：水位线浮沉、翻牌复查、已过目记忆、水下找回尾部、设置页 |
-| [todo/at-hand](todo/at-hand.md) | 手头软会话：`Session` schema、sessions 域登记、抓/移/散/续生命周期、atHand 排他投影、自愈规则 |
+| [todo/at-hand](todo/at-hand.md) | 手头软会话：`Session` schema、sessions 域登记、抓/移/散/续生命周期、atHand 排他投影、自愈规则，以及与待办其他区域统一的标题 / 行面板 UI 骨架 |
