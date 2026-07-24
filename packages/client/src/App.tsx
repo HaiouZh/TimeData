@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { BrowserRouter, useLocation } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, useLocation } from "react-router-dom";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
@@ -44,10 +44,16 @@ export function AppShell() {
   );
 }
 
-export default function App() {
-  return (
-    <ErrorBoundary>
-      <BrowserRouter>
+// 惰性单例：模块顶层不创建 router——createBrowserRouter 会读写 window.history，
+// 在 import 阶段执行会让 node 环境的测试（如 App.test.tsx）在 collect 阶段崩。
+// 单例保证「不随渲染重建」，历史状态不丢。
+let routerInstance: ReturnType<typeof createBrowserRouter> | null = null;
+
+export function getRouter() {
+  routerInstance ??= createBrowserRouter([
+    {
+      path: "*",
+      element: (
         <SyncProvider>
           <BottomNavProvider>
             <TrackAttentionProvider>
@@ -55,7 +61,16 @@ export default function App() {
             </TrackAttentionProvider>
           </BottomNavProvider>
         </SyncProvider>
-      </BrowserRouter>
+      ),
+    },
+  ]);
+  return routerInstance;
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <RouterProvider router={getRouter()} />
     </ErrorBoundary>
   );
 }
