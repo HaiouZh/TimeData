@@ -17,6 +17,7 @@ const BUSINESS_TABLES: BusinessTable[] = [
   { table: "settings", pk: "key" },
   { table: "quick_notes", pk: "id" },
   { table: "tasks", pk: "id" },
+  { table: "sessions", pk: "id" },
   { table: "health_heart_rate", pk: "id" },
   { table: "health_hrv", pk: "id" },
   { table: "health_sleep", pk: "id" },

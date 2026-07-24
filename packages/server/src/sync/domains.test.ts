@@ -34,6 +34,7 @@ describe("server sync domains", () => {
       "health_stress",
       "quick_notes",
       "runs",
+      "sessions",
       "settings",
       "tasks",
       "time_entries",

@@ -615,6 +615,24 @@ describe("initializeDatabase", () => {
     const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
     expect(columns.map((c) => c.name)).toEqual(expect.arrayContaining(["rule_id", "skipped"]));
   });
+
+  it("ensureTaskSessionIdColumn 幂等补 session_id 列并建索引", async () => {
+    const { ensureTaskSessionIdColumn } = await import("./schema.js");
+    db.exec("CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL)");
+    ensureTaskSessionIdColumn(db);
+    ensureTaskSessionIdColumn(db);
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    expect(columns.some((c) => c.name === "session_id")).toBe(true);
+    const idx = db.prepare("PRAGMA index_list(tasks)").all() as Array<{ name: string }>;
+    expect(idx.some((i) => i.name === "idx_tasks_session_id")).toBe(true);
+  });
+
+  it("initializeDatabase 建 tasks 含 session_id 列", async () => {
+    const { initializeDatabase } = await import("./schema.js");
+    initializeDatabase();
+    const columns = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+    expect(columns.map((c) => c.name)).toEqual(expect.arrayContaining(["session_id"]));
+  });
 });
 
 describe("dropColumnsIfExist", () => {

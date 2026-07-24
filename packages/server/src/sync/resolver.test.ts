@@ -81,6 +81,16 @@ beforeEach(async () => {
       skipped INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
+      session_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

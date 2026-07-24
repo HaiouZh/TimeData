@@ -49,6 +49,7 @@ const RESET_DOMAIN_SPECS: readonly ResetDomainSpec[] = [
   simpleDomain("tracks"),
   simpleDomain("time_entries"),
   simpleDomain("tasks"),
+  simpleDomain("sessions"),
   simpleDomain("quick_notes"),
   simpleDomain("settings", "key"),
   simpleDomain("health_charts"),

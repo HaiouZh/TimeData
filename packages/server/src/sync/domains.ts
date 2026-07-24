@@ -38,6 +38,7 @@ import {
   goalLayoutPinToRow,
   rowToGoalLayoutPin,
 } from "../lib/goal-layout-pin-rows.js";
+import { type SessionRow, rowToSession, sessionToRow } from "../lib/session-rows.js";
 import { type TrackRow, type TrackStepRow, rowToTrack, rowToTrackStep, trackStepToRow, trackToRow } from "../lib/track-rows.js";
 import { recordSeqWithDb } from "./seq.js";
 
@@ -452,6 +453,7 @@ function taskToRow(data: unknown): Record<string, string | number | null> {
     skipped: task.skipped ? 1 : 0,
     completed_at: task.completedAt ?? null,
     tags: JSON.stringify(task.tags ?? []),
+    session_id: task.sessionId ?? null,
     created_at: task.createdAt,
   };
 }
@@ -645,6 +647,7 @@ export const SERVER_SYNC_DOMAINS: Record<string, ServerDomainHooks> = {
     apply: applyGoalLayoutPinChange,
     readRecord: readGoalLayoutPinRecord,
   },
+  sessions: simpleLwwDomain<SessionRow>("sessions", sessionToRow, (row) => rowToSession(row)),
 };
 
 export function getServerDomain(table: string): ServerDomainHooks {

@@ -65,6 +65,12 @@ export function ensureTrackStepEditedAtColumn(db: Database): void {
   if (!names.has("edited_at")) db.exec("ALTER TABLE track_steps ADD COLUMN edited_at TEXT");
 }
 
+export function ensureTaskSessionIdColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("session_id")) db.exec("ALTER TABLE tasks ADD COLUMN session_id TEXT");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)");
+}
+
 function quoteIdentifier(identifier: string): string {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
     throw new Error(`Invalid SQLite identifier: ${identifier}`);
@@ -155,6 +161,7 @@ export function initializeDatabase(): void {
       skipped INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
+      session_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -165,6 +172,15 @@ export function initializeDatabase(): void {
       summary TEXT,
       status TEXT NOT NULL,
       refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -282,6 +298,7 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_quick_notes_updated_at ON quick_notes(updated_at);
     CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at);
     CREATE INDEX IF NOT EXISTS idx_tracks_updated_at ON tracks(updated_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at);
     CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
     CREATE INDEX IF NOT EXISTS idx_goals_updated_at ON goals(updated_at);
     CREATE INDEX IF NOT EXISTS idx_goal_layout_pins_goal_id ON goal_layout_pins(goal_id);
@@ -399,6 +416,7 @@ export function initializeDatabase(): void {
   ensureTaskSkippedColumn(db);
   ensureGoalMembersColumn(db);
   ensureTrackStepEditedAtColumn(db);
+  ensureTaskSessionIdColumn(db);
   dropColumnsIfExist(db, "tasks", ["goal_id"], ["idx_tasks_goal_id"]);
   dropColumnsIfExist(db, "tracks", ["goal_id"], ["idx_tracks_goal_id"]);
   // 退役 turn（M2，2026-06-20）：摘掉 tasks 表的 turn/turn_at 列。明文列名是合法墓碑，

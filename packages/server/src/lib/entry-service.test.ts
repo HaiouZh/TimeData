@@ -72,6 +72,15 @@ function createSchema() {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE track_steps (
       id TEXT PRIMARY KEY,
       track_id TEXT NOT NULL,
@@ -369,6 +378,14 @@ function makeDb2() {
       summary TEXT,
       status TEXT NOT NULL,
       refs TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );

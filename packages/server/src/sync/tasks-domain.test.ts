@@ -32,6 +32,7 @@ beforeEach(async () => {
       skipped INTEGER NOT NULL DEFAULT 0,
       completed_at TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
+      session_id TEXT,
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL
     );
     CREATE TABLE sync_tombstones (table_name TEXT NOT NULL, record_id TEXT NOT NULL, deleted_at TEXT NOT NULL, PRIMARY KEY (table_name, record_id));
@@ -113,6 +114,29 @@ describe("tasks rides generic LWW pipeline with zero apply hook", () => {
 
     const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "occ-1");
     expect(pulled).toMatchObject({ data: { ruleId: "rule-1", skipped: true } });
+  });
+
+  it("persists sessionId and round-trips it", () => {
+    const c = change("create", "occ-2", "手头任务");
+    (c as unknown as { data: Record<string, unknown> }).data.sessionId = "s1";
+
+    expect(applyChange(c).status).toBe("applied");
+    expect(db.prepare("SELECT session_id FROM tasks WHERE id='occ-2'").get()).toEqual({ session_id: "s1" });
+
+    const pulled = domains.SERVER_SYNC_DOMAINS.tasks.readRecord(db, "occ-2");
+    expect(pulled).toMatchObject({ data: { sessionId: "s1" } });
+  });
+
+  it("session_id 不是守卫列：无 op 的 update 会覆盖它", () => {
+    const created = change("create", "occ-3", "手头任务2");
+    (created as unknown as { data: Record<string, unknown> }).data.sessionId = "s1";
+    expect(applyChange(created).status).toBe("applied");
+
+    const updated = change("update", "occ-3", "手头任务2");
+    (updated as unknown as { data: Record<string, unknown> }).data.sessionId = null;
+    expect(applyChange(updated).status).toBe("applied");
+
+    expect(db.prepare("SELECT session_id FROM tasks WHERE id='occ-3'").get()).toEqual({ session_id: null });
   });
 
   it("delete 生效前把整行快照进 deleted_tasks_archive", () => {

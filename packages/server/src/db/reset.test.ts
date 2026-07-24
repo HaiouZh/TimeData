@@ -70,6 +70,15 @@ beforeEach(() => {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      ended_at TEXT,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE track_steps (
       id TEXT PRIMARY KEY,
       track_id TEXT NOT NULL,
@@ -186,6 +195,10 @@ describe("resetDatabaseConnectionToDefaults", () => {
       VALUES ('task-1', '任务', 0, NULL, NULL, NULL, 0, ?, ?)
     `).run(now, now);
     db.prepare(`
+      INSERT INTO sessions (id, started_at, created_at, updated_at)
+      VALUES ('session-1', ?, ?, ?)
+    `).run(now, now, now);
+    db.prepare(`
       INSERT INTO health_charts (id, type, sort_order, config, created_at, updated_at)
       VALUES ('chart-1', 'line', 0, '{}', ?, ?)
     `).run(now, now);
@@ -254,6 +267,7 @@ describe("resetDatabaseConnectionToDefaults", () => {
       "settings",
       "quick_notes",
       "tasks",
+      "sessions",
       "health_heart_rate",
       "health_hrv",
       "health_sleep",
@@ -283,6 +297,7 @@ describe("resetDatabaseConnectionToDefaults", () => {
         "settings:setting-1",
         "quick_notes:note-1",
         "tasks:task-1",
+        "sessions:session-1",
         "health_heart_rate:heart-1",
         "health_hrv:hrv-1",
         "health_sleep:sleep-1",

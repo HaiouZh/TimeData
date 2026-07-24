@@ -116,6 +116,7 @@ export interface TaskRow {
   skipped: number | null;
   completed_at: string | null;
   tags: string | null;
+  session_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +137,7 @@ export function rowToTask(row: TaskRow): Task {
     skipped: Boolean(row.skipped),
     completedAt: row.completed_at ?? null,
     tags: row.tags ? JSON.parse(row.tags) : [],
+    sessionId: row.session_id ?? null,
     sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
