@@ -45,6 +45,7 @@
   "src/pages/settings/SettingsTodoGravityPage.test.tsx",
   "src/pages/settings/SettingsTracksPage.test.tsx",
   "src/pages/stats/health/ChartBuilderSheet.test.tsx",
+  "src/pages/todo/AtHandSection.test.tsx",
   "src/pages/todo/CollapsibleSection.test.tsx",
   "src/pages/todo/CustomRecurrencePage.test.tsx",
   "src/pages/todo/DayGroupedList.test.tsx",

@@ -51,7 +51,15 @@ import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
 import { currentGravityDate, msUntilNextLocalDay } from "../lib/tasks/gravityClock.js";
 import { useTodoGravitySettings } from "../lib/settings/todoGravitySetting.ts";
+import {
+  endActiveSession,
+  healActiveSessions,
+  listResumableSessions,
+  releaseTaskFromHand,
+  resumeSession,
+} from "../lib/sessions.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
+import { AtHandSection } from "./todo/AtHandSection.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { GravityReviewSection } from "./todo/GravityReviewSection.js";
@@ -88,6 +96,10 @@ export function TodoPage() {
   const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
   const goals = useLiveQuery(() => db.goals.toArray(), []) ?? [];
   const goalLinkedIds = goalLinkedTaskIds(goals);
+  const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
+  useEffect(() => {
+    void healActiveSessions();
+  }, [buckets.handSession?.id]);
   const [searchParams, setSearchParams] = useSearchParams();
   const taskIdParam = searchParams.get("taskId");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -249,6 +261,10 @@ export function TodoPage() {
     return markGravityTasksSurfaced(ids, now, { waterlineDays: gravitySettings.waterlineDays });
   };
 
+  const releaseFromHand = (t: Task) => void releaseTaskFromHand(t.id);
+  const endHand = () => void endActiveSession();
+  const resumeHand = (sessionId: string) => void resumeSession(sessionId);
+
   const rowHandlers = {
     onToggle: toggle,
     onEdit: openDetail,
@@ -398,6 +414,20 @@ export function TodoPage() {
     }
   }
 
+  const atHandBlock = (
+    <AtHandSection
+      atHand={buckets.atHand}
+      session={buckets.handSession}
+      resumable={resumable}
+      onRelease={releaseFromHand}
+      onEndSession={endHand}
+      onResume={resumeHand}
+      onToggle={toggle}
+      onEdit={openDetail}
+      goalLinkedIds={goalLinkedIds}
+    />
+  );
+
   const todayBlock = (
     <TaskColumn
       title="今天"
@@ -537,6 +567,7 @@ export function TodoPage() {
               className="items-start gap-y-4"
               left={
                 <>
+                  {atHandBlock}
                   {todayBlock}
                   {gravityReviewBlock}
                   {completedBlock}
@@ -551,6 +582,7 @@ export function TodoPage() {
             />
           ) : (
             <div className="flex flex-col gap-4">
+              {atHandBlock}
               {todayBlock}
               {gravityReviewBlock}
               {completedBlock}

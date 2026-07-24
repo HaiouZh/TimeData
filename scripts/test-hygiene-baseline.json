@@ -104,6 +104,7 @@
   "dirty-in-clean-bucket:pages/stats/health/ChartBuilderSheet.test.tsx",
   "dirty-in-clean-bucket:pages/stats/health/MetricChartBlock.test.tsx",
   "dirty-in-clean-bucket:pages/stats/modules/TrendSection.test.tsx",
+  "dirty-in-clean-bucket:pages/todo/AtHandSection.test.tsx",
   "dirty-in-clean-bucket:pages/todo/CollapsibleSection.test.tsx",
   "dirty-in-clean-bucket:pages/todo/CustomRecurrencePage.test.tsx",
   "dirty-in-clean-bucket:pages/todo/DayGroupedList.test.tsx",
