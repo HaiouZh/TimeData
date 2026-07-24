@@ -70,10 +70,9 @@ def parse_overview(body: str, report):
     return topics
 
 
-def check_links(md_path: Path, report):
-    """文内相对链接的目标文件必须存在（归档搬移后的残链检查）。"""
-    text = md_path.read_text(encoding="utf-8")
-    for raw in LINK_RE.findall(text):
+def iter_local_links(md_path: Path):
+    """产出文内相对链接的 (原始写法, 解析后路径)，跳过外链与纯锚点。"""
+    for raw in LINK_RE.findall(md_path.read_text(encoding="utf-8")):
         target = raw.strip()
         if target.startswith("<") and target.endswith(">"):
             target = target[1:-1].strip()
@@ -82,7 +81,13 @@ def check_links(md_path: Path, report):
         target = target.split("#", 1)[0]
         if not target:
             continue
-        if not (md_path.parent / target).exists():
+        yield raw, md_path.parent / target
+
+
+def check_links(md_path: Path, report):
+    """文内相对链接的目标文件必须存在（归档搬移后的残链检查）。"""
+    for raw, target in iter_local_links(md_path):
+        if not target.exists():
             report("error", "link", f"{md_path.name} 链接目标不存在：{raw}")
 
 
@@ -156,13 +161,14 @@ def check(root: Path):
     archive = root / "ROADMAP-archive.md"
     if archive.is_file():
         check_links(archive, report)
-        archive_text = archive.read_text(encoding="utf-8")
+        # 索引登记要的是**实链**：正文里提一嘴文件名不算登记（index-line-guide 实链纪律）
+        indexed = {t.resolve() for _, t in iter_local_links(archive)}
         topic_dir = root / ARCHIVE_TOPIC_DIR
         for f in sorted(topic_dir.glob("*.md")) if topic_dir.is_dir() else []:
             check_links(f, report)
-            if f.name not in archive_text:
+            if f.resolve() not in indexed:
                 report("error", "archive-index",
-                       f"{ARCHIVE_TOPIC_DIR}/{f.name} 未登记进 ROADMAP-archive.md 索引表"
+                       f"{ARCHIVE_TOPIC_DIR}/{f.name} 未被 ROADMAP-archive.md 索引表实链引用"
                        "——归档页挂不上索引 = 后人 grep 不到（rules.md §3）")
 
     # 活目录孤儿：specs/plans 下未被 ROADMAP 引用的文件 = 漏归档候选
