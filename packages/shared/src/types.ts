@@ -9,6 +9,7 @@ import type {
   GoalSchema,
   QuickNoteSchema,
   RecurrenceSchema,
+  SessionSchema,
   SettingSchema,
   SyncForcePushPrepareRequestSchema,
   SyncForcePushRequestSchema,
@@ -49,6 +50,8 @@ export type Setting = z.infer<typeof SettingSchema>;
 export type Recurrence = z.infer<typeof RecurrenceSchema>;
 
 export type Task = z.infer<typeof TaskSchema>;
+
+export type Session = z.infer<typeof SessionSchema>;
 
 export type TimeEntry = z.infer<typeof TimeEntrySchema>;
 
@@ -127,7 +130,9 @@ export type SyncChange =
   | SyncUpsertChange<"goals", Goal>
   | SyncDeleteChange<"goals">
   | SyncUpsertChange<"goal_layout_pins", GoalLayoutPin>
-  | SyncDeleteChange<"goal_layout_pins">;
+  | SyncDeleteChange<"goal_layout_pins">
+  | SyncUpsertChange<"sessions", Session>
+  | SyncDeleteChange<"sessions">;
 
 export type SyncPushOutcomeStatus = "accepted" | "rejected" | "conflict";
 

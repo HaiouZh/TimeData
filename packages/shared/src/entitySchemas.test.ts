@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { GoalLayoutPinSchema, GoalSchema, RecurrenceSchema, TaskSchema, TrackSchema } from "./entitySchemas.js";
+import { GoalLayoutPinSchema, GoalSchema, RecurrenceSchema, SessionSchema, TaskSchema, TrackSchema } from "./entitySchemas.js";
 
 describe("RecurrenceSchema", () => {
   const base = { interval: 1, basis: "due" as const };
@@ -456,5 +456,42 @@ describe("GoalLayoutPinSchema", () => {
         updatedAt: "2026-06-24T00:00:00Z",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("SessionSchema", () => {
+  const base = {
+    id: "s1",
+    startedAt: "2026-07-24T01:00:00.000Z",
+    createdAt: "2026-07-24T01:00:00.000Z",
+    updatedAt: "2026-07-24T01:00:00.000Z",
+  };
+  it("接受最小载荷，endedAt/note 默认 null", () => {
+    const s = SessionSchema.parse(base);
+    expect(s.endedAt).toBeNull();
+    expect(s.note).toBeNull();
+  });
+  it("接受显式 endedAt", () => {
+    expect(SessionSchema.safeParse({ ...base, endedAt: "2026-07-24T02:00:00.000Z" }).success).toBe(true);
+  });
+  it("拒绝非 UTC ISO 的 startedAt", () => {
+    expect(SessionSchema.safeParse({ ...base, startedAt: "2026-07-24" }).success).toBe(false);
+  });
+});
+
+describe("TaskSchema sessionId", () => {
+  const baseTask = {
+    id: "t1", title: "占位", done: false, recurrence: null,
+    lastDoneAt: null, startAt: null, scheduledAt: null, sortOrder: 0,
+    createdAt: "2026-07-24T00:00:00.000Z", updatedAt: "2026-07-24T00:00:00.000Z",
+  };
+  it("legacy payload 缺 sessionId → 默认 null", () => {
+    expect(TaskSchema.parse(baseTask).sessionId).toBeNull();
+  });
+  it("接受 sessionId 字符串", () => {
+    expect(TaskSchema.parse({ ...baseTask, sessionId: "s1" }).sessionId).toBe("s1");
+  });
+  it("拒绝空串 sessionId", () => {
+    expect(() => TaskSchema.parse({ ...baseTask, sessionId: "" })).toThrow();
   });
 });

@@ -27,6 +27,7 @@ export {
   QuickNoteSchema,
   RecurrenceSchema,
   RefSchema,
+  SessionSchema,
   SettingSchema,
   TaskSchema,
   TimeEntrySchema,

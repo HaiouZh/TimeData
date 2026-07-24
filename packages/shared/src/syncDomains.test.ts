@@ -20,6 +20,7 @@ describe("sync domain registry", () => {
       "track_steps",
       "goals",
       "goal_layout_pins",
+      "sessions",
     ]);
   });
 
@@ -124,6 +125,15 @@ describe("goal layout pin domain registration", () => {
     expect(pins.upsertPriority).toBeGreaterThan(goals.upsertPriority);
     expect(pins.deletePriority).toBeGreaterThanOrEqual(goals.deletePriority);
     expect(SYNC_TABLE_NAMES).toContain("goal_layout_pins");
+  });
+});
+
+describe("sessions domain registration", () => {
+  it("registers sessions as an lww domain after goal_layout_pins", () => {
+    const sessions = getSyncDomain("sessions");
+    expect(sessions.conflictPolicy).toBe("lww");
+    expect(sessions.countsInStatus).toBe(false);
+    expect(SYNC_TABLE_NAMES).toContain("sessions");
   });
 });
 

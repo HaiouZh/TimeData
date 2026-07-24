@@ -219,6 +219,7 @@ export const TaskSchema = z.object({
     .max(50)
     .default([]),
   ruleId: z.string().min(1).nullable().default(null),
+  sessionId: z.string().min(1).nullable().default(null),
   skipped: z.boolean().default(false),
   sortOrder: z.number().int().finite(),
   createdAt: UtcIsoStringSchema,
@@ -264,3 +265,13 @@ export const TrackStepSchema = z
     path: ["endedAt"],
     message: "endedAt must be at or after startedAt",
   });
+
+/** 「手头」软会话：只存元数据，任务经 Task.sessionId 反挂（见 evergreen todo/at-hand）。 */
+export const SessionSchema = z.object({
+  id: NonEmptyTrimmedStringSchema,
+  startedAt: UtcIsoStringSchema,
+  endedAt: UtcIsoStringSchema.nullable().default(null),
+  note: z.string().max(200).nullable().default(null),
+  createdAt: UtcIsoStringSchema,
+  updatedAt: UtcIsoStringSchema,
+});
