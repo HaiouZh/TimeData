@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listAllGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { listGoals } from "../../lib/goals.js";
+import { getActiveSession } from "../../lib/sessions.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { GoalGalaxyCanvas } from "./GoalGalaxyCanvas.js";
@@ -20,12 +21,14 @@ export function GoalsPage() {
   const tracks = useLiveQuery(() => listTracks(), []);
   const steps = useLiveQuery(() => listAllTrackSteps(), []);
   const layoutPins = useLiveQuery(() => listAllGoalLayoutPins(), []);
+  const activeSession = useLiveQuery(() => getActiveSession(), []);
   const galaxyReady =
     goals !== undefined &&
     tasks !== undefined &&
     tracks !== undefined &&
     steps !== undefined &&
-    layoutPins !== undefined;
+    layoutPins !== undefined &&
+    activeSession !== undefined;
 
   useEffect(() => {
     setMode(wide ? "galaxy" : "list");
@@ -36,7 +39,11 @@ export function GoalsPage() {
   return (
     <div className="flex h-full min-h-full flex-col bg-page text-ink">
       <div className="flex shrink-0 justify-end px-4 py-3">
-        <div className="inline-flex rounded-pill border border-border bg-surface-elevated p-1 shadow-sm" role="tablist" aria-label="目标视图">
+        <div
+          className="inline-flex rounded-pill border border-border bg-surface-elevated p-1 shadow-sm"
+          role="tablist"
+          aria-label="目标视图"
+        >
           <button
             type="button"
             role="tab"
@@ -67,6 +74,7 @@ export function GoalsPage() {
             tracks={tracks}
             steps={steps}
             layoutPins={layoutPins}
+            activeSessionId={activeSession?.id ?? null}
             onNavigate={(to) => navigate(to)}
           />
         ) : showGalaxy ? (

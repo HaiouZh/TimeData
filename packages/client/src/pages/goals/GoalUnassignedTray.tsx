@@ -15,6 +15,7 @@ export interface GoalUnassignedTrayProps {
   tracks: Track[];
   steps: TrackStep[];
   boardSignals: readonly string[];
+  activeSessionId?: string | null;
   interaction?: GoalCandidateInteraction;
 }
 
@@ -28,7 +29,14 @@ function toggleListValue(values: string[], value: string): string[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
-export function GoalUnassignedTray({ tasks, tracks, steps, boardSignals, interaction }: GoalUnassignedTrayProps) {
+export function GoalUnassignedTray({
+  tasks,
+  tracks,
+  steps,
+  boardSignals,
+  activeSessionId = null,
+  interaction,
+}: GoalUnassignedTrayProps) {
   const [tab, setTab] = useState<TrayTab>("tasks");
   const [searchQuery, setSearchQuery] = useState("");
   const [includeTags, setIncludeTags] = useState<string[]>([]);
@@ -41,12 +49,13 @@ export function GoalUnassignedTray({ tasks, tracks, steps, boardSignals, interac
     () =>
       buildGoalTaskCandidates(tasks, NO_MEMBERS, {
         now: new Date(),
+        activeSessionId,
         searchQuery,
         includeTags,
         excludeTags,
         tagMode,
       }),
-    [excludeTags, includeTags, searchQuery, tagMode, tasks],
+    [activeSessionId, excludeTags, includeTags, searchQuery, tagMode, tasks],
   );
   const trackCandidates = useMemo(
     () => buildGoalTrackCandidates(tracks, steps, NO_MEMBERS, { searchQuery, boardSignals }),
@@ -71,7 +80,9 @@ export function GoalUnassignedTray({ tasks, tracks, steps, boardSignals, interac
       <div className="space-y-3 border-b border-border-hairline px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="td-text-body font-medium text-ink">未归类</h2>
-          <span className="rounded-pill bg-accent-soft px-2 py-1 td-text-caption tabular-nums text-accent">{total}</span>
+          <span className="rounded-pill bg-accent-soft px-2 py-1 td-text-caption tabular-nums text-accent">
+            {total}
+          </span>
         </div>
         <div className="flex gap-2">
           <button

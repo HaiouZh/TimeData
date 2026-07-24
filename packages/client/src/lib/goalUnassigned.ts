@@ -2,6 +2,7 @@ import type { Goal, GoalMemberRef, Task, Track, TrackStep } from "@timedata/shar
 import {
   buildGoalTaskCandidates,
   buildGoalTrackCandidates,
+  isGoalTaskCandidate,
   type GoalTaskCandidate,
   type GoalTaskCandidateOptions,
   type GoalTrackCandidate,
@@ -54,7 +55,7 @@ export function activeGoalMemberRefs(goals: readonly Goal[]): GoalMemberRef[] {
 
 export function unassignedTasks(tasks: readonly Task[], goals: readonly Goal[]): Task[] {
   const owned = activeGoalMemberKeys(goals);
-  return tasks.filter((task) => !task.done && !owned.has(`task:${task.id}`));
+  return tasks.filter((task) => task.parentId === null && isGoalTaskCandidate(task) && !owned.has(`task:${task.id}`));
 }
 
 export function unassignedTracks(tracks: readonly Track[], goals: readonly Goal[]): Track[] {
@@ -73,10 +74,12 @@ export function buildUnassignedGoalCandidates({
   includeTags,
   excludeTags,
   tagMode,
+  activeSessionId,
 }: BuildUnassignedGoalCandidatesOptions): UnassignedGoalCandidates {
   const assignedMembers = activeGoalMemberRefs(goals);
   const taskCandidates = buildGoalTaskCandidates(unassignedTasks(tasks, goals), assignedMembers, {
     now,
+    activeSessionId,
     searchQuery,
     includeTags,
     excludeTags,

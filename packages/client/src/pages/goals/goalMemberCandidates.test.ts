@@ -68,7 +68,12 @@ describe("goalMemberCandidates", () => {
       task({ id: "inbox", title: "收件箱", scheduledAt: null, sortOrder: 1 }),
       task({ id: "future", title: "未来", scheduledAt: "2026-06-25T00:00:00.000Z" }),
       task({ id: "done", title: "完成", done: true, completedAt: "2026-06-22T00:00:00.000Z" }),
-      task({ id: "repeat", title: "重复", recurrence: { freq: "daily", interval: 1, basis: "due" }, startAt: "2026-06-24T00:00:00.000Z" }),
+      task({
+        id: "repeat",
+        title: "重复",
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        startAt: "2026-06-24T00:00:00.000Z",
+      }),
     ];
 
     const candidates = buildGoalTaskCandidates(tasks, members, {
@@ -79,10 +84,78 @@ describe("goalMemberCandidates", () => {
       tagMode: "and",
     });
 
-    expect(taskCandidateGroups(candidates).map((group) => [group.key, group.items.map((item) => item.task.id)])).toEqual([
+    expect(
+      taskCandidateGroups(candidates).map((group) => [group.key, group.items.map((item) => item.task.id)]),
+    ).toEqual([
       ["today", ["today"]],
       ["inbox", ["inbox"]],
       ["scheduled", ["future"]],
+    ]);
+  });
+
+  it("排除到期的重复模板与已完成/已删跳的历史 occurrence，只保留活跃 occurrence", () => {
+    const tasks = [
+      task({
+        id: "rule",
+        title: "每日复盘",
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+        startAt: "2026-06-23T00:00:00.000Z",
+      }),
+      task({
+        id: "occurrence-done",
+        title: "每日复盘",
+        ruleId: "rule",
+        scheduledAt: "2026-06-22T00:00:00.000Z",
+        done: true,
+        completedAt: "2026-06-22T08:00:00.000Z",
+      }),
+      task({
+        id: "occurrence-skipped",
+        title: "每日复盘",
+        ruleId: "deleted-rule",
+        scheduledAt: "2026-06-23T00:00:00.000Z",
+        skipped: true,
+      }),
+      task({
+        id: "occurrence-active",
+        title: "每日复盘",
+        ruleId: "rule",
+        scheduledAt: "2026-06-23T00:00:00.000Z",
+      }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      searchQuery: "",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    expect(candidates.map((item) => item.task.id)).toEqual(["occurrence-active"]);
+  });
+
+  it("当前活跃场的任务单列手头并置顶，历史场任务仍按原落点分组", () => {
+    const tasks = [
+      task({ id: "inbox", title: "普通收件箱", sortOrder: 1 }),
+      task({ id: "hand", title: "正在做", sessionId: "session-active", sortOrder: 99 }),
+      task({ id: "history", title: "历史场任务", sessionId: "session-ended", sortOrder: 2 }),
+    ];
+
+    const candidates = buildGoalTaskCandidates(tasks, [], {
+      now,
+      activeSessionId: "session-active",
+      searchQuery: "",
+      includeTags: [],
+      excludeTags: [],
+      tagMode: "and",
+    });
+
+    expect(
+      taskCandidateGroups(candidates).map((group) => [group.key, group.items.map((item) => item.task.id)]),
+    ).toEqual([
+      ["atHand", ["hand"]],
+      ["inbox", ["inbox", "history"]],
     ]);
   });
 
@@ -208,7 +281,9 @@ describe("goalMemberCandidates", () => {
       boardSignals: ["待我处理", "agent在做"],
     });
 
-    expect(trackCandidateGroups(candidates).map((group) => [group.key, group.items.map((item) => item.track.id)])).toEqual([
+    expect(
+      trackCandidateGroups(candidates).map((group) => [group.key, group.items.map((item) => item.track.id)]),
+    ).toEqual([
       ["active", ["active"]],
       ["concluded", ["old"]],
     ]);

@@ -3,7 +3,7 @@ import { groupStepsByTrack, latestBoardSignal, latestStep, type TrackBoardSignal
 import { placementForTask } from "../../lib/tasks/placement.js";
 import { filterTasks, type TaskFilter } from "../../lib/tasks/turnTags.js";
 
-export type GoalTaskCandidateGroupKey = "today" | "inbox" | "scheduled";
+export type GoalTaskCandidateGroupKey = "atHand" | "today" | "inbox" | "scheduled";
 export type GoalTrackCandidateGroupKey = "active" | "parked" | "concluded";
 
 export interface GoalTaskCandidate {
@@ -22,6 +22,7 @@ export interface GoalTrackCandidate {
 
 export interface GoalTaskCandidateOptions extends TaskFilter {
   now: Date;
+  activeSessionId?: string | null;
 }
 
 export interface GoalTrackCandidateOptions {
@@ -41,10 +42,11 @@ export interface GoalTrackCandidateGroup {
   items: GoalTrackCandidate[];
 }
 
-const TASK_GROUP_ORDER: GoalTaskCandidateGroupKey[] = ["today", "inbox", "scheduled"];
+const TASK_GROUP_ORDER: GoalTaskCandidateGroupKey[] = ["atHand", "today", "inbox", "scheduled"];
 const TRACK_GROUP_ORDER: GoalTrackCandidateGroupKey[] = ["active", "parked", "concluded"];
 
 const TASK_GROUP_LABEL: Record<GoalTaskCandidateGroupKey, string> = {
+  atHand: "手头",
   today: "今天",
   inbox: "收件箱",
   scheduled: "已排期",
@@ -68,9 +70,25 @@ function compareTaskStable(left: Task, right: Task): number {
   return compareText(left.title, right.title) || left.id.localeCompare(right.id);
 }
 
-/** 落点映射到托盘三池；重复 / 已完成 / 已耗尽一律返回 null（不进托盘）。 */
-function taskGroup(task: Task, now: Date): { group: GoalTaskCandidateGroupKey; overdue: boolean } | null {
-  const placement = placementForTask(task, now);
+/** Goal 只收编普通未完成任务或活跃 occurrence；模板与历史 occurrence 只作规则/账本事实。 */
+export function isGoalTaskCandidate(task: Task): boolean {
+  return task.recurrence === null && !task.done && !task.skipped;
+}
+
+/** 落点映射到托盘三池；重复模板与 done/skipped 历史发一律返回 null。 */
+function taskGroup(
+  task: Task,
+  options: Pick<GoalTaskCandidateOptions, "now" | "activeSessionId">,
+): { group: GoalTaskCandidateGroupKey; overdue: boolean } | null {
+  if (!isGoalTaskCandidate(task)) return null;
+  if (
+    options.activeSessionId !== null &&
+    options.activeSessionId !== undefined &&
+    task.sessionId === options.activeSessionId
+  ) {
+    return { group: "atHand", overdue: false };
+  }
+  const placement = placementForTask(task, options.now);
   if (placement.pool === "today") return { group: "today", overdue: placement.overdue };
   if (placement.pool === "inbox") return { group: "inbox", overdue: false };
   if (placement.pool === "upcoming") return { group: "scheduled", overdue: false };
@@ -104,11 +122,7 @@ function openChildrenByParent(tasks: readonly Task[]): Map<string, Task[]> {
 }
 
 function searchTerms(query: string): string[] {
-  return query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
 function matchesTrackSearch(track: Track, query: string): boolean {
@@ -134,10 +148,12 @@ export function buildGoalTaskCandidates(
 ): GoalTaskCandidate[] {
   const memberKeys = new Set(members.map(memberKey));
   const childrenByParent = openChildrenByParent(tasks);
-  const roots = tasks.filter((task) => task.parentId === null && !memberKeys.has(`task:${task.id}`));
+  const roots = tasks.filter(
+    (task) => task.parentId === null && isGoalTaskCandidate(task) && !memberKeys.has(`task:${task.id}`),
+  );
   const candidates: GoalTaskCandidate[] = [];
   for (const task of filterTasks(roots, options)) {
-    const grouped = taskGroup(task, options.now);
+    const grouped = taskGroup(task, options);
     if (!grouped) continue;
     candidates.push({
       task,

@@ -110,7 +110,7 @@ describe("goalUnassigned", () => {
     ]);
   });
 
-  it("returns unfinished tasks not owned by any active goal", () => {
+  it("returns active candidate tasks not owned by any active goal", () => {
     const goals = [
       goal({ id: "active", title: "Active", members: [{ kind: "task", id: "owned" }] }),
       goal({ id: "archived", title: "Archived", status: "archived", members: [{ kind: "task", id: "archived-owned" }] }),
@@ -122,11 +122,20 @@ describe("goalUnassigned", () => {
           task({ id: "owned", title: "已归类" }),
           task({ id: "free", title: "自由" }),
           task({ id: "done", title: "完成", done: true, completedAt: now }),
+          task({
+            id: "rule",
+            title: "重复模板",
+            recurrence: { freq: "daily", interval: 1, basis: "due" },
+            startAt: now,
+          }),
+          task({ id: "skipped", title: "已删的一发", ruleId: "deleted-rule", skipped: true, scheduledAt: now }),
+          task({ id: "active-occurrence", title: "活跃的一发", ruleId: "rule", scheduledAt: now }),
+          task({ id: "child", title: "子任务", parentId: "free" }),
           task({ id: "archived-owned", title: "归档目标成员" }),
         ],
         goals,
       ).map((item) => item.id),
-    ).toEqual(["free", "archived-owned"]);
+    ).toEqual(["free", "active-occurrence", "archived-owned"]);
   });
 
   it("returns active tracks not owned by any active goal", () => {

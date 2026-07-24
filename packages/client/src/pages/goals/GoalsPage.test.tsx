@@ -3,7 +3,9 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 
-const useLiveQueryMock = vi.hoisted(() => vi.fn((_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? []));
+const useLiveQueryMock = vi.hoisted(() =>
+  vi.fn((_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? []),
+);
 const goalGalaxyPropsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("dexie-react-hooks", () => ({ useLiveQuery: useLiveQueryMock }));
@@ -20,6 +22,7 @@ vi.mock("../../lib/tracks.js", async () => {
   const actual = await vi.importActual<typeof import("../../lib/tracks.js")>("../../lib/tracks.js");
   return { ...actual, listTracks: vi.fn(() => []), listAllTrackSteps: vi.fn(() => []) };
 });
+vi.mock("../../lib/sessions.js", () => ({ getActiveSession: vi.fn(() => null) }));
 vi.mock("./goalPageData.js", () => ({ listAllTasksForGoals: vi.fn(() => []) }));
 vi.mock("./GoalGalaxyCanvas.js", () => ({
   GoalGalaxyCanvas: (props: Record<string, unknown>) => {
@@ -44,7 +47,9 @@ async function renderPage() {
 
 beforeEach(() => {
   useLiveQueryMock.mockReset();
-  useLiveQueryMock.mockImplementation((_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? []);
+  useLiveQueryMock.mockImplementation(
+    (_query: () => unknown, _deps?: unknown[], defaultResult?: unknown) => defaultResult ?? [],
+  );
   goalGalaxyPropsMock.mockClear();
   mockedUseIsWideScreen.mockReturnValue(true);
 });
@@ -67,6 +72,7 @@ describe("GoalsPage", () => {
       .mockImplementationOnce(() => [])
       .mockImplementationOnce(() => [])
       .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
       .mockImplementationOnce(() => undefined);
 
     const { host, root } = await renderPage();
@@ -82,8 +88,23 @@ describe("GoalsPage", () => {
 
     const { root } = await renderPage();
 
-    expect(useLiveQueryMock.mock.calls).toHaveLength(5);
+    expect(useLiveQueryMock.mock.calls).toHaveLength(6);
     expect(useLiveQueryMock.mock.calls.every((call) => call[2] === undefined)).toBe(true);
+    await unmount(root);
+  });
+
+  it("passes the active session id to the galaxy canvas", async () => {
+    useLiveQueryMock
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => [])
+      .mockImplementationOnce(() => ({ id: "session-active" }));
+
+    const { root } = await renderPage();
+
+    expect(goalGalaxyPropsMock).toHaveBeenCalledWith(expect.objectContaining({ activeSessionId: "session-active" }));
     await unmount(root);
   });
 

@@ -66,13 +66,7 @@ function step(input: Partial<TrackStep> & Pick<TrackStep, "id" | "trackId" | "se
 
 async function renderTray(props: Partial<ComponentProps<typeof GoalUnassignedTray>> = {}) {
   mounted = await renderDom(
-    <GoalUnassignedTray
-      tasks={[]}
-      tracks={[]}
-      steps={[]}
-      boardSignals={["待我处理", "agent在做"]}
-      {...props}
-    />,
+    <GoalUnassignedTray tasks={[]} tracks={[]} steps={[]} boardSignals={["待我处理", "agent在做"]} {...props} />,
   );
   return mounted;
 }
@@ -125,6 +119,19 @@ describe("GoalUnassignedTray", () => {
     expect(rendered.host.textContent).toContain("等确认");
   });
 
+  it("把当前活跃场任务单列为置顶的手头组", async () => {
+    const rendered = await renderTray({
+      activeSessionId: "session-active",
+      tasks: [
+        task({ id: "inbox", title: "普通收件箱", sortOrder: 1 }),
+        task({ id: "hand", title: "正在做", sessionId: "session-active", sortOrder: 99 }),
+      ],
+    });
+
+    expect([...rendered.host.querySelectorAll("h3")].map((heading) => heading.textContent)).toEqual(["手头", "收件箱"]);
+    expect(rendered.host.querySelector('[data-tray-ref="task:hand"]')).toBeTruthy();
+  });
+
   it("writes GoalMemberRef JSON to dataTransfer when a tray row is dragged", async () => {
     const rendered = await renderTray({ tasks: [task({ id: "candidate", title: "写星图" })] });
     const row = buttonByLabel(rendered.host, "拖动任务 写星图");
@@ -162,10 +169,7 @@ describe("GoalUnassignedTray", () => {
 
   it("有子任务的根默认折叠、点开露出子任务", async () => {
     const rendered = await renderTray({
-      tasks: [
-        task({ id: "root", title: "父任务" }),
-        task({ id: "child", title: "子条目", parentId: "root" }),
-      ],
+      tasks: [task({ id: "root", title: "父任务" }), task({ id: "child", title: "子条目", parentId: "root" })],
     });
 
     expect(rendered.host.textContent).not.toContain("子条目");

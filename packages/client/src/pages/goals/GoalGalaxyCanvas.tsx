@@ -73,6 +73,7 @@ export interface GoalGalaxyCanvasProps {
   tracks: Track[];
   steps: TrackStep[];
   layoutPins: GoalLayoutPin[];
+  activeSessionId?: string | null;
   onNavigate: (to: string) => void;
 }
 
@@ -436,7 +437,15 @@ export function GoalGalaxyCanvas(props: GoalGalaxyCanvasProps) {
   );
 }
 
-function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavigate }: GoalGalaxyCanvasProps) {
+function GoalGalaxyCanvasInner({
+  goals,
+  tasks,
+  tracks,
+  steps,
+  layoutPins,
+  activeSessionId = null,
+  onNavigate,
+}: GoalGalaxyCanvasProps) {
   const flow = useReactFlow();
   const wide = useIsWideScreen();
   const coarse = useIsCoarsePointer();
@@ -558,7 +567,8 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
         }) satisfies GoalGalaxyFlowNode,
     );
     const memberNodes = model.nodes.map((node) => {
-      const pinned = !settleEnabled && node.anchorIds.length === 1 && pinnedMemberIds.has(`${node.anchorIds[0]}|${node.id}`);
+      const pinned =
+        !settleEnabled && node.anchorIds.length === 1 && pinnedMemberIds.has(`${node.anchorIds[0]}|${node.id}`);
       return {
         id: node.id,
         type: "goal-galaxy-member",
@@ -581,15 +591,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     });
     nodeCacheRef.current = new Map(nextNodes.map((node) => [node.id, node]));
     return nextNodes;
-  }, [
-    layout.positions,
-    model.nodes,
-    model.stars,
-    pinnedMemberIds,
-    pinnedStarIds,
-    selectedNodeId,
-    settleEnabled,
-  ]);
+  }, [layout.positions, model.nodes, model.stars, pinnedMemberIds, pinnedStarIds, selectedNodeId, settleEnabled]);
   const [nodes, setNodes] = useState<GoalGalaxyFlowNode[]>(() => layoutNodes);
   const applySettlePositions = useCallback((positions: Record<string, XY>) => {
     setNodes((current) => {
@@ -767,11 +769,9 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
     }
 
     const starNodeId = `goal:${ref.goalId}`;
-    const anchor =
-      nodes.find((candidate) => candidate.id === starNodeId)?.position ??
+    const anchor = nodes.find((candidate) => candidate.id === starNodeId)?.position ??
       layout.positions[starNodeId] ??
-      anchorCanvasById[starNodeId] ??
-      { x: 0, y: 0 };
+      anchorCanvasById[starNodeId] ?? { x: 0, y: 0 };
     const coords = memberPinFromCanvas(finalPosition, anchor);
     void upsertGoalLayoutPin({ ...ref, x: coords.x, y: coords.y });
   }
@@ -1118,6 +1118,7 @@ function GoalGalaxyCanvasInner({ goals, tasks, tracks, steps, layoutPins, onNavi
             tracks={trayTracks}
             steps={steps}
             boardSignals={boardSignals}
+            activeSessionId={activeSessionId}
             interaction={coarse ? { mode: "click", onSelect: setAssignRef } : { mode: "drag" }}
           />
         </ResizableTrayAside>

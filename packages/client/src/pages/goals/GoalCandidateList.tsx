@@ -24,6 +24,7 @@ export interface GoalCandidateListProps {
 }
 
 const TASK_GROUP_COPY: Record<GoalTaskCandidateGroupKey, string> = {
+  atHand: "手头",
   today: "今天",
   inbox: "收件箱",
   scheduled: "已排期",

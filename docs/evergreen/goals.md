@@ -31,6 +31,8 @@ contracts:
   - packages/server/src/sync/domains.ts
 last-reviewed: 2026-07-24
 ---
+<!-- 复核 2026-07-24（星图手头分组）：全局未归类托盘读取当前活跃 Session，把 sessionId 精确匹配的候选单列到置顶“手头”；历史场任务仍按原落点，目标详情成员 picker 不变。 -->
+<!-- 复核 2026-07-24（星图周期任务过滤）：未归类托盘与成员 picker 只接收普通未完成任务或 active pending occurrence；重复模板及 done/skipped 历史发不再误入候选与计数。 -->
 <!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、syncDomains.ts、server/src/sync/domains.ts 新增 sessions LWW 域与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；Goal.members 引用口径、项目完成度读取与目标布局钉点同步域均不受影响。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/syncDomains.ts、server/src/sync/domains.ts 为 tasks 域新增 archiveDelete 钩子与 deleteReason 字段，goals 域未受影响。 -->
 
@@ -102,7 +104,7 @@ UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显�
 
 全局星图是 Goal-centered portfolio view，不是自由画布或跨 Goal 依赖编辑器：每个 active Goal 是一颗恒星，展开时该 Goal 的 Task / Track 成员作为卫星；同一个成员被多个已展开 Goal 引用时，只绘制一个桥接节点并用 tether 连到多个 Goal 锚。桥接节点只是共享成员的可视化，不改变进度账、不写反向索引，也不落 `goal_layout_pins`，因为现有钉点复合键没有跨 Goal 所属格式。
 
-未归类不是画布散点池，也不是伪 Goal。`goalUnassigned` 只把全部 active Goal 的成员并集当排除集：未完成 Task、`status:"active"` Track 且不属于任何 active Goal 的项进入托盘；只属于 archived Goal 的成员会自动回流到未归类。托盘复用 Goal 添加成员候选的搜索、标签筛选和任务/轨道分组；细指针下行使用 HTML5 drag payload `application/x-goal-member`。把托盘行拖到某颗 Goal 星上时，画布用 React Flow `screenToFlowPosition` 与 `goalStarHitTest` 按星体中心 bounds 命中，命中则调用 `addGoalMember(goalId, ref)`（写入经 `recordSyncLog` 自动调度上传），落空或 payload 非法则忽略。粗指针下托盘行改为点按，先弹“加入哪个目标” Sheet，选择 active Goal 后再调用同一写入 helper。加入后候选重算，该项自然离开托盘。窄屏不挂抽屉、不做拖入，继续使用现有列表和每 Goal 添加成员 picker。
+未归类不是画布散点池，也不是伪 Goal。`goalUnassigned` 只把全部 active Goal 的成员并集当排除集：普通未完成根 Task 或 active pending root occurrence（排除子任务、重复模板及 done/skipped 历史发）、`status:"active"` Track 且不属于任何 active Goal 的项进入托盘；只属于 archived Goal 的成员会自动回流到未归类。托盘计数与列表使用同一任务资格口径。全局托盘额外纯读当前活跃 Session：候选 Task 的 `sessionId` 与活跃 Session id 精确相等时进入置顶“手头”组；只带已散场历史 `sessionId` 的任务仍按今天/收件箱/已排期落点，不把 `sessionId !== null` 误当当前状态。这个分组只作用于全局未归类托盘，目标详情添加成员 picker 仍维持原分组。托盘复用 Goal 添加成员候选的搜索、标签筛选和任务/轨道分组；细指针下行使用 HTML5 drag payload `application/x-goal-member`。把托盘行拖到某颗 Goal 星上时，画布用 React Flow `screenToFlowPosition` 与 `goalStarHitTest` 按星体中心 bounds 命中，命中则调用 `addGoalMember(goalId, ref)`（写入经 `recordSyncLog` 自动调度上传），落空或 payload 非法则忽略。粗指针下托盘行改为点按，先弹“加入哪个目标” Sheet，选择 active Goal 后再调用同一写入 helper。加入后候选重算，该项自然离开托盘。窄屏不挂抽屉、不做拖入，继续使用现有列表和每 Goal 添加成员 picker。
 
 全局画布的纯函数地基分层：
 
@@ -132,7 +134,7 @@ B 阶段后，`goalGraphLayout` 输出确定性星环 seed：Goal 居中，成�
 
 图上浮层默认不拦截画布手势，但工具栏自身必须恢复可点击命中；“添加成员 / 回到全图 / 返回目标星图 / 目标菜单”都属于图编辑器的主操作入口，不能被画布 pass-through 容器吞掉。
 
-宽屏下，添加成员与目标设置使用星图局部右侧面板；窄屏/粗指针继续使用底部 sheet。添加成员面板复用 ToDo 的搜索和标签筛选口径，任务按今天/收件箱/已排期/重复/已完成分组，轨道按 active / parked / concluded 分组并显示看板信号和最新步骤提示。
+宽屏下，添加成员与目标设置使用星图局部右侧面板；窄屏/粗指针继续使用底部 sheet。添加成员面板复用 ToDo 的搜索和标签筛选口径；任务候选只含普通未完成任务与 active pending occurrence，目标详情 picker 按今天/收件箱/已排期分组，全局未归类托盘在其前额外显示当前活跃场的“手头”组；重复模板及 done/skipped 历史发不进入候选；轨道按 active / parked / concluded 分组并显示看板信号和最新步骤提示。
 
 轻撤销只覆盖破坏性结构操作：删除前置边、移出成员、移出失效引用。移出成员的撤销会恢复成员列表和被级联删除的前置边；Task 完成、加成员、快建任务、新建前置等非破坏操作不进入这条 undo 口径。
 
