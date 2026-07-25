@@ -1611,6 +1611,41 @@ describe("listTasks projects 桶", () => {
     expect(visible.map((x) => x.id)).toContain(occurrence?.id);
   });
 
+  it("排他判据与归集判据同源：无排期的僵尸发被写进 members 后仍留在 inbox", async () => {
+    // 红线 2 的真闸。上一条用例里的正常 occurrence 恒带 scheduledAt，placement 只会给它
+    // today/upcoming，走不到 inbox 分支，因此判别不出排他被写歪。这里直接落一条
+    // scheduledAt===null 的「僵尸发」（UI 造不出、数据层可达：addTask/scheduleTask 拒绝的是 UI 路径），
+    // 它的 placement 必是 inbox，于是排他分支必被执行：
+    // 把排他改成单独判 projectIndex.has(t.id)，它会既进不了项目区（归集守卫要求 ruleId===null）
+    // 又被踢出 inbox，整条从页面上消失——本例即刻转红。
+    const zombie = {
+      id: "occ-僵尸发",
+      parentId: null,
+      title: "没有排期的一发",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "rule-1",
+      sessionId: null,
+      skipped: false,
+      sortOrder: 0,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    await db.tasks.add(zombie);
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: zombie.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.inbox.map((x) => x.id)).toContain(zombie.id);
+    expect(buckets.projects).toEqual([]);
+  });
+
   it("theme 目标与 archived 目标都不进 projects 桶", async () => {
     const a = await addTask({ title: "主题任务", toInbox: true });
     const b = await addTask({ title: "归档任务", toInbox: true });
