@@ -48,6 +48,12 @@ export function resolveAndroidBackAction(pathname: string, search = ""): Android
     return { type: "back", fallbackTo: "/" };
   }
 
+  // 日记页：优先退回来处（通常是速记页），无历史时兜底回速记页。
+  // 不能落兜底的 navigate("/", replace)——那会连历史都不留，未保存内容的守卫也就没机会拦。
+  if (pathname === "/diary") {
+    return { type: "back", fallbackTo: "/quick-notes" };
+  }
+
   if (
     pathname === "/quick-notes" ||
     pathname === "/stats" ||

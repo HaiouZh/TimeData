@@ -32,6 +32,10 @@ describe("resolveAndroidBackAction", () => {
     expect(resolveAndroidBackAction("/entries/entry-1/edit")).toEqual({ type: "back", fallbackTo: "/" });
   });
 
+  it("日记页优先走 history back，兜底回速记页", () => {
+    expect(resolveAndroidBackAction("/diary")).toEqual({ type: "back", fallbackTo: "/quick-notes" });
+  });
+
   it("returns home from secondary tab pages", () => {
     expect(resolveAndroidBackAction("/quick-notes")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/stats")).toEqual({ type: "navigate", to: "/", replace: true });
