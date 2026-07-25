@@ -1,33 +1,52 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import { useNowMinute } from "../hooks/useNowMinute.js";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
+import { resolveDiaryDate } from "../lib/diary/diaryDate.js";
 import { detectEol } from "../lib/diary/eol.js";
 import { applyIndent } from "../lib/diary/indent.js";
 import { applyLinkShortcut } from "../lib/diary/link.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
-
-function todayDateString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { getDateString } from "../lib/time.js";
 
 export default function DiaryPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const today = useRef(todayDateString()).current;
+  const [searchParams, setSearchParams] = useSearchParams();
   const { confirm, dialog } = useConfirm();
   // 行尾保护：记住原文件的主导行尾，保存时在 handleSave 还原（见该处红线注释）。
   // 必须是 ref 不是 state——它不参与渲染，用 state 会多一次渲染、还会污染 effect 依赖。
   const eolRef = useRef<"\r\n" | "\n">("\n");
 
+  // 实时今天（Asia/Shanghai）。useNowMinute 是对齐到分钟边界的自重排 setTimeout，
+  // 且挂了 useAppResumeRefresh——手机息屏一夜后回前台会立刻刷新，正是跨零点提示要的。
+  const liveToday = getDateString(useNowMinute());
+  // 跟随模式的日期锚 = 进入跟随模式那一刻的今天。只在 Task 4 的重锚点前进，
+  // 绝不随 liveToday 自动前进——那就是跨零点把用户正在写的正文换到新文件。
+  const [followAnchor, setFollowAnchor] = useState(() => getDateString(new Date()));
+  const { date, rolledOver, clearParam } = resolveDiaryDate({
+    param: searchParams.get("date"),
+    liveToday,
+    followAnchor,
+  });
+
+  // 深链 ?date=<今天> / 非法 / 未来：归一成无参形态，让它与裸 /diary 完全一致。
+  // replace 不新增历史条目，返回键行为不变。这个 effect 自终止：清完 param 后
+  // clearParam 变 false，即使 setSearchParams 引用变化导致重跑也会立刻早退。
+  useEffect(() => {
+    if (!clearParam) return;
+    setSearchParams({}, { replace: true });
+  }, [clearParam, setSearchParams]);
+
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
   const [template, setTemplate] = useState("");
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [content, setContent] = useState("");
   const [baseMtime, setBaseMtime] = useState<number | null>(null);
   // 警示：dirty 现在只由 markDirty（onChange / 降级编辑）置位，不是内容比对，所以打开一个 CRLF 文件（eolRef 探测
@@ -48,6 +67,8 @@ export default function DiaryPage() {
   const [conflict, setConflict] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
+  // config 与日期无关，只拉一次。不拆的话每切一天都多一次 /api/diary/config 往返，
+  // 也多一次"config 请求失败 → 整页 loadFailed"的机会。
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -56,11 +77,42 @@ export default function DiaryPage() {
         if (cancelled) return;
         setEnabled(config.enabled);
         setTemplate(config.template);
-        if (!config.enabled || config.template === "") {
-          setLoading(false);
-          return; // 未挂载 vault / 未配模板：不调 fetchDiary，直接走对应提示分支
-        }
-        const doc = await fetchDiary(today);
+        setConfigLoaded(true);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadFailed(true);
+        setError(err instanceof Error ? err.message : "加载失败");
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!configLoaded) return;
+    if (!enabled || template === "") {
+      setLoading(false);
+      return; // 未挂载 vault / 未配模板：不调 fetchDiary，直接走对应提示分支
+    }
+    let cancelled = false;
+    // 切日期必须重置这四个态——effect 自身一个都不会重置它们：
+    // loading 只有 setLoading(false)、从没有 true（不重置 = 旧正文原地留着，用户
+    // 对着上一天的内容打字然后被覆盖，这是四条里唯一的真数据风险）；
+    // error/conflict 只有 handleSave/handleReload 会清（不重置 = 上一天的冲突条
+    // 挂到新一天头上，点「仍然覆盖」会 force 掉新一天的文件）；
+    // loadFailed 全文没有任何地方置 false（不重置 = 一次失败后永久全屏失败态）。
+    setLoading(true);
+    setError(null);
+    setConflict(false);
+    setLoadFailed(false);
+    // baseMtime 也要清：切到 B 日、加载失败、用户点保存，会拿着 A 日的 mtime 去
+    // PUT B 日，服务端 mtime 守卫判不等 → 假冲突，用户被诱导去点「仍然覆盖」。
+    setBaseMtime(null);
+    (async () => {
+      try {
+        const doc = await fetchDiary(date);
         if (cancelled) return;
         // 必须在 setContent 之前、对原始 fetch 结果探测：一旦进了 textarea，
         // HTML 规范会把换行归一为 LF，\r 就没了，届时再探测永远判成 LF。
@@ -79,7 +131,7 @@ export default function DiaryPage() {
     return () => {
       cancelled = true;
     };
-  }, [today]);
+  }, [date, configLoaded, enabled, template]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     // IME 组合态守卫：Enter/Tab/Ctrl+K 共用这一个 handler，这一行天然覆盖全部键位，
@@ -132,7 +184,7 @@ export default function DiaryPage() {
       // 已知行为：若原文件本身混合行尾，这里会统一成主导行尾，产生一次全篇 diff——
       // 接受，混合行尾文件本就异常，统一比"随机保留一半"更可预期，且只发生一次。
       const body = eolRef.current === "\r\n" ? content.replaceAll("\n", "\r\n") : content;
-      const result = await saveDiary(today, { content: body, baseMtime, force: options.force });
+      const result = await saveDiary(date, { content: body, baseMtime, force: options.force });
       setBaseMtime(result.mtime);
       // 只有"这一发上传的就是当前内容"才清脏。用户在请求在途中继续打字时，那段内容从未上传，
       // 无条件 setDirty(false) 会连 useUnsavedChangesGuard 一起关掉——换页即静默丢数据。
@@ -178,7 +230,7 @@ export default function DiaryPage() {
     setError(null);
     let doc: Awaited<ReturnType<typeof fetchDiary>>;
     try {
-      doc = await fetchDiary(today);
+      doc = await fetchDiary(date);
     } catch (err) {
       // 只出条状提示，不打成 loadFailed 全屏态：正文还在编辑器里、用户还能接着编辑和保存，
       // 换成全屏"加载失败"反而会把这份没上传的内容从屏幕上抹掉。冲突条也保留——冲突没解决。
@@ -214,7 +266,7 @@ export default function DiaryPage() {
         >
           <Icon icon={ArrowLeft} size={16} />
         </button>
-        <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记 · {today}</h1>
+        <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记 · {date}</h1>
         <button
           type="button"
           aria-label="保存"

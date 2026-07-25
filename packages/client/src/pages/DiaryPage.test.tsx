@@ -44,7 +44,9 @@ async function flush() {
   });
 }
 
-async function renderPage(): Promise<{ host: HTMLElement; root: Root; router: ReturnType<typeof createMemoryRouter> }> {
+async function renderPage(
+  entry = "/diary",
+): Promise<{ host: HTMLElement; root: Root; router: ReturnType<typeof createMemoryRouter> }> {
   // 必须是 data router：DiaryPage 现在用 useUnsavedChangesGuard（内部 useBlocker），
   // 在 <MemoryRouter> 下会抛 "useBlocker must be used within a data router."
   // initialIndex 指向 /diary，让 navigate(-1) 有处可退（退到 /todo）。
@@ -53,11 +55,18 @@ async function renderPage(): Promise<{ host: HTMLElement; root: Root; router: Re
       { path: "/todo", element: createElement("span", null, "待办页") },
       { path: "/diary", element: createElement(DiaryPage) },
     ],
-    { initialEntries: ["/todo", "/diary"], initialIndex: 1 },
+    { initialEntries: ["/todo", entry], initialIndex: 1 },
   );
   const { host, root } = await renderDom(createElement(RouterProvider, { router }));
   await flush();
   return { host, root, router };
+}
+
+async function navigateTo(router: ReturnType<typeof createMemoryRouter>, to: string) {
+  await act(async () => {
+    await router.navigate(to);
+  });
+  await flush();
 }
 
 // 只有 /diary 一个 entry：模拟书签 / PWA 快捷方式 / 硬刷新直接落地，没有 app 内历史。
@@ -110,10 +119,15 @@ beforeEach(() => {
   fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "1. " });
   fetchDiary.mockResolvedValue({ content: "1. x", mtime: 100 });
   document.body.innerHTML = "";
+  // 固定"今天"，日期断言才能写死。绝不能用 vi.useFakeTimers()——本文件的 flush()
+  // 靠 10 个真实 setTimeout(0) 推进，开假时钟它们永不触发，整个文件挂死（超时不是变红）。
+  // 实测 vitest 4.1.8 下 setSystemTime 无需 useFakeTimers，且 setTimeout 保持真实。
+  vi.setSystemTime(new Date("2026-07-25T10:00:00+08:00"));
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("DiaryPage", () => {
@@ -710,6 +724,95 @@ describe("DiaryPage", () => {
       baseMtime: 400,
     });
 
+    await unmount(root);
+  });
+
+  it("URL 带 ?date= 时加载并保存到该日期，而不是今天", async () => {
+    const { host, root } = await renderPage("/diary?date=2026-07-20");
+
+    expect(fetchDiary).toHaveBeenCalledWith("2026-07-20");
+
+    await typeInto(textarea(host), "补写 7/20");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    expect(saveDiary).toHaveBeenCalledWith("2026-07-20", expect.objectContaining({ content: "补写 7/20" }));
+    await unmount(root);
+  });
+
+  it("?date= 非法时落回今天，并把 URL 上的坏参数归一掉", async () => {
+    // 2026-02-31 正则挡不住、V8 会静默滚动到 3 月 3 日，必须落回今天而不是"3月3日"
+    const { root, router } = await renderPage("/diary?date=2026-02-31");
+
+    expect(fetchDiary).toHaveBeenCalledWith("2026-07-25");
+    expect(router.state.location.search).toBe("");
+    await unmount(root);
+  });
+
+  it("?date= 恰是今天时归一成无参 URL，与裸 /diary 完全一致", async () => {
+    const { root, router } = await renderPage("/diary?date=2026-07-25");
+
+    expect(router.state.location.search).toBe("");
+    expect(fetchDiary).toHaveBeenCalledWith("2026-07-25");
+    await unmount(root);
+  });
+
+  it("切日期只重拉正文，不重拉 config", async () => {
+    const { root, router } = await renderPage();
+    expect(fetchDiaryConfig).toHaveBeenCalledTimes(1);
+
+    await navigateTo(router, "/diary?date=2026-07-20");
+
+    expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-20");
+    // config 与日期无关。不拆 effect 的话这里是 2，且每切一天都多一次"config 失败→整页挂掉"的机会
+    expect(fetchDiaryConfig).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("上一天加载失败后切日期，新一天正常显示正文而不是继续卡在全屏失败态", async () => {
+    // loadFailed 全文只有置 true 的地方，从没有置 false 的——不重置的话一次失败就永久全屏失败
+    fetchDiary.mockRejectedValueOnce(new Error("离线"));
+    const { host, root, router } = await renderPage();
+    expect(host.textContent).toContain("加载失败");
+
+    fetchDiary.mockResolvedValue({ content: "7/20 的正文", mtime: 200 });
+    await navigateTo(router, "/diary?date=2026-07-20");
+
+    expect(textarea(host).value).toBe("7/20 的正文");
+    expect(host.textContent).not.toContain("加载失败");
+    await unmount(root);
+  });
+
+  it("上一天的冲突条不会带进新一天（否则「仍然覆盖」会 force 掉新一天的文件）", async () => {
+    const { host, root, router } = await renderPage();
+    await typeInto(textarea(host), "本地改动");
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+
+    await navigateTo(router, "/diary?date=2026-07-20");
+
+    expect(host.textContent).not.toContain("日记已被其他窗口修改");
+    await unmount(root);
+  });
+
+  it("切日期期间不把上一天的正文留在编辑器里（loading 必须重新亮起）", async () => {
+    // 不置 loading=true 的话，旧内容原地留着直到新内容到达，
+    // 用户可能对着上一天的正文打字，然后被 setContent 静默覆盖
+    const { host, root, router } = await renderPage();
+    expect(textarea(host).value).toBe("1. x");
+
+    let releaseFetch: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(
+      () => new Promise((resolve) => { releaseFetch = resolve; }),
+    );
+    await navigateTo(router, "/diary?date=2026-07-20");
+
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).toContain("正在加载");
+
+    await act(async () => { releaseFetch({ content: "7/20 的正文", mtime: 200 }); });
+    await flush();
+    expect(textarea(host).value).toBe("7/20 的正文");
     await unmount(root);
   });
 });
