@@ -10,12 +10,20 @@ export default function GoalDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const goal = useLiveQuery(async () => (await getGoal(id)) ?? null, [id]);
-  const tasks = useLiveQuery(() => listAllTasksForGoals(), [], []);
-  const tracks = useLiveQuery(() => listTracks(), [], []);
-  const steps = useLiveQuery(() => listAllTrackSteps(), [], []);
+  const tasks = useLiveQuery(() => listAllTasksForGoals(), []);
+  const tracks = useLiveQuery(() => listTracks(), []);
+  const steps = useLiveQuery(() => listAllTrackSteps(), []);
   const layoutPins = useLiveQuery(() => listGoalLayoutPins(id), [id]);
 
-  if (goal === undefined || layoutPins === undefined) {
+  // 与 GoalsPage 的 galaxyReady 同口径：五个 live query 全部返回才挂编辑器。
+  // 用 [] 兜底会让 buildGoalOverview 把全部成员判成失效引用、首帧渲染成 ghost 再跳位。
+  if (
+    goal === undefined ||
+    tasks === undefined ||
+    tracks === undefined ||
+    steps === undefined ||
+    layoutPins === undefined
+  ) {
     return <div className="min-h-full bg-page px-4 py-6 text-sm text-ink-3">正在加载...</div>;
   }
 
