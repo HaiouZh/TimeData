@@ -187,20 +187,25 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
   const subtaskTotal = childRows.length;
   const subtaskDone = childRows.filter((c) => c.done).length;
   // 从 occurrence 打开时，重复编辑的目标是它的规则模板（occurrence 自身 recurrence 恒为 null）。
-  // useLiveQuery 在「加载中」和「查到 undefined」两种情况下都返回 undefined，直接用 !rule 判断
-  // 会把每次加载都误判成孤儿。故 querier 统一返回包装对象：外层 undefined 只可能是加载中，
-  // 内层 rule === undefined 才是「模板真的没了」（模板被级联删除后留下的悬空 ruleId）。
+  // 「加载中」不能用 useLiveQuery 返回 undefined 来判：它的 monitor 是 useRef，deps 变化时不重置，
+  // 一旦产出过结果就跳过同步窥值，deps 变更那帧会返回**上一次订阅的陈旧值**。故让结果自带
+  // 「它是为哪个 ruleId 算的」，靠比对判新鲜度；陈旧结果一律当加载中，避免闪一帧假孤儿文案。
   const ruleQuery = useLiveQuery(
-    async () => ({ rule: task?.ruleId ? await db.tasks.get(task.ruleId) : undefined }),
+    async () => ({
+      forRuleId: task?.ruleId ?? null,
+      rule: task?.ruleId ? await db.tasks.get(task.ruleId) : undefined,
+    }),
     [task?.ruleId],
   );
-  const hasRuleId = (task?.ruleId ?? null) !== null;
-  const ruleLoading = hasRuleId && ruleQuery === undefined;
-  const rule = ruleQuery?.rule;
+  const ruleFresh = ruleQuery?.forRuleId === (task?.ruleId ?? null);
+  const rule = ruleFresh ? ruleQuery?.rule : undefined;
+  // 真 occurrence：有 ruleId 且自身不带 recurrence。混合体行（两者都非空）不算——它仍指向自己，
+  // 保留「打开预设选不重复清掉 recurrence」这条就地自愈路径。
+  const isOccurrence = (task?.ruleId ?? null) !== null && (task?.recurrence ?? null) === null;
   // 孤儿 occurrence：ruleId 指向已不存在的模板。此时绝不回退到 task 自己——
   // 回退会让「编辑重复与时间」把 recurrence 写进 occurrence，就地造出 ruleId × recurrence 混合体行。
-  const orphanOccurrence = hasRuleId && !ruleLoading && rule === undefined;
-  const recurrenceTarget: Task | null = hasRuleId ? (rule ?? null) : (task ?? null);
+  const orphanOccurrence = isOccurrence && ruleFresh && rule === undefined;
+  const recurrenceTarget: Task | null = isOccurrence ? (rule ?? null) : (task ?? null);
   const ruleOccurrences =
     useLiveQuery(
       () =>

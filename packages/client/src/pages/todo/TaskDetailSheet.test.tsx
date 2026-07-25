@@ -623,6 +623,74 @@ describe("TaskDetailSheet 重复规则编辑目标与锚点", () => {
     expect(await db.tasks.get(occId)).toMatchObject({ recurrence: null, ruleId: "rule-gone" });
     await unmount(root);
   });
+
+  it("模板查询未回来时：既不渲染入口也不闪孤儿文案（正常 occurrence 不被误判成孤儿）", async () => {
+    const today = getDateString(new Date());
+    const rule = await addTask({
+      title: "每日站会",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      startAt: normalizeScheduledDate(addDays(today, -5)),
+    });
+    const occDate = addDays(today, -1);
+    await db.tasks.add(occurrenceRow(rule.id, occDate, { title: "每日站会" }));
+    const occId = `occ:${rule.id}:${occDate}`;
+
+    // 闸住「查模板」这一次读，把加载窗口拖成可断言的稳定态。
+    // useLiveQuery 的 monitor 是 useRef，deps 变化不重置：一旦首帧（task 还没回来、deps=[undefined]）
+    // 产出过结果，第二帧（deps=[ruleId]）会同步返回上一订阅的陈旧值而非 undefined。
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    const realGet = db.tasks.get.bind(db.tasks);
+    vi.spyOn(db.tasks, "get").mockImplementation((async (key: unknown) => {
+      if (key === rule.id) await gate;
+      return realGet(key as string);
+    }) as typeof db.tasks.get);
+
+    const { host, root } = await renderSheet(occId);
+    await settle();
+
+    // 加载窗口内：模板还没查出来，不许拿「查不到」当孤儿
+    expect(host.textContent).not.toContain("重复规则已删除");
+    expect(host.querySelector('button[aria-label="编辑重复与时间"]')).toBeNull();
+
+    openGate();
+    vi.restoreAllMocks();
+    await waitForElement(host, 'button[aria-label="编辑重复与时间"]');
+    // 放行后回到正常 occurrence：入口在，且显示的是规则摘要
+    expect(badgeOf(host)).not.toBeNull();
+    expect(badgeOf(host).textContent).toContain(recurrenceSummary(rule.recurrence!));
+    expect(host.textContent).not.toContain("重复规则已删除");
+    await unmount(root);
+  });
+
+  it("混合体行（ruleId 悬空 + 自带 recurrence）：入口仍在，保留「选不重复」自愈路径", async () => {
+    const occDate = addDays(getDateString(new Date()), -2);
+    const occId = `occ:rule-gone-2:${occDate}`;
+    await db.tasks.add(
+      occurrenceRow("rule-gone-2", occDate, {
+        title: "坏数据行",
+        recurrence: { freq: "daily", interval: 1, basis: "due" },
+      }),
+    );
+    expect(await db.tasks.get("rule-gone-2")).toBeUndefined();
+
+    const { host, root } = await renderSheet(occId);
+    await settle();
+
+    // 它自己就带 recurrence，「重复规则已删除」对它是错的；入口必须留着才能就地清掉 recurrence
+    expect(host.textContent).not.toContain("重复规则已删除");
+    expect(badgeOf(host)).not.toBeNull();
+
+    // 自愈走通：选「不重复」清掉 recurrence，坏数据行退回干净 occurrence（ruleId 保留）
+    await click(badgeOf(host));
+    await click(await waitForElement(host, 'button[aria-label="不重复"]'));
+    const healed = await waitForTask(occId, (t) => (t?.recurrence ?? null) === null);
+    expect(healed?.recurrence ?? null).toBeNull();
+    expect(healed?.ruleId).toBe("rule-gone-2");
+    await unmount(root);
+  });
 });
 
 describe("TaskDetailSheet 删除", () => {
