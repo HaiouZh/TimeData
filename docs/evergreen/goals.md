@@ -73,7 +73,7 @@ last-reviewed: 2026-07-24
 }
 ```
 
-成员关系存在 Goal 侧：`Goal.members` 是 typed 引用集合，成员只允许 `task` / `track`。同一个 Task / Track 可以被多个 Goal 引用；删除 Goal 只删除 Goal，不改 Task/Track 的任何业务语义——唯一的例外是**失去 active project 归属的 task 成员会被同事务刷新 `updatedAt`**（删除、归档、`kind` 改 theme、`members` 移除四条通道同理），为的是让它回落收件箱后浮在重力水位线之上，详见 [todo](todo.md) §3 第 14 条。
+成员关系存在 Goal 侧：`Goal.members` 是 typed 引用集合，成员只允许 `task` / `track`。同一个 Task / Track 可以被多个 Goal 引用；删除 Goal 只删除 Goal，不改 Task/Track 的任何业务语义——唯一的例外是**active project 归属发生变化的 task 成员会被同事务刷新 `updatedAt`**：失去归属的四条通道（删除、归档、`kind` 改 theme、`members` 移除）如此，`addGoalMember` 加入 active project 亦同。为的是让归属变化后的任务浮在重力水位线之上，详见 [todo](todo.md) §3 第 14 条。
 
 `prerequisites` 是目标内部成员之间的 typed 有向边：`blocker` 必须先完成，`blocked` 才算可推进。shared schema 拒绝重复成员、前置边引用非成员、自环、重复边和环；UI roll-up 对历史坏数据仍宽容，会忽略缺失成员和指向非有效成员的前置边并保留低调提示。
 
