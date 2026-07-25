@@ -215,7 +215,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 8. **同步的粒度是「整行」，不是「改动的字段」**——本条是 §2.1 与 §3 两条规则相乘的后果，写代码前必须知道。`syncLog` 只记「哪一行变了」（`SyncLogEntry` 无列信息，`recordSyncLog` 签名里也没有位置放），push 时按 recordId 回读**当前整行**（`engine.ts` 的 `db.table(storeName).get(...)`），服务端 `ON CONFLICT DO UPDATE SET` **除主键 / `created_at` / 无 `op` 时的 `guardedColumns` 外的全部列**。由此产生两个必须记住的后果：
    - **双向丢失窗口**：设备 A 改了某行并同步成功，设备 B 尚未拉到就对同一行发生任何写入（哪怕只想改一个字段），B 的整行 push 会用它手上的旧值覆盖 A 的改动；同时 §3 的「lww 域本地有未推送日志则跳过远端」会让 B 也永远收不到 A 的那次改动。风险列 = 非 `guardedColumns` 的全部（`tasks` 即 `title` / `tags` / `scheduled_at` / `sort_order` / `parent_id` / `session_id` / `weight`）。
    - **版本错位会清空新列**：旧客户端不认识新加的字段，push 的 payload 里缺这一项，服务端 zod 的 `.default(null)` 会把它补成 null，再经全列 SET 抹掉服务器现值（如 `TaskSchema.sessionId` 的 `.default(null)` + `taskToRow` 的 `?? null`）。这是 §3.5 结尾「server / Web / APK 必须同版本发布」在**上行方向**的具体机理，也是 [ADR 0012](../adr/0012-sync-ledger-and-domain-registry.md) 那条部署纪律不能松的原因。
-   缓解手段只有既有的两件：`guardedColumns`（黑名单，仅 `tasks` 5 列 + `tracks.status`）与 `op`（布尔授权闸，见 §2.2.1）。**它们都是窄解法，不是通用防线。**
+   缓解手段只有既有的两件：`guardedColumns`（黑名单，仅 `tasks` 5 列 + `tracks.status`）与 `op`（布尔授权闸，见 §2.2.1）。**它们都是窄解法，不是通用防线。**（截至 2026-07-25：720 条同步测试**无一条**用「缺新字段的旧 payload」做回归覆盖本条；最小闸 = 补该回归测试 + 请求加 `X-TimeData-Client-Build` 头。）
 
 ## 6. 错误码处理（客户端侧）
 
