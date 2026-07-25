@@ -674,4 +674,41 @@ describe("TodoPage occurrence 删除分流", () => {
     );
     await unmount(root);
   });
+
+  it("删除混合体行（ruleId × recurrence 都非空）：走 cascade 兜底，不撞 markOccurrenceSkipped 前置校验", async () => {
+    // 坏数据行：recurrence 非空让它落「已排期」，ruleId 非空则会被裸 `ruleId !== null` 误判成 occurrence。
+    // markOccurrenceSkipped 的前置校验必抛，而列表侧删除是 fire-and-forget → 用户体感「点了没反应」。
+    await db.tasks.add({
+      id: "mixed-1",
+      parentId: null,
+      title: "混合体坏行",
+      done: false,
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "r9",
+      skipped: false,
+      sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "混合体坏行");
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[aria-label="删除 混合体坏行"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitForCondition(() => !(host.textContent?.includes("混合体坏行") ?? false), "mixed row to leave the list");
+    expect(await db.tasks.get("mixed-1")).toBeUndefined();
+    await unmount(root);
+  });
 });

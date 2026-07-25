@@ -174,7 +174,9 @@ export function TodoPage() {
     await toggleTaskDone(t.id);
   };
   const remove = async (t: Task) => {
-    if (t.ruleId !== null) {
+    // recurrence===null 是 markOccurrenceSkipped 的前置条件：混合体行（ruleId/recurrence 都非空）
+    // 撞它必抛，而这里是 fire-and-forget，用户只会看到"点了没反应"。故混合体走 cascade 兜底。
+    if (t.ruleId !== null && t.recurrence === null) {
       await markOccurrenceSkipped(t.id);
     } else {
       // 级联删除：模板连清子任务+活跃 occurrence；普通父任务连清子任务（旧 deleteTask 会孤儿化两者）
