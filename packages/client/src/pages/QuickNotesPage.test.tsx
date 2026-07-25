@@ -229,6 +229,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 这个文件是页面级 jsdom 用例，整套跑 70s+，最慢一条（搜索截断上限那组）在空闲机器上就要 4.4s，
+// 已占满 vitest 默认 5s 预算的 87%。全量 `pnpm test` 并行跑时 CPU 争抢会把它顶过线，表现为间歇性
+// "Test timed out in 5000ms"——不是逻辑 flake，同一提交聚焦重跑必绿。按文件抬高上限，不动分桶默认值：
+// 别的文件不该借这个口子变慢。
+const PAGE_TEST_TIMEOUT_MS = 20_000;
+
 describe("QuickNotesPage", () => {
   it("挂载时恢复未发出的草稿，并说明它是恢复来的", async () => {
     localStorage.setItem(STORAGE_KEYS.quickNoteComposerDraft, "写了一半");
@@ -1509,7 +1515,7 @@ describe("QuickNotesPage", () => {
 
     await unmount(root);
   });
-});
+}, PAGE_TEST_TIMEOUT_MS);
 
 describe("捕捉中心", () => {
   beforeEach(async () => {
@@ -1862,4 +1868,4 @@ describe("捕捉中心", () => {
 
     await unmount(root);
   });
-});
+}, PAGE_TEST_TIMEOUT_MS);
