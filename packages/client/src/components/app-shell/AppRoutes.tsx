@@ -10,6 +10,7 @@ const GoalDetailPage = lazy(() => import("../../pages/goals/GoalDetailPage.tsx")
 const GoalsPage = lazy(() => import("../../pages/goals/GoalsPage.tsx"));
 const HealthStatsPage = lazy(() => import("../../pages/HealthStatsPage.tsx"));
 const QuickNotesPage = lazy(() => import("../../pages/QuickNotesPage.tsx"));
+const SearchPage = lazy(() => import("../../pages/SearchPage.tsx"));
 const SettingsPage = lazy(() => import("../../pages/SettingsPage.tsx"));
 const StatsPage = lazy(() => import("../../pages/StatsPage.tsx"));
 const SettingsAdminInsightsPage = lazy(() => import("../../pages/settings/SettingsAdminInsightsPage.tsx"));
@@ -51,6 +52,7 @@ export function AppRoutes() {
       <Route path="/goals/:id" element={<GoalDetailPage />} />
       <Route path="/entries/new" element={<EntryPage />} />
       <Route path="/entries/:id/edit" element={<EntryPage />} />
+      <Route path="/search" element={<SearchPage />} />
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/stats/time" element={<TimeStatsPage />} />
       <Route path="/stats/health" element={<HealthStatsPage />} />

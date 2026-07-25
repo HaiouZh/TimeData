@@ -81,4 +81,23 @@ describe("DateNav", () => {
     const container = await mount("2026-01-15", () => {});
     expect(container.querySelector('[data-calendar-hint="true"]')).not.toBeNull();
   });
+
+  it("传入 onSearch 时渲染搜索按钮并回调", async () => {
+    const onSearch = vi.fn();
+    const { host } = await renderDom(
+      createElement(DateNav, { date: "2026-06-03", onDateChange: () => {}, onSearch }),
+    );
+    const button = findButton(host, "搜索记录");
+    await act(async () => {
+      button.click();
+    });
+    expect(onSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("不传 onSearch 时不渲染搜索按钮", async () => {
+    const { host } = await renderDom(createElement(DateNav, { date: "2026-06-03", onDateChange: () => {} }));
+    expect(
+      Array.from(host.querySelectorAll("button")).some((b) => b.getAttribute("aria-label") === "搜索记录"),
+    ).toBe(false);
+  });
 });

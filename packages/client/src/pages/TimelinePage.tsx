@@ -111,7 +111,7 @@ export default function TimelinePage() {
         swipeStartRef.current = null;
       }}
     >
-      <DateNav date={date} onDateChange={handleDateChange} />
+      <DateNav date={date} onDateChange={handleDateChange} onSearch={() => navigate("/search")} />
       <div data-swipe-exempt="true">
         <CircularTimeline
           date={date}

@@ -54,6 +54,12 @@ export function resolveAndroidBackAction(pathname: string, search = ""): Android
     return { type: "back", fallbackTo: "/quick-notes" };
   }
 
+  // 搜索页：优先退回来处（通常是时间轴），并让 URL 里的筛选状态随历史恢复。
+  // 用 back 而非 navigate："时间轴 → 搜索 → 记录编辑 → 返回" 才能正确落回搜索页。
+  if (pathname === "/search") {
+    return { type: "back", fallbackTo: "/" };
+  }
+
   if (
     pathname === "/quick-notes" ||
     pathname === "/stats" ||

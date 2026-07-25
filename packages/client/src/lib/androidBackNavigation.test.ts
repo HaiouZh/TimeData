@@ -97,6 +97,14 @@ describe("resolveAndroidBackAction", () => {
       replace: true,
     });
   });
+
+  it("搜索页优先退回来处，无历史时兜底回时间轴", () => {
+    expect(resolveAndroidBackAction("/search")).toEqual({ type: "back", fallbackTo: "/" });
+    expect(resolveAndroidBackAction("/search", "?cat=cat-sleep&range=year")).toEqual({
+      type: "back",
+      fallbackTo: "/",
+    });
+  });
 });
 
 describe("executeAndroidBackAction", () => {
