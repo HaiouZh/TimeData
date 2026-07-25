@@ -13,6 +13,20 @@ from pathlib import Path
 
 SIZE_CAP = 8000
 NOW_MAX_LINES = 5
+NOW_BUDGET = 600
+TOPIC_BUDGET = 1200
+FRIDGE_BUDGET = 400
+PHASE_LINE_BUDGET = 150
+FRIDGE_ITEM_BUDGET = 130
+NO_PHASE_STATES = {"设计中", "排队", "进行中", "完成"}
+MOVE_LADDER = [
+    "搬家五档（按优先序，做一档就重跑；只搬家不改写）：",
+    "  ① 全 [完成] 主题 → 归档四联动（rules §3.1）",
+    "  ② [完成] 阶段行 → 压一行，详情回写该阶段 plan 尾部「落地记录」（rules §2.2）",
+    "  ③ 冰箱条目 → 压一行 + 指针，正文进 archive/roadmap/ 主题页或现成文档（rules §3.2）",
+    "  ④ 沉淀记录 → 做沉淀 pass，压成去向指针（rules §2.1）",
+    "  ⑤ 「现在在哪」→ 只留进行中 + 下一步；「刚完成」≤1 行只写主题名 + 归档去向（rules §8）",
+]
 VALID_STATES = {"构想", "设计中", "排队", "进行中", "完成", "搁置"}
 REQUIRED_SECTIONS = ["现在在哪", "主题总览", "冰箱", "阶段完成定义"]
 MUST_HAVE_SECTION = {"设计中", "排队", "进行中"}  # 这些状态的主题必须开五件套小节
@@ -103,7 +117,8 @@ def check(root: Path):
     # size 门
     if len(text) > SIZE_CAP:
         report("error", "size",
-               f"ROADMAP.md {len(text)} 字符 > {SIZE_CAP} —— 先归档全 [完成] 主题，不是继续往里写。{ARCHIVE_GUIDANCE}")
+               f"ROADMAP.md {len(text)} 字符 > {SIZE_CAP} —— 只搬家，不改写："
+               f"删句子省字符 = 烧掉一次性教训（rules.md §3.3，分节体量排行与搬家五档见下）")
 
     sections = split_sections(text)
 
@@ -132,7 +147,7 @@ def check(root: Path):
         if m:
             topic_sections[m.group(1).strip()] = body
 
-    # 阶段行状态合法性 + 全 [完成] 报归档
+    # 阶段行状态合法性 + 全 [完成] 报归档 + 体量 WARN
     for slug, body in topic_sections.items():
         phase_states = [m.group(1) for ln in body.split("\n") if (m := PHASE_LINE_RE.match(ln))]
         for st in phase_states:
@@ -140,6 +155,51 @@ def check(root: Path):
                 report("error", "state", f"主题「{slug}」阶段行状态 [{st}] 不在六态中")
         if phase_states and all(st == "完成" for st in phase_states):
             report("error", "archive-due", f"主题「{slug}」全部阶段 [完成] —— 该归档了。{ARCHIVE_GUIDANCE}")
+        for ln in body.split("\n"):
+            if PHASE_LINE_RE.match(ln) and len(ln) > PHASE_LINE_BUDGET:
+                num = re.match(r"\s*(\d+)\.", ln).group(1)
+                report("warn", "phase-line",
+                       f"主题「{slug}」阶段 {num} 行 {len(ln)} 字符 > {PHASE_LINE_BUDGET}"
+                       f" —— 详情回写 plan 尾部「落地记录」（rules.md §2.2）")
+        if not phase_states and topics.get(slug) in NO_PHASE_STATES:
+            report("warn", "no-phase",
+                   f"主题「{slug}」（[{topics.get(slug)}]）无编号阶段行 —— 归档触发器静默失效（rules.md §2.2）")
+
+    # 分节体量预算（WARN）
+    def _budget_for(title):
+        if title.startswith("现在在哪"):
+            return NOW_BUDGET
+        if title.startswith("冰箱"):
+            return FRIDGE_BUDGET
+        if TOPIC_TITLE_RE.match(title):
+            return TOPIC_BUDGET
+        return None
+
+    for t, body in sections:
+        cap = _budget_for(t)
+        if cap and len(body) > cap:
+            report("warn", "budget", f"「{t.split('（')[0]}」{len(body)} 字符 > 预算 {cap}")
+
+    # 冰箱条目（WARN）：`- ` 开头起算，续行并入
+    def _fridge_flush(item):
+        if item and len(item) > FRIDGE_ITEM_BUDGET:
+            report("warn", "fridge-item",
+                   f"冰箱条目「{item[2:22]}…」{len(item)} 字符 > {FRIDGE_ITEM_BUDGET}"
+                   f" —— 该压一行 + 指针（rules.md §3.2）")
+
+    for t, body in sections:
+        if not t.startswith("冰箱"):
+            continue
+        item = None
+        for ln in body.split("\n") + [""]:
+            if ln.startswith("- "):
+                _fridge_flush(item)
+                item = ln
+            elif ln.strip() and item is not None:
+                item += ln.strip()
+            else:
+                _fridge_flush(item)
+                item = None
 
     # 总览表 ↔ 正文小节一一对应
     for slug, state in topics.items():
@@ -178,7 +238,18 @@ def check(root: Path):
                 report("warn", "orphan",
                        f"{d}/{f.name} 未被 ROADMAP.md 引用——漏归档候选？（活目录只放活的，rules.md §3）")
 
-    return errors, warns, len(text), len(topics)
+    # 撞线 diagnostics：分节体量排行 + 搬家五档
+    diagnostics = []
+    if len(text) > SIZE_CAP:
+        diagnostics.append("分节体量（降序，✗ = 超预算）：")
+        for n, t in sorted(((len(b), t) for t, b in sections), reverse=True):
+            cap = _budget_for(t)
+            mark = "✗" if cap and n > cap else " "
+            cap_note = f"（预算 {cap}）" if cap else ""
+            diagnostics.append(f"  {n:>5} {mark}  {t.split('（')[0]}  {cap_note}")
+        diagnostics.extend(MOVE_LADDER)
+
+    return errors, warns, len(text), len(topics), diagnostics
 
 
 def main(argv):
@@ -188,9 +259,11 @@ def main(argv):
     if not (root / "ROADMAP.md").is_file():
         print(f"[check_roadmap] skip: {root / 'ROADMAP.md'} 不存在")
         return 0
-    errors, warns, size, n_topics = check(root)
+    errors, warns, size, n_topics, diagnostics = check(root)
     for msg in errors + warns:
         print(f"[check_roadmap] {msg}")
+    for line in diagnostics:
+        print(f"    {line}")
     if errors:
         print(f"[check_roadmap] ROADMAP.md: {len(errors)} error(s), {len(warns)} warn(s)")
         return 1
