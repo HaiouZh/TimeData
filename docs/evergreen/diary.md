@@ -10,7 +10,7 @@ covers:
 contracts:
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-25
 ---
 
 # 日记
@@ -54,7 +54,8 @@ SettingsDiaryPage 保存模板
 4. **`enabled=false`（vault 未挂载）时**页面仍可加载/展示，但视为不可用状态提示用户，不阻断路由本身；`template=""`（未配置模板）在 `DiaryPage` 单独提示并链接到 `/settings/diary`。
 5. **有序列表续号**（`orderedList.ts:applyEnterInOrderedList`）只依据光标前后文本判定 `^\d+\. ` 前缀，IME 组合态回车（`event.nativeEvent.isComposing`）不触发续号；光标前是空列表项且行内光标后无余文时，回车清空该行序号而非续号。
 6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（Phase 1 表单控件棘轮闸 `check:ui` 强制）。
-7. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
+7. **未保存修改的离开守卫**统一走 `hooks/useUnsavedChangesGuard`（`useBlocker` + `beforeunload`），覆盖桌面侧栏 / 底栏 / `<Link>` / `navigate()` / 浏览器后退 / 安卓返回键；页面**不再**自管 `beforeunload`，返回按钮也不自己弹确认（否则会连弹两次）。页内「刷新重载」的确认不归它管，仍走 `useConfirm`。
+8. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
 
 ## 3. 模块速查
 
