@@ -24,6 +24,8 @@ const EMPTY: TodoBuckets = {
   scheduledSunkenFromIndex: 0,
   atHand: [],
   handSession: null,
+  projects: [],
+  goalLinkedIds: new Set<string>(),
 };
 
 export default function SettingsTodoGravityPage() {

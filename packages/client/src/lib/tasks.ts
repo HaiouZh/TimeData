@@ -16,6 +16,12 @@ import { recordSyncLog } from "../sync/engine.js";
 import { getActiveSession } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { completionOp } from "./tasks/completionOp.js";
+import {
+  buildTodoProjectGroups,
+  goalLinkedTaskIds,
+  projectMemberIndex,
+  type TodoProjectGroup,
+} from "./tasks/goalMembership.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
 import { currentDueDateString } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
@@ -744,6 +750,18 @@ export interface TodoBuckets {
   /** 手头：活跃会话抓住的 root（含本场 done，按 sortOrder）；未完的不再进 today/inbox/scheduled。 */
   atHand: Task[];
   handSession: Session | null;
+  /**
+   * 项目区：按 active project 目标分组的成员任务，组间按成员 max(updatedAt) 倒序。
+   * P1 只投影，归属轴排他（成员不进 inbox）随 P2 的项目区 UI 一起打开——
+   * 排他若先于 UI 上线，任务会从收件箱消失且页面上无处可见。
+   */
+  projects: TodoProjectGroup[];
+  /**
+   * 被任一 active 目标引用的 task id，**不看 kind**，喂行内绿竖条 `inGoal`。
+   * 与 projects 的口径（只认 kind==="project"）不同，两者不得互相派生：
+   * 若由 projects 派生，只属于 theme 目标的任务会失去绿竖条。
+   */
+  goalLinkedIds: ReadonlySet<string>;
 }
 
 function isOverdue(t: Task, now: Date): boolean {
@@ -772,6 +790,11 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const handSessionId = handSession?.id ?? null;
   const atHand: Task[] = [];
   const rows = await db.tasks.orderBy("sortOrder").toArray();
+  // 读裸行不做 GoalSchema 解析：superRefine 会因单个成员重复 reject 整行，让整组归属静默失效。
+  // 这一读同时把 goals 表纳入 useLiveQuery 的依赖追踪，TodoPage 不必再单开一条 goals 查询。
+  const goalRows = await db.goals.toArray();
+  const projectIndex = projectMemberIndex(goalRows);
+  const projectCandidates: Task[] = [];
   const all: Task[] = [];
   for (const row of rows) {
     const parsed = TaskSchema.safeParse(row);
@@ -790,6 +813,8 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     scheduledSunkenFromIndex: 0,
     atHand,
     handSession,
+    projects: [],
+    goalLinkedIds: goalLinkedTaskIds(goalRows),
   };
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。
   const occurrencesByRule = new Map<string, Task[]>();
@@ -803,6 +828,10 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   for (const t of all) {
     if ((t.parentId ?? null) !== null) continue;
     if (t.ruleId !== null && t.skipped) continue; // skipped occurrence 不进活跃桶
+    // 项目区归集必须早于下面手头的 `continue`：被抓到手头的成员仍要出现在项目区
+    // （焦点轴与归属轴正交，缺了正在干的那几条就是残废视图）。
+    // 上面的 parentId 早退已保证只收根任务；重复模板与 occurrence 本期不参与归属。
+    if (t.recurrence === null && t.ruleId === null && projectIndex.has(t.id)) projectCandidates.push(t);
     if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) === handSessionId) {
       atHand.push(t);
       if (!t.done) continue; // 未完只在手头；done 继续走 placement 落 completed（战果双显）
@@ -833,5 +862,6 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const sunkenFrom = buckets.scheduled.findIndex((t) => scheduledDateKey(t, now, ruleDueKey) > horizonKey);
   buckets.scheduledSunkenFromIndex = sunkenFrom === -1 ? buckets.scheduled.length : sunkenFrom;
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
+  buckets.projects = buildTodoProjectGroups(goalRows, projectIndex, projectCandidates);
   return buckets;
 }

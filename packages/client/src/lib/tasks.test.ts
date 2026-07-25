@@ -1539,3 +1539,102 @@ describe("listTasks atHand 投影", () => {
     expect(nextOcc!.sessionId).toBeNull(); // 下一发不继承
   });
 });
+
+describe("listTasks projects 桶", () => {
+  async function seedGoal(patch: {
+    id: string;
+    title?: string;
+    kind?: "project" | "theme";
+    status?: "active" | "archived";
+    members: Array<{ kind: "task" | "track"; id: string }>;
+    createdAt?: string;
+    updatedAt?: string;
+  }): Promise<void> {
+    await db.goals.add({
+      id: patch.id,
+      title: patch.title ?? `目标 ${patch.id}`,
+      kind: patch.kind ?? "project",
+      status: patch.status ?? "active",
+      members: patch.members,
+      prerequisites: [],
+      createdAt: patch.createdAt ?? "2026-07-01T00:00:00.000Z",
+      updatedAt: patch.updatedAt ?? "2026-07-01T00:00:00.000Z",
+    });
+  }
+
+  it("active project 的成员进 projects 桶并带组名", async () => {
+    const t = await addTask({ title: "刷墙", toInbox: true });
+    await seedGoal({ id: "g1", title: "装修", members: [{ kind: "task", id: t.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.projects).toHaveLength(1);
+    expect(buckets.projects[0]?.goalTitle).toBe("装修");
+    expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
+  });
+
+  it("P1 过渡态：成员同时留在 inbox（排他随 P2 的项目区 UI 一起打开）", async () => {
+    const t = await addTask({ title: "刷墙", toInbox: true });
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: t.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.inbox.map((x) => x.id)).toContain(t.id);
+    expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
+  });
+
+  it("theme 目标与 archived 目标都不进 projects 桶", async () => {
+    const a = await addTask({ title: "主题任务", toInbox: true });
+    const b = await addTask({ title: "归档任务", toInbox: true });
+    await seedGoal({ id: "g1", kind: "theme", members: [{ kind: "task", id: a.id }] });
+    await seedGoal({ id: "g2", status: "archived", members: [{ kind: "task", id: b.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.projects).toEqual([]);
+  });
+
+  it("被抓到手头的成员仍出现在 projects 桶（焦点轴与归属轴正交）", async () => {
+    const t = await addTask({ title: "刷墙", toInbox: true });
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: t.id }] });
+    await grabTaskToHand(t.id);
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.atHand.map((x) => x.id)).toEqual([t.id]);
+    expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
+  });
+
+  it("已完成成员只计 doneCount，且悬空 ref 不计数", async () => {
+    const open = await addTask({ title: "未完", toInbox: true });
+    const done = await addTask({ title: "已完", toInbox: true });
+    await toggleTaskDone(done.id);
+    await seedGoal({
+      id: "g1",
+      members: [
+        { kind: "task", id: open.id },
+        { kind: "task", id: done.id },
+        { kind: "task", id: "已被删除的任务" },
+      ],
+    });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([open.id]);
+    expect(buckets.projects[0]?.doneCount).toBe(1);
+  });
+
+  it("goalLinkedIds 收全 kind（project + theme），不受 projects 口径影响", async () => {
+    const a = await addTask({ title: "项目任务", toInbox: true });
+    const b = await addTask({ title: "主题任务", toInbox: true });
+    await seedGoal({ id: "g1", kind: "project", members: [{ kind: "task", id: a.id }] });
+    await seedGoal({ id: "g2", kind: "theme", members: [{ kind: "task", id: b.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect([...buckets.goalLinkedIds].sort()).toEqual([a.id, b.id].sort());
+  });
+
+  it("子任务不进 projects 桶（即便被写进了 members）", async () => {
+    const root = await addTask({ title: "根任务", toInbox: true });
+    const child = await createChildTask(root.id, "子步骤");
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: child.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.projects).toEqual([]);
+  });
+});

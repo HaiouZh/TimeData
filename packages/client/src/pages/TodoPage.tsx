@@ -90,6 +90,8 @@ const EMPTY: TodoBuckets = {
   scheduledSunkenFromIndex: 0,
   atHand: [],
   handSession: null,
+  projects: [],
+  goalLinkedIds: new Set<string>(),
 };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
