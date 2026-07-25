@@ -16,10 +16,10 @@
  *
  * ⚠️ 红线：onChange 里绝不能对 value 做任何加工（trim / 行尾转换 / 任何归一化）。
  * 一加工守卫就不成立，React 整体回写，撤销栈立刻又没了——而且这种坏法**静默**。
- * 机检的是「React 的写回守卫行为」本身：textareaEdit.test.tsx 里那条「React 零回写计数器」
- * 护栏测试守的是测试文件内部的等价 Probe 组件，不是 DiaryPage 本体——将来谁在 DiaryPage.tsx
- * 的 onChange 里加归一化，这条测试照样绿。生产组件的 onChange 是否守规矩，测不到，得靠
- * review 与本注释的约束兜底。护栏测试本身别删。
+ * 机检覆盖两层：textareaEdit.test.tsx 里的「React 零回写计数器」护栏守的是测试文件内部的
+ * 等价 Probe 组件；`pages/DiaryPage.successPath.test.tsx`（真实 execCommand + 同一计数器
+ * 手法）接的是 DiaryPage.tsx 本体的 onChange——谁在那里加归一化，这条测试当场变红（实测过：
+ * 加一个 .trimEnd() 就红）。两条护栏测试都别删。
  */
 
 export type EditAction =

@@ -209,6 +209,27 @@ describe("applyIndent · 可变 gap（M3 裁决：gap 不写死单空格）", ()
   });
 });
 
+describe("applyIndent · 缩进字节前置（Tab→Shift+Tab 互逆的落点），无这条闸空跑", () => {
+  // 缩进字节是 INDENT + indent（前置）还是 indent + INDENT（后置），251 条 diary 测试此前全绿——
+  // 两者行为确实不同，只是没有一条断言盯住这个选择。这条闸直接锁死前置的具体产出。
+  it("非空缩进（2 空格）Tab：新 Tab 前置在原缩进之前，不是拼在原缩进之后", () => {
+    expect(run("  1. a\n  2. b", 13, 13, "in").text).toBe("  1. a\n\t  1. b");
+  });
+
+  // 后置在这个用例下会产出 "  1. a\n  \t1. b"：新加的 Tab 被塞在两个空格之后。表面上看只是
+  // 字节顺序不同，但会连累 Shift+Tab：removableIndentLen 判定"是否有 Tab 可拿"看的是
+  // indent.startsWith(INDENT)——后置产出的 "  \t" 不以 Tab 开头，起点判定就已经错位，
+  // 下面这条互逆闸就是冲着这个坑写的。
+  it("Tab → Shift+Tab 互逆：出层拿掉的必须正是刚加的那个 Tab，缩进整体回到原样", () => {
+    const original = "  1. a\n  2. b";
+    const indented = run(original, 13, 13, "in");
+    if (indented === "NULL") throw new Error("expected Tab to indent, got NULL");
+    const back = run(indented.text, indented.selStart, indented.selEnd, "out");
+    if (back === "NULL") throw new Error("expected Shift+Tab to out-dent back, got NULL");
+    expect(back.text).toBe(original);
+  });
+});
+
 describe("applyIndent · 代码围栏 / front-matter 内一律放行", () => {
   it("代码围栏内的 '1. x' 不被当作列表项，Tab 放行", () => {
     expect(applyIndent("```\n1. a\n```", 6, 6, "in")).toBeNull();

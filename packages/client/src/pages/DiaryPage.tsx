@@ -252,8 +252,8 @@ export default function DiaryPage() {
           aria-label="日记正文"
           value={content}
           // 红线：这里不许对 value 做任何加工（trim / 行尾转换 / 任何归一化）。一加工 React 就整体回写，
-          // 原生撤销栈当场清空，而且这种坏法静默、测试测不出（唯一机检在 textareaEdit.test.tsx 的
-          // 零回写护栏，但它守的是那个文件内部的等价组件，守不到这里）。
+          // 原生撤销栈当场清空，而且这种坏法静默。这条守到本体：DiaryPage.successPath.test.tsx
+          // 用真实 execCommand + 零回写计数器接上这个 onChange，一加工就变红。
           onChange={(event) => {
             setContent(event.target.value);
             setDirty(true);

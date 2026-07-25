@@ -81,9 +81,11 @@ export function applyIndent(value: string, selStart: number, selEnd: number, dir
       return item !== null && removableIndentLen(item.indent) > 0;
     });
   }
-  // 硬约束（写进实现注释，不是可讨论的裁决）：本页正文几乎全是有序列表，Tab 在列表行一律被吃掉，
-  // 前向逃生口实际不存在——targets 为空即返回 null 放行，是 Shift+Tab 在顶层列表行走通的唯一路径
-  // （WCAG 2.1.2 键盘陷阱要求存在某个出口）。这一分支同时覆盖 Tab 在非列表行/围栏内放行的情形。
+  // 硬约束（写进实现注释，不是可讨论的裁决）：targets 为空即返回 null，把焦点交还浏览器——
+  // Tab/Shift+Tab 各自都有确定的出口场景，满足 WCAG 2.1.2 键盘陷阱要求存在出口。
+  // Tab 的前向出口：非列表行/围栏内（parseItem 在 candidates 过滤阶段就挡掉，走不到这里）、
+  // 以及块首行（父行约束 canIndentRows 拒绝——块首行即任意列表的第一项，日记里最常见的位置，
+  // 见 T13）。Shift+Tab 的反向出口：顶层列表行（removableIndentLen 判定无缩进可拿，见 T8）。
   // 将来若有人以"对称性"为由想让 Shift+Tab 也在顶层被吃掉（出到顶再继续出层），那会真的把两个
   // 方向同时封死，构成键盘陷阱——不要改。
   if (targets.length === 0) return null;

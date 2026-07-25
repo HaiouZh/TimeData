@@ -91,7 +91,7 @@ SettingsDiaryPage 保存模板
 
 - **父行约束**（Tab 入层，`canIndentRows`）：目标行在同块内必须存在上方最近的列表项（块首行不可缩进）；且目标行原深度必须 ≤ 上方最近列表项的新深度，否则拒绝（防跳级）。附属行既不断链也不推进"最近列表项"深度。
 - **出层不受父行约束**：Shift+Tab 只要该行还有缩进可拿即放行——`indent` 以 `\t` 开头拿掉 1 个 Tab 字符，否则视为空格缩进的老文件，最多拿掉 `TAB_COLUMNS`（4）个前导空格。
-- **逃生口**：本页正文几乎全是有序列表，Tab 在列表行一律被吃掉，前向逃生口实际不存在；候选行为空（选区不含任何未受保护的列表行）才返回 `null` 放行——这是 Shift+Tab 在顶层走通的唯一路径，满足 WCAG 2.1.2 键盘陷阱要求存在出口。**不要**因为"对称性"让 Shift+Tab 也在顶层被吃掉，那会把两个方向同时封死，构成键盘陷阱。
+- **逃生口**：`targets` 为空即返回 `null`，把焦点交还浏览器——Tab/Shift+Tab 各自都有确定的出口，满足 WCAG 2.1.2 键盘陷阱要求存在出口。Tab 的前向出口：非列表行/围栏内（候选行过滤阶段就放行）、以及**块首行**（父行约束 `canIndentRows` 拒绝——块首行即任意列表的第一项，日记里最常见的位置）。Shift+Tab 的反向出口：**顶层列表行**（`removableIndentLen` 判定无缩进可拿）。**不要**因为"对称性"让 Shift+Tab 也在顶层被吃掉，那会把两个方向同时封死，构成键盘陷阱。
 - **缩进不带子树**（已知行为，非 bug）：只动目标行的 `indent`，子项原样留在原深度；带子树要引入"子树"概念与额外用户预期，多行选中一起缩已经用行级操作覆盖了这个需求。
 - **缩进字符固定 `\t`**（`INDENT` 常量），不做设置项；且是**前置** Tab（`INDENT + indent`）不是后置——保证 `visualCol("\t" + s) === visualCol(s) + TAB_COLUMNS` 恒成立，这个等式只在前置时成立，后置只在原列宽恰好是 4 的倍数时碰巧对，否则会漂移，还会让 Shift+Tab 的 `removableIndentLen` 认不出刚加的 Tab，Tab→Shift+Tab 就不再互逆。
 - **替换区间是行级收窄**（改动首行到末行整行替换），不是回车用的字节级前后缀裁剪——Tab 是"这一整行往里/往外挪"的行级操作，回车是"在光标处拆一行"的插入点操作，两者口径不同是有意的。
@@ -113,7 +113,7 @@ SettingsDiaryPage 保存模板
 
 `textarea` 的 `onChange` 绝不能对 `value` 做任何加工（trim / 行尾转换 / 任何归一化）。原因：React 受控 `textarea` 写回时，`react-dom` 内部带一条守卫 `value !== element.value && (element.value = value)`；只要 `onChange` 把与 DOM 当前值不同的字符串灌回 state，这条守卫就会触发整体赋值 `element.value = value`，浏览器原生撤销栈当场清空（Ctrl+Z 撤不回，甚至撤掉更早内容）。`applyEdit`（走 `execCommand`）改完 DOM 后原样把同一字符串灌回 `onChange`，守卫不成立、不触发整体写回，从 React 的视角这条路径与用户普通打字完全同构；一旦 `onChange` 加工了 value，这个前提就被破坏。
 
-这种坏法**静默**：功能表现不会立刻出错，只有撤销栈会在用户下次按 Ctrl+Z 时表现异常。唯一机检是 `textareaEdit.test.tsx` 里的"React 零回写计数器"护栏，但它守的是那个测试文件内部的等价 Probe 组件，**守不到 `DiaryPage.tsx` 本体**——生产组件的 `onChange` 是否守规矩，测不到，只能靠 review 与本节 + 源码注释的约束兜底。
+这种坏法**静默**：功能表现不会立刻出错，只有撤销栈会在用户下次按 Ctrl+Z 时表现异常。机检覆盖两层：`textareaEdit.test.tsx` 里的"React 零回写计数器"护栏守的是那个测试文件内部的等价 Probe 组件；`pages/DiaryPage.successPath.test.tsx`（jsdom 打桩出真实 `execCommand`，用同一套计数器手法）接的是 `DiaryPage.tsx` 本体的 `onChange`——生产组件的 `onChange` 一旦加工 value，这条测试当场变红（实测过：往 `onChange` 加一个 `.trimEnd()` 就红），不再只能靠 review 兜底。
 
 ### 3.6 撤销栈：已知缺口
 

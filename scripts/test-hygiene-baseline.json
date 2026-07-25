@@ -51,6 +51,7 @@
   "dirty-in-clean-bucket:lib/settings/trackActionTagsSetting.test.ts",
   "dirty-in-clean-bucket:lib/useIsCoarsePointer.test.ts",
   "dirty-in-clean-bucket:lib/useIsWideScreen.test.ts",
+  "dirty-in-clean-bucket:pages/DiaryPage.successPath.test.tsx",
   "dirty-in-clean-bucket:pages/DiaryPage.test.tsx",
   "dirty-in-clean-bucket:pages/EntryPage.freeze.test.tsx",
   "dirty-in-clean-bucket:pages/EntryPage.test.tsx",
