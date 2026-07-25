@@ -35,6 +35,7 @@ last-reviewed: 2026-07-24
 <!-- 复核 2026-07-24（星图周期任务过滤）：未归类托盘与成员 picker 只接收普通未完成任务或 active pending occurrence；重复模板及 done/skipped 历史发不再误入候选与计数。 -->
 <!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、syncDomains.ts、server/src/sync/domains.ts 新增 sessions LWW 域与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；Goal.members 引用口径、项目完成度读取与目标布局钉点同步域均不受影响。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/syncDomains.ts、server/src/sync/domains.ts 为 tasks 域新增 archiveDelete 钩子与 deleteReason 字段，goals 域未受影响。 -->
+<!-- 复核 2026-07-25（项目区数据层）：lib/goals.ts 的 addGoalMember/removeGoalMember/updateGoal/deleteGoal 新增同事务 touch 成员任务 updatedAt；goalLinkedTaskIds 迁出 lib/goalUnassigned.ts 到 lib/tasks/goalMembership.ts（该文件其余导出与 Goal.members 引用口径不变）。 -->
 
 <!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared Task schema 与 tasks 同步域映射；Goal.members 仍只引用 Task/Track 身份，不消费 weight，也不改变目标 roll-up。 -->
 <!-- 复核 2026-07-04（tasks 完成语义 op）：Task 完成字段同步守卫不改变 Goal.members 引用、项目完成度读取口径或目标布局钉点同步域。 -->
@@ -72,7 +73,7 @@ last-reviewed: 2026-07-24
 }
 ```
 
-成员关系存在 Goal 侧：`Goal.members` 是 typed 引用集合，成员只允许 `task` / `track`。同一个 Task / Track 可以被多个 Goal 引用；删除 Goal 只删除 Goal，不改 Task/Track。
+成员关系存在 Goal 侧：`Goal.members` 是 typed 引用集合，成员只允许 `task` / `track`。同一个 Task / Track 可以被多个 Goal 引用；删除 Goal 只删除 Goal，不改 Task/Track 的任何业务语义——唯一的例外是**失去 active project 归属的 task 成员会被同事务刷新 `updatedAt`**（删除、归档、`kind` 改 theme、`members` 移除四条通道同理），为的是让它回落收件箱后浮在重力水位线之上，详见 [todo](todo.md) §3 第 14 条。
 
 `prerequisites` 是目标内部成员之间的 typed 有向边：`blocker` 必须先完成，`blocked` 才算可推进。shared schema 拒绝重复成员、前置边引用非成员、自环、重复边和环；UI roll-up 对历史坏数据仍宽容，会忽略缺失成员和指向非有效成员的前置边并保留低调提示。
 
