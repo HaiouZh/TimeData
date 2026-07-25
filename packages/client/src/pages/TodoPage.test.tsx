@@ -91,14 +91,14 @@ async function typeAndAdd(host: HTMLElement, title: string) {
 }
 
 describe("TodoPage", () => {
-  it("已归入 active 目标的收件箱任务带外圈标记，未归入的不带", async () => {
+  it("已归入 active theme 目标的收件箱任务带外圈标记，未归入的不带", async () => {
     const now = "2026-06-28T09:00:00.000Z";
     const linked = await addTask({ title: "已归目标任务", toInbox: true });
     await addTask({ title: "自由任务", toInbox: true });
     await db.goals.add({
       id: "g1",
       title: "目标一",
-      kind: "project",
+      kind: "theme",
       status: "active",
       members: [{ kind: "task", id: linked.id }],
       prerequisites: [],
@@ -627,6 +627,46 @@ describe("TodoPage", () => {
     await flushAsync();
 
     expect(inbox.textContent).toContain("沉没搜索词");
+    await unmount(root);
+  });
+
+  it("归属轴排他：项目成员离开收件箱，出现在项目区并带组名与计数", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await addTask({ title: "自由任务", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => {
+      const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement | null;
+      return (zone?.textContent ?? "").includes("刷墙");
+    }, "project zone to list the member");
+
+    const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
+    expect(zone.textContent).toContain("装修");
+    expect(zone.textContent).toContain("还剩 1 / 共 1");
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    expect(inbox.textContent ?? "").toContain("自由任务");
+    expect(inbox.textContent ?? "").not.toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("零 active project 时不渲染项目区，也不挂存量提示条", async () => {
+    await addTask({ title: "自由任务", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "自由任务");
+    expect(host.querySelector('[data-section="todo-projects"]')).toBeNull();
+    expect(host.querySelector('[data-testid="project-zone-intro"]')).toBeNull();
     await unmount(root);
   });
 });

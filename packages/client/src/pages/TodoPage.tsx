@@ -58,6 +58,7 @@ import {
   releaseTaskFromHand,
   resumeSession,
 } from "../lib/sessions.js";
+import { removeGoalMember } from "../lib/goals.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -70,6 +71,7 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
+import { ProjectZoneIntroBar, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
@@ -269,6 +271,7 @@ export function TodoPage() {
   const grabToHand = (t: Task) => void grabTaskToHand(t.id);
   const endHand = () => void endActiveSession();
   const resumeHand = (sessionId: string) => void resumeSession(sessionId);
+  const exitProject = (goalId: string, t: Task) => void removeGoalMember(goalId, { kind: "task", id: t.id });
 
   const rowHandlers = {
     onToggle: toggle,
@@ -428,6 +431,18 @@ export function TodoPage() {
     }
   }
 
+  // 项目区不过 f()：与手头区一致，标签筛选与搜索本期不覆盖项目区（design §非目标）。
+  const projectMemberCount = buckets.projects.reduce((sum, group) => sum + group.tasks.length, 0);
+  const projectsBlock = (
+    <TodoProjectSection
+      groups={buckets.projects}
+      handSessionId={buckets.handSession?.id ?? null}
+      now={gravityNow}
+      onExitProject={exitProject}
+      {...rowHandlers}
+    />
+  );
+
   const atHandBlock = (
     <AtHandSection
       atHand={buckets.atHand}
@@ -492,6 +507,8 @@ export function TodoPage() {
   const sunkenExtraAction = makeSunkenExtraAction(bumpWeight);
   const inboxBlock = (
     <section data-section="inbox">
+      {/* 说明条挂在收件箱顶部而非项目区顶部：任务是从这里消失的，解释要贴着消失的地方。 */}
+      <ProjectZoneIntroBar memberCount={projectMemberCount} groupCount={buckets.projects.length} />
       <CollapsibleSection
         title="收件箱"
         count={inboxFiltered.length}
@@ -590,6 +607,7 @@ export function TodoPage() {
               right={
                 <>
                   {scheduledBlock}
+                  {projectsBlock}
                   {inboxBlock}
                 </>
               }
@@ -601,6 +619,7 @@ export function TodoPage() {
               {gravityReviewBlock}
               {completedBlock}
               {scheduledBlock}
+              {projectsBlock}
               {inboxBlock}
             </div>
           )}

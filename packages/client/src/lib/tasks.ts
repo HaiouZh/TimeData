@@ -778,8 +778,8 @@ export interface TodoBuckets {
   handSession: Session | null;
   /**
    * 项目区：按 active project 目标分组的成员任务，组间按成员 max(updatedAt) 倒序。
-   * P1 只投影，归属轴排他（成员不进 inbox）随 P2 的项目区 UI 一起打开——
-   * 排他若先于 UI 上线，任务会从收件箱消失且页面上无处可见。
+   * 归属轴排他已打开——这些成员不再进 `inbox`，收件箱因此是「真·未归类托盘」。
+   * 焦点轴与时间轴正交：被抓到手头 / 排了今天的成员**同时**出现在对应桶与本桶。
    */
   projects: TodoProjectGroup[];
   /**
@@ -857,7 +857,12 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     // 项目区归集必须早于下面手头的 `continue`：被抓到手头的成员仍要出现在项目区
     // （焦点轴与归属轴正交，缺了正在干的那几条就是残废视图）。
     // 上面的 parentId 早退已保证只收根任务；重复模板与 occurrence 本期不参与归属。
-    if (t.recurrence === null && t.ruleId === null && projectIndex.has(t.id)) projectCandidates.push(t);
+    //
+    // 这个布尔量同时是归集判据与**排他判据**，两者必须同源：若排他单独用 projectIndex.has(t.id)，
+    // 一条被写进 members 的 occurrence 会既进不了项目区（被本行的守卫挡住）、又被踢出 inbox，
+    // 在页面上彻底消失。
+    const ownedByProject = t.recurrence === null && t.ruleId === null && projectIndex.has(t.id);
+    if (ownedByProject) projectCandidates.push(t);
     if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) === handSessionId) {
       atHand.push(t);
       if (!t.done) continue; // 未完只在手头；done 继续走 placement 落 completed（战果双显）
@@ -874,8 +879,10 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     }
     const p = placementForTask(t, now);
     if (p.pool === "today") buckets.today.push(t);
-    else if (p.pool === "inbox") buckets.inbox.push(t);
-    else if (p.pool === "upcoming") buckets.scheduled.push(t);
+    // 归属轴排他：已归 active project 的根任务不进收件箱，收件箱回归「真·未归类托盘」。
+    else if (p.pool === "inbox") {
+      if (!ownedByProject) buckets.inbox.push(t);
+    } else if (p.pool === "upcoming") buckets.scheduled.push(t);
     else if (p.pool === "recurring") buckets.scheduled.push(t);
     else buckets.completed.push(t); // pool === "completed"：所有已完成 + 耗尽重复
   }

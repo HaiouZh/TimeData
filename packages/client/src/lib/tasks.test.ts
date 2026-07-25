@@ -1572,13 +1572,43 @@ describe("listTasks projects 桶", () => {
     expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
   });
 
-  it("P1 过渡态：成员同时留在 inbox（排他随 P2 的项目区 UI 一起打开）", async () => {
-    const t = await addTask({ title: "刷墙", toInbox: true });
-    await seedGoal({ id: "g1", members: [{ kind: "task", id: t.id }] });
+  it("归属轴排他：active project 成员离开 inbox，只出现在 projects 桶", async () => {
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    const free = await addTask({ title: "自由任务", toInbox: true });
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: member.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.inbox.map((x) => x.id)).not.toContain(member.id);
+    expect(buckets.inbox.map((x) => x.id)).toContain(free.id);
+    expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([member.id]);
+  });
+
+  it("只属于 theme 目标的任务仍留在 inbox（排他只认 kind==='project'）", async () => {
+    const t = await addTask({ title: "主题任务", toInbox: true });
+    await seedGoal({ id: "g1", kind: "theme", members: [{ kind: "task", id: t.id }] });
 
     const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
     expect(buckets.inbox.map((x) => x.id)).toContain(t.id);
-    expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
+    expect(buckets.goalLinkedIds.has(t.id)).toBe(true);
+    expect(buckets.projects).toEqual([]);
+  });
+
+  it("被写进 members 的 occurrence 不进项目区，也不因此被踢出 inbox（否则整条消失）", async () => {
+    const rule = await addTask({
+      title: "每天喝水",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+      now: new Date("2026-07-09T08:00:00.000Z"),
+    });
+    await runMaterialization(new Date("2026-07-10T10:00:00.000Z"));
+    const occurrence = (await db.tasks.where("ruleId").equals(rule.id).toArray()).find((t) => !t.done && !t.skipped);
+    expect(occurrence).toBeDefined();
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: occurrence?.id ?? "" }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.projects).toEqual([]);
+    // occurrence 落 today 而非 inbox；关键断言是它没被排他吞掉——四个活跃桶里必须找得到它。
+    const visible = [...buckets.today, ...buckets.inbox, ...buckets.scheduled, ...buckets.completed];
+    expect(visible.map((x) => x.id)).toContain(occurrence?.id);
   });
 
   it("theme 目标与 archived 目标都不进 projects 桶", async () => {
