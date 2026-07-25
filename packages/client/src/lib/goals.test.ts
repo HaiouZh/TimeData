@@ -201,6 +201,25 @@ describe("归属变更同事务刷新成员任务 updatedAt", () => {
     expect(touchLog).toBeDefined();
   });
 
+  it("addGoalMember 加入 active project 刷新被加入任务的 updatedAt 并记 syncLog", async () => {
+    // 增益方向与失去方向同等重要：任务刚被圈进项目时若不刷新 updatedAt，
+    // 它会带着旧时间戳参与重力水位线判定，直接沉进默认折叠的水下区——
+    // 用户刚做完"归入"这个动作，转头发现任务不见了。
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    const task = await addTask({ title: "刷墙", toInbox: true });
+    await db.tasks.update(task.id, { updatedAt: STALE });
+
+    await addGoalMember(goal.id, { kind: "task", id: task.id });
+
+    const after = await db.tasks.get(task.id);
+    expect(after?.updatedAt).not.toBe(STALE);
+    // 不筛 action 会被 addTask 写的 create 日志误判成真；
+    // 只有 action === "update" 且 timestamp 对得上刷新后的 updatedAt，才是 touch 本身写的那条。
+    const logs = await db.syncLog.filter((e) => e.tableName === "tasks" && e.recordId === task.id).toArray();
+    const touchLog = logs.find((log) => log.action === "update" && log.timestamp === after?.updatedAt);
+    expect(touchLog).toBeDefined();
+  });
+
   it("归档目标刷新全部成员任务", async () => {
     const { goalId, taskId } = await staleTaskInProject();
     await updateGoal(goalId, { status: "archived" });
