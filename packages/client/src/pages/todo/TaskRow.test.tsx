@@ -626,6 +626,29 @@ describe("TaskRow", () => {
 
       await unmount(root);
     });
+
+    it("桌面 + occurrence：不显示排期换池按钮，但「抓到手头」照常开放", async () => {
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task({ id: "occ:r1:2026-06-14", ruleId: "r1", scheduledAt: "2026-06-14T00:00:00.000Z" })}
+          pool="today"
+          coarsePointer={false}
+          onToggle={noop}
+          onEdit={noop}
+          onDelete={noop}
+          onToInbox={noop}
+          onToHand={noop}
+        />,
+      );
+
+      // 排期通道拒绝 occurrence：换池按钮不渲染（否则点了会撞 lib 层 throw，且 TodoPage 无 try/catch）
+      expect(host.querySelector('[aria-label^="回收件箱"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="排进今天"]')).toBeNull();
+      // 抓到手头是另一个动词，与排期无关，必须仍在
+      expect(host.querySelector('[aria-label^="抓到手头"]')).not.toBeNull();
+
+      await unmount(root);
+    });
   });
 
   describe("抓到手头 overlay 入口", () => {

@@ -580,6 +580,9 @@ export async function scheduleTask(id: string, date: string, options: { now?: Da
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
   if (existing.recurrence) throw new Error("重复任务不通过排期接口修改，请改重复规则");
+  // occurrence（重复规则的「这一发」）不走通用排期通道：这里的 scheduledAt 同时是账本的应发生日游标，
+  // 挪它会把整条规则的推进游标带歪。给单发改期是另一个动词（未来做，需要与应发生日解耦），不是这个。
+  if (existing.ruleId !== null) throw new Error("重复任务的这一发不通过排期通道改期");
   const updatedAt = (options.now ?? new Date()).toISOString();
   const base = { ...existing, scheduledAt: existing.scheduledAt ?? null };
   const next = TaskSchema.parse({ ...base, scheduledAt: normalizeScheduledDate(date), updatedAt });
@@ -590,6 +593,9 @@ export async function unscheduleTask(id: string, options: { now?: Date } = {}): 
   const existing = await db.tasks.get(id);
   if (!existing) throw new Error("任务不存在");
   if (existing.recurrence) throw new Error("重复任务不能删除排期");
+  // occurrence 清排期会造出 scheduledAt=null 的僵尸发：placement 先按 null 落 inbox（回不到 today），
+  // 而引擎仍视其为 active，整条规则再不产下一发。不受理；不想做这一发请用「跳过」。
+  if (existing.ruleId !== null) throw new Error("重复任务的这一发不能清排期，不想做请跳过");
   const updatedAt = (options.now ?? new Date()).toISOString();
   const base = { ...existing, scheduledAt: existing.scheduledAt ?? null };
   const next = TaskSchema.parse({ ...base, scheduledAt: null, updatedAt });

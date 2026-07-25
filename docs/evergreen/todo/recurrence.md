@@ -71,7 +71,7 @@ last-reviewed: 2026-07-04
 - **规则行子任务勾选映射**：scheduled 管理区展开重复模板时，模板子任务只提供标题 / 结构；复选框显示和点击代理到该 rule 名下 **active（未完成未跳过）那一发**的确定性 occurrence child。无 active 发（含最新一发已完成、下一发未物化的空档期——规则行代表下一发，子任务显示全新未勾）时复选框置灰；写入层 `toggleTaskDone` 的代理选发仍走 `latestOccurrenceForRule`（无 active 回看最新已处理发），但空档期 UI 已置灰不可达。目标 child 缺失时 `toggleTaskDone` 在同事务内按 `${occ.id}:child:${templateChild.id}` 兜底创建并写 `tasks/create` syncLog。模板子任务本体不承载完成态，历史脏 `done=true` 不再影响规则行显示，也不会污染未来物化。
 - **单发动作**：勾 occurrence 无需新代码（`recurrence=null` 天然走 `toggleTaskDone` 非重复分支）。删·跳 = `markOccurrenceSkipped`（置 `skipped=true` 留痕、写 update syncLog，不删行让 P2 游标前进）；`TodoPage.remove` 对 `ruleId!==null` 的 occurrence 调 `markOccurrenceSkipped`，其余行走 `deleteTaskCascade` 级联删除。撤勾 done occurrence（reopen）会在同事务删掉同 rule 后来物化的 active 发及其 children——它是这发完成的推进产物，删除后游标回退一格、保证同 rule 至多一条 active。
 - **删除级联**：`deleteTaskCascade` 是「懂规则的删除」——删重复模板时连清其名下活跃 pending occurrence 及 children（done/skipped 历史发留作账本事实）；删模板子任务时连清活跃发里按确定性 id 物化的镜像子任务（done 历史发的快照不动）。全部同事务写 delete syncLog。
-- `scheduleTask`/`unscheduleTask` 拒绝重复任务（重复任务的排期由重复规则管理；server 端 schedule 端点对重复任务回 409 `TASK_RECURRING_USE_RULE`）。
+- `scheduleTask`/`unscheduleTask` 拒绝重复**模板**与 **occurrence**（换池/排期通道）：模板的排期由重复规则管理，server 端 schedule 端点回 409 `TASK_RECURRING_USE_RULE`；occurrence 的 `scheduledAt` 同时是账本应发生日游标，通道不受理，回 409 `TASK_OCCURRENCE_NOT_SCHEDULABLE`。`occurrence` 的改期是未来独立动词，届时需先把「排期」与「应发生日」拆成两个字段，**不在此禁之列**。
 
 ## 4. 预设门 UI（行为）
 

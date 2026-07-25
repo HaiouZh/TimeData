@@ -19,12 +19,13 @@ function seedTask(overrides: Partial<{
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  ruleId: string | null;
 }> = {}): string {
   const id = overrides.id ?? `t-${Math.random().toString(36).slice(2)}`;
   const timestamp = overrides.createdAt ?? "2026-06-14T00:00:00.000Z";
   db.prepare(`
-    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, scheduled_at, sort_order, weight, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tasks (id, parent_id, title, done, recurrence, last_done_at, start_at, scheduled_at, rule_id, sort_order, weight, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     overrides.parentId ?? null,
@@ -34,6 +35,7 @@ function seedTask(overrides: Partial<{
     overrides.lastDoneAt ?? null,
     overrides.startAt ?? null,
     overrides.scheduledAt ?? null,
+    overrides.ruleId ?? null,
     overrides.sortOrder ?? 0,
     overrides.weight ?? 0,
     timestamp,
@@ -255,5 +257,21 @@ describe("POST /api/tasks/:id/schedule", () => {
 
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ ok: false, error: { code: "TASK_RECURRING_USE_RULE" } });
+  });
+
+  it("occurrence → 409 TASK_OCCURRENCE_NOT_SCHEDULABLE", async () => {
+    seedTask({ id: "occ:t2:2026-06-15", ruleId: "t2", scheduledAt: "2026-06-15T00:00:00.000Z" });
+
+    const res = await app.request("/api/tasks/occ%3At2%3A2026-06-15/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledDate: "2026-06-20" }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ ok: false, error: { code: "TASK_OCCURRENCE_NOT_SCHEDULABLE" } });
+    expect(db.prepare("SELECT scheduled_at FROM tasks WHERE id = ?").get("occ:t2:2026-06-15")).toEqual({
+      scheduled_at: "2026-06-15T00:00:00.000Z",
+    });
   });
 });

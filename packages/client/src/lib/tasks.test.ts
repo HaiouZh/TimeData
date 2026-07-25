@@ -757,6 +757,17 @@ describe("scheduleTask / unscheduleTask", () => {
     const t = await addTask({ title: "刮胡子", recurrence: { freq: "daily", interval: 1, basis: "due" } });
     await expect(unscheduleTask(t.id)).rejects.toThrow();
   });
+
+  it("排期通道拒绝 occurrence（这一发不走通用排期）", async () => {
+    const rule = await addTask({ title: "每天", recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await runMaterialization(new Date());
+    const occ = (await db.tasks.toArray()).find((t) => t.ruleId === rule.id && t.recurrence === null);
+    expect(occ).toBeDefined();
+    await expect(scheduleTask(occ!.id, "2026-08-01")).rejects.toThrow();
+    await expect(unscheduleTask(occ!.id)).rejects.toThrow();
+    // 拒绝后原值不动
+    expect((await db.tasks.get(occ!.id))?.scheduledAt).toBe(occ!.scheduledAt);
+  });
 });
 
 describe("listTasks", () => {

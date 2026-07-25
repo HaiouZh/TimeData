@@ -78,6 +78,14 @@ tasks.post("/:id/schedule", async (c) => {
       409,
     );
   }
+  // occurrence（rule 的单发）：scheduledAt 同时是账本应发生日游标，外部改期会拖歪整条规则的推进。
+  // 单独一个 code，好让调用方区分「模板」与「这一发」。
+  if (task.ruleId !== null) {
+    return c.json(
+      { ok: false, error: { code: "TASK_OCCURRENCE_NOT_SCHEDULABLE", message: "Occurrence schedule is derived from its rule and cannot be changed here" } },
+      409,
+    );
+  }
 
   const now = new Date().toISOString();
   const scheduledAt = parsed.data.scheduledDate === null ? null : localDateToUtcIso(parsed.data.scheduledDate);

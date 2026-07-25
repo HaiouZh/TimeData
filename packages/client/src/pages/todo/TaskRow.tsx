@@ -165,7 +165,9 @@ export function TaskRow({
       : null;
   // isRecurring 兜住"重复但耗尽无日期"的场景（此时 dateChip 为 null 但 repeat 胶囊仍要渲染）。
   const hasMeta = isRecurring || childTotal > 0 || dateChip !== null || (task.tags ?? []).length > 0;
-  const canSwapPool = task.recurrence === null && pool !== "completed";
+  // 与 TaskList.tsx 的左右滑判据（canSwap）对齐：occurrence 不进排期通道。
+  const canSwapPool = task.recurrence === null && task.ruleId === null && pool !== "completed";
+  // canGrab 刻意不加 ruleId：把「这一发」抓到手头是另一个动词，与排期无关，照常开放。
   const canGrab = task.recurrence === null && pool !== "completed";
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
   const canInlineCompose = childTotal === 0 && childrenMode !== "readonly";
