@@ -754,7 +754,10 @@ export async function deleteTaskCascade(taskId: string): Promise<void> {
 export async function touchTasksInCurrentTransaction(taskIds: readonly string[], timestamp: string): Promise<void> {
   if (taskIds.length === 0) return;
   const existing = await db.tasks.bulkGet([...taskIds]);
-  const present = existing.filter((row): row is Task => Boolean(row)).map((row) => row.id);
+  // 调用方（如 ownedProjectTaskIds）读的是未经 GoalSchema 校验的裸 goal 行，
+  // members 里可能含重复 task ref（唯一性 superRefine 只在 parse 路径上跑）；
+  // 去重避免 bulkUpdate 带重复 key、以及给同一条 task 记两条 syncLog。
+  const present = [...new Set(existing.filter((row): row is Task => Boolean(row)).map((row) => row.id))];
   if (present.length === 0) return;
   await db.tasks.bulkUpdate(present.map((id) => ({ key: id, changes: { updatedAt: timestamp } })));
   for (const id of present) {

@@ -194,8 +194,11 @@ describe("归属变更同事务刷新成员任务 updatedAt", () => {
 
     const after = await db.tasks.get(taskId);
     expect(after?.updatedAt).not.toBe(STALE);
+    // 不筛 action 会被 staleTaskInProject() 里 addTask 写的 create 日志误判成真；
+    // 只有 action === "update" 且 timestamp 对得上刷新后的 updatedAt，才是 touch 本身写的那条。
     const logs = await db.syncLog.filter((e) => e.tableName === "tasks" && e.recordId === taskId).toArray();
-    expect(logs.length).toBeGreaterThan(0);
+    const touchLog = logs.find((log) => log.action === "update" && log.timestamp === after?.updatedAt);
+    expect(touchLog).toBeDefined();
   });
 
   it("归档目标刷新全部成员任务", async () => {
@@ -250,5 +253,28 @@ describe("归属变更同事务刷新成员任务 updatedAt", () => {
     await db.tasks.update(task.id, { updatedAt: STALE });
     await removeGoalMember(goal.id, { kind: "task", id: task.id });
     expect((await db.tasks.get(task.id))?.updatedAt).toBe(STALE);
+  });
+
+  it("members 裸行含重复 task ref 时 touch 只记一条 syncLog（不受 GoalSchema 唯一性约束保护）", async () => {
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    const task = await addTask({ title: "刷墙", toInbox: true });
+    const raw = await db.goals.get(goal.id);
+    if (!raw) throw new Error("goal 不存在");
+    // 直接 put 裸行绕开 GoalSchema.parse 的 members 唯一性 superRefine——
+    // 生产路径上 ownedProjectTaskIds 读到的正是这种未经校验的裸行。
+    await db.goals.put({
+      ...raw,
+      members: [
+        { kind: "task", id: task.id },
+        { kind: "task", id: task.id },
+      ],
+    });
+
+    await deleteGoal(goal.id);
+
+    const updateLogs = await db.syncLog
+      .filter((e) => e.tableName === "tasks" && e.recordId === task.id && e.action === "update")
+      .toArray();
+    expect(updateLogs).toHaveLength(1);
   });
 });
