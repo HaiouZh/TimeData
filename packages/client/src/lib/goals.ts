@@ -6,7 +6,8 @@ import {
   deleteGoalMemberPinInCurrentTransaction,
 } from "./goalLayoutPins.js";
 import { recordSyncLog } from "../sync/engine.js";
-import { buildNewRootTask, insertNewTaskInCurrentTransaction } from "./tasks.js";
+import { ownedProjectTaskIds, releasedProjectTaskIds } from "./tasks/goalMembership.js";
+import { buildNewRootTask, insertNewTaskInCurrentTransaction, touchTasksInCurrentTransaction } from "./tasks.js";
 
 export interface AddGoalInput {
   title: string;
@@ -104,9 +105,13 @@ export async function updateGoal(id: string, patch: UpdateGoalPatch): Promise<Go
   }
 
   const next = GoalSchema.parse(candidate);
-  await db.transaction("rw", db.goals, db.syncLog, async () => {
+  // 一次更新可能通过四条通道释放成员：status→archived、kind→theme、members 整包替换、以及组合。
+  // 用前后归属差集统一覆盖，将来新增的调用方自动被覆盖。
+  const released = releasedProjectTaskIds(existing, next);
+  await db.transaction("rw", db.goals, db.tasks, db.syncLog, async () => {
     await db.goals.put(next);
     await recordSyncLog("goals", next.id, "update", next.updatedAt);
+    await touchTasksInCurrentTransaction(released, next.updatedAt);
   });
   return next;
 }
@@ -169,6 +174,9 @@ export async function addGoalMember(
     });
     await db.goals.put(next);
     await recordSyncLog("goals", next.id, "update", timestamp);
+    if (ref.kind === "task" && ownedProjectTaskIds(next).includes(ref.id)) {
+      await touchTasksInCurrentTransaction([ref.id], timestamp);
+    }
     nextGoal = next;
   });
 
@@ -184,7 +192,7 @@ export async function removeGoalMember(
   const timestamp = nowIso(options.now);
   let nextGoal: Goal | null = null;
 
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
     const goal = await db.goals.get(goalId);
     if (!goal) throw new Error("目标不存在");
 
@@ -208,6 +216,7 @@ export async function removeGoalMember(
     await recordSyncLog("goals", next.id, "update", timestamp);
     // 移出成员：同事务回收它在本 Goal 下的布局钉点，不留孤儿。
     await deleteGoalMemberPinInCurrentTransaction({ goalId, nodeKind: ref.kind, nodeId: ref.id }, options.now);
+    await touchTasksInCurrentTransaction(releasedProjectTaskIds(goal, next), timestamp);
     nextGoal = next;
   });
 
@@ -275,7 +284,7 @@ export async function listGoalTracks(goalId: string): Promise<Track[]> {
 
 export async function deleteGoal(id: string, options: { now?: Date } = {}): Promise<void> {
   const timestamp = nowIso(options.now);
-  await db.transaction("rw", db.goals, db.goalLayoutPins, db.syncLog, async () => {
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.syncLog, async () => {
     const goal = await db.goals.get(id);
     if (!goal) throw new Error("目标不存在");
 
@@ -283,5 +292,7 @@ export async function deleteGoal(id: string, options: { now?: Date } = {}): Prom
     await deleteGoalLayoutPinsForGoalInCurrentTransaction(id, options.now);
     await db.goals.delete(id);
     await recordSyncLog("goals", id, "delete", timestamp);
+    // 删除与归档同样让成员失去归属，必须一起浮上水面。
+    await touchTasksInCurrentTransaction(ownedProjectTaskIds(goal), timestamp);
   });
 }

@@ -739,6 +739,29 @@ export async function deleteTaskCascade(taskId: string): Promise<void> {
   });
 }
 
+/**
+ * 归属变更后刷新任务 updatedAt。**必须在调用方已开启的事务内调用**，
+ * 调用方的事务表清单须含 db.tasks 与 db.syncLog。
+ *
+ * 为什么必须刷新：重力沉降按 task.updatedAt 的年龄判定（tasks/gravity.ts 的 isTaskSunken）。
+ * 任务失去项目归属会回落收件箱，不刷新就按旧时间戳参与水位线判定，久置任务直接沉进
+ * 默认折叠的水下区——用户体感是「退出项目 = 任务消失」。
+ *
+ * 这是**本机副作用、不是跨设备不变量**：入站 sync apply 按域写单表、没有跨域钩子，
+ * 其它设备改归属不会 touch 本机 task 行。所以项目区必须完全由 goals 推导，
+ * 不得依赖 task 行上任何反向标记。
+ */
+export async function touchTasksInCurrentTransaction(taskIds: readonly string[], timestamp: string): Promise<void> {
+  if (taskIds.length === 0) return;
+  const existing = await db.tasks.bulkGet([...taskIds]);
+  const present = existing.filter((row): row is Task => Boolean(row)).map((row) => row.id);
+  if (present.length === 0) return;
+  await db.tasks.bulkUpdate(present.map((id) => ({ key: id, changes: { updatedAt: timestamp } })));
+  for (const id of present) {
+    await recordSyncLog("tasks", id, "update", timestamp);
+  }
+}
+
 export interface TodoBuckets {
   today: Task[]; // 含过期，过期排前
   inbox: Task[];

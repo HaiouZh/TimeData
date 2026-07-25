@@ -11,6 +11,7 @@ import {
   updateGoal,
   updateGoalPrerequisites,
 } from "./goals.js";
+import { addTask } from "./tasks.js";
 
 const now = "2026-06-22T01:00:00.000Z";
 
@@ -173,5 +174,81 @@ describe("goals data helpers", () => {
         expect.objectContaining({ tableName: "goals", recordId: goal.id, action: "update" }),
       ]),
     );
+  });
+});
+
+describe("归属变更同事务刷新成员任务 updatedAt", () => {
+  const STALE = "2026-01-01T00:00:00.000Z";
+
+  async function staleTaskInProject(): Promise<{ goalId: string; taskId: string }> {
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    const task = await addTask({ title: "刷墙", toInbox: true });
+    await addGoalMember(goal.id, { kind: "task", id: task.id });
+    await db.tasks.update(task.id, { updatedAt: STALE });
+    return { goalId: goal.id, taskId: task.id };
+  }
+
+  it("removeGoalMember 刷新被移出任务的 updatedAt 并记 syncLog", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await removeGoalMember(goalId, { kind: "task", id: taskId });
+
+    const after = await db.tasks.get(taskId);
+    expect(after?.updatedAt).not.toBe(STALE);
+    const logs = await db.syncLog.filter((e) => e.tableName === "tasks" && e.recordId === taskId).toArray();
+    expect(logs.length).toBeGreaterThan(0);
+  });
+
+  it("归档目标刷新全部成员任务", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await updateGoal(goalId, { status: "archived" });
+    expect((await db.tasks.get(taskId))?.updatedAt).not.toBe(STALE);
+  });
+
+  it("kind 从 project 改成 theme 也刷新成员任务", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await updateGoal(goalId, { kind: "theme" });
+    expect((await db.tasks.get(taskId))?.updatedAt).not.toBe(STALE);
+  });
+
+  it("members 整包替换移除成员时刷新（GoalGraphEditor 的撤销路径）", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await updateGoal(goalId, { members: [] });
+    expect((await db.tasks.get(taskId))?.updatedAt).not.toBe(STALE);
+  });
+
+  it("deleteGoal 刷新全部成员任务", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await deleteGoal(goalId);
+    expect((await db.tasks.get(taskId))?.updatedAt).not.toBe(STALE);
+  });
+
+  it("只改标题不刷新成员任务", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await updateGoal(goalId, { title: "新名字" });
+    expect((await db.tasks.get(taskId))?.updatedAt).toBe(STALE);
+  });
+
+  it("重复加同一成员（幂等早退）不刷新任务", async () => {
+    const { goalId, taskId } = await staleTaskInProject();
+    await db.tasks.update(taskId, { updatedAt: STALE });
+    await addGoalMember(goalId, { kind: "task", id: taskId });
+    expect((await db.tasks.get(taskId))?.updatedAt).toBe(STALE);
+  });
+
+  it("移出本就不在组里的成员（幂等早退）不刷新任务", async () => {
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    const task = await addTask({ title: "无关任务", toInbox: true });
+    await db.tasks.update(task.id, { updatedAt: STALE });
+    await removeGoalMember(goal.id, { kind: "task", id: task.id });
+    expect((await db.tasks.get(task.id))?.updatedAt).toBe(STALE);
+  });
+
+  it("theme 目标的成员变更不触发 touch（只有 active project 拥有归属）", async () => {
+    const goal = await addGoal({ title: "主题", kind: "theme" });
+    const task = await addTask({ title: "主题任务", toInbox: true });
+    await addGoalMember(goal.id, { kind: "task", id: task.id });
+    await db.tasks.update(task.id, { updatedAt: STALE });
+    await removeGoalMember(goal.id, { kind: "task", id: task.id });
+    expect((await db.tasks.get(task.id))?.updatedAt).toBe(STALE);
   });
 });
