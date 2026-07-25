@@ -18,7 +18,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
-import { goalLinkedTaskIds } from "../lib/goalUnassigned.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
@@ -99,8 +98,7 @@ export function TodoPage() {
   // 单一时钟：四分区 / 逾期 / 重力水位线共用 gravityNow，跨日由下方 timer+focus+visibilitychange 刷新后整页重算。
   const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
   const buckets = useLiveQuery(() => listTasks(gravityNow), [gravityNow], EMPTY) ?? EMPTY;
-  const goals = useLiveQuery(() => db.goals.toArray(), []) ?? [];
-  const goalLinkedIds = goalLinkedTaskIds(goals);
+  const goalLinkedIds = buckets.goalLinkedIds;
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   useEffect(() => {
     void healActiveSessions();
@@ -282,9 +280,17 @@ export function TodoPage() {
     onTagsChange: changeTags,
   };
 
+  // 项目区成员一并纳入：P2 打开归属轴排他后它们会离开 inbox，
+  // 不纳入的话筛选栏的标签候选会随着圈组而缩水。
   const allTasks: Task[] = Array.from(
     new Map(
-      [...buckets.today, ...buckets.inbox, ...buckets.scheduled, ...buckets.recurring].map((t) => [t.id, t]),
+      [
+        ...buckets.today,
+        ...buckets.inbox,
+        ...buckets.scheduled,
+        ...buckets.recurring,
+        ...buckets.projects.flatMap((group) => group.tasks),
+      ].map((t) => [t.id, t]),
     ).values(),
   );
   const tagOptions = allTags(allTasks);
