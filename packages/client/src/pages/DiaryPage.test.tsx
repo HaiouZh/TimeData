@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createElement } from "react";
+import { createElement, act as reactAct } from "react";
 import { flushSync } from "react-dom";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,12 +23,17 @@ vi.mock("../lib/diary/diaryApi.ts", async () => {
 });
 
 async function act(callback: () => Promise<void> | void) {
-  let result: Promise<void> | void;
-  flushSync(() => {
-    result = callback();
+  // 本地 flushSync 版 act 只包住回调的同步部分：mock 的 saveDiary/fetchDiary 等 Promise
+  // 在此之后的 resolve/continuation 落在它的作用域之外，React 会报
+  // "not wrapped in act(...)"。套一层 React 真正的 act（reactAct）让这段异步收尾也算数。
+  await reactAct(async () => {
+    let result: Promise<void> | void;
+    flushSync(() => {
+      result = callback();
+    });
+    await result;
+    flushSync(() => {});
   });
-  await result;
-  flushSync(() => {});
 }
 
 async function flush() {
