@@ -67,6 +67,10 @@ export default function DiaryPage() {
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  // latest-ref：让在途异步响应回来时判断"目标文件还是不是当初那个"。
+  // 与 shortcutSaveRef 同款——渲染期赋值，回调里读 .current。
+  const dateRef = useRef(date);
+  dateRef.current = date;
 
   // config 与日期无关，只拉一次。不拆的话每切一天都多一次 /api/diary/config 往返，
   // 也多一次"config 请求失败 → 整页 loadFailed"的机会。
@@ -189,6 +193,8 @@ export default function DiaryPage() {
     setError(null);
     // 发起时的编辑序号：请求在途中用户可能继续打字，回来时得认得出来（见下面清脏处）
     const revisionAtRequest = editRevisionRef.current;
+    // 发起时的目标日期：请求在途中用户可能切日期，回来时这一发属于旧文件
+    const dateAtRequest = date;
     try {
       // 行尾保护还原点：content 来自 textarea，规范保证其中不含 \r（jsdom 忠实实现了这条
       // 规范，本页 jsdom 接线测试可以真实复现丢失），所以这里不需要、也不应该先做防御性
@@ -199,7 +205,11 @@ export default function DiaryPage() {
       // 已知行为：若原文件本身混合行尾，这里会统一成主导行尾，产生一次全篇 diff——
       // 接受，混合行尾文件本就异常，统一比"随机保留一半"更可预期，且只发生一次。
       const body = eolRef.current === "\r\n" ? content.replaceAll("\n", "\r\n") : content;
-      const result = await saveDiary(date, { content: body, baseMtime, force: options.force });
+      const result = await saveDiary(dateAtRequest, { content: body, baseMtime, force: options.force });
+      // 日期闸：与编辑序号闸正交——序号管"内容变没变"，日期闸管"目标文件换没换"。
+      // 不加这道，A 日的 mtime 会写进 B 日的 baseMtime，B 日首次保存就带着别人的 mtime
+      // 去过服务端并发守卫 → 假冲突，用户被诱导去点「仍然覆盖」force 掉一个没冲突的文件。
+      if (dateRef.current !== dateAtRequest) return;
       setBaseMtime(result.mtime);
       // 只有"这一发上传的就是当前内容"才清脏。用户在请求在途中继续打字时，那段内容从未上传，
       // 无条件 setDirty(false) 会连 useUnsavedChangesGuard 一起关掉——换页即静默丢数据。
@@ -208,12 +218,16 @@ export default function DiaryPage() {
       if (editRevisionRef.current === revisionAtRequest) setDirty(false);
       setConflict(false);
     } catch (err) {
+      // 同理：A 日的冲突/错误不该挂到 B 日头上
+      if (dateRef.current !== dateAtRequest) return;
       if (err instanceof DiaryConflictError) {
         setConflict(true);
         return;
       }
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
+      // saving 是页面级的"有没有在途保存"，与目标日期无关，无条件解锁——
+      // 加日期判据会让切日后保存按钮永久置灰。
       setSaving(false);
     }
   }
@@ -237,19 +251,40 @@ export default function DiaryPage() {
   }, []);
 
   async function handleReload() {
+    // 在途保存期间不许重载：两个写操作交错会让 baseMtime 指向一份编辑器里已不存在的
+    // 内容——force save 在写 A（回来 mtime=X），reload 先回来把正文换成 B/mtime=Y，
+    // 随后 save resolve 又把 baseMtime 改回 X。此后用户随便改一个字保存，mtime 校验
+    // 通过、不报冲突，刚写进去的 A 被 B 静默覆盖。按钮也会置灰，这里是兜底。
+    if (saving) return;
     if (
       dirty &&
       !(await confirm({ title: "丢弃当前修改？", body: "将丢弃当前修改，加载服务器版本。", danger: true }))
     )
       return;
+    // 确认框开着的这段时间里 Ctrl+S 可能起了一发保存（快捷键不看按钮置灰），再挡一次
+    if (saving) return;
+    const dateAtRequest = date;
+    const revisionAtRequest = editRevisionRef.current;
     setError(null);
     let doc: Awaited<ReturnType<typeof fetchDiary>>;
     try {
-      doc = await fetchDiary(date);
+      doc = await fetchDiary(dateAtRequest);
     } catch (err) {
-      // 只出条状提示，不打成 loadFailed 全屏态：正文还在编辑器里、用户还能接着编辑和保存，
+      if (dateRef.current !== dateAtRequest) return;
+      // 只出条状提示，不打成 loadFailed 全屏态：正文还在编辑器里、用户还能接着编辑，
       // 换成全屏"加载失败"反而会把这份没上传的内容从屏幕上抹掉。冲突条也保留——冲突没解决。
-      setError(err instanceof Error ? err.message : "重载失败");
+      // 前缀一句中文再带原始 message：这条是该路径唯一的用户反馈（不像首屏失败还配中文
+      // 全屏兜底），真机离线时裸展示会是 "Failed to fetch"/"Load failed"，服务端 500 时
+      // 是 "API error: 500 …"，用户只看到一串英文技术串。
+      setError(`重载失败：${err instanceof Error ? err.message : "未知错误"}`);
+      return;
+    }
+    if (dateRef.current !== dateAtRequest) return;
+    if (editRevisionRef.current !== revisionAtRequest) {
+      // 点了"确认丢弃"之后、fetch 回来之前用户又敲了字。这时盖上服务器版本，
+      // 那段新内容既没上传、也从屏幕上消失了——与"保存在途打字被清脏"同类的静默丢数据。
+      // 放弃这一发重载，让用户重新决定。
+      setError("重载期间你又做了修改，已取消这次重载。需要丢弃请再点一次刷新重载。");
       return;
     }
     // 行尾保护第二个写入点——最容易漏的那个。冲突后点「刷新重载」若不更新 eolRef，
@@ -354,15 +389,17 @@ export default function DiaryPage() {
           <span className="flex-1">日记已被其他窗口修改</span>
           <button
             type="button"
+            disabled={saving}
             onClick={() => void handleReload()}
-            className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
+            className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
           >
             刷新重载
           </button>
           <button
             type="button"
+            disabled={saving}
             onClick={() => void handleSave({ force: true })}
-            className="rounded-xl bg-danger px-3 py-1 td-text-body font-medium text-page"
+            className="rounded-xl bg-danger px-3 py-1 td-text-body font-medium text-page disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
           >
             仍然覆盖
           </button>

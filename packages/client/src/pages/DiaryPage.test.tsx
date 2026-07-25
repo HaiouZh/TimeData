@@ -1069,4 +1069,101 @@ describe("DiaryPage", () => {
     expect(textarea(host).value).toBe("还没保存");
     await unmount(root);
   });
+
+  it("保存在途中切日期：旧日期的 mtime 不落到新日期上（否则新一天首存必假冲突）", async () => {
+    const { host, root, router } = await renderPage();
+    await typeInto(textarea(host), "7/25 的内容");
+
+    let releaseSave: (value: { mtime: number }) => void = () => {};
+    saveDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseSave = resolve; }));
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    // 保存还在飞，用户切到 7/20（新文件不存在，服务器 mtime 为 null）
+    fetchDiary.mockResolvedValue({ content: "", mtime: null });
+    await navigateTo(router, "/diary?date=2026-07-20");
+    await act(async () => { releaseSave({ mtime: 999 }); });
+    await flush();
+
+    // 7/20 的首次保存必须带 baseMtime:null。带上 999 的话服务端 mtime 守卫判不等 → 假冲突，
+    // 用户被诱导去点「仍然覆盖」force 掉一个其实没冲突的文件
+    await typeInto(textarea(host), "补写 7/20");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(saveDiary).toHaveBeenLastCalledWith("2026-07-20", expect.objectContaining({ baseMtime: null }));
+    await unmount(root);
+  });
+
+  it("保存在途中切日期：旧日期的冲突不挂到新日期头上", async () => {
+    const { host, root, router } = await renderPage();
+    await typeInto(textarea(host), "7/25 的内容");
+
+    let rejectSave: (reason: unknown) => void = () => {};
+    saveDiary.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectSave = reject; }));
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    await navigateTo(router, "/diary?date=2026-07-20");
+    await act(async () => { rejectSave(new DiaryConflictError(500)); });
+    await flush();
+
+    expect(host.textContent).not.toContain("日记已被其他窗口修改");
+    await unmount(root);
+  });
+
+  it("重载在途中切日期：旧日期的正文不覆盖新日期", async () => {
+    const { host, root, router } = await renderPage();
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    let releaseReload: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseReload = resolve; }));
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认")); // handleReload 的 confirm 没传 confirmLabel，用默认
+
+    fetchDiary.mockResolvedValue({ content: "7/20 的正文", mtime: 200 });
+    await navigateTo(router, "/diary?date=2026-07-20");
+    await act(async () => { releaseReload({ content: "7/25 的服务器版本", mtime: 400 }); });
+    await flush();
+
+    expect(textarea(host).value).toBe("7/20 的正文");
+    await unmount(root);
+  });
+
+  it("重载在途中继续打字：不静默覆盖，取消这一发并提示", async () => {
+    // 与「保存在途打字被清脏」是同类丢数据，只是在 reload 侧，编辑序号闸此前不参与
+    const { host, root } = await renderPage();
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    let releaseReload: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseReload = resolve; }));
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认"));
+
+    await typeInto(textarea(host), "重载期间又敲的内容");
+    await act(async () => { releaseReload({ content: "服务器版本", mtime: 400 }); });
+    await flush();
+
+    expect(textarea(host).value).toBe("重载期间又敲的内容");
+    expect(host.textContent).toContain("已取消这次重载");
+    await unmount(root);
+  });
+
+  it("保存在途中「刷新重载」按钮置灰（两个写操作交错会让 mtime 守卫失效）", async () => {
+    const { host, root } = await renderPage();
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    let releaseSave: (value: { mtime: number }) => void = () => {};
+    saveDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseSave = resolve; }));
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    expect(buttonByText(host, "刷新重载")?.disabled).toBe(true);
+    expect(buttonByText(host, "仍然覆盖")?.disabled).toBe(true);
+
+    await act(async () => { releaseSave({ mtime: 999 }); });
+    await flush();
+    await unmount(root);
+  });
 });
