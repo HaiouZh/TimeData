@@ -16,7 +16,10 @@
  *
  * ⚠️ 红线：onChange 里绝不能对 value 做任何加工（trim / 行尾转换 / 任何归一化）。
  * 一加工守卫就不成立，React 整体回写，撤销栈立刻又没了——而且这种坏法**静默**。
- * 唯一的机检形式是 textareaEdit.test.tsx 里那条「React 零回写计数器」护栏测试，别删它。
+ * 机检的是「React 的写回守卫行为」本身：textareaEdit.test.tsx 里那条「React 零回写计数器」
+ * 护栏测试守的是测试文件内部的等价 Probe 组件，不是 DiaryPage 本体——将来谁在 DiaryPage.tsx
+ * 的 onChange 里加归一化，这条测试照样绿。生产组件的 onChange 是否守规矩，测不到，得靠
+ * review 与本注释的约束兜底。护栏测试本身别删。
  */
 
 export type EditAction =
@@ -24,8 +27,16 @@ export type EditAction =
   | { kind: "select"; selStart: number; selEnd: number }
   | { kind: "noop" };
 
+/**
+ * kind: "applied" = execCommand 真改了值；"selection-only" = 退化的 replace（零宽区间 + 空串，
+ * 即文本零改动）在 applyEdit 内部被判定为纯挪光标，直接早退，完全不碰 execCommand。
+ *
+ * 别把这个 "selection-only" 与 EditAction 的 kind:"select" 混为一谈：后者是纯函数层的返回
+ * 变体（调用方本来就只想挪光标，压根没产出 replace）；前者是 applyEdit 对一个"形状上是
+ * replace、但退化成零改动"的输入做的兜底判定，两者出现在不同的层。
+ */
 export type ApplyResult =
-  | { ok: true; kind: "applied" }
+  | { ok: true; kind: "applied" | "selection-only" }
   | { ok: false; kind: "unsupported" | "rejected"; fallbackValue: string };
 
 /** 编辑描述符 → 整篇新文本。成功判据 / 降级路径 / 单测三处共用，避免两处真相源。 */
@@ -35,6 +46,15 @@ export function previewEdit(value: string, edit: Extract<EditAction, { kind: "re
 
 export function applyEdit(field: HTMLTextAreaElement, edit: Extract<EditAction, { kind: "replace" }>): ApplyResult {
   const { start, end, text, selStart, selEnd } = edit;
+
+  // 退化的 replace（零宽区间 + 空串 = 文本零改动）必须在这里就早退。
+  // 放它往下走会落进 execCommand("delete")，而 delete 在光标折叠时语义是**退格**：
+  // 先真删掉前一个字符并压一条真删除进撤销栈，接着降级路径整体回写救回文本 —— 撤销栈当场清空。
+  // 光靠调用方约定守不住：任何生产者都可能产出这个形状，闸必须在这一层。
+  if (start === end && text === "") {
+    field.setSelectionRange(selStart, selEnd);
+    return { ok: true, kind: "selection-only" };
+  }
 
   // 降级文本**必须在这里**算好：execCommand 失败时可能已经部分应用，事后再拿
   // field.value 去算就是基于污染值算的。这也是本函数不能只返回 boolean 的原因。
@@ -58,8 +78,8 @@ export function applyEdit(field: HTMLTextAreaElement, edit: Extract<EditAction, 
   try {
     if (text === "") {
       // 空串必须走 delete：execCommand("insertText", …, "") 在实现间不一致
-      // （Firefox 55 前抛异常）。而 delete 在**光标折叠**时语义是退格、会吃掉前一个字符，
-      // 所以 start === end 的情形绝不能落到这里——那种情况由 runEditAction 的 select 变体接走。
+      // （Firefox 55 前抛异常）。走到这里 start < end 恒成立——零宽 + 空串的退化形态已经在
+      // 函数开头早退，不会落进来——所以这里的 delete 语义是"删掉 [start,end) 选区"，不是退格。
       doc.execCommand("delete");
     } else {
       doc.execCommand("insertText", false, text);
@@ -84,6 +104,11 @@ export function applyEdit(field: HTMLTextAreaElement, edit: Extract<EditAction, 
  *   replace + 成功 → onChange 置（execCommand 发的真 input 事件会触发它）
  *   replace + 降级 → **这里显式 markDirty()**，因为 setValue 不经 onChange，漏了保存按钮永不亮
  *   select / noop  → 不置（用户一个字没改，不该变脏）
+ *
+ * 调用约定（后续任务共用）：纯函数返回 null 表示"不管这个按键"——调用方**不**
+ * preventDefault，交还浏览器默认行为；返回 { kind: "noop" } 表示"吃掉这个按键"
+ * （调用方**要** preventDefault）但不改任何东西。两者传进这里都不会碰 setValue / markDirty，
+ * 差别只在按键本身要不要被浏览器继续处理，那一层判断在调用方，不在 runEditAction 内部。
  */
 export function runEditAction(
   field: HTMLTextAreaElement,
@@ -100,5 +125,13 @@ export function runEditAction(
   if (result.ok) return;
   setValue(result.fallbackValue);
   markDirty();
-  requestAnimationFrame(() => field.setSelectionRange(action.selStart, action.selEnd));
+  // 与本模块其余逻辑一致，走 field.ownerDocument 而非裸的全局 window。理论上元素既然已经
+  // 挂在 document 上就一定有 defaultView，这里的全局兜底纯粹是防御性的：宁可退化到全局
+  // rAF 也要把光标恢复这一步做完，不为拿不到 view 就整段跳过。
+  const view = field.ownerDocument.defaultView;
+  if (view) {
+    view.requestAnimationFrame(() => field.setSelectionRange(action.selStart, action.selEnd));
+  } else {
+    requestAnimationFrame(() => field.setSelectionRange(action.selStart, action.selEnd));
+  }
 }

@@ -27,7 +27,6 @@ function stubExecCommand(field: HTMLTextAreaElement, mode: "ok" | "returns-false
   const impl = (command: string, _ui?: boolean, arg?: string): boolean => {
     calls.push([command, arg]);
     if (mode === "throws") throw new Error("execCommand failed");
-    if (mode === "returns-false") return false;
     const start = field.selectionStart ?? 0;
     const end = field.selectionEnd ?? 0;
     let next: string;
@@ -52,7 +51,10 @@ function stubExecCommand(field: HTMLTextAreaElement, mode: "ok" | "returns-false
         data: arg,
       }),
     );
-    return true;
+    // "returns-false" 模拟真实 Chrome 的实况：insertText 常返回 false，但值其实已经改了。
+    // 这个模式必须先照 "ok" 一样把值真改掉、事件真发出去，最后才在返回值上撒谎——否则它
+    // 测不出 applyEdit「成功判据看结果不看返回值」这条线，只会退化成 rejected 的另一种写法。
+    return mode !== "returns-false";
   };
   Object.defineProperty(document, "execCommand", { value: impl, configurable: true, writable: true });
   return { calls, restore: () => Reflect.deleteProperty(document, "execCommand") };
@@ -89,6 +91,27 @@ describe("applyEdit", () => {
     expect(stub.calls).toEqual([["insertText", "\n2. "]]);
     expect(field.value).toBe("1. a\n2. ");
     expect(field.selectionStart).toBe(8);
+  });
+
+  it('零宽区间 + 空串（文本零改动）在这里早退为 selection-only，不落到 execCommand("delete") 的退格语义', () => {
+    // 这条守的是 applyEdit 自身的闸：退化的 replace（start===end 且 text===""）若走到
+    // execCommand("delete")，光标折叠时那是退格语义——会真删掉前一个字符。这里断言零调用、
+    // 值不变，证明早退发生在 execCommand 之前。
+    const field = makeField("1. a");
+    const stub = stubExecCommand(field);
+    const result = applyEdit(field, { kind: "replace", start: 4, end: 4, text: "", selStart: 4, selEnd: 4 });
+    expect(result).toEqual({ ok: true, kind: "selection-only" });
+    expect(stub.calls).toEqual([]);
+    expect(field.value).toBe("1. a");
+  });
+
+  it("execCommand 返回 false 但实际已写入时仍判 applied（不看返回值，只看结果）", () => {
+    const field = makeField("1. a");
+    const stub = stubExecCommand(field, "returns-false");
+    const result = applyEdit(field, { kind: "replace", start: 4, end: 4, text: "\n2. ", selStart: 8, selEnd: 8 });
+    expect(result).toEqual({ ok: true, kind: "applied" });
+    expect(stub.calls).toEqual([["insertText", "\n2. "]]);
+    expect(field.value).toBe("1. a\n2. ");
   });
 
   it("纯删除（start<end 且 text 为空）走 delete，不走 insertText", () => {
@@ -179,6 +202,26 @@ describe("runEditAction", () => {
     expect(dirty).toBe(false);
   });
 
+  it("零宽区间 + 空串经 runEditAction 时不写值、不置 dirty（applyEdit 的 selection-only 早退接住了）", () => {
+    const field = makeField("1. a");
+    const stub = stubExecCommand(field);
+    let dirty = false;
+    let written: string | null = null;
+    runEditAction(
+      field,
+      { kind: "replace", start: 4, end: 4, text: "", selStart: 4, selEnd: 4 },
+      (v) => {
+        written = v;
+      },
+      () => {
+        dirty = true;
+      },
+    );
+    expect(stub.calls).toEqual([]);
+    expect(written).toBeNull();
+    expect(dirty).toBe(false);
+  });
+
   it("降级路径必须显式置 dirty（否则保存按钮永远不亮）", () => {
     // G2：execCommand 不可用时走 setValue，不经 onChange，dirty 没人置。
     const field = makeField("1. a");
@@ -245,18 +288,28 @@ describe("React 回写护栏", () => {
     // 必须先装计数器再 renderDom（内部 createRoot），否则 React 的 value tracker
     // 抓到的是原生 descriptor 而不是我们包过的那个，数不到写次数。
     const counter = countReactValueWrites();
-    const { host, root } = await renderDom(<Probe />);
-    const field = host.querySelector("textarea") as HTMLTextAreaElement;
-    counter.writes.length = 0; // 忽略首次挂载的写
-    const stub = stubExecCommand(field);
-    await act(async () => {
-      applyEdit(field, { kind: "replace", start: 4, end: 4, text: "\n2. ", selStart: 8, selEnd: 8 });
-    });
-    expect(field.value).toBe("1. a\n2. ");
-    // 桩自己那一次写是通过 native setter 走的，不计入；这里数的纯粹是 React 的写。
-    expect(counter.writes).toEqual([]);
-    stub.restore();
-    await unmount(root); // 漏了它 CI 并行下偶发 "window is not defined"
-    counter.restore();
+    try {
+      const { host, root } = await renderDom(<Probe />);
+      try {
+        const field = host.querySelector("textarea") as HTMLTextAreaElement;
+        counter.writes.length = 0; // 忽略首次挂载的写
+        const stub = stubExecCommand(field);
+        try {
+          await act(async () => {
+            applyEdit(field, { kind: "replace", start: 4, end: 4, text: "\n2. ", selStart: 8, selEnd: 8 });
+          });
+          expect(field.value).toBe("1. a\n2. ");
+          // 桩自己那一次写是通过 native setter 走的，不计入；这里数的纯粹是 React 的写。
+          expect(counter.writes).toEqual([]);
+        } finally {
+          stub.restore();
+        }
+      } finally {
+        // 断言一旦失败，清理仍必须跑完——漏了 unmount(root) CI 并行下偶发 "window is not defined"。
+        await unmount(root);
+      }
+    } finally {
+      counter.restore();
+    }
   });
 });
