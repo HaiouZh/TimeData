@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   CliUsageError,
+  diffSizeBaseline,
   evaluateDocSync,
   evaluateLinks,
   evaluateSizes,
@@ -304,4 +305,26 @@ test("evaluateLinks ignores links outside the docs tree", () => {
   ];
 
   assert.equal(evaluateLinks(docs).ok, true);
+});
+
+test("diffSizeBaseline 把被抬高的 covers 单列出来（重写基线时要喊出来的那部分）", () => {
+  const previous = { "a.md": { covers: 3 }, "b.md": { covers: 5 }, "gone.md": { covers: 1 } };
+  const next = { "a.md": { covers: 4 }, "b.md": { covers: 2 }, "new.md": { covers: 7 } };
+
+  assert.deepEqual(diffSizeBaseline(previous, next), {
+    added: ["new.md"],
+    removed: ["gone.md"],
+    raised: ["a.md：covers 3 → 4"],
+    lowered: ["b.md：covers 5 → 2"],
+  });
+});
+
+test("diffSizeBaseline 在无变化时四个清单都是空的", () => {
+  const same = { "a.md": { covers: 3 } };
+  assert.deepEqual(diffSizeBaseline(same, { "a.md": { covers: 3 } }), {
+    added: [],
+    removed: [],
+    raised: [],
+    lowered: [],
+  });
 });

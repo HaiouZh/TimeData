@@ -6,7 +6,7 @@ covers:
   - scripts/check-evergreen-docs.test.mjs
 contracts:
   - scripts/check-evergreen-docs.mjs
-last-reviewed: 2026-06-18
+last-reviewed: 2026-07-25
 ---
 
 # 文档组织规则
@@ -129,6 +129,8 @@ last-reviewed: YYYY-MM-DD
 - ADR 不参与体量闸；ADR 是决策记录，只追加。
 
 合理扩大 `covers` 管辖时（真实职责扩展），跑 `--write-size-baseline` 重写基线并在提交信息说明原因。字符增长不需要重写基线。
+
+**这个写基线是整体重写**（基线是 filePath → covers 的完整映射，新增 / 拆分 / 删除文档都要求条目全量重建，做不成单条增量），所以它同时会把**工作树里当时全部**的 covers 增长一并收编。为免棘轮被静默放松，写完会逐条打印被抬高的 `covers`（`old → new`）与新增 / 移除 / 收窄的文档：**跑完必须看那份 ⚠️ 清单**，只留本次改动应得的那几条，其余说明你重写早了（先提交或还原别的改动再重写）。同源问题在 `scripts/check-test-hygiene.mjs` 走的是另一条路——那份基线是扁平 key 列表，可以单条增量，故已把 `--write-baseline` 换成 `--add <路径>` / `--prune` / `--rewrite-baseline`（见 [development](development.md)）。
 
 ## 5. 检查脚本闭环
 

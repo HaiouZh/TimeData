@@ -434,11 +434,42 @@ function readSizeBaseline() {
   return JSON.parse(fs.readFileSync(baselinePath, "utf8"));
 }
 
+/**
+ * 为什么这里仍是"整体重写"而不像 check-test-hygiene 那样改成 --add 单条登记：
+ * 本基线是 filePath → covers 的**完整映射**，新增文档 / 拆子文档 / 删文档都要求条目全量重建，
+ * 单条增量反而做不完整（missing-baseline、stale-baseline 两类违规就是靠全量重建消掉的）。
+ * 真正的风险与 --write-baseline 同源——顺手把**别的**文档的 covers 上限一起抬高、棘轮静默放松。
+ * 所以这里不改机制，改成"喊出来"：被抬高的 covers 逐条打印 old→new，让 review 一眼看见。
+ */
+export function diffSizeBaseline(previous, baseline) {
+  const raised = [];
+  const lowered = [];
+  const added = [];
+  for (const [filePath, entry] of Object.entries(baseline)) {
+    const before = previous[filePath];
+    if (!before) added.push(filePath);
+    else if (entry.covers > before.covers) raised.push(`${filePath}：covers ${before.covers} → ${entry.covers}`);
+    else if (entry.covers < before.covers) lowered.push(`${filePath}：covers ${before.covers} → ${entry.covers}`);
+  }
+  const removed = Object.keys(previous).filter((filePath) => !baseline[filePath]);
+  return { added, removed, raised, lowered };
+}
+
 function writeSizeBaseline(docs) {
   const baseline = buildSizeBaseline(docs);
+  const { added, removed, raised, lowered } = diffSizeBaseline(readSizeBaseline() ?? {}, baseline);
   const baselinePath = path.join(REPO_ROOT, SIZE_BASELINE_PATH);
   fs.writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
   console.log(`✓ 写入 ${Object.keys(baseline).length} 份 evergreen 文档体量基线：${SIZE_BASELINE_PATH}`);
+  if (added.length > 0) console.log(`  新增文档 ${added.length} 份：\n${added.map((f) => `    + ${f}`).join("\n")}`);
+  if (removed.length > 0) console.log(`  移除文档 ${removed.length} 份：\n${removed.map((f) => `    - ${f}`).join("\n")}`);
+  if (lowered.length > 0) console.log(`  covers 收窄（棘轮收紧）${lowered.length} 份：\n${lowered.map((f) => `    ${f}`).join("\n")}`);
+  if (raised.length > 0) {
+    console.log(
+      `⚠️ covers 上限被抬高 ${raised.length} 份——棘轮在这里被放松了，逐条确认都是本次改动应得的管辖扩张：\n` +
+        raised.map((f) => `    ${f}`).join("\n"),
+    );
+  }
   return 0;
 }
 
