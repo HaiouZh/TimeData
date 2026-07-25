@@ -34,8 +34,11 @@ Object.defineProperty(globalThis, "localStorage", { value: memoryStorage, config
 afterEach(() => {
   // 定时器复位（部分纯逻辑测试用 fake timers，防泄漏到下个测试）
   vi.useRealTimers();
-  // mock / spy 复位
+  // mock / spy 复位。两条缺一不可：Vitest 3 起 restoreAllMocks 只还原 vi.spyOn 装的间谍，
+  // 不再清 vi.fn() 的调用历史（含 vi.mock 工厂里造的那些）。少了 clearAllMocks，
+  // 「上一条用例调用过某 mock」就会泄漏成下一条的 toHaveBeenCalled 脏数据。
   vi.restoreAllMocks();
+  vi.clearAllMocks();
   // 全局 stub 兜底复位（干净桶本不应 stubGlobal，仍保留以防万一）
   vi.unstubAllGlobals();
   // 桶级 localStorage 清空（防跨文件串键）

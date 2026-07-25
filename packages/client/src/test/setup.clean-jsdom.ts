@@ -9,8 +9,12 @@ import { cleanupRoots } from "./domHarness.js";
 afterEach(async () => {
   // 定时器复位
   vi.useRealTimers();
-  // mock / spy 复位
+  // mock / spy 复位。两条缺一不可：Vitest 3 起 restoreAllMocks 只还原 vi.spyOn 装的间谍，
+  // 不再清 vi.fn() 的调用历史（含 vi.mock 工厂里造的那些）。少了 clearAllMocks，
+  // 「上一条用例调用过某 mock」就会泄漏成下一条的 toHaveBeenCalled 脏数据——
+  // 默认顺序下可能恒绿，shuffle 一换序就随机翻车。
   vi.restoreAllMocks();
+  vi.clearAllMocks();
   // 全局 stub 复位（vi.stubGlobal 注入的全局，restoreAllMocks 撤不掉）
   vi.unstubAllGlobals();
   // 卸载未手动 unmount 的 React root（治 root/Provider 残留泄漏）
