@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useState } from "react";
 import { ConfirmSheet } from "../components/ui/ConfirmSheet.js";
 
-interface ConfirmRequest {
+export interface ConfirmRequest {
   title: string;
   body: ReactNode;
   confirmLabel?: string;

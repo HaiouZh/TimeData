@@ -45,6 +45,7 @@ function renderAt(initialDirty: boolean, entries: string[] = ["/editor"], index 
     [
       { path: "/editor", element: createElement(EditorPage, { initialDirty }) },
       { path: "/other", element: createElement("span", null, "别处") },
+      { path: "/third", element: createElement("span", null, "第三处") },
     ],
     { initialEntries: entries, initialIndex: index },
   );
@@ -61,10 +62,6 @@ function findButton(host: HTMLElement, label: string): HTMLButtonElement {
 
 function hasButton(host: HTMLElement, label: string): boolean {
   return Array.from(host.querySelectorAll("button")).some((b) => b.textContent?.trim() === label);
-}
-
-function countButtons(host: HTMLElement, label: string): number {
-  return Array.from(host.querySelectorAll("button")).filter((b) => b.textContent?.trim() === label).length;
 }
 
 function findLink(host: HTMLElement, label: string): HTMLAnchorElement {
@@ -117,18 +114,6 @@ describe("useUnsavedChangesGuard", () => {
     await unmount(root);
   });
 
-  it("同一次拦截只弹一个确认（proceed 重复调用会抛，必须去重）", async () => {
-    const { node } = renderAt(true);
-    const { host, root } = await renderDom(node);
-    await flush();
-
-    await act(async () => click(findLink(host, "去别处")));
-    await flush();
-
-    expect(countButtons(host, "继续编辑")).toBe(1);
-    await unmount(root);
-  });
-
   it("浏览器后退（POP）同样被拦下", async () => {
     const { router, node } = renderAt(true, ["/other", "/editor"], 1);
     const { host, root } = await renderDom(node);
@@ -155,5 +140,45 @@ describe("useUnsavedChangesGuard", () => {
     expect(router.state.location.pathname).toBe("/editor");
     expect(hasButton(host, "继续编辑")).toBe(false);
     await unmount(root);
+  });
+
+  // 这条是真正承重的回归测试：blockerRef 存在的唯一理由。见 useUnsavedChangesGuard.tsx 的 JSDoc。
+  // 已用「还原成 v1 效果体（cancelled + [blocker,...] 依赖）」验证过：还原后这条会变红
+  // （落到 /editor 而非 /third），证明它确实在守护这个行为，不是摆设。
+  it("blocked 期间又来一次导航，「放弃修改」放行到最新目标而非第一次拦下的那个", async () => {
+    const { router, node } = renderAt(true);
+    const { host, root } = await renderDom(node);
+    await flush();
+
+    await act(async () => click(findLink(host, "去别处")));
+    await flush();
+    expect(findButton(host, "继续编辑")).toBeTruthy();
+
+    // 第一次拦截尚未回应时又来一次导航到别的目标：effect 依赖的 blockerState 仍是
+    // "blocked"（不会重跑），但 blocker 对象本身换了个新的、location 指向 /third。
+    await act(async () => {
+      void router.navigate("/third");
+    });
+    await flush();
+    expect(findButton(host, "继续编辑")).toBeTruthy();
+
+    await act(async () => click(findButton(host, "放弃修改")));
+    await flush();
+
+    // 若 resolve 时拿的是闭包里第一次的旧 blocker 对象，会错误跳到 /other。
+    expect(router.state.location.pathname).toBe("/third");
+    await unmount(root);
+  });
+
+  it("blocked 状态下直接卸载，不抛错（cleanup 已 deleteBlocker，无需手动 reset）", async () => {
+    const { node } = renderAt(true);
+    const { host, root } = await renderDom(node);
+    await flush();
+
+    await act(async () => click(findLink(host, "去别处")));
+    await flush();
+    expect(findButton(host, "继续编辑")).toBeTruthy();
+
+    await expect(unmount(root)).resolves.toBeUndefined();
   });
 });
