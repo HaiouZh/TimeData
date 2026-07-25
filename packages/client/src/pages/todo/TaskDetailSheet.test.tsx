@@ -869,6 +869,11 @@ describe("TaskDetailSheet tag 编辑", () => {
     await click(host.querySelector('button[aria-label="每天"]'));
     await settle();
 
+    // 落库确认写入已完成（也顺带验证"变成重复模板"）：applyRecurrenceChoice 的 recurrence 分支比
+    // none/scheduled 分支多一次 Dexie 往返，单次 settle() 未必够；用 waitForTask 轮询到位后再查
+    // onTimeCleared，避免断言抢在 run(...).then(...) 那个额外 tick 之前跑、把"还没触发"误判成"不会触发"。
+    const saved = await waitForTask(task.id, (t) => (t?.recurrence ?? null) !== null);
+    expect(saved?.recurrence).not.toBeNull();
     expect(onTimeCleared).not.toHaveBeenCalled();
     await unmount(root);
   });
