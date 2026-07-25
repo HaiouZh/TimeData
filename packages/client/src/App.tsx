@@ -5,7 +5,7 @@ import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
 import { DesktopSidebar } from "./components/app-shell/DesktopSidebar.tsx";
 import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
-import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
+import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
@@ -62,6 +62,9 @@ export function getRouter() {
           </BottomNavProvider>
         </SyncProvider>
       ),
+      // 根路由（index 0）总被 RR 包一层 boundary；不给 errorElement 会落回 RR 自带的
+      // 未翻译兜底页，见 components/ErrorBoundary.tsx 的 RouteErrorFallback 注释。
+      errorElement: <RouteErrorFallback />,
     },
   ]);
   return routerInstance;

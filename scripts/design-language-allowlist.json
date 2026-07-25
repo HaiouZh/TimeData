@@ -586,30 +586,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/components/ErrorBoundary.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<h1 className=\"text-lg font-medium\">应用出错了</h1>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/ErrorBoundary.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<p className=\"text-xs text-ink-2\">{error.message}</p>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/ErrorBoundary.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"rounded bg-accent px-4 py-2 text-sm font-medium text-page hover:bg-accent-strong\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/components/MonthCalendar.tsx",
       "rule": "bare-text-size",
       "lineText": "\"td-num flex aspect-square min-h-9 w-full items-center justify-center rounded-lg border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent\";",
