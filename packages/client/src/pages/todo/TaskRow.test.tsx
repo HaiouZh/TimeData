@@ -768,6 +768,60 @@ describe("childless 左区展开直达草稿", () => {
     await unmount(root);
   });
 
+  // 真机时序：pointerdown → 草稿 textarea 失焦(onEmptyDismiss 收起) → click。
+  // 只按 click 时的 state 取反会被这个夹在中间的收起吃掉，故按下时快照。
+  async function pressRowAt(host: HTMLElement, ratio: number, focused: Element | null): Promise<void> {
+    const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
+    row.getBoundingClientRect = () =>
+      ({ width: 300, height: 40, top: 0, left: 0, right: 300, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+    // 三个事件分别 act：真机每个事件各自 flush，合批会掩盖中间那次收起。
+    await act(async () => {
+      row.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    await act(async () => {
+      focused?.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 300 * ratio }));
+    });
+  }
+
+  it("无子任务：草稿展开后再点左区收起", async () => {
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ title: "无子任务的任务" }), pool: "inbox", ...handlers }),
+    );
+    await clickRowAt(host, 0.2);
+    const input = host.querySelector('textarea[aria-label="新子任务标题"]');
+    expect(input).not.toBeNull();
+
+    await pressRowAt(host, 0.2, input);
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("无子任务：抓取区展开草稿后再点抓取区收起", async () => {
+    const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
+    const { host, root } = await render(
+      createElement(TaskRow, { task: task({ title: "无子任务的任务" }), pool: "today", ...handlers, dragHandle: handle }),
+    );
+    const grab = host.querySelector('[data-testid="task-row-grab-area"]') as HTMLElement;
+    await click(grab);
+    const input = host.querySelector('textarea[aria-label="新子任务标题"]');
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      grab.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    await act(async () => {
+      input?.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    await act(async () => {
+      grab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(host.querySelector('textarea[aria-label="新子任务标题"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("readonly 模式无子任务：左区点击仍开抽屉", async () => {
     const onEdit = vi.fn();
     const { host, root } = await render(

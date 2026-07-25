@@ -195,20 +195,25 @@ export function TaskRow({
     return () => window.clearTimeout(timeoutId);
   }, [taskCreatedAt, taskDone, taskRecurrence, taskRuleId, taskSkipped]);
 
+  // 按下时快照展开态：空草稿行会在 pointerdown 之后、click 之前因失焦触发 onEmptyDismiss 收起，
+  // 若 click 读的是彼时的 state，切换会被这次中间收起吃掉，行永远收不起来。
+  const expandedAtPressRef = useRef(expanded);
+  function captureExpandedAtPress(): void {
+    expandedAtPressRef.current = expanded;
+  }
+
+  /** 左 2/5 进入子任务层：有子任务切展开，无子任务切草稿行。返回是否消费了这次点击。 */
+  function toggleChildLayer(): boolean {
+    if (childTotal === 0 && !canInlineCompose) return false;
+    setExpanded(!expandedAtPressRef.current);
+    return true;
+  }
+
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
     if (window.getSelection()?.toString()) return;
-    // 左 2/5 统一进入子任务层：有子任务切换展开；无子任务直达草稿行；readonly 快照无子任务保持开抽屉。
+    // 左 2/5 统一进入子任务层；readonly 快照无子任务则保持开抽屉。
     const rect = event.currentTarget.getBoundingClientRect();
-    if (rowClickZone(event.clientX - rect.left, rect.width) === "expand") {
-      if (childTotal > 0) {
-        setExpanded((value) => !value);
-        return;
-      }
-      if (canInlineCompose) {
-        setExpanded(true);
-        return;
-      }
-    }
+    if (rowClickZone(event.clientX - rect.left, rect.width) === "expand" && toggleChildLayer()) return;
     onEdit(task);
   }
 
@@ -216,6 +221,7 @@ export function TaskRow({
     <div
       data-in-goal={inGoal ? "true" : undefined}
       data-fresh-occurrence={freshOccurrence ? "true" : undefined}
+      onPointerDownCapture={captureExpandedAtPress}
       className={`group w-full rounded-row bg-surface transition hover:bg-surface-hover ${
         indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
       } ${freshOccurrence ? "todo-occurrence-fresh" : ""}`}
@@ -250,9 +256,7 @@ export function TaskRow({
             onClick={(event) => {
               event.stopPropagation();
               if (window.getSelection()?.toString()) return;
-              if (childTotal > 0) setExpanded((value) => !value);
-              else if (canInlineCompose) setExpanded(true);
-              else onEdit(task);
+              if (!toggleChildLayer()) onEdit(task);
             }}
             {...dragHandle.attributes}
             {...dragHandle.listeners}
