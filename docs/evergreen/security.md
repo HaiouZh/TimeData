@@ -29,6 +29,7 @@ last-reviewed: 2026-07-10
 <!-- 复核 2026-07-02（同步提速 S1）：storageKeys 仅删除从未被引用的死 key serverHealthy；凭据存储、token 处理与鉴权边界不变。 -->
 <!-- 复核 2026-07-04（同步 staleGuard）：storageKeys 新增 clockSkewMs 只记录本地-服务器时间差毫秒数；sync push 仍走既有鉴权、限流和 body limit，安全边界不变。 -->
 <!-- 复核 2026-07-09（tracks 调度台）：storageKeys 仅随并发甘特退役删除 trackGanttWidth / trackGanttNameWidth 两个本地 UI 偏好 key；凭据存储、token 处理与鉴权边界不变。 -->
+<!-- 复核 2026-07-25（goals 视图偏好）：storageKeys 新增 goalsViewMode，只存 "galaxy" / "list" 两个字面量的本地 UI 偏好，不同步、不含用户内容；凭据存储、token 处理与鉴权边界不变。 -->
 
 # 安全与凭据处理
 
