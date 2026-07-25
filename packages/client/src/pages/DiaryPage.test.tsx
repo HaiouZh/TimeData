@@ -189,13 +189,11 @@ describe("DiaryPage", () => {
 
     const back = host.querySelector('button[aria-label="返回"]');
     if (!(back instanceof HTMLButtonElement)) throw new Error("missing back button");
-    await act(async () => click(back));
-    await flush();
+    await click(back);
 
-    const cancel = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.trim() === "继续编辑");
+    const cancel = Array.from(host.querySelectorAll("button")).find((b) => b.textContent?.trim() === "继续编辑");
     if (!(cancel instanceof HTMLButtonElement)) throw new Error("missing cancel button");
-    await act(async () => click(cancel));
-    await flush();
+    await click(cancel);
 
     expect(router.state.location.pathname).toBe("/diary");
     expect(textarea(host).value).toBe("改过的内容");
