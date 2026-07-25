@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createElement, useState } from "react";
+import { createElement, act as reactAct, useState } from "react";
 import { flushSync } from "react-dom";
 import { createMemoryRouter, Link, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -119,10 +119,12 @@ describe("useUnsavedChangesGuard", () => {
     const { host, root } = await renderDom(node);
     await flush();
 
-    await act(async () => {
-      void router.navigate(-1);
+    // 直接调 router.navigate(...) 得用 React 真正的 act（而非本文件的 flushSync 版 act()）
+    // 并 await 掉：导航是异步的，它触发的状态更新落在 flushSync 的同步作用域之外，
+    // flushSync 版 act() 包不住，会报 "not wrapped in act(...)"。
+    await reactAct(async () => {
+      await router.navigate(-1);
     });
-    await flush();
 
     expect(findButton(host, "继续编辑")).toBeTruthy();
     expect(router.state.location.pathname).toBe("/editor");
@@ -156,10 +158,10 @@ describe("useUnsavedChangesGuard", () => {
 
     // 第一次拦截尚未回应时又来一次导航到别的目标：effect 依赖的 blockerState 仍是
     // "blocked"（不会重跑），但 blocker 对象本身换了个新的、location 指向 /third。
-    await act(async () => {
-      void router.navigate("/third");
+    // 同上一条用例：直接调 router.navigate(...) 得用 React 真正的 act 并 await。
+    await reactAct(async () => {
+      await router.navigate("/third");
     });
-    await flush();
     expect(findButton(host, "继续编辑")).toBeTruthy();
 
     await act(async () => click(findButton(host, "放弃修改")));
