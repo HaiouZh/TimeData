@@ -753,6 +753,9 @@ describe("DiaryPage", () => {
 
     expect(router.state.location.search).toBe("");
     expect(fetchDiary).toHaveBeenCalledWith("2026-07-25");
+    // 归一用的是 { replace: true }，不应新增历史条目：用变异验证过——把实现改成默认 push，
+    // 这条断言会从 "REPLACE" 变成 "PUSH" 而变红（见 Task 报告的证伪记录）。
+    expect(router.state.historyAction).toBe("REPLACE");
     await unmount(root);
   });
 
@@ -813,6 +816,88 @@ describe("DiaryPage", () => {
     await act(async () => { releaseFetch({ content: "7/20 的正文", mtime: 200 }); });
     await flush();
     expect(textarea(host).value).toBe("7/20 的正文");
+    await unmount(root);
+  });
+
+  it("切日期期间（loading 未落地）按 Ctrl+S 不写入——B 日的 loading 窗口期不能把 A 日残留内容存进 B 日文件", async () => {
+    // 复现的失败场景：A 日打字未保存 → 切到 B 日 → B 日 fetchDiary 还在飞（loading=true，
+    // textarea 已卸载）→ 此时按 Ctrl+S。Ctrl+S 挂在 window 上不经过 textarea，"textarea 已
+    // 卸载所以用户碰不到"是错的假设。此前 handleSave 没有 loading 早退，会把 content 里 A 日
+    // 残留的正文，连同已被日期 effect 清成 null 的 baseMtime，一起写进 B 日的文件——服务端
+    // mtime 并发守卫拿 null 当"文件不存在"直接放行，不报冲突，静默写坏 B 日文件。
+    const { host, root, router } = await renderPage();
+
+    await typeInto(textarea(host), "A 日未保存的编辑");
+
+    let releaseFetch: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseFetch = resolve; }));
+    await navigateTo(router, "/diary?date=2026-07-20");
+
+    // B 日仍在飞：textarea 已卸载，页面显示"正在加载"
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).toContain("正在加载");
+
+    let defaultPrevented = false;
+    await act(async () => {
+      const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true });
+      window.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(true); // 仍要拦掉浏览器"保存网页"对话框
+    expect(saveDiary).not.toHaveBeenCalled();
+
+    // 收尾：放行挂起的 fetch，避免留下悬空 Promise
+    await act(async () => {
+      releaseFetch({ content: "7/20 的正文", mtime: 200 });
+    });
+    await flush();
+    await unmount(root);
+  });
+
+  it("切日期后 fetchDiary 失败：loadFailed 态下若曾脏着的编辑触发保存，baseMtime 是 null 不是上一天的值（防假冲突）", async () => {
+    // 修完 loading 早退后，loading 期间已经不能保存了；但 loadFailed=true 时 loading 已经是
+    // false，保存按钮仍可点。这条测试确认 baseMtime 确实被日期 effect 清成了 null，而不是
+    // 遗留 A 日的 100——否则用户点保存会带着 A 日的 mtime 去 PUT B 日，服务端判不等产生假
+    // 冲突，诱导用户去点「仍然覆盖」，其实 B 日的文件根本没有冲突。
+    saveDiary.mockResolvedValue({ mtime: 999 });
+    const { host, root, router } = await renderPage();
+
+    await typeInto(textarea(host), "A 日未保存的编辑");
+
+    fetchDiary.mockRejectedValueOnce(new Error("离线"));
+    await navigateTo(router, "/diary?date=2026-07-20");
+
+    expect(host.textContent).toContain("加载失败");
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+    expect(save.disabled).toBe(false); // loading 已经是 false，dirty 仍是 true
+
+    await click(save);
+
+    expect(saveDiary).toHaveBeenCalledWith("2026-07-20", expect.objectContaining({ baseMtime: null }));
+
+    await unmount(root);
+  });
+
+  it("fetchDiaryConfig 挂起时不提前判定“还没有配置日记模板”/未启用，仍显示正在加载", async () => {
+    // configLoaded 早退闸防的是：template 初值是 ""，若日期 effect 不等 config 落地就跑，
+    // 会拿着初值 template="" 判成"还没有配置日记模板"，闪一下错误分支再变回正确内容。
+    // 现有测试测不出来是因为所有断言都在 flush()（10 个真实 setTimeout(0)）之后才做，
+    // 那时 config 早就 resolve 了——这条测试把 fetchDiaryConfig 挂起，钉住这个时序窗口。
+    let releaseConfig: (value: { enabled: boolean; template: string }) => void = () => {};
+    fetchDiaryConfig.mockImplementationOnce(() => new Promise((resolve) => { releaseConfig = resolve; }));
+    const { host, root } = await renderPage();
+
+    expect(host.textContent).not.toContain("还没有配置日记模板");
+    expect(host.textContent).not.toContain("服务器未配置日记 vault");
+    expect(host.textContent).toContain("正在加载");
+
+    await act(async () => {
+      releaseConfig({ enabled: true, template: "1. " });
+    });
+    await flush();
     await unmount(root);
   });
 });

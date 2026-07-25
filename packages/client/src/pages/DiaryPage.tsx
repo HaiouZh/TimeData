@@ -170,6 +170,12 @@ export default function DiaryPage() {
 
   async function handleSave(options: { force?: boolean } = {}) {
     if (saving) return;
+    // loading 早退：正文还没到位，content 里还是上一天残留的内容，且日期 effect 已经把
+    // baseMtime 清成 null（见下面切日期重置四态的注释）——若在这里放行保存，会把上一天的
+    // 内容写进新一天的文件；baseMtime=null 还会被服务端 mtime 并发守卫当成"文件不存在"直接
+    // 放行，不报冲突、静默写坏新一天的文件。Ctrl+S 挂在 window 上不经过 textarea，
+    // "textarea 已卸载所以碰不到"这个假设不成立，必须在这里显式挡。
+    if (loading) return;
     setSaving(true);
     setError(null);
     // 发起时的编辑序号：请求在途中用户可能继续打字，回来时得认得出来（见下面清脏处）
@@ -270,7 +276,7 @@ export default function DiaryPage() {
         <button
           type="button"
           aria-label="保存"
-          disabled={!dirty || saving}
+          disabled={!dirty || saving || loading}
           onClick={() => void handleSave()}
           className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
         >
