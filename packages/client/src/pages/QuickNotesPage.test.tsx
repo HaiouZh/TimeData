@@ -1523,6 +1523,8 @@ describe("捕捉中心", () => {
   it("空草稿时 composer 左侧打开搜索、右侧打点，顶部不再保留搜索按钮", async () => {
     const { host, root } = await renderPage();
 
+    // 反向闸：没有 localStorage 草稿时不该出现「已恢复」提示。
+    expect(host.textContent).not.toContain("已恢复");
     expect(composerButton(host, "搜索速记")).toBeInstanceOf(HTMLButtonElement);
     expect(composerButton(host, "打点（记录到现在）")).toBeInstanceOf(HTMLButtonElement);
     expect(host.querySelector('header button[aria-label="搜索速记"]')).toBeNull();
@@ -1738,6 +1740,7 @@ describe("捕捉中心", () => {
 
     await expect(db.tasks.count()).resolves.toBe(0);
     expect(input(host).value).toBe("误存的内容");
+    expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBe("误存的内容");
 
     await unmount(root);
   });
@@ -1755,6 +1758,76 @@ describe("捕捉中心", () => {
     await expect(db.tasks.count()).resolves.toBe(0);
     expect(input(host).value).toBe("新打的字");
     expect(host.textContent).toContain("原文本未回填");
+
+    await unmount(root);
+  });
+
+  it("撤销回填的文本要重新落盘，不能被防抖的 Object.is bail-out 卡死", async () => {
+    const { host, root } = await renderPage();
+
+    // 第一步：让防抖把「误存的内容」先落盘。用假时钟确定性跨过 400ms，不做真实等待；
+    // 这一步只碰 localStorage，不触发任何 Dexie 写入，与 Dexie+fake timers 的既有冲突无关。
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await typeInto(input(host), "误存的内容");
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      await flush();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBe("误存的内容");
+
+    // 第二步：存为待办、撤销都要落库（Dexie 事务），必须在真实时钟下做。两次点击之间
+    // 没有任何显式等待，天然落在 400ms 防抖窗口内——这正是复现该问题所需要的时序。
+    await click(composerButton(host, "存为待办"));
+    await expect(db.tasks.count()).resolves.toBe(1);
+    await click(lastButtonByText(host, "撤销"));
+    await expect(db.tasks.count()).resolves.toBe(0);
+
+    // 第三步：撤销之后再跨过一个完整防抖窗口——不涉及任何 Dexie 写入，用假时钟确定性推进。
+    // 若同步落盘缺失，debouncedComposeDraft 从未真的变过（Object.is bail-out），写盘 effect
+    // 永远不会再跑，localStorage 会永久停在 handleSaveTodo 清掉的那次，拿不回「误存的内容」。
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      await flush();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBe("误存的内容");
+
+    await unmount(root);
+  });
+
+  it("撤销时若已经切去编辑另一条速记，拒绝回填并保留任务，不污染编辑缓冲", async () => {
+    await db.quickNotes.add({
+      id: "note-other",
+      text: "被编辑的速记",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "误存的内容");
+    await click(composerButton(host, "存为待办"));
+    await expect(db.tasks.count()).resolves.toBe(1);
+
+    // toast 存活 6 秒，期间用户长按另一条速记进入编辑——「撤销」按钮仍挂在 composer 里。
+    await openMenu(host, "被编辑的速记");
+    await click(menuItem(host, "编辑"));
+    expect(input(host).value).toBe("被编辑的速记");
+
+    await click(lastButtonByText(host, "撤销"));
+
+    await expect(db.tasks.count()).resolves.toBe(1);
+    expect(input(host).value).toBe("被编辑的速记");
+    expect(host.textContent).toContain("正在编辑速记，先退出编辑再撤销这条待办");
 
     await unmount(root);
   });

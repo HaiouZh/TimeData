@@ -76,7 +76,9 @@ const STATUS_AUTO_DISMISS_MS = 2400;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 const SEARCH_RESULT_PAGE_SIZE = 100;
 const SEARCH_FOCUS_HIGHLIGHT_MS = 1500;
-// 草稿落盘的防抖窗口：压到最后几个字才可能丢，而不是整条草稿；不做每字一写。
+// 草稿落盘的防抖窗口：停顿超过这个时长才落盘，连续不停打字（键间隔 < 400ms）期间一次都不落盘，
+// 不做每字一写。此时若被杀/刷新，丢的是整条草稿，不只是最后几个字——实际风险低，因为切页/
+// 后台化天然带来 >400ms 的停顿，但不要误读成「压到最后几个字才可能丢」。
 const COMPOSER_DRAFT_DEBOUNCE_MS = 400;
 const NOTE_CARD_BASE =
   "relative max-w-full [@media(pointer:coarse)]:select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
@@ -154,6 +156,12 @@ export default function QuickNotesPage() {
   useEffect(() => {
     draftTextRef.current = draftText;
   }, [draftText]);
+  // 同上：toast 的 onClick 闭包同样冻结 editingId，创建 toast 那次渲染时必为 null（存待办只在
+  // 非编辑态可达）。撤销要判「此刻是不是正在编辑另一条」，只能靠这个随渲染同步的 ref 读最新值。
+  const editingIdRef = useRef(editingId);
+  useEffect(() => {
+    editingIdRef.current = editingId;
+  }, [editingId]);
   const saveTodoPendingRef = useRef(false);
   const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -213,10 +221,16 @@ export default function QuickNotesPage() {
   useEffect(() => {
     if (readComposerDraft() === "") return;
     setStatus("已恢复未发出的草稿");
-    statusTimerRef.current = setTimeout(() => {
+    const timer = setTimeout(() => {
       statusTimerRef.current = null;
       setStatus(null);
     }, STATUS_AUTO_DISMISS_MS);
+    statusTimerRef.current = timer;
+    // StrictMode 下这个 effect 会挂载两次：清理时只清自己种下的那个定时器（闭包里的
+    // timer），不读 statusTimerRef.current——它此刻可能已经被第二次挂载或后续 showStatus 顶替。
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
   const jumpDateLabel = formatJumpDateLabel(jumpDate, today);
   const exportMarkdownLabel = jumpDateLabel === "今天" ? "导出今天 Markdown" : `导出 ${jumpDateLabel} Markdown`;
@@ -600,6 +614,12 @@ export default function QuickNotesPage() {
   }
 
   async function handleUndoSaveTodo(taskId: string, text: string) {
+    // toast 活 6 秒，期间用户可能已进编辑态。此刻回填会把待办正文写进被编辑速记的输入缓冲，
+    // 保存就静默替换了那条速记的正文——所以在删任务之前就拒绝，别造成“任务删了、正文也没了”。
+    if (editingIdRef.current) {
+      showStatus("正在编辑速记，先退出编辑再撤销这条待办");
+      return;
+    }
     await deleteTask(taskId);
     clearActionToast();
     // 撤销窗口里用户可能已经开始打新草稿：覆盖手上的输入比少一次回填更坏。
@@ -608,6 +628,10 @@ export default function QuickNotesPage() {
       return;
     }
     setDraftText(text);
+    // 清盘（handleSaveTodo 的 clearComposerDraft）是同步的，回填也要同步落盘对称：
+    // 否则防抖窗口内清空再回填到同一个值，debouncedComposeDraft 从未真的变过（Object.is
+    // bail-out），写盘 effect 永远不会再跑，localStorage 就永久停在被清掉的那次。
+    writeComposerDraft(text);
     focusInput();
   }
 
