@@ -95,6 +95,12 @@ function textarea(host: HTMLElement): HTMLTextAreaElement {
   return element;
 }
 
+// 冲突条、ConfirmSheet、DateNav 的「回到今天」都是无 aria-label 的文本按钮
+function buttonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
+  const found = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === text);
+  return found instanceof HTMLButtonElement ? found : null;
+}
+
 async function typeInto(element: HTMLTextAreaElement, value: string) {
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
@@ -907,6 +913,64 @@ describe("DiaryPage", () => {
       releaseConfig({ enabled: true, template: "1. " });
     });
     await flush();
+    await unmount(root);
+  });
+
+  it("点「前一天」加载前一天的日记", async () => {
+    const { host, root, router } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="前一天"]'));
+
+    expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-24");
+    expect(router.state.location.search).toBe("?date=2026-07-24");
+    await unmount(root);
+  });
+
+  it("脏态下切日期先弹确认，点「继续编辑」不切且本地修改仍在", async () => {
+    // useUnsavedChangesGuard 只比 pathname，?date= 变化它一概不拦——不自己弹就是静默丢数据
+    const { host, root, router } = await renderPage();
+    await typeInto(textarea(host), "还没保存的内容");
+    fetchDiary.mockClear();
+
+    await click(host.querySelector('button[aria-label="前一天"]'));
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+    await click(buttonByText(host, "继续编辑"));
+
+    expect(fetchDiary).not.toHaveBeenCalled();
+    expect(textarea(host).value).toBe("还没保存的内容");
+    expect(router.state.location.search).toBe("");
+    await unmount(root);
+  });
+
+  it("脏态下切日期点「放弃修改」才真的切过去", async () => {
+    const { host, root } = await renderPage();
+    await typeInto(textarea(host), "还没保存的内容");
+    fetchDiary.mockResolvedValue({ content: "7/24 的正文", mtime: 200 });
+
+    await click(host.querySelector('button[aria-label="前一天"]'));
+    await click(buttonByText(host, "放弃修改"));
+
+    expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-24");
+    expect(textarea(host).value).toBe("7/24 的正文");
+    await unmount(root);
+  });
+
+  it("从历史日期点「回到今天」清掉 URL 参数，回到跟随模式", async () => {
+    const { host, root, router } = await renderPage("/diary?date=2026-07-20");
+
+    await click(buttonByText(host, "回到今天"));
+
+    expect(router.state.location.search).toBe("");
+    expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-25");
+    await unmount(root);
+  });
+
+  it("标题不再重复日期（DateNav 已经在显示）", async () => {
+    const { host, root } = await renderPage("/diary?date=2026-07-20");
+
+    const heading = host.querySelector("h1");
+    expect(heading?.textContent).toBe("日记");
+    expect(host.querySelector('button[aria-label="前一天"]')).not.toBeNull();
     await unmount(root);
   });
 });

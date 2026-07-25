@@ -1,6 +1,7 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import DateNav from "../components/DateNav.js";
 import { Icon } from "../components/Icon.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useNowMinute } from "../hooks/useNowMinute.js";
@@ -12,7 +13,7 @@ import { applyIndent } from "../lib/diary/indent.js";
 import { applyLinkShortcut } from "../lib/diary/link.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
-import { getDateString } from "../lib/time.js";
+import { formatMonthDay, getDateString } from "../lib/time.js";
 
 export default function DiaryPage() {
   const navigate = useNavigate();
@@ -260,6 +261,36 @@ export default function DiaryPage() {
     setConflict(false);
   }
 
+  async function switchDate(nextDate: string) {
+    if (nextDate === date) return;
+    // 全局离开守卫（useUnsavedChangesGuard）只比 pathname，?date= 变化它拦不到，
+    // 所以这里必须自己问。反过来说也不会双弹层。文案单独写：并没有"离开"页面，
+    // 复用守卫那套「离开后当前修改将丢失」语义不贴。
+    if (
+      dirty &&
+      !(await confirm({
+        title: `切到 ${formatMonthDay(nextDate)}？`,
+        body: "当前修改尚未保存，切换后将丢失。",
+        confirmLabel: "放弃修改",
+        cancelLabel: "继续编辑",
+        danger: true,
+      }))
+    )
+      return;
+    if (nextDate === liveToday) {
+      // 回到今天 = 重回跟随模式。必须重锚：不重锚的话下一次跨零点 rolledOver 立刻为真，
+      // 提示条会在用户刚点完"回到今天"时又冒出来。
+      setFollowAnchor(liveToday);
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ date: nextDate }, { replace: true });
+    }
+  }
+
+  function handleDateChange(nextDate: string) {
+    void switchDate(nextDate);
+  }
+
   function handleBack() {
     // 脏态确认由 useUnsavedChangesGuard 统一处理，这里不再自己弹一次（否则会连弹两个）
     // 无 app 内历史时（书签 / PWA 快捷方式 / 硬刷新直接落地）navigate(-1) 是 no-op，
@@ -271,25 +302,33 @@ export default function DiaryPage() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
       {dialog}
-      <header className="sticky top-0 z-[var(--z-dropdown)] flex shrink-0 items-center gap-3 border-b border-border bg-page/95 px-4 py-3 backdrop-blur">
-        <button
-          type="button"
-          aria-label="返回"
-          onClick={handleBack}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
-        >
-          <Icon icon={ArrowLeft} size={16} />
-        </button>
-        <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记 · {date}</h1>
-        <button
-          type="button"
-          aria-label="保存"
-          disabled={!dirty || saving || loading || loadFailed}
-          onClick={() => void handleSave()}
-          className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
-        >
-          保存
-        </button>
+      <header className="sticky top-0 z-[var(--z-dropdown)] shrink-0 border-b border-border bg-page/95 backdrop-blur">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            type="button"
+            aria-label="返回"
+            onClick={handleBack}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
+          >
+            <Icon icon={ArrowLeft} size={16} />
+          </button>
+          <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记</h1>
+          <button
+            type="button"
+            aria-label="保存"
+            disabled={!dirty || saving || loading || loadFailed}
+            onClick={() => void handleSave()}
+            className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+          >
+            保存
+          </button>
+        </div>
+        {/* DateNav 一个字节都不许改：它有 3 条 check:design 逐字豁免（DateNav.tsx:11/24/25），
+            匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符豁免就失配、门禁当场红。
+            要调间距就在外面包容器。
+            放在 header 内做第二行、而不是塞进下面的内容分支：阶段四要在 header 之下挂左右
+            分栏，日期导航必须横跨两栏，掉进左栏就得返工。 */}
+        <DateNav date={date} onDateChange={handleDateChange} />
       </header>
 
       {conflict && (
