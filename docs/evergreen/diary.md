@@ -156,7 +156,9 @@ SettingsDiaryPage 保存模板
 - **显式模式**（URL 有合法且早于今天的 `?date=`）：`date` = 该日期，`rolledOver` **恒 false**。用户翻到 7/20 补写时头上不会一直挂着「切到今天」。
 - **跟随模式**（无参 / 参数非法 / 未来 / 恰是今天）：`date` = `followAnchor`，`rolledOver` = 实时今天是否已越过锚点，`clearParam` 提示页面把冗余参数 `replace` 掉。
 
-`followAnchor` 是 **state 不是 ref**：跟随模式下点提示条时 URL 本来就没参数，`setSearchParams({})` 是 no-op、不触发渲染；锚若是 ref，改了也不重渲染，提示条会卡住不动。它只在「（重新）进入跟随模式」时前进（点提示条、或用 DateNav 切回今天），**绝不随实时今天自动前进**。
+`followAnchor` 是 **state 不是 ref**：它参与渲染（`date` 与 `rolledOver` 都由它算出来），改了必须重渲染。它只在「（重新）进入跟随模式」时前进（点提示条、或用 DateNav 切回今天），**绝不随实时今天自动前进**——自动前进就是跨零点把用户正在写的正文换到新文件。
+
+> 别写成「因为同 URL 的 `setSearchParams({})` 是 no-op、不触发渲染，所以锚必须是 state」——**这个机理是错的**，实测同 URL 的 `setSearchParams` 照样发起一次真导航并触发重渲染。理由就是上面那条朴素的「它参与渲染」。
 
 ### 4.2 跨天：只提示不自动切
 
@@ -164,9 +166,9 @@ SettingsDiaryPage 保存模板
 
 **红线**：正文加载 effect 的依赖数组里**绝不能出现** `liveToday` / `now`。写进去就是每分钟重新 `fetchDiary` + `setContent`，直接覆盖用户正在编辑的正文，且静默。
 
-### 4.3 切日期必须重置的四态，与真正兜底的那道闸
+### 4.3 切日期必须重置的五态，与真正兜底的那道闸
 
-`loading` / `error` / `conflict` / `loadFailed` **没有任何地方会自动重置**（`loading` 全文只有置 false、`loadFailed` 只有置 true），必须在日期 effect 开头显式重置：
+`loading` / `error` / `conflict` / `loadFailed` / `dirty` **没有任何地方会自动重置**（`loading` 全文只有置 false、`loadFailed` 只有置 true；`dirty` 只在加载**成功**路径才清），必须在日期 effect 开头显式重置：
 
 | 态 | 不重置的后果 |
 |---|---|
@@ -174,6 +176,7 @@ SettingsDiaryPage 保存模板
 | `error` | 上一天的错误提示条挂在新一天页面上，误导用户 |
 | `conflict` | 上一天的冲突条挂到新一天头上，点「仍然覆盖」force 掉新一天的文件 |
 | `loadFailed` | 一次加载失败之后，切到任何日期都永远是全屏「加载失败」 |
+| `dirty` | 新一天**加载失败**时脏标记永久停在 true，把共享的 `useUnsavedChangesGuard`（含 `beforeunload` 那条腿）钉死在武装状态，对着一份用户已确认丢弃、屏幕上也不存在的内容反复弹「放弃未保存的修改？」——保护 vault 的最后一道人肉闸被喊成狼来了 |
 
 `fetchDiaryConfig` 拆在独立的 `[]` effect 里：config 与日期无关，不拆则每切一天多一次往返，也多一次「config 失败 → 整页 loadFailed」的机会。
 
@@ -192,18 +195,26 @@ SettingsDiaryPage 保存模板
 | 闸 | 判据 | 管什么 |
 |---|---|---|
 | `editRevisionRef` | 内容序号 | 内容变没变（保存在途打字不清脏；重载在途打字不被盖掉） |
-| `dateRef` | 当前日期 | 目标文件换没换（A 日的 mtime / 冲突不落到 B 日） |
-| `saving` | 在途保存标志 | 有没有别的写在飞（重载与 force save 交错会让 mtime 守卫失效） |
+| `loadEpochRef` | 单调递增的加载世代号 | 目标文件的**加载生命周期**换没换（A 日的 mtime / 冲突不落到 B 日） |
+| `savingRef` / `reloadingRef` | 在途写标志，**双向** | 有没有别的写在飞（save 与 reload 交错会让 mtime 守卫失效） |
 
-`saving` 的 `finally { setSaving(false) }` **不加日期判据**——它是页面级的「有没有在途保存」，加了会让切日后保存按钮永久置灰。
+**世代号不能退化成日期字符串比较**。曾用 `dateRef.current !== dateAtRequest` 做这道闸，有 ABA：7/25 保存在飞 → 切到 7/24 → 再切回 7/25，字符串又相等、闸认不出这是上一轮加载的响应，旧 save 的 mtime 会落到新一轮加载的正文上；用户再改一个字保存，服务端守卫比对通过、不报冲突，刚保存成功的那版被旧内容静默覆盖。世代号在正文 effect 每次开始时 `+= 1`，任何一次重新加载都换代，严格强于值比较。
 
-`handleReload` 里 `saving` 这道闸要读两次，且**不能读同一个来源**：函数入口 `if (saving) return;` 此时还没有 `await`，读普通 state（闭包值）没问题；但用户确认弹窗 `await confirm(...)` 之后的第二次判断**必须读 `savingRef.current`**（渲染期同步赋值的活 ref），不能再读闭包里的 `saving`——后者从函数入口起就冻结住了，`await` 期间外部 `setSaving(true)` 它读不到，与入口那道判据永远同值，会是一道结构上**永不生效**的假闸（这个坑真实发生过）。
+**save↔reload 的互锁必须是双向的**。只让 `handleReload` 挡 `saving` 是不够的——`handleReload` 自己也要置 `reloading`，否则 `handleSave` 不知道有重载在路上：冲突条 →「刷新重载」确认（`fetchDiary` 弱网飞着，页面无任何在途迹象）→ 用户以为没点上、改点「仍然覆盖」（该按钮当时只看 `saving`，可点）→ force 把本地内容写进 vault → reload 先回来把正文换成服务器版本、`baseMtime` 换成旧值 → force save 后回来把 `baseMtime` 改成落盘后的新值 → **编辑器显示服务器版本，而 `baseMtime` 恰好等于盘上真实 mtime** → 用户随手改一个字保存，服务端不报冲突，他刚刚明确选择保住的那份内容被静默销毁。三个写入口（保存 / 刷新重载 / 仍然覆盖）在任一方在飞时都要置灰。
+
+`savingRef` / `reloadingRef` 的 `finally` 解锁**不加世代号或日期判据**——它们是页面级的「有没有在途写」，加了会让切日后按钮永久置灰。
+
+**所有 `await` 之后读的判据一律走活 ref，不许读闭包里的 state**。React 函数组件里，一次调用开始后闭包中的 state 就冻结了：`await` 期间外部 `setSaving(true)` 读不到，与函数入口那道判据永远同值——写成 `if (saving)` 就是一道结构上**永不生效**的假闸。这个坑真实发生过两次（`handleReload` confirm 之后那道、`handleSave` 入口那道），且三轮逐任务审查都没看出来，只有专门问「这行代码真的在做事吗」的视角才抓到。
 
 重载在途中用户又打字时**取消这一发重载并提示**，不盖服务器版本——那与「保存在途打字被清脏」是同类的静默丢数据。
 
 ### 4.6 不用改的东西
 
-- `lib/androidBackNavigation.ts` 的 `/diary` 分支恒返回 `{type:"back"}`，`navigate(-1)` 天然一层层退掉日期历史。`/` 分支之所以要显式判 `has("date")`，是因为它无 date 时的动作是 `exit`。
+- `lib/androidBackNavigation.ts` 的 `/diary` 分支恒返回 `{type:"back", fallbackTo:"/quick-notes"}`，不用改。它不需要像 `/` 分支那样显式判 `has("date")`——`/` 无 date 时的动作是 `exit`（退出 app），必须先把日期历史退完；而 `/diary` 的动作恒为 `back`，且切日期一律走 `replace`（§2.13），压根不产生日期历史。
+
+**但 `location.key === "default"` 这个哨兵会被 `replace` 打破**：`handleBack` 拿它判断「书签 / PWA 快捷方式 / 硬刷新直接落地，没有 app 内历史」，而本页的 `setSearchParams(..., { replace: true })`（切日期两处 + `?date=` 归一一处）会把 `location.key` 从 `"default"` 换成随机 key。所以必须在**挂载那一刻**把这个判断定下来存进 ref，不能每次渲染现读——否则直接落地后切一次日期，返回按钮就从「兜底回速记页」退化成 `navigate(-1)` 空转。
+
+> **已知缺口**：安卓返回键的执行层 `AndroidBackButtonHandler.tsx` 是 app 全局挂载的，在按键那一刻**现读** `location.key`，踩的是同一个坑。窄场景（直接落地 `/diary` + 切过日期 + 按安卓返回键）下它会 `navigate(-1)` 空转；页内返回按钮仍可用，所以不是死路。修它要动全局导航层，留待单独处理。
 - `components/DateNav.tsx` **一个字节不动**：它有 3 条 `check:design` 精确豁免，匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符就失配。要调间距在外面包容器。它自己每次渲染现算 `today`，跨零点会自动跟上，无需传 prop。
 
 ## 5. 模块速查
