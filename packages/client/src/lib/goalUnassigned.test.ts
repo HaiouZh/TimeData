@@ -4,10 +4,10 @@ import {
   activeGoalMemberKeys,
   activeGoalMemberRefs,
   buildUnassignedGoalCandidates,
-  goalLinkedTaskIds,
   unassignedTasks,
   unassignedTracks,
 } from "./goalUnassigned.js";
+import { goalLinkedTaskIds } from "./tasks/goalMembership.js";
 
 const now = "2026-06-26T08:00:00.000Z";
 
