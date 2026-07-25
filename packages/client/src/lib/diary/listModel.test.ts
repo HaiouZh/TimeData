@@ -3,7 +3,11 @@ import {
   assignBlocks,
   canIndentRows,
   expectedNumbers,
+  lineIndexAt,
   parseItem,
+  type RenumberInputRow,
+  type RenumberItemRow,
+  type RenumberRawRow,
   renumberBlock,
   scanProtected,
   splitLines,
@@ -91,6 +95,26 @@ describe("splitLines", () => {
   });
 });
 
+describe("lineIndexAt", () => {
+  const lines = splitLines("1. a\n2. b\n3. c"); // [0,4] [5,9] [10,14]
+
+  it("偏移落在行首", () => {
+    expect(lineIndexAt(lines, 0)).toBe(0);
+  });
+  it("偏移落在行中", () => {
+    expect(lineIndexAt(lines, 7)).toBe(1); // "2. b" 内部
+  });
+  it("偏移落在行尾换行符之前，判给该行（C43）", () => {
+    expect(lineIndexAt(lines, 9)).toBe(1); // "2. b" 的 end，不是 "3. c" 的行首
+  });
+  it("偏移落在下一行行首，判给下一行（与上一条相差 1 的无歧义边界）", () => {
+    expect(lineIndexAt(lines, 10)).toBe(2); // "3. c" 的 start
+  });
+  it("偏移落在文件末尾", () => {
+    expect(lineIndexAt(lines, 14)).toBe(2);
+  });
+});
+
 describe("scanProtected", () => {
   it("代码围栏必须从文件头识别，块内看不见也要保护", () => {
     const lines = splitLines("```js\n1. a\n2. b\n```");
@@ -107,8 +131,10 @@ describe("scanProtected", () => {
     expect(prot[3]).toBe(false);
   });
   it("行内代码不误开围栏", () => {
-    const lines = splitLines("`x`\n1. a");
-    expect(scanProtected(lines)[1]).toBe(false);
+    // 单个反引号 `x` 根本匹配不上 FENCE_RE（要求 `{3,}），连守卫都碰不到；
+    // 换成三反引号包住的行内代码，才真正触达"info string 含反引号 → 不开围栏"这条守卫。
+    const lines = splitLines("```x```\n1. a");
+    expect(scanProtected(lines)).toEqual([false, false]);
   });
   it("front-matter 未闭合保守保护到文件尾", () => {
     const lines = splitLines("---\ntitle: t\n1. a\n2. b");
@@ -129,6 +155,12 @@ describe("scanProtected", () => {
     const lines = splitLines("1. a\n\t```\n\t1. b\n\t```");
     const prot = scanProtected(lines);
     expect(prot[2]).toBe(true);
+  });
+  it('关闭行去除空白后必须为空，否则视为未闭合（m[2].trim() === ""）', () => {
+    // "``` extra" 长得像收尾围栏，但收尾行只能有围栏字符+空白，不能有额外内容——
+    // 否则整篇会一直被判定为"未闭合"保护到文件尾。
+    const lines = splitLines("```\n1. a\n``` extra\n2. b");
+    expect(scanProtected(lines).every(Boolean)).toBe(true);
   });
 });
 
@@ -155,6 +187,14 @@ describe("assignBlocks", () => {
     expect(blockOf).toEqual([0, -1, 1]);
     expect(blocks).toHaveLength(2);
   });
+  it("纯空白行（非真空串）同样断块", () => {
+    // 与上一条测的是同一个 t.trim() === "" 分支，但用行尾留空格这种极常见的真实输入，
+    // 能区分出 "t.trim() === \"\"" 与误写成 "t === \"\"" 的变异。
+    const lines = splitLines("1. a\n   \n2. b");
+    const prot = scanProtected(lines);
+    const { blockOf } = assignBlocks(lines, prot);
+    expect(blockOf).toEqual([0, -1, 1]);
+  });
   it("受保护行不计入任何块，且切断块", () => {
     const lines = splitLines("1. a\n```\nx\n```\n2. b");
     const prot = scanProtected(lines);
@@ -172,28 +212,90 @@ describe("assignBlocks", () => {
     expect(blockOf).toEqual([0, -1, 1]);
     expect(blocks).toHaveLength(2);
   });
+  it("缩进围栏内看起来像列表项的行不会被误认成附属行（prot[i] 分支）", () => {
+    // "\t5. b" 本身能被 parseItem 正常解析成有效列表项，若不靠 prot 挡住，会被
+    // assignBlocks 的附属行规则（视觉列宽 > 最近项 col）误吞进 "1. a" 所在的块，
+    // 之后拉直编号会把围栏里的代码改写成 "\t1. b"——这正是要防的"改坏 vault 代码块"。
+    const lines = splitLines("1. a\n\t```\n\t5. b\n\t```\n2. c");
+    const prot = scanProtected(lines);
+    const { blockOf, blocks } = assignBlocks(lines, prot);
+    expect(blockOf).toEqual([0, -1, -1, -1, 1]);
+    expect(blocks).toHaveLength(2);
+  });
 });
 
 describe("renumberBlock", () => {
-  it("straighten=true 按视觉列宽重新拉直编号，indent/gap/content 原样保留", () => {
-    const rows = ["1. a", "\t1. b", "    1. c"]; // c 缩进 4 空格，与 b 的 Tab 视觉同级
-    expect(renumberBlock(rows, true)).toEqual(["1. a", "\t1. b", "    2. c"]);
+  function item(text: string): RenumberItemRow {
+    const it = parseItem(text);
+    if (!it) throw new Error(`不是有效列表项: ${text}`);
+    return { kind: "item", indent: it.indent, numText: it.numText, gap: it.gap, content: it.content };
+  }
+  function raw(text: string): RenumberRawRow {
+    return { kind: "raw", text };
+  }
+
+  it("straighten=true 按视觉列宽重新拉直编号，indent/gap/content 原样保留，并交出重算后的 markerLen", () => {
+    const rows = [item("1. a"), item("\t1. b"), item("    1. c")]; // c 缩进 4 空格，与 b 的 Tab 视觉同级
+    expect(renumberBlock(rows, true)).toEqual([
+      { text: "1. a", markerLen: 3 }, // "" + "1" + "." + " "
+      { text: "\t1. b", markerLen: 4 }, // "\t" + "1" + "." + " "
+      { text: "    2. c", markerLen: 7 }, // "    " + "2" + "." + " "
+    ]);
   });
-  it("straighten=false 原样返回，一个字节不动", () => {
-    const rows = ["7. a", "9. b"];
-    expect(renumberBlock(rows, false)).toEqual(rows);
-    expect(renumberBlock(rows, false)).not.toBe(rows); // 返回新数组，不是同一引用
+  it("straighten=false 时 numText 原样使用，markerLen 据此算出", () => {
+    const rows = [item("7. a"), item("9. b")];
+    expect(renumberBlock(rows, false)).toEqual([
+      { text: "7. a", markerLen: 3 },
+      { text: "9. b", markerLen: 3 },
+    ]);
   });
-  it("附属行（非列表项文本）在拉直时原样透传", () => {
-    const rows = ["1. a", "   续写的一段", "5. b"];
-    expect(renumberBlock(rows, true)).toEqual(["1. a", "   续写的一段", "2. b"]);
+  it("附属行（raw）在拉直时原样透传，markerLen 恒为 null", () => {
+    const rows: RenumberInputRow[] = [item("1. a"), raw("   续写的一段"), item("5. b")];
+    expect(renumberBlock(rows, true)).toEqual([
+      { text: "1. a", markerLen: 3 },
+      { text: "   续写的一段", markerLen: null },
+      { text: "2. b", markerLen: 3 },
+    ]);
   });
   it("前导零在拉直时丢失（拉直的一部分）", () => {
-    expect(renumberBlock(["01. a", "02. b"], true)).toEqual(["1. a", "2. b"]);
+    const rows = [item("01. a"), item("02. b")];
+    expect(renumberBlock(rows, true)).toEqual([
+      { text: "1. a", markerLen: 3 },
+      { text: "2. b", markerLen: 3 },
+    ]);
   });
-  it("gap 原样保留（多空格/ Tab）", () => {
-    expect(renumberBlock(["1.  a", "5.  b"], true)).toEqual(["1.  a", "2.  b"]);
-    expect(renumberBlock(["1.\ta", "5.\tb"], true)).toEqual(["1.\ta", "2.\tb"]);
+  it("gap 原样保留（多空格/Tab），markerLen 把 gap 的真实长度算进去", () => {
+    expect(renumberBlock([item("1.  a"), item("5.  b")], true)).toEqual([
+      { text: "1.  a", markerLen: 4 },
+      { text: "2.  b", markerLen: 4 },
+    ]);
+    expect(renumberBlock([item("1.\ta"), item("5.\tb")], true)).toEqual([
+      { text: "1.\ta", markerLen: 3 },
+      { text: "2.\tb", markerLen: 3 },
+    ]);
+  });
+
+  describe("markerLen 不靠 re-parse（回归 A）", () => {
+    it("straighten=true：content 以空白开头的新插入行，markerLen 依然正确", () => {
+      // 对应 "1. 买菜⌶ 和做饭" 回车产生的新行：content=" 和做饭"（前导空格），gap=" "。
+      // 若靠 re-parse 输出行反解 markerLen，ITEM_RE 的贪婪 gap 会把 content 的前导空格也吞
+      // 进去，markerLen 多算 1，光标就会落在空格右边而不是左边（"2.  ⌶和做饭" 而不是
+      // "2. ⌶ 和做饭"）。
+      const rows: RenumberInputRow[] = [
+        { kind: "item", indent: "", numText: "1", gap: " ", content: "买菜" },
+        { kind: "item", indent: "", numText: "?", gap: " ", content: " 和做饭" },
+      ];
+      const out = renumberBlock(rows, true);
+      expect(out[1]).toEqual({ text: "2.  和做饭", markerLen: 3 }); // "2." + " "(gap)，不含 content 的前导空格
+    });
+    it("straighten=false：同样不受影响（numText 原样使用）", () => {
+      const rows: RenumberInputRow[] = [
+        { kind: "item", indent: "", numText: "1", gap: " ", content: "买菜" },
+        { kind: "item", indent: "", numText: "2", gap: " ", content: " 和做饭" },
+      ];
+      const out = renumberBlock(rows, false);
+      expect(out[1]).toEqual({ text: "2.  和做饭", markerLen: 3 });
+    });
   });
 });
 
@@ -211,52 +313,69 @@ describe("trimEditSpan", () => {
     expect(span.end).toBeGreaterThanOrEqual(1);
     expect(span.text).toBe("x");
   });
-  it("防御性夹逼：mustCover 落在旧区间之外时区间被撑大到包住它", () => {
-    // oldText/newText 完全相同（无差异），自然裁剪结果是块尾的零宽插入点 [3,3)；
-    // mustCover=5 在这之外（如选区删除后光标落在块尾之后），end 被夹逼撑到 5。
-    const span = trimEditSpan("abc", "abc", 0, 5);
-    expect(span).toEqual({ start: 3, end: 5, text: "" });
+  it("块中回车：起点夹逼与后缀扫描的 p 夹逼同时生效（真实场景，非契约外输入）", () => {
+    // "1. a\n2. b\n3. c" 在第 3 行回车（光标在行尾之后、新块 "3. \n4. c" 已经拉直）：
+    // 自然裁剪出的最小区间起点在 13，但光标（mustCover=9）在它之前，需要把起点夹逼回 9；
+    // 这同时钉住"后缀扫描不能越过前缀 p" —— 若后缀扫描的上界从 oldLen-p 放宽成 oldLen，
+    // 会一路扫穿前缀区，算出 end < start 的倒挂区间。
+    const oldText = "1. a\n2. b\n3. c";
+    const newText = "1. a\n2. b\n3. \n4. c";
+    expect(trimEditSpan(oldText, newText, 0, 9)).toEqual({ start: 9, end: 13, text: "\n3. \n4. " });
+  });
+  it("mustCover < base 时被夹逼到 base（未写明的前置条件，防止负索引产出垃圾）", () => {
+    const span = trimEditSpan("abc", "axc", 10, 3); // mustCover(3) < base(10)
+    expect(span.start).toBeGreaterThanOrEqual(10);
   });
 });
 
-describe("canIndentRows（父行约束）", () => {
+describe("canIndentRows（父行约束，与 assignBlocks 共用块边界）", () => {
+  function setup(text: string) {
+    const lines = splitLines(text);
+    const prot = scanProtected(lines);
+    const { blockOf } = assignBlocks(lines, prot);
+    return { lines, blockOf };
+  }
+
   it("块首行不可缩进（没有上方列表行）", () => {
-    // "1. A\n2. B\n3. C" 选中前两行 Tab：A 是块首行，不可缩进
-    const rows = [
-      { isListItem: true, col: 0, isTarget: true }, // A
-      { isListItem: true, col: 0, isTarget: true }, // B
-      { isListItem: true, col: 0, isTarget: false }, // C
-    ];
-    expect(canIndentRows(rows)).toEqual([false, true, false]);
+    // "1. A\n2. B\n3. C" 选中前两行 Tab：A 是块首行，不可缩进；B 可以
+    const { lines, blockOf } = setup("1. A\n2. B\n3. C");
+    expect(canIndentRows(lines, blockOf, [0, 1])).toEqual([false, true]);
   });
   it("已经比上一行深时不可缩进（防跳级）", () => {
     // "1. A\n\t2. B\n3. C" 光标在 B，再按一次 Tab：B 原深度 4 > A 的新深度 0，不可缩进
-    const rows = [
-      { isListItem: true, col: 0, isTarget: false }, // A
-      { isListItem: true, col: 4, isTarget: true }, // B
-      { isListItem: true, col: 0, isTarget: false }, // C
-    ];
-    expect(canIndentRows(rows)).toEqual([false, false, false]);
+    const { lines, blockOf } = setup("1. A\n\t2. B\n3. C");
+    expect(canIndentRows(lines, blockOf, [1])).toEqual([false]);
   });
   it("同层第二个子项可以再缩进一级", () => {
     // "1. A\n\t1. b1\n\t2. b2" 光标在 b2：b2 原深度 4 == b1 的新深度 4，可以缩进
-    const rows = [
-      { isListItem: true, col: 0, isTarget: false }, // A
-      { isListItem: true, col: 4, isTarget: false }, // b1
-      { isListItem: true, col: 4, isTarget: true }, // b2
-    ];
-    expect(canIndentRows(rows)).toEqual([false, false, true]);
+    const { lines, blockOf } = setup("1. A\n\t1. b1\n\t2. b2");
+    expect(canIndentRows(lines, blockOf, [2])).toEqual([true]);
   });
-  it("非列表行/空行切断「上方最近列表行」链", () => {
-    const rows = [
-      { isListItem: true, col: 0, isTarget: false }, // A
-      { isListItem: false, col: 0, isTarget: false }, // 空行/普通行，切断链
-      { isListItem: true, col: 0, isTarget: true }, // 新块块首行
-    ];
-    expect(canIndentRows(rows)).toEqual([false, false, false]);
+  it("真正的块边界（空行）切断「上方最近列表行」链", () => {
+    const { lines, blockOf } = setup("1. A\n\n1. C");
+    expect(canIndentRows(lines, blockOf, [2])).toEqual([false]); // C 是新块块首行
   });
-  it("全部候选行都不满足约束时整体返回全 false（调用方据此放行 Tab）", () => {
-    const rows = [{ isListItem: true, col: 0, isTarget: true }];
-    expect(canIndentRows(rows)).toEqual([false]);
+  it("单行且无上方列表行时不可缩进（调用方据此放行 Tab）", () => {
+    const { lines, blockOf } = setup("1. a");
+    expect(canIndentRows(lines, blockOf, [0])).toEqual([false]);
+  });
+
+  it("【回归 B】附属行（续写段落）不切断链——与 assignBlocks 的块划分保持一致", () => {
+    // 这是本次修复要根治的 bug：旧实现里非列表行一律当块边界，与 assignBlocks 的附属行规则
+    // 矛盾，"1. a\n   续写的一段\n2. b" 这种全日记最常见的写法会把 "2. b" 误判成块首行，
+    // Tab 被错误放行，焦点跳出编辑器。现在两者共用同一份 blockOf，不可能再分叉。
+    const { lines, blockOf } = setup("1. a\n   续写的一段\n2. b");
+    expect(canIndentRows(lines, blockOf, [2])).toEqual([true]);
+  });
+  it("附属行本身若被误当作目标行，返回 false（它不是列表项）", () => {
+    const { lines, blockOf } = setup("1. a\n   续写的一段\n2. b");
+    expect(canIndentRows(lines, blockOf, [1])).toEqual([false]);
+  });
+  it("【回归】用「新深度」推进 nearestCol，不是原深度", () => {
+    // 4-键位语义.md §1.4 特意加粗的一条：B 被允许缩进后，后续判定要用 B 缩进后的新列宽（4），
+    // 不是它原来的列宽（0）；否则 C（col 4）会被误判成"比新深度更深"而不可缩进（变异版会给出
+    // [false, true, false]，把 C 拉平成 B 的兄弟）。
+    const { lines, blockOf } = setup("1. A\n2. B\n\t1. C");
+    expect(canIndentRows(lines, blockOf, [0, 1, 2])).toEqual([false, true, true]);
   });
 });

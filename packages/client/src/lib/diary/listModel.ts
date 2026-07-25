@@ -49,14 +49,16 @@ export interface OrderedItem {
   markerLen: number;
 }
 
-/** assignBlocks 产出的一个连续列表块。rows 同时含项行与附属行（按文档序）。 */
+/**
+ * assignBlocks 产出的一个连续列表块。rows 同时含项行与附属行（按文档序）。
+ * 不含"最近一个列表项列宽"这类扫描游标——那是 assignBlocks 内部状态，扫描结束后它的语义会
+ * 退化成"块内最后一项的列宽"，对消费者没用还容易被误当成"块的层级信息"用错（见 §E.7）。
+ */
 export interface Block {
   id: number;
   rows: number[];
   /** 块内"真正的"列表项行数，不含附属行。 */
   items: number;
-  /** 扫描过程中最近一个列表项的视觉列宽，供判定后续附属行使用。 */
-  lastItemCol: number;
 }
 
 /** 按 "\n" 切分为带绝对偏移的行数组。用 indexOf 循环而非 split，需要每行的绝对 offset。 */
@@ -150,6 +152,7 @@ export function assignBlocks(lines: DocLine[], prot: boolean[]): { blockOf: numb
   const blockOf: number[] = new Array(lines.length).fill(-1);
   const blocks: Block[] = [];
   let cur: Block | null = null;
+  let lastItemCol = 0; // 扫描游标：当前块内最近一个列表项的视觉列宽；不进 Block（见 Block 注释）
   for (let i = 0; i < lines.length; i += 1) {
     const t = lines[i].text;
     if (prot[i] || t.trim() === "") {
@@ -159,17 +162,17 @@ export function assignBlocks(lines: DocLine[], prot: boolean[]): { blockOf: numb
     const item = parseItem(t);
     if (item) {
       if (!cur) {
-        cur = { id: blocks.length, rows: [], items: 0, lastItemCol: item.col };
+        cur = { id: blocks.length, rows: [], items: 0 };
         blocks.push(cur);
       }
-      cur.lastItemCol = item.col;
+      lastItemCol = item.col;
       cur.items += 1;
       cur.rows.push(i);
       blockOf[i] = cur.id;
       continue;
     }
     const leading = LEADING_WS_RE.exec(t)?.[0] ?? "";
-    if (cur && visualCol(leading) > cur.lastItemCol) {
+    if (cur && visualCol(leading) > lastItemCol) {
       cur.rows.push(i); // 附属行：续写段落 / 无序子项，块不断、不计数
       blockOf[i] = cur.id;
       continue;
@@ -195,35 +198,84 @@ export function expectedNumbers(cols: number[]): number[] {
 }
 
 /**
- * 拉直一个块内的编号。straighten=false 时原样返回（一个字节不动）——"当前号+1"这类单项块护栏
- * 逻辑属于插入新行的语义，由调用方（Task 4）在喂给这里之前就决定好，不在本函数职责内。
- * straighten=true 时按 expectedNumbers 重新计算每个列表项的编号，indent/gap/content 一律不动。
- * 非列表行（附属行）原样透传。
+ * renumberBlock 的一行输入。分 "item"（列表项，indent/numText/gap/content 拆开传）与
+ * "raw"（附属行，原样透传、不参与编号）。
+ *
+ * item 行必须拆开传，不能先拼成整行字符串再让本函数解析：新插入行的 content 可能以空白开头
+ * （如 "1. 买菜⌶ 和做饭" 回车后，新行 content=" 和做饭"），一旦拼接成整行，ITEM_RE 的
+ * `([ \t]+)` 贪婪匹配会把 content 的前导空白也吞进 gap——拼接后的整行文本字节不变（gap 与
+ * content 只是同一段空白的两种切法，两种切法拼回去是同一个字符串），但由此反解出的 gap.length
+ * 会多算，markerLen 也就多算，直接导致光标落错位置。这正是本函数存在的原因。
  */
-export function renumberBlock(rows: string[], straighten: boolean): string[] {
-  if (!straighten) return rows.slice();
-  const parsed = rows.map((r) => parseItem(r));
-  const itemIndices: number[] = [];
-  const cols: number[] = [];
-  parsed.forEach((it, idx) => {
-    if (it) {
-      itemIndices.push(idx);
-      cols.push(it.col);
-    }
+export interface RenumberItemRow {
+  kind: "item";
+  indent: string;
+  /** straighten=false 时原样使用；straighten=true 时会被整体覆盖，传什么都无所谓。 */
+  numText: string;
+  gap: string;
+  content: string;
+}
+
+/** 附属行 / 本次不参与编号的行，原样透传，两种模式下 markerLen 恒为 null。 */
+export interface RenumberRawRow {
+  kind: "raw";
+  text: string;
+}
+
+export type RenumberInputRow = RenumberItemRow | RenumberRawRow;
+
+/** renumberBlock 的一行输出。 */
+export interface RenumberedRow {
+  text: string;
+  /** item 行是最终 marker（indent+numText+"."+gap）的长度；raw 行恒为 null。 */
+  markerLen: number | null;
+}
+
+/**
+ * 拉直一个块内的编号，返回每行的最终文本与 marker 长度。Task 4 算光标要用
+ * `cursor = blockStart + newLineOffset + newLineMarkerLen`，而 newLineMarkerLen（新插入行拉直
+ * 之后的 marker 长度）只有拉直完成后才知道，只能由本函数直接交出——调用方不该、也不能靠
+ * re-parse 输出的 text 反解 markerLen（见 RenumberItemRow 的 JSDoc；这条坑在实测中造成
+ * 49437 组随机用例里 1.9% 光标错位），本函数内部同样不 re-parse 任何字符串，markerLen 永远从
+ * indent/numText/gap 的长度直接相加算出。
+ *
+ * straighten=false 时：item 行的 numText 原样使用（调用方已在喂进来之前算好，如"当前号+1"的
+ * 单项块护栏语义），只据此重新拼出 text 与 markerLen，indent/gap/content 一律不动。
+ * straighten=true 时：按 visualCol(indent) + expectedNumbers 重新计算每个 item 行的编号，传入
+ * 的 numText 无所谓写什么（会被整体覆盖）。
+ * raw 行两种模式下都原样透传。
+ */
+export function renumberBlock(rows: RenumberInputRow[], straighten: boolean): RenumberedRow[] {
+  if (!straighten) {
+    return rows.map((r) => {
+      if (r.kind === "raw") return { text: r.text, markerLen: null };
+      const text = `${r.indent}${r.numText}.${r.gap}${r.content}`;
+      const markerLen = r.indent.length + r.numText.length + 1 + r.gap.length;
+      return { text, markerLen };
+    });
+  }
+  const itemCols = rows.filter((r): r is RenumberItemRow => r.kind === "item").map((r) => visualCol(r.indent));
+  const nums = expectedNumbers(itemCols);
+  let k = 0;
+  return rows.map((r) => {
+    if (r.kind === "raw") return { text: r.text, markerLen: null };
+    const numText = String(nums[k]);
+    k += 1;
+    const text = `${r.indent}${numText}.${r.gap}${r.content}`;
+    const markerLen = r.indent.length + numText.length + 1 + r.gap.length;
+    return { text, markerLen };
   });
-  const nums = expectedNumbers(cols);
-  const out = rows.slice();
-  itemIndices.forEach((rowIdx, k) => {
-    const it = parsed[rowIdx];
-    if (!it) return;
-    out[rowIdx] = `${it.indent}${nums[k]}.${it.gap}${it.content}`;
-  });
-  return out;
 }
 
 /**
  * 整块新文本 → 前后缀裁剪，得最小替换区间，再夹逼到包住 mustCover（通常是光标）。
  * 编号本来就正确时，裁剪后区间自然塌成插入点，上下文一个字节不动。
+ *
+ * 前置条件（未写明但必须满足）：mustCover >= base。mustCover 通常是光标/选区端点的绝对偏移，
+ * base 是 oldText 在文档中的起始绝对偏移；`newText.slice(start - base, …)` 在 start < base 时
+ * 走负索引会产出垃圾（如 `trimEditSpan("abc","axc",10,3)` 不夹逼会切出无意义的区间）。Task 4
+ * 天然满足（caret ≥ blockStart），但 Task 5 的选区起点可能落在块首之前，容易踩——这里显式把
+ * mustCover 夹逼到 base，不静默产出错误区间。
  */
 export function trimEditSpan(
   oldText: string,
@@ -231,6 +283,7 @@ export function trimEditSpan(
   base: number,
   mustCover: number,
 ): { start: number; end: number; text: string } {
+  if (mustCover < base) mustCover = base; // 前置条件夹逼，见上方 JSDoc
   const oldLen = oldText.length;
   const newLen = newText.length;
   let p = 0;
@@ -246,41 +299,57 @@ export function trimEditSpan(
 }
 
 /**
- * Tab 缩进的"父行约束"判定输入（4-键位语义.md §1.4）。isTarget = 这次操作打算缩进的候选
- * （通常是选区触及的列表行）；非候选行只用于把"上方最近列表行"的列宽往前推进。
+ * 由字符偏移定位行号（Task 4/5 都要用："这个光标/选区端点落在第几行"）。
+ * caret === lines[i].end（行尾换行符之前）判给第 i 行，caret === lines[i+1].start（下一行行首）
+ * 判给第 i+1 行，无歧义——勘察报告 C43 专门实测过的边界，两个任务各写一遍容易分叉，收进共享
+ * 行模型里只写一遍。
  */
-export interface IndentCandidateRow {
-  /** 该行是否是有序列表项。非列表行/空行会切断"上方最近列表行"链。 */
-  isListItem: boolean;
-  /** 该行当前（缩进前）的视觉列宽；非列表行时忽略。 */
-  col: number;
-  /** 该行是否是这次 Tab 操作打算缩进的目标行。 */
-  isTarget: boolean;
+export function lineIndexAt(lines: DocLine[], offset: number): number {
+  let i = 0;
+  while (i < lines.length - 1 && offset > lines[i].end) i += 1;
+  return i;
 }
 
 /**
- * 父行约束批量判定：朴素地在行首插 `\t` 会生成被 markdown 渲染成 indented code block 的文本——
- * 把用户的列表项静默变成代码块。两条约束，自上而下逐行累积判定，用"已处理行的新深度"而非原深度：
- * 1. 目标行在同块内必须存在上方最近的列表行（非列表行/空行会切断该链）；不存在（= 块首行）→ 不可缩进。
- * 2. 目标行原深度 ≤ 上方最近列表行的新深度；否则（已经比上一行深）→ 不可缩进，防跳级。
- * 输入须是同一个块内、按文档序排列的行；调用方（Task 5）不需要再自己写这套累积逻辑。
+ * Tab 缩进的"父行约束"批量判定（4-键位语义.md §1.4）。调用方只需给出这次操作想缩进哪些行的
+ * 行号（targetLines，可来自选区覆盖的列表行，不要求同块/连续），不需要自己翻译"这一行算不算
+ * 附属行"——本函数从文件头单遍前向扫描 lines，行的角色判定与 assignBlocks 用同一份依据
+ * （blockOf[i] === -1 才断链），保证两者的块边界理解永远一致。
+ *
+ * 历史教训（务必读）：早期版本让调用方传 `{ isListItem, col, isTarget }[]`，用 isListItem:false
+ * 表示"非列表行切断链"；但 assignBlocks 明确规定"缩进更深的非列表行是附属行、不断块"——两条
+ * 规则对同一份文本给出相反的块边界。"1. a\n   续写的一段\n2. b" 这种日记里极常见的写法会被
+ * 误判成 "2. b" 是块首行、Tab 被错误放行、焦点跳出编辑器。现在直接吃 assignBlocks 算出的
+ * blockOf，附属行判定不可能再分叉。
+ *
+ * 两条约束，自上而下用"已处理行的新深度"（而非原深度）逐行累积判定：
+ * 1. 目标行在同块内必须存在上方最近的列表项（blockOf[i]===-1 才切断该链；附属行既不断链也
+ *    不推进"最近列表项"列宽，直接跳过）；不存在（= 块首行）→ 不可缩进。
+ * 2. 目标行原深度 ≤ 上方最近列表项的新深度；否则（已经比上一行深）→ 不可缩进，防跳级。
+ *
+ * 返回值与 targetLines 一一对应（不是与 lines 等长）；非目标/非列表项/附属行不在 targetLines
+ * 里没有意义，若仍传入统一按 false 处理。
  */
-export function canIndentRows(rows: IndentCandidateRow[]): boolean[] {
-  const result: boolean[] = new Array(rows.length).fill(false);
-  let nearestCol: number | null = null; // 上方最近列表行的"新"列宽
-  for (let i = 0; i < rows.length; i += 1) {
-    const row = rows[i];
-    if (!row.isListItem) {
-      nearestCol = null; // 非列表行/空行切断链
+export function canIndentRows(lines: DocLine[], blockOf: number[], targetLines: number[]): boolean[] {
+  const targetSet = new Set(targetLines);
+  const resultByLine = new Map<number, boolean>();
+  let nearestCol: number | null = null; // 上方最近列表项的"新"列宽
+  for (let i = 0; i < lines.length; i += 1) {
+    if (blockOf[i] === -1) {
+      nearestCol = null; // 真正的块边界（空行/受保护行/不深于最近项的普通行）才断链
       continue;
     }
-    if (!row.isTarget) {
-      nearestCol = row.col; // 非目标列表行不缩进，新深度 = 原深度
-      continue;
+    const item = parseItem(lines[i].text);
+    if (!item) continue; // 附属行：既不断链也不推进 nearestCol，本身也不可能是 Tab 目标
+    if (targetSet.has(i)) {
+      const allowed: boolean = nearestCol !== null && item.col <= nearestCol;
+      resultByLine.set(i, allowed);
+      // 用"新深度"而非原深度：+TAB_COLUMNS 隐含 INDENT === "\t"（visualCol("\t"+s) ===
+      // visualCol(s)+TAB_COLUMNS 恒成立），将来若改缩进单元这里要同步改。
+      nearestCol = allowed ? item.col + TAB_COLUMNS : item.col;
+    } else {
+      nearestCol = item.col; // 非目标列表项不缩进，新深度 = 原深度
     }
-    const allowed: boolean = nearestCol !== null && row.col <= nearestCol;
-    result[i] = allowed;
-    nearestCol = allowed ? row.col + TAB_COLUMNS : row.col;
   }
-  return result;
+  return targetLines.map((line) => resultByLine.get(line) ?? false);
 }
