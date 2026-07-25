@@ -37,8 +37,9 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-24
+last-reviewed: 2026-07-25
 ---
+<!-- 复核 2026-07-25（记忆下沉）：§模块速查的 SwipeableList 一格补记 `fullSwipe={false}` 是有意设计（滑到头不自动触发，防全滑误删），交互与数据契约不变。 -->
 <!-- 复核 2026-07-24（手头软会话）：entitySchemas.ts 新增 `Task.sessionId` 反挂字段、syncDomains.ts 新增 `sessions` LWW 域；字段契约见本文 §2.1/§2.3，投影/生命周期语义见子文档 todo/at-hand.md，不在本文重复。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts/syncDomains.ts 新增 tasks delete change 可选 deleteReason 枚举字段，仅服务端归档消费，不改动待办数据契约/语义。 -->
 
@@ -207,7 +208,7 @@ agent / CLI (task-done/task-tag)
 |---|---|
 | `pages/TodoPage.tsx` | 顶层编排：`useLiveQuery(listTasks)` 取桶、持有筛选/搜索/展开状态（include/exclude/tagMode/notMode/filterOpen/composerText）、窄屏堆叠/宽屏 `ResizableSplit`、挂受控 `TodoComposer`（内嵌 `TagFilterPanel`）/`TaskDetailSheet`；重力水位线拆 `floatingInbox`/`sunkenInbox` + 渲染翻牌区（见 [todo/gravity](todo/gravity.md)）；渲染 `AtHandSection`（`buckets.atHand`/`handSession`）并把 `rowHandlers.onToHand` 透传给各列表，`useEffect` 依 `buckets.handSession?.id` 触发 `healActiveSessions`（见 [todo/at-hand](todo/at-hand.md)）；支持 `/todo?taskId=<id>` 作为打开任务详情的 deep link，参数变化会切换抽屉目标，关闭抽屉只移除 `taskId` 并保留其他 query 参数，行点击仍只走本地打开状态、不写 URL |
 | `pages/todo/TaskRow.tsx` | 扁平双行任务行：复选框（重复模板有下一发即可点，含未到期提前完成；耗尽才置灰）、左 2/5 root 拖拽抓取区、`CaretDown`/`CaretRight` 或 grip 纯指示、`rowClickZone` 派发展开/打开、meta 第二行、内联 children（`InlineChildren`，按池给 `draggable`/`static`/`readonly` mode）、缩进候选父高亮与落定后展开、刚物化 pending occurrence 短暂入场高亮；桌面细指针行尾 overlay 动作（排进今天 / 回收件箱 / 删除，由 `useIsCoarsePointer` 门控；换池箭头指向目标列）；可选 `extraAction` 行内插槽（翻牌区「顶一下」经它渲染） |
-| `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不各持 `DndContext` |
+| `pages/todo/{TaskColumn,TaskList,SortableTaskRow}.tsx` | 列容器（仅 today/inbox 注册 droppable+SortableContext）/ `SwipeableList`（根与 item 带 `min-w-0`/横向裁剪约束，resize 后按当前容器宽度收缩；`fullSwipe={false}` 是**有意设计**——滑到头不自动触发、要滑出菜单再点一下，因为 trailing 末项是删除，全滑会误删，"拉到头无反应"不当 bug 修）/ dnd-kit 包装（`useSortable` 带 `containerId`）；顶层 `DndContext` 在 `TodoPage`，列内不各持 `DndContext` |
 | `pages/todo/TaskDetailSheet.tsx` | 底部抽屉：`InlineChildren`、标题、tag、删除（普通任务 cascade；pending occurrence 删·跳）、重复预设 overlay；重复模板复选框有下一发即可代理完成（含未到期提前完成；耗尽置灰），逾期重复模板打开重复设置时用今天作为锚点；`parentId!==null`（child）隐藏 recurrence/tags/scheduledAt 高级控件 |
 | `pages/todo/{InlineChildren,SortableChildRow,useTaskChildren,useLatestOccurrenceChildren,todoDnd}.*` | children 列表（三 mode；static 重复模板行用 `useLatestOccurrenceChildren` + `projectTemplateChildren` 把勾态投影到最新非 skipped occurrence child，无目标发置灰；新增走空白草稿行 `NewChildRow`：点 +子任务 或在某 child 编辑态回车都在末尾打开聚焦空输入框、不预填充、空标题不落库、回车提交非空后保持草稿连录；子任务标题默认是可跨行选择复制的 `span` 文本，无行尾编辑按钮，空选区点击或标题获焦后 Enter/F2 才进入编辑；编辑态 textarea 按内容与宽度变化自动增高、不保留内部滚动条，blur/Enter 提交，Escape 取消）/ 可拖 child 行 / `useLiveQuery` 拉 children hook / DnD 操作解析纯函数（container 解析、`resolveIndentLevel` 二元缩进、`clampTodoIndentPreview` 横向预览夹取、`resolveTodoDragWithIndent` 落点矩阵、`hoveredRootIdFromOver`） |
 | `pages/todo/{DayGroupedList,TagFilterPanel,TodoComposer,ResizableSplit,CollapsibleSection}.tsx` | 分组列表（展开后的 sticky「收起」按钮按 `TodoPage` 计算出的底部避让值上移；窄屏下滑把底栏和 composer 隐藏后，不避让已不可见的输入栏；可选 `expandedFooter` 尾部插槽，在列表已完全展开、天然 ≤ `initialGroups` 或列表为空但有 footer 时渲染，供 Inbox 挂水下找回尾部）/ 展开态三态填色筛选面 / 底部操作栏（变身左键+搜索+建任务带 includeTags，fixed 高度由 `TodoPage` 测量给列表与主内容 padding 复用；`TodoPage` 传入当前移动底栏 offset 与隐藏状态，宽屏不套移动底栏避让；`zIndex=40` 压过任务行内部交互层、低于详情抽屉；下滑收起底栏时 `translateY(100%)` 整体滑出视口、上滑归位） / 双栏 / 折叠；折叠 caret 等交互图标经 Phosphor `Icon` 包装 |

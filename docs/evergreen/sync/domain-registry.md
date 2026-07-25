@@ -22,8 +22,9 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-07-24
+last-reviewed: 2026-07-25
 ---
+<!-- 复核 2026-07-25（记忆下沉）：§3.3 checklist 补第 6 条「手写 CREATE TABLE 的 server 测试夹具要跟着建新表 + 合并前跑无参全量」，登记簿机制不变。 -->
 <!-- 复核 2026-07-24（手头软会话）：新增 sessions LWW 域（第 16 个运行时域，upsertPriority/deletePriority 74）承载 Task.sessionId 反挂指针；见 §2 表格。投影/生命周期语义见 [todo/at-hand](../todo/at-hand.md)，不在本文重复。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts/syncDomains.ts、server/src/sync/domains.ts、shared/src/types.ts 为 tasks 域新增可选 deleteReason 字段与服务端 archiveDelete 钩子，不新增/改变运行时同步域数量或登记簿结构。 -->
 
@@ -119,6 +120,7 @@ LWW 只定义“同一记录发生并发修改时如何自动收敛”，字段�
 3. `types.ts` 扩展静态 `SyncChange` 判别联合，并让 shared schema 测试覆盖运行时 / 静态对齐。
 4. 客户端 Dexie 表、`CLIENT_SYNC_DOMAINS`、pull 应用分支和 backup 角色。
 5. 参照 `fake-domain.e2e.test.ts` 写一条全链路域测试，并更新对应业务域文档、[data-model](../data-model.md)、[backup](../backup.md) 与 [sync](../sync.md) 摘要。
+6. 补齐 server 里**手写 `CREATE TABLE` 建库**（不走 `initializeDatabase()`）又会触发 sync-state / commit-hash 计算的测试夹具：`computeAndPersistCommitHash` 会遍历每个 `domain.table` 查询，漏建新表即 `SqliteError: no such table: <域>`。已知需要补的是 `db/reset.test.ts`、`db/utcReset.test.ts`、`lib/entry-service.test.ts`（canonical 建表语句可从 `db/backfillSeq.test.ts` 抄）；`schema.test.ts` 走 `initializeDatabase` 不受影响。**合并前跑无参全量 `pnpm --filter @timedata/server test`**——窄过滤跑不到这几个文件，`goals` 域当年就是这么漏到合并后才暴露。
 
 校验、排序、写入、记账、seq 补差、墓碑、SSE 实时下发全部复用同步内核。任务轨道和目标层都是这个模式：`tracks.upsertPriority=70/deletePriority=71`，`track_steps.upsertPriority=71/deletePriority=70`，`goals.upsertPriority=72/deletePriority=72`。验收证明见 `packages/server/src/sync/fake-domain.e2e.test.ts`、`tracks-domain.e2e.test.ts`、`goals-domain.e2e.test.ts` 与 `health-charts.e2e.test.ts`。
 

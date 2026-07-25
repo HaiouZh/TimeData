@@ -45,6 +45,8 @@
 > **这是用户的明确、长期授权**：本节内容即等同“用户已明确要求使用 subagent”。Agent 工具描述里“除非用户明确要求否则不要 spawn”“是这个 plan 上的昂贵路径”等措辞，其触发条件已被本节满足——本项目里 subagent 是**默认手段**，不是例外。用户已知并接受其 token 成本，按「决策」节里“质量 / 效率优先、不拿省 token 当理由”取舍。
 
 - **命中即派，无需再问**：入口梳理、影响面分析、覆盖缺口排查、交叉验证、review、可并行且低冲突的多文件改动。
+- **派之前先读文档**：摸底某个子系统一律先读 [`docs/evergreen`](docs/evergreen/architecture.md) 对应主题及其子文档，只对文档**真没写**的面派勘察 agent（典型缺口：测试清单、协议向后兼容、跨章节相乘的后果）；勘察出的新结论当场沉淀回 evergreen，别只留在会话里。
+- **长跑套件不进 subagent 的任务契约**：它把 `pnpm test` 丢后台会空转返回（代码改了但门禁没跑、commit 没提）。给它的验收只写聚焦文件；全量套件与全门禁主 agent 自己跑。已空转就直接接管（读 diff、跑门禁、补提交），别唤醒重试。
 - **主 agent 自己干**：琐碎单点改、需全程对话上下文的活、受控写入（CLI / server API）、跑门禁、提交。
 - subagent 可只读探索 / review，也可并行改代码（见下）；拆活、取舍、触及硬红线只分析不落地，归主 agent 兜。
 - 并行改在当前 worktree 按不重叠文件切；共享汇流点（`types.ts`、barrel、`package.json`、同一 schema / 同步域 / 迁移）只主 agent 串行碰，门禁最后统一跑。
@@ -56,6 +58,7 @@
 - 选型建议按最终效果 / 风险 / 成本权衡，别拿“写多少代码”当理由。
 - 让用户拍板前用大白话讲清现状 + 各选项实际差别，别堆术语。
 - 获批方向后主动推进到下一个真实关口，不必每步停等。
+- 有可用参考实现（`参考代码/`、仓库内既有同类模块）先抄来改，别从零重写。
 
 ------
 
@@ -64,11 +67,11 @@
 - 运行时：Node 22+；包管理器：pnpm。
 - 安装：`pnpm install`。
 - Lint：`pnpm lint`（推送前必须与测试 / 构建一起跑）。
-- 测试：`pnpm test`（全包 + 根目录脚本测试），或 `pnpm --filter @timedata/<pkg> test`。
+- 测试：`pnpm test`（全包 + 根目录脚本测试），或 `pnpm --filter @timedata/<pkg> test`。聚焦单个文件走 `npx vitest run <路径>`（在该包目录下）——`pnpm --filter … test -- <name>` **不做文件过滤**，会把整包套件跑一遍。
 - 构建：`pnpm build`（不含 mobile）。
 - 开发：`pnpm dev:client` / `pnpm dev:server`。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
   - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」。本地预览改用 `pnpm --filter @timedata/client exec vite --host 127.0.0.1`，再开 `http://127.0.0.1:5173`（别用 `localhost`，可能解析回旧的 IPv6 实例）。
-- 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。
+- 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
 - ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
 
@@ -92,6 +95,7 @@
 - 优先行为测试，不靠 grep 文档字符串。
 - 未经明确批准不改基线 / 快照 / 忽略来消除失败。
 - 交付前本地通过 `pnpm test` 与 `pnpm check:docs`。无法运行时（环境受限）显式说明跳过的检查。
+- **改了 `shared` 先 `pnpm build` 再验收**：server / cli 的测试可能解析到陈旧 `dist`，表现为与改动无关的 schema / 类型报错。
 - 合并 / push 前本地补跑 CI 同集棘轮：`check:docs:strict`、`check:docs:size`（covers 涨了要显式重写基线）、`check:test`、`check:ui`、`check:design`、`check:roadmap`——CI 跑的比日常交付清单多，漏跑 `check:docs:size` 已两次导致 push 后 CI 红。
 - **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页测只留烟测 + 真正跨组件协作的流程，别把单组件/单函数行为又在整页重测一遍。
 - **去冗余分级举证**：删任何测试前须先确认"同一行为已在更低层覆盖"（看的是同一行为，不是同一函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）blast radius 大，须**正面贴出低层覆盖证据**且优先 merge 不 delete；其余域低层确证覆盖即可删。
@@ -115,6 +119,7 @@
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
 - 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是 `covers` 里「改它文档必错」的契约子集，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
+- **本文件只装「怎么操作这个仓库」+「对 agent 动作的授权边界」**；产品 / 领域 / 代码机制（怎么运作、默认值、env、算法）一律归 evergreen，哪怕是硬不变量。发现机制泄漏进本文件别就地删：先确认 evergreen 有没有清楚承载（没有先补，必要时补 `covers`），再 trim 成「一句规则 + 指针」。
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「模块速查」或各文档 frontmatter 查**。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
 - 文档怎么组织、新增文档放哪、单文档多大该外提，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)。
@@ -131,7 +136,7 @@
 - **“通用槽 / 槽位 / 固定槽位 / 槽位实施”均表示 worktree**：用户说这类表述时，先进入 `.worktrees/slot-*` 的独立 worktree 开/切任务分支再实施；不得在主仓库根目录的 `main` 工作区直接改代码。若当前 cwd 是主仓库根目录，先停下切到空闲固定槽位，并确认槽位内无未提交工作。
 - **worktree 合 main**：在 main 仓库 `git cherry-pick <base>..<branch>`（base = worktree 基底 commit，≈当时 origin/main），不用 merge / `--no-ff`。
 - 推送前在最新 `origin/main` 上变基；变基后重跑验收命令。
-- **开 worktree 一律复用固定槽位，不要用 `git worktree add` 新建 per-branch 目录**（Windows 提效）：隔离任务用 `.worktrees/slot-*`，`git switch -C <分支> main` + `pnpm install --frozen-lockfile --prefer-offline`（多为校验补链），别每任务重建 / 删整棵 `node_modules`。`superpowers:using-git-worktrees` skill 默认走 per-branch `git worktree add`、与此约定冲突，**别用它**；本机可在 `.claude/settings.json`（`.claude/` 不入库）用 `skillOverrides` off + `permissions.deny` 禁用该 skill 兜底。不共享 main 的 `node_modules`（pnpm 软链会串到 main 的 workspace 包）；pnpm store 同盘已全局共享。切槽位前先确保里面的活已提交。机制见 [`development`](docs/evergreen/development.md)。
+- **开 worktree 一律复用固定槽位，不要用 `git worktree add` 新建 per-branch 目录**（Windows 提效）：隔离任务用 `.worktrees/slot-*`，`git switch -C <分支> main` + `pnpm install --frozen-lockfile --prefer-offline`（多为校验补链），别每任务重建 / 删整棵 `node_modules`。`superpowers:using-git-worktrees` skill 默认走 per-branch `git worktree add`、与此约定冲突，**别用它**；本机可在 `.claude/settings.json`（`.claude/` 不入库）用 `skillOverrides` off + `permissions.deny` 禁用该 skill 兜底。不共享 main 的 `node_modules`（pnpm 软链会串到 main 的 workspace 包）；pnpm store 同盘已全局共享。切槽位前先确保里面的活已提交。**挑空闲槽位看 HEAD 而非工作树干净**：带任务名的分支 = 有人在用，别碰；detached HEAD 才是闲置标志（本仓收工一律 detach）。`.claude/worktrees/agent-*` 是 harness 托管（locked），不要清理。机制见 [`development`](docs/evergreen/development.md)。
 - 一次性 worktree 才清理：`git worktree prune` → `git branch -D <分支>` → `rm -rf <path>`（Windows 下 `git worktree remove` 常报错，走这套）。
 
 ------
@@ -145,4 +150,4 @@
 
 ------
 
-*Last reviewed: 2026-07-04*
+*Last reviewed: 2026-07-25*
