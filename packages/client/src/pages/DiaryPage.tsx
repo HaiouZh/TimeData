@@ -331,6 +331,24 @@ export default function DiaryPage() {
         <DateNav date={date} onDateChange={handleDateChange} />
       </header>
 
+      {rolledOver && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-accent/40 bg-accent-soft px-4 py-2 td-text-body text-accent-ink">
+          {/* 文案必须带具体日期：息屏几天后回前台可能一次跨好几天，
+              写"新的一天"用户不知道要跳去哪 */}
+          <span className="flex-1">
+            已经是 {formatMonthDay(liveToday)} 了，当前还在写 {formatMonthDay(date)} 的日记
+          </span>
+          <button
+            type="button"
+            data-testid="diary-rollover-accept"
+            onClick={() => void switchDate(liveToday)}
+            className="rounded-xl border border-accent bg-surface px-3 py-1 td-text-body font-medium text-accent"
+          >
+            切到今天
+          </button>
+        </div>
+      )}
+
       {conflict && (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger-soft px-4 py-2 td-text-body text-danger">
           <span className="flex-1">日记已被其他窗口修改</span>

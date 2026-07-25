@@ -22,6 +22,17 @@ vi.mock("../lib/diary/diaryApi.ts", async () => {
   };
 });
 
+const resumeCallbackRef = vi.hoisted(() => ({ current: null as (() => void) | null }));
+
+// 打桩 useAppResumeRefresh 拿到 resume 回调手动调，而不是打桩 useNowMinute 本身——
+// 后者就不验接线了。这条路径语义上正好是"手机息屏一夜后回前台"，最真实的跨零点场景。
+// 现成范式见 hooks/useNowMinute.test.tsx:7-12 与 :62-72。
+vi.mock("../hooks/useAppResumeRefresh.ts", () => ({
+  useAppResumeRefresh: (onResume: () => void) => {
+    resumeCallbackRef.current = onResume;
+  },
+}));
+
 async function act(callback: () => Promise<void> | void) {
   // 本地 flushSync 版 act 只包住回调的同步部分：mock 的 saveDiary/fetchDiary 等 Promise
   // 在此之后的 resolve/continuation 落在它的作用域之外，React 会报
@@ -42,6 +53,16 @@ async function flush() {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   });
+}
+
+async function crossMidnightTo(day: string) {
+  // 只推进系统时钟，不开 fake timers——本文件的 flush() 靠真实 setTimeout(0)，
+  // 一旦 useFakeTimers 整个文件挂死。
+  vi.setSystemTime(new Date(`${day}T00:01:00+08:00`));
+  await act(async () => {
+    resumeCallbackRef.current?.();
+  });
+  await flush();
 }
 
 async function renderPage(
@@ -99,6 +120,10 @@ function textarea(host: HTMLElement): HTMLTextAreaElement {
 function buttonByText(host: HTMLElement, text: string): HTMLButtonElement | null {
   const found = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === text);
   return found instanceof HTMLButtonElement ? found : null;
+}
+
+function todayBanner(host: HTMLElement): HTMLElement | null {
+  return host.querySelector('button[data-testid="diary-rollover-accept"]');
 }
 
 async function typeInto(element: HTMLTextAreaElement, value: string) {
@@ -975,6 +1000,73 @@ describe("DiaryPage", () => {
     const heading = host.querySelector("h1");
     expect(heading?.textContent).toBe("日记");
     expect(host.querySelector('button[aria-label="前一天"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("跟随模式下过零点：出提示条，但正文与存盘日期都还停在昨天（不自动切）", async () => {
+    const { host, root } = await renderPage();
+    await typeInto(textarea(host), "23:58 写的内容");
+    fetchDiary.mockClear();
+
+    await crossMidnightTo("2026-07-26");
+
+    expect(host.textContent).toContain("7月26日");
+    expect(textarea(host).value).toBe("23:58 写的内容");
+    expect(fetchDiary).not.toHaveBeenCalled(); // 绝不能因为跨零点就重新拉正文
+
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(saveDiary).toHaveBeenCalledWith("2026-07-25", expect.anything()); // 存回昨天那篇
+    await unmount(root);
+  });
+
+  it("点「切到今天」才真的切过去，提示条随之消失", async () => {
+    const { host, root } = await renderPage();
+    await crossMidnightTo("2026-07-26");
+    fetchDiary.mockResolvedValue({ content: "新一天", mtime: 300 });
+
+    await click(todayBanner(host));
+
+    expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-26");
+    expect(textarea(host).value).toBe("新一天");
+    expect(todayBanner(host)).toBeNull();
+    await unmount(root);
+  });
+
+  it("点过一次之后再过一天，提示条要能再出来（重锚）", async () => {
+    // 不重锚的话 followAnchor 永远停在挂载那天：切过去之后 rolledOver 恒为真（提示条不消失），
+    // 或者反过来永远为假（第二天不再提示）。这条是重锚的唯一承重测试。
+    const { host, root } = await renderPage();
+    await crossMidnightTo("2026-07-26");
+    await click(todayBanner(host));
+    expect(todayBanner(host)).toBeNull();
+
+    await crossMidnightTo("2026-07-27");
+
+    expect(todayBanner(host)).not.toBeNull();
+    expect(host.textContent).toContain("7月27日");
+    await unmount(root);
+  });
+
+  it("显式日期模式下过零点绝不提示（用户自己选的补写目标不是被冻住）", async () => {
+    const { host, root } = await renderPage("/diary?date=2026-07-20");
+
+    await crossMidnightTo("2026-07-26");
+
+    expect(todayBanner(host)).toBeNull();
+    await unmount(root);
+  });
+
+  it("脏态下点「切到今天」先弹确认，点「继续编辑」不切", async () => {
+    const { host, root } = await renderPage();
+    await typeInto(textarea(host), "还没保存");
+    await crossMidnightTo("2026-07-26");
+    fetchDiary.mockClear();
+
+    await click(todayBanner(host));
+    await click(buttonByText(host, "继续编辑"));
+
+    expect(fetchDiary).not.toHaveBeenCalled();
+    expect(textarea(host).value).toBe("还没保存");
     await unmount(root);
   });
 });
