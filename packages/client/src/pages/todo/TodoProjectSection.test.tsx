@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { Task } from "@timedata/shared";
+import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
@@ -46,19 +47,24 @@ const handlers = {
   onToInbox: vi.fn(),
 };
 
-function renderSection(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
-  return renderDom(
+function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
+  return (
     <MemoryRouter>
       <TodoProjectSection
         groups={props.groups ?? []}
         handSessionId={props.handSessionId ?? null}
         now={props.now ?? NOW}
-        revealGoal={props.revealGoal ?? null}
+        revealGoals={props.revealGoals ?? []}
+        onRevealConsumed={props.onRevealConsumed ?? vi.fn()}
         onExitProject={props.onExitProject ?? vi.fn()}
         {...handlers}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderSection(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
+  return renderDom(sectionElement(props));
 }
 
 beforeEach(() => {
@@ -180,7 +186,7 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 
-  it("revealGoal 展开指定组（jsdom 无 scrollIntoView 也不抛）", async () => {
+  it("revealGoals 展开指定组并回报消费（jsdom 无 scrollIntoView 也不抛）", async () => {
     setProjectZoneIntroDismissed(true);
     const groups = [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })];
     const { host, root } = await renderSection({ groups });
@@ -188,9 +194,29 @@ describe("TodoProjectSection", () => {
 
     await unmount(root);
 
-    const second = await renderSection({ groups, revealGoal: { id: "g1", nonce: 1 } });
+    const onRevealConsumed = vi.fn();
+    const second = await renderSection({ groups, revealGoals: ["g1"], onRevealConsumed });
     expect(second.host.textContent).toContain("刷墙");
+    // 消费必须回报给宿主清空，否则跨断点重挂时这条意图会被 mount effect 重放一遍。
+    expect(onRevealConsumed).toHaveBeenCalledWith(["g1"]);
     await unmount(second.root);
+  });
+
+  it("目标组这一帧还没渲染出来：意图不消费也不丢，组出现后补上展开", async () => {
+    // 成员刚升根 / 刚被清掉重复时，宿主查一次库就置位，而项目区要等 listTasks 整轮重算才产出这一组——
+    // 前者几乎必然先落。此时 rowRefs 上没有节点，脉冲式实现会静默跳过滚动且永不重试。
+    setProjectZoneIntroDismissed(true);
+    const onRevealConsumed = vi.fn();
+    const revealGoals = ["g1"];
+    const { host, root } = await renderDom(sectionElement({ groups: [], revealGoals, onRevealConsumed }));
+    expect(onRevealConsumed).not.toHaveBeenCalled();
+
+    const groups = [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })];
+    await act(async () => root.render(sectionElement({ groups, revealGoals, onRevealConsumed })));
+
+    expect(host.textContent).toContain("刷墙");
+    expect(onRevealConsumed).toHaveBeenCalledWith(["g1"]);
+    await unmount(root);
   });
 });
 

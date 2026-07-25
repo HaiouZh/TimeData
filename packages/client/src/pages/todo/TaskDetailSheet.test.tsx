@@ -845,36 +845,40 @@ describe("TaskDetailSheet tag 编辑", () => {
     await unmount(root);
   });
 
-  it("选「不重复」清掉时间后回调 onTimeCleared（页面据此展开归属组）", async () => {
+  it("选「不重复」写入成功后回调 onTimeChanged，交出去的是写入后的行（页面据此判落点）", async () => {
     const task = await addTask({ title: "刷墙", scheduledAt: normalizeScheduledDate("2026-07-01"), toInbox: true });
-    const onTimeCleared = vi.fn();
-    const { host, root } = await renderSheet(task.id, { onTimeCleared });
+    const onTimeChanged = vi.fn();
+    const { host, root } = await renderSheet(task.id, { onTimeChanged });
 
     await click(badgeOf(host));
     await click(host.querySelector('button[aria-label="不重复"]'));
     await settle();
 
     expect((await db.tasks.get(task.id))?.scheduledAt).toBeNull();
-    expect(onTimeCleared).toHaveBeenCalledTimes(1);
-    expect(onTimeCleared).toHaveBeenCalledWith(task.id);
+    expect(onTimeChanged).toHaveBeenCalledTimes(1);
+    // 交 id 不够：页面要按写入后的 done / sessionId / scheduledAt 判落点，抽屉里的 task 是动作前的行。
+    expect(onTimeChanged).toHaveBeenCalledWith(expect.objectContaining({ id: task.id, scheduledAt: null }));
     await unmount(root);
   });
 
-  it("选「每天」不回调：任务变成重复模板、不落 inbox 池，没有落点要反馈", async () => {
+  it("选「每天」同样回调，交的是重复模板：抽屉只报事实，落点判据不在这里", async () => {
     const task = await addTask({ title: "刷墙", toInbox: true });
-    const onTimeCleared = vi.fn();
-    const { host, root } = await renderSheet(task.id, { onTimeCleared });
+    const onTimeChanged = vi.fn();
+    const { host, root } = await renderSheet(task.id, { onTimeChanged });
 
     await click(badgeOf(host));
     await click(host.querySelector('button[aria-label="每天"]'));
     await settle();
 
-    // 落库确认写入已完成（也顺带验证"变成重复模板"）：applyRecurrenceChoice 的 recurrence 分支比
-    // none/scheduled 分支多一次 Dexie 往返，单次 settle() 未必够；用 waitForTask 轮询到位后再查
-    // onTimeCleared，避免断言抢在 run(...).then(...) 那个额外 tick 之前跑、把"还没触发"误判成"不会触发"。
+    // 落库确认写入已完成：applyRecurrenceChoice 的 recurrence 分支比 none/scheduled 分支多一次 Dexie 往返，
+    // 单次 settle() 未必够；轮询到位后再查回调，避免断言抢在那个额外 tick 之前跑。
     const saved = await waitForTask(task.id, (t) => (t?.recurrence ?? null) !== null);
     expect(saved?.recurrence).not.toBeNull();
-    expect(onTimeCleared).not.toHaveBeenCalled();
+    // 用 choice.kind 当代理判据两个方向都错，故这里照报——「变成重复模板不该展开归属组」由页面侧的
+    // landsInCollapsedProjectGroup 挡住（见 TodoPage.test.tsx 的两条反向用例）。
+    expect(onTimeChanged).toHaveBeenCalledTimes(1);
+    expect(onTimeChanged).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }));
+    expect(onTimeChanged.mock.calls[0]?.[0]?.recurrence).not.toBeNull();
     await unmount(root);
   });
 });

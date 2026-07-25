@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
+import type { Task } from "@timedata/shared";
 import { act, createElement, useEffect } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +11,7 @@ import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
@@ -21,6 +23,10 @@ beforeEach(async () => {
   await db.settings.clear();
   await db.syncLog.clear();
   await db.goals.clear();
+  // sessions 与上面四张表一起列全：本文件有用例 grabTaskToHand 开场，漏了它的话，
+  // 一旦本文件哪天迁进 isolate:false 的快桶、或全局 afterEach 的兜底清表被改窄，
+  // 上一条的活跃场就会漏给下一条，任务被 listTasks 截进手头区、整页断言跑偏。
+  await db.sessions.clear();
 });
 
 afterEach(() => {
@@ -57,16 +63,72 @@ async function flushAsync(): Promise<void> {
   });
 }
 
-async function waitForCondition(assertion: () => boolean, label: string): Promise<void> {
+/**
+ * 让 Dexie/fake-indexeddb 的事务真的提交：flushAsync 只清微任务，多段事务（详情抽屉那条链）要让出宏任务。
+ * 抽屉相关用例一律用它推进，否则断言会抢在写入之前跑、把"还没到"误判成"不会发生"。
+ */
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  });
+}
+
+async function waitForCondition(
+  assertion: () => boolean,
+  label: string,
+  step: () => Promise<void> = flushAsync,
+): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     if (assertion()) return;
-    await flushAsync();
+    await step();
   }
   throw new Error(`Timed out waiting for ${label}`);
 }
 
 async function waitForText(host: HTMLElement, text: string): Promise<void> {
   await waitForCondition(() => host.textContent?.includes(text) ?? false, text);
+}
+
+/** 落库轮询：断言"不该展开"之前必须先等写入真的落了，否则测的是"还没跑到"。 */
+async function waitForTask(id: string, predicate: (task: Task | undefined) => boolean): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (predicate(await db.tasks.get(id))) return;
+    await settle();
+  }
+  throw new Error(`Timed out waiting for task ${id}`);
+}
+
+function zoneText(host: HTMLElement): string {
+  return (host.querySelector('[data-section="todo-projects"]') as HTMLElement | null)?.textContent ?? "";
+}
+
+async function seedProjectGoal(memberId: string, createdAt = "2026-06-28T09:00:00.000Z"): Promise<void> {
+  await db.goals.add({
+    id: "g1",
+    title: "装修",
+    kind: "project",
+    status: "active",
+    members: [{ kind: "task", id: memberId }],
+    prerequisites: [],
+    createdAt,
+    updatedAt: createdAt,
+  });
+}
+
+/** 从行打开详情抽屉 → 点开「重复与时间」预设面板。 */
+async function openRecurrencePresets(host: HTMLElement, title: string): Promise<void> {
+  const row = host.querySelector(`[aria-label="打开 ${title}"]`);
+  expect(row).not.toBeNull();
+  await act(async () => {
+    row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
+  const badge = host.querySelector('[role="dialog"][aria-label="任务详情"] button[aria-label="编辑重复与时间"]');
+  expect(badge).not.toBeNull();
+  await act(async () => {
+    badge?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await settle();
 }
 
 async function openGravityReview(host: HTMLElement): Promise<void> {
@@ -817,6 +879,119 @@ describe("TodoPage", () => {
         ),
       "project zone to expand the member's home group",
     );
+    await unmount(root);
+  });
+
+  it("红线 4 反向：手头区「本场已完成」取消勾选，项目区不展开（它回的是手头，本来就看得见）", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    setProjectZoneIntroDismissed(true);
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await grabTaskToHand(member.id, { now: new Date(now) });
+    await toggleTaskDone(member.id);
+    await seedProjectGoal(member.id, now);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => zoneText(host).includes("已完成 · 1 条"), "折叠的项目组");
+    expect(zoneText(host)).not.toContain("刷墙");
+
+    // 「本场已完成」是 <details open={false}>，子树仍在 DOM 里，不必展开就能点到这枚复选框。
+    const checkbox = host.querySelector(
+      '[data-section="todo-at-hand"] input[aria-label="完成 刷墙"]',
+    ) as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    await act(async () => {
+      checkbox.click();
+    });
+
+    // 取消勾选后 listTasks 把它截进 atHand（焦点轴压过 placement），落到页面最顶上的手头区；
+    // 此时展开项目区只会把页面滚走——这正是同批 releaseFromHand 亲手立的红线。
+    await waitForCondition(() => zoneText(host).includes("还剩 1 / 共 1"), "组头计数回到未完成口径");
+    expect(zoneText(host)).not.toContain("刷墙");
+    expect((host.querySelector('[data-section="todo-at-hand"]') as HTMLElement).textContent ?? "").toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("详情抽屉清掉时间：项目成员回落 inbox 池，项目区展开归属组（抽屉→页面这根线）", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    setProjectZoneIntroDismissed(true);
+    // 排到今天（addTask 的默认落点）：行落在今天区、点得开详情。排到远期会沉进已排期水下尾，点不到。
+    const member = await addTask({ title: "刷墙" });
+    await seedProjectGoal(member.id, now);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => zoneText(host).includes("还剩 1 / 共 1"), "折叠的项目组");
+    expect(zoneText(host)).not.toContain("刷墙");
+
+    await openRecurrencePresets(host, "刷墙");
+    await act(async () => {
+      host.querySelector('button[aria-label="不重复"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await waitForCondition(() => zoneText(host).includes("刷墙"), "项目区展开归属组", settle);
+    await unmount(root);
+  });
+
+  it("详情抽屉清时间但任务已完成：不展开（落点是组内另一个折叠子区，展开了也看不到它）", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    setProjectZoneIntroDismissed(true);
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await scheduleTask(member.id, "2099-12-10");
+    await toggleTaskDone(member.id);
+    await seedProjectGoal(member.id, now);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => zoneText(host).includes("已完成 · 1 条"), "折叠的项目组");
+    expect(zoneText(host)).not.toContain("刷墙");
+
+    await openRecurrencePresets(host, "刷墙");
+    await act(async () => {
+      host.querySelector('button[aria-label="不重复"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // 写入确实落了（scheduledAt 被清成 null），但 done 没翻面：落点是「已完成」不是收件箱。
+    await waitForTask(member.id, (task) => task?.scheduledAt === null);
+    await settle();
+    await settle();
+    expect(zoneText(host)).toContain("已完成 · 1 条");
+    expect(zoneText(host)).not.toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("详情抽屉选「仅某天」到未来日期：不展开（落点是已排期区，本来就看得见）", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    setProjectZoneIntroDismissed(true);
+    const member = await addTask({ title: "刷墙" });
+    await seedProjectGoal(member.id, now);
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => zoneText(host).includes("还剩 1 / 共 1"), "折叠的项目组");
+
+    await openRecurrencePresets(host, "刷墙");
+    await act(async () => {
+      host.querySelector('button[aria-label="仅某天…"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    // 翻到下个月再挑最后一天：恒在未来，且不必替测试算时区（日期从月历自己的 aria-label 上读）。
+    // 「仅某天」还能选过去的日期——那支才回落 inbox 池，靠 choice.kind === "none" 判会整个漏掉。
+    const nextMonth = host.querySelector('section[aria-label="月历"] button[aria-label="下个月"]');
+    expect(nextMonth).not.toBeNull();
+    await act(async () => {
+      nextMonth?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    const dayButtons = Array.from(host.querySelectorAll('section[aria-label="月历"] button[aria-pressed]'));
+    const futureDay = dayButtons[dayButtons.length - 1] as HTMLButtonElement | undefined;
+    const futureDate = futureDay?.getAttribute("aria-label") ?? "";
+    expect(futureDate).not.toBe("");
+    await act(async () => {
+      futureDay?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await waitForTask(member.id, (task) => task?.scheduledAt === normalizeScheduledDate(futureDate));
+    await settle();
+    await settle();
+    expect(zoneText(host)).toContain("还剩 1 / 共 1");
+    expect(zoneText(host)).not.toContain("刷墙");
     await unmount(root);
   });
 });

@@ -275,6 +275,31 @@ describe("归属变更同事务刷新成员任务 updatedAt", () => {
     expect((await db.tasks.get(task.id))?.updatedAt).toBe(STALE);
   });
 
+  // 下面两条盯的是 addGoalMember 里 `ref.kind === "task" && ownedProjectTaskIds(next).includes(ref.id)` 的
+  // **右半边**：只测「两个条件都真」的话，把 && 写成 || 也照样绿。盖 STALE 必须在 add **之前**——
+  // 上面那条 theme 用例是先 add 再盖 STALE，add 阶段真发生了错误 touch 也被后盖的 STALE 抹掉了。
+  it("加进 theme 目标不 touch（先盖 STALE 再 add，才验得到 add 这一步）", async () => {
+    const goal = await addGoal({ title: "主题", kind: "theme" });
+    const task = await addTask({ title: "主题任务", toInbox: true });
+    await db.tasks.update(task.id, { updatedAt: STALE });
+
+    await addGoalMember(goal.id, { kind: "task", id: task.id });
+
+    // 错误 touch 的实际伤害：任务被无故顶上重力水位线，从水下折叠区冒出来。
+    expect((await db.tasks.get(task.id))?.updatedAt).toBe(STALE);
+  });
+
+  it("加进已归档 project 不 touch（归档目标不拥有归属）", async () => {
+    const goal = await addGoal({ title: "旧项目", kind: "project" });
+    await updateGoal(goal.id, { status: "archived" });
+    const task = await addTask({ title: "旧任务", toInbox: true });
+    await db.tasks.update(task.id, { updatedAt: STALE });
+
+    await addGoalMember(goal.id, { kind: "task", id: task.id });
+
+    expect((await db.tasks.get(task.id))?.updatedAt).toBe(STALE);
+  });
+
   it("members 裸行含重复 task ref 时 touch 只记一条 syncLog（不受 GoalSchema 唯一性约束保护）", async () => {
     const goal = await addGoal({ title: "装修", kind: "project" });
     const task = await addTask({ title: "刷墙", toInbox: true });
@@ -342,5 +367,23 @@ describe("findActiveProjectGoalIdForTask", () => {
   it("不是任何 active project 的成员 → null", async () => {
     const task = await addTask({ title: "自由任务", toInbox: true });
     expect(await findActiveProjectGoalIdForTask(task.id)).toBeNull();
+  });
+
+  it("读裸行不过 GoalSchema：members 含重复 task ref 的行仍查得到归属", async () => {
+    // GoalSchema 的 superRefine 会因单个成员重复 reject **整行**，一过 parse 就是整组归属静默失效——
+    // 用户点「回收件箱」后没有任何反馈，退回本轮修的那个 bug。存量与跨设备并发都能造出这种行。
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    const task = await addTask({ title: "刷墙", toInbox: true });
+    const raw = await db.goals.get(goal.id);
+    if (!raw) throw new Error("goal 不存在");
+    await db.goals.put({
+      ...raw,
+      members: [
+        { kind: "task", id: task.id },
+        { kind: "task", id: task.id },
+      ],
+    });
+
+    expect(await findActiveProjectGoalIdForTask(task.id)).toBe(goal.id);
   });
 });
