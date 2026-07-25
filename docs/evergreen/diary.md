@@ -14,6 +14,7 @@ last-reviewed: 2026-07-25
 ---
 
 <!-- 复核 2026-07-25（diary-workbench 阶段二 · 编辑器语义收口）：补三键位（回车整段重排/Tab缩进出层/Ctrl+K补链接）契约、EditAction 四态、onChange 红线、撤销栈已知缺口、dirty 记账四条路径、行尾保护 §3.8；不新增 covers（lib/diary/** 通配已覆盖全部新文件）。 -->
+<!-- 复核 2026-07-25（存量两问题）：补 §2.8 保存在途脏标记（编辑序号判据）、§2.9 重载失败只出条状提示；§3.7 补 markDirty 与清脏出口。 -->
 
 # 日记
 
@@ -57,7 +58,9 @@ SettingsDiaryPage 保存模板
 5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时，回车清空该行前缀而非续号。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 §3.2。
 6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（Phase 1 表单控件棘轮闸 `check:ui` 强制）。
 7. **未保存修改的离开守卫**统一走 `hooks/useUnsavedChangesGuard`（`useBlocker` + `beforeunload`），覆盖桌面侧栏 / 底栏 / `<Link>` / `navigate()` / 浏览器后退 / 安卓返回键；页面**不再**自管 `beforeunload`，返回按钮也不自己弹确认（否则会连弹两次）。页内「刷新重载」的确认不归它管，仍走 `useConfirm`。**已知缺口**：`appUpdate.tsx` 检测到新构建时会在 `visibilitychange`/`focus` 上程序化调用 `window.location.reload()`（无用户激活的硬刷新），浏览器对此类 reload 普遍抑制 `beforeunload` 提示，且 Android WebView 本就不显示 `beforeunload` 对话框；这条路径既不过 `useBlocker`（不是路由内导航）也不过 `beforeunload`（被抑制/不支持），日记正文又不进任何本地存储或同步域，因此是离开守卫覆盖不到的出口。
-8. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
+8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 §3.8 行尾保护。
+9. **`handleReload` 失败只出条状错误提示**（`setError`），不进 `loadFailed` 全屏态、不清冲突条：正文还在编辑器里、用户还能接着编辑保存，全屏失败态反而会把这份没上传的内容从屏幕上抹掉。
+10. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
 
 ## 3. 编辑器语义（回车 / Tab / Ctrl+K）
 
@@ -129,6 +132,8 @@ SettingsDiaryPage 保存模板
 | replace + 降级 | `runEditAction` 内显式 `markDirty()` | `setValue` 不经 `onChange`，漏了这一步保存按钮永远不亮 |
 | select | 不置 | 用户一个字没改，不该变脏 |
 | noop | 不置 | 同上 |
+
+四条路径都走页面里的 `markDirty()`（置位 + 编辑序号 +1），不裸调 `setDirty(true)`——序号是"保存在途中有没有继续打字"的唯一判据（§2.8）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
 
 ### 3.8 行尾保护
 

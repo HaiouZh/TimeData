@@ -140,6 +140,63 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  it("保存成功且期间无编辑：脏标记照常清除，保存按钮变灰", async () => {
+    // 与下一条互为反面：没有这条，"永不清脏"式的假修复也能让下一条变绿。
+    saveDiary.mockResolvedValue({ mtime: 200 });
+    const { host, root } = await renderPage();
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    await typeInto(textarea(host), "1. y");
+    expect(save.disabled).toBe(false);
+
+    await click(save);
+
+    expect(save.disabled).toBe(true);
+
+    await unmount(root);
+  });
+
+  it("保存在途中继续打字：回来不清脏标记，那段内容仍能保存出去", async () => {
+    // 无条件 setDirty(false) 会把这段从未上传的内容的脏标记一起抹掉——保存按钮变灰、
+    // useUnsavedChangesGuard 也不再拦截，换页即静默丢数据。
+    let resolveSave!: (value: { mtime: number }) => void;
+    saveDiary.mockImplementationOnce(
+      () =>
+        new Promise<{ mtime: number }>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    saveDiary.mockResolvedValueOnce({ mtime: 300 });
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    await typeInto(el, "1. 第一版");
+    await click(save);
+    expect(saveDiary).toHaveBeenCalledTimes(1);
+
+    // 请求还挂在途中，用户继续打字
+    await typeInto(el, "1. 第一版\n2. 在途中补的");
+    await act(async () => {
+      resolveSave({ mtime: 200 });
+    });
+    await flush();
+
+    expect(save.disabled).toBe(false);
+    expect(el.value).toBe("1. 第一版\n2. 在途中补的");
+
+    // 再点一次保存，这段内容真的上传得出去（baseMtime 用上一发返回的新值）
+    await click(save);
+    expect(saveDiary).toHaveBeenLastCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), {
+      content: "1. 第一版\n2. 在途中补的",
+      baseMtime: 200,
+    });
+
+    await unmount(root);
+  });
+
   it("saveDiary 抛 DiaryConflictError，点“仍然覆盖”带 force:true 重试", async () => {
     saveDiary.mockRejectedValueOnce(new DiaryConflictError(150));
     saveDiary.mockResolvedValueOnce({ mtime: 300 });
@@ -256,6 +313,35 @@ describe("DiaryPage", () => {
     expect(host.querySelector('[role="dialog"]')).toBeNull();
     expect(textarea(host).value).toBe("1. local edit");
     expect(fetchDiary.mock.calls.length).toBe(fetchCallsBefore);
+
+    await unmount(root);
+  });
+
+  it("刷新重载失败：出条状错误提示，保留本地编辑与冲突条，不打成全屏加载失败态", async () => {
+    // 没有 try/catch 时这里除了"页面毫无反应"，还会真产生一条 unhandled rejection（vitest 会抓）。
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(150));
+    const { host, root } = await renderPage();
+
+    await typeInto(textarea(host), "1. local edit");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    const reloadButton = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "刷新重载",
+    );
+    expect(reloadButton).toBeInstanceOf(HTMLButtonElement);
+
+    fetchDiary.mockRejectedValue(new Error("网络断开"));
+    await click(reloadButton ?? null);
+    const confirmDiscard = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "确认",
+    );
+    expect(confirmDiscard).toBeInstanceOf(HTMLButtonElement);
+    await click(confirmDiscard ?? null);
+
+    expect(host.textContent).toContain("网络断开");
+    expect(host.textContent).not.toContain("加载失败，请检查网络后重试");
+    expect(textarea(host).value).toBe("1. local edit");
+    expect(host.textContent).toContain("日记已被其他窗口修改");
 
     await unmount(root);
   });

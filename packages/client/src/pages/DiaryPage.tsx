@@ -30,10 +30,17 @@ export default function DiaryPage() {
   const [template, setTemplate] = useState("");
   const [content, setContent] = useState("");
   const [baseMtime, setBaseMtime] = useState<number | null>(null);
-  // 警示：dirty 现在只由 onChange 置位，不是内容比对，所以打开一个 CRLF 文件（eolRef 探测
+  // 警示：dirty 现在只由 markDirty（onChange / 降级编辑）置位，不是内容比对，所以打开一个 CRLF 文件（eolRef 探测
   // 到 "\r\n" 但用户还没碰键盘）不会自己变脏。将来若有人把 dirty 改成"内容与加载值比对"，
   // 这里会连带踩坑：CRLF 文件会一打开就永远脏（textarea 里的 LF 版本永远不等于原始 CRLF 内容）。
   const [dirty, setDirty] = useState(false);
+  // 编辑序号：每次用户改动 +1。handleSave 用它判断"保存在途中用户有没有继续打字"，
+  // 是 ref 不是 state——它只在回调里读写，不参与渲染。
+  const editRevisionRef = useRef(0);
+  function markDirty() {
+    editRevisionRef.current += 1;
+    setDirty(true);
+  }
   // 站内换页 + 关标签页两条腿都由它管；页内「刷新重载」的确认仍走下面的 confirm
   useUnsavedChangesGuard({ when: dirty, confirm });
   const [saving, setSaving] = useState(false);
@@ -106,13 +113,15 @@ export default function DiaryPage() {
     // （Ctrl+K 落在已有链接上，用户只是想改地址，一个字没改不该变脏）。
     if (!action) return;
     event.preventDefault();
-    runEditAction(field, action, setContent, () => setDirty(true));
+    runEditAction(field, action, setContent, markDirty);
   }
 
   async function handleSave(options: { force?: boolean } = {}) {
     if (saving) return;
     setSaving(true);
     setError(null);
+    // 发起时的编辑序号：请求在途中用户可能继续打字，回来时得认得出来（见下面清脏处）
+    const revisionAtRequest = editRevisionRef.current;
     try {
       // 行尾保护还原点：content 来自 textarea，规范保证其中不含 \r（jsdom 忠实实现了这条
       // 规范，本页 jsdom 接线测试可以真实复现丢失），所以这里不需要、也不应该先做防御性
@@ -125,7 +134,11 @@ export default function DiaryPage() {
       const body = eolRef.current === "\r\n" ? content.replaceAll("\n", "\r\n") : content;
       const result = await saveDiary(today, { content: body, baseMtime, force: options.force });
       setBaseMtime(result.mtime);
-      setDirty(false);
+      // 只有"这一发上传的就是当前内容"才清脏。用户在请求在途中继续打字时，那段内容从未上传，
+      // 无条件 setDirty(false) 会连 useUnsavedChangesGuard 一起关掉——换页即静默丢数据。
+      // 判据用编辑序号不用内容比对：dirty 一旦改成内容比对，CRLF 文件会一打开就永远脏
+      // （textarea 按 HTML 规范把 \r\n 归一成 \n，与加载值天然不等，见上面 dirty 的警示注释）。
+      if (editRevisionRef.current === revisionAtRequest) setDirty(false);
       setConflict(false);
     } catch (err) {
       if (err instanceof DiaryConflictError) {
@@ -163,7 +176,15 @@ export default function DiaryPage() {
     )
       return;
     setError(null);
-    const doc = await fetchDiary(today);
+    let doc: Awaited<ReturnType<typeof fetchDiary>>;
+    try {
+      doc = await fetchDiary(today);
+    } catch (err) {
+      // 只出条状提示，不打成 loadFailed 全屏态：正文还在编辑器里、用户还能接着编辑和保存，
+      // 换成全屏"加载失败"反而会把这份没上传的内容从屏幕上抹掉。冲突条也保留——冲突没解决。
+      setError(err instanceof Error ? err.message : "重载失败");
+      return;
+    }
     // 行尾保护第二个写入点——最容易漏的那个。冲突后点「刷新重载」若不更新 eolRef，
     // 它还停在上一次的值，会把 LF 文件写成 CRLF 或反过来。同样必须在 setContent 之前。
     eolRef.current = detectEol(doc.content);
@@ -256,7 +277,7 @@ export default function DiaryPage() {
           // 用真实 execCommand + 零回写计数器接上这个 onChange，一加工就变红。
           onChange={(event) => {
             setContent(event.target.value);
-            setDirty(true);
+            markDirty();
           }}
           onKeyDown={handleKeyDown}
           className="min-h-0 flex-1 resize-none bg-surface px-4 py-4 td-text-body text-ink outline-none"
