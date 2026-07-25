@@ -129,10 +129,9 @@ async function materializeRuleInCurrentTransaction(rule: Task, now: Date): Promi
   if (rule.recurrence === null || (rule.parentId ?? null) !== null) return;
   const forRule = await db.tasks.where("ruleId").equals(rule.id).toArray();
   const active = forRule.find((o) => !o.done && !o.skipped);
-  if (active) {
-    await ensureOccurrenceChildrenInCurrentTransaction(rule, active);
-    return;
-  }
+  // children 只在 occurrence 创建事务内克隆一次：引擎分不清「没同步到」和「用户刚删」，
+  // 每轮补齐会把用户删掉的子步骤原样补回（#5.2）。
+  if (active) return;
 
   const processed = forRule.filter((o) => o.done || o.skipped);
   const occ = materializeDue(rule, processed, now, await nextTaskSortOrder());
@@ -146,10 +145,7 @@ async function materializeNextRuleOccurrenceInCurrentTransaction(rule: Task, now
   if (rule.recurrence === null || (rule.parentId ?? null) !== null) return null;
   const forRule = await db.tasks.where("ruleId").equals(rule.id).toArray();
   const active = forRule.find((o) => !o.done && !o.skipped);
-  if (active) {
-    await ensureOccurrenceChildrenInCurrentTransaction(rule, active);
-    return active;
-  }
+  if (active) return active;
 
   const dueDate = nextDueDate(
     rule,
@@ -162,7 +158,6 @@ async function materializeNextRuleOccurrenceInCurrentTransaction(rule: Task, now
   const existing = await db.tasks.get(occurrence.id);
   if (existing) {
     if (!existing.done && !existing.skipped) {
-      await ensureOccurrenceChildrenInCurrentTransaction(rule, existing);
       return existing;
     }
     return null;

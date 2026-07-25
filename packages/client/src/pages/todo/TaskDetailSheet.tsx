@@ -158,7 +158,10 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
     if (!id || !task) return;
     void (async () => {
       try {
-        if (task.ruleId !== null && !task.done && !task.skipped) {
+        // occurrence 一律留痕（done / 已 skipped 也是）：硬删会让游标回退，
+        // 引擎下一轮用确定性 id occ:{ruleId}:{dueDate} 把这发重新物化成未勾选。
+        // recurrence===null 是 markOccurrenceSkipped 的前置条件，混合体行仍走 cascade 兜底不至于删不掉。
+        if (task.ruleId !== null && task.recurrence === null) {
           await markOccurrenceSkipped(id);
         } else {
           await deleteTaskCascade(id);

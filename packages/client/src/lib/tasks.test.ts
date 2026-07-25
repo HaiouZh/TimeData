@@ -1195,6 +1195,24 @@ describe("runMaterialization", () => {
     const active = (await db.tasks.where("ruleId").equals(rule.id).toArray()).filter((o) => !o.done && !o.skipped);
     expect(active).toHaveLength(1);
   });
+
+  it("删掉 occurrence 的镜像子任务后，跨轮物化不再补回", async () => {
+    const rule = await addTask({
+      title: "每天",
+      recurrence: { freq: "daily", interval: 1, basis: "due" },
+    });
+    await createChildTask(rule.id, "子步骤");
+    const now = new Date();
+    await runMaterialization(now);
+    const occ = (await db.tasks.toArray()).find((t) => t.ruleId === rule.id && t.recurrence === null);
+    const child = (await db.tasks.toArray()).find((t) => t.parentId === occ!.id);
+    expect(child).toBeDefined();
+
+    await deleteTaskCascade(child!.id);
+    await runMaterialization(now);
+
+    expect((await db.tasks.toArray()).filter((t) => t.parentId === occ!.id)).toHaveLength(0);
+  });
 });
 
 describe("listTasks occurrence 切读", () => {

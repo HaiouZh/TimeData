@@ -654,6 +654,41 @@ describe("TaskDetailSheet 删除", () => {
     );
     await unmount(root);
   });
+
+  it("删除 done occurrence：同样留痕，done/completedAt 不翻面", async () => {
+    await db.tasks.add({
+      id: "occ:r2:2026-06-14",
+      parentId: null,
+      title: "已完成的一发",
+      done: true,
+      recurrence: null,
+      lastDoneAt: "2026-06-14T08:00:00.000Z",
+      startAt: null,
+      scheduledAt: "2026-06-14T00:00:00.000Z",
+      completedCount: 1,
+      weight: 0,
+      completedAt: "2026-06-14T08:00:00.000Z",
+      tags: [],
+      ruleId: "r2",
+      skipped: false,
+      sortOrder: 0,
+      createdAt: "2026-06-14T00:00:00.000Z",
+      updatedAt: "2026-06-14T00:00:00.000Z",
+    });
+    const { host, root, onClose } = await renderSheet("occ:r2:2026-06-14");
+
+    await click(host.querySelector('button[aria-label="删除任务"]'));
+    await settle();
+
+    // 硬删会让引擎按确定性 id 复活成未勾选，所以必须留痕；且 done/completedAt 不翻面（保 completion-basis 游标）
+    expect(await db.tasks.get("occ:r2:2026-06-14")).toMatchObject({
+      skipped: true,
+      done: true,
+      completedAt: "2026-06-14T08:00:00.000Z",
+    });
+    expect(onClose).toHaveBeenCalled();
+    await unmount(root);
+  });
 });
 
 describe("TaskDetailSheet 抓到手头", () => {
