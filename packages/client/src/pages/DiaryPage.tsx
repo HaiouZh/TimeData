@@ -211,6 +211,9 @@ export default function DiaryPage() {
         <textarea
           aria-label="日记正文"
           value={content}
+          // 红线：这里不许对 value 做任何加工（trim / 行尾转换 / 任何归一化）。一加工 React 就整体回写，
+          // 原生撤销栈当场清空，而且这种坏法静默、测试测不出（唯一机检在 textareaEdit.test.tsx 的
+          // 零回写护栏，但它守的是那个文件内部的等价组件，守不到这里）。
           onChange={(event) => {
             setContent(event.target.value);
             setDirty(true);

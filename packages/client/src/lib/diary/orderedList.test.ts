@@ -6,7 +6,9 @@ import { previewEdit } from "./textareaEdit.js";
 // 这个助手把描述符应用回原文，让下面 6 条断言保持迁移前的形状，期望值一字不改。
 function applyTo(value: string, action: ReturnType<typeof applyEnterInOrderedList>) {
   if (action?.kind !== "replace") return null;
-  return { value: previewEdit(value, action), cursor: action.selStart };
+  const result = { value: previewEdit(value, action), cursor: action.selStart };
+  // selEnd 漂了就多带一个键，toEqual 当场红；不漂则形状与迁移前完全一致
+  return action.selEnd === action.selStart ? result : { ...result, selEnd: action.selEnd };
 }
 
 describe("applyEnterInOrderedList", () => {
@@ -38,5 +40,10 @@ describe("applyEnterInOrderedList", () => {
     const v = "1. abcd";
     const r = applyTo(v, applyEnterInOrderedList(v, 5, 7)); // 选中 "cd"
     expect(r).toEqual({ value: "1. ab\n2. ", cursor: "1. ab\n2. ".length });
+  });
+  it("空列表项 + 选区跨到行尾，连选区一起清掉", () => {
+    const v = "1. xyz\n";
+    const r = applyTo(v, applyEnterInOrderedList(v, 3, 6));
+    expect(r).toEqual({ value: "\n", cursor: 0 });
   });
 });

@@ -12,11 +12,7 @@ const ITEM_RE = /^(\d+)\. (.*)$/;
  * @param selEnd 选区终点（光标或选区右端）
  * @returns 返回 null 表示不处理；否则返回编辑描述符（交给 runEditAction 落到 textarea 上）
  */
-export function applyEnterInOrderedList(
-  value: string,
-  selStart: number,
-  selEnd: number,
-): EditAction | null {
+export function applyEnterInOrderedList(value: string, selStart: number, selEnd: number): EditAction | null {
   const before = value.slice(0, selStart);
   const after = value.slice(selEnd);
   const lineStart = before.lastIndexOf("\n") + 1;
@@ -32,6 +28,7 @@ export function applyEnterInOrderedList(
     return { kind: "replace", start: lineStart, end: selEnd, text: "", selStart: lineStart, selEnd: lineStart };
   }
   const marker = `${Number(m[1]) + 1}. `;
+  // 光标统一落在完整 marker（含空格）之后
   const cursor = before.length + 1 + marker.length;
   return { kind: "replace", start: selStart, end: selEnd, text: `\n${marker}`, selStart: cursor, selEnd: cursor };
 }
