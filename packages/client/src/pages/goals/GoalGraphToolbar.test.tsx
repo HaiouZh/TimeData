@@ -46,7 +46,7 @@ describe("GoalGraphToolbar", () => {
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
       "添加成员",
       "回到全图",
-      "返回目标星图",
+      "返回目标页",
       "目标菜单",
     ]);
 
@@ -61,7 +61,7 @@ describe("GoalGraphToolbar", () => {
     expect(onBackToGalaxy).not.toHaveBeenCalled();
     expect(onOpenGoalMenu).not.toHaveBeenCalled();
 
-    await click(host.querySelector('button[aria-label="返回目标星图"]'));
+    await click(host.querySelector('button[aria-label="返回目标页"]'));
     expect(onAddMember).toHaveBeenCalledTimes(1);
     expect(onFitView).toHaveBeenCalledTimes(1);
     expect(onBackToGalaxy).toHaveBeenCalledTimes(1);

@@ -43,7 +43,7 @@ export function GoalGraphToolbar({
         <button type="button" aria-label="回到全图" onClick={onFitView} className={buttonClass}>
           <Icon icon={CornersOut} size={16} />
         </button>
-        <button type="button" aria-label="返回目标星图" onClick={onBackToGalaxy} className={buttonClass}>
+        <button type="button" aria-label="返回目标页" onClick={onBackToGalaxy} className={buttonClass}>
           <Icon icon={ArrowLeft} size={16} />
         </button>
         {onRestoreLayout && (

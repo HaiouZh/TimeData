@@ -461,14 +461,14 @@ describe("GoalGraphEditor", () => {
     expect(toolbarOverlay?.querySelector(".pointer-events-auto")).toContain(addMemberButton);
   });
 
-  it("点击返回触发回到目标星图导航", async () => {
+  it("点击返回触发回到目标页导航", async () => {
     const goalValue = goal();
     const onNavigate = vi.fn<(to: string) => void>();
     await seed(goalValue);
 
     const { host } = await renderEditor({ goal: goalValue, onNavigate });
 
-    await click(buttonByLabel(host, "返回目标星图"));
+    await click(buttonByLabel(host, "返回目标页"));
 
     expect(onNavigate).toHaveBeenCalledWith("/goals");
   });

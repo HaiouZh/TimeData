@@ -115,7 +115,7 @@ UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显�
 - `goalGalaxyModel` 复用 `buildGoalOverview` 与 `buildGoalGraphModel`，但把局部裸 Goal 锚改写为全局唯一 `goal:<goalId>`，跳过 ghost，并把共享成员合并成多锚节点。
 - `goalGalaxyLayout` 使用确定性布局，不引 `d3-force`。恒星读 `goal_layout_pins` world pin，无 pin 时用确定性螺旋种子；单 Goal 成员有 pin 时使用“锚 + 相对偏移”，无 pin 时使用该 Goal 局部 `goalGraphLayout` seed；桥接成员放在多锚质心附近，再做全局确定性碰撞推挤。
 
-全局画布 C2 起支持就地编辑，但仍不做跨 Goal 依赖编辑器：恒星与单 Goal 成员可拖拽，拖停后经 `goal_layout_pins` 写 pin，恒星保存 world pin，成员保存相对该 Goal 锚点的偏移；桥接成员不可拖、不可落 pin。已钉节点显示图钉角标，选中后的“恢复自动”删除对应 pin。进入局部编辑器有两条路径：桌面双击恒星；任意指针下选中恒星后动作单第一项“打开目标”。聚焦编辑器工具栏提供“返回目标星图”回到 `/goals`。
+全局画布 C2 起支持就地编辑，但仍不做跨 Goal 依赖编辑器：恒星与单 Goal 成员可拖拽，拖停后经 `goal_layout_pins` 写 pin，恒星保存 world pin，成员保存相对该 Goal 锚点的偏移；桥接成员不可拖、不可落 pin。已钉节点显示图钉角标，选中后的“恢复自动”删除对应 pin。进入局部编辑器有两条路径：桌面双击恒星；任意指针下选中恒星后动作单第一项“打开目标”。聚焦编辑器工具栏提供“返回目标页”回到 `/goals`（文案中性：`/goals` 可能是星图也可能是列表）。
 
 点节点只选中，显式动作才写入或导航：Task 可就地完成/取消完成；单 Goal 成员可确认后移出；同 Goal 内成员可用“连前置”建立 blocker -> blocked 前置，进入连前置草稿态后关闭动作单，并在画布顶部提示“点击目标节点完成连接”与“取消”；选择前置边可删除；恒星可打开添加成员 picker，也可进入目标设置 sheet 编辑、归档或确认删除 Goal。所有结构写入仍只经 `lib/goals.ts`、`lib/tasks.ts` 与 `lib/goalLayoutPins.ts` 的既有 Dexie + `syncLog` 边界，写入经 `recordSyncLog` 自动调度上传。桥接节点的原子动作（如 Task 完成）就地生效；“移除成员 / 连前置”这类需要判定“哪个 Goal”的操作会先让用户选择 Goal，再导航到对应 `/goals/:id` 聚焦编辑器处理。
 
@@ -133,7 +133,7 @@ B 阶段后，`goalGraphLayout` 输出确定性星环 seed：Goal 居中，成�
 
 交互语义以防误触为先：点节点只选中，显式“打开”才进入源页面。打开 Task 使用 `/todo?taskId=<id>` 深链；打开 Track 使用 `/tracks/:id`。Task 可在图内快速完成/取消完成，Track 状态仍回轨道页处理。结构写入仍只经 `lib/goals.ts` 和 Task 写入 helper：加已有成员、移出成员、快建任务、增删前置、编辑/归档/删除 Goal 都复用既有 Dexie + `syncLog` 边界。
 
-图上浮层默认不拦截画布手势，但工具栏自身必须恢复可点击命中；“添加成员 / 回到全图 / 返回目标星图 / 目标菜单”都属于图编辑器的主操作入口，不能被画布 pass-through 容器吞掉。
+图上浮层默认不拦截画布手势，但工具栏自身必须恢复可点击命中；“添加成员 / 回到全图 / 返回目标页 / 目标菜单”都属于图编辑器的主操作入口，不能被画布 pass-through 容器吞掉。
 
 宽屏下，添加成员与目标设置使用星图局部右侧面板；窄屏/粗指针继续使用底部 sheet。添加成员面板复用 ToDo 的搜索和标签筛选口径；任务候选只含普通未完成任务与 active pending occurrence，目标详情 picker 按今天/收件箱/已排期分组，全局未归类托盘在其前额外显示当前活跃场的“手头”组；重复模板及 done/skipped 历史发不进入候选；轨道按 active / parked / concluded 分组并显示看板信号和最新步骤提示。
 
