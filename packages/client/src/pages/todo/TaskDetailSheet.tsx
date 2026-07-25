@@ -187,8 +187,20 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
   const subtaskTotal = childRows.length;
   const subtaskDone = childRows.filter((c) => c.done).length;
   // 从 occurrence 打开时，重复编辑的目标是它的规则模板（occurrence 自身 recurrence 恒为 null）。
-  const rule = useLiveQuery(() => (task?.ruleId ? db.tasks.get(task.ruleId) : undefined), [task?.ruleId]);
-  const recurrenceTarget = (task?.ruleId ? rule : task) ?? task ?? null;
+  // useLiveQuery 在「加载中」和「查到 undefined」两种情况下都返回 undefined，直接用 !rule 判断
+  // 会把每次加载都误判成孤儿。故 querier 统一返回包装对象：外层 undefined 只可能是加载中，
+  // 内层 rule === undefined 才是「模板真的没了」（模板被级联删除后留下的悬空 ruleId）。
+  const ruleQuery = useLiveQuery(
+    async () => ({ rule: task?.ruleId ? await db.tasks.get(task.ruleId) : undefined }),
+    [task?.ruleId],
+  );
+  const hasRuleId = (task?.ruleId ?? null) !== null;
+  const ruleLoading = hasRuleId && ruleQuery === undefined;
+  const rule = ruleQuery?.rule;
+  // 孤儿 occurrence：ruleId 指向已不存在的模板。此时绝不回退到 task 自己——
+  // 回退会让「编辑重复与时间」把 recurrence 写进 occurrence，就地造出 ruleId × recurrence 混合体行。
+  const orphanOccurrence = hasRuleId && !ruleLoading && rule === undefined;
+  const recurrenceTarget: Task | null = hasRuleId ? (rule ?? null) : (task ?? null);
   const ruleOccurrences =
     useLiveQuery(
       () =>
@@ -313,7 +325,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
                     <span className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-3">
                       作为子任务
                     </span>
-                  ) : (
+                  ) : recurrenceTarget ? (
                     <button
                       type="button"
                       aria-label="编辑重复与时间"
@@ -322,7 +334,12 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
                     >
                       {nextTimeLabel}
                     </button>
-                  )}
+                  ) : orphanOccurrence ? (
+                    // 模板没了就没有可编辑的重复规则；给静态说明而不是可点入口，避免把 recurrence 写回这一发。
+                    <span className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 td-text-caption text-ink-3">
+                      重复规则已删除，不能在这里改
+                    </span>
+                  ) : null}
                   {subtaskTotal > 0 && (
                     <span className="text-xs text-ink-3">
                       <span aria-hidden="true">

@@ -598,6 +598,31 @@ describe("TaskDetailSheet 重复规则编辑目标与锚点", () => {
     expect(host.querySelector(`button[aria-label="每月${startDay}号"]`)).toBeNull();
     await unmount(root);
   });
+
+  it("孤儿 occurrence（模板已被级联删除）：不渲染重复入口，改给静态说明", async () => {
+    const occDate = addDays(getDateString(new Date()), -2);
+    const occId = `occ:rule-gone:${occDate}`;
+    await db.tasks.add(
+      occurrenceRow("rule-gone", occDate, {
+        title: "已完成的一发",
+        done: true,
+        completedCount: 1,
+        completedAt: normalizeScheduledDate(occDate),
+        lastDoneAt: normalizeScheduledDate(occDate),
+      }),
+    );
+    expect(await db.tasks.get("rule-gone")).toBeUndefined();
+
+    const { host, root } = await renderSheet(occId);
+    await settle();
+
+    // 入口消失，才不会走 applyRecurrenceChoice(occ.id, …) 把 recurrence 写回这一发造出混合体行
+    expect(host.querySelector('button[aria-label="编辑重复与时间"]')).toBeNull();
+    expect(host.textContent).toContain("重复规则已删除");
+    // occurrence 自身未被改写
+    expect(await db.tasks.get(occId)).toMatchObject({ recurrence: null, ruleId: "rule-gone" });
+    await unmount(root);
+  });
 });
 
 describe("TaskDetailSheet 删除", () => {
