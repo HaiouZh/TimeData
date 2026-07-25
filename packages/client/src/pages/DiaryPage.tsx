@@ -89,9 +89,10 @@ export default function DiaryPage() {
       action = applyLinkShortcut(field.value, field.selectionStart, field.selectionEnd);
     }
 
-    // null = 交还浏览器默认行为（换行 / Tab 跳焦 / Ctrl+K 在代码围栏内）；非 null 一律吃掉按键——
-    // 包括 { kind: "noop" }，它的语义就是“什么都不改但要吃掉”（Ctrl+K 含换行选区）；
-    // { kind: "select" } 同样吃掉按键，但 runEditAction 只挪光标、不碰 setValue/markDirty
+    // null = 交还浏览器默认行为（换行在代码围栏内 / Tab 顶层逃生口）；非 null 一律吃掉按键——
+    // 包括 { kind: "noop" }，它的语义就是"什么都不改但要吃掉"（Ctrl+K 含换行选区，或 Ctrl+K
+    // 落在代码围栏 / front-matter 内——围栏内同样做不成链接，与"选区含换行"同一类，不再交还
+    // 浏览器）；{ kind: "select" } 同样吃掉按键，但 runEditAction 只挪光标、不碰 setValue/markDirty
     // （Ctrl+K 落在已有链接上，用户只是想改地址，一个字没改不该变脏）。
     if (!action) return;
     event.preventDefault();

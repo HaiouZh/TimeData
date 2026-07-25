@@ -132,12 +132,16 @@ describe("applyLinkShortcut · K1–K27 边界表", () => {
   });
 
   it("K12 光标紧贴 ) 之后 → 不命中现有链接，在旁边插入新链接", () => {
-    expect(run("[标题](https://a.com)", 21, 21)).toEqual({
+    // 下标改 19（审查 H）：`"[标题](https://a.com)"` 只有 19 个字符（`[标题](https://a.com)`
+    // 逐字符数：[ 标 题 ] ( h t t p s : / / a . c o m ) = 19），原先的 21 是照抄边界表时把
+    // CJK 当成两字节的下标错误，真实 textarea 给不出这个下标；21 恰好越界到字符串外，行为
+    // 仍与"紧贴 ) 之后"一致（都 > close 走同一分支），但没测到真实的"紧贴 ) 之后"边界。
+    expect(run("[标题](https://a.com)", 19, 19)).toEqual({
       kind: "replace",
       text: "[标题](https://a.com)[]()",
-      selStart: 22,
-      selEnd: 22,
-      span: [21, 21],
+      selStart: 20,
+      selEnd: 20,
+      span: [19, 19],
     });
   });
 
@@ -285,14 +289,66 @@ describe("applyLinkShortcut · K1–K27 边界表", () => {
   });
 });
 
-describe("applyLinkShortcut · G4 代码围栏 / front-matter 内一律放行", () => {
+describe("applyLinkShortcut · G4 代码围栏 / front-matter 内吃掉按键但不生成链接", () => {
   // 与 indent.ts 的围栏豁免同一份 scanProtected（listModel.ts），不另写扫描器。
   // 这是审查发现的缺口：原设计（design §4.4）没提，围栏内插入 "[]()" 一样会污染 vault。
-  it("代码围栏内按 Ctrl+K 放行（不插入链接骨架）", () => {
-    expect(applyLinkShortcut("```\nhttps://a.com\n```", 8, 8)).toBeNull();
+  //
+  // 期望值 null → { kind: "noop" } 是本次唯一允许改动的现有期望（审查 A 拍板的行为变更）：
+  // 本函数内 case③「选区含换行」已经是"不生成链接但仍 preventDefault"（noop），围栏内属于
+  // 同一类"这里做不成链接"的情形，没理由用相反的处理方式把按键交还浏览器——Ctrl+K 也不像
+  // Tab 那样承担键盘逃生口职责，不需要放行给 Firefox 跳搜索栏 / Chrome 跳地址栏。
+  it("代码围栏内按 Ctrl+K 吃掉按键（不插入链接骨架，不交还浏览器）", () => {
+    expect(applyLinkShortcut("```\nhttps://a.com\n```", 8, 8)).toEqual({ kind: "noop" });
   });
 
-  it("front-matter 内按 Ctrl+K 放行", () => {
-    expect(applyLinkShortcut("---\nhttps://a.com\n---\n正文", 8, 8)).toBeNull();
+  it("front-matter 内按 Ctrl+K 吃掉按键（不插入链接骨架，不交还浏览器）", () => {
+    expect(applyLinkShortcut("---\nhttps://a.com\n---\n正文", 8, 8)).toEqual({ kind: "noop" });
+  });
+});
+
+describe("applyLinkShortcut · 审查覆盖缺口补测（B/C/D/F）", () => {
+  // B：`prot[startLine] || prot[endLine]` 两个半边分别补测——现有两条 G4 用例都是塌陷光标
+  // （start === end），两个半边被"顺带"同时覆盖，单独砍掉任一半边都不会让那两条用例变红。
+  it("B1 选区起点在围栏外、终点落进围栏开启行 → 仍整体拦下（不只依赖 prot[startLine]）", () => {
+    // 若把守卫误改成只看 prot[startLine]（丢掉 prot[endLine] 半边），这里会把围栏开启行
+    // 的 "```" 改写成 "[```]()"——正是围栏豁免要挡的那类 vault 污染。
+    expect(applyLinkShortcut("a\n```\nx\n```", 1, 5)).toEqual({ kind: "noop" });
+  });
+
+  it("B2 选区起点落在围栏闭合行、终点在围栏外 → 仍整体拦下（不只依赖 prot[endLine]）", () => {
+    // 对称情形：若把守卫误改成只看 prot[endLine]（丢掉 prot[startLine] 半边），这里会把
+    // 围栏闭合行的最后一个反引号改写掉（"```" → "``[`]()"），同样污染 vault。
+    expect(applyLinkShortcut("```\nx\n```\na", 8, 10)).toEqual({ kind: "noop" });
+  });
+
+  // C：命中判定 selStart === close 这一端点是最高频路径的落点——case ⑦ 产出 "[文字]()" 后
+  // 光标恰好落在 close，"打标题→跳去填地址" 的连招第二下就走这个端点。现有 K13/K14 钉的是
+  // 光标在标题里 / 在 []() 内部，都不钉这个端点，必须单独补。
+  it("C 光标恰好落在链接 close 端点（) 前一位）→ 命中，select 到 URL 段", () => {
+    expect(run("[a](b)", 5, 5)).toEqual({
+      kind: "select",
+      selStart: 4,
+      selEnd: 5,
+      selected: "b",
+    });
+  });
+
+  // D：嵌套方括号回退分支——findLinkAt 遇到嵌套 "[" 时把扫描起点重置到那个新 "["
+  // （`i = j`）才能续扫出内层有效链接；重置到 `j + 1` 会跳过那个 "["，导致内层链接
+  // 找不到，退化成在光标处插入新的 "[]()"，破坏原本应该被识别的链接结构。
+  it("D 光标落在被外层未闭合方括号包住的内层有效链接里 → 命中内层链接的 URL 段", () => {
+    expect(run("见[备注[细则](https://a.com)", 6, 6)).toEqual({
+      kind: "select",
+      selStart: 9,
+      selEnd: 22,
+      selected: "https://a.com",
+    });
+  });
+
+  // F：K7（"a\nb"）钉 noop 分支，K23（"https://a.com/a b"）钉 /\s/ 闸，但没有一条同时压住
+  // 两道闸——跨行且 trim 后长得像 URL，正是设计文档记载的原始事故形态：WHATWG URL 解析器
+  // 会先剥掉换行再解析，`new URL("https://a.com\nfoo")` 不抛且 href 是 "https://a.comfoo/"。
+  it("F 跨行选区 trim 后长得像 URL → 仍先被换行闸拦下（不会被误判成合法 URL）", () => {
+    expect(run("https://a.com\nfoo", 0, 17)).toBe("NOOP");
   });
 });

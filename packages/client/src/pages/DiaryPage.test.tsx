@@ -496,4 +496,73 @@ describe("DiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("Ctrl+Alt+K 不触发补链接（AltGr 在部分键盘布局等价 Ctrl+Alt，必须放行）", async () => {
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    let defaultPrevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      const event = new KeyboardEvent("keydown", {
+        key: "k",
+        ctrlKey: true,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      el.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(false);
+    expect(el.value).toBe("1. x");
+
+    await unmount(root);
+  });
+
+  it("Ctrl+Shift+K 不触发补链接", async () => {
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    let defaultPrevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      const event = new KeyboardEvent("keydown", {
+        key: "k",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      el.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(false);
+    expect(el.value).toBe("1. x");
+
+    await unmount(root);
+  });
+
+  it("Cmd+K（metaKey）与 Ctrl+K 同结果：mac 上功能唯一可用的路径，不能只靠 ctrlKey 判定", async () => {
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    let prevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      const event = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      prevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(prevented).toBe(true);
+    expect(el.value).toBe("1. x[]()");
+
+    await unmount(root);
+  });
 });

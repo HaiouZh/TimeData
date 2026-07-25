@@ -67,7 +67,7 @@ SettingsDiaryPage 保存模板
 | `lib/diary/orderedList.ts` | 有序列表回车续号纯函数 |
 | `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排 §4.2 / Tab 缩进 §4.3 复用） |
 | `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口 |
-| `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，六态语义（null/noop/select/replace）+ 围栏豁免 |
+| `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case |
 | `server/routes/diary.ts` | 四端点：`GET/PUT /config`、`GET/PUT /:date` |
 | `server/lib/diary-path.ts` | 模板展开 + 路径安全校验纯函数 |
 

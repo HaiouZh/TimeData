@@ -96,9 +96,12 @@ function isHttpUrl(text: string): boolean {
  * @param value 完整文本
  * @param selStart 选区起点（光标或选区左端）
  * @param selEnd 选区终点（光标或选区右端）
- * @returns 六态：
- *   `null`               = 不处理，不 preventDefault，交还浏览器（代码围栏 / front-matter 内）；
- *   `{ kind: "noop" }`    = 吃掉按键但不改任何东西（选区 trim 后仍含换行）；
+ * @returns 四态返回、七 case（case①是调用方的 IME 组合态守卫，不在本函数内，见下；本函数
+ *   内部是 case②–⑦ 共六个判定分支，合计七 case）：
+ *   `null`               = 当前实现不会产出（签名保留只为兼容调用方 `if (!action)` 的判空写法）；
+ *   `{ kind: "noop" }`    = 吃掉按键但不改任何东西（选区 trim 后仍含换行 / 落在代码围栏或
+ *                          front-matter 内——围栏内同样做不成链接，与"选区含换行"是同一类
+ *                          情形，审查拍板：不再像 Tab 顶层逃生口那样交还浏览器）；
  *   `{ kind: "select" }`  = 只挪光标去 URL 段，不走 execCommand、不置 dirty（已落在既有链接上）；
  *   `{ kind: "replace" }` = 插入链接骨架（无选区 / URL 选区 / 普通文字选区三种落点不同）。
  *
@@ -114,11 +117,13 @@ export function applyLinkShortcut(value: string, selStart: number, selEnd: numbe
   const lines = splitLines(value);
   const prot = scanProtected(lines); // 代码围栏 / front-matter：直接复用，不另写扫描器（G4）
 
-  // case ②：代码围栏 / front-matter 内一律放行。selStart/selEnd 可能落在不同行（如选区跨越
-  // 保护区边界），任一端落在保护区内就整体放行——宁可功能不生效，不可在受保护区里插入内容。
+  // case ②：代码围栏 / front-matter 内吃掉按键但不生成链接（{ kind: "noop" }）。selStart/selEnd
+  // 可能落在不同行（如选区跨越保护区边界），任一端落在保护区内就整体拦下——宁可功能不生效，
+  // 不可在受保护区里插入内容。与 case ③ 同一类处理（内部一致性，审查拍板）：这里同样做不成
+  // 链接，没理由像 Tab 顶层逃生口那样把按键交还浏览器（Firefox 跳搜索栏 / Chrome 跳地址栏）。
   const startLine = lineIndexAt(lines, selStart);
   const endLine = lineIndexAt(lines, selEnd);
-  if (prot[startLine] || prot[endLine]) return null;
+  if (prot[startLine] || prot[endLine]) return { kind: "noop" };
 
   const raw = value.slice(selStart, selEnd);
 
