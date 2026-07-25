@@ -59,8 +59,10 @@ describe("toSearchUrlParams", () => {
     expect(parseSearchUrlState(toSearchUrlParams(state, TODAY), TODAY)).toEqual(state);
   });
 
-  it("空白查询不进 URL", () => {
-    const params = toSearchUrlParams({ categoryId: null, mode: "year", anchor: TODAY, query: "   " }, TODAY);
-    expect(params.has("q")).toBe(false);
+  it("纯空白查询照样进 URL，保证往返一致", () => {
+    const state = { categoryId: null, mode: "year" as const, anchor: TODAY, query: "   " };
+    const params = toSearchUrlParams(state, TODAY);
+    expect(params.get("q")).toBe("   ");
+    expect(parseSearchUrlState(params, TODAY)).toEqual(state);
   });
 });
