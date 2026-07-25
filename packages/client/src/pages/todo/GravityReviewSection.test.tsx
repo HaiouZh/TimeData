@@ -210,4 +210,43 @@ describe("GravityReviewSection", () => {
     expect(host.textContent).toContain("水下想法");
     await unmount(root);
   });
+
+  it("derefs the batch from fresh sunkenTasks instead of holding a stale snapshot", async () => {
+    const onMarkSurfaced = vi.fn().mockResolvedValue({});
+    const before = [task({ id: "a", title: "Alpha" }), task({ id: "b", title: "Bravo" })];
+    const { host, root } = await renderDom(
+      <GravityReviewSection
+        sunkenTasks={before}
+        settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 2 }}
+        surfaced={{}}
+        now={NOW}
+        onMarkSurfaced={onMarkSurfaced}
+        onBump={vi.fn()}
+        {...handlers}
+      />,
+    );
+
+    await openReview(host);
+    expect(host.textContent).toContain("Alpha");
+    expect(host.textContent).toContain("Bravo");
+
+    // 勾掉 Alpha：父级 live query 回流后它离开水下桶，翻牌区必须跟着掉，而不是留着旧快照。
+    await act(async () => {
+      root.render(
+        <GravityReviewSection
+          sunkenTasks={[task({ id: "b", title: "Bravo" })]}
+          settings={{ ...DEFAULT_TODO_GRAVITY_SETTINGS, drawM: 2 }}
+          surfaced={{}}
+          now={NOW}
+          onMarkSurfaced={onMarkSurfaced}
+          onBump={vi.fn()}
+          {...handlers}
+        />,
+      );
+    });
+
+    expect(host.textContent).not.toContain("Alpha");
+    expect(host.textContent).toContain("Bravo");
+    await unmount(root);
+  });
 });

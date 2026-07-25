@@ -34,7 +34,7 @@ export function GravityReviewSection({
   goalLinkedIds,
   ...rowHandlers
 }: GravityReviewSectionProps) {
-  const [batch, setBatch] = useState<Task[]>([]);
+  const [batchIds, setBatchIds] = useState<string[]>([]);
   const [pickedThisBatch, setPickedThisBatch] = useState<Set<string>>(() => new Set());
   // 本会话已展示过的牌，防止 settings 回流慢时「再翻几张」抽回刚展示过的任务。
   const [sessionSurfacedMap, setSessionSurfacedMap] = useState<GravitySurfacedMap>({});
@@ -42,15 +42,24 @@ export function GravityReviewSection({
 
   const effectiveSurfaced = useMemo(() => ({ ...surfaced, ...sessionSurfacedMap }), [surfaced, sessionSurfacedMap]);
 
+  // 翻牌区只记 id，渲染时从最新 sunkenTasks 解引用：勾选/顶一下后父级 live query 回流，
+  // 行拿到的是新鲜 Task（勾选立刻有反馈），离开水下的任务自然从本批消失，
+  // 不会再出现「点第二下把刚完成的任务翻回未完成」。
+  const sunkenById = useMemo(() => new Map(sunkenTasks.map((task) => [task.id, task])), [sunkenTasks]);
+  const batchTasks = useMemo(
+    () => batchIds.map((id) => sunkenById.get(id)).filter((task): task is Task => task !== undefined),
+    [batchIds, sunkenById],
+  );
+
   const drawBatch = useCallback(
     (excludeIds: ReadonlySet<string> = new Set(), pickedIds: ReadonlySet<string> = new Set()) => {
       const candidates = sunkenTasks.filter((task) => !excludeIds.has(task.id));
       const nextBatch = pickGravityReviewBatch(candidates, effectiveSurfaced, { now, drawM: settings.drawM });
-      setBatch(nextBatch);
-      setPickedThisBatch(new Set(pickedIds));
-      if (nextBatch.length === 0) return;
-
       const ids = nextBatch.map((task) => task.id);
+      setBatchIds(ids);
+      setPickedThisBatch(new Set(pickedIds));
+      if (ids.length === 0) return;
+
       const optimistic = Object.fromEntries(ids.map((id) => [id, now.toISOString()]));
       setSessionSurfacedMap((prev) => ({ ...prev, ...optimistic }));
       void Promise.resolve(onMarkSurfaced(ids, now)).then(
@@ -101,16 +110,16 @@ export function GravityReviewSection({
         count={remainingPicks}
         defaultOpen={false}
         onToggle={(open) => {
-          if (open && batch.length === 0) drawBatch();
+          if (open && batchTasks.length === 0) drawBatch();
         }}
       >
-        {batch.length === 0 ? (
+        {batchTasks.length === 0 ? (
           <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">水下暂时没有可翻的任务</p>
         ) : (
           <div className="rounded-card p-1.5">
             <TaskList
               pool="inbox"
-              tasks={batch}
+              tasks={batchTasks}
               extraAction={extraAction}
               childrenModeOverride="static"
               goalLinkedIds={goalLinkedIds}
