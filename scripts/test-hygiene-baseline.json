@@ -36,6 +36,7 @@
   "dirty-in-clean-bucket:db/schemaNormalization.test.ts",
   "dirty-in-clean-bucket:hooks/useAppHideFlush.test.ts",
   "dirty-in-clean-bucket:hooks/useCategories.test.ts",
+  "dirty-in-clean-bucket:hooks/useConfirm.test.tsx",
   "dirty-in-clean-bucket:hooks/useDebouncedValue.test.tsx",
   "dirty-in-clean-bucket:hooks/useEntries.test.ts",
   "dirty-in-clean-bucket:hooks/useHideBottomNavOnScroll.test.tsx",

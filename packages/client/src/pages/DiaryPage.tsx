@@ -1,6 +1,6 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
@@ -14,6 +14,7 @@ function todayDateString(): string {
 
 export default function DiaryPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const today = useRef(todayDateString()).current;
   const { confirm, dialog } = useConfirm();
 
@@ -130,7 +131,10 @@ export default function DiaryPage() {
 
   function handleBack() {
     // 脏态确认由 useUnsavedChangesGuard 统一处理，这里不再自己弹一次（否则会连弹两个）
-    navigate(-1);
+    // 无 app 内历史时（书签 / PWA 快捷方式 / 硬刷新直接落地）navigate(-1) 是 no-op，
+    // 兜底回速记页，与安卓返回键 androidBackNavigation.ts 的 /diary 分支保持一致。
+    if (location.key === "default") navigate("/quick-notes", { replace: true });
+    else navigate(-1);
   }
 
   return (

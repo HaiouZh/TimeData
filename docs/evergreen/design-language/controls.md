@@ -9,9 +9,10 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-06-27
+last-reviewed: 2026-07-25
 ---
 
+<!-- 复核 2026-07-25（diary-workbench 阶段一 · 终审修复）：useConfirm 的被顶替请求改为解析 false（原先 Promise 悬空，会让路由守卫的 blocker 永久卡死），§3 补该不变量；控件词汇表与图标规则不变。 -->
 <!-- 复核 2026-06-27（设计语言 P3）：check-design-language.mjs 新增「--shadow-* token 定义」与「图表色镜像文件」两处 bare-raw-color 跳过（详见 design-language §3），属 check:design 颜色范畴；交互图标规则（本控件子文档关注点）不变。 -->
 
 # 设计语言 · 控件库
@@ -52,6 +53,7 @@ last-reviewed: 2026-06-27
 
 - `useConfirm` 替代 `window.confirm`：返回 Promise 的应用内确认（配 `ConfirmSheet`），便于本地化与 Android WebView 体验统一。
 - 重复性提示一律走 `useConfirm` / `ConfirmSheet`，不直接调 `window.confirm/alert`。
+- **`pending` 是单槽，新请求会顶替旧请求**：被顶替的那次**必须**解析为 `false`（视作取消），绝不能让它的 Promise 悬空。调用方常在 `await confirm(...)` 之后才做收尾动作（如 `useUnsavedChangesGuard` 要据结果调 `blocker.proceed()`/`reset()`），Promise 悬空会让那步永远不执行——路由守卫场景下的后果是 blocker 永久停在 blocked、全站无法导航，只能整页刷新恢复。
 
 ## 4. CI 棘轮（`scripts/check-no-native-controls.mjs` → `pnpm check:ui`）
 

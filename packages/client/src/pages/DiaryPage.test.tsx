@@ -60,6 +60,26 @@ async function renderPage(): Promise<{ host: HTMLElement; root: Root; router: Re
   return { host, root, router };
 }
 
+// 只有 /diary 一个 entry：模拟书签 / PWA 快捷方式 / 硬刷新直接落地，没有 app 内历史。
+// createMemoryRouter 下首个 entry 的 location.key 实测为 "default"（DiaryPage 的
+// handleBack 据此判断要不要兜底，而不是盲调 navigate(-1) 落空）。
+async function renderPageNoHistory(): Promise<{
+  host: HTMLElement;
+  root: Root;
+  router: ReturnType<typeof createMemoryRouter>;
+}> {
+  const router = createMemoryRouter(
+    [
+      { path: "/quick-notes", element: createElement("span", null, "速记页") },
+      { path: "/diary", element: createElement(DiaryPage) },
+    ],
+    { initialEntries: ["/diary"] },
+  );
+  const { host, root } = await renderDom(createElement(RouterProvider, { router }));
+  await flush();
+  return { host, root, router };
+}
+
 function textarea(host: HTMLElement): HTMLTextAreaElement {
   const element = host.querySelector("textarea");
   if (!(element instanceof HTMLTextAreaElement)) throw new Error("missing textarea");
@@ -197,6 +217,17 @@ describe("DiaryPage", () => {
 
     expect(router.state.location.pathname).toBe("/diary");
     expect(textarea(host).value).toBe("改过的内容");
+    await unmount(root);
+  });
+
+  it("无 app 内历史（书签/直接落地）点返回，兜底跳速记页而非 navigate(-1) 空操作", async () => {
+    const { host, root, router } = await renderPageNoHistory();
+
+    const back = host.querySelector('button[aria-label="返回"]');
+    if (!(back instanceof HTMLButtonElement)) throw new Error("missing back button");
+    await click(back);
+
+    expect(router.state.location.pathname).toBe("/quick-notes");
     await unmount(root);
   });
 
