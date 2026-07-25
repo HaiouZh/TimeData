@@ -201,8 +201,21 @@ export function TodoPage() {
       return next;
     });
   };
+  const openProject = (goalId: string) => setRevealGoal((prev) => ({ id: goalId, nonce: (prev?.nonce ?? 0) + 1 }));
+  /**
+   * 项目成员回落 inbox 池时，把它的归属组展开并滚过去。
+   *
+   * 归属轴排他打开后，「回到 inbox 池」不再等于「出现在收件箱」：成员会落进项目区里一个默认折叠的组，
+   * 而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动——全屏零反馈，体感是「我把它拖到收件箱，它消失了」。
+   * 这里复用项目名 chip 的回跳机制补上落点反馈。非项目成员命中不了 chip，行为一字不变。
+   */
+  const revealProjectHome = (taskId: string) => {
+    const chip = projectChips.get(taskId);
+    if (chip) openProject(chip.goalId);
+  };
   const moveToInbox = async (t: Task) => {
     await unscheduleTask(t.id);
+    revealProjectHome(t.id);
   };
   const moveToToday = async (t: Task) => {
     await scheduleTask(t.id, localDateString(new Date()));
@@ -272,12 +285,17 @@ export function TodoPage() {
     return markGravityTasksSurfaced(ids, now, { waterlineDays: gravitySettings.waterlineDays });
   };
 
-  const releaseFromHand = (t: Task) => void releaseTaskFromHand(t.id);
+  const releaseFromHand = (t: Task) => {
+    // 只对「会落回 inbox 池」的成员 reveal：有排期的移出手头后去今天 / 已排期区，那里带项目名 chip、本来就看得见，
+    // 强行展开反而会把页面滚到项目区。判据直接复用页面内既有的 placementForTask（逾期的一次性任务同样回落 inbox）。
+    const fallsBackToInbox = placementForTask(t, gravityNow).pool === "inbox";
+    void releaseTaskFromHand(t.id);
+    if (fallsBackToInbox) revealProjectHome(t.id);
+  };
   const grabToHand = (t: Task) => void grabTaskToHand(t.id);
   const endHand = () => void endActiveSession();
   const resumeHand = (sessionId: string) => void resumeSession(sessionId);
   const exitProject = (goalId: string, t: Task) => void removeGoalMember(goalId, { kind: "task", id: t.id });
-  const openProject = (goalId: string) => setRevealGoal((prev) => ({ id: goalId, nonce: (prev?.nonce ?? 0) + 1 }));
   const projectMetaChip = (t: Task): ReactNode => {
     const chip = projectChips.get(t.id);
     return chip ? <ProjectNameChip chip={chip} onOpen={openProject} /> : null;
@@ -431,7 +449,9 @@ export function TodoPage() {
           if (op.pool === "today") {
             await scheduleTask(activeId, localDateString(new Date()));
           } else {
+            // 拖进 pool:inbox 不经 moveToInbox，落点反馈要在这里补一遍（同 revealProjectHome 的理由）。
             await unscheduleTask(activeId);
+            revealProjectHome(activeId);
           }
           break;
         }
@@ -442,7 +462,10 @@ export function TodoPage() {
   }
 
   // 项目区不过 f()：与手头区一致，标签筛选与搜索本期不覆盖项目区（design §非目标）。
-  const projectMemberCount = buckets.projects.reduce((sum, group) => sum + group.tasks.length, 0);
+  // 提示条的两个数必须同口径：`memberCount` 只数未完成成员，`groupCount` 若数全部组（含「全部完成」的组），
+  // 「1 条任务已归入 2 个项目」这种自相矛盾的话就是可达的。
+  const projectGroupsWithPending = buckets.projects.filter((group) => group.tasks.length > 0);
+  const projectMemberCount = projectGroupsWithPending.reduce((sum, group) => sum + group.tasks.length, 0);
   const projectsBlock = (
     <TodoProjectSection
       groups={buckets.projects}
@@ -521,7 +544,7 @@ export function TodoPage() {
   const inboxBlock = (
     <section data-section="inbox">
       {/* 说明条挂在收件箱顶部而非项目区顶部：任务是从这里消失的，解释要贴着消失的地方。 */}
-      <ProjectZoneIntroBar memberCount={projectMemberCount} groupCount={buckets.projects.length} />
+      <ProjectZoneIntroBar memberCount={projectMemberCount} groupCount={projectGroupsWithPending.length} />
       <CollapsibleSection
         title="收件箱"
         count={inboxFiltered.length}

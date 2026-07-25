@@ -708,6 +708,48 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
+  it("今天区的项目成员点「回收件箱」：进不了收件箱，改为展开归属组并列出它", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    // 提示条已读 → 项目区默认全折叠。这正是「消失」的现场：排他让它进不了收件箱，
+    // 没有 reveal 的话它只是落进上面那个折叠组，组 header 的「还剩 N / 共 M」纹丝不动，全屏零反馈。
+    setProjectZoneIntroDismissed(true);
+    const member = await addTask({ title: "刷墙" });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="today"] [aria-label="回收件箱 刷墙"]') !== null,
+      "今天区行尾「回收件箱」动作",
+    );
+    expect((host.querySelector('[data-section="todo-projects"]') as HTMLElement).textContent ?? "").not.toContain(
+      "刷墙",
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-section="today"] [aria-label="回收件箱 刷墙"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitForCondition(() => {
+      const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement | null;
+      return (zone?.textContent ?? "").includes("刷墙");
+    }, "项目区展开归属组并列出该成员");
+
+    expect((host.querySelector('[data-section="today"]') as HTMLElement).textContent ?? "").not.toContain("刷墙");
+    expect((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").not.toContain("刷墙");
+    await unmount(root);
+  });
+
   it("红线 3：被抓到手头的项目成员显示项目名 chip，且不与绿竖条同屏", async () => {
     // 手头区是唯一同时消费 goalLinkedIds 与 metaChip 的消费点（AtHandSection.tsx 两者都传给了 TaskRow）；
     // 今天区 / 已排期区当前接线里根本没传 goalLinkedIds 给对应组件，那两处的「无竖条」是恒真的，测了也白测——

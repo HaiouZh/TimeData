@@ -5,8 +5,8 @@ import { Link } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
+import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
-import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
@@ -31,12 +31,11 @@ export interface TodoProjectSectionProps {
 function memberStateChip(task: Task, handSessionId: string | null, now: Date): ReactNode {
   const state = projectMemberState(task, { handSessionId, now });
   if (state.kind === "idle") return null;
-  const label =
-    state.kind === "at-hand"
-      ? "在手头"
-      : state.kind === "today"
-        ? "今天"
-        : formatYearAwareMonthDay(getDateString(new Date(state.scheduledAt)));
+  // 排期日文案走 taskDueDateLabel（任务行日期胶囊的同一个内核），不在这里再写一遍日期格式化：
+  // 项目区成员恒为非重复（归集守卫 `recurrence === null && ruleId === null`），它必走「排期日」分支，
+  // 与 `state.scheduledAt` 同源、恒非 null——下面的 null 判只是给类型收口。
+  const label = state.kind === "at-hand" ? "在手头" : state.kind === "today" ? "今天" : taskDueDateLabel(task);
+  if (label === null) return null;
   return (
     <span data-testid="project-member-state" className={`${META_CHIP_CLASS} text-ink-2`}>
       {label}
