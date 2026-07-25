@@ -12,14 +12,15 @@ covers:
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
-last-reviewed: 2026-06-27
+last-reviewed: 2026-07-25
 ---
+<!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：「不讲什么」追加 /search 记录明细检索交叉指针，点明与本页零点裁剪口径的有意分叉；不改变本域数据流、schema 或不变量。 -->
 
 # 统计与洞察
 
 > 时间统计页 `/stats/time`：按周期/日期聚合 `time_entries`，产出总览/作息/异常/趋势/结构五模块洞察。
 > 讲什么：STATS_MODULES 注册表、周期区间与“只统计到今天”、baseline 90 天、布局/趋势设置、insights 引擎各模块契约。
-> 不讲什么：健康统计页（见 [health](health.md)）、时间段数据流（见 [timeline](timeline.md)）、分类管理（见 [categories-settings](categories-settings.md)）、同步（见 [sync](sync.md)）。
+> 不讲什么：健康统计页（见 [health](health.md)）、时间段数据流（见 [timeline](timeline.md)）、分类管理（见 [categories-settings](categories-settings.md)）、同步（见 [sync](sync.md)）、记录明细检索（`/search`，见 [timeline](timeline.md)——该页跨夜记录归属口径与本页 §2.4 `dailyRollup.ts` 的“跨午夜按本地午夜裁剪”**有意不同**：本页把跨夜记录按零点切成两段分归两天，`/search` 整条记录只按 `startTime` 归开始那天；这是两页回答不同问题的刻意设计（本页是时间预算视角，`/search` 是事件清单视角），不是待修的不一致）。
 
 ## 承上启下
 

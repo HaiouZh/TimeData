@@ -18,12 +18,16 @@ covers:
   - packages/server/src/lib/entry-service.ts
   - packages/server/src/sync/domains.ts
   - packages/cli/src/commands/log.ts
+  - packages/client/src/pages/SearchPage.tsx
+  - packages/client/src/pages/search/**
+  - packages/client/src/lib/entrySearch/**
 contracts:
   - packages/shared/src/types.ts:TimeEntry
   - packages/shared/src/entitySchemas.ts
   - packages/client/src/lib/time.ts
-last-reviewed: 2026-07-24
+last-reviewed: 2026-07-25
 ---
+<!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：新增「时间记录搜索页」一节，covers 追加 SearchPage.tsx / pages/search/** / lib/entrySearch/**；TimeEntry schema、重叠校验、CLI/server 写入语义均不变，搜索页对 time_entries 只读。 -->
 <!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、types.ts 新增 SessionSchema 与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；TimeEntry schema、重叠校验、CLI/server 写入语义均不变。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/types.ts 为 tasks delete change 新增可选 deleteReason 字段，timeline/entry 契约未受影响。 -->
 
@@ -43,7 +47,7 @@ last-reviewed: 2026-07-24
 ## 承上启下
 
 - 上游：用户在时间轴/新增记录页写入；速记页和圆环中心可触发“打点到现在”；CLI `timedata log` 可经服务端受控 API 创建记录。
-- 下游：客户端本地写 `timeEntries` 与 `syncLog(tableName="time_entries")`；CLI/server 写 SQLite 后追加 `sync_seq`；统计页按同一 `[start, end)` 交集口径读取。
+- 下游：客户端本地写 `timeEntries` 与 `syncLog(tableName="time_entries")`；CLI/server 写 SQLite 后追加 `sync_seq`；统计页按同一 `[start, end)` 交集口径读取；搜索页（`/search`）只读查询，归属口径与统计页有意不同，见 §11。
 - 契约：`TimeEntry` 字段 schema 见本文 §1；跨域时间、ID、SQL/Dexie 映射见 [data-model](data-model.md)。
 - 邻居：[categories-settings](categories-settings.md) 管分类与打点分类设置；[stats-insights](stats-insights.md) 管统计聚合；[tracks](tracks.md) 管状态线历时；[goals](goals.md) 收编 Task/Track 但不引用 `time_entries`；[sync](sync.md) 管账本和冲突。
 
@@ -217,7 +221,27 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 
 如果旧版本或设备时钟偏移已经把未来结束记录写进本地 IndexedDB，当前客户端不再提供单条本地未来记录修复入口。用户应先校准设备时间；若异常记录导致同步持续失败，可在 `设置 → 数据设置 → 高级 · 数据恢复` 中运行同步诊断，并在确认云端数据正确时使用“将本地数据替换为云端数据”恢复本地数据。
 
-## 11. 模块速查
+## 11. 时间记录搜索页
+
+时间轴首页 `DateNav` 右侧放大镜进入 `/search` → `SearchPage`（路由懒加载，注册在 `AppRoutes`）；这是全站唯一入口。`DateNav` 本身保持零路由依赖，只收可选回调 `onSearch?: () => void`，由 `TimelinePage` 注入 `() => navigate("/search")`——这是刻意设计：`DateNav.test.tsx` 裸挂载无 Router，若组件内部直接引入 `<Link>` 会让它全部既有用例报错。搜索页不进主导航（`nav.visibleTabs.v1` / `nav.desktopSidebar.v1` 的可配置 tab 列表都不含 `/search`）。Android 返回键对 `/search` 走 `{ type: "back", fallbackTo: "/" }`（用 back 而非 navigate，让“时间轴 → 搜索 → 记录编辑 → 返回”能正确落回搜索页，筛选状态随浏览器历史一起恢复，见 [architecture](architecture.md) §4.2）。
+
+**三个 AND 筛子**（同时满足才命中）：
+
+- **分类**：单选，父/子皆可选；选中父分类命中整棵子树。命中集合由既有 `collectCategoryTreeIds(categories, rootId)`（`lib/categoryTree.ts`）产出，**该函数返回值包含 rootId 自身**，因此直接挂在父分类上、没有下沉到子分类的记录也会被捞到。
+- **时间范围**：`all` / `year` / `month` / `week` 四档，默认 `year`；`all` 档两侧无约束（`startUtc`/`endUtc` 均为 `null`）且隐藏翻页箭头；周以周一为首；区间语义半开 `[startUtc, endUtc)`。计算见 `lib/entrySearch/range.ts` 的 `buildSearchRange` / `shiftSearchAnchor`。
+- **关键词**：匹配 `note`，复用既有 `quick-notes/searchTerms.ts` 的 `parseSearchTerms`（空格分词、多词 AND、已转小写）+ `matchesAllTerms`。`lib/entrySearch/filter.ts` 的 `filterSearchEntries` 只小写 `entry.note`、不小写 `terms`，调用方必须传入 `parseSearchTerms` 的产物，否则大小写不匹配。
+
+**归属口径：跨夜记录整条算开始那天**。`filterSearchEntries` 只看 `entry.startTime` 判断是否落在筛选范围，**不按零点裁剪**——一条 23:00~次日 07:00 的记录，整条 8 小时都算在开始那天。这与统计页 `/stats/time` 的裁剪口径**有意不同**：统计页会把同一条记录按零点切成 1h + 7h 分别归到两天（见 [stats-insights](stats-insights.md)）。两页回答的问题不同——统计页答“那一天我实际花了多少时间”（时间预算视角，需要零点切分让每天时长总和有意义），搜索页答“这是一次睡眠，发生在那天”（事件清单视角，一条记录是不可再分的事件）。**这条口径分叉是刻意设计，不是 bug**：同一条记录在两页可能显示归属不同的天，日后若有人拿“两页数字对不上”来报 bug，先查是不是这条。
+
+**汇总四数口径**（`lib/entrySearch/filter.ts` 的 `summarizeSearchEntries`）：天数 = 有记录的天数（按开始日去重，不是区间总天数）；时长 = 各条 `endTime - startTime` 直接累加，不裁剪；日均 = 总时长 ÷ 有记录的天数，`dayCount === 0` 时输出 0；次数 = 匹配记录条数。汇总永远基于**完整匹配集**，不是当前渲染页——否则点“显示更多”会让四个数跟着变。
+
+**状态与取数**：筛选状态（`cat`/`range`/`anchor`/`q`）编码进 URL，由 `lib/entrySearch/urlState.ts` 解析/序列化；写回一律 `{ replace: true }`，理由有二：① 组件 state 会在“进记录编辑页再返回”时丢失，筛选必须能从 URL 完整重建；② push 会让改十次筛子往浏览器历史塞十条，返回键要连按十几次才能退出搜索页。**空白查询照写进 URL、不 trim**：输入框的值由 URL 派生，丢弃纯空白会让“先打一个空格”被吞掉，且 parse→serialize 往返对不上。取数走 `useLiveQuery`：`all` 档 `db.timeEntries.toArray()`，其余档位 `db.timeEntries.where("startTime").between(startUtc, endUtc, true, false)`，吃既有 `startTime` 索引。列表按 `startTime` 倒序，先渲染 100 条，超出显示“还有 N 条 · 显示更多”。
+
+**分类选择器弹层**（`pages/search/CategoryPickerSheet.tsx`）：一层弹层，父子缩排。父分类行左 2/5 展开子分类、右 3/5 选中该父，判定复用既有 `lib/tasks/taskRowZone.ts` 的 `rowClickZone`（与 ToDo 行同一套分区规则）；父分类无子分类时不分区、整行选中、不显示 caret。**打开弹层时自动展开“当前已选分类”所在的父分类**——没有这条，折叠方案不成立：选子分类会恒为两次点击。这条靠 `useState` 的 lazy 初始化在 mount 时求值一次，因此 `SearchPage` 必须**条件渲染**该弹层（`{pickerOpen && <CategoryPickerSheet />}`）而非常驻挂载——常驻会让自动展开只在首次挂载生效，此后关闭重开都不会重新展开。
+
+代码入口：`pages/SearchPage.tsx`、`pages/search/CategoryPickerSheet.tsx`、`lib/entrySearch/{range,filter,urlState}.ts`。测试：`lib/entrySearch/*.test.ts`、`pages/search/CategoryPickerSheet.test.tsx`、`pages/SearchPage.test.tsx`。
+
+## 12. 模块速查
 
 | 关注点 | 入口 |
 |---|---|
@@ -225,8 +249,9 @@ entry.endTime > 当天 00:00:00 对应的 UTC 边界
 | 客户端查询与写入 | `packages/client/src/hooks/useEntries.ts` |
 | 页面 | `packages/client/src/pages/TimelinePage.tsx`、`packages/client/src/pages/EntryPage.tsx` |
 | 时间轴组件 | `packages/client/src/components/Timeline.tsx`、`packages/client/src/components/CircularTimeline.tsx`、`packages/client/src/components/TimeRangeWheelPicker.tsx` |
+| 搜索页（§11） | `packages/client/src/pages/SearchPage.tsx`、`packages/client/src/pages/search/CategoryPickerSheet.tsx`、`packages/client/src/lib/entrySearch/{range,filter,urlState}.ts` |
 | 时间工具 | `packages/client/src/lib/time.ts`、`packages/client/src/lib/punch.ts` |
 | 服务端受控写入 | `packages/server/src/routes/entries.ts`、`packages/server/src/lib/entry-service.ts` |
 | 同步域钩子 | `packages/server/src/sync/domains.ts` 的 `time_entries` |
 | CLI | `packages/cli/src/commands/log.ts` |
-| 代表测试 | `useEntries.test.ts`、`TimelinePage.test.tsx`、`EntryPage.test.tsx`、`time.test.ts`、`entry-service.test.ts`、`routes/entries.test.ts`、`commands/log.test.ts` |
+| 代表测试 | `useEntries.test.ts`、`TimelinePage.test.tsx`、`EntryPage.test.tsx`、`time.test.ts`、`entry-service.test.ts`、`routes/entries.test.ts`、`commands/log.test.ts`、`lib/entrySearch/*.test.ts`、`pages/search/CategoryPickerSheet.test.tsx`、`pages/SearchPage.test.tsx` |
