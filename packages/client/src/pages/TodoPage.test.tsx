@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
 import { db } from "../db/index.js";
+import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
@@ -695,9 +696,8 @@ describe("TodoPage", () => {
 
     const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
     expect(zone.textContent ?? "").not.toContain("刷墙");
-    // 项目成员在今天区不再画绿竖条（chip 已经说了同一件事）。
-    const today = host.querySelector('[data-section="today"]') as HTMLElement;
-    expect(today.querySelector("[data-testid='goal-linked-bar']")).toBeNull();
+    // 注：今天区的 <TaskColumn> 本就没接 goalLinkedIds（见下方「红线 3」用例的说明），
+    // 这条用例只覆盖 chip 本身的展示与回跳，不覆盖竖条裁剪。
 
     const chip = host.querySelector('[data-section="today"] [data-testid="project-name-chip"]') as HTMLButtonElement;
     await act(async () => {
@@ -705,6 +705,36 @@ describe("TodoPage", () => {
     });
     await flushAsync();
     expect((host.querySelector('[data-section="todo-projects"]') as HTMLElement).textContent ?? "").toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("红线 3：被抓到手头的项目成员显示项目名 chip，且不与绿竖条同屏", async () => {
+    // 手头区是唯一同时消费 goalLinkedIds 与 metaChip 的消费点（AtHandSection.tsx 两者都传给了 TaskRow）；
+    // 今天区 / 已排期区当前接线里根本没传 goalLinkedIds 给对应组件，那两处的「无竖条」是恒真的，测了也白测——
+    // 真正需要裁剪生效的断言只能立在这里。
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    await grabTaskToHand(member.id, { now: new Date(now) });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-at-hand"] [data-testid="project-name-chip"]') !== null,
+      "project chip in at-hand section",
+    );
+
+    const atHand = host.querySelector('[data-section="todo-at-hand"]') as HTMLElement;
+    expect(atHand.querySelector('[data-testid="project-name-chip"]')?.textContent).toContain("装修");
+    expect(atHand.querySelector('[data-testid="goal-linked-bar"]')).toBeNull();
     await unmount(root);
   });
 });
