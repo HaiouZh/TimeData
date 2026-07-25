@@ -24,10 +24,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function renderSheet(id: string | null) {
+async function renderSheet(id: string | null, extraProps: Record<string, unknown> = {}) {
   const onClose = vi.fn();
   const { host, root } = await renderDom(
-    createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose })),
+    createElement(SyncProvider, null, createElement(TaskDetailSheet, { id, onClose, ...extraProps })),
   );
   await act(async () => {
     await new Promise((r) => setTimeout(r, 0));
@@ -842,6 +842,34 @@ describe("TaskDetailSheet tag 编辑", () => {
     setInputValue(input, "   ");
     await pressEnter(input);
     expect(onTagsChange).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("选「不重复」清掉时间后回调 onTimeCleared（页面据此展开归属组）", async () => {
+    const task = await addTask({ title: "刷墙", scheduledAt: normalizeScheduledDate("2026-07-01"), toInbox: true });
+    const onTimeCleared = vi.fn();
+    const { host, root } = await renderSheet(task.id, { onTimeCleared });
+
+    await click(badgeOf(host));
+    await click(host.querySelector('button[aria-label="不重复"]'));
+    await settle();
+
+    expect((await db.tasks.get(task.id))?.scheduledAt).toBeNull();
+    expect(onTimeCleared).toHaveBeenCalledTimes(1);
+    expect(onTimeCleared).toHaveBeenCalledWith(task.id);
+    await unmount(root);
+  });
+
+  it("选「每天」不回调：任务变成重复模板、不落 inbox 池，没有落点要反馈", async () => {
+    const task = await addTask({ title: "刷墙", toInbox: true });
+    const onTimeCleared = vi.fn();
+    const { host, root } = await renderSheet(task.id, { onTimeCleared });
+
+    await click(badgeOf(host));
+    await click(host.querySelector('button[aria-label="每天"]'));
+    await settle();
+
+    expect(onTimeCleared).not.toHaveBeenCalled();
     await unmount(root);
   });
 });

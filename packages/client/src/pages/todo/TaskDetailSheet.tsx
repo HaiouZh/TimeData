@@ -27,6 +27,12 @@ interface TaskDetailSheetProps {
   id: string | null;
   onClose: () => void;
   onTagsChange?: (task: Task, tags: string[]) => void;
+  /**
+   * 「不重复」把 scheduledAt 清成 null 后回调：任务回落 inbox 池，
+   * 若它是 active project 成员就会落进项目区里一个默认折叠的组，页面要据此补落点反馈。
+   * 抽屉不认识项目区，reveal 状态住在 TodoPage，所以走回调而不是自己处理。
+   */
+  onTimeCleared?: (taskId: string) => void;
 }
 
 const SWIPE_CLOSE_THRESHOLD = 60;
@@ -48,7 +54,7 @@ function normalizeTitle(value: string): string {
   return value.replace(/\s*[\r\n]+\s*/g, " ").trim();
 }
 
-export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetProps) {
+export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeCleared }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const activeSession = useLiveQuery(() => getActiveSession(), []) ?? null;
   const [title, setTitle] = useState("");
@@ -447,8 +453,12 @@ export function TaskDetailSheet({ id, onClose, onTagsChange }: TaskDetailSheetPr
           scheduledAt={recurrenceTarget.scheduledAt ?? null}
           anchor={anchorDate}
           onChoose={(choice) => {
+            const targetId = recurrenceTarget.id;
             setOverlay("none");
-            void run(() => applyRecurrenceChoice(recurrenceTarget.id, choice));
+            void run(() => applyRecurrenceChoice(targetId, choice)).then(() => {
+              // 只有 none 会把 scheduledAt 清成 null；改成某天会去已排期区、本来就看得见（红线 4）。
+              if (choice.kind === "none") onTimeCleared?.(targetId);
+            });
           }}
           onCustom={() => setOverlay("custom")}
           onClose={() => setOverlay("none")}

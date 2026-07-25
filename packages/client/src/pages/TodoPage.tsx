@@ -695,7 +695,14 @@ export function TodoPage() {
           formRef={composerRef}
         />
 
-        {detailId && <TaskDetailSheet id={detailId} onClose={closeDetail} onTagsChange={changeTags} />}
+        {detailId && (
+          <TaskDetailSheet
+            id={detailId}
+            onClose={closeDetail}
+            onTagsChange={changeTags}
+            onTimeCleared={(taskId) => void revealProjectHome(taskId)}
+          />
+        )}
       </div>
     </DndContext>
   );
