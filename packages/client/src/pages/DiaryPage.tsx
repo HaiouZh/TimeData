@@ -71,6 +71,10 @@ export default function DiaryPage() {
   // 与 shortcutSaveRef 同款——渲染期赋值，回调里读 .current。
   const dateRef = useRef(date);
   dateRef.current = date;
+  // 同款活 ref：handleReload 在 await confirm(...) 之后要判断"这期间有没有别的写飞起来"，
+  // 而闭包里的 saving 冻结在这次调用发生那一刻，await 期间外部 setSaving(true) 它读不到。
+  const savingRef = useRef(saving);
+  savingRef.current = saving;
 
   // config 与日期无关，只拉一次。不拆的话每切一天都多一次 /api/diary/config 往返，
   // 也多一次"config 请求失败 → 整页 loadFailed"的机会。
@@ -265,17 +269,11 @@ export default function DiaryPage() {
       !(await confirm({ title: "丢弃当前修改？", body: "将丢弃当前修改，加载服务器版本。", danger: true }))
     )
       return;
-    // 本意：确认框开着的这段时间里 Ctrl+S 可能起了一发保存（快捷键不看按钮置灰），再挡一次。
-    // 但这里的 saving 是函数体顶部解构出的普通变量，不是 ref——handleReload 这次调用从进入时
-    // 就把它的值冻结在闭包里，await confirm(...) 期间哪怕真的另起一次 setSaving(true)，这里
-    // 读到的仍是调用发生那一刻的旧值（且已经被上面第一次 if (saving) return 判过一遍，不可能
-    // 是 true）。也就是说这行与上面那行在同一次调用里恒同值，是静默失效的兜底：已用临时
-    // console.log 实测——构造"确认框开着期间 Ctrl+S 真的起了一发保存并且还没返回"的真实竞态，
-    // 这里读到的 saving 仍是 false，fetchDiary 照样会被再次调用。要让它真正生效，需要像
-    // dateRef 那样引入一个活的 ref（例如 savingRef.current，函数体顶部同步赋值）；这是逻辑改动，
-    // 超出本轮"只碰注释和测试文件"的范围，未做，留给后续任务。恒假的判据写不出真测试，
-    // 故此处不为它硬凑一条。
-    if (saving) return;
+    // 确认框开着的这段时间里 Ctrl+S 可能起了一发保存（快捷键走 window 监听，不看按钮置灰），
+    // 再挡一次。**必须读 savingRef.current 不能读 saving**：后者是这次调用进入时就冻结在闭包
+    // 里的渲染值，await confirm(...) 期间外部 setSaving(true) 它读不到，与上面第一道判据恒同值
+    // ——写成 `if (saving)` 的话这行结构上永远不生效，是一道看着在防、实际不防的假闸。
+    if (savingRef.current) return;
     const dateAtRequest = date;
     const revisionAtRequest = editRevisionRef.current;
     // 这里不需要日期闸：confirm 的 await 期间用户理论上能切换日期，但实测走不到——

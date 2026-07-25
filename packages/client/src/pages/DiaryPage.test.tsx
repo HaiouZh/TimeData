@@ -1167,6 +1167,39 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  it("确认框开着期间 Ctrl+S 抢跑起一发保存，点确认后不再重载（confirm 后的 savingRef 闸）", async () => {
+    // 按钮置灰挡不住这条：Ctrl+S 走 window 监听，不看 disabled。若这道闸读的是闭包里的
+    // saving（进入调用时就冻结的渲染值）而不是 savingRef.current，它与函数入口那道判据恒同值、
+    // 结构上永远不生效——reload 就会在保存飞着的时候发出去，两个写操作交错让 baseMtime 指向
+    // 一份编辑器里已不存在的内容，用户下次保存 mtime 校验通过、不报冲突，刚写进去的内容被静默覆盖。
+    const { host, root } = await renderPage();
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    // 进入冲突态后点「刷新重载」，脏态确认框弹出
+    await click(buttonByText(host, "刷新重载"));
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+
+    // 确认框开着的时候按 Ctrl+S：起一发挂住不返回的保存
+    let releaseSave: (value: { mtime: number }) => void = () => {};
+    saveDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseSave = resolve; }));
+    const fetchCallsBefore = fetchDiary.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    });
+    await flush();
+    expect(saveDiary).toHaveBeenCalledTimes(2);
+
+    await click(buttonByText(host, "确认"));
+
+    expect(fetchDiary.mock.calls.length).toBe(fetchCallsBefore);
+
+    await act(async () => { releaseSave({ mtime: 999 }); });
+    await flush();
+    await unmount(root);
+  });
+
   it("重载 fetchDiary 在飞时切了日期，随后才 reject：失败提示不挂到新日期头上（catch 分支日期闸）", async () => {
     // 与「重载在途中切日期：旧日期的正文不覆盖新日期」是同一处日期闸的另一面：那条测的是
     // 成功路径（doc 回来但日期已换，不覆盖新日期正文），这条测的是失败路径——旧日期的
