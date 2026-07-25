@@ -107,8 +107,12 @@ export default function DiaryPage() {
     setError(null);
     setConflict(false);
     setLoadFailed(false);
-    // baseMtime 也要清：切到 B 日、加载失败、用户点保存，会拿着 A 日的 mtime 去
-    // PUT B 日，服务端 mtime 守卫判不等 → 假冲突，用户被诱导去点「仍然覆盖」。
+    // 防御性清空，无可观测行为差异（已验证）：handleSave 现在 loading || loadFailed 都早退，
+    // 这两个态覆盖了"content 还是上一天残留"的全部窗口，所以 saveDiary 不可能在 baseMtime
+    // 仍是上面这次重置的旧值时被调用——要么早退（loading/loadFailed 未清），要么 fetchDiary
+    // 已经成功并把 baseMtime 覆盖成 doc.mtime。删掉这行、跑 DiaryPage 全部 38 条测试验证过
+    // 仍然全绿。留着是因为"切日期就清掉旧 mtime"语义上仍然对，且不给将来的改动留隐患
+    // （万一以后 handleSave 的早退条件被弱化，这行还能兜底）；不要为它硬凑一条测试。
     setBaseMtime(null);
     (async () => {
       try {
@@ -170,12 +174,16 @@ export default function DiaryPage() {
 
   async function handleSave(options: { force?: boolean } = {}) {
     if (saving) return;
-    // loading 早退：正文还没到位，content 里还是上一天残留的内容，且日期 effect 已经把
-    // baseMtime 清成 null（见下面切日期重置四态的注释）——若在这里放行保存，会把上一天的
-    // 内容写进新一天的文件；baseMtime=null 还会被服务端 mtime 并发守卫当成"文件不存在"直接
-    // 放行，不报冲突、静默写坏新一天的文件。Ctrl+S 挂在 window 上不经过 textarea，
-    // "textarea 已卸载所以碰不到"这个假设不成立，必须在这里显式挡。
-    if (loading) return;
+    // loading || loadFailed 早退，同一个根因两个窗口：正文没成功加载出来时，content 里还是
+    // 上一天残留的内容，且日期 effect 已经把 baseMtime 清成 null（见下面切日期重置四态的
+    // 注释）——若在这里放行保存，会把上一天的内容写进新一天的文件；baseMtime=null 还会被
+    // 服务端 mtime 并发守卫当成"文件不存在"直接放行，不报冲突、静默写坏新一天的文件。
+    // loading 只挡到 fetchDiary 还在飞的那一段；fetchDiary reject 后 loading 变 false 但
+    // loadFailed 变 true，同样的残留 content + null baseMtime 原样还在，不补 loadFailed
+    // 这条守卫这个窗口就完全不设防。"loadFailed 时主区域是全屏加载失败提示、textarea 未挂载，
+    // 用户碰不到保存"这个假设是错的——Ctrl+S 挂在 window 上、根本不经过 textarea，保存按钮
+    // 本身在 loadFailed 态下也没有单独置灰，两条路都能触发 handleSave。
+    if (loading || loadFailed) return;
     setSaving(true);
     setError(null);
     // 发起时的编辑序号：请求在途中用户可能继续打字，回来时得认得出来（见下面清脏处）
@@ -276,7 +284,7 @@ export default function DiaryPage() {
         <button
           type="button"
           aria-label="保存"
-          disabled={!dirty || saving || loading}
+          disabled={!dirty || saving || loading || loadFailed}
           onClick={() => void handleSave()}
           className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
         >

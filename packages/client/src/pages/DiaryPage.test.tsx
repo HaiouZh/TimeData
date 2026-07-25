@@ -856,12 +856,13 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
-  it("切日期后 fetchDiary 失败：loadFailed 态下若曾脏着的编辑触发保存，baseMtime 是 null 不是上一天的值（防假冲突）", async () => {
-    // 修完 loading 早退后，loading 期间已经不能保存了；但 loadFailed=true 时 loading 已经是
-    // false，保存按钮仍可点。这条测试确认 baseMtime 确实被日期 effect 清成了 null，而不是
-    // 遗留 A 日的 100——否则用户点保存会带着 A 日的 mtime 去 PUT B 日，服务端判不等产生假
-    // 冲突，诱导用户去点「仍然覆盖」，其实 B 日的文件根本没有冲突。
-    saveDiary.mockResolvedValue({ mtime: 999 });
+  it("切日期后 fetchDiary 失败（loadFailed 态）：保存按钮变灰、Ctrl+S 也不触发保存，A 日残留内容不会被静默写进 B 日文件", async () => {
+    // 与 loading 早退是同一个根因的两个窗口，只挡 loading 不够：loadFailed=true 时 loading
+    // 已经是 false，content 仍是 A 日残留、baseMtime 已被日期 effect 清成 null。此前的实现
+    // 只挡 loading，这里点保存或按 Ctrl+S 会把 A 日内容静默写进 B 日文件——baseMtime=null
+    // 还会被服务端 mtime 并发守卫当成"文件不存在"直接放行，连假冲突提示都不会有。
+    // （复审已实测：给旧版本这条测试加一行 `expect(saveDiary).toHaveBeenCalledWith("2026-07-20",
+    // expect.objectContaining({ content: "A 日未保存的编辑" }))` 会通过，坐实过写穿。）
     const { host, root, router } = await renderPage();
 
     await typeInto(textarea(host), "A 日未保存的编辑");
@@ -872,11 +873,19 @@ describe("DiaryPage", () => {
     expect(host.textContent).toContain("加载失败");
     const save = host.querySelector('button[aria-label="保存"]');
     if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
-    expect(save.disabled).toBe(false); // loading 已经是 false，dirty 仍是 true
+    expect(save.disabled).toBe(true); // loadFailed 必须单独挡下，不能只看 loading
 
-    await click(save);
+    // Ctrl+S 挂在 window 上，不经过按钮的 disabled，必须在 handleSave 里也显式挡住
+    let defaultPrevented = false;
+    await act(async () => {
+      const event = new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true, cancelable: true });
+      window.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
 
-    expect(saveDiary).toHaveBeenCalledWith("2026-07-20", expect.objectContaining({ baseMtime: null }));
+    expect(defaultPrevented).toBe(true); // 仍要拦掉浏览器"保存网页"对话框
+    expect(saveDiary).not.toHaveBeenCalled();
 
     await unmount(root);
   });
