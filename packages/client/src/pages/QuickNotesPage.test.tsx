@@ -1360,6 +1360,106 @@ describe("QuickNotesPage", () => {
 
     await unmount(root);
   });
+
+  it("编辑未保存时切去编辑另一条要先确认，取消则留在原来那条", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "note-a",
+        text: "第一条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "note-b",
+        text: "第二条",
+        occurredAt: "2026-06-01T05:00:00.000Z",
+        createdAt: "2026-06-01T05:00:00.000Z",
+        updatedAt: "2026-06-01T05:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "第一条");
+    await click(menuItem(host, "编辑"));
+    await typeInto(input(host), "第一条改过了");
+
+    await openMenu(host, "第二条");
+    await click(menuItem(host, "编辑"));
+
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("放弃对上一条的修改");
+
+    await click(lastButtonByText(host, "继续编辑"));
+
+    // 取消 = 留在第一条，改动一个字都不许掉
+    expect(input(host).value).toBe("第一条改过了");
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("确认放弃后切到另一条，装载新目标的原文", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "note-a",
+        text: "第一条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "note-b",
+        text: "第二条",
+        occurredAt: "2026-06-01T05:00:00.000Z",
+        createdAt: "2026-06-01T05:00:00.000Z",
+        updatedAt: "2026-06-01T05:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "第一条");
+    await click(menuItem(host, "编辑"));
+    await typeInto(input(host), "第一条改过了");
+
+    await openMenu(host, "第二条");
+    await click(menuItem(host, "编辑"));
+    await click(lastButtonByText(host, "放弃修改"));
+
+    expect(input(host).value).toBe("第二条");
+
+    await unmount(root);
+  });
+
+  it("没改过就切换不弹确认（不过度拦截）", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "note-a",
+        text: "第一条",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "note-b",
+        text: "第二条",
+        occurredAt: "2026-06-01T05:00:00.000Z",
+        createdAt: "2026-06-01T05:00:00.000Z",
+        updatedAt: "2026-06-01T05:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "第一条");
+    await click(menuItem(host, "编辑"));
+
+    await openMenu(host, "第二条");
+    await click(menuItem(host, "编辑"));
+
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(input(host).value).toBe("第二条");
+
+    await unmount(root);
+  });
 });
 
 describe("捕捉中心", () => {

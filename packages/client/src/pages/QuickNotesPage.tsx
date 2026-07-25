@@ -47,7 +47,7 @@ import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinati
 import { addTask } from "../lib/tasks.js";
 import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
-import { clearComposerDraft, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
+import { clearComposerDraft, isEditDraftDirty, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
 import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
@@ -144,6 +144,10 @@ export default function QuickNotesPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const composeDraftRef = useRef("");
+  // 进入编辑时快照被编辑那条的原文，用来判「用户改过没」。
+  // 故意用进入编辑时的快照而不是当前库里的值：编辑期间那条被另一台设备改了而用户没动，
+  // 判定为「没改过」静默切换是对的——用户没有东西可丢。
+  const editingOriginalRef = useRef("");
   const saveTodoPendingRef = useRef(false);
   const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -525,6 +529,7 @@ export default function QuickNotesPage() {
         setEditingId(null);
         setDraftText(composeDraftRef.current);
         composeDraftRef.current = "";
+        editingOriginalRef.current = "";
       } else {
         await addQuickNote(text);
         setDraftText("");
@@ -563,8 +568,19 @@ export default function QuickNotesPage() {
     }
   }
 
-  function startEditing(note: QuickNote) {
+  async function startEditing(note: QuickNote) {
+    if (editingId && isEditDraftDirty(draftText, editingOriginalRef.current)) {
+      const confirmed = await confirm({
+        title: "放弃对上一条的修改？",
+        body: "你对上一条速记的修改还没保存，切去编辑另一条会丢掉它。",
+        confirmLabel: "放弃修改",
+        cancelLabel: "继续编辑",
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
     if (!editingId) composeDraftRef.current = draftText;
+    editingOriginalRef.current = note.text;
     setPinnedOpen(false);
     setEditingId(note.id);
     setDraftText(note.text);
@@ -577,6 +593,7 @@ export default function QuickNotesPage() {
     setEditingId(null);
     setDraftText(composeDraftRef.current);
     composeDraftRef.current = "";
+    editingOriginalRef.current = "";
     setError(null);
   }
 
@@ -1390,7 +1407,7 @@ export default function QuickNotesPage() {
           y={menu.y}
           pinned={menu.note.pinned ?? false}
           onCopy={() => void handleCopy(menu.note)}
-          onEdit={() => startEditing(menu.note)}
+          onEdit={() => void startEditing(menu.note)}
           onDelete={() => void handleDelete(menu.note)}
           onSelect={() => enterSelection(menu.note)}
           onTogglePin={() => void handleTogglePin(menu.note)}
