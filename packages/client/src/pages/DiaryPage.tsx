@@ -3,6 +3,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 
@@ -22,6 +23,8 @@ export default function DiaryPage() {
   const [content, setContent] = useState("");
   const [baseMtime, setBaseMtime] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
+  // 站内换页 + 关标签页两条腿都由它管；页内「刷新重载」的确认仍走下面的 confirm
+  useUnsavedChangesGuard({ when: dirty, confirm });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -56,16 +59,6 @@ export default function DiaryPage() {
       cancelled = true;
     };
   }, [today]);
-
-  useEffect(() => {
-    if (!dirty) return;
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
-      event.preventDefault();
-      event.returnValue = "";
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [dirty]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     // IME 候选确认的 Enter 不参与续号
@@ -135,8 +128,8 @@ export default function DiaryPage() {
     setConflict(false);
   }
 
-  async function handleBack() {
-    if (dirty && !(await confirm({ title: "确定离开？", body: "有未保存的修改，确定离开？", danger: true }))) return;
+  function handleBack() {
+    // 脏态确认由 useUnsavedChangesGuard 统一处理，这里不再自己弹一次（否则会连弹两个）
     navigate(-1);
   }
 
@@ -147,7 +140,7 @@ export default function DiaryPage() {
         <button
           type="button"
           aria-label="返回"
-          onClick={() => void handleBack()}
+          onClick={handleBack}
           className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
         >
           <Icon icon={ArrowLeft} size={16} />

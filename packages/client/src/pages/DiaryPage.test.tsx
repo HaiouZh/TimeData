@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
 import { flushSync } from "react-dom";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import DiaryPage from "./DiaryPage.js";
@@ -39,12 +39,20 @@ async function flush() {
   });
 }
 
-async function renderPage(): Promise<{ host: HTMLElement; root: Root }> {
-  const { host, root } = await renderDom(
-    createElement(MemoryRouter, { initialEntries: ["/diary"] }, createElement(DiaryPage)),
+async function renderPage(): Promise<{ host: HTMLElement; root: Root; router: ReturnType<typeof createMemoryRouter> }> {
+  // 必须是 data router：DiaryPage 现在用 useUnsavedChangesGuard（内部 useBlocker），
+  // 在 <MemoryRouter> 下会抛 "useBlocker must be used within a data router."
+  // initialIndex 指向 /diary，让 navigate(-1) 有处可退（退到 /todo）。
+  const router = createMemoryRouter(
+    [
+      { path: "/todo", element: createElement("span", null, "待办页") },
+      { path: "/diary", element: createElement(DiaryPage) },
+    ],
+    { initialEntries: ["/todo", "/diary"], initialIndex: 1 },
   );
+  const { host, root } = await renderDom(createElement(RouterProvider, { router }));
   await flush();
-  return { host, root };
+  return { host, root, router };
 }
 
 function textarea(host: HTMLElement): HTMLTextAreaElement {
@@ -167,24 +175,25 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
-  it("脏状态点返回弹 ConfirmSheet，点取消不导航、编辑内容仍在", async () => {
-    const { host, root } = await renderPage();
+  it("脏状态点返回被 blocker 拦下，点取消不导航、编辑内容仍在", async () => {
+    fetchDiaryConfig.mockResolvedValue({ enabled: true, template: "日记/{yyyy}/{MM}-{dd}.md" });
+    fetchDiary.mockResolvedValue({ content: "原文", mtime: 100 });
+    const { host, root, router } = await renderPage();
 
-    await typeInto(textarea(host), "1. dirty");
-    await click(host.querySelector('button[aria-label="返回"]'));
+    await typeInto(textarea(host), "改过的内容");
 
-    // ConfirmSheet 出现
-    const dialog = host.querySelector('[role="dialog"]');
-    expect(dialog).not.toBeNull();
-    expect(host.textContent).toContain("有未保存的修改");
+    const back = host.querySelector('button[aria-label="返回"]');
+    if (!(back instanceof HTMLButtonElement)) throw new Error("missing back button");
+    await act(async () => click(back));
+    await flush();
 
-    const cancelButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "取消");
-    await click(cancelButton ?? null);
+    const cancel = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.trim() === "继续编辑");
+    if (!(cancel instanceof HTMLButtonElement)) throw new Error("missing cancel button");
+    await act(async () => click(cancel));
+    await flush();
 
-    // 未导航：编辑页与本地编辑内容原样保留
-    expect(host.querySelector('[role="dialog"]')).toBeNull();
-    expect(textarea(host).value).toBe("1. dirty");
-
+    expect(router.state.location.pathname).toBe("/diary");
+    expect(textarea(host).value).toBe("改过的内容");
     await unmount(root);
   });
 
