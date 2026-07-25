@@ -60,6 +60,7 @@
   "src/pages/todo/TaskRow.test.tsx",
   "src/pages/todo/TodoComposer.test.tsx",
   "src/pages/todo/TodoListSections.test.tsx",
+  "src/pages/todo/TodoProjectSection.test.tsx",
   "src/pages/tracks/NewTrackComposer.test.tsx",
   "src/pages/tracks/RefChip.test.tsx",
   "src/pages/tracks/StepComposer.test.tsx",
