@@ -5,6 +5,7 @@ import {
   addGoalMember,
   addTaskForGoal,
   deleteGoal,
+  findActiveProjectGoalIdForTask,
   getGoal,
   listGoals,
   removeGoalMember,
@@ -295,5 +296,51 @@ describe("归属变更同事务刷新成员任务 updatedAt", () => {
       .filter((e) => e.tableName === "tasks" && e.recordId === task.id && e.action === "update")
       .toArray();
     expect(updateLogs).toHaveLength(1);
+  });
+});
+
+describe("findActiveProjectGoalIdForTask", () => {
+  it("认 members 原始事实：子任务成员与已完成成员都查得到（项目区投影会把它们丢掉）", async () => {
+    // 投影层只收根任务、只索引未完成成员，所以这两类在 buckets.projects 里根本不存在。
+    // 而落点反馈恰恰要在「刚从子任务升成根」「刚从已完成回到未完成」这两个瞬间查得到归属。
+    const goal = await addGoal({ title: "装修", kind: "project" });
+    const parent = await addTask({ title: "父任务", toInbox: true });
+    const child = await addTask({ title: "子任务", toInbox: true });
+    const done = await addTask({ title: "已完成的", toInbox: true });
+    await addGoalMember(goal.id, { kind: "task", id: child.id });
+    await addGoalMember(goal.id, { kind: "task", id: done.id });
+    await db.tasks.update(child.id, { parentId: parent.id });
+    await db.tasks.update(done.id, { done: true, completedAt: now });
+
+    expect(await findActiveProjectGoalIdForTask(child.id)).toBe(goal.id);
+    expect(await findActiveProjectGoalIdForTask(done.id)).toBe(goal.id);
+  });
+
+  it("只认 active project：theme 与 archived 都不算归属", async () => {
+    const theme = await addGoal({ title: "主题", kind: "theme" });
+    const archived = await addGoal({ title: "旧项目", kind: "project" });
+    const themeTask = await addTask({ title: "主题任务", toInbox: true });
+    const archivedTask = await addTask({ title: "旧任务", toInbox: true });
+    await addGoalMember(theme.id, { kind: "task", id: themeTask.id });
+    await addGoalMember(archived.id, { kind: "task", id: archivedTask.id });
+    await updateGoal(archived.id, { status: "archived" });
+
+    expect(await findActiveProjectGoalIdForTask(themeTask.id)).toBeNull();
+    expect(await findActiveProjectGoalIdForTask(archivedTask.id)).toBeNull();
+  });
+
+  it("同挂多个 active project 时与项目区分组同一套仲裁：updatedAt 新者胜", async () => {
+    const older = await addGoal({ title: "旧组", kind: "project" });
+    const newer = await addGoal({ title: "新组", kind: "project" });
+    const task = await addTask({ title: "双挂任务", toInbox: true });
+    await addGoalMember(older.id, { kind: "task", id: task.id }, { now: date("2026-06-22T02:00:00.000Z") });
+    await addGoalMember(newer.id, { kind: "task", id: task.id }, { now: date("2026-06-22T03:00:00.000Z") });
+
+    expect(await findActiveProjectGoalIdForTask(task.id)).toBe(newer.id);
+  });
+
+  it("不是任何 active project 的成员 → null", async () => {
+    const task = await addTask({ title: "自由任务", toInbox: true });
+    expect(await findActiveProjectGoalIdForTask(task.id)).toBeNull();
   });
 });

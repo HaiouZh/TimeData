@@ -6,7 +6,7 @@ import {
   deleteGoalMemberPinInCurrentTransaction,
 } from "./goalLayoutPins.js";
 import { recordSyncLog } from "../sync/engine.js";
-import { ownedProjectTaskIds, releasedProjectTaskIds } from "./tasks/goalMembership.js";
+import { ownedProjectTaskIds, projectMemberIndex, releasedProjectTaskIds } from "./tasks/goalMembership.js";
 import { buildNewRootTask, insertNewTaskInCurrentTransaction, touchTasksInCurrentTransaction } from "./tasks.js";
 
 export interface AddGoalInput {
@@ -295,4 +295,21 @@ export async function deleteGoal(id: string, options: { now?: Date } = {}): Prom
     // 删除与归档同样让成员失去归属，必须一起浮上水面。
     await touchTasksInCurrentTransaction(ownedProjectTaskIds(goal), timestamp);
   });
+}
+
+/**
+ * 找 taskId 当前所属的 active project 目标 id，没有则 null。
+ *
+ * 与 `buckets.projects` 的口径差别是**刻意的**：那份投影只收根任务、只索引未完成成员，
+ * 而本函数认 `members` 的原始事实——待办页的落点反馈要在「子任务刚升成根」
+ * 「已完成成员刚被取消勾选」这两个瞬间查得到归属，那时任务还不在投影里。
+ *
+ * 读裸行、不过 `GoalSchema.parse`：`superRefine` 会因单个成员重复 reject 整行，
+ * 让整组归属静默失效（`listTasks` 同款理由）。仲裁（同挂多个 active project 取
+ * `updatedAt` 新者、并列取 `id` 字典序小者）直接复用 `projectMemberIndex`，
+ * 与项目区分组共用同一份代码，不会漂移。
+ */
+export async function findActiveProjectGoalIdForTask(taskId: string): Promise<string | null> {
+  const goalRows = await db.goals.toArray();
+  return projectMemberIndex(goalRows).get(taskId)?.goalId ?? null;
 }
