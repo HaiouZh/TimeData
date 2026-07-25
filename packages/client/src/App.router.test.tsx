@@ -19,6 +19,14 @@ describe("App router", () => {
     expect(matches.path).toBe("*");
   });
 
+  it("根路由挂了 errorElement，页面崩溃不会落回 RR 自带的未翻译兜底页", () => {
+    // 接线断言：RR 对根路由（index 0）总会包一层 boundary，不给 errorElement 就用它自带的
+    // DefaultErrorComponent，而那层在 RouterProvider 内、页面渲染错误冒不到 App() 的 ErrorBoundary。
+    // hasErrorBoundary 由 mapRouteProperties 从 errorElement != null 推导，删掉 App.tsx 的
+    // errorElement 这条就会红。（RouteErrorFallback 渲染出什么由 ErrorBoundary.test.tsx 覆盖。）
+    expect(getRouter().routes[0].hasErrorBoundary).toBe(true);
+  });
+
   it("多次取用返回同一个实例，router 不随渲染重建", () => {
     expect(getRouter()).toBe(getRouter());
   });

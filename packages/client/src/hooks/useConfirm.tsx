@@ -42,6 +42,9 @@ export function useConfirm() {
       // pending 是单值：第二次调用会直接覆盖第一次，被顶替请求的 resolve 若不主动结算就永远
       // 不 settle。useUnsavedChangesGuard 之类的调用方 await 着它，promise 悬空会让全局
       // useBlocker 卡在 blocked、应用再也导航不了。顶替时解析为「取消」（留在原地），是安全方向。
+      // 在 updater 里做这个副作用是安全的：Promise 只会 settle 一次，所以 StrictMode 下
+      // React 重复调用 updater 时第二次是 no-op。别为了「纯函数 updater」把它改成 ref 版本——
+      // 那会把悬空的口子重新打开。
       setPending((prev) => {
         prev?.resolve(false);
         return { ...request, resolve };
