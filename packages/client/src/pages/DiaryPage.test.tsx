@@ -923,6 +923,9 @@ describe("DiaryPage", () => {
 
     expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-24");
     expect(router.state.location.search).toBe("?date=2026-07-24");
+    // 切日必须是 replace 不是 push：日记页 header 有返回按钮、安卓返回键 /diary 分支也恒走
+    // navigate(-1)，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去。
+    expect(router.state.historyAction).toBe("REPLACE");
     await unmount(root);
   });
 
@@ -961,6 +964,7 @@ describe("DiaryPage", () => {
     await click(buttonByText(host, "回到今天"));
 
     expect(router.state.location.search).toBe("");
+    expect(router.state.historyAction).toBe("REPLACE");
     expect(fetchDiary).toHaveBeenLastCalledWith("2026-07-25");
     await unmount(root);
   });
