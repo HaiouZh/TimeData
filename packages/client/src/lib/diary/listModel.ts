@@ -274,8 +274,8 @@ export function renumberBlock(rows: RenumberInputRow[], straighten: boolean): Re
  * 前置条件（未写明但必须满足）：mustCover >= base。mustCover 通常是光标/选区端点的绝对偏移，
  * base 是 oldText 在文档中的起始绝对偏移；`newText.slice(start - base, …)` 在 start < base 时
  * 走负索引会产出垃圾（如 `trimEditSpan("abc","axc",10,3)` 不夹逼会切出无意义的区间）。Task 4
- * 天然满足（caret ≥ blockStart），但 Task 5 的选区起点可能落在块首之前，容易踩——这里显式把
- * mustCover 夹逼到 base，不静默产出错误区间。
+ * 天然满足（caret ≥ blockStart），这里仍显式把 mustCover 夹逼到 base，不静默产出错误区间——
+ * Tab 缩进路径（Task 5）改用行级区间、不调用本函数，理由见 `indent.ts` 里的注释。
  */
 export function trimEditSpan(
   oldText: string,

@@ -379,4 +379,36 @@ describe("DiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("回车出新项后按 Tab 真的缩进（Enter→Tab 最高频路径，接线闸）", async () => {
+    // 上面两条 jsdom 接线测试断言的都是"什么都没发生"（IME 不触发 / 顶层 Shift+Tab 不
+    // preventDefault），把 handleKeyDown 里整个 Tab 分支删掉这两条依然成立——接线可以完全
+    // 断线而这两条测试测不出来。这条正测走一次真实会落地的 Enter→Tab 编辑，断言最终 DOM 值。
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await flush();
+    expect(el.value).toBe("1. x\n2. ");
+
+    let prevented = false;
+    await act(async () => {
+      el.setSelectionRange(8, 8);
+      const ev = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      prevented = ev.defaultPrevented;
+    });
+    await flush();
+
+    expect(prevented).toBe(true);
+    expect(el.value).toBe("1. x\n\t1. ");
+    expect(save.disabled).toBe(false);
+
+    await unmount(root);
+  });
 });

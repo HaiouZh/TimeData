@@ -105,7 +105,7 @@ export function applyIndent(value: string, selStart: number, selEnd: number, dir
   // 同块内后续行的编号（如 depth0 的第 2 项被缩进成子项后，depth0 的第 3 项要顺势改叫第 2 项）。
   // 缩进/出层本身只动目标行的 indent；不带子树——子项原样留在原深度，这是明确的取舍（§1.7 例 3），
   // 不是 bug：带子树要引入"子树"概念与额外用户预期，而多行选中一起缩已经用行级操作覆盖了这个需求。
-  const outputByLine = new Map<number, string>();
+  const outputByLine = new Map<number, { text: string; markerLen: number | null }>();
   for (const bid of touchedBlockIds) {
     const block = blocks[bid];
     const rows: RenumberInputRow[] = block.rows.map((r) => {
@@ -113,23 +113,42 @@ export function applyIndent(value: string, selStart: number, selEnd: number, dir
       if (!item) return { kind: "raw", text: lines[r].text }; // 附属行原样透传，不参与编号
       let indent = item.indent;
       if (targetSet.has(r)) {
-        indent = dir === "in" ? indent + INDENT : indent.slice(removableIndentLen(indent));
+        // 前置 Tab（INDENT + indent），不是后置：canIndentRows/listModel.ts 的层级比较全部假设
+        // visualCol("\t" + s) === visualCol(s) + TAB_COLUMNS 恒成立，这是前置才有的等式——
+        // 后置只在 col 恰好是 4 的倍数时碰巧等于 +4，否则会漂移，且会让 Shift+Tab 的
+        // removableIndentLen（认 indent.startsWith(INDENT)）认不出刚加的这个 Tab，Tab→Shift+Tab
+        // 就不再互逆。
+        indent = dir === "in" ? INDENT + indent : indent.slice(removableIndentLen(indent));
       }
-      // numText 传原值即可：straighten=true 会整体覆盖，这里只是凑齐字段形状。
+      // numText 传原值即可：straighten=true 会整体覆盖，straighten=false（单项块）会原样使用，
+      // 两种情况都要传原值，不能传占位串。
       return { kind: "item", indent, numText: item.numText, gap: item.gap, content: item.content };
     });
-    const renumbered = renumberBlock(rows, true);
+    // 单项块护栏（同 orderedList.ts 的 straighten = block.items >= 2）：块内只有 1 个列表项时不拉直，
+    // 原样保留用户手写的编号。不加这条，孤立的单项块（loose list 很常见）Shift+Tab/Tab 一下就会被
+    // 静默拉直成 "1."，用户手写的号码被吃掉，是我们自己制造的 vault 污染。
+    const straighten = block.items >= 2;
+    const renumbered = renumberBlock(rows, straighten);
     block.rows.forEach((r, k) => {
-      outputByLine.set(r, renumbered[k].text);
+      outputByLine.set(r, { text: renumbered[k].text, markerLen: renumbered[k].markerLen });
     });
   }
 
-  const finalTextOf = (i: number): string => outputByLine.get(i) ?? lines[i].text;
+  const finalTextOf = (i: number): string => outputByLine.get(i)?.text ?? lines[i].text;
 
-  // 替换区间收窄到真正变化的首/末行——这是行级收窄，不是 trimEditSpan 的字节级前后缀裁剪。
-  // 两者会给出不同的答案（字节级会切得更碎，如把 "3. C"→"2. C" 只换开头的 "3"→"2"），但 T1/T12/T17
-  // 等边界表条目要求的是"整行替换、行内容原样"的粒度，所以这里手写行级扫描，不强行套 trimEditSpan
-  // （它的 mustCover 前置条件也未必总能满足，见 listModel.ts 的 JSDoc）。
+  // 替换区间收窄到真正变化的首/末行——这是行级收窄，不是 trimEditSpan 的字节级前后缀裁剪，
+  // 也不是复用 orderedList.ts 那套"插入点"逻辑。为什么不能套 trimEditSpan，三点：
+  // 1. Tab 天生是行级操作（这一整行往里/往外挪），回车是插入点操作（在光标处拆一行）；权威原型
+  //    对 Tab 的实跑结果也是逐行比较找首末变化行，不是字节级前后缀裁剪。
+  // 2. trimEditSpan 的 mustCover 参数是为回车量身定做的：回车永远只有一个光标、且这个光标恒在
+  //    块内（caret ≥ blockStart）。Tab 有两个端点（选区），且端点可以整体落在改动区间之外
+  //    （如选区 [0,10] 而真正的改动区间是 [5,14]，见 T12/本文件的模式 B 平移测试）——硬把
+  //    mustCover 塞成"选区端点"，夹逼出来的区间反而比行级扫描算出来的还宽，字节级"更窄"的
+  //    卖点在这里不成立。两者会给出不同答案（字节级会切得更碎，如把 "3. C"→"2. C" 只换开头的
+  //    "3"→"2"），但 T1/T12/T17 等边界表条目要求的是"整行替换、行内容原样"的粒度。
+  // 3. "口径不一致"（Tab 用行级、回车用字节级）不构成问题：撤销条目由每次按键调一次
+  //    execCommand 决定，与区间宽窄无关；saveDiary 是整篇内容 PUT，编辑区间根本不出客户端，
+  //    409 冲突判定看的是 mtime 不看内容差。
   let rowFirst = -1;
   let rowLast = -1;
   for (let i = bs; i <= be; i += 1) {
@@ -177,7 +196,10 @@ export function applyIndent(value: string, selStart: number, selEnd: number, dir
     const i = fi; // fi === li（无选区时单点必落在同一行）
     const oldPre = parseItem(lines[i].text)?.markerLen ?? 0;
     const newLineText = newLineTextOf(i);
-    const newPre = parseItem(newLineText)?.markerLen ?? 0;
+    // 不 re-parse newLineText 反解 markerLen（listModel.ts renumberBlock 的 JSDoc 明确禁止这么做：
+    // 这条坑在 Task 4 的随机用例里实测造成 1.9% 光标错位）；renumberBlock 已经把 markerLen 直接
+    // 算出来，这里从上面存的 outputByLine 里原样取用。
+    const newPre = outputByLine.get(i)?.markerLen ?? 0;
     const col = selStart - lines[i].start;
     const newCol = col > oldPre ? col + (newPre - oldPre) : newPre;
     const pos = newLineStartOf(i) + Math.min(newCol, newLineText.length);

@@ -219,4 +219,68 @@ describe("applyIndent · 代码围栏 / front-matter 内一律放行", () => {
     // 候选行过滤要在 parseItem 判定之前/之外就把它挡掉，不能只靠"内容不像列表"侥幸放行。
     expect(applyIndent("---\n1. x\n---\n2. a", 6, 6, "in")).toBeNull();
   });
+
+  // 上面两条只测了 Tab（dir="in"）方向；围栏保护发生在 candidates 循环的 `if (prot[i]) continue`，
+  // 早于 dir 分支，理应两个方向都放行——但这条早于分支的事实此前只被 Tab 方向的测试验证过。
+  // dir="out" 分支自己另有一条防线（canIndentRows 见不到围栏内的行会返回 false），如果围栏过滤
+  // 被误删，Shift+Tab 方向可能被那条防线顺手兜住而测不出来；这两条测试专门锁住围栏过滤本身。
+  it("代码围栏内 Shift+Tab 同样放行（围栏保护不分方向）", () => {
+    expect(applyIndent("```\n\t1. a\n```", 7, 7, "out")).toBeNull();
+  });
+
+  it("front-matter 内 Shift+Tab 同样放行（围栏保护不分方向）", () => {
+    expect(applyIndent("---\n\t1. x\n---\n2. a", 7, 7, "out")).toBeNull();
+  });
+});
+
+describe("applyIndent · 逃生口的真实判定路径（不能靠“恰好没变化”兜底）", () => {
+  // T8（"1. A\n2. B" 顶层 Shift+Tab → null）即使删掉 removableIndentLen 过滤也会绿：块内编号
+  // 本来就正确，拉直后文本没变化，靠 rowFirst===-1 的防御性早退顺手兜住。但这条兜底只在块内编号
+  // 恰好正确时成立——块内编号一旦有错（用户手写跳号很常见），拉直会把编号改对从而"有变化"，
+  // 逃生口就被吃掉，构成 WCAG 2.1.2 键盘陷阱。这条测试专门盯住 removableIndentLen 过滤本身。
+  it("顶层 Shift+Tab 即使块内编号是坏的也放行（逃生口不能靠'恰好没变化'兜底）", () => {
+    expect(run("1. A\n5. B", 8, 8, "out")).toBe("NULL");
+  });
+});
+
+describe("applyIndent · 光标宽度补偿与模式 B 跨改动区平移", () => {
+  // T14 的光标走的是"落在 marker 内一律吸到内容起点"的 newCol=newPre 分支，从未碰到
+  // col+(newPre-oldPre) 这条真正做宽度补偿的算式；这条案例的光标落在内容里（col>oldPre），
+  // 且宽度漂移不是 +1（4 空格缩进出层→0 缩进，markerLen 从 7 变 3，漂移 -4），能把
+  // "写死 +1" 与"真正取 newPre-oldPre 差值"两种实现区分开。
+  it("Shift+Tab 光标宽度补偿走真实的 markerLen 差值，不是硬编码 +1", () => {
+    expect(run("1. A\n    1. BBBB\n2. C", 13, 13, "out")).toEqual({
+      text: "1. A\n2. BBBB\n3. C",
+      selStart: 9,
+      selEnd: 9,
+      span: [5, 21],
+    });
+  });
+
+  // 模式 B 的 li（选区末行）是"普通行"，不属于被 Tab 命中的块（blockOf=-1），因此
+  // rowLast < li：newLineStartOf(li) 必须走 `j > rowLast` 的 `+ delta` 平移分支，否则选区尾端
+  // 会少算 delta 个字符（少了新插入的 Tab 的宽度）。
+  it("模式 B 选区末端落在改动区间之外时按 delta 整体平移", () => {
+    expect(run("1. A\n2. B\n普通行", 0, 13, "in")).toEqual({
+      text: "1. A\n\t1. B\n普通行",
+      selStart: 0,
+      selEnd: 14,
+      span: [5, 9],
+    });
+  });
+});
+
+describe("applyIndent · 单项块 Shift+Tab 不静默拉直编号", () => {
+  // "1. a" 与 "2. c" 各自单独成块（被空行分隔），中间的 "\t5. b" 也单独成块（items=1）。
+  // 若无单项块护栏，renumberBlock(rows, true) 会把这个孤立单项块强制拉直成 "1."，
+  // 用户手写的 "5." 被静默改写——同样的输入走回车路径（orderedList.ts 有 straighten 护栏）
+  // 不会发生这种事，Tab 路径不该是例外。
+  it("孤立单项块出层保留用户手写的编号（不套用 renumberBlock 强制拉直）", () => {
+    expect(run("1. a\n\n\t5. b\n\n2. c", 11, 11, "out")).toEqual({
+      text: "1. a\n\n5. b\n\n2. c",
+      selStart: 10,
+      selEnd: 10,
+      span: [6, 11],
+    });
+  });
 });
