@@ -48,9 +48,12 @@ async function renderPage(initialEntry: string, extra?: ReactNode) {
   );
 }
 
+// 上限用「事件循环轮次」而非墙钟：等的是同线程的 liveQuery 通知 + React 重渲染，
+// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
+const MAX_FLUSHES = 200;
+
 async function waitForCondition(check: () => boolean, message: string): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
     if (check()) return;
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0));

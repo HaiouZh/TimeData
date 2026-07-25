@@ -26,17 +26,31 @@ async function flush() {
   });
 }
 
+// 上限用「事件循环轮次」而非墙钟：等的是同线程的 liveQuery 通知 + React 重渲染，
+// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
+const MAX_FLUSHES = 200;
+
 async function waitForTags(predicate: (tags: string[]) => boolean): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
     if (predicate(await readTrackActionTags())) return;
     await flush();
   }
   throw new Error("Timed out waiting for track.actionTags.v2");
 }
 
+// 元素异步渲染出来才能操作：不等就 querySelector 会拿到 null，
+// 拿 null 去 setValue.call 会撞 jsdom 的 brand check，报错像 realm 污染其实只是没等。
+async function waitForElement<T extends Element>(host: HTMLElement, selector: string): Promise<T> {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
+    const found = host.querySelector<T>(selector);
+    if (found) return found;
+    await flush();
+  }
+  throw new Error(`Timed out waiting for element ${selector}`);
+}
+
 async function fillInput(host: HTMLElement, value: string): Promise<void> {
-  const input = host.querySelector('input[aria-label="新增看板信号"]') as HTMLInputElement;
+  const input = await waitForElement<HTMLInputElement>(host, 'input[aria-label="新增看板信号"]');
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   await act(async () => {
     setValue?.call(input, value);
@@ -45,10 +59,9 @@ async function fillInput(host: HTMLElement, value: string): Promise<void> {
 }
 
 async function submitForm(host: HTMLElement): Promise<void> {
+  const form = await waitForElement<HTMLFormElement>(host, "form");
   await act(async () => {
-    (host.querySelector("form") as HTMLFormElement).dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
 }
 

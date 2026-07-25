@@ -34,13 +34,27 @@ async function flush() {
   });
 }
 
+// 上限用「事件循环轮次」而非墙钟：等的是同线程的 liveQuery 通知 + React 重渲染，
+// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
+const MAX_FLUSHES = 200;
+
 async function waitForText(host: HTMLElement, text: string): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
     if (host.textContent?.includes(text)) return;
     await flush();
   }
   throw new Error(`Timed out waiting for ${text}`);
+}
+
+// 元素异步渲染出来才能操作：不等就 querySelector 会拿到 null，
+// 拿 null 去 setValue.call 会撞 jsdom 的 brand check，报错像 realm 污染其实只是没等。
+async function waitForElement<T extends Element>(host: HTMLElement, selector: string): Promise<T> {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
+    const found = host.querySelector<T>(selector);
+    if (found) return found;
+    await flush();
+  }
+  throw new Error(`Timed out waiting for element ${selector}`);
 }
 
 async function renderList() {
@@ -56,8 +70,8 @@ function trackCardsText(host: HTMLElement): string {
 }
 
 async function typeTextarea(host: HTMLElement, value: string): Promise<void> {
+  const textarea = await waitForElement<HTMLTextAreaElement>(host, "textarea");
   await act(async () => {
-    const textarea = host.querySelector("textarea") as HTMLTextAreaElement;
     const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
     setValue?.call(textarea, value);
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
@@ -284,7 +298,11 @@ describe("TracksListPage", () => {
     await seedTrackWithStep("待处理轨道", ["待我处理"]);
     const host = await renderList();
     await waitForText(host, "待处理轨道");
-    await click(host.querySelector('button[aria-label="写一步"]'));
+    // 标题来自 tracks liveQuery、看板信号来自 allSteps liveQuery，两条分别落地：
+    // 只等标题会抢跑，随后 allSteps 到达把卡片改分组（换 <section> 父节点）会重挂 TrackListItem，
+    // 刚点开的内联 composer 被连带重置。等信号徽章出现＝分组已定型，再点开才稳。
+    await waitForText(host, "#待我处理");
+    await click(await waitForElement(host, 'button[aria-label="写一步"]'));
     await typeTextarea(host, "交给 agent 继续");
     await clickButton(host, "#agent在做");
     await submitInlineForm(host);

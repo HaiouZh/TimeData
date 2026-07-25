@@ -23,9 +23,12 @@ function inputByLabel(host: HTMLElement, label: string): HTMLInputElement {
   return input;
 }
 
+// 上限用「事件循环轮次」而非墙钟：等的是同线程的 Dexie 持久化 + React 重渲染，
+// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
+const MAX_FLUSHES = 200;
+
 async function waitForSetting(expected: (value: string | null) => boolean): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
     const value = await getSetting(HEALTH_RANGE_PRESETS_KEY);
     if (expected(value)) return;
     // setTimeout(0)：让位给 Dexie 持久化的宏任务边界，非真实计时等待。

@@ -11,9 +11,12 @@ import SettingsStatsLayoutPage from "./SettingsStatsLayoutPage.tsx";
 
 beforeEach(resetDb);
 
+// 上限用「事件循环轮次」而非墙钟：等的是同线程的 Dexie 持久化 + React 重渲染，
+// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
+const MAX_FLUSHES = 200;
+
 async function waitForLayout(expected: (layout: { order?: string[]; hidden?: string[] }) => boolean): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
     const raw = await getSetting("stats.layout.v1");
     const layout = raw ? (JSON.parse(raw) as { order?: string[]; hidden?: string[] }) : {};
     if (expected(layout)) return;

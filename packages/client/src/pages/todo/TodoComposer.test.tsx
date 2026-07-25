@@ -64,11 +64,14 @@ const clickAndFlush = async (el: Element | null) => {
 };
 const input = (host: HTMLElement) => host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement | null;
 
+// 上限用「事件循环轮次」而非墙钟：等的是同线程的 Dexie 写 + React 重渲染，
+// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
+const MAX_FLUSHES = 200;
+
 // addTask 是异步（Dexie 写 + setText 回填），点提交到输入框清空之间隔着多个宏任务边界。
 // 单次 flush 在重载下不够，沿用主仓既有的 setTimeout(0) 宏任务边界轮询直到清空。
 async function waitForInputValue(host: HTMLElement, expected: string) {
-  const started = Date.now();
-  while (Date.now() - started < 1000) {
+  for (let i = 0; i < MAX_FLUSHES; i += 1) {
     if ((input(host)?.value ?? null) === expected) return;
     await flush();
   }
