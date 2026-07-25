@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
+import { detectEol } from "../lib/diary/eol.js";
 import { applyIndent } from "../lib/diary/indent.js";
 import { applyLinkShortcut } from "../lib/diary/link.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
@@ -20,12 +21,18 @@ export default function DiaryPage() {
   const location = useLocation();
   const today = useRef(todayDateString()).current;
   const { confirm, dialog } = useConfirm();
+  // 行尾保护：记住原文件的主导行尾，保存时在 handleSave 还原（见该处红线注释）。
+  // 必须是 ref 不是 state——它不参与渲染，用 state 会多一次渲染、还会污染 effect 依赖。
+  const eolRef = useRef<"\r\n" | "\n">("\n");
 
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
   const [template, setTemplate] = useState("");
   const [content, setContent] = useState("");
   const [baseMtime, setBaseMtime] = useState<number | null>(null);
+  // 警示：dirty 现在只由 onChange 置位，不是内容比对，所以打开一个 CRLF 文件（eolRef 探测
+  // 到 "\r\n" 但用户还没碰键盘）不会自己变脏。将来若有人把 dirty 改成"内容与加载值比对"，
+  // 这里会连带踩坑：CRLF 文件会一打开就永远脏（textarea 里的 LF 版本永远不等于原始 CRLF 内容）。
   const [dirty, setDirty] = useState(false);
   // 站内换页 + 关标签页两条腿都由它管；页内「刷新重载」的确认仍走下面的 confirm
   useUnsavedChangesGuard({ when: dirty, confirm });
@@ -48,6 +55,9 @@ export default function DiaryPage() {
         }
         const doc = await fetchDiary(today);
         if (cancelled) return;
+        // 必须在 setContent 之前、对原始 fetch 结果探测：一旦进了 textarea，
+        // HTML 规范会把换行归一为 LF，\r 就没了，届时再探测永远判成 LF。
+        eolRef.current = detectEol(doc.content);
         setContent(doc.content);
         setBaseMtime(doc.mtime);
         setDirty(false);
@@ -104,7 +114,16 @@ export default function DiaryPage() {
     setSaving(true);
     setError(null);
     try {
-      const result = await saveDiary(today, { content, baseMtime, force: options.force });
+      // 行尾保护还原点：content 来自 textarea，规范保证其中不含 \r（jsdom 忠实实现了这条
+      // 规范，本页 jsdom 接线测试可以真实复现丢失），所以这里不需要、也不应该先做防御性
+      // normalize——那会让人误以为 content 可能带 \r。绝不在 onChange 里做这一步（红线：
+      // 一加工 value，React 就整体回写 element.value，原生撤销栈当场清空，而且这种坏法
+      // 静默、测试测不出）；也绝不改 content state 本身（否则三个编辑纯函数都要处理 \r，
+      // 边界表整个翻倍，还会破坏 orderedList.ts 顶部"只服务 textarea、不处理 CRLF"的假设）。
+      // 已知行为：若原文件本身混合行尾，这里会统一成主导行尾，产生一次全篇 diff——
+      // 接受，混合行尾文件本就异常，统一比"随机保留一半"更可预期，且只发生一次。
+      const body = eolRef.current === "\r\n" ? content.replaceAll("\n", "\r\n") : content;
+      const result = await saveDiary(today, { content: body, baseMtime, force: options.force });
       setBaseMtime(result.mtime);
       setDirty(false);
       setConflict(false);
@@ -145,6 +164,9 @@ export default function DiaryPage() {
       return;
     setError(null);
     const doc = await fetchDiary(today);
+    // 行尾保护第二个写入点——最容易漏的那个。冲突后点「刷新重载」若不更新 eolRef，
+    // 它还停在上一次的值，会把 LF 文件写成 CRLF 或反过来。同样必须在 setContent 之前。
+    eolRef.current = detectEol(doc.content);
     setContent(doc.content);
     setBaseMtime(doc.mtime);
     setDirty(false);

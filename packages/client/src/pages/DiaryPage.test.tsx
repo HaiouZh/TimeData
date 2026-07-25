@@ -565,4 +565,65 @@ describe("DiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("加载路径：CRLF 文件保存时按探测到的行尾还原，不静默改写成 LF", async () => {
+    // jsdom 忠实实现 HTML 规范：textarea.value 会把 CRLF 归一成 LF，本条断言的是
+    // handleSave 组装请求体时是否把它转回去——不是"什么都没发生"式的裸奔测试。
+    fetchDiary.mockResolvedValue({ content: "1. a\r\n2. b", mtime: 100 });
+    saveDiary.mockResolvedValue({ mtime: 200 });
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    // textarea 读回的是归一后的 LF 版本：\r 已经不在了，证明丢失点确实在这里
+    expect(el.value).toBe("1. a\n2. b");
+
+    await typeInto(el, "1. a\n2. b\n3. c");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    expect(saveDiary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), {
+      content: "1. a\r\n2. b\r\n3. c",
+      baseMtime: 100,
+    });
+
+    await unmount(root);
+  });
+
+  it("handleReload 路径：刷新重载拿到新文件的行尾后，再保存按新行尾还原（最容易漏的写入点）", async () => {
+    // 先以 LF 文件加载并触发一次冲突态（进入 handleReload 分支需要冲突条 UI），
+    // 点「刷新重载」后 fetchDiary 改为返回 CRLF 内容——若 eolRef 没有在 handleReload
+    // 里更新，会仍按 LF（旧值）写回，这条断言就会假绿地失败。
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(150));
+    saveDiary.mockResolvedValueOnce({ mtime: 300 });
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    await typeInto(el, "1. y");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    const reloadButton = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "刷新重载",
+    );
+    expect(reloadButton).toBeInstanceOf(HTMLButtonElement);
+
+    // 「刷新重载」会先弹脏态确认（ConfirmSheet 默认 confirmLabel="确认"）
+    fetchDiary.mockResolvedValue({ content: "1. p\r\n2. q", mtime: 400 });
+    await click(reloadButton ?? null);
+    const confirmDiscard = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "确认",
+    );
+    expect(confirmDiscard).toBeInstanceOf(HTMLButtonElement);
+    await click(confirmDiscard ?? null);
+
+    expect(el.value).toBe("1. p\n2. q");
+
+    await typeInto(el, "1. p\n2. q\n3. r");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    expect(saveDiary).toHaveBeenLastCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), {
+      content: "1. p\r\n2. q\r\n3. r",
+      baseMtime: 400,
+    });
+
+    await unmount(root);
+  });
 });
