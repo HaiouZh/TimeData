@@ -18,6 +18,10 @@ import { formatMonthDay, getDateString } from "../lib/time.js";
 export default function DiaryPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  // location.key 只在首个历史条目上是 "default"；本页的 setSearchParams(replace) 会把它换成
+  // 随机 key（切日期 / ?date= 归一都会），所以必须在挂载那一刻定下来，不能每次渲染现读——
+  // 否则书签/PWA 直接落地后切一次日期，返回按钮就从"兜底回速记页"退化成 navigate(-1) 空转。
+  const landedWithoutHistoryRef = useRef(location.key === "default");
   const [searchParams, setSearchParams] = useSearchParams();
   const { confirm, dialog } = useConfirm();
   // 行尾保护：记住原文件的主导行尾，保存时在 handleSave 还原（见该处红线注释）。
@@ -64,17 +68,27 @@ export default function DiaryPage() {
   // 站内换页 + 关标签页两条腿都由它管；页内「刷新重载」的确认仍走下面的 confirm
   useUnsavedChangesGuard({ when: dirty, confirm });
   const [saving, setSaving] = useState(false);
+  // Critical 修复的另一半状态：handleReload 原先全程不置任何"重载在飞"标志，
+  // handleSave 完全不知道有 reload 在路上（冲突条「仍然覆盖」按钮之前只看 saving，
+  // reload 飞着时它是 false、可点）。force save 与 reload 反向交错会让 baseMtime
+  // 落地到一份编辑器里已经不存在的内容上，见 handleReload/handleSave 内的用法。
+  const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
-  // latest-ref：让在途异步响应回来时判断"目标文件还是不是当初那个"。
-  // 与 shortcutSaveRef 同款——渲染期赋值，回调里读 .current。
-  const dateRef = useRef(date);
-  dateRef.current = date;
+  // 单调递增的加载世代号，取代原先的 dateRef 值比较——dateRef 比的是日期字符串，
+  // 存在 ABA：切走再切回同一天（A→B→A），字符串又相等，识别不出这是上一轮加载的
+  // 陈旧响应。世代号在正文加载 effect 每次真正重跑时 +1，严格单调，天然堵住 ABA。
+  const loadEpochRef = useRef(0);
   // 同款活 ref：handleReload 在 await confirm(...) 之后要判断"这期间有没有别的写飞起来"，
   // 而闭包里的 saving 冻结在这次调用发生那一刻，await 期间外部 setSaving(true) 它读不到。
   const savingRef = useRef(saving);
   savingRef.current = saving;
+  // 同款活 ref，给 handleSave 判断"这期间有没有 reload 飞起来"（Critical 修复的核心）：
+  // handleReload 发出 fetchDiary 前 setReloading(true)，handleSave 入口据此挡下——
+  // 不加这道，force save 会在 reload 飞着的时候钻进去。
+  const reloadingRef = useRef(reloading);
+  reloadingRef.current = reloading;
 
   // config 与日期无关，只拉一次。不拆的话每切一天都多一次 /api/diary/config 往返，
   // 也多一次"config 请求失败 → 整页 loadFailed"的机会。
@@ -101,21 +115,30 @@ export default function DiaryPage() {
 
   useEffect(() => {
     if (!configLoaded) return;
+    // 世代号在每次 config 就绪后的"真实重跑"都要 +1（不管走不走 fetchDiary 分支）：
+    // handleSave/handleReload 捕获的是发起请求那一刻的世代号，只要这个 effect 又跑过一次
+    // （哪怕是切走再切回同一天的 A→B→A），世代号就已经前进，陈旧响应据此被挡下。
+    loadEpochRef.current += 1;
     if (!enabled || template === "") {
       setLoading(false);
       return; // 未挂载 vault / 未配模板：不调 fetchDiary，直接走对应提示分支
     }
     let cancelled = false;
-    // 切日期必须重置这四个态——effect 自身一个都不会重置它们：
+    // 切日期必须重置这五个态——effect 自身一个都不会重置它们：
     // loading 只有 setLoading(false)、从没有 true（不重置 = 旧正文原地留着，用户
-    // 对着上一天的内容打字然后被覆盖，这是四条里唯一的真数据风险）；
+    // 对着上一天的内容打字然后被覆盖，这是这里最直接的真数据风险）；
     // error/conflict 只有 handleSave/handleReload 会清（不重置 = 上一天的冲突条
     // 挂到新一天头上，点「仍然覆盖」会 force 掉新一天的文件）；
-    // loadFailed 全文没有任何地方置 false（不重置 = 一次失败后永久全屏失败态）。
+    // loadFailed 全文没有任何地方置 false（不重置 = 一次失败后永久全屏失败态）；
+    // dirty 只有成功分支和 handleReload 会清，加载失败分支从来没清过（不重置 = 加载失败后
+    // dirty 永久停在 true，把共享的 useUnsavedChangesGuard 钉死在武装状态，对着一份用户
+    // 已经确认丢弃、屏幕上也不存在的内容反复弹"放弃未保存的修改？"）。这里清空是安全的：
+    // switchDate 已经在调用方问过一次"放弃修改"，此处只是把该确认的结果落地，不会绕过确认。
     setLoading(true);
     setError(null);
     setConflict(false);
     setLoadFailed(false);
+    setDirty(false);
     // 防御性清空，无可观测行为差异（已验证）：handleSave 现在 loading || loadFailed 都早退，
     // 这两个态覆盖了"content 还是上一天残留"的全部窗口，所以 saveDiary 不可能在 baseMtime
     // 仍是上面这次重置的旧值时被调用——要么早退（loading/loadFailed 未清），要么 fetchDiary
@@ -182,9 +205,15 @@ export default function DiaryPage() {
   }
 
   async function handleSave(options: { force?: boolean } = {}) {
-    if (saving) return;
+    // 防重入 + 挡 reload：读活 ref 不读闭包值。原来这里是 `if (saving) return;`——四个调用点
+    // （header 保存按钮、Ctrl+S 快捷键、冲突条「仍然覆盖」等）全都在同一次渲染的闭包里，
+    // saving 是冻结值，这道判据结构上永远取不到 true（Minor A：看着在防、实际不防的假闸）。
+    // reloadingRef 是 Critical 修复的核心：不挡 reload 的话，冲突条「仍然覆盖」在 reload
+    // 飞着的时候可点（disabled 之前只看 saving），force save 与 reload 反向交错，
+    // baseMtime 会落地到一份编辑器里已经被 reload 替换掉的内容上。
+    if (savingRef.current || reloadingRef.current) return;
     // loading || loadFailed 早退，同一个根因两个窗口：正文没成功加载出来时，content 里还是
-    // 上一天残留的内容，且日期 effect 已经把 baseMtime 清成 null（见下面切日期重置四态的
+    // 上一天残留的内容，且日期 effect 已经把 baseMtime 清成 null（见下面切日期重置五态的
     // 注释）——若在这里放行保存，会把上一天的内容写进新一天的文件；baseMtime=null 还会被
     // 服务端 mtime 并发守卫当成"文件不存在"直接放行，不报冲突、静默写坏新一天的文件。
     // loading 只挡到 fetchDiary 还在飞的那一段；fetchDiary reject 后 loading 变 false 但
@@ -194,11 +223,16 @@ export default function DiaryPage() {
     // 本身在 loadFailed 态下也没有单独置灰，两条路都能触发 handleSave。
     if (loading || loadFailed) return;
     setSaving(true);
+    // 「保存失败」条的唯一清除点：成功路径不碰 error，下一次成功保存全靠这里把上一次的
+    // 失败提示清掉，漏了它会跟一份早已成功的保存永久共存。
     setError(null);
     // 发起时的编辑序号：请求在途中用户可能继续打字，回来时得认得出来（见下面清脏处）
     const revisionAtRequest = editRevisionRef.current;
     // 发起时的目标日期：请求在途中用户可能切日期，回来时这一发属于旧文件
     const dateAtRequest = date;
+    // 发起时的加载世代号：与编辑序号闸正交——序号管"内容变没变"，世代号管"目标文件的
+    // 加载生命周期换没换"。取代原先的 dateRef 值比较（见上面 loadEpochRef 声明处的 ABA 说明）。
+    const epochAtRequest = loadEpochRef.current;
     try {
       // 行尾保护还原点：content 来自 textarea，规范保证其中不含 \r（jsdom 忠实实现了这条
       // 规范，本页 jsdom 接线测试可以真实复现丢失），所以这里不需要、也不应该先做防御性
@@ -210,10 +244,11 @@ export default function DiaryPage() {
       // 接受，混合行尾文件本就异常，统一比"随机保留一半"更可预期，且只发生一次。
       const body = eolRef.current === "\r\n" ? content.replaceAll("\n", "\r\n") : content;
       const result = await saveDiary(dateAtRequest, { content: body, baseMtime, force: options.force });
-      // 日期闸：与编辑序号闸正交——序号管"内容变没变"，日期闸管"目标文件换没换"。
-      // 不加这道，A 日的 mtime 会写进 B 日的 baseMtime，B 日首次保存就带着别人的 mtime
-      // 去过服务端并发守卫 → 假冲突，用户被诱导去点「仍然覆盖」force 掉一个没冲突的文件。
-      if (dateRef.current !== dateAtRequest) return;
+      // 世代号闸：不加这道，A 日的 mtime 会写进 B 日的 baseMtime，B 日首次保存就带着别人的
+      // mtime 去过服务端并发守卫 → 假冲突，用户被诱导去点「仍然覆盖」force 掉一个没冲突的文件。
+      // 用世代号而不是日期值比较：切走再切回同一天（A→B→A），日期字符串又相等，值比较
+      // 认不出这是上一轮加载的陈旧响应；世代号严格单调，天然堵住这个 ABA。
+      if (loadEpochRef.current !== epochAtRequest) return;
       setBaseMtime(result.mtime);
       // 只有"这一发上传的就是当前内容"才清脏。用户在请求在途中继续打字时，那段内容从未上传，
       // 无条件 setDirty(false) 会连 useUnsavedChangesGuard 一起关掉——换页即静默丢数据。
@@ -222,8 +257,8 @@ export default function DiaryPage() {
       if (editRevisionRef.current === revisionAtRequest) setDirty(false);
       setConflict(false);
     } catch (err) {
-      // 同理：A 日的冲突/错误不该挂到 B 日头上
-      if (dateRef.current !== dateAtRequest) return;
+      // 同理：A 日的冲突/错误不该挂到 B 日头上（世代号闸，理由同上）
+      if (loadEpochRef.current !== epochAtRequest) return;
       if (err instanceof DiaryConflictError) {
         setConflict(true);
         return;
@@ -255,38 +290,43 @@ export default function DiaryPage() {
   }, []);
 
   async function handleReload() {
-    // 在途保存期间不许重载：两个写操作交错会让 baseMtime 指向一份编辑器里已不存在的
-    // 内容——force save 在写 A（回来 mtime=X），reload 先回来把正文换成 B/mtime=Y，
-    // 随后 save resolve 又把 baseMtime 改回 X。此后用户随便改一个字保存，mtime 校验
-    // 通过、不报冲突，刚写进去的 A 被 B 静默覆盖。按钮也会置灰，这里是兜底。
-    // 当前不可达：handleReload 全文件唯一调用点是下面「刷新重载」那个已 disabled={saving}
-    // 的按钮，jsdom 实测对 disabled 按钮调 .click() 不会派发 click 事件，所以这行现在
-    // 永远读到 false。留着是纯防御性的——将来给 handleReload 加新入口（比如快捷键）时，
-    // 它才会真正生效；届时记得回来给这行补一条测试，不要现在为不可达路径硬凑。
-    if (saving) return;
+    // 防重入：连点两次「刷新重载」——disabled 属性正常情况下已经挡住（jsdom/浏览器都不会对
+    // disabled 元素派发 click），这里是给未来可能出现的非按钮入口（比如快捷键）兜底，读活 ref
+    // 不读闭包值，理由同 handleSave 入口（Minor A）。savingRef 挡的是"在途保存期间不许重载"：
+    // 两个写操作交错会让 baseMtime 指向一份编辑器里已不存在的内容——force save 在写 A（回来
+    // mtime=X），reload 先回来把正文换成 B/mtime=Y，随后 save resolve 又把 baseMtime 改回 X。
+    // 此后用户随便改一个字保存，mtime 校验通过、不报冲突，刚写进去的 A 被 B 静默覆盖。
+    if (savingRef.current || reloadingRef.current) return;
     if (
       dirty &&
       !(await confirm({ title: "丢弃当前修改？", body: "将丢弃当前修改，加载服务器版本。", danger: true }))
     )
       return;
     // 确认框开着的这段时间里 Ctrl+S 可能起了一发保存（快捷键走 window 监听，不看按钮置灰），
-    // 再挡一次。**必须读 savingRef.current 不能读 saving**：后者是这次调用进入时就冻结在闭包
-    // 里的渲染值，await confirm(...) 期间外部 setSaving(true) 它读不到，与上面第一道判据恒同值
+    // 再挡一次。**必须读活 ref 不能读闭包值**：闭包里的 saving/reloading 冻结在这次调用进入时
+    // 的渲染值，await confirm(...) 期间外部 setSaving(true) 它读不到，与上面第一道判据恒同值
     // ——写成 `if (saving)` 的话这行结构上永远不生效，是一道看着在防、实际不防的假闸。
-    if (savingRef.current) return;
+    if (savingRef.current || reloadingRef.current) return;
     const dateAtRequest = date;
     const revisionAtRequest = editRevisionRef.current;
+    // 发起时的加载世代号，理由同 handleSave（取代 dateRef 值比较，堵住 ABA）。
+    const epochAtRequest = loadEpochRef.current;
     // 这里不需要日期闸：confirm 的 await 期间用户理论上能切换日期，但实测走不到——
     // ① ConfirmSheet 背后是 Sheet.tsx 的 fixed inset-0 遮罩，真实点击路径下点不到 DateNav；
     // ② 唯一能切日期的 switchDate 自己也调用同一个单例 confirm()，而 useConfirm 的单槽
     // pending 被顶替时会把前一个 resolve(false)——本次 handleReload 的确认会在被顶替瞬间
     // 判定为"取消"提前 return，走不到这里。两重原因都不可达，故不加日期闸，也不为它硬凑测试。
     setError(null);
+    // Critical 修复的核心写入点：发出 fetchDiary 之前置位，让 handleSave 的入口闸能读到
+    // "reload 在飞"。必须在这里（await 之前）而不是 finally 唯一置位点之前的任何更早处，
+    // 也不能晚于下面的 await——晚了会有一个"reload 已经决定要发但还没让 handleSave 挡得住"
+    // 的窗口。
+    setReloading(true);
     let doc: Awaited<ReturnType<typeof fetchDiary>>;
     try {
       doc = await fetchDiary(dateAtRequest);
     } catch (err) {
-      if (dateRef.current !== dateAtRequest) return;
+      if (loadEpochRef.current !== epochAtRequest) return;
       // 只出条状提示，不打成 loadFailed 全屏态：正文还在编辑器里、用户还能接着编辑，
       // 换成全屏"加载失败"反而会把这份没上传的内容从屏幕上抹掉。冲突条也保留——冲突没解决。
       // 前缀一句中文再带原始 message：这条是该路径唯一的用户反馈（不像首屏失败还配中文
@@ -294,8 +334,13 @@ export default function DiaryPage() {
       // 是 "API error: 500 …"，用户只看到一串英文技术串。
       setError(`重载失败：${err instanceof Error ? err.message : "未知错误"}`);
       return;
+    } finally {
+      // 页面级的"有没有在途重载"，与目标日期/世代无关，无条件解锁——这里不加任何日期/
+      // 世代判据：加了的话，一旦某一发 reload 因为日期切换被上面的判据早退，reloading
+      // 就再也没有机会归位，会把保存按钮永久锁死。
+      setReloading(false);
     }
-    if (dateRef.current !== dateAtRequest) return;
+    if (loadEpochRef.current !== epochAtRequest) return;
     if (editRevisionRef.current !== revisionAtRequest) {
       // 点了"确认丢弃"之后、fetch 回来之前用户又敲了字。这时盖上服务器版本，
       // 那段新内容既没上传、也从屏幕上消失了——与"保存在途打字被清脏"同类的静默丢数据。
@@ -346,7 +391,8 @@ export default function DiaryPage() {
     // 脏态确认由 useUnsavedChangesGuard 统一处理，这里不再自己弹一次（否则会连弹两个）
     // 无 app 内历史时（书签 / PWA 快捷方式 / 硬刷新直接落地）navigate(-1) 是 no-op，
     // 兜底回速记页，与安卓返回键 androidBackNavigation.ts 的 /diary 分支保持一致。
-    if (location.key === "default") navigate("/quick-notes", { replace: true });
+    // 读挂载时冻结的 ref，不现读 location.key（见该 ref 声明处的注释——切日期会打破它）。
+    if (landedWithoutHistoryRef.current) navigate("/quick-notes", { replace: true });
     else navigate(-1);
   }
 
@@ -367,7 +413,7 @@ export default function DiaryPage() {
           <button
             type="button"
             aria-label="保存"
-            disabled={!dirty || saving || loading || loadFailed}
+            disabled={!dirty || saving || reloading || loading || loadFailed}
             onClick={() => void handleSave()}
             className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
           >
@@ -405,7 +451,7 @@ export default function DiaryPage() {
           <span className="flex-1">日记已被其他窗口修改</span>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || reloading}
             onClick={() => void handleReload()}
             className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
           >
@@ -413,7 +459,7 @@ export default function DiaryPage() {
           </button>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || reloading}
             onClick={() => void handleSave({ force: true })}
             className="rounded-xl bg-danger px-3 py-1 td-text-body font-medium text-page disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
           >
