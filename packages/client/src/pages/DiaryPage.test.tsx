@@ -812,7 +812,12 @@ describe("DiaryPage", () => {
     await navigateTo(router, "/diary?date=2026-07-20");
 
     expect(textarea(host).value).toBe("7/20 的正文");
-    expect(host.textContent).not.toContain("加载失败");
+    // 注意：断言错误条本身的文案（"离线"）而不是 "加载失败"——后者是 loadFailed 分支的
+    // 硬编码全屏文案，与 error 状态是两码事。原断言 `not.toContain("加载失败")` 只盯住了
+    // 同一段重置块里的 setLoadFailed(false)，因为 error 状态渲染的是原始 message（这里是
+    // "离线"），根本不含"加载失败"四个字——删掉 setError(null) 这条断言依然会通过，是一条
+    // "断言了但等于没断言" 的假测试。这里改成断言 error 状态真正显示的文案消失。
+    expect(host.textContent).not.toContain("离线");
     await unmount(root);
   });
 
@@ -1228,6 +1233,256 @@ describe("DiaryPage", () => {
     expect(host.textContent).not.toContain("重载失败");
     expect(textarea(host).value).toBe("7/20 的正文");
 
+    await unmount(root);
+  });
+
+  it("刷新重载在飞时，保存按钮与冲突条两个按钮全部置灰（Critical：save↔reload 互锁的另一半）", async () => {
+    // 总审实测过：修复前"仍然覆盖"按钮 disabled 只看 saving，reload 飞着时它是 false、可点，
+    // force save 与 reload 反向交错会让 baseMtime 落到一份编辑器里已经不存在的内容上。
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    const { host, root } = await renderPage();
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+
+    let releaseReload: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseReload = resolve; }));
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认")); // 触发 fetchDiary，reloading=true，此刻仍在飞
+
+    const saveButton = host.querySelector('button[aria-label="保存"]');
+    expect(saveButton instanceof HTMLButtonElement && saveButton.disabled).toBe(true);
+    expect(buttonByText(host, "刷新重载")?.disabled).toBe(true);
+    expect(buttonByText(host, "仍然覆盖")?.disabled).toBe(true);
+
+    await act(async () => { releaseReload({ content: "服务器版本", mtime: 999 }); });
+    await flush();
+    await unmount(root);
+  });
+
+  it("刷新重载在飞时 Ctrl+S 抢跑起不了保存（reloadingRef 闸，绕开按钮 disabled 也钻不进去）", async () => {
+    // 用 Ctrl+S 绕开按钮的 disabled 属性，直接钉住 handleSave 内部的 reloadingRef 闸
+    // 有没有真的生效——这是 Critical 修复的核心：不加这道闸，force save 会在 reload
+    // 飞着的时候钻进去，两个写操作交错，baseMtime 落到一份已经被 reload 换掉的内容上。
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    const { host, root } = await renderPage();
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+
+    let releaseReload: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseReload = resolve; }));
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认")); // reloading=true，fetchDiary 挂起
+
+    const saveCallsBefore = saveDiary.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    });
+    await flush();
+
+    expect(saveDiary.mock.calls.length).toBe(saveCallsBefore); // 没有新的保存被发出去
+
+    await act(async () => { releaseReload({ content: "服务器版本", mtime: 999 }); });
+    await flush();
+    await unmount(root);
+  });
+
+  it("刷新重载成功后清掉 dirty 与冲突条（「刷新重载」的语义就是丢弃本地修改、解掉冲突）", async () => {
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    const { host, root } = await renderPage();
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    await typeInto(textarea(host), "本地改动");
+    await click(save);
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+    expect(save.disabled).toBe(false); // 仍是脏的
+
+    fetchDiary.mockResolvedValueOnce({ content: "服务器版本", mtime: 400 });
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认"));
+
+    expect(save.disabled).toBe(true); // dirty 已清
+    expect(host.textContent).not.toContain("日记已被其他窗口修改"); // 冲突条已解除
+
+    await unmount(root);
+  });
+
+  it("force 保存成功后清掉冲突条（不清则用户会被诱导反复 force）", async () => {
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(150));
+    saveDiary.mockResolvedValueOnce({ mtime: 300 });
+    const { host, root } = await renderPage();
+
+    await typeInto(textarea(host), "1. y");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+
+    await click(buttonByText(host, "仍然覆盖"));
+
+    expect(host.textContent).not.toContain("日记已被其他窗口修改");
+    await unmount(root);
+  });
+
+  it("切走再切回同一天(A→B→A)期间旧保存才 resolve：世代号闸挡住，不让假冲突/静默覆盖发生（ABA，日期值比较挡不住）", async () => {
+    // 复现链路：7/25 打字→保存在飞→切前一天(7/24，确认放弃修改)→再切后一天回到 7/25→
+    // 7/25 的 effect 重新 fetchDiary 拿回旧 mtime=100→随后那发陈旧的 7/25 保存才 resolve。
+    // dateRef 值比较在这里放行（"2026-07-25" === "2026-07-25"，A→B→A 认不出是陈旧响应），
+    // 世代号是严格单调的，即使日期字符串绕回来也不会相等。
+    const { host, root } = await renderPage(); // 7/25，跟随模式
+    await typeInto(textarea(host), "7/25 的内容");
+
+    let releaseSave: (value: { mtime: number }) => void = () => {};
+    saveDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseSave = resolve; }));
+    await click(host.querySelector('button[aria-label="保存"]')); // 保存在飞
+
+    fetchDiary.mockResolvedValueOnce({ content: "7/24 的正文", mtime: 50 });
+    await click(host.querySelector('button[aria-label="前一天"]'));
+    await click(buttonByText(host, "放弃修改"));
+    expect(textarea(host).value).toBe("7/24 的正文");
+
+    fetchDiary.mockResolvedValueOnce({ content: "1. x", mtime: 100 });
+    await click(host.querySelector('button[aria-label="后一天"]'));
+    expect(textarea(host).value).toBe("1. x");
+
+    // 那发陈旧的 7/25 保存现在才 resolve
+    await act(async () => { releaseSave({ mtime: 999 }); });
+    await flush();
+
+    // 世代号闸应挡住这发陈旧响应：baseMtime 不该被污染成 999，否则下一次保存会带着
+    // 假冲突的 mtime 去过服务端并发守卫
+    await typeInto(textarea(host), "1. x2");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(saveDiary).toHaveBeenLastCalledWith(expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), {
+      content: "1. x2",
+      baseMtime: 100,
+    });
+
+    await unmount(root);
+  });
+
+  it("重载在途中切走再切回同一天(A→B→A)，旧重载才 resolve：世代号闸挡住，不被陈旧内容覆盖（ABA，reload 侧）", async () => {
+    // 与上一条是同一个 ABA 漏洞在 handleReload 侧的复现：进入冲突态→点「刷新重载」确认→
+    // fetchDiary 挂起→切前一天（确认放弃修改）→再切回后一天，重新加载→那发陈旧的 A 重载
+    // 现在才 resolve。日期值比较在这里放行（A→B→A 绕回同一个字符串），世代号严格单调不会。
+    const { host, root } = await renderPage(); // 7/25 = "1. x"/mtime 100（beforeEach 默认）
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(host.textContent).toContain("日记已被其他窗口修改");
+
+    let releaseA: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseA = resolve; }));
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认")); // A（7/25 这一轮）的 fetchDiary 挂起
+
+    fetchDiary.mockResolvedValueOnce({ content: "7/24 的正文", mtime: 50 });
+    await click(host.querySelector('button[aria-label="前一天"]'));
+    await click(buttonByText(host, "放弃修改")); // 仍是"本地改动"脏态，需先确认丢弃才能切走
+    expect(textarea(host).value).toBe("7/24 的正文");
+
+    fetchDiary.mockResolvedValueOnce({ content: "重新加载的 7/25", mtime: 700 });
+    await click(host.querySelector('button[aria-label="后一天"]'));
+    expect(textarea(host).value).toBe("重新加载的 7/25");
+
+    // A 现在才姗姗来迟
+    await act(async () => { releaseA({ content: "A 的陈旧内容", mtime: 999 }); });
+    await flush();
+
+    expect(textarea(host).value).toBe("重新加载的 7/25"); // 没被 A 覆盖
+    await unmount(root);
+  });
+
+  it("无 app 内历史落地后切一次日期（location.key 从 default 变成新 key），返回仍兜底速记页而非 navigate(-1) 空转（哨兵改用挂载时 ref）", async () => {
+    // 本分支新增的 setSearchParams(..., { replace: true }) 会把 location.key 从 "default"
+    // 换成随机新 key。若 handleBack 现读 location.key === "default"，切一次日期之后它就再也
+    // 读不到 "default"，从"兜底回速记页"退化成 navigate(-1) 空转（单条历史记录时是 no-op）。
+    const { host, root, router } = await renderPageNoHistory();
+
+    fetchDiary.mockResolvedValueOnce({ content: "7/24 的正文", mtime: 50 });
+    await click(host.querySelector('button[aria-label="前一天"]'));
+    expect(router.state.location.key).not.toBe("default");
+
+    const back = host.querySelector('button[aria-label="返回"]');
+    if (!(back instanceof HTMLButtonElement)) throw new Error("missing back button");
+    await click(back);
+
+    expect(router.state.location.pathname).toBe("/quick-notes");
+    await unmount(root);
+  });
+
+  it("上一天加载失败后切日期，新一天不残留上一天的 dirty（否则返回键会被 useUnsavedChangesGuard 对着已确认丢弃的内容反复拦下）", async () => {
+    // 不能只看保存按钮 disabled：loadFailed 为 true 时按钮本就会置灰，掩盖了 dirty 有没有
+    // 真的清掉。改用 useUnsavedChangesGuard 的 blocker 机制来观测 dirty 的真实状态——
+    // dirty 若仍卡在 true，点返回会被拦下弹确认框，location 停在原地。
+    const { host, root, router } = await renderPage();
+    await typeInto(textarea(host), "还没保存的内容");
+
+    fetchDiary.mockRejectedValueOnce(new Error("离线"));
+    await click(host.querySelector('button[aria-label="前一天"]'));
+    await click(buttonByText(host, "放弃修改")); // 确认丢弃，切到 7/24，但该次加载失败
+    expect(host.textContent).toContain("离线");
+
+    const back = host.querySelector('button[aria-label="返回"]');
+    if (!(back instanceof HTMLButtonElement)) throw new Error("missing back button");
+    await click(back);
+
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(router.state.location.pathname).toBe("/todo");
+    await unmount(root);
+  });
+
+  it("上一天(A)的 fetchDiary 晚于新一天(B)成功抵达时不覆盖 B 的正文/mtime（正文加载 effect 自身的 cancelled 闸，成功分支）", async () => {
+    // 与 handleSave/handleReload 的世代号闸是不同的守卫：这条测的是正文加载 effect 自己
+    // 那个作用域内的 cancelled 闭包标志——A 的 fetchDiary 挂起，切到 B 并成功加载，
+    // A 才姗姗来迟，若没有这道闸，A 的回调会把 B 的正文/mtime 覆盖掉。
+    let releaseA: (value: { content: string; mtime: number }) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((resolve) => { releaseA = resolve; }));
+    const { host, root, router } = await renderPage();
+    expect(host.textContent).toContain("正在加载");
+
+    fetchDiary.mockResolvedValueOnce({ content: "B 的正文", mtime: 500 });
+    await navigateTo(router, "/diary?date=2026-07-20");
+    expect(textarea(host).value).toBe("B 的正文");
+
+    await act(async () => { releaseA({ content: "A 的正文", mtime: 100 }); });
+    await flush();
+
+    expect(textarea(host).value).toBe("B 的正文"); // 没被 A 覆盖
+    await unmount(root);
+  });
+
+  it("上一天(A)的 fetchDiary 晚于新一天(B)成功抵达后才 reject，不会把新一天打成全屏加载失败态（正文加载 effect 自身的 cancelled 闸，catch 分支）", async () => {
+    let rejectA: (reason: unknown) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectA = reject; }));
+    const { host, root, router } = await renderPage();
+    expect(host.textContent).toContain("正在加载");
+
+    fetchDiary.mockResolvedValueOnce({ content: "B 的正文", mtime: 500 });
+    await navigateTo(router, "/diary?date=2026-07-20");
+    expect(textarea(host).value).toBe("B 的正文");
+
+    await act(async () => { rejectA(new Error("A 迟到的失败")); });
+    await flush();
+
+    expect(textarea(host).value).toBe("B 的正文"); // 没被打成全屏失败
+    expect(host.textContent).not.toContain("加载失败，请检查网络后重试");
+    await unmount(root);
+  });
+
+  it("保存失败后再次保存成功，清掉“保存失败”错误提示（handleSave 开头的 setError(null) 是唯一清除点）", async () => {
+    saveDiary.mockRejectedValueOnce(new Error("网络断开"));
+    saveDiary.mockResolvedValueOnce({ mtime: 200 });
+    const { host, root } = await renderPage();
+
+    await typeInto(textarea(host), "1. y");
+    await click(host.querySelector('button[aria-label="保存"]'));
+    expect(host.textContent).toContain("网络断开");
+
+    await typeInto(textarea(host), "1. y2");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    expect(host.textContent).not.toContain("网络断开");
     await unmount(root);
   });
 });
