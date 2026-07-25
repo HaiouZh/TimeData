@@ -319,4 +319,26 @@ describe("DiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("execCommand 不可用时回车续号仍把文档标脏（保存按钮亮起）", async () => {
+    // jsdom 没有 execCommand ⇒ applyEdit 判 unsupported ⇒ 走 setValue 降级路径，
+    // 而降级不经 onChange，dirty 只能由 runEditAction 显式补。漏了它保存按钮永远是灰的。
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    expect(save.disabled).toBe(true); // 刚加载完，未改动
+
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await flush();
+
+    expect(el.value).toBe("1. x\n2. ");
+    expect(save.disabled).toBe(false);
+
+    await unmount(root);
+  });
 });

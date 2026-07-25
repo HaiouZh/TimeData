@@ -6,6 +6,7 @@ import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
+import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
 
 function todayDateString(): string {
   const d = new Date();
@@ -62,19 +63,22 @@ export default function DiaryPage() {
   }, [today]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // IME 候选确认的 Enter 不参与续号
+    // IME 组合态守卫：Enter/Tab/Ctrl+K 共用这一个 handler，这一行天然覆盖全部键位，
+    // 满足 design §8 契约 4（“每个新键位各自复刻一遍”）。别把键位拆到各自的 useEffect 里，
+    // 那样必然漏抄第三处。
     if (event.nativeEvent.isComposing) return;
-    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
-    const target = event.currentTarget;
-    const result = applyEnterInOrderedList(target.value, target.selectionStart, target.selectionEnd);
-    if (!result) return;
+    const field = event.currentTarget;
+
+    let action: EditAction | null = null;
+    if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      action = applyEnterInOrderedList(field.value, field.selectionStart, field.selectionEnd);
+    }
+
+    // null = 交还浏览器默认行为（换行 / Tab 跳焦）；非 null 一律吃掉按键——
+    // 包括 { kind: "noop" }，它的语义就是“什么都不改但要吃掉”（Ctrl+K 含换行选区）。
+    if (!action) return;
     event.preventDefault();
-    setContent(result.value);
-    setDirty(true);
-    const cursor = result.cursor;
-    requestAnimationFrame(() => {
-      target.setSelectionRange(cursor, cursor);
-    });
+    runEditAction(field, action, setContent, () => setDirty(true));
   }
 
   async function handleSave(options: { force?: boolean } = {}) {

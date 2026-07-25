@@ -1,6 +1,8 @@
 // 有序列表续号纯函数
 // 假设：输入 value 来自 textarea.value，按 HTML 规范换行已归一为 LF（"\n"）；
 // 本函数只服务 textarea，不处理 CRLF。
+import type { EditAction } from "./textareaEdit.js";
+
 const ITEM_RE = /^(\d+)\. (.*)$/;
 
 /**
@@ -8,13 +10,13 @@ const ITEM_RE = /^(\d+)\. (.*)$/;
  * @param value 完整文本
  * @param selStart 选区起点（光标或选区左端）
  * @param selEnd 选区终点（光标或选区右端）
- * @returns 返回 null 表示不处理；否则返回新文本和光标位置
+ * @returns 返回 null 表示不处理；否则返回编辑描述符（交给 runEditAction 落到 textarea 上）
  */
 export function applyEnterInOrderedList(
   value: string,
   selStart: number,
   selEnd: number,
-): { value: string; cursor: number } | null {
+): EditAction | null {
   const before = value.slice(0, selStart);
   const after = value.slice(selEnd);
   const lineStart = before.lastIndexOf("\n") + 1;
@@ -27,10 +29,9 @@ export function applyEnterInOrderedList(
   const afterInLine = nl === -1 ? after : after.slice(0, nl);
   // 空列表项（光标前只有 "N. "、行内光标后无余文）回车：清掉序号
   if (m[2] === "" && afterInLine === "") {
-    return { value: value.slice(0, lineStart) + after, cursor: lineStart };
+    return { kind: "replace", start: lineStart, end: selEnd, text: "", selStart: lineStart, selEnd: lineStart };
   }
   const marker = `${Number(m[1]) + 1}. `;
-  const next = `${before}\n${marker}${after}`;
-  // 光标统一落在完整 marker（含空格）之后
-  return { value: next, cursor: before.length + 1 + marker.length };
+  const cursor = before.length + 1 + marker.length;
+  return { kind: "replace", start: selStart, end: selEnd, text: `\n${marker}`, selStart: cursor, selEnd: cursor };
 }

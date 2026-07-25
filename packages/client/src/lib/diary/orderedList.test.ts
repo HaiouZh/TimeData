@@ -1,20 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { applyEnterInOrderedList } from "./orderedList.js";
+import { previewEdit } from "./textareaEdit.js";
+
+// applyEnterInOrderedList 现在返回 EditAction 描述符（Task 2 迁移），不再是 { value, cursor }。
+// 这个助手把描述符应用回原文，让下面 6 条断言保持迁移前的形状，期望值一字不改。
+function applyTo(value: string, action: ReturnType<typeof applyEnterInOrderedList>) {
+  if (action?.kind !== "replace") return null;
+  return { value: previewEdit(value, action), cursor: action.selStart };
+}
 
 describe("applyEnterInOrderedList", () => {
   it("在 '1. 内容' 行末回车续 '2. '", () => {
     const v = "1. 买菜";
-    const r = applyEnterInOrderedList(v, v.length, v.length);
+    const r = applyTo(v, applyEnterInOrderedList(v, v.length, v.length));
     expect(r).toEqual({ value: "1. 买菜\n2. ", cursor: "1. 买菜\n2. ".length });
   });
   it("行中回车把余文带到下一项", () => {
     const v = "3. 前后";
-    const r = applyEnterInOrderedList(v, 4, 4); // 光标在 "前" 后
+    const r = applyTo(v, applyEnterInOrderedList(v, 4, 4)); // 光标在 "前" 后
     expect(r).toEqual({ value: "3. 前\n4. 后", cursor: 8 });
   });
   it("空列表项回车清掉序号（Obsidian 习惯）", () => {
     const v = "1. 事\n2. ";
-    const r = applyEnterInOrderedList(v, v.length, v.length);
+    const r = applyTo(v, applyEnterInOrderedList(v, v.length, v.length));
     expect(r).toEqual({ value: "1. 事\n", cursor: "1. 事\n".length });
   });
   it("非列表行返回 null", () => {
@@ -22,13 +30,13 @@ describe("applyEnterInOrderedList", () => {
   });
   it("跨行选区按光标前后文本判定续号", () => {
     const v = "1. ab\n2. cd";
-    const r = applyEnterInOrderedList(v, 5, 8); // 选中 "\n2."
+    const r = applyTo(v, applyEnterInOrderedList(v, 5, 8)); // 选中 "\n2."
     // beforeLine = "1. ab" 续 "2. "；选区后余文 " cd" 带到新行
     expect(r).toEqual({ value: "1. ab\n2.  cd", cursor: 9 });
   });
   it("有选区时先删除选区再续号", () => {
     const v = "1. abcd";
-    const r = applyEnterInOrderedList(v, 5, 7); // 选中 "cd"
+    const r = applyTo(v, applyEnterInOrderedList(v, 5, 7)); // 选中 "cd"
     expect(r).toEqual({ value: "1. ab\n2. ", cursor: "1. ab\n2. ".length });
   });
 });
