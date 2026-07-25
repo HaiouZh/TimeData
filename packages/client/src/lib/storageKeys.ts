@@ -18,5 +18,6 @@ export const STORAGE_KEYS = {
   galaxyEngine: "timedata_galaxy_engine",
   goalTrayWidth: "timedata_goal_tray_width",
   goalsViewMode: "timedata_goals_view_mode",
+  quickNoteComposerDraft: "timedata_quicknote_composer_draft",
   syncPhaseTimings: "timedata_sync_phase_timings",
 } as const;
