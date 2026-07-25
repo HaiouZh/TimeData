@@ -28,11 +28,13 @@ interface TaskDetailSheetProps {
   onClose: () => void;
   onTagsChange?: (task: Task, tags: string[]) => void;
   /**
-   * 「不重复」把 scheduledAt 清成 null 后回调：任务回落 inbox 池，
-   * 若它是 active project 成员就会落进项目区里一个默认折叠的组，页面要据此补落点反馈。
-   * 抽屉不认识项目区，reveal 状态住在 TodoPage，所以走回调而不是自己处理。
+   * 「重复与时间」写入成功后把**写入结果**交出去，供页面判落点（成员回落 inbox 池要展开归属组）。
+   *
+   * 抽屉只报告事实、不判落点：`choice.kind` 是代理判据，两个方向都错——「仅某天」可以选过去的日期
+   * （一次性任务过期照样回落 inbox 池），而「不重复」落在已完成 / 手头的任务根本不去 inbox 池。
+   * 落点判据统一在 TodoPage 的 revealProjectHome 一处判。
    */
-  onTimeCleared?: (taskId: string) => void;
+  onTimeChanged?: (task: Task) => void;
 }
 
 const SWIPE_CLOSE_THRESHOLD = 60;
@@ -54,7 +56,7 @@ function normalizeTitle(value: string): string {
   return value.replace(/\s*[\r\n]+\s*/g, " ").trim();
 }
 
-export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeCleared }: TaskDetailSheetProps) {
+export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: TaskDetailSheetProps) {
   const task = useLiveQuery(() => (id ? db.tasks.get(id) : undefined), [id]);
   const activeSession = useLiveQuery(() => getActiveSession(), []) ?? null;
   const [title, setTitle] = useState("");
@@ -102,12 +104,15 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeCleared }: Ta
     }
   }, [task, id, onClose]);
 
-  async function run(fn: () => Promise<unknown>): Promise<void> {
+  /** 成功返回写入结果，失败把消息落进 error 并返回 undefined（**照常 resolve**，调用方据返回值区分成败）。 */
+  async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
     try {
-      await fn();
+      const value = await fn();
       setError(null);
+      return value;
     } catch (err) {
       setError((err as Error).message);
+      return undefined;
     }
   }
 
@@ -455,10 +460,12 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeCleared }: Ta
           onChoose={(choice) => {
             const targetId = recurrenceTarget.id;
             setOverlay("none");
-            void run(() => applyRecurrenceChoice(targetId, choice)).then(() => {
-              // 只有 none 会把 scheduledAt 清成 null；改成某天会去已排期区、本来就看得见（红线 4）。
-              if (choice.kind === "none") onTimeCleared?.(targetId);
-            });
+            void (async () => {
+              // 只有写入成功才报：run() 把异常吞进 error 后照常 resolve，挂 .then() 等于「不管成败都报」——
+              // 任务被并发删除时会一边弹错一边把页面滚去展开一个空组（查归属认 members 原始事实，不校验行还在不在）。
+              const next = await run(() => applyRecurrenceChoice(targetId, choice));
+              if (next) onTimeChanged?.(next);
+            })();
           }}
           onCustom={() => setOverlay("custom")}
           onClose={() => setOverlay("none")}

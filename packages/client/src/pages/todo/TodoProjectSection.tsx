@@ -16,8 +16,18 @@ export interface TodoProjectSectionProps {
   groups: TodoProjectGroup[];
   handSessionId: string | null;
   now: Date;
-  /** 外部（项目名 chip）要求展开并滚到的组；nonce 变化即重新触发，同 TaskRow 的 revealChildren 形态。 */
-  revealGoal?: { id: string; nonce: number } | null;
+  /**
+   * 外部要求展开并滚过去的组（项目名 chip 回跳 / 落点反馈），是**待消费意图不是脉冲**：
+   * 目标组这一帧可能还没渲染出来（成员刚升根 / 刚清掉重复，要等 listTasks 整轮重算才产出这组），
+   * 那时 ref 上没有节点，滚动会静默丢失。故留在数组里等组出现再消费。
+   */
+  revealGoals: readonly string[];
+  /**
+   * 已消费（组已展开、已尝试滚动）的 goalId 回报给宿主清空。**必填**：不清空的话，
+   * 跨 1024px 断点时本组件整棵重挂（projectsBlock 换了父容器），mount effect 会把上一次的意图重放一遍——
+   * 用户手动折叠的状态丢失、页面被滚走。
+   */
+  onRevealConsumed: (goalIds: string[]) => void;
   onExitProject: (goalId: string, task: Task) => void;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
@@ -47,7 +57,8 @@ export function TodoProjectSection({
   groups,
   handSessionId,
   now,
-  revealGoal,
+  revealGoals,
+  onRevealConsumed,
   onExitProject,
   ...rowHandlers
 }: TodoProjectSectionProps) {
@@ -59,13 +70,25 @@ export function TodoProjectSection({
 
   const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? introPending;
 
+  // 消费展开意图：只认**这一帧真的渲染出来了**的组（渲染出来 ⇒ ref 回调已跑完，节点必在 rowRefs 里）。
+  // 没渲染出来的留着不消费，groups 变化时本 effect 重跑、届时补上——这正是「滚动那一半永久丢失」的修法。
   useEffect(() => {
-    if (!revealGoal) return;
-    const goalId = revealGoal.id;
-    setOverrides((prev) => new Map(prev).set(goalId, true));
-    // jsdom 的 Element 上没有 scrollIntoView，两级可选调用兜住（测试环境不能因此抛）。
-    rowRefs.current.get(goalId)?.scrollIntoView?.({ block: "nearest" });
-  }, [revealGoal]);
+    if (revealGoals.length === 0) return;
+    const rendered = new Set(groups.map((group) => group.goalId));
+    const consumed = revealGoals.filter((goalId) => rendered.has(goalId));
+    const first = consumed[0];
+    if (first === undefined) return;
+    setOverrides((prev) => {
+      const next = new Map(prev);
+      for (const goalId of consumed) next.set(goalId, true);
+      return next;
+    });
+    // 只滚到第一个：同时展开多组时连着滚会互相打架。
+    // 两级可选调用兜的是两件不同的事，都不能删：`?.` 兜 ref 尚未挂上，`scrollIntoView?.` 兜 jsdom 的
+    // Element 根本没有这个方法（测试环境不能因此抛）。
+    rowRefs.current.get(first)?.scrollIntoView?.({ block: "nearest" });
+    onRevealConsumed(consumed);
+  }, [revealGoals, groups, onRevealConsumed]);
 
   if (groups.length === 0) return null;
 

@@ -117,8 +117,10 @@ export function TodoPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [notMode, setNotMode] = useState(false);
   const [composerText, setComposerText] = useState("");
-  // 项目名 chip 的回跳目标；nonce 让「连点同一个 chip」也能重新触发展开与滚动。
-  const [revealGoal, setRevealGoal] = useState<{ id: string; nonce: number } | null>(null);
+  // 待消费的「展开并滚过去」意图（项目名 chip 回跳 + 落点反馈共用）。
+  // 是集合不是单槽：两条分属不同组的成员先后回落时，两次置位若被 React 自动批处理合并，
+  // 单槽只会保住最后一个、另一组静默丢掉。消费由 TodoProjectSection 回报（见 onRevealConsumed）。
+  const [revealGoals, setRevealGoals] = useState<readonly string[]>([]);
   // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
@@ -178,10 +180,10 @@ export function TodoPage() {
   }, [measureComposer]);
 
   const toggle = async (t: Task) => {
+    // 传写入后的行：勾选重复模板时 toggleTaskDone 返回的是被完成的那一发（另一条任务），
+    // 落点要按它判，不能按动作前的 t 判。
     const next = await toggleTaskDone(t.id);
-    // 取消勾选后若回落 inbox 池，它会进项目区里一个默认折叠的组——同 revealProjectHome 的理由。
-    // 排到未来的成员回的是已排期区、本来就看得见，不展开（红线 4：reveal 必须带落点判据）。
-    if (!next.done && placementForTask(next, gravityNow).pool === "inbox") await revealProjectHome(next.id);
+    await revealProjectHome(next);
   };
   const remove = async (t: Task) => {
     // recurrence===null 是 markOccurrenceSkipped 的前置条件：混合体行（ruleId/recurrence 都非空）
@@ -204,28 +206,62 @@ export function TodoPage() {
       return next;
     });
   };
-  const openProject = (goalId: string) => setRevealGoal((prev) => ({ id: goalId, nonce: (prev?.nonce ?? 0) + 1 }));
+  const openProject = (goalId: string) =>
+    setRevealGoals((prev) => (prev.includes(goalId) ? prev : [...prev, goalId]));
+  const consumeReveal = useCallback((goalIds: readonly string[]) => {
+    setRevealGoals((prev) => prev.filter((id) => !goalIds.includes(id)));
+  }, []);
+  /**
+   * 写入后的这条会不会落进项目区里那个**默认折叠的组**——落点反馈的唯一判据。三道闸缺一不可：
+   *
+   * 1. 项目区归集守卫（`parentId === null && recurrence === null && ruleId === null`）里 placement 判不出的两条：
+   *    子任务 scheduledAt 为空照样被 placement 判成 inbox，而投影层只收根任务；ruleId 非空的混合体行
+   *    被 recurrence 清成 null 后同理。这两种展开的都是不含它的组。
+   *    （`done` 与 `recurrence` 不必单列：placement 首行就把 done 判成 completed、重复模板判成 today/recurring，
+   *    两者永远进不了下面那个 inbox 分支——已完成成员待在组内**另一个**默认折叠的「已完成」子区里，
+   *    展开组也看不到它，给的是错误指认、比零反馈更糟，正是靠这条挡住。）
+   * 2. 焦点轴压过落点：listTasks 把未完成的手头成员截进 atHand 并 continue，它就在页面最顶上、本来就看得见，
+   *    强行展开只会把页面滚走。
+   * 3. 落点真的是 inbox 池：排到未来的成员回的是已排期区，同样本来就看得见。
+   */
+  const landsInCollapsedProjectGroup = (task: Task): boolean => {
+    if ((task.parentId ?? null) !== null || task.ruleId !== null) return false;
+    const handSessionId = buckets.handSession?.id ?? null;
+    if (handSessionId !== null && (task.sessionId ?? null) === handSessionId) return false;
+    return placementForTask(task, gravityNow).pool === "inbox";
+  };
   /**
    * 项目成员回落 inbox 池时，把它的归属组展开并滚过去。
    *
    * 归属轴排他打开后，「回到 inbox 池」不再等于「出现在收件箱」：成员会落进项目区里一个默认折叠的组，
    * 而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动——全屏零反馈，体感是「我把它拖到收件箱，它消失了」。
    * 这里复用项目名 chip 的回跳机制补上落点反馈。非项目成员命中不了 chip，行为一字不变。
+   *
+   * **入参是写入后的 Task，判据只在这里判一次**：调用方各自判会分裂成动作前的行 / 拖拽意图 / choice.kind
+   * 三四种口径，每种都漏一半（这正是本轮修的三个缺陷）。想加新的回落路径，只要把写入结果丢进来。
    */
-  const revealProjectHome = async (taskId: string) => {
-    const chip = projectChips.get(taskId);
+  const revealProjectHome = async (task: Task) => {
+    if (!landsInCollapsedProjectGroup(task)) return;
+    const chip = projectChips.get(task.id);
     if (chip) {
       openProject(chip.goalId);
       return;
     }
     // 快路径未命中有两种真实情形：动作前它还是子任务（投影只收根任务），
     // 或它是已完成成员（chip 索引只收未完成）。两种都不在渲染期闭包里，直接问一次库。
-    const goalId = await findActiveProjectGoalIdForTask(taskId);
-    if (goalId) openProject(goalId);
+    try {
+      const goalId = await findActiveProjectGoalIdForTask(task.id);
+      if (goalId) openProject(goalId);
+    } catch (error) {
+      // 落点反馈不是关键路径：DatabaseClosed / 版本升级期查库 reject 就静默降级成"不展开"。
+      // 绝不能把它抛回 toggle——TaskRow 的 onToggle 是裸调用，promise 无人接，会变成 unhandled rejection。
+      console.warn("[todo] 查项目归属失败，跳过落点反馈:", error);
+    }
   };
   const moveToInbox = async (t: Task) => {
-    await unscheduleTask(t.id);
-    await revealProjectHome(t.id);
+    // 函数语义即"送进 inbox"，但落点未必是 inbox 池（已完成 / 在手头的行也走这里），判据交给 revealProjectHome。
+    const next = await unscheduleTask(t.id);
+    await revealProjectHome(next);
   };
   const moveToToday = async (t: Task) => {
     await scheduleTask(t.id, localDateString(new Date()));
@@ -296,11 +332,12 @@ export function TodoPage() {
   };
 
   const releaseFromHand = (t: Task) => {
-    // 只对「会落回 inbox 池」的成员 reveal：有排期的移出手头后去今天 / 已排期区，那里带项目名 chip、本来就看得见，
-    // 强行展开反而会把页面滚到项目区。判据直接复用页面内既有的 placementForTask（逾期的一次性任务同样回落 inbox）。
-    const fallsBackToInbox = placementForTask(t, gravityNow).pool === "inbox";
-    void releaseTaskFromHand(t.id);
-    if (fallsBackToInbox) void revealProjectHome(t.id);
+    // 判据要读解绑之后的行：动作前它的 sessionId 还等于活跃场，
+    // 按那份行判会被 revealProjectHome 的手头闸误判成「本来就看得见」，反而一条都不 reveal。
+    void (async () => {
+      const next = await releaseTaskFromHand(t.id);
+      await revealProjectHome(next);
+    })();
   };
   const grabToHand = (t: Task) => void grabTaskToHand(t.id);
   const endHand = () => void endActiveSession();
@@ -452,10 +489,12 @@ export function TodoPage() {
         case "promote-to-root": {
           const targetTasks = op.pool === "today" ? f(buckets.today) : f(floatingInbox);
           const sortOrder = targetTasks.length > 0 ? Math.max(...targetTasks.map((t) => t.sortOrder)) + 1 : 0;
-          await promoteToRoot(activeId, op.pool, sortOrder);
           // 子任务被投影层整个丢掉（只收根任务），所以升根前它不在 chips 里；
           // 升根后若它本就是某 active project 的成员，会直接落进折叠的组。
-          if (op.pool === "inbox") await revealProjectHome(activeId);
+          // 判据必须读 promoteToRoot 的返回行而不是 op.pool（那是拖拽**意图**）：
+          // promoteToRoot 不动 done/recurrence，把一条已完成子任务拖进收件箱是可达手势，落点其实是「已完成」。
+          const promoted = await promoteToRoot(activeId, op.pool, sortOrder);
+          await revealProjectHome(promoted);
           break;
         }
         case "schedule-root": {
@@ -463,8 +502,8 @@ export function TodoPage() {
             await scheduleTask(activeId, localDateString(new Date()));
           } else {
             // 拖进 pool:inbox 不经 moveToInbox，落点反馈要在这里补一遍（同 revealProjectHome 的理由）。
-            await unscheduleTask(activeId);
-            await revealProjectHome(activeId);
+            const unscheduled = await unscheduleTask(activeId);
+            await revealProjectHome(unscheduled);
           }
           break;
         }
@@ -484,7 +523,8 @@ export function TodoPage() {
       groups={buckets.projects}
       handSessionId={buckets.handSession?.id ?? null}
       now={gravityNow}
-      revealGoal={revealGoal}
+      revealGoals={revealGoals}
+      onRevealConsumed={consumeReveal}
       onExitProject={exitProject}
       {...rowHandlers}
     />
@@ -700,7 +740,7 @@ export function TodoPage() {
             id={detailId}
             onClose={closeDetail}
             onTagsChange={changeTags}
-            onTimeCleared={(taskId) => void revealProjectHome(taskId)}
+            onTimeChanged={(task) => void revealProjectHome(task)}
           />
         )}
       </div>
