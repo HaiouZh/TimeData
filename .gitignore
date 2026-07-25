@@ -25,6 +25,7 @@ data/
 .trae/
 .superpowers/
 .worktrees/
+.codegraph/
 
 # Local-only development documents
 docs_local/
