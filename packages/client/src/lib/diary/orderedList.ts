@@ -75,11 +75,12 @@ export function applyEnterInOrderedList(value: string, selStart: number, selEnd:
     if (r === i) {
       rows.push({ kind: "item", indent: item.indent, numText: item.numText, gap: item.gap, content: contentBefore });
       newLineSlot = rows.length;
-      // 新行继承当前行的缩进与 gap；numText 在 straighten=true 时会被整体覆盖，随便填一个占位串。
+      // 新行继承当前行的缩进与 gap；numText 填 bumpedNum，straighten=true 时会被 renumberBlock 整体覆盖，
+      // straighten=false 时它就是最终值，两种情况下都不用另填占位串。
       rows.push({
         kind: "item",
         indent: item.indent,
-        numText: straighten ? "" : bumpedNum,
+        numText: bumpedNum,
         gap: item.gap,
         content: restOfLine,
       });
@@ -118,56 +119,4 @@ export function applyEnterInOrderedList(value: string, selStart: number, selEnd:
     selStart: cursor,
     selEnd: cursor,
   };
-}
-
-/**
- * 纯重排：拉直 offset 所在有序列表块的编号，不插入新行。供 §4.3 Tab 缩进（Task 5）用——
- * 缩进/反缩进改了某几行的 indent 字节后，块内层级跟着变了，需要重新走一遍 expectedNumbers。
- * 无变化（offset 不在任何列表块 / 所在行受保护 / 拉直后与原文一字不差）时返回 null。
- *
- * 未被 C01–C50 边界表覆盖：原型（proto.mjs）未实现这个函数，本实现是按同一套 listModel 原语
- * 类比 applyEnterInOrderedList 的光标公式推出的合理实现，Task 5 接线时如与实际交互不符，
- * 以 Task 5 的验收为准重新核实。
- */
-export function renumberOrderedBlockAt(value: string, offset: number): EditAction | null {
-  const lines = splitLines(value);
-  const prot = scanProtected(lines);
-  const rowIdx = lineIndexAt(lines, offset);
-  if (prot[rowIdx]) return null;
-
-  const { blockOf, blocks } = assignBlocks(lines, prot);
-  const blockId = blockOf[rowIdx];
-  if (blockId === -1) return null;
-  const block = blocks[blockId];
-  const blockStart = lines[block.rows[0]].start;
-  const blockEnd = lines[block.rows[block.rows.length - 1]].end;
-  const oldBlock = value.slice(blockStart, blockEnd);
-
-  const rows: RenumberInputRow[] = block.rows.map((r) => {
-    const rowLine = lines[r];
-    const rowItem = parseItem(rowLine.text);
-    return rowItem
-      ? { kind: "item", indent: rowItem.indent, numText: rowItem.numText, gap: rowItem.gap, content: rowItem.content }
-      : { kind: "raw", text: rowLine.text };
-  });
-  const renumbered = renumberBlock(rows, true);
-  const out = renumbered.map((r) => r.text);
-  const newBlock = out.join("\n");
-  if (newBlock === oldBlock) return null; // 编号本就正确，无事可做
-
-  const span = trimEditSpan(oldBlock, newBlock, blockStart, offset);
-
-  // 光标随 offset 所在行一起漂移：该行之前的行若变长/变短，行首整体平移；
-  // 该行自身若是列表项，marker 长度变化量（仅数字位数可能变，indent/gap/content 不动）也要计入。
-  const posInBlock = block.rows.indexOf(rowIdx);
-  const oldMarkerLen = parseItem(lines[rowIdx].text)?.markerLen ?? 0;
-  const newMarkerLen = renumbered[posInBlock].markerLen ?? 0;
-  const localOld = offset - lines[rowIdx].start;
-  const localNew =
-    localOld <= oldMarkerLen ? Math.min(localOld, newMarkerLen) : localOld + (newMarkerLen - oldMarkerLen);
-  let newRowStart = blockStart;
-  for (let idx = 0; idx < posInBlock; idx += 1) newRowStart += out[idx].length + 1;
-  const cursor = newRowStart + localNew;
-
-  return { kind: "replace", start: span.start, end: span.end, text: span.text, selStart: cursor, selEnd: cursor };
 }

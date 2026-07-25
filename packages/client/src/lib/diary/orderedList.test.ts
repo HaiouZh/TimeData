@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEnterInOrderedList, renumberOrderedBlockAt } from "./orderedList.js";
+import { applyEnterInOrderedList } from "./orderedList.js";
 import { previewEdit } from "./textareaEdit.js";
 
 // applyEnterInOrderedList 现在返回 EditAction 描述符（Task 2 迁移），不再是 { value, cursor }。
@@ -160,41 +160,5 @@ describe("applyEnterInOrderedList · 最小替换区间（只在这几条上断�
     const v = "1. a\n\n2. b";
     const e = applyEnterInOrderedList(v, v.length, v.length);
     expect(e).toMatchObject({ kind: "replace", start: 10, end: 10, text: "\n3. " });
-  });
-});
-
-// renumberOrderedBlockAt：供 Task 5（Tab 缩进）用的纯重排（不插入新行）。不在 C01–C50 边界表
-// 覆盖范围内——原型未实现这个函数（见勘察 §G），这里只做基础行为覆盖，Task 5 接线时若与实际
-// 交互不符，以 Task 5 的验收结论为准重新核实。
-describe("renumberOrderedBlockAt", () => {
-  it("乱序编号被拉直，offset 所在行未变时光标原地不动", () => {
-    const v = "1. a\n5. b\n3. c";
-    const e = renumberOrderedBlockAt(v, 0); // 光标在未变的首行
-    expect(e?.kind).toBe("replace");
-    if (e?.kind !== "replace") throw new Error("expected replace");
-    expect(previewEdit(v, e)).toBe("1. a\n2. b\n3. c");
-    expect(e.selStart).toBe(0);
-    expect(e.selEnd).toBe(0);
-  });
-  it("编号本来就对时返回 null（无事可做）", () => {
-    expect(renumberOrderedBlockAt("1. a\n2. b\n3. c", 5)).toBeNull();
-  });
-  it("offset 不在任何列表块时返回 null", () => {
-    expect(renumberOrderedBlockAt("普通行", 2)).toBeNull();
-  });
-  it("offset 所在行受保护（代码围栏内）时返回 null", () => {
-    expect(renumberOrderedBlockAt("```\n1. a\n5. b\n```", 6)).toBeNull();
-  });
-  it("光标所在行自身编号变化时，光标随 marker 长度变化同步平移", () => {
-    // 9 个 "1. x" + 光标落在第 9 行内容前一格：拉直后前 8 行仍是个位数字，第 9 行从 "1." 变 "9."，
-    // marker 长度不变（都是 1 位数字），光标应落在同一相对位置。
-    const v = ["1. a", "1. b", "1. c", "1. d", "1. e", "1. f", "1. g", "1. h", "1. i"].join("\n");
-    const offset = v.lastIndexOf("i"); // 光标恰好在最后一项的内容字符上
-    const e = renumberOrderedBlockAt(v, offset);
-    expect(e?.kind).toBe("replace");
-    if (e?.kind !== "replace") throw new Error("expected replace");
-    const result = previewEdit(v, e);
-    expect(result).toBe(["1. a", "2. b", "3. c", "4. d", "5. e", "6. f", "7. g", "8. h", "9. i"].join("\n"));
-    expect(result.slice(0, e.selStart)).toBe("1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. ");
   });
 });
