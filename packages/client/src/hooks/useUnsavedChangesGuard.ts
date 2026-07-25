@@ -29,6 +29,9 @@ interface UnsavedChangesGuardOptions {
  * - 组件卸载**不需要**手动 reset：useBlocker 内部 cleanup 已 deleteBlocker。
  * - 将来若出现「保存成功后在同一个 handler 里主动跳转」的流程，会被误拦
  *   （shouldBlock 读到的是上一帧的 when），届时需要加一个一次性 bypass ref。
+ * - 传入的 `confirm` 若来自 `useConfirm`：确认弹层被新请求顶替时会把旧请求 resolve(false)
+ *   （留在原地，安全方向），不会悬空——否则这里 `await confirmRef.current(...)` 永远不 settle，
+ *   blocker 卡死在 blocked，全局再也导航不了。
  * - 询问的 effect 只依赖 `blocker.state` 字符串：blocked 期间再来一次导航只换 blocker 对象、
  *   不改 state，effect 不重跑，因此不会重复弹窗；proceed/reset 一律对 `blockerRef.current`
  *   这个最新对象调用，否则会放行到上一次那个目标。

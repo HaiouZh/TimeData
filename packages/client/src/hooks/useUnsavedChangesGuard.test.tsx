@@ -144,7 +144,7 @@ describe("useUnsavedChangesGuard", () => {
     await unmount(root);
   });
 
-  // 这条是真正承重的回归测试：blockerRef 存在的唯一理由。见 useUnsavedChangesGuard.tsx 的 JSDoc。
+  // 这条是真正承重的回归测试：blockerRef 存在的唯一理由。见 useUnsavedChangesGuard.ts 的 JSDoc。
   // 已用「还原成 v1 效果体（cancelled + [blocker,...] 依赖）」验证过：还原后这条会变红
   // （落到 /editor 而非 /third），证明它确实在守护这个行为，不是摆设。
   it("blocked 期间又来一次导航，「放弃修改」放行到最新目标而非第一次拦下的那个", async () => {
