@@ -779,6 +779,46 @@ describe("TodoPage", () => {
     expect(atHand.querySelector('[data-testid="goal-linked-bar"]')).toBeNull();
     await unmount(root);
   });
+
+  it("已完成区取消勾选：项目成员回落 inbox 池时展开归属组", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    // 提示条已读 → 项目区默认全折叠，才观察得到"被展开"这件事。
+    setProjectZoneIntroDismissed(true);
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await toggleTaskDone(member.id);
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "刷墙");
+    // 组是折叠的：项目区此时只显示组名与「已完成 · 1 条」，成员不在 DOM 里
+    //（组体是条件渲染 `{expanded && ...}`，不是 <details>，所以 not.toContain 在这里有效）。
+    const before = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
+    expect(before.textContent ?? "").toContain("装修");
+    expect(before.textContent ?? "").not.toContain("刷墙");
+
+    const checkbox = host.querySelector('input[aria-label="完成 刷墙"]') as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    await act(async () => {
+      checkbox.click();
+    });
+    await waitForCondition(
+      () =>
+        ((host.querySelector('[data-section="todo-projects"]') as HTMLElement | null)?.textContent ?? "").includes(
+          "刷墙",
+        ),
+      "project zone to expand the member's home group",
+    );
+    await unmount(root);
+  });
 });
 
 describe("TodoPage occurrence 删除分流", () => {

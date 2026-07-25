@@ -59,7 +59,7 @@ import {
   releaseTaskFromHand,
   resumeSession,
 } from "../lib/sessions.js";
-import { removeGoalMember } from "../lib/goals.js";
+import { findActiveProjectGoalIdForTask, removeGoalMember } from "../lib/goals.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -178,7 +178,10 @@ export function TodoPage() {
   }, [measureComposer]);
 
   const toggle = async (t: Task) => {
-    await toggleTaskDone(t.id);
+    const next = await toggleTaskDone(t.id);
+    // 取消勾选后若回落 inbox 池，它会进项目区里一个默认折叠的组——同 revealProjectHome 的理由。
+    // 排到未来的成员回的是已排期区、本来就看得见，不展开（红线 4：reveal 必须带落点判据）。
+    if (!next.done && placementForTask(next, gravityNow).pool === "inbox") await revealProjectHome(next.id);
   };
   const remove = async (t: Task) => {
     // recurrence===null 是 markOccurrenceSkipped 的前置条件：混合体行（ruleId/recurrence 都非空）
@@ -209,13 +212,20 @@ export function TodoPage() {
    * 而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动——全屏零反馈，体感是「我把它拖到收件箱，它消失了」。
    * 这里复用项目名 chip 的回跳机制补上落点反馈。非项目成员命中不了 chip，行为一字不变。
    */
-  const revealProjectHome = (taskId: string) => {
+  const revealProjectHome = async (taskId: string) => {
     const chip = projectChips.get(taskId);
-    if (chip) openProject(chip.goalId);
+    if (chip) {
+      openProject(chip.goalId);
+      return;
+    }
+    // 快路径未命中有两种真实情形：动作前它还是子任务（投影只收根任务），
+    // 或它是已完成成员（chip 索引只收未完成）。两种都不在渲染期闭包里，直接问一次库。
+    const goalId = await findActiveProjectGoalIdForTask(taskId);
+    if (goalId) openProject(goalId);
   };
   const moveToInbox = async (t: Task) => {
     await unscheduleTask(t.id);
-    revealProjectHome(t.id);
+    await revealProjectHome(t.id);
   };
   const moveToToday = async (t: Task) => {
     await scheduleTask(t.id, localDateString(new Date()));
@@ -290,7 +300,7 @@ export function TodoPage() {
     // 强行展开反而会把页面滚到项目区。判据直接复用页面内既有的 placementForTask（逾期的一次性任务同样回落 inbox）。
     const fallsBackToInbox = placementForTask(t, gravityNow).pool === "inbox";
     void releaseTaskFromHand(t.id);
-    if (fallsBackToInbox) revealProjectHome(t.id);
+    if (fallsBackToInbox) void revealProjectHome(t.id);
   };
   const grabToHand = (t: Task) => void grabTaskToHand(t.id);
   const endHand = () => void endActiveSession();
@@ -443,6 +453,9 @@ export function TodoPage() {
           const targetTasks = op.pool === "today" ? f(buckets.today) : f(floatingInbox);
           const sortOrder = targetTasks.length > 0 ? Math.max(...targetTasks.map((t) => t.sortOrder)) + 1 : 0;
           await promoteToRoot(activeId, op.pool, sortOrder);
+          // 子任务被投影层整个丢掉（只收根任务），所以升根前它不在 chips 里；
+          // 升根后若它本就是某 active project 的成员，会直接落进折叠的组。
+          if (op.pool === "inbox") await revealProjectHome(activeId);
           break;
         }
         case "schedule-root": {
@@ -451,7 +464,7 @@ export function TodoPage() {
           } else {
             // 拖进 pool:inbox 不经 moveToInbox，落点反馈要在这里补一遍（同 revealProjectHome 的理由）。
             await unscheduleTask(activeId);
-            revealProjectHome(activeId);
+            await revealProjectHome(activeId);
           }
           break;
         }
