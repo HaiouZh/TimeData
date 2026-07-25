@@ -1,7 +1,7 @@
 import { CaretLeft, CaretRight, MagnifyingGlass, X } from "@phosphor-icons/react";
 import type { TimeEntry } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon.js";
 import { db } from "../db/index.ts";
@@ -33,6 +33,11 @@ export default function SearchPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(state.query.length > 0);
   const [visibleCount, setVisibleCount] = useState(SEARCH_PAGE_SIZE);
+  // 搜索框的原文由本地 state 持有，绝不逐键写 URL：RouterProvider 默认把路由 setState 包进
+  // React.startTransition（v7 已无关闭开关），而 React 19 要求受控文本框同步更新——由 transition
+  // 驱动时 value prop 在提交前仍是旧值，ReactDOM 会在离散 input 事件收尾把 DOM 值回写回去，
+  // 表现为快速连打 / 中文 IME 输入丢字符。URL 只在去抖落定后写一次（QuickNotesPage 同款范式）。
+  const [queryInput, setQueryInput] = useState(state.query);
 
   const { categories, parentCategories, getChildren, getCategoryPath, getCategoryColor } = useCategories();
 
@@ -43,21 +48,40 @@ export default function SearchPage() {
   }
 
   const range = useMemo(() => buildSearchRange(state.mode, state.anchor), [state.mode, state.anchor]);
-  const debouncedQuery = useDebouncedValue(state.query, 200);
+  const debouncedQuery = useDebouncedValue(queryInput, 200);
   const terms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
-  const categoryIds = useMemo(
-    () => (state.categoryId ? collectCategoryTreeIds(categories, state.categoryId) : null),
+
+  // 只依赖 debouncedQuery：把 state.query 也列进依赖，点 X 清空后这条 effect 会在旧词的去抖
+  // 落定前先被 state.query 的变化唤醒，把刚清掉的词又写回 URL。空白照写不 trim（见 urlState 注释）。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 见上，state.query / updateState 是有意不入依赖的
+  useEffect(() => {
+    if (debouncedQuery === state.query) return;
+    updateState({ query: debouncedQuery });
+  }, [debouncedQuery]);
+
+  // 分类 id 是外部输入，三态回落：categories 尚未加载（useLiveQuery 首帧为空）或该 id 已归档 /
+  // 来自另一台设备时，一律当「没选分类」处理。不能把 collectCategoryTreeIds 的 [] 直接交给
+  // filterSearchEntries——它读成「命中集合为空 → 一条都不匹配」，会让进页面必闪一帧空态、
+  // 带分类的深链明明库里有记录却说没有（设计文档：未知 cat 回落默认值）。
+  const resolvedCategoryId = useMemo(
+    () =>
+      state.categoryId && categories.some((category) => category.id === state.categoryId) ? state.categoryId : null,
     [categories, state.categoryId],
   );
+  const categoryIds = useMemo(
+    () => (resolvedCategoryId ? collectCategoryTreeIds(categories, resolvedCategoryId) : null),
+    [categories, resolvedCategoryId],
+  );
 
-  const rawEntries =
-    useLiveQuery(async () => {
-      if (range.startUtc === null || range.endUtc === null) return db.timeEntries.toArray();
-      return db.timeEntries.where("startTime").between(range.startUtc, range.endUtc, true, false).toArray();
-    }, [range.startUtc, range.endUtc]) ?? [];
+  const rawEntries = useLiveQuery(async () => {
+    if (range.startUtc === null || range.endUtc === null) return db.timeEntries.toArray();
+    return db.timeEntries.where("startTime").between(range.startUtc, range.endUtc, true, false).toArray();
+  }, [range.startUtc, range.endUtc]);
+  // undefined 保留作第三态：坍缩成 [] 会让「还在查库」和「真的一条都没有」共用同一句空态文案。
+  const loading = rawEntries === undefined;
 
   const matched = useMemo(
-    () => filterSearchEntries(rawEntries, { range, categoryIds, terms }),
+    () => filterSearchEntries(rawEntries ?? [], { range, categoryIds, terms }),
     [rawEntries, range, categoryIds, terms],
   );
   // 汇总永远按完整匹配集算——按当前页算的话，「显示更多」会让四个数跟着变，那就是 bug。
@@ -65,7 +89,7 @@ export default function SearchPage() {
   const visible = matched.slice(0, visibleCount);
   const hiddenCount = matched.length - visible.length;
 
-  const categoryLabel = state.categoryId ? getCategoryPath(state.categoryId) : "全部分类";
+  const categoryLabel = resolvedCategoryId ? getCategoryPath(resolvedCategoryId) : "全部分类";
   const rangeLabel = formatSearchRangeLabel(state.mode, state.anchor, today);
 
   const groups = useMemo(() => {
@@ -94,14 +118,16 @@ export default function SearchPage() {
           <h2 className="shrink-0 td-text-title">搜索</h2>
           <button
             type="button"
+            aria-haspopup="dialog"
+            aria-expanded={pickerOpen}
             onClick={() => setPickerOpen((open) => !open)}
             className="ml-auto flex min-h-11 min-w-0 items-center gap-1.5 rounded-pill border border-border bg-surface-elevated px-3 td-text-body text-ink"
           >
-            {state.categoryId && (
+            {resolvedCategoryId && (
               <span
                 aria-hidden="true"
                 className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: getCategoryColor(state.categoryId) }}
+                style={{ backgroundColor: getCategoryColor(resolvedCategoryId) }}
               />
             )}
             <span className="truncate">{categoryLabel}</span>
@@ -110,7 +136,10 @@ export default function SearchPage() {
             type="button"
             aria-label={searchOpen ? "收起搜索" : "搜索备注"}
             onClick={() => {
-              if (searchOpen) updateState({ query: "" });
+              if (searchOpen) {
+                setQueryInput("");
+                updateState({ query: "" });
+              }
               setSearchOpen((open) => !open);
             }}
             className="grid size-11 shrink-0 place-items-center rounded-pill text-ink-2 hover:bg-surface-hover hover:text-ink"
@@ -122,8 +151,8 @@ export default function SearchPage() {
         {searchOpen && (
           <input
             type="search"
-            value={state.query}
-            onChange={(event) => updateState({ query: event.target.value })}
+            value={queryInput}
+            onChange={(event) => setQueryInput(event.target.value)}
             placeholder="搜索备注"
             aria-label="搜索备注"
             className="mt-2 min-h-11 w-full rounded-row border border-border bg-surface-elevated px-3 td-text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -135,7 +164,7 @@ export default function SearchPage() {
             <CategoryPickerSheet
               parentCategories={parentCategories}
               getChildren={getChildren}
-              selectedId={state.categoryId}
+              selectedId={resolvedCategoryId}
               onSelect={(categoryId) => updateState({ categoryId })}
               onClose={() => setPickerOpen(false)}
             />
@@ -200,7 +229,8 @@ export default function SearchPage() {
         </dl>
       </section>
 
-      {matched.length === 0 ? (
+      {/* 还在查库时既不出空态也不出列表：把 undefined 当成 0 条会让每次进页面先闪一句「没有匹配的记录」。 */}
+      {loading ? null : matched.length === 0 ? (
         <p className="px-4 py-12 text-center td-text-body text-ink-3">这个范围里没有匹配的记录</p>
       ) : (
         <div>
@@ -213,6 +243,7 @@ export default function SearchPage() {
                 <button
                   key={entry.id}
                   type="button"
+                  data-entry-id={entry.id}
                   onClick={() => navigate(`/entries/${entry.id}/edit`)}
                   className="flex min-h-11 w-full items-center gap-2 border-b border-border bg-surface px-4 py-2 text-left td-text-body hover:bg-surface-hover"
                 >

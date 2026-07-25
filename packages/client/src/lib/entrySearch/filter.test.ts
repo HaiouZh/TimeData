@@ -34,6 +34,17 @@ describe("filterSearchEntries", () => {
     expect(result.map((e) => e.id)).toEqual(["in"]);
   });
 
+  it("范围左边界是闭区间，开始时刻恰好等于 startUtc 的记录被包含", () => {
+    // 每档区间的第一秒：把 `entry.startTime < range.startUtc` 写成 `<=` 就会把它整条吞掉，
+    // 而右边界有精确踩点用例、左边界原先一条都没有。
+    const range = buildSearchRange("month", "2026-02-14");
+    const atStart = entry("start", "c1", "2026-02-01T00:00:00", "2026-02-01T00:30:00");
+    expect(atStart.startTime).toBe(range.startUtc);
+
+    const result = filterSearchEntries([atStart], { range, categoryIds: null, terms: [] });
+    expect(result.map((e) => e.id)).toEqual(["start"]);
+  });
+
   it("跨夜记录只按开始时间归属，不因结束时间落在范围外被排除", () => {
     // 2 月最后一天 23:00 开始、次月 07:00 结束：整条属 2 月
     const overnight = entry("night", "c1", "2026-02-28T23:00:00", "2026-03-01T07:00:00");
@@ -104,6 +115,18 @@ describe("summarizeSearchEntries", () => {
     const summary = summarizeSearchEntries([a, b, c]);
     expect(summary.dayCount).toBe(2);
     expect(summary.entryCount).toBe(3);
+  });
+
+  it("天数按本地日归属，凌晨记录不并进 UTC 的前一天", () => {
+    // 本地 02-10 01:00(+08) 的 UTC 是 02-09T17:00Z，与本地 02-09 20:00(+08)（UTC 02-09T12:00Z）
+    // 同属一个 UTC 日。按 startTime.slice(0,10) 分桶会算成 1 天，按 APP_TIME_ZONE 才是 2 天。
+    const dawn = entry("dawn", "c1", "2026-02-10T01:00:00", "2026-02-10T02:00:00");
+    const prevEvening = entry("prev", "c1", "2026-02-09T20:00:00", "2026-02-09T21:00:00");
+    expect(dawn.startTime.slice(0, 10)).toBe(prevEvening.startTime.slice(0, 10));
+
+    const summary = summarizeSearchEntries([dawn, prevEvening]);
+    expect(summary.dayCount).toBe(2);
+    expect(summary.entryCount).toBe(2);
   });
 
   it("时长直接累加不裁剪，跨夜整条计入", () => {
