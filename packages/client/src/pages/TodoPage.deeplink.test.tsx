@@ -66,17 +66,24 @@ function detailDialog(host: HTMLElement): HTMLElement | null {
   return host.querySelector('[role="dialog"][aria-label="任务详情"]');
 }
 
+function titleInput(host: HTMLElement): HTMLTextAreaElement | null {
+  return host.querySelector('textarea[aria-label="任务标题"]');
+}
+
 describe("TodoPage deep link", () => {
   it("挂载 /todo?taskId=<id> 时打开任务详情", async () => {
     const task = await addTask({ title: "来自链接的任务" });
 
     const { host, root } = await renderPage(`/todo?taskId=${task.id}`);
-    await waitForCondition(() => detailDialog(host) !== null, "Timed out waiting for task detail sheet");
+    // 等的是标题**内容**而非弹层本身：弹层先挂出来、标题随任务数据晚一拍填充，
+    // 只等弹层会在断言时读到空 textarea（listTasks 的异步读取一变多就复现）。
+    await waitForCondition(
+      () => titleInput(host)?.value === "来自链接的任务",
+      "Timed out waiting for task detail title",
+    );
 
     expect(detailDialog(host)).not.toBeNull();
-    expect((host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement | null)?.value).toBe(
-      "来自链接的任务",
-    );
+    expect(titleInput(host)?.value).toBe("来自链接的任务");
     await unmount(root);
   });
 
@@ -106,20 +113,14 @@ describe("TodoPage deep link", () => {
         createElement(NavigateButton, { to: "/todo?taskId=missing-task" }),
       ),
     );
-    await waitForCondition(
-      () => (host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement | null)?.value === "第一条",
-      "Timed out waiting for first task detail",
-    );
+    await waitForCondition(() => titleInput(host)?.value === "第一条", "Timed out waiting for first task detail");
 
     await click(
       Array.from(host.querySelectorAll("button")).find(
         (button) => button.textContent === `navigate:/todo?taskId=${second.id}`,
       ),
     );
-    await waitForCondition(
-      () => (host.querySelector('textarea[aria-label="任务标题"]') as HTMLTextAreaElement | null)?.value === "第二条",
-      "Timed out waiting for second task detail",
-    );
+    await waitForCondition(() => titleInput(host)?.value === "第二条", "Timed out waiting for second task detail");
 
     await click(
       Array.from(host.querySelectorAll("button")).find(
