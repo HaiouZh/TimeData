@@ -1509,6 +1509,40 @@ describe("QuickNotesPage", () => {
 
     await unmount(root);
   });
+
+  it("存为待办的提示条可以撤销：删掉任务并把文本放回输入框", async () => {
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "误存的内容");
+    await click(composerButton(host, "存为待办"));
+
+    await expect(db.tasks.count()).resolves.toBe(1);
+    expect(input(host).value).toBe("");
+
+    await click(lastButtonByText(host, "撤销"));
+
+    await expect(db.tasks.count()).resolves.toBe(0);
+    expect(input(host).value).toBe("误存的内容");
+
+    await unmount(root);
+  });
+
+  it("撤销时输入框已有新内容就不覆盖它，只说明没回填", async () => {
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "误存的内容");
+    await click(composerButton(host, "存为待办"));
+    // 撤销窗口里用户又开始打字
+    await typeInto(input(host), "新打的字");
+
+    await click(lastButtonByText(host, "撤销"));
+
+    await expect(db.tasks.count()).resolves.toBe(0);
+    expect(input(host).value).toBe("新打的字");
+    expect(host.textContent).toContain("原文本未回填");
+
+    await unmount(root);
+  });
 });
 
 describe("捕捉中心", () => {

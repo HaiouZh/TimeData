@@ -44,7 +44,7 @@ import {
   updateQuickNote,
 } from "../lib/quickNotes.ts";
 import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
-import { addTask } from "../lib/tasks.js";
+import { addTask, deleteTask } from "../lib/tasks.js";
 import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { clearComposerDraft, isEditDraftDirty, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
@@ -148,6 +148,12 @@ export default function QuickNotesPage() {
   // 故意用进入编辑时的快照而不是当前库里的值：编辑期间那条被另一台设备改了而用户没动，
   // 判定为「没改过」静默切换是对的——用户没有东西可丢。
   const editingOriginalRef = useRef("");
+  // toast 的 onClick 捕获的是「创建 toast 那次渲染」的闭包，直接读 draftText 会读到提交前那份
+  // （非空），于是「输入框已有内容就不覆盖」永远为真、永远不回填。经这个 ref 读最新值。
+  const draftTextRef = useRef(draftText);
+  useEffect(() => {
+    draftTextRef.current = draftText;
+  }, [draftText]);
   const saveTodoPendingRef = useRef(false);
   const punchPendingRef = useRef(false);
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -574,13 +580,16 @@ export default function QuickNotesPage() {
     setError(null);
     try {
       const dest = await readTodoDefaultDestination();
-      await addTask({ title: text, toInbox: dest === "inbox" });
+      const task = await addTask({ title: text, toInbox: dest === "inbox" });
       setDraftText("");
       clearComposerDraft();
       focusInput();
       showActionToast({
         message: dest === "inbox" ? "已放入收件箱" : "已加入今天",
-        actions: [{ label: "去待办", onClick: () => navigate("/todo") }],
+        actions: [
+          { label: "撤销", onClick: () => void handleUndoSaveTodo(task.id, text) },
+          { label: "去待办", onClick: () => navigate("/todo") },
+        ],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -588,6 +597,18 @@ export default function QuickNotesPage() {
       saveTodoPendingRef.current = false;
       setSaving(false);
     }
+  }
+
+  async function handleUndoSaveTodo(taskId: string, text: string) {
+    await deleteTask(taskId);
+    clearActionToast();
+    // 撤销窗口里用户可能已经开始打新草稿：覆盖手上的输入比少一次回填更坏。
+    if (draftTextRef.current.trim()) {
+      showStatus("已删除该待办，原文本未回填（输入框已有内容）");
+      return;
+    }
+    setDraftText(text);
+    focusInput();
   }
 
   async function startEditing(note: QuickNote) {
