@@ -6,6 +6,7 @@ import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
 import { applyIndent } from "../lib/diary/indent.js";
+import { applyLinkShortcut } from "../lib/diary/link.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
 
@@ -75,10 +76,23 @@ export default function DiaryPage() {
       action = applyEnterInOrderedList(field.value, field.selectionStart, field.selectionEnd);
     } else if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
       action = applyIndent(field.value, field.selectionStart, field.selectionEnd, event.shiftKey ? "out" : "in");
+    } else if (
+      event.key.toLowerCase() === "k" &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      // 一把抓 ctrlKey || metaKey，不做平台检测：本仓零平台嗅探代码，且嗅探在测试里的 stub
+      // 会命中 test-buckets.mjs 的 stubGlobal 脏标记、把测试文件踢出快桶（4-键位语义.md §2.6）。
+      // 已知代价（显式接受）：macOS 上 Ctrl+K（Emacs 风格 kill-to-end-of-line）也会被吃掉——
+      // 它是次要绑定、有替代（Shift+End 再删），误伤代价是"一次编辑没发生"，不丢数据、可撤销。
+      action = applyLinkShortcut(field.value, field.selectionStart, field.selectionEnd);
     }
 
-    // null = 交还浏览器默认行为（换行 / Tab 跳焦）；非 null 一律吃掉按键——
-    // 包括 { kind: "noop" }，它的语义就是“什么都不改但要吃掉”（Ctrl+K 含换行选区）。
+    // null = 交还浏览器默认行为（换行 / Tab 跳焦 / Ctrl+K 在代码围栏内）；非 null 一律吃掉按键——
+    // 包括 { kind: "noop" }，它的语义就是“什么都不改但要吃掉”（Ctrl+K 含换行选区）；
+    // { kind: "select" } 同样吃掉按键，但 runEditAction 只挪光标、不碰 setValue/markDirty
+    // （Ctrl+K 落在已有链接上，用户只是想改地址，一个字没改不该变脏）。
     if (!action) return;
     event.preventDefault();
     runEditAction(field, action, setContent, () => setDirty(true));

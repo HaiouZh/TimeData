@@ -411,4 +411,89 @@ describe("DiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("IME 组合态按 Ctrl+K 不触发补链接（守卫在 handleKeyDown 顶部，与 Tab/Enter 共用）", async () => {
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    let defaultPrevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      const event = new KeyboardEvent("keydown", {
+        key: "k",
+        ctrlKey: true,
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      el.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(false);
+    expect(el.value).toBe("1. x"); // 未被 applyLinkShortcut 处理，值原样不动
+
+    await unmount(root);
+  });
+
+  it("无选区按 Ctrl+K 插入 markdown 链接骨架并置 dirty（接线正测：真按键、真产出、真变脏）", async () => {
+    // 上面的 IME 测试断言的是"什么都没发生"——把 DiaryPage.tsx 里整个 Ctrl+K 分支删掉，
+    // 那条测试依然成立，接线可以完全断线而测不出来。这条正测走一次真实会落地的编辑，
+    // 断言最终 DOM 值与 dirty 态，是本任务"接线必须有正测"的硬要求。
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    expect(save.disabled).toBe(true); // 刚加载完，未改动
+
+    let prevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4); // "1. x" 行尾，无选区
+      const event = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      prevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(prevented).toBe(true);
+    expect(el.value).toBe("1. x[]()");
+    expect(save.disabled).toBe(false);
+
+    // 光标经 requestAnimationFrame 恢复到方括号之间（jsdom 无 execCommand，走 setValue 降级路径）
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    expect(el.selectionStart).toBe(5);
+    expect(el.selectionEnd).toBe(5);
+
+    await unmount(root);
+  });
+
+  it("光标落在已有链接上按 Ctrl+K 只挪光标去 URL 段，不调 applyEdit、不置 dirty（select 分支）", async () => {
+    fetchDiary.mockResolvedValue({ content: "[标题](https://a.com)", mtime: 100 });
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+    const save = host.querySelector('button[aria-label="保存"]');
+    if (!(save instanceof HTMLButtonElement)) throw new Error("missing save button");
+
+    expect(save.disabled).toBe(true);
+
+    let prevented = false;
+    await act(async () => {
+      el.setSelectionRange(2, 2); // 光标落在链接文本"标题"里
+      const event = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      prevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(prevented).toBe(true);
+    expect(el.value).toBe("[标题](https://a.com)"); // 一字未变
+    expect(save.disabled).toBe(true); // 不置 dirty：用户只是想改地址，一个字没改不该变脏
+    // select 分支同步调用 setSelectionRange，不经 requestAnimationFrame 降级路径
+    expect(el.selectionStart).toBe(5);
+    expect(el.selectionEnd).toBe(18);
+
+    await unmount(root);
+  });
 });
