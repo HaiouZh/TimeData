@@ -260,7 +260,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 - [ ] 跨 client/server 改动后跑 `pnpm --filter @timedata/client test:e2e`（`sync-roundtrip.e2e.test.ts`）。
 - [ ] **加新域**：按 [sync/domain-registry](sync/domain-registry.md) 的 checklist 同步 shared/server/client 登记簿、静态 `SyncChange`、backup 角色、force-push 取舍、对应域文档和全链路测试。
 - [ ] 改 `SyncPushReasonCode`：shared schema、server validation/resolver、`classifyReasonCode()`、本文档第 6 节、`data-model.md`。
-- [ ] **加任何写入路径前先问：这次写入是用户在直接编辑这条记录吗？** 若否（元数据刷新、批量 touch、级联副作用），它同样会把**整行**推上去并触发 §5 第 8 条的覆盖窗口，且爆炸半径 = 这一次写了多少行。已有的这类写入：`persistTaskOrder`（拖拽排序批量改 `sortOrder`）、`touchTasksInCurrentTransaction`（目标归属变更刷 `updatedAt`，见 [todo](todo.md) §3 第 14 条）。
+- [ ] **加任何写入路径前先问：这次写入是用户在直接编辑这条记录吗？** 若否（元数据刷新、批量 touch、级联副作用），它同样会把**整行**推上去并触发 §5 第 8 条的覆盖窗口，且爆炸半径 = 这一次写了多少行。已有的这类写入：`persistTaskOrder`（拖拽排序批量改 `sortOrder`）、`touchTasksInCurrentTransaction`（目标归属变更刷 `updatedAt`，见 [todo/project-zone](todo/project-zone.md) §4）。
 - [ ] 改 `regularSync` 主路径：先测 seq no-op、pull-only 补差、push + pull 三条路径。
 - [ ] 改服务端写路径：确认写表与 `recordSeq` 同事务、commit hash 标 dirty、事务后 `notifySyncChange`。
 - [ ] 改 shared 实体 schema：客户端按需升 `SCHEMA_NORMALIZATION_VERSION` 清洗老数据；服务端按需 `ensure*Columns()` 或 `dropColumnsIfExist()`；加字段 server 先行、减字段 shared 先行物理删列最后。归一不写 `syncLog`，也不替代服务端权威校验。
