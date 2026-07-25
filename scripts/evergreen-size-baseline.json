@@ -39,7 +39,10 @@
     "covers": 5
   },
   "docs/evergreen/goals.md": {
-    "covers": 22
+    "covers": 9
+  },
+  "docs/evergreen/goals/canvas.md": {
+    "covers": 13
   },
   "docs/evergreen/health.md": {
     "covers": 9
