@@ -14,7 +14,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
@@ -45,6 +45,7 @@ import {
   toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
+import { goalBarTaskIds, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
 import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
@@ -71,7 +72,7 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
-import { ProjectZoneIntroBar, TodoProjectSection } from "./todo/TodoProjectSection.js";
+import { ProjectNameChip, ProjectZoneIntroBar, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
@@ -100,7 +101,9 @@ export function TodoPage() {
   // 单一时钟：四分区 / 逾期 / 重力水位线共用 gravityNow，跨日由下方 timer+focus+visibilitychange 刷新后整页重算。
   const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
   const buckets = useLiveQuery(() => listTasks(gravityNow), [gravityNow], EMPTY) ?? EMPTY;
-  const goalLinkedIds = buckets.goalLinkedIds;
+  // 项目成员用可点的项目名 chip 表达归属，绿竖条退回只表达 theme 归属——同屏两种说法是重复信号。
+  const projectChips = projectChipIndex(buckets.projects);
+  const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   useEffect(() => {
     void healActiveSessions();
@@ -114,6 +117,8 @@ export function TodoPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [notMode, setNotMode] = useState(false);
   const [composerText, setComposerText] = useState("");
+  // 项目名 chip 的回跳目标；nonce 让「连点同一个 chip」也能重新触发展开与滚动。
+  const [revealGoal, setRevealGoal] = useState<{ id: string; nonce: number } | null>(null);
   // 拖拽期间挂 todo-dnd-dragging：临时解除 .swipeable-list-item 的 overflow:hidden，
   // 否则 dnd-kit 的 translateY 会被裁掉、被拖/让位的行隐身（index.css 有对应规则）。
   const [dragging, setDragging] = useState(false);
@@ -272,6 +277,11 @@ export function TodoPage() {
   const endHand = () => void endActiveSession();
   const resumeHand = (sessionId: string) => void resumeSession(sessionId);
   const exitProject = (goalId: string, t: Task) => void removeGoalMember(goalId, { kind: "task", id: t.id });
+  const openProject = (goalId: string) => setRevealGoal((prev) => ({ id: goalId, nonce: (prev?.nonce ?? 0) + 1 }));
+  const projectMetaChip = (t: Task): ReactNode => {
+    const chip = projectChips.get(t.id);
+    return chip ? <ProjectNameChip chip={chip} onOpen={openProject} /> : null;
+  };
 
   const rowHandlers = {
     onToggle: toggle,
@@ -438,6 +448,7 @@ export function TodoPage() {
       groups={buckets.projects}
       handSessionId={buckets.handSession?.id ?? null}
       now={gravityNow}
+      revealGoal={revealGoal}
       onExitProject={exitProject}
       {...rowHandlers}
     />
@@ -454,6 +465,7 @@ export function TodoPage() {
       onToggle={toggle}
       onEdit={openDetail}
       goalLinkedIds={goalLinkedIds}
+      metaChip={projectMetaChip}
     />
   );
 
@@ -467,6 +479,7 @@ export function TodoPage() {
       isOverdue={isOverdue}
       sortable
       containerId="pool:today"
+      metaChip={projectMetaChip}
       indentTargetId={indentTargetId}
       revealChildren={revealChildren}
       {...rowHandlers}
@@ -566,8 +579,10 @@ export function TodoPage() {
         <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">没有已排期任务</p>
       ) : (
         <div className="rounded-card p-1.5">
-          {scheduledSurface.length > 0 && <TaskList pool="upcoming" tasks={scheduledSurface} {...rowHandlers} />}
-          <SunkenScheduledTail sunkenTasks={scheduledSunken} {...rowHandlers} />
+          {scheduledSurface.length > 0 && (
+            <TaskList pool="upcoming" tasks={scheduledSurface} metaChip={projectMetaChip} {...rowHandlers} />
+          )}
+          <SunkenScheduledTail sunkenTasks={scheduledSunken} metaChip={projectMetaChip} {...rowHandlers} />
         </div>
       )}
     </CollapsibleSection>

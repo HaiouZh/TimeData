@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
-import { ProjectZoneIntroBar, TodoProjectSection } from "./TodoProjectSection.js";
+import { TaskRow } from "./TaskRow.js";
+import { ProjectNameChip, ProjectZoneIntroBar, TodoProjectSection } from "./TodoProjectSection.js";
 
 const NOW = new Date("2026-07-25T10:00:00.000Z");
 
@@ -213,5 +214,30 @@ describe("ProjectZoneIntroBar", () => {
     const dismissed = await renderDom(<ProjectZoneIntroBar memberCount={5} groupCount={2} />);
     expect(dismissed.host.textContent).toBe("");
     await unmount(dismissed.root);
+  });
+});
+
+describe("ProjectNameChip", () => {
+  it("显示组名；点击回调组 id 且不触发行的打开详情", async () => {
+    const onOpen = vi.fn();
+    const onEdit = vi.fn();
+    const { host, root } = await renderDom(
+      <TaskRow
+        task={task({ id: "t1", title: "刷墙" })}
+        pool="today"
+        metaChip={<ProjectNameChip chip={{ goalId: "g1", goalTitle: "装修" }} onOpen={onOpen} />}
+        {...handlers}
+        onEdit={onEdit}
+      />,
+    );
+    const chip = host.querySelector('[data-testid="project-name-chip"]');
+    expect(chip?.textContent).toContain("装修");
+
+    await click(chip);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledWith("g1");
+    // 行本身是 role="link"，点 chip 不能顺手把详情抽屉也打开。
+    expect(onEdit).not.toHaveBeenCalled();
+    await unmount(root);
   });
 });

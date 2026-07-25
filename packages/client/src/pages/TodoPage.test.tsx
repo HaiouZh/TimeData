@@ -9,6 +9,7 @@ import { db } from "../db/index.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import { setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
@@ -667,6 +668,43 @@ describe("TodoPage", () => {
     await waitForText(host, "自由任务");
     expect(host.querySelector('[data-section="todo-projects"]')).toBeNull();
     expect(host.querySelector('[data-testid="project-zone-intro"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("排到今天的项目成员在今天区显示项目名 chip，点它展开项目区对应组", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    // 提示条已读 → 项目区默认全折叠，才能观察到 chip 把它点开。
+    setProjectZoneIntroDismissed(true);
+    const member = await addTask({ title: "刷墙" });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="today"] [data-testid="project-name-chip"]') !== null,
+      "project chip in today section",
+    );
+
+    const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
+    expect(zone.textContent ?? "").not.toContain("刷墙");
+    // 项目成员在今天区不再画绿竖条（chip 已经说了同一件事）。
+    const today = host.querySelector('[data-section="today"]') as HTMLElement;
+    expect(today.querySelector("[data-testid='goal-linked-bar']")).toBeNull();
+
+    const chip = host.querySelector('[data-section="today"] [data-testid="project-name-chip"]') as HTMLButtonElement;
+    await act(async () => {
+      chip.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flushAsync();
+    expect((host.querySelector('[data-section="todo-projects"]') as HTMLElement).textContent ?? "").toContain("刷墙");
     await unmount(root);
   });
 });

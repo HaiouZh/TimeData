@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
-import { projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
+import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
@@ -155,6 +155,31 @@ export function TodoProjectSection({
         })}
       </div>
     </section>
+  );
+}
+
+/**
+ * 组外行（手头 / 今天 / 已排期）的项目名 chip：既是「这条属于哪个项目」的标注，
+ * 也是回跳入口——点它展开项目区里的对应组。
+ *
+ * `relative z-20` 是必须的：任务行左 2/5 盖着一个 `z-10` 的拖拽 activator 按钮，
+ * 不抬层级的话点击会被它吃掉。`stopPropagation` 则拦住行的 onClick（打开详情）。
+ */
+export function ProjectNameChip({ chip, onOpen }: { chip: ProjectChip; onOpen: (goalId: string) => void }) {
+  return (
+    <button
+      type="button"
+      data-testid="project-name-chip"
+      aria-label={`查看项目 ${chip.goalTitle}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(chip.goalId);
+      }}
+      className={`relative z-20 ${META_CHIP_CLASS} text-ink-2 hover:text-ink`}
+    >
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-ok" />
+      {chip.goalTitle}
+    </button>
   );
 }
 
