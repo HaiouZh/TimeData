@@ -83,13 +83,13 @@ describe("projectMemberIndex", () => {
 });
 
 describe("buildTodoProjectGroups", () => {
-  it("已完成成员只计 doneCount 不进 tasks", () => {
+  it("已完成成员只进 doneTasks 不进 tasks", () => {
     const goals = [goal({ id: "g1", title: "装修", members: [{ kind: "task", id: "t1" }, { kind: "task", id: "t2" }] })];
     const index = projectMemberIndex(goals);
     const groups = buildTodoProjectGroups(goals, index, [task({ id: "t1" }), task({ id: "t2", done: true })]);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.tasks.map((t) => t.id)).toEqual(["t1"]);
-    expect(groups[0]?.doneCount).toBe(1);
+    expect(groups[0]?.doneTasks.map((t) => t.id)).toEqual(["t2"]);
     expect(groups[0]?.goalTitle).toBe("装修");
   });
 

@@ -1601,7 +1601,7 @@ describe("listTasks projects 桶", () => {
     expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
   });
 
-  it("已完成成员只计 doneCount，且悬空 ref 不计数", async () => {
+  it("已完成成员只计 doneTasks，且悬空 ref 不计数", async () => {
     const open = await addTask({ title: "未完", toInbox: true });
     const done = await addTask({ title: "已完", toInbox: true });
     await toggleTaskDone(done.id);
@@ -1616,7 +1616,7 @@ describe("listTasks projects 桶", () => {
 
     const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
     expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([open.id]);
-    expect(buckets.projects[0]?.doneCount).toBe(1);
+    expect(buckets.projects[0]?.doneTasks.map((x) => x.id)).toEqual([done.id]);
   });
 
   it("goalLinkedIds 收全 kind（project + theme），不受 projects 口径影响", async () => {

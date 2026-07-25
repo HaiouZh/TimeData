@@ -23,8 +23,11 @@ export interface TodoProjectGroup {
   goalTitle: string;
   /** 未完成成员，保持传入顺序（listTasks 按 sortOrder 读表）。 */
   tasks: Task[];
-  /** 已完成成员数；这些任务不进 tasks，但参与组间排序键。 */
-  doneCount: number;
+  /**
+   * 已完成成员，保持传入顺序。不进 `tasks`（项目区显示集合只要未完成的），
+   * 但参与组间排序键，且喂展开态尾部的「已完成 N 条」折叠子区。
+   */
+  doneTasks: Task[];
 }
 
 /**
@@ -97,12 +100,12 @@ export function buildTodoProjectGroups(
     let entry = draft.get(membership.goalId);
     if (!entry) {
       entry = {
-        group: { goalId: membership.goalId, goalTitle: membership.goalTitle, tasks: [], doneCount: 0 },
+        group: { goalId: membership.goalId, goalTitle: membership.goalTitle, tasks: [], doneTasks: [] },
         latest: "",
       };
       draft.set(membership.goalId, entry);
     }
-    if (task.done) entry.group.doneCount += 1;
+    if (task.done) entry.group.doneTasks.push(task);
     else entry.group.tasks.push(task);
     if (task.updatedAt > entry.latest) entry.latest = task.updatedAt;
   }
