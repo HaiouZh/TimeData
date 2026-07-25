@@ -202,6 +202,16 @@ describe("resolveTodoDragOperation", () => {
       }),
     ).toBeNull();
   });
+
+  it("收件箱同容器 → null（显示序按 createdAt，落库只会白写 sortOrder + 重置重力时钟）", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "pool:inbox",
+        targetContainerId: "pool:inbox",
+        activeParentId: null,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("hoveredRootIdFromOver", () => {
@@ -316,6 +326,27 @@ describe("resolveTodoDragWithIndent", () => {
 
   it("无法得到目标池且没有合法候选父时返回 null", () => {
     expect(resolveTodoDragWithIndent({ ...baseIndentInput, rootAboveId: null, targetPool: null })).toBeNull();
+  });
+
+  it("收件箱内竖直重排 -> null，不落 persistTaskOrder", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        activeContainerId: "pool:inbox",
+        targetPool: "inbox",
+      }),
+    ).toBeNull();
+  });
+
+  it("收件箱内缩进成子任务不受短路影响 -> move-to-parent", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...baseIndentInput,
+        activeContainerId: "pool:inbox",
+        targetPool: "inbox",
+        indentLevel: "child",
+      }),
+    ).toEqual({ kind: "move-to-parent", parentId: "parent" });
   });
 });
 

@@ -87,7 +87,7 @@ export interface ResolveTodoDragInput {
 /**
  * 给定一次 drag end 的容器对，决定执行哪种待办操作。
  *
- * - 同一容器 → reorder（调用方再根据 sortable item 顺序计算新排序）。
+ * - 同一容器 → reorder（调用方再根据 sortable item 顺序计算新排序）；`pool:inbox` 例外，返回 null。
  * - child → 池（today/inbox）→ promote-to-root。
  * - root → parent → move-to-parent。
  * - root 在 today/inbox 之间 → schedule-root（schedule 或 unschedule）。
@@ -104,6 +104,11 @@ export function resolveTodoDragOperation({
   if (!active || !target) return null;
 
   if (activeContainerId === targetContainerId) {
+    // 收件箱不支持同容器重排：显示序 = 按 createdAt 分天 + 段内 createdAt 倒序
+    //（lib/tasks/inboxGrouping.ts），根本不读 sortOrder，落库后松手照样弹回；
+    // 而 persistTaskOrder 会把变化行的 updatedAt 推到当下，等于重置这些行的重力下沉时钟
+    //（gravity.isTaskSunken 读 updatedAt），该沉的不沉。故判为无效操作。
+    if (target.kind === "pool" && target.pool === "inbox") return null;
     return { kind: "reorder", containerId: activeContainerId };
   }
 
