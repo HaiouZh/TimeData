@@ -13,7 +13,6 @@ covers:
   - packages/client/src/pages/todo/**
   - packages/client/src/lib/tasks.ts
   - packages/client/src/lib/tasks/placement.ts
-  - packages/client/src/lib/tasks/goalMembership.ts
   - packages/client/src/lib/tasks/taskSort.ts
   - packages/client/src/lib/tasks/taskRowZone.ts
   - packages/client/src/lib/tasks/workbenchPrefs.ts
@@ -42,12 +41,13 @@ last-reviewed: 2026-07-25
 <!-- 复核 2026-07-25（记忆下沉）：§模块速查的 SwipeableList 一格补记 `fullSwipe={false}` 是有意设计（滑到头不自动触发，防全滑误删），交互与数据契约不变。 -->
 <!-- 复核 2026-07-24（手头软会话）：entitySchemas.ts 新增 `Task.sessionId` 反挂字段、syncDomains.ts 新增 `sessions` LWW 域；字段契约见本文 §2.1/§2.3，投影/生命周期语义见子文档 todo/at-hand.md，不在本文重复。 -->
 <!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts/syncDomains.ts 新增 tasks delete change 可选 deleteReason 枚举字段，仅服务端归档消费，不改动待办数据契约/语义。 -->
+<!-- 复核 2026-07-25（项目区 UI）：归属轴排他打开、`listTasks` 落点派发新增排他分支；机制细节外提子文档 todo/project-zone.md，本文只留指针。 -->
 
 # 待办任务
 
 > 待办域的**主题文档**：`tasks` 表（轻量任务池 + 重复待办），跨端同步，不引用分类/时间记录/速记，不参与时长统计。
 > 本文讲：Task 字段契约（含 `parentId` 一层父子）、四分区落点、三条写入通道、tags、子任务=独立可拖 Task、agent/CLI 回写、关键不变量。
-> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)。
+> 重复规则引擎见子文档 [todo/recurrence](todo/recurrence.md)；想法重力（水位线/翻牌/水下找回）见子文档 [todo/gravity](todo/gravity.md)；手头软会话（抓/移/散/续 + atHand 排他投影）见子文档 [todo/at-hand](todo/at-hand.md)；项目区与归属轴（`Goal.members` → 分组投影 + 收件箱排他）见子文档 [todo/project-zone](todo/project-zone.md)。
 > 不讲：同步账本机制（见 [sync](sync.md)）、备份（见 [backup](backup.md)）、CLI 命令清单（见 [cli](cli.md)）。
 
 <!-- 复核 2026-07-10（validated reasonCode + syncLog 死信位）：shared schemas 本轮改动只涉及 push 回执 reasonCode 与 syncLog.synced 死信位（见 sync.md / data-model.md），Task 字段契约与待办语义无变化。 -->
@@ -192,13 +192,12 @@ agent / CLI (task-done/task-tag)
    - 拖拽中只高亮候选父、不提前展开真实 children；落定为 child 后目标父展开一次。
 6. **`tags` 自由标签不驱动自动逻辑**（[ADR 0014](../adr/0014-task-tags-vs-fields.md)）：只供人/agent 语义标记 + 展示/检索层消费——`filterTasks` 三轴 AND 过滤（含 AND/OR、排除 NOT、标题关键词），`tagColor` 确定性派生颜色（hash 取模色板、不存储），`TagFilterPanel` 底部召唤式三态填色带计数筛选面，`TaskRow` 行内最多 3 chip 带色点。需要代码可靠动作的维度应毕业为结构化字段。
 7. **子任务 = 独立可拖 `Task`（`parentId` 一层）**：见 §2.2。child 勾选不联动父 `done`/`completedAt`（父进度 `m/n` 由 `InlineChildren` 实时聚合，不回写父行）。pending occurrence 物化时克隆模板当前 children 的标题 / `tags` / 顺序，但新 occurrence children 一律 `done=false`、`completedAt=null` 起步；Today 展开的是这一发自己的 children，不回退读取模板 children。scheduled 管理区展开重复模板时，规则行子任务复选框只代理显示/写入该 rule 最新非 skipped occurrence child（无 occurrence 时置灰），模板 child 本体不承载完成态。**重复 root 完成不动 children**：完成代理只写目标 occurrence 本体——client 侧 children 由物化引擎按模板克隆（`done=false` 起步），server agent 代理不镜像 children、也不 reset 模板 children（模板 child 的 `done` 无读方）。历史 occurrence 的 children 在「已完成」内只读显示。
-8. **目标层只从 Goal 侧引用 Task**：Goal 可以把 Task 写入 `Goal.members` 并读取 `done` 计算项目完成度或主题活跃度，但不会改变 Task 的完成、重复、排序、子任务或排期语义。删除 / 归档 Goal 不改 Task 的上述任何语义，**只刷新受影响成员的 `updatedAt`**（见第 14 条，这是重力可见性所需，不是状态变更）；删除 Task 后，Goal 读取时把失效引用作为缺失成员提示。
+8. **目标层只从 Goal 侧引用 Task**：Goal 可以把 Task 写入 `Goal.members` 并读取 `done` 计算项目完成度或主题活跃度，但不会改变 Task 的完成、重复、排序、子任务或排期语义。删除 / 归档 Goal 不改 Task 的上述任何语义，**只刷新受影响成员的 `updatedAt`**（见第 13 条，这是重力可见性所需，不是状态变更）；删除 Task 后，Goal 读取时把失效引用作为缺失成员提示。
 9. **`tasks` 不引用分类/时间/速记/目标等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；目标组织关系属于 [goals](goals.md)，不回流到 Task schema。
 10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 同步字段 + `updatedAt` 时间衰减，`TodoPage` 出桶后把 inbox 拆浮起/水下；`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知。水位线 / 翻牌复查 / 已过目记忆 / 水下找回尾部 / 设置见 [todo/gravity](todo/gravity.md)。
 12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。详见 [todo/at-hand](todo/at-hand.md)。
-13. **项目区投影与两份目标索引不得互相派生**：`listTasks` 另读一次 `db.goals`（**裸行、不做 `GoalSchema` 解析**——`superRefine` 会因单个成员重复 reject 整行，让整组归属静默失效；且 `status`/`members` 有 schema 默认值，老行可能缺字段），产出口径不同的两份索引：`goalLinkedIds` 判据只有 `status==="active"`（**全 kind**）、喂行内绿竖条 `inGoal`；`projects` 判据是 `status==="active" && kind==="project"`、喂项目区分组。若由后者派生前者，只属于 `theme` 目标的任务会失去绿竖条。归集在主循环里发生于手头 `continue` **之前**——被抓到手头的成员仍要出现在项目区（焦点轴与归属轴正交）；子任务、重复模板与 occurrence 本期一律不参与归属。组间按成员 `max(updatedAt)` 倒序且**已完成成员也参与排序键**，故"某组全部完成"不会让它掉到末尾；查不到的成员 ref 直接丢弃、不计数，**不做清理**（悬空 ref 正是 goals 星图 ghost 节点的唯一数据源，见 [goals](goals.md)）。同挂多个 active project 的任务**只归一个组**（`updatedAt` 新者胜、并列取 `goal.id` 字典序小者），在项目区只出现一次——`members` 没有跨目标唯一约束，读侧仲裁保证 `db.goals.toArray()` 返回顺序变化时结果稳定。**归属轴排他（成员不进 `inbox`）尚未打开**，随项目区 UI 一起生效。纯函数在 `lib/tasks/goalMembership.ts`。
-14. **归属变更同事务刷新成员任务 `updatedAt`**：`lib/goals.ts` 的 `addGoalMember` / `removeGoalMember` / `updateGoal` / `deleteGoal` 在同一 Dexie 事务内调用 `touchTasksInCurrentTransaction`（`lib/tasks.ts`），刷新归属发生变化的成员任务并各记一条 `syncLog`。原因是重力沉降按 `task.updatedAt` 年龄判定（`isTaskSunken`）：任务失去归属会回落收件箱，不刷新就按旧时间戳参与水位线判定、直接沉进默认折叠的水下区，体感是"退出项目 = 任务消失"。释放通道有四条（`status→archived`、`kind→theme`、`members` 整包替换、删除目标），`updateGoal` 用**前后归属差集**（`releasedProjectTaskIds`）统一覆盖前三条而非逐条特判；`addGoalMember`/`removeGoalMember` 的幂等早退分支**不 touch**（否则重复点一下就把任务从水下顶上来）。这是**本机副作用、不是跨设备不变量**——入站 sync apply 按域写单表、无跨域钩子，其它设备改归属不会 touch 本机 task 行，故项目区必须完全由 goals 推导，不得依赖 task 行上的反向标记。
+13. **项目区与归属轴**：`Goal(kind="project", status="active")` 的成员任务在待办页聚成「项目区」，并对收件箱**排他**——成员不进 `inbox`，收件箱因此回归「真·未归类托盘」；焦点轴（手头）与时间轴（今天/已排期）与它正交，成员同时出现在对应桶与项目区。两份 goal→task 索引口径不同且**不得互相派生**，归属变更必须同事务刷新成员 `updatedAt`（重力可见性所需）。完整契约（投影规则、排他红线、写入不变量、呈现约定）见 [todo/project-zone](todo/project-zone.md)。
 
 ## 4. 模块速查
 
@@ -250,3 +249,4 @@ Todo 详情抽屉的标签删除、折叠区 caret、自定义重复的月末勾
 | [todo/recurrence](todo/recurrence.md) | 重复规则引擎：Recurrence schema、occurrence 物化、终止条件、预设门、删除级联 |
 | [todo/gravity](todo/gravity.md) | 想法重力：水位线浮沉、翻牌复查、已过目记忆、水下找回尾部、设置页 |
 | [todo/at-hand](todo/at-hand.md) | 手头软会话：`Session` schema、sessions 域登记、抓/移/散/续生命周期、atHand 排他投影、自愈规则，以及与待办其他区域统一的标题 / 行面板 UI 骨架 |
+| [todo/project-zone](todo/project-zone.md) | 项目区与归属轴：两份 goal→task 索引、分组投影、收件箱排他、归属变更 touch 不变量、呈现契约 |

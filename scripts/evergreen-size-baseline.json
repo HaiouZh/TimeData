@@ -75,13 +75,16 @@
     "covers": 16
   },
   "docs/evergreen/todo.md": {
-    "covers": 27
+    "covers": 26
   },
   "docs/evergreen/todo/at-hand.md": {
     "covers": 3
   },
   "docs/evergreen/todo/gravity.md": {
     "covers": 5
+  },
+  "docs/evergreen/todo/project-zone.md": {
+    "covers": 2
   },
   "docs/evergreen/todo/recurrence.md": {
     "covers": 6
