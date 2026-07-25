@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
 import { DiaryConflictError, fetchDiary, fetchDiaryConfig, saveDiary } from "../lib/diary/diaryApi.js";
+import { applyIndent } from "../lib/diary/indent.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
 
@@ -72,6 +73,8 @@ export default function DiaryPage() {
     let action: EditAction | null = null;
     if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
       action = applyEnterInOrderedList(field.value, field.selectionStart, field.selectionEnd);
+    } else if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      action = applyIndent(field.value, field.selectionStart, field.selectionEnd, event.shiftKey ? "out" : "in");
     }
 
     // null = 交还浏览器默认行为（换行 / Tab 跳焦）；非 null 一律吃掉按键——

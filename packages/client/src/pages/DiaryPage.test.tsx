@@ -341,4 +341,42 @@ describe("DiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("IME 组合态按 Tab 不触发缩进（守卫在 handleKeyDown 顶部，Enter/Tab/未来键位共用）", async () => {
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    let defaultPrevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4);
+      const event = new KeyboardEvent("keydown", { key: "Tab", isComposing: true, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(false);
+    expect(el.value).toBe("1. x"); // 未被 applyIndent 处理，值原样不动
+
+    await unmount(root);
+  });
+
+  it("顶层列表行按 Shift+Tab 返回 null，交还浏览器焦点跳走（唯一逃生口，不 preventDefault）", async () => {
+    const { host, root } = await renderPage();
+    const el = textarea(host);
+
+    let defaultPrevented = false;
+    await act(async () => {
+      el.setSelectionRange(4, 4); // "1. x" 顶层，光标在行尾
+      const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
+      el.dispatchEvent(event);
+      defaultPrevented = event.defaultPrevented;
+    });
+    await flush();
+
+    expect(defaultPrevented).toBe(false);
+    expect(el.value).toBe("1. x");
+
+    await unmount(root);
+  });
 });
