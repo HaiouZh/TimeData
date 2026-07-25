@@ -1831,4 +1831,35 @@ describe("捕捉中心", () => {
 
     await unmount(root);
   });
+
+  it("撤销时若已切去编辑且编辑框已被清空，依然拒绝回填、不覆盖空缓冲、不删任务", async () => {
+    await db.quickNotes.add({
+      id: "note-other",
+      text: "被编辑的速记",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "误存的内容");
+    await click(composerButton(host, "存为待办"));
+    await expect(db.tasks.count()).resolves.toBe(1);
+
+    // toast 存活 6 秒，期间用户长按另一条速记进入编辑——「撤销」按钮仍挂在 composer 里。
+    await openMenu(host, "被编辑的速记");
+    await click(menuItem(host, "编辑"));
+    // 与上一条用例唯一的差别：把编辑框清空（想重写这条速记），此时 draftTextRef.current.trim()
+    // 为假。若守卫被误合并成 editingIdRef.current && draftTextRef.current.trim()，这里就会失效。
+    await typeInto(input(host), "");
+    expect(input(host).value).toBe("");
+
+    await click(lastButtonByText(host, "撤销"));
+
+    await expect(db.tasks.count()).resolves.toBe(1);
+    expect(input(host).value).toBe("");
+    expect(host.textContent).toContain("正在编辑速记，先退出编辑再撤销这条待办");
+
+    await unmount(root);
+  });
 });
