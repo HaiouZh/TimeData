@@ -82,6 +82,13 @@ describe("CategoryPickerSheet", () => {
     await unmount(root);
   });
 
+  it("已选分类就是父分类本身时，同样自动展开它", async () => {
+    const { host, root } = await mountSheet("cat-sleep");
+    expect(host.textContent).toContain("夜眠");
+    expect(host.textContent).toContain("小睡");
+    await unmount(root);
+  });
+
   it("父分类行左 2/5 点击只展开、不选中", async () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();
@@ -90,6 +97,16 @@ describe("CategoryPickerSheet", () => {
     expect(onSelect).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(host.textContent).toContain("小睡");
+    await unmount(root);
+  });
+
+  it("父分类行左 2/5 连点两次：先展开再收起子分类", async () => {
+    const { host, root } = await mountSheet(null);
+    const sleepRow = rowByLabel(host, "睡眠");
+    await clickAtRatio(sleepRow, 0.1);
+    expect(host.textContent).toContain("小睡");
+    await clickAtRatio(sleepRow, 0.1);
+    expect(host.textContent).not.toContain("小睡");
     await unmount(root);
   });
 
@@ -108,6 +125,13 @@ describe("CategoryPickerSheet", () => {
     const { host, root } = await mountSheet(null, onSelect);
     await clickAtRatio(rowByLabel(host, "杂项"), 0.1);
     expect(onSelect).toHaveBeenCalledWith("cat-misc");
+    await unmount(root);
+  });
+
+  it("无子分类的父分类不渲染 caret 图标", async () => {
+    const { host, root } = await mountSheet(null);
+    expect(rowByLabel(host, "杂项").querySelector("svg")).toBeNull();
+    expect(rowByLabel(host, "睡眠").querySelector("svg")).not.toBeNull();
     await unmount(root);
   });
 
