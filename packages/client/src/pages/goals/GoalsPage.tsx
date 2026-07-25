@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listAllGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { listGoals } from "../../lib/goals.js";
@@ -8,14 +8,21 @@ import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { GoalGalaxyCanvas } from "./GoalGalaxyCanvas.js";
 import { listAllTasksForGoals } from "./goalPageData.js";
+import { type GoalsViewMode, readGoalsViewMode, resolveGoalsViewMode, writeGoalsViewMode } from "./goalsViewPrefs.js";
 import GoalsListPage from "./GoalsListPage.js";
-
-type GoalsViewMode = "galaxy" | "list";
 
 export function GoalsPage() {
   const wide = useIsWideScreen();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<GoalsViewMode>(() => (wide ? "galaxy" : "list"));
+  // state 只存「手选偏好」；实际模式是派生值，未手选时天然跟随宽窄，手选后宽窄不再覆盖。
+  const [storedMode, setStoredMode] = useState<GoalsViewMode | null>(() => readGoalsViewMode());
+  const mode = resolveGoalsViewMode(wide, storedMode);
+
+  function chooseMode(next: GoalsViewMode): void {
+    writeGoalsViewMode(next);
+    setStoredMode(next);
+  }
+
   const goals = useLiveQuery(() => listGoals(), []);
   const tasks = useLiveQuery(() => listAllTasksForGoals(), []);
   const tracks = useLiveQuery(() => listTracks(), []);
@@ -29,10 +36,6 @@ export function GoalsPage() {
     steps !== undefined &&
     layoutPins !== undefined &&
     activeSession !== undefined;
-
-  useEffect(() => {
-    setMode(wide ? "galaxy" : "list");
-  }, [wide]);
 
   const showGalaxy = mode === "galaxy";
 
@@ -49,7 +52,7 @@ export function GoalsPage() {
             role="tab"
             aria-label="切换到目标星图"
             aria-selected={showGalaxy}
-            onClick={() => setMode("galaxy")}
+            onClick={() => chooseMode("galaxy")}
             className={`min-h-8 rounded-pill px-3 text-sm ${showGalaxy ? "bg-accent text-page" : "text-ink-2 hover:bg-surface-hover"}`}
           >
             星图
@@ -59,7 +62,7 @@ export function GoalsPage() {
             role="tab"
             aria-label="切换到目标列表"
             aria-selected={!showGalaxy}
-            onClick={() => setMode("list")}
+            onClick={() => chooseMode("list")}
             className={`min-h-8 rounded-pill px-3 text-sm ${showGalaxy ? "text-ink-2 hover:bg-surface-hover" : "bg-accent text-page"}`}
           >
             列表

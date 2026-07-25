@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 
 const useLiveQueryMock = vi.hoisted(() =>
@@ -52,6 +53,7 @@ beforeEach(() => {
   );
   goalGalaxyPropsMock.mockClear();
   mockedUseIsWideScreen.mockReturnValue(true);
+  localStorage.clear();
 });
 
 describe("GoalsPage", () => {
@@ -127,6 +129,65 @@ describe("GoalsPage", () => {
 
     await click(host.querySelector('button[aria-label="切换到目标星图"]'));
     expect(host.querySelector("[data-galaxy]")).toBeTruthy();
+    await unmount(root);
+  });
+
+  it("窄屏也尊重已存的星图偏好", async () => {
+    localStorage.setItem(STORAGE_KEYS.goalsViewMode, "galaxy");
+    mockedUseIsWideScreen.mockReturnValue(false);
+
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector("[data-galaxy]")).toBeTruthy();
+    expect(host.querySelector("[data-goals-list]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("宽屏也尊重已存的列表偏好", async () => {
+    localStorage.setItem(STORAGE_KEYS.goalsViewMode, "list");
+    mockedUseIsWideScreen.mockReturnValue(true);
+
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector("[data-goals-list]")).toBeTruthy();
+    expect(host.querySelector("[data-galaxy]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("手选模式落 localStorage", async () => {
+    mockedUseIsWideScreen.mockReturnValue(true);
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="切换到目标列表"]'));
+
+    expect(localStorage.getItem(STORAGE_KEYS.goalsViewMode)).toBe("list");
+    await unmount(root);
+  });
+
+  it("宽窄翻转不覆盖已手选的模式", async () => {
+    mockedUseIsWideScreen.mockReturnValue(true);
+    const { host, root } = await renderPage();
+
+    // 先切到列表把模式挪离初值，否则下一次点「星图」是同值 setState、React 直接 bailout，
+    // 压根不重渲染、wide 也就没机会翻转，这条断言就成了怎样都通过。
+    await click(host.querySelector('button[aria-label="切换到目标列表"]'));
+
+    // 手选星图的同一轮里让 wide 翻成窄屏：手选值与窄屏默认相反。
+    // 旧实现的 [wide] 重置 effect 会在这轮把模式吹回 list，新实现必须留在 galaxy。
+    mockedUseIsWideScreen.mockReturnValue(false);
+    await click(host.querySelector('button[aria-label="切换到目标星图"]'));
+
+    expect(host.querySelector("[data-galaxy]")).toBeTruthy();
+    expect(host.querySelector("[data-goals-list]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("从未手选时仍按宽窄给默认", async () => {
+    mockedUseIsWideScreen.mockReturnValue(true);
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector("[data-galaxy]")).toBeTruthy();
+    expect(localStorage.getItem(STORAGE_KEYS.goalsViewMode)).toBeNull();
     await unmount(root);
   });
 });

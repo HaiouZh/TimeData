@@ -101,7 +101,7 @@ UI 复用三行主显：动量、前线、完成计数。`/goals` 列表项显�
 
 ## 4. 全局星图就地编辑
 
-`/goals` 在宽屏默认进入全局星图，窄屏默认保留列表，两端都提供“星图 / 列表”切换。全局星图只展示 `status:"active"` 的 Goal；archived Goal 仍在列表的归档区，不进入画布。宽屏星图是三段式目标工作台：中间保持 Goal 星座画布，左侧“目标”抽屉是 active Goal 索引，右侧“未归类”抽屉是未被任何 active Goal 收编的活跃 Task/Track 托盘。两个抽屉默认收起，由左上控件群的 pill 唤起，作为画布内 overlay 出现，不推动 React Flow 布局重排。
+`/goals` 的视图模式以 localStorage `timedata_goals_view_mode` 为准：手选过就一直用手选值、窗口尺寸翻转不覆盖；从未手选时才按宽窄给默认（宽屏星图、窄屏列表）。两端都提供“星图 / 列表”切换。全局星图只展示 `status:"active"` 的 Goal；archived Goal 仍在列表的归档区，不进入画布。宽屏星图是三段式目标工作台：中间保持 Goal 星座画布，左侧“目标”抽屉是 active Goal 索引，右侧“未归类”抽屉是未被任何 active Goal 收编的活跃 Task/Track 托盘。两个抽屉默认收起，由左上控件群的 pill 唤起，作为画布内 overlay 出现，不推动 React Flow 布局重排。
 
 全局星图是 Goal-centered portfolio view，不是自由画布或跨 Goal 依赖编辑器：每个 active Goal 是一颗恒星，展开时该 Goal 的 Task / Track 成员作为卫星；同一个成员被多个已展开 Goal 引用时，只绘制一个桥接节点并用 tether 连到多个 Goal 锚。桥接节点只是共享成员的可视化，不改变进度账、不写反向索引，也不落 `goal_layout_pins`，因为现有钉点复合键没有跨 Goal 所属格式。
 
