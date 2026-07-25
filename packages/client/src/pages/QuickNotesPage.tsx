@@ -460,6 +460,20 @@ export default function QuickNotesPage() {
     }
   }
 
+  // 「回到最新」的唯一实现：浮标按钮与历史视图保存后的 toast 共用，避免两处各写一遍。
+  function jumpToLatest() {
+    setJumpDate(today);
+    setSearchParams({});
+    stickBottomRef.current = true;
+    setAtBottom(true);
+    if (!timeline.atLatest) {
+      void timeline.resetToLatest();
+      return;
+    }
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
   async function handleResultClick(note: QuickNote) {
     const localDate = getDateString(new Date(note.occurredAt));
     closeSearch({ resetTimeline: false, preserveQuery: true });
@@ -535,6 +549,14 @@ export default function QuickNotesPage() {
         setDraftText("");
         clearComposerDraft();
         stickBottomRef.current = true;
+        // 历史窗口下新速记落在窗口之外、气泡不出现，吸底滚动也被 atLatest 挡住。
+        // 不给事件反馈的话页面零变化，用户会以为没存上而重发。
+        if (!timeline.atLatest) {
+          showActionToast({
+            message: "已记录",
+            actions: [{ label: "回到最新", onClick: jumpToLatest }],
+          });
+        }
       }
       focusInput();
     } catch (err) {
@@ -1267,18 +1289,7 @@ export default function QuickNotesPage() {
       {!searchOpen && shouldShowJumpToLatest({ atBottom, atLatest: timeline.atLatest }) && (
         <button
           type="button"
-          onClick={() => {
-            setJumpDate(today);
-            setSearchParams({});
-            stickBottomRef.current = true;
-            setAtBottom(true);
-            if (!timeline.atLatest) {
-              void timeline.resetToLatest();
-              return;
-            }
-            const el = scrollRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-          }}
+          onClick={jumpToLatest}
           className="fixed right-4 rounded-full border border-border-strong bg-surface px-3 py-2 text-xs font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >

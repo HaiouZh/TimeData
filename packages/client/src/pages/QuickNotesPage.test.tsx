@@ -1460,6 +1460,55 @@ describe("QuickNotesPage", () => {
 
     await unmount(root);
   });
+
+  it("历史视图里发速记给成功反馈和回到最新的入口", async () => {
+    // 满 50 条同日 + 一条更新的，jumpToDate 才会离开「最新」窗口
+    await db.quickNotes.bulkAdd(
+      Array.from({ length: 50 }, (_, index) => {
+        const at = `2026-06-01T04:${String(index).padStart(2, "0")}:00.000Z`;
+        return { id: `old-${index}`, text: `旧记录 ${index}`, occurredAt: at, createdAt: at, updatedAt: at };
+      }),
+    );
+    await db.quickNotes.add({
+      id: "newer",
+      text: "更新的一条",
+      occurredAt: "2026-06-20T04:00:00.000Z",
+      createdAt: "2026-06-20T04:00:00.000Z",
+      updatedAt: "2026-06-20T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    const dateInput = host.querySelector('input[aria-label="跳转日期"]');
+    if (!(dateInput instanceof HTMLInputElement)) throw new Error("missing jump date input");
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(dateInput, "2026-06-01");
+      dateInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await flush();
+
+    await typeInto(input(host), "在历史里记一条");
+    await click(composerButton(host, "记录速记"));
+
+    // "text" 未建 Dexie 索引，where().equals() 会抛 SchemaError，改用 filter 达到同样的校验目的
+    await expect(db.quickNotes.filter((note) => note.text === "在历史里记一条").count()).resolves.toBe(1);
+    const toast = host.querySelector('[aria-label="捕捉操作反馈"]');
+    expect(toast?.textContent).toContain("已记录");
+    expect(lastButtonByText(host, "回到最新")).toBeInstanceOf(HTMLButtonElement);
+
+    await unmount(root);
+  });
+
+  it("在最新窗口发速记不出 toast（气泡本身就是反馈）", async () => {
+    const { host, root } = await renderPage();
+
+    await typeInto(input(host), "今天这条");
+    await click(composerButton(host, "记录速记"));
+
+    expect(host.querySelector('[aria-label="捕捉操作反馈"]')?.textContent ?? "").not.toContain("已记录");
+
+    await unmount(root);
+  });
 });
 
 describe("捕捉中心", () => {
