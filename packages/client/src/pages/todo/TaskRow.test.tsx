@@ -927,4 +927,38 @@ describe("meta 胶囊", () => {
     expect(chip?.textContent).toBe("6月14日");
     await unmount(root);
   });
+
+  it("metaChip 渲染在 meta 胶囊带里", async () => {
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: task(),
+        pool: "today",
+        metaChip: createElement("span", { "data-testid": "probe-chip" }, "装修"),
+        ...handlers,
+      }),
+    );
+    const chip = host.querySelector("[data-testid='probe-chip']");
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toBe("装修");
+    await unmount(root);
+  });
+
+  it("只有 metaChip 也让 meta 带出现（无重复/无日期/无子任务/无标签时）", async () => {
+    const { host: without, root: rootWithout } = await renderDom(
+      createElement(TaskRow, { task: task(), pool: "inbox", ...handlers }),
+    );
+    expect(without.querySelector("[data-testid='probe-chip']")).toBeNull();
+    await unmount(rootWithout);
+
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: task(),
+        pool: "inbox",
+        metaChip: createElement("span", { "data-testid": "probe-chip" }, "装修"),
+        ...handlers,
+      }),
+    );
+    expect(host.querySelector("[data-testid='probe-chip']")).not.toBeNull();
+    await unmount(root);
+  });
 });

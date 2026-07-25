@@ -1,10 +1,12 @@
 import type { Task } from "@timedata/shared";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { TaskList } from "./TaskList.js";
 
 interface SunkenScheduledTailProps {
   sunkenTasks: Task[];
   goalLinkedIds?: ReadonlySet<string>;
+  /** meta 胶囊带插槽：已排期水下尾与水上列表口径一致，都显示项目名 chip。 */
+  metaChip?: (task: Task) => ReactNode;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
   onDelete: (t: Task) => void;
@@ -17,7 +19,7 @@ interface SunkenScheduledTailProps {
  * 已排期区 7 天水位线的水下入口：下一发生日在「今天+7 天」之外的任务/规则。
  * 默认收起只显示「更远还有 N 条」；展开渲染完整列表（与水上同款行，不参与 DnD）。
  */
-export function SunkenScheduledTail({ sunkenTasks, goalLinkedIds, ...rowHandlers }: SunkenScheduledTailProps) {
+export function SunkenScheduledTail({ sunkenTasks, goalLinkedIds, metaChip, ...rowHandlers }: SunkenScheduledTailProps) {
   const [expanded, setExpanded] = useState(false);
 
   if (sunkenTasks.length === 0) return null;
@@ -31,7 +33,9 @@ export function SunkenScheduledTail({ sunkenTasks, goalLinkedIds, ...rowHandlers
       >
         {expanded ? `收起更远 ${sunkenTasks.length} 条` : `更远还有 ${sunkenTasks.length} 条`}
       </button>
-      {expanded && <TaskList pool="upcoming" tasks={sunkenTasks} goalLinkedIds={goalLinkedIds} {...rowHandlers} />}
+      {expanded && (
+        <TaskList pool="upcoming" tasks={sunkenTasks} goalLinkedIds={goalLinkedIds} metaChip={metaChip} {...rowHandlers} />
+      )}
     </div>
   );
 }

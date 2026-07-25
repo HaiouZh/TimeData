@@ -16,6 +16,8 @@ export interface AtHandSectionProps {
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
   goalLinkedIds?: ReadonlySet<string>;
+  /** meta 胶囊带插槽：手头区用它显示项目名 chip。 */
+  metaChip?: (task: Task) => ReactNode;
 }
 
 function sessionDateLabel(iso: string): string {
@@ -57,6 +59,7 @@ export function AtHandSection({
   onToggle,
   onEdit,
   goalLinkedIds,
+  metaChip,
 }: AtHandSectionProps) {
   if (session === null && resumable.length === 0) return null;
 
@@ -134,6 +137,7 @@ export function AtHandSection({
               onToggle={onToggle}
               onEdit={onEdit}
               inGoal={goalLinkedIds?.has(task.id)}
+              metaChip={metaChip?.(task)}
             />
           ))}
         </AtHandRowsSurface>

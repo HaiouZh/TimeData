@@ -56,6 +56,12 @@ export interface TaskRowProps {
   revealChildren?: { id: string; nonce: number } | null;
   /** 该任务已归入某个 active 目标：渲染常驻外圈，提示「已有去处、不必再纠结」。 */
   inGoal?: boolean;
+  /**
+   * meta 胶囊带最前的一枚调用方胶囊：项目区行放「当前在哪」状态点，
+   * 组外行放可点的项目名 chip。内容与交互（stopPropagation / 层级）由调用方自负，
+   * TaskRow 只负责给位置并让 meta 带因它出现。
+   */
+  metaChip?: ReactNode;
 }
 
 const FRESH_OCCURRENCE_MS = 4000;
@@ -66,7 +72,7 @@ const RULE_COMPLETE_FLASH_MS = 1000;
  * 悬停时胶囊边界会整体隐形。文字色由各胶囊追加（text-ink-2 / 逾期 text-danger），
  * 不放进底盘避免同属性 utility 冲突。
  */
-const META_CHIP_CLASS = "inline-flex items-center gap-1 rounded-pill bg-surface-elevated px-1.5 py-px";
+export const META_CHIP_CLASS = "inline-flex items-center gap-1 rounded-pill bg-surface-elevated px-1.5 py-px";
 
 type FreshOccurrenceInput = Pick<Task, "createdAt" | "done" | "recurrence" | "ruleId" | "skipped">;
 
@@ -101,6 +107,7 @@ export function TaskRow({
   indentTargetActive,
   revealChildren,
   inGoal,
+  metaChip,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const taskCreatedAt = task.createdAt;
@@ -164,7 +171,8 @@ export function TaskRow({
       ? { label: passiveDueLabel, danger: false }
       : null;
   // isRecurring 兜住"重复但耗尽无日期"的场景（此时 dateChip 为 null 但 repeat 胶囊仍要渲染）。
-  const hasMeta = isRecurring || childTotal > 0 || dateChip !== null || (task.tags ?? []).length > 0;
+  const hasMeta =
+    metaChip != null || isRecurring || childTotal > 0 || dateChip !== null || (task.tags ?? []).length > 0;
   // 与 TaskList.tsx 的左右滑判据（canSwap）对齐：occurrence 不进排期通道。
   const canSwapPool = task.recurrence === null && task.ruleId === null && pool !== "completed";
   // canGrab 刻意不加 ruleId：把「这一发」抓到手头是另一个动词，与排期无关，照常开放。
@@ -305,6 +313,7 @@ export function TaskRow({
           </span>
           {hasMeta && (
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 td-text-caption text-ink-3">
+              {metaChip}
               {task.recurrence && (
                 <span data-testid="repeat-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
                   <span data-icon="repeat" aria-hidden="true" className="text-accent">

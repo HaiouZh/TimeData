@@ -38,6 +38,8 @@ export interface TaskListProps {
   onToHand?: (t: Task) => void;
   /** 行内额外动作插槽（如翻牌「顶一下」）。 */
   extraAction?: (task: Task) => ReactNode;
+  /** meta 胶囊带插槽（项目区状态点 / 项目名 chip）；返回 null 即该行不加。 */
+  metaChip?: (task: Task) => ReactNode;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
 }
@@ -67,6 +69,7 @@ export function TaskList(props: TaskListProps) {
         indentTargetActive={props.indentTargetId === task.id}
         revealChildren={props.revealChildren}
         inGoal={props.goalLinkedIds?.has(task.id) ?? false}
+        metaChip={props.metaChip?.(task)}
       />
     );
   }
