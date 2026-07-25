@@ -255,16 +255,34 @@ export default function DiaryPage() {
     // 内容——force save 在写 A（回来 mtime=X），reload 先回来把正文换成 B/mtime=Y，
     // 随后 save resolve 又把 baseMtime 改回 X。此后用户随便改一个字保存，mtime 校验
     // 通过、不报冲突，刚写进去的 A 被 B 静默覆盖。按钮也会置灰，这里是兜底。
+    // 当前不可达：handleReload 全文件唯一调用点是下面「刷新重载」那个已 disabled={saving}
+    // 的按钮，jsdom 实测对 disabled 按钮调 .click() 不会派发 click 事件，所以这行现在
+    // 永远读到 false。留着是纯防御性的——将来给 handleReload 加新入口（比如快捷键）时，
+    // 它才会真正生效；届时记得回来给这行补一条测试，不要现在为不可达路径硬凑。
     if (saving) return;
     if (
       dirty &&
       !(await confirm({ title: "丢弃当前修改？", body: "将丢弃当前修改，加载服务器版本。", danger: true }))
     )
       return;
-    // 确认框开着的这段时间里 Ctrl+S 可能起了一发保存（快捷键不看按钮置灰），再挡一次
+    // 本意：确认框开着的这段时间里 Ctrl+S 可能起了一发保存（快捷键不看按钮置灰），再挡一次。
+    // 但这里的 saving 是函数体顶部解构出的普通变量，不是 ref——handleReload 这次调用从进入时
+    // 就把它的值冻结在闭包里，await confirm(...) 期间哪怕真的另起一次 setSaving(true)，这里
+    // 读到的仍是调用发生那一刻的旧值（且已经被上面第一次 if (saving) return 判过一遍，不可能
+    // 是 true）。也就是说这行与上面那行在同一次调用里恒同值，是静默失效的兜底：已用临时
+    // console.log 实测——构造"确认框开着期间 Ctrl+S 真的起了一发保存并且还没返回"的真实竞态，
+    // 这里读到的 saving 仍是 false，fetchDiary 照样会被再次调用。要让它真正生效，需要像
+    // dateRef 那样引入一个活的 ref（例如 savingRef.current，函数体顶部同步赋值）；这是逻辑改动，
+    // 超出本轮"只碰注释和测试文件"的范围，未做，留给后续任务。恒假的判据写不出真测试，
+    // 故此处不为它硬凑一条。
     if (saving) return;
     const dateAtRequest = date;
     const revisionAtRequest = editRevisionRef.current;
+    // 这里不需要日期闸：confirm 的 await 期间用户理论上能切换日期，但实测走不到——
+    // ① ConfirmSheet 背后是 Sheet.tsx 的 fixed inset-0 遮罩，真实点击路径下点不到 DateNav；
+    // ② 唯一能切日期的 switchDate 自己也调用同一个单例 confirm()，而 useConfirm 的单槽
+    // pending 被顶替时会把前一个 resolve(false)——本次 handleReload 的确认会在被顶替瞬间
+    // 判定为"取消"提前 return，走不到这里。两重原因都不可达，故不加日期闸，也不为它硬凑测试。
     setError(null);
     let doc: Awaited<ReturnType<typeof fetchDiary>>;
     try {

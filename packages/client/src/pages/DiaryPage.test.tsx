@@ -1166,4 +1166,35 @@ describe("DiaryPage", () => {
     await flush();
     await unmount(root);
   });
+
+  it("重载 fetchDiary 在飞时切了日期，随后才 reject：失败提示不挂到新日期头上（catch 分支日期闸）", async () => {
+    // 与「重载在途中切日期：旧日期的正文不覆盖新日期」是同一处日期闸的另一面：那条测的是
+    // 成功路径（doc 回来但日期已换，不覆盖新日期正文），这条测的是失败路径——旧日期的
+    // fetchDiary 请求在飞时切到新日期（新日期正常加载完成），随后旧请求才 reject（网络抖动）。
+    // 若 catch 分支没有 `if (dateRef.current !== dateAtRequest) return;`，"重载失败：xxx"
+    // 会无条件 setError，错误地扣到已经切过去的新日期头上。
+    const { host, root, router } = await renderPage();
+    saveDiary.mockRejectedValueOnce(new DiaryConflictError(300));
+    await typeInto(textarea(host), "本地改动");
+    await click(host.querySelector('button[aria-label="保存"]'));
+
+    let rejectReload: (reason: unknown) => void = () => {};
+    fetchDiary.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectReload = reject; }));
+    await click(buttonByText(host, "刷新重载"));
+    await click(buttonByText(host, "确认")); // handleReload 的 confirm 没传 confirmLabel，用默认
+
+    // 7/25 的 fetchDiary 还在飞（rejectReload 未调用），期间切到 7/20，正常加载完成
+    fetchDiary.mockResolvedValue({ content: "7/20 的正文", mtime: 200 });
+    await navigateTo(router, "/diary?date=2026-07-20");
+    expect(textarea(host).value).toBe("7/20 的正文");
+
+    // 那发 7/25 的 fetchDiary 现在才 reject
+    await act(async () => { rejectReload(new Error("网络断开")); });
+    await flush();
+
+    expect(host.textContent).not.toContain("重载失败");
+    expect(textarea(host).value).toBe("7/20 的正文");
+
+    await unmount(root);
+  });
 });
