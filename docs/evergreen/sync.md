@@ -5,7 +5,6 @@ covers:
   - packages/server/src/sync/backup.ts
   - packages/server/src/sync/conflict.ts
   - packages/server/src/sync/forcePushValidation.ts
-  - packages/server/src/sync/notifier.ts
   - packages/server/src/sync/order.ts
   - packages/server/src/sync/resolver.ts
   - packages/server/src/sync/seq.ts
@@ -18,12 +17,7 @@ covers:
   - packages/client/src/sync/conflicts.ts
   - packages/client/src/sync/engine.ts
   - packages/client/src/sync/reason.ts
-  - packages/client/src/sync/scheduler.ts
-  - packages/client/src/lib/syncStream.ts
   - packages/client/src/sync/phaseTimings.ts
-  - packages/client/src/hooks/useSync.ts
-  - packages/client/src/hooks/useAppHideFlush.ts
-  - packages/client/src/contexts/SyncContext.tsx
   - packages/client/src/lib/api.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/taskCompletion.ts
@@ -99,37 +93,9 @@ no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照�
 - `getSyncHealth()`：contentHash 深度体检 + 建议；本地 content hash 目前只 hash `categories`、`time_entries`、`quick_notes`、`tasks`，不覆盖 `tracks` / `track_steps` / `goals` / `goal_layout_pins` / `sessions`，主要作为诊断对照；服务端 `/api/sync/status` 的 `contentHash` 仍是全域 commit hash。公开计数字段仍只返回分类、时间记录和速记数量。
 - `syncForcePushToServer()`：确认后把本地核心同步表覆盖到服务器；当前只包含 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`，不包含健康原始数据、`health_charts`、任务轨道、`goals`、`goal_layout_pins` 或 `sessions`。目标成员关系属于 `Goal.members`，因此不随 tasks force-push 携带；`Task.sessionId` 随 `tasks` 一起搬运，但 `sessions` 本身不在兜底范围内（见 [todo/at-hand](todo/at-hand.md) 关于悬空 sessionId 的说明）。
 
-## 1.5 前台 SSE 实时通知通道
+## 1.5 实时通道与调度器（已外提）
 
-服务端提供只读接口 `GET /api/sync/stream`（`packages/server/src/routes/sync.ts`）。挂在 `/api/*` 鉴权之后，客户端 fetch 流式读取、header 带 token。连接成功立刻发 `event: hello`（`{"latestSeq": ...}`），之后每 30 秒一条 `: ping` 注释心跳。
-
-`packages/server/src/sync/notifier.ts` 维护进程内连接集合，广播函数为 `notifySyncChange(latestSeq, payload?)`；`event: bump` 的 data 形状是 `SyncStreamBumpSchema`（`{latestSeq, fromSeq?, changes?}`，`packages/shared/src/schemas.ts`）——`fromSeq`/`changes` 成对出现时收端可就地 apply，缺省即纯通知。**仅 `/api/sync/push` 构造带数据的载荷**：apply 事务结束后用 `buildBumpPayload` 读出本次 push 造成的 `(fromSeq, latestSeqAfter]` 区间 changes；超过 `BUMP_MAX_CHANGES`（50 条）或序列化后超过 `BUMP_MAX_BYTES`（32KB）任一上限就放弃 payload、退化为纯 `{latestSeq}`（常量与 `buildBumpPayload` 均在 `packages/server/src/routes/sync.ts`）。其余写路径——`/api/sync/force-push`、CLI `/api/entries` 创建、agent `POST /api/quick-notes` 投递、agent `POST /api/agent/tasks/:id/status` 回写任务状态或 tags——成功后仍只调用 `notifySyncChange(getLatestSeq())`，保持纯 bump 不变。决策与退化规则见 [ADR 0021](../adr/0021-sse-bump-carries-changes.md)。
-
-客户端连接逻辑在 `packages/client/src/lib/syncStream.ts`：前台可见、云同步开启且已配置 API 地址时启动；断开按 1s/2s/4s 退避封顶 30s 带抖动。每次 start 都有独立 generation、AbortController、连接超时与 watchdog，旧 run 收尾不能污染新连接；等待响应头超过 15 秒会中止并走重连。`hello` / `bump` 统一处理：远端 `latestSeq <= 本地读数` 视为回声忽略；更高则经 `shouldPullForBump` 判定后 `syncScheduler.requestSync("bump")`。设置页连接灯读 `SyncContext.connection`。
-
-`SyncContext` 解析每条 SSE 消息时先用 `SyncStreamBumpSchema` 校验；`event: bump` 且 `fromSeq`/`changes`/数字 `latestSeq` 三者齐全就 `stashBumpPayload()` 存入 `engine.ts` 模块级单槽（新覆盖旧、取出即清），随后仍按上一段的 `shouldPullForBump` 判定唤醒 `requestSync("bump")`。真正的零网络落地发生在 `runRegularSync`：本地无 pending 且 stash 的 `fromSeq` 与本地游标连续时，直接复用 pull 同一套 `applyPullChangesBatch` 就地写入、游标推进到 `stash.latestSeq`，跳过 `/api/sync/status` 与 `/api/sync/pull`；schema 校验失败、游标不连续、apply 抛错都自然退化为现状的 status 预查 + pull 链路；仍有 pending 时该轮走写后 push 路径、stash 原地排队（不取不清）等下一轮无 pending 再判定——各分支都不丢事件也不跳号。
-
-连接带**心跳看门狗**（`STREAM_WATCHDOG_TIMEOUT_MS=45_000`）：每次收到任何字节（含服务端 30 秒一条的 `: ping` 注释心跳）都重置一个 45 秒定时器；定时器到期说明连接已静默断线但底层 fetch 流未报错，主动 `abort()` 触发既有重连退避路径。`stop()` 会同步清理看门狗定时器。服务端心跳节奏本身零改动。
-
-服务端 stream 先注册 listener，再读取并发送 hello；hello 写出前到达的 bump 暂存在连接内，hello 后若账本确实前进再补发。这样没有“hello 已读旧 seq、listener 尚未注册”的丢事件窗口。
-
-通知器与 force-push token 一样是单进程内存状态；`SERVER_REPLICAS>1` 时启动告警，真正多实例前需要 Redis pub/sub 等跨实例转发。
-
-## 1.6 客户端调度器
-
-所有触发 `regularSync()` 的路径统一收口到模块级单例 `syncScheduler`（`packages/client/src/sync/scheduler.ts`）。它不依赖 React，`SyncContext` 挂载时经 `setExecutor()` 注册一个包装了 `useSync().sync` 的 executor，卸载或云同步关闭时注销（`setExecutor(null)`）。
-
-**触发下沉到写入本身**：`recordSyncLog()`（`engine.ts`）每次成功写入 Dexie `syncLog` 后调用 `syncScheduler.notifyWrite()`；批量写入用新增的 `recordSyncLogs(entries)` helper（同样内部调 `notifyWrite()`）。这意味着任何写 `syncLog` 的路径（包括此前遗漏接线的页面、以及 bootstrap 期 `runMaterialization`）都自动获得写后同步，无需页面显式调用同步函数。
-
-**触发原因（`SyncRequestReason`）**：`write`（写入触发）、`bump`（SSE 提示账本前进）、`resume`（回前台）、`reconnect`（SSE 重连成功且上次同步失败）、`fallback`（60 秒兜底 interval）、`flush`（隐藏前尝试推送）、`startup`（executor 注册时的启动 kick）。`requestSync(reason)` 供上述场景显式调用；`notifyWrite()` 是 `write` 原因的专用入口。
-
-**防抖与硬上限**：每次触发用 300ms trailing 防抖合并突发写入；同时有 2s max-wait 硬上限，避免连续写入无限推迟执行。执行中如果又被新触发拦截，不会打断当前这轮，而是记下待处理原因，等本轮结束后自动补跑一次——补跑的 `waitMs`（executor 收到的 `SyncExecutorMeta.waitMs`）如实累计从首次触发到真正执行的等待时长，不清零重算。
-
-**失败与兜底**：任意执行失败（包括纯 pull）保留 retry-needed，按 1s/2s/4s 指数退避、封顶 60s；429 优先尊重响应 body 或真实 `ApiError.headers` 中的 `Retry-After`。成功、关闭云同步或 executor 换代会清掉旧重试状态。60 秒 fallback 仍只做低频保险：有本地 pending 或 retry-needed 才调度，不在成功路径空转。hidden/pagehide flush 会检查真实 outbox/retry 状态，退避中允许一次隐藏前立即尝试；并发的 outbox 预检单飞且绑定 executor generation，连续 hidden/pagehide 不重复发两轮，旧 generation 的迟到查询也不能给新 executor 排任务。没有 executor 时触发只记脏标记，重新注册时再兑现。
-
-**生命周期接线**（`SyncContext.tsx`）：`useAppResumeRefresh` 回前台时 `requestSync("resume")`；`useAppHideFlush`（`hooks/useAppHideFlush.ts`，监听 `visibilitychange` hidden、`pagehide`、Capacitor 原生 `appStateChange` 的 `!isActive`）在应用隐藏前调 `flushNow()` 尝试立即推送——这是一次普通 fire-and-forget 的 `sync()`，不使用 `navigator.sendBeacon` / fetch keepalive（keepalive 请求体有 64KB 上限，同步 payload 可能超限，取舍是尽力而为而非保证送达）。`useAppResumeRefresh` 的唯一消费方是 `SyncContext`，页面不各自接线回前台刷新。
-
-**与手动同步的关系**：设置页手动"立即同步"按钮直调 `sync()`，不经过 `syncScheduler`；`engine.ts` 的 `regularSyncInFlight` 单飞去重仍然生效，手动触发和调度器触发并发时不会重复跑两轮同步。
+「什么时候同步」整簇在子文档 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)：服务端 SSE 通知通道（`GET /api/sync/stream`、`notifySyncChange`、带 changes 的 bump 及其退化规则）、客户端连接与重连退避、以及所有触发路径收口的模块级 `syncScheduler`（防抖 300ms / max-wait 2s / 失败退避 / 60s 兜底 / 生命周期接线）。
 
 ## 2. Push 流程详解
 
@@ -201,6 +167,8 @@ no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照�
 - 远端 delete + 本地同 record（或分类级联影响范围内）有未同步 `syncLog` → 挂起为 `SyncConflict { remote: null, remoteAction: 'delete', sourceLogIds }`，不删本地；分类整树作为一个冲突单元，保护集合跨 pull 分页保持，后代墓碑不能先删一半。
 - 远端 delete + 本地无 pending → 直接删除；分类删除级联后代分类和关联 entries。
 
+**被跳过的远端 change 不会有第二次机会**：上面第 3 条的「lww 域跳过远端」是**静默丢弃**——游标照常推进到 `nextSinceSeq`，该条 change 不会重发，只有等这条记录下次在服务端再被改动才会重新下行。且这条跳过不产生 `SyncConflict`、不进 `pushIssues`、不写任何日志，线上完全不可观测。它与 §5 第 8 条的整行 push 合起来构成双向丢失窗口。
+
 `syncPull({mode:'repair'})` 是修复模式：`sinceSeq: 0` 全量；仍有 pending 的同记录或分类级联整组不覆盖/不删除，已完整且本地更新的 entry 继续保留。repair 不生成冲突 UI，但不能吞掉尚未同步的本地主张。
 
 **tombstone 保留约束**（沿用 [ADR 0006](../adr/0006-sync-tombstone-retention.md)）：`sync_tombstones` 与 `sync_seq` 都不按 TTL 自动清理。长期离线客户端持有旧读数，提前清账会导致已删除记录被当作本地独有数据重新 push。安全清理必须同时满足：知道所有活跃客户端水位、有全量修复兜底、有人工确认。
@@ -244,6 +212,10 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 5. **`updated_at` 由服务器分配**：客户端不要依赖自己提交的时间戳会原样落库；展示"业务发生时间"用业务字段（如 `occurredAt` / `startTime`），不用 `updatedAt`。
 6. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeqWithDb` 在同一事务内标 dirty，`/api/sync/status` 惰性重算；reset 完成时立即刷新。它现在只服务诊断，但仍要保持正确。
 7. **server 是冲突仲裁者**：用 `baseSeq` 判断快进 / 非重叠合并 / 重叠冲突 / unknown-base；重叠记录按时间戳 staleGuard 拒收过期来包，并用受保护备份记录危险 push 场景。
+8. **同步的粒度是「整行」，不是「改动的字段」**——本条是 §2.1 与 §3 两条规则相乘的后果，写代码前必须知道。`syncLog` 只记「哪一行变了」（`SyncLogEntry` 无列信息，`recordSyncLog` 签名里也没有位置放），push 时按 recordId 回读**当前整行**（`engine.ts` 的 `db.table(storeName).get(...)`），服务端 `ON CONFLICT DO UPDATE SET` **除主键 / `created_at` / 无 `op` 时的 `guardedColumns` 外的全部列**。由此产生两个必须记住的后果：
+   - **双向丢失窗口**：设备 A 改了某行并同步成功，设备 B 尚未拉到就对同一行发生任何写入（哪怕只想改一个字段），B 的整行 push 会用它手上的旧值覆盖 A 的改动；同时 §3 的「lww 域本地有未推送日志则跳过远端」会让 B 也永远收不到 A 的那次改动。风险列 = 非 `guardedColumns` 的全部（`tasks` 即 `title` / `tags` / `scheduled_at` / `sort_order` / `parent_id` / `session_id` / `weight`）。
+   - **版本错位会清空新列**：旧客户端不认识新加的字段，push 的 payload 里缺这一项，服务端 zod 的 `.default(null)` 会把它补成 null，再经全列 SET 抹掉服务器现值（如 `TaskSchema.sessionId` 的 `.default(null)` + `taskToRow` 的 `?? null`）。这是 §3.5 结尾「server / Web / APK 必须同版本发布」在**上行方向**的具体机理，也是 [ADR 0012](../adr/0012-sync-ledger-and-domain-registry.md) 那条部署纪律不能松的原因。
+   缓解手段只有既有的两件：`guardedColumns`（黑名单，仅 `tasks` 5 列 + `tracks.status`）与 `op`（布尔授权闸，见 §2.2.1）。**它们都是窄解法，不是通用防线。**
 
 ## 6. 错误码处理（客户端侧）
 
@@ -280,7 +252,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 
 `useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`，默认单调时钟 `performance.now`，与 `totalMs` 同源）给 status/push/pull 三个阶段计时——写后路径只有 push/pull，补差路径只有 status/pull；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。`getSyncTimings()` 读取时做逐元素 shape 校验，坏元素丢弃；`phases` 允许携带未知阶段键（值须为有限 number），带 health/backup/report 等旧阶段键的存量数据仍合法、无需迁移。
 
-`SyncTimingEntry` 额外携带三个可选诊断字段，均来自调度器 `SyncExecutorMeta` 与 SSE 连接态：`waitMs`（executor 触发前在调度器里排队的时长，见 §1.6）、`reason`（`SyncRequestReason` 字符串，本轮由谁触发）、`connection`（触发时的 `SyncStreamState`）。三者都做类型校验（number 需有限、string 类型），缺失时按可选字段处理，不影响存量数据兼容性。设置页同步卡片的 `SyncTimingsPanel` 展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs`/`reason`/`connection`。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
+`SyncTimingEntry` 额外携带三个可选诊断字段，均来自调度器 `SyncExecutorMeta` 与 SSE 连接态：`waitMs`（executor 触发前在调度器里排队的时长，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2）、`reason`（`SyncRequestReason` 字符串，本轮由谁触发）、`connection`（触发时的 `SyncStreamState`）。三者都做类型校验（number 需有限、string 类型），缺失时按可选字段处理，不影响存量数据兼容性。设置页同步卡片的 `SyncTimingsPanel` 展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs`/`reason`/`connection`。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
 
 ## 8. 改这块代码前的清单
 
@@ -288,6 +260,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 - [ ] 跨 client/server 改动后跑 `pnpm --filter @timedata/client test:e2e`（`sync-roundtrip.e2e.test.ts`）。
 - [ ] **加新域**：按 [sync/domain-registry](sync/domain-registry.md) 的 checklist 同步 shared/server/client 登记簿、静态 `SyncChange`、backup 角色、force-push 取舍、对应域文档和全链路测试。
 - [ ] 改 `SyncPushReasonCode`：shared schema、server validation/resolver、`classifyReasonCode()`、本文档第 6 节、`data-model.md`。
+- [ ] **加任何写入路径前先问：这次写入是用户在直接编辑这条记录吗？** 若否（元数据刷新、批量 touch、级联副作用），它同样会把**整行**推上去并触发 §5 第 8 条的覆盖窗口，且爆炸半径 = 这一次写了多少行。已有的这类写入：`persistTaskOrder`（拖拽排序批量改 `sortOrder`）、`touchTasksInCurrentTransaction`（目标归属变更刷 `updatedAt`，见 [todo](todo.md) §3 第 14 条）。
 - [ ] 改 `regularSync` 主路径：先测 seq no-op、pull-only 补差、push + pull 三条路径。
 - [ ] 改服务端写路径：确认写表与 `recordSeq` 同事务、commit hash 标 dirty、事务后 `notifySyncChange`。
 - [ ] 改 shared 实体 schema：客户端按需升 `SCHEMA_NORMALIZATION_VERSION` 清洗老数据；服务端按需 `ensure*Columns()` 或 `dropColumnsIfExist()`；加字段 server 先行、减字段 shared 先行物理删列最后。归一不写 `syncLog`，也不替代服务端权威校验。
@@ -299,3 +272,4 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 | 子文档 | 拥有什么 |
 |---|---|
 | [sync/domain-registry](sync/domain-registry.md) | shared/server/client 三端同步域登记簿、当前运行时域、新增 LWW / 复合键域 checklist、登记簿测试入口 |
+| [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) | 服务端 SSE 通知通道与 bump 载荷、客户端连接/重连退避、模块级 `syncScheduler` 的触发原因·防抖·退避·生命周期接线 |

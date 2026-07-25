@@ -110,7 +110,7 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 4. 检查 `#root` 挂载点。
 5. `<AppUpdateProvider>`、`ErrorBoundary`、`BrowserRouter`、`SyncProvider`、`BottomNavProvider`、`TrackAttentionProvider`、`AppShell` 依次包裹（`TrackAttentionProvider` 用 `useTrackAttentionCount` 把轨道「待我处理」回手计数下发给导航 badge，见 [tracks](tracks.md) §5；默认 0，只渲染导航壳的单测不触 db）。
 6. Router 注册时间轴、速记、待办、轨道、目标、时间/健康统计、设置及记录编辑路由；AppShell 按 `1024px` viewport 断点分流：窄屏 / APK 渲染底部纯图标导航并继续使用 `nav.visibleTabs.v1`，数组内入口显示在底栏，数组外入口由 `/settings/more` 动态承接，不保留移动端三点菜单；宽屏渲染左侧固定纯图标侧栏并使用 `nav.desktopSidebar.v1` 的排序 / 更多收纳配置。导航配置只保存 route / placement，不保存颜色。两套主导航按钮都必须有 `aria-label`，active 形态只用 `accent` / `surface` / `border` token。`/goals` 先进入目标页宽窄分流壳：宽屏默认全局星图只读总览，窄屏默认列表，并允许手动切换；`/tracks` 与 `/tracks/:id` 包在 `TracksShell` 布局路由里（宽屏调度台常驻左列的 master-detail，右栏随路由出空态/详情；窄屏纯透传，见 [tracks](tracks.md) §8）。目标详情 `/goals/:id` 与轨道详情 `/tracks/:id` 在窄屏隐藏底部导航，宽屏仍保留桌面侧栏。设置子路由包含更多功能、导航、轨道行动标签、统计布局、健康范围、服务端/数据/管理等入口，具体归属见各主题文档。
-7. `SyncProvider` 在云同步开启且配置完整时维护 SSE 连接，并向模块级 `syncScheduler` 注册 executor；写入、SSE bump、回前台、隐藏前 flush、重连成功、失败退避与 60 秒兜底等触发统一经调度器驱动普通同步。成功热路径仍保持 300ms 防抖、2s max-wait 和无插队时单 push 请求；失败（含 pull-only）按上限指数退避，生命周期预检与 executor/SSE run 都按 generation 隔离。详见 [sync](sync.md) §1.5–§1.6。
+7. `SyncProvider` 在云同步开启且配置完整时维护 SSE 连接，并向模块级 `syncScheduler` 注册 executor；写入、SSE bump、回前台、隐藏前 flush、重连成功、失败退避与 60 秒兜底等触发统一经调度器驱动普通同步。成功热路径仍保持 300ms 防抖、2s max-wait 和无插队时单 push 请求；失败（含 pull-only）按上限指数退避，生命周期预检与 executor/SSE run 都按 generation 隔离。详见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md)。
 
 ### 4.3 CLI
 

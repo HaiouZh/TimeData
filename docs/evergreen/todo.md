@@ -69,7 +69,7 @@ last-reviewed: 2026-07-24
            deleteTask/deleteTaskCascade/persistTaskOrder/bumpTaskWeight
         → putTask(): db.transaction("rw", db.tasks, db.syncLog) 内
            db.tasks.put(next) + recordSyncLog("tasks", id, action, ts, completionOp?)
-        → recordSyncLog 内 syncScheduler.notifyWrite() 自动调度（见 sync.md §1.6）
+        → recordSyncLog 内 syncScheduler.notifyWrite() 自动调度（见 sync/realtime-and-scheduler.md §2）
         → POST /api/sync/push → server 通用 LWW 域（无自定义 apply）
            → taskToRow 写 SQLite tasks + 服务器分配 updated_at + recordSeq
         → sync_seq 记账 → notifySyncChange → 其他设备 SSE pull

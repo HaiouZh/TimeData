@@ -60,10 +60,13 @@
     "covers": 10
   },
   "docs/evergreen/sync.md": {
-    "covers": 37
+    "covers": 31
   },
   "docs/evergreen/sync/domain-registry.md": {
     "covers": 14
+  },
+  "docs/evergreen/sync/realtime-and-scheduler.md": {
+    "covers": 6
   },
   "docs/evergreen/timeline.md": {
     "covers": 16
