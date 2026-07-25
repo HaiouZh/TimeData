@@ -9,6 +9,7 @@ import { addQuickNote, setQuickNotePinned } from "../lib/quickNotes.js";
 import { setPunchCategoryId } from "../lib/settings/punchCategorySetting.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { getDateString } from "../lib/time.js";
+import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { db } from "../test/dbReset.js";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import QuickNotesPage from "./QuickNotesPage.js";
@@ -219,6 +220,7 @@ beforeEach(async () => {
   await db.settings.clear();
   await db.syncLog.clear();
   document.body.innerHTML = "";
+  localStorage.clear();
 });
 
 afterEach(() => {
@@ -228,6 +230,90 @@ afterEach(() => {
 });
 
 describe("QuickNotesPage", () => {
+  it("挂载时恢复未发出的草稿，并说明它是恢复来的", async () => {
+    localStorage.setItem(STORAGE_KEYS.quickNoteComposerDraft, "写了一半");
+
+    const { host, root } = await renderPage();
+
+    expect(input(host).value).toBe("写了一半");
+    // 必须说一声：否则用户不知道输入框为什么有字，也不知道左键此刻是「存为待办」不是「搜索」
+    expect(host.textContent).toContain("已恢复未发出的草稿");
+    expect(composerButton(host, "存为待办")).toBeInstanceOf(HTMLButtonElement);
+
+    await unmount(root);
+  });
+
+  it("边打字边把草稿写进本地，发出后清掉", async () => {
+    const { host, root } = await renderPage();
+
+    // Dexie 的事务在 vitest fake timers 下会提前判定「已完成」，跨表二次写入随之炸穿——
+    // 这与本 Task 要测的行为无关，故把会落库的提交动作放到 fake timers 窗口之外。
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await typeInto(input(host), "正在写的半条");
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      await flush();
+      expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBe("正在写的半条");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await click(composerButton(host, "记录速记"));
+    await expect(db.quickNotes.count()).resolves.toBe(1);
+    expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("编辑旧速记不污染 compose 草稿，退出编辑那一刻也不污染", async () => {
+    localStorage.setItem(STORAGE_KEYS.quickNoteComposerDraft, "原本的草稿");
+    await db.quickNotes.add({
+      id: "note-edit",
+      text: "旧速记",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "旧速记");
+    await click(menuItem(host, "编辑"));
+
+    // Dexie 的事务在 vitest fake timers 下会提前判定「已完成」，跨表二次写入随之炸穿——
+    // 这与本 Task 要测的行为无关，故把会落库的提交动作放到 fake timers 窗口之外。
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await typeInto(input(host), "旧速记改过了");
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      await flush();
+      // 编辑态下 draftText 是速记正文，防抖不该把它当草稿写进去
+      expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBe("原本的草稿");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await click(composerButton(host, "保存速记"));
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      await flush();
+      // 退出编辑这一刻是时序陷阱的窗口：防抖值若还停在速记正文上就会污染草稿
+      expect(localStorage.getItem(STORAGE_KEYS.quickNoteComposerDraft)).toBe("原本的草稿");
+      expect(input(host).value).toBe("原本的草稿");
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await unmount(root);
+  });
+
   it("sends a quick note and clears the input", async () => {
     const { host, root } = await renderPage();
 

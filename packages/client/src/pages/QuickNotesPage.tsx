@@ -47,6 +47,7 @@ import { readTodoDefaultDestination } from "../lib/settings/todoDefaultDestinati
 import { addTask } from "../lib/tasks.js";
 import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
+import { clearComposerDraft, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
 import { pickCurrentDateDivider } from "../quick-notes/currentDate.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
@@ -75,6 +76,8 @@ const STATUS_AUTO_DISMISS_MS = 2400;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 const SEARCH_RESULT_PAGE_SIZE = 100;
 const SEARCH_FOCUS_HIGHLIGHT_MS = 1500;
+// 草稿落盘的防抖窗口：压到最后几个字才可能丢，而不是整条草稿；不做每字一写。
+const COMPOSER_DRAFT_DEBOUNCE_MS = 400;
 const NOTE_CARD_BASE =
   "relative max-w-full [@media(pointer:coarse)]:select-none border px-4 py-2 text-[15px] leading-relaxed text-ink shadow-elev1 outline-none transition hover:border-accent focus-visible:ring-2 focus-visible:ring-accent";
 const NOTE_CARD_DEFAULT = "border-border bg-surface/90 hover:bg-surface-hover";
@@ -109,7 +112,7 @@ export default function QuickNotesPage() {
   const today = getDateString(new Date());
   const queryDate = normalizeDateParam(searchParams.get("date"));
   const [jumpDate, setJumpDate] = useState(queryDate ?? today);
-  const [draftText, setDraftText] = useState("");
+  const [draftText, setDraftText] = useState(() => readComposerDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +190,24 @@ export default function QuickNotesPage() {
   const searchHiddenCount = searchResults.length - visibleSearchResults.length;
   const hasQuery = searchTerms.length > 0;
   const hasDraft = draftText.trim().length > 0;
+  // 防抖的输入恒为「compose 草稿」而不是 draftText。编辑态下 draftText 是被编辑速记的正文，
+  // 若改成「防抖 draftText + effect 里判编辑态跳过」，退出编辑那一刻 editingId 已变 null、
+  // effect 立即放行，而防抖值还停在速记正文上，正文就被写成了草稿。让输入本身永远是 compose
+  // 草稿，这个时序陷阱从根上不存在，effect 里也不必再判编辑态。
+  const composeDraft = editingId ? composeDraftRef.current : draftText;
+  const debouncedComposeDraft = useDebouncedValue(composeDraft, COMPOSER_DRAFT_DEBOUNCE_MS);
+  useEffect(() => {
+    writeComposerDraft(debouncedComposeDraft);
+  }, [debouncedComposeDraft]);
+  // 恢复来的草稿要说一声。定时器共用 statusTimerRef，这样后续 showStatus 能正确顶替它。
+  useEffect(() => {
+    if (readComposerDraft() === "") return;
+    setStatus("已恢复未发出的草稿");
+    statusTimerRef.current = setTimeout(() => {
+      statusTimerRef.current = null;
+      setStatus(null);
+    }, STATUS_AUTO_DISMISS_MS);
+  }, []);
   const jumpDateLabel = formatJumpDateLabel(jumpDate, today);
   const exportMarkdownLabel = jumpDateLabel === "今天" ? "导出今天 Markdown" : `导出 ${jumpDateLabel} Markdown`;
   const exportJsonLabel = jumpDateLabel === "今天" ? "导出今天 JSON" : `导出 ${jumpDateLabel} JSON`;
@@ -507,6 +528,7 @@ export default function QuickNotesPage() {
       } else {
         await addQuickNote(text);
         setDraftText("");
+        clearComposerDraft();
         stickBottomRef.current = true;
       }
       focusInput();
@@ -527,6 +549,7 @@ export default function QuickNotesPage() {
       const dest = await readTodoDefaultDestination();
       await addTask({ title: text, toInbox: dest === "inbox" });
       setDraftText("");
+      clearComposerDraft();
       focusInput();
       showActionToast({
         message: dest === "inbox" ? "已放入收件箱" : "已加入今天",
