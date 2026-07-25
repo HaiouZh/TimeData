@@ -475,6 +475,36 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
+  // 回归：0702 审查 #1 —— 四分区曾用 useLiveQuery(..., []) 冻住时钟，跨日后「明天到期」不会掉进今天。
+  // 修复前 listTasks 走默认参数 new Date()（不吃 Date.now spy），故本例必红；修复后走 gravityNow 才吃。
+  it("跨日后四分区随 gravityNow 重算：明天的排期任务掉进今天", async () => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const ymd = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    const task = await addTask({ title: "明天到期", toInbox: true });
+    await scheduleTask(task.id, ymd);
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "明天到期");
+    expect((host.querySelector('[data-section="today"]') as HTMLElement | null)?.textContent ?? "").not.toContain(
+      "明天到期",
+    );
+
+    const noonTomorrow = new Date(tomorrow);
+    noonTomorrow.setHours(12, 0, 0, 0);
+    vi.spyOn(Date, "now").mockReturnValue(noonTomorrow.getTime());
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitForCondition(
+      () =>
+        (host.querySelector('[data-section="today"]') as HTMLElement | null)?.textContent?.includes("明天到期") ??
+        false,
+      "scheduled task to fall into today after crossing midnight",
+    );
+    await unmount(root);
+  });
+
   it("writes todo.gravity.review.v1 to settings on gravity review open without refreshing updatedAt", async () => {
     const t = await addTask({ title: "旧想法", toInbox: true, now: new Date("2000-01-01T00:00:00.000Z") });
     const before = await db.tasks.get(t.id);

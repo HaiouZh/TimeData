@@ -94,7 +94,9 @@ const EMPTY: TodoBuckets = {
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
 
 export function TodoPage() {
-  const buckets = useLiveQuery(() => listTasks(), [], EMPTY) ?? EMPTY;
+  // 单一时钟：四分区 / 逾期 / 重力水位线共用 gravityNow，跨日由下方 timer+focus+visibilitychange 刷新后整页重算。
+  const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
+  const buckets = useLiveQuery(() => listTasks(gravityNow), [gravityNow], EMPTY) ?? EMPTY;
   const goals = useLiveQuery(() => db.goals.toArray(), []) ?? [];
   const goalLinkedIds = goalLinkedTaskIds(goals);
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
@@ -216,13 +218,12 @@ export function TodoPage() {
     setTagMode("and");
   };
   const isOverdue = (t: Task) => {
-    const p = placementForTask(t, new Date());
+    const p = placementForTask(t, gravityNow);
     return p.pool === "today" && p.overdue;
   };
 
   const gravitySettings = useTodoGravitySettings();
   const surfacedMap = useGravitySurfacedMap();
-  const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
   useEffect(() => {
     let timer: number | undefined;
     const refreshGravityNow = () => {
