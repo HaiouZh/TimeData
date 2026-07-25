@@ -10,11 +10,12 @@ covers:
 contracts:
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
-last-reviewed: 2026-07-25
+last-reviewed: 2026-07-26
 ---
 
 <!-- 复核 2026-07-25（diary-workbench 阶段二 · 编辑器语义收口）：补三键位（回车整段重排/Tab缩进出层/Ctrl+K补链接）契约、EditAction 四态、onChange 红线、撤销栈已知缺口、dirty 记账四条路径、行尾保护 §3.8；不新增 covers（lib/diary/** 通配已覆盖全部新文件）。 -->
 <!-- 复核 2026-07-25（存量两问题）：补 §2.8 保存在途脏标记（编辑序号判据）、§2.9 重载失败只出条状提示；§3.7 补 markDirty 与清脏出口。 -->
+<!-- 复核 2026-07-26（diary-workbench 阶段三 · 日期与跨零点收口）：§2 追加日期口径/事实源/replace 三条契约（第 11–13 条）；新开 §4「日期与跨零点」（两种模式、跨天只提示不自动切、切日重置四态与 handleSave 的早退真防线、脏态确认为何页面自己弹、在途响应三道正交闸、不用改的东西），原 §4「模块速查」顺延为 §5；订正 §3.7 表格首行与概括句里裸 `setDirty(true)` 与 `markDirty()` 的自相矛盾。不新增 covers：新文件 `lib/diary/diaryDate.ts` 落在既有 `packages/client/src/lib/diary/**` 通配下。 -->
 
 # 日记
 
@@ -61,6 +62,9 @@ SettingsDiaryPage 保存模板
 8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 §3.8 行尾保护。
 9. **`handleReload` 失败只出条状错误提示**（`setError`），不进 `loadFailed` 全屏态、不清冲突条：正文还在编辑器里、用户还能接着编辑保存，全屏失败态反而会把这份没上传的内容从屏幕上抹掉。
 10. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
+11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。
+12. **当前日期的事实源是 URL `?date=`**（`lib/diary/diaryDate.ts:resolveDiaryDate`）：有合法的过去日期 = 显式模式（用户自选的补写目标，跨零点**永不**提示）；无参 = 跟随模式，展示 `followAnchor` 并在实时今天越过它时出提示条。非法 / 未来 / 恰是今天的参数一律归一成无参形态（`replace`，不新增历史条目）。不用 `following: boolean` state 表达模式——state 活不过 PWA 冷启动。
+13. **切日期用 `replace` 不用 `push`**。有意偏离时间轴 TL-15 已拍板的「保留 push」：日记页有 header 返回按钮（`handleBack` 走 `navigate(-1)`）且安卓返回键 `/diary` 分支恒返回 `back`，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去；时间轴没有返回按钮，不暴露这个矛盾。
 
 ## 3. 编辑器语义（回车 / Tab / Ctrl+K）
 
@@ -128,12 +132,12 @@ SettingsDiaryPage 保存模板
 
 | 路径 | 触发点 | 说明 |
 |---|---|---|
-| replace + 成功 | `onChange` | `execCommand` 发出真实 `input` 事件，React `onChange` 自然触发，页面 `onChange` 里 `setDirty(true)` |
+| replace + 成功 | `onChange` | `execCommand` 发出真实 `input` 事件，React `onChange` 自然触发，页面 `onChange` 里调 `markDirty()` |
 | replace + 降级 | `runEditAction` 内显式 `markDirty()` | `setValue` 不经 `onChange`，漏了这一步保存按钮永远不亮 |
 | select | 不置 | 用户一个字没改，不该变脏 |
 | noop | 不置 | 同上 |
 
-四条路径都走页面里的 `markDirty()`（置位 + 编辑序号 +1），不裸调 `setDirty(true)`——序号是"保存在途中有没有继续打字"的唯一判据（§2.8）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
+置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（§2.8）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
 
 ### 3.8 行尾保护
 
@@ -143,12 +147,72 @@ SettingsDiaryPage 保存模板
 - **混合行尾的原文件会被统一成主导行尾**，产生一次性全篇 diff——混合行尾文件本就异常，统一比"随机保留一半"更可预期，且只发生一次。
 - **孤立 `\r`（老 Mac 行尾）不计入 CRLF/LF 计数**，这类文件本来就会被 textarea 的 HTML 规范归一行为转成 LF；已知不修，不在 `detectEol` 职责内处理。
 
-## 4. 模块速查
+## 4. 日期与跨零点
+
+### 4.1 两种模式
+
+`resolveDiaryDate({ param, liveToday, followAnchor })` 是唯一裁决点，返回 `{ date, following, rolledOver, clearParam }`：
+
+- **显式模式**（URL 有合法且早于今天的 `?date=`）：`date` = 该日期，`rolledOver` **恒 false**。用户翻到 7/20 补写时头上不会一直挂着「切到今天」。
+- **跟随模式**（无参 / 参数非法 / 未来 / 恰是今天）：`date` = `followAnchor`，`rolledOver` = 实时今天是否已越过锚点，`clearParam` 提示页面把冗余参数 `replace` 掉。
+
+`followAnchor` 是 **state 不是 ref**：跟随模式下点提示条时 URL 本来就没参数，`setSearchParams({})` 是 no-op、不触发渲染；锚若是 ref，改了也不重渲染，提示条会卡住不动。它只在「（重新）进入跟随模式」时前进（点提示条、或用 DateNav 切回今天），**绝不随实时今天自动前进**。
+
+### 4.2 跨天：只提示不自动切
+
+过零点后正文与存盘日期都停在原处，只出一条提示条。自动切 = 正在写的那段被换到新文件；不点提示条就一直存到昨天那篇，这正是「补写昨天」的语义。提示条文案**必须带具体日期**——`useAppResumeRefresh` 让息屏几天后回前台立刻刷新，一次可能跨好几天。
+
+**红线**：正文加载 effect 的依赖数组里**绝不能出现** `liveToday` / `now`。写进去就是每分钟重新 `fetchDiary` + `setContent`，直接覆盖用户正在编辑的正文，且静默。
+
+### 4.3 切日期必须重置的四态，与真正兜底的那道闸
+
+`loading` / `error` / `conflict` / `loadFailed` **没有任何地方会自动重置**（`loading` 全文只有置 false、`loadFailed` 只有置 true），必须在日期 effect 开头显式重置：
+
+| 态 | 不重置的后果 |
+|---|---|
+| `loading` | 旧正文原地留着直到新内容到达，用户对着上一天的内容打字然后被覆盖 |
+| `error` | 上一天的错误提示条挂在新一天页面上，误导用户 |
+| `conflict` | 上一天的冲突条挂到新一天头上，点「仍然覆盖」force 掉新一天的文件 |
+| `loadFailed` | 一次加载失败之后，切到任何日期都永远是全屏「加载失败」 |
+
+`fetchDiaryConfig` 拆在独立的 `[]` effect 里：config 与日期无关，不拆则每切一天多一次往返，也多一次「config 失败 → 整页 loadFailed」的机会。
+
+日期 effect 同时把 `baseMtime` 清成 `null`，但这**不是**一道有效防线：`handleSave` 现在 `loading || loadFailed` 两态都早退，已经覆盖了"`content` 还是上一天残留"的全部窗口，`baseMtime` 清不清都轮不到它起作用（删掉这行、跑 DiaryPage 全部测试验证过仍然全绿）。保留只是语义上仍然对、给将来改动留的防御性兜底，**不要为它单独凑测试**。
+
+真正堵住这个窗口的是 `handleSave` 入口的 `if (loading || loadFailed) return;`。不加这道闸：切日期后新一天的正文还没加载出来（`loading` 期）或加载失败（`loadFailed` 期）时，`content` 里是上一天的残留正文，且 `baseMtime` 已被日期 effect 清成 `null`；此时若能保存，会把上一天的正文写进新一天的文件，且 `baseMtime === null` 会让服务端 mtime 并发守卫（§2 第 3 条）当成"文件不存在"直接放行——不报 409 冲突，静默写坏新一天的文件。**触发路径不需要 textarea 挂载**：这两态下主区域是全屏提示、textarea 未渲染，容易误以为"用户碰不到保存"，但 Ctrl+S 的快捷键监听挂在 `window` 上，不经过 textarea，且保存按钮本身在 `loadFailed` 态下也没有单独置灰——两条路都能触发 `handleSave`。这条早退是四态重置之外**必须另外补的一道闸**，不是四态重置能自然带出来的推论。
+
+### 4.4 脏态确认由页面自己弹
+
+`useUnsavedChangesGuard` 的 `shouldBlock` 只比 `pathname`，`?date=` 变化 pathname 不变 → **它一概拦不到**。所以切日期 / 点提示条时必须页面自己 `await confirm(...)`；不弹就是静默丢数据。反过来说也不会出现双弹层。文案单独写（并没有「离开」页面），不复用守卫默认的「离开后当前修改将丢失」。
+
+### 4.5 在途响应的三道闸（正交，不可互相替代）
+
+加载 effect 有 `cancelled` 守卫；`handleSave` / `handleReload` 各自需要：
+
+| 闸 | 判据 | 管什么 |
+|---|---|---|
+| `editRevisionRef` | 内容序号 | 内容变没变（保存在途打字不清脏；重载在途打字不被盖掉） |
+| `dateRef` | 当前日期 | 目标文件换没换（A 日的 mtime / 冲突不落到 B 日） |
+| `saving` | 在途保存标志 | 有没有别的写在飞（重载与 force save 交错会让 mtime 守卫失效） |
+
+`saving` 的 `finally { setSaving(false) }` **不加日期判据**——它是页面级的「有没有在途保存」，加了会让切日后保存按钮永久置灰。
+
+`handleReload` 里 `saving` 这道闸要读两次，且**不能读同一个来源**：函数入口 `if (saving) return;` 此时还没有 `await`，读普通 state（闭包值）没问题；但用户确认弹窗 `await confirm(...)` 之后的第二次判断**必须读 `savingRef.current`**（渲染期同步赋值的活 ref），不能再读闭包里的 `saving`——后者从函数入口起就冻结住了，`await` 期间外部 `setSaving(true)` 它读不到，与入口那道判据永远同值，会是一道结构上**永不生效**的假闸（这个坑真实发生过）。
+
+重载在途中用户又打字时**取消这一发重载并提示**，不盖服务器版本——那与「保存在途打字被清脏」是同类的静默丢数据。
+
+### 4.6 不用改的东西
+
+- `lib/androidBackNavigation.ts` 的 `/diary` 分支恒返回 `{type:"back"}`，`navigate(-1)` 天然一层层退掉日期历史。`/` 分支之所以要显式判 `has("date")`，是因为它无 date 时的动作是 `exit`。
+- `components/DateNav.tsx` **一个字节不动**：它有 3 条 `check:design` 精确豁免，匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符就失配。要调间距在外面包容器。它自己每次渲染现算 `today`，跨零点会自动跟上，无需传 prop。
+
+## 5. 模块速查
 
 | 入口 | 职责 |
 |---|---|
-| `pages/DiaryPage.tsx` | 编辑页：加载当天内容、`handleKeyDown` 分派三键位、脏态提示离开、mtime 冲突 UI（§3） |
+| `pages/DiaryPage.tsx` | 编辑页：加载当天内容、`handleKeyDown` 分派三键位、脏态提示离开、mtime 冲突 UI（§3）、日期驱动与跨零点提示（§4） |
 | `pages/settings/SettingsDiaryPage.tsx` | 设置页：显示 enabled 状态、编辑并保存路径模板、400 错误展示服务器中文 message |
+| `lib/diary/diaryDate.ts` | `resolveDiaryDate`：显式/跟随两种日期模式的唯一裁决点（§4.1） |
 | `lib/diary/diaryApi.ts` | 客户端 API 封装：`fetchDiaryConfig`/`saveDiaryTemplate`/`fetchDiary`/`saveDiary`，`DiaryConflictError` |
 | `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（§3.1/3.5/3.6/3.7） |
 | `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（§3.2） |
@@ -159,5 +223,5 @@ SettingsDiaryPage 保存模板
 | `server/routes/diary.ts` | 四端点：`GET/PUT /config`、`GET/PUT /:date` |
 | `server/lib/diary-path.ts` | 模板展开 + 路径安全校验纯函数 |
 
-**client**：`pages/DiaryPage.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,orderedList,listModel,indent,link,eol}.test.ts`、`lib/diary/textareaEdit.test.tsx`
+**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,orderedList,listModel,indent,link,eol}.test.ts`、`lib/diary/textareaEdit.test.tsx`
 **server**：`routes/diary.test.ts`、`lib/diary-path.test.ts`
