@@ -115,13 +115,16 @@ last-reviewed: 2026-07-26
 - **入口**在收件箱标题右侧常驻（`CollapsibleSection` 的 `action` 插槽），零 active project 时也在——那正是冷启动入口。插槽的拦截用 **`preventDefault` 而不是 `stopPropagation`**：`<summary>` 的折叠是浏览器对 `details` 的**默认行为**（activation behavior），在事件派发结束后才执行，不经 React 冒泡，`stopPropagation` 对它完全无效。代价是包裹层会吃掉内部所有点击的默认动作，故 **action 里只放按钮、不放 `<a>` 或 `type="submit"`**。
 - **可选范围 = 收件箱的三处渲染点**（浮动区 / 水下尾 / 重力翻牌区），三处都要显式接 selection 三 prop，不能混进 `...rowHandlers` 让它自己流过去。水下的陈年任务恰恰最该被圈——归组会 touch `updatedAt` 让它当场浮上水面（§4.2），这一下就是整理的即时回报。
 - **不做禁选态**：`listTasks` 主循环三处早退保证 inbox 桶只含 `parentId === null && recurrence === null && ruleId === null` 的根任务（子任务首行 `continue`；重复模板走 `if (t.recurrence)` 进 scheduled；occurrence 必带 `scheduledAt`，落 today/upcoming）。准入闸仍留在写入侧兜底，但 UI 上没有可禁的行。
-- **其余区块用 `inert` 而不是 `pointer-events-none`**：后者只挡指针，Tab 键照样聚焦进去、回车照样开详情，而那正是多选中最容易误触的路径。窄屏与宽屏两套布局**各包一次**，漏一处那种屏幕下模式态形同虚设。包裹前要对空节点早退——空区块包一层 div 会在 `flex gap-4` 里多占一个 flex 子项、进多选时整列凭空下移。
+- **进多选顺带展开收件箱**（`setInboxCollapsed(false)`）。入口挂在 `<summary>` 里、与 `<details open>` 无关，而折叠状态是持久化的：折叠着点进去，全页其余区块变灰 `inert` + 底部「已选 0 条」操作栏，收件箱却还收着，一条可选行都看不见，第一眼是「模式坏了」。改一下 localStorage 就够，因为 `defaultOpen={!getInboxCollapsed()}` 在**每次渲染时都重读**。代价是把用户的折叠偏好改成展开——可以接受，他点「圈成项目」就是要看收件箱。
+- **其余区块用 `inert` 而不是 `pointer-events-none`**：后者只挡指针，Tab 键照样聚焦进去、回车照样开详情，而那正是多选中最容易误触的路径。窄屏与宽屏两套布局**各包一次**，漏一处那种屏幕下模式态形同虚设。**包装层恒定存在，进出多选只切 `inert` 与 className，绝不切元素类型**——换类型会让 React 在这个插槽上卸载重挂整棵子树，`TodoProjectSection` 的组展开态（组件本地 state）每次进/出多选全部清空，建组成功时表现为「新组展开」被「其余全塌」的布局跳动淹掉。空区块（无已完成任务 / 无项目组）由此多出的 flex 子项靠 Tailwind `empty:hidden` 消掉，前提是那层里**一个节点都没有**，塞任何占位内容 `:empty` 就不匹配、`gap-4` 的 16px 会静默回来。
+- **多选态下行右端的悬停动作条整条关掉**。多选是「圈一批」的模式，单条处置在这个模式里没有位置；更要紧的是整行就是勾选命中区，用户往右点必然压到「排进今天」上——任务离开收件箱 → 被 §7.1 的剪枝踢出选中集（无提示）→ 落进一个 `opacity-40` 且 `inert` 的区块 → 多选态里再也弄不回来（「抓到手头」更重，它顺带开/换了一个活跃会话）。与 `TaskList` 关掉拖拽（`canSort`）和滑动（`blockSwipe`）是同一条理由的三处落点，改一处要想到另外两处。
 - **Esc 要让位给弹窗**。`Sheet` 与 `TaskDetailSheet` 的 Esc handler 同样挂在 window 上、与多选那条互不知情，同一次 keydown 两个都会跑——用户想关弹窗，选了半天的那批一起没了，**而退出后的页面和「成功建组」长得一模一样**（操作栏消失、记录框回来），只少一条 toast。判据用 `[role="dialog"]` 在场而不是给 `useConfirm` 加 `isOpen`：能与多选同屏的弹窗不止确认框，按 hook 逐个开洞会漏。
 - **底部避让量按「此刻谁站在底部」算**，不能按 composer 算。多选态下 `TodoComposer` 不渲染而 `TodoSelectionBar` 顶上，若沿用 `composerHiddenByScroll` 那套，滚动隐藏底栏时避让归零、toast 落进操作栏的盒子被完全遮住——而多选态下 toast 是**唯一**的失败反馈通道（提交失败刻意不退出多选、只靠它说原因），压住就等于「点了没反应」。同款问题 `QuickNotesPage` 的 `bottomInsetPx` 早处理过。
+- **「放进…」的组列表选完即收**。操作栏与 toast 容器同为 `z-backdrop` 且它在 DOM 里排其后 → 后绘制的它赢，而列表向上展开、不透明、最高 `max-h-60`，正铺在 toast 那条带上。列表只由用户点「放进…」切换、不会自己收，等他合上时 6 秒的 toast 早已消失——纯粹的「点了没反应」。**别用 z 层级解决**：那会把「列表要盖住页面」与「toast 要盖住操作栏」这两个各自自洽的决定改成互相打架的两个数字。
 
 ### 7.1 `selectedIds` 必须跟着可选集合剪枝
 
-选中集只存 id，而 `useLiveQuery` 回流不会通知它。不剪枝就会攒出**幽灵 id**：悬停删掉一行、或在多选态里勾完成一行（复选框在多选态下仍是「完成」，是刻意的），那行离开收件箱而 id 还攥在手上 → 操作栏说「已选 2 条」屏幕上只剩 1 行 → 提交时 `db.tasks.get` 拿不到人，抛的是裸 `Error` 不是 `ProjectAssignError`，落进兜底文案；而失败**不退出多选**，用户原地重试、每次都失败，屏幕上没有任何东西指向那个幽灵。
+选中集只存 id，而 `useLiveQuery` 回流不会通知它。不剪枝就会攒出**幽灵 id**：在多选态里勾完成一行（复选框在多选态下仍是「完成」，是刻意的）、另一端同步下来一条删除、或另一端把这行收进某个 project 组，那行离开收件箱而 id 还攥在手上 → 操作栏说「已选 2 条」屏幕上只剩 1 行 → 提交时 `db.tasks.get` 拿不到人，抛的是裸 `Error` 不是 `ProjectAssignError`，落进兜底文案；而失败**不退出多选**，用户原地重试、每次都失败，屏幕上没有任何东西指向那个幽灵。
 
 - **剪枝源照着渲染点写**（`floatingInbox ∪ sunkenInbox`），不要图省事用 `buckets.inbox`——此刻两者恒等，但将来哪一处渲染改了口径（比如水下尾不再可选），剪枝会跟着变而 `buckets.inbox` 会静默继续放行，那正是幽灵回来的方式。
 - **取未经 `f()` 筛选的列表**：筛选是临时视图，不该让"筛一下"丢掉选中；何况多选态下 composer 不渲染，用户根本改不了筛选条件。
@@ -146,6 +149,8 @@ last-reviewed: 2026-07-26
 归属轴排他的判据与 `prerequisiteLossOnAssignMany` 取源组的判据逐字相同（`status === "active" && kind === "project"`），叠上 §7.1 的剪枝——「选中项带 project 归属」在常规时序下**不可能成立**，确认框恒不弹。
 
 仍然保留，因为剩一个真窗口：远端 goal 行**已落进 Dexie**、而 liveQuery 通知与剪枝 effect 还没跑完，用户恰在这几毫秒里松手。此时选中集还是旧的，而预测函数读的是最新库——该弹，不问就是静默丢边。**承重在数据层**（`goals.test.ts` 的 `prerequisiteLossOnAssignMany` 一节）；页面这一段测不了，jsdom 里 `act()` 会把渲染和 effect 一口气跑完。**别据此当死代码删。**
+
+调用点必须**在两条提交路径的 `try` 之内**：它第一句就是 `db.goals.toArray()`，DatabaseClosed / 版本升级期会 reject，而提交是 `void submitXxx(...)` 发出的——留在 try 外既不进兜底 toast 也没人接这个 rejection，用户只看到「点了没反应」。用户点「取消」返回的是 `false` 不是异常，在 try 里照旧原地返回，不会被兜底 toast 当成错误。
 
 ## 8. 模块速查
 
