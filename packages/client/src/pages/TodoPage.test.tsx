@@ -192,6 +192,48 @@ async function waitForToast(host: HTMLElement, text: string): Promise<void> {
   );
 }
 
+/** 进入多选：点收件箱标题右侧的「圈成项目」。 */
+async function enterSelection(host: HTMLElement): Promise<void> {
+  const entry = host.querySelector('[data-section="inbox"] [aria-label="圈成项目"]') as HTMLButtonElement;
+  await act(async () => {
+    entry.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+  await flushAsync();
+}
+
+/** 多选态下点一行 = 勾选/取消勾选。 */
+async function clickSelectRow(host: HTMLElement, title: string): Promise<void> {
+  const row = host.querySelector(`[aria-label="选择 ${title}"]`) as HTMLElement;
+  await act(async () => {
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  });
+  await flushAsync();
+}
+
+function selectionBar(host: HTMLElement): HTMLElement | null {
+  return host.querySelector('[data-testid="todo-selection-bar"]');
+}
+
+/**
+ * 把这一条用例切到宽屏分支（`ResizableSplit`）。
+ *
+ * 默认 jsdom 的 `matchMedia().matches` 恒 false，整份文件都跑在窄屏 `flex flex-col` 上——
+ * 于是「其余区块被 inert 挡住」只给窄屏那处包装上闸，宽屏那处漏了也不会红。
+ * 两处布局必须同改，就得有一条用例站在另一边。
+ */
+function stubWideScreen(): void {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("min-width: 1024px"),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
 describe("TodoPage", () => {
   it("已归入 active theme 目标的收件箱任务带外圈标记，未归入的不带", async () => {
     const now = "2026-06-28T09:00:00.000Z";
@@ -1480,6 +1522,161 @@ describe("TodoPage occurrence 删除分流", () => {
 
     await waitForCondition(() => !(host.textContent?.includes("混合体坏行") ?? false), "mixed row to leave the list");
     expect(await db.tasks.get("mixed-1")).toBeUndefined();
+    await unmount(root);
+  });
+});
+
+describe("TodoPage 多选态", () => {
+  const COMPOSER_INPUT = 'input[placeholder="做什么？怎样算做完…"]';
+
+  it("收件箱标题右侧的「圈成项目」进入多选，操作栏顶替记录框", async () => {
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+
+    expect(selectionBar(host)).toBeNull();
+    expect(host.querySelector(COMPOSER_INPUT)).not.toBeNull();
+
+    await enterSelection(host);
+
+    expect(selectionBar(host)?.textContent).toContain("已选 0 条");
+    expect(host.querySelector(COMPOSER_INPUT)).toBeNull();
+    await unmount(root);
+  });
+
+  it("零 active project 时入口仍常驻（冷启动）", async () => {
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+
+    expect(host.querySelector('[data-section="todo-projects"]')).toBeNull();
+    expect(host.querySelector('[data-section="inbox"] [aria-label="圈成项目"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("点收件箱行会勾上，计数跟着变", async () => {
+    await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    await clickSelectRow(host, "买灯");
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+    await unmount(root);
+  });
+
+  it("水下尾展开后的行也能选", async () => {
+    // 沉水要同时过两道判据：`updatedAt` 老过水位线（默认 14 天）**且** `createdAt` 出了宽限期
+    //（`isTaskInGracePeriod`，默认 7 天）。只改 updatedAt 的行还在宽限期里，永远浮着。
+    // 用 addTask 的 now 一次把两个时间戳都写老，与本文件既有水下用例同口径。
+    await addTask({ title: "陈年任务", toInbox: true, now: new Date("2025-06-28T09:00:00.000Z") });
+    await addTask({ title: "新任务", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "新任务");
+    await enterSelection(host);
+
+    const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
+    const tailToggle = [...inbox.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").startsWith("水下"),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      tailToggle.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flushAsync();
+
+    await clickSelectRow(host, "陈年任务");
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+    await unmount(root);
+  });
+
+  it("重力翻牌区的行也能选（该区不被 inert 挡）", async () => {
+    // 收件箱三处渲染点里最容易漏的一处：翻牌区走 GravityReviewSection 自己那份 TaskList，
+    // 三个 selection prop 少透一个，这里就点不动，而其它两处照常工作、没人会发现。
+    await addTask({ title: "水下陈年", toInbox: true, now: new Date("2025-06-28T09:00:00.000Z") });
+    await addTask({ title: "新任务", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "新任务");
+    await enterSelection(host);
+    await openGravityReview(host);
+
+    const review = host.querySelector('[data-section="todo-gravity-review"]') as HTMLElement;
+    expect(review.closest("[inert]")).toBeNull();
+    expect(review.querySelector('[aria-label="选择 水下陈年"]')).not.toBeNull();
+
+    await clickSelectRow(host, "水下陈年");
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+    await unmount(root);
+  });
+
+  it("其余区块被 inert 挡住，收件箱不被挡", async () => {
+    await addTask({ title: "今天的事" });
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "今天的事");
+    await enterSelection(host);
+
+    // 用 closest 而不是指名某个 wrapper：窄屏与宽屏两套布局各包一层，closest 两边都验得到。
+    expect(host.querySelector('[data-section="today"]')?.closest("[inert]")).not.toBeNull();
+    expect(host.querySelector('[data-section="inbox"]')?.closest("[inert]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("宽屏分支同样被 inert 挡住（两处布局各有一条闸）", async () => {
+    // 与上一条同断言、只差屏幕：漏包窄屏或漏包宽屏各会红一条，两处同改的要求才真有闸。
+    stubWideScreen();
+    await addTask({ title: "今天的事" });
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "今天的事");
+    // 探针：确认这条真的跑在宽屏分支上，否则它只是第二份窄屏用例。
+    expect(host.querySelector('[aria-label="调整左右面板宽度"]')).not.toBeNull();
+    await enterSelection(host);
+
+    expect(host.querySelector('[data-section="today"]')?.closest("[inert]")).not.toBeNull();
+    expect(host.querySelector('[data-section="inbox"]')?.closest("[inert]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("Esc 退出多选并清空选中", async () => {
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await flushAsync();
+    expect(selectionBar(host)).toBeNull();
+
+    // 再进一次：选中集必须是空的，否则上一轮的勾选会跟着回来。
+    await enterSelection(host);
+    expect(selectionBar(host)?.textContent).toContain("已选 0 条");
+    await unmount(root);
+  });
+
+  it("点取消退出多选，记录框回来", async () => {
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+
+    await act(async () => {
+      (host.querySelector('[aria-label="取消多选"]') as HTMLElement).dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+    await flushAsync();
+
+    expect(selectionBar(host)).toBeNull();
+    expect(host.querySelector(COMPOSER_INPUT)).not.toBeNull();
     await unmount(root);
   });
 });

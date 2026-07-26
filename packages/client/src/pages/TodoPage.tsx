@@ -83,6 +83,7 @@ import { TaskColumn } from "./todo/TaskColumn.js";
 import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
+import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
 import { ProjectNameChip, ProjectZoneIntroBar, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import {
   clampTodoIndentPreview,
@@ -129,6 +130,9 @@ export function TodoPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [notMode, setNotMode] = useState(false);
   const [composerText, setComposerText] = useState("");
+  // 页面级多选态（design §动作一）。selectedIds 只存 id：useLiveQuery 回流后手里攥着的整行会过期。
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   // 待消费的「展开并滚过去」意图（项目名 chip 回跳 + 落点反馈共用）。
   // 是集合不是单槽：两条分属不同组的成员先后回落时，两次置位若被 React 自动批处理合并，
   // 单槽只会保住最后一个、另一组静默丢掉。消费由 TodoProjectSection 回报（见 onRevealConsumed）。
@@ -342,6 +346,36 @@ export function TodoPage() {
     const chip = projectChips.get(t.id);
     return chip ? <ProjectNameChip chip={chip} onOpen={openProject} /> : null;
   };
+
+  const enterSelection = () => {
+    setSelectionMode(true);
+    setSelectedIds(new Set());
+  };
+  const exitSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+  const toggleSelect = (task: Task) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(task.id)) next.delete(task.id);
+      else next.add(task.id);
+      return next;
+    });
+  };
+  const selectionProps = { selectionMode, selectedIds, onToggleSelect: toggleSelect };
+  // 这个 effect 必须待在 exitSelection **之后**：依赖数组在渲染期就读它，
+  // 挪回上面那堆 useEffect 里会撞 const 的 TDZ（ReferenceError，整页白屏）。
+  useEffect(() => {
+    if (!selectionMode) return;
+    // 挂 window 而不是 document：测试派发键盘事件走的是 window.dispatchEvent，
+    // 而 window 上派发的事件不会向下冒泡到 document——挂错了这条闸在测试里永远不触发。
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") exitSelection();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectionMode, exitSelection]);
 
   const rowHandlers = {
     onToggle: toggle,
@@ -601,6 +635,11 @@ export function TodoPage() {
   // 「1 条任务已归入 2 个项目」这种自相矛盾的话就是可达的。
   const projectGroupsWithPending = buckets.projects.filter((group) => group.tasks.length > 0);
   const projectMemberCount = projectGroupsWithPending.reduce((sum, group) => sum + group.tasks.length, 0);
+  // 「放进…」的候选：项目区当前显示的组即可，与用户看到的一致。
+  const selectableProjects = buckets.projects.map((group) => ({
+    goalId: group.goalId,
+    goalTitle: group.goalTitle,
+  }));
   const projectsBlock = (
     <TodoProjectSection
       groups={buckets.projects}
@@ -671,6 +710,7 @@ export function TodoPage() {
       onMarkSurfaced={markSurfaced}
       onBump={bumpWeight}
       goalLinkedIds={goalLinkedIds}
+      {...selectionProps}
       {...rowHandlers}
     />
   );
@@ -687,6 +727,18 @@ export function TodoPage() {
         count={inboxFiltered.length}
         defaultOpen={!getInboxCollapsed()}
         onToggle={(open) => setInboxCollapsed(!open)}
+        action={
+          selectionMode ? null : (
+            <button
+              type="button"
+              aria-label="圈成项目"
+              onClick={enterSelection}
+              className="rounded-ctl px-1.5 py-0.5 td-text-caption text-ink-3 hover:bg-surface-hover hover:text-accent"
+            >
+              圈成项目
+            </button>
+          )
+        }
       >
         {inboxFiltered.length === 0 && sunkenFiltered.length === 0 ? (
           <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
@@ -700,6 +752,7 @@ export function TodoPage() {
                 stickyBottomOffsetPx={composerAvoidancePx}
                 extraAction={sunkenExtraAction}
                 goalLinkedIds={goalLinkedIds}
+                {...selectionProps}
                 {...rowHandlers}
               />
             }
@@ -712,6 +765,7 @@ export function TodoPage() {
                 indentTargetId={indentTargetId}
                 revealChildren={revealChildren}
                 goalLinkedIds={goalLinkedIds}
+                {...selectionProps}
                 {...rowHandlers}
               />
             )}
@@ -720,6 +774,28 @@ export function TodoPage() {
       </CollapsibleSection>
     </section>
   );
+
+  /**
+   * 多选态下把非收件箱区块整块挡掉。用 `inert` 而不是 `pointer-events-none`：
+   * 后者只挡指针，Tab 键照样能聚焦进去、回车照样开详情——那正是多选中最容易误触的路径。
+   * React 19 原生支持布尔 inert 属性。
+   */
+  const dimWhenSelecting = (node: ReactNode) =>
+    // 空区块（`completedBlock` 没有已完成任务时是 `false`）原样返回：包一层空 div 会在
+    // `flex flex-col gap-4` 里多占一个 flex 子项，进多选态时整列凭空下移 16px。
+    !node ? (
+      node
+    ) : selectionMode ? (
+      <div inert className="opacity-40 transition-opacity">
+        {node}
+      </div>
+    ) : (
+      node
+    );
+
+  // Task 7 接入写入：本任务只做「进得去、选得中、别处点不动、退得出」，提交流不在这里。
+  const submitCreateProject = async (_title: string) => {};
+  const submitAssignToProject = async (_goalId: string) => {};
 
   const scheduledFiltered = f(buckets.scheduled);
   // 7 天水位线：过滤激活时失效（命中即显示），否则水下折叠进 SunkenScheduledTail。
@@ -777,28 +853,28 @@ export function TodoPage() {
               className="items-start gap-y-4"
               left={
                 <>
-                  {atHandBlock}
-                  {todayBlock}
+                  {dimWhenSelecting(atHandBlock)}
+                  {dimWhenSelecting(todayBlock)}
                   {gravityReviewBlock}
-                  {completedBlock}
+                  {dimWhenSelecting(completedBlock)}
                 </>
               }
               right={
                 <>
-                  {scheduledBlock}
-                  {projectsBlock}
+                  {dimWhenSelecting(scheduledBlock)}
+                  {dimWhenSelecting(projectsBlock)}
                   {inboxBlock}
                 </>
               }
             />
           ) : (
             <div className="flex flex-col gap-4">
-              {atHandBlock}
-              {todayBlock}
+              {dimWhenSelecting(atHandBlock)}
+              {dimWhenSelecting(todayBlock)}
               {gravityReviewBlock}
-              {completedBlock}
-              {scheduledBlock}
-              {projectsBlock}
+              {dimWhenSelecting(completedBlock)}
+              {dimWhenSelecting(scheduledBlock)}
+              {dimWhenSelecting(projectsBlock)}
               {inboxBlock}
             </div>
           )}
@@ -815,24 +891,38 @@ export function TodoPage() {
           </div>
         </div>
 
-        <TodoComposer
-          tags={tagOptions}
-          composerText={composerText}
-          onComposerTextChange={setComposerText}
-          filterOpen={filterOpen}
-          onToggleFilterOpen={() => setFilterOpen((value) => !value)}
-          includeTags={includeTags}
-          excludeTags={excludeTags}
-          tagMode={tagMode}
-          notMode={notMode}
-          onToggleTag={toggleTag}
-          onToggleMode={toggleMode}
-          onToggleNotMode={toggleNotMode}
-          onClear={clearTags}
-          bottomOffsetPx={navOffsetPx}
-          hiddenByScroll={composerHiddenByScroll}
-          formRef={composerRef}
-        />
+        {/* 多选态下操作栏顶替记录框：两者同一位置、同一层级（见 TodoSelectionBar 的 zIndex 注释）。
+            TodoComposer 不渲染时 composerHeightPx 保持上一次测量值，contentBottomPaddingPx 因此不跳动——
+            操作栏高度与 composer 相近，沿用旧值即可，不为此加新的测量逻辑。 */}
+        {selectionMode ? (
+          <TodoSelectionBar
+            selectedCount={selectedIds.size}
+            projects={selectableProjects}
+            bottomOffsetPx={navOffsetPx}
+            onCreate={(title) => void submitCreateProject(title)}
+            onAssign={(goalId) => void submitAssignToProject(goalId)}
+            onCancel={exitSelection}
+          />
+        ) : (
+          <TodoComposer
+            tags={tagOptions}
+            composerText={composerText}
+            onComposerTextChange={setComposerText}
+            filterOpen={filterOpen}
+            onToggleFilterOpen={() => setFilterOpen((value) => !value)}
+            includeTags={includeTags}
+            excludeTags={excludeTags}
+            tagMode={tagMode}
+            notMode={notMode}
+            onToggleTag={toggleTag}
+            onToggleMode={toggleMode}
+            onToggleNotMode={toggleNotMode}
+            onClear={clearTags}
+            bottomOffsetPx={navOffsetPx}
+            hiddenByScroll={composerHiddenByScroll}
+            formRef={composerRef}
+          />
+        )}
 
         {confirmDialog}
 

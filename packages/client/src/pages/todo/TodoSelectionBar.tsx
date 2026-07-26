@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Z } from "../../lib/zLayers.js";
 
 export interface TodoSelectionBarProps {
   selectedCount: number;
@@ -39,8 +40,11 @@ export function TodoSelectionBar({
   return (
     <div
       data-testid="todo-selection-bar"
-      className="fixed inset-x-0 z-[var(--z-sticky)] px-4"
-      style={{ bottom: bottomOffsetPx }}
+      className="fixed inset-x-0 px-4"
+      // 与被顶替的 TodoComposer 同一个常量：同一个位置、同一个角色，就该在同一层。
+      // 取 sticky(20) 会被待办页那条 toast 容器（z-backdrop=40，落在 composer 上沿）压住——
+      // 「放进…」列表最高 max-h-60 向上展开，正好铺进 toast 那一行；多选态里报错 toast 是可达的。
+      style={{ bottom: bottomOffsetPx, zIndex: Z.backdrop }}
     >
       <div className="mx-auto w-full max-w-2xl">
         {pickerOpen && projects.length > 0 && (

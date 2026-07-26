@@ -16,6 +16,10 @@ interface GravityReviewSectionProps {
   onBump: (task: Task) => void | Promise<void>;
   /** 被任一 active 目标引用的 task id 集合：命中的翻牌行也渲染「已有去处」竖条。 */
   goalLinkedIds?: ReadonlySet<string>;
+  /** 页面级多选态（翻牌区展示的也是收件箱任务，一并可选）。 */
+  selectionMode?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (task: Task) => void;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -32,6 +36,10 @@ export function GravityReviewSection({
   onMarkSurfaced,
   onBump,
   goalLinkedIds,
+  // 三个 selection prop 显式解构、显式下传，不混进 `...rowHandlers`（同 SunkenInboxTail 的理由）。
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
   ...rowHandlers
 }: GravityReviewSectionProps) {
   const [batchIds, setBatchIds] = useState<string[]>([]);
@@ -123,6 +131,9 @@ export function GravityReviewSection({
               extraAction={extraAction}
               childrenModeOverride="static"
               goalLinkedIds={goalLinkedIds}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
               {...rowHandlers}
             />
             <button

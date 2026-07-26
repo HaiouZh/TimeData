@@ -11,6 +11,10 @@ interface SunkenInboxTailProps {
   extraAction?: (task: Task) => ReactNode;
   /** 被任一 active 目标引用的 task id 集合：命中的水下行也渲染「已有去处」竖条。 */
   goalLinkedIds?: ReadonlySet<string>;
+  /** 页面级多选态（水下的陈年任务恰恰最该被圈成项目，故一并可选）。 */
+  selectionMode?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (task: Task) => void;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -28,6 +32,11 @@ export function SunkenInboxTail({
   stickyBottomOffsetPx: _stickyBottomOffsetPx,
   extraAction,
   goalLinkedIds,
+  // 三个 selection prop 显式解构、显式下传：混在 `...rowHandlers` 里流过去虽然也能跑，
+  // 但类型与意图都会糊掉——下一个人读这个组件看不出它参与多选。
+  selectionMode,
+  selectedIds,
+  onToggleSelect,
   ...rowHandlers
 }: SunkenInboxTailProps) {
   const [expanded, setExpanded] = useState(false);
@@ -59,6 +68,9 @@ export function SunkenInboxTail({
                 extraAction={extraAction}
                 childrenModeOverride="static"
                 goalLinkedIds={goalLinkedIds}
+                selectionMode={selectionMode}
+                selectedIds={selectedIds}
+                onToggleSelect={onToggleSelect}
                 {...rowHandlers}
               />
             </div>
