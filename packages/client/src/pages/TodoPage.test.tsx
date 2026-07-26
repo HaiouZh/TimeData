@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement, useEffect } from "react";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, useSearchParams } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
@@ -33,6 +33,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * 让用例在渲染之后改 URL 查询参数。用来模拟「多选态开着时来了一条 `?taskId=` 深链」
+ *（通知点进来 / 应用内跳转），这是详情抽屉与多选态唯一能同屏共存的真实路径——
+ * 多选态下行点击是勾选、其余区块 inert，页面内部开不出抽屉。
+ */
+let driveSearchParams: ((next: Record<string, string>) => void) | null = null;
+function SearchParamDriver() {
+  const [, setSearchParams] = useSearchParams();
+  driveSearchParams = (next) => setSearchParams(new URLSearchParams(next));
+  return null;
+}
+
 function HideBottomNavOnMount() {
   const { setHidden } = useBottomNav();
   useEffect(() => {
@@ -46,6 +58,7 @@ async function renderPage({ hideBottomNav = false } = {}) {
     createElement(
       MemoryRouter,
       null,
+      createElement(SearchParamDriver),
       createElement(
         BottomNavProvider,
         null,
@@ -1719,6 +1732,45 @@ describe("TodoPage 多选态", () => {
     // 再进一次：选中集必须是空的，否则上一轮的勾选会跟着回来。
     await enterSelection(host);
     expect(selectionBar(host)?.textContent).toContain("已选 0 条");
+    await unmount(root);
+  });
+
+  it("有弹窗开着时 Esc 只关弹窗，多选态与选中集都不动", async () => {
+    // 多选的 Esc 与 Sheet / TaskDetailSheet 的 Esc **都挂在 window 上、互不知情**：
+    // 前者在 selectionMode 转 true 时先注册、后者在弹窗打开时后注册，同一次 keydown 两个都跑。
+    // 用户想关弹窗，结果选了半天的那批一起没了——而退出后的页面和「成功建组」长得一模一样
+    //（操作栏消失、记录框回来），只少一条 toast。
+    const target = await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    await act(async () => {
+      driveSearchParams?.({ taskId: target.id });
+    });
+    await settle();
+    // 探针：抽屉真的开了才谈得上「让位」，否则这条只是又一遍「Esc 退出多选」。
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await settle();
+
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(selectionBar(host)).not.toBeNull();
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    // 反向：弹窗关掉之后 Esc 必须重新生效，否则「让位」就成了「永久失灵」。
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await flushAsync();
+    expect(selectionBar(host)).toBeNull();
     await unmount(root);
   });
 

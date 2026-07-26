@@ -411,7 +411,17 @@ export function TodoPage() {
     // 挂 window 而不是 document：测试派发键盘事件走的是 window.dispatchEvent，
     // 而 window 上派发的事件不会向下冒泡到 document——挂错了这条闸在测试里永远不触发。
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") exitSelection();
+      if (event.key !== "Escape") return;
+      // 有 modal 开着就让位。`Sheet` 与 `TaskDetailSheet` 的 Esc handler 同样挂在 window 上、
+      // 与这条互不知情：这条在 selectionMode 转 true 时先注册、它们在弹窗打开时后注册，
+      // 同一次 keydown 两个都会跑——用户想关弹窗，选了半天的那批一起没了，
+      // 而退出后的页面和「成功建组」长得一模一样（操作栏消失、记录框回来），只少一条 toast。
+      //
+      // 判据用 DOM 在场而不是给 useConfirm 加 isOpen：待办页上能与多选同屏的弹窗不止确认框
+      //（`?taskId=` 深链会在多选态里推开 TaskDetailSheet，它有自己的第三个 window handler），
+      // 按 hook 逐个开洞会漏，按 `[role="dialog"]` 一次管住全部。
+      if (document.querySelector('[role="dialog"]') !== null) return;
+      exitSelection();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
