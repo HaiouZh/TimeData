@@ -21,6 +21,7 @@ import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
+import { useConfirm } from "../hooks/useConfirm.tsx";
 import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
@@ -66,6 +67,7 @@ import {
 import {
   assignTaskToProject,
   findActiveProjectGoalIdForTask,
+  prerequisiteLossOnAssign,
   ProjectAssignError,
   removeGoalMember,
 } from "../lib/goals.js";
@@ -369,6 +371,9 @@ export function TodoPage() {
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
+  // 归入项目前的一次性询问（拖走带前置边的任务会连带删边）。useConfirm 是单槽，
+  // 但这里只在一次 drag end 的末尾调用，不会有第二个请求来顶替它。
+  const { confirm, dialog: confirmDialog } = useConfirm();
   // 当前被拖的任务：项目组按它画「可落 / 不可落」两态。存 id 而不是整行，
   // 免得 useLiveQuery 刷新后手里攥着一份过期的行。allTasks 已含项目区成员，不另开查询（design §数据源）。
   const [dragCandidateId, setDragCandidateId] = useState<string | null>(null);
@@ -475,7 +480,15 @@ export function TodoPage() {
       // 落点是项目组却解析不出操作 = 准入拒绝。当前唯一可达的是子任务这一支
       //（重复模板在已排期区、那区不可拖；occurrence 走 assign-to-project 分支由写入侧拒）。
       // 不在这里报，用户就只看到「往这儿拖没反应」——design §动作二 明写四种拒绝都要给原因。
-      if (targetContainer?.kind === "project" && activeParentId !== null) {
+      //
+      // 判据必须**先看容器 id**：上面那段 activeParentId 对子任务恒为 null——它查的两个来源
+      //（buckets.today/inbox 与 allTasks）全是 listTasks 的产物，而 listTasks 把 parentId !== null
+      // 的行整个跳过。只认 activeParentId 的话这条 toast 一次也弹不出来，正是本轮在修的那个病。
+      // 后半段的 `activeParentId !== null` 仍留着：池容器里 parentId 非空是数据不自洽的可达状态
+      //（todoDnd 有对应用例），对用户同样是「这是条子任务」。
+      const activeIsSubtask =
+        parseTodoContainerId(activeContainerId)?.kind === "parent" || activeParentId !== null;
+      if (targetContainer?.kind === "project" && activeIsSubtask) {
         const group = buckets.projects.find((g) => g.goalId === targetContainer.goalId);
         if (group) showActionToast({ message: projectAssignBlockMessage("subtask", group.goalTitle) });
       }
@@ -533,6 +546,19 @@ export function TodoPage() {
         }
         case "assign-to-project": {
           try {
+            // 摘除必然删掉源组里引用它的 prerequisites 边（星图里画的「甲做完才能做乙」），
+            // 这是 GoalSchema superRefine 的硬后果、改不掉。变的是触发门槛：以前「退出项目」
+            // 是 goals 页的显式动作，现在待办页手滑一拖就触发，且成功不展开组、当场察觉不到。
+            const loss = await prerequisiteLossOnAssign(activeId, op.goalId);
+            if (loss !== null) {
+              const ok = await confirm({
+                title: "移动会删掉依赖关系",
+                body: `这条任务在「${loss.goalTitle}」里有 ${loss.count} 条前置依赖关系。移到别的项目会一并删除，且无法撤销。`,
+                confirmLabel: "仍要移动",
+                danger: true,
+              });
+              if (!ok) return;
+            }
             await assignTaskToProject(op.goalId, activeId);
             const group = buckets.projects.find((g) => g.goalId === op.goalId);
             // 组间排序键是成员的 max(updatedAt)，而归入刚好刷新它——目标组会跳到项目区第一位。
@@ -799,6 +825,8 @@ export function TodoPage() {
           hiddenByScroll={composerHiddenByScroll}
           formRef={composerRef}
         />
+
+        {confirmDialog}
 
         {detailId && (
           <TaskDetailSheet

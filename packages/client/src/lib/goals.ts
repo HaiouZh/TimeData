@@ -301,6 +301,45 @@ export async function assignTaskToProject(
   return nextGoal;
 }
 
+/**
+ * 把 `taskId` 归入 `nextGoalId` 时，会被连带删掉的前置依赖边数量与来源组名。
+ *
+ * 摘除成员必然删掉源组里引用它的边（`GoalSchema` superRefine 要求 prerequisite 必须指向成员，
+ * 不删则整行 parse 失败、整个目标从 UI 与同步里消失），所以这不是可选副作用而是硬后果。
+ * 待办页在拖拽落库前用它决定要不要先问一句——同样的破坏在 goals 页是显式动作，在这里只是一次手滑。
+ *
+ * 读裸行不过 `GoalSchema.parse`：superRefine 会因单个成员重复 reject 整行，
+ * 那会让这次询问静默失效、用户在毫不知情下丢掉整组边（同 `assignTaskToProject`）。
+ *
+ * 单一归属是写入侧不变量，正常情况下最多命中一个源组；但存量与跨设备并发能造出多个，
+ * 故 count 是全部命中组之和，`goalTitle` 取边最多的那个（一句话里只塞得下一个名字）。
+ */
+export async function prerequisiteLossOnAssign(
+  taskId: string,
+  nextGoalId: string,
+): Promise<{ count: number; goalTitle: string } | null> {
+  const ref: GoalMemberRef = { kind: "task", id: taskId };
+  const rows = await db.goals.toArray();
+  let total = 0;
+  let widest: { count: number; title: string } | null = null;
+
+  for (const row of rows) {
+    if (row.id === nextGoalId) continue;
+    // 只数会被真的摘除的组：摘除循环本身也只认 active project（theme 归属与归档组都不摘）。
+    if (row.status !== "active" || row.kind !== "project") continue;
+    if (!(row.members ?? []).some((member) => sameGoalMember(member, ref))) continue;
+    // 判据与 removeGoalMember 里那句 filter 一字对应，两处漂了就会问一个不发生的后果。
+    const count = (row.prerequisites ?? []).filter(
+      (edge) => sameGoalMember(edge.blocker, ref) || sameGoalMember(edge.blocked, ref),
+    ).length;
+    if (count === 0) continue;
+    total += count;
+    if (!widest || count > widest.count) widest = { count, title: row.title };
+  }
+
+  return widest === null ? null : { count: total, goalTitle: widest.title };
+}
+
 export async function addTaskForGoal(goalId: string, input: AddTaskForGoalInput): Promise<Task> {
   const task = await buildNewRootTask({ title: input.title, toInbox: input.toInbox, now: input.now });
   let nextTask: Task | null = null;

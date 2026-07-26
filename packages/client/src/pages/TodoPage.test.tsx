@@ -154,6 +154,35 @@ async function typeAndAdd(host: HTMLElement, title: string) {
   });
 }
 
+/**
+ * 用键盘传感器完成一次「抓起 → 松手」的拖拽。
+ *
+ * 不用 MouseSensor：它有 180ms 激活延迟，而仓库禁真实定时等待。KeyboardSensor 无延迟，
+ * 抓起与松手都是 Space。落点之所以能稳定落在项目组：jsdom 里所有 rect 都是 (0,0,0,0)，
+ * `pointerWithin` 判定「指针 (0,0) 落在每个 droppable 内」而全部命中，
+ * 页面的 `preferProjectCollisions` 再把结果过滤成只剩 `project:` 前缀的那些。
+ * 因此**这类用例只能有一个项目组**，多于一个时落到哪组由注册顺序决定。
+ */
+async function keyboardDrag(handle: HTMLElement): Promise<void> {
+  await act(async () => {
+    handle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+  });
+  await settle();
+  await act(async () => {
+    handle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+
+/** 等页面上出现某条操作反馈 toast。 */
+async function waitForToast(host: HTMLElement, text: string): Promise<void> {
+  await waitForCondition(
+    () => (host.querySelector('[aria-label="待办操作反馈"]')?.textContent ?? "").includes(text),
+    `toast ${text}`,
+    settle,
+  );
+}
+
 describe("TodoPage", () => {
   it("已归入 active theme 目标的收件箱任务带外圈标记，未归入的不带", async () => {
     const now = "2026-06-28T09:00:00.000Z";
@@ -785,6 +814,172 @@ describe("TodoPage", () => {
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
     });
+    await unmount(root);
+  });
+
+
+
+  it("拖进项目组成功后弹一条「已归入」：组间排序键被刷新，目标组会跳到项目区第一位", async () => {
+    // 成功路径刻意不展开组，但归入刷新成员 updatedAt、而组间排序键正是成员的 max(updatedAt)——
+    // 目标组必然跳到第一位。不说出去向，连续拖第二条就会照着旧的视觉位置落进别的组，
+    // 而且几乎不可见（组不展开、任务同时从收件箱消失）。
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    const free = await addTask({ title: "自由任务", toInbox: true });
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "自由任务");
+    await keyboardDrag(host.querySelector('[aria-label="移动 自由任务"]') as HTMLElement);
+
+    await waitForToast(host, "已归入「装修」");
+    const goal = await db.goals.get("g1");
+    expect(goal?.members).toContainEqual({ kind: "task", id: free.id });
+    await unmount(root);
+  });
+
+  it("把子任务拖进项目组：给出拒绝原因，而不是「往这儿拖没反应」", async () => {
+    // 承重点是 handleDragEnd 里 `if (!op)` 那段。它早退时 switch 里的 toast 一条也执行不到，
+    // 而子任务→项目组恰好就走这条早退路径：resolveTodoDragOperation 对它返回 null。
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    const parent = await addTask({ title: "父任务", toInbox: true });
+    const child = await createChildTask(parent.id, "子任务");
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "父任务");
+    await act(async () => {
+      (host.querySelector('[aria-label="移动 父任务"]') as HTMLElement).dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+    await waitForCondition(
+      () => host.querySelector('[aria-label="拖动子任务 子任务"]') !== null,
+      "child drag handle",
+      settle,
+    );
+
+    await keyboardDrag(host.querySelector('[aria-label="拖动子任务 子任务"]') as HTMLElement);
+
+    await waitForToast(host, "子任务不能单独归入项目");
+    const goal = await db.goals.get("g1");
+    expect(goal?.members).not.toContainEqual({ kind: "task", id: child.id });
+    await unmount(root);
+  });
+
+  it("拖走带前置依赖的任务先问一句：取消则原样不动，确认才连边一起删", async () => {
+    // 摘除成员必然删掉源组里引用它的 prerequisites 边（GoalSchema superRefine 的硬后果，改不掉）。
+    // 以前这只发生在 goals 页的显式「退出项目」，现在待办页手滑一拖就触发、且成功不展开组，
+    // 当场察觉不到。所以落库前先问一句。
+    //
+    // **布置为什么这么绕**：jsdom 里所有 rect 都是 (0,0,0,0)，closestCenter 全部并列，
+    // dnd-kit 取先注册的那个 droppable。要让落点稳定是 gB，必须满足两件事：
+    //   ① 初次渲染时今天区是空的（今天区在 DOM 里排在项目区前面，有行就会先注册、抢走落点）；
+    //   ② gB 排在 gA 前面（组间按成员 max(updatedAt) 倒序），于是 gB 的卡先注册。
+    // 被拖的 t1 是 gA 的成员，只有排进今天才可拖——所以它的今天行是**渲染之后**才挂上的，
+    // 注册顺序排在两张组卡之后。
+    const old = "2026-01-01T00:00:00.000Z";
+    const newer = "2026-05-01T00:00:00.000Z";
+    const t1 = await addTask({ title: "打地基", toInbox: true });
+    const t2 = await addTask({ title: "砌墙", toInbox: true });
+    const other = await addTask({ title: "别组成员", toInbox: true });
+    await db.tasks.update(t1.id, { updatedAt: old });
+    await db.tasks.update(t2.id, { updatedAt: old });
+    await db.tasks.update(other.id, { updatedAt: newer });
+    await db.goals.add({
+      id: "gA",
+      title: "老项目",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: t1.id },
+        { kind: "task", id: t2.id },
+      ],
+      prerequisites: [{ blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } }],
+      createdAt: old,
+      updatedAt: old,
+    });
+    await db.goals.add({
+      id: "gB",
+      title: "新项目",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: other.id }],
+      prerequisites: [],
+      createdAt: newer,
+      updatedAt: newer,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelectorAll('[data-testid="project-group"]').length === 2,
+      "both project groups",
+    );
+    expect([...host.querySelectorAll("[data-goal-id]")].map((e) => e.getAttribute("data-goal-id"))).toEqual([
+      "gB",
+      "gA",
+    ]);
+
+    const today = new Date();
+    const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    await scheduleTask(t1.id, ymd);
+    await waitForCondition(
+      () => host.querySelector('[aria-label="移动 打地基"]') !== null,
+      "打地基 draggable in today",
+      settle,
+    );
+    const grab = () => host.querySelector('[aria-label="移动 打地基"]') as HTMLElement;
+    const dialogText = () => host.querySelector('[role="dialog"]')?.textContent ?? "";
+
+    // ① 取消：一条边都不许掉，归属也不许动。
+    await keyboardDrag(grab());
+    await waitForCondition(() => dialogText().includes("移动会删掉依赖关系"), "confirm dialog", settle);
+    expect(dialogText()).toContain("在「老项目」里有 1 条前置依赖关系");
+    await act(async () => {
+      [...host.querySelectorAll('[role="dialog"] button')]
+        .find((b) => b.textContent === "取消")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect((await db.goals.get("gA"))?.members).toContainEqual({ kind: "task", id: t1.id });
+    expect((await db.goals.get("gA"))?.prerequisites).toHaveLength(1);
+    expect((await db.goals.get("gB"))?.members).not.toContainEqual({ kind: "task", id: t1.id });
+
+    // ② 确认：归属换组，源组那条边随之消失——这正是要先问的那个后果。
+    await keyboardDrag(grab());
+    await waitForCondition(() => dialogText().includes("移动会删掉依赖关系"), "confirm dialog again", settle);
+    await act(async () => {
+      [...host.querySelectorAll('[role="dialog"] button')]
+        .find((b) => b.textContent === "仍要移动")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    let moved = false;
+    for (let i = 0; i < 20 && !moved; i += 1) {
+      await settle();
+      moved = (await db.goals.get("gB"))?.members?.some((member) => member.id === t1.id) === true;
+    }
+    expect(moved).toBe(true);
+    expect((await db.goals.get("gA"))?.members).not.toContainEqual({ kind: "task", id: t1.id });
+    expect((await db.goals.get("gA"))?.prerequisites).toEqual([]);
     await unmount(root);
   });
 

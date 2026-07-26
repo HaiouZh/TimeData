@@ -9,6 +9,7 @@ import {
   findActiveProjectGoalIdForTask,
   getGoal,
   listGoals,
+  prerequisiteLossOnAssign,
   ProjectAssignError,
   removeGoalMember,
   updateGoal,
@@ -390,47 +391,47 @@ describe("findActiveProjectGoalIdForTask", () => {
   });
 });
 
+async function seedTask(id: string, patch: Record<string, unknown> = {}): Promise<void> {
+  await db.tasks.add({
+    id,
+    parentId: null,
+    title: `任务 ${id}`,
+    done: false,
+    recurrence: null,
+    lastDoneAt: null,
+    startAt: null,
+    scheduledAt: null,
+    completedCount: 0,
+    weight: 0,
+    completedAt: null,
+    tags: [],
+    // ruleId 必须显式给 null：projectAssignBlock 判的是 `task.ruleId !== null`，
+    // 缺字段读出来是 undefined，会让每条 seed 任务都被判成 recurring。
+    ruleId: null,
+    sessionId: null,
+    skipped: false,
+    sortOrder: 0,
+    createdAt: now,
+    updatedAt: now,
+    ...patch,
+  } as never);
+}
+
+async function seedProject(id: string, members: string[] = [], patch: Record<string, unknown> = {}): Promise<void> {
+  await db.goals.add({
+    id,
+    title: `项目 ${id}`,
+    kind: "project",
+    status: "active",
+    members: members.map((taskId) => ({ kind: "task", id: taskId })),
+    prerequisites: [],
+    createdAt: now,
+    updatedAt: now,
+    ...patch,
+  } as never);
+}
+
 describe("assignTaskToProject", () => {
-  async function seedTask(id: string, patch: Record<string, unknown> = {}): Promise<void> {
-    await db.tasks.add({
-      id,
-      parentId: null,
-      title: `任务 ${id}`,
-      done: false,
-      recurrence: null,
-      lastDoneAt: null,
-      startAt: null,
-      scheduledAt: null,
-      completedCount: 0,
-      weight: 0,
-      completedAt: null,
-      tags: [],
-      // ruleId 必须显式给 null：projectAssignBlock 判的是 `task.ruleId !== null`，
-      // 缺字段读出来是 undefined，会让每条 seed 任务都被判成 recurring。
-      ruleId: null,
-      sessionId: null,
-      skipped: false,
-      sortOrder: 0,
-      createdAt: now,
-      updatedAt: now,
-      ...patch,
-    } as never);
-  }
-
-  async function seedProject(id: string, members: string[] = [], patch: Record<string, unknown> = {}): Promise<void> {
-    await db.goals.add({
-      id,
-      title: `项目 ${id}`,
-      kind: "project",
-      status: "active",
-      members: members.map((taskId) => ({ kind: "task", id: taskId })),
-      prerequisites: [],
-      createdAt: now,
-      updatedAt: now,
-      ...patch,
-    } as never);
-  }
-
   it("从 A 组拖到 B 组：A 里不再有它，B 里有它（单一归属是写入侧不变量）", async () => {
     await seedTask("t1");
     await seedProject("gA", ["t1"]);
@@ -593,5 +594,90 @@ describe("assignTaskToProject", () => {
       { kind: "task", id: "dup" },
       { kind: "task", id: "dup" },
     ]);
+  });
+});
+
+describe("prerequisiteLossOnAssign", () => {
+  /** 一条 blocker→blocked 的前置边（星图里的「甲做完才能做乙」）。 */
+  function edge(blocker: string, blocked: string) {
+    return { blocker: { kind: "task", id: blocker }, blocked: { kind: "task", id: blocked } };
+  }
+
+  it("源组里有引用它的边 → 报出条数与源组名（blocker 侧与 blocked 侧都算）", async () => {
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedTask("t3");
+    await seedProject("gA", ["t1", "t2", "t3"], { prerequisites: [edge("t1", "t2"), edge("t3", "t1")] });
+    await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 2, goalTitle: "项目 gA" });
+  });
+
+  it("源组里没有引用它的边 → null（不为一次无后果的移动弹确认）", async () => {
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedTask("t3");
+    await seedProject("gA", ["t1", "t2", "t3"], { prerequisites: [edge("t2", "t3")] });
+    await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toBeNull();
+  });
+
+  it("源组是 theme → 不算：摘除循环根本不摘它，那些边一条都不会掉", async () => {
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedProject("gTheme", ["t1", "t2"], { kind: "theme", prerequisites: [edge("t1", "t2")] });
+    await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toBeNull();
+  });
+
+  it("源组已归档 → 不算：读侧不认它，摘除循环也跳过它", async () => {
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedProject("gOld", ["t1", "t2"], { status: "archived", prerequisites: [edge("t1", "t2")] });
+    await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toBeNull();
+  });
+
+  it("目标组自己的边不算：往回拖进它已经在的组不会摘除、边一条不掉", async () => {
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedProject("gB", ["t1", "t2"], { prerequisites: [edge("t1", "t2")] });
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toBeNull();
+  });
+
+  it("多个源组时条数相加，组名取边最多的那个（一句话里只塞得下一个名字）", async () => {
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedTask("t3");
+    await seedProject("gFew", ["t1", "t2"], { prerequisites: [edge("t1", "t2")] });
+    await seedProject("gMany", ["t1", "t2", "t3"], { prerequisites: [edge("t1", "t2"), edge("t3", "t1")] });
+    await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 3, goalTitle: "项目 gMany" });
+  });
+
+  it("读裸行不过 GoalSchema：members 含重复 ref 的源组照样数得出边", async () => {
+    // 一过 parse，superRefine 会因单个成员重复 reject 整行，这次询问静默失效，
+    // 用户在毫不知情下丢掉整组边——正是红线 3 要挡的那类失效。
+    await seedTask("t1");
+    await seedTask("t2");
+    await seedProject("gA", [], { prerequisites: [edge("t1", "t2")] });
+    const rawA = await db.goals.get("gA");
+    if (!rawA) throw new Error("gA 不存在");
+    await db.goals.put({
+      ...rawA,
+      members: [
+        { kind: "task", id: "t1" },
+        { kind: "task", id: "t1" },
+        { kind: "task", id: "t2" },
+      ],
+    });
+    await seedProject("gB");
+
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 1, goalTitle: "项目 gA" });
   });
 });
