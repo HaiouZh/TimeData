@@ -273,6 +273,12 @@ export async function assignTaskToProject(
     const goalRows = await db.goals.toArray();
     const target = goalRows.find((row) => row.id === goalId);
     if (!target) throw new Error("目标不存在");
+    // 目标组必须**仍然**是 active project。缺了这道闸，另一端归档 / 改成 theme 后（本页项目区还没刷新完，
+    // droppable 仍在）拖进来会照常摘除、照常写入，而读侧只认 active project——这条任务从此不属于任何组，
+    // 是静默的归属丢失。同文件 `addTaskForGoal` 早有同款闸，此处缺失属不对称。
+    if (target.status !== "active" || target.kind !== "project") {
+      throw new ProjectAssignError("inactive", target.title);
+    }
 
     const members = target.members ?? [];
     const already = members.some((member) => member.kind === "task" && member.id === taskId);

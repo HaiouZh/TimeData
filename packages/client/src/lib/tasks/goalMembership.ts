@@ -153,8 +153,13 @@ export function releasedProjectTaskIds(before: Goal, after: Goal): string[] {
  */
 export const GOAL_MEMBERS_MAX = 500;
 
-/** 归入项目被拒的原因；null = 可以入组。 */
-export type ProjectAssignBlock = "subtask" | "recurring" | "full";
+/**
+ * 归入项目被拒的原因；null = 可以入组。
+ *
+ * 前三支是**任务侧**的，由 `projectAssignBlock` 判；`inactive` 是**目标侧**的
+ * （目标组已归档或已改成 theme），只能由写入入口在拿到 goal 行后自己判，故不在那个函数里。
+ */
+export type ProjectAssignBlock = "subtask" | "recurring" | "full" | "inactive";
 
 /**
  * 成员准入（design §成员准入）：`parentId === null && recurrence === null && ruleId === null`，外加 500 上限。
@@ -185,5 +190,7 @@ export function projectAssignBlockMessage(block: ProjectAssignBlock, goalTitle: 
       return "重复待办本期不能归入项目";
     case "full":
       return `「${goalTitle}」的成员已满 ${GOAL_MEMBERS_MAX}，无法再加入`;
+    case "inactive":
+      return `「${goalTitle}」已归档或不再是项目，无法加入`;
   }
 }

@@ -466,6 +466,29 @@ describe("assignTaskToProject", () => {
     expect(old?.members).toEqual([{ kind: "task", id: "t1" }]);
   });
 
+  it("目标组已归档 → 抛 inactive，且源组的成员一个没摘（否则任务失去全部有效归属）", async () => {
+    await seedTask("t1");
+    await seedProject("gA", ["t1"]);
+    await seedProject("gArchived", [], { status: "archived" });
+
+    await expect(assignTaskToProject("gArchived", "t1")).rejects.toMatchObject({ block: "inactive" });
+
+    const a = await db.goals.get("gA");
+    expect(a?.members).toEqual([{ kind: "task", id: "t1" }]);
+    expect(await findActiveProjectGoalIdForTask("t1")).toBe("gA");
+  });
+
+  it("目标组是 theme → 抛 inactive：归属轴排他只在 kind=project 之间成立", async () => {
+    await seedTask("t1");
+    await seedProject("gA", ["t1"]);
+    await seedProject("gTheme2", [], { kind: "theme" });
+
+    await expect(assignTaskToProject("gTheme2", "t1")).rejects.toMatchObject({ block: "inactive" });
+
+    const a = await db.goals.get("gA");
+    expect(a?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
   it("刷新成员任务 updatedAt 并记 tasks 同步日志（不刷新会让它按旧时钟沉进水下）", async () => {
     await seedTask("t1");
     await seedProject("gB");

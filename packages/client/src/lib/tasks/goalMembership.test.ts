@@ -196,9 +196,10 @@ describe("projectAssignBlock", () => {
 });
 
 describe("projectAssignBlockMessage", () => {
-  it("三支各有自己的话，满员那支带组名", () => {
+  it("四支各有自己的话，涉及目标组的两支带组名", () => {
     expect(projectAssignBlockMessage("subtask", "装修")).toBe("子任务不能单独归入项目，先把它拽成独立任务");
     expect(projectAssignBlockMessage("recurring", "装修")).toBe("重复待办本期不能归入项目");
     expect(projectAssignBlockMessage("full", "装修")).toBe("「装修」的成员已满 500，无法再加入");
+    expect(projectAssignBlockMessage("inactive", "装修")).toBe("「装修」已归档或不再是项目，无法加入");
   });
 });
