@@ -144,3 +144,46 @@ export function releasedProjectTaskIds(before: Goal, after: Goal): string[] {
   const kept = new Set(ownedProjectTaskIds(after));
   return ownedProjectTaskIds(before).filter((taskId) => !kept.has(taskId));
 }
+
+/**
+ * `GoalSchema.members` 的数组上限（`packages/shared/src/entitySchemas.ts` 的 `.max(500)`）。
+ *
+ * 这里重复一份字面量而不是从 shared 导出常量：改 `entitySchemas.ts` 属仓库的「schema 变更」停手边界，
+ * 而这个值本身没变。两处漂移由 goalMembership.test.ts 里那条 GoalSchema 对拍用例钉住。
+ */
+export const GOAL_MEMBERS_MAX = 500;
+
+/** 归入项目被拒的原因；null = 可以入组。 */
+export type ProjectAssignBlock = "subtask" | "recurring" | "full";
+
+/**
+ * 成员准入（design §成员准入）：`parentId === null && recurrence === null && ruleId === null`，外加 500 上限。
+ *
+ * - 子任务：与「子任务不能单独抓到手头」同构。
+ * - 重复模板与 occurrence 合成 `recurring` 一支：对用户是同一件事，文案一字不差。
+ * - `memberCount` 传 `goal.members` 的**数组长度**（含 track 成员与悬空 ref），不是可解析的 task 数——
+ *   500 是 schema 对整个数组的硬闸，撞上后 parse 失败会让整个 goal 从 UI 与同步里消失，不是报错。
+ *
+ * 准入三条件优先于满员：满员只是「这个组装不下」，而子任务/重复待办是「这东西本身不参与归属」，
+ * 换个组也一样，先说更根本的那个原因。
+ */
+export function projectAssignBlock(
+  task: Pick<Task, "parentId" | "recurrence" | "ruleId">,
+  memberCount: number,
+): ProjectAssignBlock | null {
+  if ((task.parentId ?? null) !== null) return "subtask";
+  if (task.recurrence !== null || task.ruleId !== null) return "recurring";
+  if (memberCount >= GOAL_MEMBERS_MAX) return "full";
+  return null;
+}
+
+export function projectAssignBlockMessage(block: ProjectAssignBlock, goalTitle: string): string {
+  switch (block) {
+    case "subtask":
+      return "子任务不能单独归入项目，先把它拽成独立任务";
+    case "recurring":
+      return "重复待办本期不能归入项目";
+    case "full":
+      return `「${goalTitle}」的成员已满 ${GOAL_MEMBERS_MAX}，无法再加入`;
+  }
+}

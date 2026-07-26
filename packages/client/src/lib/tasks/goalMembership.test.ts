@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { Goal, Task } from "@timedata/shared";
+import { GoalSchema, type Goal, type Task } from "@timedata/shared";
 import {
   buildTodoProjectGroups,
   goalLinkedTaskIds,
   ownedProjectTaskIds,
+  projectAssignBlock,
+  projectAssignBlockMessage,
   projectMemberIndex,
   releasedProjectTaskIds,
+  GOAL_MEMBERS_MAX,
 } from "./goalMembership.js";
 
 function goal(patch: Partial<Goal> & Pick<Goal, "id">): Goal {
@@ -145,5 +148,57 @@ describe("ownedProjectTaskIds", () => {
     expect(ownedProjectTaskIds(goal({ id: "g1", members }))).toEqual(["t1"]);
     expect(ownedProjectTaskIds(goal({ id: "g1", members, status: "archived" }))).toEqual([]);
     expect(ownedProjectTaskIds(goal({ id: "g1", members, kind: "theme" }))).toEqual([]);
+  });
+});
+
+describe("projectAssignBlock", () => {
+  const ok = { parentId: null, recurrence: null, ruleId: null };
+
+  it("根任务 + 非重复 + 未满 → null（可以入组）", () => {
+    expect(projectAssignBlock(ok, 0)).toBeNull();
+    expect(projectAssignBlock(ok, GOAL_MEMBERS_MAX - 1)).toBeNull();
+  });
+
+  it("子任务 → subtask", () => {
+    expect(projectAssignBlock({ ...ok, parentId: "p1" }, 0)).toBe("subtask");
+  });
+
+  it("重复模板 → recurring", () => {
+    expect(projectAssignBlock({ ...ok, recurrence: { kind: "daily", interval: 1 } as never }, 0)).toBe("recurring");
+  });
+
+  it("occurrence → recurring（与模板同文案，不分两支）", () => {
+    expect(projectAssignBlock({ ...ok, ruleId: "r1" }, 0)).toBe("recurring");
+  });
+
+  it("成员已满 → full", () => {
+    expect(projectAssignBlock(ok, GOAL_MEMBERS_MAX)).toBe("full");
+  });
+
+  it("准入不合格优先于满员：满员的组收到子任务，报的是 subtask 不是 full", () => {
+    expect(projectAssignBlock({ ...ok, parentId: "p1" }, GOAL_MEMBERS_MAX)).toBe("subtask");
+  });
+
+  it("GOAL_MEMBERS_MAX 与 GoalSchema 的实际上限一致（钉死两处 500 漂移）", () => {
+    const base = {
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      prerequisites: [],
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    const full = Array.from({ length: GOAL_MEMBERS_MAX }, (_, i) => ({ kind: "task", id: `t${i}` }));
+    expect(() => GoalSchema.parse({ ...base, members: full })).not.toThrow();
+    expect(() => GoalSchema.parse({ ...base, members: [...full, { kind: "task", id: "overflow" }] })).toThrow();
+  });
+});
+
+describe("projectAssignBlockMessage", () => {
+  it("三支各有自己的话，满员那支带组名", () => {
+    expect(projectAssignBlockMessage("subtask", "装修")).toBe("子任务不能单独归入项目，先把它拽成独立任务");
+    expect(projectAssignBlockMessage("recurring", "装修")).toBe("重复待办本期不能归入项目");
+    expect(projectAssignBlockMessage("full", "装修")).toBe("「装修」的成员已满 500，无法再加入");
   });
 });
