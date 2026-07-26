@@ -1016,6 +1016,103 @@ describe("TaskRow 多选态", () => {
     await unmount(root);
   });
 
+  // 行焦点上派发一枚可取消的 keydown，并把事件本身还回来供断言 defaultPrevented
+  //（Space 的默认行为是滚页面：多选态必须挡掉，非多选态必须放行）。
+  async function pressOn(el: Element | null | undefined, key: string): Promise<KeyboardEvent> {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+    await act(async () => {
+      el?.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  it("多选态下按 Space 勾选，并挡掉默认滚页（Space 才是 checkbox 的约定键）", async () => {
+    const onToggleSelect = vi.fn();
+    const onEdit = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: rowTask,
+        pool: "inbox",
+        selectionMode: true,
+        selected: false,
+        onToggleSelect,
+        onToggle: vi.fn(),
+        onEdit,
+      }),
+    );
+
+    const event = await pressOn(host.querySelector('[aria-label="选择 买灯"]'), " ");
+
+    expect(onToggleSelect).toHaveBeenCalledWith(rowTask);
+    expect(onEdit).not.toHaveBeenCalled();
+    // 不 preventDefault 的话，键盘用户每勾一条就把页面往下滚一屏。
+    expect(event.defaultPrevented).toBe(true);
+    await unmount(root);
+  });
+
+  it("焦点在行内「完成」复选框上按 Space 只完成、不连带勾选（一次按键不许干两件事）", async () => {
+    const onToggle = vi.fn();
+    const onToggleSelect = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: rowTask,
+        pool: "inbox",
+        selectionMode: true,
+        selected: false,
+        onToggleSelect,
+        onToggle,
+        onEdit: vi.fn(),
+      }),
+    );
+
+    // 原生 checkbox 自己吃 Space 切换完成态，keydown 照样冒泡到行上。
+    // 行上那道 `event.target !== event.currentTarget` 闸没了的话，这一下会同时「完成」+「勾选」。
+    await pressOn(host.querySelector('input[aria-label="完成 买灯"]'), " ");
+
+    expect(onToggleSelect).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("焦点在行内「完成」复选框上按 Enter 也不连带勾选（Enter 与 Space 共用同一道 target 闸）", async () => {
+    const onToggleSelect = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: rowTask,
+        pool: "inbox",
+        selectionMode: true,
+        selected: false,
+        onToggleSelect,
+        onToggle: vi.fn(),
+        onEdit: vi.fn(),
+      }),
+    );
+
+    await pressOn(host.querySelector('input[aria-label="完成 买灯"]'), "Enter");
+
+    expect(onToggleSelect).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("非多选态按 Space 什么都不做，也不挡默认滚页（行是 role=link，Space 归页面）", async () => {
+    const onEdit = vi.fn();
+    const onToggleSelect = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, { task: rowTask, pool: "inbox", onToggleSelect, onToggle: vi.fn(), onEdit }),
+    );
+
+    const event = await pressOn(host.querySelector('[aria-label="打开 买灯"]'), " ");
+
+    expect(onToggleSelect).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
+    // Space 分支若不按 selectionMode 收口，这里会白吃掉一次滚页。
+    expect(event.defaultPrevented).toBe(false);
+    await unmount(root);
+  });
+
   it("多选态下复选框语义仍是「完成」", async () => {
     const onToggle = vi.fn();
     const onToggleSelect = vi.fn();

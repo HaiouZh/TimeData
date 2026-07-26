@@ -263,6 +263,11 @@ export function TaskRow({
         aria-label={selectionMode ? `选择 ${task.title}` : `打开 ${task.title}`}
         onClick={handleRowClick}
         onKeyDown={(event) => {
+          // 两支共用一道 target 闸：只认落在行本身的按键。行内嵌着真正的「完成」复选框，
+          // 焦点在它上面按 Space 会先原生切换完成态、keydown 再冒泡上来——不挡的话一次按键
+          // 同时「完成」+「勾选」。Enter 一并挡（原生 checkbox 不理 Enter，但拖柄按钮理），
+          // 两支口径必须一致，否则下一个改这里的人只会照着有闸的那支抄。
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter") {
             event.preventDefault();
             if (selectionMode) {
@@ -270,6 +275,14 @@ export function TaskRow({
               return;
             }
             onEdit(task);
+            return;
+          }
+          // Space 才是 checkbox 的键盘约定键（原生 checkbox 对 Enter 毫无反应），多选态必须认它，
+          // 否则键盘用户 Tab 到行按 Space 只会滚页面、一条都挑不中。preventDefault 挡的就是那次滚页。
+          // **只在多选态生效**：非多选态行是 role="link"，那里 Space 本来就该滚页面。
+          if (selectionMode && event.key === " ") {
+            event.preventDefault();
+            onToggleSelect?.(task);
           }
         }}
       >
