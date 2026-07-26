@@ -2326,6 +2326,60 @@ describe("TodoPage 多选提交", () => {
     await unmount(root);
   });
 
+  /**
+   * `confirmPrerequisiteLoss` 里第一句就是 `db.goals.toArray()`（见 `prerequisiteLossOnAssignMany`）。
+   * DatabaseClosed / 版本升级期它会 reject，而调用点是 `void submitCreateProject(...)`——
+   * 这句要是留在 try 之外，既不进 `reportSubmitFailure` 也没人接这个 rejection：
+   * 静默无反馈 + unhandled rejection。两条提交路径各写一条，只修一边是这轮已经犯过的手误。
+   */
+  function breakPrerequisiteScan(): void {
+    vi.spyOn(db.goals, "toArray").mockRejectedValueOnce(new Error("DatabaseClosed"));
+  }
+
+  it("建组时查前置边就 reject：走兜底 toast，不静默、不留 unhandled rejection", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await typeProjectName(host, "装修");
+
+    // 紧贴着点击装 mock：中间不 await，免得被某次 liveQuery 回流的 listTasks 抢先消费掉这一发。
+    breakPrerequisiteScan();
+    await clickByLabel(host, "圈成项目");
+
+    await waitForToast(host, "暂时建不了组");
+    expect(errorSpy).toHaveBeenCalled();
+    // 什么都没写，且留在多选态让用户原地重试。
+    expect(await db.goals.toArray()).toHaveLength(0);
+    expect(selectionBar(host)).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("归入时查前置边就 reject：同样走兜底 toast", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickByLabel(host, "放进已有项目");
+
+    breakPrerequisiteScan();
+    await clickByLabel(host, "放进 装修");
+
+    await waitForToast(host, "暂时移不过去");
+    expect(errorSpy).toHaveBeenCalled();
+    expect((await db.goals.get("g1"))?.members).toHaveLength(1);
+    expect(selectionBar(host)).not.toBeNull();
+    await unmount(root);
+  });
+
   it("归入失败时组列表已收起，失败 toast 露得出来", async () => {
     // 操作栏与 toast dock 同为 z-backdrop，操作栏在 DOM 里排其后 → 后绘制的它（含向上展开的
     // 「放进…」列表）赢。实测几何：toast 占 101…141，操作栏顶边 95、列表占 103…140——

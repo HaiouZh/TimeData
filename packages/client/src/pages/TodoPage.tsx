@@ -957,8 +957,12 @@ export function TodoPage() {
       // 成功分支里再去读它只会拿到 0 条，提示语当场说谎。
       const taskIds = [...selectedIds];
       if (taskIds.length === 0) return;
-      if (!(await confirmPrerequisiteLoss(taskIds, null))) return;
       try {
+        // 询问必须**在 try 之内**：它第一句就是 `db.goals.toArray()`（见 prerequisiteLossOnAssignMany），
+        // DatabaseClosed / 版本升级期会 reject，而调用点是 `void submitCreateProject(...)`——
+        // 留在外面既不进 reportSubmitFailure 也没人接这个 rejection，用户只看到「点了没反应」。
+        // 用户点「取消」是 false 不是异常，照旧在这里原地返回，不会被下面的兜底 toast 当成错误。
+        if (!(await confirmPrerequisiteLoss(taskIds, null))) return;
         const goal = await createProjectWithMembers({ title, taskIds });
         exitSelection();
         // 建组要展开：刚命名完的组出现在项目区第一位，展开才能当场确认「都进去了」。
@@ -975,8 +979,9 @@ export function TodoPage() {
     runExclusiveSubmit(async () => {
       const taskIds = [...selectedIds];
       if (taskIds.length === 0) return;
-      if (!(await confirmPrerequisiteLoss(taskIds, goalId))) return;
       try {
+        // 同 submitCreateProject：询问在 try 之内，理由见那处注释。
+        if (!(await confirmPrerequisiteLoss(taskIds, goalId))) return;
         const goal = await assignTasksToProject(goalId, taskIds);
         exitSelection();
         openProject(goalId);
