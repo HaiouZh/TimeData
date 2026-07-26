@@ -3,7 +3,7 @@
 // 若被 import 排序挪到 lib/settings（其 import db/index）之后，db/index 会在 fake-idb 注册前捕获到 undefined → MissingAPIError。
 import { resetDb } from "../../test/dbReset.ts";
 import { createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getSetting } from "../../lib/settings/index.ts";
 import { click, renderDom, unmount } from "../../test/domHarness.tsx";

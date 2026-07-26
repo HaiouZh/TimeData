@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";

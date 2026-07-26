@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement, useEffect } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";

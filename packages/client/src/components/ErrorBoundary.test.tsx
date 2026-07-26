@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter } from "react-router";
+import { RouterProvider } from "react-router/dom";
 import { describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../test/domHarness.js";
 import { ErrorBoundary, RouteErrorFallback } from "./ErrorBoundary.js";

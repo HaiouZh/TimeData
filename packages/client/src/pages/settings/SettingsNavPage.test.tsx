@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/index.js";
 import { readDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";

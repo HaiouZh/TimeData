@@ -2,7 +2,7 @@ import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";

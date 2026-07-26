@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router";
 import { useIsWideScreen } from "../../lib/useIsWideScreen.js";
 import { TracksBoard } from "./TracksBoard.js";
 

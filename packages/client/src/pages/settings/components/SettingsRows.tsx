@@ -1,6 +1,6 @@
 import { CaretRight } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Icon } from "../../../components/Icon.js";
 
 export type SettingsRowTone = "neutral" | "accent" | "status";

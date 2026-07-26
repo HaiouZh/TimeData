@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CaretRight } from "@phosphor-icons/react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { useCategories } from "../../hooks/useCategories.ts";

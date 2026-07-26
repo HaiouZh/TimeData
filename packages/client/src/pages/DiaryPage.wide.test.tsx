@@ -2,7 +2,8 @@
 // 宽屏参考栏测试：需 mock useIsWideScreen（脏标记），有意留在 isolate:true 的 unit 桶，勿收编 fast-jsdom。
 import { createElement, act as reactAct } from "react";
 import { flushSync } from "react-dom";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter } from "react-router";
+import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import DiaryPage from "./DiaryPage.js";

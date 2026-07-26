@@ -25,7 +25,7 @@ const addCategoryMock = vi.hoisted(() =>
   }),
 );
 
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router", () => ({
   useNavigate: () => vi.fn(),
 }));
 

@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 
 import { act, createElement } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Goal, Task } from "@timedata/shared";
 import { db } from "../../db/index.js";

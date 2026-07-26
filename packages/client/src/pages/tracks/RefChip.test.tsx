@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { Ref } from "@timedata/shared";
 import { createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { RefChip } from "./RefChip.js";

@@ -1,6 +1,6 @@
 import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shared";
 import { useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import EntryForm from "../components/EntryForm.tsx";
 import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";

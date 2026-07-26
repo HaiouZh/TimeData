@@ -2,7 +2,7 @@
 import type { Category } from "@timedata/shared";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
-import { MemoryRouter, useSearchParams } from "react-router-dom";
+import { MemoryRouter, useSearchParams } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { addQuickNote, setQuickNotePinned } from "../lib/quickNotes.js";

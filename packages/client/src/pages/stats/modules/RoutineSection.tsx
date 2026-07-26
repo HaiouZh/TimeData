@@ -1,6 +1,6 @@
 import { CaretRight } from "@phosphor-icons/react";
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Icon } from "../../../components/Icon.js";
 import { memoRoutine } from "../../../lib/insights/cache.ts";
 import { type buildRoutineInsights, formatClockFromMinute } from "../../../lib/insights/routine.ts";

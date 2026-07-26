@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsDiaryPage from "./SettingsDiaryPage.js";

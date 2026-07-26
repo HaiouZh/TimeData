@@ -8,7 +8,7 @@ const searchParamsMock = vi.hoisted(() => ({ value: new URLSearchParams("") }));
 const resumeCallbacksRef = vi.hoisted(() => ({ current: [] as (() => void)[] }));
 const formPropsLog = vi.hoisted(() => ({ value: [] as { startTime: string; endTime: string }[] }));
 
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router", () => ({
   useNavigate: () => vi.fn(),
   useParams: () => ({}),
   useSearchParams: () => [searchParamsMock.value, vi.fn()],

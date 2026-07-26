@@ -12,7 +12,7 @@ import type {
 } from "@timedata/shared";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsAdminInsightsPage from "./SettingsAdminInsightsPage.js";

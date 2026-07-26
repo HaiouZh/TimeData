@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { createElement, act as reactAct } from "react";
 import { flushSync } from "react-dom";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter } from "react-router";
+import { RouterProvider } from "react-router/dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
 import DiaryPage from "./DiaryPage.js";

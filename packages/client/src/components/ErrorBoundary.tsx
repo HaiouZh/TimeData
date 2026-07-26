@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { useRouteError } from "react-router-dom";
+import { useRouteError } from "react-router";
 
 interface State {
   hasError: boolean;

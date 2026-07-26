@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { MAIN_NAV_ITEMS } from "../lib/navigation/navRegistry.js";
 import { addDays, getDateString } from "../lib/time.js";

@@ -1,5 +1,5 @@
 import { type UIEvent, useCallback, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { useBottomNav } from "../contexts/BottomNavContext.js";
 import { initialNavScrollState, resolveNavVisibility } from "../lib/navScroll.js";
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router";
 import { useTrackAttentionBadge } from "../../contexts/TrackAttentionContext.js";
 import { MORE_NAV_ITEM, findMainNavItem, primaryRouteForPath, type MainNavItem } from "../../lib/navigation/navRegistry.js";
 import { useDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";

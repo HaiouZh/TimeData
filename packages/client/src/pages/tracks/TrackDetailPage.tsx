@@ -1,7 +1,7 @@
 import { ArrowLeft, Check, PencilSimple, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import {

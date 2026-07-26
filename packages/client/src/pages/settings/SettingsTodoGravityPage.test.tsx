@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it } from "vitest";
 import { SyncProvider } from "../../contexts/SyncContext.tsx";
 import { getSetting } from "../../lib/settings/index.js";

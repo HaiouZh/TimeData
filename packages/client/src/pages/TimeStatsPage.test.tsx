@@ -1,7 +1,7 @@
 import type { Category } from "@timedata/shared";
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDateString } from "../lib/time.ts";
 import { renderDom, unmount } from "../test/domHarness.js";

@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { listAllGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { listGoals } from "../../lib/goals.js";
 import { getActiveSession } from "../../lib/sessions.js";

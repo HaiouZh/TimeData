@@ -7,7 +7,7 @@ const searchParamsMock = vi.hoisted(() => ({ value: new URLSearchParams("") }));
 const navigateMock = vi.hoisted(() => vi.fn());
 const locationKeyMock = vi.hoisted(() => ({ value: "default" }));
 
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router", () => ({
   useNavigate: () => navigateMock,
   useParams: () => ({}),
   useSearchParams: () => [searchParamsMock.value, vi.fn()],

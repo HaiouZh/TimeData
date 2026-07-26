@@ -1,6 +1,6 @@
 import type { Track, TrackStep } from "@timedata/shared";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { formatRelativeTime } from "../../lib/time.js";
 import { lastActivityAt, latestStep, stepSourceText, type TrackBoardSignal } from "../../lib/tracksView.js";
 import { StepComposer, type StepDraft } from "./StepComposer.js";

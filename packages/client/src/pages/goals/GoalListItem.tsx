@@ -1,5 +1,5 @@
 import type { GoalOverview } from "../../lib/goalsView.js";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { goalSummaryLines } from "./goalSummaryLines.js";
 
 function kindLabel(kind: "project" | "theme"): string {

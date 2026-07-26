@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { Track, TrackStep } from "@timedata/shared";
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TrackBoardSignal } from "../../lib/tracksView.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";

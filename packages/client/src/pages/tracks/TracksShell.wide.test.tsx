@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // 宽屏 master-detail 测试：需 mock useIsWideScreen（脏标记），有意留在 isolate:true 的 unit 桶，勿收编 fast-jsdom。
 import { act, createElement } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // dbReset 必须先于任何触 db/index 的模块求值（fake-indexeddb 注册顺序），故 lib/tracks 放下面第二个 import 块。
 import { db } from "../../test/dbReset.js";

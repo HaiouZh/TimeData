@@ -1,7 +1,7 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { executeAndroidBackAction, resolveAndroidBackAction } from "../lib/androidBackNavigation.ts";
 
 export default function AndroidBackButtonHandler() {

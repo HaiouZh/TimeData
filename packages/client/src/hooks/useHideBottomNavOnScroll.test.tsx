@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement, type ReactElement } from "react";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { renderDom, unmount } from "../test/domHarness.js";

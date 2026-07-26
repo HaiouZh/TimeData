@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { TimeEntry } from "@timedata/shared";
 import { act, createElement } from "react";
-import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "../test/dbReset.js";
 import { cleanupRoots, click, renderDom, type Root, unmount } from "../test/domHarness.js";

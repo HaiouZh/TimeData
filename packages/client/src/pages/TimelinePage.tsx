@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
 import CircularTimeline, { type RingSelectionTarget } from "../components/CircularTimeline.tsx";
 import DateNav from "../components/DateNav.tsx";

@@ -2,7 +2,7 @@ import { CaretLeft, CaretRight, MagnifyingGlass, X } from "@phosphor-icons/react
 import type { TimeEntry } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";

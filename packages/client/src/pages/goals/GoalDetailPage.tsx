@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { listGoalLayoutPins } from "../../lib/goalLayoutPins.js";
 import { getGoal } from "../../lib/goals.js";
 import { listAllTrackSteps, listTracks } from "../../lib/tracks.js";

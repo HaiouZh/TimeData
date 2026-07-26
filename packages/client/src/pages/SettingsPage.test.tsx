@@ -2,7 +2,7 @@
 
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage, { getServerConnectionState } from "./SettingsPage.js";
 import { click, renderDom, unmount } from "../test/domHarness.tsx";

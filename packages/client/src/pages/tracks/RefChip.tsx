@@ -1,6 +1,6 @@
 import { ArrowSquareOut, GitBranch, LinkSimple } from "@phosphor-icons/react";
 import type { Ref } from "@timedata/shared";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import { isLinkRef } from "../../lib/tracksView.js";
 

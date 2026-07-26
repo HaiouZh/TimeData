@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import type { Category } from "@timedata/shared";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { useCategories } from "../../hooks/useCategories.ts";
 import { CATEGORY_COLOR_PALETTES, type CategoryColorPaletteId } from "../../lib/categoryColors.ts";

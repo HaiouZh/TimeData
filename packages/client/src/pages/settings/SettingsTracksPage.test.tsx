@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readTrackActionTags, setTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import { resetDb } from "../../test/dbReset.js";

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { exportBackup } from "../../backup/exportBackup.ts";
 import { describeDomainCounts, domainCountsFromBackup } from "../../backup/domainLabels.ts";
 import { downloadBackupFile } from "../../backup/fileDownload.ts";

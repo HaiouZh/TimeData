@@ -2,7 +2,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { CaretDown, CaretRight, SignOut, X } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
