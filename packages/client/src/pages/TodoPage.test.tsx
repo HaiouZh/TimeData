@@ -1735,6 +1735,31 @@ describe("TodoPage 多选态", () => {
     await unmount(root);
   });
 
+  it("底栏被滚动隐藏时，toast 仍避开顶替记录框的操作栏", async () => {
+    // 窄屏进多选后往下滚（多选本来就是给「要圈很多条」用的，滚动几乎必然发生）→ navHidden 为 true
+    // → composerHiddenByScroll 为 true 且 navOffsetPx=0 → composerAvoidancePx 归零 → toast 落到
+    // bottom:8px。但此刻 TodoComposer 根本没渲染，顶替它的 TodoSelectionBar **原地不动**、仍占着
+    // 底部约 42px；两者同为 Z.backdrop(40) 而操作栏在 DOM 里排在 toast 容器之后 → 后绘制 → 完全遮住。
+    // 多选态下 toast 是唯一的失败反馈通道（两种失败都不退出多选、只靠它说原因），压住就等于「点了没反应」。
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage({ hideBottomNav: true });
+    await waitForText(host, "买灯");
+    const dockBottom = () =>
+      Number.parseInt((host.querySelector('[data-testid="todo-toast-dock"]') as HTMLElement).style.bottom, 10);
+
+    // 探针：非多选态下记录框自己也被滚动藏起来了，底部真的空着，toast 贴底是对的。
+    // 这一行同时钉死「本用例确实跑在 navHidden 分支上」——否则下面那条断言无论如何都会绿。
+    const composerForm = (host.querySelector(COMPOSER_INPUT) as HTMLElement).closest("form") as HTMLElement;
+    expect(composerForm.style.transform).toBe("translateY(100%)");
+    expect(dockBottom()).toBe(8);
+
+    await enterSelection(host);
+    expect(selectionBar(host)).not.toBeNull();
+    // 操作栏实测高约 42px（px-3 py-2 + 一行控件）。留不出这么多，toast 就在它底下。
+    expect(dockBottom()).toBeGreaterThanOrEqual(42 + 8);
+    await unmount(root);
+  });
+
   it("有弹窗开着时 Esc 只关弹窗，多选态与选中集都不动", async () => {
     // 多选的 Esc 与 Sheet / TaskDetailSheet 的 Esc **都挂在 window 上、互不知情**：
     // 前者在 selectionMode 转 true 时先注册、后者在弹窗打开时后注册，同一次 keydown 两个都跑。

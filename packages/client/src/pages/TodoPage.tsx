@@ -112,6 +112,11 @@ const EMPTY: TodoBuckets = {
   goalLinkedIds: new Set<string>(),
 };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
+/**
+ * `TodoSelectionBar` 的占位高度下限（px）：卡片 `px-3 py-2` + 一行控件，实测约 42。
+ * 只当兜底——量得到 composer 高度时取两者的大者，见 `bottomBarHeightPx`。
+ */
+const TODO_SELECTION_BAR_HEIGHT_PX = 44;
 
 export function TodoPage() {
   // 单一时钟：四分区 / 逾期 / 重力水位线共用 gravityNow，跨日由下方 timer+focus+visibilitychange 刷新后整页重算。
@@ -159,7 +164,26 @@ export function TodoPage() {
     }, []) ?? new Set<string>();
   const navOffsetPx = !wide && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const composerHiddenByScroll = !wide && navHidden;
-  const composerAvoidancePx = Math.ceil((composerHiddenByScroll ? 0 : composerHeightPx) + navOffsetPx);
+  /**
+   * 底部**实际占位者**的高度。照 QuickNotesPage 的 `bottomInsetPx` 那条路子：避让量按「此刻底部
+   * 站着谁」算，不是按 composer 一个人算。
+   *
+   * 多选态下站着的是 `TodoSelectionBar`，它 `hiddenByScroll` 管不着、滚动时原地不动。
+   * 只看 `composerHiddenByScroll` 会在窄屏滚动后把避让量归零，而操作栏还占着底部约 42px，
+   * 与 toast 容器同为 `Z.backdrop`(40) 且在 DOM 里排其后 → 后绘制 → 把 toast 完全盖住。
+   * 多选态下 toast 是唯一的失败反馈通道（两种提交失败都不退出多选、只靠它说原因），
+   * 盖住就等于「点了没反应」。同一个量还喂 `DayGroupedList` 的 sticky「收起」，一并跟着修正。
+   *
+   * 取 `max(上次量到的 composer 高, 常量)` 而不是给操作栏另开一套测量：两者高度本就相近
+   *（见下方操作栏处的注释），常量只是兜住「量不到高度」的场景（首帧、jsdom）——
+   * 这条避让的唯一职责是别把 toast 压住，宁可多留几像素。
+   */
+  const bottomBarHeightPx = selectionMode
+    ? Math.max(composerHeightPx, TODO_SELECTION_BAR_HEIGHT_PX)
+    : composerHiddenByScroll
+      ? 0
+      : composerHeightPx;
+  const composerAvoidancePx = Math.ceil(bottomBarHeightPx + navOffsetPx);
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
   const deepLinkedTask = useLiveQuery(
     async () => {
@@ -1000,6 +1024,7 @@ export function TodoPage() {
         {/* 贴着 composer 上沿浮起：composerAvoidancePx = composer 高 + 底部导航高，
             与 DayGroupedList 的 sticky 头同源，保证 toast 不被输入框压住。 */}
         <div
+          data-testid="todo-toast-dock"
           className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4"
           style={{ bottom: composerAvoidancePx + 8 }}
         >
