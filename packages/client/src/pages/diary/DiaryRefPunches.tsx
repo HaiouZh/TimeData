@@ -1,14 +1,17 @@
+import { useLiveQuery } from "dexie-react-hooks";
 import { useCategories } from "../../hooks/useCategories.js";
-import { useEntries } from "../../hooks/useEntries.js";
-import { clipEntriesToDay } from "../../lib/diary/diaryRefEntries.js";
+import { clipEntriesToDay, listEntriesOverlappingDay } from "../../lib/diary/diaryRefEntries.js";
 import { getDiaryRefCollapsed, setDiaryRefCollapsed } from "../../lib/diary/diaryRefPrefs.js";
 import { formatDuration, formatTimelineTimeRange } from "../../lib/time.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
 
 export function DiaryRefPunches({ date }: { date: string }) {
-  const { entries } = useEntries(date);
+  // 直接查当天窗口，不走 useEntries：理由见 listEntriesOverlappingDay 的注释（多一条无用全表扫描，
+  // 且它把「查询未回」的 undefined 兜底成 []，会让本块在加载中谎报「这天没有打点」）。
+  const entries = useLiveQuery(() => listEntriesOverlappingDay(date), [date]);
   const { getCategoryPath } = useCategories();
-  const rows = clipEntriesToDay(entries, date);
+  const loading = entries === undefined;
+  const rows = entries === undefined ? [] : clipEntriesToDay(entries, date);
 
   return (
     <CollapsibleSection
@@ -17,7 +20,9 @@ export function DiaryRefPunches({ date }: { date: string }) {
       defaultOpen={!getDiaryRefCollapsed("punches")}
       onToggle={(open) => setDiaryRefCollapsed("punches", !open)}
     >
-      {rows.length === 0 ? (
+      {loading ? (
+        <p className="px-2 py-1 td-text-caption text-ink-3">读取中…</p>
+      ) : rows.length === 0 ? (
         <p className="px-2 py-1 td-text-caption text-ink-3">这天没有打点</p>
       ) : (
         <ul className="space-y-0.5" data-testid="diary-ref-punch-list">

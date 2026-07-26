@@ -1,6 +1,6 @@
 import type { TimeEntry } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { clipEntriesToDay } from "./diaryRefEntries.js";
+import { clipEntriesToDay, diaryRefDayWindow } from "./diaryRefEntries.js";
 
 function entry(id: string, startTime: string, endTime: string): TimeEntry {
   return {
@@ -15,12 +15,21 @@ function entry(id: string, startTime: string, endTime: string): TimeEntry {
 }
 
 // 东八区：2026-07-25 的日界是 UTC 2026-07-24T16:00Z .. 2026-07-25T16:00Z
+describe("diaryRefDayWindow", () => {
+  it("按 Asia/Shanghai 日界给出半开区间，跨月末也不错位", () => {
+    expect(diaryRefDayWindow("2026-07-25")).toEqual({
+      dayStart: "2026-07-24T16:00:00.000Z",
+      dayEnd: "2026-07-25T16:00:00.000Z",
+    });
+    expect(diaryRefDayWindow("2026-07-31").dayEnd).toBe("2026-07-31T16:00:00.000Z");
+  });
+});
+
 describe("clipEntriesToDay", () => {
-  it("完全落在当天的条目原样返回，两端都不标裁剪", () => {
+  it("完全落在当天的条目原样返回，尾端不标裁剪", () => {
     const [e] = clipEntriesToDay([entry("a", "2026-07-25T01:00:00.000Z", "2026-07-25T03:00:00.000Z")], "2026-07-25");
     expect(e.startTime).toBe("2026-07-25T01:00:00.000Z");
     expect(e.endTime).toBe("2026-07-25T03:00:00.000Z");
-    expect(e.clippedStart).toBe(false);
     expect(e.clippedEnd).toBe(false);
   });
 
@@ -29,14 +38,12 @@ describe("clipEntriesToDay", () => {
     const [e] = clipEntriesToDay([entry("a", "2026-07-25T15:00:00.000Z", "2026-07-25T17:00:00.000Z")], "2026-07-25");
     expect(e.endTime).toBe("2026-07-25T16:00:00.000Z");
     expect(e.clippedEnd).toBe(true);
-    expect(e.clippedStart).toBe(false);
   });
 
-  it("从前一天跨进来的条目，首端裁到当天日界并标 clippedStart", () => {
+  it("从前一天跨进来的条目，首端裁到当天日界", () => {
     // 本地 2026-07-24 23:00 → 2026-07-25 01:00，查 07-25
     const [e] = clipEntriesToDay([entry("a", "2026-07-24T15:00:00.000Z", "2026-07-24T17:00:00.000Z")], "2026-07-25");
     expect(e.startTime).toBe("2026-07-24T16:00:00.000Z");
-    expect(e.clippedStart).toBe(true);
     expect(e.clippedEnd).toBe(false);
   });
 

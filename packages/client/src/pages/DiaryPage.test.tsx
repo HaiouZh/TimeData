@@ -170,6 +170,20 @@ describe("DiaryPage", () => {
     await unmount(root);
   });
 
+  // 契约「窄屏（<1024px，含 APK）整个不渲染参考栏」此前零覆盖：实测把挂载三元的 `wide` 判断
+  // 去掉（`) : true || wide ? (`），本文件 + successPath + wide 三个文件 68 条全绿。
+  // 本文件默认就是窄屏——jsdom 无 matchMedia，useIsWideScreen 恒 false。
+  it("窄屏不渲染参考栏，也不渲染分栏分隔条（窄屏行为与加参考栏之前完全一致）", async () => {
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector('[data-testid="diary-reference-panel"]')).toBeNull();
+    expect(host.querySelector('[role="separator"]')).toBeNull();
+    // 编辑区本身照旧在，证明上面两条不是因为整页没渲染出来才为空。
+    expect(host.querySelector("textarea")).not.toBeNull();
+
+    await unmount(root);
+  });
+
   it("改动后点保存，saveDiary 收到 { content, baseMtime }", async () => {
     saveDiary.mockResolvedValue({ mtime: 200 });
     const { host, root } = await renderPage();

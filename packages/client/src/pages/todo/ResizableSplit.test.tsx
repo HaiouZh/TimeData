@@ -136,6 +136,39 @@ describe("ResizableSplit", () => {
     await unmount(root);
   });
 
+  // 下面四条 prefs 用例全部从空 localStorage 起手，走的是"写入后读回"，挂载时的**初始读取**没有
+  // 用例经过：实测把 `useState(() => loadSplitRatio(prefs))` 的 prefs 去掉（退化成待办默认键），
+  // 本文件 + workbenchPrefs.test.ts 全绿。生产后果：日记页开屏用待办页存的比例，自己存的读不回来。
+  it("挂载时读的是自己那把键，不是待办页的", async () => {
+    localStorage.setItem(STORAGE_KEYS.diarySplit, "0.8");
+    localStorage.setItem(STORAGE_KEYS.todoWorkbenchSplit, "0.4");
+
+    const { host, root } = await renderSplit(DIARY_SPLIT_PREFS);
+
+    expect((host.firstElementChild as HTMLElement).style.gridTemplateColumns).toContain("0.8fr");
+
+    await unmount(root);
+  });
+
+  // 同族第二处：重置（双击 / Enter / 0）用的是 prefs.defaultRatio。实测把它变异成待办常量 0.62
+  // 后 8 条全绿——日记侧的重置默认值 0.7 没有任何用例经过。
+  it("传 diary prefs 时双击重置到日记自己的默认值 0.7，不是待办的 0.62", async () => {
+    localStorage.setItem(STORAGE_KEYS.diarySplit, "0.85");
+    const { host, root } = await renderSplit(DIARY_SPLIT_PREFS);
+    const handle = host.querySelector('[role="separator"]') as HTMLElement;
+
+    await act(async () => {
+      handle.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+
+    expect((host.firstElementChild as HTMLElement).style.gridTemplateColumns).toContain("0.7fr");
+    expect(localStorage.getItem(STORAGE_KEYS.diarySplit)).toBe("0.7");
+    // 待办常量 0.62 落在日记范围 [0.5,0.85] 内、不会被夹取，所以必须正面钉住数值本身。
+    expect(localStorage.getItem(STORAGE_KEYS.diarySplit)).not.toBe(String(SPLIT_DEFAULT));
+
+    await unmount(root);
+  });
+
   it("不传 prefs 时 aria 范围仍是待办页的 35/70", async () => {
     const { host, root } = await renderSplit();
     const handle = host.querySelector('[role="separator"]') as HTMLElement;
