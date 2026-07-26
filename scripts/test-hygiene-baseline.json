@@ -130,6 +130,7 @@
   "dirty-in-clean-bucket:pages/todo/TodoComposer.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TodoListSections.test.tsx",
   "dirty-in-clean-bucket:pages/todo/TodoProjectSection.test.tsx",
+  "dirty-in-clean-bucket:pages/todo/TodoSelectionBar.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/NewTrackComposer.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/RefChip.test.tsx",
   "dirty-in-clean-bucket:pages/tracks/StepComposer.test.tsx",
