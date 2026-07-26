@@ -97,3 +97,42 @@ describe("参考栏 · 完成的待办块", () => {
     expect(host.textContent).not.toContain("上周干的活");
   });
 });
+
+describe("参考栏 · 速记块", () => {
+  async function addNote(id: string, text: string, occurredAt: string) {
+    await db.quickNotes.add({
+      id, text, occurredAt,
+      createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+    } as never);
+  }
+
+  it("列出当天速记并带时间", async () => {
+    await addNote("n1", "他提的那个点值得记", "2026-07-25T02:30:00.000Z");
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.querySelector('[data-testid="diary-ref-quick-note-list"]') !== null, "速记列表");
+    const list = host.querySelector('[data-testid="diary-ref-quick-note-list"]') as HTMLElement;
+    expect(list.textContent).toContain("他提的那个点值得记");
+    expect(list.textContent).toContain("10:30");
+  });
+
+  it("别的日期的速记不出现在这天", async () => {
+    await addNote("n1", "上周记的", "2026-07-20T02:30:00.000Z");
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.textContent?.includes("这天没有速记") === true, "空态");
+    expect(host.textContent).not.toContain("上周记的");
+  });
+
+  it("切日期时速记跟着换，不留上一天的残留", async () => {
+    await addNote("n1", "周一记的", "2026-07-20T02:30:00.000Z");
+    await addNote("n2", "周六记的", "2026-07-25T02:30:00.000Z");
+
+    const { host, root } = await renderPanel("2026-07-20");
+    await waitFor(() => host.textContent?.includes("周一记的") === true, "07-20 的速记");
+
+    await act(async () => {
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }));
+    });
+    await waitFor(() => host.textContent?.includes("周六记的") === true, "07-25 的速记");
+    expect(host.textContent).not.toContain("周一记的");
+  });
+});
