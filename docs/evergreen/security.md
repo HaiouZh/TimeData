@@ -32,6 +32,7 @@ last-reviewed: 2026-07-10
 <!-- 复核 2026-07-25（goals 视图偏好）：storageKeys 新增 goalsViewMode，只存 "galaxy" / "list" 两个字面量的本地 UI 偏好，不同步、不含用户内容；凭据存储、token 处理与鉴权边界不变。 -->
 <!-- 复核 2026-07-25（待办项目区 UI）：storageKeys 新增 todoProjectZoneIntroDismissed，只在本机存一个「提示条已读」布尔值，不含任务文本、不入同步、不碰凭据存储与鉴权边界。 -->
 <!-- 复核 2026-07-25（速记草稿持久化）：storageKeys 新增 quickNoteComposerDraft，只存用户尚未发出的速记正文，纯本地、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
+<!-- 复核 2026-07-26（日记参考栏折叠偏好）：storageKeys 新增 diaryRefPunchesCollapsed / diaryRefDoneTasksCollapsed / diaryRefQuickNotesCollapsed，只存三块参考区各自的「是否折叠」布尔值，纯本地 UI 偏好、不含用户内容、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
 
 # 安全与凭据处理
 

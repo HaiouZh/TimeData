@@ -13,7 +13,11 @@ import { applyIndent } from "../lib/diary/indent.js";
 import { applyLinkShortcut } from "../lib/diary/link.js";
 import { applyEnterInOrderedList } from "../lib/diary/orderedList.js";
 import { type EditAction, runEditAction } from "../lib/diary/textareaEdit.js";
+import { DIARY_SPLIT_PREFS } from "../lib/tasks/workbenchPrefs.js";
 import { formatMonthDay, getDateString } from "../lib/time.js";
+import { useIsWideScreen } from "../lib/useIsWideScreen.js";
+import { DiaryReferencePanel } from "./diary/DiaryReferencePanel.js";
+import { ResizableSplit } from "./todo/ResizableSplit.js";
 
 export default function DiaryPage() {
   const navigate = useNavigate();
@@ -39,6 +43,7 @@ export default function DiaryPage() {
     liveToday,
     followAnchor,
   });
+  const wide = useIsWideScreen();
 
   // 深链 ?date=<今天> / 非法 / 未来：归一成无参形态，让它与裸 /diary 完全一致。
   // replace 不新增历史条目，返回键行为不变。这个 effect 自终止：清完 param 后
@@ -396,6 +401,22 @@ export default function DiaryPage() {
     else navigate(-1);
   }
 
+  const editor = (
+    <textarea
+      aria-label="日记正文"
+      value={content}
+      // 红线：这里不许对 value 做任何加工（trim / 行尾转换 / 任何归一化）。一加工 React 就整体回写，
+      // 原生撤销栈当场清空，而且这种坏法静默。这条守到本体：DiaryPage.successPath.test.tsx
+      // 用真实 execCommand + 零回写计数器接上这个 onChange，一加工就变红。
+      onChange={(event) => {
+        setContent(event.target.value);
+        markDirty();
+      }}
+      onKeyDown={handleKeyDown}
+      className="min-h-0 flex-1 resize-none bg-surface px-4 py-4 td-text-body text-ink outline-none"
+    />
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
       {dialog}
@@ -490,20 +511,17 @@ export default function DiaryPage() {
           </Link>{" "}
           配置一个吧
         </div>
-      ) : (
-        <textarea
-          aria-label="日记正文"
-          value={content}
-          // 红线：这里不许对 value 做任何加工（trim / 行尾转换 / 任何归一化）。一加工 React 就整体回写，
-          // 原生撤销栈当场清空，而且这种坏法静默。这条守到本体：DiaryPage.successPath.test.tsx
-          // 用真实 execCommand + 零回写计数器接上这个 onChange，一加工就变红。
-          onChange={(event) => {
-            setContent(event.target.value);
-            markDirty();
-          }}
-          onKeyDown={handleKeyDown}
-          className="min-h-0 flex-1 resize-none bg-surface px-4 py-4 td-text-body text-ink outline-none"
+      ) : wide ? (
+        <ResizableSplit
+          prefs={DIARY_SPLIT_PREFS}
+          className="min-h-0 flex-1"
+          leftClassName="flex flex-col min-h-0"
+          rightClassName="min-h-0 overflow-y-auto"
+          left={editor}
+          right={<DiaryReferencePanel date={date} isToday={date === liveToday} />}
         />
+      ) : (
+        editor
       )}
     </div>
   );

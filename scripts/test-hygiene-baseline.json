@@ -53,6 +53,7 @@
   "dirty-in-clean-bucket:lib/useIsWideScreen.test.ts",
   "dirty-in-clean-bucket:pages/DiaryPage.successPath.test.tsx",
   "dirty-in-clean-bucket:pages/DiaryPage.test.tsx",
+  "dirty-in-clean-bucket:pages/DiaryPage.wide.test.tsx",
   "dirty-in-clean-bucket:pages/EntryPage.freeze.test.tsx",
   "dirty-in-clean-bucket:pages/EntryPage.test.tsx",
   "dirty-in-clean-bucket:pages/HealthStatsPage.test.tsx",

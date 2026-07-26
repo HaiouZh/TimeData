@@ -5,6 +5,7 @@ covers:
   - packages/client/src/pages/DiaryPage.tsx
   - packages/client/src/pages/settings/SettingsDiaryPage.tsx
   - packages/client/src/lib/diary/**
+  - packages/client/src/pages/diary/**
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
 contracts:
