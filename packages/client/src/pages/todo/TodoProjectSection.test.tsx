@@ -251,28 +251,18 @@ describe("TodoProjectSection 落点", () => {
     await unmount(root);
   });
 
-  // 下面两条**不再覆盖判定**：dropBlocked 的判定已经整个上移到 TodoPage（子任务不在任何 bucket 里，
-  // 组件根本查不到它的行）。它们现在只锁「传 true 就画禁止态」这一段渲染，两条走的是同一条路径。
-  // 真正的判定（子任务 / 重复待办 → true）由 TodoPage.test.tsx 的
-  // 《拖起子任务时项目组块进禁止态：判定认的是 dnd 容器 id，不是查得到的行》守。
-  it("页面判定为禁止（子任务那支）时组块是禁止态", async () => {
+  // 本条**只锁渲染，不覆盖任何一支判定**：dropBlocked 的判定已整个上移到 TodoPage（子任务不在任何
+  // bucket 里，组件根本查不到它的行）。曾经这里摆着「子任务那支」「重复待办那支」两条，但两条逐行等价、
+  // 走同一条渲染路径，名字里的两支在组件里早已不存在——那是对「两条各锁一半」这个标注规范的假冒，
+  // 会抬高下一轮误删真双胞胎的概率（参见 goalMembership.test.ts 里那对外观相同但性质相反的真双胞胎）。
+  // 真闸在 TodoPage.test.tsx 的《拖起子任务或重复待办时项目组块进禁止态，拖起根任务则是可落态》。
+  it("dropBlocked=true 时组块进禁止态", async () => {
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1" })],
       dropBlocked: true,
     });
     const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
     expect(card?.getAttribute("data-drop-blocked")).toBe("true");
-    await unmount(root);
-  });
-
-  it("页面判定为禁止（重复待办那支）时组块是禁止态", async () => {
-    const { host, root } = await renderWithDnd({
-      groups: [group({ goalId: "g1" })],
-      dropBlocked: true,
-    });
-    expect(
-      host.querySelector('[data-testid="project-group"][data-goal-id="g1"]')?.getAttribute("data-drop-blocked"),
-    ).toBe("true");
     await unmount(root);
   });
 

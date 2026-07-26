@@ -481,13 +481,12 @@ export function TodoPage() {
       //（重复模板在已排期区、那区不可拖；occurrence 走 assign-to-project 分支由写入侧拒）。
       // 不在这里报，用户就只看到「往这儿拖没反应」——design §动作二 明写四种拒绝都要给原因。
       //
-      // 判据必须**先看容器 id**：上面那段 activeParentId 对子任务恒为 null——它查的两个来源
-      //（buckets.today/inbox 与 allTasks）全是 listTasks 的产物，而 listTasks 把 parentId !== null
-      // 的行整个跳过。只认 activeParentId 的话这条 toast 一次也弹不出来，正是本轮在修的那个病。
-      // 后半段的 `activeParentId !== null` 仍留着：池容器里 parentId 非空是数据不自洽的可达状态
-      //（todoDnd 有对应用例），对用户同样是「这是条子任务」。
-      const activeIsSubtask =
-        parseTodoContainerId(activeContainerId)?.kind === "parent" || activeParentId !== null;
+      // 判据只能看容器 id：`activeParentId` 在**本调用点恒为 null**——它查的两个来源
+      //（buckets.today/inbox 与 allTasks）全是 listTasks 的产物，而 listTasks 主循环第一行就
+      // `if ((t.parentId ?? null) !== null) continue;`。所以这里不再 `|| activeParentId !== null`：
+      // 那一支恒 false，是永假的闸而不是防御。（`todoDnd` 里那条同名用例守的是**纯函数的入参契约**
+      // ——纯函数可以被喂任意 activeParentId；那说的不是本调用点可达。）
+      const activeIsSubtask = parseTodoContainerId(activeContainerId)?.kind === "parent";
       if (targetContainer?.kind === "project" && activeIsSubtask) {
         const group = buckets.projects.find((g) => g.goalId === targetContainer.goalId);
         if (group) showActionToast({ message: projectAssignBlockMessage("subtask", group.goalTitle) });
@@ -551,9 +550,16 @@ export function TodoPage() {
             // 是 goals 页的显式动作，现在待办页手滑一拖就触发，且成功不展开组、当场察觉不到。
             const loss = await prerequisiteLossOnAssign(activeId, op.goalId);
             if (loss !== null) {
+              // 分两句说而不是一句套模板：`count` 是全部源组之和、`goalTitle` 只是边最多的那一组，
+              // 多组时凑一句就成了「在「X」里有 N 条」——用户去 X 里数出来比 N 少，
+              // 一次数不对就再也不信这个提示，往后一路无脑点「仍要移动」。多组时干脆不点名。
+              const body =
+                loss.groupCount > 1
+                  ? `这条任务在 ${loss.groupCount} 个原项目里共有 ${loss.count} 条前置依赖关系。移到别的项目会一并删除，且无法撤销。`
+                  : `这条任务在「${loss.goalTitle}」里有 ${loss.count} 条前置依赖关系。移到别的项目会一并删除，且无法撤销。`;
               const ok = await confirm({
                 title: "移动会删掉依赖关系",
-                body: `这条任务在「${loss.goalTitle}」里有 ${loss.count} 条前置依赖关系。移到别的项目会一并删除，且无法撤销。`,
+                body,
                 confirmLabel: "仍要移动",
                 danger: true,
               });

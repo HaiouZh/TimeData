@@ -158,10 +158,19 @@ async function typeAndAdd(host: HTMLElement, title: string) {
  * 用键盘传感器完成一次「抓起 → 松手」的拖拽。
  *
  * 不用 MouseSensor：它有 180ms 激活延迟，而仓库禁真实定时等待。KeyboardSensor 无延迟，
- * 抓起与松手都是 Space。落点之所以能稳定落在项目组：jsdom 里所有 rect 都是 (0,0,0,0)，
- * `pointerWithin` 判定「指针 (0,0) 落在每个 droppable 内」而全部命中，
- * 页面的 `preferProjectCollisions` 再把结果过滤成只剩 `project:` 前缀的那些。
- * 因此**这类用例只能有一个项目组**，多于一个时落到哪组由注册顺序决定。
+ * 抓起与松手都是 Space。
+ *
+ * **落点为什么落在项目组**：键盘拖拽没有指针坐标（`pointerCoordinates` 恒 null），于是
+ * `pointerWithin` 恒返回 `[]`，`preferProjectCollisions` 在这些用例里**一次都没生效**
+ *（`projects.length === 0`，直接走 fallback）。真正定落点的是 `closestCenter`：jsdom 里所有 rect
+ * 都是 (0,0,0,0)，全部距离并列，stable sort 保序，于是取 `droppableContainers` 里的第一名——
+ * 那是**挂载顺序**（dnd-kit 用 Map 存，迭代走插入序），**不是 DOM 顺序**。
+ *
+ * 脆性边界（写明是为了让下一个人知道该怎么读红）：**任何**先挂载的 droppable 都会抢走落点，
+ * 与它在 DOM 里的位置无关。在项目区之前新增 droppable（给某个分区加落点、给行加落点等）
+ * 会让依赖本函数落进项目组的那几条用例**超时报红**——响亮失效，不会静默地把落点测成别的组。
+ * 现有布置靠两件事把项目组顶到最前：① 初次渲染时今天区为空（被拖的行是渲染之后才挂上的）；
+ * ② 只让目标那一组产出组卡，或让它按组间排序排在最前。
  */
 async function keyboardDrag(handle: HTMLElement): Promise<void> {
   await act(async () => {
@@ -754,10 +763,14 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
-  it("拖起子任务时项目组块进禁止态，拖起根任务则是可落态（判定认 dnd 容器 id，不是查得到的行）", async () => {
-    // 承重点：`dragDropBlocked` 的子任务那一支。子任务被 listTasks 整个跳过、不在任何 bucket 里，
-    // 所以 `allTasks.find(...)` 恒查不到它——只能从 `parent:` 前缀的容器 id 认。这一支若退化，
-    // 用户拖子任务到项目组就是全屏零反馈（TodoProjectSection.test.tsx 那两条只锁渲染，锁不住这里）。
+  it("拖起子任务或重复待办时项目组块进禁止态，拖起根任务则是可落态", async () => {
+    // `dragDropBlocked` 是两支各锁一半的判定，本例三段各打一支，删任一段另一支就裸奔：
+    //  ① 子任务：被 listTasks 整个跳过、不在任何 bucket 里，`allTasks.find(...)` 恒查不到它，
+    //     只能从 `parent:` 前缀的容器 id 认。
+    //  ② 重复待办（occurrence）：它是根任务、容器 id 是 `pool:today`，容器那一支对它恒 false，
+    //     只能由 `projectAssignBlock(task, 0) !== null` 认出来。
+    //  ③ 普通根任务：必须给出相反答案，否则「恒 true」也能让前两段绿。
+    // 任一支退化，用户往项目组拖就是全屏零反馈（TodoProjectSection.test.tsx 那条只锁渲染，锁不住这里）。
     const now = "2026-06-28T09:00:00.000Z";
     const member = await addTask({ title: "刷墙", toInbox: true });
     await db.goals.add({
@@ -772,6 +785,29 @@ describe("TodoPage", () => {
     });
     const parent = await addTask({ title: "父任务", toInbox: true });
     await createChildTask(parent.id, "子任务");
+    // occurrence：ruleId 非空、recurrence 为 null、scheduledAt 落在今天 → placement 判 today，
+    // 且 listTasks 只跳过 skipped 的 occurrence，所以它在今天区是真的可拖。取本地正午避开时区边界。
+    const todayNoon = new Date();
+    todayNoon.setHours(12, 0, 0, 0);
+    await db.tasks.add({
+      id: "occ:r1:today",
+      parentId: null,
+      title: "补铁",
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: todayNoon.toISOString(),
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      ruleId: "r1",
+      skipped: false,
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
 
     const { host, root } = await renderPage();
     await waitForText(host, "父任务");
@@ -810,6 +846,19 @@ describe("TodoPage", () => {
       rootHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
     });
     expect(card()?.getAttribute("data-drop-blocked")).toBe("false");
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+    });
+    await waitForCondition(() => card()?.hasAttribute("data-drop-blocked") === false, "second drag cancelled");
+
+    // 第三段：重复待办。它从 `pool:today` 抓起，容器判定给不出 true，只能靠查行 + projectAssignBlock。
+    await waitForCondition(() => host.querySelector('[aria-label="移动 补铁"]') !== null, "occurrence drag handle");
+    const occurrenceHandle = host.querySelector('[aria-label="移动 补铁"]') as HTMLElement;
+    await act(async () => {
+      occurrenceHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+    });
+    expect(card()?.getAttribute("data-drop-blocked")).toBe("true");
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
@@ -953,7 +1002,10 @@ describe("TodoPage", () => {
     // ① 取消：一条边都不许掉，归属也不许动。
     await keyboardDrag(grab());
     await waitForCondition(() => dialogText().includes("移动会删掉依赖关系"), "confirm dialog", settle);
-    expect(dialogText()).toContain("在「老项目」里有 1 条前置依赖关系");
+    // 整句匹配而不是片段：单组这句是唯一可以点名的那句，措辞漂了（或被多组那句顶掉）必须当场红。
+    expect(dialogText()).toContain(
+      "这条任务在「老项目」里有 1 条前置依赖关系。移到别的项目会一并删除，且无法撤销。",
+    );
     await act(async () => {
       [...host.querySelectorAll('[role="dialog"] button')]
         .find((b) => b.textContent === "取消")
@@ -980,6 +1032,102 @@ describe("TodoPage", () => {
     expect(moved).toBe(true);
     expect((await db.goals.get("gA"))?.members).not.toContainEqual({ kind: "task", id: t1.id });
     expect((await db.goals.get("gA"))?.prerequisites).toEqual([]);
+    await unmount(root);
+  });
+
+  it("多个源组时确认弹窗只说组数与总条数，不把总数栽给某一个组名", async () => {
+    // `count` 是全部源组之和，`goalTitle` 只是边最多的那一组。凑成「在「X」里有 N 条」就是在说假话：
+    // 用户去 X 里数出来比 N 少，一次数不对就再也不信这个提示，往后一路无脑点「仍要移动」。
+    //
+    // 布置同上一条（今天区初次渲染为空 → 两张组卡先挂载 → 键盘拖拽落点稳定是排第一的 gB）。
+    // 多出来的 gC 与 gA 争 t1/t2 的归属：projectMemberIndex 按 updatedAt 新者胜、并列取 id 小者，
+    // 两组 updatedAt 都是 old → gA 全胜，gC 一个成员都投影不出来、**不产出组卡**，
+    // 于是 droppable 的挂载顺序与上一条一字不差。而 prerequisiteLossOnAssign 读的是裸行、不看投影，
+    // 照样把 gC 数进去——这正是"多源组"在真实数据里长的样子。
+    const old = "2026-01-01T00:00:00.000Z";
+    const newer = "2026-05-01T00:00:00.000Z";
+    const t1 = await addTask({ title: "打地基", toInbox: true });
+    const t2 = await addTask({ title: "砌墙", toInbox: true });
+    const other = await addTask({ title: "别组成员", toInbox: true });
+    await db.tasks.update(t1.id, { updatedAt: old });
+    await db.tasks.update(t2.id, { updatedAt: old });
+    await db.tasks.update(other.id, { updatedAt: newer });
+    const pair = [
+      { kind: "task", id: t1.id },
+      { kind: "task", id: t2.id },
+    ] as const;
+    await db.goals.add({
+      id: "gA",
+      title: "老项目",
+      kind: "project",
+      status: "active",
+      members: [...pair],
+      // 1 条引用 t1
+      prerequisites: [{ blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } }],
+      createdAt: old,
+      updatedAt: old,
+    });
+    await db.goals.add({
+      id: "gC",
+      title: "另一个老项目",
+      kind: "project",
+      status: "active",
+      members: [...pair],
+      // 2 条引用 t1（blocker 侧与 blocked 侧各一）——总数 3、边最多的组是 gC 而不是 gA
+      prerequisites: [
+        { blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } },
+        { blocker: { kind: "task", id: t2.id }, blocked: { kind: "task", id: t1.id } },
+      ],
+      createdAt: old,
+      updatedAt: old,
+    });
+    await db.goals.add({
+      id: "gB",
+      title: "新项目",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: other.id }],
+      prerequisites: [],
+      createdAt: newer,
+      updatedAt: newer,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelectorAll('[data-testid="project-group"]').length === 2,
+      "both rendered project groups",
+    );
+    expect([...host.querySelectorAll("[data-goal-id]")].map((e) => e.getAttribute("data-goal-id"))).toEqual([
+      "gB",
+      "gA",
+    ]);
+
+    const today = new Date();
+    const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    await scheduleTask(t1.id, ymd);
+    await waitForCondition(
+      () => host.querySelector('[aria-label="移动 打地基"]') !== null,
+      "打地基 draggable in today",
+      settle,
+    );
+    const dialogText = () => host.querySelector('[role="dialog"]')?.textContent ?? "";
+
+    await keyboardDrag(host.querySelector('[aria-label="移动 打地基"]') as HTMLElement);
+    await waitForCondition(() => dialogText().includes("移动会删掉依赖关系"), "confirm dialog", settle);
+
+    expect(dialogText()).toContain(
+      "这条任务在 2 个原项目里共有 3 条前置依赖关系。移到别的项目会一并删除，且无法撤销。",
+    );
+    // 反面：不许出现单组那句的任何点名说法（"在「gC」里有 3 条" 是用户数不出来的那个数）。
+    expect(dialogText()).not.toContain("里有 3 条");
+
+    await act(async () => {
+      [...host.querySelectorAll('[role="dialog"] button')]
+        .find((b) => b.textContent === "取消")
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+    expect((await db.goals.get("gB"))?.members).not.toContainEqual({ kind: "task", id: t1.id });
     await unmount(root);
   });
 

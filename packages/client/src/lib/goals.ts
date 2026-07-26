@@ -312,15 +312,21 @@ export async function assignTaskToProject(
  * 那会让这次询问静默失效、用户在毫不知情下丢掉整组边（同 `assignTaskToProject`）。
  *
  * 单一归属是写入侧不变量，正常情况下最多命中一个源组；但存量与跨设备并发能造出多个，
- * 故 count 是全部命中组之和，`goalTitle` 取边最多的那个（一句话里只塞得下一个名字）。
+ * 故 `count` 是全部命中组之和、`groupCount` 是命中的组数，`goalTitle` 取边最多的那一组
+ *（一句话里只塞得下一个名字）。
+ *
+ * **`goalTitle` 只有在 `groupCount === 1` 时才能和 `count` 摆进同一句话**：多组时那个名字底下的边数
+ * 严格少于 `count`，说成「在「X」里有 N 条」用户去 X 里数不出 N，一次数不对就再也不信这个提示了。
+ * 调用方按 `groupCount` 分两句说，别把两个字段硬凑一句。
  */
 export async function prerequisiteLossOnAssign(
   taskId: string,
   nextGoalId: string,
-): Promise<{ count: number; goalTitle: string } | null> {
+): Promise<{ count: number; groupCount: number; goalTitle: string } | null> {
   const ref: GoalMemberRef = { kind: "task", id: taskId };
   const rows = await db.goals.toArray();
   let total = 0;
+  let groupCount = 0;
   let widest: { count: number; title: string } | null = null;
 
   for (const row of rows) {
@@ -334,10 +340,11 @@ export async function prerequisiteLossOnAssign(
     ).length;
     if (count === 0) continue;
     total += count;
+    groupCount += 1;
     if (!widest || count > widest.count) widest = { count, title: row.title };
   }
 
-  return widest === null ? null : { count: total, goalTitle: widest.title };
+  return widest === null ? null : { count: total, groupCount, goalTitle: widest.title };
 }
 
 export async function addTaskForGoal(goalId: string, input: AddTaskForGoalInput): Promise<Task> {

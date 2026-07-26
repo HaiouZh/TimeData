@@ -649,7 +649,7 @@ describe("prerequisiteLossOnAssign", () => {
     await seedProject("gA", ["t1", "t2", "t3"], { prerequisites: [edge("t1", "t2"), edge("t3", "t1")] });
     await seedProject("gB");
 
-    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 2, goalTitle: "项目 gA" });
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 2, groupCount: 1, goalTitle: "项目 gA" });
   });
 
   it("源组里没有引用它的边 → null（不为一次无后果的移动弹确认）", async () => {
@@ -688,7 +688,10 @@ describe("prerequisiteLossOnAssign", () => {
     expect(await prerequisiteLossOnAssign("t1", "gB")).toBeNull();
   });
 
-  it("多个源组时条数相加，组名取边最多的那个（一句话里只塞得下一个名字）", async () => {
+  it("多个源组时条数相加、另报组数，组名仍取边最多的那个", async () => {
+    // `count` 是全部命中组之和（3），而 `goalTitle` 指的那一组只有 2 条——两个字段口径不同，
+    // 所以必须同时报 `groupCount`，调用方才能知道「这两个数不能凑进同一句话」。
+    // 少了 groupCount，弹窗只会说「在「gMany」里有 3 条」，用户去 gMany 里数三遍只有 2 条。
     await seedTask("t1");
     await seedTask("t2");
     await seedTask("t3");
@@ -696,7 +699,7 @@ describe("prerequisiteLossOnAssign", () => {
     await seedProject("gMany", ["t1", "t2", "t3"], { prerequisites: [edge("t1", "t2"), edge("t3", "t1")] });
     await seedProject("gB");
 
-    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 3, goalTitle: "项目 gMany" });
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 3, groupCount: 2, goalTitle: "项目 gMany" });
   });
 
   it("读裸行不过 GoalSchema：members 含重复 ref 的源组照样数得出边", async () => {
@@ -717,6 +720,6 @@ describe("prerequisiteLossOnAssign", () => {
     });
     await seedProject("gB");
 
-    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 1, goalTitle: "项目 gA" });
+    expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 1, groupCount: 1, goalTitle: "项目 gA" });
   });
 });
