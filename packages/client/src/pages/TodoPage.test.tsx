@@ -1925,6 +1925,71 @@ describe("TodoPage 多选提交", () => {
     await unmount(root);
   });
 
+  it("在项目名输入框里按住回车，只建出一个项目", async () => {
+    // 最容易撞上的不是鼠标双击，是**按住回车**：onKeyDown 对每一次 keydown（含系统自动重复，
+    // 约 30ms 一发）都调一次 submitCreate()，而 `disabled={!canCreate}` 只看有没有选中 + 有没有
+    // 名字，提交期间两者都还成立。后果是两个同名 goal，第二个的 assignTasksToProject 把成员从
+    // 第一个摘走，留下一个**成员为 0 的空壳项目** + 一条推给别的设备的 goals create 同步日志。
+    setProjectZoneIntroDismissed(true);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await typeProjectName(host, "装修");
+
+    const input = host.querySelector('[aria-label="项目名"]') as HTMLInputElement;
+    // 两发 keydown 必须在**同一个 tick 里连发**，中间不 await：这正是自动重复的形态，
+    // 也是在途闸唯一挡得住而 disabled 挡不住的窗口。分两次 act 的话第一次早就跑完了。
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    await waitForToast(host, "已建「装修」· 1 条");
+    await settle();
+
+    const created = (await db.goals.toArray()).filter((goal) => goal.title === "装修");
+    expect(created).toHaveLength(1);
+    expect(created[0]?.members).toHaveLength(1);
+    // 同步日志同样只能有一条 create，否则别的设备也会收到那个空壳。
+    const createLogs = (await db.syncLog.toArray()).filter(
+      (log) => log.tableName === "goals" && log.action === "create",
+    );
+    expect(createLogs).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("提交失败后在途闸要放开，原地重试仍能提交", async () => {
+    // 失败刻意不退出多选，就是为了让用户原地重试（见 reportSubmitFailure）。闸若不在 finally 里
+    // 放开，重试就永远点不动，而屏幕上没有任何东西说明为什么——比原来的重复提交更糟。
+    //
+    // 走「放进…」这一侧，让共用的在途闸在**两个调用点**上都被踩过：另一条（按住回车）在
+    // submitCreateProject 上。「放进…」自己的并发后果反而看不见——addGoalMember 对已在组内的
+    // 成员整个 return、连 syncLog 都不写，所以第二发是彻底的 no-op，那种用例是假闸。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+
+    // 只坏一次：addGoalMember 写目标组走的就是这一步。
+    vi.spyOn(db.goals, "put").mockRejectedValueOnce(new Error("写库失败"));
+    await clickByLabel(host, "放进已有项目");
+    await clickByLabel(host, "放进 装修");
+    await waitForToast(host, "暂时移不过去");
+    expect(errorSpy).toHaveBeenCalled();
+    expect(selectionBar(host)).not.toBeNull();
+
+    await clickByLabel(host, "放进 装修");
+    await waitForToast(host, "已归入「装修」· 1 条");
+    expect((await db.goals.get("g1"))?.members).toHaveLength(2);
+    await unmount(root);
+  });
+
   it("批量归入成功：退出多选、展开目标组、弹提示", async () => {
     setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });

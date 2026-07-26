@@ -905,38 +905,64 @@ export function TodoPage() {
     showActionToast({ message: fallback });
   };
 
-  const submitCreateProject = async (title: string): Promise<void> => {
-    // 快照必须在 exitSelection 之前取：那个函数会把 selectedIds 清空，
-    // 成功分支里再去读它只会拿到 0 条，提示语当场说谎。
-    const taskIds = [...selectedIds];
-    if (taskIds.length === 0) return;
-    if (!(await confirmPrerequisiteLoss(taskIds, null))) return;
+  /**
+   * 提交在途闸，两条提交路径共用。
+   *
+   * 挡的是**异步提交全程**（含前面那次 `prerequisiteLossOnAssignMany` 的全表读与确认框），
+   * 不只是写库那一下。`disabled={!canCreate}` 挡不住：它只看有没有选中 + 有没有名字，提交期间
+   * 两者都还成立。最容易撞上的也不是鼠标双击，是在项目名输入框里**按住回车**——`onKeyDown` 对
+   * 每一次 keydown（含系统自动重复，约 30ms 一发）都调一次 `submitCreate()`。后果是两个同名
+   * goal，第二个的 `assignTasksToProject` 把成员从第一个摘走，留下一个成员为 0 的空壳项目
+   * 加一条推给别的设备的 goals create 同步日志。
+   *
+   * 用 ref 不用 state：state 要等一次渲染才生效，同一个 tick 里连发的第二发读到的还是旧值。
+   * 放开必须在 `finally`：失败刻意不退出多选就是为了让用户原地重试，闸漏了就永远点不动。
+   */
+  const submitPendingRef = useRef(false);
+  const runExclusiveSubmit = async (submit: () => Promise<void>): Promise<void> => {
+    if (submitPendingRef.current) return;
+    submitPendingRef.current = true;
     try {
-      const goal = await createProjectWithMembers({ title, taskIds });
-      exitSelection();
-      // 建组要展开：刚命名完的组出现在项目区第一位，展开才能当场确认「都进去了」。
-      // 与 P3「拖入不展开」不冲突——那条防的是连续拖入让下一个落点跑掉，一次性动作不适用。
-      // `openProject` 就是 P2 那套 revealGoals 机制，展开 + scrollIntoView 都在里面，不必另写滚动。
-      openProject(goal.id);
-      showActionToast({ message: `已建「${goal.title}」· ${taskIds.length} 条` });
-    } catch (error) {
-      reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时建不了组");
+      await submit();
+    } finally {
+      submitPendingRef.current = false;
     }
   };
 
-  const submitAssignToProject = async (goalId: string): Promise<void> => {
-    const taskIds = [...selectedIds];
-    if (taskIds.length === 0) return;
-    if (!(await confirmPrerequisiteLoss(taskIds, goalId))) return;
-    try {
-      const goal = await assignTasksToProject(goalId, taskIds);
-      exitSelection();
-      openProject(goalId);
-      showActionToast({ message: `已归入「${goal.title}」· ${taskIds.length} 条` });
-    } catch (error) {
-      reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时移不过去");
-    }
-  };
+  const submitCreateProject = (title: string): Promise<void> =>
+    runExclusiveSubmit(async () => {
+      // 快照必须在 exitSelection 之前取：那个函数会把 selectedIds 清空，
+      // 成功分支里再去读它只会拿到 0 条，提示语当场说谎。
+      const taskIds = [...selectedIds];
+      if (taskIds.length === 0) return;
+      if (!(await confirmPrerequisiteLoss(taskIds, null))) return;
+      try {
+        const goal = await createProjectWithMembers({ title, taskIds });
+        exitSelection();
+        // 建组要展开：刚命名完的组出现在项目区第一位，展开才能当场确认「都进去了」。
+        // 与 P3「拖入不展开」不冲突——那条防的是连续拖入让下一个落点跑掉，一次性动作不适用。
+        // `openProject` 就是 P2 那套 revealGoals 机制，展开 + scrollIntoView 都在里面，不必另写滚动。
+        openProject(goal.id);
+        showActionToast({ message: `已建「${goal.title}」· ${taskIds.length} 条` });
+      } catch (error) {
+        reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时建不了组");
+      }
+    });
+
+  const submitAssignToProject = (goalId: string): Promise<void> =>
+    runExclusiveSubmit(async () => {
+      const taskIds = [...selectedIds];
+      if (taskIds.length === 0) return;
+      if (!(await confirmPrerequisiteLoss(taskIds, goalId))) return;
+      try {
+        const goal = await assignTasksToProject(goalId, taskIds);
+        exitSelection();
+        openProject(goalId);
+        showActionToast({ message: `已归入「${goal.title}」· ${taskIds.length} 条` });
+      } catch (error) {
+        reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时移不过去");
+      }
+    });
 
   const scheduledFiltered = f(buckets.scheduled);
   // 7 天水位线：过滤激活时失效（命中即显示），否则水下折叠进 SunkenScheduledTail。
