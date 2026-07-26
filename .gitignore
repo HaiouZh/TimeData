@@ -51,3 +51,6 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
+
+# iOS native project is CI-generated (see packages/mobile/README.md); never track
+packages/mobile/ios/

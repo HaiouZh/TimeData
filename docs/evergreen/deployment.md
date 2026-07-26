@@ -27,7 +27,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-26
 ---
 
 <!-- 复核 2026-07-02（S2 调度重做）：SettingsPage.tsx 手动同步按钮 onClick 从 `sync` 改为 `() => sync()`（仅签名包装，行为不变，仍不经调度器直调 sync()），部署/自更新相关内容无需改动。 -->
@@ -133,6 +133,7 @@ Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 
 - `ci.yml`：push / PR 的基础 CI，`pnpm/action-setup` 从根 `packageManager` 读取 pnpm 11 版本并安装依赖后，先运行 `pnpm audit --audit-level=high --prod`，生产依赖存在 high/critical advisory 时直接阻断；随后依次运行 `pnpm lint`、`pnpm -r typecheck`、`pnpm -r --parallel test`、`pnpm check:ui`、`pnpm check:design`、`pnpm check:test`、`pnpm test:scripts`、evergreen 文档一致性检查、`pnpm check:docs:size` 和 `pnpm build`，不发布产物。文档一致性检查只在 `pull_request` 事件下运行（main 的 push 不重跑，因为同样的 diff 在 PR 阶段已经查过），按发起人区分：依赖 bot（`dependabot[bot]` / `renovate[bot]`）触发的 PR 走 `pnpm check:docs`（warn，不阻塞），其余走 `pnpm check:docs:strict`。体量棘轮不依赖 PR diff，push 和 PR 都会跑，要求 `scripts/evergreen-size-baseline.json` 覆盖当前所有 evergreen 文档，且字符数 / `covers:` 不超过基线。`ci.yml` 配有 `concurrency`（按 ref 取消被顶掉的旧跑批）。
 - `build.yml`：main 分支发布镜像到 GHCR，自更新机制读取它的成功运行记录。
 - `android-apk.yml`：Android 签名 release APK 构建与 GitHub Release 发布流程；`pnpm/action-setup`（v6，自身运行在 Node 24）必须先于 `actions/setup-node`，因为 setup-node v5 的 pnpm 缓存逻辑会在步骤执行时查找 `pnpm`。此 workflow 和 `ci.yml` 都从根 `packageManager` 读取 pnpm 11 版本。
+- `ios-ipa.yml`：macOS runner 上现场生成 iOS 原生工程并产出**未签名** IPA，发布到 `ios-*` tag 的 Release；细节见子文档 [deployment/ios-ipa](deployment/ios-ipa.md)。
 - `secret-scan.yml`：push main / PR 上用 gitleaks 扫全历史找泄漏的密钥；误报白名单维护在根目录 `.gitleaks.toml`（`regexTarget = "match"`）。
 
 依赖升级由 Renovate 承担（配置在根目录 `renovate.json5`，需在 GitHub 安装 Renovate App），替代原 dependabot：原生支持 `pnpm-workspace.yaml` 的 catalog，`rangeStrategy: bump` 保证 spec 与 lockfile 同步（否则 `--frozen-lockfile` 拒绝），`minimumReleaseAge: 7 days` 与 pnpm 11 供应链发布龄闸对齐；Capacitor major 被禁用，升级需人工评估。
@@ -143,6 +144,10 @@ Android 签名 release APK 的 workflow、keystore、Capacitor / Gradle 版本�
 
 - APK 只包含构建时的 client/mobile 代码；自托管服务器镜像由 `build.yml` 另行发布和自更新。
 - 客户端新增 API 调用后，最新 APK 可能要求服务器也更新到对应版本；移动端“连不上服务器”的 HTTPS、CORS、旧镜像排查见 [deployment/android-apk](deployment/android-apk.md)。
+
+## 3.2 iOS 未签名 IPA
+
+iOS 原生工程不入库、由 CI 现场生成，产出未签名 IPA 供 SideStore 自签装机，细节在子文档 [deployment/ios-ipa](deployment/ios-ipa.md)。主线上只有一条要记住：**iOS Release 不打 `--latest`**，否则设置页「APK 更新」读到的最新 Release 会变成 Android 装不了的 `.ipa`。
 
 ## 4. 版本检查（`/api/version`）
 
@@ -340,9 +345,11 @@ $env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pn
 - [ ] 改自更新流程：要在 staging 完整跑一次“拉镜像后服务能正常重启 + 接续提供服务”。
 - [ ] 改 `/api/version` 缓存 TTL：太短会打 GitHub API 限额，太长用户看不到新版本。
 - [ ] 改 Android APK 发布、Capacitor、Gradle、Manifest 或移动端 HTTPS 策略：同步看 [deployment/android-apk](deployment/android-apk.md)。
+- [ ] 改 iOS 发布或 Release 发布步骤：确认 iOS Release 仍不带 `--latest`，见 [deployment/ios-ipa](deployment/ios-ipa.md)。
 
 ## 子文档索引
 
 | 子文档 | 拥有什么 |
 |---|---|
 | [deployment/android-apk](deployment/android-apk.md) | Android 签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错 |
+| [deployment/ios-ipa](deployment/ios-ipa.md) | iOS 未签名 IPA workflow、CI 现场生成原生工程、键盘工具条补丁、不标 latest 的 Release 契约、SideStore 装机与数据边界 |

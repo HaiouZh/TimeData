@@ -26,6 +26,9 @@
   "docs/evergreen/deployment/android-apk.md": {
     "covers": 14
   },
+  "docs/evergreen/deployment/ios-ipa.md": {
+    "covers": 2
+  },
   "docs/evergreen/design-language.md": {
     "covers": 10
   },

@@ -1,6 +1,23 @@
 # TimeData Mobile
 
-This package contains the Capacitor Android shell for TimeData.
+This package contains the Capacitor Android shell for TimeData, plus CI configuration for an iOS shell.
+
+## iOS（未签名 IPA，CI 生成）
+
+iOS 原生工程**不进仓库**，由 `.github/workflows/ios-ipa.yml` 在 macOS runner 上现场 `cap add ios` 生成，产出未签名 `TimeData-unsigned.ipa`。构建链路、键盘工具条补丁、Release 契约与 SideStore 装机见 [docs/evergreen/deployment/ios-ipa.md](../../docs/evergreen/deployment/ios-ipa.md)。
+
+手动触发：GitHub → Actions → `ios-ipa` → Run workflow。
+
+本地调试 iOS 工程（需 macOS）：
+
+```bash
+pnpm add @capacitor/ios@<与 @capacitor/core 同版本>
+pnpm build:web && pnpm exec cap add ios
+ruby scripts/ios/patch-ios.rb
+pnpm exec cap sync ios && pnpm exec cap open ios
+```
+
+调完不要提交 `ios/` 目录与 lockfile 变更。
 
 ## 本地环境
 

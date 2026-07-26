@@ -1,0 +1,145 @@
+name: ios-ipa
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "packages/client/**"
+      - "packages/mobile/**"
+      - "packages/shared/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".github/workflows/ios-ipa.yml"
+
+permissions:
+  contents: read
+
+# 与 android-apk 同理:build number 的当日序号靠数已发布的 ios-* tag,
+# 并发跑会算出重复序号,这里排队(不取消)保证同一时刻只有一个构建。
+concurrency:
+  group: ios-ipa-release
+  cancel-in-progress: false
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Compute build number
+        id: version
+        run: |
+          TODAY=$(TZ=Asia/Shanghai date +%y%m%d)
+          EXISTING=$(git tag -l "ios-${TODAY}*" | wc -l | tr -d ' ')
+          SEQ=$(printf "%02d" $((EXISTING + 1)))
+          BUILD_NUMBER="${TODAY}${SEQ}"
+          echo "code=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "tag=ios-${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "Build number: ${BUILD_NUMBER}"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # iOS 原生工程不进仓库,每次构建现场生成(见 packages/mobile/README.md)。
+      # @capacitor/ios 也只在 CI 安装,版本跟随 @capacitor/core,避免本地 lockfile 漂移。
+      - name: Add @capacitor/ios (CI only)
+        run: |
+          CORE_VERSION=$(node -p "require('./packages/mobile/package.json').dependencies['@capacitor/core']")
+          pnpm --filter @timedata/mobile add "@capacitor/ios@${CORE_VERSION}"
+
+      - name: Build web assets (mobile mode)
+        run: pnpm --filter @timedata/mobile build:web
+
+      - name: Generate iOS project
+        run: pnpm --filter @timedata/mobile exec cap add ios
+
+      - name: Patch iOS project (remove keyboard accessory bar)
+        run: |
+          gem list -i xcodeproj >/dev/null || sudo gem install xcodeproj --no-document
+          cd packages/mobile && ruby scripts/ios/patch-ios.rb
+
+      - name: Sync web assets & pods
+        run: pnpm --filter @timedata/mobile exec cap sync ios
+
+      - name: Set bundle version
+        env:
+          BUILD_NUMBER: ${{ steps.version.outputs.code }}
+        run: |
+          PLIST=packages/mobile/ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "$PLIST"
+
+      - name: Build unsigned archive
+        run: |
+          xcodebuild -workspace packages/mobile/ios/App/App.xcworkspace \
+            -scheme App -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned IPA
+        run: |
+          cd "$RUNNER_TEMP"
+          mkdir Payload
+          cp -R App.xcarchive/Products/Applications/App.app Payload/
+          zip -qry TimeData-unsigned.ipa Payload
+          ls -la TimeData-unsigned.ipa
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: timedata-unsigned-ipa
+          path: ${{ runner.temp }}/TimeData-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Publish latest IPA release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.version.outputs.tag }}
+          RELEASE_NAME: TimeData iOS ${{ steps.version.outputs.code }}
+          IPA_PATH: ${{ runner.temp }}/TimeData-unsigned.ipa
+        run: |
+          BODY=$(cat <<'EOF'
+          Unsigned iOS IPA build `${{ steps.version.outputs.code }}`, built from `${{ github.sha }}`.
+
+          此 IPA 未签名,不能直接安装。用 SideStore 或 AltStore 导入安装,安装时会用你的 Apple ID 自动签名(免费账号签名 7 天有效,SideStore 可在手机上自行续签)。
+          EOF
+          )
+
+          for attempt in 1 2 3; do
+            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+              gh release upload "$TAG_NAME" "$IPA_PATH" --clobber && \
+              gh release edit "$TAG_NAME" --title "$RELEASE_NAME" --notes "$BODY" && \
+              exit 0
+            else
+              gh release create "$TAG_NAME" "$IPA_PATH" \
+                --target "$GITHUB_SHA" \
+                --title "$RELEASE_NAME" \
+                --notes "$BODY" && \
+              exit 0
+            fi
+            echo "Release publish attempt $attempt failed; retrying..."
+            sleep $((attempt * 10))
+          done
+
+          echo "Release publish failed after 3 attempts."
+          exit 1

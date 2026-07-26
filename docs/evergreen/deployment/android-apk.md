@@ -5,7 +5,7 @@ covers:
   - .github/workflows/android-apk.yml
   - packages/mobile/capacitor.config.ts
   - packages/mobile/package.json
-  - packages/mobile/scripts/**
+  - packages/mobile/scripts/*.mjs
   - packages/mobile/android/build.gradle
   - packages/mobile/android/app/build.gradle
   - packages/mobile/android/app/capacitor.build.gradle
@@ -19,16 +19,17 @@ covers:
 contracts:
   - .github/workflows/android-apk.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-26
 ---
 
+<!-- 复核 2026-07-26（新增 iOS 发布线）：`capacitor.config.ts` 加了 ios 段、`packages/mobile/scripts/ios/**` 归新子文档 [deployment/ios-ipa](ios-ipa.md)，covers 相应收窄到 `scripts/*.mjs`；Android 侧的 workflow、签名与 Gradle 配置不变。 -->
 <!-- 复核 2026-07-04（依赖升级收 dependabot）：packages/mobile 的 @capacitor/android|core|cli 由 ^7.6.5 升 ^7.6.7（patch）；发布流程、签名与 Gradle 配置不变。 -->
 <!-- 复核 2026-07-04（CI 自动化升级）：workflow 内 setup-java v4→v5、setup-android v3→v4、upload-artifact v4→v7（清 Node 20 弃用告警）；构建步骤与签名流程不变。 -->
 
 # 部署 · Android APK 发布
 
 > [deployment](../deployment.md) 的 Android 发布子文档：签名 release APK workflow、release keystore、Capacitor / Gradle 版本、安全配置、APK 更新入口与移动端排错。
-> 不讲服务器镜像、自更新或 Docker 数据卷；这些仍在 [deployment](../deployment.md)。
+> 不讲服务器镜像、自更新或 Docker 数据卷；这些仍在 [deployment](../deployment.md)。iOS 侧（未签名 IPA、CI 现场生成原生工程）见 [deployment/ios-ipa](ios-ipa.md)。
 
 ## 承上启下
 
@@ -67,6 +68,8 @@ Capacitor 7 版本的 Android 构建要求：Node 22+、pnpm 11、Java 21、Andr
 Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把 APK 下载直链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
 
 Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。App 内服务器配置在原生 Android 环境会拒绝保存 `http://` API 地址；自托管服务器需要先通过 Caddy / Nginx / Tunnel 等方式暴露 HTTPS，再在 App 中填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
+
+`packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。
 
 Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上显式应用 `systemBars` + `displayCutout` 的 inset padding，让 Capacitor WebView 避开状态栏、导航栏和刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。
 
