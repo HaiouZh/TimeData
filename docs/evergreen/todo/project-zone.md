@@ -108,7 +108,46 @@ last-reviewed: 2026-07-26
 - **兜底 toast 不可省**：目标组的裸行过不了 `GoalSchema.parse` 时抛的是 `ZodError` 而非 `ProjectAssignError`。红线「读裸行不 parse」保证这种组**照常渲染成落点**，用户拖多少次都一样——静默吞掉等于应用坏了。文案要中性（真正坏掉的常是任务**原来所在**的源组，指认目标组会让用户换组反复重试）。
 - **前置边确认**：`prerequisiteLossOnAssign(taskId, nextGoalId)` 读裸行算出「摘除会连带删掉几条边、来自几个组」，非空则落库前 `useConfirm` 问一句。判据与 `removeGoalMember` 内那句 filter 同源（跳过目标组自身、只认 active project、`blocker`/`blocked` 双侧）。多源组时文案只说组数与总条数、不点名（`count` 是各组之和而 `goalTitle` 取边最多那组，点名会把总数栽给单个组）。**它在准入闸之前调用**，故满员/归档/occurrence 等被拒场景会「先警告后失败」——方向是过度警告，不是数据丢失。
 
-## 7. 模块速查
+## 7. 多选建组 / 批量归入（动作一）
+
+页面级模式态 `selectionMode`：从收件箱勾一批，圈成新项目、或整批放进已有组。
+
+- **入口**在收件箱标题右侧常驻（`CollapsibleSection` 的 `action` 插槽），零 active project 时也在——那正是冷启动入口。插槽的拦截用 **`preventDefault` 而不是 `stopPropagation`**：`<summary>` 的折叠是浏览器对 `details` 的**默认行为**（activation behavior），在事件派发结束后才执行，不经 React 冒泡，`stopPropagation` 对它完全无效。代价是包裹层会吃掉内部所有点击的默认动作，故 **action 里只放按钮、不放 `<a>` 或 `type="submit"`**。
+- **可选范围 = 收件箱的三处渲染点**（浮动区 / 水下尾 / 重力翻牌区），三处都要显式接 selection 三 prop，不能混进 `...rowHandlers` 让它自己流过去。水下的陈年任务恰恰最该被圈——归组会 touch `updatedAt` 让它当场浮上水面（§4.2），这一下就是整理的即时回报。
+- **不做禁选态**：`listTasks` 主循环三处早退保证 inbox 桶只含 `parentId === null && recurrence === null && ruleId === null` 的根任务（子任务首行 `continue`；重复模板走 `if (t.recurrence)` 进 scheduled；occurrence 必带 `scheduledAt`，落 today/upcoming）。准入闸仍留在写入侧兜底，但 UI 上没有可禁的行。
+- **其余区块用 `inert` 而不是 `pointer-events-none`**：后者只挡指针，Tab 键照样聚焦进去、回车照样开详情，而那正是多选中最容易误触的路径。窄屏与宽屏两套布局**各包一次**，漏一处那种屏幕下模式态形同虚设。包裹前要对空节点早退——空区块包一层 div 会在 `flex gap-4` 里多占一个 flex 子项、进多选时整列凭空下移。
+- **Esc 要让位给弹窗**。`Sheet` 与 `TaskDetailSheet` 的 Esc handler 同样挂在 window 上、与多选那条互不知情，同一次 keydown 两个都会跑——用户想关弹窗，选了半天的那批一起没了，**而退出后的页面和「成功建组」长得一模一样**（操作栏消失、记录框回来），只少一条 toast。判据用 `[role="dialog"]` 在场而不是给 `useConfirm` 加 `isOpen`：能与多选同屏的弹窗不止确认框，按 hook 逐个开洞会漏。
+- **底部避让量按「此刻谁站在底部」算**，不能按 composer 算。多选态下 `TodoComposer` 不渲染而 `TodoSelectionBar` 顶上，若沿用 `composerHiddenByScroll` 那套，滚动隐藏底栏时避让归零、toast 落进操作栏的盒子被完全遮住——而多选态下 toast 是**唯一**的失败反馈通道（提交失败刻意不退出多选、只靠它说原因），压住就等于「点了没反应」。同款问题 `QuickNotesPage` 的 `bottomInsetPx` 早处理过。
+
+### 7.1 `selectedIds` 必须跟着可选集合剪枝
+
+选中集只存 id，而 `useLiveQuery` 回流不会通知它。不剪枝就会攒出**幽灵 id**：悬停删掉一行、或在多选态里勾完成一行（复选框在多选态下仍是「完成」，是刻意的），那行离开收件箱而 id 还攥在手上 → 操作栏说「已选 2 条」屏幕上只剩 1 行 → 提交时 `db.tasks.get` 拿不到人，抛的是裸 `Error` 不是 `ProjectAssignError`，落进兜底文案；而失败**不退出多选**，用户原地重试、每次都失败，屏幕上没有任何东西指向那个幽灵。
+
+- **剪枝源照着渲染点写**（`floatingInbox ∪ sunkenInbox`），不要图省事用 `buckets.inbox`——此刻两者恒等，但将来哪一处渲染改了口径（比如水下尾不再可选），剪枝会跟着变而 `buckets.inbox` 会静默继续放行，那正是幽灵回来的方式。
+- **取未经 `f()` 筛选的列表**：筛选是临时视图，不该让"筛一下"丢掉选中；何况多选态下 composer 不渲染，用户根本改不了筛选条件。
+- **防死循环靠 updater 内「真的少了东西才换引用」**，不靠依赖数组——那个 Set 每次渲染都是新引用，写进依赖数组也是每渲染必跑，只是多骗一层。
+- 剪掉的**不是**「已完成任务不能当成员」（它可以，§3 规则 4 的 `doneCount` 就是数它），剪掉的是「用户没在看的东西别替他提交」。
+
+### 7.2 两个写入入口，单事务，全成全败
+
+| 入口 | 事务内容 |
+|---|---|
+| `createProjectWithMembers({title, taskIds})` | `db.goals.add` + 一条 goals create syncLog → 转交下一行 |
+| `assignTasksToProject(goalId, taskIds)` | 目标组 active+project 校验（一次）→ 摘旧组 → 加入 → 成员 touch |
+
+- **500 上限判在整批之上**（`members.length + 新增数 > 500`），不是逐条问「已经满了吗」——逐条判要到第 501 条才抛，而前 500 条已经写进去了，与「全成全败」直接矛盾。为此把 `projectAssignBlock` 拆成 `taskAssignBlock`（任务侧三条件）+ `exceedsGoalMemberCap(memberCount, addCount)`（容量），单条入口传 `addCount=1`，两个口径同源不漂。
+- **`taskIds` 入口去重**。`existing` 是循环外快照、不随写入更新，重复 id 会让新增数多记，恰好卡在边界时误报满员；`addGoalMember` 的幂等只挡重复写 members，管不到容量判定。不能外包给调用方——撞 `.max(500)` 不是报错，是整行 parse 失败、整个 goal 从 UI 与同步里消失。
+- **建组也走摘除路径**，不因「收件箱里的任务必无 project 归属」而跳过：摘旧组 / 准入闸 / 容量 / touch 只有一份实现，将来改归属语义不会漏掉建组这一侧。
+- **不做「能进多少进多少」**：部分成功会留下「选了 6 条为何只进去 4 条」的哑谜，而撞 500 在真实使用里近乎不发生。
+- **提交要有在途闸**（ref 不是 state——state 要等一次渲染，同 tick 第二发读到旧值），且覆盖异步全程含确认框。没有它，在项目名输入框里**按住回车**（系统自动重复约 30ms 一发）会建出两个同名 goal，第二个把成员从第一个摘走、留一个空壳组 + 一条推给别的设备的 create 日志。
+
+### 7.3 批量路径的前置边确认只剩一个窄窗口
+
+归属轴排他的判据与 `prerequisiteLossOnAssignMany` 取源组的判据逐字相同（`status === "active" && kind === "project"`），叠上 §7.1 的剪枝——「选中项带 project 归属」在常规时序下**不可能成立**，确认框恒不弹。
+
+仍然保留，因为剩一个真窗口：远端 goal 行**已落进 Dexie**、而 liveQuery 通知与剪枝 effect 还没跑完，用户恰在这几毫秒里松手。此时选中集还是旧的，而预测函数读的是最新库——该弹，不问就是静默丢边。**承重在数据层**（`goals.test.ts` 的 `prerequisiteLossOnAssignMany` 一节）；页面这一段测不了，jsdom 里 `act()` 会把渲染和 effect 一口气跑完。**别据此当死代码删。**
+
+## 8. 模块速查
 
 | 入口 | 职责 |
 |---|---|
@@ -117,13 +156,17 @@ last-reviewed: 2026-07-26
 | `pages/todo/TodoProjectSection.tsx` | 项目区 UI：受控展开的组 header（`revealGoals` 待消费意图 → 组渲染出来才展开 + `scrollIntoView`，并经 `onRevealConsumed` 回报宿主清空）、成员行「当前在哪」胶囊与「退出项目」、已完成折叠子区；同文件另导出 `ProjectNameChip`（组外行的项目名 chip）与 `ProjectZoneIntroBar`（存量提示条） |
 | `lib/tasks.ts: listTasks()`（归 [todo](../todo.md) covers） | 归集与排他的同源判据 `ownedByProject`、`buckets.projects` 出桶、`goalLinkedIds` |
 | `pages/TodoPage.tsx`（归 [todo](../todo.md) covers） | 接线：项目区挂收件箱正上方（宽窄两种布局）、chip → `openProject` 回跳、成员回落 inbox 池时 `revealProjectHome`（唯一落点判据 `landsInCollapsedProjectGroup`，六条路径一律传写入后的 `Task`）、`exitProject` → `removeGoalMember`、`tagOptions` 纳入项目区成员 |
-| `lib/goals.ts`（归 [goals](../goals.md) covers） | 写侧四条归属通道 + `touchTasksInCurrentTransaction`（§4.2）；`assignTaskToProject` 单事务先摘后加（§4.1）+ `ProjectAssignError`；`prerequisiteLossOnAssign` 只读预测（§6） |
+| `lib/goals.ts`（归 [goals](../goals.md) covers） | 写侧四条归属通道 + `touchTasksInCurrentTransaction`（§4.2）；`assignTaskToProject` 单事务先摘后加（§4.1）+ `ProjectAssignError`；`prerequisiteLossOnAssign` 只读预测（§6）；批量版 `assignTasksToProject` / `createProjectWithMembers` / `prerequisiteLossOnAssignMany`（§7.2、§7.3） |
+| `pages/todo/TodoSelectionBar.tsx` | 多选态底部操作栏：已选计数、项目名就地输入（回车即提交，`disabled` 挡不住回车故另有早退闸）、「放进…」组列表、取消。零业务依赖，数据全走 props、动作全走回调 |
+| `pages/todo/CollapsibleSection.tsx` | 通用折叠区块；`action` 插槽渲染在 summary 内并 `preventDefault`（§7），16 个调用方不传即行为不变 |
 | `pages/todo/todoDnd.ts`（归 [todo](../todo.md) covers） | `project:<goalId>` 容器域与 `assign-to-project` 操作、对缩进系统让位、`preferProjectCollisions` 碰撞策略（§6） |
 
 测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、组间排序、同挂多组仲裁、悬空 ref）、`lib/tasks/projectZone.test.ts`（成员四态、组三态计数、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、状态胶囊、退出项目、已完成子区、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、提示条、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
 
+多选的用例分三层：`pages/todo/TodoSelectionBar.test.tsx`（计数、命名必填与 trim、回车两条路径、「放进…」列表、零项目时不渲染该按钮）、`pages/todo/TaskRow.test.tsx` 与 `TaskList.test.tsx`（行点击/Enter/Space 三种勾选路径、复选框在多选态下仍是「完成」、内层控件上按键不连带勾选、多选态不渲染拖柄与禁滑）、`pages/TodoPage.test.tsx`（进出多选、三处渲染点可选、其余区 inert 且窄屏宽屏**各一条**、Esc 退出与「有弹窗时让位」、建组/批量归入成功、满员拒绝、兜底文案两侧、剪枝四条、在途闸两条）。`lib/goals.test.ts` 覆盖批量写入的原子性（全成全败、撞 500 一条不写、摘除闸的 `status`/`kind` **各一条**、去重占位、`prerequisiteLossOnAssignMany` 的边去重与源组口径）。
+
 拖拽归入的页面级用例在 `pages/TodoPage.test.tsx`（成功 toast、子任务拒绝 toast、禁止态三支、确认弹窗取消/确认两路）。**它们的落点稳定性依赖一条实现细节**：jsdom 里 rect 全为 0 → `closestCenter` 全部并列 → dnd-kit 取 `droppableContainers` 的**挂载顺序**第一名（不是 DOM 顺序）。键盘拖拽无指针坐标，`preferProjectCollisions` 在这些用例里一次都没生效。**在项目区之前新增任何 droppable，这几条会以超时报红**——那是响亮失效不是 flaky，别加重试，去读 `keyboardDrag` 上方那段注释。
 
-## 8. 本期未做
+## 9. 本期未做
 
-圈成项目（多选建组）在后续阶段。**已排期（非今天）与手头的任务没有任何归入路径**——拖拽源只有 `pool:today` / `pool:inbox`，绕法是先清日期或等它到期；真要补，优先做详情抽屉里的「归入项目」选择器（不依赖拖拽、一次覆盖全部区），而不是把已排期区接进 dnd 系统。项目级重力、项目区参与筛选、重复待办的归属、捕捉侧携带归属一律不做。归档前的「N 条未完成任务将回到收件箱」提示未做——归档是 toggle 且 5 处入口当前都无确认，属 goals 页议题；数据安全已由 §4 的 touch 兜住。
+**已排期（非今天）与手头的任务没有任何归入路径**——拖拽源只有 `pool:today` / `pool:inbox`，绕法是先清日期或等它到期；真要补，优先做详情抽屉里的「归入项目」选择器（不依赖拖拽、一次覆盖全部区），而不是把已排期区接进 dnd 系统。项目级重力、项目区参与筛选、重复待办的归属、捕捉侧携带归属一律不做。归档前的「N 条未完成任务将回到收件箱」提示未做——归档是 toggle 且 5 处入口当前都无确认，属 goals 页议题；数据安全已由 §4 的 touch 兜住。
