@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@timedata/shared";
 import type { TodoProjectGroup } from "./goalMembership.js";
-import { goalBarTaskIds, projectChipIndex, projectMemberState, summarizeProjectGroup } from "./projectZone.js";
+import {
+  goalBarTaskIds,
+  landsInCollapsedProjectGroup,
+  projectChipIndex,
+  projectMemberState,
+  summarizeProjectGroup,
+} from "./projectZone.js";
 
 const NOW = new Date("2026-07-25T10:00:00.000Z");
 
@@ -103,5 +109,39 @@ describe("goalBarTaskIds", () => {
 
   it("chip 为空时原样返回全部（P2 之前的行为）", () => {
     expect([...goalBarTaskIds(new Set(["a", "b"]), new Map())].sort()).toEqual(["a", "b"]);
+  });
+});
+
+describe("landsInCollapsedProjectGroup", () => {
+  const opts = { handSessionId: "s1", now: NOW };
+
+  it("根任务无排期、不在手头 → true（真会落进折叠的组）", () => {
+    expect(landsInCollapsedProjectGroup(task({ id: "t1" }), opts)).toBe(true);
+  });
+
+  it("子任务 → false：投影层只收根任务，展开的是不含它的组", () => {
+    expect(landsInCollapsedProjectGroup(task({ id: "t1", parentId: "p1" }), opts)).toBe(false);
+  });
+
+  it("ruleId 非空（occurrence / 混合体行）→ false：同样进不了项目区归集", () => {
+    expect(landsInCollapsedProjectGroup(task({ id: "t1", ruleId: "r1" }), opts)).toBe(false);
+  });
+
+  it("在手头 → false：它在页面最顶上本来就看得见，展开只会把页面滚走", () => {
+    expect(landsInCollapsedProjectGroup(task({ id: "t1", sessionId: "s1" }), opts)).toBe(false);
+  });
+
+  it("sessionId 是历史指针、不等于当前活跃场 → 仍 true", () => {
+    expect(landsInCollapsedProjectGroup(task({ id: "t1", sessionId: "s0" }), opts)).toBe(true);
+  });
+
+  it("排到未来 → false：回的是已排期区，本来就看得见", () => {
+    const t = task({ id: "t1", scheduledAt: "2026-08-20T00:00:00.000Z" });
+    expect(landsInCollapsedProjectGroup(t, opts)).toBe(false);
+  });
+
+  it("已完成 → false：已完成成员待在组内另一个默认折叠的子区，展开也看不到，指错更糟", () => {
+    const t = task({ id: "t1", done: true, completedAt: "2026-07-25T09:00:00.000Z" });
+    expect(landsInCollapsedProjectGroup(t, opts)).toBe(false);
   });
 });

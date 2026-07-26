@@ -45,7 +45,7 @@ import {
   toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
-import { goalBarTaskIds, projectChipIndex } from "../lib/tasks/projectZone.js";
+import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
 import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
@@ -212,25 +212,6 @@ export function TodoPage() {
     setRevealGoals((prev) => prev.filter((id) => !goalIds.includes(id)));
   }, []);
   /**
-   * 写入后的这条会不会落进项目区里那个**默认折叠的组**——落点反馈的唯一判据。三道闸缺一不可：
-   *
-   * 1. 项目区归集守卫（`parentId === null && recurrence === null && ruleId === null`）里 placement 判不出的两条：
-   *    子任务 scheduledAt 为空照样被 placement 判成 inbox，而投影层只收根任务；ruleId 非空的混合体行
-   *    被 recurrence 清成 null 后同理。这两种展开的都是不含它的组。
-   *    （`done` 与 `recurrence` 不必单列：placement 首行就把 done 判成 completed、重复模板判成 today/recurring，
-   *    两者永远进不了下面那个 inbox 分支——已完成成员待在组内**另一个**默认折叠的「已完成」子区里，
-   *    展开组也看不到它，给的是错误指认、比零反馈更糟，正是靠这条挡住。）
-   * 2. 焦点轴压过落点：listTasks 把未完成的手头成员截进 atHand 并 continue，它就在页面最顶上、本来就看得见，
-   *    强行展开只会把页面滚走。
-   * 3. 落点真的是 inbox 池：排到未来的成员回的是已排期区，同样本来就看得见。
-   */
-  const landsInCollapsedProjectGroup = (task: Task): boolean => {
-    if ((task.parentId ?? null) !== null || task.ruleId !== null) return false;
-    const handSessionId = buckets.handSession?.id ?? null;
-    if (handSessionId !== null && (task.sessionId ?? null) === handSessionId) return false;
-    return placementForTask(task, gravityNow).pool === "inbox";
-  };
-  /**
    * 项目成员回落 inbox 池时，把它的归属组展开并滚过去。
    *
    * 归属轴排他打开后，「回到 inbox 池」不再等于「出现在收件箱」：成员会落进项目区里一个默认折叠的组，
@@ -241,7 +222,9 @@ export function TodoPage() {
    * 三四种口径，每种都漏一半（这正是本轮修的三个缺陷）。想加新的回落路径，只要把写入结果丢进来。
    */
   const revealProjectHome = async (task: Task) => {
-    if (!landsInCollapsedProjectGroup(task)) return;
+    if (!landsInCollapsedProjectGroup(task, { handSessionId: buckets.handSession?.id ?? null, now: gravityNow })) {
+      return;
+    }
     const chip = projectChips.get(task.id);
     if (chip) {
       openProject(chip.goalId);
