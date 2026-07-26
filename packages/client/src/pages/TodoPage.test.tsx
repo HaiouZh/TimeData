@@ -1849,6 +1849,31 @@ describe("TodoPage 多选态", () => {
     await unmount(root);
   });
 
+  it("会话内手动折叠收件箱后再进多选，照样展开", async () => {
+    // 上一条走的是「折叠偏好在挂载前就存着」，那条路只需 defaultOpen 从 false 变 true。
+    // 这一条是同一功能上真正会漏的那半：用户在页面里手动折叠——`onToggle` 只写 localStorage、
+    // **不触发重渲染**，React 手上仍是上一次渲染的 `open={true}`，而 DOM 已经是 false。
+    // 此时 enterSelection 再写一次 localStorage，下一帧算出的 defaultOpen 还是 true，
+    // 与 React 记着的值相同 → 它认为没变、不碰 DOM → 收件箱还收着，修复形同虚设。
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    const details = () => host.querySelector('[data-section="inbox"] details') as HTMLDetailsElement;
+    expect(details().open).toBe(true);
+
+    // 浏览器点 summary 的形态：先改 DOM 的 open，再派发 toggle。
+    await act(async () => {
+      details().open = false;
+      details().dispatchEvent(new Event("toggle", { bubbles: true }));
+    });
+    expect(details().open).toBe(false);
+
+    await enterSelection(host);
+
+    expect(details().open).toBe(true);
+    await unmount(root);
+  });
+
   it("进出多选不重挂项目区，用户展开的组保持展开", async () => {
     // `dimWhenSelecting` 在同一插槽位置返回 `node` 或 `<div inert>{node}</div>`——元素类型变了，
     // React 卸载重挂，`TodoProjectSection` 的展开态 overrides（组件本地 state）随之清空。

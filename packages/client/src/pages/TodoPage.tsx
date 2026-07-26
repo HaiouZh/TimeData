@@ -138,6 +138,16 @@ export function TodoPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [notMode, setNotMode] = useState(false);
   const [composerText, setComposerText] = useState("");
+  /**
+   * 收件箱的展开态由页面持有一份 state，不能像另外两个折叠区那样每次渲染现读 localStorage。
+   *
+   * 理由是这一处**要被程序打开**（进多选时，见 `enterSelection`），而 `<details open>` 是
+   * React 的受控值：用户手动折叠只改 DOM 与 localStorage、不触发重渲染，React 手上仍是上一次
+   * 渲染的 `true`。此时只写 localStorage 的话，下一帧算出的 `open` 还是 `true`——与 React 记着的
+   * 值相同 → 它认为没变、根本不碰 DOM → 收件箱还收着，"进多选顺带展开"形同虚设。
+   * 存成 state 后每次开合都过 React 一遍，两边不会各说各话。localStorage 仍写，负责跨会话持久化。
+   */
+  const [inboxOpen, setInboxOpen] = useState(() => !getInboxCollapsed());
   // 页面级多选态（design §动作一）。selectedIds 只存 id：useLiveQuery 回流后手里攥着的整行会过期。
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -380,9 +390,9 @@ export function TodoPage() {
     // 顺带展开收件箱。入口「圈成项目」挂在 `<summary>` 里、与 `<details open>` 无关，而折叠状态
     // 是持久化的：折叠着点进多选，全页其余区块变灰 inert + 底部「已选 0 条」，收件箱却还收着——
     // 一条可选行都看不见，第一眼是「模式坏了」。
-    // 够用的原因：`CollapsibleSection` 的 `open` 来自 `defaultOpen={!getInboxCollapsed()}`，
-    // 而那句在**每次渲染时都重读** localStorage，上面 setState 触发的重渲染会把它带成 true。
-    // 代价是把用户的折叠偏好改成展开——可以接受，他点「圈成项目」就是要看收件箱。
+    // 两处都写：`inboxOpen` 是 `<details open>` 的受控值（光写 localStorage 不够，理由见它的声明处），
+    // localStorage 负责跨会话。代价是把用户的折叠偏好改成展开——可以接受，他点「圈成项目」就是要看收件箱。
+    setInboxOpen(true);
     setInboxCollapsed(false);
   };
   const exitSelection = useCallback(() => {
@@ -806,8 +816,13 @@ export function TodoPage() {
       <CollapsibleSection
         title="收件箱"
         count={inboxFiltered.length}
-        defaultOpen={!getInboxCollapsed()}
-        onToggle={(open) => setInboxCollapsed(!open)}
+        defaultOpen={inboxOpen}
+        onToggle={(open) => {
+          // 两处都要写：state 让 React 手上的值跟 DOM 一致（否则程序化展开会被 diff 判成"没变"），
+          // localStorage 负责跨会话记住。见 `inboxOpen` 的声明处。
+          setInboxOpen(open);
+          setInboxCollapsed(!open);
+        }}
         action={
           selectionMode ? null : (
             <button
