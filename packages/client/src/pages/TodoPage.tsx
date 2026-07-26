@@ -367,6 +367,43 @@ export function TodoPage() {
     });
   };
   const selectionProps = { selectionMode, selectedIds, onToggleSelect: toggleSelect };
+  /**
+   * 当前可选的 id 全集。收件箱三处渲染点合起来就是它：浮动区 `floatingInbox`、水下尾 `sunkenInbox`、
+   * 重力复习区用的也是 `sunkenInbox`。非多选态不算（省掉每次渲染一趟 O(n) 建集）。
+   *
+   * 不用 `buckets.inbox`（此刻两者恒等）而是照着渲染点写：将来哪一处改了口径（比如水下尾不再可选），
+   * 剪枝会跟着一起变，而 `buckets.inbox` 会静默继续放行——那正是幽灵 id 回来的方式。
+   */
+  const selectableIds = selectionMode ? new Set([...floatingInbox, ...sunkenInbox].map((task) => task.id)) : null;
+  /**
+   * 跟着数据回流剪枝 `selectedIds`。
+   *
+   * `selectedIds` 只存 id，而 `useLiveQuery` 回流不会通知它：悬停删掉一行、或在多选态里勾完成一行
+   *（复选框在多选态下仍是「完成」，design 拍板），那行就离开了收件箱，而 id 还攥在手上——
+   * 操作栏说「已选 2 条」屏幕上却只剩 1 行高亮，提交时 `db.tasks.get(ghostId)` 拿不到人、
+   * 抛的还是裸 `Error` 落进兜底文案，而失败刻意不退出多选，用户原地重试、每次都失败。
+   *
+   * 剪掉的不是「已完成任务不能当成员」——它可以（design §投影规则 4 的 `doneCount` 就是数它）。
+   * 剪掉的是「用户没在看的东西别替他提交」。
+   *
+   * 无依赖数组（每次渲染跑一趟）而不是依赖 `selectableIds`：那个 Set 每次渲染都是新引用，
+   * 写进依赖数组也是每渲染必跑，只是多骗一层。真正防死循环的是下面 updater 里的「没少东西就还它原来那个」。
+   */
+  useEffect(() => {
+    if (selectableIds === null) return;
+    setSelectedIds((prev) => {
+      let pruned = false;
+      for (const id of prev) {
+        if (!selectableIds.has(id)) {
+          pruned = true;
+          break;
+        }
+      }
+      // 无条件 `new Set(...)` 会每次都换引用 → 渲染 → setState → 渲染，死循环。
+      if (!pruned) return prev;
+      return new Set([...prev].filter((id) => selectableIds.has(id)));
+    });
+  });
   // 这个 effect 必须待在 exitSelection **之后**：依赖数组在渲染期就读它，
   // 挪回上面那堆 useEffect 里会撞 const 的 TDZ（ReferenceError，整页白屏）。
   useEffect(() => {

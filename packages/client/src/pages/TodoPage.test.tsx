@@ -1644,6 +1644,64 @@ describe("TodoPage 多选态", () => {
     await unmount(root);
   });
 
+  it("已勾选的行被删掉后从选中集剔除，操作栏不再多数一条", async () => {
+    // 幽灵 id：`selectedIds` 只存 id，行被删后它照旧攥在手上。操作栏说「已选 2 条」而屏幕上只剩 1 行，
+    // 提交时 `db.tasks.get(ghostId)` 拿不到人 → 抛裸 Error → 落进兜底文案 → 而失败刻意不退出多选，
+    // 用户原地重试、每次都失败，屏幕上没有任何东西指向那个幽灵 id。
+    await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    // 行右侧的垃圾桶。jsdom 无 matchMedia → useIsCoarsePointer 为 false → 悬停动作条照常进 DOM，
+    // 多选态没关掉它（关掉才是另一个决定），所以这是可达手势。
+    const del = host.querySelector('[aria-label="删除 买灯"]') as HTMLButtonElement;
+    expect(del).not.toBeNull();
+    await act(async () => {
+      del.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await waitForCondition(
+      () => !((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").includes("买灯"),
+      "买灯 离开收件箱",
+      settle,
+    );
+
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+    await unmount(root);
+  });
+
+  it("已勾选的行被勾完成后从选中集剔除（复选框在多选态里仍是「完成」）", async () => {
+    // 同源的第二个现象：完成的行落进已完成区、离开收件箱，而操作栏照旧数着它。
+    // 已完成任务本身**可以**当项目成员（design §投影规则 4），这条修的不是「不许收编已完成」，
+    // 而是「操作栏别说谎、别把用户没在看的东西提交上去」。
+    await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    const checkbox = host.querySelector('input[aria-label="完成 买灯"]') as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    await act(async () => {
+      checkbox.click();
+    });
+    await waitForCondition(
+      () => !((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").includes("买灯"),
+      "买灯 落进已完成区",
+      settle,
+    );
+
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+    await unmount(root);
+  });
+
   it("Esc 退出多选并清空选中", async () => {
     await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage();
@@ -1704,15 +1762,6 @@ describe("TodoPage 多选提交", () => {
 
   const dialogText = (host: HTMLElement) => host.querySelector('[role="dialog"]')?.textContent ?? "";
 
-  async function clickDialogButton(host: HTMLElement, text: string): Promise<void> {
-    await act(async () => {
-      [...host.querySelectorAll('[role="dialog"] button')]
-        .find((b) => b.textContent === text)
-        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await settle();
-  }
-
   /**
    * 跨设备并发的存量形态：**选中之后**这批任务才被另一端写进某 active project 的 members。
    *
@@ -1757,6 +1806,45 @@ describe("TodoPage 多选提交", () => {
     await waitForCondition(() => zoneText(host).includes("买灯"), "新组展开并列出成员", settle);
     expect(zoneText(host)).toContain("装修");
     expect((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").not.toContain("买灯");
+    await unmount(root);
+  });
+
+  it("勾选后又删掉一条，整批照常提交（不再被幽灵 id 卡死）", async () => {
+    // 剪枝之前这条走的是死路：`assignTasksToProject`/`createProjectWithMembers` 里
+    // `db.tasks.get(ghostId)` 返回 undefined → 抛裸 `Error("任务不存在")`（不是 ProjectAssignError）
+    // → 兜底文案「…数据有问题…」→ 而失败不退出多选，用户原地重试，每次都失败。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+
+    await act(async () => {
+      (host.querySelector('[aria-label="删除 买灯"]') as HTMLButtonElement).dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+    await waitForCondition(
+      () => !((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").includes("买灯"),
+      "买灯 离开收件箱",
+      settle,
+    );
+
+    await typeProjectName(host, "装修");
+    await clickByLabel(host, "圈成项目");
+
+    await waitForToast(host, "已建「装修」· 1 条");
+    expect(selectionBar(host)).toBeNull();
+    const goal = (await db.goals.toArray()).find((g) => g.title === "装修");
+    expect(goal?.members).toHaveLength(1);
+    // 兜底 catch 一次都不该进：进了就说明这条只是"换了个方式失败"。
+    // 按前缀挑而不是 `not.toHaveBeenCalled()`：React 的 act 警告也走 console.error，
+    // 整体断言会被它顶成红，测的就不再是这条链路了。
+    expect(errorSpy.mock.calls.filter((call) => String(call[0]).includes("多选提交失败"))).toHaveLength(0);
     await unmount(root);
   });
 
@@ -1841,7 +1929,21 @@ describe("TodoPage 多选提交", () => {
     await unmount(root);
   });
 
-  it("带前置依赖边时先弹确认，取消则一个字都不写", async () => {
+  /**
+   * ⚠️ 这三条原本测的是「批量路径上的前置边确认框」（弹出/取消不写/确认写入/`nextGoalId` 不能传 null）。
+   * `selectedIds` 开始跟着收件箱剪枝之后，那个确认框在批量路径上**不再可达**，原构造整体失效：
+   *
+   *   `listTasks` 的归属轴排他判据是 `row.status === "active" && row.kind === "project"`；
+   *   `prerequisiteLossOnAssignMany` 的取源判据**逐字相同**。于是「选中项带 project 归属」
+   *   与「选中项还在收件箱里（= 还在选中集里）」互斥，前置边一条都数不出来。
+   *
+   * 确认框的调用保留着当保险（判据将来若放宽，它立刻重新生效），但它的承重测试必须下沉到
+   * `lib/goals` 的 `prerequisiteLossOnAssignMany` 一侧——那是另一轮的事。
+   * 这三条换成剪枝自己的承重：被另一端抢走的选中项退出选中集，且**不替用户去动它原来的组**。
+   */
+  it("另一端把选中项收进项目组后，它退出选中集，原组一个字都不动", async () => {
+    // 剪枝前这里是一条静默的破坏路径：买灯 已经不在收件箱、屏幕上看不到它被选中，
+    // 而提交会把它从「旧组」摘走、连带删掉那条前置边——用户从没碰过「旧组」。
     setProjectZoneIntroDismissed(true);
     const t1 = await addTask({ title: "买灯", toInbox: true });
     const t2 = await addTask({ title: "买椅子", toInbox: true });
@@ -1852,82 +1954,93 @@ describe("TodoPage 多选提交", () => {
     // 归属在选完之后才落地——顺序的理由见 seedStaleMembership 的注释。
     await seedStaleMembership(t1.id, t2.id);
     await waitForCondition(() => zoneText(host).includes("旧组"), "旧组进项目区", settle);
-    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+    expect(selectionBar(host)?.textContent).toContain("已选 0 条");
 
+    // 选中集空了，「圈成项目」随之禁用；点它（以及走 Enter）都该是彻底的 no-op。
     await typeProjectName(host, "新组");
     await clickByLabel(host, "圈成项目");
-    await waitForCondition(() => dialogText(host).includes("移动会删掉依赖关系"), "确认框", settle);
-    // 整句匹配：单组这句是唯一可以点名的那句，措辞漂了（或被多组那句顶掉）必须当场红。
-    expect(dialogText(host)).toContain(
-      "这些任务在「旧组」里有 1 条前置依赖关系。移到别的项目会一并删除，且无法撤销。",
-    );
+    await settle();
 
-    await clickDialogButton(host, "取消");
+    expect(dialogText(host)).toBe("");
     expect((await db.goals.toArray()).map((g) => g.title)).toEqual(["旧组"]);
     expect((await db.goals.get("gA"))?.prerequisites).toHaveLength(1);
+    // 留在多选态：什么都没提交，没有理由把用户踢出去。
+    expect(selectionBar(host)).not.toBeNull();
     await unmount(root);
   });
 
-  it("确认后照常写入，源组那条边随之消失", async () => {
+  it("只被抢走一条时，剩下那条照常建组，原组不受影响", async () => {
+    // 剪枝必须是**逐条**的，不是「一有幽灵就整批放弃」：那样一条 sync 就能让用户重选一遍。
     setProjectZoneIntroDismissed(true);
-    const t1 = await addTask({ title: "买灯", toInbox: true });
-    const t2 = await addTask({ title: "买椅子", toInbox: true });
-    const { host, root } = await renderPage();
-    await waitForText(host, "买椅子");
-    await enterSelection(host);
-    await clickSelectRow(host, "买灯");
-    await seedStaleMembership(t1.id, t2.id);
-    await waitForCondition(() => zoneText(host).includes("旧组"), "旧组进项目区", settle);
-
-    await typeProjectName(host, "新组");
-    await clickByLabel(host, "圈成项目");
-    await waitForCondition(() => dialogText(host).includes("移动会删掉依赖关系"), "确认框", settle);
-    await clickDialogButton(host, "仍要移动");
-    await waitForToast(host, "已建「新组」· 1 条");
-
-    expect((await db.goals.get("gA"))?.members).not.toContainEqual({ kind: "task", id: t1.id });
-    expect((await db.goals.get("gA"))?.prerequisites).toEqual([]);
-    await unmount(root);
-  });
-
-  it("重入目标组不弹确认，目标组自己的前置边一条不掉", async () => {
-    // 询问时的 `nextGoalId` 必须是**目标组**，不能照抄建组那边的 `null`。
-    // 传 null 的话目标组自己也被数进"会被摘除的源组"，用户看到一句「移动会删掉依赖关系」，
-    // 而实际上一条边都不会掉（摘除循环 `row.id === goalId` 直接跳过目标组）——
-    // 这是纯粹的假警报，而且吓的正是"我把漏掉的两条补进原来那个组"这种最常见的动作。
-    // 一句吓人的话说错一次，往后所有真警报都会被无脑点掉。
-    setProjectZoneIntroDismissed(true);
-    const t1 = await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买灯", toInbox: true });
     const t2 = await addTask({ title: "买椅子", toInbox: true });
     const { host, root } = await renderPage();
     await waitForText(host, "买椅子");
     await enterSelection(host);
     await clickSelectRow(host, "买灯");
     await clickSelectRow(host, "买椅子");
-    // 选完之后这两条才被另一端写进「装修」（同 seedStaleMembership 的可达路径），
-    // 于是它们既在手上、又已经属于即将点进去的那个组——重入。
-    await db.goals.add({
-      id: "gT",
-      title: "装修",
-      kind: "project",
-      status: "active",
-      members: [
-        { kind: "task", id: t1.id },
-        { kind: "task", id: t2.id },
-      ],
-      prerequisites: [{ blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } }],
-      createdAt: "2026-06-28T09:00:00.000Z",
-      updatedAt: "2026-06-28T09:00:00.000Z",
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    await act(async () => {
+      await db.goals.add({
+        id: "gA",
+        title: "旧组",
+        kind: "project",
+        status: "active",
+        members: [{ kind: "task", id: t2.id }],
+        prerequisites: [],
+        createdAt: "2026-06-28T09:00:00.000Z",
+        updatedAt: "2026-06-28T09:00:00.000Z",
+      });
     });
-    await waitForCondition(() => zoneText(host).includes("装修"), "装修进项目区", settle);
+    await waitForCondition(() => zoneText(host).includes("旧组"), "旧组进项目区", settle);
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+
+    await typeProjectName(host, "装修");
+    await clickByLabel(host, "圈成项目");
+    await waitForToast(host, "已建「装修」· 1 条");
+
+    const created = (await db.goals.toArray()).find((g) => g.title === "装修");
+    expect(created?.members).toEqual([{ kind: "task", id: (await db.tasks.toArray()).find((t) => t.title === "买灯")?.id }]);
+    // 「旧组」既没被摘成员也没被改：它从头到尾不该参与这次提交。
+    expect((await db.goals.get("gA"))?.members).toEqual([{ kind: "task", id: t2.id }]);
+    await unmount(root);
+  });
+
+  it("「放进…」路径同样剪枝：被抢走的那条不算进提交", async () => {
+    // 两条提交路径各自读 `selectedIds`，剪枝只在一处生效是可能的手误——归入这侧要有自己的闸。
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await addTask({ title: "买灯", toInbox: true });
+    const t2 = await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+    expect(selectionBar(host)?.textContent).toContain("已选 2 条");
+
+    await act(async () => {
+      await db.goals.add({
+        id: "gA",
+        title: "旧组",
+        kind: "project",
+        status: "active",
+        members: [{ kind: "task", id: t2.id }],
+        prerequisites: [],
+        createdAt: "2026-06-28T09:00:00.000Z",
+        updatedAt: "2026-06-28T09:00:00.000Z",
+      });
+    });
+    await waitForCondition(() => zoneText(host).includes("旧组"), "旧组进项目区", settle);
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
 
     await clickByLabel(host, "放进已有项目");
     await clickByLabel(host, "放进 装修");
+    await waitForToast(host, "已归入「装修」· 1 条");
 
-    // 直奔成功反馈：确认框一旦弹出来，提交就停在那儿等人点，这个 toast 永远等不到。
-    await waitForToast(host, "已归入「装修」· 2 条");
-    expect(dialogText(host)).toBe("");
-    expect((await db.goals.get("gT"))?.prerequisites).toHaveLength(1);
+    expect((await db.goals.get("gA"))?.members).toEqual([{ kind: "task", id: t2.id }]);
     await unmount(root);
   });
 
@@ -1969,35 +2082,21 @@ describe("TodoPage 多选提交", () => {
     // 这两个断言只覆盖了 submitAssignToProject 一侧。实测过——在 submitCreateProject 的 catch 里
     // 顺手加一句 exitSelection()（一个看着更"干净"的手误），整套 57 条用例一条都不会红。
     //
-    // 构造走的是 selectedIds 不随 useLiveQuery 剪枝那条真实路径（见 confirmPrerequisiteLoss 的注释）：
-    // 多选态开着时另一端 sync 下来一份含选中任务的坏组，提交那一刻才撞上。
-    // 坏在哪：摘掉「买灯」后，剩下那条边的 blocked 指向一个非成员，`goal prerequisite must
-    // reference members` 拒掉整行。**不能用重复 ref 凑**——filter 会把两个重复项一起摘干净，
-    // parse 反而通过，这条路径抛不出来。
+    // 原构造（另一端 sync 下来一份含选中任务的坏组）随 selectedIds 剪枝一起失效了：
+    // 那条任务一旦带上 active project 归属就离开收件箱、被剪出选中集，提交根本不会发生。
+    // 理由与上面三条同源，见那段 ⚠️ 注释。
+    //
+    // 换成在写库那一步注入失败：这条用例守的本来就是**页面的失败出口**（兜底文案 + 不退出多选），
+    // 不是数据层为什么会抛。`createProjectWithMembers` 里 `db.goals.add(seed)` 是这条链上的第一次写。
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     setProjectZoneIntroDismissed(true);
-    const target = await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage();
     await waitForText(host, "买灯");
     await enterSelection(host);
     await clickSelectRow(host, "买灯");
 
-    await act(async () => {
-      await db.goals.add({
-        id: "gBroken",
-        title: "另一端同步下来的组",
-        kind: "project",
-        status: "active",
-        members: [
-          { kind: "task", id: target.id },
-          { kind: "task", id: "ghost-member" },
-        ],
-        prerequisites: [{ blocker: { kind: "task", id: "ghost-member" }, blocked: { kind: "task", id: "ghost-outsider" } }],
-        createdAt: "2026-06-28T09:00:00.000Z",
-        updatedAt: "2026-06-28T09:00:00.000Z",
-      });
-    });
-    await settle();
+    vi.spyOn(db.goals, "add").mockRejectedValueOnce(new Error("写库失败"));
 
     await typeProjectName(host, "装修");
     await clickByLabel(host, "圈成项目");
