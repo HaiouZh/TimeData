@@ -987,6 +987,35 @@ describe("TaskRow 多选态", () => {
     await unmount(root);
   });
 
+  it("多选态下按 Enter 也是勾选，不开详情（键盘用户走的是 onKeyDown 那一支）", async () => {
+    const onToggleSelect = vi.fn();
+    const onEdit = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: rowTask,
+        pool: "inbox",
+        selectionMode: true,
+        selected: false,
+        onToggleSelect,
+        onToggle: vi.fn(),
+        onEdit,
+      }),
+    );
+
+    // 行是 role="checkbox" tabIndex=0，键盘是它的一等入口。onKeyDown 里少了 selectionMode 这一支，
+    // Tab 到行按 Enter 会开详情抽屉而不是勾选——上面那条点击用例照常绿，键盘用户全程勾不上。
+    await act(async () => {
+      host
+        .querySelector('[aria-label="选择 买灯"]')
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+
+    expect(onToggleSelect).toHaveBeenCalledWith(rowTask);
+    expect(onEdit).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
   it("多选态下复选框语义仍是「完成」", async () => {
     const onToggle = vi.fn();
     const onToggleSelect = vi.fn();

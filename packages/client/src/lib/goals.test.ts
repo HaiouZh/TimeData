@@ -818,6 +818,48 @@ describe("批量归属写入", () => {
     ]);
   });
 
+  // 本条与紧随其后的《批量归入：已归档的 project 也不被摘除》**各锁一半**：批量版摘除循环的跳过条件
+  // 与单条版一字相同（`row.status !== "active" || row.kind !== "project"`），本条锁 kind 半边、
+  // 那条锁 status 半边。删任一条，另一半析取项立刻裸奔——单条版 assignTaskToProject 那一对同源。
+  it("批量归入：theme 目标持有同一条任务时不被摘除（归属轴排他只对 kind=project 成立）", async () => {
+    await seedBareTask("t1");
+    const theme = await addGoal({ title: "主题组", kind: "theme", now: date(now) });
+    await addGoalMember(theme.id, { kind: "task", id: "t1" }, { now: date(now) });
+    const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
+
+    await assignTasksToProject(target.id, ["t1"], { now: date("2026-06-23T02:00:00.000Z") });
+
+    // 丢了 kind 那半的实际后果：theme 成员照常出现在收件箱（正是最容易被圈进去的那批行），
+    // 被静默摘掉后绿竖条、「已有去处」标记、goals 页的归属一起消失，用户看不到任何提示。
+    expect((await getGoal(theme.id))?.members).toEqual([{ kind: "task", id: "t1" }]);
+    expect((await getGoal(target.id))?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("批量归入：已归档的 project 也不被摘除，它引用该任务的前置边也不掉", async () => {
+    // 与上面《theme 目标持有同一条任务时不被摘除》各锁摘除循环那个 `||` 的一半，见那条的注释。
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const old = await addGoal({ title: "旧组", kind: "project", now: date(now) });
+    await addGoalMember(old.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(old.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await updateGoalPrerequisites(old.id, [
+      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
+    ]);
+    await updateGoal(old.id, { status: "archived", now: date(now) });
+    const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
+
+    await assignTasksToProject(target.id, ["t1"], { now: date("2026-06-23T02:00:00.000Z") });
+
+    // 丢了 status 那半的实际后果：归档组的成员被摘除，还连带删掉组里引用它的 prerequisites 边——
+    // 而 prerequisiteLossOnAssignMany 压根不数归档组，确认框连一句警告都不弹。
+    const archived = await getGoal(old.id);
+    expect(archived?.members).toEqual([
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ]);
+    expect(archived?.prerequisites).toHaveLength(1);
+  });
+
   it("批量归入：目标组已归档 → inactive，且源组成员纹丝不动", async () => {
     await seedBareTask("t1");
     const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
@@ -993,7 +1035,10 @@ describe("prerequisiteLossOnAssignMany", () => {
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], target.id)).toBeNull();
   });
 
-  it("归档组与 theme 组不数（摘除循环本来就不摘它们）", async () => {
+  // 本条与紧随其后的《theme 源组不数》**各锁一半**：这里的跳过条件同样是
+  // `row.status !== "active" || row.kind !== "project"`，本条锁 status 半边、那条锁 kind 半边。
+  // 原本一条用例的名字说了「归档组与 theme 组」两件事，body 里却只造了归档组，故拆成两条。
+  it("归档源组不数（摘除循环本来就不摘它）", async () => {
     await seedBareTask("t1");
     await seedBareTask("t2");
     const archived = await addGoal({ title: "归档组", kind: "project", now: date(now) });
@@ -1003,6 +1048,22 @@ describe("prerequisiteLossOnAssignMany", () => {
       { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
     ]);
     await updateGoal(archived.id, { status: "archived", now: date(now) });
+
+    expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
+  });
+
+  it("theme 源组不数（摘除循环不摘 theme，一条边都不会掉）", async () => {
+    // 与上一条各锁那个 `||` 的一半，见上一条的注释。kind 半边裸奔时这里会弹一句**纯假警报**
+    //「移动会删掉依赖关系」——摘除循环根本不摘 theme。单条版有对应用例
+    //（prerequisiteLossOnAssign 那节《源组是 theme → 不算》），批量版本来漏了镜像。
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const theme = await addGoal({ title: "主题组", kind: "theme", now: date(now) });
+    await addGoalMember(theme.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(theme.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await updateGoalPrerequisites(theme.id, [
+      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
+    ]);
 
     expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
   });
