@@ -513,6 +513,7 @@ export function TodoPage() {
       revealGoals={revealGoals}
       onRevealConsumed={consumeReveal}
       onExitProject={exitProject}
+      dragCandidate={null}
       {...rowHandlers}
     />
   );

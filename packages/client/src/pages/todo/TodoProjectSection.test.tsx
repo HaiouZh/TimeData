@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { DndContext } from "@dnd-kit/core";
 import type { Task } from "@timedata/shared";
 import { act } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -9,6 +10,7 @@ import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../.
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
 import { ProjectNameChip, ProjectZoneIntroBar, TodoProjectSection } from "./TodoProjectSection.js";
+import { projectContainerId } from "./todoDnd.js";
 
 const NOW = new Date("2026-07-25T10:00:00.000Z");
 
@@ -57,6 +59,7 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         revealGoals={props.revealGoals ?? []}
         onRevealConsumed={props.onRevealConsumed ?? vi.fn()}
         onExitProject={props.onExitProject ?? vi.fn()}
+        dragCandidate={props.dragCandidate ?? null}
         {...handlers}
       />
     </MemoryRouter>
@@ -216,6 +219,72 @@ describe("TodoProjectSection", () => {
 
     expect(host.textContent).toContain("刷墙");
     expect(onRevealConsumed).toHaveBeenCalledWith(["g1"]);
+    await unmount(root);
+  });
+});
+
+describe("TodoProjectSection 落点", () => {
+  function renderWithDnd(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
+    // 生产里本组件挂在 TodoPage 顶层 DndContext 之下，落点要真的注册进去才算数。
+    return renderDom(<DndContext>{sectionElement(props)}</DndContext>);
+  }
+
+  it("每组渲染一个 project:<goalId> 落点，且落点包住展开态的内容区", async () => {
+    setProjectZoneIntroDismissed(false); // 首次默认展开
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
+    });
+    const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
+    expect(card?.getAttribute("data-droppable-id")).toBe(projectContainerId("g1"));
+    // 展开态的行在落点内部，而不是它的兄弟节点
+    expect(card?.querySelector('[aria-label="打开 任务 t1"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("拖着一条可入组的任务时组块是可落态", async () => {
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1" })],
+      dragCandidate: task({ id: "t1" }),
+    });
+    const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
+    expect(card?.getAttribute("data-drop-blocked")).toBe("false");
+    await unmount(root);
+  });
+
+  it("拖着子任务时组块是禁止态", async () => {
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1" })],
+      dragCandidate: task({ id: "t1", parentId: "p1" }),
+    });
+    const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
+    expect(card?.getAttribute("data-drop-blocked")).toBe("true");
+    await unmount(root);
+  });
+
+  it("拖着重复待办时组块是禁止态", async () => {
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1" })],
+      dragCandidate: task({ id: "t1", ruleId: "r1" }),
+    });
+    expect(
+      host.querySelector('[data-testid="project-group"][data-goal-id="g1"]')?.getAttribute("data-drop-blocked"),
+    ).toBe("true");
+    await unmount(root);
+  });
+
+  it("没在拖时不给任何态（data-drop-blocked 缺席）", async () => {
+    const { host, root } = await renderWithDnd({ groups: [group({ goalId: "g1" })], dragCandidate: null });
+    const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
+    expect(card?.hasAttribute("data-drop-blocked")).toBe(false);
+    await unmount(root);
+  });
+
+  it("组内的行不渲染拖柄：项目区不注册 draggable，同一 taskId 不会在页面里被登记两次", async () => {
+    setProjectZoneIntroDismissed(false);
+    const { host, root } = await renderWithDnd({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
+    });
+    expect(host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
     await unmount(root);
   });
 });

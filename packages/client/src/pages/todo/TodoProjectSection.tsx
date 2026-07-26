@@ -1,15 +1,17 @@
+import { useDroppable } from "@dnd-kit/core";
 import { CaretDown, CaretRight, SignOut, X } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
-import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
+import { projectAssignBlock, type TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
+import { projectContainerId } from "./todoDnd.js";
 
 export interface TodoProjectSectionProps {
   /** 已按组间排序好的项目区分组，**不过标签筛选**（与手头区一致，见 design §非目标）。 */
@@ -29,6 +31,14 @@ export interface TodoProjectSectionProps {
    */
   onRevealConsumed: (goalIds: string[]) => void;
   onExitProject: (goalId: string, task: Task) => void;
+  /**
+   * 当前正被拖拽的任务（null = 没在拖），用来给组块画「可落 / 不可落」两态。
+   *
+   * **不判满员**：组件手上只有可解析成员数（tasks + doneTasks），而 500 闸看的是 goal.members
+   * 数组长度（含 track 成员与悬空 ref），拿近似值画禁止态会撒谎。满员一律由写入侧
+   * assignTaskToProject 抛错、走页面的 toast。
+   */
+  dragCandidate: Task | null;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -53,6 +63,84 @@ function memberStateChip(task: Task, handSessionId: string | null, now: Date): R
   );
 }
 
+/**
+ * 单个项目组的组块：标题行 + 展开态内容区，整块就是那个 `project:<goalId>` 落点。
+ *
+ * 独立成组件是因为 `useDroppable` 是 hook，不能在 `groups.map` 的回调里调。
+ *
+ * **落点覆盖整块而非只有标题行**：展开后标题行只有一行高、下面是一整片任务列表，只认标题行会让
+ * 展开态几乎瞄不准。组内不做用户自定义重排、组内行也不注册 sortable（`TaskList` 未传
+ * `sortable`/`containerId` → `canSort=false` → 不渲染拖柄），因此整块当落点没有落点竞争。
+ */
+function ProjectGroupCard({
+  group,
+  expanded,
+  dropBlocked,
+  onToggleExpand,
+  registerRef,
+  children,
+}: {
+  group: TodoProjectGroup;
+  expanded: boolean;
+  /** null = 没在拖，不画任何态 */
+  dropBlocked: boolean | null;
+  onToggleExpand: () => void;
+  registerRef: (el: HTMLElement | null) => void;
+  children: ReactNode;
+}) {
+  const containerId = projectContainerId(group.goalId);
+  const { setNodeRef, isOver } = useDroppable({ id: containerId, data: { containerId } });
+  const summary = summarizeProjectGroup(group);
+  const highlight =
+    isOver && dropBlocked === false
+      ? " ring-2 ring-inset ring-accent"
+      : isOver && dropBlocked === true
+        ? " opacity-60 ring-2 ring-inset ring-border-strong"
+        : "";
+
+  return (
+    <div
+      data-testid="project-group"
+      data-goal-id={group.goalId}
+      data-droppable-id={containerId}
+      {...(dropBlocked === null ? {} : { "data-drop-blocked": String(dropBlocked) })}
+      ref={(el) => {
+        // 两个 ref 各管一件事，都不能省：registerRef 供落点反馈滚动，setNodeRef 供 dnd-kit 量 rect。
+        registerRef(el);
+        setNodeRef(el);
+      }}
+      className={`rounded-card bg-surface transition${highlight}`}
+    >
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
+        <button
+          type="button"
+          data-testid="project-group-toggle"
+          aria-expanded={expanded}
+          onClick={onToggleExpand}
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-ctl py-1 text-left td-text-label font-medium text-ink-2 hover:bg-surface-hover"
+        >
+          <span className="shrink-0 text-ink-3">
+            <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
+          </span>
+          <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
+          <span className="shrink-0 td-text-caption font-normal text-ink-3">
+            {summary.allDone ? `已完成 · ${summary.total} 条` : `还剩 ${summary.remaining} / 共 ${summary.total}`}
+          </span>
+        </button>
+        {summary.allDone && (
+          <Link
+            to={`/goals/${group.goalId}`}
+            className="shrink-0 rounded-ctl px-2 py-1 td-text-label text-accent hover:bg-surface-elevated"
+          >
+            去归档
+          </Link>
+        )}
+      </div>
+      {expanded && <div className="px-1.5 pb-1.5">{children}</div>}
+    </div>
+  );
+}
+
 export function TodoProjectSection({
   groups,
   handSessionId,
@@ -60,6 +148,7 @@ export function TodoProjectSection({
   revealGoals,
   onRevealConsumed,
   onExitProject,
+  dragCandidate,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   // 首次（存量提示条尚未关闭）默认展开全部组，之后默认全折叠。
@@ -100,79 +189,49 @@ export function TodoProjectSection({
       </div>
       <div className="space-y-1">
         {groups.map((group) => {
-          const summary = summarizeProjectGroup(group);
-          const expanded = isExpanded(group.goalId);
+          // 第二个入参恒传 0：组件不判满员（见 props 注释），让 full 分支永不命中。
+          const dropBlocked = dragCandidate === null ? null : projectAssignBlock(dragCandidate, 0) !== null;
           return (
-            <div
+            <ProjectGroupCard
               key={group.goalId}
-              data-testid="project-group"
-              data-goal-id={group.goalId}
-              ref={(el) => {
+              group={group}
+              expanded={isExpanded(group.goalId)}
+              dropBlocked={dropBlocked}
+              onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
+              registerRef={(el) => {
                 rowRefs.current.set(group.goalId, el);
               }}
-              className="rounded-card bg-surface"
             >
-              <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <button
-                  type="button"
-                  data-testid="project-group-toggle"
-                  aria-expanded={expanded}
-                  onClick={() => setOverrides((prev) => new Map(prev).set(group.goalId, !expanded))}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-ctl py-1 text-left td-text-label font-medium text-ink-2 hover:bg-surface-hover"
-                >
-                  <span className="shrink-0 text-ink-3">
-                    <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
-                  <span className="shrink-0 td-text-caption font-normal text-ink-3">
-                    {summary.allDone
-                      ? `已完成 · ${summary.total} 条`
-                      : `还剩 ${summary.remaining} / 共 ${summary.total}`}
-                  </span>
-                </button>
-                {summary.allDone && (
-                  <Link
-                    to={`/goals/${group.goalId}`}
-                    className="shrink-0 rounded-ctl px-2 py-1 td-text-label text-accent hover:bg-surface-elevated"
-                  >
-                    去归档
-                  </Link>
-                )}
-              </div>
-              {expanded && (
-                <div className="px-1.5 pb-1.5">
-                  {group.tasks.length > 0 && (
-                    <TaskList
-                      pool="inbox"
-                      tasks={group.tasks}
-                      childrenModeOverride="static"
-                      metaChip={(task) => memberStateChip(task, handSessionId, now)}
-                      extraAction={(task) => (
-                        <button
-                          type="button"
-                          aria-label={`退出项目 ${task.title}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onExitProject(group.goalId, task);
-                          }}
-                          className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                        >
-                          <Icon icon={SignOut} size={16} />
-                        </button>
-                      )}
-                      {...rowHandlers}
-                    />
+              {group.tasks.length > 0 && (
+                <TaskList
+                  pool="inbox"
+                  tasks={group.tasks}
+                  childrenModeOverride="static"
+                  metaChip={(task) => memberStateChip(task, handSessionId, now)}
+                  extraAction={(task) => (
+                    <button
+                      type="button"
+                      aria-label={`退出项目 ${task.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onExitProject(group.goalId, task);
+                      }}
+                      className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                    >
+                      <Icon icon={SignOut} size={16} />
+                    </button>
                   )}
-                  {group.doneTasks.length > 0 && (
-                    <div className="mt-1">
-                      <CollapsibleSection title="已完成" count={group.doneTasks.length} defaultOpen={false}>
-                        <TaskList pool="completed" tasks={group.doneTasks} {...rowHandlers} />
-                      </CollapsibleSection>
-                    </div>
-                  )}
+                  {...rowHandlers}
+                />
+              )}
+              {group.doneTasks.length > 0 && (
+                <div className="mt-1">
+                  <CollapsibleSection title="已完成" count={group.doneTasks.length} defaultOpen={false}>
+                    <TaskList pool="completed" tasks={group.doneTasks} {...rowHandlers} />
+                  </CollapsibleSection>
                 </div>
               )}
-            </div>
+            </ProjectGroupCard>
           );
         })}
       </div>
