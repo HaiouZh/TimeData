@@ -276,4 +276,45 @@ describe("参考栏 · 回看块", () => {
 
     expect(host.textContent).not.toContain("早就作废的正文");
   });
+
+  // 上一条只断言"折叠状态下看不见旧正文"，而切日的重置 effect 本来就会收起——两条闸
+  // 保护的是同一个可观察面，删掉 epoch 守卫也照样绿。真正暴露它的是**再次展开**：
+  // 迟到响应若把 state 写成 loaded，toggle() 会因为 state.kind 不是 idle 而跳过重新请求，
+  // 于是把上一个日期的正文渲染在新日期的标签下。
+  it("迟到响应被作废后，再次展开会重新请求而不是显示旧日期的正文", async () => {
+    const { host, root } = await renderPanel("2026-07-25");
+
+    let resolveStale!: (v: { content: string; mtime: number | null }) => void;
+    const stale = new Promise<{ content: string; mtime: number | null }>((resolve) => {
+      resolveStale = resolve;
+    });
+    fetchDiaryMock.mockImplementationOnce(() => stale);
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("读取中") === true, "加载中");
+
+    // 切到别的日期：重置 effect 收起并清空
+    await act(async () => {
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false }));
+    });
+    await flush();
+
+    // 07-24 的旧响应此刻才回来，必须被 epoch 守卫挡掉
+    await act(async () => {
+      resolveStale({ content: "07-24 的正文", mtime: 1 });
+    });
+    await flush();
+
+    // 再次展开：应当为新日期（昨天 = 07-19）重新发请求，而不是端出滞留的旧内容
+    fetchDiaryMock.mockResolvedValue({ content: "07-19 的正文", mtime: 2 });
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("07-19 的正文") === true, "新日期正文");
+
+    expect(host.textContent).not.toContain("07-24 的正文");
+    expect(fetchDiaryMock).toHaveBeenCalledWith("2026-07-19");
+  });
 });
