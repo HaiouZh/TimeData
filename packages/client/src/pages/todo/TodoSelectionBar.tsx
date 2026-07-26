@@ -42,8 +42,13 @@ export function TodoSelectionBar({
       data-testid="todo-selection-bar"
       className="fixed inset-x-0 px-4"
       // 与被顶替的 TodoComposer 同一个常量：同一个位置、同一个角色，就该在同一层。
-      // 取 sticky(20) 会被待办页那条 toast 容器（z-backdrop=40，落在 composer 上沿）压住——
-      // 「放进…」列表最高 max-h-60 向上展开，正好铺进 toast 那一行；多选态里报错 toast 是可达的。
+      //
+      // **本栏与待办页的 toast 容器同层（都是 z-backdrop=40）、且在 DOM 里排它之后 → 后绘制的本栏赢。**
+      // 所以本栏（含向上展开的「放进…」列表）绝不许压到 toast 那条带上，而多选态里 toast 是唯一的
+      // 失败反馈通道（两种提交失败都不退出多选、只靠它说原因），压住就等于「点了没反应」。
+      // 两处各自让路，别改这个数字：页面用 composerAvoidancePx 把 toast 顶到操作栏上沿之外
+      //（TodoPage 的 bottomBarHeightPx），列表则「选完即收起」（见下面 onClick）。
+      // 调 z 层级只会把这两个各自自洽的决定改成互相打架的两个数字，下一个人还会撞。
       style={{ bottom: bottomOffsetPx, zIndex: Z.backdrop }}
     >
       <div className="mx-auto w-full max-w-2xl">
@@ -54,7 +59,12 @@ export function TodoSelectionBar({
                 <button
                   type="button"
                   aria-label={`放进 ${project.goalTitle}`}
-                  onClick={() => onAssign(project.goalId)}
+                  // 先收列表再发动作：动作已经发出，列表没有理由继续占着屏幕，
+                  // 而它正盖在失败 toast 那条带上（见容器 zIndex 处的注释）。收起来 toast 才露得出来。
+                  onClick={() => {
+                    setPickerOpen(false);
+                    onAssign(project.goalId);
+                  }}
                   className="w-full px-3 py-2 text-left td-text-body text-ink hover:bg-surface-hover"
                 >
                   {project.goalTitle}

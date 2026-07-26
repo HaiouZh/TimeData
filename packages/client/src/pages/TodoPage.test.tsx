@@ -1984,6 +1984,9 @@ describe("TodoPage 多选提交", () => {
     expect(errorSpy).toHaveBeenCalled();
     expect(selectionBar(host)).not.toBeNull();
 
+    // 重试要先把列表再点开：选完一个组列表就收起了（让出被它盖住的失败 toast，
+    // 见 TodoSelectionBar 的 onClick）。这一步本身也是那条修复的连带闸——列表若没收，这里会红。
+    await clickByLabel(host, "放进已有项目");
     await clickByLabel(host, "放进 装修");
     await waitForToast(host, "已归入「装修」· 1 条");
     expect((await db.goals.get("g1"))?.members).toHaveLength(2);
@@ -2216,6 +2219,33 @@ describe("TodoPage 多选提交", () => {
     await waitForToast(host, "暂时移不过去");
     expect(errorSpy).toHaveBeenCalled();
     expect(selectionBar(host)).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("归入失败时组列表已收起，失败 toast 露得出来", async () => {
+    // 操作栏与 toast dock 同为 z-backdrop，操作栏在 DOM 里排其后 → 后绘制的它（含向上展开的
+    // 「放进…」列表）赢。实测几何：toast 占 101…141，操作栏顶边 95、列表占 103…140——
+    // 列表开着就把 toast 整条盖死。而归入失败刻意不退出多选、toast 是唯一的失败反馈通道，
+    // 列表又只由用户点「放进…」切换、不会自动收，等他合上列表 toast 早已到点消失。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+
+    vi.spyOn(db.goals, "put").mockRejectedValueOnce(new Error("写库失败"));
+    await clickByLabel(host, "放进已有项目");
+    // 探针：列表真的开过，否则「已收起」是白捡的绿。
+    expect(host.querySelector('[aria-label="放进 装修"]')).not.toBeNull();
+    await clickByLabel(host, "放进 装修");
+
+    await waitForToast(host, "暂时移不过去");
+    expect(host.querySelector('[aria-label="放进 装修"]')).toBeNull();
+    expect(errorSpy).toHaveBeenCalled();
     await unmount(root);
   });
 

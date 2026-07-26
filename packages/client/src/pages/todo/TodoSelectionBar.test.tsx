@@ -113,6 +113,23 @@ describe("TodoSelectionBar", () => {
     await unmount(root);
   });
 
+  it("选完一个组后组列表立刻收起（让出被它盖住的那条 toast）", async () => {
+    // 列表向上展开、不透明、最高 max-h-60，与待办页的 toast dock 占同一条带，且本栏在 DOM 里
+    // 排 toast 之后（同为 z-backdrop）→ 后绘制的列表把失败 toast 完全盖住。
+    // 归入失败刻意不退出多选、toast 是唯一的失败反馈通道，而列表不会自己收起、toast 6 秒就没了——
+    // 用户合上列表时它早已消失，纯粹的「点了没反应」。
+    const onAssign = vi.fn();
+    const { host, root } = await renderDom(createElement(TodoSelectionBar, { ...base, onAssign }));
+    await click(host.querySelector('[aria-label="放进已有项目"]'));
+    expect(host.querySelector('[aria-label="放进 搬家"]')).not.toBeNull();
+
+    await click(host.querySelector('[aria-label="放进 搬家"]'));
+
+    expect(onAssign).toHaveBeenCalledWith("g2");
+    expect(host.querySelector('[aria-label="放进 搬家"]')).toBeNull();
+    await unmount(root);
+  });
+
   it("一个项目都没有时不渲染「放进…」", async () => {
     const { host, root } = await renderDom(createElement(TodoSelectionBar, { ...base, projects: [] }));
     expect(host.querySelector('[aria-label="放进已有项目"]')).toBeNull();
