@@ -136,6 +136,10 @@ describe("TaskList 多选态", () => {
   // SortableContext / useSortable 要真的注册进去，拖柄才会按实现渲染或不渲染。
   const renderWithDnd = (node: React.ReactElement) => renderDom(<DndContext>{node}</DndContext>);
 
+  // 下面这对（不渲染 / 照常渲染）守的是 TaskList 的 canSort 里那个 `!props.selectionMode`。
+  // 别把它当「多选态下顺手也别拖」的口味题删掉：多选态的行用 Space 勾选（TaskRow 的 onKeyDown），
+  // dnd-kit 的 KeyboardSensor 默认也用 Space 起拖，两者不打架的唯一原因就是多选态压根不渲染拖柄。
+  // 拖柄一旦回来，多选态下按一次 Space 会同时起拖 + 勾选。
   it("多选态下不渲染拖柄（sortable 被关掉）", async () => {
     const { host, root } = await renderWithDnd(
       <TaskList
@@ -158,6 +162,7 @@ describe("TaskList 多选态", () => {
     await unmount(root);
   });
 
+  // 反向基线：没有它，上一条可能因为别的原因（比如漏传 sortable）假绿。
   it("非多选态照常渲染拖柄", async () => {
     const { host, root } = await renderWithDnd(
       <TaskList
