@@ -107,6 +107,25 @@ describe("ResizableSplit", () => {
     await unmount(root);
   });
 
+  // 键盘那条走的是 applyAndSaveRatio，碰不到 finishDrag。拖拽收尾（pointerup）是另一条
+  // 独立的保存路径，它的 prefs 透传若丢了，日记的拖拽结果会静默存进待办页的键。
+  it("传 diary prefs 时拖拽 pointerup 也存进日记自己的键", async () => {
+    const { host, root } = await renderSplit(DIARY_SPLIT_PREFS);
+    const handle = host.querySelector('[role="separator"]') as HTMLElement;
+
+    await act(async () => {
+      handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 500, pointerId: 1 }));
+      handle.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 800, pointerId: 1 }));
+      handle.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 800, pointerId: 1 }));
+    });
+
+    // 0.8 在日记范围 [0.5,0.85] 内合法；若误用待办范围会被夹到 0.7。
+    expect(localStorage.getItem(STORAGE_KEYS.diarySplit)).toBe("0.8");
+    expect(localStorage.getItem(STORAGE_KEYS.todoWorkbenchSplit)).toBeNull();
+
+    await unmount(root);
+  });
+
   it("传 diary prefs 时 aria 范围随之变化", async () => {
     const { host, root } = await renderSplit(DIARY_SPLIT_PREFS);
     const handle = host.querySelector('[role="separator"]') as HTMLElement;
