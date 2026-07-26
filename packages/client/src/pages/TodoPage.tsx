@@ -7,6 +7,7 @@ import {
   type DragStartEvent,
   KeyboardSensor,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
   useSensor,
   useSensors,
@@ -16,8 +17,10 @@ import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
+import { useActionToast } from "../hooks/useActionToast.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
@@ -59,7 +62,12 @@ import {
   releaseTaskFromHand,
   resumeSession,
 } from "../lib/sessions.js";
-import { findActiveProjectGoalIdForTask, removeGoalMember } from "../lib/goals.js";
+import {
+  assignTaskToProject,
+  findActiveProjectGoalIdForTask,
+  ProjectAssignError,
+  removeGoalMember,
+} from "../lib/goals.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
@@ -77,6 +85,7 @@ import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
   parseTodoContainerId,
+  preferProjectCollisions,
   resolveIndentLevel,
   resolveTodoDragWithIndent,
   type TodoContainer,
@@ -358,6 +367,11 @@ export function TodoPage() {
   const f = (list: Task[]) => filterTasks(list, { searchQuery: composerText, includeTags, excludeTags, tagMode });
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
+  const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
+  // 当前被拖的任务：项目组按它画「可落 / 不可落」两态。存 id 而不是整行，
+  // 免得 useLiveQuery 刷新后手里攥着一份过期的行。allTasks 已含项目区成员，不另开查询（design §数据源）。
+  const [dragCandidateId, setDragCandidateId] = useState<string | null>(null);
+  const dragCandidate = dragCandidateId === null ? null : (allTasks.find((t) => t.id === dragCandidateId) ?? null);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
@@ -371,6 +385,7 @@ export function TodoPage() {
     indentRef.current = base;
     setIndentTargetId(null);
     setDragging(true);
+    setDragCandidateId(String(event.active.id));
   }
 
   function handleDragMove(event: DragMoveEvent): void {
@@ -403,6 +418,7 @@ export function TodoPage() {
 
   async function handleDragEnd(event: DragEndEvent): Promise<void> {
     setDragging(false);
+    setDragCandidateId(null);
     const indentLevel = indentRef.current;
     indentRef.current = "root";
     setIndentTargetId(null);
@@ -491,9 +507,25 @@ export function TodoPage() {
           }
           break;
         }
-        case "assign-to-project":
-          // 接线在 Task 6。此刻页面还没注册任何 project droppable，`op` 结构上到不了这里。
+        case "assign-to-project": {
+          try {
+            await assignTaskToProject(op.goalId, activeId);
+          } catch (error) {
+            // 准入/满员/目标组失效是**可预期**的用户操作结果，说出原因。
+            // 成功路径刻意不做 revealProjectHome：落点就在手指下方，自动展开会在连续拖入第二条时
+            // 改变布局、让下一条的落点跑掉（design §动作二「成功反馈：不展开组」）。
+            if (error instanceof ProjectAssignError) {
+              showActionToast({ message: error.message });
+              break;
+            }
+            // 其余错误里有一类是用户可达且会永远复现的：目标组的裸行过不了 GoalSchema.parse
+            //（members 有重复 ref / prerequisites 有悬空边，跨设备并发与 force-push 都能造出来）。
+            // 红线 3 保证这种组照常渲染成落点，用户拖多少次都一样——静默吞掉等于"应用坏了"。
+            console.error("[todo] 归入项目失败:", error);
+            showActionToast({ message: "这个项目的数据有点问题，暂时加不进去" });
+          }
           break;
+        }
       }
     } catch (err) {
       void err;
@@ -513,7 +545,7 @@ export function TodoPage() {
       revealGoals={revealGoals}
       onRevealConsumed={consumeReveal}
       onExitProject={exitProject}
-      dragCandidate={null}
+      dragCandidate={dragCandidate}
       {...rowHandlers}
     />
   );
@@ -655,7 +687,7 @@ export function TodoPage() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={(args) => preferProjectCollisions(pointerWithin(args), closestCenter(args))}
       modifiers={[clampTodoIndentPreview]}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
@@ -663,6 +695,7 @@ export function TodoPage() {
       onDragEnd={(event) => void handleDragEnd(event)}
       onDragCancel={() => {
         setDragging(false);
+        setDragCandidateId(null);
         indentRef.current = "root";
         setIndentTargetId(null);
       }}
@@ -702,6 +735,14 @@ export function TodoPage() {
               {inboxBlock}
             </div>
           )}
+        </div>
+
+        {/* 贴着 composer 上沿浮起：composerAvoidancePx = composer 高 + 底部导航高，
+            与 DayGroupedList 的 sticky 头同源，保证 toast 不被输入框压住。 */}
+        <div className="pointer-events-none fixed inset-x-0 z-30 px-4" style={{ bottom: composerAvoidancePx + 8 }}>
+          <div className="pointer-events-auto mx-auto w-full max-w-2xl">
+            <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />
+          </div>
         </div>
 
         <TodoComposer
