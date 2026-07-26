@@ -366,6 +366,13 @@ export async function assignTasksToProject(
   options: { now?: Date } = {},
 ): Promise<Goal> {
   if (taskIds.length === 0) throw new Error("没有选中任务");
+  // **入口去重，容量不变量不能外包给调用方。** `existing` 是循环外拿的成员快照、不随本次写入更新，
+  // 同一个 id 传两次会让 `addCount` 多记一格，恰好卡在 500 边界时误报满员。`addGoalMember` 的幂等
+  // 只保证不重复写进 members，救不了容量判定这一侧——那是两回事。
+  //
+  // 之所以不能靠「调用方传的是 Set」：500 是 `GoalSchema.members` 的 `.max(500)` 硬闸，撞上不是报个错，
+  // 而是整行 parse 失败、整个 goal 从 UI 与同步里一起消失。没有任何东西保护那个假设，就在入口自己钉死。
+  const uniqueTaskIds = [...new Set(taskIds)];
   let nextGoal: Goal | null = null;
 
   await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
@@ -383,7 +390,7 @@ export async function assignTasksToProject(
 
     // 先把整批验完再动手：任一条不合格就整批拒绝，不留「写了一半」的中间态。
     let addCount = 0;
-    for (const taskId of taskIds) {
+    for (const taskId of uniqueTaskIds) {
       const task = await db.tasks.get(taskId);
       if (!task) throw new Error("任务不存在");
       const block = taskAssignBlock(task);
@@ -395,7 +402,7 @@ export async function assignTasksToProject(
       throw new ProjectAssignError("full", target.title);
     }
 
-    for (const taskId of taskIds) {
+    for (const taskId of uniqueTaskIds) {
       for (const row of goalRows) {
         if (row.id === goalId) continue;
         // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。

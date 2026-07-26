@@ -877,6 +877,20 @@ describe("批量归属写入", () => {
     expect(next.members).toHaveLength(500);
   });
 
+  it("批量归入：taskIds 里的重复 id 只占一格容量（499 + 传两次的同一条 = 500）", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    const filler = Array.from({ length: 499 }, (_, i) => ({ kind: "task" as const, id: `filler-${i}` }));
+    await db.goals.put({ ...(await db.goals.get(target.id))!, members: filler });
+    await seedBareTask("t1");
+
+    // 不在入口去重的话：existing 是循环外的快照、不随写入更新，t1 被数两次 → addCount=2 →
+    // 499 + 2 = 501 > 500 → 误报满员。addGoalMember 的幂等只挡住重复写 members，管不到容量判定。
+    // 而 500 不是「报个错」：GoalSchema 的 .max(500) 撞上后整行 parse 失败，整个 goal 从 UI 与同步里消失，
+    // 所以这个不变量必须由入口自己保证，不能寄望调用方一定传 Set。
+    const next = await assignTasksToProject(target.id, ["t1", "t1"]);
+    expect(next.members).toHaveLength(500);
+  });
+
   it("批量归入：任一条是子任务 → 整批拒绝，一条都不写", async () => {
     const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
     await seedBareTask("t1");
