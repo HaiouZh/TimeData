@@ -394,7 +394,12 @@ export function TaskRow({
             </div>
           )}
         </div>
-        {coarsePointer === false && (
+        {/* 多选态下整条动作条关掉（产品拍板）：多选是「圈一批」的模式，单条处置在这个模式里没有位置。
+            不关的后果不是"多一个按钮"：整行是勾选命中区，用户往右点必然压到「排进今天」上——任务离开
+            收件箱 → 被剪枝踢出选中集（无提示）→ 落进 opacity-40 + inert 的区块 → 多选态里再也弄不回来；
+            「抓到手头」更重，它顺带开/换了一个活跃会话。TaskList 已按同一理由关掉拖拽（canSort）
+            与滑动（blockSwipe），这条是当时漏的第三处。 */}
+        {coarsePointer === false && !selectionMode && (
           <div className="pointer-events-none absolute inset-y-0 right-2 z-20 my-auto flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
             <span
               aria-hidden="true"

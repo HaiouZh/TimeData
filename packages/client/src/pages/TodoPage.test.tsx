@@ -10,7 +10,7 @@ import { db } from "../db/index.js";
 import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
-import { addTask, createChildTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
 import { renderDom, unmount } from "../test/domHarness.js";
@@ -1657,6 +1657,35 @@ describe("TodoPage 多选态", () => {
     await unmount(root);
   });
 
+  it("多选态下行右端的悬停动作条整条关掉，退出后回来", async () => {
+    // 多选态下整行就是勾选命中区，用户自然会往右边点，指针正好压在「排进今天」上：任务离开收件箱
+    // → 被剪枝踢出选中集（无任何提示）→ 落进一个 opacity-40 且 inert 的区块 → 多选态里再也弄不回来。
+    // TaskList 关掉了拖拽（canSort）与滑动（blockSwipe），唯独这条动作条一直带电。
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    // 探针：jsdom 无 matchMedia → useIsCoarsePointer 为 false → 非多选态下动作条确实进了 DOM。
+    // 没有这一行，下面的 toBeNull 在「动作条压根不渲染」的环境里也会绿。
+    expect(host.querySelector('[aria-label="删除 买灯"]')).not.toBeNull();
+
+    await enterSelection(host);
+    expect(host.querySelector('[aria-label="删除 买灯"]')).toBeNull();
+    expect(host.querySelector('[aria-label="排进今天 买灯"]')).toBeNull();
+    expect(host.querySelector('[aria-label="抓到手头 买灯"]')).toBeNull();
+    // 勾选照常：关的是动作条，不是这一行。
+    await clickSelectRow(host, "买灯");
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+
+    await act(async () => {
+      (host.querySelector('[aria-label="取消多选"]') as HTMLElement).dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+    await flushAsync();
+    expect(host.querySelector('[aria-label="删除 买灯"]')).not.toBeNull();
+    await unmount(root);
+  });
+
   it("已勾选的行被删掉后从选中集剔除，操作栏不再多数一条", async () => {
     // 幽灵 id：`selectedIds` 只存 id，行被删后它照旧攥在手上。操作栏说「已选 2 条」而屏幕上只剩 1 行，
     // 提交时 `db.tasks.get(ghostId)` 拿不到人 → 抛裸 Error → 落进兜底文案 → 而失败刻意不退出多选，
@@ -1666,16 +1695,17 @@ describe("TodoPage 多选态", () => {
     const { host, root } = await renderPage();
     await waitForText(host, "买椅子");
     await enterSelection(host);
+    const doomed = (await db.tasks.toArray()).find((t) => t.title === "买灯");
     await clickSelectRow(host, "买灯");
     await clickSelectRow(host, "买椅子");
     expect(selectionBar(host)?.textContent).toContain("已选 2 条");
 
-    // 行右侧的垃圾桶。jsdom 无 matchMedia → useIsCoarsePointer 为 false → 悬停动作条照常进 DOM，
-    // 多选态没关掉它（关掉才是另一个决定），所以这是可达手势。
-    const del = host.querySelector('[aria-label="删除 买灯"]') as HTMLButtonElement;
-    expect(del).not.toBeNull();
+    // 直接落库删，不点行右侧的垃圾桶：多选态下那条悬停动作条整条已经关掉（单条处置在这个模式里
+    // 没有位置），页面内不再有删除手势。剩下的可达来源是**别的设备 / 别的标签页**同步下来一条删除，
+    // liveQuery 照样回流——那正是幽灵 id 的真实出处（被抢走归属的那种，任务行还在库里，
+    // `db.tasks.get` 拿得到人，是另一回事，已由「另一端把选中项收进项目组」那条守）。
     await act(async () => {
-      del.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await deleteTaskCascade(doomed?.id ?? "");
     });
     await waitForCondition(
       () => !((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").includes("买灯"),
@@ -1897,13 +1927,13 @@ describe("TodoPage 多选提交", () => {
     const { host, root } = await renderPage();
     await waitForText(host, "买椅子");
     await enterSelection(host);
+    const doomed = (await db.tasks.toArray()).find((t) => t.title === "买灯");
     await clickSelectRow(host, "买灯");
     await clickSelectRow(host, "买椅子");
 
+    // 直接落库删（同步下来的删除），不点垃圾桶：多选态下悬停动作条整条已关掉。理由同上一条用例。
     await act(async () => {
-      (host.querySelector('[aria-label="删除 买灯"]') as HTMLButtonElement).dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
+      await deleteTaskCascade(doomed?.id ?? "");
     });
     await waitForCondition(
       () => !((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").includes("买灯"),

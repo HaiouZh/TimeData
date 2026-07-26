@@ -567,6 +567,35 @@ describe("TaskRow", () => {
       await unmount(root);
     });
 
+    it("多选态：整条 overlay 动作条关掉", async () => {
+      // 多选态下整行就是勾选命中区，用户自然会往右边点，指针正好压在「排进今天」上：
+      // 任务离开收件箱 → 被剪枝踢出选中集（无任何提示）→ 落进一个 opacity-40 且 inert 的区块 →
+      // 多选态里再也没有办法把它弄回来。「抓到手头」更重，它顺带开/换了一个活跃会话。
+      // 多选是「圈一批」的模式，单条处置在这个模式里没有位置（产品拍板）。
+      const onToToday = vi.fn();
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task()}
+          pool="inbox"
+          coarsePointer={false}
+          selectionMode
+          onToggle={noop}
+          onEdit={noop}
+          onDelete={noop}
+          onToToday={onToToday}
+          onToHand={noop}
+        />,
+      );
+
+      expect(host.querySelector('[aria-label^="排进今天"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="抓到手头"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="删除"]')).toBeNull();
+      // 勾选本身照常可用：关的是动作条，不是这一行。
+      expect(host.querySelector('[aria-label="选择 示例任务"]')).not.toBeNull();
+
+      await unmount(root);
+    });
+
     it("桌面 + completed 池：只显示「删除」按钮", async () => {
       const { host, root } = await renderDom(
         <TaskRow
