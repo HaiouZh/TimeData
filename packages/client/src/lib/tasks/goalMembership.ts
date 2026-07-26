@@ -167,10 +167,36 @@ export const GOAL_MEMBERS_MAX = 500;
 export type ProjectAssignBlock = "subtask" | "recurring" | "full" | "inactive";
 
 /**
- * 成员准入（design §成员准入）：`parentId === null && recurrence === null && ruleId === null`，外加 500 上限。
+ * `GoalSchema.members` 还装得下再加 `addCount` 个吗。
+ *
+ * 单条入口传 1，批量入口传**整批的新增数**。批量必须一次判完：逐条问「已经满了吗」要到第 501 条
+ * 才抛，而前 500 条已经写进去了，与批量入口「全成功或全失败」的契约直接矛盾。
+ */
+export function exceedsGoalMemberCap(memberCount: number, addCount: number): boolean {
+  return memberCount + addCount > GOAL_MEMBERS_MAX;
+}
+
+/**
+ * 任务侧准入（design §成员准入 的前两条），**不含 500 上限**。
  *
  * - 子任务：与「子任务不能单独抓到手头」同构。
  * - 重复模板与 occurrence 合成 `recurring` 一支：对用户是同一件事，文案一字不差。
+ *
+ * 三个字段都要 `?? null`：喂进来的是 `db.tasks.get` 的**裸行**（不过 `TaskSchema.parse`），
+ * 老行缺字段读出来是 `undefined`。少一个防护，缺那个字段的行就被永久判成 subtask / recurring，
+ * 用户怎么拖都归不了组，且没有任何提示能指向真因。
+ */
+export function taskAssignBlock(
+  task: Pick<Task, "parentId" | "recurrence" | "ruleId">,
+): Extract<ProjectAssignBlock, "subtask" | "recurring"> | null {
+  if ((task.parentId ?? null) !== null) return "subtask";
+  if ((task.recurrence ?? null) !== null || (task.ruleId ?? null) !== null) return "recurring";
+  return null;
+}
+
+/**
+ * 成员准入：任务侧三条件 + 500 上限。
+ *
  * - `memberCount` 传 `goal.members` 的**数组长度**（含 track 成员与悬空 ref），不是可解析的 task 数——
  *   500 是 schema 对整个数组的硬闸，撞上后 parse 失败会让整个 goal 从 UI 与同步里消失，不是报错。
  *
@@ -181,13 +207,7 @@ export function projectAssignBlock(
   task: Pick<Task, "parentId" | "recurrence" | "ruleId">,
   memberCount: number,
 ): ProjectAssignBlock | null {
-  // 三个字段都要 `?? null`：`assignTaskToProject` 喂进来的是 `db.tasks.get` 的**裸行**
-  //（不过 `TaskSchema.parse`），老行缺字段读出来是 `undefined`。少一个防护，缺那个字段的行
-  // 就被永久判成 subtask / recurring，用户怎么拖都归不了组，且没有任何提示能指向真因。
-  if ((task.parentId ?? null) !== null) return "subtask";
-  if ((task.recurrence ?? null) !== null || (task.ruleId ?? null) !== null) return "recurring";
-  if (memberCount >= GOAL_MEMBERS_MAX) return "full";
-  return null;
+  return taskAssignBlock(task) ?? (exceedsGoalMemberCap(memberCount, 1) ? "full" : null);
 }
 
 export function projectAssignBlockMessage(block: ProjectAssignBlock, goalTitle: string): string {

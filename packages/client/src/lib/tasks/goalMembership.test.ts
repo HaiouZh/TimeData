@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { GoalSchema, type Goal, type Task } from "@timedata/shared";
 import {
   buildTodoProjectGroups,
+  exceedsGoalMemberCap,
   goalLinkedTaskIds,
   ownedProjectTaskIds,
   projectAssignBlock,
   projectAssignBlockMessage,
   projectMemberIndex,
   releasedProjectTaskIds,
+  taskAssignBlock,
   GOAL_MEMBERS_MAX,
 } from "./goalMembership.js";
 
@@ -234,5 +236,39 @@ describe("projectAssignBlockMessage", () => {
     expect(projectAssignBlockMessage("recurring", "装修")).toBe("重复待办本期不能归入项目");
     expect(projectAssignBlockMessage("full", "装修")).toBe("「装修」的成员已满 500，无法再加入");
     expect(projectAssignBlockMessage("inactive", "装修")).toBe("「装修」已归档或不再是项目，无法加入");
+  });
+});
+
+describe("taskAssignBlock / exceedsGoalMemberCap", () => {
+  const ok = { parentId: null, recurrence: null, ruleId: null };
+
+  it("任务侧三支：子任务、重复模板、occurrence", () => {
+    expect(taskAssignBlock(ok)).toBeNull();
+    expect(taskAssignBlock({ ...ok, parentId: "p1" })).toBe("subtask");
+    expect(taskAssignBlock({ ...ok, recurrence: { freq: "daily", interval: 1, basis: "due" } })).toBe("recurring");
+    expect(taskAssignBlock({ ...ok, ruleId: "r1" })).toBe("recurring");
+  });
+
+  it("裸行缺字段（undefined）不被误判成 subtask / recurring", () => {
+    // db.tasks.get 返回的是不过 TaskSchema.parse 的裸行，老行这三个字段可能整个缺失。
+    // 少一个 `?? null`，缺字段的行就永远归不了组，且没有任何提示指向真因。
+    expect(taskAssignBlock({} as Parameters<typeof taskAssignBlock>[0])).toBeNull();
+  });
+
+  it("上限判在整批之上：memberCount + addCount > 500 才算满", () => {
+    expect(exceedsGoalMemberCap(499, 1)).toBe(false);
+    expect(exceedsGoalMemberCap(500, 1)).toBe(true);
+    expect(exceedsGoalMemberCap(495, 5)).toBe(false);
+    expect(exceedsGoalMemberCap(496, 5)).toBe(true);
+    expect(exceedsGoalMemberCap(0, 501)).toBe(true);
+    expect(exceedsGoalMemberCap(0, 500)).toBe(false);
+  });
+
+  it("单条口径与批量口径在 addCount=1 上等价", () => {
+    // projectAssignBlock 原本判的是 `memberCount >= 500`。重构后它走 exceedsGoalMemberCap(n, 1)，
+    // 两者必须在边界上逐点相等——这条用例是那次改写的唯一回归保证。
+    for (const memberCount of [0, 1, 498, 499, 500, 501]) {
+      expect(projectAssignBlock(ok, memberCount) === "full").toBe(memberCount >= 500);
+    }
   });
 });
