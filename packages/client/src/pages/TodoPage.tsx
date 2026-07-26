@@ -21,6 +21,7 @@ import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
 import { useActionToast } from "../hooks/useActionToast.js";
+import { projectAssignBlock, projectAssignBlockMessage } from "../lib/tasks/goalMembership.js";
 import { groupCompletedByDay, groupInboxByDay } from "../lib/tasks/inboxGrouping.js";
 import { localDateString, placementForTask } from "../lib/tasks/placement.js";
 import { allTags, filterTasks } from "../lib/tasks/turnTags.js";
@@ -371,7 +372,19 @@ export function TodoPage() {
   // 当前被拖的任务：项目组按它画「可落 / 不可落」两态。存 id 而不是整行，
   // 免得 useLiveQuery 刷新后手里攥着一份过期的行。allTasks 已含项目区成员，不另开查询（design §数据源）。
   const [dragCandidateId, setDragCandidateId] = useState<string | null>(null);
-  const dragCandidate = dragCandidateId === null ? null : (allTasks.find((t) => t.id === dragCandidateId) ?? null);
+  // 被拖项所在的 dnd 容器 id。单独记一份是因为子任务查不到行（见下方判定注释）。
+  const [dragCandidateContainerId, setDragCandidateContainerId] = useState<string | null>(null);
+  // 拖拽中的这条能不能落进项目组。**判定必须在页面做**：组件手上只有 TodoProjectGroup，
+  // 既没有 goal.status/kind（判不了 inactive），也没有 members 数组长度（判不了满员）。
+  // 更要命的是子任务——listTasks 把 parentId !== null 的行整个跳过，它不在任何 bucket 里，
+  // 所以 allTasks 查不到它，只能从 dnd 容器 id 认（`parent:` 前缀即子任务）。
+  const dragDropBlocked: boolean | null = (() => {
+    if (dragCandidateId === null) return null;
+    if (parseTodoContainerId(dragCandidateContainerId)?.kind === "parent") return true;
+    const task = allTasks.find((t) => t.id === dragCandidateId);
+    // 查不到就当可落：满员与目标组失效本来就由写入侧兜，宁可假高亮也不假禁止。
+    return task ? projectAssignBlock(task, 0) !== null : false;
+  })();
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
@@ -386,6 +399,7 @@ export function TodoPage() {
     setIndentTargetId(null);
     setDragging(true);
     setDragCandidateId(String(event.active.id));
+    setDragCandidateContainerId(activeContainerId);
   }
 
   function handleDragMove(event: DragMoveEvent): void {
@@ -419,6 +433,7 @@ export function TodoPage() {
   async function handleDragEnd(event: DragEndEvent): Promise<void> {
     setDragging(false);
     setDragCandidateId(null);
+    setDragCandidateContainerId(null);
     const indentLevel = indentRef.current;
     indentRef.current = "root";
     setIndentTargetId(null);
@@ -456,7 +471,16 @@ export function TodoPage() {
       targetContainer,
     });
 
-    if (!op) return;
+    if (!op) {
+      // 落点是项目组却解析不出操作 = 准入拒绝。当前唯一可达的是子任务这一支
+      //（重复模板在已排期区、那区不可拖；occurrence 走 assign-to-project 分支由写入侧拒）。
+      // 不在这里报，用户就只看到「往这儿拖没反应」——design §动作二 明写四种拒绝都要给原因。
+      if (targetContainer?.kind === "project" && activeParentId !== null) {
+        const group = buckets.projects.find((g) => g.goalId === targetContainer.goalId);
+        if (group) showActionToast({ message: projectAssignBlockMessage("subtask", group.goalTitle) });
+      }
+      return;
+    }
 
     try {
       switch (op.kind) {
@@ -510,6 +534,11 @@ export function TodoPage() {
         case "assign-to-project": {
           try {
             await assignTaskToProject(op.goalId, activeId);
+            const group = buckets.projects.find((g) => g.goalId === op.goalId);
+            // 组间排序键是成员的 max(updatedAt)，而归入刚好刷新它——目标组会跳到项目区第一位。
+            // 「不展开组」挡不住这种布局变化，所以必须说出它去了哪儿，否则连续拖第二条会照着
+            // 旧的视觉位置落进别的组，而且几乎不可见（组不展开、任务同时从收件箱消失）。
+            showActionToast({ message: `已归入「${group?.goalTitle ?? "项目"}」` });
           } catch (error) {
             // 准入/满员/目标组失效是**可预期**的用户操作结果，说出原因。
             // 成功路径刻意不做 revealProjectHome：落点就在手指下方，自动展开会在连续拖入第二条时
@@ -522,7 +551,10 @@ export function TodoPage() {
             //（members 有重复 ref / prerequisites 有悬空边，跨设备并发与 force-push 都能造出来）。
             // 红线 3 保证这种组照常渲染成落点，用户拖多少次都一样——静默吞掉等于"应用坏了"。
             console.error("[todo] 归入项目失败:", error);
-            showActionToast({ message: "这个项目的数据有点问题，暂时加不进去" });
+            // 文案不指认目标组：真正 parse 不过的常常是任务**当前所在**的源组
+            //（摘除那步 removeGoalMember 内部的 GoalSchema.parse 会抛），说「这个项目」会让用户
+            // 换 C 组 D 组反复重试，每次都在指责一个健康的组。
+            showActionToast({ message: "这条任务或它原来所在的项目数据有问题，暂时移不过去" });
           }
           break;
         }
@@ -545,7 +577,7 @@ export function TodoPage() {
       revealGoals={revealGoals}
       onRevealConsumed={consumeReveal}
       onExitProject={exitProject}
-      dragCandidate={dragCandidate}
+      dropBlocked={dragDropBlocked}
       {...rowHandlers}
     />
   );
@@ -696,6 +728,7 @@ export function TodoPage() {
       onDragCancel={() => {
         setDragging(false);
         setDragCandidateId(null);
+        setDragCandidateContainerId(null);
         indentRef.current = "root";
         setIndentTargetId(null);
       }}

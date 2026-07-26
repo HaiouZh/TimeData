@@ -10,7 +10,7 @@ import { db } from "../db/index.js";
 import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
-import { addTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import { addTask, createChildTask, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
 import { renderDom, unmount } from "../test/domHarness.js";
@@ -722,6 +722,69 @@ describe("TodoPage", () => {
     const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
     expect(inbox.textContent ?? "").toContain("自由任务");
     expect(inbox.textContent ?? "").not.toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("拖起子任务时项目组块进禁止态，拖起根任务则是可落态（判定认 dnd 容器 id，不是查得到的行）", async () => {
+    // 承重点：`dragDropBlocked` 的子任务那一支。子任务被 listTasks 整个跳过、不在任何 bucket 里，
+    // 所以 `allTasks.find(...)` 恒查不到它——只能从 `parent:` 前缀的容器 id 认。这一支若退化，
+    // 用户拖子任务到项目组就是全屏零反馈（TodoProjectSection.test.tsx 那两条只锁渲染，锁不住这里）。
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    const parent = await addTask({ title: "父任务", toInbox: true });
+    await createChildTask(parent.id, "子任务");
+
+    const { host, root } = await renderPage();
+    await waitForText(host, "父任务");
+
+    const card = () => host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
+    await waitForCondition(() => card() !== null, "project group card");
+    expect(card()?.hasAttribute("data-drop-blocked")).toBe(false);
+
+    // 展开父任务的子任务层（点左 2/5 抓取区），子任务行的拖柄才存在。
+    const parentGrab = host.querySelector('[aria-label="移动 父任务"]') as HTMLElement;
+    await act(async () => {
+      parentGrab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await waitForCondition(
+      () => host.querySelector('[aria-label="拖动子任务 子任务"]') !== null,
+      "child drag handle",
+      settle,
+    );
+
+    // 键盘拖拽：MouseSensor 有 180ms 激活延迟（真实定时等待是禁的），KeyboardSensor 无延迟。
+    const childHandle = host.querySelector('[aria-label="拖动子任务 子任务"]') as HTMLElement;
+    await act(async () => {
+      childHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+    });
+    expect(card()?.getAttribute("data-drop-blocked")).toBe("true");
+
+    // Escape 结束这一拖，换根任务再来一次：同一个判定必须给出相反的答案，
+    // 否则「恒 true」也能让上面那条断言绿。
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+    });
+    await waitForCondition(() => card()?.hasAttribute("data-drop-blocked") === false, "drag cancelled");
+
+    const rootHandle = host.querySelector('[aria-label="移动 父任务"]') as HTMLElement;
+    await act(async () => {
+      rootHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+    });
+    expect(card()?.getAttribute("data-drop-blocked")).toBe("false");
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+    });
     await unmount(root);
   });
 

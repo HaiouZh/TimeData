@@ -59,7 +59,7 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         revealGoals={props.revealGoals ?? []}
         onRevealConsumed={props.onRevealConsumed ?? vi.fn()}
         onExitProject={props.onExitProject ?? vi.fn()}
-        dragCandidate={props.dragCandidate ?? null}
+        dropBlocked={props.dropBlocked ?? null}
         {...handlers}
       />
     </MemoryRouter>
@@ -244,27 +244,31 @@ describe("TodoProjectSection 落点", () => {
   it("拖着一条可入组的任务时组块是可落态", async () => {
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1" })],
-      dragCandidate: task({ id: "t1" }),
+      dropBlocked: false,
     });
     const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
     expect(card?.getAttribute("data-drop-blocked")).toBe("false");
     await unmount(root);
   });
 
-  it("拖着子任务时组块是禁止态", async () => {
+  // 下面两条**不再覆盖判定**：dropBlocked 的判定已经整个上移到 TodoPage（子任务不在任何 bucket 里，
+  // 组件根本查不到它的行）。它们现在只锁「传 true 就画禁止态」这一段渲染，两条走的是同一条路径。
+  // 真正的判定（子任务 / 重复待办 → true）由 TodoPage.test.tsx 的
+  // 《拖起子任务时项目组块进禁止态：判定认的是 dnd 容器 id，不是查得到的行》守。
+  it("页面判定为禁止（子任务那支）时组块是禁止态", async () => {
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1" })],
-      dragCandidate: task({ id: "t1", parentId: "p1" }),
+      dropBlocked: true,
     });
     const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
     expect(card?.getAttribute("data-drop-blocked")).toBe("true");
     await unmount(root);
   });
 
-  it("拖着重复待办时组块是禁止态", async () => {
+  it("页面判定为禁止（重复待办那支）时组块是禁止态", async () => {
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1" })],
-      dragCandidate: task({ id: "t1", ruleId: "r1" }),
+      dropBlocked: true,
     });
     expect(
       host.querySelector('[data-testid="project-group"][data-goal-id="g1"]')?.getAttribute("data-drop-blocked"),
@@ -273,7 +277,7 @@ describe("TodoProjectSection 落点", () => {
   });
 
   it("没在拖时不给任何态（data-drop-blocked 缺席）", async () => {
-    const { host, root } = await renderWithDnd({ groups: [group({ goalId: "g1" })], dragCandidate: null });
+    const { host, root } = await renderWithDnd({ groups: [group({ goalId: "g1" })], dropBlocked: null });
     const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
     expect(card?.hasAttribute("data-drop-blocked")).toBe(false);
     await unmount(root);

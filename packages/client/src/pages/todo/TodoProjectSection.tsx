@@ -4,7 +4,7 @@ import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/Icon.js";
-import { projectAssignBlock, type TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
+import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
@@ -32,19 +32,21 @@ export interface TodoProjectSectionProps {
   onRevealConsumed: (goalIds: string[]) => void;
   onExitProject: (goalId: string, task: Task) => void;
   /**
-   * 当前正被拖拽的任务（null = 没在拖），用来给组块画「可落 / 不可落」两态。
+   * 当前拖拽的这条能不能落进项目组（null = 没在拖）。**判定由页面做，组件只渲染两态**。
    *
-   * **只判任务侧（子任务 / 重复待办），目标组侧的两种拒绝一律不判**：
+   * 组件判不了，理由三条（前两条从来就成立，第三条是子任务那支的根因）：
    * - 满员：组件手上只有可解析成员数（tasks + doneTasks），而 500 闸看的是 goal.members
    *   数组长度（含 track 成员与悬空 ref），拿近似值画禁止态会撒谎。
    * - 目标组已归档 / 已改成 theme（`inactive`）：`TodoProjectGroup` 里根本没有 status/kind 字段，
    *   要判就得改投影层形状，代价远大于收益。
+   * - 子任务：`listTasks` 把 `parentId !== null` 的行整个跳过，它不在任何 bucket 里，
+   *   页面按 id 查得到 null、组件更无从谈起；只能从 dnd 容器 id 认，那是页面手上的东西。
    *
-   * 两者都由写入侧 `assignTaskToProject` 抛错、走页面的 toast。因此存在一个**已知且刻意**的窗口：
-   * 组在拖拽途中于另一端被归档时，组块仍显示「可落」高亮，松手才弹拒绝——**这不是 bug**。
+   * 满员与 inactive 仍只由写入侧 `assignTaskToProject` 抛错、走页面的 toast。因此存在一个**已知且刻意**的
+   * 窗口：组在拖拽途中于另一端被归档时，组块仍显示「可落」高亮，松手才弹拒绝——**这不是 bug**。
    * 它换掉的是修复前那个「高亮 → 静默吞掉归属」的数据丢失，方向是净改善。
    */
-  dragCandidate: Task | null;
+  dropBlocked: boolean | null;
   onToggle: (task: Task) => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
@@ -154,7 +156,7 @@ export function TodoProjectSection({
   revealGoals,
   onRevealConsumed,
   onExitProject,
-  dragCandidate,
+  dropBlocked,
   ...rowHandlers
 }: TodoProjectSectionProps) {
   // 首次（存量提示条尚未关闭）默认展开全部组，之后默认全折叠。
@@ -194,52 +196,48 @@ export function TodoProjectSection({
         <span className="td-text-caption text-ink-3">{groups.length}</span>
       </div>
       <div className="space-y-1">
-        {groups.map((group) => {
-          // 第二个入参恒传 0：组件不判满员（见 props 注释），让 full 分支永不命中。
-          const dropBlocked = dragCandidate === null ? null : projectAssignBlock(dragCandidate, 0) !== null;
-          return (
-            <ProjectGroupCard
-              key={group.goalId}
-              group={group}
-              expanded={isExpanded(group.goalId)}
-              dropBlocked={dropBlocked}
-              onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
-              registerRef={(el) => {
-                rowRefs.current.set(group.goalId, el);
-              }}
-            >
-              {group.tasks.length > 0 && (
-                <TaskList
-                  pool="inbox"
-                  tasks={group.tasks}
-                  childrenModeOverride="static"
-                  metaChip={(task) => memberStateChip(task, handSessionId, now)}
-                  extraAction={(task) => (
-                    <button
-                      type="button"
-                      aria-label={`退出项目 ${task.title}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onExitProject(group.goalId, task);
-                      }}
-                      className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                    >
-                      <Icon icon={SignOut} size={16} />
-                    </button>
-                  )}
-                  {...rowHandlers}
-                />
-              )}
-              {group.doneTasks.length > 0 && (
-                <div className="mt-1">
-                  <CollapsibleSection title="已完成" count={group.doneTasks.length} defaultOpen={false}>
-                    <TaskList pool="completed" tasks={group.doneTasks} {...rowHandlers} />
-                  </CollapsibleSection>
-                </div>
-              )}
-            </ProjectGroupCard>
-          );
-        })}
+        {groups.map((group) => (
+          <ProjectGroupCard
+            key={group.goalId}
+            group={group}
+            expanded={isExpanded(group.goalId)}
+            dropBlocked={dropBlocked}
+            onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
+            registerRef={(el) => {
+              rowRefs.current.set(group.goalId, el);
+            }}
+          >
+            {group.tasks.length > 0 && (
+              <TaskList
+                pool="inbox"
+                tasks={group.tasks}
+                childrenModeOverride="static"
+                metaChip={(task) => memberStateChip(task, handSessionId, now)}
+                extraAction={(task) => (
+                  <button
+                    type="button"
+                    aria-label={`退出项目 ${task.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onExitProject(group.goalId, task);
+                    }}
+                    className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                  >
+                    <Icon icon={SignOut} size={16} />
+                  </button>
+                )}
+                {...rowHandlers}
+              />
+            )}
+            {group.doneTasks.length > 0 && (
+              <div className="mt-1">
+                <CollapsibleSection title="已完成" count={group.doneTasks.length} defaultOpen={false}>
+                  <TaskList pool="completed" tasks={group.doneTasks} {...rowHandlers} />
+                </CollapsibleSection>
+              </div>
+            )}
+          </ProjectGroupCard>
+        ))}
       </div>
     </section>
   );
