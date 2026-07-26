@@ -7,11 +7,13 @@ import {
 } from "./goalLayoutPins.js";
 import { recordSyncLog } from "../sync/engine.js";
 import {
+  exceedsGoalMemberCap,
   ownedProjectTaskIds,
   projectAssignBlock,
   projectAssignBlockMessage,
   projectMemberIndex,
   releasedProjectTaskIds,
+  taskAssignBlock,
   type ProjectAssignBlock,
 } from "./tasks/goalMembership.js";
 import { buildNewRootTask, insertNewTaskInCurrentTransaction, touchTasksInCurrentTransaction } from "./tasks.js";
@@ -342,6 +344,145 @@ export async function prerequisiteLossOnAssign(
     total += count;
     groupCount += 1;
     if (!widest || count > widest.count) widest = { count, title: row.title };
+  }
+
+  return widest === null ? null : { count: total, groupCount, goalTitle: widest.title };
+}
+
+/**
+ * 把多条任务一次性归入某个 active project。**单事务，全成功或全失败。**
+ *
+ * 与 `assignTaskToProject` 只有两处不同，其余（摘旧组、准入闸、touch、裸行读）完全同源：
+ * ① 目标组的 active + project 闸只判一次；
+ * ② 500 上限判在**整批之上**（`members.length + 新增数 > 500`），不是逐条问「已经满了吗」——
+ *    逐条判要到第 501 条才抛，而前 500 条已经写进去了，与「全成功或全失败」直接矛盾。
+ *
+ * 不做「能进多少进多少」：部分成功会留下「选了 6 条为何只进去 4 条」的哑谜，
+ * 而撞 500 在真实使用里近乎不发生（design §动作一）。
+ */
+export async function assignTasksToProject(
+  goalId: string,
+  taskIds: readonly string[],
+  options: { now?: Date } = {},
+): Promise<Goal> {
+  if (taskIds.length === 0) throw new Error("没有选中任务");
+  let nextGoal: Goal | null = null;
+
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
+    const goalRows = await db.goals.toArray();
+    const target = goalRows.find((row) => row.id === goalId);
+    if (!target) throw new Error("目标不存在");
+    // 目标组必须**仍然**是 active project。缺了这道闸，另一端归档 / 改成 theme 后拖进来会照常摘除、
+    // 照常写入，而读侧只认 active project——这批任务从此不属于任何组，是静默的归属丢失。
+    if (target.status !== "active" || target.kind !== "project") {
+      throw new ProjectAssignError("inactive", target.title);
+    }
+
+    const members = target.members ?? [];
+    const existing = new Set(members.filter((member) => member.kind === "task").map((member) => member.id));
+
+    // 先把整批验完再动手：任一条不合格就整批拒绝，不留「写了一半」的中间态。
+    let addCount = 0;
+    for (const taskId of taskIds) {
+      const task = await db.tasks.get(taskId);
+      if (!task) throw new Error("任务不存在");
+      const block = taskAssignBlock(task);
+      if (block !== null) throw new ProjectAssignError(block, target.title);
+      // 已在组内的不计入新增：幂等重入不会让数组变长，把它算进去会造出假的满员。
+      if (!existing.has(taskId)) addCount += 1;
+    }
+    if (exceedsGoalMemberCap(members.length, addCount)) {
+      throw new ProjectAssignError("full", target.title);
+    }
+
+    for (const taskId of taskIds) {
+      for (const row of goalRows) {
+        if (row.id === goalId) continue;
+        // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。
+        if (row.status !== "active" || row.kind !== "project") continue;
+        if (!(row.members ?? []).some((member) => member.kind === "task" && member.id === taskId)) continue;
+        // goalRows 是事务入口的快照，摘除会让它过期——但只用于「要不要调一次」，
+        // removeGoalMember 自己重读最新行，快照过期最多多调一次无害的 no-op。
+        await removeGoalMember(row.id, { kind: "task", id: taskId }, options);
+      }
+      nextGoal = await addGoalMember(goalId, { kind: "task", id: taskId }, options);
+    }
+  });
+
+  if (!nextGoal) throw new Error("目标不存在");
+  return nextGoal;
+}
+
+/**
+ * 建新项目并一次性收编成员。**单事务**：不留空 Goal，也不留成员写了一半的中间态。
+ *
+ * 成员走 `assignTasksToProject` 而不是直接塞 `members` 数组——摘旧组、准入闸、500 上限、成员 touch
+ * 只有一份实现，将来改归属语义不会漏掉建组这一侧。嵌套 `db.transaction` 的表列表是本事务的子集，
+ * Dexie 会并入父事务，原子性不破。
+ */
+export async function createProjectWithMembers(input: {
+  title: string;
+  taskIds: readonly string[];
+  now?: Date;
+}): Promise<Goal> {
+  const title = trimRequired(input.title, "项目名不能为空");
+  if (input.taskIds.length === 0) throw new Error("没有选中任务");
+  const createdAt = nowIso(input.now);
+  const goalId = uuid();
+  let nextGoal: Goal | null = null;
+
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
+    const seed = GoalSchema.parse({
+      id: goalId,
+      title,
+      kind: "project",
+      status: "active",
+      members: [],
+      prerequisites: [],
+      createdAt,
+      updatedAt: createdAt,
+    });
+    await db.goals.add(seed);
+    await recordSyncLog("goals", seed.id, "create", seed.updatedAt);
+    nextGoal = await assignTasksToProject(goalId, input.taskIds, input.now ? { now: input.now } : {});
+  });
+
+  if (!nextGoal) throw new Error("建项目失败");
+  return nextGoal;
+}
+
+/**
+ * 把 `taskIds` 整批归入 `nextGoalId`（**建新组传 `null`**）时会被连带删掉的前置依赖边。
+ *
+ * 语义与单条版 `prerequisiteLossOnAssign` 一致（那条的长注释说明了为什么 `goalTitle` 只在
+ * `groupCount === 1` 时才能和 `count` 摆进同一句话），只多一条批量特有的规矩：
+ * **一条边同时挂两个被摘成员时只数一次**——逐条相加会说多，用户去核对发现对不上，
+ * 一次数不对就再也不信这个提示。
+ */
+export async function prerequisiteLossOnAssignMany(
+  taskIds: readonly string[],
+  nextGoalId: string | null,
+): Promise<{ count: number; groupCount: number; goalTitle: string } | null> {
+  const refs: GoalMemberRef[] = taskIds.map((id) => ({ kind: "task", id }));
+  const rows = await db.goals.toArray();
+  let total = 0;
+  let groupCount = 0;
+  let widest: { count: number; title: string } | null = null;
+
+  for (const row of rows) {
+    if (row.id === nextGoalId) continue;
+    // 只数会被真的摘除的组：摘除循环本身也只认 active project（theme 归属与归档组都不摘）。
+    if (row.status !== "active" || row.kind !== "project") continue;
+    const hit = refs.filter((ref) => (row.members ?? []).some((member) => sameGoalMember(member, ref)));
+    if (hit.length === 0) continue;
+    // filter 而非逐条累加：一条边挂两个被摘成员时只落进结果一次。
+    const edges = (row.prerequisites ?? []).filter((edge) =>
+      hit.some((ref) => sameGoalMember(edge.blocker, ref) || sameGoalMember(edge.blocked, ref)),
+    );
+    if (edges.length === 0) continue;
+    total += edges.length;
+    groupCount += 1;
+    if (!widest || edges.length > widest.count) widest = { count: edges.length, title: row.title };
   }
 
   return widest === null ? null : { count: total, groupCount, goalTitle: widest.title };

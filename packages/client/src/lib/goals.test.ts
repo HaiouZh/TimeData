@@ -5,11 +5,14 @@ import {
   addGoalMember,
   addTaskForGoal,
   assignTaskToProject,
+  assignTasksToProject,
+  createProjectWithMembers,
   deleteGoal,
   findActiveProjectGoalIdForTask,
   getGoal,
   listGoals,
   prerequisiteLossOnAssign,
+  prerequisiteLossOnAssignMany,
   ProjectAssignError,
   removeGoalMember,
   updateGoal,
@@ -721,5 +724,272 @@ describe("prerequisiteLossOnAssign", () => {
     await seedProject("gB");
 
     expect(await prerequisiteLossOnAssign("t1", "gB")).toEqual({ count: 1, groupCount: 1, goalTitle: "项目 gA" });
+  });
+});
+
+describe("批量归属写入", () => {
+  /** 照抄本文件 seedMembers 的裸行形态：不带 ruleId/weight/sessionId/skipped。 */
+  async function seedBareTask(id: string, patch: Record<string, unknown> = {}): Promise<void> {
+    await db.tasks.add({
+      id,
+      parentId: null,
+      title: id,
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      completedAt: null,
+      tags: [],
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+      ...patch,
+    } as never);
+  }
+
+  it("建组：单事务写入 goal + 全部成员 + 成员 touch", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+
+    const goal = await createProjectWithMembers({
+      title: " 装修 ",
+      taskIds: ["t1", "t2"],
+      now: date("2026-06-23T02:00:00.000Z"),
+    });
+
+    expect(goal.title).toBe("装修");
+    expect(goal.kind).toBe("project");
+    expect(goal.status).toBe("active");
+    expect(goal.members).toEqual([
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ]);
+    // 归属变更必须刷新成员 updatedAt，否则任务按旧值沉进水位线以下、体感是「圈完就没了」。
+    for (const id of ["t1", "t2"]) {
+      const row = await db.tasks.get(id);
+      expect(row?.updatedAt).toBe("2026-06-23T02:00:00.000Z");
+    }
+    const created = await db.syncLog.filter((e) => e.tableName === "goals" && e.action === "create").toArray();
+    expect(created).toHaveLength(1);
+  });
+
+  it("建组：标题为空则抛，且一个 Goal 都不留", async () => {
+    await seedBareTask("t1");
+    await expect(createProjectWithMembers({ title: "   ", taskIds: ["t1"] })).rejects.toThrow();
+    expect(await db.goals.count()).toBe(0);
+  });
+
+  it("建组：选中为空则抛，且一个 Goal 都不留", async () => {
+    await expect(createProjectWithMembers({ title: "装修", taskIds: [] })).rejects.toThrow();
+    expect(await db.goals.count()).toBe(0);
+  });
+
+  it("建组：任一任务不存在则整体回滚，不留半个组", async () => {
+    await seedBareTask("t1");
+    await expect(createProjectWithMembers({ title: "装修", taskIds: ["t1", "ghost"] })).rejects.toThrow();
+    expect(await db.goals.count()).toBe(0);
+    // t1 也没被 touch
+    expect((await db.tasks.get("t1"))?.updatedAt).toBe(now);
+  });
+
+  it("建组：成员从别的 active project 摘除，单一归属成立", async () => {
+    await seedBareTask("t1");
+    const old = await addGoal({ title: "旧组", kind: "project", now: date(now) });
+    await addGoalMember(old.id, { kind: "task", id: "t1" }, { now: date(now) });
+
+    await createProjectWithMembers({ title: "新组", taskIds: ["t1"], now: date("2026-06-23T02:00:00.000Z") });
+
+    expect((await getGoal(old.id))?.members).toEqual([]);
+  });
+
+  it("批量归入：全部写入，已在组内的不重复加", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const goal = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    await addGoalMember(goal.id, { kind: "task", id: "t1" }, { now: date(now) });
+
+    const next = await assignTasksToProject(goal.id, ["t1", "t2"], { now: date("2026-06-23T02:00:00.000Z") });
+
+    expect(next.members).toEqual([
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ]);
+  });
+
+  it("批量归入：目标组已归档 → inactive，且源组成员纹丝不动", async () => {
+    await seedBareTask("t1");
+    const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
+    const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
+    await updateGoal(target.id, { status: "archived", now: date(now) });
+
+    await expect(assignTasksToProject(target.id, ["t1"])).rejects.toThrow(ProjectAssignError);
+    // 缺了目标组这道闸，摘除会照做、写入也会照做，而读侧只认 active project
+    //  → 这条任务从此不属于任何组，是静默的归属丢失。
+    expect((await getGoal(source.id))?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("批量归入：目标组改成 theme → inactive", async () => {
+    await seedBareTask("t1");
+    const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
+    await updateGoal(target.id, { kind: "theme", now: date(now) });
+    await expect(assignTasksToProject(target.id, ["t1"])).rejects.toThrow(ProjectAssignError);
+  });
+
+  it("批量归入：整批撞 500 上限 → 一条都不写", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    const filler = Array.from({ length: 498 }, (_, i) => ({ kind: "task" as const, id: `filler-${i}` }));
+    await db.goals.put({ ...(await db.goals.get(target.id))!, members: filler });
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    await seedBareTask("t3");
+
+    // 498 + 3 = 501 > 500。逐条判「已经满了吗」会放前两条进去，那正是这道闸要挡的。
+    await expect(assignTasksToProject(target.id, ["t1", "t2", "t3"])).rejects.toThrow(ProjectAssignError);
+    expect((await getGoal(target.id))?.members).toHaveLength(498);
+    expect((await db.tasks.get("t1"))?.updatedAt).toBe(now);
+  });
+
+  it("批量归入：498 + 2 刚好装下", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    const filler = Array.from({ length: 498 }, (_, i) => ({ kind: "task" as const, id: `filler-${i}` }));
+    await db.goals.put({ ...(await db.goals.get(target.id))!, members: filler });
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+
+    const next = await assignTasksToProject(target.id, ["t1", "t2"]);
+    expect(next.members).toHaveLength(500);
+  });
+
+  it("批量归入：已在组内的不计入新增，满员组幂等重入不报假满员", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    await seedBareTask("t1");
+    const filler = Array.from({ length: 499 }, (_, i) => ({ kind: "task" as const, id: `filler-${i}` }));
+    await db.goals.put({
+      ...(await db.goals.get(target.id))!,
+      members: [...filler, { kind: "task", id: "t1" }],
+    });
+
+    // members 已是 500，但 t1 本来就在里面：重入不会让数组变长，此时报「满员」是假拒绝。
+    const next = await assignTasksToProject(target.id, ["t1"]);
+    expect(next.members).toHaveLength(500);
+  });
+
+  it("批量归入：任一条是子任务 → 整批拒绝，一条都不写", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    await seedBareTask("t1");
+    await seedBareTask("kid", { parentId: "t1" });
+
+    await expect(assignTasksToProject(target.id, ["t1", "kid"])).rejects.toThrow(ProjectAssignError);
+    expect((await getGoal(target.id))?.members).toEqual([]);
+    expect((await db.tasks.get("t1"))?.updatedAt).toBe(now);
+  });
+
+  it("批量归入：任一条是 occurrence → 整批拒绝", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    await seedBareTask("t1");
+    await seedBareTask("occ", { ruleId: "rule-1" });
+    await expect(assignTasksToProject(target.id, ["t1", "occ"])).rejects.toThrow(ProjectAssignError);
+    expect((await getGoal(target.id))?.members).toEqual([]);
+  });
+
+  it("批量归入：空数组直接抛，不产生任何写入", async () => {
+    const target = await addGoal({ title: "装修", kind: "project", now: date(now) });
+    await expect(assignTasksToProject(target.id, [])).rejects.toThrow();
+    expect((await getGoal(target.id))?.updatedAt).toBe(now);
+  });
+});
+
+describe("prerequisiteLossOnAssignMany", () => {
+  async function seedBareTask(id: string): Promise<void> {
+    await db.tasks.add({
+      id,
+      parentId: null,
+      title: id,
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      completedAt: null,
+      tags: [],
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+  }
+
+  it("无前置边时返回 null", async () => {
+    await seedBareTask("t1");
+    const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
+    expect(await prerequisiteLossOnAssignMany(["t1"], null)).toBeNull();
+  });
+
+  it("一条边同时挂两个被摘成员时只数一次", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const source = await addGoal({ title: "源组", kind: "project", now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(source.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await updateGoalPrerequisites(source.id, [
+      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
+    ]);
+
+    // 单条版逐条问会数出 2（t1 一次、t2 一次），但真正被删的边只有 1 条。
+    // 说多了用户去核对会发现对不上，一次数不对就再也不信这个提示。
+    const loss = await prerequisiteLossOnAssignMany(["t1", "t2"], null);
+    expect(loss).toEqual({ count: 1, groupCount: 1, goalTitle: "源组" });
+  });
+
+  it("多个源组时 count 是总和、groupCount 是组数", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    await seedBareTask("other");
+    const a = await addGoal({ title: "组A", kind: "project", now: date(now) });
+    await addGoalMember(a.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(a.id, { kind: "task", id: "other" }, { now: date(now) });
+    await updateGoalPrerequisites(a.id, [
+      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "other" } },
+    ]);
+    const b = await addGoal({ title: "组B", kind: "project", now: date(now) });
+    await addGoalMember(b.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await addGoalMember(b.id, { kind: "task", id: "other" }, { now: date(now) });
+    await updateGoalPrerequisites(b.id, [
+      { blocker: { kind: "task", id: "other" }, blocked: { kind: "task", id: "t2" } },
+    ]);
+
+    const loss = await prerequisiteLossOnAssignMany(["t1", "t2"], null);
+    expect(loss?.count).toBe(2);
+    expect(loss?.groupCount).toBe(2);
+  });
+
+  it("目标组自身被排除（重入不该报损失）", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const target = await addGoal({ title: "目标组", kind: "project", now: date(now) });
+    await addGoalMember(target.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(target.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await updateGoalPrerequisites(target.id, [
+      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
+    ]);
+    expect(await prerequisiteLossOnAssignMany(["t1", "t2"], target.id)).toBeNull();
+  });
+
+  it("归档组与 theme 组不数（摘除循环本来就不摘它们）", async () => {
+    await seedBareTask("t1");
+    await seedBareTask("t2");
+    const archived = await addGoal({ title: "归档组", kind: "project", now: date(now) });
+    await addGoalMember(archived.id, { kind: "task", id: "t1" }, { now: date(now) });
+    await addGoalMember(archived.id, { kind: "task", id: "t2" }, { now: date(now) });
+    await updateGoalPrerequisites(archived.id, [
+      { blocker: { kind: "task", id: "t1" }, blocked: { kind: "task", id: "t2" } },
+    ]);
+    await updateGoal(archived.id, { status: "archived", now: date(now) });
+
+    expect(await prerequisiteLossOnAssignMany(["t1", "t2"], null)).toBeNull();
   });
 });
