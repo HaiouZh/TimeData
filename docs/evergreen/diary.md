@@ -17,6 +17,7 @@ last-reviewed: 2026-07-26
 <!-- 复核 2026-07-25（diary-workbench 阶段二 · 编辑器语义收口）：补三键位（回车整段重排/Tab缩进出层/Ctrl+K补链接）契约、EditAction 四态、onChange 红线、撤销栈已知缺口、dirty 记账四条路径、行尾保护 §3.8；不新增 covers（lib/diary/** 通配已覆盖全部新文件）。 -->
 <!-- 复核 2026-07-25（存量两问题）：补 §2.8 保存在途脏标记（编辑序号判据）、§2.9 重载失败只出条状提示；§3.7 补 markDirty 与清脏出口。 -->
 <!-- 复核 2026-07-26（diary-workbench 阶段三 · 日期与跨零点收口）：§2 追加日期口径/事实源/replace 三条契约（第 11–13 条）；新开 §4「日期与跨零点」（两种模式、跨天只提示不自动切、切日重置四态与 handleSave 的早退真防线、脏态确认为何页面自己弹、在途响应三道正交闸、不用改的东西），原 §4「模块速查」顺延为 §5；订正 §3.7 表格首行与概括句里裸 `setDirty(true)` 与 `markDirty()` 的自相矛盾。不新增 covers：新文件 `lib/diary/diaryDate.ts` 落在既有 `packages/client/src/lib/diary/**` 通配下。 -->
+<!-- 复核 2026-07-26（diary-workbench 阶段四 · 只读参考栏）：§2 追加只读/不污染主编辑区/窄屏不渲染三条契约（第 14–16 条）；新开 §5「参考栏」（布局挂载与三个 className 硬要求、四块数据口径表、本地三块为何没有 error 态、回看块的世代号与活 ref 两道闸），原「模块速查」顺延为 §6。covers 新增 `packages/client/src/pages/diary/**`（组件不放 lib/：全仓 lib/ 下零 tsx），基线同步 5→6。 -->
 
 # 日记
 
@@ -66,6 +67,9 @@ SettingsDiaryPage 保存模板
 11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。
 12. **当前日期的事实源是 URL `?date=`**（`lib/diary/diaryDate.ts:resolveDiaryDate`）：有合法的过去日期 = 显式模式（用户自选的补写目标，跨零点**永不**提示）；无参 = 跟随模式，展示 `followAnchor` 并在实时今天越过它时出提示条。非法 / 未来 / 恰是今天的参数一律归一成无参形态（`replace`，不新增历史条目）。不用 `following: boolean` state 表达模式——state 活不过 PWA 冷启动。
 13. **切日期用 `replace` 不用 `push`**。有意偏离时间轴 TL-15 已拍板的「保留 push」：日记页有 header 返回按钮（`handleBack` 走 `navigate(-1)`）且安卓返回键 `/diary` 分支恒返回 `back`，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去；时间轴没有返回按钮，不暴露这个矛盾。
+14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也让本期免掉光标插入/格式化/撤销栈交互的一整片复杂度。
+15. **参考栏不得污染主编辑区状态**：任何一块的加载中/失败只在自己那块显示，绝不 set 页面的 `loading`/`loadFailed`/`conflict`/`error`/`dirty`。否则参考栏一超时会连累正文写不了。
+16. **窄屏（<1024px，含 APK）整个不渲染参考栏**：窄屏行为与加参考栏之前完全一致。
 
 ## 3. 编辑器语义（回车 / Tab / Ctrl+K）
 
@@ -218,7 +222,43 @@ SettingsDiaryPage 保存模板
 > **已知缺口**：安卓返回键的执行层 `AndroidBackButtonHandler.tsx` 是 app 全局挂载的，在按键那一刻**现读** `location.key`，踩的是同一个坑。窄场景（直接落地 `/diary` + 切过日期 + 按安卓返回键）下它会 `navigate(-1)` 空转；页内返回按钮仍可用，所以不是死路。修它要动全局导航层，留待单独处理。
 - `components/DateNav.tsx` **一个字节不动**：它有 3 条 `check:design` 精确豁免，匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符就失配。要调间距在外面包容器。它自己每次渲染现算 `today`，跨零点会自动跟上，无需传 prop。
 
-## 5. 模块速查
+## 5. 参考栏（只读）
+
+### 5.1 布局与挂载
+
+分栏底座复用 `pages/todo/ResizableSplit.tsx`，靠一个 `SplitPrefs`（存储键 + min/max/default 捆成一体）区分两个页面：待办 `0.62 / 0.35–0.7`、日记 `0.7 / 0.5–0.85`，各存各的 key。**捆成一个对象而非四个独立 prop，是为了让"只传了键、忘了传范围"这种错配在类型层就不可能发生**。
+
+挂载点是内容三元的最后一支：`loading ? … : loadFailed ? … : !enabled ? … : template === "" ? … : (wide ? <ResizableSplit …/> : editor)`。三个 className 缺一不可——`className="min-h-0 flex-1"` + `leftClassName="flex flex-col min-h-0"` + `rightClassName="min-h-0 overflow-y-auto"`；漏掉右栏那条，内容一长会撑穿 `h-dvh` 且 `overflow-y-auto` 永不触发，textarea 的 `flex-1` 也会失效塌成内容高。**这条靠人工冒烟验证，jsdom 不算布局、自动化测不出。**
+
+`<header>` 与跨天提示条保持在分栏**之上**、横跨两栏：页面真正的滚动容器是 App 的 `<main>`，把 header 塞进左栏内部会让 sticky 失效。
+
+### 5.2 四块的数据口径
+
+| 块 | 来源 | 口径 |
+|---|---|---|
+| 打点 | `useEntries(date)` + `useCategories()` | 区间重叠查出，跨零点条目**必须按日界裁剪**（`lib/diary/diaryRefEntries.ts`），否则「23:00–次日01:00」两天各显示成两小时 |
+| 完成的待办 | `listTasks().completed` 再过滤 | 硬性三条：`done === true`（排除账本判定耗尽、混在同一桶里的重复模板）、`completedAt !== null`（**绝不回退 `updatedAt`**）、`getDateString(completedAt) === date` |
+| 速记 | `listQuickNotesByDate(date)` | 现成，走 `occurredAt` 索引半开区间、日界已是 Asia/Shanghai，**不再包一层过滤** |
+| 回看 | `fetchDiary(addDays(date,-1))` / `addDays(date,-7)` | 相对 `date` 而非相对真实今天。两块**一律默认收起、展开才请求**，已加载过不重复拉 |
+
+三个本地源一律 `getDateString`（Asia/Shanghai）。仓库存在两套日界（待办的 today/逾期判定走设备本地 `localDateString`），混用会让非东八区设备上三块内容互相差一天。
+
+### 5.3 为什么本地三块没有 error 态
+
+本地三块走 `useLiveQuery`，只有 loading / empty 两态。`useLiveQuery` 没有 error 通道，但它由 Dexie 托管订阅生命周期，**天然免掉手写「切日取消在途」的一整类竞态 bug**——阶段三在这类 bug 上栽过两次（见 §4.5）。本地 Dexie 读失败在实践中不发生，为它造一套 retry UI 是 YAGNI。error/retry 只有走网络的「回看」块有。
+
+### 5.4 回看块的两道闸
+
+回看是唯一走网络的一块，两道闸都必须在：
+
+1. **世代号，不是日期比较**。`date` 变了要作废在途响应，判据用**单调递增**的 `epochRef`。用日期字符串比较会在 `A→B→A` 序列下失效（值又相等、闸不生效），这就是 ABA 问题。
+2. **`await` 之后一律读活 `ref`**。React 函数组件里闭包捕获的 state 在调用开始那一刻就冻结了；`await` 之后拿它做判断，与函数入口处的同款判断**永远同值**，是「看着在防、结构上永不生效」的假闸。`epochRef.current = epoch` 写在组件体顶层每次渲染同步赋值，异步回调只读它。
+
+> 这两条是阶段三用两轮返工换来的（§4.5 同源）。本页任何新的异步分支都照这两条办。
+
+> **已知缺口**：删掉成功分支的 epoch 守卫，原有用例照样全绿——因为切日的重置 effect 会先把块收起，两条闸保护的是同一个可观察面，「折叠态看不见旧内容」这条断言测不出闸有没有真的在起作用。真正暴露它的是**再次展开**：迟到响应若把 `state` 写成 `loaded`，`toggle()` 会因为 `state.kind` 不是 `idle` 而跳过重新请求，把上一个日期的正文渲染在新日期的标签下。已补用例「迟到响应被作废后，再次展开会重新请求而不是显示旧日期的正文」（`DiaryReferencePanel.test.tsx`）堵住这条。**「折叠态看不见旧内容」不是充分判据，判据必须落在「再次展开时会不会重新请求」上**——这是本阶段唯一一处「两道闸共用一个可观察面」的教训，值得成文。
+
+## 6. 模块速查
 
 | 入口 | 职责 |
 |---|---|
@@ -232,8 +272,12 @@ SettingsDiaryPage 保存模板
 | `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（§3.3） |
 | `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（§3.4） |
 | `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（§3.8） |
+| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（§5.2） |
+| `lib/diary/diaryRefEntries.ts` | 打点日界裁剪：`clipEntriesToDay` 把跨零点条目按 Asia/Shanghai 日界裁到当天窗口（§5.2） |
+| `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（§5.2） |
+| `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载与两个分区）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（§5） |
 | `server/routes/diary.ts` | 四端点：`GET/PUT /config`、`GET/PUT /:date` |
 | `server/lib/diary-path.ts` | 模板展开 + 路径安全校验纯函数 |
 
-**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,orderedList,listModel,indent,link,eol}.test.ts`、`lib/diary/textareaEdit.test.tsx`
+**client**：`pages/DiaryPage.test.tsx`、`pages/DiaryPage.successPath.test.tsx`、`pages/settings/SettingsDiaryPage.test.tsx`、`lib/diary/{diaryApi,diaryDate,orderedList,listModel,indent,link,eol,diaryRefPrefs,diaryRefEntries,diaryRefTasks}.test.ts`、`lib/diary/textareaEdit.test.tsx`、`pages/diary/DiaryReferencePanel.test.tsx`
 **server**：`routes/diary.test.ts`、`lib/diary-path.test.ts`
