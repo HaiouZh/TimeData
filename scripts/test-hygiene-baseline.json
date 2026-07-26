@@ -151,5 +151,6 @@
   "dirty-in-clean-bucket:startup.test.ts",
   "dirty-in-clean-bucket:sync/engine.test.ts",
   "dirty-in-clean-bucket:test/domHarness.test.tsx",
+  "dirty-in-clean-bucket:test/rootCleanupContract.test.tsx",
   "real-timer-wait:components/AndroidBackButtonHandler.test.tsx"
 ]

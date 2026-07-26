@@ -16,8 +16,16 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   // localStorage 清空
   if (typeof localStorage !== "undefined") localStorage.clear();
-  // DOM 残留清理（裸 createRoot 未 unmount 的兜底）
-  if (typeof document !== "undefined") document.body.innerHTML = "";
+  // React root 卸载 + DOM 残留清理。两步缺一不可：只清 innerHTML 不卸 root，页面组件（连同它的
+  // useLiveQuery 订阅）会永久留活——页面级用例把 unmount(root) 写在最后一句，任一断言先失败就走不到，
+  // 之后每条用例开头的 db.*.clear() 都会驱动这些僵尸页重渲染，把一条失败放大成后续用例的连带超时。
+  // cleanupRoots 幂等（已手动 unmount 的 root 不在 activeRoots 里）；动态 import 避免给
+  // 纯逻辑（node 环境）测试平白加上 react-dom 的 import 开销。
+  if (typeof document !== "undefined") {
+    const { cleanupRoots } = await import("./domHarness.js");
+    await cleanupRoots();
+    document.body.innerHTML = "";
+  }
   // Dexie 全表清空（泛化遍历 db.tables，schema 加表自动覆盖）
   // 若测试本身调用了 db.delete()，db 已关闭，跳过避免 DatabaseClosedError
   if (typeof indexedDB !== "undefined") {
