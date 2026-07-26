@@ -77,8 +77,10 @@ async function waitForCondition(
   assertion: () => boolean,
   label: string,
   step: () => Promise<void> = flushAsync,
+  /** 轮询次数。默认 20 够绝大多数链路；只有规模异常的用例（500 成员的组）才该调大它。 */
+  attempts = 20,
 ): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < attempts; i += 1) {
     if (assertion()) return;
     await step();
   }
@@ -1677,6 +1679,332 @@ describe("TodoPage 多选态", () => {
 
     expect(selectionBar(host)).toBeNull();
     expect(host.querySelector(COMPOSER_INPUT)).not.toBeNull();
+    await unmount(root);
+  });
+});
+
+describe("TodoPage 多选提交", () => {
+  async function clickByLabel(host: HTMLElement, label: string): Promise<void> {
+    const el = host.querySelector(`[aria-label="${label}"]`) as HTMLElement;
+    await act(async () => {
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flushAsync();
+  }
+
+  async function typeProjectName(host: HTMLElement, value: string): Promise<void> {
+    const input = host.querySelector('[aria-label="项目名"]') as HTMLInputElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushAsync();
+  }
+
+  const dialogText = (host: HTMLElement) => host.querySelector('[role="dialog"]')?.textContent ?? "";
+
+  async function clickDialogButton(host: HTMLElement, text: string): Promise<void> {
+    await act(async () => {
+      [...host.querySelectorAll('[role="dialog"] button')]
+        .find((b) => b.textContent === text)
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await settle();
+  }
+
+  /**
+   * 跨设备并发的存量形态：**选中之后**这批任务才被另一端写进某 active project 的 members。
+   *
+   * 顺序不能反。归属轴排他（`listTasks` 里的 `ownedByProject`）保证 active project 的成员
+   * **永远不出现在收件箱**，"既在 members 里又还显示在收件箱"那种行根本构造不出来——
+   * 先 seed 再进多选的话连 `选择 X` 那一行都查不到，用例会死在 null 上而不是测到东西。
+   * 真正可达的是这一条：多选态开着的时候 sync 拉下一份新的 goals 行，而 `selectedIds` 只存 id、
+   * 没有任何剪枝，那批任务照旧攥在手上，提交时才撞上前置边。
+   */
+  async function seedStaleMembership(t1Id: string, t2Id: string): Promise<void> {
+    await db.goals.add({
+      id: "gA",
+      title: "旧组",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: t1Id },
+        { kind: "task", id: t2Id },
+      ],
+      prerequisites: [{ blocker: { kind: "task", id: t1Id }, blocked: { kind: "task", id: t2Id } }],
+      createdAt: "2026-06-28T09:00:00.000Z",
+      updatedAt: "2026-06-28T09:00:00.000Z",
+    });
+  }
+
+  it("建组成功：退出多选、展开新组、弹提示", async () => {
+    // 提示条已读 → 项目区默认全折叠。不加这句，「新组是展开的」会被"首次默认展开"顶成假绿。
+    setProjectZoneIntroDismissed(true);
+    await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+
+    await typeProjectName(host, "装修");
+    await clickByLabel(host, "圈成项目");
+    await waitForToast(host, "已建「装修」· 2 条");
+
+    expect(selectionBar(host)).toBeNull();
+    await waitForCondition(() => zoneText(host).includes("买灯"), "新组展开并列出成员", settle);
+    expect(zoneText(host)).toContain("装修");
+    expect((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").not.toContain("买灯");
+    await unmount(root);
+  });
+
+  it("批量归入成功：退出多选、展开目标组、弹提示", async () => {
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await addTask({ title: "买灯", toInbox: true });
+    await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+
+    await clickByLabel(host, "放进已有项目");
+    await clickByLabel(host, "放进 装修");
+    await waitForToast(host, "已归入「装修」· 2 条");
+
+    expect(selectionBar(host)).toBeNull();
+    await waitForCondition(() => zoneText(host).includes("买灯"), "目标组展开并列出新成员", settle);
+    await unmount(root);
+  });
+
+  it("目标组满员：说出原因，且留在多选态", async () => {
+    setProjectZoneIntroDismissed(true);
+    // 500 个**真实存在**的成员，不能用悬空 ref 凑数：查不到任务的 ref 不进项目区投影，
+    // 那个组连组卡都不产出、`selectableProjects` 里也没有它，「放进 装修」按钮根本不存在。
+    // 每行照 TaskSchema 的形态写全（含 `ruleId: null`）：listTasks 主循环前对每行做
+    // `TaskSchema.safeParse`，parse 不过的行被整条丢弃，同样会让这 500 个成员一个都投影不出来。
+    const filler = Array.from({ length: 500 }, (_, i) => ({
+      id: `filler-${i}`,
+      parentId: null,
+      title: `填充 ${i}`,
+      done: false,
+      recurrence: null,
+      ruleId: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      completedAt: null,
+      tags: [],
+      sortOrder: i,
+      createdAt: "2026-06-28T09:00:00.000Z",
+      updatedAt: "2026-06-28T09:00:00.000Z",
+    }));
+    await db.tasks.bulkAdd(filler);
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: filler.map((task) => ({ kind: "task" as const, id: task.id })),
+      prerequisites: [],
+      createdAt: "2026-06-28T09:00:00.000Z",
+      updatedAt: "2026-06-28T09:00:00.000Z",
+    });
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    // 探针：500 条 filler 必须全归项目区、收件箱只剩「买灯」。它们要是涌进收件箱，
+    // 「放进 装修」照样点得动、toast 照样出，但这条用例测的就不再是满员那道闸了。
+    expect((host.querySelector('[data-section="inbox"]') as HTMLElement).textContent ?? "").not.toContain("填充 0");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+
+    await clickByLabel(host, "放进已有项目");
+    await clickByLabel(host, "放进 装修");
+
+    // 轮询预算放到 120 次：500 个成员的组每转一轮都很贵（成员数组的结构化克隆 + 整组重渲染），
+    // 从点击到 toast 实测要 49 个宏任务，而共用的 waitForToast 只轮 20 次。
+    // 这不是"等一个不会发生的事"——同一条链路在 3 个成员的组上只要 9 次，纯粹是规模代价。
+    await waitForCondition(
+      () => (host.querySelector('[aria-label="待办操作反馈"]')?.textContent ?? "").includes("的成员已满 500"),
+      "满员 toast",
+      settle,
+      120,
+    );
+    // 留在多选态：选了半天的那批还在手上，退出等于让用户重选一遍。
+    expect(selectionBar(host)).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("带前置依赖边时先弹确认，取消则一个字都不写", async () => {
+    setProjectZoneIntroDismissed(true);
+    const t1 = await addTask({ title: "买灯", toInbox: true });
+    const t2 = await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    // 归属在选完之后才落地——顺序的理由见 seedStaleMembership 的注释。
+    await seedStaleMembership(t1.id, t2.id);
+    await waitForCondition(() => zoneText(host).includes("旧组"), "旧组进项目区", settle);
+    expect(selectionBar(host)?.textContent).toContain("已选 1 条");
+
+    await typeProjectName(host, "新组");
+    await clickByLabel(host, "圈成项目");
+    await waitForCondition(() => dialogText(host).includes("移动会删掉依赖关系"), "确认框", settle);
+    // 整句匹配：单组这句是唯一可以点名的那句，措辞漂了（或被多组那句顶掉）必须当场红。
+    expect(dialogText(host)).toContain(
+      "这些任务在「旧组」里有 1 条前置依赖关系。移到别的项目会一并删除，且无法撤销。",
+    );
+
+    await clickDialogButton(host, "取消");
+    expect((await db.goals.toArray()).map((g) => g.title)).toEqual(["旧组"]);
+    expect((await db.goals.get("gA"))?.prerequisites).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("确认后照常写入，源组那条边随之消失", async () => {
+    setProjectZoneIntroDismissed(true);
+    const t1 = await addTask({ title: "买灯", toInbox: true });
+    const t2 = await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await seedStaleMembership(t1.id, t2.id);
+    await waitForCondition(() => zoneText(host).includes("旧组"), "旧组进项目区", settle);
+
+    await typeProjectName(host, "新组");
+    await clickByLabel(host, "圈成项目");
+    await waitForCondition(() => dialogText(host).includes("移动会删掉依赖关系"), "确认框", settle);
+    await clickDialogButton(host, "仍要移动");
+    await waitForToast(host, "已建「新组」· 1 条");
+
+    expect((await db.goals.get("gA"))?.members).not.toContainEqual({ kind: "task", id: t1.id });
+    expect((await db.goals.get("gA"))?.prerequisites).toEqual([]);
+    await unmount(root);
+  });
+
+  it("重入目标组不弹确认，目标组自己的前置边一条不掉", async () => {
+    // 询问时的 `nextGoalId` 必须是**目标组**，不能照抄建组那边的 `null`。
+    // 传 null 的话目标组自己也被数进"会被摘除的源组"，用户看到一句「移动会删掉依赖关系」，
+    // 而实际上一条边都不会掉（摘除循环 `row.id === goalId` 直接跳过目标组）——
+    // 这是纯粹的假警报，而且吓的正是"我把漏掉的两条补进原来那个组"这种最常见的动作。
+    // 一句吓人的话说错一次，往后所有真警报都会被无脑点掉。
+    setProjectZoneIntroDismissed(true);
+    const t1 = await addTask({ title: "买灯", toInbox: true });
+    const t2 = await addTask({ title: "买椅子", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买椅子");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickSelectRow(host, "买椅子");
+    // 选完之后这两条才被另一端写进「装修」（同 seedStaleMembership 的可达路径），
+    // 于是它们既在手上、又已经属于即将点进去的那个组——重入。
+    await db.goals.add({
+      id: "gT",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: t1.id },
+        { kind: "task", id: t2.id },
+      ],
+      prerequisites: [{ blocker: { kind: "task", id: t1.id }, blocked: { kind: "task", id: t2.id } }],
+      createdAt: "2026-06-28T09:00:00.000Z",
+      updatedAt: "2026-06-28T09:00:00.000Z",
+    });
+    await waitForCondition(() => zoneText(host).includes("装修"), "装修进项目区", settle);
+
+    await clickByLabel(host, "放进已有项目");
+    await clickByLabel(host, "放进 装修");
+
+    // 直奔成功反馈：确认框一旦弹出来，提交就停在那儿等人点，这个 toast 永远等不到。
+    await waitForToast(host, "已归入「装修」· 2 条");
+    expect(dialogText(host)).toBe("");
+    expect((await db.goals.get("gT"))?.prerequisites).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("非预期错误：兜底提示 + console.error，不吞掉、不退出多选", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    // 重复 ref 的裸行：读侧照常渲染成落点（红线 3），但 addGoalMember 内部的 GoalSchema.parse
+    // 会被 superRefine 拒掉 —— 这是用户可达且会永远复现的一类非 ProjectAssignError。
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: seedMember.id },
+        { kind: "task", id: seedMember.id },
+      ],
+      prerequisites: [],
+      createdAt: "2026-06-28T09:00:00.000Z",
+      updatedAt: "2026-06-28T09:00:00.000Z",
+    });
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+    await clickByLabel(host, "放进已有项目");
+    await clickByLabel(host, "放进 装修");
+
+    await waitForToast(host, "暂时移不过去");
+    expect(errorSpy).toHaveBeenCalled();
+    expect(selectionBar(host)).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("建组时源组数据损坏：兜底文案说的是「建不了组」，且留在多选态", async () => {
+    // 建组侧的 catch 分支此前完全裸奔：上面那条走的是归入路径，所以「留在多选态」与兜底文案
+    // 这两个断言只覆盖了 submitAssignToProject 一侧。实测过——在 submitCreateProject 的 catch 里
+    // 顺手加一句 exitSelection()（一个看着更"干净"的手误），整套 57 条用例一条都不会红。
+    //
+    // 构造走的是 selectedIds 不随 useLiveQuery 剪枝那条真实路径（见 confirmPrerequisiteLoss 的注释）：
+    // 多选态开着时另一端 sync 下来一份含选中任务的坏组，提交那一刻才撞上。
+    // 坏在哪：摘掉「买灯」后，剩下那条边的 blocked 指向一个非成员，`goal prerequisite must
+    // reference members` 拒掉整行。**不能用重复 ref 凑**——filter 会把两个重复项一起摘干净，
+    // parse 反而通过，这条路径抛不出来。
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    setProjectZoneIntroDismissed(true);
+    const target = await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await enterSelection(host);
+    await clickSelectRow(host, "买灯");
+
+    await act(async () => {
+      await db.goals.add({
+        id: "gBroken",
+        title: "另一端同步下来的组",
+        kind: "project",
+        status: "active",
+        members: [
+          { kind: "task", id: target.id },
+          { kind: "task", id: "ghost-member" },
+        ],
+        prerequisites: [{ blocker: { kind: "task", id: "ghost-member" }, blocked: { kind: "task", id: "ghost-outsider" } }],
+        createdAt: "2026-06-28T09:00:00.000Z",
+        updatedAt: "2026-06-28T09:00:00.000Z",
+      });
+    });
+    await settle();
+
+    await typeProjectName(host, "装修");
+    await clickByLabel(host, "圈成项目");
+
+    await waitForToast(host, "暂时建不了组");
+    expect(errorSpy).toHaveBeenCalled();
+    expect(selectionBar(host)).not.toBeNull();
     await unmount(root);
   });
 });

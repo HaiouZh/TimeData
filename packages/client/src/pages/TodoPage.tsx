@@ -65,9 +65,12 @@ import {
   resumeSession,
 } from "../lib/sessions.js";
 import {
+  assignTasksToProject,
   assignTaskToProject,
+  createProjectWithMembers,
   findActiveProjectGoalIdForTask,
   prerequisiteLossOnAssign,
+  prerequisiteLossOnAssignMany,
   ProjectAssignError,
   removeGoalMember,
 } from "../lib/goals.js";
@@ -793,9 +796,76 @@ export function TodoPage() {
       node
     );
 
-  // Task 7 接入写入：本任务只做「进得去、选得中、别处点不动、退得出」，提交流不在这里。
-  const submitCreateProject = async (_title: string) => {};
-  const submitAssignToProject = async (_goalId: string) => {};
+  /**
+   * 归入前的一次性询问：摘除必然删掉源组里引用这批任务的 prerequisites 边
+   *（`GoalSchema` superRefine 的硬后果，见 `prerequisiteLossOnAssignMany`）。
+   * 返回 false = 用户取消，调用方必须原地返回、一个字都别写。
+   *
+   * 建新组也要问，且这不是"以防万一"：归属轴排他保证 active project 的成员**不出现在收件箱**，
+   * 所以刚进多选那一刻选中的任务确实都没有 project 归属、这里恒返回 true。但 `selectedIds` 只存 id、
+   * **不随 useLiveQuery 回流剪枝**——多选态开着的时候另一端 sync 下来一份新 goals 行，
+   * 手上这批就成了带归属的，提交时才撞上前置边。批量归入同理，两条路的语义必须一致。
+   */
+  const confirmPrerequisiteLoss = async (taskIds: string[], nextGoalId: string | null): Promise<boolean> => {
+    const loss = await prerequisiteLossOnAssignMany(taskIds, nextGoalId);
+    if (loss === null) return true;
+    // 分两句说而不是一句套模板：`count` 是全部源组之和、`goalTitle` 只是边最多的那一组，
+    // 多组时凑一句就成了「在「X」里有 N 条」——用户去 X 里数出来比 N 少，一次数不对就再也不信这个提示。
+    const body =
+      loss.groupCount > 1
+        ? `这些任务在 ${loss.groupCount} 个原项目里共有 ${loss.count} 条前置依赖关系。移到别的项目会一并删除，且无法撤销。`
+        : `这些任务在「${loss.goalTitle}」里有 ${loss.count} 条前置依赖关系。移到别的项目会一并删除，且无法撤销。`;
+    return confirm({ title: "移动会删掉依赖关系", body, confirmLabel: "仍要移动", danger: true });
+  };
+
+  /**
+   * 提交失败的统一出口。可预期的拒绝（准入 / 满员 / 目标组失效）说原因；其余兜底。
+   * **两种情况都不退出多选**：选了半天的那批还在手上，退出等于让用户重选一遍，
+   * 而且退出后页面看着和成功一模一样——用户会以为进去了。
+   */
+  const reportSubmitFailure = (error: unknown, fallback: string): void => {
+    if (error instanceof ProjectAssignError) {
+      showActionToast({ message: error.message });
+      return;
+    }
+    // 用户可达且会永远复现的一类：目标组或源组的裸行过不了 GoalSchema.parse
+    //（members 有重复 ref / prerequisites 有悬空边，跨设备并发与 force-push 都能造出来）。静默吞掉等于"应用坏了"。
+    console.error("[todo] 多选提交失败:", error);
+    showActionToast({ message: fallback });
+  };
+
+  const submitCreateProject = async (title: string): Promise<void> => {
+    // 快照必须在 exitSelection 之前取：那个函数会把 selectedIds 清空，
+    // 成功分支里再去读它只会拿到 0 条，提示语当场说谎。
+    const taskIds = [...selectedIds];
+    if (taskIds.length === 0) return;
+    if (!(await confirmPrerequisiteLoss(taskIds, null))) return;
+    try {
+      const goal = await createProjectWithMembers({ title, taskIds });
+      exitSelection();
+      // 建组要展开：刚命名完的组出现在项目区第一位，展开才能当场确认「都进去了」。
+      // 与 P3「拖入不展开」不冲突——那条防的是连续拖入让下一个落点跑掉，一次性动作不适用。
+      // `openProject` 就是 P2 那套 revealGoals 机制，展开 + scrollIntoView 都在里面，不必另写滚动。
+      openProject(goal.id);
+      showActionToast({ message: `已建「${goal.title}」· ${taskIds.length} 条` });
+    } catch (error) {
+      reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时建不了组");
+    }
+  };
+
+  const submitAssignToProject = async (goalId: string): Promise<void> => {
+    const taskIds = [...selectedIds];
+    if (taskIds.length === 0) return;
+    if (!(await confirmPrerequisiteLoss(taskIds, goalId))) return;
+    try {
+      const goal = await assignTasksToProject(goalId, taskIds);
+      exitSelection();
+      openProject(goalId);
+      showActionToast({ message: `已归入「${goal.title}」· ${taskIds.length} 条` });
+    } catch (error) {
+      reportSubmitFailure(error, "这些任务或它们原来所在的项目数据有问题，暂时移不过去");
+    }
+  };
 
   const scheduledFiltered = f(buckets.scheduled);
   // 7 天水位线：过滤激活时失效（命中即显示），否则水下折叠进 SunkenScheduledTail。
