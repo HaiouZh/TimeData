@@ -23,9 +23,10 @@ const tasksFailure = vi.hoisted(() => ({ shouldFail: false }));
 // 这道闸把查询按在半空中，才断得到加载态。闸不开时不 await 任何东西（保住 dexie 的订阅追踪）。
 const punchGate = vi.hoisted(() => ({ hold: null as Promise<void> | null }));
 
-vi.mock("../../lib/diary/diaryRefEntries.ts", async () => {
-  const actual =
-    await vi.importActual<typeof import("../../lib/diary/diaryRefEntries.js")>("../../lib/diary/diaryRefEntries.ts");
+vi.mock("../../lib/diary/diaryRefEntriesQuery.ts", async () => {
+  const actual = await vi.importActual<typeof import("../../lib/diary/diaryRefEntriesQuery.js")>(
+    "../../lib/diary/diaryRefEntriesQuery.ts",
+  );
   return {
     ...actual,
     listEntriesOverlappingDay: async (date: string) => {

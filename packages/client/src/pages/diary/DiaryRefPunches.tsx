@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useCategories } from "../../hooks/useCategories.js";
-import { clipEntriesToDay, listEntriesOverlappingDay } from "../../lib/diary/diaryRefEntries.js";
+import { clipEntriesToDay } from "../../lib/diary/diaryRefEntries.js";
+import { listEntriesOverlappingDay } from "../../lib/diary/diaryRefEntriesQuery.js";
 import { getDiaryRefCollapsed, setDiaryRefCollapsed } from "../../lib/diary/diaryRefPrefs.js";
 import { formatDuration, formatTimelineTimeRange } from "../../lib/time.js";
 import { CollapsibleSection } from "../todo/CollapsibleSection.js";
