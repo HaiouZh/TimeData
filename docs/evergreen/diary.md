@@ -4,8 +4,8 @@ title: 日记
 covers:
   - packages/client/src/pages/DiaryPage.tsx
   - packages/client/src/pages/settings/SettingsDiaryPage.tsx
-  - packages/client/src/lib/diary/**
-  - packages/client/src/pages/diary/**
+  - packages/client/src/lib/diary/diaryApi.ts
+  - packages/client/src/lib/diary/diaryDate.ts
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
 contracts:
@@ -19,19 +19,20 @@ last-reviewed: 2026-07-26
 <!-- 复核 2026-07-26（diary-workbench 阶段三 · 日期与跨零点收口）：§2 追加日期口径/事实源/replace 三条契约（第 11–13 条）；新开 §4「日期与跨零点」（两种模式、跨天只提示不自动切、切日重置四态与 handleSave 的早退真防线、脏态确认为何页面自己弹、在途响应三道正交闸、不用改的东西），原 §4「模块速查」顺延为 §5；订正 §3.7 表格首行与概括句里裸 `setDirty(true)` 与 `markDirty()` 的自相矛盾。不新增 covers：新文件 `lib/diary/diaryDate.ts` 落在既有 `packages/client/src/lib/diary/**` 通配下。 -->
 <!-- 复核 2026-07-26（diary-workbench 阶段四 · 只读参考栏）：§2 追加只读/不污染主编辑区/窄屏不渲染三条契约（第 14–16 条）；新开 §5「参考栏」（布局挂载与三个 className 硬要求、四块数据口径表、本地三块为何没有 error 态、回看块的世代号与活 ref 两道闸），原「模块速查」顺延为 §6。covers 新增 `packages/client/src/pages/diary/**`（组件不放 lib/：lib/ 下无组件 tsx，只有 `textareaEdit.test.tsx` 这类测试文件），基线同步 5→6。 -->
 <!-- 复核 2026-07-26（阶段四终审修复波）：§5.3 订正事实错误——`useLiveQuery` **有** error 通道（render 里 throw），故每块各围一层 `ErrorBoundary`；新开 §5.4「四块口径都各自查」（打点改走 `listEntriesOverlappingDay`，不借 `useEntries` 的双查询与 `|| []` 兜底），原 §5.4 顺延为 §5.5 并如实订正两道闸的实际作用面（生产每次切日整栏卸载重挂）、补「两道闸共用同一条承重用例」的脆弱点；§5.2 补回看措辞随 `isToday` 切。不新增 covers。 -->
+<!-- 复核 2026-07-26（拆子文档）：本文 23135 字符逼近 hard cap 25000，把 §3「编辑器语义」与 §5「参考栏」原样外提为 diary/editor.md 与 diary/reference-panel.md（正文未改，仅章节号降级、跨文档引用改相对链接）；原 §4「日期与跨零点」顺延为 §3、原 §6「模块速查」顺延为 §4。主文档降至约 1.3 万字符。covers 相应拆分：编辑器六个纯函数文件归 editor.md，参考栏组件与 diaryRef* 归 reference-panel.md，主文档保留 DiaryPage/设置页/diaryApi/diaryDate/服务端两文件。**上方历史复核注释里的章节号是当时的编号，未回改。** -->
 
 # 日记
 
 > 日记域：每天一条纯文本文件，直接写在用户挂载的本地 vault 目录里（Obsidian 风格），不进 SQLite/Dexie、不进同步账本、不进备份格式。
-> 讲什么：路径模板展开与安全校验、mtime 并发守卫、编辑器三键位语义（回车/Tab/Ctrl+K）与撤销栈约束、行尾保护、设置页模板配置。
-> 不讲什么：QuickNote/待办/时间记录等结构化域的存储与同步（见 [quick-notes](quick-notes.md)/[todo](todo.md)/[timeline](timeline.md)）、通用同步账本（见 [sync](sync.md)）。
+> 讲什么：路径模板展开与安全校验、mtime 并发守卫、关键契约与不变量、日期与跨零点、设置页模板配置。
+> 不讲什么：编辑器三键位语义与撤销栈约束（见子文档 [diary/editor](diary/editor.md)）、宽屏只读参考栏（见子文档 [diary/reference-panel](diary/reference-panel.md)）；QuickNote/待办/时间记录等结构化域的存储与同步（见 [quick-notes](quick-notes.md)/[todo](todo.md)/[timeline](timeline.md)）、通用同步账本（见 [sync](sync.md)）。
 
 ## 承上启下
 
 - **上游**：用户在 `/diary`（`DiaryPage.tsx`）编辑当天日记；在 `/settings/diary`（`SettingsDiaryPage.tsx`）配置路径模板。
 - **下游**：内容直接写入服务器本机文件系统（`DIARY_VAULT_DIR` 挂载的目录），不落库、不同步、不进独立备份。
 - **契约**：`routes/diary.ts` 的四个端点（`GET/PUT /config`、`GET/PUT /:date`）与 `lib/diary-path.ts` 的模板展开/安全校验规则，见本文 §2。
-- **邻居**：[quick-notes](quick-notes.md)（QuickNotesPage 提供跳转 `/diary` 的入口，二者是并列的记录方式，互不引用数据）。
+- **邻居**：[diary/editor](diary/editor.md) 与 [diary/reference-panel](diary/reference-panel.md)（同主题子文档）；[quick-notes](quick-notes.md)（QuickNotesPage 提供跳转 `/diary` 的入口，二者是并列的记录方式，互不引用数据）。
 
 ## 1. 数据流
 
@@ -59,10 +60,10 @@ SettingsDiaryPage 保存模板
 2. **模板安全校验**（`expandDiaryTemplate`）：不能含反斜杠、不能是绝对路径（`/` 开头或 `X:` 盘符开头）、不能含 `..` 段；展开后的绝对路径必须仍在 `vaultDir` 内（`resolveDiaryFile` 二次校验，防止模板拼接后越权）。
 3. **mtime 并发守卫**：`PUT /:date` 非 `force` 请求时，服务器当前文件 mtime 必须等于客户端携带的 `baseMtime`（文件不存在时 `baseMtime` 应为 `null`），否则 409 冲突并回传服务器当前 mtime；`force:true` 无条件覆盖。mtime 精度为 `Math.floor(mtimeMs)`（毫秒截断）。
 4. **`enabled=false`（vault 未挂载）时**页面仍可加载/展示，但视为不可用状态提示用户，不阻断路由本身；`template=""`（未配置模板）在 `DiaryPage` 单独提示并链接到 `/settings/diary`。
-5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时，回车清空该行前缀而非续号。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 §3.2。
+5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时，回车清空该行前缀而非续号。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md) §2。
 6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（Phase 1 表单控件棘轮闸 `check:ui` 强制）。
 7. **未保存修改的离开守卫**统一走 `hooks/useUnsavedChangesGuard`（`useBlocker` + `beforeunload`），覆盖桌面侧栏 / 底栏 / `<Link>` / `navigate()` / 浏览器后退 / 安卓返回键；页面**不再**自管 `beforeunload`，返回按钮也不自己弹确认（否则会连弹两次）。页内「刷新重载」的确认不归它管，仍走 `useConfirm`。**已知缺口**：`appUpdate.tsx` 检测到新构建时会在 `visibilitychange`/`focus` 上程序化调用 `window.location.reload()`（无用户激活的硬刷新），浏览器对此类 reload 普遍抑制 `beforeunload` 提示，且 Android WebView 本就不显示 `beforeunload` 对话框；这条路径既不过 `useBlocker`（不是路由内导航）也不过 `beforeunload`（被抑制/不支持），日记正文又不进任何本地存储或同步域，因此是离开守卫覆盖不到的出口。
-8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 §3.8 行尾保护。
+8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 [diary/editor](diary/editor.md) §8 行尾保护。
 9. **`handleReload` 失败只出条状错误提示**（`setError`），不进 `loadFailed` 全屏态、不清冲突条：正文还在编辑器里、用户还能接着编辑保存，全屏失败态反而会把这份没上传的内容从屏幕上抹掉。
 10. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
 11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。
@@ -72,90 +73,9 @@ SettingsDiaryPage 保存模板
 15. **参考栏不得污染主编辑区状态**：任何一块的加载中/失败只在自己那块显示，绝不 set 页面的 `loading`/`loadFailed`/`conflict`/`error`/`dirty`。否则参考栏一超时会连累正文写不了。
 16. **窄屏（<1024px，含 APK）整个不渲染参考栏**：窄屏行为与加参考栏之前完全一致。
 
-## 3. 编辑器语义（回车 / Tab / Ctrl+K）
+## 3. 日期与跨零点
 
-> 三个键位在 `DiaryPage.tsx` 的 `handleKeyDown` 里统一分派：先过 IME 组合态守卫（`event.nativeEvent.isComposing` 提前 return，三键位共用同一处判断，不在各自纯函数里重复判断），再按 `event.key` 依次尝试 `applyEnterInOrderedList` / `applyIndent` / `applyLinkShortcut`，命中的纯函数返回一个 `EditAction`，交给 `runEditAction`（`textareaEdit.ts`）统一落地。三个纯函数与 `listModel.ts` 共享同一份行模型（行定位 `splitLines`/`lineIndexAt`、保护位扫描 `scanProtected`、分块 `assignBlocks`、重排 `renumberBlock`）——这是本阶段唯一准用的一份实现，两处各写一套曾被判定为最大架构风险。
-
-### 3.1 EditAction 四态契约
-
-| 返回值 | 语义 | `handleKeyDown` 动作 | 是否置 dirty |
-|---|---|---|---|
-| `null` | 不处理这个按键 | **不** `preventDefault`，交还浏览器默认行为 | 不涉及 |
-| `{ kind: "noop" }` | 吃掉按键但不改任何东西 | `preventDefault`，不碰 `setValue`/`markDirty` | 否 |
-| `{ kind: "select" }` | 只挪光标 | `preventDefault`，只调 `field.setSelectionRange`，**不**走 `execCommand` | 否 |
-| `{ kind: "replace" }` | 替换 `[start,end)` 为 `text`，落点 `[selStart,selEnd)` | `preventDefault`，走 `applyEdit`（execCommand） | 见 §3.7 |
-
-`null` 与 `{ kind: "noop" }` 都不碰 `setValue`/`markDirty`，差别只在按键要不要交还浏览器继续处理（唯有 `null` 不 `preventDefault`）；这条区分是 `handleKeyDown` 一层的判断，`runEditAction` 内部只处理非 `null` 的三态。
-
-### 3.2 回车：有序列表整段重排
-
-光标不在列表项 marker 之后（缩进/编号/gap 内部，或所在行根本不是列表项）→ `null` 放行原生换行；光标落在代码围栏 / front-matter 保护区内（`scanProtected`）同样 `null` 放行——这两类都是"看起来像列表操作但不该拦"。
-
-命中列表项后：
-- **附属行**（`assignBlocks`）：视觉列宽大于块内最近一项列宽的非列表行（续写段落、无序子项）随块移动、不参与编号计数、字节原样保留；不加这条，`"1. a\n   续写\n2. b"` 会在无序子项处断块，`"2. b"` 被孤立分块后拉直成 `"1. b"`。
-- **单项块护栏**：块内只有 1 个列表项时不做整段拉直，退化为"当前号 + 1"；块内 ≥2 项才整段拉直（`straighten = block.items >= 2`）。不加这条，loose list（`"1. a\n\n2. b"`）里的 `"2. b"` 会被孤立分块后错误拉直成 `"1. b"`。
-- **空列表项回车**：光标前无内容、行内光标后也无余文 → 清空该行（含缩进）而非续号。
-- **光标落点**：不能用"旧光标 + 增量"算——编号位数变化（如 9→10）可能发生在光标上方；必须用 `blockStart + 新块内新行之前所有行长度和 + 新行重排后的 markerLen`。
-- **最小编辑区间**：`trimEditSpan` 做前后缀字节级裁剪，编号本来就对时自然塌成插入点，上下文一个字节不动。
-
-### 3.3 Tab / Shift+Tab：缩进出层
-
-判定"这一行算不算列表行"看整行本身，与光标在行内哪一列无关（缩进区/marker 中间/行尾/空列表项都算）——这与回车不同，回车看的是"光标是否在 marker 之后"。
-
-- **父行约束**（Tab 入层，`canIndentRows`）：目标行在同块内必须存在上方最近的列表项（块首行不可缩进）；且目标行原深度必须 ≤ 上方最近列表项的新深度，否则拒绝（防跳级）。附属行既不断链也不推进"最近列表项"深度。
-- **出层不受父行约束**：Shift+Tab 只要该行还有缩进可拿即放行——`indent` 以 `\t` 开头拿掉 1 个 Tab 字符，否则视为空格缩进的老文件，最多拿掉 `TAB_COLUMNS`（4）个前导空格。
-- **逃生口**：`targets` 为空即返回 `null`，把焦点交还浏览器——Tab/Shift+Tab 各自都有确定的出口，满足 WCAG 2.1.2 键盘陷阱要求存在出口。Tab 的前向出口：非列表行/围栏内（候选行过滤阶段就放行）、以及**块首行**（父行约束 `canIndentRows` 拒绝——块首行即任意列表的第一项，日记里最常见的位置）。Shift+Tab 的反向出口：**顶层列表行**（`removableIndentLen` 判定无缩进可拿）。**不要**因为"对称性"让 Shift+Tab 也在顶层被吃掉，那会把两个方向同时封死，构成键盘陷阱。
-- **缩进不带子树**（已知行为，非 bug）：只动目标行的 `indent`，子项原样留在原深度；带子树要引入"子树"概念与额外用户预期，多行选中一起缩已经用行级操作覆盖了这个需求。
-- **缩进字符固定 `\t`**（`INDENT` 常量），不做设置项；且是**前置** Tab（`INDENT + indent`）不是后置——保证 `visualCol("\t" + s) === visualCol(s) + TAB_COLUMNS` 恒成立，这个等式只在前置时成立，后置只在原列宽恰好是 4 的倍数时碰巧对，否则会漂移，还会让 Shift+Tab 的 `removableIndentLen` 认不出刚加的 Tab，Tab→Shift+Tab 就不再互逆。
-- **替换区间是行级收窄**（改动首行到末行整行替换），不是回车用的字节级前后缀裁剪——Tab 是"这一整行往里/往外挪"的行级操作，回车是"在光标处拆一行"的插入点操作，两者口径不同是有意的。
-
-### 3.4 Ctrl+K：补 markdown 链接
-
-四态返回（含义同 §3.1；`null` 当前实现不会产出，签名保留只为兼容调用方 `if (!action)` 的判空写法），内部七 case（case① 是调用方的 IME 组合态守卫，不在函数内）：
-
-1. **case②** 光标或选区任一端落在代码围栏 / front-matter 内 → `{ kind: "noop" }`——围栏内同样做不成链接，与"选区含换行"同一类，不像 Tab 顶层逃生口那样交还浏览器。
-2. **case③** 选区 trim 后仍含换行 → `{ kind: "noop" }`；必须早于 case⑥ 的 URL 判定——WHATWG URL 解析器会先剥掉字符串里的 tab/LF/CR 再解析，跨行选区若先过 URL 判定会被误判成合法 URL，生成把两行硬粘起来的错链接，而且看起来"成功了"。
-3. **case④** 光标/选区落在已有 `[文本](URL)` 上 → `{ kind: "select" }`，只挪光标到 URL 段，不改文本、不置 dirty。
-4. **case⑤** 无选区 / 全空白选区 → 插入 `"[]()"`，光标落在方括号之间。
-5. **case⑥** 选区 trim 后是 `http`/`https` URL → 把 URL 塞进圆括号，光标落进方括号等待填标题。
-6. **case⑦** 其余情况 → 把选中文字包进方括号，光标落进圆括号等待填地址。
-
-**mac 上 Ctrl+K 会被一并吃掉**（Emacs 风格 kill-to-end-of-line，是次要绑定）：判定用 `event.ctrlKey || event.metaKey` 一把抓，不做平台检测——本仓零平台嗅探代码，且平台嗅探在测试里的 stub 会命中测试分桶脚本的 `stubGlobal` 脏标记、把测试文件踢出快桶（测试成本）；判定同时要求 `!event.altKey`——AltGr 在部分键盘布局上等价 Ctrl+Alt，不排除会被误判成触发补链接（误触发风险）。已知代价（显式接受）：mac 上误伤 Emacs 绑定，代价是"一次编辑没发生"，不丢数据，可用 Shift+End 再删代替。
-
-### 3.5 onChange 红线
-
-`textarea` 的 `onChange` 绝不能对 `value` 做任何加工（trim / 行尾转换 / 任何归一化）。原因：React 受控 `textarea` 写回时，`react-dom` 内部带一条守卫 `value !== element.value && (element.value = value)`；只要 `onChange` 把与 DOM 当前值不同的字符串灌回 state，这条守卫就会触发整体赋值 `element.value = value`，浏览器原生撤销栈当场清空（Ctrl+Z 撤不回，甚至撤掉更早内容）。`applyEdit`（走 `execCommand`）改完 DOM 后原样把同一字符串灌回 `onChange`，守卫不成立、不触发整体写回，从 React 的视角这条路径与用户普通打字完全同构；一旦 `onChange` 加工了 value，这个前提就被破坏。
-
-这种坏法**静默**：功能表现不会立刻出错，只有撤销栈会在用户下次按 Ctrl+Z 时表现异常。机检覆盖两层：`textareaEdit.test.tsx` 里的"React 零回写计数器"护栏守的是那个测试文件内部的等价 Probe 组件；`pages/DiaryPage.successPath.test.tsx`（jsdom 打桩出真实 `execCommand`，用同一套计数器手法）接的是 `DiaryPage.tsx` 本体的 `onChange`——生产组件的 `onChange` 一旦加工 value，这条测试当场变红（实测过：往 `onChange` 加一个 `.trimEnd()` 就红），不再只能靠 review 兜底。
-
-### 3.6 撤销栈：已知缺口
-
-`applyEdit` 探测 `document.execCommand` 是否存在（存在性探测，不是"调用后看返回值"）；不存在时（含**jsdom 全部测试环境**——jsdom 不实现 `execCommand`）走降级路径：`runEditAction` 调 `setValue`（即 React `setState`）整体回写，功能结果正确（最终文本与走 `execCommand` 一致），但**这一步没有进原生撤销栈**——用户按 Ctrl+Z 会跳过这次编辑。`execCommand` 调用失败（`rejected`，如浏览器拒绝该操作）同样走这条降级路径。
-
-因此：**撤销行为本身零自动化覆盖**（jsdom 测不出真实的浏览器撤销栈行为，所有 DOM 测试天然只能验证降级路径的文本正确性），只能靠真机人工验收（Ctrl+Z 逐步撤销三个键位各自产生的编辑）。
-
-### 3.7 dirty 记账四条路径
-
-| 路径 | 触发点 | 说明 |
-|---|---|---|
-| replace + 成功 | `onChange` | `execCommand` 发出真实 `input` 事件，React `onChange` 自然触发，页面 `onChange` 里调 `markDirty()` |
-| replace + 降级 | `runEditAction` 内显式 `markDirty()` | `setValue` 不经 `onChange`，漏了这一步保存按钮永远不亮 |
-| select | 不置 | 用户一个字没改，不该变脏 |
-| noop | 不置 | 同上 |
-
-置脏的两个出口只有 `onChange` 与 `runEditAction` 的降级分支，二者都调 `markDirty()`（序号 +1 再 `setDirty(true)`），不许裸调 `setDirty(true)`；`select`/`noop` 两条路径刻意什么都不调。序号是"保存在途中有没有继续打字"的唯一判据（§2.8）。**清除**只有两个出口：保存成功且序号未变、加载/重载成功。
-
-### 3.8 行尾保护
-
-`detectEol`（`eol.ts`）在内容**进 textarea 之前**、对原始 `fetch` 结果探测主导行尾（CRLF 计数 > LF 计数判 CRLF，平局或无换行判 LF），存进 `eolRef`（`useRef`，不是 state——不参与渲染）；`handleSave` 保存时按 `eolRef.current` 把 `content`（textarea 值，HTML 规范保证已归一为 LF）里的 `\n` 换回 `\r\n` 再 PUT。第二个写入点在 `handleReload`（点"刷新重载"）：同样要在 `setContent` 之前重新探测，容易漏——`eolRef` 若还停在上一次的值，会把新加载的 LF 文件当成 CRLF 写回，或反过来。
-
-已知行为（接受，不是 bug）：
-- **混合行尾的原文件会被统一成主导行尾**，产生一次性全篇 diff——混合行尾文件本就异常，统一比"随机保留一半"更可预期，且只发生一次。
-- **孤立 `\r`（老 Mac 行尾）不计入 CRLF/LF 计数**，这类文件本来就会被 textarea 的 HTML 规范归一行为转成 LF；已知不修，不在 `detectEol` 职责内处理。
-
-## 4. 日期与跨零点
-
-### 4.1 两种模式
+### 3.1 两种模式
 
 `resolveDiaryDate({ param, liveToday, followAnchor })` 是唯一裁决点，返回 `{ date, following, rolledOver, clearParam }`：
 
@@ -166,13 +86,13 @@ SettingsDiaryPage 保存模板
 
 > 别写成「因为同 URL 的 `setSearchParams({})` 是 no-op、不触发渲染，所以锚必须是 state」——**这个机理是错的**，实测同 URL 的 `setSearchParams` 照样发起一次真导航并触发重渲染。理由就是上面那条朴素的「它参与渲染」。
 
-### 4.2 跨天：只提示不自动切
+### 3.2 跨天：只提示不自动切
 
 过零点后正文与存盘日期都停在原处，只出一条提示条。自动切 = 正在写的那段被换到新文件；不点提示条就一直存到昨天那篇，这正是「补写昨天」的语义。提示条文案**必须带具体日期**——`useAppResumeRefresh` 让息屏几天后回前台立刻刷新，一次可能跨好几天。
 
 **红线**：正文加载 effect 的依赖数组里**绝不能出现** `liveToday` / `now`。写进去就是每分钟重新 `fetchDiary` + `setContent`，直接覆盖用户正在编辑的正文，且静默。
 
-### 4.3 切日期必须重置的五态，与真正兜底的那道闸
+### 3.3 切日期必须重置的五态，与真正兜底的那道闸
 
 `loading` / `error` / `conflict` / `loadFailed` / `dirty` **没有任何地方会自动重置**（`loading` 全文只有置 false、`loadFailed` 只有置 true；`dirty` 只在加载**成功**路径才清），必须在日期 effect 开头显式重置：
 
@@ -190,11 +110,11 @@ SettingsDiaryPage 保存模板
 
 真正堵住这个窗口的是 `handleSave` 入口的 `if (loading || loadFailed) return;`。不加这道闸：切日期后新一天的正文还没加载出来（`loading` 期）或加载失败（`loadFailed` 期）时，`content` 里是上一天的残留正文，且 `baseMtime` 已被日期 effect 清成 `null`；此时若能保存，会把上一天的正文写进新一天的文件，且 `baseMtime === null` 会让服务端 mtime 并发守卫（§2 第 3 条）当成"文件不存在"直接放行——不报 409 冲突，静默写坏新一天的文件。**触发路径不需要 textarea 挂载**：这两态下主区域是全屏提示、textarea 未渲染，容易误以为"用户碰不到保存"，但 Ctrl+S 的快捷键监听挂在 `window` 上，不经过 textarea，且保存按钮本身在 `loadFailed` 态下也没有单独置灰——两条路都能触发 `handleSave`。这条早退是四态重置之外**必须另外补的一道闸**，不是四态重置能自然带出来的推论。
 
-### 4.4 脏态确认由页面自己弹
+### 3.4 脏态确认由页面自己弹
 
 `useUnsavedChangesGuard` 的 `shouldBlock` 只比 `pathname`，`?date=` 变化 pathname 不变 → **它一概拦不到**。所以切日期 / 点提示条时必须页面自己 `await confirm(...)`；不弹就是静默丢数据。反过来说也不会出现双弹层。文案单独写（并没有「离开」页面），不复用守卫默认的「离开后当前修改将丢失」。
 
-### 4.5 在途响应的三道闸（正交，不可互相替代）
+### 3.5 在途响应的三道闸（正交，不可互相替代）
 
 加载 effect 有 `cancelled` 守卫；`handleSave` / `handleReload` 各自需要：
 
@@ -214,7 +134,7 @@ SettingsDiaryPage 保存模板
 
 重载在途中用户又打字时**取消这一发重载并提示**，不盖服务器版本——那与「保存在途打字被清脏」是同类的静默丢数据。
 
-### 4.6 不用改的东西
+### 3.6 不用改的东西
 
 - `lib/androidBackNavigation.ts` 的 `/diary` 分支恒返回 `{type:"back", fallbackTo:"/quick-notes"}`，不用改。它不需要像 `/` 分支那样显式判 `has("date")`——`/` 无 date 时的动作是 `exit`（退出 app），必须先把日期历史退完；而 `/diary` 的动作恒为 `back`，且切日期一律走 `replace`（§2.13），压根不产生日期历史。
 
@@ -223,79 +143,26 @@ SettingsDiaryPage 保存模板
 > **已知缺口**：安卓返回键的执行层 `AndroidBackButtonHandler.tsx` 是 app 全局挂载的，在按键那一刻**现读** `location.key`，踩的是同一个坑。窄场景（直接落地 `/diary` + 切过日期 + 按安卓返回键）下它会 `navigate(-1)` 空转；页内返回按钮仍可用，所以不是死路。修它要动全局导航层，留待单独处理。
 - `components/DateNav.tsx` **一个字节不动**：它有 3 条 `check:design` 精确豁免，匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符就失配。要调间距在外面包容器。它自己每次渲染现算 `today`，跨零点会自动跟上，无需传 prop。
 
-## 5. 参考栏（只读）
-
-### 5.1 布局与挂载
-
-分栏底座复用 `pages/todo/ResizableSplit.tsx`，靠一个 `SplitPrefs`（存储键 + min/max/default 捆成一体）区分两个页面：待办 `0.62 / 0.35–0.7`、日记 `0.7 / 0.5–0.85`，各存各的 key。**捆成一个对象而非四个独立 prop，是为了让"只传了键、忘了传范围"这种错配在类型层就不可能发生**。
-
-挂载点是内容三元的最后一支：`loading ? … : loadFailed ? … : !enabled ? … : template === "" ? … : (wide ? <ResizableSplit …/> : editor)`。三个 className 缺一不可——`className="min-h-0 flex-1"` + `leftClassName="flex flex-col min-h-0"` + `rightClassName="min-h-0 overflow-y-auto"`；漏掉右栏那条，内容一长会撑穿 `h-dvh` 且 `overflow-y-auto` 永不触发，textarea 的 `flex-1` 也会失效塌成内容高。**这条靠人工冒烟验证，jsdom 不算布局、自动化测不出。**
-
-`<header>` 与跨天提示条保持在分栏**之上**、横跨两栏：页面真正的滚动容器是 App 的 `<main>`，把 header 塞进左栏内部会让 sticky 失效。
-
-### 5.2 四块的数据口径
-
-| 块 | 来源 | 口径 |
-|---|---|---|
-| 打点 | `listEntriesOverlappingDay(date)` + `useCategories()` | 区间重叠查出，跨零点条目**必须按日界裁剪**（`lib/diary/diaryRefEntries.ts`），否则「23:00–次日01:00」两天各显示成两小时。**不借 `useEntries`**，理由见 §5.4 |
-| 完成的待办 | `listTasks().completed` 再过滤 | 硬性三条：`done === true`（排除账本判定耗尽、混在同一桶里的重复模板）、`completedAt !== null`（**绝不回退 `updatedAt`**）、`getDateString(completedAt) === date` |
-| 速记 | `listQuickNotesByDate(date)` | 现成，走 `occurredAt` 索引半开区间、日界已是 Asia/Shanghai，**不再包一层过滤** |
-| 回看 | `fetchDiary(addDays(date,-1))` / `addDays(date,-7)` | 相对 `date` 而非相对真实今天。两块**一律默认收起、展开才请求**，已加载过不重复拉 |
-
-回看两块的**措辞随 `isToday` 切**：今天说「昨天 / 上周今日」，看历史日期说「前一天 / 前七天」。口径本来就对，但看 7/20 时上半区标题写着「7月20日」、下半区说「昨天 7月19日」，屏幕上同时出现两句互相矛盾的话；非今天时一律用不带绝对时间断言的相对说法。
-
-三个本地源一律 `getDateString`（Asia/Shanghai）。仓库存在两套日界（待办的 today/逾期判定走设备本地 `localDateString`），混用会让非东八区设备上三块内容互相差一天。
-
-### 5.3 本地三块的错误通道：必须自己围 ErrorBoundary
-
-本地三块走 `useLiveQuery`，正常路径只有 loading / empty 两态；它由 Dexie 托管订阅生命周期，**天然免掉手写「切日取消在途」的一整类竞态 bug**——阶段三在这类 bug 上栽过两次（见 §4.5）。本地 Dexie 读失败在实践中罕见，为它造一套 retry UI 是 YAGNI，所以三块**没有 retry 入口**，error/retry 只有走网络的「回看」块有。
-
-**但「没有 retry 入口」不等于「没有 error 通道」**。`useLiveQuery` 的 error 通道就是**在 render 里 throw**（`dexie-react-hooks/dist/dexie-react-hooks.js`：`// Throw if observable has emitted error so that an ErrorBoundrary can catch it` / `if (monitor.current.error) throw monitor.current.error;`）。不自己围，离参考栏最近的边界是根路由的 `errorElement`（`App.tsx`），它会把**整个 app shell** 换成「应用出错了」；而日记正文只活在 `DiaryPage` 的 React state（不进 Dexie、不进同步域、不进备份），整页一掀就永久没了。
-
-因此 `DiaryReferencePanel` 里**每块各围一层** `components/ErrorBoundary.tsx`（`RefBlock`，`fallback` 只渲染一行 `{块名}读取失败`）。逐块围而不是整栏围一层，是为了兑现 §2 契约 15 的字面：一块挂了，另外三块照常显示。回看块也围——它自己的 `catch` 只接住 `fetchDiary` 的 rejection，接不住渲染期抛出的错。
-
-### 5.4 参考栏的四块口径都各自查，不借用页面级 hook
-
-打点块**不走** `hooks/useEntries(date)`，走 `lib/diary/diaryRefEntries.ts:listEntriesOverlappingDay`。两条理由：
-
-1. `useEntries` 内部是**两条** `useLiveQuery`（`entries` + `previousEntry`），本块只用前者，`previousEntry` 是几乎同构的第二次近全表扫描（`where("startTime").below(...).toArray()`），每次挂载/切日期白付一倍读取；
-2. `useEntries` 写的是 `useLiveQuery(...) || []`，把「查询未回」的 `undefined` 兜底成空数组——打点块会在加载中显示「这天没有打点」，把没查完当成事实说出来，而同屏另外两块此刻写着「读取中…」，三块自相矛盾。
-
-判据统一是 `rows === undefined`（`useLiveQuery` 未回）→ 渲染「读取中…」。查询窗口与裁剪窗口共用同一个 `diaryRefDayWindow(date)`，不许各算各的日界，否则边界条目会一边查得出、一边被裁没。
-
-### 5.5 回看块的两道闸
-
-回看是唯一走网络的一块，两道闸都应保留：
-
-1. **世代号，不是日期比较**。`date` 变了要作废在途响应，判据用**单调递增**的 `epochRef`。用日期字符串比较会在 `A→B→A` 序列下失效（值又相等、闸不生效），这就是 ABA 问题。
-2. **`await` 之后一律读活 `ref`**。React 函数组件里闭包捕获的 state 在调用开始那一刻就冻结了；`await` 之后拿它做判断，与函数入口处的同款判断**永远同值**，是「看着在防、结构上永不生效」的假闸。`epochRef.current = epoch` 写在组件体顶层每次渲染同步赋值，异步回调只读它。
-
-> 这两条是阶段三用两轮返工换来的（§4.5 同源）。本页任何新的异步分支都照这两条办。
-
-**这两道闸在生产路径上的实际作用面比字面小**（如实记账，别据此以为它们是主力防线）：`DiaryPage` 的内容三元里 `loading` 排第一支，而正文加载 effect 在 `date` 变化时**无条件** `setLoading(true)`——所以生产环境每次切日期，整个参考栏是被**卸载重挂**的，不是「同一实例换 props」。真正拦住「旧正文配新标签」的是那次卸载；两道 epoch 闸只在「面板不卸载而 `date` 变」的极短窗口内起作用（测试里 `root.render(...)` 直接换 props 就是这个窗口）。闸仍应保留：它是防御性的，且那条窗口不是不可能出现（比如以后有人把 `loading` 支挪到参考栏之外、或给面板加 `key` 复用）。
-
-> **已知缺口（两道闸共用同一条承重用例）**：删掉成功分支的 epoch 守卫，原有用例照样全绿——因为切日的重置 effect 会先把块收起，两条闸保护的是同一个可观察面，「折叠态看不见旧内容」这条断言测不出闸有没有真的在起作用。真正暴露它的是**再次展开**：迟到响应若把 `state` 写成 `loaded`，`toggle()` 会因为 `state.kind` 不是 `idle` 而跳过重新请求，把上一个日期的正文渲染在新日期的标签下。已补用例「迟到响应被作废后，再次展开会重新请求而不是显示旧日期的正文」（`DiaryReferencePanel.test.tsx`）堵住这条。**「折叠态看不见旧内容」不是充分判据，判据必须落在「再次展开时会不会重新请求」上**——这是本阶段唯一一处「两道闸共用一个可观察面」的教训，值得成文。
->
-> **更脆的一点**：终审做具名逃逸变异（把两处 `epochRef.current` 换成闭包变量 `epoch`）时，**只有上面那条新补的用例变红**，「A→B→A 切回原日期」那条照绿。也就是说两道闸目前共用**同一条**承重用例——删掉它，两道闸同时失守且无人报警。要动这条用例前先想清楚拿什么接替它。
-
-## 6. 模块速查
+## 4. 模块速查
 
 | 入口 | 职责 |
 |---|---|
-| `pages/DiaryPage.tsx` | 编辑页：加载当天内容、`handleKeyDown` 分派三键位、脏态提示离开、mtime 冲突 UI（§3）、日期驱动与跨零点提示（§4） |
+| `pages/DiaryPage.tsx` | 编辑页：加载当天内容、`handleKeyDown` 分派三键位、脏态提示离开、mtime 冲突 UI（见 [diary/editor](diary/editor.md)）、日期驱动与跨零点提示（§3） |
 | `pages/settings/SettingsDiaryPage.tsx` | 设置页：显示 enabled 状态、编辑并保存路径模板、400 错误展示服务器中文 message |
-| `lib/diary/diaryDate.ts` | `resolveDiaryDate`：显式/跟随两种日期模式的唯一裁决点（§4.1） |
+| `lib/diary/diaryDate.ts` | `resolveDiaryDate`：显式/跟随两种日期模式的唯一裁决点（§3.1） |
 | `lib/diary/diaryApi.ts` | 客户端 API 封装：`fetchDiaryConfig`/`saveDiaryTemplate`/`fetchDiary`/`saveDiary`，`DiaryConflictError` |
-| `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（§3.1/3.5/3.6/3.7） |
-| `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（§3.2） |
-| `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排 §3.2 / Tab 缩进 §3.3 复用） |
-| `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（§3.3） |
-| `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（§3.4） |
-| `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（§3.8） |
-| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（§5.2） |
-| `lib/diary/diaryRefEntries.ts` | 打点当天窗口查询 `listEntriesOverlappingDay` + 日界裁剪 `clipEntriesToDay`，二者共用 `diaryRefDayWindow`（§5.2/5.4） |
-| `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（§5.2） |
-| `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（§5） |
+| `lib/diary/textareaEdit.ts` | 程序化编辑唯一出口：`applyEdit` 走 `execCommand` 保住原生撤销栈，`runEditAction` 统一落地 `EditAction`（[diary/editor](diary/editor.md) §1/5/6/7） |
+| `lib/diary/orderedList.ts` | 有序列表回车整段重排纯函数（[diary/editor](diary/editor.md) §2） |
+| `lib/diary/listModel.ts` | 共享行模型与有序列表重排原语（供回车重排与 Tab 缩进复用，见 [diary/editor](diary/editor.md) §2、§3） |
+| `lib/diary/indent.ts` | Tab/Shift+Tab 缩进出层纯函数，带父行约束与顶层逃生口（[diary/editor](diary/editor.md) §3） |
+| `lib/diary/link.ts` | Ctrl+K 补 markdown 链接纯函数，四态返回（null/noop/select/replace）+ 围栏豁免，七 case（[diary/editor](diary/editor.md) §4） |
+| `lib/diary/eol.ts` | 行尾保护：探测原文件主导行尾（CRLF/LF），`DiaryPage` 保存时据此还原，避免打开 CRLF 文件后静默改写成 LF（[diary/editor](diary/editor.md) §8） |
+| `lib/diary/diaryRefPrefs.ts` | 参考栏折叠偏好：「今天」三块的展开/折叠状态存取（[diary/reference-panel](diary/reference-panel.md) §2） |
+| `lib/diary/diaryRefEntries.ts` | 打点当天窗口查询 `listEntriesOverlappingDay` + 日界裁剪 `clipEntriesToDay`，二者共用 `diaryRefDayWindow`（[diary/reference-panel](diary/reference-panel.md) §2、§4） |
+| `lib/diary/diaryRefTasks.ts` | 完成待办过滤：`selectTasksCompletedOn` 三条硬性口径（[diary/reference-panel](diary/reference-panel.md) §2） |
+| `pages/diary/**` | 参考栏五个组件：`DiaryReferencePanel`（挂载、两个分区、每块各一层 `ErrorBoundary`）、`DiaryRefPunches`、`DiaryRefDoneTasks`、`DiaryRefQuickNotes`、`DiaryRefLookback`（[diary/reference-panel](diary/reference-panel.md)） |
+| 编辑器三键位 / EditAction 四态 / onChange 红线 / dirty 记账 / 行尾保护 | → [diary/editor](diary/editor.md) |
+| 参考栏布局挂载 / 四块数据口径 / 错误围栏 / 回看两道闸 | → [diary/reference-panel](diary/reference-panel.md) |
 | `server/routes/diary.ts` | 四端点：`GET/PUT /config`、`GET/PUT /:date` |
 | `server/lib/diary-path.ts` | 模板展开 + 路径安全校验纯函数 |
 

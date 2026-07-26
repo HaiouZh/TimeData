@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../test/domHarness.js";
 import DiaryPage from "./DiaryPage.js";
 
-// 本文件补两个结构性空档（见 docs/evergreen/diary.md §3.5、lib/diary/textareaEdit.ts 顶部注释）：
+// 本文件补两个结构性空档（见 docs/evergreen/diary/editor.md §5、lib/diary/textareaEdit.ts 顶部注释）：
 //
 // 1) 生产环境唯一真正走的那条路径（document.execCommand 可用）此前在页面级零覆盖。jsdom 没有
 //    execCommand，DiaryPage.test.tsx 的全部用例走的都是"execCommand 不可用 → setValue 整体
