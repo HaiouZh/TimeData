@@ -287,7 +287,50 @@ data/
 - 升级前备份这整个目录最稳。
 - `backups/` 是服务端自动生成的，服务启动时会跑一次清理，每次创建 server backup 后也会异步清理旧普通备份；具体保留窗口见 [`backup.md` 第 6 节](./backup.md#6-server-backup服务端写入前)。
 
-## 9. 改部署相关代码前的清单
+## 9. 本地开发环境（不走 Docker）
+
+本地跑的是两个进程：`pnpm dev:server`（Hono，默认 3000）+ `pnpm dev:client`（Vite，5174，把 `/api` 代理到 3000）。与容器部署的差别只有两处：**环境变量怎么进去**、**vault 根目录是宿主机绝对路径而非 `/app/vault`**。
+
+### 9.1 环境变量必须在启动命令里给
+
+**本仓没有装 dotenv，dev 脚本也没有 `--env-file`**，所以写进 `.env` 文件不生效（`.env.example` 是给 Docker Compose 用的）。变量只能在启动服务的那条命令里设，换个终端就没了。
+
+PowerShell：
+
+```
+$env:ALLOW_UNAUTHENTICATED_DEV='1'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pnpm dev:server
+```
+
+`ALLOW_UNAUTHENTICATED_DEV=1` 是鉴权旁路：不设 `AUTH_TOKEN` 时 `/api/*` 会直接返回 500 `Server misconfigured: AUTH_TOKEN not set`（**故意 fail-closed**，见 `middleware/auth.ts`），加上这个变量才放行，启动日志会打一行 `[auth] AUTH_TOKEN unset — all /api/* endpoints are open` 提醒旁路开着。要连鉴权一起验就别用旁路：设 `AUTH_TOKEN=<任意串>`，再去 `/settings/server` 把同一个串填进「API Token」（前端从 localStorage 读它拼 `Authorization: Bearer`）。
+
+### 9.2 日记 vault：宿主机绝对路径
+
+| | vault 根 |
+|---|---|
+| 本地开发 | 宿主机绝对路径，如 `D:\OneDrive\Obsidian\Time`（Windows 下正反斜杠都行，`path.resolve` 会归一） |
+| 容器 | 恒为 `/app/vault`，宿主机目录靠 `DIARY_VAULT_HOST_DIR` 挂进去 |
+
+**路径模板两边完全一样**——它存在 `server_config` 表里（不是环境变量），且 `expandDiaryTemplate` 强制要求**相对路径、只能用 `/`**：反斜杠、绝对路径、盘符、`..`、未知占位符全部拒绝（只认 `{yyyy}` / `{MM}` / `{dd}`）。所以模板填一次就能跨环境复用，这是有意为之。
+
+例：vault 根 `D:\OneDrive\Obsidian\Time`、模板 `日记_{yyyy}/Day/{yyyy}年{MM}月/{yyyy}-{MM}-{dd}.md` → `2026-07-24` 解析为 `D:\OneDrive\Obsidian\Time\日记_2026\Day\2026年07月\2026-07-24.md`，跨月跨年自动跟随。缺失的目录在保存时由 `mkdirSync(recursive)` 自动创建。
+
+### 9.3 配错了会卡在哪
+
+四道闸各有明确响应，照报错定位即可：
+
+| 现象 | 原因 |
+|---|---|
+| 500 `Server misconfigured: AUTH_TOKEN not set` | 见 §9.1，旁路或 token 都没给 |
+| 设置页显示「未启用」（`/config` 返回 `enabled:false`） | `DIARY_VAULT_DIR` 没进到服务进程（多半是在另一个终端启的服务） |
+| 409 `diary-no-template` | 模板还没存 |
+| 400 带具体原因 | 模板语法违规（反斜杠 / 绝对路径 / `..` / 未知占位符） |
+| 400 `路径越出 vault 目录` | 模板展开后跑到 vault 之外 |
+
+**没有报错但读不到内容**是最容易误判的一种：模板本身合法、只是指错了地方，此时 `GET /:date` 把「文件不存在」当正常情况返回 `{content:"", mtime:null}`，页面显示空白。**验证方法是读一个已经存在的历史日期**——读得出正文说明 vault 根、模板、日期口径三者全对；这一步不写盘，配错也不会在 vault 里留下垃圾文件。
+
+> 用命令行 `curl` 灌含中文的模板时注意：Windows 终端的 GBK 编码会把中文打成替换字符，存进去是合法但错误的模板，表现正是上面这种「不报错、读不到」。把 JSON 写成 UTF-8 文件再 `--data-binary @file`，或者干脆在浏览器设置页里填。
+
+## 10. 改部署相关代码前的清单
 
 - [ ] 跑 `packages/server/src/lib/version.test.ts`、`update.test.ts`：用 mock 测过版本查询和 Watchtower 更新触发流程。
 - [ ] 改 `WATCHTOWER_URL`、`WATCHTOWER_TOKEN` 或 Watchtower compose 参数：确认 Watchtower 不暴露 host 端口，且只更新带 `com.centurylinklabs.watchtower.enable=true` label 的容器。
