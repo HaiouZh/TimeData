@@ -34,9 +34,15 @@ export interface TodoProjectSectionProps {
   /**
    * 当前正被拖拽的任务（null = 没在拖），用来给组块画「可落 / 不可落」两态。
    *
-   * **不判满员**：组件手上只有可解析成员数（tasks + doneTasks），而 500 闸看的是 goal.members
-   * 数组长度（含 track 成员与悬空 ref），拿近似值画禁止态会撒谎。满员一律由写入侧
-   * assignTaskToProject 抛错、走页面的 toast。
+   * **只判任务侧（子任务 / 重复待办），目标组侧的两种拒绝一律不判**：
+   * - 满员：组件手上只有可解析成员数（tasks + doneTasks），而 500 闸看的是 goal.members
+   *   数组长度（含 track 成员与悬空 ref），拿近似值画禁止态会撒谎。
+   * - 目标组已归档 / 已改成 theme（`inactive`）：`TodoProjectGroup` 里根本没有 status/kind 字段，
+   *   要判就得改投影层形状，代价远大于收益。
+   *
+   * 两者都由写入侧 `assignTaskToProject` 抛错、走页面的 toast。因此存在一个**已知且刻意**的窗口：
+   * 组在拖拽途中于另一端被归档时，组块仍显示「可落」高亮，松手才弹拒绝——**这不是 bug**。
+   * 它换掉的是修复前那个「高亮 → 静默吞掉归属」的数据丢失，方向是净改善。
    */
   dragCandidate: Task | null;
   onToggle: (task: Task) => void;

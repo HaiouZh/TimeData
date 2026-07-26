@@ -158,6 +158,11 @@ export const GOAL_MEMBERS_MAX = 500;
  *
  * 前三支是**任务侧**的，由 `projectAssignBlock` 判；`inactive` 是**目标侧**的
  * （目标组已归档或已改成 theme），只能由写入入口在拿到 goal 行后自己判，故不在那个函数里。
+ *
+ * **`inactive` 先于下面那条「更根本的原因优先」规则**，别按那条把它挪到准入之后：它说的不是
+ * 「这东西装不进这个组」，而是「这个落点根本不是合法落点」，后面的准入判定（含拿 members 长度
+ * 算 500 闸）建立在「目标确实是个 active project」之上，顺序反了就是拿一个 theme 的成员数组去算。
+ * 它与 `full` 虽同属目标侧却一头一尾，就是这个原因——`full` 只有在目标合法时才有意义。
  */
 export type ProjectAssignBlock = "subtask" | "recurring" | "full" | "inactive";
 
