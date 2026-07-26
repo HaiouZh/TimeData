@@ -6,12 +6,14 @@ import {
   containerIdForTask,
   hoveredRootIdFromOver,
   parseTodoContainerId,
+  projectContainerId,
   resolveIndentLevel,
   resolveTodoDragOperation,
   resolveTodoDragWithIndent,
   TODO_CHILD_INDENT_PX,
   TODO_INDENT_RELEASE_PX,
   type TodoContainer,
+  todoContainerId,
 } from "./todoDnd.js";
 
 /** 只喂 transform 调用 modifier（其余 ModifierArguments 字段本实现用不到）。 */
@@ -243,7 +245,7 @@ const baseIndentInput = {
   activeHasChildren: false,
   indentLevel: "root",
   rootAboveId: "parent",
-  targetPool: "today",
+  targetContainer: { kind: "pool", pool: "today" },
 } as const;
 
 describe("resolveTodoDragWithIndent", () => {
@@ -265,10 +267,12 @@ describe("resolveTodoDragWithIndent", () => {
   });
 
   it("root 无 child 缩进、跨 today/inbox -> schedule-root", () => {
-    expect(resolveTodoDragWithIndent({ ...baseIndentInput, targetPool: "inbox" })).toEqual({
-      kind: "schedule-root",
-      pool: "inbox",
-    });
+    expect(resolveTodoDragWithIndent({ ...baseIndentInput, targetContainer: { kind: "pool", pool: "inbox" } })).toEqual(
+      {
+        kind: "schedule-root",
+        pool: "inbox",
+      },
+    );
   });
 
   it("child 左回 root -> promote-to-root", () => {
@@ -278,7 +282,7 @@ describe("resolveTodoDragWithIndent", () => {
         activeContainerId: "parent:old",
         activeParentId: "old",
         indentLevel: "root",
-        targetPool: "inbox",
+        targetContainer: { kind: "pool", pool: "inbox" },
       }),
     ).toEqual({ kind: "promote-to-root", pool: "inbox" });
   });
@@ -325,7 +329,7 @@ describe("resolveTodoDragWithIndent", () => {
   });
 
   it("无法得到目标池且没有合法候选父时返回 null", () => {
-    expect(resolveTodoDragWithIndent({ ...baseIndentInput, rootAboveId: null, targetPool: null })).toBeNull();
+    expect(resolveTodoDragWithIndent({ ...baseIndentInput, rootAboveId: null, targetContainer: null })).toBeNull();
   });
 
   it("收件箱内竖直重排 -> null，不落 persistTaskOrder", () => {
@@ -333,7 +337,7 @@ describe("resolveTodoDragWithIndent", () => {
       resolveTodoDragWithIndent({
         ...baseIndentInput,
         activeContainerId: "pool:inbox",
-        targetPool: "inbox",
+        targetContainer: { kind: "pool", pool: "inbox" },
       }),
     ).toBeNull();
   });
@@ -343,7 +347,7 @@ describe("resolveTodoDragWithIndent", () => {
       resolveTodoDragWithIndent({
         ...baseIndentInput,
         activeContainerId: "pool:inbox",
-        targetPool: "inbox",
+        targetContainer: { kind: "pool", pool: "inbox" },
         indentLevel: "child",
       }),
     ).toEqual({ kind: "move-to-parent", parentId: "parent" });
@@ -367,5 +371,114 @@ describe("containerIdForTask", () => {
 
   it("scheduledAt 是别的日期 → 空字符串（upcoming 不参与拖拽）", () => {
     expect(containerIdForTask({ parentId: null, scheduledAt: "2026-07-01T00:00:00.000Z" }, "2026-06-19")).toBe("");
+  });
+});
+
+describe("project 容器（P3 拖拽归入）", () => {
+  it("parseTodoContainerId 认 project:<goalId>", () => {
+    expect(parseTodoContainerId("project:g1")).toEqual({ kind: "project", goalId: "g1" });
+  });
+
+  it("空 goalId 的 project: 视为非法", () => {
+    expect(parseTodoContainerId("project:")).toBeNull();
+  });
+
+  it("projectContainerId / todoContainerId 与解析互为逆", () => {
+    const id = projectContainerId("g1");
+    expect(id).toBe("project:g1");
+    expect(todoContainerId(parseTodoContainerId(id) as TodoContainer)).toBe(id);
+    expect(todoContainerId({ kind: "pool", pool: "inbox" })).toBe("pool:inbox");
+    expect(todoContainerId({ kind: "parent", parentId: "p1" })).toBe("parent:p1");
+  });
+
+  it("收件箱根任务 → 项目组 = assign-to-project", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "pool:inbox",
+        targetContainerId: "project:g1",
+        activeParentId: null,
+      }),
+    ).toEqual({ kind: "assign-to-project", goalId: "g1" });
+  });
+
+  it("今天区根任务 → 项目组 = assign-to-project（时间轴与归属轴正交）", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "pool:today",
+        targetContainerId: "project:g1",
+        activeParentId: null,
+      }),
+    ).toEqual({ kind: "assign-to-project", goalId: "g1" });
+  });
+
+  it("子任务 → 项目组 = null：不做「先升根再入组」的复合动作", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "parent:p1",
+        targetContainerId: "project:g1",
+        activeParentId: "p1",
+      }),
+    ).toBeNull();
+  });
+
+  it("池容器里但 activeParentId 非空（数据不自洽）→ null", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "pool:inbox",
+        targetContainerId: "project:g1",
+        activeParentId: "p1",
+      }),
+    ).toBeNull();
+  });
+
+  it("active 是项目容器 → null：项目区的行不注册 draggable，这是防御闸", () => {
+    expect(
+      resolveTodoDragOperation({
+        activeContainerId: "project:g1",
+        targetContainerId: "pool:inbox",
+        activeParentId: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("hoveredRootIdFromOver 对项目容器恒返回 null（项目区无可作缩进父的根行）", () => {
+    expect(hoveredRootIdFromOver("project:g1", "g1")).toBeNull();
+  });
+});
+
+describe("resolveTodoDragWithIndent × 项目容器", () => {
+  const base = {
+    activeContainerId: "pool:inbox",
+    activeParentId: null,
+    activeId: "t1",
+    activeHasChildren: false,
+  };
+
+  it("手指带横向位移（indentLevel=child）拖进项目组，仍是 assign-to-project", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...base,
+        indentLevel: "child",
+        rootAboveId: null,
+        targetContainer: { kind: "project", goalId: "g1" },
+      }),
+    ).toEqual({ kind: "assign-to-project", goalId: "g1" });
+  });
+
+  it("即使调用方错传了非空 rootAboveId，项目容器也不得被判成 move-to-parent", () => {
+    expect(
+      resolveTodoDragWithIndent({
+        ...base,
+        indentLevel: "child",
+        rootAboveId: "t9",
+        targetContainer: { kind: "project", goalId: "g1" },
+      }),
+    ).toEqual({ kind: "assign-to-project", goalId: "g1" });
+  });
+
+  it("目标容器为 null 时行为不变，仍返回 null", () => {
+    expect(
+      resolveTodoDragWithIndent({ ...base, indentLevel: "root", rootAboveId: null, targetContainer: null }),
+    ).toBeNull();
   });
 });

@@ -79,8 +79,8 @@ import {
   parseTodoContainerId,
   resolveIndentLevel,
   resolveTodoDragWithIndent,
+  type TodoContainer,
   type TodoIndentLevel,
-  type TodoPool,
 } from "./todo/todoDnd.js";
 
 const EMPTY: TodoBuckets = {
@@ -377,12 +377,13 @@ export function TodoPage() {
     indentRef.current = resolveIndentLevel(event.delta.x, indentRef.current, indentBaseRef.current);
   }
 
-  function targetPoolFromOver(overContainerId: string, rootAboveId: string | null): TodoPool | null {
+  function targetContainerFromOver(overContainerId: string, rootAboveId: string | null): TodoContainer | null {
     const container = parseTodoContainerId(overContainerId);
-    if (container?.kind === "pool") return container.pool;
+    // 池容器与项目组容器都是直接落点；parent 容器不是（它要按下面的根行反查它所在的池）。
+    if (container?.kind === "pool" || container?.kind === "project") return container;
     if (!rootAboveId) return null;
-    if (buckets.today.some((task) => task.id === rootAboveId)) return "today";
-    if (floatingInbox.some((task) => task.id === rootAboveId)) return "inbox";
+    if (buckets.today.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "today" };
+    if (floatingInbox.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "inbox" };
     return null;
   }
 
@@ -426,7 +427,7 @@ export function TodoPage() {
     }
 
     const rootAboveId = hoveredRootIdFromOver(overContainerId, overId, activeContainerId);
-    const targetPool = targetPoolFromOver(overContainerId, rootAboveId);
+    const targetContainer = targetContainerFromOver(overContainerId, rootAboveId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
 
     const op = resolveTodoDragWithIndent({
@@ -436,7 +437,7 @@ export function TodoPage() {
       activeHasChildren,
       indentLevel,
       rootAboveId,
-      targetPool,
+      targetContainer,
     });
 
     if (!op) return;
@@ -490,6 +491,9 @@ export function TodoPage() {
           }
           break;
         }
+        case "assign-to-project":
+          // 接线在 Task 6。此刻页面还没注册任何 project droppable，`op` 结构上到不了这里。
+          break;
       }
     } catch (err) {
       void err;

@@ -47,21 +47,37 @@ export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
   return { ...transform, x };
 };
 
-/** dnd-kit container id 域：池容器或父任务容器。 */
-export type TodoContainer = { kind: "pool"; pool: TodoPool } | { kind: "parent"; parentId: string };
+/** dnd-kit container id 域：池容器、父任务容器、项目组容器。 */
+export type TodoContainer =
+  | { kind: "pool"; pool: TodoPool }
+  | { kind: "parent"; parentId: string }
+  | { kind: "project"; goalId: string };
 
 /** drop 后要执行的语义化操作。 */
 export type TodoDragOperation =
   | { kind: "reorder"; containerId: string }
   | { kind: "move-to-parent"; parentId: string }
   | { kind: "promote-to-root"; pool: TodoPool }
-  | { kind: "schedule-root"; pool: TodoPool };
+  | { kind: "schedule-root"; pool: TodoPool }
+  | { kind: "assign-to-project"; goalId: string };
+
+/** 项目组 droppable 的 container id。组件与判定层共用它，避免两处手写前缀漂移。 */
+export function projectContainerId(goalId: string): string {
+  return `project:${goalId}`;
+}
+
+export function todoContainerId(container: TodoContainer): string {
+  if (container.kind === "pool") return `pool:${container.pool}`;
+  if (container.kind === "parent") return `parent:${container.parentId}`;
+  return projectContainerId(container.goalId);
+}
 
 /**
  * 解析 container id 字符串。仅接受：
  * - `pool:today` / `pool:inbox`
  * - `parent:<非空 id>`
- * 其它（含 `parent:` 空 id）返回 null。
+ * - `project:<非空 goalId>`
+ * 其它（含 `parent:` / `project:` 空 id）返回 null。
  */
 export function parseTodoContainerId(value: string | null | undefined): TodoContainer | null {
   if (!value) return null;
@@ -71,6 +87,11 @@ export function parseTodoContainerId(value: string | null | undefined): TodoCont
     const parentId = value.slice("parent:".length);
     if (!parentId) return null;
     return { kind: "parent", parentId };
+  }
+  if (value.startsWith("project:")) {
+    const goalId = value.slice("project:".length);
+    if (!goalId) return null;
+    return { kind: "project", goalId };
   }
   return null;
 }
@@ -91,6 +112,7 @@ export interface ResolveTodoDragInput {
  * - child → 池（today/inbox）→ promote-to-root。
  * - root → parent → move-to-parent。
  * - root 在 today/inbox 之间 → schedule-root（schedule 或 unschedule）。
+ * - root → 项目组 → assign-to-project（子任务不收，见分支内注释）。
  *
  * 返回 null 表示无效组合（例如目标解析失败、子任务被拖到子任务作为 parent 等），调用方应忽略。
  */
@@ -111,6 +133,18 @@ export function resolveTodoDragOperation({
     if (target.kind === "pool" && target.pool === "inbox") return null;
     return { kind: "reorder", containerId: activeContainerId };
   }
+
+  // → 项目组：只收根任务。子任务不做「先升根再入组」的复合动作——一个手势改两件事、
+  // 且拆父子关系不可撤销，判为无效由调用方给拒绝反馈。
+  if (target.kind === "project") {
+    if (active.kind !== "pool" || activeParentId !== null) return null;
+    return { kind: "assign-to-project", goalId: target.goalId };
+  }
+
+  // 项目区的行不注册 draggable（design §动作二 dnd 身份规则），active 不可能是项目容器；防御闸。
+  // 注意：此刻它对返回值零影响——下面四个分支都要求 active 是 pool/parent，落到末尾同样 return null。
+  // 留着是为了让「项目容器不作 active」这条规则在代码里有据可依，且将来新增分支时不至于漏掉它。
+  if (active.kind === "project") return null;
 
   // child → pool：升级为 root（child 不允许把别的 root 拖进来——一层约束）
   if (active.kind === "parent" && target.kind === "pool") {
@@ -148,6 +182,8 @@ export function hoveredRootIdFromOver(
 ): string | null {
   const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(fallbackContainerId);
   if (!container) return null;
+  // 项目区没有可作缩进父的根行（组内行不注册 draggable），恒返回 null 让缩进系统对项目组让位。
+  if (container.kind === "project") return null;
   if (container.kind === "pool") return overId;
   return container.parentId;
 }
@@ -159,7 +195,7 @@ export interface ResolveTodoDragWithIndentInput {
   activeHasChildren: boolean;
   indentLevel: TodoIndentLevel;
   rootAboveId: string | null;
-  targetPool: TodoPool | null;
+  targetContainer: TodoContainer | null;
 }
 
 export function resolveTodoDragWithIndent({
@@ -169,17 +205,23 @@ export function resolveTodoDragWithIndent({
   activeHasChildren,
   indentLevel,
   rootAboveId,
-  targetPool,
+  targetContainer,
 }: ResolveTodoDragWithIndentInput): TodoDragOperation | null {
   const canBecomeChild =
-    indentLevel === "child" && !activeHasChildren && rootAboveId !== null && rootAboveId !== activeId;
-  const targetContainerId = canBecomeChild ? `parent:${rootAboveId}` : targetPool ? `pool:${targetPool}` : "";
+    indentLevel === "child" &&
+    !activeHasChildren &&
+    rootAboveId !== null &&
+    rootAboveId !== activeId &&
+    // 项目组不是缩进落点。第二道保险：hoveredRootIdFromOver 已让项目容器恒返回 null，
+    // 但那是调用方传进来的值，斜着拖进项目组不该因为一个错传就变成拆/接父子关系。
+    targetContainer?.kind !== "project";
+  const targetContainerId = canBecomeChild
+    ? `parent:${rootAboveId}`
+    : targetContainer
+      ? todoContainerId(targetContainer)
+      : "";
 
-  return resolveTodoDragOperation({
-    activeContainerId,
-    targetContainerId,
-    activeParentId,
-  });
+  return resolveTodoDragOperation({ activeContainerId, targetContainerId, activeParentId });
 }
 
 /** 给一个 task 计算它在拖拽系统中所属的容器 id。 */
