@@ -739,7 +739,10 @@ export function TodoPage() {
 
         {/* 贴着 composer 上沿浮起：composerAvoidancePx = composer 高 + 底部导航高，
             与 DayGroupedList 的 sticky 头同源，保证 toast 不被输入框压住。 */}
-        <div className="pointer-events-none fixed inset-x-0 z-30 px-4" style={{ bottom: composerAvoidancePx + 8 }}>
+        <div
+          className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4"
+          style={{ bottom: composerAvoidancePx + 8 }}
+        >
           <div className="pointer-events-auto mx-auto w-full max-w-2xl">
             <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />
           </div>
