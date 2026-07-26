@@ -71,3 +71,29 @@ describe("参考栏 · 打点块", () => {
     expect(host.textContent).toContain("这天没有打点");
   });
 });
+
+describe("参考栏 · 完成的待办块", () => {
+  async function addTask(over: Record<string, unknown>) {
+    await db.tasks.add({
+      parentId: null, title: "写日记", done: true, recurrence: null, lastDoneAt: null,
+      startAt: null, scheduledAt: null, completedCount: 0, weight: 0, completedAt: null, tags: [],
+      ruleId: null, sessionId: null, skipped: false, sortOrder: 0,
+      createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+      ...over,
+    } as never);
+  }
+
+  it("列出当天完成的待办", async () => {
+    await addTask({ id: "t1", title: "收尾同步", completedAt: "2026-07-25T02:00:00.000Z" });
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.querySelector('[data-testid="diary-ref-done-task-list"]') !== null, "待办列表");
+    expect(host.textContent).toContain("收尾同步");
+  });
+
+  it("别的日期完成的不出现在这天", async () => {
+    await addTask({ id: "t1", title: "上周干的活", completedAt: "2026-07-20T02:00:00.000Z" });
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.textContent?.includes("这天没有完成的待办") === true, "空态");
+    expect(host.textContent).not.toContain("上周干的活");
+  });
+});

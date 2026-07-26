@@ -1,5 +1,6 @@
 import { formatMonthDay } from "../../lib/time.js";
 
+import { DiaryRefDoneTasks } from "./DiaryRefDoneTasks.js";
 import { DiaryRefPunches } from "./DiaryRefPunches.js";
 
 export interface DiaryReferencePanelProps {
@@ -13,6 +14,7 @@ export function DiaryReferencePanel({ date, isToday }: DiaryReferencePanelProps)
       <section className="space-y-1">
         <h2 className="px-2 td-text-label font-medium text-ink-3">{isToday ? "今天" : formatMonthDay(date)}</h2>
         <DiaryRefPunches date={date} />
+        <DiaryRefDoneTasks date={date} />
       </section>
       <section className="space-y-1 border-t border-border pt-4">
         <h2 className="px-2 td-text-label font-medium text-ink-3">回看</h2>
