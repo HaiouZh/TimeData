@@ -42,12 +42,16 @@ export interface TaskListProps {
   metaChip?: (task: Task) => ReactNode;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
+  /** 页面级多选态：行点击变勾选，拖拽与滑动一并禁用。 */
+  selectionMode?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (task: Task) => void;
 }
 
 export function TaskList(props: TaskListProps) {
   const { pool, tasks, isOverdue, sortable, containerId } = props;
   const readOnly = pool === "completed";
-  const canSort = Boolean(sortable && containerId && !readOnly);
+  const canSort = Boolean(sortable && containerId && !readOnly && !props.selectionMode);
   const isCoarsePointer = useIsCoarsePointer();
 
   function renderTaskRow(task: Task, dragHandle?: RowDragHandle) {
@@ -65,11 +69,14 @@ export function TaskList(props: TaskListProps) {
         onToInbox={readOnly ? undefined : props.onToInbox}
         onToHand={props.onToHand}
         extraAction={props.extraAction}
-        childrenModeOverride={props.childrenModeOverride}
+        childrenModeOverride={props.selectionMode ? "static" : props.childrenModeOverride}
         indentTargetActive={props.indentTargetId === task.id}
         revealChildren={props.revealChildren}
         inGoal={props.goalLinkedIds?.has(task.id) ?? false}
         metaChip={props.metaChip?.(task)}
+        selectionMode={props.selectionMode}
+        selected={props.selectedIds?.has(task.id) ?? false}
+        onToggleSelect={props.onToggleSelect}
       />
     );
   }
@@ -115,7 +122,7 @@ export function TaskList(props: TaskListProps) {
         className="min-w-0 max-w-full"
         leadingActions={leading}
         trailingActions={trailing}
-        blockSwipe={!isCoarsePointer}
+        blockSwipe={!isCoarsePointer || Boolean(props.selectionMode)}
         maxSwipe={0.5}
       >
         {canSort && containerId ? (

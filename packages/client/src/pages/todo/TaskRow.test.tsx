@@ -962,3 +962,85 @@ describe("meta 胶囊", () => {
     await unmount(root);
   });
 });
+
+describe("TaskRow 多选态", () => {
+  it("多选态下点行触发 onToggleSelect，不开详情", async () => {
+    const onToggleSelect = vi.fn();
+    const onEdit = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: rowTask,
+        pool: "inbox",
+        selectionMode: true,
+        selected: false,
+        onToggleSelect,
+        onToggle: vi.fn(),
+        onEdit,
+      }),
+    );
+
+    await click(host.querySelector('[aria-label="选择 买灯"]'));
+
+    expect(onToggleSelect).toHaveBeenCalledWith(rowTask);
+    expect(onEdit).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("多选态下复选框语义仍是「完成」", async () => {
+    const onToggle = vi.fn();
+    const onToggleSelect = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: rowTask,
+        pool: "inbox",
+        selectionMode: true,
+        selected: false,
+        onToggleSelect,
+        onToggle,
+        onEdit: vi.fn(),
+      }),
+    );
+
+    await click(host.querySelector('[aria-label="完成 买灯"]'));
+
+    expect(onToggle).toHaveBeenCalledWith(rowTask);
+    expect(onToggleSelect).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("选中态标在行上且 aria-checked 反映状态", async () => {
+    const { host, root } = await renderDom(
+      createElement(TaskRow, {
+        task: task({ id: "t1", title: "买灯" }),
+        pool: "inbox",
+        selectionMode: true,
+        selected: true,
+        onToggleSelect: vi.fn(),
+        onToggle: vi.fn(),
+        onEdit: vi.fn(),
+      }),
+    );
+    const row = host.querySelector('[aria-label="选择 买灯"]') as HTMLElement;
+    expect(row.getAttribute("role")).toBe("checkbox");
+    expect(row.getAttribute("aria-checked")).toBe("true");
+    await unmount(root);
+  });
+
+  it("非多选态行为一字不变：点行开详情，label 仍是「打开 X」", async () => {
+    const onEdit = vi.fn();
+    const onToggleSelect = vi.fn();
+    const rowTask = task({ id: "t1", title: "买灯" });
+    const { host, root } = await renderDom(
+      createElement(TaskRow, { task: rowTask, pool: "inbox", onToggleSelect, onToggle: vi.fn(), onEdit }),
+    );
+
+    expect(host.querySelector('[aria-label="选择 买灯"]')).toBeNull();
+    await click(host.querySelector('[aria-label="打开 买灯"]'));
+
+    expect(onEdit).toHaveBeenCalledWith(rowTask);
+    expect(onToggleSelect).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+});

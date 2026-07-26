@@ -62,6 +62,13 @@ export interface TaskRowProps {
    * TaskRow 只负责给位置并让 meta 带因它出现。
    */
   metaChip?: ReactNode;
+  /**
+   * 页面级多选态。开着时行点击 = 勾选（不再开详情），行的语义从 link 变 checkbox。
+   * **复选框不受影响，仍然是「完成」**——两个动作同屏但不同位，见 design §动作一。
+   */
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (t: Task) => void;
 }
 
 const FRESH_OCCURRENCE_MS = 4000;
@@ -108,6 +115,9 @@ export function TaskRow({
   revealChildren,
   inGoal,
   metaChip,
+  selectionMode,
+  selected,
+  onToggleSelect,
 }: TaskRowProps) {
   const [expanded, setExpanded] = useState(false);
   const taskCreatedAt = task.createdAt;
@@ -220,6 +230,10 @@ export function TaskRow({
   }
 
   function handleRowClick(event: ReactMouseEvent<HTMLDivElement>): void {
+    if (selectionMode) {
+      onToggleSelect?.(task);
+      return;
+    }
     if (window.getSelection()?.toString()) return;
     // 左 2/5 统一进入子任务层；readonly 快照无子任务则保持开抽屉。
     const rect = event.currentTarget.getBoundingClientRect();
@@ -234,17 +248,27 @@ export function TaskRow({
       onPointerDownCapture={captureExpandedAtPress}
       className={`group w-full rounded-row bg-surface transition hover:bg-surface-hover ${
         indentTargetActive ? "bg-surface-hover ring-1 ring-accent" : ""
-      } ${freshOccurrence ? "todo-occurrence-fresh" : ""}`}
+      } ${selectionMode && selected ? "bg-surface-hover ring-1 ring-accent" : ""} ${
+        freshOccurrence ? "todo-occurrence-fresh" : ""
+      }`}
     >
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: role 是动态的，规则只按 link 那一支判；
+          aria-checked 与 role="checkbox" 由同一个 selectionMode 三元同时开合，非多选态下是 undefined。 */}
       <div
         className="relative flex items-center gap-1.5 px-2 py-1"
-        role="link"
+        role={selectionMode ? "checkbox" : "link"}
+        aria-checked={selectionMode ? Boolean(selected) : undefined}
+        data-selected={selectionMode && selected ? "true" : undefined}
         tabIndex={0}
-        aria-label={`打开 ${task.title}`}
+        aria-label={selectionMode ? `选择 ${task.title}` : `打开 ${task.title}`}
         onClick={handleRowClick}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
+            if (selectionMode) {
+              onToggleSelect?.(task);
+              return;
+            }
             onEdit(task);
           }
         }}
