@@ -872,10 +872,22 @@ export function TodoPage() {
    *（`GoalSchema` superRefine 的硬后果，见 `prerequisiteLossOnAssignMany`）。
    * 返回 false = 用户取消，调用方必须原地返回、一个字都别写。
    *
-   * 建新组也要问，且这不是"以防万一"：归属轴排他保证 active project 的成员**不出现在收件箱**，
-   * 所以刚进多选那一刻选中的任务确实都没有 project 归属、这里恒返回 true。但 `selectedIds` 只存 id、
-   * **不随 useLiveQuery 回流剪枝**——多选态开着的时候另一端 sync 下来一份新 goals 行，
-   * 手上这批就成了带归属的，提交时才撞上前置边。批量归入同理，两条路的语义必须一致。
+   * **可达性（2026-07-26 订正，上一版注释已过时）**：归属轴排他的判据与 `prerequisiteLossOnAssignMany`
+   * 取源组的判据逐字相同（`status === "active" && kind === "project"`），而 `selectedIds` 现在会跟着
+   * 收件箱剪枝——两条一叠，"选中项带 project 归属"在常规时序下**不可能成立**，这里恒返回 true。
+   * 上一版注释说的「另一端 sync 下来就撞上」那条路，正是被剪枝堵死的那条。
+   *
+   * 仍然保留，因为剩下一个真窗口：远端 goal 行**已经落进 Dexie**、而 liveQuery 通知与剪枝 effect
+   * 还没跑完，用户恰在这几毫秒里松手提交。此时 `selectedIds` 还是旧的，而 `prerequisiteLossOnAssignMany`
+   * 读的是最新库——确认框会弹，且该弹：那个窗口里不问就是静默丢边。将来若有人改窄剪枝口径
+   *（比如水下尾不再可选），这条路还会整个活过来。
+   *
+   * **承重在数据层**（`goals.test.ts` 的 `prerequisiteLossOnAssignMany` 一节）。页面这一段测不了——
+   * 要精确卡在"库已写、effect 未跑"之间，jsdom 里 `act()` 会把渲染和 effect 一口气跑完。
+   * 实测：把这两行调用整个删掉，`TodoPage.test.tsx` 一条都不红。别据此当死代码删。
+   *
+   * `nextGoalId` 传 `goalId` 而不是 `null`：剪枝之后"重入已在的目标组"同样不可达，两者已无实际差异，
+   * 但传 `goalId` 才是这个参数的本义（别把目标组自己算成损失），照本义写。
    */
   const confirmPrerequisiteLoss = async (taskIds: string[], nextGoalId: string | null): Promise<boolean> => {
     const loss = await prerequisiteLossOnAssignMany(taskIds, nextGoalId);
