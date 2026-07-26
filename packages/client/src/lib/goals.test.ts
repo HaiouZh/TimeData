@@ -445,6 +445,9 @@ describe("assignTaskToProject", () => {
     expect(b?.members).toEqual([{ kind: "task", id: "t1" }]);
   });
 
+  // 本条与《已归档的 project 也不被摘除（读侧只认 active，摘它是白写一行 syncLog）》**各锁一半**：
+  // 摘除循环的跳过条件是 `row.status !== "active" || row.kind !== "project"`，本条锁 kind 半边、
+  // 那条锁 status 半边。删任一条，另一半析取项立刻裸奔。
   it("theme 目标持有同一条任务时不被摘除（归属轴排他只对 kind=project 成立）", async () => {
     await seedTask("t1");
     await seedProject("gTheme", ["t1"], { kind: "theme" });
@@ -457,6 +460,7 @@ describe("assignTaskToProject", () => {
   });
 
   it("已归档的 project 也不被摘除（读侧只认 active，摘它是白写一行 syncLog）", async () => {
+    // 与上面《theme 目标持有同一条任务时不被摘除》各锁摘除循环那个 `||` 的一半，见那条的注释。
     await seedTask("t1");
     await seedProject("gOld", ["t1"], { status: "archived" });
     await seedProject("gB");
@@ -467,6 +471,9 @@ describe("assignTaskToProject", () => {
     expect(old?.members).toEqual([{ kind: "task", id: "t1" }]);
   });
 
+  // 本条与《目标组是 theme → 抛 inactive：归属轴排他只在 kind=project 之间成立》**各锁一半**：
+  // 目标组闸是 `target.status !== "active" || target.kind !== "project"`，本条锁 status 半边、
+  // 那条锁 kind 半边。删任一条，另一半析取项立刻裸奔。
   it("目标组已归档 → 抛 inactive，且源组的成员一个没摘（否则任务失去全部有效归属）", async () => {
     await seedTask("t1");
     await seedProject("gA", ["t1"]);
@@ -480,6 +487,7 @@ describe("assignTaskToProject", () => {
   });
 
   it("目标组是 theme → 抛 inactive：归属轴排他只在 kind=project 之间成立", async () => {
+    // 与上面《目标组已归档 → 抛 inactive》各锁目标组闸那个 `||` 的一半，见那条的注释。
     await seedTask("t1");
     await seedProject("gA", ["t1"]);
     await seedProject("gTheme2", [], { kind: "theme" });
@@ -547,6 +555,37 @@ describe("assignTaskToProject", () => {
 
     const b = await db.goals.get("gB");
     expect(b?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("已在该组时不走摘除路径：布局钉点必须原样还在（重入不该抹掉手工摆位）", async () => {
+    // 摘除循环里那句 `if (row.id === goalId) continue;` 的真闸。删掉它，目标组自己也会进循环、
+    // 对已在组内的任务走一遍 removeGoalMember——它内部的 deleteGoalMemberPinInCurrentTransaction
+    // 会删掉这条任务在该 goal 画布上的布局钉点，而随后的 addGoalMember **不重建钉点**。
+    // 净效果：把一条已在组内的任务再拖进同一个组，它在目标画布上的手工摆位静默消失且加不回来。
+    await seedTask("t1");
+    await seedProject("gB", ["t1"]);
+    await db.goalLayoutPins.add({
+      goalId: "gB",
+      nodeKind: "task",
+      nodeId: "t1",
+      x: 120,
+      y: 240,
+      updatedAt: now,
+    } as never);
+
+    await assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") });
+
+    expect(await db.goalLayoutPins.get(["gB", "task", "t1"])).toMatchObject({ x: 120, y: 240 });
+  });
+
+  it("已在组内但已变成子任务：仍要拒绝，例外只对 full 开口", async () => {
+    // 闸是 `!(block === "full" && already)`。退化成 `!already` 的话，已在组内、但已被拽成子任务的
+    // 成员再次拖入本组时会静默放行——拒绝 toast 消失，用户得不到任何反馈。
+    await seedTask("p1");
+    await seedTask("t1", { parentId: "p1" });
+    await seedProject("gB", ["t1"]);
+
+    await expect(assignTaskToProject("gB", "t1")).rejects.toMatchObject({ block: "subtask" });
   });
 
   it("满员的组里已有这条任务时仍幂等放行，不误报 full（重入不会让数组变长）", async () => {

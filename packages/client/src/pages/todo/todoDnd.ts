@@ -242,8 +242,18 @@ export function containerIdForTask(task: Pick<Task, "parentId" | "scheduledAt">,
  * 既有 droppable 全都不是 `project:` 前缀，因此非项目场景行为一字不变。
  *
  * 键盘拖拽没有指针坐标，`pointerWithin` 恒空 → 走 fallback，项目组在纯键盘下仍难命中（已知限制）。
+ *
+ * **入参是对象不是两个位置参数**：两者同型 `Collision[]`，写反完全合法、tsc 与任何测试都拦不住，
+ * 而写反的后果是每次拖拽都被判成归入项目（closestCenter 几乎总含 `project:` 项，filter 恒非空）。
  */
-export function preferProjectCollisions(pointerHits: Collision[], fallback: Collision[]): Collision[] {
+export function preferProjectCollisions({
+  pointerHits,
+  fallback,
+}: {
+  pointerHits: Collision[];
+  /** 惰性：指针已落在项目卡内时 closestCenter 的结果注定被丢弃，没必要每帧遍历全部 droppable。 */
+  fallback: () => Collision[];
+}): Collision[] {
   const projects = pointerHits.filter((collision) => String(collision.id).startsWith("project:"));
-  return projects.length > 0 ? projects : fallback;
+  return projects.length > 0 ? projects : fallback();
 }

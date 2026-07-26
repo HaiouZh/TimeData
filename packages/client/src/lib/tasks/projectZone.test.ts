@@ -119,11 +119,15 @@ describe("landsInCollapsedProjectGroup", () => {
     expect(landsInCollapsedProjectGroup(task({ id: "t1" }), opts)).toBe(true);
   });
 
+  // 本条与《ruleId 非空（occurrence / 混合体行）→ false：同样进不了项目区归集》**各锁一半**：
+  // 闸一是 `parentId === null && ruleId === null` 两个析取项（取反后），本条锁 parentId 半边、
+  // 那条锁 ruleId 半边。删任一条，另一半立刻裸奔。
   it("子任务 → false：投影层只收根任务，展开的是不含它的组", () => {
     expect(landsInCollapsedProjectGroup(task({ id: "t1", parentId: "p1" }), opts)).toBe(false);
   });
 
   it("ruleId 非空（occurrence / 混合体行）→ false：同样进不了项目区归集", () => {
+    // 与上面《子任务 → false》各锁闸一那两个析取项的一半，见那条的注释。
     expect(landsInCollapsedProjectGroup(task({ id: "t1", ruleId: "r1" }), opts)).toBe(false);
   });
 

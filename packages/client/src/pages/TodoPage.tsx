@@ -745,7 +745,9 @@ export function TodoPage() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={(args) => preferProjectCollisions(pointerWithin(args), closestCenter(args))}
+      collisionDetection={(args) =>
+        preferProjectCollisions({ pointerHits: pointerWithin(args), fallback: () => closestCenter(args) })
+      }
       modifiers={[clampTodoIndentPreview]}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}

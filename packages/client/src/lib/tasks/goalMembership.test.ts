@@ -163,11 +163,18 @@ describe("projectAssignBlock", () => {
     expect(projectAssignBlock({ ...ok, parentId: "p1" }, 0)).toBe("subtask");
   });
 
+  // 本条与《occurrence → recurring（与模板同文案，不分两支）》**各锁一半**：
+  // recurring 那句是 `recurrence !== null || ruleId !== null` 两个析取项，本条锁 recurrence 半边、
+  // 那条锁 ruleId 半边。两条标题都断言 "recurring"、看着像重复用例，实际不是——
+  // 未来精简重复用例时最容易被误删的一组。
+  //（另有《准入不合格优先于满员：满员的组收到重复待办》同时压着两半，但它锁的是**优先级**，
+  // 一旦哪天为收窄它而只留一个入参，这两半就只剩本条与那条各守一边。）
   it("重复模板 → recurring", () => {
     expect(projectAssignBlock({ ...ok, recurrence: { kind: "daily", interval: 1 } as never }, 0)).toBe("recurring");
   });
 
   it("occurrence → recurring（与模板同文案，不分两支）", () => {
+    // 与上面《重复模板 → recurring》各锁一半，见那条的注释。
     expect(projectAssignBlock({ ...ok, ruleId: "r1" }, 0)).toBe("recurring");
   });
 
@@ -177,6 +184,32 @@ describe("projectAssignBlock", () => {
 
   it("准入不合格优先于满员：满员的组收到子任务，报的是 subtask 不是 full", () => {
     expect(projectAssignBlock({ ...ok, parentId: "p1" }, GOAL_MEMBERS_MAX)).toBe("subtask");
+  });
+
+  it("准入不合格优先于满员：满员的组收到重复待办，报的是 recurring 不是 full", () => {
+    // full 若被插到 subtask 与 recurring 之间，重复待办撞满员的组会被告知「成员已满 500」，
+    // 用户会去删成员腾位置，回来照样失败——报的原因换个组也一样成立才对。
+    expect(projectAssignBlock({ ...ok, ruleId: "r1" }, GOAL_MEMBERS_MAX)).toBe("recurring");
+    expect(projectAssignBlock({ ...ok, recurrence: { kind: "daily", interval: 1 } as never }, GOAL_MEMBERS_MAX)).toBe(
+      "recurring",
+    );
+  });
+
+  it("既是子任务又是重复待办时报 subtask：子任务是更根本的那个原因", () => {
+    expect(projectAssignBlock({ ...ok, parentId: "p1", ruleId: "r1" }, 0)).toBe("subtask");
+  });
+
+  it("裸行缺 parentId 字段（undefined）不当成子任务", () => {
+    // assignTaskToProject 喂进来的是 db.tasks.get 的裸行，不过 TaskSchema.parse，老行缺字段就是
+    // undefined。少了 `?? null`，这些行会被永久判成 subtask、再也归不了组。
+    expect(projectAssignBlock({ recurrence: null, ruleId: null } as never, 0)).toBeNull();
+  });
+
+  it("裸行缺 ruleId / recurrence 字段（undefined）不当成重复待办", () => {
+    // 与上一条对称：`recurrence !== null || ruleId !== null` 少了 `?? null` 防护时，
+    // 缺这两个字段的裸行会被永久判成 recurring。
+    expect(projectAssignBlock({ parentId: null, recurrence: null } as never, 0)).toBeNull();
+    expect(projectAssignBlock({ parentId: null, ruleId: null } as never, 0)).toBeNull();
   });
 
   it("GOAL_MEMBERS_MAX 与 GoalSchema 的实际上限一致（钉死两处 500 漂移）", () => {

@@ -181,8 +181,11 @@ export function projectAssignBlock(
   task: Pick<Task, "parentId" | "recurrence" | "ruleId">,
   memberCount: number,
 ): ProjectAssignBlock | null {
+  // 三个字段都要 `?? null`：`assignTaskToProject` 喂进来的是 `db.tasks.get` 的**裸行**
+  //（不过 `TaskSchema.parse`），老行缺字段读出来是 `undefined`。少一个防护，缺那个字段的行
+  // 就被永久判成 subtask / recurring，用户怎么拖都归不了组，且没有任何提示能指向真因。
   if ((task.parentId ?? null) !== null) return "subtask";
-  if (task.recurrence !== null || task.ruleId !== null) return "recurring";
+  if ((task.recurrence ?? null) !== null || (task.ruleId ?? null) !== null) return "recurring";
   if (memberCount >= GOAL_MEMBERS_MAX) return "full";
   return null;
 }

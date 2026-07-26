@@ -313,6 +313,10 @@ describe("resolveTodoDragWithIndent", () => {
   });
 
   it("候选父为自己或为空时不降级,退回 root 级判定", () => {
+    // **承重单位在这里是断言不是测试**：下面两条断言各锁 canBecomeChild 的一个条件——
+    // 第一条锁 `rootAboveId !== activeId`（拖到自己头上不该把自己接成自己的子任务），
+    // 第二条锁 `rootAboveId !== null`（没有候选父时不该拼出 `parent:null`）。
+    // 删掉任一条，被它守的那个条件就裸奔了；两条看着像重复，实际不是。
     expect(
       resolveTodoDragWithIndent({
         ...baseIndentInput,
@@ -433,6 +437,10 @@ describe("project 容器（P3 拖拽归入）", () => {
   });
 
   it("active 是项目容器 → null：项目区的行不注册 draggable，这是防御闸", () => {
+    // 注意：本例当前**不**能证明那道防御闸存在——把 resolveTodoDragOperation 里
+    // `if (active.kind === "project") return null;` 整行删掉，本文件照样全绿（下面四个分支都要求
+    // active 是 pool/parent，落到函数末尾同样 return null）。它锁的是**返回值契约**，
+    // 将来给项目容器新增分支时才会变成真闸。
     expect(
       resolveTodoDragOperation({
         activeContainerId: "project:g1",
@@ -488,22 +496,57 @@ describe("preferProjectCollisions", () => {
   const hit = (id: string) => ({ id }) as never;
 
   it("指针落在项目组内 → 只保留项目组，不让 closestCenter 的近邻抢走", () => {
-    const result = preferProjectCollisions([hit("project:g1"), hit("t9")], [hit("t9")]);
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g1"), hit("t9")],
+      fallback: () => [hit("t9")],
+    });
     expect(result.map((c) => c.id)).toEqual(["project:g1"]);
   });
 
   it("指针没落在任何项目组 → 原样退回 closestCenter 的结果（既有行为一字不变）", () => {
     const fallback = [hit("t9"), hit("t8")];
-    expect(preferProjectCollisions([hit("t9")], fallback)).toBe(fallback);
+    expect(preferProjectCollisions({ pointerHits: [hit("t9")], fallback: () => fallback })).toBe(fallback);
   });
 
   it("指针命中为空（如键盘拖拽）→ 退回 closestCenter", () => {
     const fallback = [hit("t9")];
-    expect(preferProjectCollisions([], fallback)).toBe(fallback);
+    expect(preferProjectCollisions({ pointerHits: [], fallback: () => fallback })).toBe(fallback);
   });
 
   it("同时命中多个项目组时全部保留，交给 dnd-kit 定序", () => {
-    const result = preferProjectCollisions([hit("project:g1"), hit("project:g2")], []);
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g1"), hit("project:g2")],
+      fallback: () => [],
+    });
     expect(result.map((c) => c.id)).toEqual(["project:g1", "project:g2"]);
+  });
+
+  it("命中项目组时 fallback 一次都不求值：closestCenter 每帧遍历全部 droppable，结果注定被丢弃", () => {
+    let calls = 0;
+    const result = preferProjectCollisions({
+      pointerHits: [hit("project:g1")],
+      fallback: () => {
+        calls += 1;
+        return [hit("t9")];
+      },
+    });
+    expect(result.map((c) => c.id)).toEqual(["project:g1"]);
+    expect(calls).toBe(0);
+  });
+
+  it("只认 project: 前缀，不认 id 里恰好含 project 的近似落点", () => {
+    // 判据若从 startsWith 松成 includes，这类 id 会被当成项目落点、把真正的落点顶掉。
+    const fallback = [hit("parent:my-project-notes"), hit("project-ideas")];
+    expect(
+      preferProjectCollisions({
+        pointerHits: [hit("parent:my-project-notes"), hit("project-ideas")],
+        fallback: () => fallback,
+      }),
+    ).toBe(fallback);
+  });
+
+  it("数字型 UniqueIdentifier 不炸（dnd-kit 的 id 是 string | number）", () => {
+    const fallback = [hit("t9")];
+    expect(preferProjectCollisions({ pointerHits: [{ id: 42 } as never], fallback: () => fallback })).toBe(fallback);
   });
 });
