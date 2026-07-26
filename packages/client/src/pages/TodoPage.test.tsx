@@ -12,7 +12,7 @@ import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
-import { setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
+import { setInboxCollapsed, setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
 import { renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
@@ -1826,6 +1826,26 @@ describe("TodoPage 多选态", () => {
     });
     await flushAsync();
     expect(selectionBar(host)).toBeNull();
+    await unmount(root);
+  });
+
+  it("收件箱折叠着进多选，顺带把它展开", async () => {
+    // 「圈成项目」在 `<summary>` 里，与 `<details open>` 无关，折叠状态又是持久化的。
+    // 折叠着点进去：全页其余区块变灰 inert + 底部「已选 0 条」操作栏，而收件箱还收着——
+    // 一条可选行都看不见，第一眼是「模式坏了」。他点「圈成项目」就是要看收件箱，顺带展开。
+    setInboxCollapsed(true);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    const details = () => host.querySelector('[data-section="inbox"] details') as HTMLDetailsElement;
+    // 探针：折叠偏好真的读进来了，而且点「圈成项目」不会因为 summary 的默认行为顺手展开
+    //（CollapsibleSection 的 action 插槽 preventDefault 拦掉了那条路）。
+    expect(details().open).toBe(false);
+
+    await enterSelection(host);
+
+    expect(details().open).toBe(true);
+    expect(host.querySelector('[aria-label="选择 买灯"]')).not.toBeNull();
     await unmount(root);
   });
 

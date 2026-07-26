@@ -377,6 +377,13 @@ export function TodoPage() {
   const enterSelection = () => {
     setSelectionMode(true);
     setSelectedIds(new Set());
+    // 顺带展开收件箱。入口「圈成项目」挂在 `<summary>` 里、与 `<details open>` 无关，而折叠状态
+    // 是持久化的：折叠着点进多选，全页其余区块变灰 inert + 底部「已选 0 条」，收件箱却还收着——
+    // 一条可选行都看不见，第一眼是「模式坏了」。
+    // 够用的原因：`CollapsibleSection` 的 `open` 来自 `defaultOpen={!getInboxCollapsed()}`，
+    // 而那句在**每次渲染时都重读** localStorage，上面 setState 触发的重渲染会把它带成 true。
+    // 代价是把用户的折叠偏好改成展开——可以接受，他点「圈成项目」就是要看收件箱。
+    setInboxCollapsed(false);
   };
   const exitSelection = useCallback(() => {
     setSelectionMode(false);
