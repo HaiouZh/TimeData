@@ -81,7 +81,7 @@ last-reviewed: 2026-07-10
 |---|---|---|
 | `AUTH_TOKEN` | 生产必填 | API 鉴权。所有 `/api/*` 请求都要带 `Authorization: Bearer <TOKEN>`，除了 `/api/health` 和 `/api/version` |
 | `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写与任务轨道 ingest；未设置时该作用域仍可用 `AUTH_TOKEN` |
-| `ALLOW_UNAUTHENTICATED_DEV` | 否 | 仅本地开发旁路。设为 `1` 且 `AUTH_TOKEN` 缺失时，放行所有 `/api/*` 并打印一次 warning；生产不要设置 |
+| `ALLOW_UNAUTHENTICATED_DEV` | 否 | 鉴权旁路。设为 `1` 且 `AUTH_TOKEN` 缺失时，放行所有 `/api/*` 并打印一次 warning；生产不要设置。**本仓约定本地开发也不用它**（理由见 §9.1），只留给临时排查 |
 | `ALLOWED_ORIGINS` | 生产必填 | CORS 允许来源白名单，逗号分隔；未配置时所有跨域 `/api/*` 请求会被拒绝（fail-closed） |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
@@ -291,17 +291,19 @@ data/
 
 本地跑的是两个进程：`pnpm dev:server`（Hono，默认 3000）+ `pnpm dev:client`（Vite，5174，把 `/api` 代理到 3000）。与容器部署的差别只有两处：**环境变量怎么进去**、**vault 根目录是宿主机绝对路径而非 `/app/vault`**。
 
-### 9.1 环境变量必须在启动命令里给
+### 9.1 环境变量必须在启动命令里给，且一律带鉴权
 
 **本仓没有装 dotenv，dev 脚本也没有 `--env-file`**，所以写进 `.env` 文件不生效（`.env.example` 是给 Docker Compose 用的）。变量只能在启动服务的那条命令里设，换个终端就没了。
 
 PowerShell：
 
 ```
-$env:ALLOW_UNAUTHENTICATED_DEV='1'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pnpm dev:server
+$env:AUTH_TOKEN='devtoken'; $env:DIARY_VAULT_DIR='D:\OneDrive\Obsidian\Time'; pnpm dev:server
 ```
 
-`ALLOW_UNAUTHENTICATED_DEV=1` 是鉴权旁路：不设 `AUTH_TOKEN` 时 `/api/*` 会直接返回 500 `Server misconfigured: AUTH_TOKEN not set`（**故意 fail-closed**，见 `middleware/auth.ts`），加上这个变量才放行，启动日志会打一行 `[auth] AUTH_TOKEN unset — all /api/* endpoints are open` 提醒旁路开着。要连鉴权一起验就别用旁路：设 `AUTH_TOKEN=<任意串>`，再去 `/settings/server` 把同一个串填进「API Token」（前端从 localStorage 读它拼 `Authorization: Bearer`）。
+然后去 `/settings/server` 把同一个串填进「API Token」——前端存 localStorage（`STORAGE_KEYS.apiToken`），`lib/api.ts` 的 `apiFetch` 据此拼 `Authorization: Bearer`。**这一步不做，前端所有请求都会 401**。
+
+**本仓约定：本地开发也必须带 `AUTH_TOKEN`，不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路。** 旁路虽然存在（不设 `AUTH_TOKEN` 时 `/api/*` 直接返回 500 `Server misconfigured: AUTH_TOKEN not set`，**故意 fail-closed**，见 `middleware/auth.ts`；加上旁路变量才放行，并打一行 `[auth] AUTH_TOKEN unset — all /api/* endpoints are open`），但它让**鉴权中间件、token 分级、401 分支全部走不到**——旁路下验过的东西不构成"能用"的证据，上生产可能照样挂。旁路只留给"确认某个问题与鉴权无关"这类临时排查，用完即走。
 
 ### 9.2 日记 vault：宿主机绝对路径
 

@@ -70,6 +70,7 @@
 - 测试：`pnpm test`（全包 + 根目录脚本测试），或 `pnpm --filter @timedata/<pkg> test`。聚焦单个文件走 `npx vitest run <路径>`（在该包目录下）——`pnpm --filter … test -- <name>` **不做文件过滤**，会把整包套件跑一遍。
 - 构建：`pnpm build`（不含 mobile）。
 - 开发：`pnpm dev:client` / `pnpm dev:server`。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
+  - **本地起服务一律带鉴权**：`dev:server` 必须设 `AUTH_TOKEN`，**不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路**。理由：旁路下跑出来的"能用"不构成证据——鉴权、token 分级、401 路径全部没走到，本地验过的东西上生产可能照样挂。前端在 `/settings/server` 填同一个串（存 localStorage，`api.ts` 据此拼 `Authorization: Bearer`）。**本仓没装 dotenv、dev 脚本也无 `--env-file`，写进 `.env` 不生效**，变量只能在启动命令里给。完整配法（含日记 vault）见 [`deployment`](docs/evergreen/deployment.md) §9。
   - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」。本地预览改用 `pnpm --filter @timedata/client exec vite --host 127.0.0.1`，再开 `http://127.0.0.1:5174`（别用 `localhost`，可能解析回旧的 IPv6 实例）。
 - 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
 - ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
