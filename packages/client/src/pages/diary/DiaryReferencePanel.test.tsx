@@ -1,9 +1,19 @@
 // @vitest-environment jsdom
 // 参考栏块测试：seed 真 db，故 dbReset 必须先于任何触 db/index 的模块求值。
 import { act, createElement } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../test/dbReset.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
+
+const fetchDiaryMock = vi.fn(async (_date: string) => ({ content: "", mtime: null as number | null }));
+
+// 路径必须写 ".ts" 而不是 ".js"——本仓 vi.mock 按 vitest 的解析路径匹配，
+// `DiaryPage.test.tsx` 已验证的写法就是 ".ts"，写成 ".js" 会静默不生效（mock 没挂上、
+// 测试却因为真去请求而以别的方式失败，极难排查）。用 importActual 展开保留其余导出。
+vi.mock("../../lib/diary/diaryApi.ts", async () => {
+  const actual = await vi.importActual<typeof import("../../lib/diary/diaryApi.js")>("../../lib/diary/diaryApi.ts");
+  return { ...actual, fetchDiary: (...args: unknown[]) => fetchDiaryMock(...(args as [string])) };
+});
 
 import { DiaryReferencePanel } from "./DiaryReferencePanel.js";
 
@@ -13,6 +23,8 @@ beforeEach(async () => {
   localStorage.clear();
   await db.open();
   await Promise.all(db.tables.map((t) => t.clear()));
+  fetchDiaryMock.mockReset();
+  fetchDiaryMock.mockResolvedValue({ content: "", mtime: null });
 });
 
 afterEach(async () => {
@@ -134,5 +146,134 @@ describe("参考栏 · 速记块", () => {
     });
     await waitFor(() => host.textContent?.includes("周六记的") === true, "07-25 的速记");
     expect(host.textContent).not.toContain("周一记的");
+  });
+});
+
+describe("参考栏 · 回看块", () => {
+  function lookbackButton(host: HTMLElement, label: string): HTMLButtonElement {
+    const btns = [...host.querySelectorAll("button")] as HTMLButtonElement[];
+    const found = btns.find((b) => b.textContent?.includes(label));
+    if (!found) throw new Error(`找不到按钮：${label}`);
+    return found;
+  }
+
+  it("默认收起，不发请求", async () => {
+    const { host } = await renderPanel("2026-07-25");
+    expect(host.textContent).toContain("昨天 7月24日");
+    expect(host.textContent).toContain("上周今日 7月18日");
+    expect(fetchDiaryMock).not.toHaveBeenCalled();
+  });
+
+  it("展开才请求，且拉的是相对当前日期的前一天", async () => {
+    const { host } = await renderPanel("2026-07-25");
+    fetchDiaryMock.mockResolvedValue({ content: "昨天写的东西", mtime: 1 });
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("昨天写的东西") === true, "昨天正文");
+
+    expect(fetchDiaryMock).toHaveBeenCalledWith("2026-07-24");
+  });
+
+  it("那天没写日记时出空态，不当成错误", async () => {
+    const { host } = await renderPanel("2026-07-25");
+    fetchDiaryMock.mockResolvedValue({ content: "", mtime: null });
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("这天没写日记") === true, "空态");
+    expect(host.textContent).not.toContain("读取失败");
+  });
+
+  it("请求失败出重试按钮，点了会重发", async () => {
+    const { host } = await renderPanel("2026-07-25");
+    fetchDiaryMock.mockRejectedValue(new Error("boom"));
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("读取失败") === true, "错误态");
+
+    fetchDiaryMock.mockResolvedValue({ content: "重试拿到的", mtime: 1 });
+    await act(async () => {
+      lookbackButton(host, "读取失败").click();
+    });
+    await waitFor(() => host.textContent?.includes("重试拿到的") === true, "重试成功");
+  });
+
+  it("已展开加载过的内容，不会因为再次折叠展开而重复请求", async () => {
+    const { host } = await renderPanel("2026-07-25");
+    fetchDiaryMock.mockResolvedValue({ content: "只拉一次", mtime: 1 });
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("只拉一次") === true, "首次加载");
+    const callsAfterFirst = fetchDiaryMock.mock.calls.length;
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await flush();
+
+    expect(fetchDiaryMock.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  it("切日期后回看收起，且不把上一天的正文留在屏幕上", async () => {
+    const { host, root } = await renderPanel("2026-07-25");
+    fetchDiaryMock.mockResolvedValue({ content: "7月24日的正文", mtime: 1 });
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("7月24日的正文") === true, "首次加载");
+
+    await act(async () => {
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false }));
+    });
+    await flush();
+
+    expect(host.textContent).not.toContain("7月24日的正文");
+    expect(host.textContent).toContain("昨天 7月19日");
+  });
+
+  it("A→B→A 切回原日期后，旧的在途响应不会覆盖新状态", async () => {
+    // ABA 判据：若闸用日期字符串比较，切回 07-25 时旧响应的日期又相等、闸失效。
+    const { host, root } = await renderPanel("2026-07-25");
+
+    // 用 definite-assignment（`!`）而不是 `| null = null`：后者会让 TS 的控制流分析在
+    // 后面把 resolveFirst 收窄成 null，`resolveFirst?.()` 直接编译报错。
+    let resolveFirst!: (v: { content: string; mtime: number | null }) => void;
+    const pending = new Promise<{ content: string; mtime: number | null }>((resolve) => {
+      resolveFirst = resolve;
+    });
+    fetchDiaryMock.mockImplementationOnce(() => pending);
+
+    await act(async () => {
+      lookbackButton(host, "昨天").click();
+    });
+    await waitFor(() => host.textContent?.includes("读取中") === true, "加载中");
+
+    // A → B → A
+    await act(async () => {
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-20", isToday: false }));
+    });
+    await act(async () => {
+      root.render(createElement(DiaryReferencePanel, { date: "2026-07-25", isToday: true }));
+    });
+    await flush();
+
+    // 旧响应此刻才回来
+    await act(async () => {
+      resolveFirst({ content: "早就作废的正文", mtime: 1 });
+    });
+    await flush();
+
+    expect(host.textContent).not.toContain("早就作废的正文");
   });
 });
