@@ -7,10 +7,27 @@ export interface CollapsibleSectionProps {
   count: number;
   defaultOpen?: boolean;
   onToggle?: (open: boolean) => void;
+  /**
+   * summary 右侧的动作插槽（收件箱的「圈成项目」）。点它不会折叠本区块。
+   *
+   * 拦截用的是 `preventDefault` 而不是 `stopPropagation`：`<summary>` 的折叠是浏览器对 `details`
+   * 的**默认行为**（activation behavior），在事件派发结束后才执行，不经 React 冒泡——
+   * `stopPropagation` 对它完全无效（design 初稿写错，P2 实测确认）。
+   *
+   * 代价是这层包裹会吃掉内部所有点击的默认动作，因此 **action 里只放按钮，不要放 `<a>`**。
+   */
+  action?: ReactNode;
   children: ReactNode;
 }
 
-export function CollapsibleSection({ title, count, defaultOpen = false, onToggle, children }: CollapsibleSectionProps) {
+export function CollapsibleSection({
+  title,
+  count,
+  defaultOpen = false,
+  onToggle,
+  action,
+  children,
+}: CollapsibleSectionProps) {
   return (
     <details open={defaultOpen} onToggle={(event) => onToggle?.(event.currentTarget.open)} className="rounded-xl">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 text-sm font-medium text-ink-2">
@@ -19,6 +36,11 @@ export function CollapsibleSection({ title, count, defaultOpen = false, onToggle
         </span>
         <span className="flex-1">{title}</span>
         <span className="text-xs text-ink-3">{count}</span>
+        {action && (
+          <span data-section-action className="shrink-0" onClick={(event) => event.preventDefault()}>
+            {action}
+          </span>
+        )}
       </summary>
       <div className="mt-1">{children}</div>
     </details>
