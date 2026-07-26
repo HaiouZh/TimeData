@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   sleepCategoryId: "timedata_sleep_category_id",
   schemaNormalizationVersion: "timedata_schema_normalization_version",
   todoWorkbenchSplit: "timedata_todo_workbench_split",
+  diarySplit: "timedata_diary_split",
   todoDoneCollapsed: "timedata_todo_done_collapsed",
   todoInboxCollapsed: "timedata_todo_inbox_collapsed",
   todoScheduledCollapsed: "timedata_todo_scheduled_collapsed",

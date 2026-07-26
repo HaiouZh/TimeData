@@ -2,13 +2,17 @@
 import { act, createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
-import { SPLIT_DEFAULT } from "../../lib/tasks/workbenchPrefs.js";
+import { DIARY_SPLIT_PREFS, SPLIT_DEFAULT, type SplitPrefs } from "../../lib/tasks/workbenchPrefs.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { ResizableSplit } from "./ResizableSplit.js";
 
-async function renderSplit() {
+async function renderSplit(prefs?: SplitPrefs) {
   const { host, root } = await renderDom(
-    createElement(ResizableSplit, { left: createElement("p", null, "左"), right: createElement("p", null, "右") }),
+    createElement(ResizableSplit, {
+      left: createElement("p", null, "左"),
+      right: createElement("p", null, "右"),
+      ...(prefs ? { prefs } : {}),
+    }),
   );
   const split = host.firstElementChild as HTMLElement;
   vi.spyOn(split, "getBoundingClientRect").mockReturnValue({
@@ -83,6 +87,42 @@ describe("ResizableSplit", () => {
 
     expect(sections[0].className).toContain("space-y-4");
     expect(sections[1].className).toContain("space-y-4");
+
+    await unmount(root);
+  });
+
+  it("传 diary prefs 时存进日记自己的键，且按日记范围夹取", async () => {
+    const { host, root } = await renderSplit(DIARY_SPLIT_PREFS);
+    const handle = host.querySelector('[role="separator"]') as HTMLElement;
+
+    await act(async () => {
+      handle.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    });
+
+    // End 键推到最大：日记范围上限 0.85，不是待办的 0.7
+    expect((host.firstElementChild as HTMLElement).style.gridTemplateColumns).toContain("0.85fr");
+    expect(localStorage.getItem(STORAGE_KEYS.diarySplit)).toBe("0.85");
+    expect(localStorage.getItem(STORAGE_KEYS.todoWorkbenchSplit)).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("传 diary prefs 时 aria 范围随之变化", async () => {
+    const { host, root } = await renderSplit(DIARY_SPLIT_PREFS);
+    const handle = host.querySelector('[role="separator"]') as HTMLElement;
+
+    expect(handle.getAttribute("aria-valuemin")).toBe("50");
+    expect(handle.getAttribute("aria-valuemax")).toBe("85");
+
+    await unmount(root);
+  });
+
+  it("不传 prefs 时 aria 范围仍是待办页的 35/70", async () => {
+    const { host, root } = await renderSplit();
+    const handle = host.querySelector('[role="separator"]') as HTMLElement;
+
+    expect(handle.getAttribute("aria-valuemin")).toBe("35");
+    expect(handle.getAttribute("aria-valuemax")).toBe("70");
 
     await unmount(root);
   });

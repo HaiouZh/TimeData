@@ -1,5 +1,11 @@
 import { type ReactNode, type PointerEvent as ReactPointerEvent, useRef, useState } from "react";
-import { clampSplitRatio, loadSplitRatio, SPLIT_DEFAULT, saveSplitRatio } from "../../lib/tasks/workbenchPrefs.js";
+import {
+  clampSplitRatio,
+  loadSplitRatio,
+  saveSplitRatio,
+  type SplitPrefs,
+  TODO_SPLIT_PREFS,
+} from "../../lib/tasks/workbenchPrefs.js";
 
 export interface ResizableSplitProps {
   left: ReactNode;
@@ -8,6 +14,7 @@ export interface ResizableSplitProps {
   leftClassName?: string;
   rightClassName?: string;
   separatorLabel?: string;
+  prefs?: SplitPrefs;
 }
 
 function formatRatio(value: number): string {
@@ -21,21 +28,22 @@ export function ResizableSplit({
   leftClassName,
   rightClassName,
   separatorLabel = "调整左右面板宽度",
+  prefs = TODO_SPLIT_PREFS,
 }: ResizableSplitProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activePointerId = useRef<number | null>(null);
-  const [ratio, setRatio] = useState(() => loadSplitRatio());
+  const [ratio, setRatio] = useState(() => loadSplitRatio(prefs));
   const ratioRef = useRef(ratio);
 
   function applyRatio(nextRatio: number): number {
-    const next = clampSplitRatio(nextRatio);
+    const next = clampSplitRatio(nextRatio, prefs);
     ratioRef.current = next;
     setRatio(next);
     return next;
   }
 
   function applyAndSaveRatio(nextRatio: number): void {
-    saveSplitRatio(applyRatio(nextRatio));
+    saveSplitRatio(applyRatio(nextRatio), prefs);
   }
 
   function updateFromPointer(event: ReactPointerEvent): void {
@@ -47,7 +55,7 @@ export function ResizableSplit({
   function finishDrag(event: ReactPointerEvent<HTMLDivElement>): void {
     if (activePointerId.current !== event.pointerId) return;
     activePointerId.current = null;
-    saveSplitRatio(ratioRef.current);
+    saveSplitRatio(ratioRef.current, prefs);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -67,8 +75,8 @@ export function ResizableSplit({
         role="separator"
         aria-orientation="vertical"
         aria-label={separatorLabel}
-        aria-valuemin={35}
-        aria-valuemax={70}
+        aria-valuemin={Math.round(prefs.min * 100)}
+        aria-valuemax={Math.round(prefs.max * 100)}
         aria-valuenow={Math.round(ratio * 100)}
         tabIndex={0}
         className="group flex cursor-col-resize touch-none items-stretch justify-center self-stretch px-1"
@@ -84,7 +92,7 @@ export function ResizableSplit({
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
         onDoubleClick={() => {
-          applyAndSaveRatio(SPLIT_DEFAULT);
+          applyAndSaveRatio(prefs.defaultRatio);
         }}
         onKeyDown={(event) => {
           const step = event.shiftKey ? 0.1 : 0.05;
@@ -102,7 +110,7 @@ export function ResizableSplit({
             applyAndSaveRatio(1);
           } else if (event.key === "Enter" || event.key === "0") {
             event.preventDefault();
-            applyAndSaveRatio(SPLIT_DEFAULT);
+            applyAndSaveRatio(prefs.defaultRatio);
           }
         }}
       >

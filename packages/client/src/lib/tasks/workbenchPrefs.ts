@@ -5,20 +5,42 @@ export const SPLIT_MIN = 0.35;
 export const SPLIT_MAX = 0.7;
 export const SPLIT_DEFAULT = 0.62;
 
-export function clampSplitRatio(ratio: number): number {
-  if (!Number.isFinite(ratio)) return SPLIT_DEFAULT;
-  return Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, ratio));
+/** 分栏偏好：存储键与取值范围捆在一起传，避免调用方只传键、静默用错范围。 */
+export interface SplitPrefs {
+  storageKey: string;
+  min: number;
+  max: number;
+  defaultRatio: number;
 }
 
-export function loadSplitRatio(): number {
-  const raw = safeGetItem(STORAGE_KEYS.todoWorkbenchSplit);
-  if (raw === null) return SPLIT_DEFAULT;
+export const TODO_SPLIT_PREFS: SplitPrefs = {
+  storageKey: STORAGE_KEYS.todoWorkbenchSplit,
+  min: SPLIT_MIN,
+  max: SPLIT_MAX,
+  defaultRatio: SPLIT_DEFAULT,
+};
+
+export const DIARY_SPLIT_PREFS: SplitPrefs = {
+  storageKey: STORAGE_KEYS.diarySplit,
+  min: 0.5,
+  max: 0.85,
+  defaultRatio: 0.7,
+};
+
+export function clampSplitRatio(ratio: number, prefs: SplitPrefs = TODO_SPLIT_PREFS): number {
+  if (!Number.isFinite(ratio)) return prefs.defaultRatio;
+  return Math.min(prefs.max, Math.max(prefs.min, ratio));
+}
+
+export function loadSplitRatio(prefs: SplitPrefs = TODO_SPLIT_PREFS): number {
+  const raw = safeGetItem(prefs.storageKey);
+  if (raw === null) return prefs.defaultRatio;
   const parsed = Number.parseFloat(raw);
-  return Number.isFinite(parsed) ? clampSplitRatio(parsed) : SPLIT_DEFAULT;
+  return Number.isFinite(parsed) ? clampSplitRatio(parsed, prefs) : prefs.defaultRatio;
 }
 
-export function saveSplitRatio(ratio: number): void {
-  safeSetItem(STORAGE_KEYS.todoWorkbenchSplit, String(clampSplitRatio(ratio)));
+export function saveSplitRatio(ratio: number, prefs: SplitPrefs = TODO_SPLIT_PREFS): void {
+  safeSetItem(prefs.storageKey, String(clampSplitRatio(ratio, prefs)));
 }
 
 export function getDoneCollapsed(): boolean {
