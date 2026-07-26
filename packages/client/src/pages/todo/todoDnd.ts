@@ -1,4 +1,4 @@
-import type { Modifier } from "@dnd-kit/core";
+import type { Collision, Modifier } from "@dnd-kit/core";
 import type { Task } from "@timedata/shared";
 
 export type TodoPool = "today" | "inbox";
@@ -231,4 +231,19 @@ export function containerIdForTask(task: Pick<Task, "parentId" | "scheduledAt">,
   if (!task.scheduledAt) return "pool:inbox";
   // 已排期到非今天：upcoming，不参与拖拽，调用方应跳过。
   return "";
+}
+
+/**
+ * 项目组落点优先于最近中心。
+ *
+ * 页面用 `closestCenter`，它按 droppable 矩形**中心点**算距离；而项目组展开后是几百像素高的大块，
+ * 中心离手指很远，会被隔壁收件箱某一行（中心近）抢走落点——整块 droppable 在展开态近乎失灵。
+ * 故：指针真的落在某个项目组内时只认它，否则原样退回 closestCenter 的结果。
+ * 既有 droppable 全都不是 `project:` 前缀，因此非项目场景行为一字不变。
+ *
+ * 键盘拖拽没有指针坐标，`pointerWithin` 恒空 → 走 fallback，项目组在纯键盘下仍难命中（已知限制）。
+ */
+export function preferProjectCollisions(pointerHits: Collision[], fallback: Collision[]): Collision[] {
+  const projects = pointerHits.filter((collision) => String(collision.id).startsWith("project:"));
+  return projects.length > 0 ? projects : fallback;
 }

@@ -6,6 +6,7 @@ import {
   containerIdForTask,
   hoveredRootIdFromOver,
   parseTodoContainerId,
+  preferProjectCollisions,
   projectContainerId,
   resolveIndentLevel,
   resolveTodoDragOperation,
@@ -480,5 +481,29 @@ describe("resolveTodoDragWithIndent × 项目容器", () => {
     expect(
       resolveTodoDragWithIndent({ ...base, indentLevel: "root", rootAboveId: null, targetContainer: null }),
     ).toBeNull();
+  });
+});
+
+describe("preferProjectCollisions", () => {
+  const hit = (id: string) => ({ id }) as never;
+
+  it("指针落在项目组内 → 只保留项目组，不让 closestCenter 的近邻抢走", () => {
+    const result = preferProjectCollisions([hit("project:g1"), hit("t9")], [hit("t9")]);
+    expect(result.map((c) => c.id)).toEqual(["project:g1"]);
+  });
+
+  it("指针没落在任何项目组 → 原样退回 closestCenter 的结果（既有行为一字不变）", () => {
+    const fallback = [hit("t9"), hit("t8")];
+    expect(preferProjectCollisions([hit("t9")], fallback)).toBe(fallback);
+  });
+
+  it("指针命中为空（如键盘拖拽）→ 退回 closestCenter", () => {
+    const fallback = [hit("t9")];
+    expect(preferProjectCollisions([], fallback)).toBe(fallback);
+  });
+
+  it("同时命中多个项目组时全部保留，交给 dnd-kit 定序", () => {
+    const result = preferProjectCollisions([hit("project:g1"), hit("project:g2")], []);
+    expect(result.map((c) => c.id)).toEqual(["project:g1", "project:g2"]);
   });
 });
