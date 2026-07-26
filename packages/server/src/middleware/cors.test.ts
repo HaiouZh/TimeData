@@ -13,9 +13,9 @@ describe("allowedOriginsFromEnv", () => {
   it("parses comma-separated origins and trims whitespace", () => {
     expect(
       allowedOriginsFromEnv({
-        ALLOWED_ORIGINS: " https://app.example.com,capacitor://localhost , http://localhost:5173 ",
+        ALLOWED_ORIGINS: " https://app.example.com,capacitor://localhost , http://localhost:5174 ",
       }),
-    ).toEqual(["https://app.example.com", "capacitor://localhost", "http://localhost:5173"]);
+    ).toEqual(["https://app.example.com", "capacitor://localhost", "http://localhost:5174"]);
   });
 
   it("filters empty entries", () => {

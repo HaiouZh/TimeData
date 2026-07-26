@@ -12,8 +12,9 @@ covers:
   - packages/client/src/lib/androidBackNavigation.ts
   - packages/mobile/README.md
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-07-25
+last-reviewed: 2026-07-26
 ---
+<!-- 复核 2026-07-26（前端本地默认端口调整）：client Vite dev server 默认端口改为 5174；本地开发地址与故障排查同步更新，不改变 /api 代理、PWA、mobile 或部署行为。 -->
 <!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：新增段落记录 fake-indexeddb 依赖真实 setImmediate 驱动事务完成的机制，测试白名单式收窄 fake timers 的做法；不改变开发流程、命令或 worktree 约定。 -->
 <!-- 复核 2026-07-02（同步提速 S1）：androidBackNavigation 仅移除已退役的 /settings/data/backup-history 返回路由映射；开发流程、命令与 worktree 约定不变。 -->
 <!-- 复核 2026-07-04（依赖升级收 dependabot）：catalog typescript ^6.0.3、@types/node ^26、patch/minor 批量升级（vite/tailwind/dexie/hono/capacitor 等）；tsconfig.base.json 删除 TS6 弃用的 baseUrl（paths 本就相对 tsconfig 解析，语义不变）；开发流程与命令不变。 -->
@@ -102,7 +103,7 @@ pnpm dev:server
 默认监听 `http://localhost:3000`。访问时如果看到类似下面的 JSON，说明后端正常运行：
 
 ```json
-{"name":"TimeData API","status":"running","hint":"Client dev server is on http://localhost:5173/"}
+{"name":"TimeData API","status":"running","hint":"Client dev server is on http://localhost:5174/"}
 ```
 
 前端：
@@ -111,9 +112,9 @@ pnpm dev:server
 pnpm dev:client
 ```
 
-默认监听 `http://localhost:5173`。Vite 已配置 `/api` 代理到 `http://localhost:3000`，前后端可以分开启动。
+默认监听 `http://localhost:5174`。Vite 已配置 `/api` 代理到 `http://localhost:3000`，前后端可以分开启动。
 
-如果浏览器访问 `localhost:5173` 失败，可以尝试 `http://127.0.0.1:5173`，或显式指定 host：
+如果浏览器访问 `localhost:5174` 失败，可以尝试 `http://127.0.0.1:5174`，或显式指定 host：
 
 ```bash
 pnpm --filter @timedata/client dev -- --host 127.0.0.1
@@ -260,8 +261,8 @@ TimeData/
 
 ## 故障排查
 
-- `http://localhost:3000` 显示 JSON 是正常的，表示后端运行正常；前端页面应访问 `http://localhost:5173`。
-- 如果 `5173` 无法访问，确认 `pnpm dev:client` 终端没有关闭，检查 Vite 实际输出的地址。端口被占用时 Vite 会自动切换到 `5174` 等。
+- `http://localhost:3000` 显示 JSON 是正常的，表示后端运行正常；前端页面应访问 `http://localhost:5174`。
+- 如果 `5174` 无法访问，确认 `pnpm dev:client` 终端没有关闭，检查 Vite 实际输出的地址。端口被占用时 Vite 会自动切换到 `5175` 等。
 - 同步失败时，检查设置页中的 API 地址是否包含协议（`http://` 或 `https://`），并确认 Token 和服务器 `AUTH_TOKEN` 一致。
 - Android 同步的 API 地址只填写服务器根地址，例如 `https://timedata.yanzhou.icu`，不要填写 `/api` 后缀。
 - Android Token 原样粘贴，不要加 `Bearer ` 前缀，客户端会自动添加。
