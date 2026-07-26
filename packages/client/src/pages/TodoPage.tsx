@@ -854,18 +854,21 @@ export function TodoPage() {
    * 后者只挡指针，Tab 键照样能聚焦进去、回车照样开详情——那正是多选中最容易误触的路径。
    * React 19 原生支持布尔 inert 属性。
    */
-  const dimWhenSelecting = (node: ReactNode) =>
-    // 空区块（`completedBlock` 没有已完成任务时是 `false`）原样返回：包一层空 div 会在
-    // `flex flex-col gap-4` 里多占一个 flex 子项，进多选态时整列凭空下移 16px。
-    !node ? (
-      node
-    ) : selectionMode ? (
-      <div inert className="opacity-40 transition-opacity">
-        {node}
-      </div>
-    ) : (
-      node
-    );
+  const dimWhenSelecting = (node: ReactNode) => (
+    // **包装层恒定存在，进出多选只切 `inert` 与 className，绝不切元素类型。**
+    // 换类型（`node` ↔ `<div>{node}</div>`）会让 React 在这个插槽上卸载重挂整棵子树，
+    // 而 `TodoProjectSection` 的组展开态 `overrides` 是组件本地 state——每次进/出多选全部清空。
+    // 建组成功时最刺眼：新组按 reveal 展开并滚过去，用户此前展开的其余组同时全塌，
+    // 「展开新组」的反馈被那阵布局跳动淹掉。
+    //
+    // `empty:hidden` 不是装饰：空区块（没有已完成任务时 `completedBlock` 就是 `false`；
+    // `TodoProjectSection` 无组时 render 出 null）恒定包一层就会在 `flex flex-col gap-4` 里
+    // 白占一个 flex 子项、凭空多 16px。`:empty` 靠的是「这层里一个节点都没有」——
+    // 往里塞任何占位内容（哪怕一段空白文本）间距就会静默回来。
+    <div inert={selectionMode} className={`empty:hidden${selectionMode ? " opacity-40 transition-opacity" : ""}`}>
+      {node}
+    </div>
+  );
 
   /**
    * 归入前的一次性询问：摘除必然删掉源组里引用这批任务的 prerequisites 边

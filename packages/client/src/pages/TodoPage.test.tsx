@@ -1829,6 +1829,60 @@ describe("TodoPage 多选态", () => {
     await unmount(root);
   });
 
+  it("进出多选不重挂项目区，用户展开的组保持展开", async () => {
+    // `dimWhenSelecting` 在同一插槽位置返回 `node` 或 `<div inert>{node}</div>`——元素类型变了，
+    // React 卸载重挂，`TodoProjectSection` 的展开态 overrides（组件本地 state）随之清空。
+    // 建组成功后尤其明显：新组按 reveal 展开并滚过去，而用户此前展开的其它组全部收回去，
+    // 「展开新组」的反馈被「其余全塌」的布局跳动淹掉。
+    setProjectZoneIntroDismissed(true);
+    const seedMember = await addTask({ title: "刷墙", toInbox: true });
+    await seedProjectGoal(seedMember.id);
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+    await waitForCondition(() => zoneText(host).includes("装修"), "项目区出现「装修」", settle);
+
+    const toggle = () => host.querySelector('[data-testid="project-group-toggle"]') as HTMLButtonElement;
+    // 探针：提示条已读 → 默认全折叠，下面那次点击才真的是「用户手动展开」。
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    await act(async () => {
+      toggle().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await flushAsync();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+
+    await enterSelection(host);
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => {
+      (host.querySelector('[aria-label="取消多选"]') as HTMLElement).dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    });
+    await flushAsync();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    await unmount(root);
+  });
+
+  it("没有内容的区块，包装层不含任何节点（靠 empty:hidden 不占 flex 子项）", async () => {
+    // 恒定包一层是上一条的修法，代价是空区块（没有已完成任务时 `completedBlock` 就是 `false`）
+    // 也会多出一个 flex 子项，`gap-4` 里凭空多 16px。靠 Tailwind 的 `empty:hidden`（`:empty` 伪类）
+    // 消掉——前提是那个包装层里**一个节点都没有**：塞进任何占位内容（哪怕一段空白文本）
+    // `:empty` 就不匹配，间距会静默回来，而 jsdom 里没有 CSS、断言不到 display。
+    // 故这里守的是那个前提，CSS 那一半由 Tailwind 构建产物验证（见提交说明）。
+    await addTask({ title: "买灯", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买灯");
+
+    const column = host.querySelector(".flex.flex-col.gap-4") as HTMLElement;
+    expect(column).not.toBeNull();
+    const blanks = [...column.children].filter((el) => el.matches(":empty"));
+    // 已完成区没有任务 → 至少有它一个空包装层。
+    expect(blanks.length).toBeGreaterThan(0);
+    for (const blank of blanks) expect(blank.classList.contains("empty:hidden")).toBe(true);
+    await unmount(root);
+  });
+
   it("点取消退出多选，记录框回来", async () => {
     await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage();
