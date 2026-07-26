@@ -4,10 +4,12 @@ import {
   addGoal,
   addGoalMember,
   addTaskForGoal,
+  assignTaskToProject,
   deleteGoal,
   findActiveProjectGoalIdForTask,
   getGoal,
   listGoals,
+  ProjectAssignError,
   removeGoalMember,
   updateGoal,
   updateGoalPrerequisites,
@@ -385,5 +387,188 @@ describe("findActiveProjectGoalIdForTask", () => {
     });
 
     expect(await findActiveProjectGoalIdForTask(task.id)).toBe(goal.id);
+  });
+});
+
+describe("assignTaskToProject", () => {
+  async function seedTask(id: string, patch: Record<string, unknown> = {}): Promise<void> {
+    await db.tasks.add({
+      id,
+      parentId: null,
+      title: `任务 ${id}`,
+      done: false,
+      recurrence: null,
+      lastDoneAt: null,
+      startAt: null,
+      scheduledAt: null,
+      completedCount: 0,
+      weight: 0,
+      completedAt: null,
+      tags: [],
+      // ruleId 必须显式给 null：projectAssignBlock 判的是 `task.ruleId !== null`，
+      // 缺字段读出来是 undefined，会让每条 seed 任务都被判成 recurring。
+      ruleId: null,
+      sessionId: null,
+      skipped: false,
+      sortOrder: 0,
+      createdAt: now,
+      updatedAt: now,
+      ...patch,
+    } as never);
+  }
+
+  async function seedProject(id: string, members: string[] = [], patch: Record<string, unknown> = {}): Promise<void> {
+    await db.goals.add({
+      id,
+      title: `项目 ${id}`,
+      kind: "project",
+      status: "active",
+      members: members.map((taskId) => ({ kind: "task", id: taskId })),
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+      ...patch,
+    } as never);
+  }
+
+  it("从 A 组拖到 B 组：A 里不再有它，B 里有它（单一归属是写入侧不变量）", async () => {
+    await seedTask("t1");
+    await seedProject("gA", ["t1"]);
+    await seedProject("gB");
+
+    await assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") });
+
+    const a = await db.goals.get("gA");
+    const b = await db.goals.get("gB");
+    expect(a?.members).toEqual([]);
+    expect(b?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("theme 目标持有同一条任务时不被摘除（归属轴排他只对 kind=project 成立）", async () => {
+    await seedTask("t1");
+    await seedProject("gTheme", ["t1"], { kind: "theme" });
+    await seedProject("gB");
+
+    await assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") });
+
+    const theme = await db.goals.get("gTheme");
+    expect(theme?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("已归档的 project 也不被摘除（读侧只认 active，摘它是白写一行 syncLog）", async () => {
+    await seedTask("t1");
+    await seedProject("gOld", ["t1"], { status: "archived" });
+    await seedProject("gB");
+
+    await assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") });
+
+    const old = await db.goals.get("gOld");
+    expect(old?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("刷新成员任务 updatedAt 并记 tasks 同步日志（不刷新会让它按旧时钟沉进水下）", async () => {
+    await seedTask("t1");
+    await seedProject("gB");
+
+    await assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") });
+
+    const task = await db.tasks.get("t1");
+    expect(task?.updatedAt).toBe("2026-06-22T02:00:00.000Z");
+    const logs = await db.syncLog.toArray();
+    expect(
+      logs.some((log) => log.tableName === "tasks" && log.recordId === "t1" && log.action === "update"),
+    ).toBe(true);
+  });
+
+  it("子任务被拒且两侧都没写：抛 ProjectAssignError(block=subtask)", async () => {
+    await seedTask("p1");
+    await seedTask("t1", { parentId: "p1" });
+    await seedProject("gB");
+
+    await expect(assignTaskToProject("gB", "t1")).rejects.toBeInstanceOf(ProjectAssignError);
+    const b = await db.goals.get("gB");
+    expect(b?.members).toEqual([]);
+  });
+
+  it("重复模板被拒：block=recurring", async () => {
+    await seedTask("t1", { recurrence: { freq: "daily", interval: 1, basis: "due" } });
+    await seedProject("gB");
+
+    await expect(assignTaskToProject("gB", "t1")).rejects.toMatchObject({ block: "recurring" });
+  });
+
+  it("occurrence 被拒：block=recurring", async () => {
+    await seedTask("t1", { ruleId: "r1" });
+    await seedProject("gB");
+
+    await expect(assignTaskToProject("gB", "t1")).rejects.toMatchObject({ block: "recurring" });
+  });
+
+  it("满员被拒：block=full，错误消息带组名", async () => {
+    await seedTask("t1");
+    await seedProject(
+      "gB",
+      Array.from({ length: 500 }, (_, i) => `seed${i}`),
+    );
+
+    await expect(assignTaskToProject("gB", "t1")).rejects.toMatchObject({ block: "full" });
+    await expect(assignTaskToProject("gB", "t1")).rejects.toThrow("项目 gB");
+  });
+
+  it("已在该组时幂等：不重复写成员、不抛错", async () => {
+    await seedTask("t1");
+    await seedProject("gB", ["t1"]);
+
+    await assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") });
+
+    const b = await db.goals.get("gB");
+    expect(b?.members).toEqual([{ kind: "task", id: "t1" }]);
+  });
+
+  it("满员的组里已有这条任务时仍幂等放行，不误报 full（重入不会让数组变长）", async () => {
+    await seedTask("t1");
+    await seedProject("gB", [...Array.from({ length: 499 }, (_, i) => `seed${i}`), "t1"]);
+
+    await expect(assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") })).resolves.toBeDefined();
+  });
+
+  it("任务不存在时抛错且不留半个写入", async () => {
+    await seedProject("gB");
+    await expect(assignTaskToProject("gB", "missing")).rejects.toThrow("任务不存在");
+    const b = await db.goals.get("gB");
+    expect(b?.members).toEqual([]);
+  });
+
+  it("加入失败时整包回滚：A 组的成员不能被摘掉（否则这条任务凭空消失）", async () => {
+    // 事务原子性的真闸。摘除走 removeGoalMember、加入走 addGoalMember，两者各自 `db.transaction("rw", …)`；
+    // 若 Dexie 没把它们并进外层事务，摘除会独立提交，加入失败后就留下「A 摘了、B 没加上」的半截状态——
+    // 那条任务从两个组里同时消失，且是静默的。
+    //
+    // 构造「摘除成功但加入失败」：gB 的裸行 members 里含一对重复 ref（存量与跨设备并发都能造出，
+    // 见 findActiveProjectGoalIdForTask 那组用例）。它长度只有 2、不触发满员闸，
+    // 但 addGoalMember 内部的 GoalSchema.parse 会被 superRefine 的「goal member must be unique」拒掉。
+    await seedTask("t1");
+    await seedTask("dup");
+    await seedProject("gA", ["t1"]);
+    await seedProject("gB");
+    const rawB = await db.goals.get("gB");
+    if (!rawB) throw new Error("gB 不存在");
+    await db.goals.put({
+      ...rawB,
+      members: [
+        { kind: "task", id: "dup" },
+        { kind: "task", id: "dup" },
+      ],
+    });
+
+    await expect(assignTaskToProject("gB", "t1", { now: date("2026-06-22T02:00:00.000Z") })).rejects.toThrow();
+
+    const a = await db.goals.get("gA");
+    expect(a?.members).toEqual([{ kind: "task", id: "t1" }]);
+    const b = await db.goals.get("gB");
+    expect(b?.members).toEqual([
+      { kind: "task", id: "dup" },
+      { kind: "task", id: "dup" },
+    ]);
   });
 });

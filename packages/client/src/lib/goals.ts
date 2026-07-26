@@ -6,7 +6,14 @@ import {
   deleteGoalMemberPinInCurrentTransaction,
 } from "./goalLayoutPins.js";
 import { recordSyncLog } from "../sync/engine.js";
-import { ownedProjectTaskIds, projectMemberIndex, releasedProjectTaskIds } from "./tasks/goalMembership.js";
+import {
+  ownedProjectTaskIds,
+  projectAssignBlock,
+  projectAssignBlockMessage,
+  projectMemberIndex,
+  releasedProjectTaskIds,
+  type ProjectAssignBlock,
+} from "./tasks/goalMembership.js";
 import { buildNewRootTask, insertNewTaskInCurrentTransaction, touchTasksInCurrentTransaction } from "./tasks.js";
 
 export interface AddGoalInput {
@@ -218,6 +225,70 @@ export async function removeGoalMember(
     await deleteGoalMemberPinInCurrentTransaction({ goalId, nodeKind: ref.kind, nodeId: ref.id }, options.now);
     await touchTasksInCurrentTransaction(releasedProjectTaskIds(goal, next), timestamp);
     nextGoal = next;
+  });
+
+  if (!nextGoal) throw new Error("目标不存在");
+  return nextGoal;
+}
+
+/** 归入项目被拒。`block` 给调用方分支用，`message` 已是可直接展示的中文。 */
+export class ProjectAssignError extends Error {
+  readonly block: ProjectAssignBlock;
+  readonly goalTitle: string;
+
+  // 显式字段赋值而非 TS 参数属性：参数属性是不可擦除语法，将来上 `erasableSyntaxOnly`
+  // 或换纯类型剥离的转译链会当场炸，这里没必要冒这个险。
+  constructor(block: ProjectAssignBlock, goalTitle: string) {
+    super(projectAssignBlockMessage(block, goalTitle));
+    this.name = "ProjectAssignError";
+    this.block = block;
+    this.goalTitle = goalTitle;
+  }
+}
+
+/**
+ * 把一条任务归入某个 active project。
+ *
+ * **单一归属是写入侧不变量**（design §多重归属）：同事务内先把它从其它 active project 摘掉再加入，
+ * 读侧的 `projectMemberIndex` 仲裁只作为存量与跨设备并发的兜底，不承担正确性。
+ *
+ * 摘/加都复用 `removeGoalMember` / `addGoalMember`：它们已经负担幂等、`prerequisites` 边清理、
+ * `goalLayoutPins` 回收、成员任务 touch + syncLog 四件事，重写一遍必漂。Dexie 的嵌套事务会并入
+ * 外层这个 rw 事务（表是子集），因此任一步抛错整包回滚，不会留下「A 摘了但 B 没加上」的半截状态。
+ *
+ * 读 goals 走 `toArray()` 裸行、不过 `GoalSchema.parse`：superRefine 会因单个成员重复 reject 整行，
+ * 让整组归属静默失效（同 `listTasks` / `findActiveProjectGoalIdForTask`）。
+ */
+export async function assignTaskToProject(
+  goalId: string,
+  taskId: string,
+  options: { now?: Date } = {},
+): Promise<Goal> {
+  let nextGoal: Goal | null = null;
+
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
+    const task = await db.tasks.get(taskId);
+    if (!task) throw new Error("任务不存在");
+
+    const goalRows = await db.goals.toArray();
+    const target = goalRows.find((row) => row.id === goalId);
+    if (!target) throw new Error("目标不存在");
+
+    const members = target.members ?? [];
+    const already = members.some((member) => member.kind === "task" && member.id === taskId);
+    // 已在组内时不看 full：幂等重入不会让数组变长，此时报「满员」是假拒绝。
+    const block = projectAssignBlock(task, members.length);
+    if (block !== null && !(block === "full" && already)) throw new ProjectAssignError(block, target.title);
+
+    for (const row of goalRows) {
+      if (row.id === goalId) continue;
+      // 只摘 active project：theme 归属走绿竖条那条独立通道，归档目标读侧本来就不认。
+      if (row.status !== "active" || row.kind !== "project") continue;
+      if (!(row.members ?? []).some((member) => member.kind === "task" && member.id === taskId)) continue;
+      await removeGoalMember(row.id, { kind: "task", id: taskId }, options);
+    }
+
+    nextGoal = await addGoalMember(goalId, { kind: "task", id: taskId }, options);
   });
 
   if (!nextGoal) throw new Error("目标不存在");
