@@ -654,7 +654,6 @@ textarea {
 /* Health table = dashboard style（紧凑行，发丝分隔，无斑马纹，数字 tabular 右对齐） */
 .health-table-scroll {
   overflow-x: auto;
-  scrollbar-width: thin;
 }
 .health-table {
   width: 100%;
