@@ -677,6 +677,12 @@ function ConnectSheet({
   onTarget: (node: GoalGraphNodeModel) => void;
 }) {
   const candidates = nodes.filter((node) => isRealMemberNode(node) && node.id !== draft?.node.id);
+  const candidateTitle =
+    draft?.direction === "from-current"
+      ? `谁要等「${draft.node.title}」完成？`
+      : draft?.direction === "to-current"
+        ? `「${draft.node.title}」在等谁？`
+        : null;
 
   return (
     <Sheet open={open} onClose={onClose} title="连前置">
@@ -684,15 +690,17 @@ function ConnectSheet({
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             type="button"
+            aria-pressed={draft?.direction === "from-current"}
             onClick={() => onDirection("from-current")}
-            className="min-h-11 rounded-ctl border border-border px-3 text-sm text-ink"
+            className="min-h-11 rounded-ctl border border-border px-3 text-sm text-ink transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-page"
           >
             让它先于别人
           </button>
           <button
             type="button"
+            aria-pressed={draft?.direction === "to-current"}
             onClick={() => onDirection("to-current")}
-            className="min-h-11 rounded-ctl border border-border px-3 text-sm text-ink"
+            className="min-h-11 rounded-ctl border border-border px-3 text-sm text-ink transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-page"
           >
             让它等待别人
           </button>
@@ -708,6 +716,9 @@ function ConnectSheet({
         )}
         {draft?.direction && (
           <div className="grid gap-2">
+            <p data-connect-candidate-title className="td-text-caption text-ink-2">
+              {candidateTitle}
+            </p>
             {candidates.map((node) => (
               <button
                 key={node.id}

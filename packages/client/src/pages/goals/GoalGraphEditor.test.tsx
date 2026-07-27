@@ -573,6 +573,38 @@ describe("GoalGraphEditor", () => {
     expect(sheetError?.textContent).toContain("这条前置已存在");
   });
 
+  it("连前置方向按钮有选中态，候选列表标题复述语义", async () => {
+    const members: GoalMemberRef[] = [
+      { kind: "task", id: "t1" },
+      { kind: "task", id: "t2" },
+    ];
+    const goalValue = goal({ members });
+    const first = task("t1", { title: "A" });
+    const second = task("t2", { title: "B" });
+    await seed(goalValue, [first, second]);
+
+    const { host } = await renderEditor({ goal: goalValue, tasks: [first, second] });
+
+    await click(nodeButton(host, "task:t1"));
+    await click(buttonByLabel(document.body, "连前置 A"));
+
+    const forward = buttonByText(document.body, "让它先于别人");
+    const backward = buttonByText(document.body, "让它等待别人");
+    expect(forward.getAttribute("aria-pressed")).toBe("false");
+    expect(backward.getAttribute("aria-pressed")).toBe("false");
+    expect(document.body.querySelector("[data-connect-candidate-title]")).toBeNull();
+
+    await click(forward);
+    expect(forward.getAttribute("aria-pressed")).toBe("true");
+    expect(backward.getAttribute("aria-pressed")).toBe("false");
+    expect(document.body.querySelector("[data-connect-candidate-title]")?.textContent).toBe("谁要等「A」完成？");
+
+    await click(backward);
+    expect(forward.getAttribute("aria-pressed")).toBe("false");
+    expect(backward.getAttribute("aria-pressed")).toBe("true");
+    expect(document.body.querySelector("[data-connect-candidate-title]")?.textContent).toBe("「A」在等谁？");
+  });
+
   it("React Flow select changes sync selected node state", async () => {
     const members: GoalMemberRef[] = [{ kind: "task", id: "task-1" }];
     const goalValue = goal({ members });
