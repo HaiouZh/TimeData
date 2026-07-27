@@ -79,6 +79,7 @@ last-reviewed: 2026-07-04
 - `preserveHitDays`（`recurrencePresets.ts`）保留多周几/多月号/`byMonthday:[-1]` 月末，不因打开/完成而静默降级。
 - `CustomRecurrencePage` UI 限制 `interval`/`count` 1..99（schema 允许 1..999，UI 更严）；时间滚轮用共享 `components/Wheel.tsx`，月号选择用 `components/MonthCalendar.tsx`。这两个共享组件消费 [design-language](../design-language.md) token 与 `td-num` 数字角色；样式迁移不改变重复规则的取值、锚点或保存语义。
 - “仅某天”预设通过 `applyRecurrenceChoice()` 一次写成普通排期任务（非重复）。
+- **`ruleId` 与 `recurrence` 互斥，防线只在这层 UI**：occurrence 的重复编辑一律重定向到它的规则模板；孤儿 occurrence（`ruleId` 指向已不存在的模板）把可点入口降级为静态说明「重复规则已删除，不能在这里改」。降级是有意的——回退到 occurrence 自身会让保存把 `recurrence` 写进这一发，就地造出混合体行。写路径本身不设防：`updateTask` / `applyRecurrenceChoice` 不校验，sync tasks 域无 `validate`，故这条不变量由“不给入口”维持、不由代码强制。混合体行仍删得掉（`deleteTaskCascade` 兜底）、能自愈（预设门选“不重复”清掉 `recurrence`）。
 
 ## 5. 模块速查
 
