@@ -994,30 +994,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-11 rounded-ctl border border-border px-3 text-sm text-ink\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-11 rounded-ctl border border-border px-3 text-sm text-ink\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/goals/GoalGraphEditor.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-11 rounded-row border border-border bg-surface px-3 text-left text-sm text-ink\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/goals/GoalGraphNodeView.tsx",
       "rule": "bare-text-size",
       "lineText": "className=\"group/goal-node relative inline-flex items-center text-sm\"",

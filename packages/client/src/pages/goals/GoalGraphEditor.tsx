@@ -692,7 +692,7 @@ function ConnectSheet({
             type="button"
             aria-pressed={draft?.direction === "from-current"}
             onClick={() => onDirection("from-current")}
-            className="min-h-11 rounded-ctl border border-border px-3 text-sm text-ink transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-page"
+            className="min-h-11 rounded-ctl border border-border px-3 td-text-body text-ink transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-page"
           >
             让它先于别人
           </button>
@@ -700,7 +700,7 @@ function ConnectSheet({
             type="button"
             aria-pressed={draft?.direction === "to-current"}
             onClick={() => onDirection("to-current")}
-            className="min-h-11 rounded-ctl border border-border px-3 text-sm text-ink transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-page"
+            className="min-h-11 rounded-ctl border border-border px-3 td-text-body text-ink transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-page"
           >
             让它等待别人
           </button>
@@ -725,7 +725,7 @@ function ConnectSheet({
                 type="button"
                 aria-label={`选择前置目标 ${node.title}`}
                 onClick={() => onTarget(node)}
-                className="min-h-11 rounded-row border border-border bg-surface px-3 text-left text-sm text-ink"
+                className="min-h-11 rounded-row border border-border bg-surface px-3 text-left td-text-body text-ink"
               >
                 {node.title}
               </button>
