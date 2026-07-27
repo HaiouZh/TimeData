@@ -4,7 +4,9 @@ import {
   canIndentRows,
   expectedNumbers,
   lineIndexAt,
+  normalizeIndent,
   parseItem,
+  removableIndentLen,
   type RenumberInputRow,
   type RenumberItemRow,
   type RenumberRawRow,
@@ -377,5 +379,122 @@ describe("canIndentRows（父行约束，与 assignBlocks 共用块边界）", (
     // [false, true, false]，把 C 拉平成 B 的兄弟）。
     const { lines, blockOf } = setup("1. A\n2. B\n\t1. C");
     expect(canIndentRows(lines, blockOf, [0, 1, 2])).toEqual([false, true, true]);
+  });
+});
+
+// 全角字符放宽（2026-07-27）。全角一律用 \uXXXX 转义写：U+00A0 与普通空格肉眼无从分辨，
+// 写字面量的话这些用例迟早被 formatter 或后来的人静默改成半角、从此永远绿。
+const FW_SPACE = "\u3000"; // 全角空格
+const NB_SPACE = "\u00a0"; // 不间断空格
+const FW_1 = "\uff11"; // 全角数字 1
+const FW_2 = "\uff12";
+const CN_DOT = "\u3002"; // 中文句号
+const FW_DOT = "\uff0e"; // 全角句点
+
+describe("parseItem · 四个位置认全角", () => {
+  it("缩进用全角空格也认得出是列表项", () => {
+    const item = parseItem(`${FW_SPACE}1. a`);
+    expect(item).not.toBeNull();
+    expect(item?.col).toBe(2); // 全角空格占两列
+  });
+  it("编号用全角数字也认得出", () => {
+    expect(parseItem(`${FW_1}${FW_2}. a`)?.numText).toBe(`${FW_1}${FW_2}`);
+  });
+  it("分隔符用中文句号 / 全角句点也认得出", () => {
+    expect(parseItem(`1${CN_DOT} a`)).not.toBeNull();
+    expect(parseItem(`1${FW_DOT} a`)).not.toBeNull();
+  });
+  it("gap 用全角空格也认得出，markerLen 按原文字符数算", () => {
+    const item = parseItem(`1.${FW_SPACE}a`);
+    expect(item?.content).toBe("a");
+    expect(item?.markerLen).toBe(3); // "1" + "." + 一个全角空格
+  });
+  it("四个位置全是全角也认得出", () => {
+    const item = parseItem(`${FW_SPACE}${FW_1}${CN_DOT}${FW_SPACE}内容`);
+    expect(item?.content).toBe("内容");
+  });
+  it("仍然不认 `)` 分隔符与 10 位以上数字（放宽没有顺手放开别的）", () => {
+    expect(parseItem("1) a")).toBeNull();
+    expect(parseItem("1234567890. a")).toBeNull();
+  });
+});
+
+describe("visualCol / normalizeIndent · 等宽替换", () => {
+  it("全角空格算两列，与两个半角空格同层", () => {
+    expect(visualCol(FW_SPACE)).toBe(2);
+    expect(visualCol(FW_SPACE)).toBe(visualCol("  "));
+  });
+  it("不间断空格算一列", () => {
+    expect(visualCol(NB_SPACE)).toBe(1);
+  });
+  it("规范化前后视觉列宽恒等（否则回车会顺手改掉嵌套层级）", () => {
+    for (const indent of [FW_SPACE, NB_SPACE, `${FW_SPACE}${FW_SPACE}`, `\t${FW_SPACE}`, `${NB_SPACE} \t`, "  "]) {
+      expect(visualCol(normalizeIndent(indent))).toBe(visualCol(indent));
+    }
+  });
+  it("规范化后不再含全角空白（这才是让 Obsidian 也认它是列表的那一步）", () => {
+    expect(normalizeIndent(`${FW_SPACE}${NB_SPACE}`)).toBe("   ");
+  });
+});
+
+describe("removableIndentLen · 按视觉列宽出层", () => {
+  it("全角空格按列宽拿：两个全角空格 = 4 列 = 一级", () => {
+    expect(removableIndentLen(`${FW_SPACE}${FW_SPACE}`)).toBe(2);
+  });
+  it("一个全角空格不足一级，有多少拿多少", () => {
+    expect(removableIndentLen(FW_SPACE)).toBe(1);
+  });
+  it("半角空格行为不变（4 个拿 4，2 个拿 2）", () => {
+    expect(removableIndentLen("    ")).toBe(4);
+    expect(removableIndentLen("  ")).toBe(2);
+  });
+  it("Tab 优先，仍然只拿一个 Tab 字符", () => {
+    expect(removableIndentLen(`\t${FW_SPACE}`)).toBe(1);
+  });
+  it("顶层仍返回 0（Shift+Tab 的逃生口判据没被放宽破坏）", () => {
+    expect(removableIndentLen("")).toBe(0);
+    expect(removableIndentLen("abc")).toBe(0);
+  });
+});
+
+describe("renumberBlock · marker 规范成半角", () => {
+  const item = (indent: string, numText: string, gap: string, content: string): RenumberInputRow => ({
+    kind: "item",
+    indent,
+    numText,
+    gap,
+    content,
+  });
+
+  it("全角编号被拉直成半角，不产出 NaN", () => {
+    const out = renumberBlock([item("", FW_1, " ", "a"), item("", FW_2, " ", "b")], true);
+    expect(out.map((r) => r.text)).toEqual(["1. a", "2. b"]);
+  });
+  it("不拉直（单项块）时也半角化，保留原号数值", () => {
+    const out = renumberBlock([item("", `${FW_1}${FW_2}`, " ", "a")], false);
+    expect(out[0].text).toBe("12. a");
+    expect(out[0].text).not.toContain("NaN");
+  });
+  it("全角缩进与全角 gap 一并规范，markerLen 跟着新文本算", () => {
+    const out = renumberBlock([item(FW_SPACE, "1", FW_SPACE, "a")], false);
+    expect(out[0].text).toBe("  1. a"); // 缩进等宽换成两个半角空格，gap 收成一个半角空格
+    expect(out[0].markerLen).toBe(5);
+  });
+  it("raw 行原样透传，不被规范化碰到", () => {
+    const raw: RenumberRawRow = { kind: "raw", text: `${FW_SPACE}续写的一段` };
+    expect(renumberBlock([item("", "1", " ", "a"), raw], false)[1].text).toBe(`${FW_SPACE}续写的一段`);
+  });
+});
+
+describe("assignBlocks · 附属行的行首空白口径同步放宽", () => {
+  it("全角空格缩进的续写段落算附属行，不把块截断", () => {
+    // LEADING_WS_RE 与 ITEM_RE 用同一份 WS_CLASS。它若漏了全角，"　　　续写"会被判成
+    // 普通行、在这里断块，下面的 "2. b" 自成一块被拉直成 "1. b"——用户毫无感觉但文件已经改坏。
+    const text = `1. a\n${FW_SPACE}${FW_SPACE}${FW_SPACE}续写的一段\n2. b`;
+    const lines = splitLines(text);
+    const { blocks } = assignBlocks(lines, scanProtected(lines));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].items).toBe(2); // 附属行不计入 items
+    expect(blocks[0].rows).toEqual([0, 1, 2]);
   });
 });

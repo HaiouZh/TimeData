@@ -16,6 +16,7 @@ import {
   renumberBlock,
   scanProtected,
   splitLines,
+  toHalfWidthDigits,
   trimEditSpan,
 } from "./listModel.js";
 import type { EditAction } from "./textareaEdit.js";
@@ -173,7 +174,9 @@ export function applyEnterInOrderedList(value: string, selStart: number, selEnd:
       {
         kind: "item",
         indent: item.indent,
-        numText: String(Number(item.numText) + 1),
+        // 必须先半角化再 Number()：`Number("１")` 是 NaN，直接算会把字符串 "NaN" 当编号
+        // 写进用户的日记（straighten=false 的单项块路径下它就是最终值，无人兜底）。
+        numText: String(Number(toHalfWidthDigits(item.numText)) + 1),
         gap: item.gap,
         content: restOfLine,
       },

@@ -11,19 +11,71 @@ export const TAB_COLUMNS = 4;
 export const INDENT = "\t";
 
 /**
- * 有序列表项正则。四点变化，逐条见勘察 §A：
- * - `([ \t]*)` 捕获前导缩进（Tab/空格混用的存量文件都要认）；
- * - `\d{1,9}` 上限 9 位，防 `Number()` 溢出；代价是超长数字被当普通行（功能不生效，不是改坏文件）；
- * - `([ \t]+)` 允许多空格/Tab 作为 gap，且原样保留、新行继承；
- * - 只认 `.` 不认 `)`，与现状一致。
+ * 认作空白（缩进 / gap）的字符：半角空格、Tab、**全角空格 U+3000**、不间断空格 U+00A0。
+ * 认作编号的数字：半角 `0-9` 与**全角 `０-９`**。认作 marker 分隔符：`.`、**中文句号 `。`**、
+ * **全角句点 `．`**。
+ *
+ * 三处全角是 2026-07-27 放宽进来的（用户明确要求）。原因：中文输入法下这四个位置极易混进全角，
+ * 而只要混进一个，整行就不再匹配 ITEM_RE，回车直接返回 null 交还浏览器 → 吐出一行没序号的空行，
+ * 紧接着 Tab 也认不出那行、焦点跳去分栏拖拽把手。用户看到的是"回车吐空行、Tab 乱跳"，且全角
+ * 字符肉眼与半角难分，自己排查不出来。
+ *
+ * **已知代价（显式接受）**：中文正式文档里「１．这是一段」这种全角编号是常见的装饰性写法，
+ * 现在它会被当成列表项——光标落在它上面按回车，整块会被拉直并规范成半角。
  */
-export const ITEM_RE = /^([ \t]*)(\d{1,9})\.([ \t]+)(.*)$/;
+const WS_CLASS = " \\t\\u3000\\u00a0";
+const DIGIT_CLASS = "0-9\\uff10-\\uff19";
+const DOT_CLASS = "\\.\\u3002\\uff0e";
+
+/**
+ * 有序列表项正则。捕获组：缩进 / 编号 / 分隔符 / gap / 内容。
+ * - 缩进与 gap 认 `WS_CLASS`（Tab/空格混用的存量文件、以及全角空白都要认）；
+ * - 编号上限 9 位，防 `Number()` 溢出；代价是超长数字被当普通行（功能不生效，不是改坏文件）；
+ * - gap 原样捕获（`renumberBlock` 输出时规范化，见该函数）；
+ * - 只认句点族，不认 `)`，与现状一致。
+ */
+export const ITEM_RE = new RegExp(`^([${WS_CLASS}]*)([${DIGIT_CLASS}]{1,9})([${DOT_CLASS}])([${WS_CLASS}]+)(.*)$`);
 
 /** 代码围栏行识别；缩进用 `[ \t]*` 而非 CommonMark 的 `{0,3}` 空格——偏保守，见 scanProtected 注释。 */
 const FENCE_RE = /^[ \t]*(`{3,}|~{3,})(.*)$/;
 
-/** 行首空白探测，供 assignBlocks 判定"附属行"用。 */
-const LEADING_WS_RE = /^[ \t]*/;
+/** 行首空白探测，供 assignBlocks 判定"附属行"用。与 ITEM_RE 的缩进口径保持一致。 */
+const LEADING_WS_RE = new RegExp(`^[${WS_CLASS}]*`);
+
+/**
+ * 全角数字 → 半角。`Number("１")` 是 **NaN**（JS 的数字解析只认 ASCII 数字），所以任何要把编号
+ * 当数字用的地方都必须先过这一手，否则 `String(Number(numText) + 1)` 会产出字符串 "NaN" 并
+ * 直接写进用户的日记。
+ */
+export function toHalfWidthDigits(numText: string): string {
+  // 全角字符一律写 \uXXXX 转义，不写字面量：U+00A0 与普通空格肉眼无从分辨，写字面量迟早被
+  // formatter 或后来的人静默改坏，而这类坏法不会报错、只会让整条识别悄悄失效。
+  return numText.replace(/[\uff10-\uff19]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+}
+
+/**
+ * 缩进规范化：全角空格 → 两个半角空格，不间断空格 → 一个半角空格，其余（含 Tab）原样。
+ * **等宽替换**是硬要求——`visualCol(normalizeIndent(s)) === visualCol(s)` 必须恒成立，否则
+ * 规范化会顺手改掉层级，"回车一下嵌套关系变了"。
+ *
+ * 只在 `renumberBlock` 输出时调用（即只作用于本次真被改写的块）。不规范化的话这条救援只做了一半：
+ * 行首带 U+3000 的行在 CommonMark 里连列表都不是（U+3000 不是空白，整行退化成普通段落），
+ * 在 Obsidian 里照样不渲染成列表。
+ */
+export function normalizeIndent(indent: string): string {
+  let out = "";
+  for (const ch of indent) {
+    if (ch === "\u3000") out += "  ";
+    else if (ch === "\u00a0") out += " ";
+    else out += ch;
+  }
+  return out;
+}
+
+/** gap 规范化：全角/不间断空格 → 一个半角空格，Tab 原样（gap 宽度不承载层级信息，不需要等宽）。 */
+function normalizeGap(gap: string): string {
+  return gap.replace(/[\u3000\u00a0]/g, " ");
+}
 
 /** 一行的物理位置。index 是 0 基行号；start/end 是行首/行尾（不含 "\n"）在 value 中的绝对偏移。 */
 export interface DocLine {
@@ -86,6 +138,9 @@ export function visualCol(indent: string): number {
   let col = 0;
   for (const ch of indent) {
     if (ch === "\t") col += TAB_COLUMNS - (col % TAB_COLUMNS);
+    // 全角空格占两列——层级比较全靠这个函数，按 1 算会让"两个全角空格"和"两个半角空格"
+    // 判成同层，normalizeIndent 的等宽替换（U+3000 → 两个空格）也就不再等宽。
+    else if (ch === "\u3000") col += 2;
     else col += 1;
   }
   return col;
@@ -102,8 +157,20 @@ export function visualCol(indent: string): number {
  */
 export function removableIndentLen(indent: string): number {
   if (indent.startsWith(INDENT)) return INDENT.length;
+  // 空格缩进（含全角空格 / 不间断空格）：按**视觉列宽**最多拿掉 TAB_COLUMNS 列，不是最多拿掉
+  // 4 个字符——1 个全角空格已经占 2 列，按字符数算会一次拿掉 8 列、出层直接跳两级。
   let n = 0;
-  while (n < TAB_COLUMNS && indent[n] === " ") n += 1;
+  let cols = 0;
+  while (n < indent.length && cols < TAB_COLUMNS) {
+    // 显式白名单，不复用 visualCol 求宽：visualCol 对任何非 Tab 字符都返回 ≥1，拿它当"是不是
+    // 空白"的判据会让守卫结构上永远不成立，传进来一个非空白开头的串就会被当缩进吃掉。
+    // Tab 不在表里 → 命中 break，归上面那条分支管。
+    const ch = indent[n];
+    const width = ch === " " ? 1 : ch === "\u3000" ? 2 : ch === "\u00a0" ? 1 : 0;
+    if (width === 0) break;
+    cols += width;
+    n += 1;
+  }
   return n;
 }
 
@@ -111,14 +178,18 @@ export function removableIndentLen(indent: string): number {
 export function parseItem(text: string): OrderedItem | null {
   const m = ITEM_RE.exec(text);
   if (!m) return null;
-  const [, indent, numText, gap, content] = m;
+  // 五个捕获组：缩进 / 编号 / **分隔符** / gap / 内容。分隔符是 2026-07-27 随全角放宽新增的第三组，
+  // 漏掉它会让 gap 和 content 整体错位一格（gap 拿到 "."，content 拿到真 gap），markerLen 与光标全错。
+  const [, indent, numText, dot, gap, content] = m;
   return {
     indent,
     col: visualCol(indent),
     numText,
     gap,
     content,
-    markerLen: indent.length + numText.length + 1 + gap.length,
+    // 分隔符族（`.` `。` `．`）全是单字符，所以这里仍是 +dot.length === +1；写 dot.length 而不是
+    // 写死 1，是为了将来有人往 DOT_CLASS 里加多字符分隔符时这行不会静默算错。
+    markerLen: indent.length + numText.length + dot.length + gap.length,
   };
 }
 
@@ -265,9 +336,7 @@ export function renumberBlock(rows: RenumberInputRow[], straighten: boolean): Re
   if (!straighten) {
     return rows.map((r) => {
       if (r.kind === "raw") return { text: r.text, markerLen: null };
-      const text = `${r.indent}${r.numText}.${r.gap}${r.content}`;
-      const markerLen = r.indent.length + r.numText.length + 1 + r.gap.length;
-      return { text, markerLen };
+      return renderItem(r.indent, toHalfWidthDigits(r.numText), r.gap, r.content);
     });
   }
   const itemCols = rows.filter((r): r is RenumberItemRow => r.kind === "item").map((r) => visualCol(r.indent));
@@ -277,10 +346,25 @@ export function renumberBlock(rows: RenumberInputRow[], straighten: boolean): Re
     if (r.kind === "raw") return { text: r.text, markerLen: null };
     const numText = String(nums[k]);
     k += 1;
-    const text = `${r.indent}${numText}.${r.gap}${r.content}`;
-    const markerLen = r.indent.length + numText.length + 1 + r.gap.length;
-    return { text, markerLen };
+    return renderItem(r.indent, numText, r.gap, r.content);
   });
+}
+
+/**
+ * 拼一条 item 行的最终文本 + marker 长度，**顺手把 marker 规范成半角**（缩进按等宽替换、
+ * gap 收成半角空白、分隔符恒输出 `.`；编号由调用方保证已是半角）。
+ *
+ * 规范化只发生在这里，也就是只作用于本次真被 renumberBlock 改写的块，不会去动文件里别处的行。
+ * 之所以要规范化而不是原样回填：全角 marker 在 CommonMark / Obsidian 里根本不构成列表，
+ * 只放宽识别、原样写回，等于我们这边认了、渲染那边不认，同一份文件两套行为。既然这一块已经
+ * 要被改写，就一次改到位。**代价是用户手写的全角编号会在回车时被就地改成半角**（显式接受，
+ * 见 WS_CLASS 那段的"已知代价"）。
+ */
+function renderItem(indent: string, numText: string, gap: string, content: string): RenumberedRow {
+  const nIndent = normalizeIndent(indent);
+  const nGap = normalizeGap(gap);
+  const text = `${nIndent}${numText}.${nGap}${content}`;
+  return { text, markerLen: nIndent.length + numText.length + 1 + nGap.length };
 }
 
 /**
