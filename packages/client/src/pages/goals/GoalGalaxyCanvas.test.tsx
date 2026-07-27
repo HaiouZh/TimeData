@@ -158,6 +158,27 @@ async function dropGoalMember(
   return dataTransfer;
 }
 
+async function dragOverGalaxy(target: Element, position: { x: number; y: number }): Promise<{ dropEffect: string }> {
+  const dataTransfer = { dropEffect: "copy", getData: () => "" };
+  await act(async () => {
+    const event = new MouseEvent("dragover", {
+      bubbles: true,
+      cancelable: true,
+      clientX: position.x,
+      clientY: position.y,
+    });
+    Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+    target.dispatchEvent(event);
+  });
+  return dataTransfer;
+}
+
+async function dragLeaveGalaxy(target: Element): Promise<void> {
+  await act(async () => {
+    target.dispatchEvent(new MouseEvent("dragleave", { bubbles: true, cancelable: true }));
+  });
+}
+
 describe("GoalGalaxyCanvas", () => {
   beforeEach(() => {
     upsertGoalLayoutPinMock.mockReset().mockResolvedValue(undefined);
@@ -592,6 +613,54 @@ describe("GoalGalaxyCanvas", () => {
     await dropGoalMember(host.querySelector("[data-galaxy]") ?? host, { kind: "task", id: "candidate" }, { x: 500, y: 500 });
 
     expect(addGoalMemberMock).not.toHaveBeenCalled();
+    await unmount(root);
+  });
+
+  it("拖动中实时预览命中：命中给可放置光标并高亮该星，落空给禁止光标", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const canvas = host.querySelector("[data-galaxy]") ?? host;
+
+    const hit = await dragOverGalaxy(canvas, { x: 0, y: 0 });
+    expect(hit.dropEffect).toBe("copy");
+    expect(host.querySelector('[data-node-render-id="goal:g1"] [data-drop-target="true"]')).not.toBeNull();
+
+    const miss = await dragOverGalaxy(canvas, { x: 500, y: 500 });
+    expect(miss.dropEffect).toBe("none");
+    expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("拖离画布后熄灭命中高亮", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const canvas = host.querySelector("[data-galaxy]") ?? host;
+
+    await dragOverGalaxy(canvas, { x: 0, y: 0 });
+    expect(host.querySelector('[data-drop-target="true"]')).not.toBeNull();
+
+    await dragLeaveGalaxy(canvas);
+    expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
+
     await unmount(root);
   });
 

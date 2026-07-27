@@ -7,6 +7,7 @@ export interface GoalStarNodeData extends Record<string, unknown> {
   star: GalaxyStar;
   pinned?: boolean;
   lively?: boolean;
+  dropActive?: boolean;
   handles?: ReactNode;
   onRestoreAuto?: () => void;
 }
@@ -24,10 +25,11 @@ export function GoalStarNode({ data }: { data: GoalStarNodeData }) {
       data-goal-star-shell="true"
       className={`relative inline-flex items-center justify-center rounded-pill border border-[var(--galaxy-star-core)] bg-surface-elevated/85 text-center text-ink shadow-[var(--shadow-galaxy-star-core-wide)] ${
         collapsed ? "h-20 w-20" : "h-36 w-36"
-      } ${data.lively ? "motion-safe:animate-pulse" : ""}`}
+      } ${data.lively ? "motion-safe:animate-pulse" : ""} ${data.dropActive ? "ring-2 ring-accent" : ""}`}
       data-star-id={star.nodeId}
       data-star-lod={star.lod}
       data-galaxy-lively={data.lively ? "true" : undefined}
+      data-drop-target={data.dropActive ? "true" : undefined}
     >
       {data.handles}
       <span

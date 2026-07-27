@@ -465,6 +465,7 @@ function GoalGalaxyCanvasInner({
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+  const [dropTargetGoalId, setDropTargetGoalId] = useState<string | null>(null);
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
   const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
@@ -820,37 +821,58 @@ function GoalGalaxyCanvasInner({
     [flow, nodes],
   );
 
-  const onGalaxyDragOver = useCallback((event: DragEvent<HTMLDivElement>): void => {
-    if (isGalaxyOverlayTarget(event.target)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+  const collectStarHitTargets = useCallback((): GoalStarHitTarget[] => {
+    const positionByNodeId = new Map(nodes.map((node) => [node.id, node.position]));
+    return model.stars.map((star) => {
+      const measured = flow.getNode(star.nodeId)?.measured;
+      return {
+        goalId: star.goalId,
+        center: positionByNodeId.get(star.nodeId) ?? layout.positions[star.nodeId] ?? { x: 0, y: 0 },
+        width: measured?.width ?? STAR_HIT_FALLBACK.width,
+        height: measured?.height ?? STAR_HIT_FALLBACK.height,
+      };
+    });
+  }, [flow, layout.positions, model.stars, nodes]);
+
+  const onGalaxyDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>): void => {
+      if (isGalaxyOverlayTarget(event.target)) {
+        setDropTargetGoalId(null);
+        return;
+      }
+      event.preventDefault();
+      // 与 drop 用同一套命中判定：两条路径一旦漂移，光标就会又说"能放"而实际放不进
+      const flowPos = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const goalId = hitTestGoalStar(flowPos, collectStarHitTargets());
+      event.dataTransfer.dropEffect = goalId ? "copy" : "none";
+      setDropTargetGoalId((current) => (current === goalId ? current : goalId));
+    },
+    [collectStarHitTargets, flow],
+  );
+
+  const onGalaxyDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
+    // 子元素之间移动也会冒泡出 dragleave，只有真正离开画布才熄灭
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setDropTargetGoalId(null);
   }, []);
 
   const onGalaxyDrop = useCallback(
     (event: DragEvent<HTMLDivElement>): void => {
       if (isGalaxyOverlayTarget(event.target)) return;
       event.preventDefault();
+      setDropTargetGoalId(null);
       const ref = readDragRef(event.dataTransfer);
       if (!ref) return;
 
       const flowPos = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      const positionByNodeId = new Map(nodes.map((node) => [node.id, node.position]));
-      const stars: GoalStarHitTarget[] = model.stars.map((star) => {
-        const measured = flow.getNode(star.nodeId)?.measured;
-        return {
-          goalId: star.goalId,
-          center: positionByNodeId.get(star.nodeId) ?? layout.positions[star.nodeId] ?? { x: 0, y: 0 },
-          width: measured?.width ?? STAR_HIT_FALLBACK.width,
-          height: measured?.height ?? STAR_HIT_FALLBACK.height,
-        };
-      });
-      const goalId = hitTestGoalStar(flowPos, stars);
+      const goalId = hitTestGoalStar(flowPos, collectStarHitTargets());
       if (!goalId) return;
 
       event.dataTransfer.dropEffect = "copy";
       void addGoalMember(goalId, ref);
     },
-    [flow, layout.positions, model.stars, nodes],
+    [collectStarHitTargets, flow],
   );
 
   function handleLineOpacityChange(value: string): void {
@@ -909,6 +931,14 @@ function GoalGalaxyCanvasInner({
     () => (selectedEdgeId ? (edges.find((edge) => edge.id === selectedEdgeId) ?? null) : null),
     [edges, selectedEdgeId],
   );
+
+  const renderNodes = useMemo<GoalGalaxyFlowNode[]>(() => {
+    if (!dropTargetGoalId) return nodes;
+    const starId = `goal:${dropTargetGoalId}`;
+    return nodes.map((node) =>
+      node.id === starId && node.type === "goal-star" ? { ...node, data: { ...node.data, dropActive: true } } : node,
+    );
+  }, [dropTargetGoalId, nodes]);
 
   function clearSelection(): void {
     setSelectedNodeId(null);
@@ -1111,11 +1141,12 @@ function GoalGalaxyCanvasInner({
     <div
       data-galaxy
       onDragOver={onGalaxyDragOver}
+      onDragLeave={onGalaxyDragLeave}
       onDrop={onGalaxyDrop}
       className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink"
     >
       <ReactFlow
-        nodes={nodes}
+        nodes={renderNodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
