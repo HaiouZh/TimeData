@@ -11,26 +11,17 @@ import {
   INDENT,
   lineIndexAt,
   parseItem,
+  removableIndentLen,
   type RenumberInputRow,
   renumberBlock,
   scanProtected,
   splitLines,
-  TAB_COLUMNS,
 } from "./listModel.js";
 import type { EditAction } from "./textareaEdit.js";
 
-/**
- * Shift+Tab 每次能拿掉多少缩进：indent 以 INDENT（"\t"）开头就拿掉 1 个 Tab 字符；
- * 否则视为空格缩进的老文件，最多拿掉 TAB_COLUMNS 个前导空格（不足则有多少拿多少）。
- * 返回 0 表示该行已经是顶层（无缩进可拿），调用方据此把它排除出 targets——
- * 这正是"Shift+Tab 在顶层放行"的判定依据（§1.3）。
- */
-function removableIndentLen(indent: string): number {
-  if (indent.startsWith(INDENT)) return INDENT.length;
-  let n = 0;
-  while (n < TAB_COLUMNS && indent[n] === " ") n += 1;
-  return n;
-}
+// removableIndentLen 已上收到 listModel.ts：空列表项回车的逐级出层（orderedList.ts）要用同一份
+// 判据，两处各写一套会分叉（Shift+Tab 说还能出层、回车说已经到顶）。"Shift+Tab 在顶层放行"
+// 的判定依据仍是它返回 0（§1.3），语义一个字没变。
 
 /**
  * Tab / Shift+Tab 缩进出层。

@@ -7,7 +7,7 @@ covers:
   - packages/client/src/lib/diary/diaryRefEntriesQuery.ts
   - packages/client/src/lib/diary/diaryRefTasks.ts
   - packages/client/src/lib/diary/diaryRefPrefs.ts
-last-reviewed: 2026-07-26
+last-reviewed: 2026-07-27
 ---
 
 # 日记 · 参考栏（只读）
@@ -34,7 +34,7 @@ last-reviewed: 2026-07-26
 
 | 块 | 来源 | 口径 |
 |---|---|---|
-| 打点 | `listEntriesOverlappingDay(date)` + `useCategories()` | 区间重叠查出，跨零点条目**必须按日界裁剪**（`lib/diary/diaryRefEntries.ts`），否则「23:00–次日01:00」两天各显示成两小时。**不借 `useEntries`**，理由见 §4 |
+| 打点 | `listEntriesOverlappingDay(date)` + `useCategories()` | 区间重叠查出，跨零点条目**必须按日界裁剪**（`lib/diary/diaryRefEntries.ts`），否则「23:00–次日01:00」两天各显示成两小时。**不借 `useEntries`**，理由见 §4。每行按分类上色，见下 |
 | 完成的待办 | `listTasks().completed` 再过滤 | 硬性三条：`done === true`（排除账本判定耗尽、混在同一桶里的重复模板）、`completedAt !== null`（**绝不回退 `updatedAt`**）、`getDateString(completedAt) === date` |
 | 速记 | `listQuickNotesByDate(date)` | 现成，走 `occurredAt` 索引半开区间、日界已是 Asia/Shanghai，**不再包一层过滤** |
 | 回看 | `fetchDiary(addDays(date,-1))` / `addDays(date,-7)` | 相对 `date` 而非相对真实今天。两块**一律默认收起、展开才请求**，已加载过不重复拉 |
@@ -42,6 +42,8 @@ last-reviewed: 2026-07-26
 回看两块的**措辞随 `isToday` 切**：今天说「昨天 / 上周今日」，看历史日期说「前一天 / 前七天」。口径本来就对，但看 7/20 时上半区标题写着「7月20日」、下半区说「昨天 7月19日」，屏幕上同时出现两句互相矛盾的话；非今天时一律用不带绝对时间断言的相对说法。
 
 三个本地源一律 `getDateString`（Asia/Shanghai）。仓库存在两套日界（待办的 today/逾期判定走设备本地 `localDateString`），混用会让非东八区设备上三块内容互相差一天。
+
+**打点行的上色与时间线逐字同款**（`DiaryRefPunches.tsx` ↔ `components/TimeSlot.tsx`）：左侧 3px 实色条 + 同色 10%（`0x1a`）底，色值取 `useCategories().getCategoryColor(categoryId)`（子分类返回父分类的颜色）。逐字复用而不是另调一套，是为了让「参考栏里的这条打点」与「时间线里的那条打点」一眼就是同一个分类——两边各调各的色，同一分类在两个页面会长得不像同一件事。
 
 ## 3 本地三块的错误通道：必须自己围 ErrorBoundary
 

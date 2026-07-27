@@ -1500,4 +1500,55 @@ describe("DiaryPage", () => {
     expect(host.textContent).not.toContain("网络断开");
     await unmount(root);
   });
+
+  describe("空白日记预填 “1. ”", () => {
+    it("正文为空时预填，但不算已修改——保存按钮仍置灰，离开不弹未保存", async () => {
+      fetchDiary.mockResolvedValue({ content: "", mtime: null });
+      const { host, root } = await renderPage();
+
+      expect(textarea(host).value).toBe("1. ");
+      // 承重断言：预填**不置脏**。这条一红说明有人把 dirty 改成了"内容与加载值比对"，
+      // 那样打开任何一天空日记都会永远脏，useUnsavedChangesGuard 被钉死在武装状态。
+      expect(host.querySelector('button[aria-label="保存"]')).toHaveProperty("disabled", true);
+      await unmount(root);
+    });
+
+    it("在预填正文上接着写，保存上去的是带 “1. ” 的完整正文", async () => {
+      fetchDiary.mockResolvedValue({ content: "", mtime: null });
+      saveDiary.mockResolvedValue({ mtime: 500 });
+      const { host, root } = await renderPage();
+
+      // 追加在**编辑器里已有的值**之后，不是直接灌一个写死的完整串——写死的话这条用例
+      // 在预填被整个删掉时照样绿（实测过），是假闸。
+      const field = textarea(host);
+      await typeInto(field, `${field.value}今天做了什么`);
+      await click(host.querySelector('button[aria-label="保存"]'));
+
+      expect(saveDiary).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ content: "1. 今天做了什么" }),
+      );
+      await unmount(root);
+    });
+
+    it("已有正文的一天一个字节都不动（预填只认空正文）", async () => {
+      fetchDiary.mockResolvedValue({ content: "昨天写的东西", mtime: 100 });
+      const { host, root } = await renderPage();
+
+      expect(textarea(host).value).toBe("昨天写的东西");
+      await unmount(root);
+    });
+
+    it("连着切到第二个空日记也照样预填", async () => {
+      fetchDiary.mockResolvedValue({ content: "", mtime: null });
+      const { host, root, router } = await renderPage();
+      expect(textarea(host).value).toBe("1. ");
+
+      // 换一天，服务端同样是空文件。这里只断言正文——"seedNonce 用计数器不用布尔"那半条
+      // 的可观察面是光标有没有归位，只有宽屏才聚焦，所以那条闸在 DiaryPage.wide.test.tsx。
+      await navigateTo(router, "/diary?date=2026-01-05");
+      expect(textarea(host).value).toBe("1. ");
+      await unmount(root);
+    });
+  });
 });

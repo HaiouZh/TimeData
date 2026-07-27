@@ -111,6 +111,51 @@ describe("参考栏 · 打点块", () => {
     expect(list.textContent).not.toContain("2小时");
   });
 
+  it("每条打点按自己的分类上色，同类同色、异类异色", async () => {
+    // 断言的是"颜色跟着分类走"这个行为，不是具体色值或具体 CSS 属性写法：
+    // 从 li 的 style 里取到什么色不重要，重要的是它取自该行分类的 color，且两个分类不串色。
+    await db.categories.bulkAdd([
+      {
+        id: "cat-写作", name: "写作", parentId: null, color: "#3B82F6", icon: null,
+        sortOrder: 0, isArchived: false,
+        createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+      },
+      {
+        id: "cat-运动", name: "运动", parentId: null, color: "#EF4444", icon: null,
+        sortOrder: 1, isArchived: false,
+        createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+      },
+    ] as never[]);
+    await db.timeEntries.bulkAdd([
+      {
+        id: "e-写1", categoryId: "cat-写作", startTime: "2026-07-25T01:00:00.000Z", endTime: "2026-07-25T02:00:00.000Z",
+        note: null, createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+      },
+      {
+        id: "e-动", categoryId: "cat-运动", startTime: "2026-07-25T03:00:00.000Z", endTime: "2026-07-25T04:00:00.000Z",
+        note: null, createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+      },
+      {
+        id: "e-写2", categoryId: "cat-写作", startTime: "2026-07-25T05:00:00.000Z", endTime: "2026-07-25T06:00:00.000Z",
+        note: null, createdAt: "2026-07-25T00:00:00.000Z", updatedAt: "2026-07-25T00:00:00.000Z",
+      },
+    ] as never[]);
+
+    const { host } = await renderPanel("2026-07-25");
+    await waitFor(() => host.querySelectorAll('[data-testid="diary-ref-punch-list"] li').length === 3, "三条打点");
+
+    const rows = Array.from(host.querySelectorAll('[data-testid="diary-ref-punch-list"] li'));
+    const paint = rows.map((li) => (li as HTMLElement).getAttribute("style") ?? "");
+    // 每行都真的被涂了（没上色的话 style 为空，下面两条相等/不等的断言会同时成立而漏网）
+    for (const style of paint) expect(style).not.toBe("");
+    const byName = new Map(rows.map((li, i) => [li.textContent?.includes("写作") ? `写${i}` : `动${i}`, paint[i]]));
+    const writing = Array.from(byName.entries()).filter(([k]) => k.startsWith("写")).map(([, v]) => v);
+    const sport = Array.from(byName.entries()).filter(([k]) => k.startsWith("动")).map(([, v]) => v);
+    expect(writing).toHaveLength(2);
+    expect(writing[0]).toBe(writing[1]); // 同分类两条 → 同色
+    expect(sport[0]).not.toBe(writing[0]); // 另一分类 → 不同色
+  });
+
   it("没有打点时出空态文案", async () => {
     const { host } = await renderPanel("2026-07-25");
     await flush();

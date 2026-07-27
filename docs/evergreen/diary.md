@@ -11,7 +11,7 @@ covers:
 contracts:
   - packages/server/src/routes/diary.ts
   - packages/server/src/lib/diary-path.ts
-last-reviewed: 2026-07-26
+last-reviewed: 2026-07-27
 ---
 
 # 日记
@@ -53,7 +53,7 @@ SettingsDiaryPage 保存模板
 2. **模板安全校验**（`expandDiaryTemplate`）：不能含反斜杠、不能是绝对路径（`/` 开头或 `X:` 盘符开头）、不能含 `..` 段；展开后的绝对路径必须仍在 `vaultDir` 内（`resolveDiaryFile` 二次校验，防止模板拼接后越权）。
 3. **mtime 并发守卫**：`PUT /:date` 非 `force` 请求时，服务器当前文件 mtime 必须等于客户端携带的 `baseMtime`（文件不存在时 `baseMtime` 应为 `null`），否则 409 冲突并回传服务器当前 mtime；`force:true` 无条件覆盖。mtime 精度为 `Math.floor(mtimeMs)`（毫秒截断）。
 4. **`enabled=false`（vault 未挂载）时**页面仍可加载/展示，但视为不可用状态提示用户，不阻断路由本身；`template=""`（未配置模板）在 `DiaryPage` 单独提示并链接到 `/settings/diary`。
-5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时，回车清空该行前缀而非续号。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md) §2。
+5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时不续号，**有缩进先退一层、退到顶层再按一次才清行**（逐级出层）。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md) §2。
 6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（表单控件棘轮闸 `check:ui` 强制）。
 7. **未保存修改的离开守卫**统一走 `hooks/useUnsavedChangesGuard`（`useBlocker` + `beforeunload`），覆盖桌面侧栏 / 底栏 / `<Link>` / `navigate()` / 浏览器后退 / 安卓返回键；页面**不再**自管 `beforeunload`，返回按钮也不自己弹确认（否则会连弹两次）。页内「刷新重载」的确认不归它管，仍走 `useConfirm`。**已知缺口**：`appUpdate.tsx` 检测到新构建时会在 `visibilitychange`/`focus` 上程序化调用 `window.location.reload()`（无用户激活的硬刷新），浏览器对此类 reload 普遍抑制 `beforeunload` 提示，且 Android WebView 本就不显示 `beforeunload` 对话框；这条路径既不过 `useBlocker`（不是路由内导航）也不过 `beforeunload`（被抑制/不支持），日记正文又不进任何本地存储或同步域，因此是离开守卫覆盖不到的出口。
 8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 [diary/editor](diary/editor.md) §8 行尾保护。
@@ -65,6 +65,8 @@ SettingsDiaryPage 保存模板
 14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也免掉了光标插入/格式化/撤销栈交互的一整片复杂度。
 15. **参考栏不得污染主编辑区状态**：任何一块的加载中/失败只在自己那块显示，绝不 set 页面的 `loading`/`loadFailed`/`conflict`/`error`/`dirty`。否则参考栏一超时会连累正文写不了。
 16. **窄屏（<1024px，含 APK）整个不渲染参考栏**：窄屏行为与加参考栏之前完全一致。
+17. **空正文预填 `"1. "`**（`DiaryPage.tsx:DIARY_SEED`）：`fetchDiary` 返回的 `content === ""` 时（文件不存在，或存在但是空的）正文预填一条空的有序列表项，之后每次回车由 §2.5 自动接号。判据是**内容**不是 `mtime === null`——手动清空过的旧文件也该照样预填。**预填不置脏**（不调 `markDirty`）：不写字就不落盘，既不会每天路过一眼就在 vault 里攒出一堆只有 `"1. "` 的空壳文件，离开也不会弹「未保存的修改」。这条靠 dirty 的记账口径天然成立（dirty 只由 `onChange` / 降级编辑置位，不是内容比对，见 §2.8）；谁把 dirty 改成内容比对，这里会连带变成「打开就永远脏」。**只在加载路径预填，`handleReload` 不预填**——重载语义是「我要看服务器到底是什么」。
+18. **预填后只有宽屏抢焦点**（光标落到 `"1. "` 之后）：窄屏（手机）抢焦点会立刻顶起软键盘，把本就矮的正文区再压掉半屏，而用户这一步多半只是想先扫一眼当天的打点。窄屏仍然预填，只是等用户自己点进去。驱动它的 `seedNonce` 是**计数器不是布尔**：连续切到第二天空日记时 `true→true` 不会触发 effect，第二天的光标就不会归位。
 
 ## 3. 日期与跨零点
 

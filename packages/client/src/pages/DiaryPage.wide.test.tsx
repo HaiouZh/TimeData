@@ -46,7 +46,9 @@ async function flush() {
   });
 }
 
-async function renderPage(entry = "/diary"): Promise<{ host: HTMLElement; root: Root }> {
+async function renderPage(
+  entry = "/diary",
+): Promise<{ host: HTMLElement; root: Root; router: ReturnType<typeof createMemoryRouter> }> {
   // 必须是 data router：DiaryPage 用 useUnsavedChangesGuard（内部 useBlocker），
   // 在 <MemoryRouter> 下会抛 "useBlocker must be used within a data router."
   const router = createMemoryRouter(
@@ -58,7 +60,14 @@ async function renderPage(entry = "/diary"): Promise<{ host: HTMLElement; root: 
   );
   const { host, root } = await renderDom(createElement(RouterProvider, { router }));
   await flush();
-  return { host, root };
+  return { host, root, router };
+}
+
+async function navigateTo(router: ReturnType<typeof createMemoryRouter>, to: string) {
+  await act(async () => {
+    await router.navigate(to);
+  });
+  await flush();
 }
 
 beforeEach(() => {
@@ -96,6 +105,43 @@ describe("DiaryPage 宽屏参考栏", () => {
     expect(panel.textContent).toContain("7月20日");
     expect(panel.textContent).not.toContain("今天");
 
+    await unmount(root);
+  });
+
+  it("空白日记预填后，宽屏把光标送到 “1. ” 之后，直接开打", async () => {
+    fetchDiary.mockResolvedValue({ content: "", mtime: null });
+    const { host, root } = await renderPage();
+
+    const field = host.querySelector("textarea") as HTMLTextAreaElement;
+    expect(field.value).toBe("1. ");
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe(3);
+    expect(field.selectionEnd).toBe(3);
+
+    await unmount(root);
+  });
+
+  it("已有正文的一天不抢焦点（只有真预填才聚焦）", async () => {
+    fetchDiary.mockResolvedValue({ content: "昨天写的", mtime: 100 });
+    const { host, root } = await renderPage();
+
+    expect(document.activeElement).not.toBe(host.querySelector("textarea"));
+    await unmount(root);
+  });
+
+  it("连着切到第二个空日记，光标同样归位（预填标志是计数器不是布尔）", async () => {
+    fetchDiary.mockResolvedValue({ content: "", mtime: null });
+    const { host, root, router } = await renderPage();
+    expect(document.activeElement).toBe(host.querySelector("textarea"));
+
+    // 切日期会把 loading 置回 true、整个分栏连 textarea 一起卸载重挂，焦点自然掉回 body。
+    // 预填标志若是布尔（true→true 不变），归位 effect 不重跑，第二天就只能自己去点一下。
+    await navigateTo(router, "/diary?date=2026-01-05");
+
+    const field = host.querySelector("textarea") as HTMLTextAreaElement;
+    expect(field.value).toBe("1. ");
+    expect(document.activeElement).toBe(field);
+    expect(field.selectionStart).toBe(3);
     await unmount(root);
   });
 });

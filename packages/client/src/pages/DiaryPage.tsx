@@ -19,6 +19,17 @@ import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { DiaryReferencePanel } from "./diary/DiaryReferencePanel.js";
 import { ResizableSplit } from "./todo/ResizableSplit.js";
 
+/**
+ * 空白日记的预填正文：一条空的有序列表项。日记绝大多数写法是"今天 1/2/3"，让第一条不用手打，
+ * 之后每次回车由 applyEnterInOrderedList 自动接号。
+ *
+ * 只预填、**不置脏**（不调 markDirty）：不写字就不落盘，既不会每天路过一眼就在 vault 里攒出一堆
+ * 只有 "1. " 的空壳文件，离开时也不会弹"未保存的修改"。这条靠 dirty 的记账口径天然成立——
+ * dirty 只由 onChange / 降级编辑置位，不是"内容与加载值比对"（见下方 dirty 声明处的警示注释）；
+ * 谁要是把 dirty 改成内容比对，这里会连带变成"打开就永远脏"。
+ */
+const DIARY_SEED = "1. ";
+
 export default function DiaryPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,6 +65,10 @@ export default function DiaryPage() {
   }, [clearParam, setSearchParams]);
 
   const [loading, setLoading] = useState(true);
+  // 预填世代号：每预填一次 +1，驱动下面那条"把光标送到 seed 末尾"的 effect。用计数器而不是布尔，
+  // 是因为切日期可能连续预填两天空日记（true→true 不触发 effect，第二天光标就不会归位）。
+  const [seedNonce, setSeedNonce] = useState(0);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const [enabled, setEnabled] = useState(true);
   const [template, setTemplate] = useState("");
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -158,7 +173,12 @@ export default function DiaryPage() {
         // 必须在 setContent 之前、对原始 fetch 结果探测：一旦进了 textarea，
         // HTML 规范会把换行归一为 LF，\r 就没了，届时再探测永远判成 LF。
         eolRef.current = detectEol(doc.content);
-        setContent(doc.content);
+        // 空正文（文件不存在，或存在但是空的）→ 预填 DIARY_SEED，见其声明处。判据用 content 而不是
+        // mtime === null：手动清空过的旧文件也该照样预填，"这天还没写"是内容说了算，不是文件说了算。
+        const seeded = doc.content === "";
+        setContent(seeded ? DIARY_SEED : doc.content);
+        // 只在真预填时推进，不是每次加载都推——否则打开任何一天都会抢焦点。
+        if (seeded) setSeedNonce((n) => n + 1);
         setBaseMtime(doc.mtime);
         setDirty(false);
         setLoading(false);
@@ -173,6 +193,17 @@ export default function DiaryPage() {
       cancelled = true;
     };
   }, [date, configLoaded, enabled, template]);
+
+  // 预填之后把光标送到 "1. " 后面，直接开打。**只在宽屏聚焦**：窄屏（手机）抢焦点会立刻顶起软
+  // 键盘，把本来就矮的正文区再压掉半屏，而用户这一步多半只是想先扫一眼今天的打点。窄屏仍然预填，
+  // 只是等用户自己点进去。
+  useEffect(() => {
+    if (seedNonce === 0 || !wide) return;
+    const field = editorRef.current;
+    if (!field) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  }, [seedNonce, wide]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     // IME 组合态守卫：Enter/Tab/Ctrl+K 共用这一个 handler，这一行天然覆盖全部键位，
@@ -403,6 +434,7 @@ export default function DiaryPage() {
 
   const editor = (
     <textarea
+      ref={editorRef}
       aria-label="日记正文"
       value={content}
       // 红线：这里不许对 value 做任何加工（trim / 行尾转换 / 任何归一化）。一加工 React 就整体回写，

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { applyIndent } from "./indent.js";
 import { applyEnterInOrderedList } from "./orderedList.js";
 import { previewEdit } from "./textareaEdit.js";
 
@@ -22,10 +23,15 @@ describe("applyEnterInOrderedList", () => {
     const r = applyTo(v, applyEnterInOrderedList(v, 4, 4)); // 光标在 "前" 后
     expect(r).toEqual({ value: "3. 前\n4. 后", cursor: 8 });
   });
-  it("空列表项回车清掉序号（Obsidian 习惯）", () => {
+  it("顶层空列表项回车清掉序号（Obsidian 习惯）", () => {
     const v = "1. 事\n2. ";
     const r = applyTo(v, applyEnterInOrderedList(v, v.length, v.length));
     expect(r).toEqual({ value: "1. 事\n", cursor: "1. 事\n".length });
+  });
+  it("有缩进的空列表项回车先退一层，不直接清行", () => {
+    const v = "1. 事\n\t1. ";
+    const r = applyTo(v, applyEnterInOrderedList(v, v.length, v.length));
+    expect(r).toEqual({ value: "1. 事\n2. ", cursor: "1. 事\n2. ".length });
   });
   it("非列表行返回 null", () => {
     expect(applyEnterInOrderedList("普通行", 3, 3)).toBeNull();
@@ -91,7 +97,11 @@ const TABLE: [string, string, string][] = [
     "1. a\n2. b\n3. c\n4. d\n5. e\n6. f\n7. g\n8. h\n9. i\n10. j\n11. k\n12. ⌶",
   ],
   ["C09 空列表项回车清号", "1. 事\n2. ⌶", "1. 事\n⌶"],
-  ["C10 空子项清号（含 Tab）", "1. a\n\t1. ⌶", "1. a\n⌶"],
+  // C10/C42 在 2026-07-27 随"空列表项回车逐级出层"改判（用户明确批准的语义变更，不是消除失败）：
+  // 原语义是任何深度的空项都直接清行，二级空项一回车就吐出一行连缩进都没有的纯空行，紧接着按
+  // Tab 想救回来只会跳焦点（宽屏是分栏拖拽把手）。新语义：还有缩进就先退一层，退到顶层再按一次
+  // 才清行。顶层清行本身没变（C09/C39/C41 原样保留，它们是这条边界的另一半）。
+  ["C10 空子项出层（含 Tab）", "1. a\n\t1. ⌶", "1. a\n2. ⌶"],
   ["C11 嵌套子项回车", "1. a\n\t1. b⌶", "1. a\n\t1. b\n\t2. ⌶"],
   ["C12 子项后回到父级", "1. a\n\t1. b\n2. c⌶", "1. a\n\t1. b\n2. c\n3. ⌶"],
   ["C13 同行选区", "1. ab⌶cd⌶", "1. ab\n2. ⌶"],
@@ -123,7 +133,9 @@ const TABLE: [string, string, string][] = [
   ["C39 整篇只有一个空项", "1. ⌶", "⌶"],
   ["C40 10 位数字", "1234567890. a⌶", "NULL"],
   ["C41 块中清号（下方不重排）", "1. a\n2. b\n3. ⌶\n4. c", "1. a\n2. b\n⌶\n4. c"],
-  ["C42 缩进空项在块中清号", "1. a\n\t1. b\n\t2. ⌶\n2. c", "1. a\n\t1. b\n⌶\n2. c"],
+  // 出层后它成了顶层第 2 项，原来的顶层 "2. c" 顺延成 3——整段拉直的既定语义（C02/C03 同款），
+  // 不是出层额外引入的副作用。
+  ["C42 缩进空项在块中出层", "1. a\n\t1. b\n\t2. ⌶\n2. c", "1. a\n\t1. b\n2. ⌶\n3. c"],
   ["C43 光标在行尾换行符前", "1. a⌶\n普通行", "1. a\n2. ⌶\n普通行"],
   ["C44 块首之前是普通段落", "引言\n1. a\n2. b⌶", "引言\n1. a\n2. b\n3. ⌶"],
   ["C45 tilde 围栏", "~~~\n1. a⌶\n~~~", "NULL"],
@@ -132,11 +144,44 @@ const TABLE: [string, string, string][] = [
   ["C48 深层后浅一格（退化）", "1. a\n\t\t1. b\n  1. c⌶", "1. a\n\t\t1. b\n  1. c\n  2. ⌶"],
   ["C49 选区覆盖整块", "⌶1. a\n2. b⌶", "NULL"],
   ["C50 gap 是 Tab", "1.\ta\n2.\tb⌶", "1.\ta\n2.\tb\n3.\t⌶"],
+  // C51–C56：空列表项逐级出层（2026-07-27 新增语义，见 C10 处的说明）
+  ["C51 三级空项只出一层，落到二级", "1. a\n\t1. b\n\t\t1. ⌶", "1. a\n\t1. b\n\t2. ⌶"],
+  ["C52 空格缩进空项出层（4 格）", "1. a\n    1. ⌶", "1. a\n2. ⌶"],
+  ["C53 空格缩进不足一级也算出层（2 格）", "1. a\n  1. ⌶", "1. a\n2. ⌶"],
+  ["C54 单项块空子项出层不拉直，原号保留", "\t7. ⌶", "7. ⌶"],
+  ["C55 出层后下方更深项按新层级重算", "1. a\n\t1. ⌶\n\t2. b", "1. a\n2. ⌶\n\t1. b"],
+  ["C56 出层带 Tab gap，gap 原样保留", "1. a\n\t1.\t⌶", "1. a\n2.\t⌶"],
 ];
 
-describe("applyEnterInOrderedList · C01–C50 边界表", () => {
+describe("applyEnterInOrderedList · C01–C56 边界表", () => {
   it.each(TABLE)("%s", (_name, input, expected) => {
     expect(run(input)).toBe(expected);
+  });
+});
+
+// 承重用例：光看单次出层的结果，分不出"逐级出层"和"少清了一层"——只有把两次回车连起来跑，
+// 才能证明第一次退层、第二次才清行这条完整链路。改动出层逻辑时这条必须仍绿。
+describe("applyEnterInOrderedList · 逐级出层是两步，不是一步清行", () => {
+  it("二级空项：第一次回车退到顶层，第二次回车才清成空行", () => {
+    const first = run("1. a\n\t1. ⌶");
+    expect(first).toBe("1. a\n2. ⌶");
+    expect(run(first)).toBe("1. a\n⌶");
+  });
+
+  it("三级空项：连按三次才清行，中间两次各退一层", () => {
+    const step1 = run("1. a\n\t1. b\n\t\t1. ⌶");
+    expect(step1).toBe("1. a\n\t1. b\n\t2. ⌶");
+    const step2 = run(step1);
+    expect(step2).toBe("1. a\n\t1. b\n2. ⌶");
+    expect(run(step2)).toBe("1. a\n\t1. b\n⌶");
+  });
+
+  it("出层产出的仍是货真价实的列表项：Tab 认得出它，不会跳焦点", () => {
+    // 这条正是原 bug 的用户可见面——原语义下这一步拿到的是纯空行，applyIndent 直接返回 null，
+    // 焦点跳去分栏拖拽把手。断言 Tab 能缩进 = 断言那行没退化成非列表行。
+    const outdented = "1. a\n2. ⌶";
+    const { value, selStart } = parse(outdented);
+    expect(applyIndent(value, selStart, selStart, "in")).not.toBeNull();
   });
 });
 

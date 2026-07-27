@@ -91,6 +91,22 @@ export function visualCol(indent: string): number {
   return col;
 }
 
+/**
+ * 一次"出层"能从 indent 前面拿掉多少个字符：indent 以 INDENT（"\t"）开头就拿掉 1 个 Tab 字符；
+ * 否则视为空格缩进的老文件，最多拿掉 TAB_COLUMNS 个前导空格（不足则有多少拿多少）。
+ * 返回 0 表示该行已经是顶层（无缩进可拿）。
+ *
+ * 两个消费者共用同一份定义，不许各写一套：Shift+Tab 出层（`indent.ts`）据此判定"这一行还能不能
+ * 再出一层"，空列表项回车的逐级出层（`orderedList.ts`）据此判定"这次回车是退一层还是清行"。
+ * 两处若分叉，会出现 Shift+Tab 认为还能出层、回车却认为已经到顶（或反过来）的自相矛盾。
+ */
+export function removableIndentLen(indent: string): number {
+  if (indent.startsWith(INDENT)) return INDENT.length;
+  let n = 0;
+  while (n < TAB_COLUMNS && indent[n] === " ") n += 1;
+  return n;
+}
+
 /** 解析一行是否是有序列表项；不是则返回 null（含 marker 用 `)` 分隔、10 位以上数字等情形）。 */
 export function parseItem(text: string): OrderedItem | null {
   const m = ITEM_RE.exec(text);
