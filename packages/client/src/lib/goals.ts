@@ -521,6 +521,23 @@ export async function addTaskForGoal(goalId: string, input: AddTaskForGoalInput)
   return nextTask;
 }
 
+export async function createTaskForProject(
+  goalId: string,
+  input: { title: string; now?: Date },
+): Promise<Task> {
+  const task = await buildNewRootTask({ title: input.title, toInbox: true, now: input.now });
+  let created: Task | null = null;
+
+  await db.transaction("rw", db.goals, db.goalLayoutPins, db.tasks, db.tracks, db.syncLog, async () => {
+    await insertNewTaskInCurrentTransaction(task);
+    await assignTaskToProject(goalId, task.id, input.now ? { now: input.now } : {});
+    created = (await db.tasks.get(task.id)) ?? task;
+  });
+
+  if (!created) throw new Error("项目内创建任务失败");
+  return created;
+}
+
 export async function listGoalTasks(goalId: string): Promise<Task[]> {
   const goal = await getGoal(goalId);
   if (!goal) return [];

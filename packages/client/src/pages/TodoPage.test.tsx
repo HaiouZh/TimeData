@@ -2,7 +2,7 @@
 import "fake-indexeddb/auto";
 import type { Task } from "@timedata/shared";
 import { act, createElement, useEffect } from "react";
-import { MemoryRouter, useSearchParams } from "react-router";
+import { MemoryRouter, useLocation, useSearchParams } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BottomNavProvider, useBottomNav } from "../contexts/BottomNavContext.js";
 import { SyncProvider } from "../contexts/SyncContext.tsx";
@@ -19,6 +19,7 @@ import { TodoPage } from "./TodoPage.js";
 beforeEach(async () => {
   localStorage.clear();
   vi.unstubAllGlobals();
+  currentPathname = "/";
   await db.tasks.clear();
   await db.settings.clear();
   await db.syncLog.clear();
@@ -39,9 +40,15 @@ afterEach(() => {
  * 多选态下行点击是勾选、其余区块 inert，页面内部开不出抽屉。
  */
 let driveSearchParams: ((next: Record<string, string>) => void) | null = null;
+let currentPathname = "/";
 function SearchParamDriver() {
   const [, setSearchParams] = useSearchParams();
   driveSearchParams = (next) => setSearchParams(new URLSearchParams(next));
+  return null;
+}
+
+function LocationDriver() {
+  currentPathname = useLocation().pathname;
   return null;
 }
 
@@ -59,6 +66,7 @@ async function renderPage({ hideBottomNav = false } = {}) {
       MemoryRouter,
       null,
       createElement(SearchParamDriver),
+      createElement(LocationDriver),
       createElement(
         BottomNavProvider,
         null,
@@ -117,6 +125,10 @@ function zoneText(host: HTMLElement): string {
   return (host.querySelector('[data-section="todo-projects"]') as HTMLElement | null)?.textContent ?? "";
 }
 
+function hasRemainingOne(text: string): boolean {
+  return /还剩 1(?!\d)/.test(text);
+}
+
 async function seedProjectGoal(memberId: string, createdAt = "2026-06-28T09:00:00.000Z"): Promise<void> {
   await db.goals.add({
     id: "g1",
@@ -167,6 +179,22 @@ async function typeAndAdd(host: HTMLElement, title: string) {
   await act(async () => {
     form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
+}
+
+async function setInputValue(input: HTMLInputElement, value: string): Promise<void> {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+async function submitInputByEnter(input: HTMLInputElement): Promise<void> {
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  });
+  await settle();
 }
 
 /**
@@ -812,11 +840,113 @@ describe("TodoPage", () => {
 
     const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
     expect(zone.textContent).toContain("装修");
-    expect(zone.textContent).toContain("还剩 1 / 共 1");
+    expect(hasRemainingOne(zone.textContent ?? "")).toBe(true);
 
     const inbox = host.querySelector('[data-section="inbox"]') as HTMLElement;
     expect(inbox.textContent ?? "").toContain("自由任务");
     expect(inbox.textContent ?? "").not.toContain("刷墙");
+    await unmount(root);
+  });
+
+  it("项目组内加号创建任务：直接归入该组，不经过收件箱，也不产生成功 toast", async () => {
+    setProjectZoneIntroDismissed(true);
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null, "project add button");
+    await act(async () => {
+      host.querySelector('button[aria-label="在项目 装修中创建任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+    await setInputValue(input, "补漆");
+    await submitInputByEnter(input);
+
+    await waitForCondition(() => zoneText(host).includes("补漆"), "created project task", settle);
+    const created = (await db.tasks.toArray()).find((task) => task.title === "补漆");
+    expect(created?.scheduledAt).toBeNull();
+    expect((await db.goals.get("g1"))?.members).toContainEqual({ kind: "task", id: created?.id });
+    expect((host.querySelector('[data-section="inbox"]')?.textContent ?? "")).not.toContain("补漆");
+    expect(host.querySelector('[aria-label="待办操作反馈"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("项目组内创建撞 500：展示拒绝 toast，且不留下孤立任务", async () => {
+    setProjectZoneIntroDismissed(true);
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }, ...Array.from({ length: 499 }, (_, i) => ({ kind: "task" as const, id: `ghost-${i}` }))],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null, "project add button");
+    await act(async () => {
+      host.querySelector('button[aria-label="在项目 装修中创建任务"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+    await setInputValue(input, "超额任务");
+    await submitInputByEnter(input);
+
+    await waitForToast(host, "成员已满 500");
+    expect((await db.tasks.toArray()).map((task) => task.title)).not.toContain("超额任务");
+    expect((await db.goals.get("g1"))?.members).toHaveLength(500);
+    await unmount(root);
+  });
+
+  it("项目更多菜单：改名走 updateGoal，打开跳到 goals 详情页", async () => {
+    setProjectZoneIntroDismissed(true);
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "刷墙", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('button[aria-label="项目 装修 更多操作"]') !== null, "project menu button");
+    await act(async () => {
+      host.querySelector('button[aria-label="项目 装修 更多操作"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      host.querySelector('[role="menuitem"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    const renameInput = host.querySelector('input[aria-label="重命名项目 装修"]') as HTMLInputElement;
+    await setInputValue(renameInput, "新装修");
+    await submitInputByEnter(renameInput);
+    await waitForCondition(() => zoneText(host).includes("新装修"), "goal rename rendered", settle);
+    expect((await db.goals.get("g1"))?.title).toBe("新装修");
+
+    await act(async () => {
+      host.querySelector('button[aria-label="项目 装修 更多操作"], button[aria-label="项目 新装修 更多操作"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      host.querySelectorAll('[role="menuitem"]')[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    await waitForCondition(() => currentPathname === "/goals/g1", "navigate to goal detail", settle);
     await unmount(root);
   });
 
@@ -1368,7 +1498,7 @@ describe("TodoPage", () => {
 
     // 取消勾选后 listTasks 把它截进 atHand（焦点轴压过 placement），落到页面最顶上的手头区；
     // 此时展开项目区只会把页面滚走——这正是同批 releaseFromHand 亲手立的红线。
-    await waitForCondition(() => zoneText(host).includes("还剩 1 / 共 1"), "组头计数回到未完成口径");
+    await waitForCondition(() => hasRemainingOne(zoneText(host)), "组头计数回到未完成口径");
     expect(zoneText(host)).not.toContain("刷墙");
     expect((host.querySelector('[data-section="todo-at-hand"]') as HTMLElement).textContent ?? "").toContain("刷墙");
     await unmount(root);
@@ -1382,7 +1512,7 @@ describe("TodoPage", () => {
     await seedProjectGoal(member.id, now);
 
     const { host, root } = await renderPage();
-    await waitForCondition(() => zoneText(host).includes("还剩 1 / 共 1"), "折叠的项目组");
+    await waitForCondition(() => hasRemainingOne(zoneText(host)), "折叠的项目组");
     expect(zoneText(host)).not.toContain("刷墙");
 
     await openRecurrencePresets(host, "刷墙");
@@ -1427,7 +1557,7 @@ describe("TodoPage", () => {
     await seedProjectGoal(member.id, now);
 
     const { host, root } = await renderPage();
-    await waitForCondition(() => zoneText(host).includes("还剩 1 / 共 1"), "折叠的项目组");
+    await waitForCondition(() => hasRemainingOne(zoneText(host)), "折叠的项目组");
 
     await openRecurrencePresets(host, "刷墙");
     await act(async () => {
@@ -1453,7 +1583,7 @@ describe("TodoPage", () => {
     await waitForTask(member.id, (task) => task?.scheduledAt === normalizeScheduledDate(futureDate));
     await settle();
     await settle();
-    expect(zoneText(host)).toContain("还剩 1 / 共 1");
+    expect(hasRemainingOne(zoneText(host))).toBe(true);
     expect(zoneText(host)).not.toContain("刷墙");
     await unmount(root);
   });

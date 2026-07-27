@@ -11,6 +11,7 @@ import {
   releasedProjectTaskIds,
   taskAssignBlock,
   GOAL_MEMBERS_MAX,
+  isProjectMemberCountNearCap,
 } from "./goalMembership.js";
 
 function goal(patch: Partial<Goal> & Pick<Goal, "id">): Goal {
@@ -324,5 +325,15 @@ describe("taskAssignBlock / exceedsGoalMemberCap", () => {
     for (const memberCount of [0, 1, 498, 499, 500, 501]) {
       expect(projectAssignBlock(ok, memberCount) === "full").toBe(memberCount >= 500);
     }
+  });
+});
+
+describe("isProjectMemberCountNearCap", () => {
+  const threshold = Math.ceil(GOAL_MEMBERS_MAX * 0.9);
+
+  it("只在 90% 阈值及以上预警，测试从上限推导而不是复制字面量", () => {
+    expect(isProjectMemberCountNearCap(threshold - 1)).toBe(false);
+    expect(isProjectMemberCountNearCap(threshold)).toBe(true);
+    expect(isProjectMemberCountNearCap(GOAL_MEMBERS_MAX)).toBe(true);
   });
 });

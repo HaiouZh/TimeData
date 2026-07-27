@@ -16,7 +16,7 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import type { Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { ActionToastBar } from "../components/ui/ActionToastBar.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { db } from "../db/index.js";
@@ -68,11 +68,13 @@ import {
   assignTasksToProject,
   assignTaskToProject,
   createProjectWithMembers,
+  createTaskForProject,
   findActiveProjectGoalIdForTask,
   prerequisiteLossOnAssign,
   prerequisiteLossOnAssignMany,
   ProjectAssignError,
   removeGoalMember,
+  updateGoal,
 } from "../lib/goals.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
@@ -130,6 +132,7 @@ export function TodoPage() {
     void healActiveSessions();
   }, [buckets.handSession?.id]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const taskIdParam = searchParams.get("taskId");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [includeTags, setIncludeTags] = useState<string[]>([]);
@@ -496,6 +499,30 @@ export function TodoPage() {
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
+  const createTaskInsideProject = async (goalId: string, title: string): Promise<Task> => {
+    try {
+      return await createTaskForProject(goalId, { title, now: gravityNow });
+    } catch (error) {
+      if (error instanceof ProjectAssignError) {
+        showActionToast({ message: error.message });
+        throw error;
+      }
+      console.error("[todo] 项目内创建失败:", error);
+      const message = "项目内创建失败，稍后再试";
+      showActionToast({ message });
+      throw new Error(message);
+    }
+  };
+  const renameProject = async (goalId: string, title: string): Promise<void> => {
+    try {
+      await updateGoal(goalId, { title, now: gravityNow });
+    } catch (error) {
+      console.error("[todo] 项目改名失败:", error);
+      const message = "项目改名失败，稍后再试";
+      showActionToast({ message });
+      throw new Error(message);
+    }
+  };
   // 归入项目前的一次性询问（拖走带前置边的任务会连带删边）。useConfirm 是单槽，
   // 但这里只在一次 drag end 的末尾调用，不会有第二个请求来顶替它。
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -739,6 +766,9 @@ export function TodoPage() {
       revealGoals={revealGoals}
       onRevealConsumed={consumeReveal}
       onExitProject={exitProject}
+      onCreateTask={createTaskInsideProject}
+      onRenameGoal={renameProject}
+      onOpenGoal={(goalId) => navigate(`/goals/${goalId}`)}
       dropBlocked={dragDropBlocked}
       {...rowHandlers}
     />

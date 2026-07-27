@@ -158,6 +158,19 @@ describe("sortProjectMembers", () => {
     sortProjectMembers(input, opts);
     expect(input.map((t) => t.id)).toEqual(before);
   });
+
+  it("recentTaskIds 按最新优先把新建的 idle 成员覆盖到 idle 段顶部", () => {
+    const sorted = sortProjectMembers(
+      [
+        task({ id: "old" }),
+        task({ id: "newer" }),
+        task({ id: "new" }),
+        task({ id: "future", scheduledAt: "2026-08-10T00:00:00.000Z" }),
+      ],
+      { ...opts, recentTaskIds: ["newer", "new"] },
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["newer", "new", "old", "future"]);
+  });
 });
 
 describe("goalBarTaskIds", () => {

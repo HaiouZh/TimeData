@@ -7,6 +7,7 @@ import {
   assignTaskToProject,
   assignTasksToProject,
   createProjectWithMembers,
+  createTaskForProject,
   deleteGoal,
   findActiveProjectGoalIdForTask,
   getGoal,
@@ -19,6 +20,7 @@ import {
   updateGoalPrerequisites,
 } from "./goals.js";
 import { addTask } from "./tasks.js";
+import { GOAL_MEMBERS_MAX } from "./tasks/goalMembership.js";
 
 const now = "2026-06-22T01:00:00.000Z";
 
@@ -181,6 +183,73 @@ describe("goals data helpers", () => {
         expect.objectContaining({ tableName: "goals", recordId: goal.id, action: "update" }),
       ]),
     );
+  });
+
+  it("项目内创建强制进收件箱，并在同一事务里完成归属与 touch", async () => {
+    const goal = await addGoal({ title: "发布 v2", kind: "project", now: date(now) });
+
+    const task = await createTaskForProject(goal.id, {
+      title: " 写发布文案 ",
+      now: date("2026-06-22T02:00:00.000Z"),
+    });
+
+    expect(task).toMatchObject({ title: "写发布文案", scheduledAt: null, done: false, parentId: null });
+    await expect(db.goals.get(goal.id)).resolves.toMatchObject({ members: [{ kind: "task", id: task.id }] });
+    const taskLogs = await db.syncLog.filter((entry) => entry.recordId === task.id).toArray();
+    expect(taskLogs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: "tasks", action: "create" }),
+        expect.objectContaining({ tableName: "tasks", action: "update" }),
+      ]),
+    );
+    expect(task.updatedAt).toBe("2026-06-22T02:00:00.000Z");
+    await expect(db.syncLog.filter((entry) => entry.recordId === goal.id && entry.tableName === "goals").toArray()).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "update" })]),
+    );
+  });
+
+  it("项目内创建撞 500 时拒绝且不留下孤立任务或 create 日志", async () => {
+    const goal = await addGoal({ title: "满员项目", kind: "project", now: date(now) });
+    await db.goals.update(goal.id, {
+      members: Array.from({ length: GOAL_MEMBERS_MAX }, (_, index) => ({ kind: "task" as const, id: `seed-${index}` })),
+    });
+    const beforeLogs = await db.syncLog.toArray();
+
+    await expect(createTaskForProject(goal.id, { title: "不应写入", now: date("2026-06-22T02:00:00.000Z") })).rejects.toMatchObject({
+      block: "full",
+    });
+
+    await expect(db.tasks.toArray()).resolves.toHaveLength(0);
+    const afterGoal = await db.goals.get(goal.id);
+    expect(afterGoal?.members).toHaveLength(GOAL_MEMBERS_MAX);
+    expect(afterGoal?.members[0]).toEqual({ kind: "task", id: "seed-0" });
+    await expect(db.syncLog.toArray()).resolves.toEqual(beforeLogs);
+  });
+
+  it("项目内创建遇到失效目标或裸行解析失败时整包回滚", async () => {
+    const archived = await addGoal({ title: "旧项目", kind: "project", now: date(now) });
+    await updateGoal(archived.id, { status: "archived", now: date("2026-06-22T01:30:00.000Z") });
+    const beforeArchivedLogs = await db.syncLog.toArray();
+    await expect(createTaskForProject(archived.id, { title: "不应写入", now: date("2026-06-22T02:00:00.000Z") })).rejects.toMatchObject({
+      block: "inactive",
+    });
+    await expect(db.tasks.toArray()).resolves.toHaveLength(0);
+    await expect(db.syncLog.toArray()).resolves.toEqual(beforeArchivedLogs);
+
+    const invalid = await addGoal({ title: "坏项目", kind: "project", now: date(now) });
+    const raw = await db.goals.get(invalid.id);
+    if (!raw) throw new Error("目标不存在");
+    await db.goals.put({
+      ...raw,
+      members: [
+        { kind: "task", id: "ghost" },
+        { kind: "task", id: "ghost" },
+      ],
+    });
+    const beforeInvalid = await db.goals.get(invalid.id);
+    await expect(createTaskForProject(invalid.id, { title: "解析失败也不应写入", now: date("2026-06-22T03:00:00.000Z") })).rejects.toThrow();
+    await expect(db.tasks.toArray()).resolves.toHaveLength(0);
+    await expect(db.goals.get(invalid.id)).resolves.toEqual(beforeInvalid);
   });
 });
 

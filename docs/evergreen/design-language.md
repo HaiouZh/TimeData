@@ -16,8 +16,9 @@ contracts:
   - packages/client/src/index.css
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-07-25
+last-reviewed: 2026-07-27
 ---
+<!-- 复核 2026-07-27（project-zone-usability B）：index.css 新增 `.todo-project-group-body { max-height: 45vh; }`，用于项目组内容区限高；这是功能语义类，避免在组件里新增裸任意值，不改变 token/颜色/层级规则。 -->
 <!-- 复核 2026-07-25（记忆下沉）：§4 第 6 条补「swipe 行内装饰须画在内侧」推论（ring/外侧 box-shadow 被 overflow:hidden 裁掉且单测测不出），规则本身不变。 -->
 <!-- 复核 2026-07-25（diary-workbench 阶段一 · 终审修复）：ErrorBoundary.tsx 兜底 UI 迁到语义排版类，删除 3 条失效 bare-text-size allowlist；顺带发现 §3 allowlist 计数已陈旧（跟不上历次批次清理），一并按当前实测值改正（532/54/455/23）。 -->
 <!-- 复核 2026-07-02（timeline 修复 A）：ActionToastBar 复用清掉 QuickNotesPage/TimelinePage 两条失效 bare-text-size allowlist；设计语言规则不变。 -->

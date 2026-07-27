@@ -6,6 +6,7 @@ import { act } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
+import { GOAL_MEMBERS_MAX } from "../../lib/tasks/goalMembership.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
@@ -66,6 +67,9 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         revealGoals={props.revealGoals ?? []}
         onRevealConsumed={props.onRevealConsumed ?? vi.fn()}
         onExitProject={props.onExitProject ?? vi.fn()}
+        onCreateTask={props.onCreateTask ?? vi.fn(async () => task({ id: "created" }))}
+        onRenameGoal={props.onRenameGoal ?? vi.fn(async () => undefined)}
+        onOpenGoal={props.onOpenGoal ?? vi.fn()}
         dropBlocked={props.dropBlocked ?? null}
         {...handlers}
       />
@@ -75,6 +79,20 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
 
 function renderSection(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
   return renderDom(sectionElement(props));
+}
+
+function setInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 beforeEach(() => {
@@ -148,6 +166,213 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 
+  it("项目标题行的加号只在未完成组出现，点击后展开并聚焦就地输入", async () => {
+    setProjectZoneIntroDismissed(true);
+    const { host, root } = await renderSection({
+      groups: [
+        group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] }),
+        group({ goalId: "g2", goalTitle: "已完", doneCount: 1 }),
+      ],
+    });
+    const plus = host.querySelector('button[aria-label="在项目 装修中创建任务"]');
+    expect(plus).not.toBeNull();
+    expect(host.querySelector('button[aria-label="在项目 已完中创建任务"]')).toBeNull();
+    const toggle = host.querySelector('[data-goal-id="g1"] [data-testid="project-group-toggle"]');
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+
+    await click(plus);
+    const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement | null;
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    await unmount(root);
+  });
+
+  it("项目内创建回车只提交非空标题，成功后清空但保持输入框打开，Esc 收起", async () => {
+    setProjectZoneIntroDismissed(true);
+    const onCreateTask = vi.fn(async (_goalId: string, title: string) => task({ id: title, title }));
+    const { host, root } = await renderSection({
+      onCreateTask,
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] })],
+    });
+    await click(host.querySelector('button[aria-label="在项目 装修中创建任务"]'));
+    const input = () => host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+    const submit = async (value: string) => {
+      const field = input();
+      await act(async () => {
+        setInputValue(field, value);
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+    };
+
+    await submit("  ");
+    expect(onCreateTask).not.toHaveBeenCalled();
+    await submit("先做这条");
+    expect(onCreateTask).toHaveBeenCalledWith("g1", "先做这条");
+    expect(input().value).toBe("");
+    await submit("再做这条");
+    expect(onCreateTask).toHaveBeenCalledTimes(2);
+    expect(input().value).toBe("");
+
+    await act(async () => input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('input[aria-label="在项目 装修中新建任务"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("项目内创建用 ref 闸拦住在途重复 Enter，输入法组合态 Enter 不提交", async () => {
+    setProjectZoneIntroDismissed(true);
+    const pending = deferred<Task>();
+    const onCreateTask = vi.fn(() => pending.promise);
+    const { host, root } = await renderSection({
+      onCreateTask,
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "old", title: "旧任务" })] })],
+    });
+    await click(host.querySelector('button[aria-label="在项目 装修中创建任务"]'));
+    const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+
+    await act(async () => {
+      setInputValue(input, "候选确认");
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }));
+    });
+    expect(onCreateTask).not.toHaveBeenCalled();
+
+    await act(async () => {
+      setInputValue(input, "第一条");
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    expect(onCreateTask).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      pending.resolve(task({ id: "first", title: "第一条" }));
+      await pending.promise;
+    });
+    await unmount(root);
+  });
+
+  it("连续项目内创建后，最近创建的 idle 任务排在最前", async () => {
+    setProjectZoneIntroDismissed(false);
+    const oldTask = task({ id: "old", title: "旧任务" });
+    const first = task({ id: "first", title: "第一条" });
+    const second = task({ id: "second", title: "第二条" });
+    const onCreateTask = vi.fn(async (_goalId: string, title: string) => (title === "第一条" ? first : second));
+    let groups = [group({ goalId: "g1", goalTitle: "装修", tasks: [oldTask] })];
+    const { host, root } = await renderDom(sectionElement({ groups, onCreateTask }));
+    await click(host.querySelector('button[aria-label="在项目 装修中创建任务"]'));
+    const submit = async (value: string) => {
+      const field = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+      await act(async () => {
+        setInputValue(field, value);
+        field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      });
+    };
+
+    await submit("第一条");
+    groups = [group({ goalId: "g1", goalTitle: "装修", tasks: [oldTask, first] })];
+    await act(async () => root.render(sectionElement({ groups, onCreateTask })));
+    await submit("第二条");
+    groups = [group({ goalId: "g1", goalTitle: "装修", tasks: [oldTask, first, second] })];
+    await act(async () => root.render(sectionElement({ groups, onCreateTask })));
+
+    const labels = Array.from(host.querySelectorAll('[data-goal-id="g1"] [aria-label^="打开 "]')).map((el) =>
+      el.getAttribute("aria-label"),
+    );
+    expect(labels.slice(0, 3)).toEqual(["打开 第二条", "打开 第一条", "打开 旧任务"]);
+    await unmount(root);
+  });
+
+  it("加号与更多按钮点击不穿透成组展开/折叠，多选态由宿主 inert 接管", async () => {
+    setProjectZoneIntroDismissed(true);
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })] });
+    const toggle = host.querySelector('[data-testid="project-group-toggle"]');
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    await click(host.querySelector('button[aria-label="项目 目标 g1 更多操作"]'));
+    expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    await click(host.querySelector('button[aria-label="项目 目标 g1 更多操作"]'));
+    await click(host.querySelector('button[aria-label="在项目 目标 g1中创建任务"]'));
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    await click(host.querySelector('button[aria-label="项目 目标 g1 更多操作"]'));
+    expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("更多菜单首项聚焦，Escape/外部点击关闭且焦点回到触发按钮", async () => {
+    setProjectZoneIntroDismissed(true);
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })] });
+    const trigger = host.querySelector('button[aria-label="项目 目标 g1 更多操作"]') as HTMLButtonElement;
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    await click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(host.querySelector('[role="menuitem"]'));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    await click(trigger);
+    await act(async () => document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    await unmount(root);
+  });
+
+  it("更多菜单可改名或打开 goals 页，空标题不提交且失焦恢复原名", async () => {
+    setProjectZoneIntroDismissed(true);
+    const onRenameGoal = vi.fn(async () => undefined);
+    const onOpenGoal = vi.fn();
+    const { host, root } = await renderSection({
+      onRenameGoal,
+      onOpenGoal,
+      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] })],
+    });
+    const trigger = host.querySelector('button[aria-label="项目 装修 更多操作"]') as HTMLButtonElement;
+    await click(trigger);
+    await click(host.querySelector('[role="menuitem"]'));
+    const renameInput = host.querySelector('input[aria-label="重命名项目 装修"]') as HTMLInputElement;
+    expect(renameInput).not.toBeNull();
+    await act(async () => {
+      setInputValue(renameInput, "  ");
+      renameInput.blur();
+    });
+    expect(onRenameGoal).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("装修");
+
+    await click(trigger);
+    await click(host.querySelector('[role="menuitem"]'));
+    const secondInput = host.querySelector('input[aria-label="重命名项目 装修"]') as HTMLInputElement;
+    await act(async () => {
+      setInputValue(secondInput, "新项目名");
+      secondInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }));
+    });
+    expect(onRenameGoal).not.toHaveBeenCalled();
+    await act(async () => {
+      secondInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    expect(onRenameGoal).toHaveBeenCalledWith("g1", "新项目名");
+
+    await click(trigger);
+    await click(host.querySelectorAll('[role="menuitem"]')[1]);
+    expect(onOpenGoal).toHaveBeenCalledWith("g1");
+    await unmount(root);
+  });
+
+  it("成员数达到由上限推导的 90% 时预警，低于阈值或全完成不预警", async () => {
+    setProjectZoneIntroDismissed(true);
+    const threshold = Math.ceil(GOAL_MEMBERS_MAX * 0.9);
+    const low = await renderSection({ groups: [group({ goalId: "g1", memberCount: threshold - 1, tasks: [task({ id: "t1" })] })] });
+    expect(low.host.textContent).not.toContain("接近上限");
+    await unmount(low.root);
+
+    const near = await renderSection({ groups: [group({ goalId: "g1", memberCount: threshold, tasks: [task({ id: "t1" })] })] });
+    expect(near.host.textContent).toContain("接近上限");
+    await unmount(near.root);
+
+    const done = await renderSection({ groups: [group({ goalId: "g1", memberCount: GOAL_MEMBERS_MAX, doneCount: 1 })] });
+    expect(done.host.textContent).not.toContain("接近上限");
+    await unmount(done.root);
+  });
+
   it("状态点：排今天的成员显示「今天」，躺着的不挂胶囊", async () => {
     const { host, root } = await renderSection({
       groups: [
@@ -211,7 +436,7 @@ describe("TodoProjectSection", () => {
     const card = host.querySelector('[data-testid="project-group"]') as HTMLElement;
     const body = card.querySelector(".overflow-y-auto") as HTMLElement | null;
     expect(body).not.toBeNull();
-    expect(body?.className).toContain("max-h-[45vh]");
+    expect(body?.className).toContain("todo-project-group-body");
     expect(body?.textContent).toContain("刷墙");
     expect(card.className).not.toContain("max-h-");
     await unmount(root);

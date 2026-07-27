@@ -220,6 +220,10 @@ samp {
   overflow-y: visible;
 }
 
+.todo-project-group-body {
+  max-height: 45vh;
+}
+
 /* 本类无层级、会压过 utilities 层的行常驻 bg-surface，故 accent 一律混在 surface 上
    而不是 transparent 上：否则 fresh 窗口内行底掉回 page 深底、比邻行更暗，结束时再跳变。 */
 @keyframes todo-occurrence-arrive {

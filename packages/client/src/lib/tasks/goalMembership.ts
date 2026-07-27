@@ -171,6 +171,11 @@ export function releasedProjectTaskIds(before: Goal, after: Goal): string[] {
  */
 export const GOAL_MEMBERS_MAX = 500;
 
+/** 项目成员数达到上限的 90% 时给出预警。 */
+export function isProjectMemberCountNearCap(memberCount: number): boolean {
+  return memberCount >= Math.ceil(GOAL_MEMBERS_MAX * 0.9);
+}
+
 /**
  * 归入项目被拒的原因；null = 可以入组。
  *

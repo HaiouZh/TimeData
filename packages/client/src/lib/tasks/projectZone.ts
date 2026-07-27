@@ -76,8 +76,9 @@ const MEMBER_SORT_RANK: Record<ProjectMemberState["kind"], number> = {
 /** 项目组内按「在手头 → 今天 → 躺着 → 已排期」排序，段内保持传入顺序。 */
 export function sortProjectMembers(
   tasks: readonly Task[],
-  options: { handSessionId: string | null; now: Date },
+  options: { handSessionId: string | null; now: Date; recentTaskIds?: readonly string[] },
 ): Task[] {
+  const recentRank = new Map((options.recentTaskIds ?? []).map((id, index) => [id, index]));
   return tasks
     .map((task, index) => ({ task, index, state: projectMemberState(task, options) }))
     .sort((a, b) => {
@@ -86,6 +87,12 @@ export function sortProjectMembers(
       if (a.state.kind === "scheduled" && b.state.kind === "scheduled") {
         const byDate = a.state.scheduledAt.localeCompare(b.state.scheduledAt);
         if (byDate !== 0) return byDate;
+      }
+      if (a.state.kind === "idle" && b.state.kind === "idle" && recentRank.size > 0) {
+        const aRecent = recentRank.get(a.task.id) ?? Number.POSITIVE_INFINITY;
+        const bRecent = recentRank.get(b.task.id) ?? Number.POSITIVE_INFINITY;
+        const byRecent = aRecent - bRecent;
+        if (byRecent !== 0) return byRecent;
       }
       return a.index - b.index;
     })

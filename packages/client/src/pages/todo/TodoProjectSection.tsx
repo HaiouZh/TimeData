@@ -1,11 +1,15 @@
 import { useDroppable } from "@dnd-kit/core";
-import { CaretDown, CaretRight, SignOut, X } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, DotsThree, Plus, SignOut, X } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
-import { RECENT_DONE_WINDOW_DAYS, type TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
-import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
+import {
+  isProjectMemberCountNearCap,
+  RECENT_DONE_WINDOW_DAYS,
+  type TodoProjectGroup,
+} from "../../lib/tasks/goalMembership.js";
+import { type ProjectChip, projectMemberState, sortProjectMembers, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { TaskList } from "./TaskList.js";
@@ -30,6 +34,9 @@ export interface TodoProjectSectionProps {
    */
   onRevealConsumed: (goalIds: string[]) => void;
   onExitProject: (goalId: string, task: Task) => void;
+  onCreateTask: (goalId: string, title: string) => Promise<Task>;
+  onRenameGoal: (goalId: string, title: string) => Promise<void>;
+  onOpenGoal: (goalId: string) => void;
   /**
    * 当前拖拽的这条能不能落进项目组（null = 没在拖）。**判定由页面做，组件只渲染两态**。
    *
@@ -70,6 +77,15 @@ function memberStateChip(task: Task, handSessionId: string | null, now: Date): R
   );
 }
 
+function displayProjectTasks(
+  group: TodoProjectGroup,
+  recentTaskIds: readonly string[],
+  handSessionId: string | null,
+  now: Date,
+): Task[] {
+  return recentTaskIds.length === 0 ? group.tasks : sortProjectMembers(group.tasks, { handSessionId, now, recentTaskIds });
+}
+
 /**
  * 单个项目组的组块：标题行 + 展开态内容区，整块就是那个 `project:<goalId>` 落点。
  *
@@ -85,6 +101,10 @@ function ProjectGroupCard({
   dropBlocked,
   onToggleExpand,
   registerRef,
+  onCreateTask,
+  onTaskCreated,
+  onRenameGoal,
+  onOpenGoal,
   children,
 }: {
   group: TodoProjectGroup;
@@ -93,17 +113,117 @@ function ProjectGroupCard({
   dropBlocked: boolean | null;
   onToggleExpand: () => void;
   registerRef: (el: HTMLElement | null) => void;
+  onCreateTask: (goalId: string, title: string) => Promise<Task>;
+  onTaskCreated: (goalId: string, taskId: string) => void;
+  onRenameGoal: (goalId: string, title: string) => Promise<void>;
+  onOpenGoal: (goalId: string) => void;
   children: ReactNode;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(group.goalTitle);
+  const createBusyRef = useRef(false);
+  const renameBusyRef = useRef(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const createInputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const containerId = projectContainerId(group.goalId);
   const { setNodeRef, isOver } = useDroppable({ id: containerId, data: { containerId } });
   const summary = summarizeProjectGroup(group);
+  const showCapWarning = !summary.allDone && isProjectMemberCountNearCap(group.memberCount);
   const highlight =
     isOver && dropBlocked === false
       ? " ring-2 ring-inset ring-accent"
       : isOver && dropBlocked === true
         ? " opacity-60 ring-2 ring-inset ring-border-strong"
         : "";
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMenuOpen(false);
+      menuTriggerRef.current?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !menuRef.current?.contains(target) &&
+        !menuTriggerRef.current?.contains(target)
+      ) {
+        setMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (creating) createInputRef.current?.focus();
+  }, [creating]);
+
+  useEffect(() => {
+    if (renaming) renameInputRef.current?.focus();
+  }, [renaming]);
+
+  function openCreate(): void {
+    if (!expanded) onToggleExpand();
+    setCreating(true);
+    setCreateError(null);
+  }
+
+  async function submitCreate(): Promise<void> {
+    const title = createDraft.trim();
+    if (!title || createBusyRef.current) return;
+    createBusyRef.current = true;
+    try {
+      const task = await onCreateTask(group.goalId, title);
+      setCreateDraft("");
+      setCreateError(null);
+      onTaskCreated(group.goalId, task.id);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "创建任务失败");
+    } finally {
+      createBusyRef.current = false;
+    }
+  }
+
+  function openRename(): void {
+    setMenuOpen(false);
+    setRenameDraft(group.goalTitle);
+    setRenaming(true);
+  }
+
+  async function submitRename(): Promise<void> {
+    const title = renameDraft.trim();
+    if (renameBusyRef.current) return;
+    if (!title) {
+      setRenaming(false);
+      setRenameDraft(group.goalTitle);
+      return;
+    }
+    renameBusyRef.current = true;
+    try {
+      await onRenameGoal(group.goalId, title);
+      setRenaming(false);
+    } catch {
+      // 宿主负责 toast，输入框保留草稿便于修正后重试。
+    } finally {
+      renameBusyRef.current = false;
+    }
+  }
 
   return (
     <div
@@ -118,26 +238,126 @@ function ProjectGroupCard({
       }}
       className={`rounded-card bg-surface transition${highlight}`}
     >
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
+      <div className="relative flex items-center gap-1.5 px-2 py-1.5">
+        {renaming ? (
+          <form
+            className="flex min-w-0 flex-1 items-center gap-1.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitRename();
+            }}
+          >
+            <input
+              ref={renameInputRef}
+              aria-label={`重命名项目 ${group.goalTitle}`}
+              value={renameDraft}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              onBlur={() => {
+                if (!renameBusyRef.current) {
+                  setRenaming(false);
+                  setRenameDraft(group.goalTitle);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setRenaming(false);
+                  setRenameDraft(group.goalTitle);
+                  return;
+                }
+                if (event.key === "Enter") {
+                  if (event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  void submitRename();
+                }
+              }}
+              className="min-w-0 flex-1 rounded-ctl bg-surface-elevated px-2 py-1 td-text-label text-ink outline-none"
+            />
+          </form>
+        ) : (
+          <button
+            type="button"
+            data-testid="project-group-toggle"
+            aria-expanded={expanded}
+            onClick={onToggleExpand}
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-ctl py-1 text-left td-text-label font-medium text-ink-2 hover:bg-surface-hover"
+          >
+            <span className="shrink-0 text-ink-3">
+              <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
+            </span>
+            <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
+            <span className="shrink-0 td-text-caption font-normal text-ink-3">
+              {summary.allDone
+                ? `已完成 · ${summary.doneCount} 条`
+                : summary.recentDoneCount > 0
+                  ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
+                  : `还剩 ${summary.remaining}`}
+            </span>
+            {showCapWarning && <span className="shrink-0 td-text-caption font-normal text-warn">接近上限</span>}
+          </button>
+        )}
+        {!summary.allDone && (
+          <button
+            type="button"
+            aria-label={`在项目 ${group.goalTitle}中创建任务`}
+            title="在项目中创建任务"
+            onClick={(event) => {
+              event.stopPropagation();
+              openCreate();
+            }}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-hover hover:text-ink"
+          >
+            <Icon icon={Plus} size={16} />
+          </button>
+        )}
         <button
+          ref={menuTriggerRef}
           type="button"
-          data-testid="project-group-toggle"
-          aria-expanded={expanded}
-          onClick={onToggleExpand}
-          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-ctl py-1 text-left td-text-label font-medium text-ink-2 hover:bg-surface-hover"
+          aria-label={`项目 ${group.goalTitle} 更多操作`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          title="更多操作"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (menuOpen) {
+              setMenuOpen(false);
+              menuTriggerRef.current?.focus();
+            } else {
+              setMenuOpen(true);
+            }
+          }}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-hover hover:text-ink"
         >
-          <span className="shrink-0 text-ink-3">
-            <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
-          </span>
-          <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
-          <span className="shrink-0 td-text-caption font-normal text-ink-3">
-            {summary.allDone
-              ? `已完成 · ${summary.doneCount} 条`
-              : summary.recentDoneCount > 0
-                ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
-                : `还剩 ${summary.remaining}`}
-          </span>
+          <Icon icon={DotsThree} size={18} />
         </button>
+        {menuOpen && (
+          <div ref={menuRef} role="menu" aria-label={`项目 ${group.goalTitle} 更多操作`} className="absolute right-2 top-full z-20 min-w-36 overflow-hidden rounded-ctl border border-border bg-surface-elevated py-1 shadow-elev2">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(event) => {
+                event.stopPropagation();
+                openRename();
+              }}
+              className="block w-full px-3 py-2 text-left td-text-body text-ink hover:bg-surface-hover"
+            >
+              改名
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(event) => {
+                event.stopPropagation();
+                setMenuOpen(false);
+                menuTriggerRef.current?.focus();
+                onOpenGoal(group.goalId);
+              }}
+              className="block w-full px-3 py-2 text-left td-text-body text-ink hover:bg-surface-hover"
+            >
+              在 goals 页打开
+            </button>
+          </div>
+        )}
         {summary.allDone && (
           <Link
             to={`/goals/${group.goalId}`}
@@ -147,7 +367,36 @@ function ProjectGroupCard({
           </Link>
         )}
       </div>
-      {expanded && <div className="max-h-[45vh] overflow-y-auto px-1.5 pb-1.5">{children}</div>}
+      {expanded && (
+        <>
+          {creating && (
+            <div className="px-1.5 pb-1.5">
+              <input
+                ref={createInputRef}
+                aria-label={`在项目 ${group.goalTitle}中新建任务`}
+                value={createDraft}
+                placeholder="新任务"
+                onChange={(event) => setCreateDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setCreating(false);
+                    setCreateError(null);
+                    return;
+                  }
+                  if (event.key !== "Enter") return;
+                  if (event.nativeEvent.isComposing) return;
+                  event.preventDefault();
+                  void submitCreate();
+                }}
+                className="w-full rounded-ctl bg-surface-elevated px-2 py-1 td-text-body text-ink outline-none placeholder:text-ink-3"
+              />
+              {createError && <p className="mt-1 td-text-caption text-danger">{createError}</p>}
+            </div>
+          )}
+          <div className="todo-project-group-body overflow-y-auto px-1.5 pb-1.5">{children}</div>
+        </>
+      )}
     </div>
   );
 }
@@ -159,6 +408,9 @@ export function TodoProjectSection({
   revealGoals,
   onRevealConsumed,
   onExitProject,
+  onCreateTask,
+  onRenameGoal,
+  onOpenGoal,
   dropBlocked,
   ...rowHandlers
 }: TodoProjectSectionProps) {
@@ -166,6 +418,7 @@ export function TodoProjectSection({
   // 读一次存进 state：用户后来关掉提示条时，不该把已经展开的组收回去。
   const [introPending] = useState(() => !getProjectZoneIntroDismissed());
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
+  const [recentTaskIds, setRecentTaskIds] = useState<Map<string, readonly string[]>>(() => new Map());
   const rowRefs = useRef(new Map<string, HTMLElement | null>());
 
   const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? introPending;
@@ -199,41 +452,54 @@ export function TodoProjectSection({
         <span className="td-text-caption text-ink-3">{groups.length}</span>
       </div>
       <div className="space-y-1">
-        {groups.map((group) => (
-          <ProjectGroupCard
-            key={group.goalId}
-            group={group}
-            expanded={isExpanded(group.goalId)}
-            dropBlocked={dropBlocked}
-            onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
-            registerRef={(el) => {
-              rowRefs.current.set(group.goalId, el);
-            }}
-          >
-            {group.tasks.length > 0 && (
-              <TaskList
-                pool="inbox"
-                tasks={group.tasks}
-                childrenModeOverride="static"
-                metaChip={(task) => memberStateChip(task, handSessionId, now)}
-                extraAction={(task) => (
-                  <button
-                    type="button"
-                    aria-label={`退出项目 ${task.title}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onExitProject(group.goalId, task);
-                    }}
-                    className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
-                  >
-                    <Icon icon={SignOut} size={16} />
-                  </button>
-                )}
-                {...rowHandlers}
-              />
-            )}
-          </ProjectGroupCard>
-        ))}
+        {groups.map((group) => {
+          const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
+          return (
+            <ProjectGroupCard
+              key={group.goalId}
+              group={group}
+              expanded={isExpanded(group.goalId)}
+              dropBlocked={dropBlocked}
+              onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
+              onCreateTask={onCreateTask}
+              onTaskCreated={(goalId, taskId) => {
+                setRecentTaskIds((prev) => {
+                  const next = new Map(prev);
+                  next.set(goalId, [taskId, ...(prev.get(goalId) ?? []).filter((id) => id !== taskId)]);
+                  return next;
+                });
+              }}
+              onRenameGoal={onRenameGoal}
+              onOpenGoal={onOpenGoal}
+              registerRef={(el) => {
+                rowRefs.current.set(group.goalId, el);
+              }}
+            >
+              {visibleTasks.length > 0 && (
+                <TaskList
+                  pool="inbox"
+                  tasks={visibleTasks}
+                  childrenModeOverride="static"
+                  metaChip={(task) => memberStateChip(task, handSessionId, now)}
+                  extraAction={(task) => (
+                    <button
+                      type="button"
+                      aria-label={`退出项目 ${task.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onExitProject(group.goalId, task);
+                      }}
+                      className="flex h-6 w-6 items-center justify-center rounded-ctl text-ink-3 hover:bg-surface-elevated hover:text-ink"
+                    >
+                      <Icon icon={SignOut} size={16} />
+                    </button>
+                  )}
+                  {...rowHandlers}
+                />
+              )}
+            </ProjectGroupCard>
+          );
+        })}
       </div>
     </section>
   );
