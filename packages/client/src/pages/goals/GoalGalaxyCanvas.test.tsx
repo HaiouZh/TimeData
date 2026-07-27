@@ -1095,9 +1095,39 @@ describe("GoalGalaxyCanvas", () => {
     expect(document.body.querySelector('button[aria-label="移除成员 A"]')).toBeNull();
     const hint = host.querySelector("[data-connect-hint]");
     expect(hint?.textContent).toContain("点击目标节点完成连接");
+    expect(hint?.textContent).toContain("点空白处取消");
 
     await click(buttonByLabel(hint ?? host, "取消连前置"));
     expect(host.querySelector("[data-connect-hint]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("连前置草稿态下点恒星给出解释且保留草稿", async () => {
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "task", id: "b" },
+      ],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    await click(host.querySelector('[data-node-id="goal:g1"]'));
+    await flushPromises();
+
+    expect(host.textContent).toContain("Goal 锚不参与前置");
+    expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
+    expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
     await unmount(root);
   });
 

@@ -976,7 +976,12 @@ function GoalGalaxyCanvasInner({
   }
 
   async function connectToTarget(targetFlowNode: GoalGalaxyFlowNode): Promise<void> {
-    if (!connectDraft || targetFlowNode.type !== "goal-galaxy-member") return;
+    if (!connectDraft) return;
+    // 恒星不是合法前置目标：给出解释但保留草稿，用户可以接着点成员，不必从头再选源节点
+    if (targetFlowNode.type !== "goal-galaxy-member") {
+      setErrorMessage(REASON_COPY["goal-anchor"]);
+      return;
+    }
     const blocker = refFromGraphNode(connectDraft.node);
     const blocked = refFromGraphNode(targetFlowNode.data.node);
     if (!blocker || !blocked) return;
@@ -1203,7 +1208,7 @@ function GoalGalaxyCanvasInner({
           data-connect-hint
           className="absolute left-1/2 top-3 z-[var(--z-dropdown)] flex -translate-x-1/2 items-center gap-3 rounded-pill border border-accent bg-surface-elevated px-4 py-2 td-text-body text-ink shadow-elev1"
         >
-          <span>为「{connectDraft.node.title}」连前置：点击目标节点完成连接</span>
+          <span>为「{connectDraft.node.title}」连前置：点击目标节点完成连接，点空白处取消</span>
           <button
             type="button"
             aria-label="取消连前置"
