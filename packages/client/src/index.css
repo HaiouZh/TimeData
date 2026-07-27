@@ -222,6 +222,9 @@ samp {
 
 .todo-project-group-body {
   max-height: 45vh;
+  /* 组内按状态排序：抓到手头的行会瞬移到组内第一位。滚动锚定会跟着被移动的行把
+     scrollTop 拽到顶部（滚在底部点「抓到手头」→ 跳顶），关掉让滚动位置原地不动。 */
+  overflow-anchor: none;
 }
 
 /* 本类无层级、会压过 utilities 层的行常驻 bg-surface，故 accent 一律混在 surface 上

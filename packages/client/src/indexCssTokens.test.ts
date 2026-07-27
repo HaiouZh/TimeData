@@ -75,6 +75,11 @@ describe("index.css design tokens", () => {
     );
   });
 
+  it("disables scroll anchoring in the project group body so grab-to-hand does not yank scroll to top", () => {
+    // 组内按状态排序：抓到手头的行瞬移到组内第一位，浏览器滚动锚定会跟着它把 scrollTop 拽到顶部。
+    expect(css).toMatch(/\.todo-project-group-body\s*\{[^}]*overflow-anchor:\s*none;/s);
+  });
+
   it("keeps health range presets visible instead of hiding horizontal overflow", () => {
     expect(css).toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*flex-wrap:\s*wrap;/s);
     expect(css).not.toContain(".health-page-header .health-range-selector::-webkit-scrollbar");
