@@ -121,6 +121,7 @@
 
 - AI 生成的过程文档按角色写入 `docs_local/`：活工作件进 `specs/`（含 metaspec，文件名带 `-metaspec`）和 `plans/`；想法 / 路线图 / 审查报告等分析类进 `notes/`；常青理解文档进 `green/`；收工归档进 `archive/{specs,plans,reviews,reports}/`（活目录只放活的，死了就搬）；主题整体收工另建 `archive/roadmap/<完成日>-<slug>.md` 并挂进 `ROADMAP-archive.md` 索引表（`pnpm check:roadmap` 机检）。
 - **三分法**：要做的（需 brainstorm/design）进 `docs_local/ROADMAP.md` 立主题；拿起来就能改的小事进 `docs_local/backlog.md`（修完删行）；冒出过、暂不考虑做的进 `docs_local/ideas.md` 台账（两态：待评估 / 已处置；允许堆积不设体量线）。`notes/` 原件写完须被 ROADMAP / backlog / ideas 之一实链索引，否则 `pnpm check:roadmap` 报孤儿 warn。
+- **多 worktree 并发协议**：「谁在飞哪条线」唯一真相 = ROADMAP 阶段行的 `[进行中@分支]` 标记（线≠主题，同主题可多线并飞）。ROADMAP 只在**领取**（`[排队]`→`[进行中@分支]` + 挂 plan 链接，随后跑门禁验语法）与**收工**（翻 `[完成]`+SHA、更新刚完成/下一步）两个时刻被写，飞行中对它只读；飞行中进度写**自己 plan 尾部「落地记录」**（时间戳行，单写者=本线）或该主题看板。对 ROADMAP 禁整文件 Write、只准锚定 Edit 自己的行。`pnpm check:roadmap` 链首自动快照 `docs_local` 嵌套 git 仓（无 remote，纯本地安全网，被覆盖内容用 `git -C docs_local log -p` 捞），OK 行打印在飞清单。
 - **superpowers 等技能默认把 spec / plan 写到 `docs/superpowers/**`，本项目一律改投 `docs_local/{specs,plans}/`**（统一不进 Git）；技能运行产生的本地状态目录（如 `.superpowers/`）是临时产物，不提交。
 - 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是 `covers` 里「改它文档必错」的契约子集，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
