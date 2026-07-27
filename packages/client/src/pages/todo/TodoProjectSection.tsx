@@ -4,11 +4,10 @@ import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
-import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
+import { RECENT_DONE_WINDOW_DAYS, type TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { type ProjectChip, projectMemberState, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
-import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
 import { projectContainerId } from "./todoDnd.js";
@@ -35,7 +34,7 @@ export interface TodoProjectSectionProps {
    * 当前拖拽的这条能不能落进项目组（null = 没在拖）。**判定由页面做，组件只渲染两态**。
    *
    * 组件判不了，理由三条（前两条从来就成立，第三条是子任务那支的根因）：
-   * - 满员：组件手上只有可解析成员数（tasks + doneTasks），而 500 闸看的是 goal.members
+   * - 满员：组件手上只有可解析成员数（tasks + doneCount），而 500 闸看的是 goal.members
    *   数组长度（含 track 成员与悬空 ref），拿近似值画禁止态会撒谎。
    * - 目标组已归档 / 已改成 theme（`inactive`）：`TodoProjectGroup` 里根本没有 status/kind 字段，
    *   要判就得改投影层形状，代价远大于收益。
@@ -132,7 +131,11 @@ function ProjectGroupCard({
           </span>
           <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
           <span className="shrink-0 td-text-caption font-normal text-ink-3">
-            {summary.allDone ? `已完成 · ${summary.total} 条` : `还剩 ${summary.remaining} / 共 ${summary.total}`}
+            {summary.allDone
+              ? `已完成 · ${summary.doneCount} 条`
+              : summary.recentDoneCount > 0
+                ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
+                : `还剩 ${summary.remaining}`}
           </span>
         </button>
         {summary.allDone && (
@@ -144,7 +147,7 @@ function ProjectGroupCard({
           </Link>
         )}
       </div>
-      {expanded && <div className="px-1.5 pb-1.5">{children}</div>}
+      {expanded && <div className="max-h-[45vh] overflow-y-auto px-1.5 pb-1.5">{children}</div>}
     </div>
   );
 }
@@ -228,13 +231,6 @@ export function TodoProjectSection({
                 )}
                 {...rowHandlers}
               />
-            )}
-            {group.doneTasks.length > 0 && (
-              <div className="mt-1">
-                <CollapsibleSection title="已完成" count={group.doneTasks.length} defaultOpen={false}>
-                  <TaskList pool="completed" tasks={group.doneTasks} {...rowHandlers} />
-                </CollapsibleSection>
-              </div>
             )}
           </ProjectGroupCard>
         ))}

@@ -1666,7 +1666,7 @@ describe("listTasks projects 桶", () => {
     expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([t.id]);
   });
 
-  it("已完成成员只计 doneTasks，且悬空 ref 不计数", async () => {
+  it("已完成成员只计数，且悬空 ref 不进计数", async () => {
     const open = await addTask({ title: "未完", toInbox: true });
     const done = await addTask({ title: "已完", toInbox: true });
     await toggleTaskDone(done.id);
@@ -1681,7 +1681,16 @@ describe("listTasks projects 桶", () => {
 
     const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
     expect(buckets.projects[0]?.tasks.map((x) => x.id)).toEqual([open.id]);
-    expect(buckets.projects[0]?.doneTasks.map((x) => x.id)).toEqual([done.id]);
+    expect(buckets.projects[0]?.doneCount).toBe(1);
+  });
+
+  it("组内成员排好序才进桶：已排期沉到躺着之后（接线验证）", async () => {
+    const future = await addTask({ title: "排到下月", scheduledAt: "2026-08-10T00:00:00.000Z" });
+    const idle = await addTask({ title: "躺着", toInbox: true });
+    await seedGoal({ id: "g1", members: [{ kind: "task", id: future.id }, { kind: "task", id: idle.id }] });
+
+    const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+    expect(buckets.projects[0]?.tasks.map((x) => x.title)).toEqual(["躺着", "排到下月"]);
   });
 
   it("goalLinkedIds 收全 kind（project + theme），不受 projects 口径影响", async () => {

@@ -38,7 +38,14 @@ function task(overrides: Partial<Task> & Pick<Task, "id">): Task {
 }
 
 function group(overrides: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "goalId">): TodoProjectGroup {
-  return { goalTitle: `目标 ${overrides.goalId}`, tasks: [], doneTasks: [], ...overrides };
+  return {
+    goalTitle: `目标 ${overrides.goalId}`,
+    tasks: [],
+    doneCount: 0,
+    recentDoneCount: 0,
+    memberCount: 0,
+    ...overrides,
+  };
 }
 
 const handlers = {
@@ -103,25 +110,37 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 
-  it("有未完成成员时显示「还剩 N / 共 M」，不出现去归档入口", async () => {
+  it("有未完成成员时显示「还剩 N · 近 7 天 +M」，不出现去归档入口", async () => {
     const { host, root } = await renderSection({
       groups: [
         group({
           goalId: "g1",
           goalTitle: "装修",
           tasks: [task({ id: "t1" }), task({ id: "t2" })],
-          doneTasks: [task({ id: "d1", done: true })],
+          doneCount: 9,
+          recentDoneCount: 5,
         }),
       ],
     });
-    expect(host.textContent).toContain("还剩 2 / 共 3");
+    expect(host.textContent).toContain("还剩 2 · 近 7 天 +5");
+    expect(host.textContent).not.toContain("共 11");
     expect(host.querySelector('a[href="/goals/g1"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("窗口内没动静时不画 +0，只剩「还剩 N」", async () => {
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })], doneCount: 40, recentDoneCount: 0 })],
+    });
+    expect(host.textContent).toContain("还剩 1");
+    expect(host.textContent).not.toContain("+0");
+    expect(host.textContent).not.toContain("近 7 天");
     await unmount(root);
   });
 
   it("成员全部完成时显示「已完成 · M 条」并给出去归档深链", async () => {
     const { host, root } = await renderSection({
-      groups: [group({ goalId: "g1", goalTitle: "装修", doneTasks: [task({ id: "d1", done: true })] })],
+      groups: [group({ goalId: "g1", goalTitle: "装修", doneCount: 1 })],
     });
     expect(host.textContent).toContain("已完成 · 1 条");
     const link = host.querySelector('a[href="/goals/g1"]');
@@ -168,24 +187,33 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 
-  it("已完成成员收在折叠子区里（默认不展开），未完成的在子区之外", async () => {
+  it("已完成成员在组内零渲染出口（连折叠子区都不留）", async () => {
     const { host, root } = await renderSection({
       groups: [
         group({
           goalId: "g1",
           tasks: [task({ id: "t1", title: "刷墙" })],
-          doneTasks: [task({ id: "d1", title: "已刷好", done: true })],
+          doneCount: 3,
+          recentDoneCount: 1,
         }),
       ],
     });
-    const details = host.querySelector("details") as HTMLDetailsElement;
-    expect(details).not.toBeNull();
-    // `<details open={false}>` 只是收起呈现，子树仍在 DOM 里（同 AtHandSection 的「本场已完成」），
-    // 所以判「没列出来」只能看 open 属性 + 归属，**不能**用 host.textContent 的 not.toContain。
-    expect(details.open).toBe(false);
-    expect(details.textContent).toContain("已刷好");
+    expect(host.querySelector("details")).toBeNull();
     expect(host.textContent).toContain("刷墙");
-    expect(details.textContent ?? "").not.toContain("刷墙");
+    expect(host.textContent).not.toContain("已完成");
+    await unmount(root);
+  });
+
+  it("展开态内容区限高自滚，组撑不爆页面（结构闸）", async () => {
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })],
+    });
+    const card = host.querySelector('[data-testid="project-group"]') as HTMLElement;
+    const body = card.querySelector(".overflow-y-auto") as HTMLElement | null;
+    expect(body).not.toBeNull();
+    expect(body?.className).toContain("max-h-[45vh]");
+    expect(body?.textContent).toContain("刷墙");
+    expect(card.className).not.toContain("max-h-");
     await unmount(root);
   });
 

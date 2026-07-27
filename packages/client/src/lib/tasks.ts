@@ -23,6 +23,7 @@ import {
   type TodoProjectGroup,
 } from "./tasks/goalMembership.js";
 import { localDateOf, normalizeScheduledDate, placementForTask } from "./tasks/placement.js";
+import { sortProjectMembers } from "./tasks/projectZone.js";
 import { currentDueDateString } from "./tasks/recurrence.js";
 import type { RecurrenceChoice } from "./tasks/recurrencePresets.js";
 import { reorderedTaskSortOrders } from "./tasks/taskSort.js";
@@ -895,6 +896,9 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
   const sunkenFrom = buckets.scheduled.findIndex((t) => scheduledDateKey(t, now, ruleDueKey) > horizonKey);
   buckets.scheduledSunkenFromIndex = sunkenFrom === -1 ? buckets.scheduled.length : sunkenFrom;
   buckets.completed.sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""));
-  buckets.projects = buildTodoProjectGroups(goalRows, projectIndex, projectCandidates);
+  buckets.projects = buildTodoProjectGroups(goalRows, projectIndex, projectCandidates, now).map((group) => ({
+    ...group,
+    tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
+  }));
   return buckets;
 }

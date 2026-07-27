@@ -6,6 +6,7 @@ import {
   landsInCollapsedProjectGroup,
   projectChipIndex,
   projectMemberState,
+  sortProjectMembers,
   summarizeProjectGroup,
 } from "./projectZone.js";
 
@@ -35,7 +36,7 @@ function task(patch: Partial<Task> & Pick<Task, "id">): Task {
 }
 
 function group(patch: Partial<TodoProjectGroup> & Pick<TodoProjectGroup, "goalId">): TodoProjectGroup {
-  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneTasks: [], ...patch };
+  return { goalTitle: `目标 ${patch.goalId}`, tasks: [], doneCount: 0, recentDoneCount: 0, memberCount: 0, ...patch };
 }
 
 describe("projectMemberState", () => {
@@ -78,25 +79,84 @@ describe("projectMemberState", () => {
 });
 
 describe("summarizeProjectGroup", () => {
-  it("total 含已完成成员，allDone 只在未完成为 0 且有成员时成立", () => {
-    expect(summarizeProjectGroup(group({ goalId: "g1", tasks: [task({ id: "a" })], doneTasks: [task({ id: "b" })] })))
-      .toEqual({ remaining: 1, total: 2, allDone: false });
-    expect(summarizeProjectGroup(group({ goalId: "g1", doneTasks: [task({ id: "b" })] })))
-      .toEqual({ remaining: 0, total: 1, allDone: true });
+  it("计数直传，allDone 只在未完成为 0 且有已完成成员时成立", () => {
+    expect(summarizeProjectGroup(group({ goalId: "g1", tasks: [task({ id: "a" })], doneCount: 1, recentDoneCount: 1 })))
+      .toEqual({ remaining: 1, doneCount: 1, recentDoneCount: 1, allDone: false });
+    expect(summarizeProjectGroup(group({ goalId: "g1", doneCount: 1, recentDoneCount: 0 })))
+      .toEqual({ remaining: 0, doneCount: 1, recentDoneCount: 0, allDone: true });
   });
 
   it("空组不判 allDone（数据层已保证不会出现，此处是防御）", () => {
-    expect(summarizeProjectGroup(group({ goalId: "g1" }))).toEqual({ remaining: 0, total: 0, allDone: false });
+    expect(summarizeProjectGroup(group({ goalId: "g1" }))).toEqual({ remaining: 0, doneCount: 0, recentDoneCount: 0, allDone: false });
   });
 });
 
 describe("projectChipIndex", () => {
   it("只索引未完成成员，已完成成员不给 chip", () => {
     const chips = projectChipIndex([
-      group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "a" })], doneTasks: [task({ id: "done" })] }),
+      group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "a" })], doneCount: 1 }),
     ]);
     expect(chips.get("a")).toEqual({ goalId: "g1", goalTitle: "装修" });
     expect(chips.has("done")).toBe(false);
+  });
+});
+
+describe("sortProjectMembers", () => {
+  const opts = { handSessionId: "s1", now: NOW };
+
+  it("四段顺序：在手头 → 今天 → 躺着 → 已排期（未来）", () => {
+    const sorted = sortProjectMembers(
+      [
+        task({ id: "future", scheduledAt: "2026-08-10T00:00:00.000Z" }),
+        task({ id: "idle" }),
+        task({ id: "today", scheduledAt: "2026-07-25T00:00:00.000Z" }),
+        task({ id: "hand", sessionId: "s1" }),
+      ],
+      opts,
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["hand", "today", "idle", "future"]);
+  });
+
+  it("已排期段内按 scheduledAt 升序，快到期的在上", () => {
+    const sorted = sortProjectMembers(
+      [
+        task({ id: "late", scheduledAt: "2026-09-01T00:00:00.000Z" }),
+        task({ id: "soon", scheduledAt: "2026-07-28T00:00:00.000Z" }),
+        task({ id: "mid", scheduledAt: "2026-08-15T00:00:00.000Z" }),
+      ],
+      opts,
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["soon", "mid", "late"]);
+  });
+
+  it("同段内稳定：保持传入顺序（listTasks 的 sortOrder），不按 id / updatedAt 重排", () => {
+    const sorted = sortProjectMembers(
+      [
+        task({ id: "z", updatedAt: "2026-07-01T00:00:00.000Z" }),
+        task({ id: "m", updatedAt: "2026-07-20T00:00:00.000Z" }),
+        task({ id: "a", updatedAt: "2026-07-10T00:00:00.000Z" }),
+      ],
+      opts,
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["z", "m", "a"]);
+  });
+
+  it("逾期的一次性成员回落「躺着」段，排在已排期之前", () => {
+    const sorted = sortProjectMembers(
+      [
+        task({ id: "future", scheduledAt: "2026-08-10T00:00:00.000Z" }),
+        task({ id: "overdue", scheduledAt: "2026-07-01T00:00:00.000Z" }),
+      ],
+      opts,
+    );
+    expect(sorted.map((t) => t.id)).toEqual(["overdue", "future"]);
+  });
+
+  it("不改动传入数组（listTasks 传的是 group.tasks 本体）", () => {
+    const input = [task({ id: "b", scheduledAt: "2026-08-10T00:00:00.000Z" }), task({ id: "a" })];
+    const before = input.map((t) => t.id);
+    sortProjectMembers(input, opts);
+    expect(input.map((t) => t.id)).toEqual(before);
   });
 });
 

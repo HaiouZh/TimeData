@@ -44,6 +44,8 @@ function task(patch: Partial<Task> & Pick<Task, "id">): Task {
   } as Task;
 }
 
+const NOW = new Date("2026-07-25T10:00:00.000Z");
+
 describe("goalLinkedTaskIds", () => {
   it("收全部 kind 的 active 目标成员，跳过 archived 与 track 成员", () => {
     const ids = goalLinkedTaskIds([
@@ -88,19 +90,66 @@ describe("projectMemberIndex", () => {
 });
 
 describe("buildTodoProjectGroups", () => {
-  it("已完成成员只进 doneTasks 不进 tasks", () => {
+  it("已完成成员只计数不留行", () => {
     const goals = [goal({ id: "g1", title: "装修", members: [{ kind: "task", id: "t1" }, { kind: "task", id: "t2" }] })];
     const index = projectMemberIndex(goals);
-    const groups = buildTodoProjectGroups(goals, index, [task({ id: "t1" }), task({ id: "t2", done: true })]);
+    const groups = buildTodoProjectGroups(goals, index, [task({ id: "t1" }), task({ id: "t2", done: true })], NOW);
     expect(groups).toHaveLength(1);
     expect(groups[0]?.tasks.map((t) => t.id)).toEqual(["t1"]);
-    expect(groups[0]?.doneTasks.map((t) => t.id)).toEqual(["t2"]);
+    expect(groups[0]?.doneCount).toBe(1);
     expect(groups[0]?.goalTitle).toBe("装修");
+    expect(groups[0]).not.toHaveProperty("doneTasks");
+  });
+
+  it("recentDoneCount 只数窗口内完成的：两端都闭合，老行与未来时间戳都不计", () => {
+    const goals = [
+      goal({
+        id: "g1",
+        members: [
+          { kind: "task", id: "in" },
+          { kind: "task", id: "edge" },
+          { kind: "task", id: "out" },
+          { kind: "task", id: "legacy" },
+          { kind: "task", id: "future" },
+        ],
+      }),
+    ];
+    const groups = buildTodoProjectGroups(
+      goals,
+      projectMemberIndex(goals),
+      [
+        task({ id: "in", done: true, completedAt: "2026-07-20T00:00:00.000Z" }),
+        task({ id: "edge", done: true, completedAt: "2026-07-18T10:00:00.000Z" }),
+        task({ id: "out", done: true, completedAt: "2026-07-18T09:59:59.999Z" }),
+        task({ id: "legacy", done: true, completedAt: null }),
+        task({ id: "future", done: true, completedAt: "2026-08-01T00:00:00.000Z" }),
+      ],
+      NOW,
+    );
+    expect(groups[0]?.doneCount).toBe(5);
+    expect(groups[0]?.recentDoneCount).toBe(2);
+  });
+
+  it("memberCount 数原始 members 数组长度（含 track 与悬空 ref），不与可解析数混用", () => {
+    const goals = [
+      goal({
+        id: "g1",
+        members: [
+          { kind: "task", id: "t1" },
+          { kind: "track", id: "tr1" },
+          { kind: "task", id: "已删的" },
+        ],
+      }),
+    ];
+    const groups = buildTodoProjectGroups(goals, projectMemberIndex(goals), [task({ id: "t1" })], NOW);
+    expect(groups[0]?.tasks).toHaveLength(1);
+    expect(groups[0]?.doneCount).toBe(0);
+    expect(groups[0]?.memberCount).toBe(3);
   });
 
   it("零可解析成员的目标不出现（纯 track 目标 / 成员全被删）", () => {
     const goals = [goal({ id: "g1", members: [{ kind: "track", id: "tr1" }, { kind: "task", id: "gone" }] })];
-    expect(buildTodoProjectGroups(goals, projectMemberIndex(goals), [])).toEqual([]);
+    expect(buildTodoProjectGroups(goals, projectMemberIndex(goals), [], NOW)).toEqual([]);
   });
 
   it("组间按成员 max(updatedAt) 倒序，已完成成员也参与排序键", () => {
@@ -108,10 +157,15 @@ describe("buildTodoProjectGroups", () => {
       goal({ id: "g1", members: [{ kind: "task", id: "t1" }] }),
       goal({ id: "g2", members: [{ kind: "task", id: "t2" }] }),
     ];
-    const groups = buildTodoProjectGroups(goals, projectMemberIndex(goals), [
-      task({ id: "t1", updatedAt: "2026-07-02T00:00:00.000Z" }),
-      task({ id: "t2", updatedAt: "2026-07-20T00:00:00.000Z", done: true }),
-    ]);
+    const groups = buildTodoProjectGroups(
+      goals,
+      projectMemberIndex(goals),
+      [
+        task({ id: "t1", updatedAt: "2026-07-02T00:00:00.000Z" }),
+        task({ id: "t2", updatedAt: "2026-07-20T00:00:00.000Z", done: true }),
+      ],
+      NOW,
+    );
     expect(groups.map((g) => g.goalId)).toEqual(["g2", "g1"]);
   });
 });

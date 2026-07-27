@@ -21,14 +21,18 @@ export interface ProjectMembership {
 export interface TodoProjectGroup {
   goalId: string;
   goalTitle: string;
-  /** 未完成成员，保持传入顺序（listTasks 按 sortOrder 读表）。 */
+  /** 未完成成员。由 listTasks 在进入 buckets 前按项目区状态排序。 */
   tasks: Task[];
-  /**
-   * 已完成成员，保持传入顺序。不进 `tasks`（项目区显示集合只要未完成的），
-   * 但参与组间排序键，且喂展开态尾部的「已完成 N 条」折叠子区。
-   */
-  doneTasks: Task[];
+  /** 已完成成员数，不持有长期增长的已完成任务数组。 */
+  doneCount: number;
+  /** 近 RECENT_DONE_WINDOW_DAYS 天完成的成员数。 */
+  recentDoneCount: number;
+  /** 原始 goal.members 数组长度，含 track 成员与悬空 ref。 */
+  memberCount: number;
 }
+
+/** 标题行「近 N 天 +M」的窗口长度。 */
+export const RECENT_DONE_WINDOW_DAYS = 7;
 
 /**
  * 被任一 active 目标引用的 task id（**不看 kind**），用于行内绿竖条 `inGoal`。
@@ -89,9 +93,13 @@ export function buildTodoProjectGroups(
   goals: readonly Goal[],
   index: ReadonlyMap<string, ProjectMembership>,
   memberTasks: readonly Task[],
+  now: Date,
 ): TodoProjectGroup[] {
   const goalById = new Map<string, Goal>();
   for (const goal of goals) goalById.set(goal.id, goal);
+
+  const recentSince = new Date(now.getTime() - RECENT_DONE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const recentUntil = now.toISOString();
 
   const draft = new Map<string, { group: TodoProjectGroup; latest: string }>();
   for (const task of memberTasks) {
@@ -100,13 +108,23 @@ export function buildTodoProjectGroups(
     let entry = draft.get(membership.goalId);
     if (!entry) {
       entry = {
-        group: { goalId: membership.goalId, goalTitle: membership.goalTitle, tasks: [], doneTasks: [] },
+        group: {
+          goalId: membership.goalId,
+          goalTitle: membership.goalTitle,
+          tasks: [],
+          doneCount: 0,
+          recentDoneCount: 0,
+          memberCount: goalById.get(membership.goalId)?.members?.length ?? 0,
+        },
         latest: "",
       };
       draft.set(membership.goalId, entry);
     }
-    if (task.done) entry.group.doneTasks.push(task);
-    else entry.group.tasks.push(task);
+    if (task.done) {
+      entry.group.doneCount += 1;
+      const completedAt = task.completedAt ?? "";
+      if (completedAt >= recentSince && completedAt <= recentUntil) entry.group.recentDoneCount += 1;
+    } else entry.group.tasks.push(task);
     if (task.updatedAt > entry.latest) entry.latest = task.updatedAt;
   }
 

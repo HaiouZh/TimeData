@@ -49,18 +49,47 @@ export function projectMemberState(
 export interface ProjectGroupSummary {
   /** 未完成成员数 */
   remaining: number;
-  /**
-   * 可解析成员总数（未完成 + 已完成）。**只数 task 成员**——与 goals 页
-   * `buildGoalOverview` 的项目进度口径不同，那边把 track 成员也算进分母。
-   */
-  total: number;
+  /** 已完成成员数 */
+  doneCount: number;
+  /** 近 RECENT_DONE_WINDOW_DAYS 天完成数 */
+  recentDoneCount: number;
   allDone: boolean;
 }
 
 export function summarizeProjectGroup(group: TodoProjectGroup): ProjectGroupSummary {
   const remaining = group.tasks.length;
-  const total = remaining + group.doneTasks.length;
-  return { remaining, total, allDone: remaining === 0 && total > 0 };
+  return {
+    remaining,
+    doneCount: group.doneCount,
+    recentDoneCount: group.recentDoneCount,
+    allDone: remaining === 0 && group.doneCount > 0,
+  };
+}
+
+const MEMBER_SORT_RANK: Record<ProjectMemberState["kind"], number> = {
+  "at-hand": 0,
+  today: 1,
+  idle: 2,
+  scheduled: 3,
+};
+
+/** 项目组内按「在手头 → 今天 → 躺着 → 已排期」排序，段内保持传入顺序。 */
+export function sortProjectMembers(
+  tasks: readonly Task[],
+  options: { handSessionId: string | null; now: Date },
+): Task[] {
+  return tasks
+    .map((task, index) => ({ task, index, state: projectMemberState(task, options) }))
+    .sort((a, b) => {
+      const byRank = MEMBER_SORT_RANK[a.state.kind] - MEMBER_SORT_RANK[b.state.kind];
+      if (byRank !== 0) return byRank;
+      if (a.state.kind === "scheduled" && b.state.kind === "scheduled") {
+        const byDate = a.state.scheduledAt.localeCompare(b.state.scheduledAt);
+        if (byDate !== 0) return byDate;
+      }
+      return a.index - b.index;
+    })
+    .map((entry) => entry.task);
 }
 
 export interface ProjectChip {
