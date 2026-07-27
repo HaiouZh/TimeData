@@ -1321,18 +1321,17 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
-  it("零 active project 时不渲染项目区，也不挂存量提示条", async () => {
+  it("零 active project 时不渲染项目区", async () => {
     await addTask({ title: "自由任务", toInbox: true });
     const { host, root } = await renderPage();
     await waitForText(host, "自由任务");
     expect(host.querySelector('[data-section="todo-projects"]')).toBeNull();
-    expect(host.querySelector('[data-testid="project-zone-intro"]')).toBeNull();
     await unmount(root);
   });
 
   it("排到今天的项目成员在今天区显示项目名 chip，点它展开项目区对应组", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    // 提示条已读 → 项目区默认全折叠，才能观察到 chip 把它点开。
+    // 项目区恒为默认全折叠，才能观察到 chip 把它点开。
     const member = await addTask({ title: "刷墙" });
     await db.goals.add({
       id: "g1",
@@ -1367,7 +1366,7 @@ describe("TodoPage", () => {
 
   it("今天区的项目成员点「回收件箱」：进不了收件箱，改为展开归属组并列出它", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    // 提示条已读 → 项目区默认全折叠。这正是「消失」的现场：排他让它进不了收件箱，
+    // 项目区恒为默认全折叠。这正是「消失」的现场：排他让它进不了收件箱，
     // 没有 reveal 的话它只是落进上面那个折叠组，组 header 的「还剩 N / 共 M」纹丝不动，全屏零反馈。
     const member = await addTask({ title: "刷墙" });
     await db.goals.add({
@@ -1438,7 +1437,7 @@ describe("TodoPage", () => {
 
   it("已完成区取消勾选：项目成员回落 inbox 池时展开归属组", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    // 提示条已读 → 项目区默认全折叠，才观察得到"被展开"这件事。
+    // 项目区恒为默认全折叠，才观察得到"被展开"这件事。
     const member = await addTask({ title: "刷墙", toInbox: true });
     await toggleTaskDone(member.id);
     await db.goals.add({
@@ -2013,7 +2012,7 @@ describe("TodoPage 多选态", () => {
     await waitForCondition(() => zoneText(host).includes("装修"), "项目区出现「装修」", settle);
 
     const toggle = () => host.querySelector('[data-testid="project-group-toggle"]') as HTMLButtonElement;
-    // 探针：提示条已读 → 默认全折叠，下面那次点击才真的是「用户手动展开」。
+    // 探针：默认全折叠，下面那次点击才真的是「用户手动展开」。
     expect(toggle().getAttribute("aria-expanded")).toBe("false");
     await act(async () => {
       toggle().dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
@@ -2119,7 +2118,7 @@ describe("TodoPage 多选提交", () => {
   }
 
   it("建组成功：退出多选、展开新组、弹提示", async () => {
-    // 提示条已读 → 项目区默认全折叠。不加这句，「新组是展开的」会被"首次默认展开"顶成假绿。
+    // 项目区恒为默认全折叠，所以「新组是展开的」不会被默认展开顶成假绿。
     await addTask({ title: "买灯", toInbox: true });
     await addTask({ title: "买椅子", toInbox: true });
     const { host, root } = await renderPage();

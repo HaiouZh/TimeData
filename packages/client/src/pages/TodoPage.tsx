@@ -749,9 +749,6 @@ export function TodoPage() {
   }
 
   // 项目区不过 f()：与手头区一致，标签筛选与搜索本期不覆盖项目区（design §非目标）。
-  // 提示条的两个数必须同口径：`memberCount` 只数未完成成员，`groupCount` 若数全部组（含「全部完成」的组），
-  // 「1 条任务已归入 2 个项目」这种自相矛盾的话就是可达的。
-  const projectGroupsWithPending = buckets.projects.filter((group) => group.tasks.length > 0);
   // 「放进…」的候选：项目区当前显示的组即可，与用户看到的一致。
   const selectableProjects = buckets.projects.map((group) => ({
     goalId: group.goalId,
