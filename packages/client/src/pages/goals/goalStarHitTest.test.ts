@@ -32,6 +32,14 @@ describe("hitTestGoalStar", () => {
     expect(result).toBe("right");
   });
 
+  it("命中框正好是 measured 尺寸：贴边内命中、越界一像素落空", () => {
+    const target = star({ goalId: "g1", center: { x: 100, y: 100 }, width: 80, height: 60 });
+    expect(hitTestGoalStar({ x: 139, y: 100 }, [target])).toBe("g1");
+    expect(hitTestGoalStar({ x: 141, y: 100 }, [target])).toBeNull();
+    expect(hitTestGoalStar({ x: 100, y: 129 }, [target])).toBe("g1");
+    expect(hitTestGoalStar({ x: 100, y: 131 }, [target])).toBeNull();
+  });
+
   it("skips stars that do not have usable measured dimensions", () => {
     expect(
       hitTestGoalStar(

@@ -159,7 +159,8 @@ async function dropGoalMember(
 }
 
 async function dragOverGalaxy(target: Element, position: { x: number; y: number }): Promise<{ dropEffect: string }> {
-  const dataTransfer = { dropEffect: "copy", getData: () => "" };
+  // 初值故意用既非 copy 也非 none 的值：命中与落空两个方向都必须由实现真的回写才能通过
+  const dataTransfer = { dropEffect: "link", getData: () => "" };
   await act(async () => {
     const event = new MouseEvent("dragover", {
       bubbles: true,
@@ -173,9 +174,9 @@ async function dragOverGalaxy(target: Element, position: { x: number; y: number 
   return dataTransfer;
 }
 
-async function dragLeaveGalaxy(target: Element): Promise<void> {
+async function dragLeaveGalaxy(target: Element, relatedTarget: EventTarget | null = null): Promise<void> {
   await act(async () => {
-    target.dispatchEvent(new MouseEvent("dragleave", { bubbles: true, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("dragleave", { bubbles: true, cancelable: true, relatedTarget }));
   });
 }
 
@@ -632,6 +633,7 @@ describe("GoalGalaxyCanvas", () => {
 
     const hit = await dragOverGalaxy(canvas, { x: 0, y: 0 });
     expect(hit.dropEffect).toBe("copy");
+    expect(getReactFlowMock().screenToFlowPosition).toHaveBeenCalledWith({ x: 0, y: 0 });
     expect(host.querySelector('[data-node-render-id="goal:g1"] [data-drop-target="true"]')).not.toBeNull();
 
     const miss = await dragOverGalaxy(canvas, { x: 500, y: 500 });
@@ -641,7 +643,63 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
-  it("拖离画布后熄灭命中高亮", async () => {
+  it("画布内子元素间冒泡出的 dragleave 不熄灭，真正离开画布才熄灭", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const canvas = host.querySelector("[data-galaxy]");
+    if (!(canvas instanceof HTMLElement)) throw new Error("missing galaxy canvas");
+
+    await dragOverGalaxy(canvas, { x: 0, y: 0 });
+    expect(host.querySelector('[data-drop-target="true"]')).not.toBeNull();
+
+    const insideChild = canvas.querySelector('[data-node-render-id="goal:g1"]');
+    if (!(insideChild instanceof Element)) throw new Error("missing star render node");
+    await dragLeaveGalaxy(canvas, insideChild);
+    expect(host.querySelector('[data-drop-target="true"]')).not.toBeNull();
+
+    await dragLeaveGalaxy(canvas, document.body);
+    expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("拖到未归类抽屉上方熄灭画布上的命中高亮", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const canvas = host.querySelector("[data-galaxy]");
+    if (!(canvas instanceof HTMLElement)) throw new Error("missing galaxy canvas");
+
+    await click(buttonByLabel(host, "未归类"));
+    await dragOverGalaxy(canvas, { x: 0, y: 0 });
+    expect(host.querySelector('[data-drop-target="true"]')).not.toBeNull();
+
+    const drawer = asideByLabel(host, "未归类托盘");
+    if (!drawer) throw new Error("missing drawer");
+    await dragOverGalaxy(drawer, { x: 0, y: 0 });
+    expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("拖出窗口（无 relatedTarget）也熄灭命中高亮", async () => {
     resetReactFlowMock();
     const { host, root } = await renderDom(
       <GoalGalaxyCanvas
@@ -1167,6 +1225,34 @@ describe("GoalGalaxyCanvas", () => {
     expect(hint?.textContent).toContain("点空白处取消");
 
     await click(buttonByLabel(hint ?? host, "取消连前置"));
+    expect(host.querySelector("[data-connect-hint]")).toBeNull();
+    await unmount(root);
+  });
+
+  it("连前置草稿态下点画布空白处取消草稿", async () => {
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "task", id: "b" },
+      ],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await click(host.querySelector('[data-node-id="task:a"]'));
+    await click(buttonByLabel(document.body, "连前置 A"));
+    expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
+
+    await click(host.querySelector("[data-rf='true']"));
+
     expect(host.querySelector("[data-connect-hint]")).toBeNull();
     await unmount(root);
   });
