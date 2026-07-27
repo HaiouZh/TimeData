@@ -31,6 +31,7 @@ status: living
 | [0019](0019-destructive-sync-operations-preserve-ledger.md) | 破坏性同步操作保留只增账本 | 2026-07-10 | force-push / reset 不清账本，删除差异照常传播 | 延续 [0012](0012-sync-ledger-and-domain-registry.md) |
 | [0020](0020-sync-push-request-idempotency.md) | push requestId 幂等与响应回放 | 2026-07-23 | 弱网对冲重放同一 requestId 回放首发响应，不重复记账 | |
 | [0021](0021-sse-bump-carries-changes.md) | SSE bump 携带增量数据 | 2026-07-23 | push 造成的 changes 搭 bump 车直推，收端免一轮 pull；超限即退化 | 延续 [0012](0012-sync-ledger-and-domain-registry.md)，背景见 [0020](0020-sync-push-request-idempotency.md) |
+| [0022](0022-diary-list-marker-strict-markdown.md) | 日记列表识别钉死为 Markdown 标准 | 2026-07-27 | 形近写法（全角/无空格）一律普通文本，否决识别放宽与提示机制 | |
 
 ## 按主题速查
 
@@ -38,4 +39,5 @@ status: living
 - **写入边界与鉴权**：0001 → 0011 → 0013、0005
 - **备份**：0002、0003、0007、0015
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
+- **日记编辑器**：0022（列表识别口径）
 - **范围决策**：0005、0009
