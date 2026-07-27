@@ -113,6 +113,7 @@ const REASON_COPY = {
 } as const;
 
 const DEFAULT_VIEWPORT: GalaxyViewport = { x: 0, y: 0, zoom: 1 };
+const NOTICE_DURATION_MS = 3000;
 const DEFAULT_CLUSTER_BOUNDS = { x: -260, y: -260, width: 520, height: 520 };
 const STAR_HIT_FALLBACK = { width: 144, height: 144 };
 const DEFAULT_TETHER_OPACITY = 0.05;
@@ -423,6 +424,11 @@ function canReuseGalaxyNode(
   return false;
 }
 
+function flowNodeTitle(node: GoalGalaxyFlowNode | undefined): string {
+  if (!node) return "";
+  return node.type === "goal-star" ? node.data.star.title : node.data.node.title;
+}
+
 function commonGoalIds(first: GoalGalaxyFlowNode | undefined, second: GoalGalaxyFlowNode | undefined): string[] {
   if (!first || !second) return [];
   const firstIds = new Set(goalIdsFromAnchorIds(anchorIdsForFlowNode(first)));
@@ -458,6 +464,7 @@ function GoalGalaxyCanvasInner({
   const [pendingRemoveMember, setPendingRemoveMember] = useState<PendingRemoveMember | null>(null);
   const [connectDraft, setConnectDraft] = useState<ConnectDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [addMemberGoalId, setAddMemberGoalId] = useState<string | null>(null);
   const [goalMenuGoalId, setGoalMenuGoalId] = useState<string | null>(null);
   const [bridgeRouteChoice, setBridgeRouteChoice] = useState<BridgeRouteChoice>(null);
@@ -471,6 +478,21 @@ function GoalGalaxyCanvasInner({
   const destination = useTodoDefaultDestination();
   const [liveSettle, setLiveSettle] = useState(true);
   const [settleHint, setSettleHint] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = useCallback((message: string): void => {
+    if (noticeTimerRef.current !== null) clearTimeout(noticeTimerRef.current);
+    setNoticeMessage(message);
+    noticeTimerRef.current = setTimeout(() => {
+      noticeTimerRef.current = null;
+      setNoticeMessage(null);
+    }, NOTICE_DURATION_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (noticeTimerRef.current !== null) clearTimeout(noticeTimerRef.current);
+    },
+    [],
+  );
   const settleEnabled = engineMode === "settle";
   const { anchorCanvasById, memberPinByNodeId } = useMemo(() => splitPins(layoutPins, goals), [goals, layoutPins]);
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal])), [goals]);
@@ -841,20 +863,21 @@ function GoalGalaxyCanvasInner({
     setPrereqOpacity(Math.min(PREREQUISITE_OPACITY_MAX, Math.max(PREREQUISITE_OPACITY_MIN, next / 100)));
   }
 
-  async function writePrerequisite(goalId: string, blocker: GoalMemberRef, blocked: GoalMemberRef): Promise<void> {
+  async function writePrerequisite(goalId: string, blocker: GoalMemberRef, blocked: GoalMemberRef): Promise<boolean> {
     const goal = goalById.get(goalId);
-    if (!goal) return;
+    if (!goal) return false;
 
     const validation = validatePrerequisiteEdge(goal, blocker, blocked);
     if (!validation.ok && validation.error) {
       setErrorMessage(REASON_COPY[validation.error]);
       setConnectDraft(null);
-      return;
+      return false;
     }
 
     await updateGoalPrerequisites(goal.id, nextPrerequisitesWithEdge(goal, blocker, blocked));
     setConnectDraft(null);
     setErrorMessage(null);
+    return true;
   }
 
   const selectedFlowNode = useMemo(
@@ -986,7 +1009,10 @@ function GoalGalaxyCanvasInner({
     const blocked = refFromGraphNode(targetFlowNode.data.node);
     if (!blocker || !blocked) return;
 
-    await writePrerequisite(connectDraft.goalId, blocker, blocked);
+    const written = await writePrerequisite(connectDraft.goalId, blocker, blocked);
+    if (written) {
+      showNotice(`已连前置：「${connectDraft.node.title}」→「${targetFlowNode.data.node.title}」`);
+    }
     setSelectedNodeId(targetFlowNode.id);
   }
 
@@ -1011,7 +1037,10 @@ function GoalGalaxyCanvasInner({
       return;
     }
 
-    await writePrerequisite(sharedGoalIds[0], blocker, blocked);
+    const written = await writePrerequisite(sharedGoalIds[0], blocker, blocked);
+    if (written) {
+      showNotice(`已连前置：「${flowNodeTitle(sourceNode)}」→「${flowNodeTitle(targetNode)}」`);
+    }
     setSelectedEdgeId(null);
     setSelectedNodeId(connection.target);
   }
@@ -1235,7 +1264,16 @@ function GoalGalaxyCanvasInner({
           {errorMessage}
         </div>
       )}
-      {settleHint && !errorMessage && (
+      {noticeMessage && !errorMessage && (
+        <div
+          data-galaxy-notice
+          role="status"
+          className="td-text-body absolute bottom-3 right-3 z-[var(--z-dropdown)] rounded-card border border-border bg-surface px-3 py-2 text-ink"
+        >
+          {noticeMessage}
+        </div>
+      )}
+      {settleHint && !errorMessage && !noticeMessage && (
         <div className="td-text-body absolute bottom-3 right-3 z-[var(--z-dropdown)] rounded-card border border-border bg-surface px-3 py-2 text-ink-2">
           {settleHint}
         </div>

@@ -1131,6 +1131,43 @@ describe("GoalGalaxyCanvas", () => {
     await unmount(root);
   });
 
+  it("连前置成功后给一次确认提示并自动消失", async () => {
+    vi.useFakeTimers();
+    const goalValue = goal({
+      members: [
+        { kind: "task", id: "a" },
+        { kind: "task", id: "b" },
+      ],
+    });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goalValue]}
+        tasks={[task("a", { title: "A" }), task("b", { title: "B" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    try {
+      await click(host.querySelector('[data-node-id="task:a"]'));
+      await click(buttonByLabel(document.body, "连前置 A"));
+      await click(host.querySelector('[data-node-id="task:b"]'));
+      await flushPromises();
+
+      expect(host.querySelector("[data-galaxy-notice]")?.textContent).toContain("已连前置：「A」→「B」");
+
+      await act(async () => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(host.querySelector("[data-galaxy-notice]")).toBeNull();
+    } finally {
+      await unmount(root);
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects a prerequisite target outside the selected member goal", async () => {
     const goals = [
       goal({ id: "g1", title: "G1", members: [{ kind: "task", id: "a" }] }),
