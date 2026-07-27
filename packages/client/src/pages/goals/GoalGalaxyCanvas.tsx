@@ -898,8 +898,8 @@ function GoalGalaxyCanvasInner({
 
     const validation = validatePrerequisiteEdge(goal, blocker, blocked);
     if (!validation.ok && validation.error) {
+      // 保留草稿：给了解释就该让用户接着点别的目标，不必从头重选源节点。与点恒星、与局部编辑器 ConnectSheet 同口径
       setErrorMessage(REASON_COPY[validation.error]);
-      setConnectDraft(null);
       return false;
     }
 
@@ -1049,9 +1049,8 @@ function GoalGalaxyCanvasInner({
     if (!blocker || !blocked) return;
 
     const written = await writePrerequisite(connectDraft.goalId, blocker, blocked);
-    if (written) {
-      showNotice(`已连前置：「${connectDraft.node.title}」→「${targetFlowNode.data.node.title}」`);
-    }
+    if (!written) return;
+    showNotice(`已连前置：「${connectDraft.node.title}」→「${targetFlowNode.data.node.title}」`);
     setSelectedNodeId(targetFlowNode.id);
   }
 
@@ -1077,9 +1076,8 @@ function GoalGalaxyCanvasInner({
     }
 
     const written = await writePrerequisite(sharedGoalIds[0], blocker, blocked);
-    if (written) {
-      showNotice(`已连前置：「${flowNodeTitle(sourceNode)}」→「${flowNodeTitle(targetNode)}」`);
-    }
+    if (!written) return;
+    showNotice(`已连前置：「${flowNodeTitle(sourceNode)}」→「${flowNodeTitle(targetNode)}」`);
     setSelectedEdgeId(null);
     setSelectedNodeId(connection.target);
   }

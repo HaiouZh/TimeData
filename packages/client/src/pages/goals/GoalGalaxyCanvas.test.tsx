@@ -1403,6 +1403,9 @@ describe("GoalGalaxyCanvas", () => {
 
     expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
     expect(host.textContent).toContain("只能连当前目标里的有效成员");
+    // 给了解释就该让用户接着点别的目标：草稿保留，且不把这个非法目标选中弹动作单
+    expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
+    expect(document.body.querySelector('button[aria-label="移除成员 B"]')).toBeNull();
     await unmount(root);
   });
 
