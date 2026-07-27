@@ -7,6 +7,11 @@ export function writeDragRef(dataTransfer: DataTransfer, ref: GoalMemberRef): vo
   dataTransfer.effectAllowed = "copy";
 }
 
+// dragover 期间 getData 被封，只有 types 可读——用它判断这次拖的是不是成员载荷
+export function hasGoalMemberPayload(dataTransfer: Pick<DataTransfer, "types"> | null): boolean {
+  return dataTransfer ? Array.from(dataTransfer.types).includes(GOAL_MEMBER_DRAG_MIME) : false;
+}
+
 export function readDragRef(dataTransfer: DataTransfer): GoalMemberRef | null {
   const raw = dataTransfer.getData(GOAL_MEMBER_DRAG_MIME);
   if (!raw) return null;

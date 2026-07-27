@@ -97,16 +97,26 @@ const screenToFlowPosition = vi.fn<(position: { x: number; y: number }) => { x: 
 let latestOnMoveEnd: MockReactFlowProps["onMoveEnd"] | undefined;
 let latestOnNodesChange: MockReactFlowProps["onNodesChange"] | undefined;
 let nextConnection: MockConnection | null = null;
-const getNode = vi.fn<
-  (id: string) => (MockReactFlowNode & { measured?: { width?: number; height?: number } }) | undefined
+function findRenderedNode(id: string): MockReactFlowNode | undefined {
+  return renderedNodes[renderedNodes.length - 1]?.find((item) => item.id === id);
+}
+
+function measuredFor(node: MockReactFlowNode): { width?: number; height?: number } {
+  const injected = mockNodeGeomById.get(node.id);
+  if (injected) return { width: injected.width, height: injected.height };
+  return node.measured ?? (node.type === "goal-star" ? { width: 144, height: 144 } : { width: 180, height: 56 });
+}
+
+// 真实 React Flow 的 getNode 返回 internals.userNode，measured 只写在 internal node 上、从不回写 user node。
+// mock 必须照这个来，否则「拿 getNode().measured 量尺寸」这种接线错误在测试里会被悄悄遮住。
+const getNode = vi.fn<(id: string) => MockReactFlowNode | undefined>((id) => findRenderedNode(id));
+const getInternalNode = vi.fn<
+  (id: string) => (MockReactFlowNode & { measured: { width?: number; height?: number } }) | undefined
 >((id) => {
-  const node = renderedNodes[renderedNodes.length - 1]?.find((item) => item.id === id);
-  if (!node) return undefined;
-  const measured =
-    node.measured ?? (node.type === "goal-star" ? { width: 144, height: 144 } : { width: 180, height: 56 });
-  return { ...node, measured };
+  const node = findRenderedNode(id);
+  return node ? { ...node, measured: measuredFor(node) } : undefined;
 });
-const reactFlowInstance = { fitView, setViewport, getViewport, screenToFlowPosition, getNode };
+const reactFlowInstance = { fitView, setViewport, getViewport, screenToFlowPosition, getNode, getInternalNode };
 
 const mockNodeGeomById = new Map<string, { x: number; y: number; width: number; height: number }>();
 
@@ -127,11 +137,11 @@ export function useInternalNode(
       measured: { width: injected.width, height: injected.height },
     };
   }
-  const node = getNode(id);
+  const node = findRenderedNode(id);
   if (!node) return undefined;
   return {
     internals: { positionAbsolute: node.position ?? { x: 0, y: 0 } },
-    measured: node.measured ?? {},
+    measured: measuredFor(node),
   };
 }
 
@@ -405,6 +415,7 @@ export function resetReactFlowMock() {
   getViewport.mockClear();
   screenToFlowPosition.mockClear();
   getNode.mockClear();
+  getInternalNode.mockClear();
   renderedNodes.length = 0;
   fitViewRenderedNodeCounts.length = 0;
   latestOnMoveEnd = undefined;

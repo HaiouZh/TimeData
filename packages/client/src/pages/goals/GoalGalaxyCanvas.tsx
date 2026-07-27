@@ -62,7 +62,7 @@ import { ResizableTrayAside } from "./ResizableTrayAside.js";
 import { galaxyPinRef } from "./galaxyPinRef.js";
 import { seatOrderedActiveGoals } from "./galaxySeatOrder.js";
 import { actionsForEdge, actionsForNode, type GoalAction } from "./goalGraphActions.js";
-import { readDragRef } from "./goalMemberDragData.js";
+import { hasGoalMemberPayload, readDragRef } from "./goalMemberDragData.js";
 import { type GoalStarHitTarget, hitTestGoalStar } from "./goalStarHitTest.js";
 import { restoreGalaxyPin } from "./restoreGalaxyPin.js";
 import { useGalaxySettleEngine } from "./useGalaxySettleEngine.js";
@@ -824,7 +824,9 @@ function GoalGalaxyCanvasInner({
   const collectStarHitTargets = useCallback((): GoalStarHitTarget[] => {
     const positionByNodeId = new Map(nodes.map((node) => [node.id, node.position]));
     return model.stars.map((star) => {
-      const measured = flow.getNode(star.nodeId)?.measured;
+      // 必须走 getInternalNode：getNode 返回的是我们自己传进去的 user node，measured 只写在 internal node 上，
+      // 用 getNode 量尺寸会恒取兜底值（折叠星 80×80 会被当成 144×144，星体外也报"能放"）
+      const measured = flow.getInternalNode(star.nodeId)?.measured;
       return {
         goalId: star.goalId,
         center: positionByNodeId.get(star.nodeId) ?? layout.positions[star.nodeId] ?? { x: 0, y: 0 },
@@ -836,7 +838,7 @@ function GoalGalaxyCanvasInner({
 
   const onGalaxyDragOver = useCallback(
     (event: DragEvent<HTMLDivElement>): void => {
-      if (isGalaxyOverlayTarget(event.target)) {
+      if (isGalaxyOverlayTarget(event.target) || !hasGoalMemberPayload(event.dataTransfer)) {
         setDropTargetGoalId(null);
         return;
       }
@@ -849,6 +851,11 @@ function GoalGalaxyCanvasInner({
     },
     [collectStarHitTargets, flow],
   );
+
+  // 拖拽被 Esc / 系统中断时浏览器不保证补发 dragleave，dragend 从拖拽源冒泡上来是第二道闸
+  const onGalaxyDragEnd = useCallback((): void => {
+    setDropTargetGoalId(null);
+  }, []);
 
   const onGalaxyDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
     // 子元素之间移动也会冒泡出 dragleave，只有真正离开画布才熄灭
@@ -944,6 +951,8 @@ function GoalGalaxyCanvasInner({
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
     setConnectDraft(null);
+    // 红条没有自己的关闭入口，也没有计时器；不在这里清掉，它会一直压着确认提示与灵动提示（两者都带 !errorMessage 守卫）
+    setErrorMessage(null);
   }
 
   function owningGoalIdsForNode(node: GoalGalaxyFlowNode): string[] {
@@ -1142,6 +1151,7 @@ function GoalGalaxyCanvasInner({
       data-galaxy
       onDragOver={onGalaxyDragOver}
       onDragLeave={onGalaxyDragLeave}
+      onDragEnd={onGalaxyDragEnd}
       onDrop={onGalaxyDrop}
       className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink"
     >
@@ -1272,7 +1282,10 @@ function GoalGalaxyCanvasInner({
           <button
             type="button"
             aria-label="取消连前置"
-            onClick={() => setConnectDraft(null)}
+            onClick={() => {
+              setConnectDraft(null);
+              setErrorMessage(null);
+            }}
             className="rounded-ctl border border-border px-2 py-0.5 td-text-caption text-ink-2 hover:bg-surface-hover"
           >
             取消

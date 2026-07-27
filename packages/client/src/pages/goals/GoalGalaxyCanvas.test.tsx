@@ -4,7 +4,7 @@ import type { Goal, GoalLayoutPin, Task } from "@timedata/shared";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { click, doubleClick, renderDom, unmount } from "../../test/domHarness.js";
-import { getReactFlowMock, resetReactFlowMock } from "./test/reactFlowMock.js";
+import { getReactFlowMock, resetReactFlowMock, setMockNodeGeom } from "./test/reactFlowMock.js";
 
 const upsertGoalLayoutPinMock = vi.hoisted(() => vi.fn());
 const deleteGoalLayoutPinMock = vi.hoisted(() => vi.fn());
@@ -158,9 +158,13 @@ async function dropGoalMember(
   return dataTransfer;
 }
 
-async function dragOverGalaxy(target: Element, position: { x: number; y: number }): Promise<{ dropEffect: string }> {
+async function dragOverGalaxy(
+  target: Element,
+  position: { x: number; y: number },
+  types: string[] = ["application/x-goal-member"],
+): Promise<{ dropEffect: string }> {
   // 初值故意用既非 copy 也非 none 的值：命中与落空两个方向都必须由实现真的回写才能通过
-  const dataTransfer = { dropEffect: "link", getData: () => "" };
+  const dataTransfer = { dropEffect: "link", types, getData: () => "" };
   await act(async () => {
     const event = new MouseEvent("dragover", {
       bubbles: true,
@@ -638,6 +642,55 @@ describe("GoalGalaxyCanvas", () => {
 
     const miss = await dragOverGalaxy(canvas, { x: 500, y: 500 });
     expect(miss.dropEffect).toBe("none");
+    expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("命中框按恒星实测尺寸算：折叠星旁边的空白不点亮也不给可放置光标", async () => {
+    resetReactFlowMock();
+    // 折叠恒星实际渲染 80×80，若实现拿 getNode().measured（真实环境恒 undefined）就会退到 144×144 兜底
+    setMockNodeGeom("goal:g1", { x: 0, y: 0, width: 80, height: 80 });
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const canvas = host.querySelector("[data-galaxy]") ?? host;
+
+    const inside = await dragOverGalaxy(canvas, { x: 39, y: 0 });
+    expect(inside.dropEffect).toBe("copy");
+    expect(host.querySelector('[data-drop-target="true"]')).not.toBeNull();
+
+    // 41 在 80 宽的星体外、却在 144 兜底框内：拿错 API 就会在这里报"能放"
+    const outside = await dragOverGalaxy(canvas, { x: 41, y: 0 });
+    expect(outside.dropEffect).toBe("none");
+    expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("非成员载荷的拖拽不点亮恒星也不报可放置", async () => {
+    resetReactFlowMock();
+    const { host, root } = await renderDom(
+      <GoalGalaxyCanvas
+        goals={[goal({ id: "g1", title: "G1" })]}
+        tasks={[task("candidate", { title: "候选任务" })]}
+        tracks={[]}
+        steps={[]}
+        layoutPins={[]}
+        onNavigate={vi.fn()}
+      />,
+    );
+    const canvas = host.querySelector("[data-galaxy]") ?? host;
+
+    const dropped = await dragOverGalaxy(canvas, { x: 0, y: 0 }, ["Files"]);
+    expect(dropped.dropEffect).toBe("link");
     expect(host.querySelector('[data-drop-target="true"]')).toBeNull();
 
     await unmount(root);
@@ -1283,6 +1336,10 @@ describe("GoalGalaxyCanvas", () => {
     expect(host.textContent).toContain("Goal 锚不参与前置");
     expect(host.querySelector("[data-connect-hint]")).not.toBeNull();
     expect(updateGoalPrerequisitesMock).not.toHaveBeenCalled();
+
+    // 红条没有关闭入口也没有计时器：取消草稿必须把它一起带走，否则它会永久压掉确认提示与灵动提示
+    await click(buttonByLabel(host.querySelector("[data-connect-hint]") ?? host, "取消连前置"));
+    expect(host.textContent).not.toContain("Goal 锚不参与前置");
     await unmount(root);
   });
 
