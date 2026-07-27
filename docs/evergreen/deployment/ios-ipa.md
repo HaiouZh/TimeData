@@ -58,7 +58,7 @@ iOS Release 发布到 `ios-<buildNumber>` tag，`gh release create` **不带 `--
 
 IPA 未签名，不能直接安装。手机上用 SideStore（推荐，可离机自行续签）或 AltStore 导入，安装时用你自己的 Apple ID 签名。免费 Apple ID 的签名 **7 天到期**，到期重签即可，应用数据不丢；同时最多 3 个自签应用。付费开发者账号（$99/年）才能走 TestFlight / App Store。
 
-**原生壳与 Safari 里的 PWA 不同源**：Capacitor iOS 默认 `capacitor://localhost`，Safari PWA 是站点自己的 https 源，两者的 IndexedDB 互不可见。装上原生壳后是一份空数据，要靠服务器同步把数据拉下来——首次进入先在设置里填 API 地址与 Token。同一台设备上两个入口各存各的，别指望互通。
+**原生壳与 Safari 里的 PWA 不同源**：Capacitor iOS 默认 `capacitor://localhost`，Safari PWA 是站点自己的 https 源，两者的 IndexedDB 互不可见。装上原生壳后是一份空数据，要靠服务器同步把数据拉下来——首次进入先在设置里填 API 地址与 Token。同一台设备上两个入口各存各的数据，不互通。
 
 ## 6. 排错
 

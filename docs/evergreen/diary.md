@@ -14,13 +14,6 @@ contracts:
 last-reviewed: 2026-07-26
 ---
 
-<!-- 复核 2026-07-25（diary-workbench 阶段二 · 编辑器语义收口）：补三键位（回车整段重排/Tab缩进出层/Ctrl+K补链接）契约、EditAction 四态、onChange 红线、撤销栈已知缺口、dirty 记账四条路径、行尾保护 §3.8；不新增 covers（lib/diary/** 通配已覆盖全部新文件）。 -->
-<!-- 复核 2026-07-25（存量两问题）：补 §2.8 保存在途脏标记（编辑序号判据）、§2.9 重载失败只出条状提示；§3.7 补 markDirty 与清脏出口。 -->
-<!-- 复核 2026-07-26（diary-workbench 阶段三 · 日期与跨零点收口）：§2 追加日期口径/事实源/replace 三条契约（第 11–13 条）；新开 §4「日期与跨零点」（两种模式、跨天只提示不自动切、切日重置四态与 handleSave 的早退真防线、脏态确认为何页面自己弹、在途响应三道正交闸、不用改的东西），原 §4「模块速查」顺延为 §5；订正 §3.7 表格首行与概括句里裸 `setDirty(true)` 与 `markDirty()` 的自相矛盾。不新增 covers：新文件 `lib/diary/diaryDate.ts` 落在既有 `packages/client/src/lib/diary/**` 通配下。 -->
-<!-- 复核 2026-07-26（diary-workbench 阶段四 · 只读参考栏）：§2 追加只读/不污染主编辑区/窄屏不渲染三条契约（第 14–16 条）；新开 §5「参考栏」（布局挂载与三个 className 硬要求、四块数据口径表、本地三块为何没有 error 态、回看块的世代号与活 ref 两道闸），原「模块速查」顺延为 §6。covers 新增 `packages/client/src/pages/diary/**`（组件不放 lib/：lib/ 下无组件 tsx，只有 `textareaEdit.test.tsx` 这类测试文件），基线同步 5→6。 -->
-<!-- 复核 2026-07-26（阶段四终审修复波）：§5.3 订正事实错误——`useLiveQuery` **有** error 通道（render 里 throw），故每块各围一层 `ErrorBoundary`；新开 §5.4「四块口径都各自查」（打点改走 `listEntriesOverlappingDay`，不借 `useEntries` 的双查询与 `|| []` 兜底），原 §5.4 顺延为 §5.5 并如实订正两道闸的实际作用面（生产每次切日整栏卸载重挂）、补「两道闸共用同一条承重用例」的脆弱点；§5.2 补回看措辞随 `isToday` 切。不新增 covers。 -->
-<!-- 复核 2026-07-26（拆子文档）：本文 23135 字符逼近 hard cap 25000，把 §3「编辑器语义」与 §5「参考栏」原样外提为 diary/editor.md 与 diary/reference-panel.md（正文未改，仅章节号降级、跨文档引用改相对链接）；原 §4「日期与跨零点」顺延为 §3、原 §6「模块速查」顺延为 §4。主文档降至约 1.3 万字符。covers 相应拆分：编辑器六个纯函数文件归 editor.md，参考栏组件与 diaryRef* 归 reference-panel.md，主文档保留 DiaryPage/设置页/diaryApi/diaryDate/服务端两文件。**上方历史复核注释里的章节号是当时的编号，未回改。** -->
-
 # 日记
 
 > 日记域：每天一条纯文本文件，直接写在用户挂载的本地 vault 目录里（Obsidian 风格），不进 SQLite/Dexie、不进同步账本、不进备份格式。
@@ -61,15 +54,15 @@ SettingsDiaryPage 保存模板
 3. **mtime 并发守卫**：`PUT /:date` 非 `force` 请求时，服务器当前文件 mtime 必须等于客户端携带的 `baseMtime`（文件不存在时 `baseMtime` 应为 `null`），否则 409 冲突并回传服务器当前 mtime；`force:true` 无条件覆盖。mtime 精度为 `Math.floor(mtimeMs)`（毫秒截断）。
 4. **`enabled=false`（vault 未挂载）时**页面仍可加载/展示，但视为不可用状态提示用户，不阻断路由本身；`template=""`（未配置模板）在 `DiaryPage` 单独提示并链接到 `/settings/diary`。
 5. **有序列表回车重排**（`orderedList.ts:applyEnterInOrderedList`）不是逐行 +1，是把光标所在项到块尾整段拉直编号（`listModel.ts:renumberBlock`）；IME 组合态回车（`event.nativeEvent.isComposing`）不触发；光标前是空列表项且行内光标后无余文时，回车清空该行前缀而非续号。附属行/围栏豁免/单项块护栏/光标落点公式等完整语义见 [diary/editor](diary/editor.md) §2。
-6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（Phase 1 表单控件棘轮闸 `check:ui` 强制）。
+6. **离开/重载确认走 `useConfirm`**（自绘 `ConfirmSheet`），不用裸 `window.confirm`（表单控件棘轮闸 `check:ui` 强制）。
 7. **未保存修改的离开守卫**统一走 `hooks/useUnsavedChangesGuard`（`useBlocker` + `beforeunload`），覆盖桌面侧栏 / 底栏 / `<Link>` / `navigate()` / 浏览器后退 / 安卓返回键；页面**不再**自管 `beforeunload`，返回按钮也不自己弹确认（否则会连弹两次）。页内「刷新重载」的确认不归它管，仍走 `useConfirm`。**已知缺口**：`appUpdate.tsx` 检测到新构建时会在 `visibilitychange`/`focus` 上程序化调用 `window.location.reload()`（无用户激活的硬刷新），浏览器对此类 reload 普遍抑制 `beforeunload` 提示，且 Android WebView 本就不显示 `beforeunload` 对话框；这条路径既不过 `useBlocker`（不是路由内导航）也不过 `beforeunload`（被抑制/不支持），日记正文又不进任何本地存储或同步域，因此是离开守卫覆盖不到的出口。
 8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 [diary/editor](diary/editor.md) §8 行尾保护。
 9. **`handleReload` 失败只出条状错误提示**（`setError`），不进 `loadFailed` 全屏态、不清冲突条：正文还在编辑器里、用户还能接着编辑保存，全屏失败态反而会把这份没上传的内容从屏幕上抹掉。
 10. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
 11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。
 12. **当前日期的事实源是 URL `?date=`**（`lib/diary/diaryDate.ts:resolveDiaryDate`）：有合法的过去日期 = 显式模式（用户自选的补写目标，跨零点**永不**提示）；无参 = 跟随模式，展示 `followAnchor` 并在实时今天越过它时出提示条。非法 / 未来 / 恰是今天的参数一律归一成无参形态（`replace`，不新增历史条目）。不用 `following: boolean` state 表达模式——state 活不过 PWA 冷启动。
-13. **切日期用 `replace` 不用 `push`**。有意偏离时间轴 TL-15 已拍板的「保留 push」：日记页有 header 返回按钮（`handleBack` 走 `navigate(-1)`）且安卓返回键 `/diary` 分支恒返回 `back`，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去；时间轴没有返回按钮，不暴露这个矛盾。
-14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也让本期免掉光标插入/格式化/撤销栈交互的一整片复杂度。
+13. **切日期用 `replace` 不用 `push`**。与时间轴的「保留 push」有意分叉：日记页有 header 返回按钮（`handleBack` 走 `navigate(-1)`）且安卓返回键 `/diary` 分支恒返回 `back`，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去；时间轴没有返回按钮，不暴露这个矛盾。
+14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也免掉了光标插入/格式化/撤销栈交互的一整片复杂度。
 15. **参考栏不得污染主编辑区状态**：任何一块的加载中/失败只在自己那块显示，绝不 set 页面的 `loading`/`loadFailed`/`conflict`/`error`/`dirty`。否则参考栏一超时会连累正文写不了。
 16. **窄屏（<1024px，含 APK）整个不渲染参考栏**：窄屏行为与加参考栏之前完全一致。
 
@@ -84,7 +77,7 @@ SettingsDiaryPage 保存模板
 
 `followAnchor` 是 **state 不是 ref**：它参与渲染（`date` 与 `rolledOver` 都由它算出来），改了必须重渲染。它只在「（重新）进入跟随模式」时前进（点提示条、或用 DateNav 切回今天），**绝不随实时今天自动前进**——自动前进就是跨零点把用户正在写的正文换到新文件。
 
-> 别写成「因为同 URL 的 `setSearchParams({})` 是 no-op、不触发渲染，所以锚必须是 state」——**这个机理是错的**，实测同 URL 的 `setSearchParams` 照样发起一次真导航并触发重渲染。理由就是上面那条朴素的「它参与渲染」。
+> 一个反直觉的实测点：同 URL 的 `setSearchParams({})` **不是** no-op——它照样发起一次真导航并触发重渲染。所以「锚必须是 state」的理由只是上面那条朴素的「它参与渲染」，**不是**「setSearchParams 不触发渲染」。
 
 ### 3.2 跨天：只提示不自动切
 
@@ -106,7 +99,7 @@ SettingsDiaryPage 保存模板
 
 `fetchDiaryConfig` 拆在独立的 `[]` effect 里：config 与日期无关，不拆则每切一天多一次往返，也多一次「config 失败 → 整页 loadFailed」的机会。
 
-日期 effect 同时把 `baseMtime` 清成 `null`，但这**不是**一道有效防线：`handleSave` 现在 `loading || loadFailed` 两态都早退，已经覆盖了"`content` 还是上一天残留"的全部窗口，`baseMtime` 清不清都轮不到它起作用（删掉这行、跑 DiaryPage 全部测试验证过仍然全绿）。保留只是语义上仍然对、给将来改动留的防御性兜底，**不要为它单独凑测试**。
+日期 effect 同时把 `baseMtime` 清成 `null`，但这**不是**一道有效防线：`handleSave` 现在 `loading || loadFailed` 两态都早退，已经覆盖了"`content` 还是上一天残留"的全部窗口，`baseMtime` 清不清都轮不到它起作用（删掉这行、跑 DiaryPage 全部测试验证过仍然全绿）。保留只是语义上仍然对、给将来改动留的防御性兜底，**它不需要专属测试**。
 
 真正堵住这个窗口的是 `handleSave` 入口的 `if (loading || loadFailed) return;`。不加这道闸：切日期后新一天的正文还没加载出来（`loading` 期）或加载失败（`loadFailed` 期）时，`content` 里是上一天的残留正文，且 `baseMtime` 已被日期 effect 清成 `null`；此时若能保存，会把上一天的正文写进新一天的文件，且 `baseMtime === null` 会让服务端 mtime 并发守卫（§2 第 3 条）当成"文件不存在"直接放行——不报 409 冲突，静默写坏新一天的文件。**触发路径不需要 textarea 挂载**：这两态下主区域是全屏提示、textarea 未渲染，容易误以为"用户碰不到保存"，但 Ctrl+S 的快捷键监听挂在 `window` 上，不经过 textarea，且保存按钮本身在 `loadFailed` 态下也没有单独置灰——两条路都能触发 `handleSave`。这条早退是四态重置之外**必须另外补的一道闸**，不是四态重置能自然带出来的推论。
 

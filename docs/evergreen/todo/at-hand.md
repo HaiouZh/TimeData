@@ -27,7 +27,7 @@ last-reviewed: 2026-07-24
 
 "手头"回答的是"我现在正在忙哪几件事"，不是新的任务状态：
 
-- **`Session`** 只是一段时间区间的元数据：`{id, startedAt, endedAt, note, createdAt, updatedAt}`。它自己不持有任务列表——任务经 `Task.sessionId` 反过来指向它。`note` 目前只在 schema 里占位，UI 未提供编辑入口，留给未来"战报/战役卡摘要"（见 §7 演化口子）。
+- **`Session`** 只是一段时间区间的元数据：`{id, startedAt, endedAt, note, createdAt, updatedAt}`。它自己不持有任务列表——任务经 `Task.sessionId` 反过来指向它。`note` 只在 schema 里占位：无 UI 编辑入口、无消费方。
 - **活跃场** = `endedAt === null` 的行里 `startedAt` 最大的那个（`getActiveSession()` / 内部 `pickActive()`）。正常情况下全库只有 0 或 1 个活跃场；抓活时零仪式自动开场，找不到活跃场才新建，已有活跃场就复用。
 - 任意时刻至多一个活跃场是**期望不变量**，不是数据库约束——跨设备并发开场可能短暂产生多行 `endedAt===null`，靠 §6 的显式自愈收敛，不靠事务锁或唯一索引。
 

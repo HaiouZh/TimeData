@@ -24,11 +24,6 @@ contracts:
   - packages/client/src/db/index.ts
 last-reviewed: 2026-07-24
 ---
-<!-- 复核 2026-07-24（手头软会话）：新增 `Session` 实体 + `sessions` LWW 域（`Task.sessionId` 反挂），见 §1/§9/§10/§12；投影/生命周期语义见 [todo/at-hand](todo/at-hand.md)，不在本文重复。 -->
-<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/schemas.ts 新增 tasks-only 可选 deleteReason 枚举；服务端辅助表已收录 deleted_tasks_archive，见下表。 -->
-
-<!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用，属触发下沉（见 sync.md），不改变本文档描述的数据契约、schema 归一或映射约定，无需改动。 -->
-<!-- 复核 2026-07-04（tasks 完成语义 op）：SyncLogEntry / tasks SyncChange 新增可选 op 授权标志，Dexie syncLog 不新增索引、不升版本；Task 实体字段和 SQLite tasks 表结构不变。 -->
 
 # 数据模型与契约
 
@@ -103,7 +98,7 @@ type SyncLogEntry = {
 
 ## 4. SyncChange / SyncPushOutcome
 
-`SyncChange` 是按 table/action 区分的判别联合；运行时 schema 由 `packages/shared/src/syncDomains.ts` 的登记簿生成，静态类型在 `packages/shared/src/types.ts` 手工维护。新增同步域必须同时改共享登记簿、服务端登记簿、类型、测试和文档。当前静态联合已覆盖 `health_charts`、`tracks`、`track_steps`、`goals` 与 `goal_layout_pins`，后续不要让运行时登记簿和手工类型再次分叉。
+`SyncChange` 是按 table/action 区分的判别联合；运行时 schema 由 `packages/shared/src/syncDomains.ts` 的登记簿生成，静态类型在 `packages/shared/src/types.ts` 手工维护。新增同步域必须同时改共享登记簿、服务端登记簿、类型、测试和文档。当前静态联合已覆盖 `health_charts`、`tracks`、`track_steps`、`goals` 与 `goal_layout_pins`；运行时登记簿与手工类型必须保持一致，不得分叉。
 
 ```ts
 type SyncChange =

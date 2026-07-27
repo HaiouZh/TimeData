@@ -21,30 +21,26 @@ contracts:
 last-reviewed: 2026-07-10
 ---
 
-<!-- 复核 2026-06-20（M2 退役 turn）：force-push 写路径去 turn 列，不影响安全/凭据；复核确认无需改动。 -->
-<!-- 复核 2026-06-23（目标层 Phase 1.1）：退役 tasks/tracks 目标归属列；认证、限流、确认 token 机制不变。 -->
-<!-- 复核 2026-07-10（破坏性同步账本收口）：force-push 请求契约仍不纳入 goal_layout_pins；覆盖改为五域差异应用并保留非覆盖域业务行、tombstone 与 seq，认证/限流/确认 token 机制不变。 -->
-<!-- 复核 2026-06-28（待办想法重力）：force-push 的 Task payload 新增 weight；翻牌记忆从 localStorage 迁到 settings key todo.gravity.review.v1（只存任务 id→ISO 时间戳，不存任务文本），走现有 settings LWW 同步；认证、限流、确认 token 机制不变。 -->
-<!-- 复核 2026-06-29（重力 v2）：翻牌「已过目表」从 localStorage 改为 settings blob（todo.gravity.review.v1），不写 Task、不刷新 updatedAt；认证、限流、确认 token 机制不变。 -->
-<!-- 复核 2026-07-02（同步提速 S1）：storageKeys 仅删除从未被引用的死 key serverHealthy；凭据存储、token 处理与鉴权边界不变。 -->
-<!-- 复核 2026-07-04（同步 staleGuard）：storageKeys 新增 clockSkewMs 只记录本地-服务器时间差毫秒数；sync push 仍走既有鉴权、限流和 body limit，安全边界不变。 -->
-<!-- 复核 2026-07-09（tracks 调度台）：storageKeys 仅随并发甘特退役删除 trackGanttWidth / trackGanttNameWidth 两个本地 UI 偏好 key；凭据存储、token 处理与鉴权边界不变。 -->
-<!-- 复核 2026-07-25（goals 视图偏好）：storageKeys 新增 goalsViewMode，只存 "galaxy" / "list" 两个字面量的本地 UI 偏好，不同步、不含用户内容；凭据存储、token 处理与鉴权边界不变。 -->
-<!-- 复核 2026-07-25（待办项目区 UI）：storageKeys 新增 todoProjectZoneIntroDismissed，只在本机存一个「提示条已读」布尔值，不含任务文本、不入同步、不碰凭据存储与鉴权边界。 -->
-<!-- 复核 2026-07-25（速记草稿持久化）：storageKeys 新增 quickNoteComposerDraft，只存用户尚未发出的速记正文，纯本地、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
-<!-- 复核 2026-07-26（日记参考栏折叠偏好）：storageKeys 新增 diaryRefPunchesCollapsed / diaryRefDoneTasksCollapsed / diaryRefQuickNotesCollapsed，只存三块参考区各自的「是否折叠」布尔值，纯本地 UI 偏好、不含用户内容、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
-<!-- 复核 2026-07-26（日记参考栏分栏比例，补登上一条漏掉的 key）：storageKeys 还新增了 diarySplit，只存日记页左右分栏比例一个 0..1 的数字，与待办页的 todoWorkbenchSplit 各存各的；纯本地布局偏好、不含用户内容、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
-<!-- 复核 2026-07-27（项目区提示条退役）：storageKeys **删除** todoProjectZoneIntroDismissed（2026-07-25 那条新增的逆操作）——排他上线时的一次性说明条连同它挂着的「项目区首次默认展开」一并撤掉，读写它的两个 workbenchPrefs 函数同批删除。该 key 只在本机存一个布尔值、从不入同步与备份，删除后老浏览器 localStorage 里的残留值不再被任何代码读取（不做主动清理，无害孤儿）；凭据存储、token 处理与鉴权边界不变。 -->
-
 # 安全与凭据处理
 
 ## 客户端服务器 Token
 
-客户端服务器设置页会把同步 API Token 保存在本机浏览器存储中，使用既有 key `timedata_api_token`。这个 key 是已存在的本地配置契约；不要在没有迁移计划和兼容处理的情况下改名。
+客户端服务器设置页会把同步 API Token 保存在本机浏览器存储中，使用既有 key `timedata_api_token`。这个 key 是已存在的本地配置契约，改名需要迁移计划与兼容处理。
 
 设置页必须明确提示用户：Token 会保存在本机浏览器存储中，只应在可信设备上保存服务器 Token。当前实现不引入 sessionStorage，也不在页面刷新后自动丢弃 Token。
 
-`storageKeys.ts` 还集中登记底部导航、待办布局/折叠、星图引擎模式等本地 UI 偏好 key。此类 key 只存界面状态，不存 Token、任务正文或其他业务内容；`timedata_galaxy_engine` 只保存 `/goals` 全局星图使用确定性还是本地 settle 引擎。待办翻牌「已过目表」已迁到同步 `settings` key `todo.gravity.review.v1`，只保存任务 id 到 ISO 时间戳，不保存任务正文或 Token；轨道看板信号词表也走同步 `settings` 表，不放在本地 storage key 里。
+`storageKeys.ts` 是全部 localStorage key 的唯一登记处（完整清单读该文件，此处不复述）。按**存了什么**分四档，安全影响各不相同：
+
+| 档 | 内容 | 敏感度 |
+|---|---|---|
+| 凭据与连接 | `apiToken`（见上两段）、`apiUrl` | **敏感**：明文存本机 |
+| **用户内容** | **`quickNoteComposerDraft`** —— 用户尚未发出的速记正文 | **含用户内容**：纯本地，不进同步域、不进备份 |
+| 业务 id 引用 | `sleepCategoryId`（睡眠分类 id） | 引用 id，不含内容 |
+| 同步游标 / 诊断 / UI 偏好 | `lastSyncedSeq`、`clockSkewMs`、`syncFailureCount`、`syncPhaseTimings`、`schemaNormalizationVersion`、各页分栏比例与折叠态、`goalsViewMode`、`galaxyEngine`（`/goals` 星图用确定性还是本地 settle 引擎）等 | 不含用户内容、不含凭据 |
+
+`quickNoteComposerDraft` 是唯一把用户正文落到 localStorage 的 key——清本机数据、共享设备场景要按"含用户内容"对待，不能套用"UI 偏好无所谓"的判断。
+
+待办翻牌「已过目表」在同步 `settings` key `todo.gravity.review.v1`，只保存任务 id 到 ISO 时间戳，不保存任务正文或 Token；轨道看板信号词表也走同步 `settings` 表，不放在本地 storage key 里。
 
 `schemaNormalizationVersion`（`timedata_schema_normalization_version`）是纯本地、不同步、非敏感的版本闸，只记录客户端 schema 归一 pass 已跑到的版本号。
 

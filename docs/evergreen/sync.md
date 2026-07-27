@@ -39,7 +39,6 @@ contracts:
   - packages/server/src/db/schema.ts
 last-reviewed: 2026-07-24
 ---
-<!-- 复核 2026-07-24（手头软会话）：新增 sessions LWW 域（第 16 个运行时域，完整表见 [sync/domain-registry](sync/domain-registry.md) §2），承载 Task.sessionId 反挂指针；投影/生命周期语义见 [todo/at-hand](todo/at-hand.md)，本文只更新域计数与推送顺序引用。 -->
 
 # 同步机制
 
@@ -90,7 +89,7 @@ no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照�
 
 - `syncPull({mode: 'incremental' | 'repair'})`：手动拉取。`incremental` 用本地读数；`repair` 用 `sinceSeq: 0` 全量，但任何仍有 pending 的本地记录/分类级联整组都不覆盖；已完整且本地更新的 entry 继续保留。
 - `syncForceReplace()`：清空本地后按 `sinceSeq: 0` 整库覆盖，同时清空本地 `syncLog`，并用返回的 `latestSeq` 推进读数。
-- `getSyncHealth()`：contentHash 深度体检 + 建议；本地 content hash 目前只 hash `categories`、`time_entries`、`quick_notes`、`tasks`，不覆盖 `tracks` / `track_steps` / `goals` / `goal_layout_pins` / `sessions`，主要作为诊断对照；服务端 `/api/sync/status` 的 `contentHash` 仍是全域 commit hash。公开计数字段仍只返回分类、时间记录和速记数量。
+- `getSyncHealth()`：contentHash 深度体检 + 建议；本地 content hash 只 hash `categories`、`time_entries`、`quick_notes`、`tasks`，不覆盖 `tracks` / `track_steps` / `goals` / `goal_layout_pins` / `sessions`，主要作为诊断对照；服务端 `/api/sync/status` 的 `contentHash` 仍是全域 commit hash。公开计数字段仍只返回分类、时间记录和速记数量。
 - `syncForcePushToServer()`：确认后把本地核心同步表覆盖到服务器；当前只包含 `categories`、`time_entries`、`settings`、`quick_notes`、`tasks`，不包含健康原始数据、`health_charts`、任务轨道、`goals`、`goal_layout_pins` 或 `sessions`。目标成员关系属于 `Goal.members`，因此不随 tasks force-push 携带；`Task.sessionId` 随 `tasks` 一起搬运，但 `sessions` 本身不在兜底范围内（见 [todo/at-hand](todo/at-hand.md) 关于悬空 sessionId 的说明）。
 
 ## 1.5 实时通道与调度器（已外提）
@@ -209,10 +208,10 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 2. **服务端任何业务写入必须记账**：写表与 `recordSeq` 同事务。绕过账本的写入对所有设备不可见（e2e helper 播种数据也要遵守）。
 3. **服务端 `sync_push` 是原子事务**：要么整批写入，要么完全不动；409 outcomes 不代表任何记录已应用。普通安全 push 不拍服务端备份，seq 冲突和隐式删除这类危险 push 在事务前创建受保护备份并做备份后账本版本校验。
 4. **push 应用顺序由登记簿优先级决定**：categories upsert → time_entries → settings → quick_notes → tasks → categories delete。新域的优先级要考虑外键依赖。
-5. **`updated_at` 由服务器分配**：客户端不要依赖自己提交的时间戳会原样落库；展示"业务发生时间"用业务字段（如 `occurredAt` / `startTime`），不用 `updatedAt`。
+5. **`updated_at` 由服务器分配**：客户端提交的时间戳不会原样落库；展示"业务发生时间"用业务字段（如 `occurredAt` / `startTime`），不用 `updatedAt`。
 6. **服务端 commit hash 必须随写路径失效或刷新**：`recordSeqWithDb` 在同一事务内标 dirty，`/api/sync/status` 惰性重算；reset 完成时立即刷新。它现在只服务诊断，但仍要保持正确。
 7. **server 是冲突仲裁者**：用 `baseSeq` 判断快进 / 非重叠合并 / 重叠冲突 / unknown-base；重叠记录按时间戳 staleGuard 拒收过期来包，并用受保护备份记录危险 push 场景。
-8. **同步的粒度是「整行」，不是「改动的字段」**——本条是 §2.1 与 §3 两条规则相乘的后果，写代码前必须知道。`syncLog` 只记「哪一行变了」（`SyncLogEntry` 无列信息，`recordSyncLog` 签名里也没有位置放），push 时按 recordId 回读**当前整行**（`engine.ts` 的 `db.table(storeName).get(...)`），服务端 `ON CONFLICT DO UPDATE SET` **除主键 / `created_at` / 无 `op` 时的 `guardedColumns` 外的全部列**。由此产生两个必须记住的后果：
+8. **同步的粒度是「整行」，不是「改动的字段」**——本条是 §2.1 与 §3 两条规则相乘的后果，写代码前必须知道。`syncLog` 只记「哪一行变了」（`SyncLogEntry` 无列信息，`recordSyncLog` 签名里也没有位置放），push 时按 recordId 回读**当前整行**（`engine.ts` 的 `db.table(storeName).get(...)`），服务端 `ON CONFLICT DO UPDATE SET` **除主键 / `created_at` / 无 `op` 时的 `guardedColumns` 外的全部列**。由此产生两个后果：
    - **双向丢失窗口**：设备 A 改了某行并同步成功，设备 B 尚未拉到就对同一行发生任何写入（哪怕只想改一个字段），B 的整行 push 会用它手上的旧值覆盖 A 的改动；同时 §3 的「lww 域本地有未推送日志则跳过远端」会让 B 也永远收不到 A 的那次改动。风险列 = 非 `guardedColumns` 的全部（`tasks` 即 `title` / `tags` / `scheduled_at` / `sort_order` / `parent_id` / `session_id` / `weight`）。
    - **版本错位会清空新列**：旧客户端不认识新加的字段，push 的 payload 里缺这一项，服务端 zod 的 `.default(null)` 会把它补成 null，再经全列 SET 抹掉服务器现值（如 `TaskSchema.sessionId` 的 `.default(null)` + `taskToRow` 的 `?? null`）。这是 §3.5 结尾「server / Web / APK 必须同版本发布」在**上行方向**的具体机理，也是 [ADR 0012](../adr/0012-sync-ledger-and-domain-registry.md) 那条部署纪律不能松的原因。
    缓解手段只有既有的两件：`guardedColumns`（黑名单，仅 `tasks` 5 列 + `tracks.status`）与 `op`（布尔授权闸，见 §2.2.1）。**它们都是窄解法，不是通用防线。**（截至 2026-07-25：720 条同步测试**无一条**用「缺新字段的旧 payload」做回归覆盖本条；最小闸 = 补该回归测试 + 请求加 `X-TimeData-Client-Build` 头。）
@@ -264,7 +263,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 - [ ] 改 `regularSync` 主路径：先测 seq no-op、pull-only 补差、push + pull 三条路径。
 - [ ] 改服务端写路径：确认写表与 `recordSeq` 同事务、commit hash 标 dirty、事务后 `notifySyncChange`。
 - [ ] 改 shared 实体 schema：客户端按需升 `SCHEMA_NORMALIZATION_VERSION` 清洗老数据；服务端按需 `ensure*Columns()` 或 `dropColumnsIfExist()`；加字段 server 先行、减字段 shared 先行物理删列最后。归一不写 `syncLog`，也不替代服务端权威校验。
-- [ ] 验 full sync fallback：`/api/health` → 带鉴权 `/api/sync/status` → 测试库走同步健康诊断和 force-push prepare；不要在生产库执行最终覆盖。
+- [ ] 验 full sync fallback：`/api/health` → 带鉴权 `/api/sync/status` → 测试库走同步健康诊断和 force-push prepare；最终覆盖只在测试库执行。
 - [ ] 真实数据回放：把 `timedata.backup` 放到 `docs_local/fixtures/` 后跑 `packages/server/src/__tests__/e2e/real-data-replay.test.ts`。
 
 ## 子文档索引

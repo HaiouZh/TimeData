@@ -59,9 +59,9 @@ last-reviewed: 2026-06-27
 
 1. **有效块组合仅 4 种**：`stat+derived`、`chart+healthMetricDaily`、`table+healthMetricDaily`、`table+runs`。`chart+runs` schema 允许但 UI 不创建、渲染器不渲染（死组合）。
 2. **`health_charts` 是同步 LWW 域**；`sortOrder/config` 变更要和 `syncLog(tableName="health_charts")` 同事务写入。
-3. **配置 vs 原始数据**：`health.range.presets` 是 settings 键值，不是 `health_charts` 配置；别混。
+3. **配置 vs 原始数据**：`health.range.presets` 是 settings 键值，不是 `health_charts` 配置，两者不是一回事。
 4. **打包/展开两套格式**：改 `chartRows.ts` 映射时注意 SQLite 打包格式与同步展开格式的字段覆盖顺序。
-5. **recharts 不解析 CSS `var()`**：图表配色须把 token 镜像成 JS 常量（`chartColors.ts` 的 `DATA_PALETTE` + `CHART_CHROME`），不能直接传 `var(--…)`。该文件登记在 `check-design-language.mjs` 的 `CHART_COLOR_MIRROR_FILES`，整文件豁免 `bare-raw-color`（它是 token 镜像、不是 UI chrome 裸色）；新增图表镜像文件要补登记，别用长期 allowlist 维持图表裸 hex。改了 `index.css` 的数据/中性 token 必须同步镜像值，`chartColors.test.ts` 锁定 `CHART_CHROME` 各值。
+5. **recharts 不解析 CSS `var()`**：图表配色须把 token 镜像成 JS 常量（`chartColors.ts` 的 `DATA_PALETTE` + `CHART_CHROME`），不能直接传 `var(--…)`。该文件登记在 `check-design-language.mjs` 的 `CHART_COLOR_MIRROR_FILES`，整文件豁免 `bare-raw-color`（它是 token 镜像、不是 UI chrome 裸色）；新增图表镜像文件要补登记；长期 allowlist 不是维持图表裸 hex 的手段。改了 `index.css` 的数据/中性 token 必须同步镜像值，`chartColors.test.ts` 锁定 `CHART_CHROME` 各值。
 
 ## 4. 模块速查
 

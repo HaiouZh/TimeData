@@ -10,7 +10,6 @@ covers:
   - packages/client/src/contexts/SyncContext.tsx
 last-reviewed: 2026-07-25
 ---
-<!-- 复核 2026-07-25（sync.md 超 hard cap 拆分）：本文由 sync.md 原 §1.5 / §1.6 整簇外提，正文逐字搬迁、无语义改动；对应 covers 一并迁走。 -->
 
 # 同步 · 实时通道与调度器
 

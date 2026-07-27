@@ -27,17 +27,6 @@ contracts:
   - packages/client/src/lib/time.ts
 last-reviewed: 2026-07-25
 ---
-<!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：新增「时间记录搜索页」一节，covers 追加 SearchPage.tsx / pages/search/** / lib/entrySearch/**；TimeEntry schema、重叠校验、CLI/server 写入语义均不变，搜索页对 time_entries 只读。 -->
-<!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、types.ts 新增 SessionSchema 与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；TimeEntry schema、重叠校验、CLI/server 写入语义均不变。 -->
-<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/types.ts 为 tasks delete change 新增可选 deleteReason 字段，timeline/entry 契约未受影响。 -->
-
-<!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
-<!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
-<!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared schema / sync domains covers；TimeEntry 字段、重叠校验、CLI/server 写入语义均不变。 -->
-<!-- 复核 2026-07-02（timeline 修复 C 收尾）：EntryPage 返回按钮改用 td-text-caption，仅清理设计语言旧债；时间记录语义见 §8–§9，不新增写入路径。 -->
-<!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展与 push 冲突仲裁变化不改变 TimeEntry 字段、时间范围校验或时间轴写入路径。 -->
-<!-- 复核 2026-07-04（tasks 完成语义 op）：tasks 专用 op 不改变 TimeEntry schema、时间范围校验、重叠覆盖或时间轴写入路径。 -->
-<!-- 复核 2026-07-04（tracks 并发时间语义）：轨道步骤排序、状态 op、孤儿步骤拒收和 TrackStep.editedAt 不改变 TimeEntry schema、时间范围校验、重叠覆盖或时间轴写入路径。 -->
 
 # 时间轴与记录时间规则
 

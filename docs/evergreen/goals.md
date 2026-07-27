@@ -18,13 +18,6 @@ contracts:
   - packages/server/src/sync/domains.ts
 last-reviewed: 2026-07-25
 ---
-<!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、syncDomains.ts、server/src/sync/domains.ts 新增 sessions LWW 域与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；Goal.members 引用口径、项目完成度读取与目标布局钉点同步域均不受影响。 -->
-<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/syncDomains.ts、server/src/sync/domains.ts 为 tasks 域新增 archiveDelete 钩子与 deleteReason 字段，goals 域未受影响。 -->
-<!-- 复核 2026-07-25（项目区数据层）：lib/goals.ts 的 addGoalMember/removeGoalMember/updateGoal/deleteGoal 新增同事务 touch 成员任务 updatedAt；goalLinkedTaskIds 迁出 lib/goalUnassigned.ts 到 lib/tasks/goalMembership.ts（该文件其余导出与 Goal.members 引用口径不变）。 -->
-
-<!-- 复核 2026-06-28（待办想法重力）：Task.weight 触及 shared Task schema 与 tasks 同步域映射；Goal.members 仍只引用 Task/Track 身份，不消费 weight，也不改变目标 roll-up。 -->
-<!-- 复核 2026-07-04（tasks 完成语义 op）：Task 完成字段同步守卫不改变 Goal.members 引用、项目完成度读取口径或目标布局钉点同步域。 -->
-<!-- 复核 2026-07-04（tracks 并发时间语义）：tracks.status 守卫、track_steps 宿主闸和 TrackStep.editedAt 不改变 Goal schema、Goal.members 引用口径、项目完成度读取或目标布局钉点同步域。 -->
 
 # 目标层
 

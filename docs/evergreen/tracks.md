@@ -21,7 +21,7 @@ last-reviewed: 2026-07-09
 
 # 任务轨道
 
-> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。T1 落数据地基；T2 提供 agent 受控 ingest API；T3 提供列表与详情监控面；T4/T5 已提供步骤共编与跨轨道聚合。本期口径：步骤标签默认是检索辅助；其中少数配置为“看板信号”的标签进入 `/tracks` 顶部聚合。详情时间线仍用开口步高亮执行中的段落。
+> 轨道把复杂、易分支的任务升成一条可监控的人机接力线。数据地基 + agent 受控 ingest API + 列表与详情监控面 + 步骤共编与跨轨道聚合。步骤标签默认是检索辅助；其中少数配置为“看板信号”的标签进入 `/tracks` 顶部聚合。详情时间线仍用开口步高亮执行中的段落。
 
 ## 承上启下
 
@@ -36,7 +36,7 @@ last-reviewed: 2026-07-09
 
 `Track` 只有 `active` / `concluded` / `parked` 三态，没有 done，也不保存 Goal 归属。Goal 对轨道的组织关系只存在于 `Goal.members`，不改变轨道状态机、不参与 agent ingest payload。`TrackStep` 是步骤日志，`endedAt=null` 表示开口步；`endedAt` 允许等于 `startedAt`，表示瞬时步骤。步骤排序和“当前步”裁决统一用语义时间 `(startedAt, seq, id)`，`seq` 只在同刻写入时做稳定裁决。`content` 是宽松字符串，允许空串；`editedAt` 只在人手编辑步骤正文时写入，用于展示编辑痕迹。
 
-结构化领域字段不得回流到轨道 spine。新增领域先放到自己的域，再由 `refs`、`tags` 或对应领域自己的关系字段连接；不要给 `Track` / `TrackStep` 开通用 JSON 后门。目标层是组织视图，必须从 Goal 侧引用 Track，而不是给 Track spine 加目标归属字段。
+结构化领域字段不得回流到轨道 spine。新增领域先放到自己的域，再由 `refs`、`tags` 或对应领域自己的关系字段连接；不给 `Track` / `TrackStep` 开通用 JSON 后门。目标层是组织视图，必须从 Goal 侧引用 Track，而不是给 Track spine 加目标归属字段。
 
 ## 2. 存储与同步
 
@@ -119,5 +119,5 @@ track 定位 = 每条工作流的存档点（状态卡）+ /tracks 调度台；�
 ## 9. 后续阶段
 
 - 仍待后续:批注串联到具体步(`ref{kind:"track_step"}`)、自由 refs/tags 编辑器。
-- **步骤「历时」不作设计卖点**(2026-07-02 决策):`formatStepDuration` 产出的历时仅作展示辅助,不做时间统计桥(历时聚合进 Stats 已放弃);轨道步骤的历时不写入 `time_entries`。开口/瞬时之分因此只服务于时间线可读性(开口步=正在进行的段),不服务于计量。
+- **步骤「历时」不作设计卖点**：`formatStepDuration` 产出的历时仅作展示辅助,不做时间统计桥(历时聚合进 Stats 已放弃);轨道步骤的历时不写入 `time_entries`。开口/瞬时之分因此只服务于时间线可读性(开口步=正在进行的段),不服务于计量。
 - 不接 TimeEntry 写入，不改 todo 子任务模型；扩展靠 `refs`/`tags` 与各领域自己的表，不给 schema 补领域字段。

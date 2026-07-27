@@ -30,9 +30,6 @@ contracts:
 last-reviewed: 2026-07-26
 ---
 
-<!-- 复核 2026-07-02（S2 调度重做）：SettingsPage.tsx 手动同步按钮 onClick 从 `sync` 改为 `() => sync()`（仅签名包装，行为不变，仍不经调度器直调 sync()），部署/自更新相关内容无需改动。 -->
-<!-- 复核 2026-07-04（同步 staleGuard）：SettingsPage 仅新增本地/服务器时钟偏差告警；部署拓扑、自更新接口和环境变量不变。 -->
-
 # 部署与自更新
 
 > 部署形态：单进程 Hono + SQLite，跑在 Docker 里。镜像走 GHCR，支持一键自更新。
@@ -147,7 +144,7 @@ Android 签名 release APK 的 workflow、keystore、Capacitor / Gradle 版本�
 
 ## 3.2 iOS 未签名 IPA
 
-iOS 原生工程不入库、由 CI 现场生成，产出未签名 IPA 供 SideStore 自签装机，细节在子文档 [deployment/ios-ipa](deployment/ios-ipa.md)。主线上只有一条要记住：**iOS Release 不打 `--latest`**，否则设置页「APK 更新」读到的最新 Release 会变成 Android 装不了的 `.ipa`。
+iOS 原生工程不入库、由 CI 现场生成，产出未签名 IPA 供 SideStore 自签装机，细节在子文档 [deployment/ios-ipa](deployment/ios-ipa.md)。主线上只有一条：**iOS Release 不打 `--latest`**，否则设置页「APK 更新」读到的最新 Release 会变成 Android 装不了的 `.ipa`。
 
 ## 4. 版本检查（`/api/version`）
 
@@ -268,7 +265,7 @@ timedata.example.com {
 
 客户端设置页填 `https://timedata.example.com`（不要带 `/api`）。**API 地址只填域名根**，因为客户端会自动拼 `/api/...`。
 
-生产实际链路：`客户端 → Cloudflare（橙云，h2/h3 已启用）→ 源站 nginx 1.24（h2）→ 127.0.0.1:3000`。源站 nginx 要点（`/etc/nginx/nginx.conf`，2026-07-23 起）：`gzip_types` 含 `application/json`（Ubuntu 默认只压 text/html，JSON 载荷跨太平洋回源必须压）、`gzip_vary on`、`gzip_proxied any`。SSE 反缓冲不靠 nginx 配置——服务端 `/api/sync/stream` 响应自带 `X-Accel-Buffering: no`（见 [sync](sync.md)）。注意 nginx 1.24 的 `http2` 是 443 端口级开关且该机多站共用，勿随意改 listen 行。
+生产实际链路：`客户端 → Cloudflare（橙云，h2/h3 已启用）→ 源站 nginx 1.24（h2）→ 127.0.0.1:3000`。源站 nginx 要点（`/etc/nginx/nginx.conf`，2026-07-23 起）：`gzip_types` 含 `application/json`（Ubuntu 默认只压 text/html，JSON 载荷跨太平洋回源必须压）、`gzip_vary on`、`gzip_proxied any`。SSE 反缓冲不靠 nginx 配置——服务端 `/api/sync/stream` 响应自带 `X-Accel-Buffering: no`（见 [sync](sync.md)）。nginx 1.24 的 `http2` 是 443 端口级开关，该机多站共用同一 listen 行——改它会连带影响同机其他站点。
 
 ## 8. 数据卷与备份
 

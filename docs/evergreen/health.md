@@ -17,21 +17,6 @@ contracts:
   - packages/server/src/sync/domains.ts
 last-reviewed: 2026-07-24
 ---
-<!-- 复核 2026-07-24（手头软会话）：shared/src/syncDomains.ts、server/src/sync/domains.ts 新增 sessions LWW 域与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；健康 6 域 schema、同步语义、备份角色均不变。 -->
-<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/syncDomains.ts、server/src/sync/domains.ts 为 tasks 域新增 archiveDelete 钩子与 deleteReason 字段，health 域未受影响。 -->
-
-<!-- 复核 2026-06-20（M2 退役 turn）：本次改动触及共享 schema 文件（covers 命中），本域无 turn 字段，复核确认无需改动。 -->
-<!-- 复核 2026-06-22（目标层 Phase 1）：新增 goals 域与 Dexie v10 触及共享登记簿 / db index covers；健康 6 域 schema、同步语义、备份角色均不变。 -->
-<!-- 复核 2026-07-02（S2 调度重做）：db/index.ts 的 migrateLocalSettingsToDexie 写后新增 syncScheduler.notifyWrite() 调用（触发下沉，见 sync.md），健康域 schema、写入路径和备份角色均不变，无需改动。 -->
-<!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及共享类型、db index 与 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
-<!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，server schema 新增非同步运维表；健康 6 域 schema、同步语义、备份角色仍不变。 -->
-<!-- 复核 2026-06-27（设计语言 P3）：HealthStatsPage 视觉收口（删旧死 CSS、范围按钮/页面壳 token 化、图表色走 chartColors 镜像）；健康 6 域 schema、同步语义、备份角色仍不变。 -->
-<!-- 复核 2026-06-28（待办想法重力）：Task.weight / todo.gravity.v1 触及 shared schema、Dexie 和 server schema covers；健康 6 域 schema、同步语义、备份角色仍不变。 -->
-<!-- 复核 2026-07-02（同步提速 S1）：Dexie v15 仅物理删除 autoBackups 表（ADR 0015）；健康各域 schema、同步语义与备份角色不变。 -->
-<!-- 复核 2026-07-04（同步 staleGuard）：shared reasonCode 扩展不改变健康 6 域 schema、ingest 写入路径、同步登记或备份角色。 -->
-<!-- 复核 2026-07-04（tasks 完成语义 op）：shared SyncChange/SyncLogEntry 新增 tasks 专用 op；健康 6 域 schema、ingest 写入路径、LWW 映射和备份角色不变。 -->
-<!-- 复核 2026-07-04（tracks 并发时间语义）：shared SyncChange/reasonCode 与 server sync domains 增加 tracks.status 守卫、track_steps 宿主闸和 TrackStep.editedAt；健康 6 域 schema、ingest 写入路径、LWW 映射和备份角色不变。 -->
-<!-- 复核 2026-07-10（同步原子性收口）：server 通用 resolver 改为复用调用方 SQLite transaction 记账；健康 6 域的 schema、LWW 策略、写入入口和备份角色不变。 -->
 
 # 健康数据
 
@@ -94,7 +79,7 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 5. **`health_charts` 已在运行时登记簿、静态 `SyncChange` 联合和 client/server 同步路径注册**；新增健康配置域仍要同步 shared/server/client 三端登记。
 6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts`、任务轨道或目标层**（见 [backup](backup.md)）。
 7. **轨道 refs 不改变健康 schema**：跑步、HRV 等结构化指标继续留在健康域；轨道步骤只保存指针和叙事，不新增健康专用字段。
-8. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**；不要因文件名相同把它归进 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
+8. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**——文件名相同，但不归 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
 9. **健康页视觉已按 P3 收口**：旧死 CSS 已删、健康图表 / 范围 selector / 页面壳全部 token 化，`P3-stat-health` allowlist 归零。健康 UI chrome 用中性 / `accent` / 状态色，指标曲线用数据色板，二者边界清晰；不使用 `mod-health`。新增健康 UI 一律用 token。
 
 ## 4. 模块速查（主题层）

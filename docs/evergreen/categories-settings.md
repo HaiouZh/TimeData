@@ -20,16 +20,6 @@ contracts:
   - packages/shared/src/constants.ts
 last-reviewed: 2026-07-24
 ---
-<!-- 复核 2026-07-24（手头软会话）：shared/src/entitySchemas.ts、types.ts 新增 SessionSchema 与 Task.sessionId 反挂字段（见 [todo/at-hand](todo/at-hand.md)）；Category / Setting schema、manual 同步语义、播种规则均不变。 -->
-<!-- 复核 2026-07-12（tasks 删除死因归档）：shared/src/types.ts 为 tasks delete change 新增可选 deleteReason 字段，categories/settings 契约未受影响。 -->
-
-<!-- 复核 2026-06-23（目标层 Phase 1.1）：Goal.members 修正触及 shared schema / sync domains covers；分类与 settings 字段、manual 同步语义、播种规则均不变。 -->
-<!-- 复核 2026-07-02（S2 调度重做）：useCategories.ts 内部把手拼 syncLog bulkAdd 换成 recordSyncLogs helper，触发同步的方式改为自动调度（见 sync.md），但本文档描述的分类/设置字段、mutation 语义、排序安全闸均不变，无需改动。 -->
-<!-- 复核 2026-06-25（请求审计一期）：shared types 新增 AdminRequestLog* 只读导出，未改变 Category / Setting schema、同步语义或设置 key 契约。 -->
-<!-- 复核 2026-06-27（设计语言 P3）：constants.ts 新增 UNCATEGORIZED_COLOR（无色分类回退色，用户内容色域，详见 data-model §8），未改变 Category / Setting schema、播种规则或设置 key 契约。 -->
-<!-- 复核 2026-06-28（待办想法重力）：新增 todo.gravity.v1 settings key 归 todo 域消费，分类 schema、manual 同步语义和播种规则均不变；完整 key 表见 settings-catalog。 -->
-<!-- 复核 2026-07-04（同步 staleGuard）：分类/settings 仍沿用既有字段和写入入口；重叠 baseSeq 下的 staleGuard 仲裁详见 sync.md，不改变分类层级、排序或设置 key 契约。 -->
-<!-- 复核 2026-07-04（tasks/tracks 意图 op）：guardedColumns 用于 tasks 完成语义和 tracks 状态语义；分类/settings 字段、manual/LWW 策略、排序和 settings key 契约均不变。 -->
 
 # 分类与设置
 

@@ -7,10 +7,6 @@ covers:
   - packages/client/src/pages/todo/TodoProjectSection.tsx
 last-reviewed: 2026-07-27
 ---
-<!-- 复核 2026-07-25（项目区 UI 上线）：本文由 todo.md §3 第 13/14 条外提并补齐 UI 契约；归属轴排他随本期打开。 -->
-<!-- 复核 2026-07-26（P3 拖拽归入上线）：§4 拆成写入两节并补 assignTaskToProject 的单一归属与目标组闸；新增 §6 拖拽归入契约（落点、碰撞策略、准入四拒判在两处、成功/拒绝/兜底三种反馈、前置边确认）；§5 落点反馈明确「拖入项目不在此列」。 -->
-<!-- 复核 2026-07-27（project-zone-usability A+B）：已完成成员退出组内渲染，投影改为 doneCount/recentDoneCount/memberCount；组内排序与限高上线；标题行加项目内创建、更多菜单和 90% 上限预警。 -->
-<!-- 复核 2026-07-27（存量提示条退役）：删除 ProjectZoneIntroBar、storage key todoProjectZoneIntroDismissed 与两个 workbenchPrefs 读写函数；项目区展开态由此**恒为默认全折叠**（原「首次全展开」那一档挂在提示条已读位上，一并去掉）。归属轴排他语义本身不变。 -->
 
 # 待办 · 项目区与归属轴
 
@@ -50,7 +46,7 @@ last-reviewed: 2026-07-27
 
 ## 3. 投影规则（`buckets.projects`）
 
-1. 只收根任务（`parentId === null`），且 `recurrence === null && ruleId === null`——重复模板与 occurrence 本期不参与归属。
+1. 只收根任务（`parentId === null`），且 `recurrence === null && ruleId === null`——重复模板与 occurrence 不参与归属。
 2. **排他与归集共用同一个布尔量**。这是红线：若排他单独判 `projectMemberIndex.has(id)`，一条被写进 `members` 的 occurrence 会既被归集守卫挡在项目区外、又被踢出收件箱，整条消失。
 3. 未完成成员进 `group.tasks`；已完成成员**只折成计数**，不再保留 `Task[]`。`doneCount` 是全部已完成 task 成员数，供 `allDone` 和全完成标题行使用；`recentDoneCount` 是 `[now - 7d, now]` 闭区间内完成数，供标题行的「近 7 天 +M」使用。两者口径不同，不得互相派生。
 4. `memberCount` 取 `goal.members?.length ?? 0` 的**原始数组长度**，含 track 成员与悬空 ref。它只服务 500 上限预警，不能用 `tasks.length + doneCount` 近似：后者只数可解析 task 成员，会漏掉真实容量占用。
@@ -87,13 +83,13 @@ last-reviewed: 2026-07-27
 - **位置**：收件箱正上方（两种布局都是）。零 active project 时整区不渲染。
 - **组三态**：0 可解析成员 → 不进项目区；有成员且全部完成 → `已完成 · M 条` + 「去归档」深链 `/goals/:id`；有未完成 → `还剩 N`，若近 7 天有完成则追加 `· 近 7 天 +M`。`+0` 不画，长期项目不再显示总数分母。全完成态**不特殊置顶**（置顶会让已完成项目抢占进行中项目的注意力）。
 - **组内已完成不再渲染**：已完成成员退出组内列表，标题行只回答「总共完成多少」与「最近推进多少」。当前没有等价的项目内已完成清单；低频出口是更多菜单的「在 goals 页打开」。
-- **内容区限高**：展开态内容区使用 `max-h-[45vh] overflow-y-auto`，限高加在内容区而不是组块外框。外框仍是 droppable 落点，内容区限高让落点 rect 有界且稳定，收件箱（唯一拖入源）不再被大组推出视口。已知取舍：落点反馈滚到组外框，不保证滚到内部那条成员；语义仍是「告诉你它在哪个组」。
+- **内容区限高**：展开态内容区使用 `max-h-[45vh] overflow-y-auto`，限高加在内容区而不是组块外框。外框仍是 droppable 落点，内容区限高让落点 rect 有界且稳定，收件箱（唯一拖入源）不再被大组推出视口。已知限制：落点反馈滚到组外框，不保证滚到内部那条成员；语义仍是「告诉你它在哪个组」。
 - **标题行操作**：未全完成组显示 `+`，点击后展开组并在内容区顶部显示就地输入框；Enter 以 trim 后标题调用 `createTaskForProject`，成功清空输入并保持打开，Esc 关闭。全完成组不显示 `+`，仍显示「去归档」。所有失败由页面 action toast 报原因，输入框保留草稿。
 - **更多菜单**：每组标题行有 `⋯`（Phosphor `DotsThree`，role=menu/menuitem），提供「改名」与「在 goals 页打开」。菜单沿用 QuickNoteActionMenu 的交互：打开时首项聚焦，Escape / 外点关闭并把焦点还给触发按钮；菜单按钮和输入框点击不得穿透成展开/折叠。改名走 `updateGoal(id, { title })`，空标题不提交、失焦/Escape 恢复原名；打开目标跳 `/goals/:id`。
 - **上限预警**：`memberCount >= Math.ceil(GOAL_MEMBERS_MAX * 0.9)` 且组未全完成时显示轻量「接近上限」提示。阈值从上限推导，不写死 450；预警不改变写入行为，真正撞线仍由 `ProjectAssignError("full")` 拒绝。
 - **展开态记忆**：组件内 `Map<goalId, boolean>` 覆盖表，不持久化。**恒为默认全折叠**——展开只由用户点击或 `revealGoals`（落点反馈 / chip 回跳）驱动。曾有一档「存量提示条未读时首次全展开」，2026-07-27 随提示条一并退役。
 - **成员状态点**：`projectMemberState` 判四态——`at-hand`（焦点轴优先于时间轴）/ `today` / `scheduled` / `idle`。`idle` 是默认多数态，渲染层不画胶囊：没有胶囊本身就是答案。**没有「逾期」态**：`placementForTask` 只对重复模板与 occurrence 给 `overdue`，一次性任务过期会被退回 `inbox`，而项目区的归集守卫恰好把前两类挡在门外——项目区成员拿不到 overdue。
-- **项目名 chip**：只出现在**手头 / 今天 / 已排期（含水下尾）**。它与绿竖条是同一件事的两种说法，**不得同屏**——`goalBarTaskIds` 把有 chip 的行从竖条集合里裁掉，竖条退回只表达 theme 归属。chip 需 `relative z-20` 才能压过行左 2/5 的 `z-10` 拖拽 activator。裁剪后的 `goalLinkedIds` 同时也喂给了翻牌区 / 水下收件箱 / 收件箱这三个**不渲染 chip** 的分区，看着像多裁了，其实零语义损失：「chip 集合 ∩ 收件箱 = ∅」是**构造性**成立的——`projectChipIndex` 的输入是 `buckets.projects`，而它与 inbox 排他共用同一个 `ownedByProject`（§3 第 2 条），进得了 chip 索引的就一定进不了 inbox。别把这行当笔误改回去。
+- **项目名 chip**：只出现在**手头 / 今天 / 已排期（含水下尾）**。它与绿竖条是同一件事的两种说法，**不得同屏**——`goalBarTaskIds` 把有 chip 的行从竖条集合里裁掉，竖条退回只表达 theme 归属。chip 需 `relative z-20` 才能压过行左 2/5 的 `z-10` 拖拽 activator。裁剪后的 `goalLinkedIds` 同时也喂给了翻牌区 / 水下收件箱 / 收件箱这三个**不渲染 chip** 的分区，看着像多裁了，其实零语义损失：「chip 集合 ∩ 收件箱 = ∅」是**构造性**成立的——`projectChipIndex` 的输入是 `buckets.projects`，而它与 inbox 排他共用同一个 `ownedByProject`（§3 第 2 条），进得了 chip 索引的就一定进不了 inbox——这行不是笔误。
 - **退出项目**：行内动作调 `removeGoalMember`，任务浮在水上回落收件箱。组内最后一条成员退出后 **Goal 保留不自动归档**（归档是 goals 页的显式动作）。
 - **落点反馈**：排他打开后「回到 inbox 池」不再等于「出现在收件箱」——项目成员会落进项目区里一个默认折叠的组，而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动，全屏零反馈，体感是「任务凭空消失」。故凡是让成员回落 inbox 池的路径，动作后都要复用 chip 的回跳机制（`revealProjectHome`）展开它的归属组并滚过去：行尾/左滑「回收件箱」、拖进 `pool:inbox`、移出手头、子任务升根、详情抽屉改「重复与时间」、取消勾选。**「拖入项目」不在此列**——它是把成员送**进**组、不是回落 inbox 池，落点就在手指下方，自动展开反而会在连续拖入第二条时改变布局；它的反馈走 toast（§6）。
   - **判据只在 `revealProjectHome` 一处判，入参是写入后的 `Task`**。调用方各自判必然分裂成「动作前的行 / 拖拽意图 / `choice.kind`」几种口径，每种都漏一半（详情抽屉尤其：`choice.kind === "none"` 漏掉「仅某天」选到过去日期那支，又误报已完成 / 在手头的任务）。三道闸：① 归集守卫里 placement 判不出的两条（子任务、`ruleId` 非空的混合体行——它们 scheduledAt 为空照样被判 inbox，但投影层根本不收，展开的是不含它的组）；② 焦点轴压过落点（`listTasks` 把未完成的手头成员截进 `atHand` 并 `continue`，它在页面最顶上、本来就看得见）；③ `placementForTask(...).pool === "inbox"`。`done` 与 `recurrence` 不必单列——placement 首行就把它们判成 `completed` / `today`·`recurring`；**已完成成员现在只计入标题行计数、组内没有可展开行，展开组也看不到它，给的是错误指认、比零反馈更糟**，正是靠 placement 这一支挡住。
@@ -131,13 +127,13 @@ last-reviewed: 2026-07-27
 - **多选态下行右端的悬停动作条整条关掉**。多选是「圈一批」的模式，单条处置在这个模式里没有位置；更要紧的是整行就是勾选命中区，用户往右点必然压到「排进今天」上——任务离开收件箱 → 被 §7.1 的剪枝踢出选中集（无提示）→ 落进一个 `opacity-40` 且 `inert` 的区块 → 多选态里再也弄不回来（「抓到手头」更重，它顺带开/换了一个活跃会话）。与 `TaskList` 关掉拖拽（`canSort`）和滑动（`blockSwipe`）是同一条理由的三处落点，改一处要想到另外两处。
 - **Esc 要让位给弹窗**。`Sheet` 与 `TaskDetailSheet` 的 Esc handler 同样挂在 window 上、与多选那条互不知情，同一次 keydown 两个都会跑——用户想关弹窗，选了半天的那批一起没了，**而退出后的页面和「成功建组」长得一模一样**（操作栏消失、记录框回来），只少一条 toast。判据用 `[role="dialog"]` 在场而不是给 `useConfirm` 加 `isOpen`：能与多选同屏的弹窗不止确认框，按 hook 逐个开洞会漏。
 - **底部避让量按「此刻谁站在底部」算**，不能按 composer 算。多选态下 `TodoComposer` 不渲染而 `TodoSelectionBar` 顶上，若沿用 `composerHiddenByScroll` 那套，滚动隐藏底栏时避让归零、toast 落进操作栏的盒子被完全遮住——而多选态下 toast 是**唯一**的失败反馈通道（提交失败刻意不退出多选、只靠它说原因），压住就等于「点了没反应」。同款问题 `QuickNotesPage` 的 `bottomInsetPx` 早处理过。
-- **「放进…」的组列表选完即收**。操作栏与 toast 容器同为 `z-backdrop` 且它在 DOM 里排其后 → 后绘制的它赢，而列表向上展开、不透明、最高 `max-h-60`，正铺在 toast 那条带上。列表只由用户点「放进…」切换、不会自己收，等他合上时 6 秒的 toast 早已消失——纯粹的「点了没反应」。**别用 z 层级解决**：那会把「列表要盖住页面」与「toast 要盖住操作栏」这两个各自自洽的决定改成互相打架的两个数字。
+- **「放进…」的组列表选完即收**。操作栏与 toast 容器同为 `z-backdrop` 且它在 DOM 里排其后 → 后绘制的它赢，而列表向上展开、不透明、最高 `max-h-60`，正铺在 toast 那条带上。列表只由用户点「放进…」切换、不会自己收，等他合上时 6 秒的 toast 早已消失——纯粹的「点了没反应」。**z 层级解决不了这件事**：那会把「列表要盖住页面」与「toast 要盖住操作栏」这两个各自自洽的决定改成互相打架的两个数字。
 
 ### 7.1 `selectedIds` 必须跟着可选集合剪枝
 
 选中集只存 id，而 `useLiveQuery` 回流不会通知它。不剪枝就会攒出**幽灵 id**：在多选态里勾完成一行（复选框在多选态下仍是「完成」，是刻意的）、另一端同步下来一条删除、或另一端把这行收进某个 project 组，那行离开收件箱而 id 还攥在手上 → 操作栏说「已选 2 条」屏幕上只剩 1 行 → 提交时 `db.tasks.get` 拿不到人，抛的是裸 `Error` 不是 `ProjectAssignError`，落进兜底文案；而失败**不退出多选**，用户原地重试、每次都失败，屏幕上没有任何东西指向那个幽灵。
 
-- **剪枝源照着渲染点写**（`floatingInbox ∪ sunkenInbox`），不要图省事用 `buckets.inbox`——此刻两者恒等，但将来哪一处渲染改了口径（比如水下尾不再可选），剪枝会跟着变而 `buckets.inbox` 会静默继续放行，那正是幽灵回来的方式。
+- **剪枝源照着渲染点写**（`floatingInbox ∪ sunkenInbox`），不能用 `buckets.inbox` 代替：此刻两者恒等，但将来哪一处渲染改了口径（比如水下尾不再可选），剪枝会跟着变而 `buckets.inbox` 会静默继续放行，那正是幽灵回来的方式。
 - **取未经 `f()` 筛选的列表**：筛选是临时视图，不该让"筛一下"丢掉选中；何况多选态下 composer 不渲染，用户根本改不了筛选条件。
 - **防死循环靠 updater 内「真的少了东西才换引用」**，不靠依赖数组——那个 Set 每次渲染都是新引用，写进依赖数组也是每渲染必跑，只是多骗一层。
 - 剪掉的**不是**「已完成任务不能当成员」（它可以，§3 规则 4 的 `doneCount` 就是数它），剪掉的是「用户没在看的东西别替他提交」。
@@ -159,7 +155,7 @@ last-reviewed: 2026-07-27
 
 归属轴排他的判据与 `prerequisiteLossOnAssignMany` 取源组的判据逐字相同（`status === "active" && kind === "project"`），叠上 §7.1 的剪枝——「选中项带 project 归属」在常规时序下**不可能成立**，确认框恒不弹。
 
-仍然保留，因为剩一个真窗口：远端 goal 行**已落进 Dexie**、而 liveQuery 通知与剪枝 effect 还没跑完，用户恰在这几毫秒里松手。此时选中集还是旧的，而预测函数读的是最新库——该弹，不问就是静默丢边。**承重在数据层**（`goals.test.ts` 的 `prerequisiteLossOnAssignMany` 一节）；页面这一段测不了，jsdom 里 `act()` 会把渲染和 effect 一口气跑完。**别据此当死代码删。**
+仍然保留，因为剩一个真窗口：远端 goal 行**已落进 Dexie**、而 liveQuery 通知与剪枝 effect 还没跑完，用户恰在这几毫秒里松手。此时选中集还是旧的，而预测函数读的是最新库——该弹，不问就是静默丢边。**承重在数据层**（`goals.test.ts` 的 `prerequisiteLossOnAssignMany` 一节）；页面这一段测不了，jsdom 里 `act()` 会把渲染和 effect 一口气跑完。**它不是死代码。**
 
 调用点必须**在两条提交路径的 `try` 之内**：它第一句就是 `db.goals.toArray()`，DatabaseClosed / 版本升级期会 reject，而提交是 `void submitXxx(...)` 发出的——留在 try 外既不进兜底 toast 也没人接这个 rejection，用户只看到「点了没反应」。用户点「取消」返回的是 `false` 不是异常，在 try 里照旧原地返回，不会被兜底 toast 当成错误。
 
@@ -181,8 +177,10 @@ last-reviewed: 2026-07-27
 
 多选的用例分三层：`pages/todo/TodoSelectionBar.test.tsx`（计数、命名必填与 trim、回车两条路径、「放进…」列表、零项目时不渲染该按钮）、`pages/todo/TaskRow.test.tsx` 与 `TaskList.test.tsx`（行点击/Enter/Space 三种勾选路径、复选框在多选态下仍是「完成」、内层控件上按键不连带勾选、多选态不渲染拖柄与禁滑）、`pages/TodoPage.test.tsx`（进出多选、三处渲染点可选、其余区 inert 且窄屏宽屏**各一条**、Esc 退出与「有弹窗时让位」、建组/批量归入成功、满员拒绝、兜底文案两侧、剪枝四条、在途闸两条）。`lib/goals.test.ts` 覆盖批量写入的原子性（全成全败、撞 500 一条不写、摘除闸的 `status`/`kind` **各一条**、去重占位、`prerequisiteLossOnAssignMany` 的边去重与源组口径）。
 
-拖拽归入的页面级用例在 `pages/TodoPage.test.tsx`（成功 toast、子任务拒绝 toast、禁止态三支、确认弹窗取消/确认两路）。**它们的落点稳定性依赖一条实现细节**：jsdom 里 rect 全为 0 → `closestCenter` 全部并列 → dnd-kit 取 `droppableContainers` 的**挂载顺序**第一名（不是 DOM 顺序）。键盘拖拽无指针坐标，`preferProjectCollisions` 在这些用例里一次都没生效。**在项目区之前新增任何 droppable，这几条会以超时报红**——那是响亮失效不是 flaky，别加重试，去读 `keyboardDrag` 上方那段注释。
+拖拽归入的页面级用例在 `pages/TodoPage.test.tsx`（成功 toast、子任务拒绝 toast、禁止态三支、确认弹窗取消/确认两路）。**它们的落点稳定性依赖一条实现细节**：jsdom 里 rect 全为 0 → `closestCenter` 全部并列 → dnd-kit 取 `droppableContainers` 的**挂载顺序**第一名（不是 DOM 顺序）。键盘拖拽无指针坐标，`preferProjectCollisions` 在这些用例里一次都没生效。**在项目区之前新增任何 droppable，这几条会以超时报红**——那是响亮失效不是 flaky（原委记在 `keyboardDrag` 上方的注释里），加重试只会把它埋掉。
 
-## 9. 本期未做
+## 9. 当前的归属路径边界
 
-**已排期（非今天）与手头的任务没有任何归入路径**——拖拽源只有 `pool:today` / `pool:inbox`，绕法是先清日期或等它到期；真要补，优先做详情抽屉里的「归入项目」选择器（不依赖拖拽、一次覆盖全部区），而不是把已排期区接进 dnd 系统。项目级重力、项目区参与筛选、重复待办的归属、捕捉侧携带归属一律不做。归档前的「N 条未完成任务将回到收件箱」提示未做——归档是 toggle 且 5 处入口当前都无确认，属 goals 页议题；数据安全已由 §4 的 touch 兜住。
+**只有 `pool:today` / `pool:inbox` 两个拖拽源能归入项目**——已排期（非今天）与手头的任务没有归入路径，绕法是先清日期或等它到期。
+
+归档 Goal 不弹「N 条未完成任务将回到收件箱」提示：归档是 toggle，5 处入口都无确认（属 goals 页的呈现范围）；数据安全由 §4 的 touch 兜住，不依赖提示。

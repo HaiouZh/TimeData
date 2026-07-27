@@ -12,9 +12,6 @@ contracts:
 last-reviewed: 2026-07-25
 ---
 
-<!-- 复核 2026-07-25（diary-workbench 阶段一 · 终审修复）：useConfirm 的被顶替请求改为解析 false（原先 Promise 悬空，会让路由守卫的 blocker 永久卡死），§3 补该不变量；控件词汇表与图标规则不变。 -->
-<!-- 复核 2026-06-27（设计语言 P3）：check-design-language.mjs 新增「--shadow-* token 定义」与「图表色镜像文件」两处 bare-raw-color 跳过（详见 design-language §3），属 check:design 颜色范畴；交互图标规则（本控件子文档关注点）不变。 -->
-
 # 设计语言 · 控件库
 
 > [design-language](../design-language.md) 的**控件子文档**：自绘控件词汇表 + 图标包装 + 无原生控件 CI 棘轮。
@@ -61,7 +58,7 @@ last-reviewed: 2026-07-25
 
 - **禁用模式**：`<select>`、`type="checkbox"`、`type="radio"`、`window.confirm(`、`window.alert(`，命中即 `exit 1` 并指明该用哪个自绘控件。
 - **豁免**：`components/ui/**`（原子件本身）与 `*.test.*` 测试文件。
-- **CI**：`.github/workflows/ci.yml` 有 `pnpm check:ui` 步骤（与 `check:design`、`check:test` 并列）。这是“Phase 1 棘轮闸”——锁住表单控件不回退到原生。
+- **CI**：`.github/workflows/ci.yml` 有 `pnpm check:ui` 步骤（与 `check:design`、`check:test` 并列）。这道闸锁住表单控件不回退到原生。
 
 > 注意：`check:ui` 只管**原生控件**。裸色、退役模块色、散装交互图标和业务 `font-mono` 由 [design-language](../design-language.md) §3 的 `check:design` 棘轮检查；遗留旧债必须登记在 allowlist，并随 P1/P3/P4 迁移逐步删除。
 

@@ -57,7 +57,7 @@ last-reviewed: 2026-07-10
 
 ## 3. 关键不变量 / 坑 / 红线
 
-1. **settings 是跨域共享键值表**：一个 key 一个 value 一个 updatedAt；不同 key 归不同消费域，**covers 按 key 包装文件分摊到各域**，不要把 `lib/settings/**` 整目录塞进一份文档。
+1. **settings 是跨域共享键值表**：一个 key 一个 value 一个 updatedAt；不同 key 归不同消费域，**covers 按 key 包装文件分摊到各域**，`lib/settings/**` 整目录不归任何单一文档。
 2. **`punch.categoryId.v1` 要求有效未归档子分类**：未配置或分类失效时打点不写 `time_entries`（动作在 [timeline](../timeline.md)）。
 3. **`sleep.categoryId` 当前 UI 只允许选一级分类**：只定义统计睡眠口径（[stats-insights](../stats-insights.md) 消费）。
 4. **`nav.visibleTabs.v1` 旧值归一化**：读取时 `/stats` → `/stats/time`，`/settings` 固定保留在底栏；未选入口不再进入移动端三点菜单，而由 `/settings/more` 动态列出。

@@ -124,9 +124,10 @@
 - 长期文档头部 `covers:` 声明管辖代码路径（纯归属，管 coverage / 查代码去哪篇，**不触发 strict**）；`contracts:` 是 `covers` 里「改它文档必错」的契约子集，**只有它触发 strict**。改代码后回头看命中的段落，命中即改并更新 `last-reviewed`。covers/contracts 分工见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §1.3。
 - 复查文档别只信脚本：脚本没报不等于没漂，结合语义判断段落是否真过时。
 - **本文件只装「怎么操作这个仓库」+「对 agent 动作的授权边界」**；产品 / 领域 / 代码机制（怎么运作、默认值、env、算法）一律归 evergreen，哪怕是硬不变量。发现机制泄漏进本文件别就地删：先确认 evergreen 有没有清楚承载（没有先补，必要时补 `covers`），再 trim 成「一句规则 + 指针」。
+- **反向同理：evergreen 只写「现在是什么样」**——机制 / 契约 / 不变量 / 边界。决策论证与取舍归 ADR，祈使式指令与授权（「改前先确认」「未经批准不改」）归本文件，改动流水与 `<!-- 复核 … -->` 注释归提交信息，在办事项归 `docs_local`。判据、准入 / 排除清单与「先补落点再 trim」的处置流程见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §0。
 - 哪个 evergreen 子文档管哪块代码，**去 `architecture.md` §6「模块速查」或各文档 frontmatter 查**。
 - evergreen 大调整保留代码入口 / 路由 / 测试文件路径，便于按文档反查实现。
-- 文档怎么组织、新增文档放哪、单文档多大该外提，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)。
+- evergreen 该写什么 / 不该写什么（§0）、怎么组织、新增文档放哪、单文档多大该外提，见 [`docs/evergreen/_docs-guide.md`](docs/evergreen/_docs-guide.md)。
 
 ------
 

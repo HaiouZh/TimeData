@@ -14,12 +14,6 @@ covers:
   - packages/mobile/capacitor.config.ts
 last-reviewed: 2026-07-26
 ---
-<!-- 复核 2026-07-26（前端本地默认端口调整）：client Vite dev server 默认端口改为 5174；本地开发地址与故障排查同步更新，不改变 /api 代理、PWA、mobile 或部署行为。 -->
-<!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：新增段落记录 fake-indexeddb 依赖真实 setImmediate 驱动事务完成的机制，测试白名单式收窄 fake timers 的做法；不改变开发流程、命令或 worktree 约定。 -->
-<!-- 复核 2026-07-02（同步提速 S1）：androidBackNavigation 仅移除已退役的 /settings/data/backup-history 返回路由映射；开发流程、命令与 worktree 约定不变。 -->
-<!-- 复核 2026-07-04（依赖升级收 dependabot）：catalog typescript ^6.0.3、@types/node ^26、patch/minor 批量升级（vite/tailwind/dexie/hono/capacitor 等）；tsconfig.base.json 删除 TS6 弃用的 baseUrl（paths 本就相对 tsconfig 解析，语义不变）；开发流程与命令不变。 -->
-
-<!-- 复核 2026-07-25（棘轮写基线增量化）：check-test-hygiene 的 --write-baseline 换成 --add / --prune / --rewrite-baseline，测试卫生段补登记方式；其余开发流程不变。 -->
 
 # 本地开发指南
 
@@ -84,8 +78,8 @@ lockfile 不变时 `install` 基本只校验 / 补链接，很快；变了也只
 
 要点与坑：
 
-- **不要把槽位的 `node_modules` 共享 / junction 到 main**。pnpm 把 workspace 包（`@timedata/*`）按当前 checkout 路径建软链；共享后槽位里的测试 / 构建会解析到 **main 的 `packages/`**，你以为在测分支代码、其实在测 main——静默串线，极难查。
-- **pnpm store 安全且默认已共享**：store 全盘内容寻址，槽位与 main 同盘时自动 hardlink，无需任何配置。别给单个槽位另设 `store-dir`、别把槽位放到别的盘，否则反而退化成各自复制。
+- **槽位的 `node_modules` 不共享、不 junction 到 main**。pnpm 把 workspace 包（`@timedata/*`）按当前 checkout 路径建软链；共享后槽位里的测试 / 构建会解析到 **main 的 `packages/`**，你以为在测分支代码、其实在测 main——静默串线，极难查。
+- **pnpm store 安全且默认已共享**：store 全盘内容寻址，槽位与 main 同盘时自动 hardlink，无需任何配置。给单个槽位另设 `store-dir`、或把槽位放到别的盘，反而会退化成各自复制。
 - **切分支前先确保槽位里的活已提交**：`git switch -C <分支> main` 会重置工作树，未提交改动会丢。
 - **偶发 stale 构建**：`dist` / `.vite` / `*.tsbuildinfo` 跨分支留在槽位里；遇到构建产物串味时定点删它们即可，不必删 `node_modules`。
 - 清理：复用槽位平时只 `git switch` / 删旧分支；真要回收一次性 worktree 才 `git worktree prune` → `git branch -D <分支>` → `rm -rf <path>`（Windows 下 `git worktree remove` 常报错，走这套）。
@@ -157,7 +151,7 @@ pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon �
 
 `packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。`@timedata/cli` 的 `typecheck` 会先构建 shared，因为 CLI 在 package 解析时读取 `packages/shared/dist/index.d.ts`；干净 CI 环境不能依赖本地已有 dist。
 
-根 `pnpm build` 的顺序是 `shared` 先构建，随后显式并行构建 `@timedata/client`、`@timedata/server`、`@timedata/cli`；不要用排除 `shared` 的递归过滤替代这条脚本，否则会误触发 mobile 的 Android 同步构建。`pnpm build:client:fast` 只服务本地前端打包迭代，跳过 client `tsc -b`，推送前仍以正式 `pnpm build` 为准。
+根 `pnpm build` 的顺序是 `shared` 先构建，随后显式并行构建 `@timedata/client`、`@timedata/server`、`@timedata/cli`；排除 `shared` 的递归过滤不能替代这条脚本——会误触发 mobile 的 Android 同步构建。`pnpm build:client:fast` 只服务本地前端打包迭代，跳过 client `tsc -b`，推送前仍以正式 `pnpm build` 为准。
 
 新增或修改同步域时优先跑窄门：`pnpm --filter @timedata/shared test -- trackSchemas entitySchemas syncDomains schemas`、`pnpm --filter @timedata/server test -- schema track-rows domains tracks-domain order backfillSeq sync`、`pnpm --filter @timedata/client test -- index clientDomains tracks exportBackup validateBackup importBackup domainLabels`，再扩到三端 typecheck、`pnpm test`、`pnpm lint`、`pnpm build` 与 docs 检查。
 
@@ -252,7 +246,7 @@ TimeData/
 
 - 前端：React、TypeScript、Vite、Tailwind CSS、Dexie、React Router、Recharts、React Flow（`@xyflow/react`）、dnd-kit、d3-force、react-markdown/remark-gfm/rehype-sanitize
   - d3-force 只服务 `/goals` 全局星图的可选 settle 引擎，必须由 `useGalaxySettleEngine` 动态 import；默认确定性星图路径不静态引入它。
-  - dnd-kit 目前用于设置页下的分类管理拖拽排序：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx` 组织一级分类 DnD 作用域，`SettingsCategoryDetailPage.tsx` 组织子分类 DnD 作用域，`SortableCategoryItem.tsx` 封装拖拽手柄，`useCategories.ts` 负责持久化 `sortOrder` 和 `syncLog`。
+  - dnd-kit 用于设置页下的分类管理拖拽排序：`packages/client/src/pages/settings/SettingsCategoriesPage.tsx` 组织一级分类 DnD 作用域，`SettingsCategoryDetailPage.tsx` 组织子分类 DnD 作用域，`SortableCategoryItem.tsx` 封装拖拽手柄，`useCategories.ts` 负责持久化 `sortOrder` 和 `syncLog`。
   - react-markdown/remark-gfm/rehype-sanitize 只用于 Quick Notes 的安全 Markdown 展示；速记仍保存原始文本，编辑、复制、导出和同步不依赖渲染结果。
 - 后端：Node.js、Hono、better-sqlite3、Zod、TypeScript
 - CLI：Node.js、TypeScript、受控 API 命令

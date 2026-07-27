@@ -14,9 +14,6 @@ contracts:
 last-reviewed: 2026-07-04
 ---
 
-<!-- 复核 2026-06-27（设计语言 P1）：MonthCalendar / Wheel 只迁移 token / typography / Phosphor 图标，重复规则 schema、判定“今天是否待做”和预设门行为均不变。 -->
-<!-- 复核 2026-07-04（提前完成）：client 人工入口允许未到期规则提前消耗下一发；server agent 仍保持未到期 409。 -->
-
 # 待办 · 重复规则引擎
 
 > [todo](../todo.md) 的重复规则**子文档**：`Recurrence` 字段契约、判定“今天是否待做”、终止条件、代理式完成（occurrence 账本）、预设门 UI。

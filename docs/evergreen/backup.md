@@ -23,11 +23,6 @@ contracts:
 last-reviewed: 2026-07-10
 ---
 
-<!-- 复核 2026-06-25（设置页信息架构）：SettingsDataPage 只收束到 design token 视觉壳，备份导出、恢复、自动备份和强制覆盖语义均不变。 -->
-<!-- 复核 2026-06-27（设计语言 P1）：quick-notes 展示组件只迁移 token / typography / Phosphor 图标，Quick Notes 独立备份 JSON、Markdown 导出、导入合并和 syncLog 语义均不变。 -->
-<!-- 复核 2026-07-04（同步 staleGuard）：sync push 的 unknown_base / non-fast-forward 仍会先创建受保护服务端备份；新增 stale_change_rejected 只影响是否应用变更，不改变备份格式或恢复流程。 -->
-<!-- 复核 2026-07-04（tasks 完成语义 op）：tasks 完成字段守卫只影响同步 upsert 撞行时的 SET 列表，不改变 Backup JSON、force-push 范围或恢复流程。 -->
-
 # 备份与恢复
 
 > **Sync ≠ Backup**。同步是多设备同步当前数据；备份是防误删/防迁移失败/防服务器丢数据。
@@ -217,7 +212,7 @@ UI 提示文案在 `SettingsDataPage.tsx`，每次改恢复流程时都要顺便
 - **浏览器/PWA**：构造 Blob、创建 `<a download>` 并触发点击，1 秒后再 `URL.revokeObjectURL()`。锚点临时挂到 `document.body` 上以兼容 Firefox。
 - **Capacitor Android**：用 `@capacitor/filesystem` 把 JSON 写入 `Directory.Documents`，再调用 `@capacitor/share` 让用户选择保存或分享目标（系统 Files、邮件、即时通讯等）。文件名前缀与浏览器侧一致。若用户取消分享会被静默吞掉，已经写盘的文件仍保留。
 
-Phase 5.3 的人工验收清单里有“导出 + 恢复 Backup JSON”一步（见 `packages/mobile/README.md`）。修改这块代码后必须：
+`packages/mobile/README.md` 的人工验收清单里有“导出 + 恢复 Backup JSON”一步。修改这块代码后必须：
 
 - 在 Web 端验收浏览器下载文件；
 - 在 Android APK 上验收 `Filesystem.writeFile` + Share 流程；

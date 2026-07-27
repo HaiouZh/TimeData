@@ -14,7 +14,6 @@ covers:
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
 last-reviewed: 2026-07-25
 ---
-<!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：「不讲什么」追加 /search 记录明细检索交叉指针，点明与本页零点裁剪口径的有意分叉；不改变本域数据流、schema 或不变量。 -->
 
 # 统计与洞察
 

@@ -17,8 +17,6 @@ covers:
   - packages/client/src/pages/goals/**
 last-reviewed: 2026-07-25
 ---
-<!-- 复核 2026-07-24（星图手头分组）：全局未归类托盘读取当前活跃 Session，把 sessionId 精确匹配的候选单列到置顶“手头”；历史场任务仍按原落点，目标详情成员 picker 不变。 -->
-<!-- 复核 2026-07-24（星图周期任务过滤）：未归类托盘与成员 picker 只接收普通未完成任务或 active pending occurrence；重复模板及 done/skipped 历史发不再误入候选与计数。 -->
 
 # 目标层 · 星图画布
 
@@ -59,7 +57,7 @@ last-reviewed: 2026-07-25
 
 ## 2. 局部星图编辑器
 
-`/goals/:id` 默认进入局部图编辑器，不保留 Phase 1 文字详情 fallback。图节点只表达 Goal 锚、真实 Task/Track 成员和 ghost 失效引用；前置边方向固定为 `blocker -> blocked`，Goal 锚和 ghost 不参与新建前置边。归属 tether 只表示成员属于 Goal，不作为可编辑前置关系。
+`/goals/:id` 默认进入局部图编辑器，不提供文字详情 fallback。图节点只表达 Goal 锚、真实 Task/Track 成员和 ghost 失效引用；前置边方向固定为 `blocker -> blocked`，Goal 锚和 ghost 不参与新建前置边。归属 tether 只表示成员属于 Goal，不作为可编辑前置关系。
 
 `GoalDetailPage` 壳层的加载门与 `/goals` 壳同口径：Goal、Task、Track、TrackStep、布局钉点**五个 live query 全部返回**才挂编辑器，一律不给 `useLiveQuery` 传 `[]` 默认初值。用 `[]` 兜底会让 `buildGoalOverview` 把全部成员判成失效引用，首帧渲染成 ghost、数据到位后整图重排跳位。
 

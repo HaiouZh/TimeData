@@ -24,14 +24,6 @@ contracts:
 last-reviewed: 2026-07-26
 ---
 
-<!-- 复核 2026-07-26（react-router 升 v8 · 解 GHSA-qwww-vcr4-c8h2）：v8 删掉了 react-router-dom 包，client 全量改从 react-router 导入，RouterProvider 走 react-router/dom 子路径；data router 结构、splat route、errorElement 与 useBlocker 前提全不变。v8 同时把内部字段 hasErrorBoundary 从 router.routes 上删了，App.router.test.tsx 的接线断言改断其推导来源 errorElement 本身。 -->
-<!-- 复核 2026-07-25（entry-search-plan T7 文档沉淀）：§4.2 路由清单新增 /search（时间记录搜索，见 timeline.md §11）；不改变五包职责、依赖方向或写入边界，covers 不变（页面级文件归 timeline.md 认领）。 -->
-<!-- 复核 2026-07-25（diary-workbench 阶段一 · 终审修复）：根路由补 errorElement（RR 对根路由总包一层内部 boundary，此前悄悄绕过了 App() 的 ErrorBoundary）；useUnsavedChangesGuard.tsx 更名 .ts（无 JSX），covers 路径同步。 -->
-<!-- 复核 2026-07-25（diary-workbench 阶段一）：路由根迁到 data router（splat route + RouterProvider），新增 useUnsavedChangesGuard；AppRoutes 的路由声明未变。 -->
-<!-- 复核 2026-07-04（依赖升级收 dependabot）：pnpm-workspace.yaml catalog typescript 升 ^6.0.3；包结构、依赖方向与同步边界不变。 -->
-<!-- 复核 2026-07-04（tasks 完成语义 op）：shared/index.ts 新导出 taskCompletion 纯 helper，服务五包既有依赖方向；不改变包职责、启动顺序或写入边界。 -->
-<!-- 复核 2026-07-04（tracks 并发时间语义）：shared/index.ts 新导出轨道排序/status op 纯 helper；五包依赖方向、启动顺序、写入边界和受控 API 入口不变。 -->
-
 # 架构总览
 
 > 这份文档是 TimeData 的系统地图：五个包的关系、主要数据流、启动顺序、关键约定和文档登记簿。
