@@ -36,6 +36,10 @@
   --color-border-strong: #3a4668;
   --color-border-hairline: rgba(255, 255, 255, 0.08);
 
+  /* 滚动条（独立于边框 token：语义是「滑块」，后续单独调不牵连边框） */
+  --color-scrollbar-thumb: #3a4668;
+  --color-scrollbar-thumb-hover: #4d5a80;
+
   /* 柔和高度（仅大表面用） */
   --shadow-elev1: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.16);
   --shadow-elev2: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 30px rgba(0,0,0,.4);
@@ -201,6 +205,20 @@ samp {
 
 .animate-sync-blink {
   animation: sync-blink 2.5s ease-in-out infinite;
+}
+
+/*
+ * 滚动条纳入设计语言：html 上声明、全站继承。用标准属性而非 ::-webkit-scrollbar——
+ * 伪元素会让 Chrome/Edge 从 overlay（浮在内容上、滑完即隐）退化成常驻占位条，
+ * 在窄卡片里比默认灰条更抢眼。Safari 不支持则退回系统半透明细条，可接受。
+ * hover 提亮用 :where 保持零特异性，任何类选择器（如 .wheel-scroll 隐藏）都能压过。
+ */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+:where(:hover) {
+  scrollbar-color: var(--color-scrollbar-thumb-hover) transparent;
 }
 
 .wheel-scroll {

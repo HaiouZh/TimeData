@@ -80,6 +80,24 @@ describe("index.css design tokens", () => {
     expect(css).toMatch(/\.todo-project-group-body\s*\{[^}]*overflow-anchor:\s*none;/s);
   });
 
+  it("themes scrollbars via tokens with a transparent track and hover brighten", () => {
+    // 滚动条纳入设计语言（spec: 2026-07-27-scrollbar-design-language）。
+    // 用标准属性而非 ::-webkit-scrollbar：伪元素会让 Chrome/Edge 退化成常驻占位条。
+    expect(css).toContain("--color-scrollbar-thumb: #3a4668;");
+    expect(css).toContain("--color-scrollbar-thumb-hover: #4d5a80;");
+    expect(css).toMatch(
+      /html\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--color-scrollbar-thumb\)\s+transparent;/s,
+    );
+    expect(css).toMatch(
+      /:where\(:hover\)\s*\{\s*scrollbar-color:\s*var\(--color-scrollbar-thumb-hover\)\s+transparent;\s*\}/,
+    );
+    // 防回潮：全站不得引入 webkit 滚动条伪元素定制（转盘的 display:none 隐藏除外，它不改外观只隐藏）。
+    // 只数选择器使用，先剥注释——CSS 注释里提到这个词不算数。
+    const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const webkitUses = cssWithoutComments.match(/::-webkit-scrollbar\b/g) ?? [];
+    expect(webkitUses.length).toBe(1); // 仅 .wheel-scroll::-webkit-scrollbar 那一处
+  });
+
   it("keeps health range presets visible instead of hiding horizontal overflow", () => {
     expect(css).toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*flex-wrap:\s*wrap;/s);
     expect(css).not.toContain(".health-page-header .health-range-selector::-webkit-scrollbar");
