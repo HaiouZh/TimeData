@@ -9,6 +9,7 @@
 
 本副本已偏离 live-roadmap skill v5.0：废除 构想/搁置/冰箱，新增 notes/ 孤儿 WARN（索引源 = ROADMAP/backlog/ideas）。
 回写惯例库（bump v6.0）前不要从库重装覆盖。设计：docs_local/specs/2026-07-27-ideas-ledger-design.md（归档后在 archive/specs/）。
+并发协议（v5.0 第二处偏离）：阶段行 [进行中@分支] 领取标记，OK 行打印在飞清单；配套 docs_snap.py 见 package.json 链。
 """
 import re
 import sys
@@ -45,6 +46,12 @@ STATE_CELL_RE = re.compile(r"\[([^\]]+)\]")
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
+def split_state(raw: str):
+    """'进行中@fix/x' → ('进行中', 'fix/x')；无 @ → (raw, None)。@ 只许挂 [进行中]，由调用方校验。"""
+    base, _, branch = raw.partition("@")
+    return base, (branch or None)
+
+
 def split_sections(text: str):
     """按 '## ' 二级标题切节，返回 [(title, body)]。"""
     sections, title, buf = [], None, []
@@ -76,10 +83,12 @@ def parse_overview(body: str, report):
         if not m:
             report("error", "state", f"总览表行「{cells[0]}」状态列缺 [状态] 标记")
             continue
-        state = m.group(1)
+        state, branch = split_state(m.group(1))
         if state not in VALID_STATES:
             report("error", "state",
                    f"总览表主题「{cells[0]}」状态 [{state}] 不在四态中（拼错的标记 grep 不到 = 隐身）")
+        if branch and state != "进行中":
+            report("error", "state", f"总览表主题「{cells[0]}」：@分支 只允许挂在 [进行中] 上")
         topics[cells[0]] = state
     return topics
 
@@ -106,7 +115,7 @@ def check_links(md_path: Path, report):
 
 
 def check(root: Path):
-    errors, warns = [], []
+    errors, warns, inflight = [], [], []
 
     def report(level, tag, msg):
         (errors if level == "error" else warns).append(f"{level.upper()}({tag}): {msg}")
@@ -149,10 +158,17 @@ def check(root: Path):
 
     # 阶段行状态合法性 + 全 [完成] 报归档 + 体量 WARN
     for slug, body in topic_sections.items():
-        phase_states = [m.group(1) for ln in body.split("\n") if (m := PHASE_LINE_RE.match(ln))]
-        for st in phase_states:
+        raw_states = [m.group(1) for ln in body.split("\n") if (m := PHASE_LINE_RE.match(ln))]
+        phase_states = []
+        for raw_st in raw_states:
+            st, branch = split_state(raw_st)
+            phase_states.append(st)
             if st not in VALID_STATES:
                 report("error", "state", f"主题「{slug}」阶段行状态 [{st}] 不在四态中")
+            if branch and st != "进行中":
+                report("error", "state", f"主题「{slug}」：@分支 只允许挂在 [进行中] 阶段行上")
+            if branch:
+                inflight.append((slug, branch))
         if phase_states and all(st == "完成" for st in phase_states):
             report("error", "archive-due", f"主题「{slug}」全部阶段 [完成] —— 该归档了。{ARCHIVE_GUIDANCE}")
         for ln in body.split("\n"):
@@ -235,7 +251,7 @@ def check(root: Path):
             diagnostics.append(f"  {n:>5} {mark}  {t.split('（')[0]}  {cap_note}")
         diagnostics.extend(MOVE_LADDER)
 
-    return errors, warns, len(text), len(topics), diagnostics
+    return errors, warns, len(text), len(topics), diagnostics, inflight
 
 
 def main(argv):
@@ -245,7 +261,7 @@ def main(argv):
     if not (root / "ROADMAP.md").is_file():
         print(f"[check_roadmap] skip: {root / 'ROADMAP.md'} 不存在")
         return 0
-    errors, warns, size, n_topics, diagnostics = check(root)
+    errors, warns, size, n_topics, diagnostics, inflight = check(root)
     for msg in errors + warns:
         print(f"[check_roadmap] {msg}")
     for line in diagnostics:
@@ -253,7 +269,8 @@ def main(argv):
     if errors:
         print(f"[check_roadmap] ROADMAP.md: {len(errors)} error(s), {len(warns)} warn(s)")
         return 1
-    print(f"[check_roadmap] OK（{size} 字符，{n_topics} 主题，{len(warns)} warn）")
+    inflight_note = f"，{len(inflight)} 线在飞：{' · '.join(f'{s}@{b}' for s, b in inflight)}" if inflight else ""
+    print(f"[check_roadmap] OK（{size} 字符，{n_topics} 主题，{len(warns)} warn{inflight_note}）")
     return 0
 
 
