@@ -6,6 +6,9 @@
 目标目录或 ROADMAP.md 不存在时自动跳过（exit 0），门禁里可无条件挂：
 路线 A（docs_local 不入 git）挂本地门禁，路线 B（过程文档入 git）同一脚本挂 CI。
 检查项与级别见 live-roadmap references/rules.md §4。exit 1 = 有 ERROR；WARN 不挡门。
+
+本副本已偏离 live-roadmap skill v5.0：废除 构想/搁置/冰箱，新增 notes/ 孤儿 WARN（索引源 = ROADMAP/backlog/ideas）。
+回写惯例库（bump v6.0）前不要从库重装覆盖。设计：docs_local/specs/2026-07-27-ideas-ledger-design.md（归档后在 archive/specs/）。
 """
 import re
 import sys
@@ -15,22 +18,19 @@ SIZE_CAP = 8000
 NOW_MAX_LINES = 5
 NOW_BUDGET = 600
 TOPIC_BUDGET = 1200
-FRIDGE_BUDGET = 400
 PHASE_LINE_BUDGET = 150
-FRIDGE_ITEM_BUDGET = 130
 NO_PHASE_STATES = {"设计中", "排队", "进行中", "完成"}
 MOVE_LADDER = [
     "搬家五档（按优先序，做一档就重跑；只搬家不改写）：",
     "  ① 全 [完成] 主题 → 归档四联动（rules §3.1）",
     "  ② [完成] 阶段行 → 压一行，详情回写该阶段 plan 尾部「落地记录」（rules §2.2）",
-    "  ③ 冰箱条目 → 压一行 + 指针，正文进 archive/roadmap/ 主题页或现成文档（rules §3.2）",
+    "  ③ 已否决/暂缓主题 → 移进 ideas.md「已处置」（本地口径，已偏离 rules §3.2）",
     "  ④ 沉淀记录 → 做沉淀 pass，压成去向指针（rules §2.1）",
     "  ⑤ 「现在在哪」→ 只留进行中 + 下一步；「刚完成」≤1 行只写主题名 + 归档去向（rules §8）",
 ]
-VALID_STATES = {"构想", "设计中", "排队", "进行中", "完成", "搁置"}
-REQUIRED_SECTIONS = ["现在在哪", "主题总览", "冰箱", "阶段完成定义"]
+VALID_STATES = {"设计中", "排队", "进行中", "完成"}
+REQUIRED_SECTIONS = ["现在在哪", "主题总览", "阶段完成定义"]
 MUST_HAVE_SECTION = {"设计中", "排队", "进行中"}  # 这些状态的主题必须开五件套小节
-MUST_NOT_SECTION = {"构想"}  # 构想不得开小节（rules.md §2），只占总览表一行/构想附注
 ACTIVE_DOC_DIRS = ("specs", "plans")  # 孤儿检查范围：活目录只放活的（rules.md §3）
 ARCHIVE_TOPIC_DIR = "archive/roadmap"  # 一主题一文件的归档页目录（ADR 式），每份须挂进 ROADMAP-archive 索引表
 LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
@@ -79,7 +79,7 @@ def parse_overview(body: str, report):
         state = m.group(1)
         if state not in VALID_STATES:
             report("error", "state",
-                   f"总览表主题「{cells[0]}」状态 [{state}] 不在六态中（拼错的标记 grep 不到 = 隐身）")
+                   f"总览表主题「{cells[0]}」状态 [{state}] 不在四态中（拼错的标记 grep 不到 = 隐身）")
         topics[cells[0]] = state
     return topics
 
@@ -152,7 +152,7 @@ def check(root: Path):
         phase_states = [m.group(1) for ln in body.split("\n") if (m := PHASE_LINE_RE.match(ln))]
         for st in phase_states:
             if st not in VALID_STATES:
-                report("error", "state", f"主题「{slug}」阶段行状态 [{st}] 不在六态中")
+                report("error", "state", f"主题「{slug}」阶段行状态 [{st}] 不在四态中")
         if phase_states and all(st == "完成" for st in phase_states):
             report("error", "archive-due", f"主题「{slug}」全部阶段 [完成] —— 该归档了。{ARCHIVE_GUIDANCE}")
         for ln in body.split("\n"):
@@ -169,8 +169,6 @@ def check(root: Path):
     def _budget_for(title):
         if title.startswith("现在在哪"):
             return NOW_BUDGET
-        if title.startswith("冰箱"):
-            return FRIDGE_BUDGET
         if TOPIC_TITLE_RE.match(title):
             return TOPIC_BUDGET
         return None
@@ -180,33 +178,9 @@ def check(root: Path):
         if cap and len(body) > cap:
             report("warn", "budget", f"「{t.split('（')[0]}」{len(body)} 字符 > 预算 {cap}")
 
-    # 冰箱条目（WARN）：`- ` 开头起算，续行并入
-    def _fridge_flush(item):
-        if item and len(item) > FRIDGE_ITEM_BUDGET:
-            report("warn", "fridge-item",
-                   f"冰箱条目「{item[2:22]}…」{len(item)} 字符 > {FRIDGE_ITEM_BUDGET}"
-                   f" —— 该压一行 + 指针（rules.md §3.2）")
-
-    for t, body in sections:
-        if not t.startswith("冰箱"):
-            continue
-        item = None
-        for ln in body.split("\n") + [""]:
-            if ln.startswith("- "):
-                _fridge_flush(item)
-                item = ln
-            elif ln.strip() and item is not None:
-                item += ln.strip()
-            else:
-                _fridge_flush(item)
-                item = None
-
     # 总览表 ↔ 正文小节一一对应
     for slug, state in topics.items():
         has_section = slug in topic_sections
-        if state in MUST_NOT_SECTION and has_section:
-            report("error", "consistency",
-                   f"[构想] 主题「{slug}」不得开五件套小节——只占总览表一行，输入放构想附注（rules.md §2）")
         if state in MUST_HAVE_SECTION and not has_section:
             report("error", "consistency", f"主题「{slug}」（[{state}]）无对应「## 主题：{slug}」小节")
         if state == "完成" and not has_section:
@@ -237,6 +211,18 @@ def check(root: Path):
             if f.name not in text:
                 report("warn", "orphan",
                        f"{d}/{f.name} 未被 ROADMAP.md 引用——漏归档候选？（活目录只放活的，rules.md §3）")
+
+    # notes/ 孤儿（WARN）：notes/*.md（不含子目录）须被 ROADMAP/backlog/ideas 之一按文件名实引
+    index_text = text
+    for idx_name in ("backlog.md", "ideas.md"):
+        p = root / idx_name
+        if p.is_file():
+            index_text += p.read_text(encoding="utf-8")
+    notes_dir = root / "notes"
+    for f in sorted(notes_dir.glob("*.md")) if notes_dir.is_dir() else []:
+        if f.name not in index_text:
+            report("warn", "orphan",
+                   f"notes/{f.name} 未被 ROADMAP/backlog/ideas 任一索引——写完就沉底？（ideas 台账口径，design 见 archive/specs/2026-07-27-ideas-ledger-design.md）")
 
     # 撞线 diagnostics：分节体量排行 + 搬家五档
     diagnostics = []
