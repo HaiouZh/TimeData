@@ -291,6 +291,25 @@ function isDocFile(f) {
   return f.startsWith("docs/evergreen/") || f.startsWith("docs/adr/") || f === "README.md" || f === "CLAUDE.md";
 }
 
+// §0 内容边界摘要：印在「要动 evergreen 文档」的时刻（strict/coverage 失败、diff 含 evergreen 改动）。
+// 只抄 _docs-guide §0 里最稳定的内核（判据一句话 + 归属去向），别往这里搬整段——那是第二份会腐烂的副本。
+export const EVERGREEN_RULES_SUMMARY = [
+  "—— evergreen 写作规矩（详见 docs/evergreen/_docs-guide.md §0）——",
+  "  只写「没有任何改动发生时也成立」的现状：机制 / 契约 / 不变量 / 边界。",
+  "  决策论证归 docs/adr，对 agent 的指令与授权归 AGENTS.md，改动流水归提交信息，在办事项归 docs_local。",
+  "  禁时间性措辞（目前 / 本轮 / 新增了 / 已改为）；读代码 30 秒能得到的清单别抄进正文。",
+];
+
+function printRulesSummary(log) {
+  log("");
+  for (const line of EVERGREEN_RULES_SUMMARY) log(line);
+}
+
+// 本次改动里被动过的 evergreen 正文（不含 ADR——ADR 只追加，不受 §0 约束）。
+export function selectChangedEvergreenDocs(changed) {
+  return changed.filter((f) => f.startsWith("docs/evergreen/") && f.endsWith(".md"));
+}
+
 // 纯函数：给定改动集与判定字段（covers / contracts），算出命中的文档及是否同步更新。
 // warn 用 covers（软提示，列出可能受影响的文档），strict 用 contracts（改契约必改文档）。
 export function evaluateDocSync(docs, changed, { field }) {
@@ -308,6 +327,13 @@ export function evaluateDocSync(docs, changed, { field }) {
 function modeWarnOrStrict(docs, changed, strict) {
   const field = strict ? "contracts" : "covers";
   const { codeChanged, docsChanged, hits } = evaluateDocSync(docs, changed, { field });
+  // 改了 evergreen 正文就提醒自查 §0——不管本次检查过不过：内容写错层是机检查不出的，只能在写的时刻拦。
+  const touchedEvergreen = selectChangedEvergreenDocs(changed);
+  if (touchedEvergreen.length > 0) {
+    console.log(`ℹ️ 本次改动包含 ${touchedEvergreen.length} 份 evergreen 文档，写入前自查 §0：无祈使句、无论证、无时间性措辞。`);
+    printRulesSummary(console.log);
+    console.log("");
+  }
   if (codeChanged.length === 0) {
     console.log("（没有代码改动需要检查。）");
     return 0;
@@ -339,6 +365,7 @@ function modeWarnOrStrict(docs, changed, strict) {
   if (strict) {
     console.error(`\n✗ 有 ${unmatched} 处文档命中但未同步更新（strict 模式）。`);
     console.error("  请同步更新文档，或在确认无需修改时通过其他方式跳过此检查。");
+    printRulesSummary(console.error);
     return 1;
   }
   console.log(`\n⚠️ 有 ${unmatched} 处文档命中但未更新。请确认是否需要同步修改。`);
@@ -539,6 +566,7 @@ function modeCoverage(docs, since) {
   console.error("✗ 以下新增源文件没有任何 evergreen 文档的 covers 认领：\n");
   for (const f of uncovered) console.error(`  ${f}`);
   console.error("\n请把它归入某个主题文档的 covers，或确属测试/类型/夹具时加入 COVERAGE_EXEMPTS。");
+  printRulesSummary(console.error);
   return 1;
 }
 

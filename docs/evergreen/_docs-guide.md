@@ -231,4 +231,6 @@ last-reviewed: YYYY-MM-DD
 | `check:docs:links` | **互链/指针别指向消失的文档** | evergreen 内、以及 `AGENTS.md` / `README.md` 指向 evergreen·ADR 的 `[..](x.md)` 指向不存在的 .md |
 | `check:docs:stale` | **last-reviewed 别过期** | 超 180 天或缺字段 |
 
+脚本在「要动 evergreen 文档」的时刻打印 §0 内核摘要（判据一句话 + 四个归属去向 + 指针回本文）：strict / coverage 失败时印在报错后；改动集里含 evergreen 正文（不含 ADR）时无论过不过都印一行自查提醒。摘要文本住在脚本的 `EVERGREEN_RULES_SUMMARY`，只抄 §0 最稳定的内核——§0 内核变了要同步它。
+
 闭环含义：**新代码必有主人（coverage）→ 改契约点名文档（strict，认 `contracts`）→ 文档不膨胀（size）→ 三层互链不断（links）**。新增源码若暂不值得专门文档，要么归进最贴近主题的 covers，要么确属测试/类型/夹具时加进脚本的 `COVERAGE_EXEMPTS`。

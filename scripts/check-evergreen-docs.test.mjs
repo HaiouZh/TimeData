@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   CliUsageError,
+  EVERGREEN_RULES_SUMMARY,
   diffSizeBaseline,
   evaluateDocSync,
   evaluateLinks,
@@ -12,6 +13,7 @@ import {
   getAddedFiles,
   getChangedFiles,
   parseArgs,
+  selectChangedEvergreenDocs,
   selectUncovered,
 } from "./check-evergreen-docs.mjs";
 
@@ -29,6 +31,26 @@ test("parseArgs rejects invalid modes with CLI usage exit code", () => {
     () => parseArgs(["--mode=invalid"]),
     (err) => err instanceof CliUsageError && err.exitCode === 2,
   );
+});
+
+test("EVERGREEN_RULES_SUMMARY points back to the docs guide §0", () => {
+  const text = EVERGREEN_RULES_SUMMARY.join("\n");
+  assert.match(text, /docs\/evergreen\/_docs-guide\.md/);
+  assert.match(text, /没有任何改动发生时也成立/);
+});
+
+test("selectChangedEvergreenDocs picks evergreen bodies and excludes ADR/code", () => {
+  const changed = [
+    "docs/evergreen/todo.md",
+    "docs/evergreen/health/charts.md",
+    "docs/adr/0022-list-markers.md",
+    "packages/client/src/App.tsx",
+    "docs/evergreen/img.png",
+  ];
+  assert.deepEqual(selectChangedEvergreenDocs(changed), [
+    "docs/evergreen/todo.md",
+    "docs/evergreen/health/charts.md",
+  ]);
 });
 
 test("getChangedFiles invokes git diff without shell parsing", () => {
