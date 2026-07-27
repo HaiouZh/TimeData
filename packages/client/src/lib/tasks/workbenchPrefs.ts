@@ -70,13 +70,3 @@ export function getScheduledCollapsed(): boolean {
 export function setScheduledCollapsed(collapsed: boolean): void {
   safeSetItem(STORAGE_KEYS.todoScheduledCollapsed, collapsed ? "true" : "false");
 }
-
-export function getProjectZoneIntroDismissed(): boolean {
-  // 未设偏好时提示条要出现：归属轴排他打开的那一版，用户需要知道任务去哪了。
-  // 它同时是项目区「首次默认展开」的判据——没读过说明就先把内容摊开。
-  return safeGetItem(STORAGE_KEYS.todoProjectZoneIntroDismissed) === "true";
-}
-
-export function setProjectZoneIntroDismissed(dismissed: boolean): void {
-  safeSetItem(STORAGE_KEYS.todoProjectZoneIntroDismissed, dismissed ? "true" : "false");
-}

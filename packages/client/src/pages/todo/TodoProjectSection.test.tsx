@@ -7,10 +7,9 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { GOAL_MEMBERS_MAX } from "../../lib/tasks/goalMembership.js";
-import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
-import { ProjectNameChip, ProjectZoneIntroBar, TodoProjectSection } from "./TodoProjectSection.js";
+import { ProjectNameChip, TodoProjectSection } from "./TodoProjectSection.js";
 import { projectContainerId } from "./todoDnd.js";
 
 const NOW = new Date("2026-07-25T10:00:00.000Z");
@@ -97,7 +96,6 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  setProjectZoneIntroDismissed(false);
 });
 
 describe("TodoProjectSection", () => {
@@ -107,16 +105,7 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 
-  it("提示条未关闭时首次默认展开全部组", async () => {
-    const { host, root } = await renderSection({
-      groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1", title: "刷墙" })] })],
-    });
-    expect(host.textContent).toContain("刷墙");
-    await unmount(root);
-  });
-
-  it("提示条已关闭时默认全折叠，点组头才展开", async () => {
-    setProjectZoneIntroDismissed(true);
+  it("默认全折叠，点组头才展开", async () => {
     const { host, root } = await renderSection({
       groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1", title: "刷墙" })] })],
     });
@@ -167,7 +156,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("项目标题行的加号只在未完成组出现，点击后展开并聚焦就地输入", async () => {
-    setProjectZoneIntroDismissed(true);
     const { host, root } = await renderSection({
       groups: [
         group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "t1" })] }),
@@ -189,7 +177,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("项目内创建回车只提交非空标题，成功后清空但保持输入框打开，Esc 收起", async () => {
-    setProjectZoneIntroDismissed(true);
     const onCreateTask = vi.fn(async (_goalId: string, title: string) => task({ id: title, title }));
     const { host, root } = await renderSection({
       onCreateTask,
@@ -220,7 +207,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("项目内创建用 ref 闸拦住在途重复 Enter，输入法组合态 Enter 不提交", async () => {
-    setProjectZoneIntroDismissed(true);
     const pending = deferred<Task>();
     const onCreateTask = vi.fn(() => pending.promise);
     const { host, root } = await renderSection({
@@ -250,7 +236,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("连续项目内创建后，最近创建的 idle 任务排在最前", async () => {
-    setProjectZoneIntroDismissed(false);
     const oldTask = task({ id: "old", title: "旧任务" });
     const first = task({ id: "first", title: "第一条" });
     const second = task({ id: "second", title: "第二条" });
@@ -281,7 +266,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("加号与更多按钮点击不穿透成组展开/折叠，多选态由宿主 inert 接管", async () => {
-    setProjectZoneIntroDismissed(true);
     const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })] });
     const toggle = host.querySelector('[data-testid="project-group-toggle"]');
     expect(toggle?.getAttribute("aria-expanded")).toBe("false");
@@ -298,7 +282,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("更多菜单首项聚焦，Escape/外部点击关闭且焦点回到触发按钮", async () => {
-    setProjectZoneIntroDismissed(true);
     const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })] });
     const trigger = host.querySelector('button[aria-label="项目 目标 g1 更多操作"]') as HTMLButtonElement;
     expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
@@ -318,7 +301,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("更多菜单可改名或打开 goals 页，空标题不提交且失焦恢复原名", async () => {
-    setProjectZoneIntroDismissed(true);
     const onRenameGoal = vi.fn(async () => undefined);
     const onOpenGoal = vi.fn();
     const { host, root } = await renderSection({
@@ -358,7 +340,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("成员数达到由上限推导的 90% 时预警，低于阈值或全完成不预警", async () => {
-    setProjectZoneIntroDismissed(true);
     const threshold = Math.ceil(GOAL_MEMBERS_MAX * 0.9);
     const low = await renderSection({ groups: [group({ goalId: "g1", memberCount: threshold - 1, tasks: [task({ id: "t1" })] })] });
     expect(low.host.textContent).not.toContain("接近上限");
@@ -382,6 +363,7 @@ describe("TodoProjectSection", () => {
         }),
       ],
     });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     const chips = host.querySelectorAll('[data-testid="project-member-state"]');
     expect(chips).toHaveLength(1);
     expect(chips[0]?.textContent).toBe("今天");
@@ -395,6 +377,7 @@ describe("TodoProjectSection", () => {
         group({ goalId: "g1", tasks: [task({ id: "t1", sessionId: "s1", scheduledAt: "2026-07-25T00:00:00.000Z" })] }),
       ],
     });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     expect(host.querySelector('[data-testid="project-member-state"]')?.textContent).toBe("在手头");
     await unmount(root);
   });
@@ -406,6 +389,7 @@ describe("TodoProjectSection", () => {
       onExitProject,
       groups: [group({ goalId: "g1", tasks: [member] })],
     });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     await click(host.querySelector('button[aria-label="退出项目 刷墙"]'));
     expect(onExitProject).toHaveBeenCalledTimes(1);
     expect(onExitProject).toHaveBeenCalledWith("g1", member);
@@ -423,6 +407,8 @@ describe("TodoProjectSection", () => {
         }),
       ],
     });
+    // 先展开：折叠态下组内一个节点都没有，`details` 查询恒为 null，这条会变成永远绿的空用例。
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     expect(host.querySelector("details")).toBeNull();
     expect(host.textContent).toContain("刷墙");
     expect(host.textContent).not.toContain("已完成");
@@ -433,6 +419,7 @@ describe("TodoProjectSection", () => {
     const { host, root } = await renderSection({
       groups: [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })],
     });
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     const card = host.querySelector('[data-testid="project-group"]') as HTMLElement;
     const body = card.querySelector(".overflow-y-auto") as HTMLElement | null;
     expect(body).not.toBeNull();
@@ -443,7 +430,6 @@ describe("TodoProjectSection", () => {
   });
 
   it("revealGoals 展开指定组并回报消费（jsdom 无 scrollIntoView 也不抛）", async () => {
-    setProjectZoneIntroDismissed(true);
     const groups = [group({ goalId: "g1", tasks: [task({ id: "t1", title: "刷墙" })] })];
     const { host, root } = await renderSection({ groups });
     expect(host.textContent).not.toContain("刷墙");
@@ -461,7 +447,6 @@ describe("TodoProjectSection", () => {
   it("目标组这一帧还没渲染出来：意图不消费也不丢，组出现后补上展开", async () => {
     // 成员刚升根 / 刚被清掉重复时，宿主查一次库就置位，而项目区要等 listTasks 整轮重算才产出这一组——
     // 前者几乎必然先落。此时 rowRefs 上没有节点，脉冲式实现会静默跳过滚动且永不重试。
-    setProjectZoneIntroDismissed(true);
     const onRevealConsumed = vi.fn();
     const revealGoals = ["g1"];
     const { host, root } = await renderDom(sectionElement({ groups: [], revealGoals, onRevealConsumed }));
@@ -483,10 +468,11 @@ describe("TodoProjectSection 落点", () => {
   }
 
   it("每组渲染一个 project:<goalId> 落点，且落点包住展开态的内容区", async () => {
-    setProjectZoneIntroDismissed(false); // 首次默认展开
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
     });
+    // 必须显式展开：默认全折叠时内容区不渲染，下面「行在落点内部」的断言会恒真。
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     const card = host.querySelector('[data-testid="project-group"][data-goal-id="g1"]');
     expect(card?.getAttribute("data-droppable-id")).toBe(projectContainerId("g1"));
     // 展开态的行在落点内部，而不是它的兄弟节点
@@ -527,35 +513,13 @@ describe("TodoProjectSection 落点", () => {
   });
 
   it("组内的行不渲染拖柄：项目区不注册 draggable，同一 taskId 不会在页面里被登记两次", async () => {
-    setProjectZoneIntroDismissed(false);
     const { host, root } = await renderWithDnd({
       groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })],
     });
+    // 必须显式展开：折叠态下压根没有行，`toBeNull()` 会恒真——这条守的是「展开后也没有拖柄」。
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
     expect(host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
     await unmount(root);
-  });
-});
-
-describe("ProjectZoneIntroBar", () => {
-  it("首次显示条数与组数，关闭后消失并记住偏好", async () => {
-    const { host, root } = await renderDom(<ProjectZoneIntroBar memberCount={5} groupCount={2} />);
-    expect(host.textContent).toContain("5 条任务已归入 2 个项目");
-
-    await click(host.querySelector('button[aria-label="知道了"]'));
-    expect(host.querySelector('[data-testid="project-zone-intro"]')).toBeNull();
-    expect(getProjectZoneIntroDismissed()).toBe(true);
-    await unmount(root);
-  });
-
-  it("零成员或已关闭时不渲染", async () => {
-    const empty = await renderDom(<ProjectZoneIntroBar memberCount={0} groupCount={0} />);
-    expect(empty.host.textContent).toBe("");
-    await unmount(empty.root);
-
-    setProjectZoneIntroDismissed(true);
-    const dismissed = await renderDom(<ProjectZoneIntroBar memberCount={5} groupCount={2} />);
-    expect(dismissed.host.textContent).toBe("");
-    await unmount(dismissed.root);
   });
 });
 

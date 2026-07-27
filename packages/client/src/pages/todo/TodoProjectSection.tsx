@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { CaretDown, CaretRight, DotsThree, Plus, SignOut, X } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, DotsThree, Plus, SignOut } from "@phosphor-icons/react";
 import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -11,7 +11,6 @@ import {
 } from "../../lib/tasks/goalMembership.js";
 import { type ProjectChip, projectMemberState, sortProjectMembers, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
-import { getProjectZoneIntroDismissed, setProjectZoneIntroDismissed } from "../../lib/tasks/workbenchPrefs.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
 import { projectContainerId } from "./todoDnd.js";
@@ -414,14 +413,13 @@ export function TodoProjectSection({
   dropBlocked,
   ...rowHandlers
 }: TodoProjectSectionProps) {
-  // 首次（存量提示条尚未关闭）默认展开全部组，之后默认全折叠。
-  // 读一次存进 state：用户后来关掉提示条时，不该把已经展开的组收回去。
-  const [introPending] = useState(() => !getProjectZoneIntroDismissed());
   const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
   const [recentTaskIds, setRecentTaskIds] = useState<Map<string, readonly string[]>>(() => new Map());
   const rowRefs = useRef(new Map<string, HTMLElement | null>());
 
-  const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? introPending;
+  // 默认全折叠。组展开只由用户点击或落点反馈（revealGoals）驱动，没有「首次全展开」那一档——
+  // 那一档原本挂在排他上线的一次性说明条上，说明条 2026-07-27 撤掉后一并退役。
+  const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? false;
 
   // 消费展开意图：只认**这一帧真的渲染出来了**的组（渲染出来 ⇒ ref 回调已跑完，节点必在 rowRefs 里）。
   // 没渲染出来的留着不消费，groups 变化时本 effect 重跑、届时补上——这正是「滚动那一半永久丢失」的修法。
@@ -530,32 +528,3 @@ export function ProjectNameChip({ chip, onOpen }: { chip: ProjectChip; onOpen: (
   );
 }
 
-/**
- * 排他上线后的一次性说明条：挂在收件箱顶部（任务是从那里消失的），不是项目区顶部。
- * 关闭位同时决定项目区「首次默认展开」，两者共用一个偏好。
- */
-export function ProjectZoneIntroBar({ memberCount, groupCount }: { memberCount: number; groupCount: number }) {
-  const [dismissed, setDismissed] = useState(() => getProjectZoneIntroDismissed());
-  if (dismissed || memberCount === 0) return null;
-  return (
-    <div
-      data-testid="project-zone-intro"
-      className="mb-2 flex items-start gap-2 rounded-card bg-surface px-3 py-2 td-text-caption text-ink-2"
-    >
-      <p className="min-w-0 flex-1">
-        {memberCount} 条任务已归入 {groupCount} 个项目，移到上方项目区。
-      </p>
-      <button
-        type="button"
-        aria-label="知道了"
-        onClick={() => {
-          setDismissed(true);
-          setProjectZoneIntroDismissed(true);
-        }}
-        className="shrink-0 rounded-ctl text-ink-3 hover:text-ink"
-      >
-        <Icon icon={X} size={14} />
-      </button>
-    </div>
-  );
-}

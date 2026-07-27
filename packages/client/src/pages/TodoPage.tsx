@@ -89,7 +89,7 @@ import { TaskDetailSheet } from "./todo/TaskDetailSheet.js";
 import { TaskList } from "./todo/TaskList.js";
 import { TodoComposer } from "./todo/TodoComposer.js";
 import { TodoSelectionBar } from "./todo/TodoSelectionBar.js";
-import { ProjectNameChip, ProjectZoneIntroBar, TodoProjectSection } from "./todo/TodoProjectSection.js";
+import { ProjectNameChip, TodoProjectSection } from "./todo/TodoProjectSection.js";
 import {
   clampTodoIndentPreview,
   hoveredRootIdFromOver,
@@ -752,7 +752,6 @@ export function TodoPage() {
   // 提示条的两个数必须同口径：`memberCount` 只数未完成成员，`groupCount` 若数全部组（含「全部完成」的组），
   // 「1 条任务已归入 2 个项目」这种自相矛盾的话就是可达的。
   const projectGroupsWithPending = buckets.projects.filter((group) => group.tasks.length > 0);
-  const projectMemberCount = projectGroupsWithPending.reduce((sum, group) => sum + group.tasks.length, 0);
   // 「放进…」的候选：项目区当前显示的组即可，与用户看到的一致。
   const selectableProjects = buckets.projects.map((group) => ({
     goalId: group.goalId,
@@ -841,8 +840,6 @@ export function TodoPage() {
   const sunkenExtraAction = makeSunkenExtraAction(bumpWeight);
   const inboxBlock = (
     <section data-section="inbox">
-      {/* 说明条挂在收件箱顶部而非项目区顶部：任务是从这里消失的，解释要贴着消失的地方。 */}
-      <ProjectZoneIntroBar memberCount={projectMemberCount} groupCount={projectGroupsWithPending.length} />
       <CollapsibleSection
         title="收件箱"
         count={inboxFiltered.length}

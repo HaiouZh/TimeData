@@ -34,6 +34,7 @@ last-reviewed: 2026-07-10
 <!-- 复核 2026-07-25（速记草稿持久化）：storageKeys 新增 quickNoteComposerDraft，只存用户尚未发出的速记正文，纯本地、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
 <!-- 复核 2026-07-26（日记参考栏折叠偏好）：storageKeys 新增 diaryRefPunchesCollapsed / diaryRefDoneTasksCollapsed / diaryRefQuickNotesCollapsed，只存三块参考区各自的「是否折叠」布尔值，纯本地 UI 偏好、不含用户内容、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
 <!-- 复核 2026-07-26（日记参考栏分栏比例，补登上一条漏掉的 key）：storageKeys 还新增了 diarySplit，只存日记页左右分栏比例一个 0..1 的数字，与待办页的 todoWorkbenchSplit 各存各的；纯本地布局偏好、不含用户内容、不进同步域与备份；凭据存储、token 处理与鉴权边界不变。 -->
+<!-- 复核 2026-07-27（项目区提示条退役）：storageKeys **删除** todoProjectZoneIntroDismissed（2026-07-25 那条新增的逆操作）——排他上线时的一次性说明条连同它挂着的「项目区首次默认展开」一并撤掉，读写它的两个 workbenchPrefs 函数同批删除。该 key 只在本机存一个布尔值、从不入同步与备份，删除后老浏览器 localStorage 里的残留值不再被任何代码读取（不做主动清理，无害孤儿）；凭据存储、token 处理与鉴权边界不变。 -->
 
 # 安全与凭据处理
 

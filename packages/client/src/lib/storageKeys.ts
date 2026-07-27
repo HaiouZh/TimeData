@@ -18,7 +18,6 @@ export const STORAGE_KEYS = {
   todoDoneCollapsed: "timedata_todo_done_collapsed",
   todoInboxCollapsed: "timedata_todo_inbox_collapsed",
   todoScheduledCollapsed: "timedata_todo_scheduled_collapsed",
-  todoProjectZoneIntroDismissed: "timedata_todo_project_zone_intro_dismissed",
   galaxyEngine: "timedata_galaxy_engine",
   goalTrayWidth: "timedata_goal_tray_width",
   goalsViewMode: "timedata_goals_view_mode",

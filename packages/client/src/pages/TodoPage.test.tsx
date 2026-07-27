@@ -12,8 +12,8 @@ import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
-import { setInboxCollapsed, setProjectZoneIntroDismissed } from "../lib/tasks/workbenchPrefs.js";
-import { renderDom, unmount } from "../test/domHarness.js";
+import { setInboxCollapsed } from "../lib/tasks/workbenchPrefs.js";
+import { click, renderDom, unmount } from "../test/domHarness.js";
 import { TodoPage } from "./TodoPage.js";
 
 beforeEach(async () => {
@@ -835,6 +835,12 @@ describe("TodoPage", () => {
     const { host, root } = await renderPage();
     await waitForCondition(() => {
       const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement | null;
+      return (zone?.textContent ?? "").includes("装修");
+    }, "project zone to show the group");
+    // 组默认全折叠（说明条退役后「首次全展开」一并去掉），成员行要展开才在 DOM 里。
+    await click(host.querySelector('[data-testid="project-group-toggle"]'));
+    await waitForCondition(() => {
+      const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement | null;
       return (zone?.textContent ?? "").includes("刷墙");
     }, "project zone to list the member");
 
@@ -849,7 +855,6 @@ describe("TodoPage", () => {
   });
 
   it("项目组内加号创建任务：直接归入该组，不经过收件箱，也不产生成功 toast", async () => {
-    setProjectZoneIntroDismissed(true);
     const now = "2026-06-28T09:00:00.000Z";
     const member = await addTask({ title: "刷墙", toInbox: true });
     await db.goals.add({
@@ -882,7 +887,6 @@ describe("TodoPage", () => {
   });
 
   it("项目组内创建撞 500：展示拒绝 toast，且不留下孤立任务", async () => {
-    setProjectZoneIntroDismissed(true);
     const now = "2026-06-28T09:00:00.000Z";
     const member = await addTask({ title: "刷墙", toInbox: true });
     await db.goals.add({
@@ -912,7 +916,6 @@ describe("TodoPage", () => {
   });
 
   it("项目更多菜单：改名走 updateGoal，打开跳到 goals 详情页", async () => {
-    setProjectZoneIntroDismissed(true);
     const now = "2026-06-28T09:00:00.000Z";
     const member = await addTask({ title: "刷墙", toInbox: true });
     await db.goals.add({
@@ -1330,7 +1333,6 @@ describe("TodoPage", () => {
   it("排到今天的项目成员在今天区显示项目名 chip，点它展开项目区对应组", async () => {
     const now = "2026-06-28T09:00:00.000Z";
     // 提示条已读 → 项目区默认全折叠，才能观察到 chip 把它点开。
-    setProjectZoneIntroDismissed(true);
     const member = await addTask({ title: "刷墙" });
     await db.goals.add({
       id: "g1",
@@ -1367,7 +1369,6 @@ describe("TodoPage", () => {
     const now = "2026-06-28T09:00:00.000Z";
     // 提示条已读 → 项目区默认全折叠。这正是「消失」的现场：排他让它进不了收件箱，
     // 没有 reveal 的话它只是落进上面那个折叠组，组 header 的「还剩 N / 共 M」纹丝不动，全屏零反馈。
-    setProjectZoneIntroDismissed(true);
     const member = await addTask({ title: "刷墙" });
     await db.goals.add({
       id: "g1",
@@ -1438,7 +1439,6 @@ describe("TodoPage", () => {
   it("已完成区取消勾选：项目成员回落 inbox 池时展开归属组", async () => {
     const now = "2026-06-28T09:00:00.000Z";
     // 提示条已读 → 项目区默认全折叠，才观察得到"被展开"这件事。
-    setProjectZoneIntroDismissed(true);
     const member = await addTask({ title: "刷墙", toInbox: true });
     await toggleTaskDone(member.id);
     await db.goals.add({
@@ -1477,7 +1477,6 @@ describe("TodoPage", () => {
 
   it("红线 4 反向：手头区「本场已完成」取消勾选，项目区不展开（它回的是手头，本来就看得见）", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    setProjectZoneIntroDismissed(true);
     const member = await addTask({ title: "刷墙", toInbox: true });
     await grabTaskToHand(member.id, { now: new Date(now) });
     await toggleTaskDone(member.id);
@@ -1506,7 +1505,6 @@ describe("TodoPage", () => {
 
   it("详情抽屉清掉时间：项目成员回落 inbox 池，项目区展开归属组（抽屉→页面这根线）", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    setProjectZoneIntroDismissed(true);
     // 排到今天（addTask 的默认落点）：行落在今天区、点得开详情。排到远期会沉进已排期水下尾，点不到。
     const member = await addTask({ title: "刷墙" });
     await seedProjectGoal(member.id, now);
@@ -1526,7 +1524,6 @@ describe("TodoPage", () => {
 
   it("详情抽屉清时间但任务已完成：不展开（落点是组内另一个折叠子区，展开了也看不到它）", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    setProjectZoneIntroDismissed(true);
     const member = await addTask({ title: "刷墙", toInbox: true });
     await scheduleTask(member.id, "2099-12-10");
     await toggleTaskDone(member.id);
@@ -1552,7 +1549,6 @@ describe("TodoPage", () => {
 
   it("详情抽屉选「仅某天」到未来日期：不展开（落点是已排期区，本来就看得见）", async () => {
     const now = "2026-06-28T09:00:00.000Z";
-    setProjectZoneIntroDismissed(true);
     const member = await addTask({ title: "刷墙" });
     await seedProjectGoal(member.id, now);
 
@@ -2009,7 +2005,6 @@ describe("TodoPage 多选态", () => {
     // React 卸载重挂，`TodoProjectSection` 的展开态 overrides（组件本地 state）随之清空。
     // 建组成功后尤其明显：新组按 reveal 展开并滚过去，而用户此前展开的其它组全部收回去，
     // 「展开新组」的反馈被「其余全塌」的布局跳动淹掉。
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     await seedProjectGoal(seedMember.id);
     await addTask({ title: "买灯", toInbox: true });
@@ -2125,7 +2120,6 @@ describe("TodoPage 多选提交", () => {
 
   it("建组成功：退出多选、展开新组、弹提示", async () => {
     // 提示条已读 → 项目区默认全折叠。不加这句，「新组是展开的」会被"首次默认展开"顶成假绿。
-    setProjectZoneIntroDismissed(true);
     await addTask({ title: "买灯", toInbox: true });
     await addTask({ title: "买椅子", toInbox: true });
     const { host, root } = await renderPage();
@@ -2150,7 +2144,6 @@ describe("TodoPage 多选提交", () => {
     // `db.tasks.get(ghostId)` 返回 undefined → 抛裸 `Error("任务不存在")`（不是 ProjectAssignError）
     // → 兜底文案「…数据有问题…」→ 而失败不退出多选，用户原地重试，每次都失败。
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     await addTask({ title: "买灯", toInbox: true });
     await addTask({ title: "买椅子", toInbox: true });
     const { host, root } = await renderPage();
@@ -2189,7 +2182,6 @@ describe("TodoPage 多选提交", () => {
     // 约 30ms 一发）都调一次 submitCreate()，而 `disabled={!canCreate}` 只看有没有选中 + 有没有
     // 名字，提交期间两者都还成立。后果是两个同名 goal，第二个的 assignTasksToProject 把成员从
     // 第一个摘走，留下一个**成员为 0 的空壳项目** + 一条推给别的设备的 goals create 同步日志。
-    setProjectZoneIntroDismissed(true);
     await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage();
     await waitForText(host, "买灯");
@@ -2226,7 +2218,6 @@ describe("TodoPage 多选提交", () => {
     // submitCreateProject 上。「放进…」自己的并发后果反而看不见——addGoalMember 对已在组内的
     // 成员整个 return、连 syncLog 都不写，所以第二发是彻底的 no-op，那种用例是假闸。
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     await seedProjectGoal(seedMember.id);
     await addTask({ title: "买灯", toInbox: true });
@@ -2253,7 +2244,6 @@ describe("TodoPage 多选提交", () => {
   });
 
   it("批量归入成功：退出多选、展开目标组、弹提示", async () => {
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     await seedProjectGoal(seedMember.id);
     await addTask({ title: "买灯", toInbox: true });
@@ -2274,7 +2264,6 @@ describe("TodoPage 多选提交", () => {
   });
 
   it("目标组满员：说出原因，且留在多选态", async () => {
-    setProjectZoneIntroDismissed(true);
     // 500 个**真实存在**的成员，不能用悬空 ref 凑数：查不到任务的 ref 不进项目区投影，
     // 那个组连组卡都不产出、`selectableProjects` 里也没有它，「放进 装修」按钮根本不存在。
     // 每行照 TaskSchema 的形态写全（含 `ruleId: null`）：listTasks 主循环前对每行做
@@ -2348,7 +2337,6 @@ describe("TodoPage 多选提交", () => {
   it("另一端把选中项收进项目组后，它退出选中集，原组一个字都不动", async () => {
     // 剪枝前这里是一条静默的破坏路径：买灯 已经不在收件箱、屏幕上看不到它被选中，
     // 而提交会把它从「旧组」摘走、连带删掉那条前置边——用户从没碰过「旧组」。
-    setProjectZoneIntroDismissed(true);
     const t1 = await addTask({ title: "买灯", toInbox: true });
     const t2 = await addTask({ title: "买椅子", toInbox: true });
     const { host, root } = await renderPage();
@@ -2375,7 +2363,6 @@ describe("TodoPage 多选提交", () => {
 
   it("只被抢走一条时，剩下那条照常建组，原组不受影响", async () => {
     // 剪枝必须是**逐条**的，不是「一有幽灵就整批放弃」：那样一条 sync 就能让用户重选一遍。
-    setProjectZoneIntroDismissed(true);
     await addTask({ title: "买灯", toInbox: true });
     const t2 = await addTask({ title: "买椅子", toInbox: true });
     const { host, root } = await renderPage();
@@ -2413,7 +2400,6 @@ describe("TodoPage 多选提交", () => {
 
   it("「放进…」路径同样剪枝：被抢走的那条不算进提交", async () => {
     // 两条提交路径各自读 `selectedIds`，剪枝只在一处生效是可能的手误——归入这侧要有自己的闸。
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     await seedProjectGoal(seedMember.id);
     await addTask({ title: "买灯", toInbox: true });
@@ -2450,7 +2436,6 @@ describe("TodoPage 多选提交", () => {
 
   it("非预期错误：兜底提示 + console.error，不吞掉、不退出多选", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     // 重复 ref 的裸行：读侧照常渲染成落点（红线 3），但 addGoalMember 内部的 GoalSchema.parse
     // 会被 superRefine 拒掉 —— 这是用户可达且会永远复现的一类非 ProjectAssignError。
@@ -2493,7 +2478,6 @@ describe("TodoPage 多选提交", () => {
 
   it("建组时查前置边就 reject：走兜底 toast，不静默、不留 unhandled rejection", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage();
     await waitForText(host, "买灯");
@@ -2515,7 +2499,6 @@ describe("TodoPage 多选提交", () => {
 
   it("归入时查前置边就 reject：同样走兜底 toast", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     await seedProjectGoal(seedMember.id);
     await addTask({ title: "买灯", toInbox: true });
@@ -2541,7 +2524,6 @@ describe("TodoPage 多选提交", () => {
     // 列表开着就把 toast 整条盖死。而归入失败刻意不退出多选、toast 是唯一的失败反馈通道，
     // 列表又只由用户点「放进…」切换、不会自动收，等他合上列表 toast 早已到点消失。
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     const seedMember = await addTask({ title: "刷墙", toInbox: true });
     await seedProjectGoal(seedMember.id);
     await addTask({ title: "买灯", toInbox: true });
@@ -2574,7 +2556,6 @@ describe("TodoPage 多选提交", () => {
     // 换成在写库那一步注入失败：这条用例守的本来就是**页面的失败出口**（兜底文案 + 不退出多选），
     // 不是数据层为什么会抛。`createProjectWithMembers` 里 `db.goals.add(seed)` 是这条链上的第一次写。
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    setProjectZoneIntroDismissed(true);
     await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage();
     await waitForText(host, "买灯");
