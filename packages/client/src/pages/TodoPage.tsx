@@ -80,6 +80,7 @@ import {
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
 import { TodoDragDock } from "./todo/TodoDragDock.js";
+import { applyTodoDockDrop } from "./todo/todoDockDrop.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { GravityReviewSection } from "./todo/GravityReviewSection.js";
@@ -98,7 +99,6 @@ import {
   parseTodoContainerId,
   preferProjectCollisions,
   resolveIndentLevel,
-  resolveTodoDockDrop,
   resolveTodoDragWithIndent,
   type TodoContainer,
   type TodoIndentLevel,
@@ -621,48 +621,36 @@ export function TodoPage() {
       activeParentId = found?.parentId ?? null;
     }
 
-    // 投递坞落点优先于页内容器判定。pool/project 折算成既有 op 走下方 switch(与拖到池容器/
-    // 项目卡同一条路);hand 是坞独有语义。overContainerId 与 overId 同值(坞 droppable 的
-    // data.containerId 就是它的 id),取 || 只是防 data 缺失。
-    const dockResolution = resolveTodoDockDrop({
-      dockId: overContainerId || overId,
-      activeContainerId,
-      activeParentId,
-    });
-    if (dockResolution.kind === "grab-to-hand") {
-      try {
-        await grabTaskToHand(activeId);
-      } catch (error) {
-        console.error("[todo] 投递到手头失败:", error);
-      }
-      return;
-    }
-    if (dockResolution.kind === "invalid") {
-      // 用户可达的 invalid 只有子任务投项目药丸,拒绝口径与拖到项目卡逐字相同。
-      const dockTarget = dockResolution.target;
-      if (dockTarget.kind === "project" && parseTodoContainerId(activeContainerId)?.kind === "parent") {
-        const group = buckets.projects.find((g) => g.goalId === dockTarget.goalId);
-        if (group) showActionToast({ message: projectAssignBlockMessage("subtask", group.goalTitle) });
-      }
-      return;
-    }
+    // 投递坞落点优先于页内容器判定。helper 消化坞独有路径(手头投递、invalid 拒绝 toast)——
+    // 依赖注入使这段可被单测钉住(终审 mutation 实测:不提炼则整段接线删掉测试照样绿);
+    // 折算出的 op 走下方 switch,与拖到池容器/项目卡同一条路。overContainerId 与 overId
+    // 同值(坞 droppable 的 data.containerId 就是它的 id),取 || 只是防 data 缺失。
+    const dockOutcome = await applyTodoDockDrop(
+      {
+        grabToHand: grabTaskToHand,
+        showToast: (message) => showActionToast({ message }),
+        subtaskBlockMessage: (goalTitle) => projectAssignBlockMessage("subtask", goalTitle),
+        findGoalTitle: (goalId) => buckets.projects.find((g) => g.goalId === goalId)?.goalTitle ?? null,
+      },
+      { dockId: overContainerId || overId, activeContainerId, activeParentId, activeId },
+    );
+    if (dockOutcome === "handled") return;
 
     const rootAboveId = hoveredRootIdFromOver(overContainerId, overId, activeContainerId);
     const targetContainer = targetContainerFromOver(overContainerId, rootAboveId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
 
     const op =
-      dockResolution.kind === "op"
-        ? dockResolution.op
-        : resolveTodoDragWithIndent({
-            activeContainerId,
-            activeParentId,
-            activeId,
-            activeHasChildren,
-            indentLevel,
-            rootAboveId,
-            targetContainer,
-          });
+      dockOutcome ??
+      resolveTodoDragWithIndent({
+        activeContainerId,
+        activeParentId,
+        activeId,
+        activeHasChildren,
+        indentLevel,
+        rootAboveId,
+        targetContainer,
+      });
 
     if (!op) {
       // 落点是项目组却解析不出操作 = 准入拒绝。当前唯一可达的是子任务这一支

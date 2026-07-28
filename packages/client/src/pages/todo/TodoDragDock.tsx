@@ -31,11 +31,11 @@ function DockPill({ target, label, blocked }: { target: TodoDockTarget; label: s
       data-testid="todo-dock-pill"
       data-dock-id={id}
       data-drop-blocked={blocked}
-      className={`max-w-56 truncate rounded-pill border px-3 py-1 td-text-caption transition-colors ${
+      className={`max-w-56 truncate rounded-pill border px-3 py-1 td-text-caption transition ${
         blocked
           ? "border-border bg-surface text-ink-3 opacity-60"
           : isOver
-            ? "border-accent bg-accent-soft text-accent"
+            ? "scale-105 border-accent bg-accent-soft text-accent"
             : "border-border bg-surface-elevated text-ink-2"
       }`}
     >
@@ -47,7 +47,8 @@ function DockPill({ target, label, blocked }: { target: TodoDockTarget; label: s
 /**
  * 拖拽投递坞:拖起任务时视口右缘淡入的一列瞬态落点药丸(design spec 2026-07-28-todo-drag-dock)。
  * - 常驻挂载、只切透明度:避开 dnd-kit 拖拽中挂载 droppable 的测量时序。
- * - pointer-events 恒 none:dnd-kit 命中走指针坐标不走 DOM 事件,坞永远不拦截点击/滚轮。
+ * - pointer-events 只在拖拽中放开:dnd-kit 命中走指针坐标不吃 DOM 事件,但坞内滚动要接滚轮——
+ *   恒 none 时滚轮穿透到页面,超出一屏的项目药丸在拖拽中永远够不到;平时 none,不拦点击。
  * - 淡入 300ms 延迟(CSS delay,不用计时器):列表内短距重排不会闪出坞;隐藏 duration 0 = 松手即散。
  */
 export function TodoDragDock({ dragging, activeContainerId, projects, dropBlocked }: TodoDragDockProps) {
@@ -56,8 +57,8 @@ export function TodoDragDock({ dragging, activeContainerId, projects, dropBlocke
     <ul
       data-testid="todo-drag-dock"
       aria-hidden={!dragging}
-      className={`pointer-events-none fixed right-2 top-1/2 z-[var(--z-dropdown)] flex max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col items-end gap-2 overflow-y-auto transition-opacity ${
-        dragging ? "opacity-95 delay-300" : "opacity-0 delay-0"
+      className={`fixed right-2 top-1/2 z-[var(--z-dropdown)] flex max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col items-end gap-2 overflow-y-auto transition-opacity ${
+        dragging ? "pointer-events-auto opacity-95 delay-300" : "pointer-events-none opacity-0 delay-0"
       }`}
       style={{ transitionDuration: dragging ? "var(--duration-base)" : "0ms" }}
     >

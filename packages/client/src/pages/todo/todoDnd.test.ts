@@ -582,10 +582,16 @@ describe("resolveTodoDockDrop", () => {
     ).toEqual({ kind: "not-dock" });
   });
 
-  it("任意来源 → dock:hand = grab-to-hand", () => {
+  it("根任务 → dock:hand = grab-to-hand", () => {
     expect(
       resolveTodoDockDrop({ dockId: "dock:hand", activeContainerId: "pool:inbox", activeParentId: null }),
     ).toEqual({ kind: "grab-to-hand" });
+  });
+
+  it("子任务 → dock:hand = invalid(grabTaskToHand 硬拒子任务,防御层不放行)", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:hand", activeContainerId: "parent:p1", activeParentId: "p1" }),
+    ).toEqual({ kind: "invalid", target: { kind: "hand" } });
   });
 
   it("inbox 根任务 → dock:pool:today = schedule-root today", () => {
@@ -646,10 +652,9 @@ describe("todoDockTargets", () => {
     ]);
   });
 
-  it("拖子任务(parent:):今天/收件箱都在(升根语义)", () => {
+  it("拖子任务(parent:):今天/收件箱都在(升根语义),手头不在(必失败落点不显示)", () => {
     expect(todoDockTargets("parent:p1", [])).toEqual([
       { kind: "pool", pool: "today" },
-      { kind: "hand" },
       { kind: "pool", pool: "inbox" },
     ]);
   });

@@ -192,7 +192,7 @@ agent / CLI (task-done/task-tag)
 11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 同步字段 + `updatedAt` 时间衰减，`TodoPage` 出桶后把 inbox 拆浮起/水下；`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知。水位线 / 翻牌复查 / 已过目记忆 / 水下找回尾部 / 设置见 [todo/gravity](todo/gravity.md)。
 12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。详见 [todo/at-hand](todo/at-hand.md)。
 13. **项目区与归属轴**：`Goal(kind="project", status="active")` 的成员任务在待办页聚成「项目区」，并对收件箱**排他**——成员不进 `inbox`，收件箱因此回归「真·未归类托盘」；焦点轴（手头）与时间轴（今天/已排期）与它正交，成员同时出现在对应桶与项目区。两份 goal→task 索引口径不同且**不得互相派生**，归属变更必须同事务刷新成员 `updatedAt`（重力可见性所需）。完整契约（投影规则、排他红线、写入不变量、呈现约定）见 [todo/project-zone](todo/project-zone.md)。
-14. **投递坞不发明语义**：宽屏拖拽中视口右缘的瞬态落点药丸（`TodoDragDock`），`dock:pool:*`/`dock:project:*` 折算成既有容器走 `resolveTodoDragOperation`，`dock:hand` = `grabTaskToHand`；坞永不产生 reorder（`resolveTodoDockDrop` 拦截）。坞常驻挂载只切透明度、`pointer-events: none`，仅宽屏渲染；被拖行所在池的药丸不显示；子任务投项目药丸的拒绝口径与项目卡一致。`preferProjectCollisions` 中坞命中优先于项目组与行；`hoveredRootIdFromOver` 对 dock id 恒返回 `null`（坞不是缩进落点）。
+14. **投递坞不发明语义**：宽屏拖拽中视口右缘的瞬态落点药丸（`TodoDragDock`），`dock:pool:*`/`dock:project:*` 折算成既有容器走 `resolveTodoDragOperation`，`dock:hand` = `grabTaskToHand`；坞永不产生 reorder（`resolveTodoDockDrop` 拦截）。坞常驻挂载只切透明度、`pointer-events` 仅拖拽中放开（坞内滚动需要接滚轮，平时 none 不拦点击），仅宽屏渲染；被拖行所在池的药丸不显示，**拖子任务时「手头」药丸也不显示**（`grabTaskToHand` 拒收子任务，不给必失败落点，解析层同拦成 invalid）；子任务投项目药丸的拒绝口径与项目卡一致。`preferProjectCollisions` 中坞命中优先于项目组与行；`hoveredRootIdFromOver` 对 dock id 恒返回 `null`（坞不是缩进落点）。
 
 ## 4. 模块速查
 

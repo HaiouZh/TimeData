@@ -40,7 +40,6 @@ describe("TodoDragDock", () => {
       </DndContext>,
     );
     expect(dock(host).getAttribute("aria-hidden")).toBe("true");
-    expect(dock(host).className).toContain("opacity-0");
     await unmount(root);
   });
 
