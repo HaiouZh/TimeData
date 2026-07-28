@@ -77,7 +77,7 @@ last-reviewed: 2026-07-26
 | 变量 | 必填 | 用途 |
 |---|---|---|
 | `AUTH_TOKEN` | 生产必填 | API 鉴权。所有 `/api/*` 请求都要带 `Authorization: Bearer <TOKEN>`，除了 `/api/health` 和 `/api/version` |
-| `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写与任务轨道 ingest；未设置时该作用域仍可用 `AUTH_TOKEN` |
+| `AGENT_TOKEN` | 否 | 窄域 agent 鉴权。仅 `/api/agent/*` 接受，当前用于任务状态回写与任务轨道 ingest；未设置时该作用域仍可用 `AUTH_TOKEN`。生成用 `openssl rand -base64 32`，写进服务器 `.env` 后 `docker compose up -d` 重启一次即长期生效（`.env` 不随镜像更新变动，无需每次部署重配）。2026-07-28 前 compose 未转发此变量，`.env` 里配了也不进容器——若 agent 一直在用 master token 即此因，修复后把 agent/脚本侧逐个换成这把,master 从 agent 场景退出 |
 | `ALLOW_UNAUTHENTICATED_DEV` | 否 | 鉴权旁路。设为 `1` 且 `AUTH_TOKEN` 缺失时，放行所有 `/api/*` 并打印一次 warning；生产不要设置。**本仓约定本地开发也不用它**（理由见 §9.1），只留给临时排查 |
 | `ALLOWED_ORIGINS` | 生产必填 | CORS 允许来源白名单，逗号分隔；未配置时所有跨域 `/api/*` 请求会被拒绝（fail-closed） |
 | `MAX_BODY_BYTES` | 否 | `/api/*` 请求体大小上限（字节），默认 `5242880`（5 MB）；超出返回 HTTP 413 |
