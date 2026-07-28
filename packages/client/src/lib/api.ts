@@ -15,7 +15,8 @@ export class ApiError extends Error {
   }
 }
 
-function getApiBase(): string {
+// 同上：拼绝对 asset URL 需要拿到配置的 API base。
+export function getApiBase(): string {
   return safeGetItem(STORAGE_KEYS.apiUrl) || "";
 }
 
@@ -23,7 +24,9 @@ export function buildApiUrl(base: string, path: string): string {
   return `${base.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-function getToken(): string {
+// 导出给需要绕开 apiFetch 的 JSON 封装、直接 fetch 二进制内容的场景复用
+// （例如日记回顾页的 vault 图片：拿 Bearer token 直连 <img> 会 401，需自行 fetch 转 blob）。
+export function getToken(): string {
   return safeGetItem(STORAGE_KEYS.apiToken) || "";
 }
 
