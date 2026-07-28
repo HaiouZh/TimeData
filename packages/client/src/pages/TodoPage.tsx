@@ -257,11 +257,15 @@ export function TodoPage() {
   const closeDetail = () => {
     setDetailId(null);
     if (!taskIdParam) return;
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete("taskId");
-      return next;
-    });
+    // replace 而非 push：关抽屉不该多一条历史，否则手机返回键会把抽屉重新弹开。
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("taskId");
+        return next;
+      },
+      { replace: true },
+    );
   };
   const openProject = (goalId: string) =>
     setRevealGoals((prev) => (prev.includes(goalId) ? prev : [...prev, goalId]));
