@@ -393,7 +393,8 @@ function ProjectGroupCard({
               {createError && <p className="mt-1 td-text-caption text-danger">{createError}</p>}
             </div>
           )}
-          <div className="todo-project-group-body overflow-y-auto px-1.5 pb-1.5">{children}</div>
+          {/* 组内容区退回页面底色：行自带 bg-surface，与卡片同色时行缝隐形、子项糊成一块（其他区域的行铺在 bg-page 上才有分割感）。 */}
+          <div className="todo-project-group-body mx-1.5 mb-1.5 overflow-y-auto rounded-ctl bg-page p-1.5">{children}</div>
         </>
       )}
     </div>
