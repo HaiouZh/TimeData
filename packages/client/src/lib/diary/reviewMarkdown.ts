@@ -17,9 +17,18 @@ const NON_IMAGE_EMBED_RE = /!\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g;
 // ③ 普通内部链接：[[页面]] / [[页面|别名]] → 纯文本（取别名或原名）。
 const WIKILINK_RE = /\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g;
 
+/**
+ * vault 相对路径 → 可安全嵌进 markdown / query 的编码形式：逐段 encodeURIComponent，
+ * `/` 保留原样（它在 query value 里合法）。不编码的话 `![[我的 照片.png]]` 生成的
+ * `![](td-asset:我的 照片.png)` 会在空格处断开，图片直接丢失。
+ */
+export function encodeAssetPath(relPath: string): string {
+  return relPath.split("/").map(encodeURIComponent).join("/");
+}
+
 export function preprocessDiaryMarkdown(content: string): string {
   let result = content.replace(IMAGE_EMBED_RE, (_match, path: string, alias: string | undefined) => {
-    return `![${alias ?? ""}](td-asset:${path})`;
+    return `![${alias ?? ""}](td-asset:${encodeAssetPath(path)})`;
   });
 
   result = result.replace(NON_IMAGE_EMBED_RE, (_match, path: string, alias: string | undefined) => {
