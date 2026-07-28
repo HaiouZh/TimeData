@@ -21,6 +21,9 @@ covers:
   - packages/server/src/lib/knownIps.ts
   - packages/server/src/routes/admin/totp.ts
   - packages/client/src/lib/totpChallenge.ts
+  - packages/client/src/components/TotpPromptDialog.tsx
+  - packages/client/src/pages/settings/SettingsTotpSection.tsx
+  - packages/client/src/lib/adminNewIps.ts
 contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
@@ -90,11 +93,20 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 ## TOTP 危险操作锁
 
-绑定 TOTP(RFC 6238,Google Authenticator 兼容)后,以下操作必须携带 `X-TOTP-Code` 头(当期 6 位码或 `xxxx-xxxx` 恢复码):`GET /api/export`、`/api/data/*` 重置、`POST /api/sync/force-push/prepare`、`DELETE /api/admin/backups/:id`、备份配置写入。判断标准:一次性带走大量隐私 / 改变防线本身 / 不可逆毁数据。`/api/update` 刻意不锁——它只能触发 Watchtower 拉服务端环境变量定死的镜像源,滥用上限是骚扰性重启,已有限流覆盖。缺码返回 401 `totp_required`,错码 401 `totp_invalid`;**未绑定时全部放行**(渐进启用)。
+绑定 TOTP(RFC 6238,Google Authenticator 兼容)后,以下操作必须携带 `X-TOTP-Code` 头(当期 6 位码或 `xxxx-xxxx` 恢复码):`GET /api/export`、`/api/data/*` 重置、`POST /api/sync/force-push/prepare`、`DELETE /api/admin/backups/:id`、备份配置写入。判断标准:一次性带走大量隐私 / 改变防线本身 / 不可逆毁数据。
+
+两条按请求体内容分流的闸(不是路由级中间件,需读完 body 才知道该不该拦,统一走 `middleware/totp.ts` 导出的 `verifyTotpForRequest`):
+
+- **全量 pull**——`POST /api/sync/pull` 的 `sinceSeq` 为 `0`/`null` 时等价于一次性导出全部数据,必须验码;`sinceSeq > 0` 的增量同步照常放行,零打扰。参数 schema 校验先于此闸,故缺 `sinceSeq` 键仍是 400。
+- **批量删除 push**——`POST /api/sync/push` 的 `changes` 中 `action === "delete"` 条数超过 `PUSH_BULK_DELETE_TOTP_THRESHOLD`(50)时要求验码。闸在幂等回放命中之后、实际 apply 之前:重放命中只回放缓存响应,不再验码。被拦时写 `sync_logs` 的 `push_bulk_delete_totp_blocked` / `pull_full_totp_blocked`。
+
+`/api/update` 刻意不锁——它只能触发 Watchtower 拉服务端环境变量定死的镜像源,滥用上限是骚扰性重启,已有限流覆盖。缺码返回 401 `totp_required`,错码 401 `totp_invalid`;**未绑定时全部放行**(渐进启用)。
 
 绑定走 `/api/admin/totp`(master-only):`setup` 生成密钥与 10 个一次性恢复码(只下发这一次,恢复码只存 sha256 哈希),`confirm` 验码落库,`disable` 需当期码或恢复码。密钥存服务端 SQLite `totp_config` 单行表。
 
 防锁死三层:①绑定时同一二维码扫进至少两处(手机验证器 + 电脑验证器/密码管理器);②恢复码存入密码管理器;③**服务器逃生舱**——SSH 登服务器后对业务库执行 `DELETE FROM totp_config; DELETE FROM totp_recovery_codes;` 并重启容器,即回到未绑定语义可重新绑定。攻击者只持有 API token 上不了服务器,此通道仅属于运维者。
+
+客户端弹码链路在 `lib/totpChallenge.ts`:先裸调,遇 401 `totp_required` 才弹码重试(最多 3 次)。`sync/engine.ts` 的全量 pull(`fetchSyncPullResponse` 判 `sinceSeq` falsy)与全部 push(`submitPushBatch`,批量删除闸触发时才会真弹码,requestId 不变故重试仍幂等)均包在其中。弹窗宿主 `TotpPromptDialog` 挂在 App 根部,以模块级 setter 注册命令式 prompt;绑定/停用界面在 `SettingsTotpSection`。用户在弹码框点取消抛 `TotpCancelledError` 而非原始 401,调用方据此静默收敛——取消不是失败,不显示错误文案。
 
 密钥纪律(零代码防线):master `AUTH_TOKEN` 只存自己设备的客户端,绝不进对话记录、脚本配置或公开平台;一切 agent/脚本场合只用窄域 `AGENT_TOKEN`。
 
