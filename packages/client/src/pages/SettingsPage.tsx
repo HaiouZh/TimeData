@@ -338,6 +338,12 @@ export default function SettingsPage() {
           subtitle="调整统计模块显示与顺序"
         />
         <SettingsRow
+          to="/settings/todo-stats-layout"
+          icon={<Icon icon={ChartBar} size={20} />}
+          title="待办统计布局"
+          subtitle="调整待办统计模块显示与顺序"
+        />
+        <SettingsRow
           to="/settings/health-range"
           icon={<Icon icon={ChartBar} size={20} />}
           title="健康范围"
