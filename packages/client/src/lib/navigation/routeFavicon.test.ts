@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MAIN_NAV_ITEMS } from "./navRegistry.js";
 import { faviconDataUriForPath } from "./routeFavicon.js";
 
 function decode(uri: string | null): string {
@@ -29,4 +30,13 @@ describe("faviconDataUriForPath", () => {
     expect(svg).toContain('rx="56"');
     expect(svg).toContain('viewBox="0 0 256 256"');
   });
+
+  // ICON_PATHS 是手抄的字形常量，导航新增/改名图标时全靠人记得同步；
+  // 漏了的话 faviconDataUriForPath 静默返回 null（标签页悄悄退回默认图标）。
+  it.each(MAIN_NAV_ITEMS.map((item) => [item.to, item.iconName]))(
+    "%s 的图标 %s 在 ICON_PATHS 里有命中",
+    (to, _iconName) => {
+      expect(faviconDataUriForPath(to)).not.toBeNull();
+    },
+  );
 });

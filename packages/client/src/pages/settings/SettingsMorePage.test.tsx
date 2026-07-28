@@ -2,6 +2,7 @@
 import { createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CONFIGURABLE_TABS } from "../../lib/settings/navVisibleTabsSetting.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsMorePage from "./SettingsMorePage.js";
 
@@ -37,7 +38,8 @@ describe("SettingsMorePage", () => {
   });
 
   it("shows an empty state when every configurable route is in the bottom bar", async () => {
-    visibleTabsMock.value = ["/quick-notes", "/", "/todo", "/tracks", "/goals", "/stats/time", "/stats/health"];
+    // 取全量清单而非手抄一份：新增可配置标签（如 /diary）时不会静默漏项
+    visibleTabsMock.value = [...CONFIGURABLE_TABS];
     const { host, root } = await renderPage();
 
     expect(host.textContent).toContain("所有功能都已显示在手机底栏");
