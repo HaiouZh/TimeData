@@ -219,13 +219,13 @@ function NewIpAlertCard({
   if (newIps.length === 0) return null;
   return (
     <div className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
-      <div className="text-sm font-medium text-warn">{NEW_IP_ALERT_TITLE}</div>
-      <p className="text-xs text-ink-2">{NEW_IP_ALERT_HINT}</p>
+      <div className="td-text-body font-medium text-warn">{NEW_IP_ALERT_TITLE}</div>
+      <p className="td-text-caption text-ink-2">{NEW_IP_ALERT_HINT}</p>
       <div className="space-y-2">
         {newIps.map((item) => (
           <div
             key={`${item.tokenTier}:${item.ip}`}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2"
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-ink">
@@ -348,8 +348,8 @@ function RequestAuditSection({
             key={log.id}
             className={
               log.isNewIp
-                ? "rounded-ctl border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-ink-2"
-                : "rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2"
+                ? "rounded-ctl border border-warn/40 bg-warn-soft px-3 py-2 td-text-caption text-ink-2"
+                : "rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2"
             }
           >
             <div className="flex flex-wrap items-center gap-2 text-ink">
@@ -701,7 +701,7 @@ export default function SettingsAdminInsightsPage() {
                   {data.sync.recentIssues.map((issue) => (
                     <div
                       key={`${issue.logId}:${issue.tableName}:${issue.localRecordId}`}
-                      className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2"
+                      className="rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2"
                     >
                       <div className="flex flex-wrap items-center gap-2 text-ink-2">
                         <span>
@@ -723,7 +723,7 @@ export default function SettingsAdminInsightsPage() {
               )}
               <div className="space-y-2">
                 {data.sync.logs.slice(0, 5).map((log) => (
-                  <div key={log.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">
+                  <div key={log.id} className="rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2">
                     <div className="text-ink-2">
                       {log.action} · {log.device ?? "unknown"} · {log.recordCount} 条
                     </div>
@@ -826,7 +826,7 @@ export default function SettingsAdminInsightsPage() {
               {backupActionStatus && <div className="td-text-caption text-ink-3">{backupActionStatus}</div>}
               <div className="space-y-2">
                 {data.backups.backups.slice(0, 8).map((backup) => (
-                <div key={backup.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">
+                <div key={backup.id} className="rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2">
                   <div className="flex flex-wrap items-center gap-2 text-ink-2">
                     <span className="truncate">{backup.fileName}</span>
                     {backup.protected && <SyncIssueBadge label="受保护" />}

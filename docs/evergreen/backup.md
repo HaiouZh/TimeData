@@ -38,6 +38,8 @@ TimeData 现有三种备份/可恢复文件：
 
 设备端第四层"自动滚动备份"（Dexie `autoBackups` 表）已于 2026-07-02 整层退役，见 §5 与 [ADR 0015](../adr/0015-remove-client-auto-snapshots.md)。
 
+服务端备份的删除（`DELETE /api/admin/backups/:id`）与备份配置写入在绑定 TOTP 后需携带 `X-TOTP-Code`，设置页会自动弹码重试；机制与锁定清单见 [安全与凭据处理](security.md) 的「TOTP 危险操作锁」。
+
 ## 1. Backup JSON 格式
 
 当前唯一格式：`"format": "timedata.backup"`（常量在 `packages/client/src/backup/schema.ts`）。Backup 只接受 UTC 时间：`timeFormat` 必须是 `"utc"`，`timeEntries` 中的 `startTime` / `endTime` 也必须是带 `Z` 的 UTC ISO 字符串。

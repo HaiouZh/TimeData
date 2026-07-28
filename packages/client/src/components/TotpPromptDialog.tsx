@@ -58,7 +58,7 @@ export function TotpPromptDialog() {
           submit();
         }}
       >
-        {pending.retry && <p className="text-sm text-danger">{messages.totp.promptRetry}</p>}
+        {pending.retry && <p className="td-text-body text-danger">{messages.totp.promptRetry}</p>}
         <input
           autoFocus
           type="text"
@@ -73,14 +73,14 @@ export function TotpPromptDialog() {
           <button
             type="button"
             onClick={() => settle(null)}
-            className="min-h-11 rounded-ctl border border-border px-4 text-sm text-ink"
+            className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-ink"
           >
             {messages.totp.promptCancel}
           </button>
           <button
             type="submit"
             disabled={!code.trim()}
-            className="min-h-11 rounded-ctl bg-accent-strong px-4 text-sm text-page disabled:opacity-50"
+            className="min-h-11 rounded-ctl bg-accent-strong px-4 td-text-label text-page disabled:opacity-50"
           >
             {messages.dialog.confirm}
           </button>

@@ -4,7 +4,7 @@ import { confirmTotp, disableTotp, fetchTotpStatus, setupTotp, type TotpSetupRes
 import { messages } from "../../lib/messages.ts";
 
 const primaryButtonClassName =
-  "rounded-ctl bg-accent px-4 py-2 text-sm font-medium text-page hover:bg-accent-strong disabled:opacity-40";
+  "rounded-ctl bg-accent px-4 py-2 td-text-label text-page hover:bg-accent-strong disabled:opacity-40";
 const secondaryButtonClassName =
   "rounded-ctl border border-border bg-surface-elevated px-3 py-2 td-text-label text-ink hover:bg-surface-hover disabled:opacity-40";
 const dangerButtonClassName =
@@ -97,16 +97,16 @@ export default function SettingsTotpSection() {
 
   return (
     <section className="space-y-3 rounded-card border border-border bg-surface p-4">
-      <h3 className="text-sm font-medium text-ink-2">{totpMessages.sectionTitle}</h3>
-      <p className="text-xs text-ink-3">{totpMessages.sectionIntro}</p>
+      <h3 className="td-text-body font-medium text-ink-2">{totpMessages.sectionTitle}</h3>
+      <p className="td-text-caption text-ink-3">{totpMessages.sectionIntro}</p>
 
       {statusError && (
-        <div className="rounded-ctl border border-danger/40 bg-danger-soft p-3 text-sm text-danger">{statusError}</div>
+        <div className="rounded-ctl border border-danger/40 bg-danger-soft p-3 td-text-body text-danger">{statusError}</div>
       )}
 
       {enrolled === false && !pending && (
         <div className="space-y-2">
-          <div className="text-sm text-ink-2">{totpMessages.statusDisabled}</div>
+          <div className="td-text-body text-ink-2">{totpMessages.statusDisabled}</div>
           <button type="button" disabled={busy} onClick={() => void handleSetup()} className={primaryButtonClassName}>
             {totpMessages.enableButton}
           </button>
@@ -115,29 +115,29 @@ export default function SettingsTotpSection() {
 
       {pending && (
         <div className="space-y-3">
-          <p className="text-sm text-warn">{totpMessages.scanHint}</p>
+          <p className="td-text-body text-warn">{totpMessages.scanHint}</p>
           {qrDataUrl && (
             <img src={qrDataUrl} alt="TOTP 绑定二维码" className="h-44 w-44 rounded-ctl border border-border bg-page p-2" />
           )}
           <div className="space-y-1">
-            <div className="text-xs text-ink-3">{totpMessages.secretLabel}</div>
-            <code className="block break-all rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink">
+            <div className="td-text-caption text-ink-3">{totpMessages.secretLabel}</div>
+            <code className="block break-all rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink">
               {pending.secret}
             </code>
           </div>
           <div className="space-y-1">
-            <div className="text-xs text-ink-3">{totpMessages.recoveryCodesLabel}</div>
+            <div className="td-text-caption text-ink-3">{totpMessages.recoveryCodesLabel}</div>
             <div className="grid grid-cols-2 gap-1 rounded-ctl bg-surface-elevated p-3">
               {pending.recoveryCodes.map((code) => (
-                <code key={code} className="text-xs text-ink">
+                <code key={code} className="td-text-caption text-ink">
                   {code}
                 </code>
               ))}
             </div>
-            <p className="text-xs text-warn">{totpMessages.recoveryCodesOnce}</p>
-            <p className="text-xs text-ink-3">{totpMessages.recoveryCodesLost}</p>
+            <p className="td-text-caption text-warn">{totpMessages.recoveryCodesOnce}</p>
+            <p className="td-text-caption text-ink-3">{totpMessages.recoveryCodesLost}</p>
           </div>
-          <label className="block space-y-1 text-xs text-ink-3">
+          <label className="block space-y-1 td-text-caption text-ink-3">
             {totpMessages.confirmInputLabel}
             <input
               aria-label="确认绑定动态码"
@@ -150,7 +150,7 @@ export default function SettingsTotpSection() {
               className={inputClassName}
             />
           </label>
-          {confirmError && <div className="text-sm text-danger">{confirmError}</div>}
+          {confirmError && <div className="td-text-body text-danger">{confirmError}</div>}
           <button
             type="button"
             disabled={busy || !confirmCode}
@@ -164,7 +164,7 @@ export default function SettingsTotpSection() {
 
       {enrolled === true && (
         <div className="space-y-2">
-          <div className="text-sm text-ink-2">{totpMessages.statusEnabled}</div>
+          <div className="td-text-body text-ink-2">{totpMessages.statusEnabled}</div>
           {!disabling && (
             <button type="button" disabled={busy} onClick={() => setDisabling(true)} className={secondaryButtonClassName}>
               {totpMessages.disableButton}
@@ -172,7 +172,7 @@ export default function SettingsTotpSection() {
           )}
           {disabling && (
             <div className="space-y-2">
-              <label className="block space-y-1 text-xs text-ink-3">
+              <label className="block space-y-1 td-text-caption text-ink-3">
                 {totpMessages.disableInputLabel}
                 <input
                   aria-label="停用动态码"
@@ -185,7 +185,7 @@ export default function SettingsTotpSection() {
                   className={inputClassName}
                 />
               </label>
-              {disableError && <div className="text-sm text-danger">{disableError}</div>}
+              {disableError && <div className="td-text-body text-danger">{disableError}</div>}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
