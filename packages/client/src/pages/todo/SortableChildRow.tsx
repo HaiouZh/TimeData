@@ -337,9 +337,20 @@ export function NewChildRow({ onResolve }: NewChildRowProps) {
     }
   }
 
+  // ↵ 按钮与回车同路径：提交后保持草稿行连续录入；空标题走宿主空分支收起，与空回车一致。
+  function submitByButton(): void {
+    const value = draft;
+    setDraft("");
+    autoGrow(ref.current);
+    onResolve(value, "enter");
+  }
+
   return (
     <li className="group flex items-start gap-1">
-      <div className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-1 py-0.5">
+      <div
+        data-testid="child-create-draft-row"
+        className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-1 py-0.5 ring-2 ring-inset ring-accent"
+      >
         {/* 占位与已有子任务行的复选框对齐 */}
         <span aria-hidden="true" className="mt-1.5 h-4 w-4 shrink-0" />
         <textarea
@@ -354,8 +365,19 @@ export function NewChildRow({ onResolve }: NewChildRowProps) {
           }}
           onBlur={() => onResolve(draft, "blur")}
           onKeyDown={handleKey}
-          className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm text-ink outline-none focus:bg-surface-hover"
+          className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm text-ink outline-none"
         />
+        <button
+          type="button"
+          aria-label="提交新子任务"
+          title="提交（回车）"
+          // pointerdown 阻断失焦：避免「点按钮先触发 blur 提交、click 再提交一次」
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={submitByButton}
+          className="my-0.5 flex h-6 w-7 shrink-0 items-center justify-center self-start rounded-ctl bg-accent text-white"
+        >
+          ↵
+        </button>
       </div>
     </li>
   );

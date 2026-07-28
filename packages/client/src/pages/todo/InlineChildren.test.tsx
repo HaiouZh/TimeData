@@ -576,4 +576,39 @@ describe("InlineChildren mode 行为矩阵", () => {
 
     await unmount(root);
   });
+
+  it("子任务草稿行点 ↵：提交并保持草稿行连续录入", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+    await clickAdd(host);
+
+    const draft = draftInput(host) as HTMLTextAreaElement;
+    await typeIntoTextarea(draft, "新子项");
+    await act(async () => {
+      (host.querySelector('button[aria-label="提交新子任务"]') as HTMLButtonElement).dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+    await settle();
+
+    const children = await db.tasks.where("parentId").equals(parent.id).toArray();
+    expect(children.length).toBe(3);
+    expect(children.some((c) => c.title === "新子项")).toBe(true);
+    expect(draftInput(host)).not.toBeNull();
+    expect(draftInput(host)?.value).toBe("");
+
+    await unmount(root);
+  });
+
+  it("子任务草稿行带 accent 描边", async () => {
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderChildren(parent.id, "draggable");
+    await clickAdd(host);
+
+    const row = host.querySelector('[data-testid="child-create-draft-row"]');
+    expect(row).not.toBeNull();
+    expect(row?.className).toContain("ring-accent");
+
+    await unmount(root);
+  });
 });
