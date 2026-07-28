@@ -153,29 +153,39 @@ diary.post("/batch", async (c) => {
   if (!template) return c.json({ error: "diary-no-template" }, 409);
   const weeklyTemplate = getServerConfig(WEEKLY_TEMPLATE_KEY) || null;
 
-  // 批量读是「尽力而为」：单个文件的 ENOENT/EISDIR/权限问题不该掀掉整次请求，一律当「无内容」。
+  // 批量读分级：文件不存在是常态（降级为「无内容」）；权限类是整个 vault 坏了，
+  // 必须给出信号（503，与写路径/asset 同款），否则 40 天会安静地全渲染成「无内容」。
   const readOne = (file: string) => {
     try {
       return { exists: true, content: fs.readFileSync(file, "utf8") };
-    } catch {
-      return { exists: false, content: "" };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, content: "" };
+      throw err;
     }
   };
-  // 路径解析本身也可能抛（模板越界 / 某段是指向 vault 外的 symlink），同样降级为「无内容」。
+  // 路径解析本身也可能抛（模板越界 / 某段是指向 vault 外的 symlink）：那是单条路径的问题，
+  // 降级为「无内容」；文件系统 errno（带 code）继续上抛，由下面统一分级。
   const readResolved = (resolve: () => string) => {
     try {
       return readOne(resolve());
-    } catch {
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code) throw err;
       return { exists: false, content: "" };
     }
   };
   const dateMap: Record<string, { exists: boolean; content: string }> = {};
-  for (const d of dates as string[]) dateMap[d] = readResolved(() => resolveDiaryFile(root, template, d));
   const weekMap: Record<string, { exists: boolean; content: string }> = {};
-  for (const w of weeks as string[]) {
-    weekMap[w] = weeklyTemplate
-      ? readResolved(() => resolveWeeklyFile(root, weeklyTemplate, w))
-      : { exists: false, content: "" };
+  try {
+    for (const d of dates as string[]) dateMap[d] = readResolved(() => resolveDiaryFile(root, template, d));
+    for (const w of weeks as string[]) {
+      weekMap[w] = weeklyTemplate
+        ? readResolved(() => resolveWeeklyFile(root, weeklyTemplate, w))
+        : { exists: false, content: "" };
+    }
+  } catch (err) {
+    const response = vaultReadError(err) ?? vaultWriteError(err);
+    if (response) return response;
+    throw err;
   }
   return c.json({ dates: dateMap, weeks: weekMap, weeklyConfigured: weeklyTemplate !== null });
 });

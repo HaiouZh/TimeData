@@ -212,6 +212,22 @@ describe("diary batch", () => {
     expect(body.weeks["2026-W28"]).toEqual({ exists: true, content: "week content" });
   });
 
+  it("单个文件不存在只降级为无内容，vault 权限坏掉则整次 503（不安静地全报无内容）", async () => {
+    await putConfig();
+    // ENOENT：常态，降级
+    const missing = await postBatch({ dates: ["2026-07-09"], weeks: [] });
+    expect(missing.status).toBe(200);
+    expect((await missing.json()).dates["2026-07-09"]).toEqual({ exists: false, content: "" });
+
+    // EACCES：整个 vault 读不了，必须给信号
+    vi.spyOn(fs, "readFileSync").mockImplementation(() => {
+      throw Object.assign(new Error("denied"), { code: "EACCES" });
+    });
+    const denied = await postBatch({ dates: ["2026-07-09", "2026-07-10"], weeks: [] });
+    expect(denied.status).toBe(503);
+    expect((await denied.json()).error).toBe("diary-vault-not-readable");
+  });
+
   it("vault 未挂载 503，日模板未配置 409", async () => {
     delete process.env.DIARY_VAULT_DIR;
     expect((await postBatch({ dates: [], weeks: [] })).status).toBe(503);

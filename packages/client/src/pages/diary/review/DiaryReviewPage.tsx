@@ -252,11 +252,21 @@ export default function DiaryReviewPage() {
           </button>
         </div>
       )}
-      {/* 单块渲染失败（畸形 markdown 等）不掀整页：内容区套 ErrorBoundary。 */}
+      {/* 单块渲染失败（畸形 markdown 等）不掀整页：内容区套 ErrorBoundary。
+          key 随模式/日期/重试变化 → 边界重挂、hasError 复位，换一天就能恢复，
+          否则一次异常会把内容区永久钉死在 fallback 上，只能整页刷新。 */}
       <ErrorBoundary
+        key={`${mode}-${anchor}-${retryNonce}`}
         fallback={(err) => (
-          <div className="min-h-0 flex-1 overflow-y-auto p-3 td-text-body text-danger">
-            这段内容渲染失败：{err.message}
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 td-text-body text-danger">
+            <p>这段内容渲染失败：{err.message}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
+            >
+              重试
+            </button>
           </div>
         )}
       >

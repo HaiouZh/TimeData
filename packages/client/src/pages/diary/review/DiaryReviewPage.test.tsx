@@ -283,6 +283,28 @@ describe("DiaryReviewPage · 错误与异常兜底", () => {
     expect(host.querySelectorAll('a[aria-label^="打开"], a[aria-label^="创建"]')).toHaveLength(10);
   });
 
+  it("异常后换一天能恢复：ErrorBoundary 随 mode/anchor/重试重挂复位", async () => {
+    fetchDiaryBatch.mockResolvedValue({
+      dates: { "2026-07-25": { exists: true, content: "BOOM" } },
+      weeks: {},
+      weeklyConfigured: true,
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { host } = await renderPage();
+    expect(host.textContent).toContain("这段内容渲染失败");
+
+    // 换一天（正常内容）：边界必须复位，否则 hasError 粘住、只能整页刷新才能恢复
+    fetchDiaryBatch.mockResolvedValue({
+      dates: { "2026-07-24": { exists: true, content: "正常内容" } },
+      weeks: {},
+      weeklyConfigured: true,
+    });
+    await click(host.querySelector('button[aria-label="上一段"]'));
+
+    expect(host.textContent).not.toContain("这段内容渲染失败");
+    expect(host.textContent).toContain("正常内容");
+  });
+
   it("单张卡片渲染抛异常时只掀该内容区，页头仍在（ErrorBoundary）", async () => {
     fetchDiaryBatch.mockResolvedValue({
       dates: { "2026-07-25": { exists: true, content: "BOOM" } },
