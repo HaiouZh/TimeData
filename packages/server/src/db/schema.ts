@@ -403,6 +403,19 @@ export function initializeDatabase(): void {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- TOTP 危险操作锁：单行配置(id 恒为 1),secret 为 base32 明文(单机自托管,见 api-key-protection plan)。
+    CREATE TABLE IF NOT EXISTS totp_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      secret TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    -- 恢复码只存 sha256 哈希;used_at 非空即已消费(一次性)。
+    CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+      code_hash TEXT PRIMARY KEY,
+      used_at TEXT
+    );
   `);
 
   ensureQuickNoteSourceColumns(db);
