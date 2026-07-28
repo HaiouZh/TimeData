@@ -5,8 +5,8 @@ export type ReviewMode = "A" | "B" | "C";
 export type ReviewLayoutB = "grid" | "list";
 
 const YEAR_RANGE_DEFAULT = 5;
-const YEAR_RANGE_MIN = 1;
-const YEAR_RANGE_MAX = 10;
+export const YEAR_RANGE_MIN = 1;
+export const YEAR_RANGE_MAX = 10;
 const MODE_DEFAULT: ReviewMode = "A";
 const LAYOUT_B_DEFAULT: ReviewLayoutB = "grid";
 

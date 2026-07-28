@@ -194,4 +194,39 @@ describe("SettingsDiaryPage", () => {
 
     await unmount(root);
   });
+
+  it("清空周记模板可保存成功（留空 = 不显示周记）", async () => {
+    const { host, root } = await renderPage();
+
+    const input = host.querySelector('textarea[name="weeklyTemplate"], input[name="weeklyTemplate"]') as
+      | HTMLTextAreaElement
+      | HTMLInputElement;
+    const nativeValueSetter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(input),
+      "value",
+    )?.set;
+
+    await act(async () => {
+      nativeValueSetter?.call(input, "");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButtons = [...host.querySelectorAll("button")].filter((button) => button.textContent === "保存");
+    await act(async () => {
+      saveButtons[saveButtons.length - 1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushEffects();
+
+    const putCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([url, opts]) =>
+        String(url).endsWith("/api/diary/config") &&
+        opts?.method === "PUT" &&
+        JSON.parse(String(opts?.body)).weeklyTemplate !== undefined,
+    );
+    // 空串必须真的发出去（服务端据此清除配置），且不报错
+    expect(JSON.parse(String(putCall?.[1]?.body))).toEqual({ weeklyTemplate: "" });
+    expect(host.textContent).toContain("模板已保存");
+
+    await unmount(root);
+  });
 });

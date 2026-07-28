@@ -4,8 +4,6 @@ import { formatMonthDay, formatWeekday } from "../../../lib/time.js";
 import DiaryMarkdown from "./DiaryMarkdown.js";
 import ReviewCard from "./ReviewCard.js";
 
-const CARD_MIN_HEIGHT = 160;
-
 interface WeekColumnProps {
   title: string;
   weekKey: string;
@@ -14,16 +12,29 @@ interface WeekColumnProps {
   days: string[];
   entries: Record<string, DiaryBatchEntry>;
   liveToday: string;
+  /** 请求进行中：周记区与日卡都显示加载态，别用「未配置 / 无内容」误报结论。 */
+  loading: boolean;
 }
 
-export default function WeekColumn({ title, weekKey, weekEntry, weeklyConfigured, days, entries, liveToday }: WeekColumnProps) {
+export default function WeekColumn({
+  title,
+  weekKey,
+  weekEntry,
+  weeklyConfigured,
+  days,
+  entries,
+  liveToday,
+  loading,
+}: WeekColumnProps) {
   const weekExists = Boolean(weekEntry?.exists);
 
   return (
     <div className="flex flex-col gap-3">
       <h2 className="td-text-caption font-medium text-ink-2">{title}</h2>
       <div className="rounded-ctl border border-border bg-surface px-3 py-2">
-        {!weeklyConfigured ? (
+        {loading ? (
+          <p className="td-text-caption text-ink-3">加载中…</p>
+        ) : !weeklyConfigured ? (
           <p className="td-text-caption text-ink-3">
             未配置周记路径模板，去{" "}
             <Link to="/settings/diary" className="text-accent-ink underline">
@@ -44,8 +55,7 @@ export default function WeekColumn({ title, weekKey, weekEntry, weeklyConfigured
             date={date}
             label={`${formatMonthDay(date)}${formatWeekday(date)}`}
             entry={entries[date]}
-            loading={false}
-            minHeight={CARD_MIN_HEIGHT}
+            loading={loading}
             future={date > liveToday}
           />
         ))}

@@ -1,6 +1,7 @@
 import { ArrowLeft, CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { ErrorBoundary } from "../../../components/ErrorBoundary.js";
 import { Icon } from "../../../components/Icon.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
@@ -14,13 +15,14 @@ import {
   type ReviewMode,
   setReviewLayoutB,
   setReviewMode,
+  setReviewYearRange,
+  YEAR_RANGE_MAX,
+  YEAR_RANGE_MIN,
 } from "../../../lib/diary/reviewPrefs.js";
 import { addDays, formatMonthDay, formatWeekday, getDateString } from "../../../lib/time.js";
 import { useIsWideScreen } from "../../../lib/useIsWideScreen.js";
 import ReviewCard from "./ReviewCard.js";
 import WeekColumn from "./WeekColumn.js";
-
-const CARD_MIN_HEIGHT = 160;
 
 const MODE_LABELS: Record<ReviewMode, string> = {
   A: "今天",
@@ -48,7 +50,9 @@ export default function DiaryReviewPage() {
 
   const [mode, setMode] = useState<ReviewMode>(() => getReviewMode());
   const [layoutB, setLayoutB] = useState<ReviewLayoutB>(() => getReviewLayoutB());
-  const yearRange = getReviewYearRange();
+  // state 而非每次渲染重读 localStorage：改年数要能触发 effect 重发 batch（否则新增
+  // 那几年的卡片永远停在无数据）。
+  const [yearRange, setYearRange] = useState<number>(() => getReviewYearRange());
 
   const liveToday = getDateString(useNowMinute());
   // 回顾页只读，无跨天丢稿问题，followAnchor 直接传实时今天即可。
@@ -101,8 +105,7 @@ export default function DiaryReviewPage() {
     return () => {
       cancelled = true;
     };
-    // biome-ignore lint: yearRange 来自 localStorage，非响应式 state，不需要作为依赖跟踪
-  }, [mode, anchor, retryNonce]);
+  }, [mode, anchor, retryNonce, yearRange]);
 
   function handleModeChange(next: ReviewMode) {
     setMode(next);
@@ -129,6 +132,13 @@ export default function DiaryReviewPage() {
 
   function handleRetry() {
     setRetryNonce((n) => n + 1);
+  }
+
+  function handleYearRangeChange(next: number) {
+    if (!Number.isFinite(next)) return;
+    const clamped = Math.min(YEAR_RANGE_MAX, Math.max(YEAR_RANGE_MIN, Math.trunc(next)));
+    setYearRange(clamped);
+    setReviewYearRange(clamped);
   }
 
   function toggleLayoutB() {
@@ -202,6 +212,20 @@ export default function DiaryReviewPage() {
               回到今天
             </button>
           )}
+          {mode === "A" && (
+            <label className="flex items-center gap-1 rounded-pill border border-border bg-surface px-3 py-1 td-text-caption text-ink-2">
+              显示年份数
+              <input
+                type="number"
+                aria-label="显示年份数"
+                min={YEAR_RANGE_MIN}
+                max={YEAR_RANGE_MAX}
+                value={yearRange}
+                onChange={(event) => handleYearRangeChange(Number(event.target.value))}
+                className="w-12 bg-transparent td-text-caption text-ink focus:outline-none"
+              />
+            </label>
+          )}
           {mode === "B" && wide && (
             <button
               type="button"
@@ -215,7 +239,8 @@ export default function DiaryReviewPage() {
         </div>
       </header>
 
-      {error ? (
+      {/* 错误条叠加在内容之上，不替换内容区：batch 失败时已有卡片继续可读。 */}
+      {error && (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger-soft px-4 py-2 td-text-body text-danger">
           <span className="flex-1">{error}</span>
           <button
@@ -226,7 +251,15 @@ export default function DiaryReviewPage() {
             重试
           </button>
         </div>
-      ) : (
+      )}
+      {/* 单块渲染失败（畸形 markdown 等）不掀整页：内容区套 ErrorBoundary。 */}
+      <ErrorBoundary
+        fallback={(err) => (
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 td-text-body text-danger">
+            这段内容渲染失败：{err.message}
+          </div>
+        )}
+      >
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {mode === "A" && modeA && (
             <div className={wide ? "grid grid-cols-[1fr_auto_1fr]" : "grid grid-cols-1"}>
@@ -239,7 +272,6 @@ export default function DiaryReviewPage() {
                       label={yearLabel(date)}
                       entry={batch?.dates[date]}
                       loading={loading}
-                      minHeight={CARD_MIN_HEIGHT}
                     />
                   ))}
               </div>
@@ -252,7 +284,6 @@ export default function DiaryReviewPage() {
                     label={yearLabel(date)}
                     entry={batch?.dates[date]}
                     loading={loading}
-                    minHeight={CARD_MIN_HEIGHT}
                   />
                 ))}
               </div>
@@ -271,27 +302,26 @@ export default function DiaryReviewPage() {
                   label={monthDayWeekdayLabel(date)}
                   entry={batch?.dates[date]}
                   loading={loading}
-                  minHeight={CARD_MIN_HEIGHT}
                 />
               ))}
             </div>
           )}
           {mode === "C" && (() => {
             const { lastWeek, thisWeek } = modeCDates(anchor);
-            return (
-              <div className={wide ? "grid grid-cols-[1fr_auto_1fr]" : "grid grid-cols-1"}>
-                {wide && (
-                  <WeekColumn
-                    title="上周"
-                    weekKey={lastWeek.key}
-                    weekEntry={batch?.weeks[lastWeek.key]}
-                    weeklyConfigured={batch?.weeklyConfigured ?? false}
-                    days={lastWeek.days}
-                    entries={batch?.dates ?? {}}
-                    liveToday={liveToday}
-                  />
-                )}
-                {wide && <div className="mx-1 w-px bg-border" />}
+            const columns = {
+              last: (
+                <WeekColumn
+                  title="上周"
+                  weekKey={lastWeek.key}
+                  weekEntry={batch?.weeks[lastWeek.key]}
+                  weeklyConfigured={batch?.weeklyConfigured ?? false}
+                  days={lastWeek.days}
+                  entries={batch?.dates ?? {}}
+                  liveToday={liveToday}
+                  loading={loading}
+                />
+              ),
+              this: (
                 <WeekColumn
                   title="本周"
                   weekKey={thisWeek.key}
@@ -300,12 +330,27 @@ export default function DiaryReviewPage() {
                   days={thisWeek.days}
                   entries={batch?.dates ?? {}}
                   liveToday={liveToday}
+                  loading={loading}
                 />
+              ),
+            };
+            // 宽屏：左上周 / 右本周。窄屏：单栏纵向，本周在前、上周在后——
+            // spec 是「本周在前」的排序要求，不是「只留本周」（那条只写给模式 A）。
+            return wide ? (
+              <div className="grid grid-cols-[1fr_auto_1fr]">
+                {columns.last}
+                <div className="mx-1 w-px bg-border" />
+                {columns.this}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {columns.this}
+                {columns.last}
               </div>
             );
           })()}
         </div>
-      )}
+      </ErrorBoundary>
     </div>
   );
 }
