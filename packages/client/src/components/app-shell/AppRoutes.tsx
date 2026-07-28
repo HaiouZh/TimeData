@@ -28,11 +28,13 @@ const SettingsNavPage = lazy(() =>
 const SettingsServerPage = lazy(() => import("../../pages/settings/SettingsServerPage.tsx"));
 const SettingsStatsLayoutPage = lazy(() => import("../../pages/settings/SettingsStatsLayoutPage.tsx"));
 const SettingsTodoGravityPage = lazy(() => import("../../pages/settings/SettingsTodoGravityPage.tsx"));
+const SettingsTodoStatsLayoutPage = lazy(() => import("../../pages/settings/SettingsTodoStatsLayoutPage.tsx"));
 const SettingsTracksPage = lazy(() =>
   import("../../pages/settings/SettingsTracksPage.tsx").then((m) => ({ default: m.SettingsTracksPage })),
 );
 const TimeStatsPage = lazy(() => import("../../pages/TimeStatsPage.tsx"));
 const TodoPage = lazy(() => import("../../pages/TodoPage.tsx").then((m) => ({ default: m.TodoPage })));
+const TodoStatsPage = lazy(() => import("../../pages/TodoStatsPage.tsx"));
 const TrackDetailPage = lazy(() => import("../../pages/tracks/TrackDetailPage.tsx"));
 const TracksListPage = lazy(() => import("../../pages/tracks/TracksListPage.tsx"));
 const TracksShell = lazy(() => import("../../pages/tracks/TracksShell.tsx"));
@@ -56,6 +58,7 @@ export function AppRoutes() {
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/stats/time" element={<TimeStatsPage />} />
       <Route path="/stats/health" element={<HealthStatsPage />} />
+      <Route path="/stats/todo" element={<TodoStatsPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/settings/categories" element={<SettingsCategoriesPage />} />
       <Route path="/settings/categories/:id" element={<SettingsCategoryDetailPage />} />
@@ -71,6 +74,7 @@ export function AppRoutes() {
       <Route path="/settings/garmin" element={<SettingsGarminPage />} />
       <Route path="/settings/diary" element={<SettingsDiaryPage />} />
       <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />
+      <Route path="/settings/todo-stats-layout" element={<SettingsTodoStatsLayoutPage />} />
       <Route path="/dev/styleguide" element={<StyleguidePage />} />
     </Routes>
   );
