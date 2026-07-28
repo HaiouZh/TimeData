@@ -22,14 +22,11 @@ vi.mock("../../pages/goals/GoalsListPage.tsx", () => ({ default: () => createEle
 vi.mock("../../pages/goals/GoalDetailPage.tsx", () => ({ default: () => createElement("div", null, "目标详情") }));
 vi.mock("../../pages/StatsPage.tsx", () => ({ default: () => createElement("div", null, "统计入口") }));
 vi.mock("../../pages/TimeStatsPage.tsx", () => ({ default: () => createElement("div", null, "时间统计") }));
-vi.mock("../../pages/HealthStatsPage.tsx", () => ({ default: () => createElement("div", null, "健康统计") }));
 vi.mock("../../pages/SettingsPage.tsx", () => ({ default: () => createElement("div", null, "设置首页") }));
 vi.mock("../../pages/settings/SettingsAdminInsightsPage.tsx", () => ({ default: () => createElement("div", null, "后台洞察") }));
 vi.mock("../../pages/settings/SettingsCategoriesPage.tsx", () => ({ default: () => createElement("div", null, "分类设置") }));
 vi.mock("../../pages/settings/SettingsCategoryDetailPage.tsx", () => ({ default: () => createElement("div", null, "分类详情") }));
 vi.mock("../../pages/settings/SettingsDataPage.tsx", () => ({ default: () => createElement("div", null, "数据设置") }));
-vi.mock("../../pages/settings/SettingsGarminPage.tsx", () => ({ default: () => createElement("div", null, "Garmin 设置") }));
-vi.mock("../../pages/settings/SettingsHealthRangePage.tsx", () => ({ default: () => createElement("div", null, "健康范围") }));
 vi.mock("../../pages/settings/SettingsInsightsPage.tsx", () => ({ default: () => createElement("div", null, "洞察设置") }));
 vi.mock("../../pages/settings/SettingsNavPage.tsx", () => ({ SettingsNavPage: () => createElement("div", null, "导航设置") }));
 vi.mock("../../pages/settings/SettingsServerPage.tsx", () => ({ default: () => createElement("div", null, "服务端设置") }));

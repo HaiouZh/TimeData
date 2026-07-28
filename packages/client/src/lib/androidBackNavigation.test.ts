@@ -9,17 +9,11 @@ describe("resolveAndroidBackAction", () => {
     expect(resolveAndroidBackAction("/settings/nav")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/tracks")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/insights")).toEqual({ type: "navigate", to: "/settings", replace: true });
-    expect(resolveAndroidBackAction("/settings/health-range")).toEqual({
-      type: "navigate",
-      to: "/settings",
-      replace: true,
-    });
     expect(resolveAndroidBackAction("/settings/stats-layout")).toEqual({
       type: "navigate",
       to: "/settings",
       replace: true,
     });
-    expect(resolveAndroidBackAction("/settings/garmin")).toEqual({ type: "navigate", to: "/settings", replace: true });
     expect(resolveAndroidBackAction("/settings/todo-gravity")).toEqual({
       type: "navigate",
       to: "/settings",
@@ -40,7 +34,6 @@ describe("resolveAndroidBackAction", () => {
     expect(resolveAndroidBackAction("/quick-notes")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/stats")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/stats/time")).toEqual({ type: "navigate", to: "/", replace: true });
-    expect(resolveAndroidBackAction("/stats/health")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/categories")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/settings")).toEqual({ type: "navigate", to: "/", replace: true });
   });

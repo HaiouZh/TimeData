@@ -15,7 +15,6 @@ const defaultItems = [
   { to: "/tracks", placement: "primary" },
   { to: "/goals", placement: "primary" },
   { to: "/stats/time", placement: "primary" },
-  { to: "/stats/health", placement: "primary" },
   { to: "/settings", placement: "primary" },
 ] as const;
 
@@ -44,7 +43,6 @@ describe("desktopSidebarSetting", () => {
       { to: "/", placement: "primary" },
       { to: "/todo", placement: "primary" },
       { to: "/stats/time", placement: "primary" },
-      { to: "/stats/health", placement: "primary" },
       { to: "/settings", placement: "primary" },
     ]);
   });
@@ -68,7 +66,6 @@ describe("desktopSidebarSetting", () => {
       { to: "/", placement: "primary" },
       { to: "/todo", placement: "primary" },
       { to: "/stats/time", placement: "primary" },
-      { to: "/stats/health", placement: "primary" },
       { to: "/settings", placement: "primary" },
     ]);
 

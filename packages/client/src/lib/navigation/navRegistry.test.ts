@@ -18,7 +18,6 @@ describe("navRegistry", () => {
       "/tracks",
       "/goals",
       "/stats/time",
-      "/stats/health",
       "/settings",
     ]);
     expect(new Set(MAIN_NAV_ROUTES).size).toBe(MAIN_NAV_ROUTES.length);
@@ -30,7 +29,6 @@ describe("navRegistry", () => {
       "轨道",
       "目标",
       "时间",
-      "健康",
       "设置",
     ]);
   });
@@ -43,7 +41,6 @@ describe("navRegistry", () => {
     expect(findMainNavItem("/tracks")?.iconName).toBe("Steps");
     expect(findMainNavItem("/goals")?.iconName).toBe("Planet");
     expect(findMainNavItem("/stats/time")?.iconName).toBe("ChartLine");
-    expect(findMainNavItem("/stats/health")?.iconName).toBe("Heartbeat");
     expect(findMainNavItem("/settings")?.iconName).toBe("GearSix");
   });
 
@@ -69,7 +66,6 @@ describe("navRegistry", () => {
     expect(primaryRouteForPath("/goals/goal-1")).toBe("/goals");
     expect(primaryRouteForPath("/settings/nav")).toBe("/settings");
     expect(primaryRouteForPath("/stats")).toBe("/stats/time");
-    expect(primaryRouteForPath("/stats/health")).toBe("/stats/health");
     expect(primaryRouteForPath("/diary/review")).toBe("/diary");
   });
 

@@ -45,8 +45,8 @@ describe("mobile navigation placement", () => {
 
     expect(bottomNav?.querySelector('a[href="/todo"]')).not.toBeNull();
     expect(morePage?.querySelector('a[href="/todo"]')).toBeNull();
-    expect(bottomNav?.querySelector('a[href="/stats/health"]')).toBeNull();
-    expect(morePage?.querySelector('a[href="/stats/health"]')).not.toBeNull();
+    expect(bottomNav?.querySelector('a[href="/goals"]')).toBeNull();
+    expect(morePage?.querySelector('a[href="/goals"]')).not.toBeNull();
     expect(host.querySelector('button[aria-label="更多导航"]')).toBeNull();
 
     await unmount(root);

@@ -14,7 +14,6 @@ describe("documentTitleForPath", () => {
     expect(documentTitleForPath("/tracks")).toBe("轨道 · TimeData");
     expect(documentTitleForPath("/goals")).toBe("目标 · TimeData");
     expect(documentTitleForPath("/stats/time")).toBe("时间 · TimeData");
-    expect(documentTitleForPath("/stats/health")).toBe("健康 · TimeData");
     expect(documentTitleForPath("/settings")).toBe("设置 · TimeData");
   });
 

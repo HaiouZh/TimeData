@@ -172,21 +172,19 @@ describe("SettingsPage", () => {
     expect(html).toContain("设置");
     expect(html).toContain('href="/settings/server"');
     expect(html).toContain('href="/settings/categories"');
-    expect(html).toContain('href="/settings/health-range"');
     expect(html).toContain('href="/settings/more"');
     expect(html).toContain('href="/settings/nav"');
     expect(html).toContain('href="/settings/tracks"');
     expect(html).toContain('href="/settings/data"');
-    expect(html).toContain('href="/settings/garmin"');
     expect(html).toContain('href="/settings/admin-insights"');
     expect(html).toContain("水位线与翻牌");
     expect(html).toContain('href="/settings/todo-gravity"');
   });
 
-  it("organizes settings into five user-facing groups", () => {
+  it("organizes settings into four user-facing groups", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 
-    for (const label of ["连接与同步", "记录偏好", "统计与健康", "导航与界面", "高级与更新"]) {
+    for (const label of ["记录偏好", "统计", "导航与界面", "高级与更新"]) {
       expect(html).toContain(label);
     }
     expect(html).toContain('href="/settings/insights"');

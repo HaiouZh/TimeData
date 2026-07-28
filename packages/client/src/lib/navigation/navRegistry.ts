@@ -4,7 +4,6 @@ import {
   ChartLine,
   DotsThree,
   GearSix,
-  Heartbeat,
   ListChecks,
   NotePencil,
   Planet,
@@ -20,7 +19,6 @@ export const MAIN_NAV_ROUTES = [
   "/tracks",
   "/goals",
   "/stats/time",
-  "/stats/health",
   "/settings",
 ] as const;
 
@@ -107,14 +105,6 @@ export const MAIN_NAV_ITEMS: readonly MainNavItem[] = [
     defaultDesktopPlacement: "primary",
   },
   {
-    to: "/stats/health",
-    label: "健康",
-    ariaLabel: "健康统计",
-    icon: Heartbeat,
-    iconName: "Heartbeat",
-    defaultDesktopPlacement: "primary",
-  },
-  {
     to: "/settings",
     label: "设置",
     ariaLabel: "设置",
@@ -149,8 +139,6 @@ export function primaryRouteForPath(pathname: string): MainNavRoute {
   if (pathname === "/goals" || pathname.startsWith("/goals/")) return "/goals";
   if (pathname === "/stats/time") return "/stats/time";
   if (pathname === "/stats/todo") return "/stats/time"; // 待办统计从「时间」入口进,高亮归它
-
-  if (pathname === "/stats/health") return "/stats/health";
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return "/settings";
   return "/";
 }

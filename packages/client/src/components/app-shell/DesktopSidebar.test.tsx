@@ -15,7 +15,6 @@ const desktopConfigMock = vi.hoisted(() => ({
     { to: "/tracks", placement: "primary" },
     { to: "/goals", placement: "primary" },
     { to: "/stats/time", placement: "primary" },
-    { to: "/stats/health", placement: "primary" },
     { to: "/settings", placement: "primary" },
   ],
 }));
@@ -83,7 +82,6 @@ describe("DesktopSidebar", () => {
       { to: "/tracks", placement: "primary" },
       { to: "/goals", placement: "primary" },
       { to: "/stats/time", placement: "primary" },
-      { to: "/stats/health", placement: "primary" },
       { to: "/settings", placement: "primary" },
     ];
     const { host, root } = await renderSidebar("/");

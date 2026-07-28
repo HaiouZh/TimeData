@@ -23,9 +23,7 @@ export function resolveAndroidBackAction(pathname: string, search = ""): Android
     pathname === "/settings/nav" ||
     pathname === "/settings/tracks" ||
     pathname === "/settings/insights" ||
-    pathname === "/settings/health-range" ||
     pathname === "/settings/stats-layout" ||
-    pathname === "/settings/garmin" ||
     pathname === "/settings/admin-insights" ||
     pathname === "/settings/todo-gravity"
   ) {
@@ -64,7 +62,6 @@ export function resolveAndroidBackAction(pathname: string, search = ""): Android
     pathname === "/quick-notes" ||
     pathname === "/stats" ||
     pathname === "/stats/time" ||
-    pathname === "/stats/health" ||
     pathname === "/categories" ||
     pathname === "/settings"
   ) {

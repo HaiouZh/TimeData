@@ -9,7 +9,6 @@ const StyleguidePage = lazy(() => import("../../pages/dev/StyleguidePage.tsx"));
 const EntryPage = lazy(() => import("../../pages/EntryPage.tsx"));
 const GoalDetailPage = lazy(() => import("../../pages/goals/GoalDetailPage.tsx"));
 const GoalsPage = lazy(() => import("../../pages/goals/GoalsPage.tsx"));
-const HealthStatsPage = lazy(() => import("../../pages/HealthStatsPage.tsx"));
 const QuickNotesPage = lazy(() => import("../../pages/QuickNotesPage.tsx"));
 const SearchPage = lazy(() => import("../../pages/SearchPage.tsx"));
 const SettingsPage = lazy(() => import("../../pages/SettingsPage.tsx"));
@@ -19,8 +18,6 @@ const SettingsCategoriesPage = lazy(() => import("../../pages/settings/SettingsC
 const SettingsCategoryDetailPage = lazy(() => import("../../pages/settings/SettingsCategoryDetailPage.tsx"));
 const SettingsDataPage = lazy(() => import("../../pages/settings/SettingsDataPage.tsx"));
 const SettingsDiaryPage = lazy(() => import("../../pages/settings/SettingsDiaryPage.tsx"));
-const SettingsGarminPage = lazy(() => import("../../pages/settings/SettingsGarminPage.tsx"));
-const SettingsHealthRangePage = lazy(() => import("../../pages/settings/SettingsHealthRangePage.tsx"));
 const SettingsInsightsPage = lazy(() => import("../../pages/settings/SettingsInsightsPage.tsx"));
 const SettingsMorePage = lazy(() => import("../../pages/settings/SettingsMorePage.tsx"));
 const SettingsNavPage = lazy(() =>
@@ -59,7 +56,6 @@ export function AppRoutes() {
       <Route path="/search" element={<SearchPage />} />
       <Route path="/stats" element={<StatsPage />} />
       <Route path="/stats/time" element={<TimeStatsPage />} />
-      <Route path="/stats/health" element={<HealthStatsPage />} />
       <Route path="/stats/todo" element={<TodoStatsPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/settings/categories" element={<SettingsCategoriesPage />} />
@@ -69,11 +65,9 @@ export function AppRoutes() {
       <Route path="/settings/nav" element={<SettingsNavPage />} />
       <Route path="/settings/tracks" element={<SettingsTracksPage />} />
       <Route path="/settings/insights" element={<SettingsInsightsPage />} />
-      <Route path="/settings/health-range" element={<SettingsHealthRangePage />} />
       <Route path="/settings/stats-layout" element={<SettingsStatsLayoutPage />} />
       <Route path="/settings/data" element={<SettingsDataPage />} />
       <Route path="/settings/admin-insights" element={<SettingsAdminInsightsPage />} />
-      <Route path="/settings/garmin" element={<SettingsGarminPage />} />
       <Route path="/settings/diary" element={<SettingsDiaryPage />} />
       <Route path="/settings/todo-gravity" element={<SettingsTodoGravityPage />} />
       <Route path="/settings/todo-stats-layout" element={<SettingsTodoStatsLayoutPage />} />

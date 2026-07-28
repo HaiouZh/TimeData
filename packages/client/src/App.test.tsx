@@ -10,7 +10,7 @@ vi.mock("./components/AppUpdatePrompt.tsx", () => ({
 }));
 
 vi.mock("./lib/settings/navVisibleTabsSetting.ts", () => ({
-  useVisibleTabs: () => ["/quick-notes", "/", "/todo", "/stats/time", "/stats/health"],
+  useVisibleTabs: () => ["/quick-notes", "/", "/todo", "/stats/time"],
 }));
 
 vi.mock("./pages/TimelinePage.tsx", () => ({
@@ -27,10 +27,6 @@ vi.mock("./pages/QuickNotesPage.tsx", () => ({
 
 vi.mock("./pages/TimeStatsPage.tsx", () => ({
   default: () => createElement("div", null, "时间统计页面"),
-}));
-
-vi.mock("./pages/HealthStatsPage.tsx", () => ({
-  default: () => createElement("div", null, "健康统计页面"),
 }));
 
 vi.mock("./pages/StatsPage.tsx", () => ({
@@ -184,7 +180,6 @@ describe("AppShell settings routes", () => {
     expect(html).toContain('aria-label="时间轴"');
     expect(html).toContain('aria-label="待办"');
     expect(html).toContain('aria-label="时间统计"');
-    expect(html).toContain('aria-label="健康统计"');
     expect(html).toContain('aria-label="设置"');
     expect(html).not.toContain(">记录</a>");
     expect(html).not.toContain(">时间轴</a>");
@@ -197,8 +192,7 @@ describe("AppShell settings routes", () => {
     expect(html).toContain("待办");
   });
 
-  it("renders separate time and health stats routes", async () => {
+  it("renders the time stats route", async () => {
     expect(await renderAppShell("/stats/time")).toContain("时间统计页面");
-    expect(await renderAppShell("/stats/health")).toContain("健康统计页面");
   });
 });

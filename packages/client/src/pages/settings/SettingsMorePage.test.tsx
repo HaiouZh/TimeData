@@ -30,7 +30,6 @@ describe("SettingsMorePage", () => {
     expect(host.querySelector('a[href="/tracks"]')?.textContent).toContain("轨道");
     expect(host.querySelector('a[href="/goals"]')?.textContent).toContain("目标");
     expect(host.querySelector('a[href="/stats/time"]')?.textContent).toContain("时间统计");
-    expect(host.querySelector('a[href="/stats/health"]')?.textContent).toContain("健康统计");
     expect(host.querySelector('a[href="/todo"]')).toBeNull();
     expect(host.querySelector('a[href="/settings"]')).not.toBeNull();
 

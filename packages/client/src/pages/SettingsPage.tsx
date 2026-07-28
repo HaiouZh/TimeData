@@ -288,15 +288,6 @@ export default function SettingsPage() {
       {/* 状态总览：服务器连接 + 同步摘要合并为一张卡（顺序：服务器配置 → 同步信息） */}
       <ServerStatusCard />
 
-      <SettingsSection title="连接与同步">
-        <SettingsRow
-          to="/settings/garmin"
-          icon={<Icon icon={ArrowsClockwise} size={20} />}
-          title="Garmin 数据同步"
-          subtitle="配置 Garmin 账号、定时抓取健康数据"
-        />
-      </SettingsSection>
-
       <SettingsSection title="记录偏好">
         <SettingsRow
           to="/settings/categories"
@@ -330,7 +321,7 @@ export default function SettingsPage() {
         />
       </SettingsSection>
 
-      <SettingsSection title="统计与健康">
+      <SettingsSection title="统计">
         <SettingsRow
           to="/settings/stats-layout"
           icon={<Icon icon={ChartBar} size={20} />}
@@ -342,12 +333,6 @@ export default function SettingsPage() {
           icon={<Icon icon={ChartBar} size={20} />}
           title="待办统计布局"
           subtitle="调整待办统计模块显示与顺序"
-        />
-        <SettingsRow
-          to="/settings/health-range"
-          icon={<Icon icon={ChartBar} size={20} />}
-          title="健康范围"
-          subtitle="选择健康统计页显示的时间范围"
         />
       </SettingsSection>
 

@@ -20,20 +20,12 @@ describe("navVisibleTabsSetting", () => {
     expect(sanitizeVisibleTabs(["/", "/bogus", "/"])).toEqual(["/"]);
   });
 
-  it("keeps time and health stats as separate tabs", () => {
-    expect(sanitizeVisibleTabs(["/quick-notes", "/stats/time", "/stats/health"])).toEqual([
-      "/quick-notes",
-      "/stats/time",
-      "/stats/health",
-    ]);
-  });
-
   it("maps legacy /stats to /stats/time", () => {
     expect(sanitizeVisibleTabs(["/", "/stats", "/todo"])).toEqual(["/", "/todo", "/stats/time"]);
   });
 
   it("deduplicates legacy and new stats tabs", () => {
-    expect(sanitizeVisibleTabs(["/stats", "/stats/time", "/stats/health"])).toEqual(["/stats/time", "/stats/health"]);
+    expect(sanitizeVisibleTabs(["/stats", "/stats/time", "/todo"])).toEqual(["/todo", "/stats/time"]);
   });
 
   it("persists selection and writes a settings syncLog", async () => {
@@ -66,7 +58,6 @@ describe("navVisibleTabsSetting", () => {
       "/tracks",
       "/goals",
       "/stats/time",
-      "/stats/health",
     ]);
     expect(sanitizeVisibleTabs(["/tracks", "/goals", "/bogus", "/tracks"])).toEqual(["/tracks", "/goals"]);
   });
