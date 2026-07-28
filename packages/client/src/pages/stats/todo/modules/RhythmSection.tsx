@@ -12,7 +12,8 @@ export default function RhythmSection({ tasks }: TodoStatsModuleProps) {
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <div className="grid grid-cols-[auto_repeat(4,1fr)] gap-1 text-xs">
+      <h3 className="td-text-label font-medium text-fg-muted">节奏</h3>
+      <div className="mt-2 grid grid-cols-[auto_repeat(4,1fr)] gap-1 td-text-caption">
         <div />
         {SLOT_LABELS.map((label) => (
           <div key={label} className="text-center text-muted-foreground">

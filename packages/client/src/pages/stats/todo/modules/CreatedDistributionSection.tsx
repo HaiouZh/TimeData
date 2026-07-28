@@ -18,7 +18,7 @@ export default function CreatedDistributionSection({ tasks, today }: TodoStatsMo
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="text-sm font-medium text-fg-muted">创建分布</h3>
+      <h3 className="td-text-label font-medium text-fg-muted">创建分布</h3>
       <div className="mt-2 h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
@@ -26,7 +26,7 @@ export default function CreatedDistributionSection({ tasks, today }: TodoStatsMo
             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
             <Tooltip />
-            <Bar dataKey="count" name="新建" fill="var(--color-primary, #3b82f6)" />
+            <Bar dataKey="count" name="新建" fill="var(--color-accent)" />
           </BarChart>
         </ResponsiveContainer>
       </div>

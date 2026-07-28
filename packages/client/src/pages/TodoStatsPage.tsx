@@ -52,12 +52,22 @@ export default function TodoStatsPage() {
   return (
     <div className="min-h-full space-y-4 bg-page px-3.5 pb-6 pt-4 text-ink sm:px-6">
       <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-2">TimeData</div>
-        <h2 className="mt-1 text-2xl font-semibold tracking-normal text-ink">待办统计</h2>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="td-text-caption font-medium uppercase tracking-[0.16em] text-ink-2">TimeData</div>
+            <h2 className="mt-1 td-text-title tracking-normal text-ink">待办统计</h2>
+          </div>
+          <Link
+            to="/stats/time"
+            className="flex min-h-11 items-center rounded-pill border border-border px-4 td-text-label font-medium text-ink-2"
+          >
+            时间统计
+          </Link>
+        </div>
       </header>
 
       {layout.visibleModulesInOrder.length === 0 ? (
-        <div className="rounded-card border border-dashed border-border bg-surface p-8 text-center text-sm text-ink-3">
+        <div className="rounded-card border border-dashed border-border bg-surface p-8 text-center td-text-label text-ink-3">
           所有统计模块已隐藏。
           <Link to="/settings/todo-stats-layout" className="ml-1 text-accent underline">
             去设置启用
