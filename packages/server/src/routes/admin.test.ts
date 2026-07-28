@@ -57,7 +57,28 @@ function createSchema() {
       user_agent TEXT,
       client_hint TEXT,
       device_label TEXT,
-      duration_ms INTEGER NOT NULL
+      duration_ms INTEGER NOT NULL,
+      is_new_ip INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE totp_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      secret TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE totp_recovery_codes (
+      code_hash TEXT PRIMARY KEY,
+      used_at TEXT
+    );
+
+    CREATE TABLE known_ips (
+      token_tier TEXT NOT NULL,
+      ip TEXT NOT NULL,
+      first_seen TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (token_tier, ip)
     );
 
     CREATE TABLE sync_tombstones (
