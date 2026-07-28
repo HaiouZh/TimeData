@@ -261,6 +261,14 @@ describe("updateSessionNote", () => {
     expect(logs.filter((l) => l.tableName === "sessions" && l.action === "update")).toHaveLength(1);
   });
 
+  it("存入前 trim 首尾空白", async () => {
+    await db.sessions.add(makeSession({ id: "s1", startedAt: "2026-07-28T08:00:00.000Z" }));
+
+    const next = await updateSessionNote("s1", "  冲周报  ");
+    expect(next.note).toBe("冲周报");
+    expect((await db.sessions.get("s1"))?.note).toBe("冲周报");
+  });
+
   it("trim 后空串归一为 null", async () => {
     await db.sessions.add(
       makeSession({ id: "s1", startedAt: "2026-07-28T08:00:00.000Z", note: "旧便签" }),

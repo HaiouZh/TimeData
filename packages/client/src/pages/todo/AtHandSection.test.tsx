@@ -210,6 +210,59 @@ describe("场便签标题", () => {
     await unmount(root);
   });
 
+  it("值未变时 Enter/失焦只退出编辑,不调用 onUpdateNote", async () => {
+    const onUpdateNote = vi.fn();
+    const { host, root } = await renderDom(
+      <AtHandSection
+        atHand={[]}
+        session={session({ note: "冲周报" })}
+        resumable={[]}
+        {...handlers}
+        onUpdateNote={onUpdateNote}
+      />,
+    );
+
+    await click(host.querySelector('button[aria-label="编辑场便签"]'));
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="场便签"]');
+    input!.value = "  冲周报  ";
+    await pressOnInput(input!, "Enter");
+
+    expect(onUpdateNote).not.toHaveBeenCalled();
+    expect(host.querySelector('input[aria-label="场便签"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("IME 组合态的 Enter 不保存不退出", async () => {
+    const onUpdateNote = vi.fn();
+    const { host, root } = await renderDom(
+      <AtHandSection atHand={[]} session={session({})} resumable={[]} {...handlers} onUpdateNote={onUpdateNote} />,
+    );
+
+    await click(host.querySelector('button[aria-label="编辑场便签"]'));
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="场便签"]');
+    input!.value = "chong";
+    const { act } = await import("react");
+    await act(async () => {
+      input!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, isComposing: true }),
+      );
+    });
+
+    expect(onUpdateNote).not.toHaveBeenCalled();
+    expect(host.querySelector('input[aria-label="场便签"]')).toBeTruthy();
+
+    await unmount(root);
+  });
+
+  it("note 为空串(外部数据)时标题回落「手头」", async () => {
+    const { host, root } = await renderDom(
+      <AtHandSection atHand={[]} session={session({ note: "  " })} resumable={[]} {...handlers} />,
+    );
+    expect(host.querySelector("h2")?.textContent).toBe("手头");
+    await unmount(root);
+  });
+
   it("续场列表态标题不可编辑", async () => {
     const resumable: ResumableSession[] = [
       {

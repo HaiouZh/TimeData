@@ -785,7 +785,7 @@ export function TodoPage() {
       metaChip={projectMetaChip}
       onUpdateNote={(note) => {
         const sessionId = buckets.handSession?.id;
-        if (sessionId) void updateSessionNote(sessionId, note);
+        if (sessionId) updateSessionNote(sessionId, note).catch((error) => console.error("场便签保存失败", error));
       }}
     />
   );

@@ -46,7 +46,15 @@ function AtHandHeading({
   onSaveNote?: (value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const title = note ?? "手头";
+  // 空串 note 可能从同步对端/历史数据进来（schema 不禁），空白一律回落默认标题。
+  const title = note?.trim() ? note : "手头";
+  // 脏检查：值没变（含仅空白差异）只退出编辑不写库——否则误触标题再失焦就是一次
+  // 零意图的 LWW 写入，跨设备会用陈旧内容覆盖对端刚改的便签。
+  function saveAndExit(value: string) {
+    setEditing(false);
+    if (value.trim() === (note?.trim() ?? "")) return;
+    onSaveNote?.(value);
+  }
   return (
     <div className="mb-2 flex items-center justify-between px-2">
       <h2 className="flex min-w-0 items-center gap-1.5 td-text-label font-medium text-ink">
@@ -62,18 +70,16 @@ function AtHandHeading({
             defaultValue={note ?? ""}
             className="min-w-0 flex-1 rounded-ctl bg-surface px-1 td-text-label font-medium text-ink outline-none"
             onKeyDown={(event) => {
+              // IME 组合态的 Enter 是在确认候选词，不是保存指令。
+              if (event.nativeEvent.isComposing) return;
               if (event.key === "Enter") {
-                // 只在此处保存并退出；退出后 input 卸载，onBlur 不再触发，保证单次保存。
-                onSaveNote(event.currentTarget.value);
-                setEditing(false);
+                // 保存并退出；退出后 input 卸载，onBlur 不再触发，保证单次保存。
+                saveAndExit(event.currentTarget.value);
               } else if (event.key === "Escape") {
                 setEditing(false);
               }
             }}
-            onBlur={(event) => {
-              onSaveNote(event.currentTarget.value);
-              setEditing(false);
-            }}
+            onBlur={(event) => saveAndExit(event.currentTarget.value)}
           />
         ) : onSaveNote ? (
           <button
@@ -160,6 +166,8 @@ export function AtHandSection({
   return (
     <section data-section="todo-at-hand">
       <AtHandHeading
+        // 换场强制重挂：清掉编辑态与非受控 input 残值，防止把旧场预填文本保存进新活跃场。
+        key={session.id}
         count={pending.length}
         note={session.note}
         onSaveNote={onUpdateNote ? (value) => onUpdateNote(value.trim() === "" ? null : value) : undefined}
