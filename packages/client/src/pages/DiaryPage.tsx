@@ -1,4 +1,4 @@
-import { ArrowLeft } from "@phosphor-icons/react";
+import { ArrowLeft, ClockCounterClockwise } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import DateNav from "../components/DateNav.js";
@@ -463,6 +463,13 @@ export default function DiaryPage() {
             <Icon icon={ArrowLeft} size={16} />
           </button>
           <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记</h1>
+          <Link
+            to="/diary/review"
+            aria-label="日记回顾"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
+          >
+            <Icon icon={ClockCounterClockwise} size={16} />
+          </Link>
           <button
             type="button"
             aria-label="保存"

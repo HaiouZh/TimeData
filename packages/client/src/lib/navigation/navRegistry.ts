@@ -1,11 +1,12 @@
 import {
   Alarm,
+  BookOpen,
   ChartLine,
   DotsThree,
   GearSix,
   Heartbeat,
   ListChecks,
-  Notebook,
+  NotePencil,
   Planet,
   Steps,
 } from "@phosphor-icons/react";
@@ -13,6 +14,7 @@ import type { Icon as PhosphorIcon } from "@phosphor-icons/react";
 
 export const MAIN_NAV_ROUTES = [
   "/quick-notes",
+  "/diary",
   "/",
   "/todo",
   "/tracks",
@@ -52,8 +54,16 @@ export const MAIN_NAV_ITEMS: readonly MainNavItem[] = [
     to: "/quick-notes",
     label: "记录",
     ariaLabel: "记录",
-    icon: Notebook,
-    iconName: "Notebook",
+    icon: NotePencil,
+    iconName: "NotePencil",
+    defaultDesktopPlacement: "primary",
+  },
+  {
+    to: "/diary",
+    label: "日记",
+    ariaLabel: "日记",
+    icon: BookOpen,
+    iconName: "BookOpen",
     defaultDesktopPlacement: "primary",
   },
   {
@@ -133,6 +143,7 @@ export function primaryRouteForPath(pathname: string): MainNavRoute {
   if (pathname === "/stats") return "/stats/time";
   if (pathname === "/" || pathname.startsWith("/entries/")) return "/";
   if (pathname === "/quick-notes") return "/quick-notes";
+  if (pathname === "/diary" || pathname.startsWith("/diary/")) return "/diary";
   if (pathname === "/todo") return "/todo";
   if (pathname === "/tracks" || pathname.startsWith("/tracks/")) return "/tracks";
   if (pathname === "/goals" || pathname.startsWith("/goals/")) return "/goals";

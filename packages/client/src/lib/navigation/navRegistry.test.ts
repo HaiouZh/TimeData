@@ -12,6 +12,7 @@ describe("navRegistry", () => {
   it("keeps every route unique and includes the confirmed main entries", () => {
     expect(MAIN_NAV_ROUTES).toEqual([
       "/quick-notes",
+      "/diary",
       "/",
       "/todo",
       "/tracks",
@@ -23,6 +24,7 @@ describe("navRegistry", () => {
     expect(new Set(MAIN_NAV_ROUTES).size).toBe(MAIN_NAV_ROUTES.length);
     expect(MAIN_NAV_ITEMS.map((item) => item.label)).toEqual([
       "记录",
+      "日记",
       "时间轴",
       "待办",
       "轨道",
@@ -34,7 +36,8 @@ describe("navRegistry", () => {
   });
 
   it("uses the confirmed default icons", () => {
-    expect(findMainNavItem("/quick-notes")?.iconName).toBe("Notebook");
+    expect(findMainNavItem("/quick-notes")?.iconName).toBe("NotePencil");
+    expect(findMainNavItem("/diary")?.iconName).toBe("BookOpen");
     expect(findMainNavItem("/")?.iconName).toBe("Alarm");
     expect(findMainNavItem("/todo")?.iconName).toBe("ListChecks");
     expect(findMainNavItem("/tracks")?.iconName).toBe("Steps");
@@ -66,6 +69,7 @@ describe("navRegistry", () => {
     expect(primaryRouteForPath("/settings/nav")).toBe("/settings");
     expect(primaryRouteForPath("/stats")).toBe("/stats/time");
     expect(primaryRouteForPath("/stats/health")).toBe("/stats/health");
+    expect(primaryRouteForPath("/diary/review")).toBe("/diary");
   });
 
   it("recognizes only configured main routes", () => {

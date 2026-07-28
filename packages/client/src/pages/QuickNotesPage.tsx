@@ -1,9 +1,9 @@
 import {
   ArrowDown,
+  BookOpen,
   Check,
   DotsThree,
   MagnifyingGlass,
-  Notebook,
   NotePencil,
   Plus,
   PushPin,
@@ -1141,7 +1141,7 @@ export default function QuickNotesPage() {
               aria-label="日记"
               className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink sm:size-11"
             >
-              <Icon icon={Notebook} size={16} />
+              <Icon icon={BookOpen} size={16} />
             </Link>
 
             {pinnedNotes.length > 0 && (
