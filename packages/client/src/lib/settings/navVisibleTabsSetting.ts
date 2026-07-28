@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { getSetting, setSetting, useSetting } from "./index.js";
 
 export const NAV_VISIBLE_TABS_KEY = "nav.visibleTabs.v1";
-export const CONFIGURABLE_TABS = ["/quick-notes", "/", "/todo", "/tracks", "/goals", "/stats/time", "/stats/health"] as const;
+// 顺序 = 底栏与设置页勾选列表的展示顺序，须与 navRegistry 的 MAIN_NAV_ITEMS 一致
+// （/settings 不可隐藏，故不在此列）。漏一条 = 该模块在手机底栏与「导航」设置里彻底消失。
+export const CONFIGURABLE_TABS = ["/quick-notes", "/diary", "/", "/todo", "/tracks", "/goals", "/stats/time", "/stats/health"] as const;
 
 export type ConfigurableTab = (typeof CONFIGURABLE_TABS)[number];
 

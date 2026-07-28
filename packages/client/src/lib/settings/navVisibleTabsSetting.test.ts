@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { MAIN_NAV_ITEMS } from "../navigation/navRegistry.js";
 import { db, resetDb } from "../../test/dbReset.js";
 import {
   CONFIGURABLE_TABS,
@@ -49,9 +50,17 @@ describe("navVisibleTabsSetting", () => {
     await expect(readVisibleTabs()).resolves.toEqual([]);
   });
 
+  // 真闸：新增一级导航却忘了登记到 CONFIGURABLE_TABS，该模块会在手机底栏与
+  // 「设置 · 导航」勾选列表里彻底消失（/diary 就这么漏过一次）。
+  it("covers every main nav route except the always-visible /settings", () => {
+    const expected = MAIN_NAV_ITEMS.map((item) => item.to).filter((to) => to !== "/settings");
+    expect([...CONFIGURABLE_TABS]).toEqual(expected);
+  });
+
   it("includes tracks as a default-visible configurable tab", async () => {
     await expect(readVisibleTabs()).resolves.toEqual([
       "/quick-notes",
+      "/diary",
       "/",
       "/todo",
       "/tracks",
