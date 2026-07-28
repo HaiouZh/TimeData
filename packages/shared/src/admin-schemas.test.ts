@@ -149,6 +149,7 @@ describe("admin response schemas", () => {
         clientHint: "web",
         deviceLabel: "web",
         durationMs: 12,
+        isNewIp: false,
       }],
       limit: 100,
     })).toMatchObject({ logs: [{ outcome: "ok", tokenTier: "master" }] });

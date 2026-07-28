@@ -56,7 +56,7 @@ export function TodoDragDock({ dragging, activeContainerId, projects, dropBlocke
     <ul
       data-testid="todo-drag-dock"
       aria-hidden={!dragging}
-      className={`pointer-events-none fixed right-2 top-1/2 z-[var(--z-dropdown)] flex max-h-[70vh] -translate-y-1/2 flex-col items-end gap-2 overflow-y-auto transition-opacity ${
+      className={`pointer-events-none fixed right-2 top-1/2 z-[var(--z-dropdown)] flex max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col items-end gap-2 overflow-y-auto transition-opacity ${
         dragging ? "opacity-95 delay-300" : "opacity-0 delay-0"
       }`}
       style={{ transitionDuration: dragging ? "var(--duration-base)" : "0ms" }}
