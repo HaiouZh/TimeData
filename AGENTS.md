@@ -70,7 +70,7 @@
 - 测试：`pnpm test`（全包 + 根目录脚本测试），或 `pnpm --filter @timedata/<pkg> test`。聚焦单个文件走 `npx vitest run <路径>`（在该包目录下）——`pnpm --filter … test -- <name>` **不做文件过滤**，会把整包套件跑一遍。
 - 构建：`pnpm build`（不含 mobile）。
 - 开发：`pnpm dev:server`；**client 别用 `pnpm dev:client` 起来就给人试**——它只监听 IPv6，浏览器多半打不开（见下条）。需重定向 dev/调试输出一律写进 `.local/`（已 gitignore），如 `pnpm dev:client > .local/client-dev.log 2>&1`。
-  - **本地起服务一律带鉴权**：`dev:server` 必须设 `AUTH_TOKEN`，**不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路**。理由：旁路下跑出来的"能用"不构成证据——鉴权、token 分级、401 路径全部没走到，本地验过的东西上生产可能照样挂。前端在 `/settings/server` 填同一个串（存 localStorage，`api.ts` 据此拼 `Authorization: Bearer`）。**本仓没装 dotenv、dev 脚本也无 `--env-file`，写进 `.env` 不生效**，变量只能在启动命令里给。完整配法（含日记 vault）见 [`deployment`](docs/evergreen/deployment.md) §9。
+  - **本地起服务一律带鉴权**：`dev:server` 必须设 `AUTH_TOKEN`，**不用 `ALLOW_UNAUTHENTICATED_DEV=1` 旁路**。理由：旁路下跑出来的"能用"不构成证据——鉴权、token 分级、401 路径全部没走到，本地验过的东西上生产可能照样挂。前端在 `/settings/server` 填同一个串（存 localStorage，`api.ts` 据此拼 `Authorization: Bearer`）。**本仓没装 dotenv、dev 脚本也无 `--env-file`，应用不会自动读取 `.env`**；但 agent 启动本地服务时应先读取本机 `.env`（已 gitignore），把其中的 `AUTH_TOKEN`、`ALLOWED_ORIGINS`、`DIARY_VAULT_DIR` 显式注入启动命令；`.env` 不存在时再用命令行临时变量。完整配法（含日记 vault）见 [`deployment`](docs/evergreen/deployment.md) §9。
   - **vite 默认只监听 IPv6 `[::1]`**：浏览器走 IPv4 `127.0.0.1` 时报「拒绝连接 / SYN_SENT」；**`localhost` 一样会中招**——它在本机多半解析成 `127.0.0.1`，而那个地址上没人接（2026-07-27 又踩一次：`pnpm dev:client` 打印 `http://localhost:5174/`，看着像好的，实际打不开）。
     - 起服务给人试**一律带 `--host`**：`pnpm --filter @timedata/client exec vite --host 127.0.0.1`（纯本机）；手机/局域网验收用 `--host`（暴露给同网段所有设备，**先问过人再开**）。
     - 30 秒确诊：`Get-NetTCPConnection -LocalPort 5174 -State Listen | Select LocalAddress,OwningProcess`。`LocalAddress` 是 `::1` 就是本坑，是 `127.0.0.1` / `0.0.0.0` 就不是，去查别处。换端口同理。
@@ -157,4 +157,4 @@
 
 ------
 
-*Last reviewed: 2026-07-26*
+*Last reviewed: 2026-07-28*
