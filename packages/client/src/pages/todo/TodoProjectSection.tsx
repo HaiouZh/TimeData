@@ -199,6 +199,30 @@ function ProjectGroupCard({
     }
   }
 
+  // 失焦分流：空草稿收起；非空提交，成功收起、失败保留草稿+错误（满员等写入侧拒绝）。
+  // createBusyRef 挡两类竞态：回车提交在途时触发的 blur、↵ 按钮路径。
+  // 成功不调 onTaskCreated：置顶滚动是为回车连续录入服务的，失焦离场不需要。
+  async function resolveBlur(): Promise<void> {
+    if (createBusyRef.current) return;
+    const title = createDraft.trim();
+    if (!title) {
+      setCreating(false);
+      setCreateError(null);
+      return;
+    }
+    createBusyRef.current = true;
+    try {
+      await onCreateTask(group.goalId, title);
+      setCreateDraft("");
+      setCreateError(null);
+      setCreating(false);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "创建任务失败");
+    } finally {
+      createBusyRef.current = false;
+    }
+  }
+
   function openRename(): void {
     setMenuOpen(false);
     setRenameDraft(group.goalTitle);
@@ -376,6 +400,7 @@ function ProjectGroupCard({
                 value={createDraft}
                 placeholder="新任务"
                 onChange={(event) => setCreateDraft(event.target.value)}
+                onBlur={() => void resolveBlur()}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
                     event.preventDefault();

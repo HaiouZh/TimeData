@@ -459,6 +459,54 @@ describe("TodoProjectSection", () => {
     expect(onRevealConsumed).toHaveBeenCalledWith(["g1"]);
     await unmount(root);
   });
+
+  function blurInput(input: HTMLInputElement): Promise<void> {
+    return act(async () => {
+      input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+  }
+
+  async function openCreateInput(host: HTMLElement): Promise<HTMLInputElement> {
+    await click(host.querySelector('button[aria-label="在项目 目标 g1中创建任务"]'));
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="在项目 目标 g1中新建任务"]');
+    expect(input).not.toBeNull();
+    return input as HTMLInputElement;
+  }
+
+  it("新建输入框失焦：草稿非空 → 提交创建并收起", async () => {
+    const onCreateTask = vi.fn(async () => task({ id: "t-new" }));
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })], onCreateTask });
+    const input = await openCreateInput(host);
+    await act(async () => setInputValue(input, "  写文案  "));
+    await blurInput(input);
+    expect(onCreateTask).toHaveBeenCalledWith("g1", "写文案");
+    expect(host.querySelector('input[aria-label="在项目 目标 g1中新建任务"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("新建输入框失焦：草稿为空 → 收起且不落库", async () => {
+    const onCreateTask = vi.fn(async () => task({ id: "t-new" }));
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })], onCreateTask });
+    const input = await openCreateInput(host);
+    await blurInput(input);
+    expect(onCreateTask).not.toHaveBeenCalled();
+    expect(host.querySelector('input[aria-label="在项目 目标 g1中新建任务"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("新建输入框失焦：提交被拒 → 保留草稿并显示错误", async () => {
+    const onCreateTask = vi.fn(async () => {
+      throw new Error("项目成员已达上限");
+    });
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })], onCreateTask });
+    const input = await openCreateInput(host);
+    await act(async () => setInputValue(input, "超员任务"));
+    await blurInput(input);
+    const kept = host.querySelector<HTMLInputElement>('input[aria-label="在项目 目标 g1中新建任务"]');
+    expect(kept?.value).toBe("超员任务");
+    expect(host.textContent).toContain("项目成员已达上限");
+    await unmount(root);
+  });
 });
 
 describe("TodoProjectSection 落点", () => {
