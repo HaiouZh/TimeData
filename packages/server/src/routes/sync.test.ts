@@ -3384,3 +3384,132 @@ describe("push requestId 幂等", () => {
     expect(db.prepare("SELECT 1 FROM sync_push_requests WHERE request_id = ?").get("stale-req")).toBeUndefined();
   });
 });
+
+describe("旧客户端缺新字段的整行 push（sync.md §5.8 回归钉）", () => {
+  // 这组测试**钉住现状机理**，不是断言期望行为：旧客户端不认识新加字段时，
+  // push 的 payload 缺这一项，zod .default() 在入口把它补成默认值，再经 LWW 全列 SET
+  // 抹掉服务器现值——「版本错位清空新列」。字段级 push 已拍板不做（2026-07-25 搁置页），
+  // 现役缓解只有 guardedColumns/op（窄解法）+ server/Web/APK 同版本发布纪律。
+  // 若这组测试变红且原因是「缺席字段被保留」——那是有人实现了字段级保护，请同步改写
+  // sync.md §5.8 与本组断言；除此之外的红都是真回归。
+  it("update payload 缺 sessionId/weight 时，服务器现值被 zod 默认值覆盖", async () => {
+    const seeded = taskData({ id: "task-old-payload", sessionId: "sess-1", weight: 5 });
+    const createRes = await pushChanges([taskChange("create", seeded)], 0);
+    expect(createRes.status).toBe(200);
+    expect(
+      db.prepare("SELECT session_id, weight FROM tasks WHERE id = ?").get("task-old-payload"),
+    ).toEqual({ session_id: "sess-1", weight: 5 });
+
+    // 模拟旧构建：整行快照里根本没有 sessionId / weight 这两个键（不是显式 null）。
+    const stalePayload: Record<string, unknown> = {
+      ...taskData({ id: "task-old-payload", title: "旧客户端只想改标题", updatedAt: "2026-07-05T00:00:00.000Z" }),
+    };
+    delete stalePayload.sessionId;
+    delete stalePayload.weight;
+    const updateRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: latestSeq(),
+        changes: [
+          {
+            tableName: "tasks",
+            recordId: "task-old-payload",
+            action: "update",
+            data: stalePayload,
+            timestamp: "2026-07-05T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+    expect(updateRes.status).toBe(200);
+
+    const row = db
+      .prepare("SELECT title, session_id, weight FROM tasks WHERE id = ?")
+      .get("task-old-payload") as { title: string; session_id: string | null; weight: number };
+    expect(row.title).toBe("旧客户端只想改标题");
+    // §5.8 现状：缺席字段 = zod 默认值 = 清空服务器现值。这两行断言就是那个坑本身。
+    expect(row.session_id).toBeNull();
+    expect(row.weight).toBe(0);
+  });
+
+  it("guardedColumns 不受缺字段影响：无 op 的旧 payload 不能翻回完成态", async () => {
+    const seeded = taskData({ id: "task-guarded", done: true, completedAt: "2026-07-04T12:00:00.000Z" });
+    const createRes = await pushChanges([taskChange("create", seeded, { type: "complete", at: "2026-07-04T12:00:00.000Z" })], 0);
+    expect(createRes.status).toBe(200);
+
+    // 旧 payload 缺 completedAt（zod 默认 null）且 done=false、无 op——守卫列必须保住服务器现值。
+    const stalePayload: Record<string, unknown> = {
+      ...taskData({ id: "task-guarded", title: "旧客户端改标题", updatedAt: "2026-07-05T00:00:00.000Z" }),
+    };
+    delete stalePayload.completedAt;
+    const updateRes = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseSeq: latestSeq(),
+        changes: [
+          {
+            tableName: "tasks",
+            recordId: "task-guarded",
+            action: "update",
+            data: stalePayload,
+            timestamp: "2026-07-05T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+    expect(updateRes.status).toBe(200);
+
+    const row = db
+      .prepare("SELECT title, done, completed_at FROM tasks WHERE id = ?")
+      .get("task-guarded") as { title: string; done: number; completed_at: string | null };
+    expect(row.title).toBe("旧客户端改标题");
+    expect(row.done).toBe(1);
+    expect(row.completed_at).toBe("2026-07-04T12:00:00.000Z");
+  });
+});
+
+describe("X-TimeData-Client-Build 观测头（只记录不拦截）", () => {
+  it("push 带头时 push_received detail 记 clientBuild", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-TimeData-Client-Build": "build-2026-07-28" },
+      body: JSON.stringify({ baseSeq: 0, changes: [taskChange("create", taskData({ id: "task-hdr" }))] }),
+    });
+    expect(res.status).toBe(200);
+
+    const logRow = db
+      .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
+      .get("push_received") as { detail: string };
+    expect(JSON.parse(logRow.detail).clientBuild).toBe("build-2026-07-28");
+  });
+
+  it("缺头（旧构建）记 null，且请求照常通过", async () => {
+    const res = await pushChanges([taskChange("create", taskData({ id: "task-nohdr" }))], 0);
+    expect(res.status).toBe(200);
+
+    const logRow = db
+      .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
+      .get("push_received") as { detail: string };
+    expect(JSON.parse(logRow.detail).clientBuild).toBeNull();
+  });
+
+  it("校验失败的 push_rejected 同样记 clientBuild", async () => {
+    const res = await app.request("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-TimeData-Client-Build": "build-bad" },
+      body: JSON.stringify({
+        baseSeq: 0,
+        // id_mismatch：schema 合法但 recordId 与 data.id 不一致，走 validateSyncChanges 的 409 原子拒绝。
+        changes: [{ tableName: "tasks", recordId: "task-x", action: "update", data: taskData({ id: "task-y" }), timestamp: "2026-07-05T00:00:00.000Z" }],
+      }),
+    });
+    expect(res.status).toBe(409);
+
+    const logRow = db
+      .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
+      .get("push_rejected") as { detail: string };
+    expect(JSON.parse(logRow.detail).clientBuild).toBe("build-bad");
+  });
+});

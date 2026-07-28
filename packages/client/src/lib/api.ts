@@ -1,3 +1,4 @@
+import { CURRENT_BUILD_ID } from "./frontendUpdate.js";
 import { messages } from "./messages.ts";
 import { safeGetItem } from "./safeStorage.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
@@ -67,6 +68,10 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+
+  // 观测线（只记录不拦截）：让服务端日志能看出来包出自哪个构建，
+  // 为 sync.md §5.8「旧客户端清空新列」提供排查依据。服务端不据此拒绝请求。
+  headers.set("X-TimeData-Client-Build", CURRENT_BUILD_ID);
 
   const token = getToken();
   if (token) {

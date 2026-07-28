@@ -530,6 +530,9 @@ sync.post("/push", async (c) => {
 
   const body = parsed.data;
   const db = getDb();
+  // 只记录不拦截：旧客户端 push 缺新字段会经 zod default 抹掉服务器现值（sync.md §5.8），
+  // 这个头让 sync_logs 能对出「哪次覆盖出自哪个构建」。缺头（旧构建/CLI）记 null。
+  const clientBuild = c.req.header("X-TimeData-Client-Build")?.slice(0, 64) ?? null;
 
   // 幂等命中：同 requestId 直接回放原响应，不重复校验/apply、不产生新 seq。
   if (body.requestId) {
@@ -555,6 +558,7 @@ sync.post("/push", async (c) => {
       "push_rejected",
       {
         timings: { parseMs: Math.round(parseMs), validateMs: Math.round(validateMs) },
+        clientBuild,
         outcomes: response.outcomes,
       },
       response.outcomes.length,
@@ -686,6 +690,7 @@ sync.post("/push", async (c) => {
       totalMs: Math.round(totalMs),
     },
     backupId: backup?.id ?? null,
+    clientBuild,
     outcomes: response.outcomes,
     seqAnalysis,
     protected: Boolean(backup),
