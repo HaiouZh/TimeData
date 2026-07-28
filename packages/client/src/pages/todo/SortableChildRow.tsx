@@ -365,7 +365,7 @@ export function NewChildRow({ onResolve }: NewChildRowProps) {
           }}
           onBlur={() => onResolve(draft, "blur")}
           onKeyDown={handleKey}
-          className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm text-ink outline-none"
+          className="min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 td-text-body text-ink outline-none"
         />
         <button
           type="button"

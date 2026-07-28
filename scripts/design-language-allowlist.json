@@ -3738,14 +3738,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/pages/todo/SortableChildRow.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-8 min-w-0 flex-1 resize-none break-words bg-transparent px-1 py-1 text-sm text-ink outline-none focus:bg-surface-hover\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/pages/todo/SunkenInboxTail.tsx",
       "rule": "bare-text-size",
       "lineText": "className=\"w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover\"",
