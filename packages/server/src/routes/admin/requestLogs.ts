@@ -6,8 +6,9 @@ import {
 } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
+import { acknowledgeIp, listUnacknowledgedNewIps } from "../../lib/knownIps.js";
 import { queryRequestLogs } from "../../lib/requestLog.js";
-import { validateQuery } from "../../middleware/validate.js";
+import { validateBody, validateQuery } from "../../middleware/validate.js";
 
 const requestLogs = new Hono();
 
@@ -18,6 +19,22 @@ const requestLogsQuerySchema = z.object({
   tokenTier: AdminRequestLogTokenTierSchema.optional(),
   clientHint: AdminRequestLogClientHintSchema.optional(),
 }).strict();
+
+const acknowledgeBodySchema = z.object({
+  tokenTier: z.string().min(1),
+  ip: z.string().min(1),
+}).strict();
+
+// 陌生 IP 提醒:未确认的新来源 IP 列表与「知道了」确认。
+requestLogs.get("/new-ips", (c) => {
+  return c.json({ newIps: listUnacknowledgedNewIps() });
+});
+
+requestLogs.post("/new-ips/acknowledge", validateBody(acknowledgeBodySchema), (c) => {
+  const { tokenTier, ip } = c.var.body;
+  acknowledgeIp(tokenTier, ip);
+  return c.json({ ok: true });
+});
 
 requestLogs.get("/", validateQuery(requestLogsQuerySchema), (c) => {
   const query = c.var.query;

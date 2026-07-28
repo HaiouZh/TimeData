@@ -1,0 +1,129 @@
+import type Database from "better-sqlite3";
+import type { Hono } from "hono";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { cleanupRouteTestDb, setupRouteTestApp } from "../../__tests__/helpers.js";
+
+let app: Hono;
+let db: Database.Database;
+
+beforeEach(async () => {
+  const setup = await setupRouteTestApp("/api/admin/request-logs", "../routes/admin/requestLogs.js");
+  app = setup.app;
+  db = setup.db;
+});
+
+afterEach(() => {
+  cleanupRouteTestDb(db);
+});
+
+function seedKnownIp(overrides: Partial<{
+  tokenTier: string;
+  ip: string;
+  firstSeen: string;
+  lastSeen: string;
+  acknowledged: boolean;
+}> = {}): void {
+  db.prepare(`
+    INSERT INTO known_ips (token_tier, ip, first_seen, last_seen, acknowledged)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    overrides.tokenTier ?? "master",
+    overrides.ip ?? "203.0.113.1",
+    overrides.firstSeen ?? "2026-07-28T08:00:00.000Z",
+    overrides.lastSeen ?? "2026-07-28T09:00:00.000Z",
+    overrides.acknowledged ? 1 : 0,
+  );
+}
+
+function seedRequestLog(overrides: Partial<{ ip: string; isNewIp: boolean }> = {}): void {
+  db.prepare(`
+    INSERT INTO api_request_logs (
+      timestamp, method, path, status, outcome, token_tier, ip,
+      user_agent, client_hint, device_label, duration_ms, is_new_ip
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    "2026-07-28T09:00:00.000Z",
+    "GET",
+    "/api/entries",
+    200,
+    "ok",
+    "master",
+    overrides.ip ?? "203.0.113.1",
+    "Vitest",
+    "web",
+    null,
+    5,
+    overrides.isNewIp ? 1 : 0,
+  );
+}
+
+describe("GET /api/admin/request-logs/new-ips", () => {
+  it("只返回未确认的新 IP", async () => {
+    seedKnownIp({ tokenTier: "master", ip: "203.0.113.1", acknowledged: false });
+    seedKnownIp({ tokenTier: "agent", ip: "198.51.100.7", acknowledged: true });
+
+    const res = await app.request("/api/admin/request-logs/new-ips");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      newIps: [
+        {
+          tokenTier: "master",
+          ip: "203.0.113.1",
+          firstSeen: "2026-07-28T08:00:00.000Z",
+          lastSeen: "2026-07-28T09:00:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("无未确认记录时返回空列表", async () => {
+    const res = await app.request("/api/admin/request-logs/new-ips");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ newIps: [] });
+  });
+});
+
+describe("POST /api/admin/request-logs/new-ips/acknowledge", () => {
+  it("确认后从未确认列表消失,其余不受影响", async () => {
+    seedKnownIp({ tokenTier: "master", ip: "203.0.113.1" });
+    seedKnownIp({ tokenTier: "agent", ip: "198.51.100.7", firstSeen: "2026-07-28T07:00:00.000Z" });
+
+    const ackRes = await app.request("/api/admin/request-logs/new-ips/acknowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokenTier: "master", ip: "203.0.113.1" }),
+    });
+    expect(ackRes.status).toBe(200);
+    expect(await ackRes.json()).toEqual({ ok: true });
+
+    const listRes = await app.request("/api/admin/request-logs/new-ips");
+    const body = (await listRes.json()) as { newIps: Array<{ tokenTier: string; ip: string }> };
+    expect(body.newIps).toEqual([
+      expect.objectContaining({ tokenTier: "agent", ip: "198.51.100.7" }),
+    ]);
+  });
+
+  it("缺字段返回 400", async () => {
+    const res = await app.request("/api/admin/request-logs/new-ips/acknowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokenTier: "master" }),
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/admin/request-logs 行 isNewIp 映射", () => {
+  it("is_new_ip 列正确映射为布尔", async () => {
+    seedRequestLog({ ip: "203.0.113.9", isNewIp: true });
+    seedRequestLog({ ip: "127.0.0.1", isNewIp: false });
+
+    const res = await app.request("/api/admin/request-logs");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { logs: Array<{ ip: string | null; isNewIp: boolean }> };
+    expect(body.logs).toHaveLength(2);
+    const byIp = new Map(body.logs.map((log) => [log.ip, log.isNewIp]));
+    expect(byIp.get("203.0.113.9")).toBe(true);
+    expect(byIp.get("127.0.0.1")).toBe(false);
+  });
+});
