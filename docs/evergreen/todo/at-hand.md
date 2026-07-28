@@ -7,7 +7,7 @@ covers:
   - packages/server/src/lib/session-rows.ts
 contracts:
   - packages/client/src/lib/sessions.ts
-last-reviewed: 2026-07-24
+last-reviewed: 2026-07-28
 ---
 
 # 待办 · 手头
@@ -27,7 +27,7 @@ last-reviewed: 2026-07-24
 
 "手头"回答的是"我现在正在忙哪几件事"，不是新的任务状态：
 
-- **`Session`** 只是一段时间区间的元数据：`{id, startedAt, endedAt, note, createdAt, updatedAt}`。它自己不持有任务列表——任务经 `Task.sessionId` 反过来指向它。`note` 只在 schema 里占位：无 UI 编辑入口、无消费方。
+- **`Session`** 只是一段时间区间的元数据：`{id, startedAt, endedAt, note, createdAt, updatedAt}`。它自己不持有任务列表——任务经 `Task.sessionId` 反过来指向它。`note` 是活跃场的随时可改小便签：`AtHandSection` 标题位展示（空回落显示「手头」），点标题行内编辑（Enter/失焦保存、Escape 取消、输入层 `maxLength=200`），经 `updateSessionNote` 写入（trim 后空串归一存 `null`）。散场不清 note，随场归档；续场列表态标题不可编辑、不消费历史场 note。
 - **活跃场** = `endedAt === null` 的行里 `startedAt` 最大的那个（`getActiveSession()` / 内部 `pickActive()`）。正常情况下全库只有 0 或 1 个活跃场；抓活时零仪式自动开场，找不到活跃场才新建，已有活跃场就复用。
 - 任意时刻至多一个活跃场是**期望不变量**，不是数据库约束——跨设备并发开场可能短暂产生多行 `endedAt===null`，靠 §6 的显式自愈收敛，不靠事务锁或唯一索引。
 
@@ -121,16 +121,16 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 2. **模板与 child 不可抓，occurrence 可抓**：`grabTaskToHand` 拒绝 `parentId !== null`（子任务）、`recurrence !== null`（重复模板本体）与 `skipped` 的 occurrence；重复规则物化出来的 occurrence（`ruleId!==null && recurrence===null`）是普通 root 语义，可以被抓。
 3. **三处入口的可见性判定各自独立、不完全相同**：`TaskRow` overlay 与 `TaskList` 滑出菜单都用 `recurrence===null && pool!=="completed"`；`TaskDetailSheet` 抽屉按钮用 `parentId===null && recurrence===null && !task.done`。UI 判定只影响按钮是否渲染，真正的红线在 `grabTaskToHand` 内部三道校验（§2），两层判定不同步不会破坏数据，只可能出现"按钮该出现没出现"的体验问题。翻牌复查区与水下找回尾部经同一份 `rowHandlers.onToHand` 透传同样具备抓取入口——**这是有意为之**：想法重力的翻牌/水下找回本身是收件箱任务的替代视图，理应享有同样的操作面，不是遗漏未收窄。
 4. **手头不是新写入路径**：抓/移/散/续全部经既有 `tasks`/`sessions` 两个 LWW 域的普通 create/update，不新增写入通道，也不改变 `tasks` 的 force-push 契约。`sessions` 域本身不在 force-push 五域兜底范围内，但 `sessionId` 作为 `tasks` 字段仍随 `tasks` force-push 一起搬运——极端场景下可能在对端留下一个指向"尚未同步过来的 session"的悬空 `sessionId`；这只是历史归属指针失效，不影响任务本身，也不会被误判成活跃场（`getActiveSession()` 只从 `sessions` 表本身取活跃场，不会凭空对上一个不存在的 id）。
-5. **演化口子（本期均不做，仅记录方向、不构成设计承诺）**：时间轴联动（拿 `startedAt`/`endedAt` 在 timeline 上画出手头区间）、战役常驻卡（把 `Session` 历史做成可回看的"战役"卡片，消费 §1 提到的 `note` 字段）、战报（按 `sessionId` 聚合一场做了什么生成摘要）。这三个方向都只需读现有 `Session`/`Task.sessionId` 数据，不需要现在改 schema。
+5. **演化口子（本期均不做，仅记录方向、不构成设计承诺）**：时间轴联动（拿 `startedAt`/`endedAt` 在 timeline 上画出手头区间）、战役常驻卡（把 `Session` 历史做成可回看的"战役"卡片，历史场的 `note` 便签可复用为卡片标签）、战报（按 `sessionId` 聚合一场做了什么生成摘要）。这三个方向都只需读现有 `Session`/`Task.sessionId` 数据，不需要现在改 schema。
 
 ## 8. 模块速查
 
 | 入口 | 职责 |
 |---|---|
-| `lib/sessions.ts` | 生命周期：`getActiveSession`（纯读）/ `healActiveSessions`（显式自愈）/ `grabTaskToHand` / `releaseTaskFromHand` / `endActiveSession` / `listResumableSessions` / `resumeSession` |
+| `lib/sessions.ts` | 生命周期：`getActiveSession`（纯读）/ `healActiveSessions`（显式自愈）/ `grabTaskToHand` / `releaseTaskFromHand` / `endActiveSession` / `listResumableSessions` / `resumeSession` / `updateSessionNote`（场便签） |
 | `pages/todo/AtHandSection.tsx` | 手头区 UI：沿用待办区「独立标题行 + 等宽行面板」骨架；活跃场显示未完列表 / 「本场已完成」折叠 / 散场按钮，无活跃场时显示续场行列表，全无则隐藏 |
 | `server/src/lib/session-rows.ts` | `sessionToRow` / `rowToSession`：SQL ↔ JS 映射，不写 `updated_at` |
 | `pages/TodoPage.tsx`（归 [todo](../todo.md) covers） | 接线：`buckets.atHand`/`handSession` 渲染 `AtHandSection`；`rowHandlers.onToHand` 透传给 `TaskRow`/`TaskList`/`TaskDetailSheet`/`GravityReviewSection`/`SunkenInboxTail`/`SunkenScheduledTail`；`useEffect` 触发 `healActiveSessions` |
 | `lib/tasks.ts: listTasks()`（归 [todo](../todo.md) covers） | `TodoBuckets.atHand`/`handSession` 字段与 §4 的排他投影判定 |
 
-测试：`lib/sessions.test.ts`（抓/移/散/续/自愈/可续列表全部行为，含幂等 no-op）、`pages/todo/AtHandSection.test.tsx`（活跃场渲染/移出/续场行/全无隐藏）、`lib/tasks.test.ts`（`describe("listTasks atHand 投影")`：排他、done 双显、散场回桶、指向已散场 sessionId 不影响分桶、occurrence 物化下一发不继承 sessionId）、`pages/todo/TaskRow.test.tsx`（overlay 抓取入口按钮 + 重复模板不渲染 + 不传 onToHand 不渲染）、`pages/todo/TaskDetailSheet.test.tsx`（抽屉抓/移按钮）、`shared/src/entitySchemas.test.ts` / `shared/src/syncDomains.test.ts`（`SessionSchema` + `sessions` 域注册）、`server/src/db/schema.test.ts`（`session_id` 列 + 索引幂等补齐）、`server/src/sync/domains.test.ts`（sessions 域注册）、`client/src/sync/clientDomains.test.ts`（sessions 客户端域 + bundled backup）、`client/src/db/schemaNormalization.test.ts`（`sessionId` 归一）。
+测试：`lib/sessions.test.ts`（抓/移/散/续/自愈/可续列表全部行为，含幂等 no-op；`updateSessionNote` 写入/空串归 null/不存在场 throw）、`pages/todo/AtHandSection.test.tsx`（活跃场渲染/移出/续场行/全无隐藏；场便签标题显示回退/行内编辑保存与取消/续场态不可编辑）、`lib/tasks.test.ts`（`describe("listTasks atHand 投影")`：排他、done 双显、散场回桶、指向已散场 sessionId 不影响分桶、occurrence 物化下一发不继承 sessionId）、`pages/todo/TaskRow.test.tsx`（overlay 抓取入口按钮 + 重复模板不渲染 + 不传 onToHand 不渲染）、`pages/todo/TaskDetailSheet.test.tsx`（抽屉抓/移按钮）、`shared/src/entitySchemas.test.ts` / `shared/src/syncDomains.test.ts`（`SessionSchema` + `sessions` 域注册）、`server/src/db/schema.test.ts`（`session_id` 列 + 索引幂等补齐）、`server/src/sync/domains.test.ts`（sessions 域注册）、`client/src/sync/clientDomains.test.ts`（sessions 客户端域 + bundled backup）、`client/src/db/schemaNormalization.test.ts`（`sessionId` 归一）。

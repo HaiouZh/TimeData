@@ -63,6 +63,7 @@ import {
   listResumableSessions,
   releaseTaskFromHand,
   resumeSession,
+  updateSessionNote,
 } from "../lib/sessions.js";
 import {
   assignTasksToProject,
@@ -782,6 +783,10 @@ export function TodoPage() {
       onEdit={openDetail}
       goalLinkedIds={goalLinkedIds}
       metaChip={projectMetaChip}
+      onUpdateNote={(note) => {
+        const sessionId = buckets.handSession?.id;
+        if (sessionId) void updateSessionNote(sessionId, note);
+      }}
     />
   );
 
