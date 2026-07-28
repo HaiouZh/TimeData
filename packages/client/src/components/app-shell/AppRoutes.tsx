@@ -4,6 +4,7 @@ import TimelinePage from "../../pages/TimelinePage.tsx";
 
 // 除首屏时间轴外全部路由懒加载：recharts/@xyflow/markdown 等重依赖只在进入对应页面时才加载。
 const DiaryPage = lazy(() => import("../../pages/DiaryPage.tsx"));
+const DiaryReviewPage = lazy(() => import("../../pages/diary/review/DiaryReviewPage.tsx"));
 const StyleguidePage = lazy(() => import("../../pages/dev/StyleguidePage.tsx"));
 const EntryPage = lazy(() => import("../../pages/EntryPage.tsx"));
 const GoalDetailPage = lazy(() => import("../../pages/goals/GoalDetailPage.tsx"));
@@ -43,6 +44,7 @@ export function AppRoutes() {
       <Route path="/" element={<TimelinePage />} />
       <Route path="/quick-notes" element={<QuickNotesPage />} />
       <Route path="/diary" element={<DiaryPage />} />
+      <Route path="/diary/review" element={<DiaryReviewPage />} />
       <Route path="/todo" element={<TodoPage />} />
       <Route element={<TracksShell />}>
         <Route path="/tracks" element={<TracksListPage />} />

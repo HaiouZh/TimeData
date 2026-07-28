@@ -23,4 +23,7 @@ export const STORAGE_KEYS = {
   goalsViewMode: "timedata_goals_view_mode",
   quickNoteComposerDraft: "timedata_quicknote_composer_draft",
   syncPhaseTimings: "timedata_sync_phase_timings",
+  diaryReviewYearRange: "timedata_diary_review_year_range",
+  diaryReviewLayoutB: "timedata_diary_review_layout_b",
+  diaryReviewMode: "timedata_diary_review_mode",
 } as const;
