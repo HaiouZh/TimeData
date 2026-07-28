@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api.ts";
-import { callWithTotp } from "./totpChallenge.ts";
+import { callWithTotp, TotpCancelledError } from "./totpChallenge.ts";
 
 function totpError(kind: "totp_required" | "totp_invalid"): ApiError {
   return new ApiError(401, "Unauthorized", JSON.stringify({ error: kind }), { error: kind });
@@ -62,12 +62,14 @@ describe("callWithTotp", () => {
     expect(request).toHaveBeenNthCalledWith(4, { "X-TOTP-Code": "333333" });
   });
 
-  it("用户取消（prompt 返回 null）：抛出原始 totp_required 错误", async () => {
+  it("用户取消（prompt 返回 null）：抛 TotpCancelledError 而非原始 401", async () => {
     const original = totpError("totp_required");
     const request = vi.fn().mockRejectedValue(original);
     const prompt = vi.fn().mockResolvedValue(null);
 
-    await expect(callWithTotp(request, prompt)).rejects.toBe(original);
+    const rejection = await callWithTotp(request, prompt).catch((error: unknown) => error);
+    expect(rejection).toBeInstanceOf(TotpCancelledError);
+    expect(rejection).not.toBe(original);
     expect(request).toHaveBeenCalledTimes(1);
   });
 

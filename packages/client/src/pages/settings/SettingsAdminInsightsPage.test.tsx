@@ -14,6 +14,7 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../lib/api.ts";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import SettingsAdminInsightsPage from "./SettingsAdminInsightsPage.js";
 
@@ -366,6 +367,42 @@ describe("SettingsAdminInsightsPage", () => {
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
     expect(host.textContent).not.toContain("检测到陌生 IP");
+
+    await unmount(root);
+  });
+
+  it("用户取消 TOTP 弹码：备份保存/删除都不显示错误文案", async () => {
+    mockSuccessfulAdminInsights();
+    // 弹窗宿主未挂载 → callWithTotp 的 defaultPrompt 直接返回 null，等价于用户点「取消」
+    const totpRequired = new ApiError(401, "Unauthorized", JSON.stringify({ error: "totp_required" }), {
+      error: "totp_required",
+    });
+    updateBackupConfig.mockRejectedValue(totpRequired);
+    deleteAdminBackup.mockRejectedValue(totpRequired);
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+
+    const saveButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("保存备份设置"),
+    );
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(host.textContent).not.toContain("备份设置保存失败");
+    expect(host.textContent).not.toContain("API error");
+
+    const deleteButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "删除");
+    await act(async () => {
+      deleteButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const confirmButton = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "删除备份",
+    );
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(deleteAdminBackup).toHaveBeenCalled();
+    expect(host.textContent).not.toContain("备份删除失败");
+    expect(host.textContent).not.toContain("API error");
 
     await unmount(root);
   });

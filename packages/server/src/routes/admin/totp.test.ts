@@ -126,6 +126,35 @@ describe("/api/admin/totp", () => {
     expect(await res.json()).toEqual({ enrolled: false });
   });
 
+  it("pending 超过 TTL 后 confirm 视为无 pending(400 no_pending_setup)", async () => {
+    // 注入 now 推进虚拟时间,不做真实等待
+    let fakeNow = Date.UTC(2026, 6, 28, 0, 0, 0);
+    const { Hono } = await import("hono");
+    const { createTotpRoute } = await import("./totp.js");
+    const ttlApp = new Hono().route("/api/admin/totp", createTotpRoute({ now: () => fakeNow }));
+    const post = (path: string, body?: unknown) =>
+      ttlApp.request(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+
+    // 陈旧 pending:跨过 TTL 后即便码算对也拒绝,且不落库
+    const stale = (await (await post("/api/admin/totp/setup")).json()) as { secret: string };
+    fakeNow += 10 * 60 * 1000;
+    const expired = await post("/api/admin/totp/confirm", { code: totpCode(stale.secret, fakeNow) });
+    expect(expired.status).toBe(400);
+    expect(await expired.json()).toEqual({ error: "no_pending_setup" });
+    expect(await (await ttlApp.request("/api/admin/totp")).json()).toEqual({ enrolled: false });
+
+    // 边界另一侧:TTL 内的 pending 仍可正常确认(证明上面不是被别的原因拒的)
+    const fresh = (await (await post("/api/admin/totp/setup")).json()) as { secret: string };
+    fakeNow += 9 * 60 * 1000;
+    const inTtl = await post("/api/admin/totp/confirm", { code: totpCode(fresh.secret, fakeNow) });
+    expect(inTtl.status).toBe(200);
+    expect(await (await ttlApp.request("/api/admin/totp")).json()).toEqual({ enrolled: true });
+  });
+
   it("confirm/disable 缺 code 参数按错码处理", async () => {
     await postJson("/api/admin/totp/setup");
     const confirmRes = await postJson("/api/admin/totp/confirm", {});

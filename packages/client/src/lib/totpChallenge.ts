@@ -7,6 +7,17 @@ import { ApiError } from "./api.ts";
  * 码错 → 401 { error: "totp_invalid" }。未绑定时服务端直接放行，本模块的裸调也就直通。
  */
 
+/**
+ * 用户在弹码对话框主动取消。调用方应静默收敛(不显示错误文案)——
+ * 取消是用户自己的选择，不是失败。
+ */
+export class TotpCancelledError extends Error {
+  constructor() {
+    super("totp_cancelled");
+    this.name = "TotpCancelledError";
+  }
+}
+
 export interface TotpPromptOptions {
   /** true 表示上一次输入的码被服务端判错，弹窗应显示「验证码错误，请重新输入」。 */
   retry: boolean;
@@ -27,7 +38,7 @@ export function registerTotpPrompt(prompt: TotpPrompt | null): void {
 
 const defaultPrompt: TotpPrompt = (options) => {
   if (!registeredPrompt) {
-    // 弹窗宿主没挂载（如纯逻辑测试环境）：视为用户取消，让调用方拿到原始错误。
+    // 弹窗宿主没挂载（如纯逻辑测试环境）：视为用户取消。
     return Promise.resolve(null);
   }
   return registeredPrompt(options);
@@ -43,24 +54,23 @@ function isTotpError(error: unknown, kind: "totp_required" | "totp_invalid"): er
 
 /**
  * 先裸调（空 headers）；收到 totp_required 弹码带 X-TOTP-Code 重试；
- * totp_invalid 提示重输（最多 3 次后抛最后一次错误）；用户取消抛原始错误；其他错误原样抛。
+ * totp_invalid 提示重输（最多 3 次后抛最后一次错误）；用户取消抛 `TotpCancelledError`；其他错误原样抛。
  */
 export async function callWithTotp<T>(
   request: (totpHeaders: Record<string, string>) => Promise<T>,
   prompt: TotpPrompt = defaultPrompt,
 ): Promise<T> {
-  let originalError: unknown;
+  let lastInvalidError: unknown;
   try {
     return await request({});
   } catch (error) {
     if (!isTotpError(error, "totp_required")) throw error;
-    originalError = error;
+    lastInvalidError = error;
   }
 
-  let lastInvalidError: unknown = originalError;
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
     const code = await prompt({ retry: attempt > 0 });
-    if (code === null) throw originalError;
+    if (code === null) throw new TotpCancelledError();
     try {
       return await request({ "X-TOTP-Code": code });
     } catch (error) {

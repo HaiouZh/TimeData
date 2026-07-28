@@ -35,8 +35,9 @@ import {
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
+import { messages } from "../../lib/messages.ts";
 import { formatAppDateTime } from "../../lib/time.ts";
-import { callWithTotp } from "../../lib/totpChallenge.ts";
+import { callWithTotp, TotpCancelledError } from "../../lib/totpChallenge.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 import SettingsTotpSection from "./SettingsTotpSection.js";
 
@@ -201,12 +202,6 @@ function FilterSelectSheet({
   );
 }
 
-// 陌生 IP 提醒文案:并行任务在改 messages.ts,为避免冲突文案先留组件内常量。
-const NEW_IP_ALERT_TITLE = "检测到陌生 IP";
-const NEW_IP_ALERT_HINT = "以下来源 IP 首次使用带凭证的令牌访问服务器。若不是你本人或已授权的设备,请立即更换令牌。";
-const NEW_IP_ACK_LABEL = "知道了";
-const NEW_IP_ROW_BADGE = "新 IP";
-
 function NewIpAlertCard({
   newIps,
   busy,
@@ -219,8 +214,8 @@ function NewIpAlertCard({
   if (newIps.length === 0) return null;
   return (
     <div className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
-      <div className="td-text-body font-medium text-warn">{NEW_IP_ALERT_TITLE}</div>
-      <p className="td-text-caption text-ink-2">{NEW_IP_ALERT_HINT}</p>
+      <div className="td-text-body font-medium text-warn">{messages.newIpAlert.title}</div>
+      <p className="td-text-caption text-ink-2">{messages.newIpAlert.hint}</p>
       <div className="space-y-2">
         {newIps.map((item) => (
           <div
@@ -242,7 +237,7 @@ function NewIpAlertCard({
               onClick={() => onAcknowledge(item)}
               className={secondaryButtonClassName}
             >
-              {NEW_IP_ACK_LABEL}
+              {messages.newIpAlert.acknowledge}
             </button>
           </div>
         ))}
@@ -358,7 +353,7 @@ function RequestAuditSection({
               <SyncIssueBadge label={String(log.status)} />
               <SyncIssueBadge label={log.outcome} />
               <SyncIssueBadge label={log.tokenTier} />
-              {log.isNewIp && <SyncIssueBadge label={NEW_IP_ROW_BADGE} />}
+              {log.isNewIp && <SyncIssueBadge label={messages.newIpAlert.rowBadge} />}
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
               <span>{formatAppDateTime(log.timestamp)}</span>
@@ -502,6 +497,8 @@ export default function SettingsAdminInsightsPage() {
       setBackupConfig(response.config);
       setBackupActionStatus("备份设置已保存。");
     } catch (err) {
+      // 用户在弹码框主动取消：静默收敛，不当失败提示
+      if (err instanceof TotpCancelledError) return;
       setBackupActionStatus(`备份设置保存失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBackupActionBusy(false);
@@ -552,6 +549,8 @@ export default function SettingsAdminInsightsPage() {
         );
       }
     } catch (err) {
+      // 用户在弹码框主动取消：静默收敛，不当失败提示
+      if (err instanceof TotpCancelledError) return;
       setBackupActionStatus(`备份删除失败：${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBackupActionBusy(false);

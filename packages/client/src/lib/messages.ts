@@ -54,11 +54,19 @@ export const messages = {
     disableInputLabel: "输入动态码或恢复码以停用",
     disableConfirmButton: "确认停用",
     disableFailed: "验证码错误，停用失败，请重试。",
-    // —— 危险操作弹码对话框（Task 6 使用）——
+    // —— 危险操作弹码对话框 ——
     promptTitle: "需要动态验证码",
     promptPlaceholder: "6 位动态码或恢复码",
     promptRetry: "验证码错误，请重新输入。",
     promptCancel: "取消",
+  },
+
+  /** 陌生 IP 提醒（服务端数据洞察页） */
+  newIpAlert: {
+    title: "检测到陌生 IP",
+    hint: "以下来源 IP 首次使用带凭证的令牌访问服务器。若不是你本人或已授权的设备，请立即更换令牌。",
+    acknowledge: "知道了",
+    rowBadge: "新 IP",
   },
 
   /** Confirm dialog generic labels */

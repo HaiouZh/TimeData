@@ -11,7 +11,12 @@ import {
 interface PendingSetup {
   secret: string;
   recoveryCodes: string[];
+  /** setup 发生的时刻(ms),用于 TTL 判定 */
+  createdAt: number;
 }
+
+/** 待确认绑定的存活时长:超时的 pending 视为不存在,避免陈旧密钥被后来者用旧码确认。 */
+const PENDING_SETUP_TTL_MS = 10 * 60 * 1000;
 
 // 待确认的绑定密钥,仅存内存不落库;confirm 成功或重新 setup 时更替
 let pendingSetup: PendingSetup | null = null;
@@ -28,13 +33,15 @@ export function createTotpRoute(opts: { now?: () => number } = {}): Hono {
   totp.post("/setup", (c) => {
     const secret = generateTotpSecret();
     const recoveryCodes = generateRecoveryCodes();
-    pendingSetup = { secret, recoveryCodes };
+    pendingSetup = { secret, recoveryCodes, createdAt: now() };
     return c.json({ secret, otpauthUri: otpauthUri(secret, "TimeData"), recoveryCodes });
   });
 
   // 校验码后正式落库绑定
   totp.post("/confirm", async (c) => {
     if (isTotpEnrolled()) return c.json({ error: "already_enrolled" }, 409);
+    // 过期 pending 直接丢弃,与从未 setup 同义
+    if (pendingSetup && now() - pendingSetup.createdAt >= PENDING_SETUP_TTL_MS) pendingSetup = null;
     if (!pendingSetup) return c.json({ error: "no_pending_setup" }, 400);
 
     const body = (await c.req.json().catch(() => ({}))) as { code?: unknown };
