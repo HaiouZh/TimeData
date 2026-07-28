@@ -193,6 +193,46 @@ describe("diary batch", () => {
   });
 });
 
+describe("diary asset", () => {
+  beforeEach(() => {
+    fs.mkdirSync(path.join(vault, "attachments"), { recursive: true });
+    fs.writeFileSync(path.join(vault, "attachments", "a.png"), Buffer.from([1, 2, 3, 4]));
+  });
+
+  it("命中返回图片字节流与正确 Content-Type", async () => {
+    const res = await app.request("/api/diary/asset?path=attachments/a.png");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    const buf = new Uint8Array(await res.arrayBuffer());
+    expect(Array.from(buf)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("路径越界/非法一律 4xx", async () => {
+    expect((await app.request("/api/diary/asset?path=../secret.png")).status).toBeGreaterThanOrEqual(400);
+    expect((await app.request("/api/diary/asset?path=/etc/passwd")).status).toBeGreaterThanOrEqual(400);
+    expect((await app.request("/api/diary/asset?path=a.md")).status).toBeGreaterThanOrEqual(400);
+  });
+
+  it("不存在 404", async () => {
+    const res = await app.request("/api/diary/asset?path=none.png");
+    expect(res.status).toBe(404);
+  });
+
+  it("vault 未挂载 503", async () => {
+    delete process.env.DIARY_VAULT_DIR;
+    const res = await app.request("/api/diary/asset?path=attachments/a.png");
+    expect(res.status).toBe(503);
+  });
+
+  it("svg 用专属 Content-Type 并附 CSP 头防脚本执行", async () => {
+    fs.writeFileSync(path.join(vault, "attachments", "b.svg"), "<svg></svg>");
+    const res = await app.request("/api/diary/asset?path=attachments/b.svg");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/svg+xml");
+    expect(res.headers.get("content-security-policy")).toBe("default-src 'none'");
+  });
+});
+
 describe("diary read/write", () => {
   it("文件不存在返回空内容", async () => {
     await putConfig();

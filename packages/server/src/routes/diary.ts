@@ -67,6 +67,43 @@ diary.put("/config", async (c) => {
   return c.json({ ok: true });
 });
 
+const ASSET_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+// 注意：/asset 与 /batch 必须注册在 /:date 之前，否则会被 :date 参数路由吞掉
+diary.get("/asset", (c) => {
+  const rel = c.req.query("path") ?? "";
+  const ext = rel.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+  if (!ext || !(ext in ASSET_MIME)) return c.json({ error: "仅支持图片附件" }, 400);
+  if (rel.includes("\\") || rel.startsWith("/") || /^[A-Za-z]:/.test(rel) || rel.split("/").some((s) => s === "..")) {
+    return c.json({ error: "非法路径" }, 400);
+  }
+  const root = vaultDir();
+  if (!root) return c.json({ error: "diary-disabled" }, 503);
+  const abs = path.resolve(root, rel);
+  const rootAbs = path.resolve(root);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return c.json({ error: "非法路径" }, 400);
+  try {
+    const buf = fs.readFileSync(abs);
+    const headers: Record<string, string> = {
+      "Content-Type": ASSET_MIME[ext],
+      "Cache-Control": "private, max-age=3600",
+    };
+    // svg 可携带脚本，前端虽走 blob+img 不执行脚本，服务端仍设防
+    if (ext === "svg") headers["Content-Security-Policy"] = "default-src 'none'";
+    return c.body(new Uint8Array(buf), 200, headers);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return c.json({ error: "not-found" }, 404);
+    throw err;
+  }
+});
+
 // 注意：/batch 必须注册在 /:date 之前，否则会被 :date 参数路由吞掉
 diary.post("/batch", async (c) => {
   const raw: unknown = await c.req.json().catch(() => null);
