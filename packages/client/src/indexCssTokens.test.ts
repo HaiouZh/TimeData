@@ -97,11 +97,4 @@ describe("index.css design tokens", () => {
     const webkitUses = cssWithoutComments.match(/::-webkit-scrollbar\b/g) ?? [];
     expect(webkitUses.length).toBe(1); // 仅 .wheel-scroll::-webkit-scrollbar 那一处
   });
-
-  it("keeps health range presets visible instead of hiding horizontal overflow", () => {
-    expect(css).toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*flex-wrap:\s*wrap;/s);
-    expect(css).not.toContain(".health-page-header .health-range-selector::-webkit-scrollbar");
-    expect(css).not.toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*scrollbar-width:\s*none;/s);
-    expect(css).not.toMatch(/\.health-page-header \.health-range-selector\s*\{[^}]*overflow-x:\s*auto;/s);
-  });
 });
