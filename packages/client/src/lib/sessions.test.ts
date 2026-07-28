@@ -9,6 +9,7 @@ import {
   listResumableSessions,
   releaseTaskFromHand,
   resumeSession,
+  updateSessionNote,
 } from "./sessions.js";
 
 beforeEach(resetDb);
@@ -242,5 +243,35 @@ describe("resumeSession", () => {
 
     const task = await db.tasks.get("t1");
     expect(task?.sessionId).toBe(activeId);
+  });
+});
+
+describe("updateSessionNote", () => {
+  it("写入 note 并落 sessions 域 syncLog", async () => {
+    await db.sessions.add(makeSession({ id: "s1", startedAt: "2026-07-28T08:00:00.000Z" }));
+
+    const later = new Date("2026-07-28T09:00:00.000Z");
+    const next = await updateSessionNote("s1", "先把周报弄完", { now: later });
+
+    expect(next.note).toBe("先把周报弄完");
+    expect(next.updatedAt).toBe(later.toISOString());
+    const stored = await db.sessions.get("s1");
+    expect(stored?.note).toBe("先把周报弄完");
+    const logs = await db.syncLog.toArray();
+    expect(logs.filter((l) => l.tableName === "sessions" && l.action === "update")).toHaveLength(1);
+  });
+
+  it("trim 后空串归一为 null", async () => {
+    await db.sessions.add(
+      makeSession({ id: "s1", startedAt: "2026-07-28T08:00:00.000Z", note: "旧便签" }),
+    );
+
+    const next = await updateSessionNote("s1", "   ");
+    expect(next.note).toBeNull();
+    expect((await db.sessions.get("s1"))?.note).toBeNull();
+  });
+
+  it("场不存在时 throw", async () => {
+    await expect(updateSessionNote("missing", "x")).rejects.toThrow("会话不存在");
   });
 });

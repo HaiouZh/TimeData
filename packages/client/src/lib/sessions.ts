@@ -86,6 +86,24 @@ export async function endActiveSession(options: { now?: Date } = {}): Promise<vo
   });
 }
 
+/** 场便签：trim 后空串归一 null；普通 sessions 域 update，散场不清、随场归档。 */
+export async function updateSessionNote(
+  sessionId: string,
+  note: string | null,
+  options: { now?: Date } = {},
+): Promise<Session> {
+  const ts = nowIso(options.now);
+  return db.transaction("rw", db.sessions, db.syncLog, async () => {
+    const existing = await db.sessions.get(sessionId);
+    if (!existing) throw new Error("会话不存在");
+    const trimmed = note?.trim() ?? "";
+    const next = SessionSchema.parse({ ...existing, note: trimmed === "" ? null : trimmed, updatedAt: ts });
+    await db.sessions.put(next);
+    await recordSyncLog("sessions", next.id, "update", ts);
+    return next;
+  });
+}
+
 export interface ResumableSession {
   session: Session;
   pendingCount: number;
