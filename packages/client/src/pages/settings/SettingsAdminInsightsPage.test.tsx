@@ -30,6 +30,19 @@ const fetchAdminHealthChecks = vi.hoisted(() => vi.fn());
 const fetchAdminAnalytics = vi.hoisted(() => vi.fn());
 const fetchAdminRequestLogs = vi.hoisted(() => vi.fn());
 
+const fetchTotpStatus = vi.hoisted(() => vi.fn());
+const setupTotp = vi.hoisted(() => vi.fn());
+const confirmTotp = vi.hoisted(() => vi.fn());
+const disableTotp = vi.hoisted(() => vi.fn());
+
+const fetchUnacknowledgedNewIps = vi.hoisted(() => vi.fn());
+const acknowledgeNewIp = vi.hoisted(() => vi.fn());
+
+vi.mock("../../lib/adminNewIps.ts", () => ({
+  fetchUnacknowledgedNewIps,
+  acknowledgeNewIp,
+}));
+
 vi.mock("../../lib/adminApi.ts", () => ({
   fetchAdminSummary,
   fetchAdminEntries,
@@ -43,6 +56,10 @@ vi.mock("../../lib/adminApi.ts", () => ({
   fetchAdminHealthChecks,
   fetchAdminAnalytics,
   fetchAdminRequestLogs,
+  fetchTotpStatus,
+  setupTotp,
+  confirmTotp,
+  disableTotp,
 }));
 
 const summaryResponse: AdminSummaryResponse = {
@@ -192,6 +209,7 @@ const requestLogsResponse: AdminRequestLogsResponse = {
       clientHint: "agent",
       deviceLabel: "agent",
       durationMs: 12,
+      isNewIp: false,
     },
   ],
 };
@@ -224,6 +242,9 @@ function mockSuccessfulAdminInsights() {
   fetchAdminHealthChecks.mockResolvedValue(healthChecksResponse);
   fetchAdminAnalytics.mockResolvedValue(analyticsResponse);
   fetchAdminRequestLogs.mockResolvedValue(requestLogsResponse);
+  fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [] });
+  acknowledgeNewIp.mockResolvedValue({ ok: true });
+  fetchTotpStatus.mockResolvedValue({ enrolled: false });
 }
 
 afterEach(() => {
@@ -292,6 +313,59 @@ describe("SettingsAdminInsightsPage", () => {
       clientHint: "agent",
     });
     expect(host.textContent).toContain("暂无请求审计记录。");
+
+    await unmount(root);
+  });
+
+  it("renders new-IP alert card, highlights new-IP log rows, and acknowledges", async () => {
+    mockSuccessfulAdminInsights();
+    fetchUnacknowledgedNewIps.mockResolvedValue({
+      newIps: [
+        {
+          tokenTier: "master",
+          ip: "203.0.113.9",
+          firstSeen: "2026-07-28T08:00:00.000Z",
+          lastSeen: "2026-07-28T09:00:00.000Z",
+        },
+      ],
+    });
+    fetchAdminRequestLogs.mockResolvedValue({
+      limit: 100,
+      logs: [
+        { ...requestLogsResponse.logs[0], id: 1, ip: "203.0.113.9", isNewIp: true },
+        { ...requestLogsResponse.logs[0], id: 2, ip: "127.0.0.1", isNewIp: false },
+      ],
+    });
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+
+    // 提醒卡与条目
+    expect(host.textContent).toContain("检测到陌生 IP");
+    expect(host.textContent).toContain("203.0.113.9");
+    // 新 IP 行带「新 IP」徽标,旧 IP 行没有
+    const newIpBadges = Array.from(host.querySelectorAll("span")).filter(
+      (item) => item.textContent === "新 IP",
+    );
+    expect(newIpBadges.length).toBeGreaterThan(0);
+
+    // 点「知道了」→ 调 acknowledge 并从列表移除
+    const ackButton = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("知道了"),
+    );
+    expect(ackButton).not.toBeNull();
+    await act(async () => {
+      ackButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(acknowledgeNewIp).toHaveBeenCalledWith("master", "203.0.113.9");
+    expect(host.textContent).not.toContain("检测到陌生 IP");
+
+    await unmount(root);
+  });
+
+  it("hides new-IP alert card when nothing is unacknowledged", async () => {
+    mockSuccessfulAdminInsights();
+    const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+
+    expect(host.textContent).not.toContain("检测到陌生 IP");
 
     await unmount(root);
   });

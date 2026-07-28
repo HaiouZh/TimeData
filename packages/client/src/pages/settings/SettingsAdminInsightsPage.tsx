@@ -27,11 +27,17 @@ import {
   triggerDailyBackup,
   updateBackupConfig,
 } from "../../lib/adminApi.ts";
+import {
+  acknowledgeNewIp,
+  fetchUnacknowledgedNewIps,
+  type UnacknowledgedNewIp,
+} from "../../lib/adminNewIps.ts";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { formatAppDateTime } from "../../lib/time.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
+import SettingsTotpSection from "./SettingsTotpSection.js";
 
 interface AdminInsightsState {
   summary?: AdminSummaryResponse;
@@ -194,6 +200,56 @@ function FilterSelectSheet({
   );
 }
 
+// 陌生 IP 提醒文案:并行任务在改 messages.ts,为避免冲突文案先留组件内常量。
+const NEW_IP_ALERT_TITLE = "检测到陌生 IP";
+const NEW_IP_ALERT_HINT = "以下来源 IP 首次使用带凭证的令牌访问服务器。若不是你本人或已授权的设备,请立即更换令牌。";
+const NEW_IP_ACK_LABEL = "知道了";
+const NEW_IP_ROW_BADGE = "新 IP";
+
+function NewIpAlertCard({
+  newIps,
+  busy,
+  onAcknowledge,
+}: {
+  newIps: UnacknowledgedNewIp[];
+  busy: boolean;
+  onAcknowledge: (item: UnacknowledgedNewIp) => void;
+}) {
+  if (newIps.length === 0) return null;
+  return (
+    <div className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
+      <div className="text-sm font-medium text-warn">{NEW_IP_ALERT_TITLE}</div>
+      <p className="text-xs text-ink-2">{NEW_IP_ALERT_HINT}</p>
+      <div className="space-y-2">
+        {newIps.map((item) => (
+          <div
+            key={`${item.tokenTier}:${item.ip}`}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2"
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-ink">
+                <code>{item.ip}</code>
+                <SyncIssueBadge label={tokenTierLabel[item.tokenTier as AdminRequestLogTokenTier] ?? item.tokenTier} />
+              </div>
+              <div className="mt-1 text-ink-3">
+                首见 {formatAppDateTime(item.firstSeen)} · 最近 {formatAppDateTime(item.lastSeen)}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onAcknowledge(item)}
+              className={secondaryButtonClassName}
+            >
+              {NEW_IP_ACK_LABEL}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PermissionMatrix() {
   const rows = [
     { tier: "public", access: "健康检查、版本信息", notes: "不读取个人数据。" },
@@ -287,13 +343,21 @@ function RequestAuditSection({
 
       <div className="space-y-2">
         {logs?.logs.map((log) => (
-          <div key={log.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2">
+          <div
+            key={log.id}
+            className={
+              log.isNewIp
+                ? "rounded-ctl border border-warn/40 bg-warn-soft px-3 py-2 text-xs text-ink-2"
+                : "rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2"
+            }
+          >
             <div className="flex flex-wrap items-center gap-2 text-ink">
               <code>{log.method}</code>
               <span className="min-w-0 break-all">{log.path}</span>
               <SyncIssueBadge label={String(log.status)} />
               <SyncIssueBadge label={log.outcome} />
               <SyncIssueBadge label={log.tokenTier} />
+              {log.isNewIp && <SyncIssueBadge label={NEW_IP_ROW_BADGE} />}
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
               <span>{formatAppDateTime(log.timestamp)}</span>
@@ -322,6 +386,35 @@ export default function SettingsAdminInsightsPage() {
   const [requestLogsError, setRequestLogsError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [newIps, setNewIps] = useState<UnacknowledgedNewIp[]>([]);
+  const [newIpAckBusy, setNewIpAckBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 陌生 IP 提醒独立加载:失败不影响其余洞察,静默忽略
+    fetchUnacknowledgedNewIps()
+      .then((response) => {
+        if (!cancelled) setNewIps(response.newIps);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleAcknowledgeNewIp(item: UnacknowledgedNewIp) {
+    setNewIpAckBusy(true);
+    try {
+      await acknowledgeNewIp(item.tokenTier, item.ip);
+      setNewIps((current) =>
+        current.filter((entry) => !(entry.tokenTier === item.tokenTier && entry.ip === item.ip)),
+      );
+    } catch {
+      // 确认失败保留条目,下次进入页面仍会提醒
+    } finally {
+      setNewIpAckBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -470,6 +563,8 @@ export default function SettingsAdminInsightsPage() {
       <div className="rounded-card border border-accent/30 bg-accent-soft p-4 text-sm text-accent-ink">
         诊断数据只读查看；仅备份管理会修改服务器备份（创建、删除、配置）。
       </div>
+
+      <NewIpAlertCard newIps={newIps} busy={newIpAckBusy} onAcknowledge={(item) => void handleAcknowledgeNewIp(item)} />
 
       {loading && <div className="text-sm text-ink-2">正在加载服务端数据…</div>}
       {error && (
@@ -649,6 +744,8 @@ export default function SettingsAdminInsightsPage() {
           />
 
           <PermissionMatrix />
+
+          <SettingsTotpSection />
 
           {data.backups && (
             <Section title="服务端备份">
