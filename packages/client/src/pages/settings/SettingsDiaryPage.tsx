@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "../../lib/api.js";
-import { fetchDiaryConfig, saveDiaryTemplate } from "../../lib/diary/diaryApi.js";
+import { fetchDiaryConfig, saveDiaryTemplate, saveDiaryWeeklyTemplate } from "../../lib/diary/diaryApi.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 const TEMPLATE_EXAMPLE = "日记_{yyyy}/Day/{yyyy}年{MM}月/{yyyy}-{MM}-{dd}.md";
+const WEEKLY_TEMPLATE_EXAMPLE = "Reviews/{gggg}/{gggg}-W{ww}.md";
 
 function extractServerMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -17,9 +18,13 @@ export default function SettingsDiaryPage() {
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
   const [template, setTemplate] = useState("");
+  const [weeklyTemplate, setWeeklyTemplate] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [weeklySaving, setWeeklySaving] = useState(false);
+  const [weeklyMessage, setWeeklyMessage] = useState("");
+  const [weeklyError, setWeeklyError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +33,7 @@ export default function SettingsDiaryPage() {
         if (cancelled) return;
         setEnabled(config.enabled);
         setTemplate(config.template);
+        setWeeklyTemplate(config.weeklyTemplate);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -53,6 +59,21 @@ export default function SettingsDiaryPage() {
       setError(extractServerMessage(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveWeekly() {
+    if (weeklySaving) return;
+    setWeeklySaving(true);
+    setWeeklyMessage("");
+    setWeeklyError("");
+    try {
+      await saveDiaryWeeklyTemplate(weeklyTemplate);
+      setWeeklyMessage("模板已保存");
+    } catch (err) {
+      setWeeklyError(extractServerMessage(err));
+    } finally {
+      setWeeklySaving(false);
     }
   }
 
@@ -99,6 +120,41 @@ export default function SettingsDiaryPage() {
           )}
           {error && (
             <div className="rounded-xl border border-danger/40 bg-danger-soft p-3 td-text-body text-danger">{error}</div>
+          )}
+
+          <div className="space-y-3 rounded-card border border-border bg-surface p-4">
+            <label className="block">
+              <span className="td-text-caption text-ink-3">周记路径模板</span>
+              <textarea
+                name="weeklyTemplate"
+                value={weeklyTemplate}
+                onChange={(e) => setWeeklyTemplate(e.target.value)}
+                rows={3}
+                className="mt-1 block w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
+                placeholder={WEEKLY_TEMPLATE_EXAMPLE}
+              />
+            </label>
+            <p className="td-text-caption text-ink-3">
+              占位符：{"{gggg}"} ISO 年、{"{ww}"} 两位周号；留空 = 回顾页周览不显示周记。示例：{WEEKLY_TEMPLATE_EXAMPLE}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={weeklySaving}
+            onClick={() => void handleSaveWeekly()}
+            className="rounded-xl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+          >
+            {weeklySaving ? "保存中…" : "保存"}
+          </button>
+
+          {weeklyMessage && (
+            <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{weeklyMessage}</div>
+          )}
+          {weeklyError && (
+            <div className="rounded-xl border border-danger/40 bg-danger-soft p-3 td-text-body text-danger">
+              {weeklyError}
+            </div>
           )}
         </div>
       )}
