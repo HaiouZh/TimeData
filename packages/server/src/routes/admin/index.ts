@@ -9,6 +9,7 @@ import health from "./health.js";
 import requestLogs from "./requestLogs.js";
 import summary from "./summary.js";
 import sync from "./sync.js";
+import totp from "./totp.js";
 
 const admin = new Hono();
 
@@ -22,5 +23,6 @@ admin.route("/backups", backups);
 admin.route("/backup-config", backupConfig);
 admin.route("/health-checks", health);
 admin.route("/analytics", analytics);
+admin.route("/totp", totp);
 
 export default admin;

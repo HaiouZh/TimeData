@@ -97,6 +97,7 @@ describe("initializeDatabase", () => {
       ["client_hint", "TEXT", 0, 0],
       ["device_label", "TEXT", 0, 0],
       ["duration_ms", "INTEGER", 1, 0],
+      ["is_new_ip", "INTEGER", 1, 0],
     ]);
 
     const indexes = (db.prepare("PRAGMA index_list(api_request_logs)").all() as Array<{ name: string }>).map(

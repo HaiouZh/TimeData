@@ -65,6 +65,11 @@ export function ensureTrackStepEditedAtColumn(db: Database): void {
   if (!names.has("edited_at")) db.exec("ALTER TABLE track_steps ADD COLUMN edited_at TEXT");
 }
 
+export function ensureApiRequestLogIsNewIpColumn(db: Database): void {
+  const names = new Set((db.prepare("PRAGMA table_info(api_request_logs)").all() as Array<{ name: string }>).map((column) => column.name));
+  if (!names.has("is_new_ip")) db.exec("ALTER TABLE api_request_logs ADD COLUMN is_new_ip INTEGER NOT NULL DEFAULT 0");
+}
+
 export function ensureTaskSessionIdColumn(db: Database): void {
   const names = new Set((db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>).map((column) => column.name));
   if (!names.has("session_id")) db.exec("ALTER TABLE tasks ADD COLUMN session_id TEXT");
@@ -252,7 +257,8 @@ export function initializeDatabase(): void {
       user_agent TEXT,
       client_hint TEXT,
       device_label TEXT,
-      duration_ms INTEGER NOT NULL
+      duration_ms INTEGER NOT NULL,
+      is_new_ip INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS sync_tombstones (
@@ -416,6 +422,16 @@ export function initializeDatabase(): void {
       code_hash TEXT PRIMARY KEY,
       used_at TEXT
     );
+
+    -- 陌生 IP 检测:按 token tier 隔离记录见过的来源 IP;acknowledged=0 即"新 IP 待确认"(api-key-protection plan Task 7)。
+    CREATE TABLE IF NOT EXISTS known_ips (
+      token_tier TEXT NOT NULL,
+      ip TEXT NOT NULL,
+      first_seen TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (token_tier, ip)
+    );
   `);
 
   ensureQuickNoteSourceColumns(db);
@@ -430,6 +446,7 @@ export function initializeDatabase(): void {
   ensureGoalMembersColumn(db);
   ensureTrackStepEditedAtColumn(db);
   ensureTaskSessionIdColumn(db);
+  ensureApiRequestLogIsNewIpColumn(db);
   dropColumnsIfExist(db, "tasks", ["goal_id"], ["idx_tasks_goal_id"]);
   dropColumnsIfExist(db, "tracks", ["goal_id"], ["idx_tracks_goal_id"]);
   // 退役 turn（M2，2026-06-20）：摘掉 tasks 表的 turn/turn_at 列。明文列名是合法墓碑，

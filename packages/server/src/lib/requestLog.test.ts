@@ -30,6 +30,7 @@ describe("requestLog", () => {
       clientHint: "web",
       deviceLabel: "web",
       durationMs: 3,
+      isNewIp: false,
     });
     recordRequestLog({
       timestamp: "2026-06-25T00:01:00.000Z",
@@ -43,6 +44,7 @@ describe("requestLog", () => {
       clientHint: "agent",
       deviceLabel: "agent",
       durationMs: 12,
+      isNewIp: true,
     });
 
     expect(queryRequestLogs({ limit: 10 })).toEqual([
@@ -59,6 +61,7 @@ describe("requestLog", () => {
         clientHint: "agent",
         deviceLabel: "agent",
         durationMs: 12,
+        isNewIp: true,
       },
       expect.objectContaining({
         timestamp: "2026-06-25T00:00:00.000Z",
@@ -78,6 +81,7 @@ describe("requestLog", () => {
       userAgent: null,
       deviceLabel: null,
       durationMs: 1,
+      isNewIp: false,
     };
 
     recordRequestLog({ ...base, status: 200, outcome: "ok", tokenTier: "public", clientHint: "web" });
@@ -119,6 +123,7 @@ describe("requestLog", () => {
         clientHint: "unknown",
         deviceLabel: null,
         durationMs: index,
+        isNewIp: false,
       });
     }
 

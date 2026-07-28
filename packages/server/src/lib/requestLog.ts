@@ -18,6 +18,7 @@ export interface RequestLogEntry {
   clientHint: AdminRequestLogClientHint;
   deviceLabel: string | null;
   durationMs: number;
+  isNewIp: boolean;
 }
 
 export interface RequestLogFilter {
@@ -41,6 +42,7 @@ type RequestLogDbRow = {
   client_hint: AdminRequestLogClientHint;
   device_label: string | null;
   duration_ms: number;
+  is_new_ip: number;
 };
 
 function normalizeLimit(limit: number | undefined): number {
@@ -62,6 +64,7 @@ function mapRequestLog(row: RequestLogDbRow): AdminRequestLogRow {
     clientHint: row.client_hint,
     deviceLabel: row.device_label,
     durationMs: row.duration_ms,
+    isNewIp: row.is_new_ip === 1,
   };
 }
 
@@ -79,9 +82,10 @@ export function recordRequestLog(entry: RequestLogEntry): void {
         user_agent,
         client_hint,
         device_label,
-        duration_ms
+        duration_ms,
+        is_new_ip
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .run(
       entry.timestamp,
@@ -95,6 +99,7 @@ export function recordRequestLog(entry: RequestLogEntry): void {
       entry.clientHint,
       entry.deviceLabel,
       entry.durationMs,
+      entry.isNewIp ? 1 : 0,
     );
 }
 
@@ -136,7 +141,8 @@ export function queryRequestLogs(filter: RequestLogFilter = {}): AdminRequestLog
         user_agent,
         client_hint,
         device_label,
-        duration_ms
+        duration_ms,
+        is_new_ip
       FROM api_request_logs
       ${whereSql}
       ORDER BY timestamp DESC, id DESC

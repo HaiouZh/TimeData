@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { requireTotp } from "../middleware/totp.js";
 import crypto from "node:crypto";
 import {
   SYNC_DOMAINS,
@@ -354,7 +355,8 @@ sync.get("/stream", (c) => {
   });
 });
 
-sync.post("/force-push/prepare", async (c) => {
+// TOTP 闸:force-push 本体由 prepare 下发的确认 token 保护,不重复锁。
+sync.post("/force-push/prepare", requireTotp, async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncForcePushPrepareRequestSchema.safeParse(rawBody);
   if (!parsed.success) {

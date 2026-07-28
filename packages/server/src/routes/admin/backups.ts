@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AdminBackupsResponse, AdminRunDailyResponse } from "@timedata/shared";
 import { Hono } from "hono";
 import { errorJson, ErrorCode } from "../../lib/errors.js";
+import { requireTotp } from "../../middleware/totp.js";
 import { getBackupDir, readBackupManifest, writeBackupManifest } from "../../sync/backup.js";
 import { runDailyBackupIfDue } from "../../sync/dailyBackup.js";
 import { listServerBackups } from "./_helpers.js";
@@ -21,7 +22,7 @@ backups.post("/run-daily", async (c) => {
   return c.json(response);
 });
 
-backups.delete("/:id", (c) => {
+backups.delete("/:id", requireTotp, (c) => {
   const id = c.req.param("id");
   const manifest = readBackupManifest();
   const entry = manifest.backups[id];

@@ -141,6 +141,26 @@ describe("server app middleware order", () => {
   );
 
   it(
+    "locks /api/export behind TOTP when enrolled while leaving /api/entries unaffected",
+    async () => {
+      // 默认 mock 的 getDb().prepare().get() 返回真值 → isTotpEnrolled() 视为已绑定。
+      const { default: app } = await import("./index.js");
+
+      const exportRes = await app.request("/api/export", {
+        headers: { Authorization: "Bearer secret" },
+      });
+      expect(exportRes.status).toBe(401);
+      expect(await exportRes.json()).toEqual({ error: "totp_required" });
+
+      const entriesRes = await app.request("/api/entries", {
+        headers: { Authorization: "Bearer secret" },
+      });
+      expect(entriesRes.status).not.toBe(401);
+    },
+    INDEX_TEST_TIMEOUT_MS,
+  );
+
+  it(
     "registers request auditing before auth so unauthorized API requests are logged",
     async () => {
       const { getDb } = await import("./db/connection.js");

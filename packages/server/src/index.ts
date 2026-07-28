@@ -11,6 +11,7 @@ import { bodyLimit } from "./middleware/bodyLimit.js";
 import { allowedOriginsFromEnv } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { requestAudit } from "./middleware/requestAudit.js";
+import { requireTotp } from "./middleware/totp.js";
 import adminRoute from "./routes/admin/index.js";
 import agentRoute from "./routes/agent.js";
 import agentTracksRoute from "./routes/agent-tracks.js";
@@ -85,7 +86,7 @@ app.use(
       }
       return allowedOrigins.includes(origin) ? origin : null;
     },
-    allowHeaders: ["Content-Type", "Authorization", "X-Confirm", "X-TimeData-Client"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Confirm", "X-TimeData-Client", "X-TOTP-Code"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   }),
@@ -119,6 +120,10 @@ app.route("/api/agent", agentRoute);
 app.route("/api/agent", agentTracksRoute);
 
 app.use("/api/*", authMiddleware);
+
+// TOTP 危险操作闸(绑定后才生效):锁全量导出与数据重置,须挂在 authMiddleware 之后。
+app.use("/api/export/*", requireTotp);
+app.use("/api/data/*", requireTotp);
 
 app.use("/api/sync/*", rateLimit({ windowMs: RATE_WINDOW_MS, max: SYNC_RATE_MAX }));
 app.use("/api/admin/*", rateLimit({ windowMs: RATE_WINDOW_MS, max: ADMIN_RATE_MAX }));
