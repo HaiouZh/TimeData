@@ -34,6 +34,7 @@
     "check:design": "node scripts/check-design-language.mjs",
     "check:ui": "node scripts/check-no-native-controls.mjs",
     "check:test": "node scripts/check-test-hygiene.mjs",
+    "check:diary": "node scripts/check-diary-date.mjs",
     "check:roadmap": "python scripts/docs_snap.py && python scripts/check_roadmap.py docs_local"
   },
   "devDependencies": {

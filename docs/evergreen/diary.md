@@ -59,7 +59,7 @@ SettingsDiaryPage 保存模板
 8. **保存在途中的编辑不丢**：`handleSave` 发起时记下编辑序号（`editRevisionRef`，每次 `markDirty` +1），请求回来只在序号未变（= 这一发上传的就是当前内容）时清脏；用户在请求在途中继续打字时保持脏态。无条件清脏会连 §2.7 的离开守卫一起关掉，换页即静默丢那段从未上传的内容。判据用序号不用内容比对，原因见 [diary/editor](diary/editor.md) §8 行尾保护。
 9. **`handleReload` 失败只出条状错误提示**（`setError`），不进 `loadFailed` 全屏态、不清冲突条：正文还在编辑器里、用户还能接着编辑保存，全屏失败态反而会把这份没上传的内容从屏幕上抹掉。
 10. **vault 写权限**：生产镜像 entrypoint 在降权到 UID/GID 1000 前，只创建并递归校正固定挂载根 `/app/vault` 的所有权；`DIARY_VAULT_DIR` 子目录由应用按需创建，误配到挂载根外或含 `.` / `..` 路径段时只告警。文件系统拒绝改权时启动继续但输出 warning，日记写接口把 `EACCES` / `EPERM` / `EROFS` 收敛为 503 `diary-vault-not-writable`，不再暴露通用 500。
-11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。
+11. **日期口径**：日记的「今天」恒用 `getDateString`（`lib/time.ts`，固定 `Asia/Shanghai`），**禁止** import 待办域的 `localDateString`（设备本地日界）。服务端对 `:date` 是纯字符串透传、自己从不求「今天」（`diary-path.ts` 只做占位符替换与日历有效性校验），**文件名日期 100% 由客户端口径决定**，选错就是文件名整体错一天且服务端不会纠偏。由 `pnpm check:diary`（`scripts/check-diary-date.mjs`，CI 必跑）静态守：日记域源码出现 `localDateString` 即红——单测锁不住（本机与 CI 时区同为 UTC+8，两套日界恒等）。
 12. **当前日期的事实源是 URL `?date=`**（`lib/diary/diaryDate.ts:resolveDiaryDate`）：有合法的过去日期 = 显式模式（用户自选的补写目标，跨零点**永不**提示）；无参 = 跟随模式，展示 `followAnchor` 并在实时今天越过它时出提示条。非法 / 未来 / 恰是今天的参数一律归一成无参形态（`replace`，不新增历史条目）。不用 `following: boolean` state 表达模式——state 活不过 PWA 冷启动。
 13. **切日期用 `replace` 不用 `push`**。与时间轴的「保留 push」有意分叉：日记页有 header 返回按钮（`handleBack` 走 `navigate(-1)`）且安卓返回键 `/diary` 分支恒返回 `back`，push 会把「离开日记页」变成「逐日倒带」，翻 5 天要按 6 次才出得去；时间轴没有返回按钮，不暴露这个矛盾。
 14. **参考栏只读**：不向正文写一个字节，无「插入」入口。它既是产品选择，也免掉了光标插入/格式化/撤销栈交互的一整片复杂度。
