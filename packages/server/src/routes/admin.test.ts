@@ -4,6 +4,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { totpCode } from "../lib/totp.js";
 
 let db: Database.Database;
 let app: Hono;
@@ -756,5 +757,79 @@ describe("admin route", () => {
     expect(await res.json()).toMatchObject({
       range: { from: "2026-05-08", to: "2026-05-09", groupBy: "week" },
     });
+  });
+});
+
+// —— TOTP 挂锁零守卫补测 ——
+// 终审实证：删掉 backups.ts / backupConfig.ts 上的 requireTotp 参数，原有用例全绿。以下是这两处的真闸。
+describe("admin 路由 TOTP 闸", () => {
+  const TOTP_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+  async function enrollTotpForTest(): Promise<void> {
+    const store = await import("../lib/totpStore.js");
+    store.enrollTotp(TOTP_SECRET, []);
+  }
+
+  function currentTotpCode(): string {
+    return totpCode(TOTP_SECRET, Date.now());
+  }
+
+  const configBody = JSON.stringify({
+    dailyBackup: { enabled: false, timeOfDay: "03:15" },
+    retentionDays: 14,
+  });
+
+  it("未绑定 TOTP 时备份删除与备份配置写照常放行", async () => {
+    seedBackup({ id: "no-totp", operation: "manual", createdAt: "2026-05-01T00:00:00.000Z" });
+    expect((await app.request("/api/admin/backups/no-totp", { method: "DELETE" })).status).toBe(200);
+    expect(
+      (await app.request("/api/admin/backup-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: configBody,
+      })).status,
+    ).toBe(200);
+  });
+
+  it("已绑定：DELETE /backups/:id 缺码 401 totp_required，带码放行且真的删掉", async () => {
+    seedBackup({ id: "guarded", operation: "manual", createdAt: "2026-05-01T00:00:00.000Z" });
+    await enrollTotpForTest();
+
+    const blocked = await app.request("/api/admin/backups/guarded", { method: "DELETE" });
+    expect(blocked.status).toBe(401);
+    expect(await blocked.json()).toEqual({ error: "totp_required" });
+    expect(fs.existsSync(path.join(tempDir, "backups", "guarded.db"))).toBe(true);
+
+    const allowed = await app.request("/api/admin/backups/guarded", {
+      method: "DELETE",
+      headers: { "X-TOTP-Code": currentTotpCode() },
+    });
+    expect(allowed.status).toBe(200);
+    expect(fs.existsSync(path.join(tempDir, "backups", "guarded.db"))).toBe(false);
+  });
+
+  it("已绑定：PUT /backup-config 缺码 401 totp_required，带码放行", async () => {
+    await enrollTotpForTest();
+
+    const blocked = await app.request("/api/admin/backup-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: configBody,
+    });
+    expect(blocked.status).toBe(401);
+    expect(await blocked.json()).toEqual({ error: "totp_required" });
+
+    const allowed = await app.request("/api/admin/backup-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-TOTP-Code": currentTotpCode() },
+      body: configBody,
+    });
+    expect(allowed.status).toBe(200);
+  });
+
+  it("已绑定：读接口（GET /backup-config、GET /backups）不受闸影响", async () => {
+    await enrollTotpForTest();
+    expect((await app.request("/api/admin/backup-config")).status).toBe(200);
+    expect((await app.request("/api/admin/backups")).status).toBe(200);
   });
 });
