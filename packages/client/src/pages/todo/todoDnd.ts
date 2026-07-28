@@ -96,6 +96,84 @@ export function parseTodoContainerId(value: string | null | undefined): TodoCont
   return null;
 }
 
+/** 投递坞落点域。hand 是坞独有语义;pool/project 复用页内容器语义。 */
+export type TodoDockTarget =
+  | { kind: "pool"; pool: TodoPool }
+  | { kind: "hand" }
+  | { kind: "project"; goalId: string };
+
+/** 坞 droppable 的 id。组件与判定层共用,避免前缀漂移(同 projectContainerId 的理由)。 */
+export function todoDockId(target: TodoDockTarget): string {
+  if (target.kind === "pool") return `dock:pool:${target.pool}`;
+  if (target.kind === "hand") return "dock:hand";
+  return `dock:project:${target.goalId}`;
+}
+
+export function parseTodoDockId(value: string | null | undefined): TodoDockTarget | null {
+  if (!value) return null;
+  if (value === "dock:pool:today") return { kind: "pool", pool: "today" };
+  if (value === "dock:pool:inbox") return { kind: "pool", pool: "inbox" };
+  if (value === "dock:hand") return { kind: "hand" };
+  if (value.startsWith("dock:project:")) {
+    const goalId = value.slice("dock:project:".length);
+    if (!goalId) return null;
+    return { kind: "project", goalId };
+  }
+  return null;
+}
+
+export type TodoDockDropResolution =
+  | { kind: "not-dock" }
+  | { kind: "grab-to-hand" }
+  | { kind: "op"; op: TodoDragOperation }
+  | { kind: "invalid"; target: TodoDockTarget };
+
+/**
+ * 坞落点解析:pool/project 折算成对应容器后走 resolveTodoDragOperation(语义与拖到
+ * 池容器/项目卡逐字相同);hand 是坞独有分支。reorder 一律拦成 invalid——坞没有位置语义,
+ * 且正常不可达(当前池的药丸不渲染),拦住是防隐藏规则漏了时落成怪异重排。
+ */
+export function resolveTodoDockDrop({
+  dockId,
+  activeContainerId,
+  activeParentId,
+}: {
+  dockId: string;
+  activeContainerId: string;
+  activeParentId: string | null;
+}): TodoDockDropResolution {
+  const target = parseTodoDockId(dockId);
+  if (!target) return { kind: "not-dock" };
+  if (target.kind === "hand") return { kind: "grab-to-hand" };
+  const container: TodoContainer =
+    target.kind === "pool" ? { kind: "pool", pool: target.pool } : { kind: "project", goalId: target.goalId };
+  const op = resolveTodoDragOperation({
+    activeContainerId,
+    targetContainerId: todoContainerId(container),
+    activeParentId,
+  });
+  if (!op || op.kind === "reorder") return { kind: "invalid", target };
+  return { kind: "op", op };
+}
+
+/**
+ * 拖拽中应显示的坞落点(有序:今天/手头/收件箱/项目)。
+ * 被拖行所在池的药丸不显示;子任务(parent:)时 today/inbox 都显示(升根语义)。
+ * 手头恒显示:手头区的行不注册 draggable,active 不可能来自手头。
+ */
+export function todoDockTargets(
+  activeContainerId: string,
+  projects: readonly { goalId: string }[],
+): TodoDockTarget[] {
+  const active = parseTodoContainerId(activeContainerId);
+  const targets: TodoDockTarget[] = [];
+  if (!(active?.kind === "pool" && active.pool === "today")) targets.push({ kind: "pool", pool: "today" });
+  targets.push({ kind: "hand" });
+  if (!(active?.kind === "pool" && active.pool === "inbox")) targets.push({ kind: "pool", pool: "inbox" });
+  for (const project of projects) targets.push({ kind: "project", goalId: project.goalId });
+  return targets;
+}
+
 export interface ResolveTodoDragInput {
   /** active draggable 所在的容器 id（必含）。 */
   activeContainerId: string;
@@ -180,6 +258,9 @@ export function hoveredRootIdFromOver(
   overId: string,
   fallbackContainerId?: string,
 ): string | null {
+  // 投递坞不是缩进落点:dock id 解析不进 TodoContainer,会 fall 到 fallbackContainerId(通常是池)
+  // 把 dock id 字符串当「根行 id」返回,下游拿它拼 parent:<dock:…> 落成垃圾 move-to-parent。
+  if (parseTodoDockId(overContainerId) !== null || parseTodoDockId(overId) !== null) return null;
   const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(fallbackContainerId);
   if (!container) return null;
   // 项目区没有可作缩进父的根行（组内行不注册 draggable），恒返回 null 让缩进系统对项目组让位。
@@ -254,6 +335,9 @@ export function preferProjectCollisions({
   /** 惰性：指针已落在项目卡内时 closestCenter 的结果注定被丢弃，没必要每帧遍历全部 droppable。 */
   fallback: () => Collision[];
 }): Collision[] {
+  // 坞药丸浮在列表之上:指针同时落在药丸与其下方行/项目组的矩形内时只认坞。
+  const dock = pointerHits.filter((collision) => String(collision.id).startsWith("dock:"));
+  if (dock.length > 0) return dock;
   const projects = pointerHits.filter((collision) => String(collision.id).startsWith("project:"));
   return projects.length > 0 ? projects : fallback();
 }

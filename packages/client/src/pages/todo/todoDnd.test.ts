@@ -6,7 +6,9 @@ import {
   containerIdForTask,
   hoveredRootIdFromOver,
   parseTodoContainerId,
+  parseTodoDockId,
   preferProjectCollisions,
+  resolveTodoDockDrop,
   projectContainerId,
   resolveIndentLevel,
   resolveTodoDragOperation,
@@ -15,6 +17,8 @@ import {
   TODO_INDENT_RELEASE_PX,
   type TodoContainer,
   todoContainerId,
+  todoDockId,
+  todoDockTargets,
 } from "./todoDnd.js";
 
 /** 只喂 transform 调用 modifier（其余 ModifierArguments 字段本实现用不到）。 */
@@ -548,5 +552,126 @@ describe("preferProjectCollisions", () => {
   it("数字型 UniqueIdentifier 不炸（dnd-kit 的 id 是 string | number）", () => {
     const fallback = [hit("t9")];
     expect(preferProjectCollisions({ pointerHits: [{ id: 42 } as never], fallback: () => fallback })).toBe(fallback);
+  });
+});
+
+describe("todoDock id 域", () => {
+  it("todoDockId ↔ parseTodoDockId 往返一致", () => {
+    const targets = [
+      { kind: "pool", pool: "today" },
+      { kind: "pool", pool: "inbox" },
+      { kind: "hand" },
+      { kind: "project", goalId: "g1" },
+    ] as const;
+    for (const target of targets) {
+      expect(parseTodoDockId(todoDockId(target))).toEqual(target);
+    }
+  });
+
+  it("非法 id 返回 null", () => {
+    for (const bad of ["", "dock:", "dock:project:", "pool:today", "project:g1", "dock:pool:done"]) {
+      expect(parseTodoDockId(bad)).toBeNull();
+    }
+  });
+});
+
+describe("resolveTodoDockDrop", () => {
+  it("非 dock id → not-dock", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "pool:today", activeContainerId: "pool:inbox", activeParentId: null }),
+    ).toEqual({ kind: "not-dock" });
+  });
+
+  it("任意来源 → dock:hand = grab-to-hand", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:hand", activeContainerId: "pool:inbox", activeParentId: null }),
+    ).toEqual({ kind: "grab-to-hand" });
+  });
+
+  it("inbox 根任务 → dock:pool:today = schedule-root today", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:pool:today", activeContainerId: "pool:inbox", activeParentId: null }),
+    ).toEqual({ kind: "op", op: { kind: "schedule-root", pool: "today" } });
+  });
+
+  it("today 根任务 → dock:pool:inbox = schedule-root inbox", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:pool:inbox", activeContainerId: "pool:today", activeParentId: null }),
+    ).toEqual({ kind: "op", op: { kind: "schedule-root", pool: "inbox" } });
+  });
+
+  it("子任务 → dock 池药丸 = promote-to-root(与拖进池容器同义)", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:pool:inbox", activeContainerId: "parent:p1", activeParentId: "p1" }),
+    ).toEqual({ kind: "op", op: { kind: "promote-to-root", pool: "inbox" } });
+  });
+
+  it("根任务 → dock 项目药丸 = assign-to-project", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:project:g1", activeContainerId: "pool:inbox", activeParentId: null }),
+    ).toEqual({ kind: "op", op: { kind: "assign-to-project", goalId: "g1" } });
+  });
+
+  it("子任务 → dock 项目药丸 = invalid(与项目卡准入同口径)", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:project:g1", activeContainerId: "parent:p1", activeParentId: "p1" }),
+    ).toEqual({ kind: "invalid", target: { kind: "project", goalId: "g1" } });
+  });
+
+  it("同池投递(today→dock:pool:today)= invalid,坞不做重排", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:pool:today", activeContainerId: "pool:today", activeParentId: null }),
+    ).toEqual({ kind: "invalid", target: { kind: "pool", pool: "today" } });
+  });
+});
+
+describe("todoDockTargets", () => {
+  const projects = [{ goalId: "g1" }, { goalId: "g2" }];
+
+  it("拖 inbox 行:无收件箱药丸,顺序为 今天/手头/项目", () => {
+    expect(todoDockTargets("pool:inbox", projects)).toEqual([
+      { kind: "pool", pool: "today" },
+      { kind: "hand" },
+      { kind: "project", goalId: "g1" },
+      { kind: "project", goalId: "g2" },
+    ]);
+  });
+
+  it("拖 today 行:无今天药丸", () => {
+    expect(todoDockTargets("pool:today", projects)).toEqual([
+      { kind: "hand" },
+      { kind: "pool", pool: "inbox" },
+      { kind: "project", goalId: "g1" },
+      { kind: "project", goalId: "g2" },
+    ]);
+  });
+
+  it("拖子任务(parent:):今天/收件箱都在(升根语义)", () => {
+    expect(todoDockTargets("parent:p1", [])).toEqual([
+      { kind: "pool", pool: "today" },
+      { kind: "hand" },
+      { kind: "pool", pool: "inbox" },
+    ]);
+  });
+});
+
+describe("dock 对既有判定的守卫", () => {
+  it("hoveredRootIdFromOver:over 是 dock id 时恒 null,即便 fallback 是池容器", () => {
+    // 不加守卫时:parseTodoContainerId("dock:hand")=null → fall 到 activeContainerId("pool:inbox")
+    // → kind=pool → 返回 overId("dock:hand") ≠ null,下游会拼出 parent:dock:hand 的垃圾落点。
+    expect(hoveredRootIdFromOver("dock:hand", "dock:hand", "pool:inbox")).toBeNull();
+    expect(hoveredRootIdFromOver("dock:project:g1", "dock:project:g1", "pool:today")).toBeNull();
+  });
+
+  it("preferProjectCollisions:pointer 同时命中 dock 与行/项目时只认 dock", () => {
+    const hit = (id: string) => ({ id }) as never;
+    const result = preferProjectCollisions({
+      pointerHits: [hit("t1"), hit("dock:project:g1"), hit("project:g2")],
+      fallback: () => [],
+    });
+    expect((result as { id: string }[]).map((c) => c.id)).toEqual(["dock:project:g1"]);
+    // 无 dock 命中时行为一字不变
+    const noDock = preferProjectCollisions({ pointerHits: [hit("t1"), hit("project:g2")], fallback: () => [] });
+    expect((noDock as { id: string }[]).map((c) => c.id)).toEqual(["project:g2"]);
   });
 });
