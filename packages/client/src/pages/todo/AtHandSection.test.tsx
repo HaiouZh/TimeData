@@ -126,3 +126,105 @@ describe("AtHandSection", () => {
     await unmount(root);
   });
 });
+
+describe("场便签标题", () => {
+  async function pressOnInput(input: HTMLInputElement, key: string): Promise<void> {
+    const { act } = await import("react");
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    });
+  }
+
+  it("note 非空时标题显示 note,空时回落「手头」", async () => {
+    const withNote = await renderDom(
+      <AtHandSection atHand={[]} session={session({ note: "冲周报" })} resumable={[]} {...handlers} />,
+    );
+    expect(withNote.host.querySelector("h2")?.textContent).toBe("冲周报");
+    await unmount(withNote.root);
+
+    const withoutNote = await renderDom(
+      <AtHandSection atHand={[]} session={session({})} resumable={[]} {...handlers} />,
+    );
+    expect(withoutNote.host.querySelector("h2")?.textContent).toBe("手头");
+    await unmount(withoutNote.root);
+  });
+
+  it("点击标题进入编辑,Enter 保存调用 onUpdateNote 一次并退出编辑", async () => {
+    const onUpdateNote = vi.fn();
+    const { host, root } = await renderDom(
+      <AtHandSection atHand={[]} session={session({})} resumable={[]} {...handlers} onUpdateNote={onUpdateNote} />,
+    );
+
+    await click(host.querySelector('button[aria-label="编辑场便签"]'));
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="场便签"]');
+    expect(input).toBeTruthy();
+    expect(input?.maxLength).toBe(200);
+
+    input!.value = "下午先修 bug";
+    await pressOnInput(input!, "Enter");
+
+    expect(onUpdateNote).toHaveBeenCalledTimes(1);
+    expect(onUpdateNote).toHaveBeenCalledWith("下午先修 bug");
+    expect(host.querySelector('input[aria-label="场便签"]')).toBeNull();
+
+    await unmount(root);
+  });
+
+  it("清空后 Enter 保存传 null", async () => {
+    const onUpdateNote = vi.fn();
+    const { host, root } = await renderDom(
+      <AtHandSection
+        atHand={[]}
+        session={session({ note: "旧便签" })}
+        resumable={[]}
+        {...handlers}
+        onUpdateNote={onUpdateNote}
+      />,
+    );
+
+    await click(host.querySelector('button[aria-label="编辑场便签"]'));
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="场便签"]');
+    input!.value = "";
+    await pressOnInput(input!, "Enter");
+
+    expect(onUpdateNote).toHaveBeenCalledWith(null);
+
+    await unmount(root);
+  });
+
+  it("Escape 取消不调用 onUpdateNote", async () => {
+    const onUpdateNote = vi.fn();
+    const { host, root } = await renderDom(
+      <AtHandSection atHand={[]} session={session({})} resumable={[]} {...handlers} onUpdateNote={onUpdateNote} />,
+    );
+
+    await click(host.querySelector('button[aria-label="编辑场便签"]'));
+    const input = host.querySelector<HTMLInputElement>('input[aria-label="场便签"]');
+    input!.value = "写了一半";
+    await pressOnInput(input!, "Escape");
+
+    expect(onUpdateNote).not.toHaveBeenCalled();
+    expect(host.querySelector('input[aria-label="场便签"]')).toBeNull();
+    expect(host.querySelector("h2")?.textContent).toBe("手头");
+
+    await unmount(root);
+  });
+
+  it("续场列表态标题不可编辑", async () => {
+    const resumable: ResumableSession[] = [
+      {
+        session: session({ id: "s-old", endedAt: "2026-07-20T10:00:00.000Z", note: "历史便签" }),
+        pendingCount: 1,
+        pendingTitles: ["修水管"],
+      },
+    ];
+    const { host, root } = await renderDom(
+      <AtHandSection atHand={[]} session={null} resumable={resumable} {...handlers} onUpdateNote={vi.fn()} />,
+    );
+
+    expect(host.querySelector('button[aria-label="编辑场便签"]')).toBeNull();
+    expect(host.querySelector("h2")?.textContent).toBe("手头");
+
+    await unmount(root);
+  });
+});
