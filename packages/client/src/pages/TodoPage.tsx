@@ -79,6 +79,7 @@ import {
 } from "../lib/goals.js";
 import { useIsWideScreen } from "../lib/useIsWideScreen.js";
 import { AtHandSection } from "./todo/AtHandSection.js";
+import { TodoDragDock } from "./todo/TodoDragDock.js";
 import { CollapsibleSection } from "./todo/CollapsibleSection.js";
 import { DayGroupedList } from "./todo/DayGroupedList.js";
 import { GravityReviewSection } from "./todo/GravityReviewSection.js";
@@ -97,6 +98,7 @@ import {
   parseTodoContainerId,
   preferProjectCollisions,
   resolveIndentLevel,
+  resolveTodoDockDrop,
   resolveTodoDragWithIndent,
   type TodoContainer,
   type TodoIndentLevel,
@@ -619,19 +621,48 @@ export function TodoPage() {
       activeParentId = found?.parentId ?? null;
     }
 
+    // 投递坞落点优先于页内容器判定。pool/project 折算成既有 op 走下方 switch(与拖到池容器/
+    // 项目卡同一条路);hand 是坞独有语义。overContainerId 与 overId 同值(坞 droppable 的
+    // data.containerId 就是它的 id),取 || 只是防 data 缺失。
+    const dockResolution = resolveTodoDockDrop({
+      dockId: overContainerId || overId,
+      activeContainerId,
+      activeParentId,
+    });
+    if (dockResolution.kind === "grab-to-hand") {
+      try {
+        await grabTaskToHand(activeId);
+      } catch (error) {
+        console.error("[todo] 投递到手头失败:", error);
+      }
+      return;
+    }
+    if (dockResolution.kind === "invalid") {
+      // 用户可达的 invalid 只有子任务投项目药丸,拒绝口径与拖到项目卡逐字相同。
+      const dockTarget = dockResolution.target;
+      if (dockTarget.kind === "project" && parseTodoContainerId(activeContainerId)?.kind === "parent") {
+        const group = buckets.projects.find((g) => g.goalId === dockTarget.goalId);
+        if (group) showActionToast({ message: projectAssignBlockMessage("subtask", group.goalTitle) });
+      }
+      return;
+    }
+
     const rootAboveId = hoveredRootIdFromOver(overContainerId, overId, activeContainerId);
     const targetContainer = targetContainerFromOver(overContainerId, rootAboveId);
     const activeHasChildren = rootIdsWithChildren.has(activeId);
 
-    const op = resolveTodoDragWithIndent({
-      activeContainerId,
-      activeParentId,
-      activeId,
-      activeHasChildren,
-      indentLevel,
-      rootAboveId,
-      targetContainer,
-    });
+    const op =
+      dockResolution.kind === "op"
+        ? dockResolution.op
+        : resolveTodoDragWithIndent({
+            activeContainerId,
+            activeParentId,
+            activeId,
+            activeHasChildren,
+            indentLevel,
+            rootAboveId,
+            targetContainer,
+          });
 
     if (!op) {
       // 落点是项目组却解析不出操作 = 准入拒绝。当前唯一可达的是子任务这一支
@@ -1137,6 +1168,15 @@ export function TodoPage() {
         {/* 多选态下操作栏顶替记录框：两者同一位置、同一层级（见 TodoSelectionBar 的 zIndex 注释）。
             TodoComposer 不渲染时 composerHeightPx 保持上一次测量值，contentBottomPaddingPx 因此不跳动——
             操作栏高度与 composer 相近，沿用旧值即可，不为此加新的测量逻辑。 */}
+        {wide && (
+          <TodoDragDock
+            dragging={dragging}
+            activeContainerId={dragCandidateContainerId}
+            projects={selectableProjects}
+            dropBlocked={dragDropBlocked}
+          />
+        )}
+
         {selectionMode ? (
           <TodoSelectionBar
             selectedCount={selectedIds.size}

@@ -2572,3 +2572,73 @@ describe("TodoPage 多选提交", () => {
     await unmount(root);
   });
 });
+
+describe("拖拽投递坞", () => {
+  it("宽屏键盘拖起收件箱行:坞显形、药丸集合正确;Escape 后隐藏", async () => {
+    // 宽屏:useIsWideScreen 走 matchMedia("(min-width: 1024px)")。存原值,测试尾恢复,别污染同文件其他用例。
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      const now = "2026-06-28T09:00:00.000Z";
+      const member = await addTask({ title: "刷墙", toInbox: true });
+      await db.goals.add({
+        id: "g1",
+        title: "装修房子",
+        kind: "project",
+        status: "active",
+        members: [{ kind: "task", id: member.id }],
+        prerequisites: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+      await addTask({ title: "买窗帘", toInbox: true });
+      const { host, root } = await renderPage();
+      await waitForText(host, "买窗帘");
+
+      const dockEl = () => host.querySelector('[data-testid="todo-drag-dock"]');
+      await waitForCondition(() => dockEl() !== null, "dock 常驻挂载");
+      expect(dockEl()?.getAttribute("aria-hidden")).toBe("true");
+
+      const handle = host.querySelector('[aria-label="移动 买窗帘"]') as HTMLElement;
+      await act(async () => {
+        handle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+      });
+      expect(dockEl()?.getAttribute("aria-hidden")).toBe("false");
+      const ids = [...host.querySelectorAll('[data-testid="todo-dock-pill"]')].map((el) =>
+        el.getAttribute("data-dock-id"),
+      );
+      expect(ids).toContain("dock:pool:today");
+      expect(ids).toContain("dock:hand");
+      expect(ids).toContain("dock:project:g1");
+      expect(ids).not.toContain("dock:pool:inbox");
+
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+      });
+      await waitForCondition(() => dockEl()?.getAttribute("aria-hidden") === "true", "松手即散");
+      await unmount(root);
+    } finally {
+      if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+    }
+  });
+
+  it("窄屏(默认 jsdom)不渲染坞", async () => {
+    await addTask({ title: "买窗帘", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "买窗帘");
+    expect(host.querySelector('[data-testid="todo-drag-dock"]')).toBeNull();
+    await unmount(root);
+  });
+});
