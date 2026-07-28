@@ -538,6 +538,8 @@ export function TodoPage() {
   const [dragCandidateId, setDragCandidateId] = useState<string | null>(null);
   // 被拖项所在的 dnd 容器 id。单独记一份是因为子任务查不到行（见下方判定注释）。
   const [dragCandidateContainerId, setDragCandidateContainerId] = useState<string | null>(null);
+  // 投递坞的左缘锚点:拖起时量来源区块([data-section])的左缘,坞贴着它出现(理由见 TodoDragDockProps)。
+  const [dockAnchorLeftPx, setDockAnchorLeftPx] = useState<number | null>(null);
   // 拖拽中的这条能不能落进项目组。**判定必须在页面做**：组件手上只有 TodoProjectGroup，
   // 既没有 goal.status/kind（判不了 inactive），也没有 members 数组长度（判不了满员）。
   // 更要命的是子任务——listTasks 把 parentId !== null 的行整个跳过，它不在任何 bucket 里，
@@ -564,6 +566,10 @@ export function TodoPage() {
     setDragging(true);
     setDragCandidateId(String(event.active.id));
     setDragCandidateContainerId(activeContainerId);
+    // jsdom / 异常路径量不到就退回 null(坞落视口右缘),不挡拖拽本身。
+    const activator = event.activatorEvent?.target;
+    const sourceSection = activator instanceof Element ? activator.closest("[data-section]") : null;
+    setDockAnchorLeftPx(sourceSection ? Math.round(sourceSection.getBoundingClientRect().left) : null);
   }
 
   function handleDragMove(event: DragMoveEvent): void {
@@ -1162,6 +1168,7 @@ export function TodoPage() {
             activeContainerId={dragCandidateContainerId}
             projects={selectableProjects}
             dropBlocked={dragDropBlocked}
+            anchorLeftPx={dockAnchorLeftPx}
           />
         )}
 

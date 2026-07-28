@@ -16,6 +16,12 @@ export interface TodoDragDockProps {
   projects: readonly TodoDockProject[];
   /** 拖拽中的行不允许入项目时,项目药丸置禁用视觉(与项目卡 data-drop-blocked 同源判定)。 */
   dropBlocked: boolean | null;
+  /**
+   * 坞的左缘锚点(视口坐标 px):拖起时按**来源栏左缘**定位——拖柄在行左 2/5,
+   * 锚右缘意味着全程向右横穿,恰是缩进手势(+28px 变子任务)的方向,极易误触;
+   * 锚来源栏左缘让行程向左,缩进阈值永远不会被拖向坞的手势触发。null 退回视口右缘。
+   */
+  anchorLeftPx?: number | null;
 }
 
 function dockTargetLabel(target: TodoDockTarget, projects: readonly TodoDockProject[]): string {
@@ -67,18 +73,29 @@ function DockPill({ target, label, blocked }: { target: TodoDockTarget; label: s
  * - overflow-x-hidden 是硬约束:纵向 overflow 会把横向 visible 自动算成 auto,任何内容溢出
  *   都会在坞里生出横向滚动条。
  */
-export function TodoDragDock({ dragging, activeContainerId, projects, dropBlocked }: TodoDragDockProps) {
+export function TodoDragDock({
+  dragging,
+  activeContainerId,
+  projects,
+  dropBlocked,
+  anchorLeftPx = null,
+}: TodoDragDockProps) {
   const targets = todoDockTargets(activeContainerId ?? "", projects);
   return (
     <ul
       data-testid="todo-drag-dock"
       aria-hidden={!dragging}
-      className={`fixed right-3 top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-y-auto overflow-x-hidden transition ${
+      className={`fixed top-1/2 z-[var(--z-dropdown)] flex w-44 max-h-[calc(100vh-6rem)] -translate-y-1/2 flex-col gap-1.5 overflow-y-auto overflow-x-hidden transition ${
+        anchorLeftPx === null ? "right-3" : ""
+      } ${
         dragging
           ? "pointer-events-auto translate-x-0 opacity-100 delay-300"
           : "pointer-events-none translate-x-2 opacity-0 delay-0"
       }`}
-      style={{ transitionDuration: dragging ? "var(--duration-base)" : "0ms" }}
+      style={{
+        transitionDuration: dragging ? "var(--duration-base)" : "0ms",
+        ...(anchorLeftPx === null ? {} : { left: anchorLeftPx }),
+      }}
     >
       {targets.map((target) => (
         <DockPill
