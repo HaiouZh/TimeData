@@ -119,6 +119,80 @@ describe("diary config 周记模板", () => {
   });
 });
 
+describe("diary batch", () => {
+  const putWeeklyConfig = (weeklyTemplate: string) =>
+    app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ weeklyTemplate }),
+      headers: { "Content-Type": "application/json" },
+    });
+  const postBatch = (body: unknown) =>
+    app.request("/api/diary/batch", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    });
+
+  it("路由不被 :date 吞掉——请求 /batch 不落入日期 400 分支", async () => {
+    await putConfig();
+    const res = await postBatch({ dates: [], weeks: [] });
+    expect(res.status).not.toBe(400);
+  });
+
+  it("批量读日期与周，含存在/不存在与未配周模板", async () => {
+    await putConfig();
+    await app.request("/api/diary/2026-07-09", {
+      method: "PUT",
+      body: JSON.stringify({ content: "day1", baseMtime: null }),
+      headers: { "Content-Type": "application/json" },
+    });
+    await app.request("/api/diary/2026-07-10", {
+      method: "PUT",
+      body: JSON.stringify({ content: "day2", baseMtime: null }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await postBatch({ dates: ["2026-07-09", "2026-07-10", "2026-07-11"], weeks: ["2026-W28"] });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.dates["2026-07-09"]).toEqual({ exists: true, content: "day1" });
+    expect(body.dates["2026-07-10"]).toEqual({ exists: true, content: "day2" });
+    expect(body.dates["2026-07-11"]).toEqual({ exists: false, content: "" });
+    expect(body.weeks["2026-W28"]).toEqual({ exists: false, content: "" });
+    expect(body.weeklyConfigured).toBe(false);
+  });
+
+  it("41 项超限 400", async () => {
+    await putConfig();
+    const dates = Array.from({ length: 41 }, (_, i) => `2026-01-${String((i % 28) + 1).padStart(2, "0")}`);
+    const res = await postBatch({ dates, weeks: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it("非法日期 400", async () => {
+    await putConfig();
+    const res = await postBatch({ dates: ["2026-13-05"], weeks: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it("配好周模板后周记文件能读到", async () => {
+    await putConfig();
+    await putWeeklyConfig("Reviews/{gggg}-W{ww}.md");
+    fs.mkdirSync(path.join(vault, "Reviews"), { recursive: true });
+    fs.writeFileSync(path.join(vault, "Reviews", "2026-W28.md"), "week content", "utf8");
+    const res = await postBatch({ dates: [], weeks: ["2026-W28"] });
+    const body = await res.json();
+    expect(body.weeklyConfigured).toBe(true);
+    expect(body.weeks["2026-W28"]).toEqual({ exists: true, content: "week content" });
+  });
+
+  it("vault 未挂载 503，日模板未配置 409", async () => {
+    delete process.env.DIARY_VAULT_DIR;
+    expect((await postBatch({ dates: [], weeks: [] })).status).toBe(503);
+    process.env.DIARY_VAULT_DIR = vault;
+    expect((await postBatch({ dates: [], weeks: [] })).status).toBe(409);
+  });
+});
+
 describe("diary read/write", () => {
   it("文件不存在返回空内容", async () => {
     await putConfig();

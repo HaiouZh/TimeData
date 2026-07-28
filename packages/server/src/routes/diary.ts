@@ -2,7 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
 import { getServerConfig, setServerConfig } from "../garmin/garminConfig.js";
-import { expandDiaryTemplate, expandWeeklyTemplate, isValidDiaryDate, resolveDiaryFile } from "../lib/diary-path.js";
+import {
+  expandDiaryTemplate,
+  expandWeeklyTemplate,
+  isValidDiaryDate,
+  isValidWeekKey,
+  resolveDiaryFile,
+  resolveWeeklyFile,
+} from "../lib/diary-path.js";
 
 const TEMPLATE_KEY = "diary.pathTemplate.v1";
 const WEEKLY_TEMPLATE_KEY = "diary.weeklyPathTemplate.v1";
@@ -58,6 +65,44 @@ diary.put("/config", async (c) => {
   if (typeof template === "string") setServerConfig(TEMPLATE_KEY, template.trim());
   if (typeof weeklyTemplate === "string") setServerConfig(WEEKLY_TEMPLATE_KEY, weeklyTemplate.trim());
   return c.json({ ok: true });
+});
+
+// 注意：/batch 必须注册在 /:date 之前，否则会被 :date 参数路由吞掉
+diary.post("/batch", async (c) => {
+  const raw: unknown = await c.req.json().catch(() => null);
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return c.json({ error: "请求体必须是有效 JSON 对象" }, 400);
+  }
+  const { dates = [], weeks = [] } = raw as { dates?: unknown; weeks?: unknown };
+  if (!Array.isArray(dates) || !Array.isArray(weeks)) return c.json({ error: "dates/weeks 必须是数组" }, 400);
+  if (dates.length + weeks.length > 40) return c.json({ error: "单次最多 40 项" }, 400);
+  if (!dates.every((d) => typeof d === "string" && isValidDiaryDate(d))) {
+    return c.json({ error: "日期必须是 YYYY-MM-DD" }, 400);
+  }
+  if (!weeks.every((w) => typeof w === "string" && isValidWeekKey(w))) {
+    return c.json({ error: "周号必须是 YYYY-Www" }, 400);
+  }
+  const root = vaultDir();
+  if (!root) return c.json({ error: "diary-disabled" }, 503);
+  const template = getServerConfig(TEMPLATE_KEY);
+  if (!template) return c.json({ error: "diary-no-template" }, 409);
+  const weeklyTemplate = getServerConfig(WEEKLY_TEMPLATE_KEY) || null;
+
+  const readOne = (file: string) => {
+    try {
+      return { exists: true, content: fs.readFileSync(file, "utf8") };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, content: "" };
+      throw err;
+    }
+  };
+  const dateMap: Record<string, { exists: boolean; content: string }> = {};
+  for (const d of dates as string[]) dateMap[d] = readOne(resolveDiaryFile(root, template, d));
+  const weekMap: Record<string, { exists: boolean; content: string }> = {};
+  for (const w of weeks as string[]) {
+    weekMap[w] = weeklyTemplate ? readOne(resolveWeeklyFile(root, weeklyTemplate, w)) : { exists: false, content: "" };
+  }
+  return c.json({ dates: dateMap, weeks: weekMap, weeklyConfigured: weeklyTemplate !== null });
 });
 
 /** 解析目标文件路径；失败时返回可直接返回给客户端的错误响应。 */
