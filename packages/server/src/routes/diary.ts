@@ -3,6 +3,7 @@ import path from "node:path";
 import { Hono } from "hono";
 import { getServerConfig, setServerConfig } from "../garmin/garminConfig.js";
 import {
+  assertRealpathInsideVault,
   expandDiaryTemplate,
   expandWeeklyTemplate,
   isValidDiaryDate,
@@ -24,6 +25,19 @@ function vaultWriteError(err: unknown): Response | null {
     {
       error: "diary-vault-not-writable",
       message: "服务器日记 vault 无写权限，请检查挂载目录所有权",
+    },
+    { status: 503 },
+  );
+}
+
+/** 读路径的权限类错误：与 vaultWriteError 同款处理，不裸 500。 */
+function vaultReadError(err: unknown): Response | null {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (!code || !["EACCES", "EPERM"].includes(code)) return null;
+  return Response.json(
+    {
+      error: "diary-vault-not-readable",
+      message: "服务器日记 vault 无读权限，请检查挂载目录所有权",
     },
     { status: 503 },
   );
@@ -54,7 +68,8 @@ diary.put("/config", async (c) => {
       return c.json({ error: (err as Error).message }, 400);
     }
   }
-  if (typeof weeklyTemplate === "string") {
+  // 空串 = 清除周记配置（设置页文案「留空 = 回顾页周览不显示周记」的兑现），跳过语法校验。
+  if (typeof weeklyTemplate === "string" && weeklyTemplate.trim() !== "") {
     try {
       // 用固定周号校验周记模板语法本身是否合法
       expandWeeklyTemplate(weeklyTemplate, "2026-W01");
@@ -76,35 +91,48 @@ const ASSET_MIME: Record<string, string> = {
   svg: "image/svg+xml",
 };
 
-// 注意：/asset 与 /batch 必须注册在 /:date 之前，否则会被 :date 参数路由吞掉
+// 注意：GET /asset 必须注册在 GET /:date 之前，否则会被 :date 参数路由吞掉
+// （/batch 是 POST，与只注册了 GET/PUT 的 /:date 天然不冲突，顺序对它不构成风险）。
 diary.get("/asset", (c) => {
+  // 对外一律 404：不区分「非法路径」「非白名单扩展名」「文件不存在」，不给探测者任何信号（spec 口径）。
+  const notFound = () => c.json({ error: "not-found" }, 404);
   const rel = c.req.query("path") ?? "";
   const ext = rel.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
-  if (!ext || !(ext in ASSET_MIME)) return c.json({ error: "仅支持图片附件" }, 400);
+  if (!ext || !(ext in ASSET_MIME)) return notFound();
   if (rel.includes("\\") || rel.startsWith("/") || /^[A-Za-z]:/.test(rel) || rel.split("/").some((s) => s === "..")) {
-    return c.json({ error: "非法路径" }, 400);
+    return notFound();
   }
   const root = vaultDir();
   if (!root) return c.json({ error: "diary-disabled" }, 503);
   const abs = path.resolve(root, rel);
   const rootAbs = path.resolve(root);
-  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return c.json({ error: "非法路径" }, 400);
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) return notFound();
+  // 字符串层比对挡不住 vault 内指向外部的 symlink/junction（链接在 readFileSync 内部才解析）。
+  try {
+    assertRealpathInsideVault(root, abs);
+  } catch {
+    return notFound();
+  }
   try {
     const buf = fs.readFileSync(abs);
     const headers: Record<string, string> = {
       "Content-Type": ASSET_MIME[ext],
       "Cache-Control": "private, max-age=3600",
+      // Content-Type 完全由用户可控的扩展名决定，与实际字节无关：禁嗅探 + 全类型 CSP 兜底。
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'",
     };
-    // svg 可携带脚本，前端虽走 blob+img 不执行脚本，服务端仍设防
-    if (ext === "svg") headers["Content-Security-Policy"] = "default-src 'none'";
     return c.body(new Uint8Array(buf), 200, headers);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return c.json({ error: "not-found" }, 404);
-    throw err;
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return notFound();
+    const response = vaultReadError(err);
+    if (response) return response;
+    // EISDIR / EINVAL 等（vault 里同名目录、Windows 下路径含 ?）不该裸 500 暴路径信息。
+    return notFound();
   }
 });
 
-// 注意：/batch 必须注册在 /:date 之前，否则会被 :date 参数路由吞掉
 diary.post("/batch", async (c) => {
   const raw: unknown = await c.req.json().catch(() => null);
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
@@ -125,19 +153,29 @@ diary.post("/batch", async (c) => {
   if (!template) return c.json({ error: "diary-no-template" }, 409);
   const weeklyTemplate = getServerConfig(WEEKLY_TEMPLATE_KEY) || null;
 
+  // 批量读是「尽力而为」：单个文件的 ENOENT/EISDIR/权限问题不该掀掉整次请求，一律当「无内容」。
   const readOne = (file: string) => {
     try {
       return { exists: true, content: fs.readFileSync(file, "utf8") };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return { exists: false, content: "" };
-      throw err;
+    } catch {
+      return { exists: false, content: "" };
+    }
+  };
+  // 路径解析本身也可能抛（模板越界 / 某段是指向 vault 外的 symlink），同样降级为「无内容」。
+  const readResolved = (resolve: () => string) => {
+    try {
+      return readOne(resolve());
+    } catch {
+      return { exists: false, content: "" };
     }
   };
   const dateMap: Record<string, { exists: boolean; content: string }> = {};
-  for (const d of dates as string[]) dateMap[d] = readOne(resolveDiaryFile(root, template, d));
+  for (const d of dates as string[]) dateMap[d] = readResolved(() => resolveDiaryFile(root, template, d));
   const weekMap: Record<string, { exists: boolean; content: string }> = {};
   for (const w of weeks as string[]) {
-    weekMap[w] = weeklyTemplate ? readOne(resolveWeeklyFile(root, weeklyTemplate, w)) : { exists: false, content: "" };
+    weekMap[w] = weeklyTemplate
+      ? readResolved(() => resolveWeeklyFile(root, weeklyTemplate, w))
+      : { exists: false, content: "" };
   }
   return c.json({ dates: dateMap, weeks: weekMap, weeklyConfigured: weeklyTemplate !== null });
 });

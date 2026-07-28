@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { expandDiaryTemplate, isValidDiaryDate, resolveDiaryFile } from "./diary-path.js";
 import { expandWeeklyTemplate, isValidWeekKey, resolveWeeklyFile } from "./diary-path.js";
@@ -57,5 +59,34 @@ describe("周记模板", () => {
     expect(() => expandWeeklyTemplate("{yyyy}.md", "2026-W05")).toThrow("未知占位符");
     expect(() => expandWeeklyTemplate("../{gggg}.md", "2026-W05")).toThrow();
     expect(() => resolveWeeklyFile("/vault", "a/../../{ww}.md", "2026-W05")).toThrow();
+  });
+});
+
+describe("realpath 越界防护（symlink / junction）", () => {
+  it("vault 内指向外部目录的链接：日记写路径解析必须抛错", () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), "diary-vault-rp-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "diary-outside-rp-"));
+    try {
+      try {
+        fs.symlinkSync(outside, path.join(vault, "日记_2026"), process.platform === "win32" ? "junction" : "dir");
+      } catch {
+        return; // 建链接权限不足：跳过而非误报
+      }
+      // 字符串层看着完全合法（无 ..、无绝对路径），只有 realpath 能识破。
+      expect(() => resolveDiaryFile(vault, TPL, "2026-07-09")).toThrow("路径越出 vault 目录");
+    } finally {
+      fs.rmSync(vault, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("vault 内的普通目录不受影响", () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), "diary-vault-rp-"));
+    try {
+      fs.mkdirSync(path.join(vault, "日记_2026"), { recursive: true });
+      expect(resolveDiaryFile(vault, TPL, "2026-07-09")).toContain("2026-07-09.md");
+    } finally {
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
   });
 });

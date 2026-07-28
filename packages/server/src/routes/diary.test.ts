@@ -109,6 +109,39 @@ describe("diary config 周记模板", () => {
     expect(body.weeklyTemplate).toBe("Reviews/{gggg}-W{ww}.md");
   });
 
+  it("空串 weeklyTemplate = 清除配置（设置页「留空 = 不显示周记」的兑现）", async () => {
+    await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ weeklyTemplate: "Reviews/{gggg}-W{ww}.md" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const cleared = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ weeklyTemplate: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(cleared.status).toBe(200);
+    expect((await (await app.request("/api/diary/config")).json()).weeklyTemplate).toBe("");
+
+    // 清掉之后 batch 必须回到「未配置周记」状态
+    await putConfig();
+    const batch = await app.request("/api/diary/batch", {
+      method: "POST",
+      body: JSON.stringify({ dates: [], weeks: ["2026-W28"] }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect((await batch.json()).weeklyConfigured).toBe(false);
+  });
+
+  it("日模板仍不允许空（没对外承诺可留空）", async () => {
+    const res = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ template: "" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
+  });
+
   it("两键都缺 400", async () => {
     const res = await app.request("/api/diary/config", {
       method: "PUT",
@@ -132,12 +165,6 @@ describe("diary batch", () => {
       body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
     });
-
-  it("路由不被 :date 吞掉——请求 /batch 不落入日期 400 分支", async () => {
-    await putConfig();
-    const res = await postBatch({ dates: [], weeks: [] });
-    expect(res.status).not.toBe(400);
-  });
 
   it("批量读日期与周，含存在/不存在与未配周模板", async () => {
     await putConfig();
@@ -207,15 +234,87 @@ describe("diary asset", () => {
     expect(Array.from(buf)).toEqual([1, 2, 3, 4]);
   });
 
-  it("路径越界/非法一律 4xx", async () => {
-    expect((await app.request("/api/diary/asset?path=../secret.png")).status).toBeGreaterThanOrEqual(400);
-    expect((await app.request("/api/diary/asset?path=/etc/passwd")).status).toBeGreaterThanOrEqual(400);
-    expect((await app.request("/api/diary/asset?path=a.md")).status).toBeGreaterThanOrEqual(400);
+  // 注册顺序真闸：GET /asset 若被挪到 GET /:date 之后，就会被 :date 参数路由吞掉，
+  // "asset" 当日期解析失败 → 400，拿不到 200 + image/png。这条比原来那条 POST /batch
+  // 的 not.toBe(400) 硬得多（POST 与只注册 GET/PUT 的 /:date 本就不可能冲突）。
+  it("GET /asset 注册在 /:date 之前——不被日期路由吞掉", async () => {
+    const res = await app.request("/api/diary/asset?path=attachments/a.png");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("路径越界/非法/非白名单扩展名一律 404（与「不存在」同一口径）", async () => {
+    expect((await app.request("/api/diary/asset?path=../secret.png")).status).toBe(404);
+    expect((await app.request("/api/diary/asset?path=/etc/passwd")).status).toBe(404);
+    expect((await app.request("/api/diary/asset?path=..%5cwin.png")).status).toBe(404);
+    expect((await app.request("/api/diary/asset?path=C%3A%5Cwindows%5Cx.png")).status).toBe(404);
+    // 非图片扩展名：日记正文本身也不得经 asset 接口读出
+    expect((await app.request("/api/diary/asset?path=a.md")).status).toBe(404);
+  });
+
+  // 越界防护的唯一真闸：目标文件在 vault 外**确实存在**且扩展名合法。
+  // 删掉 diary.ts 的形状/前缀校验后这条必红（会拿到 200 + 文件字节）；
+  // 只断言 >=400 的旧写法在那种状态下仍绿（走到 readFileSync 拿 ENOENT → 404）。
+  it("vault 外真实存在的 .png 也必须 404，且响应体不含其内容", async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "diary-outside-"));
+    const secret = path.join(outsideDir, "secret.png");
+    fs.writeFileSync(secret, "TOP-SECRET-BYTES");
+    try {
+      const rel = path.relative(vault, secret).split(path.sep).join("/");
+      const res = await app.request(`/api/diary/asset?path=${encodeURIComponent(rel)}`);
+      expect(res.status).toBe(404);
+      expect(await res.text()).not.toContain("TOP-SECRET-BYTES");
+    } finally {
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("vault 内指向外部目录的 symlink/junction 不得读出 vault 外文件", async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "diary-outside-"));
+    fs.writeFileSync(path.join(outsideDir, "secret.png"), "TOP-SECRET-BYTES");
+    const linkPath = path.join(vault, "out");
+    try {
+      // Windows 上目录 junction 无需管理员权限；POSIX 用普通目录 symlink。
+      fs.symlinkSync(outsideDir, linkPath, process.platform === "win32" ? "junction" : "dir");
+    } catch {
+      // 权限不足（如未开开发者模式的 Windows + 非 junction 场景）：跳过，不误报。
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+      return;
+    }
+    try {
+      const res = await app.request("/api/diary/asset?path=out/secret.png");
+      expect(res.status).toBe(404);
+      expect(await res.text()).not.toContain("TOP-SECRET-BYTES");
+    } finally {
+      fs.rmSync(linkPath, { recursive: true, force: true });
+      fs.rmSync(outsideDir, { recursive: true, force: true });
+    }
   });
 
   it("不存在 404", async () => {
     const res = await app.request("/api/diary/asset?path=none.png");
     expect(res.status).toBe(404);
+  });
+
+  it("所有类型都带 nosniff 与 CSP", async () => {
+    const res = await app.request("/api/diary/asset?path=attachments/a.png");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-security-policy")).toBe("default-src 'none'");
+  });
+
+  it("非 ENOENT 的读错误不裸 500：EACCES 给 503，其余按 404", async () => {
+    const eacces = Object.assign(new Error("denied"), { code: "EACCES" });
+    vi.spyOn(fs, "readFileSync").mockImplementationOnce(() => {
+      throw eacces;
+    });
+    const denied = await app.request("/api/diary/asset?path=attachments/a.png");
+    expect(denied.status).toBe(503);
+    expect((await denied.json()).error).toBe("diary-vault-not-readable");
+
+    vi.spyOn(fs, "readFileSync").mockImplementationOnce(() => {
+      throw Object.assign(new Error("is a directory"), { code: "EISDIR" });
+    });
+    expect((await app.request("/api/diary/asset?path=attachments/a.png")).status).toBe(404);
   });
 
   it("vault 未挂载 503", async () => {

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -28,12 +29,40 @@ function validateTemplateShape(template: string): string {
   return tpl;
 }
 
+/**
+ * 逐级解析符号链接 / junction，直到最深一段已存在的祖先；不存在的尾段按字面拼回。
+ * 纯字符串前缀比对挡不住 vault 里指向外部的链接（链接解析发生在 readFileSync/writeFileSync 内部，
+ * 早已越过闸），必须在读写前把真实路径算出来再比。
+ */
+export function realpathDeepest(target: string): string {
+  try {
+    return fs.realpathSync(target);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    const parent = path.dirname(target);
+    if (parent === target) return target;
+    return path.join(realpathDeepest(parent), path.basename(target));
+  }
+}
+
+/** realpath 后仍必须落在 vault 的 realpath 内。抛错文案与字符串层校验一致，对外不区分。 */
+export function assertRealpathInsideVault(vaultDir: string, abs: string): string {
+  const realRoot = realpathDeepest(path.resolve(vaultDir));
+  const realAbs = realpathDeepest(abs);
+  if (realAbs !== realRoot && !realAbs.startsWith(realRoot + path.sep)) {
+    throw new Error("路径越出 vault 目录");
+  }
+  return abs;
+}
+
 /** 校验展开后的绝对路径确实落在 vaultDir 内，越界防护，日/周共用 */
 function resolveInsideVault(vaultDir: string, rel: string): string {
   const abs = path.resolve(vaultDir, rel);
   const root = path.resolve(vaultDir);
   if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error("路径越出 vault 目录");
-  return abs;
+  // 字符串层过了还不够：模板里任一段可能是指向 vault 外的 symlink/junction，
+  // 那样 PUT /api/diary/:date 会变成对被链接目标的任意文件写。
+  return assertRealpathInsideVault(vaultDir, abs);
 }
 
 export function expandDiaryTemplate(template: string, date: string): string {
