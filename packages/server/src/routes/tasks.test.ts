@@ -112,6 +112,99 @@ describe("GET /api/tasks (read-only)", () => {
   });
 });
 
+function seedArchive(overrides: Partial<{
+  taskId: string;
+  payload: string;
+  deleteReason: string;
+  deletedAt: string;
+}> = {}): void {
+  db.prepare(`
+    INSERT INTO deleted_tasks_archive (task_id, payload, delete_reason, deleted_at)
+    VALUES (?, ?, ?, ?)
+  `).run(
+    overrides.taskId ?? "arch-task",
+    overrides.payload ?? JSON.stringify({ title: "归档任务", createdAt: "2026-06-01T00:00:00.000Z", done: 1, completedAt: "2026-06-02T00:00:00.000Z", tags: ["a", "b"] }),
+    overrides.deleteReason ?? "user_delete",
+    overrides.deletedAt ?? "2026-06-10T00:00:00.000Z",
+  );
+}
+
+describe("GET /api/tasks/deleted-archive (read-only)", () => {
+  beforeEach(() => {
+    db.prepare("DELETE FROM deleted_tasks_archive").run();
+  });
+
+  it("挑字段返回 snapshot，坏 payload 容错为 snapshot:null", async () => {
+    seedArchive({
+      taskId: "arch-good",
+      deletedAt: "2026-06-10T00:00:00.000Z",
+      payload: JSON.stringify({ title: "好任务", createdAt: "2026-06-01T00:00:00.000Z", done: 1, completedAt: "2026-06-02T00:00:00.000Z", tags: ["x"] }),
+    });
+    seedArchive({
+      taskId: "arch-bad",
+      deletedAt: "2026-06-11T00:00:00.000Z",
+      payload: "{not valid json",
+    });
+
+    const res = await app.request("/api/tasks/deleted-archive");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.items).toHaveLength(2);
+
+    const good = body.items.find((item: { taskId: string }) => item.taskId === "arch-good");
+    expect(good).toMatchObject({
+      taskId: "arch-good",
+      deletedAt: "2026-06-10T00:00:00.000Z",
+      deleteReason: "user_delete",
+      snapshot: {
+        title: "好任务",
+        createdAt: "2026-06-01T00:00:00.000Z",
+        done: true,
+        completedAt: "2026-06-02T00:00:00.000Z",
+        tags: ["x"],
+      },
+    });
+
+    const bad = body.items.find((item: { taskId: string }) => item.taskId === "arch-bad");
+    expect(bad).toMatchObject({ taskId: "arch-bad", snapshot: null });
+  });
+
+  it("旧快照缺字段容错为 null/默认", async () => {
+    seedArchive({ taskId: "arch-partial", payload: JSON.stringify({ title: "老快照" }) });
+
+    const res = await app.request("/api/tasks/deleted-archive");
+    const body = await res.json();
+    const item = body.items.find((i: { taskId: string }) => i.taskId === "arch-partial");
+    expect(item.snapshot).toMatchObject({
+      title: "老快照",
+      createdAt: null,
+      done: false,
+      completedAt: null,
+      tags: [],
+    });
+  });
+
+  it("from/to 过滤 deleted_at", async () => {
+    seedArchive({ taskId: "arch-early", deletedAt: "2026-06-01T00:00:00.000Z" });
+    seedArchive({ taskId: "arch-mid", deletedAt: "2026-06-15T00:00:00.000Z" });
+    seedArchive({ taskId: "arch-late", deletedAt: "2026-06-30T00:00:00.000Z" });
+
+    const res = await app.request("/api/tasks/deleted-archive?from=2026-06-10T00:00:00.000Z&to=2026-06-20T00:00:00.000Z");
+    const body = await res.json();
+    expect(body.items.map((i: { taskId: string }) => i.taskId)).toEqual(["arch-mid"]);
+  });
+
+  it("缺省 from/to 全量返回", async () => {
+    seedArchive({ taskId: "arch-1" });
+    seedArchive({ taskId: "arch-2" });
+
+    const res = await app.request("/api/tasks/deleted-archive");
+    const body = await res.json();
+    expect(body.items).toHaveLength(2);
+  });
+});
+
 describe("POST /api/tasks/:id/schedule", () => {
   it("设置日期写 scheduled_at 并记 seq", async () => {
     const res = await app.request("/api/tasks/t1/schedule", {

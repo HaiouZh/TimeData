@@ -42,6 +42,86 @@ tasks.get("/", (c) => {
   return c.json({ ok: true, tasks: result });
 });
 
+// --- GET /deleted-archive ---
+// 必须注册在 /:id 类参数路由之前，防止被吞。
+
+const archiveQuerySchema = z
+  .object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+  })
+  .strict();
+
+interface ArchiveRow {
+  task_id: string;
+  payload: string;
+  delete_reason: string;
+  deleted_at: string;
+}
+
+interface ArchiveSnapshot {
+  title: string;
+  createdAt: string | null;
+  done: boolean;
+  completedAt: string | null;
+  tags: string[];
+}
+
+function parseArchiveSnapshot(payload: string): ArchiveSnapshot | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const row = parsed as Record<string, unknown>;
+  return {
+    title: typeof row.title === "string" ? row.title : "",
+    createdAt: typeof row.createdAt === "string" ? row.createdAt : (typeof row.created_at === "string" ? row.created_at : null),
+    done: typeof row.done === "boolean" ? row.done : row.done === 1,
+    completedAt: typeof row.completedAt === "string" ? row.completedAt : (typeof row.completed_at === "string" ? row.completed_at : null),
+    tags: Array.isArray(row.tags) ? row.tags.filter((t): t is string => typeof t === "string") : [],
+  };
+}
+
+tasks.get("/deleted-archive", (c) => {
+  const parsed = archiveQuerySchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
+  if (!parsed.success) {
+    return c.json(
+      { ok: false, error: { code: "INVALID_REQUEST", message: "Invalid query", details: parsed.error.issues } },
+      400,
+    );
+  }
+
+  const conditions: string[] = [];
+  const params: string[] = [];
+  if (parsed.data.from !== undefined) {
+    conditions.push("deleted_at >= ?");
+    params.push(parsed.data.from);
+  }
+  if (parsed.data.to !== undefined) {
+    conditions.push("deleted_at <= ?");
+    params.push(parsed.data.to);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const rows = getDb()
+    .prepare(`SELECT * FROM deleted_tasks_archive ${where} ORDER BY deleted_at, id`)
+    .all(...params) as ArchiveRow[];
+
+  const items = rows.map((row) => ({
+    taskId: row.task_id,
+    deletedAt: row.deleted_at,
+    deleteReason: row.delete_reason,
+    snapshot: parseArchiveSnapshot(row.payload),
+  }));
+
+  return c.json({ ok: true, items });
+});
+
 // --- POST /:id/schedule ---
 
 const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD");
