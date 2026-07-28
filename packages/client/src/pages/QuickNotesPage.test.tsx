@@ -1983,6 +1983,30 @@ describe("多选 × 置顶（QN-09/11）", () => {
     await unmount(root);
   });
 
+
+  it("header 更多操作与导出菜单按 Escape 关闭（QN-16）", async () => {
+    await addNote("note-esc", "菜单条", "2026-06-01T04:00:00.000Z");
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="更多操作"]'));
+    expect(host.querySelector('[role="menu"][aria-label="速记导出与清理"]')).toBeInstanceOf(HTMLElement);
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(host.querySelector('[role="menu"][aria-label="速记导出与清理"]')).toBeNull();
+
+    await openMenu(host, "菜单条");
+    await click(menuItem(host, "选择"));
+    await click(lastButtonByText(host, "导出"));
+    expect(menuItem(host, "Markdown")).toBeInstanceOf(HTMLButtonElement);
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(menuItem(host, "Markdown")).toBeNull();
+
+    await unmount(root);
+  });
+
   it("批量删除的目标数与勾选数一致，置顶勾选后可见即可删（QN-09 防回归）", async () => {
     await addNote("note-x", "普通丁", "2026-06-01T04:00:00.000Z");
     await seedPinned("pin-4", "置顶戊", "2026-06-01T05:00:00.000Z");

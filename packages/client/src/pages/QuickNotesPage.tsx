@@ -325,6 +325,20 @@ export default function QuickNotesPage() {
     }
   }, [selectionMode]);
 
+  // header 更多操作 / 导出菜单开着时 Escape 可关（QN-16）。气泡操作菜单的 Escape
+  // 在 QuickNoteActionMenu 内部处理，这里只管这两个内联菜单。
+  useEffect(() => {
+    if (!actionsOpen && !exportMenuOpen) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setActionsOpen(false);
+      setExportMenuOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [actionsOpen, exportMenuOpen]);
+
   useEffect(() => {
     if (!focusNoteId) return;
     if (!timeline.notes.some((note) => note.id === focusNoteId)) return;
