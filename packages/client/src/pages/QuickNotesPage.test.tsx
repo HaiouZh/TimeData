@@ -1869,3 +1869,132 @@ describe("捕捉中心", () => {
     await unmount(root);
   });
 }, PAGE_TEST_TIMEOUT_MS);
+
+describe("多选 × 置顶（QN-09/11）", () => {
+  beforeEach(async () => {
+    await db.tasks.clear();
+    await db.quickNotes.clear();
+    await db.timeEntries.clear();
+    await db.categories.clear();
+    await db.syncLog.clear();
+  });
+
+  async function addNote(id: string, text: string, occurredAt: string) {
+    await db.quickNotes.add({ id, text, occurredAt, createdAt: occurredAt, updatedAt: occurredAt });
+  }
+
+  async function seedPinned(id: string, text: string, occurredAt: string) {
+    await addNote(id, text, occurredAt);
+    await setQuickNotePinned(id, true, { now: new Date(occurredAt) });
+    await db.syncLog.clear();
+  }
+
+  function pinnedCard(host: HTMLElement, text: string): HTMLElement {
+    const region = host.querySelector('[aria-label="置顶速记"]');
+    const card = Array.from(region?.querySelectorAll('[role="button"]') ?? []).find(
+      (element) => element.textContent?.includes(text) ?? false,
+    );
+    if (!(card instanceof HTMLElement)) throw new Error(`missing pinned card ${text}`);
+    return card;
+  }
+
+  it("从置顶浮层进多选：浮层保持打开，选中项可见可反选（QN-09 方向1）", async () => {
+    await seedPinned("pin-1", "置顶甲", "2026-06-01T04:00:00.000Z");
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="查看置顶速记，1 条"]'));
+    await openMenu(host, "置顶甲");
+    await click(menuItem(host, "选择"));
+
+    expect(host.querySelector('button[aria-label="退出多选"]')).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('[aria-label="置顶速记"]')).toBeInstanceOf(HTMLElement);
+    const card = pinnedCard(host, "置顶甲");
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+    expect(host.textContent).toContain("含置顶 1");
+
+    await click(card);
+    expect(pinnedCard(host, "置顶甲").getAttribute("aria-pressed")).toBe("false");
+    expect(host.textContent).toContain("已选 0 条");
+
+    await unmount(root);
+  });
+
+  it("主线进多选后可打开置顶浮层勾选置顶（QN-09 方向2）", async () => {
+    await addNote("note-a", "普通条", "2026-06-01T04:00:00.000Z");
+    await seedPinned("pin-2", "置顶乙", "2026-06-01T05:00:00.000Z");
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "普通条");
+    await click(menuItem(host, "选择"));
+    expect(host.textContent).toContain("已选 1 条");
+
+    await click(host.querySelector('header button[aria-label="查看置顶速记，1 条"]'));
+    await click(pinnedCard(host, "置顶乙"));
+
+    expect(host.textContent).toContain("已选 2 条");
+    expect(host.textContent).toContain("含置顶 1");
+
+    await unmount(root);
+  });
+
+  it("全选只吃已加载非置顶；取消全选保留置顶勾选（QN-11a）", async () => {
+    await addNote("note-1", "第一条", "2026-06-01T04:00:00.000Z");
+    await addNote("note-2", "第二条", "2026-06-01T05:00:00.000Z");
+    await addNote("note-3", "第三条", "2026-06-02T04:00:00.000Z");
+    await seedPinned("pin-3", "置顶丙", "2026-06-01T06:00:00.000Z");
+    const { host, root } = await renderPage();
+
+    await openMenu(host, "第一条");
+    await click(menuItem(host, "选择"));
+    await click(lastButtonByText(host, "全选"));
+
+    expect(host.textContent).toContain("已选 3 条");
+    expect(host.textContent).not.toContain("含置顶");
+
+    await click(host.querySelector('header button[aria-label="查看置顶速记，1 条"]'));
+    await click(pinnedCard(host, "置顶丙"));
+    expect(host.textContent).toContain("已选 4 条");
+
+    await click(lastButtonByText(host, "取消全选"));
+    expect(host.textContent).toContain("已选 1 条");
+    expect(host.textContent).toContain("含置顶 1");
+
+    await unmount(root);
+  });
+
+  it("日期分隔条「选中这天」toggle 当天已加载速记（QN-11b）", async () => {
+    await addNote("day1-a", "六一甲", "2026-06-01T04:00:00.000Z");
+    await addNote("day1-b", "六一乙", "2026-06-01T05:00:00.000Z");
+    await addNote("day2-a", "六二甲", "2026-06-02T04:00:00.000Z");
+    const { host, root } = await renderPage();
+
+    expect(host.querySelector('button[aria-label*="选中"]')).toBeNull();
+
+    await openMenu(host, "六二甲");
+    await click(menuItem(host, "选择"));
+
+    const dayButton = host.querySelector('button[aria-label="选中6月1日的速记"]');
+    await click(dayButton);
+    expect(host.textContent).toContain("已选 3 条");
+
+    await click(host.querySelector('button[aria-label="取消选中6月1日的速记"]'));
+    expect(host.textContent).toContain("已选 1 条");
+
+    await unmount(root);
+  });
+
+  it("批量删除的目标数与勾选数一致，置顶勾选后可见即可删（QN-09 防回归）", async () => {
+    await addNote("note-x", "普通丁", "2026-06-01T04:00:00.000Z");
+    await seedPinned("pin-4", "置顶戊", "2026-06-01T05:00:00.000Z");
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector('button[aria-label="查看置顶速记，1 条"]'));
+    await openMenu(host, "置顶戊");
+    await click(menuItem(host, "选择"));
+    await click(lastButtonByText(host, "删除"));
+
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain("删除 1 条速记");
+
+    await unmount(root);
+  });
+}, PAGE_TEST_TIMEOUT_MS);

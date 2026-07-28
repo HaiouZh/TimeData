@@ -197,6 +197,33 @@ export default function QuickNotesPage() {
     for (const note of pinnedNotes) byId.set(note.id, note);
     return [...byId.values()];
   }, [timeline.notes, pinnedNotes]);
+  // 全选/按日选只吃主列表已加载的非置顶速记：置顶不进全选，避免「全选→删除」隔着
+  // 关闭的浮层删掉看不见的置顶（与「清理跳过置顶」同一保护口径，QN-02/QN-11）。
+  const loadedUnpinnedIds = useMemo(
+    () => timeline.notes.filter((note) => !note.pinned).map((note) => note.id),
+    [timeline.notes],
+  );
+  const noteIdsByLocalDate = useMemo(() => {
+    const map = new Map<string, string[]>();
+    let currentDate: string | null = null;
+    for (const item of displayItems) {
+      if (item.type === "date") {
+        currentDate = item.localDate;
+        continue;
+      }
+      if (!currentDate) continue;
+      const ids = map.get(currentDate) ?? [];
+      ids.push(item.note.id);
+      map.set(currentDate, ids);
+    }
+    return map;
+  }, [displayItems]);
+  const allLoadedSelected =
+    loadedUnpinnedIds.length > 0 && loadedUnpinnedIds.every((id) => selectedIds.has(id));
+  const selectedPinnedCount = pinnedNotes.reduce(
+    (count, note) => (selectedIds.has(note.id) ? count + 1 : count),
+    0,
+  );
   const debouncedQuery = useDebouncedValue(searchQuery, 200);
   const searchTerms = useMemo(() => parseSearchTerms(debouncedQuery), [debouncedQuery]);
   const searchResults = useLiveQuery(() => searchQuickNotes(debouncedQuery), [debouncedQuery]) ?? [];
@@ -291,9 +318,9 @@ export default function QuickNotesPage() {
     };
   }, []);
 
+  // 多选与搜索互斥；置顶浮层在多选态保留（QN-09「通」：选中的置顶必须可见可反选）。
   useEffect(() => {
     if (selectionMode) {
-      setPinnedOpen(false);
       setSearchOpen(false);
     }
   }, [selectionMode]);
@@ -720,7 +747,7 @@ export default function QuickNotesPage() {
   function enterSelection(note: QuickNote) {
     setMenu(null);
     setActionsOpen(false);
-    setPinnedOpen(false);
+    // 不关置顶浮层：从置顶长按进多选时，被选中的那条要留在眼前（QN-09）。
     setSearchOpen(false);
     setSelectionMode(true);
     setSelectedIds(new Set([note.id]));
@@ -737,6 +764,34 @@ export default function QuickNotesPage() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  /** 全选当前已加载（非置顶）；已全在集合则反选，但保留单独勾选的置顶。 */
+  function toggleSelectAllLoaded() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (loadedUnpinnedIds.every((id) => next.has(id))) {
+        for (const id of loadedUnpinnedIds) next.delete(id);
+      } else {
+        for (const id of loadedUnpinnedIds) next.add(id);
+      }
+      return next;
+    });
+  }
+
+  /** 选中某天已加载的全部速记；已全在集合则反选。 */
+  function toggleSelectDay(localDate: string) {
+    const ids = noteIdsByLocalDate.get(localDate) ?? [];
+    if (ids.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (ids.every((id) => next.has(id))) {
+        for (const id of ids) next.delete(id);
+      } else {
+        for (const id of ids) next.add(id);
+      }
       return next;
     });
   }
@@ -930,7 +985,37 @@ export default function QuickNotesPage() {
             </button>
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               已选 <span className="td-num">{selectedIds.size}</span> 条
+              {selectedPinnedCount > 0 && (
+                <span className="text-ink-3">
+                  {" "}
+                  · 含置顶 <span className="td-num">{selectedPinnedCount}</span>
+                </span>
+              )}
             </span>
+            <button
+              type="button"
+              aria-pressed={allLoadedSelected}
+              disabled={loadedUnpinnedIds.length === 0}
+              onClick={toggleSelectAllLoaded}
+              className="td-text-label rounded-xl border border-border bg-surface px-3 py-1.5 text-ink-2 disabled:cursor-not-allowed disabled:text-ink-3"
+            >
+              {allLoadedSelected ? "取消全选" : "全选"}
+            </button>
+            {pinnedNotes.length > 0 && (
+              <button
+                type="button"
+                aria-label={`${pinnedOpen ? "收起" : "查看"}置顶速记，${pinnedNotes.length} 条`}
+                aria-haspopup="dialog"
+                aria-expanded={pinnedOpen}
+                onClick={() => setPinnedOpen((open) => !open)}
+                className="relative flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2"
+              >
+                <Icon icon={PushPin} size={16} />
+                <span className="td-num td-text-caption absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-accent px-1 font-semibold leading-5 text-page">
+                  {pinnedNotes.length}
+                </span>
+              </button>
+            )}
             <button
               type="button"
               disabled={selectedIds.size === 0}
@@ -1130,7 +1215,7 @@ export default function QuickNotesPage() {
             </div>
           </div>
         )}
-        {!selectionMode && !searchOpen && pinnedOpen && pinnedNotes.length > 0 && (
+        {!searchOpen && pinnedOpen && pinnedNotes.length > 0 && (
           <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-[var(--z-modal)] px-4">
             <section
               aria-label="置顶速记"
@@ -1262,6 +1347,8 @@ export default function QuickNotesPage() {
 
               {displayItems.map((item) => {
                 if (item.type === "date") {
+                  const dayIds = noteIdsByLocalDate.get(item.localDate) ?? [];
+                  const daySelected = dayIds.length > 0 && dayIds.every((id) => selectedIds.has(id));
                   return (
                     <div key={item.key} data-date-label={item.label} data-local-date={item.localDate} className="flex items-center gap-3 pt-1">
                       <div className="h-px flex-1 bg-border" />
@@ -1269,6 +1356,21 @@ export default function QuickNotesPage() {
                         {item.label}
                       </div>
                       <div className="h-px flex-1 bg-border" />
+                      {selectionMode && (
+                        <button
+                          type="button"
+                          aria-label={`${daySelected ? "取消选中" : "选中"}${item.label}的速记`}
+                          aria-pressed={daySelected}
+                          onClick={() => toggleSelectDay(item.localDate)}
+                          className={`shrink-0 rounded-full border px-3 py-1 td-text-caption font-medium transition ${
+                            daySelected
+                              ? "border-accent bg-accent-soft text-accent-ink"
+                              : "border-border bg-surface text-ink-3 hover:border-accent hover:text-ink-2"
+                          }`}
+                        >
+                          {daySelected ? "已选这天" : "选中这天"}
+                        </button>
+                      )}
                     </div>
                   );
                 }
