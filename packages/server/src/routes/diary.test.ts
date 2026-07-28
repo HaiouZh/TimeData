@@ -36,10 +36,10 @@ const putConfig = () =>
 describe("diary config", () => {
   it("默认空模板，保存后可读回", async () => {
     let res = await app.request("/api/diary/config");
-    expect(await res.json()).toEqual({ enabled: true, template: "" });
+    expect(await res.json()).toEqual({ enabled: true, template: "", weeklyTemplate: "" });
     expect((await putConfig()).status).toBe(200);
     res = await app.request("/api/diary/config");
-    expect(await res.json()).toEqual({ enabled: true, template: TPL });
+    expect(await res.json()).toEqual({ enabled: true, template: TPL, weeklyTemplate: "" });
   });
 
   it("非法模板 400", async () => {
@@ -65,6 +65,57 @@ describe("diary config", () => {
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "请求体必须是有效 JSON 对象" });
+  });
+});
+
+describe("diary config 周记模板", () => {
+  it("PUT weeklyTemplate 后 GET 能读回", async () => {
+    let res = await app.request("/api/diary/config");
+    expect((await res.json()).weeklyTemplate).toBe("");
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ weeklyTemplate: "Reviews/{gggg}-W{ww}.md" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
+    res = await app.request("/api/diary/config");
+    expect((await res.json()).weeklyTemplate).toBe("Reviews/{gggg}-W{ww}.md");
+  });
+
+  it("非法周记模板 400", async () => {
+    const res = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ weeklyTemplate: "{yyyy}.md" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("只传 template 不动 weeklyTemplate，两键独立更新", async () => {
+    await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ weeklyTemplate: "Reviews/{gggg}-W{ww}.md" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const put = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({ template: TPL }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(put.status).toBe(200);
+    const res = await app.request("/api/diary/config");
+    const body = await res.json();
+    expect(body.template).toBe(TPL);
+    expect(body.weeklyTemplate).toBe("Reviews/{gggg}-W{ww}.md");
+  });
+
+  it("两键都缺 400", async () => {
+    const res = await app.request("/api/diary/config", {
+      method: "PUT",
+      body: JSON.stringify({}),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(res.status).toBe(400);
   });
 });
 

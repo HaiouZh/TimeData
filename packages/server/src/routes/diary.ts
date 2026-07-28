@@ -2,9 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
 import { getServerConfig, setServerConfig } from "../garmin/garminConfig.js";
-import { expandDiaryTemplate, isValidDiaryDate, resolveDiaryFile } from "../lib/diary-path.js";
+import { expandDiaryTemplate, expandWeeklyTemplate, isValidDiaryDate, resolveDiaryFile } from "../lib/diary-path.js";
 
 const TEMPLATE_KEY = "diary.pathTemplate.v1";
+const WEEKLY_TEMPLATE_KEY = "diary.weeklyPathTemplate.v1";
 const diary = new Hono();
 
 const vaultDir = () => process.env.DIARY_VAULT_DIR?.trim() || null;
@@ -21,22 +22,41 @@ function vaultWriteError(err: unknown): Response | null {
   );
 }
 
-diary.get("/config", (c) => c.json({ enabled: vaultDir() !== null, template: getServerConfig(TEMPLATE_KEY) ?? "" }));
+diary.get("/config", (c) =>
+  c.json({
+    enabled: vaultDir() !== null,
+    template: getServerConfig(TEMPLATE_KEY) ?? "",
+    weeklyTemplate: getServerConfig(WEEKLY_TEMPLATE_KEY) ?? "",
+  }),
+);
 
 diary.put("/config", async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
     return c.json({ error: "请求体必须是有效 JSON 对象" }, 400);
   }
-  const { template } = rawBody as { template?: unknown };
-  if (typeof template !== "string") return c.json({ error: "缺少 template" }, 400);
-  try {
-    // 用固定日期校验模板语法本身是否合法
-    expandDiaryTemplate(template, "2026-01-01");
-  } catch (err) {
-    return c.json({ error: (err as Error).message }, 400);
+  const { template, weeklyTemplate } = rawBody as { template?: unknown; weeklyTemplate?: unknown };
+  if (typeof template !== "string" && typeof weeklyTemplate !== "string") {
+    return c.json({ error: "缺少 template 或 weeklyTemplate" }, 400);
   }
-  setServerConfig(TEMPLATE_KEY, template.trim());
+  if (typeof template === "string") {
+    try {
+      // 用固定日期校验模板语法本身是否合法
+      expandDiaryTemplate(template, "2026-01-01");
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  }
+  if (typeof weeklyTemplate === "string") {
+    try {
+      // 用固定周号校验周记模板语法本身是否合法
+      expandWeeklyTemplate(weeklyTemplate, "2026-W01");
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  }
+  if (typeof template === "string") setServerConfig(TEMPLATE_KEY, template.trim());
+  if (typeof weeklyTemplate === "string") setServerConfig(WEEKLY_TEMPLATE_KEY, weeklyTemplate.trim());
   return c.json({ ok: true });
 });
 
