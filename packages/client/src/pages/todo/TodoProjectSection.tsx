@@ -394,27 +394,45 @@ function ProjectGroupCard({
         <>
           {creating && (
             <div className="px-1.5 pb-1.5">
-              <input
-                ref={createInputRef}
-                aria-label={`在项目 ${group.goalTitle}中新建任务`}
-                value={createDraft}
-                placeholder="新任务"
-                onChange={(event) => setCreateDraft(event.target.value)}
-                onBlur={() => void resolveBlur()}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
+              {/* 幽灵任务行：复选框占位 + accent 描边表达「正在输入」，与任务行同形，提交后原地变真任务 */}
+              <div
+                data-testid="project-create-draft-row"
+                className="flex items-center gap-2 rounded-lg bg-surface px-2 py-1 ring-2 ring-inset ring-accent"
+              >
+                <span aria-hidden="true" data-slot="checkbox-placeholder" className="h-4 w-4 shrink-0 rounded border border-border" />
+                <input
+                  ref={createInputRef}
+                  aria-label={`在项目 ${group.goalTitle}中新建任务`}
+                  value={createDraft}
+                  placeholder="新任务…"
+                  onChange={(event) => setCreateDraft(event.target.value)}
+                  onBlur={() => void resolveBlur()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setCreating(false);
+                      setCreateError(null);
+                      return;
+                    }
+                    if (event.key !== "Enter") return;
+                    if (event.nativeEvent.isComposing) return;
                     event.preventDefault();
-                    setCreating(false);
-                    setCreateError(null);
-                    return;
-                  }
-                  if (event.key !== "Enter") return;
-                  if (event.nativeEvent.isComposing) return;
-                  event.preventDefault();
-                  void submitCreate();
-                }}
-                className="w-full rounded-ctl bg-surface-elevated px-2 py-1 td-text-body text-ink outline-none placeholder:text-ink-3"
-              />
+                    void submitCreate();
+                  }}
+                  className="min-w-0 flex-1 bg-transparent py-0.5 td-text-body text-ink outline-none placeholder:text-ink-3"
+                />
+                <button
+                  type="button"
+                  aria-label="提交新任务"
+                  title="提交（回车）"
+                  // pointerdown 阻断失焦：避免「点按钮先触发 blur 提交、click 再提交一次」
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => void submitCreate()}
+                  className="flex h-6 w-7 shrink-0 items-center justify-center rounded-ctl bg-accent text-white"
+                >
+                  ↵
+                </button>
+              </div>
               {createError && <p className="mt-1 td-text-caption text-danger">{createError}</p>}
             </div>
           )}

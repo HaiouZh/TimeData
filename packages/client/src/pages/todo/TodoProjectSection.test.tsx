@@ -507,6 +507,30 @@ describe("TodoProjectSection", () => {
     expect(host.textContent).toContain("项目成员已达上限");
     await unmount(root);
   });
+
+  it("点 ↵ 按钮：提交且草稿行保持（连续录入），不重复提交", async () => {
+    const onCreateTask = vi.fn(async () => task({ id: "t-new" }));
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })], onCreateTask });
+    const input = await openCreateInput(host);
+    await act(async () => setInputValue(input, "第一条"));
+    await click(host.querySelector('button[aria-label="提交新任务"]'));
+    expect(onCreateTask).toHaveBeenCalledTimes(1);
+    expect(onCreateTask).toHaveBeenCalledWith("g1", "第一条");
+    const kept = host.querySelector<HTMLInputElement>('input[aria-label="在项目 目标 g1中新建任务"]');
+    expect(kept).not.toBeNull();
+    expect(kept?.value).toBe("");
+    await unmount(root);
+  });
+
+  it("草稿行带复选框占位与 accent 描边（幽灵任务行形态）", async () => {
+    const { host, root } = await renderSection({ groups: [group({ goalId: "g1", tasks: [task({ id: "t1" })] })] });
+    await openCreateInput(host);
+    const row = host.querySelector('[data-testid="project-create-draft-row"]');
+    expect(row).not.toBeNull();
+    expect(row?.className).toContain("ring-accent");
+    expect(row?.querySelector('[data-slot="checkbox-placeholder"]')).not.toBeNull();
+    await unmount(root);
+  });
 });
 
 describe("TodoProjectSection 落点", () => {
