@@ -127,6 +127,9 @@ describe("server app middleware order", () => {
       expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://app.example.com");
       expect(allowed.headers.get("Access-Control-Allow-Headers")).toContain("X-Confirm");
       expect(allowed.headers.get("Access-Control-Allow-Headers")).toContain("X-TimeData-Client");
+      // 客户端 apiFetch 对每个请求都带此观测头；漏在 allowlist 里会让所有跨域请求(Capacitor 壳)
+      // 预检失败，表现为「无法连接服务器」而同源网页版无感。
+      expect(allowed.headers.get("Access-Control-Allow-Headers")).toContain("X-TimeData-Client-Build");
 
       const blocked = await app.request("/api/categories", {
         method: "OPTIONS",
