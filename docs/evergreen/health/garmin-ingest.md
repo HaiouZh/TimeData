@@ -7,7 +7,7 @@ covers:
   - packages/client/src/pages/settings/SettingsGarminPage.tsx
 contracts:
   - packages/server/src/routes/ingest.ts
-last-reviewed: 2026-06-27
+last-reviewed: 2026-07-28
 ---
 
 # 健康 · Garmin 抓取与 ingest
@@ -101,7 +101,7 @@ Garmin 服务内部**直接调 `applyChange()`，不经此端点**（`ingest.ts`
 | 入口 | 职责 |
 |---|---|
 | `garmin/garminService.ts` | 子进程管理 + 定时任务 + 写入（`fetchGarminData`/`ingestGarminDomain`/`resolveGarminFetchRange`/`getGarminDailyLatestDates`/`updateSchedule`/`recordGarminFetchAudit`/`getGarminStatus`） |
-| `garmin/garminConfig.ts` | 配置读写 + 凭证 AES-256-GCM（`loadGarminConfig`/`saveGarminConfig`/`setGarminLastFetchDate`/`getServerConfig`/`setServerConfig`） |
+| `garmin/garminConfig.ts` | 配置读写 + 凭证 AES-256-GCM（`loadGarminConfig`/`saveGarminConfig`/`setGarminLastFetchDate`；底层 KV 读写用 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig`） |
 | `garmin/garminRoutes.ts` | Admin API：`GET/PUT /config`、`POST /fetch`、`GET /status`、`POST /test` |
 | `garmin/garminFetch.py` | 抓取脚本（5 个 `build_*`、`deterministic_id`） |
 | `garmin/README.md` / `requirements.txt` | 模块文档 / Python 依赖 |

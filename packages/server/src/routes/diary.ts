@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Hono } from "hono";
-import { getServerConfig, setServerConfig } from "../garmin/garminConfig.js";
+import { getServerConfig, setServerConfig } from "../lib/serverConfig.js";
 import {
   assertRealpathInsideVault,
   expandDiaryTemplate,

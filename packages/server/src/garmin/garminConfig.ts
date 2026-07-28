@@ -4,7 +4,7 @@ import {
   createHash,
   randomBytes,
 } from "node:crypto";
-import { getDb } from "../db/connection.js";
+import { getServerConfig, setServerConfig } from "../lib/serverConfig.js";
 
 export const DEFAULT_INITIAL_BACKFILL_DAYS = 7;
 
@@ -44,21 +44,6 @@ function decrypt(data: string): string {
   const decipher = createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(tag);
   return decipher.update(encrypted) + decipher.final("utf8");
-}
-
-export function getServerConfig(key: string): string | null {
-  const db = getDb();
-  const row = db
-    .prepare("SELECT value FROM server_config WHERE key = ?")
-    .get(key) as { value: string } | undefined;
-  return row?.value ?? null;
-}
-
-export function setServerConfig(key: string, value: string): void {
-  const db = getDb();
-  db.prepare(
-    "INSERT INTO server_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-  ).run(key, value, new Date().toISOString());
 }
 
 function parseInitialBackfillDays(value: string | null): number {

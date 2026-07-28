@@ -12,6 +12,7 @@ covers:
   - packages/server/src/db/connection.ts
   - packages/server/src/db/reset.ts
   - packages/server/src/lib/db-rows.ts
+  - packages/server/src/lib/serverConfig.ts
   - packages/client/src/db/index.ts
   - packages/client/src/db/schemaNormalization.ts
 contracts:
@@ -56,7 +57,7 @@ last-reviewed: 2026-07-28
 | `sync_seq` | 服务端权威变更序列，`sinceSeq` pull 的唯一 cursor |
 | `sync_state` | 服务端状态摘要缓存，避免每次 status 全量扫描业务表 |
 | `app_metadata` | 全局一次性迁移/重置标记 |
-| `server_config` | 服务端独有配置，例如 Garmin 凭证；不同步客户端 |
+| `server_config` | 服务端独有配置，例如 Garmin 凭证；不同步客户端。通用 KV 读写：`lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` |
 | `api_request_logs` | 服务端 `/api/*` 请求审计运维表；不同步客户端，不保存 body、Authorization 或完整 query。`is_new_ip` INTEGER 0/1 列（幂等补列，默认 0）标记该请求的来源 IP 在其 token tier 下首见 |
 | `totp_config` | TOTP 危险操作锁的单行配置表，`id` 恒为 1，`secret` 存 base32 明文；不同步客户端。见 [security](security.md) |
 | `totp_recovery_codes` | 恢复码表，主键是 sha256 哈希（不存明文），`used_at` 非空即已消费（一次性） |
