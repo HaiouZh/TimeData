@@ -13,7 +13,8 @@ import type { TodoStatsModuleDef, TodoStatsModuleId } from "./types.ts";
 export const TODO_STATS_LAYOUT_KEY = "stats.todo.layout.v1";
 
 // 期2：补上 "deleted" 模块，注册表键集合与 types.ts 的联合类型对齐。
-export const TODO_STATS_MODULES: Partial<Record<TodoStatsModuleId, TodoStatsModuleDef>> = {
+// 完整 Record 而非 Partial：漏注册任一 id 直接编译期报错，下面的清单也不用非空断言。
+export const TODO_STATS_MODULES: Record<TodoStatsModuleId, TodoStatsModuleDef> = {
   overview: {
     id: "overview",
     title: "总览",
@@ -89,13 +90,13 @@ export const TODO_STATS_MODULES: Partial<Record<TodoStatsModuleId, TodoStatsModu
 };
 
 export const TODO_STATS_MODULE_LIST: TodoStatsModuleDef[] = [
-  TODO_STATS_MODULES.overview!,
-  TODO_STATS_MODULES.created!,
-  TODO_STATS_MODULES.completed!,
-  TODO_STATS_MODULES.age!,
-  TODO_STATS_MODULES.heatmap!,
-  TODO_STATS_MODULES.cycle!,
-  TODO_STATS_MODULES.rhythm!,
-  TODO_STATS_MODULES.dimension!,
-  TODO_STATS_MODULES.deleted!,
+  TODO_STATS_MODULES.overview,
+  TODO_STATS_MODULES.created,
+  TODO_STATS_MODULES.completed,
+  TODO_STATS_MODULES.age,
+  TODO_STATS_MODULES.heatmap,
+  TODO_STATS_MODULES.cycle,
+  TODO_STATS_MODULES.rhythm,
+  TODO_STATS_MODULES.dimension,
+  TODO_STATS_MODULES.deleted,
 ];
