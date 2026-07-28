@@ -10,10 +10,11 @@ const EXPECTED_IDS = [
   "cycle",
   "rhythm",
   "dimension",
+  "deleted",
 ] as const;
 
 describe("TODO_STATS_MODULES", () => {
-  it("期1 只注册 8 个模块（deleted 期2 再加），且顺序与 spec 编号一致", () => {
+  it("期2 注册 9 个模块（含 deleted），且顺序与 spec 编号一致", () => {
     expect(TODO_STATS_MODULE_LIST.map((module) => module.id)).toEqual([...EXPECTED_IDS]);
     expect(Object.keys(TODO_STATS_MODULES).sort()).toEqual([...EXPECTED_IDS].sort());
   });

@@ -3,13 +3,13 @@ import CompletedDistributionSection from "./modules/CompletedDistributionSection
 import CompletionHeatmapSection from "./modules/CompletionHeatmapSection.tsx";
 import CreatedDistributionSection from "./modules/CreatedDistributionSection.tsx";
 import CycleMetricsSection from "./modules/CycleMetricsSection.tsx";
+import DeletedInsightsSection from "./modules/DeletedInsightsSection.tsx";
 import DimensionSection from "./modules/DimensionSection.tsx";
 import RhythmSection from "./modules/RhythmSection.tsx";
 import TodoOverviewSection from "./modules/TodoOverviewSection.tsx";
 import type { TodoStatsModuleDef, TodoStatsModuleId } from "./types.ts";
 
-// 期1 只注册 8 个模块，"deleted" 期2 再加（types.ts 的联合先留位，注册表暂不收）。
-// 用 Partial 而非 `Record<TodoStatsModuleId, ...>`：键集合此期只有 8 个，"deleted" 尚无成员。
+// 期2：补上 "deleted" 模块，注册表键集合与 types.ts 的联合类型对齐。
 export const TODO_STATS_MODULES: Partial<Record<TodoStatsModuleId, TodoStatsModuleDef>> = {
   overview: {
     id: "overview",
@@ -75,6 +75,14 @@ export const TODO_STATS_MODULES: Partial<Record<TodoStatsModuleId, TodoStatsModu
     defaultVisible: true,
     component: DimensionSection,
   },
+  deleted: {
+    id: "deleted",
+    title: "删除洞察",
+    eyebrow: "Deleted",
+    description: "删除任务的死因归档：按周/原因分布与存活时长。",
+    defaultVisible: true,
+    component: DeletedInsightsSection,
+  },
 };
 
 export const TODO_STATS_MODULE_LIST: TodoStatsModuleDef[] = [
@@ -86,4 +94,5 @@ export const TODO_STATS_MODULE_LIST: TodoStatsModuleDef[] = [
   TODO_STATS_MODULES.cycle!,
   TODO_STATS_MODULES.rhythm!,
   TODO_STATS_MODULES.dimension!,
+  TODO_STATS_MODULES.deleted!,
 ];
