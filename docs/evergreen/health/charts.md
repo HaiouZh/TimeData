@@ -19,14 +19,14 @@ last-reviewed: 2026-06-27
 
 > [health](../health.md) 的展示层**子文档**：健康数据怎么变成统计卡/趋势图/指标表/跑步表。
 > 讲什么：`health_charts` 视图块配置 schema、默认块、有效块组合、指标引擎（healthMetrics）、块数据层（healthBlocks）、范围设置。
-> 不讲什么：5 指标表 schema（见 [health](../health.md)）、数据怎么进库（见 [health/garmin-ingest](garmin-ingest.md)）。
+> 不讲什么：5 指标表 schema（见 [health](../health.md)）。
 
 ## 承上启下
 
-- **上游**：Dexie 5 张健康表（由 [health/garmin-ingest](garmin-ingest.md) 写入、[sync](../sync.md) 下发）+ `health_charts` 配置同步域。
+- **上游**：Dexie 5 张健康表（历史数据经 [sync](../sync.md) 下发，无服务端写入管道）+ `health_charts` 配置同步域。
 - **下游**：`/stats/health` 终端视图，无下游。
 - **契约**：`HealthChartConfigSchema` 在 `chartSchemas.ts`（**不在** `healthSchemas.ts`）；它是配置，不是健康原始数据。
-- **邻居**：[health](../health.md)（主题）、[health/garmin-ingest](garmin-ingest.md)（同域另一子文档）、[stats-insights](../stats-insights.md)（`/stats/time` 平级页，无文件交叠）。
+- **邻居**：[health](../health.md)（主题）、[stats-insights](../stats-insights.md)（`/stats/time` 平级页，无文件交叠）。
 
 ## 1. health_charts 视图块配置 schema（`chartSchemas.ts`）
 

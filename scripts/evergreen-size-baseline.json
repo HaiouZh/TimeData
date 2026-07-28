@@ -59,9 +59,6 @@
   "docs/evergreen/health/charts.md": {
     "covers": 8
   },
-  "docs/evergreen/health/garmin-ingest.md": {
-    "covers": 3
-  },
   "docs/evergreen/quick-notes.md": {
     "covers": 16
   },

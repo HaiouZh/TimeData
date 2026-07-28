@@ -20,13 +20,14 @@ last-reviewed: 2026-07-24
 
 # 健康数据
 
-> 健康域的**主题文档**：5 张指标表 + 1 张视图块配置表（`health_charts`），由 Garmin 抓取或 HTTP ingest 写入，经同步下发到 `/stats/health` 渲染。健康数据**不参与时长统计**。
+> 健康域的**主题文档**：5 张指标表 + 1 张视图块配置表（`health_charts`），经同步下发到 `/stats/health` 渲染。健康数据**不参与时长统计**。
 > 本文只讲：域定位 / 5 指标表 schema / 同步登记 / 跨子域红线 / 子文档索引。
-> 抓取与导入管道见子文档 [health/garmin-ingest](health/garmin-ingest.md)；图表配置与渲染引擎见子文档 [health/charts](health/charts.md)。
+> 图表配置与渲染引擎见子文档 [health/charts](health/charts.md)。
+> **本域没有服务端写入管道**：server 不提供佳明抓取或 HTTP ingest 入口，体征/跑步数据由独立项目 run-track 采集。表、sync 域与历史数据仍在。
 
 ## 承上启下
 
-- **上游**：Garmin 定时/手动抓取，或受保护 `POST /api/health/ingest` 批量导入（详见 [health/garmin-ingest](health/garmin-ingest.md)）。
+- **上游**：无服务端写入管道；表内只有历史数据。
 - **下游**：服务端 `safeParse → applyChange() → sync_seq → notifySyncChange()` 写入 → [sync](sync.md) 下发 → 客户端 Dexie 健康表 → `HealthStatsPage` 渲染（块配置/渲染详见 [health/charts](health/charts.md)）。
 - **契约**：5 指标表 schema 在 `healthSchemas.ts`（见本文 §2）；视图块配置 `HealthChartConfigSchema` 在 `chartSchemas.ts`（**不在** `healthSchemas.ts`，详见 [health/charts](health/charts.md)）；跨域字段约定见 [data-model](data-model.md)。
 - **邻居**：[stats-insights](stats-insights.md)（`/stats/time` 是平级页面，与 `/stats/health` 无文件交叠）、[tracks](tracks.md)（轨道可用 refs 指向 runs/健康记录但不拥有指标字段）、[sync](sync.md)（6 个健康域均 LWW）、[security](security.md)（凭证与 token）。
@@ -34,15 +35,12 @@ last-reviewed: 2026-07-24
 ## 1. 数据流总览
 
 ```text
-Garmin 定时/手动抓取 ─┐
-HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_seq
-                         │                              → notifySyncChange()
-                         └──────────────────────────────────────┐
-客户端 SSE pull → Dexie(healthHeartRate/Hrv/Sleep/Stress/runs/healthCharts)
+SQLite 历史数据（无服务端写入管道）
+              → 客户端 SSE pull → Dexie(healthHeartRate/Hrv/Sleep/Stress/runs/healthCharts)
               → HealthStatsPage → HealthBlockList 分发渲染
 ```
 
-- 写入管道（抓取 / 缺口补抓 / ingest / Admin API / 凭证加密 / 冲突调和）→ [health/garmin-ingest](health/garmin-ingest.md)。
+- server 不暴露健康数据写入端点，本域只剩 sync 下发这条读路径。
 - `health_charts` 视图块配置、指标引擎与块渲染 → [health/charts](health/charts.md)。
 - `health_charts` 是配置同步域，不是健康原始数据。
 - `HealthStatsPage` 顶部范围 selector 消费 `health.range.presets` 的完整预设列表；默认 6 档（7/30/90/180/365/全部）在移动端允许换行，保证选项可见，不用隐藏滚动条承载不可发现的横向溢出。
@@ -74,13 +72,12 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 
 1. **健康数据走服务端受控写入**（`applyChange` + `sync_seq`），不是新底层通道；任何脚本不得直接编辑 SQLite/Dexie/syncLog/备份/导出。
 2. **健康数据不参与时间段重叠、分类统计、时长统计或 `/api/sync/status` 业务计数**（`simpleLwwDomain` 无 `crossValidate`）。
-3. **`runs` 不参与自动抓取缺口判断**（`DAILY_HEALTH_DOMAINS` 不含 runs，详见 [health/garmin-ingest](health/garmin-ingest.md)）；“没有跑步”不等于数据缺失。
-4. **凭证 AES-256-GCM 加密、密钥派生自 `AUTH_TOKEN`**：换 `AUTH_TOKEN` 后旧凭证不可解密。机制与影响详见 [health/garmin-ingest](health/garmin-ingest.md) §凭证。
-5. **`health_charts` 已在运行时登记簿、静态 `SyncChange` 联合和 client/server 同步路径注册**；新增健康配置域仍要同步 shared/server/client 三端登记。
-6. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts`、任务轨道或目标层**（见 [backup](backup.md)）。
-7. **轨道 refs 不改变健康 schema**：跑步、HRV 等结构化指标继续留在健康域；轨道步骤只保存指针和叙事，不新增健康专用字段。
-8. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**——文件名相同，但不归 Garmin/健康契约。`GET /api/health`（公开探活）与 `POST /api/health/ingest`（受 auth）也只是命名巧合，语义无关。
-9. **健康页视觉已按 P3 收口**：旧死 CSS 已删、健康图表 / 范围 selector / 页面壳全部 token 化，`P3-stat-health` allowlist 归零。健康 UI chrome 用中性 / `accent` / 状态色，指标曲线用数据色板，二者边界清晰；不使用 `mod-health`。新增健康 UI 一律用 token。
+3. **“没有跑步”不等于数据缺失**：`runs` 天然稀疏，缺日不能当成同步/数据异常。
+4. **`health_charts` 已在运行时登记簿、静态 `SyncChange` 联合和 client/server 同步路径注册**；新增健康配置域仍要同步 shared/server/client 三端登记。
+5. **force-push 只覆盖核心同步表**（分类、时间记录、设置、速记、待办），**不会清空或导入健康原始数据、`health_charts`、任务轨道或目标层**（见 [backup](backup.md)）。
+6. **轨道 refs 不改变健康 schema**：跑步、HRV 等结构化指标继续留在健康域；轨道步骤只保存指针和叙事，不新增健康专用字段。
+7. **`routes/admin/health.ts` 是后台系统健康检查，不属于本健康数据域**——文件名相同，但不归健康数据契约。`GET /api/health`（公开 DB 探活）也只是命名巧合，语义无关。
+8. **健康页视觉已按 P3 收口**：旧死 CSS 已删、健康图表 / 范围 selector / 页面壳全部 token 化，`P3-stat-health` allowlist 归零。健康 UI chrome 用中性 / `accent` / 状态色，指标曲线用数据色板，二者边界清晰；不使用 `mod-health`。新增健康 UI 一律用 token。
 
 ## 4. 模块速查（主题层）
 
@@ -89,7 +86,6 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 | 5 指标表契约 | `healthSchemas.ts`、`healthRows.ts`、`db/schema.ts` |
 | 同步域登记 | `syncDomains.ts`、`sync/domains.ts`、`clientDomains.ts` |
 | 客户端 Dexie + 页面壳 | `client/src/db/index.ts`、`HealthStatsPage.tsx` |
-| 抓取/导入管道 | → [health/garmin-ingest](health/garmin-ingest.md) |
 | 图表配置/渲染引擎 | → [health/charts](health/charts.md) |
 | 代表测试 | `syncDomains.test.ts`、`db/schema.test.ts`、`HealthStatsPage.test.tsx`（整页烟测）；管道/图表测试见各子文档 |
 
@@ -97,7 +93,6 @@ HTTP /api/health/ingest ─┤→ safeParse → applyChange() → SQLite + sync_
 
 | 子文档 | 拥有什么 |
 |---|---|
-| [health/garmin-ingest](health/garmin-ingest.md) | Garmin 抓取流程、缺口补抓、HTTP ingest、Admin API、凭证加密、两条写路径的冲突调和差异 |
 | [health/charts](health/charts.md) | `health_charts` 视图块配置 schema、默认块、有效块组合、指标引擎（healthMetrics）、块数据层（healthBlocks）、范围设置 |
 
 > 文档为何这样切（主题文档 + 子文档）、何时再外提，见 [_docs-guide](_docs-guide.md)。

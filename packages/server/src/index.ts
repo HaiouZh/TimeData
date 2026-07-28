@@ -23,10 +23,6 @@ import exportRoute from "./routes/export.js";
 import quickNotesRoute from "./routes/quick-notes.js";
 import syncRoute from "./routes/sync.js";
 import tasksRoute from "./routes/tasks.js";
-import { ingestRoutes } from "./routes/ingest.js";
-import { garminRoutes } from "./garmin/garminRoutes.js";
-import { loadGarminConfig } from "./garmin/garminConfig.js";
-import { updateSchedule } from "./garmin/garminService.js";
 import { reconcileInterruptedUpdate } from "./lib/update.js";
 import updateRoute from "./routes/update.js";
 import versionRoute from "./routes/version.js";
@@ -138,8 +134,6 @@ app.route("/api/update", updateRoute);
 app.route("/api/data", dataRoute);
 app.route("/api/diary", diaryRoute);
 app.route("/api/admin", adminRoute);
-app.route("/api/health", ingestRoutes);
-app.route("/api/admin/garmin", garminRoutes);
 
 app.use("/*", serveStatic({ root: "./public" }));
 app.get("*", serveStatic({ root: "./public", path: "index.html" }));
@@ -171,15 +165,6 @@ const dailyBackupTimer = setInterval(() => {
   runDailyBackupIfDue().catch((error) => console.warn("[backup] scheduled daily backup failed", error));
 }, DAILY_BACKUP_TICK_MS);
 dailyBackupTimer.unref?.();
-
-try {
-  const garminConfig = loadGarminConfig();
-  if (garminConfig.enabled && garminConfig.schedule) {
-    updateSchedule(garminConfig);
-  }
-} catch (error) {
-  console.warn("[garmin] startup schedule init failed", error);
-}
 
 if (process.env.SERVER_REPLICAS && Number(process.env.SERVER_REPLICAS) > 1) {
   console.warn(

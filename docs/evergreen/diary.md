@@ -45,7 +45,7 @@ SettingsDiaryPage 保存模板
   → server 用固定日期 2026-01-01 校验模板语法，非法 → 400 { error: 中文原因 }
 ```
 
-`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 存在 `server_config` 表（key = `diary.pathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，与 Garmin 配置共用同一张表但 key 独立）。
+`enabled` 由服务端 `DIARY_VAULT_DIR` 环境变量是否配置决定（非 server_config 存储项）；`template` 存在 `server_config` 表（key = `diary.pathTemplate.v1`，走 `lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` 通用 KV，同表其他配置项 key 独立）。
 
 ## 2. 关键契约 / 不变量
 

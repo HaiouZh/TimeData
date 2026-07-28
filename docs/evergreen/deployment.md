@@ -27,7 +27,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-07-26
+last-reviewed: 2026-07-28
 ---
 
 # 部署与自更新
@@ -126,7 +126,7 @@ git push main
   → push 到 ghcr.io/haiouzh/timedata:latest（带 GIT_SHA tag）
 ```
 
-Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 11，再临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段另外安装 Python 3 + pip 并通过 pip 安装 `garminconnect` 和 `garth`，供 Garmin 健康数据抓取服务使用；生产镜像把抓取脚本放在 `/app/garminFetch.py`，服务启动 Python 子进程时优先使用该路径，再回退开发路径。相关代码入口：`packages/server/Dockerfile`、`packages/server/src/garmin/garminService.ts`。
+Dockerfile 构建镜像时先从根 `packageManager` 读取并安装对应 pnpm 11，再临时安装构建工具（python3、make、g++），从源码重建 better-sqlite3 的原生 `.node` 绑定，验证产物存在后立即卸载构建工具。这是因为 pnpm install 在 Alpine 上拉取的预编译二进制可能与容器 musl libc 不兼容，需要针对当前容器环境从源码编译。运行时阶段不安装 Python：服务端没有 Python 子进程，镜像不含 Python 运行时依赖。相关代码入口：`packages/server/Dockerfile`。
 
 具体 workflow yaml 文件名和构建参数详见 `.github/workflows/`。其中：
 

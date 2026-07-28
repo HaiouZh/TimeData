@@ -21,7 +21,7 @@ covers:
   - packages/mobile/android/app/src/main/AndroidManifest.xml
 contracts:
   - packages/client/src/components/app-shell/AppRoutes.tsx
-last-reviewed: 2026-07-26
+last-reviewed: 2026-07-28
 ---
 
 # 架构总览
@@ -66,9 +66,9 @@ Web 端用户写入时，业务表 mutation 与 `syncLog(synced=0)` 必须在同
 
 ### 3.2 服务端受控写入
 
-CLI、agent、Garmin、ingest 等脚本入口都必须经 server API 或 server 内部受控服务写入。server 是最终裁判：时间合法性、分类存在性、重叠、认证、同步序列和时间戳都由 server 判定或分配。
+CLI、agent 等脚本入口都必须经 server API 或 server 内部受控服务写入。server 是最终裁判：时间合法性、分类存在性、重叠、认证、同步序列和时间戳都由 server 判定或分配。
 
-CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递速记见 [quick-notes](quick-notes.md)；agent 回写任务见 [todo](todo.md)；agent 写任务轨道见 [tracks](tracks.md)；Garmin/ingest 见 [health](health.md)。
+CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递速记见 [quick-notes](quick-notes.md)；agent 回写任务见 [todo](todo.md)；agent 写任务轨道见 [tracks](tracks.md)。
 
 ### 3.3 同步与备份
 
@@ -91,10 +91,10 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 3. 暴露 `/api/health` 与 `/api/version`。
 4. 先挂 `/api/health` 与 `/api/version` 公开标记，再挂 `/api/*` request audit 与 scoped auth / Bearer auth；未配置 `AUTH_TOKEN` 默认 fail-closed。
 5. 装 sync/admin rate limit。
-6. 注册业务路由：agent 任务回写、agent 轨道 ingest、categories、entries、quick-notes、tasks、sync、export、update、data、admin（含 sync logs / request logs）、health ingest、Garmin admin。
+6. 注册业务路由：agent 任务回写、agent 轨道 ingest、categories、entries、quick-notes、tasks、sync、export、update、data、admin（含 sync logs / request logs）。
 7. 服务静态前端产物与 SPA fallback。
 8. `initializeDatabase()` 建表、补列、播种默认分类、处理一次性迁移。
-9. 清理旧 server backup，加载 Garmin 配置并注册定时器。
+9. 清理旧 server backup，按需跑每日备份并注册每日备份定时器。
 10. 监听 `PORT`。
 
 ### 4.2 Web 客户端
@@ -155,7 +155,7 @@ CLI 不直接读写 SQLite。命令面见 [cli](cli.md)。
 | [todo](todo.md) | 域 | 待办任务、重复规则、子任务、agent 状态回写 |
 | [tracks](tracks.md) | 域 | 任务轨道、轨道步骤、状态线数据地基、agent ingest |
 | [goals](goals.md) | 域 | 目标层、Task/Track 成员引用、项目完成度、主题 7 天活跃度、前置关系 |
-| [health](health.md) | 域 | Garmin、ingest、健康 schema、健康图表配置、健康页 |
+| [health](health.md) | 域 | 健康 schema、健康图表配置、健康页 |
 | [stats-insights](stats-insights.md) | 域 | 时间统计、洞察模块、统计布局和趋势设置 |
 | [categories-settings](categories-settings.md) | 域 | 分类 schema、分类管理、排序/颜色/删除、sleep/punch 分类设置 |
 | [design-language](design-language.md) | 设计 | 语义颜色 token、字体与排版角色、圆角/边框/阴影、自绘控件库、Phosphor 图标、设计语言棘轮 |
