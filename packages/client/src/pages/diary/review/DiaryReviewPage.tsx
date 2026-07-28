@@ -5,9 +5,17 @@ import { Icon } from "../../../components/Icon.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
 import { resolveDiaryDate } from "../../../lib/diary/diaryDate.js";
-import { modeADates } from "../../../lib/diary/reviewDates.js";
-import { getReviewMode, getReviewYearRange, type ReviewMode, setReviewMode } from "../../../lib/diary/reviewPrefs.js";
-import { addDays, getDateString } from "../../../lib/time.js";
+import { modeADates, modeBDates } from "../../../lib/diary/reviewDates.js";
+import {
+  getReviewLayoutB,
+  getReviewMode,
+  getReviewYearRange,
+  type ReviewLayoutB,
+  type ReviewMode,
+  setReviewLayoutB,
+  setReviewMode,
+} from "../../../lib/diary/reviewPrefs.js";
+import { addDays, formatMonthDay, formatWeekday, getDateString } from "../../../lib/time.js";
 import { useIsWideScreen } from "../../../lib/useIsWideScreen.js";
 import ReviewCard from "./ReviewCard.js";
 
@@ -24,6 +32,10 @@ function yearLabel(date: string): string {
   return `${year}年${Number(rest[0])}月${Number(rest[1])}日`;
 }
 
+function monthDayWeekdayLabel(date: string): string {
+  return `${formatMonthDay(date)}${formatWeekday(date)}`;
+}
+
 export default function DiaryReviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,6 +46,7 @@ export default function DiaryReviewPage() {
   const wide = useIsWideScreen();
 
   const [mode, setMode] = useState<ReviewMode>(() => getReviewMode());
+  const [layoutB, setLayoutB] = useState<ReviewLayoutB>(() => getReviewLayoutB());
   const yearRange = getReviewYearRange();
 
   const liveToday = getDateString(useNowMinute());
@@ -66,6 +79,8 @@ export default function DiaryReviewPage() {
         if (mode === "A") {
           const { left, right } = modeADates(anchor, yearRange);
           dates = Array.from(new Set([...left, ...right]));
+        } else if (mode === "B") {
+          dates = modeBDates(anchor);
         }
         const result = await fetchDiaryBatch({ dates });
         if (cancelled) return;
@@ -108,6 +123,12 @@ export default function DiaryReviewPage() {
 
   function handleRetry() {
     setRetryNonce((n) => n + 1);
+  }
+
+  function toggleLayoutB() {
+    const next: ReviewLayoutB = layoutB === "grid" ? "list" : "grid";
+    setLayoutB(next);
+    setReviewLayoutB(next);
   }
 
   return (
@@ -175,6 +196,16 @@ export default function DiaryReviewPage() {
               回到今天
             </button>
           )}
+          {mode === "B" && wide && (
+            <button
+              type="button"
+              aria-label={layoutB === "grid" ? "切换为列表布局" : "切换为网格布局"}
+              onClick={toggleLayoutB}
+              className="rounded-pill border border-border bg-surface px-3 py-1 td-text-caption font-medium text-ink-2 transition hover:text-ink"
+            >
+              {layoutB === "grid" ? "切换为列表" : "切换为网格"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -219,6 +250,24 @@ export default function DiaryReviewPage() {
                   />
                 ))}
               </div>
+            </div>
+          )}
+          {mode === "B" && (
+            <div
+              className={
+                wide && layoutB === "grid" ? "grid grid-cols-3 gap-3" : "flex flex-col gap-3"
+              }
+            >
+              {modeBDates(anchor).map((date) => (
+                <ReviewCard
+                  key={date}
+                  date={date}
+                  label={monthDayWeekdayLabel(date)}
+                  entry={batch?.dates[date]}
+                  loading={loading}
+                  minHeight={CARD_MIN_HEIGHT}
+                />
+              ))}
             </div>
           )}
         </div>

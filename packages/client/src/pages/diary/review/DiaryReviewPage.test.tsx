@@ -136,3 +136,39 @@ describe("DiaryReviewPage · 骨架 + 模式 A（那年今日）", () => {
     expect(host.textContent).not.toContain("网络错误");
   });
 });
+
+describe("DiaryReviewPage · 模式 B（近三日回顾）", () => {
+  it("切到模式 B 后 batch 只请求 3 个日期", async () => {
+    const { host } = await renderPage("/diary/review?date=2026-07-25");
+    fetchDiaryBatch.mockClear();
+
+    await click(Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "回顾") ?? null);
+
+    expect(fetchDiaryBatch).toHaveBeenCalledTimes(1);
+    const { dates } = fetchDiaryBatch.mock.calls[0][0] as { dates: string[] };
+    expect(dates).toEqual(["2026-07-24", "2026-07-23", "2026-07-22"]);
+  });
+
+  it("宽屏出现布局切换钮，点击互切并写偏好", async () => {
+    const { host } = await renderPage("/diary/review?date=2026-07-25");
+    await click(Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "回顾") ?? null);
+
+    const layoutButton = host.querySelector('button[aria-label="切换为列表布局"]');
+    expect(layoutButton).not.toBeNull();
+
+    await click(layoutButton);
+    expect(host.querySelector('button[aria-label="切换为网格布局"]')).not.toBeNull();
+  });
+
+  it("卡片标签是 formatMonthDay(date) + formatWeekday(date) 形态", async () => {
+    fetchDiaryBatch.mockResolvedValue({
+      dates: { "2026-07-24": { exists: true, content: "写了" } },
+      weeks: {},
+      weeklyConfigured: true,
+    });
+    const { host } = await renderPage("/diary/review?date=2026-07-25");
+    await click(Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "回顾") ?? null);
+
+    expect(host.textContent).toContain("7月24日");
+  });
+});
