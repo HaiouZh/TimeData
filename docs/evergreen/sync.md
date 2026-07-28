@@ -137,7 +137,7 @@ no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照�
 
 ### 2.2.2 tasks 删除死因归档
 
-`tasks` 的 delete 生效前，`resolver.ts` 在 `DELETE FROM tasks` 之前调 `SERVER_SYNC_DOMAINS.tasks.lww.archiveDelete` 钩子，把即将删除的整行快照 `INSERT` 进只写不读的 `deleted_tasks_archive`（`task_id` / `payload` JSON / `delete_reason` / `deleted_at`）。行不存在（回声删除、重复 delete）时钩子 no-op，不写归档；staleGuard 拒收的 delete 同样不落库不归档。归档不参与同步域、不出现在 pull/push 协议里，纯服务端审计侧写。
+`tasks` 的 delete 生效前，`resolver.ts` 在 `DELETE FROM tasks` 之前调 `SERVER_SYNC_DOMAINS.tasks.lww.archiveDelete` 钩子，把即将删除的整行快照 `INSERT` 进 `deleted_tasks_archive`（`task_id` / `payload` JSON / `delete_reason` / `deleted_at`）。行不存在（回声删除、重复 delete）时钩子 no-op，不写归档；staleGuard 拒收的 delete 同样不落库不归档。归档不参与同步域、不出现在 pull/push 协议里，纯服务端审计侧写；`GET /api/tasks/deleted-archive` 提供只读查询供统计页消费。
 
 `deleteReason` 是可选字段，只有 `tasks` 域的 delete change 承载（`shared/src/schemas.ts` `TASK_DELETE_REASONS`：`user` / `cascade` / `occurrence` / `mirror`，缺省 `unknown`），client `lib/tasks.ts` 各删除调用点在生成 delete 变更时打标，账本与上行组包原样透传到服务端。
 

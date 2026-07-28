@@ -152,15 +152,23 @@ export default function TimeStatsPage() {
             <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-2">TimeData</div>
             <h2 className="mt-1 text-2xl font-semibold tracking-normal text-ink">时间统计</h2>
           </div>
-          {!atLatest && (
-            <button
-              type="button"
-              onClick={() => setAnchor(today)}
-              className="min-h-11 rounded-pill border border-accent bg-accent-soft px-4 text-sm font-medium text-accent"
+          <div className="flex items-center gap-2">
+            {!atLatest && (
+              <button
+                type="button"
+                onClick={() => setAnchor(today)}
+                className="min-h-11 rounded-pill border border-accent bg-accent-soft px-4 text-sm font-medium text-accent"
+              >
+                回到今天
+              </button>
+            )}
+            <Link
+              to="/stats/todo"
+              className="flex min-h-11 items-center rounded-pill border border-border px-4 td-text-label font-medium text-ink-2"
             >
-              回到今天
-            </button>
-          )}
+              待办统计
+            </Link>
+          </div>
         </div>
       </header>
 

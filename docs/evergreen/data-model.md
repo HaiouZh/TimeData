@@ -61,7 +61,7 @@ last-reviewed: 2026-07-28
 | `totp_config` | TOTP 危险操作锁的单行配置表，`id` 恒为 1，`secret` 存 base32 明文；不同步客户端。见 [security](security.md) |
 | `totp_recovery_codes` | 恢复码表，主键是 sha256 哈希（不存明文），`used_at` 非空即已消费（一次性） |
 | `known_ips` | 已见来源 IP 表，复合主键 `(token_tier, ip)`，带 `first_seen` / `last_seen` / `acknowledged`；`acknowledged=0` 即未确认的新 IP |
-| `deleted_tasks_archive` | tasks 域 delete 生效前的整行快照归档，只写不读，不进同步域，用于删除死因分析 |
+| `deleted_tasks_archive` | tasks 域 delete 生效前的整行快照归档，不进同步域，经 `GET /api/tasks/deleted-archive` 只读查询，用于删除死因分析 |
 | `sync_push_requests` | push `requestId` 幂等回放表：(requestId → status_code, 原响应 JSON)，TTL 24h 惰性清理；见 [ADR 0020](../adr/0020-sync-push-request-idempotency.md) |
 
 ## 2. Settings 键值契约
