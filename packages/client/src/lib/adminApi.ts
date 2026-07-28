@@ -99,3 +99,29 @@ export function fetchAdminAnalytics(query: AdminAnalyticsQuery = {}): Promise<Ad
 export function fetchAdminRequestLogs(query: AdminRequestLogsQuery = {}): Promise<AdminRequestLogsResponse> {
   return apiFetch(withQuery("/api/admin/request-logs", query));
 }
+
+export interface TotpStatusResponse {
+  enrolled: boolean;
+}
+
+export interface TotpSetupResponse {
+  secret: string;
+  otpauthUri: string;
+  recoveryCodes: string[];
+}
+
+export function fetchTotpStatus(): Promise<TotpStatusResponse> {
+  return apiFetch("/api/admin/totp");
+}
+
+export function setupTotp(): Promise<TotpSetupResponse> {
+  return apiFetch("/api/admin/totp/setup", { method: "POST" });
+}
+
+export function confirmTotp(code: string): Promise<TotpStatusResponse> {
+  return apiFetch("/api/admin/totp/confirm", { method: "POST", body: JSON.stringify({ code }) });
+}
+
+export function disableTotp(code: string): Promise<TotpStatusResponse> {
+  return apiFetch("/api/admin/totp/disable", { method: "POST", body: JSON.stringify({ code }) });
+}
