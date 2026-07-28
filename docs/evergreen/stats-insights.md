@@ -19,14 +19,14 @@ last-reviewed: 2026-07-25
 
 > 时间统计页 `/stats/time`：按周期/日期聚合 `time_entries`，产出总览/作息/异常/趋势/结构五模块洞察。
 > 讲什么：STATS_MODULES 注册表、周期区间与“只统计到今天”、baseline 90 天、布局/趋势设置、insights 引擎各模块契约。
-> 不讲什么：健康统计页（见 [health](health.md)）、时间段数据流（见 [timeline](timeline.md)）、分类管理（见 [categories-settings](categories-settings.md)）、同步（见 [sync](sync.md)）、记录明细检索（`/search`，见 [timeline](timeline.md)——该页跨夜记录归属口径与本页 §2.4 `dailyRollup.ts` 的“跨午夜按本地午夜裁剪”**有意不同**：本页把跨夜记录按零点切成两段分归两天，`/search` 整条记录只按 `startTime` 归开始那天；这是两页回答不同问题的刻意设计（本页是时间预算视角，`/search` 是事件清单视角），不是待修的不一致）。
+> 不讲什么：时间段数据流（见 [timeline](timeline.md)）、分类管理（见 [categories-settings](categories-settings.md)）、同步（见 [sync](sync.md)）、记录明细检索（`/search`，见 [timeline](timeline.md)——该页跨夜记录归属口径与本页 §2.4 `dailyRollup.ts` 的“跨午夜按本地午夜裁剪”**有意不同**：本页把跨夜记录按零点切成两段分归两天，`/search` 整条记录只按 `startTime` 归开始那天；这是两页回答不同问题的刻意设计（本页是时间预算视角，`/search` 是事件清单视角），不是待修的不一致）。
 
 ## 承上启下
 
 - **上游**：`time_entries`（来自 [timeline](timeline.md)）经 `db.timeEntries.where("endTime").above(...)` 查询；`sleep.categoryId` 设置（来自 [categories-settings/settings-catalog](categories-settings/settings-catalog.md) 的 `sleepCategorySetting`）决定睡眠口径。
 - **下游**：无（终端视图，不写业务数据）。布局/趋势偏好写入 `settings` 表（`stats.layout.v1` / `stats.module.trend.v1`），经同步跨端。
 - **契约**：本域无独立 DB 表，全部走 `settings` 同步键值表。跨域约定见 [data-model](data-model.md)。
-- **邻居**：[timeline](timeline.md)（时间段数据源）、[health](health.md)（`/stats/health` 平级页面，无文件交叠）、[categories-settings](categories-settings.md)（睡眠分类设置 + 布局/趋势设置页宿主）。
+- **邻居**：[timeline](timeline.md)（时间段数据源）、[categories-settings](categories-settings.md)（睡眠分类设置 + 布局/趋势设置页宿主）。
 
 ## 1. 数据流（本域端到端）
 
@@ -114,7 +114,7 @@ last-reviewed: 2026-07-25
 4. **baseline 只在可见模块声明 `needs.baseline` 时取**；`needs.sleepCategory` 声明但未被 TimeStatsPage 消费。
 5. **布局设置读取时按注册表 sanitize**：防注册表变动后旧设置崩溃（剔除未知 id、补缺失、去重、损坏回退）。
 6. **趋势窗口完全独立于页面周期**：`TrendSection` 用自己的 `trendWindowSpec + today` 解析，不随 mode/anchor；窗口超 baseline 时独立 `useLiveQuery` 兜底。
-7. **`stats/health/**` 属 health 域，本域不收**：`HealthStatsPage`（`/stats/health`）与 `TimeStatsPage`（`/stats/time`）平级、共享 `stats/` 前缀但实现独立、无文件交叠。
+7. **`/stats` 下曾有平级的健康统计页**（`stats/health/**` + `HealthStatsPage`），已随健康子系统客户端退役（2026-07-28），由独立项目 run-track 接管，代码见 tag `retire/health`；本域从未收编那批文件，退役不影响 `/stats/time`。
 8. **时间一律 UTC ISO，本地日桶按 `APP_TIME_ZONE` 切分**：`dailyRollup.ts` 用 `localDateTimeToUtc`；`routine.ts`/`anomalies.ts` 用 `Intl.DateTimeFormat` 带 `APP_TIME_ZONE`。
 9. **会话合并容差 3min、噪声会话下限 1min**（`lib/insights/constants.ts`）。
 10. **统计视觉已按 P3 收口**：统计模块、时间趋势图、`InsightCharts` 已全部 token 化，`P3-stat-health` allowlist 归零；图表 chrome 走 `CHART_CHROME` 镜像、数据序列走用户分类色。新增统计 UI 一律用 token，不写裸 `slate-*`/裸状态色，图表色统一从 `chartColors.ts` 取。

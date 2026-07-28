@@ -36,7 +36,8 @@ const PALETTE_ORDER: DataColor[] = [
   DATA_PALETTE.purple,
 ];
 
-// 指标前缀 → 语义色（与 lib/healthBlocks/summary.ts 的分类同源）
+// 指标前缀 → 语义色。前缀取自已退役的健康指标 ID（健康客户端 2026-07-28 退役，见 tag `retire/health`）；
+// metricColor 目前生产无消费方，只剩自测，保留待新图表复用取色/碰撞回退规则。
 function semanticColor(metricId: string): DataColor {
   if (metricId.startsWith("sleep.")) return DATA_PALETTE.green;
   if (metricId.startsWith("hrv.")) return DATA_PALETTE.teal;

@@ -134,9 +134,9 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 
 | 子文档 | 拥有什么 |
 |---|---|
-| [categories-settings/settings-catalog](categories-settings/settings-catalog.md) | `settings` 表持久化机制、全 key 表（sleep/punch/nav/layout/trend/health-range/todo-dest）、nav/punch/sleep 包装、`SettingsNavPage` |
+| [categories-settings/settings-catalog](categories-settings/settings-catalog.md) | `settings` 表持久化机制、全 key 表（sleep/punch/nav/layout/trend/todo-dest）、nav/punch/sleep 包装、`SettingsNavPage` |
 
 ## 深水细节
 
-- **`SettingsHealthRangePage`/`SettingsStatsLayoutPage` 不归本域**：前者→[health](health.md)，后者→[stats-insights](stats-insights.md)。
+- **`SettingsStatsLayoutPage` 不归本域**：归 [stats-insights](stats-insights.md)。（原并列的 `SettingsHealthRangePage` 已随健康子系统客户端退役，2026-07-28。）
 - **`SettingsInsightsPage` 是跨域宿主**（显示名“记录偏好”，历史路由 `/settings/insights`），归 [stats-insights](stats-insights.md) covers；本域的 `punchCategorySetting` 在该页有编辑 UI，但页面本身不属本域。

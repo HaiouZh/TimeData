@@ -204,7 +204,7 @@ last-reviewed: YYYY-MM-DD
 
 **外提动作**：把子簇移到 `docs/evergreen/<主题>/<子主题>.md`（子目录，见 §1.1），迁走对应 `covers:`，在子文档顶部回链主题文档，在主题文档的“子文档索引”小节登记。然后 `--write-size-baseline` 重写基线（新增子文档要落基线、母文档迁走的 covers 数也要更新）。architecture 登记簿**不**新增子文档条目——它只认主题文档。
 
-健康域是这套切法的样例：[health](health.md)（主题）索引 [health/charts](health/charts.md)（视图块配置/渲染）。
+同步域是这套切法的样例：[sync](sync.md)（主题）索引 [sync/domain-registry](sync/domain-registry.md)（域登记簿）。
 
 ## 4. 体量闸：字符走绝对上限，covers 走棘轮
 

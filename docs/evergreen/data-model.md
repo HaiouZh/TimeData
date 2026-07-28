@@ -8,10 +8,14 @@ covers:
   - packages/shared/src/taskCompletion.ts
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/constants.ts
+  - packages/shared/src/healthSchemas.ts
+  - packages/shared/src/chartSchemas.ts
   - packages/server/src/db/schema.ts
   - packages/server/src/db/connection.ts
   - packages/server/src/db/reset.ts
   - packages/server/src/lib/db-rows.ts
+  - packages/server/src/lib/healthRows.ts
+  - packages/server/src/lib/chartRows.ts
   - packages/server/src/lib/serverConfig.ts
   - packages/client/src/db/index.ts
   - packages/client/src/db/schemaNormalization.ts
@@ -23,7 +27,7 @@ contracts:
   - packages/shared/src/constants.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-07-28
+last-reviewed: 2026-07-29
 ---
 
 # 数据模型与契约
@@ -45,8 +49,14 @@ last-reviewed: 2026-07-28
 | 手头软会话 / `Session` | `sessions` | `sessions` | [todo/at-hand](todo/at-hand.md) §Schema |
 | 同步设置 / `Setting` | `settings` | `settings` | 本文 §2；具体 key 见对应域 |
 | 客户端同步日志 / `SyncLogEntry` | 无 | `syncLog` | 本文 §3 |
-| 健康原始数据 | `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | `healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` | [health](health.md) §Schema |
-| 健康图表配置 | `health_charts` | `healthCharts` | [health](health.md) §Schema |
+| 健康原始数据（已退役 UI，表保留） | `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | `healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` | `shared/src/healthSchemas.ts`；本文 §1.1 |
+| 健康图表配置（已退役 UI，表保留） | `health_charts` | `healthCharts` | `shared/src/chartSchemas.ts`；本文 §1.1 |
+
+### 1.1 健康域：只剩数据层
+
+健康子系统的**客户端 UI 已退役**（2026-07-28）：健康统计页、图表配置面板、佳明设置页、指标/块引擎（`lib/healthMetrics/**`、`lib/healthBlocks/**`）与服务端抓取管线全部删除，体征/跑步数据改由独立项目 run-track 采集。完整退役前状态可回溯 tag `retire/health`。
+
+**保留不动的是数据层**：上述 6 张表（SQLite + Dexie）、`healthSchemas.ts` / `chartSchemas.ts` 字段 schema、`healthRows.ts` / `chartRows.ts` 行映射、6 个同步域（见 [sync/domain-registry](sync/domain-registry.md)）与 backup bundled 域（见 [backup](backup.md)）。历史数据仍在库里、仍随同步和备份流转，只是不再有 UI 消费。**改这些表/域仍按正常 schema 变更红线走**（见 AGENTS.md「边界 · Schema / 字段变更」）。
 
 服务端辅助表：
 
@@ -76,7 +86,6 @@ last-reviewed: 2026-07-28
 | `sleep.categoryId` | [stats-insights](stats-insights.md)、[categories-settings](categories-settings.md) |
 | `punch.categoryId.v1` | [categories-settings](categories-settings.md)、[timeline](timeline.md) |
 | `nav.visibleTabs.v1` | [architecture](architecture.md) 启动/导航概览，具体实现看代码 |
-| `health.range.presets` | [health](health.md) |
 | `stats.layout.v1` | [stats-insights](stats-insights.md) |
 | `stats.module.trend.v1` | [stats-insights](stats-insights.md) |
 | `todo.defaultDestination.v1` | [todo](todo.md) |

@@ -10,13 +10,14 @@ covers:
   - packages/client/src/pages/settings/components/SettingsRows.tsx
   - packages/client/src/lib/zLayers.ts
   - packages/client/src/pages/dev/StyleguidePage.tsx
+  - packages/client/src/pages/stats/chartColors.ts
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
 contracts:
   - packages/client/src/index.css
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-07-28
+last-reviewed: 2026-07-29
 ---
 
 # 设计语言
@@ -28,8 +29,8 @@ last-reviewed: 2026-07-28
 ## 承上启下
 
 - **上游**：无（这是最底层的视觉/交互基座）。token 与全局样式集中在单一文件 `index.css`（Tailwind v4 `@theme static`）。
-- **下游**：所有功能主题（[timeline](timeline.md)/[todo](todo.md)/[quick-notes](quick-notes.md)/[health](health.md)/[stats-insights](stats-insights.md)/[categories-settings](categories-settings.md)）的页面与组件都消费这些 token 和控件；它们只在「邻居」链接到本主题，不重复 token 定义。
-- **契约**：颜色/圆角/字体 token 与排版角色见本文 §1–§2（源在 `index.css`）；设计语言棘轮见 §3；自绘控件契约见 [design-language/controls](design-language/controls.md)；图表取色见 [health/charts](health/charts.md)（recharts 镜像 token）。
+- **下游**：所有功能主题（[timeline](timeline.md)/[todo](todo.md)/[quick-notes](quick-notes.md)/[stats-insights](stats-insights.md)/[categories-settings](categories-settings.md)）的页面与组件都消费这些 token 和控件；它们只在「邻居」链接到本主题，不重复 token 定义。
+- **契约**：颜色/圆角/字体 token 与排版角色见本文 §1–§2（源在 `index.css`）；设计语言棘轮见 §3；自绘控件契约见 [design-language/controls](design-language/controls.md)；图表取色（recharts 镜像 token，`pages/stats/chartColors.ts`）见本文 §4 第 5 条。
 - **邻居**：[design-language/controls](design-language/controls.md)（同主题子文档）、全部功能主题（消费方）。
 
 ## 1. 语义颜色 token 体系（`index.css` `@theme static`）
@@ -87,15 +88,15 @@ last-reviewed: 2026-07-28
 - 禁止全局浮层裸高 z-index（`z-30/40/50/60/70`、`z-[…]`）：规则 `bare-zindex`，须用 `z-[var(--z-*)]`；局部 stacking `z-10`/`z-20` 放行（测试文件豁免）。
 - 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。数值无法落进 token 阶梯又确属某功能专有（如某区限高）时，正当出口是在 `index.css` 里加一条**功能语义类**（如 `.todo-project-group-body { max-height: 45vh; }`）交组件消费——不是在组件里留裸任意值，也不是进 allowlist。
 
-`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；当前 allowlist 含三类共 501 项：54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板，属业务数据非 UI chrome）；427 项 `typography-debt`（字号语义类迁移前的存量裸字号，`removeBy=typography-migration`）；20 项 `arbitrary-value-debt`（任意值收口前的存量裸尺寸/间距，`removeBy=arbitrary-cleanup`）。后两类是**受控渐进迁移**旧债——新规则即时止血、按子系统逐步清并删对应条目（如轨道页、Goal 连前置 Sheet 已全量迁移）。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` / 裸圆角 / 裸字号 / 裸任意值会直接失败。不得把新写的代码的违规加入 allowlist。
+`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；当前 allowlist 含三类共 471 项：54 项 `user-content-color` 长期例外（`categoryColors.ts` 42 项分类预设色 + `turnTags.ts` 12 项标签 hash 色板，属业务数据非 UI chrome）；398 项 `typography-debt`（字号语义类迁移前的存量裸字号，`removeBy=typography-migration`）；19 项 `arbitrary-value-debt`（任意值收口前的存量裸尺寸/间距，`removeBy=arbitrary-cleanup`）。后两类是**受控渐进迁移**旧债——新规则即时止血、按子系统逐步清并删对应条目（如轨道页、Goal 连前置 Sheet 已全量迁移）。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` / 裸圆角 / 裸字号 / 裸任意值会直接失败。不得把新写的代码的违规加入 allowlist。
 
 ## 4. 关键不变量 / 坑 / 红线
 
-1. **新 UI 一律用 token，不写裸 hex/rgba**；统计 / 健康面（TimeStats、HealthStats、stats 模块、图表 chrome、旧健康 CSS）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零；裸色剩余仅 `user-content-color` 长期例外（分类预设色 + 标签 hash 色板），不作范式；字号 / 任意值另由 `typography-debt` / `arbitrary-value-debt` 受控渐进迁移（见 §3）。
-2. **数据色不外溢 UI chrome**（只在图表/健康可视化里）；用户内容色只代表分类、标签、用户自定义标记。
+1. **新 UI 一律用 token，不写裸 hex/rgba**；统计面（TimeStats、stats 模块、图表 chrome）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零；裸色剩余仅 `user-content-color` 长期例外（分类预设色 + 标签 hash 色板），不作范式；字号 / 任意值另由 `typography-debt` / `arbitrary-value-debt` 受控渐进迁移（见 §3）。
+2. **数据色不外溢 UI chrome**（只在图表可视化里）；用户内容色只代表分类、标签、用户自定义标记。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。
-5. **recharts 不解析 CSS `var()`**：图表配色（数据色 + chrome 的 axis/grid/tooltip 背景边框文字/cursor）须把 token 镜像成 JS 常量，统一出自 `pages/stats/chartColors.ts`（`DATA_PALETTE` + `CHART_CHROME`），TimeStats 的 `InsightCharts` 与 Health 图表都消费它；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源仍是 `index.css` token。详见 [health/charts](health/charts.md)。
+5. **recharts 不解析 CSS `var()`**：图表配色（数据色 + chrome 的 axis/grid/tooltip 背景边框文字/cursor）须把 token 镜像成 JS 常量，统一出自 `pages/stats/chartColors.ts`（`DATA_PALETTE` + `CHART_CHROME`），当前唯一消费方是 TimeStats 的 `InsightCharts`（健康图表已随健康子系统客户端退役，2026-07-28）；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源仍是 `index.css` token。取色规则：数据序列按序取 `DATA_PALETTE`，图表 chrome（axis/grid/tooltip/legend/cursor）取 `CHART_CHROME` 中性镜像，状态色只留给真状态不上数据序列。
 6. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。**推论：swipe 行内的装饰必须画在内侧**——`ring-*` 与任何向外画的 `box-shadow` 会被祖先 `.swipeable-list-item { overflow:hidden }` 整圈裁掉，真机不可见，而 jsdom / happy-dom 不算裁剪，只断言 className 的单测照样全绿（"已归目标任务绿外圈"就这么 ship 成过隐形功能）。用绝对定位子元素（`pointer-events-none`，避开圆角与拖拽命中区）或 `ring-inset`，并靠真机 / 截图验收——单测在这件事上给不出结论。
 7. **主导航：移动纯图标 / 桌面图标+文字**：移动底栏主导航用 Phosphor 纯图标（仅 `aria-label`），只渲染 `nav.visibleTabs.v1` 选中的入口并固定保留设置，不提供三点菜单；未选入口由设置的“更多功能”子页承接。桌面侧栏主导航图标下方配 `td-text-caption` 文字标签（aside `w-20`，"更多"按钮同款），这是设计审查 C1 的可读性收口——**仅桌面，移动底栏维持纯图标不变**。图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色；主导航按钮必须有 `aria-label`。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。轨道回手计数以 `NavBadge`（`bg-accent`/`text-page` 圆点，`td-text-caption`，>9 显「9+」）叠在 `/tracks` 图标右上角，计数为 0 时不渲染；两端复用同一 `NavBadge`，不引裸色。
 8. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` / `SettingsNumberRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。`SettingsNumberRow` 的 `−`/`+` 按钮和 `input[type=number]` 消费 `surface-hover`/`border`/`ink`/`accent` token，不引入裸色。
@@ -112,7 +113,7 @@ last-reviewed: 2026-07-28
 | 设置详情页外壳与设置首页行组件 | `packages/client/src/pages/settings/SettingsDetailPage.tsx`、`packages/client/src/pages/settings/components/SettingsRows.tsx` |
 | 字体引入（GB 屏显子集 + Tinos） | `packages/client/src/main.tsx`（covers 归 [architecture](architecture.md)）；守序测试 `fontLoading.test.ts` |
 | 自绘控件 / 无原生控件棘轮 / 图标 | → [design-language/controls](design-language/controls.md) |
-| 图表取色（token→JS 常量镜像） | `packages/client/src/pages/stats/chartColors.ts`（消费方与取色规则见 [health/charts](health/charts.md)） |
+| 图表取色（token→JS 常量镜像） | `packages/client/src/pages/stats/chartColors.ts`（`DATA_PALETTE` + `CHART_CHROME`，消费方与取色规则见 §4 第 5 条；守序测试 `chartColors.test.ts`） |
 | z-index 层级 JS 镜像 | `packages/client/src/lib/zLayers.ts`（`Z`，与 `--z-*` 同步，`zLayers.test.ts` 守一致） |
 | 设计语言预览 / 验收台 | `packages/client/src/pages/dev/StyleguidePage.tsx`（路由 `/dev/styleguide`，渲染全部 token + `.td-*` + 自绘控件） |
 

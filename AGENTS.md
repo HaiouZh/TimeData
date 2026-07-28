@@ -15,7 +15,7 @@
 ## 定位
 
 - TimeData = 个人记录 PWA：本地优先（IndexedDB），可同步到自托管 Hono + SQLite，多入口（Web / CLI / 授权 agent 经服务端受控 API 写入），Capacitor 套 Android 壳。
-- 速记、时间记录、待办任务、健康数据看板、设置
+- 速记、时间记录、待办任务、任务轨道、目标层、日记、统计洞察、设置
 - **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB / 备份文件。
 
 ------

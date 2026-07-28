@@ -42,14 +42,14 @@ test("EVERGREEN_RULES_SUMMARY points back to the docs guide §0", () => {
 test("selectChangedEvergreenDocs picks evergreen bodies and excludes ADR/code", () => {
   const changed = [
     "docs/evergreen/todo.md",
-    "docs/evergreen/health/charts.md",
+    "docs/evergreen/sync/domain-registry.md",
     "docs/adr/0022-list-markers.md",
     "packages/client/src/App.tsx",
     "docs/evergreen/img.png",
   ];
   assert.deepEqual(selectChangedEvergreenDocs(changed), [
     "docs/evergreen/todo.md",
-    "docs/evergreen/health/charts.md",
+    "docs/evergreen/sync/domain-registry.md",
   ]);
 });
 
@@ -314,8 +314,8 @@ test("evaluateLinks passes when all links resolve", () => {
 
 test("evaluateLinks resolves ../ relative links across subdirs", () => {
   const docs = [
-    { filePath: "docs/evergreen/health/charts.md", links: [{ target: "../health.md", anchor: null }] },
-    { filePath: "docs/evergreen/health.md", links: [] },
+    { filePath: "docs/evergreen/sync/domain-registry.md", links: [{ target: "../sync.md", anchor: null }] },
+    { filePath: "docs/evergreen/sync.md", links: [] },
   ];
 
   assert.equal(evaluateLinks(docs).ok, true);

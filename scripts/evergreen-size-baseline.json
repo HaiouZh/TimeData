@@ -18,7 +18,7 @@
     "covers": 8
   },
   "docs/evergreen/data-model.md": {
-    "covers": 13
+    "covers": 17
   },
   "docs/evergreen/deployment.md": {
     "covers": 20
@@ -30,7 +30,7 @@
     "covers": 2
   },
   "docs/evergreen/design-language.md": {
-    "covers": 10
+    "covers": 11
   },
   "docs/evergreen/design-language/controls.md": {
     "covers": 5
@@ -52,12 +52,6 @@
   },
   "docs/evergreen/goals/canvas.md": {
     "covers": 13
-  },
-  "docs/evergreen/health.md": {
-    "covers": 9
-  },
-  "docs/evergreen/health/charts.md": {
-    "covers": 8
   },
   "docs/evergreen/quick-notes.md": {
     "covers": 16

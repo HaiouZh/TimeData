@@ -43,7 +43,6 @@ last-reviewed: 2026-07-10
 | `punch.categoryId.v1` | 子分类 ID 或 null（须未归档子分类） | `lib/settings/punchCategorySetting.ts` | [timeline](../timeline.md)（打点） |
 | `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/diary,/,/todo,/tracks,/goals,/stats/time]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 导航入口归属：数组内显示在底栏，数组外显示在 `/settings/more` |
 | `nav.desktopSidebar.v1` | JSON `{items:{to,placement}[]}`；`to` ⊆ 主导航 route，`placement=primary\|more`；缺失/坏值按 registry 默认补齐 | `lib/settings/desktopSidebarSetting.ts` | 宽屏桌面侧栏排序与更多收纳 |
-| `health.range.presets` | 逗号串 `7,30,90,180,365,all` | `lib/settings/healthRangeSetting.ts`（covers 归 [health/charts](../health/charts.md)） | [health](../health.md) |
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `todo.defaultDestination.v1` | `"today"\|"inbox"`，默认 today | `lib/settings/todoDefaultDestinationSetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md) |
@@ -53,7 +52,9 @@ last-reviewed: 2026-07-10
 
 旧 `track.actionTags.v1` 只作为影子读取来源；新写入继续使用 `track.actionTags.v2`。早期 v2 的 `court` 字段不再作为产品语义消费。server agent context API 与 client 轨道列表使用同一 shared parser 读取该 key，避免看板信号词表在前后端漂移。
 
-> 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 四个本域归属的包装：`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（health-range / stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
+`health.range.presets` 已退役（2026-07-28）：健康统计页与 `healthRangeSetting.ts` 随健康子系统客户端一起删除，由独立项目 run-track 接管，代码见 tag `retire/health`。老设备 `settings` 表里可能仍留有这条历史键值，无代码消费，不清理也无副作用。
+
+> 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 四个本域归属的包装：`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
 
 ## 3. 关键不变量 / 坑 / 红线
 

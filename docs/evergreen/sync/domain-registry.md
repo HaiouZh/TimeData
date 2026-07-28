@@ -22,7 +22,7 @@ contracts:
   - packages/shared/src/types.ts:SyncChange
   - packages/server/src/sync/domains.ts
   - packages/client/src/sync/clientDomains.ts
-last-reviewed: 2026-07-25
+last-reviewed: 2026-07-29
 ---
 
 # 同步 · 域登记簿
@@ -62,9 +62,11 @@ last-reviewed: 2026-07-25
 | `track_steps` | lww | `countsInStatus=false` |
 | `goals` | lww | `countsInStatus=false`，目标层 |
 | `goal_layout_pins` | lww | `countsInStatus=false`，目标图用户钉点，复合键域 |
-| `health_charts` | lww | 健康统计页视图块配置 |
-| `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | lww | 5 个健康数据域，零钩子，`countsInStatus=false`，走通用 LWW 路径 |
+| `health_charts` | lww | 健康统计页视图块配置；**页面已退役，域保留**（见下） |
+| `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | lww | 5 个健康数据域，零钩子，`countsInStatus=false`，走通用 LWW 路径；**UI 已退役，域保留**（见下） |
 | `sessions` | lww | 零钩子，`countsInStatus=false`；"手头"软会话元数据，`Task.sessionId` 反挂引用它，不在 force-push 五域兜底范围内，见 [todo/at-hand](../todo/at-hand.md) |
+
+**6 个健康域是「无 UI 消费但协议照旧」的域**：健康子系统的客户端页面与服务端抓取管线已退役（2026-07-28，由独立项目 run-track 接管，代码见 tag `retire/health`），但表、行映射、域登记与 e2e 回环测试（`sync/health-charts.e2e.test.ts`）全部保留——历史数据仍在库里、仍随 push/pull 与备份流转。**删域是破坏性协议变更，不因「没人用」而放宽**（见 [data-model](../data-model.md) §1.1）。
 
 登记簿是封闭的：加域必须改代码、过测试。静态类型 `SyncChange`（`types.ts` 手工判别联合）与运行时 schema（登记簿生成）必须同步修改；`health_charts`、`tracks`、`track_steps`、`goals`、`goal_layout_pins` 都已有静态分支。
 
