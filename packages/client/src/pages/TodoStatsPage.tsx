@@ -7,10 +7,8 @@ import { db } from "../db/index.ts";
 import { listTasks, type TodoBuckets } from "../lib/tasks.js";
 import { useStatsLayoutForKey } from "../lib/statsLayoutSetting.ts";
 import { getDateString } from "../lib/time.ts";
-import { TODO_STATS_MODULE_LIST, TODO_STATS_MODULES } from "./stats/todo/todoStatsModules.ts";
+import { TODO_STATS_LAYOUT_KEY, TODO_STATS_MODULE_LIST, TODO_STATS_MODULES } from "./stats/todo/todoStatsModules.ts";
 import type { TodoStatsModuleId, TodoStatsModuleProps } from "./stats/todo/types.ts";
-
-const TODO_STATS_LAYOUT_KEY = "stats.todo.layout.v1";
 
 const EMPTY_BUCKETS: TodoBuckets = {
   today: [],

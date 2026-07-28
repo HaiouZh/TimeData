@@ -1,9 +1,7 @@
 import { useStatsLayoutForKey } from "../../lib/statsLayoutSetting.ts";
-import { TODO_STATS_MODULE_LIST, TODO_STATS_MODULES } from "../stats/todo/todoStatsModules.ts";
+import { TODO_STATS_LAYOUT_KEY, TODO_STATS_MODULE_LIST, TODO_STATS_MODULES } from "../stats/todo/todoStatsModules.ts";
 import type { TodoStatsModuleId } from "../stats/todo/types.ts";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
-
-const TODO_STATS_LAYOUT_KEY = "stats.todo.layout.v1";
 
 export default function SettingsTodoStatsLayoutPage() {
   const { order, hidden, setLayout, reset } = useStatsLayoutForKey<TodoStatsModuleId>(

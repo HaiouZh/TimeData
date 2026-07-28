@@ -9,6 +9,9 @@ import RhythmSection from "./modules/RhythmSection.tsx";
 import TodoOverviewSection from "./modules/TodoOverviewSection.tsx";
 import type { TodoStatsModuleDef, TodoStatsModuleId } from "./types.ts";
 
+/** 待办统计页布局设置的存储 key，跨设备同步；TodoStatsPage 与 SettingsTodoStatsLayoutPage 单点导入，勿各自重复定义。 */
+export const TODO_STATS_LAYOUT_KEY = "stats.todo.layout.v1";
+
 // 期2：补上 "deleted" 模块，注册表键集合与 types.ts 的联合类型对齐。
 export const TODO_STATS_MODULES: Partial<Record<TodoStatsModuleId, TodoStatsModuleDef>> = {
   overview: {

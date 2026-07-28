@@ -88,4 +88,54 @@ describe("deletedStats", () => {
     const result = deletedStats(items);
     expect(result.byWeek).toEqual([{ weekStart: "2026-07-20", count: 2 }]);
   });
+
+  it("byWeek 对齐 distribution 补零口径：跨度内的空周也补 0", () => {
+    const items: ArchiveItem[] = [
+      makeItem({ taskId: "a", deletedAt: "2026-07-06T04:00:00.000Z" }), // 周一 2026-07-06
+      makeItem({ taskId: "b", deletedAt: "2026-07-20T04:00:00.000Z" }), // 周一 2026-07-20，中间隔两个空周
+    ];
+    const result = deletedStats(items);
+    expect(result.byWeek).toEqual([
+      { weekStart: "2026-07-06", count: 1 },
+      { weekStart: "2026-07-13", count: 0 },
+      { weekStart: "2026-07-20", count: 1 },
+    ]);
+  });
+
+  it("snapshot.createdAt 为 null(旧快照契约容错)的行不进 survivalBuckets，但仍进 total/byReason", () => {
+    const items: ArchiveItem[] = [
+      makeItem({ taskId: "a", deleteReason: "expired", snapshot: { createdAt: null } }),
+    ];
+    const result = deletedStats(items);
+    expect(result.total).toBe(1);
+    expect(result.byReason).toEqual([{ reason: "expired", count: 1 }]);
+    expect(result.survivalBuckets.every((b) => b.count === 0)).toBe(true);
+  });
+
+  it("survivalBuckets 排除 snapshot.ruleId 非空的 occurrence 行(createdAt 是物化时刻不是立 flag 时刻)", () => {
+    const items: ArchiveItem[] = [
+      makeItem({
+        taskId: "occ",
+        deletedAt: "2026-07-20T00:00:00.000Z",
+        snapshot: { createdAt: "2026-07-19T00:00:00.000Z", ruleId: "rule1" }, // 若不排除会落 "<7天" 桶
+      }),
+    ];
+    const result = deletedStats(items);
+    expect(result.survivalBuckets.every((b) => b.count === 0)).toBe(true);
+  });
+
+  it("deletedAfterDone 排除 snapshot.recurrence 非空的模板行(陈旧 completedAt 不代表完成过)", () => {
+    const items: ArchiveItem[] = [
+      makeItem({
+        taskId: "tpl",
+        snapshot: {
+          createdAt: "2026-07-01T00:00:00.000Z",
+          completedAt: "2026-07-05T00:00:00.000Z", // 补加 recurrence 前遗留的陈旧 completedAt
+          recurrence: { freq: "daily", interval: 1, basis: "due" },
+        },
+      }),
+    ];
+    const result = deletedStats(items);
+    expect(result.deletedAfterDone).toBe(0);
+  });
 });

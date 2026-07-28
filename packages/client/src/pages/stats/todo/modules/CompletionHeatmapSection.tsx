@@ -18,7 +18,7 @@ export default function CompletionHeatmapSection({ today, tasks }: TodoStatsModu
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="td-text-label font-medium text-fg-muted">完成热力图</h3>
+      <h3 className="td-text-label font-medium text-ink-2">完成热力图</h3>
       <div className="mt-2 grid grid-flow-col grid-rows-7 gap-0.5 overflow-x-auto">
         {cells.map((cell) => (
           <div

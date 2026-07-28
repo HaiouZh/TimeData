@@ -56,6 +56,16 @@ describe("creationEvents", () => {
   it("ruleId===null 的行算创建事件", () => {
     expect(creationEvents([makeTask({ id: "t1" })])).toHaveLength(1);
   });
+
+  it("occurrence 子任务克隆行(id 形如 occId:child:templateChildId)不算创建事件——反证", () => {
+    const clone = makeTask({ id: "occ1:child:tplchild1" });
+    expect(creationEvents([clone])).toHaveLength(0);
+  });
+
+  it("普通任务 id 不含 :child: 分隔符时仍正常计入创建事件", () => {
+    const task = makeTask({ id: "normal-task-id" });
+    expect(creationEvents([task])).toHaveLength(1);
+  });
 });
 
 describe("countByDay", () => {

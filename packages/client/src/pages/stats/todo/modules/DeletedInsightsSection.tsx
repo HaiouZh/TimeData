@@ -37,8 +37,8 @@ export default function DeletedInsightsSection() {
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="td-text-label font-medium text-fg-muted">删除洞察</h3>
-      <p className="mt-1 td-text-caption text-fg-muted">删除数据自 2026-07-12 归档上线起算</p>
+      <h3 className="td-text-label font-medium text-ink-2">删除洞察</h3>
+      <p className="mt-1 td-text-caption text-ink-3">删除数据自 2026-07-12 归档上线起算</p>
 
       {state.status === "loading" && (
         <div className="mt-2 space-y-2" aria-busy="true">
@@ -53,7 +53,7 @@ export default function DeletedInsightsSection() {
           <button
             type="button"
             onClick={load}
-            className="rounded-xl border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-fg-muted transition-colors hover:bg-surface-hover"
+            className="rounded-xl border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-2 transition-colors hover:bg-surface-hover"
           >
             重试
           </button>
@@ -62,7 +62,7 @@ export default function DeletedInsightsSection() {
 
       {state.status === "success" && (
         <div className="mt-2 space-y-3">
-          <p className="td-text-caption text-fg-muted">
+          <p className="td-text-caption text-ink-3">
             累计删除 {state.stats.total} 条 · 完成后删除 {state.stats.deletedAfterDone} 条
           </p>
           <div className="h-48">
@@ -76,7 +76,7 @@ export default function DeletedInsightsSection() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 td-text-caption text-fg-muted">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 td-text-caption text-ink-3">
             {state.stats.byReason.map((entry) => (
               <div key={entry.reason} className="flex items-center justify-between">
                 <span>{entry.reason}</span>
@@ -88,7 +88,7 @@ export default function DeletedInsightsSection() {
             {state.stats.survivalBuckets.map((bucket) => {
               const max = Math.max(1, ...state.stats.survivalBuckets.map((b) => b.count));
               return (
-                <div key={bucket.label} className="flex items-center gap-2 td-text-caption text-fg-muted">
+                <div key={bucket.label} className="flex items-center gap-2 td-text-caption text-ink-3">
                   <span className="w-16 shrink-0">{bucket.label}</span>
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-hover">
                     <div

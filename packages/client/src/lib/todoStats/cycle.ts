@@ -58,7 +58,8 @@ export function cycleMetrics(tasks: Task[], today: string): CycleMetrics {
   if (events.length > 0) {
     const completedDates = events.map((event) => getDateString(new Date(event.completedAt))).sort();
     const firstDay = completedDates[0];
-    const spanDays = Math.max(1, (new Date(today).getTime() - new Date(firstDay).getTime()) / DAY_MS);
+    // 含首尾日历天：today − firstDay + 1（恰好等于「首个完成事件就在今天」时的 1 天，不需要额外钳制）。
+    const spanDays = (new Date(today).getTime() - new Date(firstDay).getTime()) / DAY_MS + 1;
     avgCompletedPerDay = events.length / spanDays;
   }
 

@@ -87,15 +87,32 @@ describe("cycleMetrics 周转（medianTurnaroundDays / turnaroundBuckets）", ()
     expect(byLabel["8-30天"]).toBe(1);
     expect(byLabel[">30天"]).toBe(1);
   });
+
+  it("分桶边界：恰好整数天(1/3/7/30)按左闭右开归入靠近当天的一侧", () => {
+    const tasks = [
+      makeTask({ id: "e1", createdAt: "2026-07-10T00:00:00.000Z", completedAt: "2026-07-11T00:00:00.000Z" }), // 恰 1天
+      makeTask({ id: "e3", createdAt: "2026-07-10T00:00:00.000Z", completedAt: "2026-07-13T00:00:00.000Z" }), // 恰 3天
+      makeTask({ id: "e7", createdAt: "2026-07-10T00:00:00.000Z", completedAt: "2026-07-17T00:00:00.000Z" }), // 恰 7天
+      makeTask({ id: "e30", createdAt: "2026-07-10T00:00:00.000Z", completedAt: "2026-08-09T00:00:00.000Z" }), // 恰 30天
+    ];
+    const result = cycleMetrics(tasks, TODAY);
+    const byLabel = Object.fromEntries(result.turnaroundBuckets.map((b) => [b.label, b.count]));
+    expect(byLabel["当天"]).toBe(0); // 恰 1 天不进"当天"(< 1 才是"当天")
+    expect(byLabel["1-3天"]).toBe(2); // 恰 1 天、恰 3 天都进 1-3天(<=3)
+    expect(byLabel["4-7天"]).toBe(1); // 恰 7 天进 4-7天(<=7)
+    expect(byLabel["8-30天"]).toBe(1); // 恰 30 天进 8-30天(<=30)
+    expect(byLabel[">30天"]).toBe(0);
+  });
 });
 
 describe("cycleMetrics avgCompletedPerDay", () => {
-  it("完成事件总数 ÷ 首个完成事件至今天数", () => {
+  it("完成事件总数 ÷ 首个完成事件至今天数(含首尾日历天，today−firstDay+1)", () => {
     const tasks = [
-      makeTask({ id: "a", completedAt: "2026-07-24T00:00:00.000Z" }), // 首个完成日 07-24，距 today(07-28) 4天
+      makeTask({ id: "a", completedAt: "2026-07-24T00:00:00.000Z" }), // 首个完成日 07-24，距 today(07-28) 含首尾共 5天
       makeTask({ id: "b", completedAt: "2026-07-25T00:00:00.000Z" }),
       makeTask({ id: "c", completedAt: "2026-07-26T00:00:00.000Z" }),
       makeTask({ id: "d", completedAt: "2026-07-27T00:00:00.000Z" }),
+      makeTask({ id: "e", completedAt: "2026-07-28T00:00:00.000Z" }),
     ];
     const result = cycleMetrics(tasks, TODAY);
     expect(result.avgCompletedPerDay).toBe(1);
@@ -104,6 +121,15 @@ describe("cycleMetrics avgCompletedPerDay", () => {
   it("无完成事件时 avgCompletedPerDay 为 0", () => {
     const result = cycleMetrics([], TODAY);
     expect(result.avgCompletedPerDay).toBe(0);
+  });
+
+  it("全部完成事件都在今天——分母不除零，avgCompletedPerDay 为有限值", () => {
+    const tasks = [
+      makeTask({ id: "a", completedAt: "2026-07-28T01:00:00.000Z" }),
+      makeTask({ id: "b", completedAt: "2026-07-28T02:00:00.000Z" }),
+    ];
+    const result = cycleMetrics(tasks, TODAY);
+    expect(result.avgCompletedPerDay).toBe(2);
   });
 });
 

@@ -8,8 +8,8 @@ export default function DimensionSection({ tasks, goals }: TodoStatsModuleProps)
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="td-text-label font-medium text-fg-muted">维度拆解</h3>
-      <h4 className="mt-4 td-text-label font-medium text-fg-muted">标签维度</h4>
+      <h3 className="td-text-label font-medium text-ink-2">维度拆解</h3>
+      <h4 className="mt-4 td-text-label font-medium text-ink-2">标签维度</h4>
       <div className="mt-2 h-64">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={tagRows} layout="vertical">
@@ -23,9 +23,9 @@ export default function DimensionSection({ tasks, goals }: TodoStatsModuleProps)
         </ResponsiveContainer>
       </div>
 
-      <h4 className="mt-6 td-text-label font-medium text-fg-muted">项目维度</h4>
+      <h4 className="mt-6 td-text-label font-medium text-ink-2">项目维度</h4>
       {projectRows.length === 0 ? (
-        <p className="mt-2 td-text-label text-fg-muted">暂无项目数据</p>
+        <p className="mt-2 td-text-label text-ink-3">暂无项目数据</p>
       ) : (
         <div className="mt-2 h-64">
           <ResponsiveContainer width="100%" height="100%">

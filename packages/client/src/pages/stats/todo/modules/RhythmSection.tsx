@@ -12,17 +12,17 @@ export default function RhythmSection({ tasks }: TodoStatsModuleProps) {
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="td-text-label font-medium text-fg-muted">节奏</h3>
+      <h3 className="td-text-label font-medium text-ink-2">节奏</h3>
       <div className="mt-2 grid grid-cols-[auto_repeat(4,1fr)] gap-1 td-text-caption">
         <div />
         {SLOT_LABELS.map((label) => (
-          <div key={label} className="text-center text-muted-foreground">
+          <div key={label} className="text-center text-ink-3">
             {label}
           </div>
         ))}
         {matrix.map((row, dayIndex) => (
           <div key={WEEKDAY_LABELS[dayIndex]} className="contents">
-            <div className="pr-1 text-muted-foreground">周{WEEKDAY_LABELS[dayIndex]}</div>
+            <div className="pr-1 text-ink-3">周{WEEKDAY_LABELS[dayIndex]}</div>
             {row.map((count, slotIndex) => (
               <div
                 key={slotIndex}

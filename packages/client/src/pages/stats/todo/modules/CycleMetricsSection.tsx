@@ -9,8 +9,8 @@ export default function CycleMetricsSection({ tasks, today }: TodoStatsModulePro
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="td-text-label font-medium text-fg-muted">周期指标</h3>
-      <p className="mt-1 td-text-caption text-fg-muted">
+      <h3 className="td-text-label font-medium text-ink-2">周期指标</h3>
+      <p className="mt-1 td-text-caption text-ink-3">
         周转中位数 {medianText}（仅一次性任务） · 日均完成 {metrics.avgCompletedPerDay.toFixed(1)} · 当前连击{" "}
         {metrics.currentStreak}天 · 最长连击 {metrics.longestStreak}天
       </p>

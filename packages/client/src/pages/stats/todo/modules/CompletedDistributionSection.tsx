@@ -25,8 +25,8 @@ export default function CompletedDistributionSection({ tasks, today }: TodoStats
 
   return (
     <section className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-      <h3 className="td-text-label font-medium text-fg-muted">完成分布</h3>
-      <p className="mt-1 td-text-caption text-fg-muted">
+      <h3 className="td-text-label font-medium text-ink-2">完成分布</h3>
+      <p className="mt-1 td-text-caption text-ink-3">
         本周完成 {thisWeek?.completed ?? 0} / 新建 {thisWeek?.created ?? 0}（{rateText}）
       </p>
       <div className="mt-2 h-64">
