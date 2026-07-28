@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CHART_CHROME } from "./health/chartColors.js";
+import { CHART_CHROME } from "./chartColors.js";
 
 export interface TrendSeriesItem {
   key: string;

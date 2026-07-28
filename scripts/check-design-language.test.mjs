@@ -181,7 +181,7 @@ test("does not flag shadow token declarations in index.css", () => {
 
 test("does not flag hex inside the chart color mirror file", () => {
   assert.equal(
-    classifyLine("packages/client/src/pages/stats/health/chartColors.ts", '  tooltipBg: "#1b2336",').length,
+    classifyLine("packages/client/src/pages/stats/chartColors.ts", '  tooltipBg: "#1b2336",').length,
     0,
   );
   // 同样的镜像值出现在普通文件里仍是裸色违规

@@ -121,7 +121,7 @@ function isThemeTokenDeclaration(file, line) {
 // 故这些文件把 index.css 的 --color-* token 镜像成具体 hex 的 JS 常量，是 token 唯一事实源的镜像，
 // 不是 UI chrome 裸色。集中登记，便于审计。
 const TOKEN_MIRROR_FILES = new Set([
-  "packages/client/src/pages/stats/health/chartColors.ts", // --color-data-* / 中性 chrome token
+  "packages/client/src/pages/stats/chartColors.ts", // --color-data-* / 中性 chrome token
   "packages/client/src/lib/navigation/routeFavicon.ts", // --color-page / --color-ink（favicon SVG data-URI）
 ]);
 

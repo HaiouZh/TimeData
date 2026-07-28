@@ -27,7 +27,7 @@ import {
   type HealthMetricCollections,
   type MetricSeries,
 } from "../../../lib/healthMetrics/index.ts";
-import { CHART_CHROME, metricColor } from "./chartColors.js";
+import { CHART_CHROME, metricColor } from "../chartColors.js";
 
 function average(values: Array<number | null>): number | null {
   const present = values.filter((value): value is number => value != null && Number.isFinite(value));

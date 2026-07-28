@@ -1,6 +1,6 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatAxisPace, type RunPaceTrendPoint } from "../../../lib/healthMetrics/index.ts";
-import { CHART_CHROME, DATA_PALETTE } from "./chartColors.js";
+import { CHART_CHROME, DATA_PALETTE } from "../chartColors.js";
 
 export function RunPaceTrendChart({ data }: { data: RunPaceTrendPoint[] }) {
   return (
