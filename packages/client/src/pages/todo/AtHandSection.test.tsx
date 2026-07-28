@@ -263,6 +263,28 @@ describe("场便签标题", () => {
     await unmount(root);
   });
 
+  it("活跃场切换时编辑态被重挂清空,旧场草稿不残留", async () => {
+    const onUpdateNote = vi.fn();
+    const props = { atHand: [], resumable: [], ...handlers, onUpdateNote };
+    const { host, root } = await renderDom(
+      <AtHandSection {...props} session={session({ id: "sA", note: "A 场便签" })} />,
+    );
+
+    await click(host.querySelector('button[aria-label="编辑场便签"]'));
+    expect(host.querySelector('input[aria-label="场便签"]')).toBeTruthy();
+
+    const { act } = await import("react");
+    await act(async () => {
+      root.render(<AtHandSection {...props} session={session({ id: "sB" })} />);
+    });
+
+    expect(host.querySelector('input[aria-label="场便签"]')).toBeNull();
+    expect(host.querySelector("h2")?.textContent).toBe("手头");
+    expect(onUpdateNote).not.toHaveBeenCalled();
+
+    await unmount(root);
+  });
+
   it("续场列表态标题不可编辑", async () => {
     const resumable: ResumableSession[] = [
       {
