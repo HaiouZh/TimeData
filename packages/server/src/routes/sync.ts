@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { requireTotp, verifyTotpForRequest } from "../middleware/totp.js";
 import crypto from "node:crypto";
 import {
   SYNC_DOMAINS,
@@ -46,6 +47,11 @@ import { addSyncStreamListener, notifySyncChange, removeSyncStreamListener, type
 const FORCE_PUSH_CONFIRMATION_PHRASE = "OVERWRITE_SERVER" as const;
 const FORCE_PUSH_TOKEN_TTL_MS = 5 * 60 * 1000;
 const STREAM_HEARTBEAT_MS = 30_000;
+
+// push 批量删除 TOTP 阈值:一次 push 删除条数超过它就要求验码。
+// 取 50 的理由:日常手工操作(删几条待办 / 清理一天的记录)远低于此,不打扰;
+// 而"清空某个域""脚本误删"这类不可逆毁数据的量级必然越过——与 BUMP_MAX_CHANGES 同量级只是巧合,两者无关。
+const PUSH_BULK_DELETE_TOTP_THRESHOLD = 50;
 
 interface ForcePushTokenRecord {
   expiresAt: number;
@@ -354,7 +360,8 @@ sync.get("/stream", (c) => {
   });
 });
 
-sync.post("/force-push/prepare", async (c) => {
+// TOTP 闸:force-push 本体由 prepare 下发的确认 token 保护,不重复锁。
+sync.post("/force-push/prepare", requireTotp, async (c) => {
   const rawBody: unknown = await c.req.json().catch(() => null);
   const parsed = SyncForcePushPrepareRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -543,6 +550,17 @@ sync.post("/push", async (c) => {
     if (cached) {
       writeSyncLog(db, "push_replayed", { requestId: body.requestId, statusCode: cached.status_code }, 0);
       return c.json(JSON.parse(cached.response_json) as SyncPushResponse, cached.status_code === 409 ? 409 : 200);
+    }
+  }
+
+  // 批量删除闸:超阈值的删除是不可逆毁数据旁路,要求 TOTP。
+  // 位置刻意在幂等回放命中之后、实际 apply 之前——重放命中只回放缓存响应,不该再弹验码。
+  const deleteCount = body.changes.filter((change) => change.action === "delete").length;
+  if (deleteCount > PUSH_BULK_DELETE_TOTP_THRESHOLD) {
+    const verdict = verifyTotpForRequest(c);
+    if (verdict !== "ok") {
+      writeSyncLog(db, "push_bulk_delete_totp_blocked", { deleteCount, verdict, clientBuild }, deleteCount);
+      return c.json({ error: verdict }, 401);
     }
   }
 
@@ -774,6 +792,15 @@ sync.post("/pull", async (c) => {
   const db = getDb();
   // sinceSeq=0 与 null 等价：全量补差。
   const sinceSeq = body.sinceSeq ? body.sinceSeq : null;
+  // 全量 pull 闸:一个请求能带走全部隐私数据,等价于导出,必须验码;
+  // 增量 pull(sinceSeq > 0)是日常同步,零打扰放行。不能用路由级中间件——要读完 body 才知道是不是全量。
+  if (sinceSeq === null) {
+    const verdict = verifyTotpForRequest(c);
+    if (verdict !== "ok") {
+      writeSyncLog(db, "pull_full_totp_blocked", { verdict }, 0);
+      return c.json({ error: verdict }, 401);
+    }
+  }
   const readStart = performance.now();
   const page = readChangesSinceSeq(db, sinceSeq, body.limit);
   const readMs = performance.now() - readStart;

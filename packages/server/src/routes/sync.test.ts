@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SyncChange, SyncStreamBump, Task, TaskCompletionOp } from "@timedata/shared";
 import { createEntryFromCliInput } from "../lib/entry-service.js";
 import { computeAndPersistCommitHash, getCommitHash } from "../sync/state.js";
+import { totpCode } from "../lib/totp.js";
 let db: Database.Database;
 let app: Hono;
 let createServerBackupMock: ReturnType<typeof vi.fn>;
@@ -119,6 +120,17 @@ function createSchema() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE totp_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      secret TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE totp_recovery_codes (
+      code_hash TEXT PRIMARY KEY,
+      used_at TEXT
     );
     CREATE TABLE IF NOT EXISTS health_heart_rate (id TEXT PRIMARY KEY, date TEXT NOT NULL, resting_heart_rate INTEGER, min_heart_rate INTEGER, max_heart_rate INTEGER, avg_heart_rate INTEGER, last_7_days_avg_resting_heart_rate INTEGER, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS health_hrv (id TEXT PRIMARY KEY, date TEXT NOT NULL, hrv_ms INTEGER NOT NULL, sync_seq INTEGER, sync_tombstone INTEGER DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -3511,5 +3523,130 @@ describe("X-TimeData-Client-Build 观测头（只记录不拦截）", () => {
       .prepare("SELECT detail FROM sync_logs WHERE action = ? ORDER BY id DESC LIMIT 1")
       .get("push_rejected") as { detail: string };
     expect(JSON.parse(logRow.detail).clientBuild).toBe("build-bad");
+  });
+});
+
+// —— TOTP 挂锁零守卫补测 ——
+// 终审实证：删掉 sync/admin 上的 requireTotp 参数，原有 111 个用例全绿。以下用例即那三处 + 两处新闸的真闸。
+const TOTP_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+async function enrollTotpForTest(): Promise<void> {
+  const store = await import("../lib/totpStore.js");
+  store.enrollTotp(TOTP_SECRET, []);
+}
+
+function currentTotpCode(): string {
+  return totpCode(TOTP_SECRET, Date.now());
+}
+
+function pullRequest(body: unknown, code?: string): Promise<Response> {
+  return app.request("/api/sync/pull", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(code ? { "X-TOTP-Code": code } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+
+function bulkDeleteChanges(count: number): SyncChange[] {
+  return Array.from({ length: count }, (_, index) =>
+    taskDeleteChange(`bulk-del-${index}`, "2026-07-05T00:00:00.000Z"),
+  );
+}
+
+function pushRaw(body: unknown, code?: string): Promise<Response> {
+  return app.request("/api/sync/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(code ? { "X-TOTP-Code": code } : {}) },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("sync 路由 TOTP 闸", () => {
+  it("未绑定 TOTP 时全量 pull / 批量删除 push / force-push prepare 一律照常放行", async () => {
+    expect((await pullRequest({ sinceSeq: 0 })).status).toBe(200);
+    expect((await pushRaw({ baseSeq: 0, changes: bulkDeleteChanges(60) })).status).toBe(200);
+    expect(
+      (await app.request("/api/sync/force-push/prepare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryCount: 1, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null }),
+      })).status,
+    ).toBe(200);
+  });
+
+  it("已绑定：force-push/prepare 缺码 401 totp_required，带码放行", async () => {
+    await enrollTotpForTest();
+    const body = JSON.stringify({ categoryCount: 1, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null });
+    const blocked = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    expect(blocked.status).toBe(401);
+    expect(await blocked.json()).toEqual({ error: "totp_required" });
+
+    const allowed = await app.request("/api/sync/force-push/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-TOTP-Code": currentTotpCode() },
+      body,
+    });
+    expect(allowed.status).toBe(200);
+  });
+
+  // 注：缺省 sinceSeq 不在此列——schema 要求该键必填，请求在闸之前就被 400 挡掉（参数校验先于鉴权，符合既有顺序）。
+  it("已绑定：全量 pull（sinceSeq 0 / null）缺码一律 401 totp_required", async () => {
+    await enrollTotpForTest();
+    for (const body of [{ sinceSeq: 0 }, { sinceSeq: null }]) {
+      const res = await pullRequest(body);
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "totp_required" });
+    }
+  });
+
+  it("已绑定：全量 pull 带正确码放行，错码 401 totp_invalid", async () => {
+    await enrollTotpForTest();
+    const ok = await pullRequest({ sinceSeq: 0 }, currentTotpCode());
+    expect(ok.status).toBe(200);
+
+    const wrong = currentTotpCode() === "000000" ? "111111" : "000000";
+    const bad = await pullRequest({ sinceSeq: 0 }, wrong);
+    expect(bad.status).toBe(401);
+    expect(await bad.json()).toEqual({ error: "totp_invalid" });
+  });
+
+  it("已绑定：增量 pull（sinceSeq > 0）零打扰放行", async () => {
+    await enrollTotpForTest();
+    const res = await pullRequest({ sinceSeq: 1 });
+    expect(res.status).toBe(200);
+  });
+
+  it("已绑定：push 删除条数超阈值缺码 401 totp_required，带码放行", async () => {
+    await enrollTotpForTest();
+    const changes = bulkDeleteChanges(51);
+    const blocked = await pushRaw({ baseSeq: 0, changes });
+    expect(blocked.status).toBe(401);
+    expect(await blocked.json()).toEqual({ error: "totp_required" });
+
+    const allowed = await pushRaw({ baseSeq: 0, changes }, currentTotpCode());
+    expect(allowed.status).toBe(200);
+  });
+
+  it("已绑定：push 删除条数不超阈值（=50）零打扰放行", async () => {
+    await enrollTotpForTest();
+    const res = await pushRaw({ baseSeq: 0, changes: bulkDeleteChanges(50) });
+    expect(res.status).toBe(200);
+  });
+
+  it("已绑定：幂等重放命中不触发验码——同 requestId 二次请求缺码仍回放 200", async () => {
+    await enrollTotpForTest();
+    const changes = bulkDeleteChanges(51);
+    const first = await pushRaw({ baseSeq: 0, changes, requestId: "bulk-del-req" }, currentTotpCode());
+    expect(first.status).toBe(200);
+
+    const replay = await pushRaw({ baseSeq: 0, changes, requestId: "bulk-del-req" });
+    expect(replay.status).toBe(200);
+    expect(
+      (db.prepare("SELECT COUNT(*) AS count FROM sync_logs WHERE action = ?").get("push_replayed") as { count: number }).count,
+    ).toBe(1);
   });
 });

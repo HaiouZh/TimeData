@@ -76,12 +76,20 @@ export function fetchBackupConfig(): Promise<AdminBackupConfigResponse> {
   return apiFetch("/api/admin/backup-config");
 }
 
-export function updateBackupConfig(config: BackupConfig): Promise<AdminBackupConfigResponse> {
-  return apiFetch("/api/admin/backup-config", { method: "PUT", body: JSON.stringify(config) });
+/** totpHeaders 由 callWithTotp 注入（危险操作被 requireTotp 锁定，需带 X-TOTP-Code 重试）。 */
+export function updateBackupConfig(config: BackupConfig, totpHeaders?: Record<string, string>): Promise<AdminBackupConfigResponse> {
+  return apiFetch("/api/admin/backup-config", {
+    method: "PUT",
+    body: JSON.stringify(config),
+    ...(totpHeaders && Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
+  });
 }
 
-export function deleteAdminBackup(id: string): Promise<{ deleted: string }> {
-  return apiFetch(`/api/admin/backups/${encodeURIComponent(id)}`, { method: "DELETE" });
+export function deleteAdminBackup(id: string, totpHeaders?: Record<string, string>): Promise<{ deleted: string }> {
+  return apiFetch(`/api/admin/backups/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    ...(totpHeaders && Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
+  });
 }
 
 export function triggerDailyBackup(): Promise<AdminRunDailyResponse> {
@@ -98,4 +106,30 @@ export function fetchAdminAnalytics(query: AdminAnalyticsQuery = {}): Promise<Ad
 
 export function fetchAdminRequestLogs(query: AdminRequestLogsQuery = {}): Promise<AdminRequestLogsResponse> {
   return apiFetch(withQuery("/api/admin/request-logs", query));
+}
+
+export interface TotpStatusResponse {
+  enrolled: boolean;
+}
+
+export interface TotpSetupResponse {
+  secret: string;
+  otpauthUri: string;
+  recoveryCodes: string[];
+}
+
+export function fetchTotpStatus(): Promise<TotpStatusResponse> {
+  return apiFetch("/api/admin/totp");
+}
+
+export function setupTotp(): Promise<TotpSetupResponse> {
+  return apiFetch("/api/admin/totp/setup", { method: "POST" });
+}
+
+export function confirmTotp(code: string): Promise<TotpStatusResponse> {
+  return apiFetch("/api/admin/totp/confirm", { method: "POST", body: JSON.stringify({ code }) });
+}
+
+export function disableTotp(code: string): Promise<TotpStatusResponse> {
+  return apiFetch("/api/admin/totp/disable", { method: "POST", body: JSON.stringify({ code }) });
 }

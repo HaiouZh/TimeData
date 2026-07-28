@@ -33,6 +33,42 @@ export const messages = {
       `这段时间与 ${count} 条已有记录重叠。保存后会自动裁剪或删除被覆盖的记录，是否继续？`,
   },
 
+  /** TOTP 两步锁（设置页 + 危险操作弹码对话框） */
+  totp: {
+    sectionTitle: "两步验证锁（TOTP）",
+    sectionIntro: "启用后，导出、重置、全量推送与备份删除等危险操作需要动态验证码。",
+    statusEnabled: "两步锁已启用",
+    statusDisabled: "两步锁未启用",
+    enableButton: "启用两步锁",
+    scanHint: "同一二维码请同时扫进至少两处：手机验证器 + 电脑验证器/密码管理器。",
+    secretLabel: "密钥（无法扫码时手动输入）",
+    recoveryCodesLabel: "恢复码",
+    recoveryCodesOnce: "恢复码只显示这一次，请存入密码管理器。",
+    recoveryCodesLost: "忘了全部？登录服务器删除 TOTP 配置可重置——见运维文档。",
+    confirmInputLabel: "输入验证器中的 6 位动态码以完成绑定",
+    confirmButton: "确认绑定",
+    confirmFailed: "验证码错误，绑定失败，请重试。",
+    setupFailed: "两步锁初始化失败",
+    statusLoadFailed: "两步锁状态加载失败",
+    disableButton: "停用两步锁",
+    disableInputLabel: "输入动态码或恢复码以停用",
+    disableConfirmButton: "确认停用",
+    disableFailed: "验证码错误，停用失败，请重试。",
+    // —— 危险操作弹码对话框 ——
+    promptTitle: "需要动态验证码",
+    promptPlaceholder: "6 位动态码或恢复码",
+    promptRetry: "验证码错误，请重新输入。",
+    promptCancel: "取消",
+  },
+
+  /** 陌生 IP 提醒（服务端数据洞察页） */
+  newIpAlert: {
+    title: "检测到陌生 IP",
+    hint: "以下来源 IP 首次使用带凭证的令牌访问服务器。若不是你本人或已授权的设备，请立即更换令牌。",
+    acknowledge: "知道了",
+    rowBadge: "新 IP",
+  },
+
   /** Confirm dialog generic labels */
   dialog: {
     confirm: "确认",

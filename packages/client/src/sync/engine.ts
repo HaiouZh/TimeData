@@ -1,6 +1,7 @@
 import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
+import { callWithTotp, TotpCancelledError } from "../lib/totpChallenge.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import type { Table } from "dexie";
 import { classifyReasonCode } from "./reason.ts";
@@ -291,13 +292,24 @@ function isSyncPushResponse(value: unknown): value is SyncPushResponse {
     && typeof response.conflicts === "number";
 }
 
+// 全量 pull（sinceSeq 为 0/缺省）被服务端当作等价导出锁住：绑定 TOTP 后要弹码重试，
+// 否则新设备首次同步 / repair 会直接 401 且无提示。增量 pull 服务端放行，callWithTotp 裸调即直通。
+function isFullPullBody(body: unknown): boolean {
+  if (!body || typeof body !== "object") return true;
+  const sinceSeq = (body as { sinceSeq?: unknown }).sinceSeq;
+  return !sinceSeq;
+}
+
 async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: number } = {}): Promise<SyncPullResponse> {
-  const response = await apiFetch<unknown>("/api/sync/pull", {
-    method: "POST",
-    body: JSON.stringify(body),
-    hedge: SYNC_HEDGE,
-    ...options,
-  });
+  const request = (totpHeaders: Record<string, string>) =>
+    apiFetch<unknown>("/api/sync/pull", {
+      method: "POST",
+      body: JSON.stringify(body),
+      hedge: SYNC_HEDGE,
+      ...options,
+      ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
+    });
+  const response = isFullPullBody(body) ? await callWithTotp(request) : await request({});
   const parsed = SyncPullResponseSchema.safeParse(response);
   if (!parsed.success) throw new Error("Invalid /api/sync/pull response");
   return parsed.data;
@@ -497,11 +509,16 @@ async function submitPushBatch(
 ): Promise<SyncPushResult> {
   try {
     const requestId = crypto.randomUUID(); // 每批独立幂等键；409 拆批走递归自然换新
-    const response = await apiFetch<SyncPushResponse>("/api/sync/push", {
-      method: "POST",
-      body: JSON.stringify({ changes, baseSeq, requestId }),
-      hedge: SYNC_HEDGE,
-    });
+    // 服务端对「删除条数超阈值」的 push 上了 TOTP 闸（不可逆毁数据旁路）。这里无条件包 callWithTotp：
+    // 未触发闸时服务端不返 401，裸调直通、零开销；触发时才弹码，且 requestId 不变，重试仍幂等。
+    const response = await callWithTotp((totpHeaders) =>
+      apiFetch<SyncPushResponse>("/api/sync/push", {
+        method: "POST",
+        body: JSON.stringify({ changes, baseSeq, requestId }),
+        hedge: SYNC_HEDGE,
+        ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
+      }),
+    );
     recordClockSkew(response.serverTime);
     return applyPushResponse(response, sourceLogIdsByChangeKey, changeKey, baseSeq);
   } catch (error) {
@@ -867,15 +884,19 @@ export async function getSyncHealth(): Promise<SyncHealthReport> {
 
 export async function prepareForcePush(): Promise<SyncForcePushPrepareResponse> {
   const local = await getLocalStatus();
-  return apiFetch<SyncForcePushPrepareResponse>("/api/sync/force-push/prepare", {
-    method: "POST",
-    body: JSON.stringify({
-      categoryCount: local.categoryCount,
-      entryCount: local.entryCount,
-      quickNoteCount: local.quickNoteCount,
-      lastUpdatedAt: local.lastUpdatedAt,
+  // prepare 被服务端 requireTotp 锁定：绑定 TOTP 后需弹码重试（force-push 本体由 confirmToken 保护）。
+  return callWithTotp((totpHeaders) =>
+    apiFetch<SyncForcePushPrepareResponse>("/api/sync/force-push/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        categoryCount: local.categoryCount,
+        entryCount: local.entryCount,
+        quickNoteCount: local.quickNoteCount,
+        lastUpdatedAt: local.lastUpdatedAt,
+      }),
+      ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
     }),
-  });
+  );
 }
 
 export async function syncForcePushToServer(confirmToken: string, confirmationPhrase: "OVERWRITE_SERVER"): Promise<SyncForcePushResponse> {
@@ -957,6 +978,8 @@ export function resetConsecutiveSyncFailures(): void {
 
 export function recordRegularSyncFailure(error: unknown): void {
   if (isNetworkFailure(error)) return;
+  // 用户在验码框点取消是主动放弃，不是同步故障：不计入连续失败，否则几次取消就会误开同步诊断。
+  if (error instanceof TotpCancelledError) return;
   safeSetItem(SYNC_FAILURE_COUNT_KEY, String(getConsecutiveSyncFailureCount() + 1));
 }
 

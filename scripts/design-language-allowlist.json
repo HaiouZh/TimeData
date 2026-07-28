@@ -1604,14 +1604,6 @@
     {
       "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<div key={log.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "{logs && logs.logs.length === 0 && <div className=\"text-sm text-ink-3\">暂无请求审计记录。</div>}",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -1725,30 +1717,6 @@
       "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
       "rule": "bare-text-size",
       "lineText": "<div className=\"space-y-2 text-sm text-ink-2\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div key={log.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div key={backup.id} className=\"rounded-ctl bg-surface-elevated px-3 py-2 text-xs text-ink-2\">",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"

@@ -7,6 +7,7 @@ import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
 import { DesktopSidebar } from "./components/app-shell/DesktopSidebar.tsx";
 import { MobileBottomNav } from "./components/app-shell/MobileBottomNav.tsx";
 import { ErrorBoundary, RouteErrorFallback } from "./components/ErrorBoundary.tsx";
+import { TotpPromptDialog } from "./components/TotpPromptDialog.tsx";
 import { BottomNavProvider } from "./contexts/BottomNavContext.tsx";
 import { SyncProvider } from "./contexts/SyncContext.tsx";
 import { TrackAttentionProvider } from "./contexts/TrackAttentionContext.tsx";
@@ -41,6 +42,7 @@ export function AppShell() {
         {!isWideScreen && !hidesBottomNav && <MobileBottomNav />}
       </div>
       <AppUpdatePrompt />
+      <TotpPromptDialog />
     </div>
   );
 }

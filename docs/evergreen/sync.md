@@ -37,7 +37,7 @@ contracts:
   - packages/shared/src/schemas.ts
   - packages/shared/src/types.ts:SyncPushOutcome
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-24
+last-reviewed: 2026-07-28
 ---
 
 # 同步机制

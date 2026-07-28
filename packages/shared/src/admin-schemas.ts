@@ -196,6 +196,7 @@ export const AdminRequestLogRowSchema = z.object({
   clientHint: AdminRequestLogClientHintSchema,
   deviceLabel: z.string().nullable(),
   durationMs: NonNegativeIntSchema,
+  isNewIp: z.boolean(),
 });
 
 export const AdminRequestLogsResponseSchema = z.object({
