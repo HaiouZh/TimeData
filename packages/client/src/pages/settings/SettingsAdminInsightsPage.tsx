@@ -36,6 +36,7 @@ import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.
 import { Switch } from "../../components/ui/Switch.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { formatAppDateTime } from "../../lib/time.ts";
+import { callWithTotp } from "../../lib/totpChallenge.ts";
 import SettingsDetailPage from "./SettingsDetailPage.js";
 import SettingsTotpSection from "./SettingsTotpSection.js";
 
@@ -497,7 +498,7 @@ export default function SettingsAdminInsightsPage() {
     setBackupActionBusy(true);
     setBackupActionStatus("");
     try {
-      const response = await updateBackupConfig(backupConfig);
+      const response = await callWithTotp((totpHeaders) => updateBackupConfig(backupConfig, totpHeaders));
       setBackupConfig(response.config);
       setBackupActionStatus("备份设置已保存。");
     } catch (err) {
@@ -541,7 +542,7 @@ export default function SettingsAdminInsightsPage() {
     setBackupActionBusy(true);
     setBackupActionStatus("");
     try {
-      await deleteAdminBackup(id);
+      await callWithTotp((totpHeaders) => deleteAdminBackup(id, totpHeaders));
       setBackupActionStatus(`已删除备份：${id}`);
       try {
         await refreshBackups();

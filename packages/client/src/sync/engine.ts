@@ -1,6 +1,7 @@
 import { db } from "../db/index.ts";
 import { ApiError, apiFetch } from "../lib/api.ts";
 import { STORAGE_KEYS } from "../lib/storageKeys.ts";
+import { callWithTotp } from "../lib/totpChallenge.ts";
 import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js";
 import type { Table } from "dexie";
 import { classifyReasonCode } from "./reason.ts";
@@ -867,15 +868,19 @@ export async function getSyncHealth(): Promise<SyncHealthReport> {
 
 export async function prepareForcePush(): Promise<SyncForcePushPrepareResponse> {
   const local = await getLocalStatus();
-  return apiFetch<SyncForcePushPrepareResponse>("/api/sync/force-push/prepare", {
-    method: "POST",
-    body: JSON.stringify({
-      categoryCount: local.categoryCount,
-      entryCount: local.entryCount,
-      quickNoteCount: local.quickNoteCount,
-      lastUpdatedAt: local.lastUpdatedAt,
+  // prepare 被服务端 requireTotp 锁定：绑定 TOTP 后需弹码重试（force-push 本体由 confirmToken 保护）。
+  return callWithTotp((totpHeaders) =>
+    apiFetch<SyncForcePushPrepareResponse>("/api/sync/force-push/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        categoryCount: local.categoryCount,
+        entryCount: local.entryCount,
+        quickNoteCount: local.quickNoteCount,
+        lastUpdatedAt: local.lastUpdatedAt,
+      }),
+      ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
     }),
-  });
+  );
 }
 
 export async function syncForcePushToServer(confirmToken: string, confirmationPhrase: "OVERWRITE_SERVER"): Promise<SyncForcePushResponse> {

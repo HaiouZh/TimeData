@@ -387,10 +387,12 @@ describe("SettingsAdminInsightsPage", () => {
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+    // callWithTotp 先裸调：第二参是空的 totpHeaders
     expect(updateBackupConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         retentionDays: 14,
       }),
+      {},
     );
 
     const runButton = Array.from(host.querySelectorAll("button")).find((button) =>
@@ -411,7 +413,7 @@ describe("SettingsAdminInsightsPage", () => {
     await act(async () => {
       confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(deleteAdminBackup).toHaveBeenCalledWith("backup-1");
+    expect(deleteAdminBackup).toHaveBeenCalledWith("backup-1", {});
     expect(fetchAdminBackups).toHaveBeenCalledTimes(3);
 
     await unmount(root);
