@@ -148,6 +148,8 @@ export function primaryRouteForPath(pathname: string): MainNavRoute {
   if (pathname === "/tracks" || pathname.startsWith("/tracks/")) return "/tracks";
   if (pathname === "/goals" || pathname.startsWith("/goals/")) return "/goals";
   if (pathname === "/stats/time") return "/stats/time";
+  if (pathname === "/stats/todo") return "/stats/time"; // 待办统计从「时间」入口进,高亮归它
+
   if (pathname === "/stats/health") return "/stats/health";
   if (pathname === "/settings" || pathname.startsWith("/settings/")) return "/settings";
   return "/";

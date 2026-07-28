@@ -62,6 +62,7 @@ describe("navRegistry", () => {
 
   it("normalizes legacy and detail paths to their primary route", () => {
     expect(primaryRouteForPath("/")).toBe("/");
+    expect(primaryRouteForPath("/stats/todo")).toBe("/stats/time");
     expect(primaryRouteForPath("/entries/new")).toBe("/");
     expect(primaryRouteForPath("/entries/entry-1/edit")).toBe("/");
     expect(primaryRouteForPath("/tracks/track-1")).toBe("/tracks");
