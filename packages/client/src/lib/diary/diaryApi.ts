@@ -13,6 +13,20 @@ export class DiaryConflictError extends Error {
 export interface DiaryConfig {
   enabled: boolean;
   template: string;
+  weeklyTemplate: string;
+}
+
+/** 批量读接口的单条结果：是否存在及内容 */
+export interface DiaryBatchEntry {
+  exists: boolean;
+  content: string;
+}
+
+/** 批量读接口响应：日 key/周 key 各自的映射，以及周记模板是否已配置 */
+export interface DiaryBatchResult {
+  dates: Record<string, DiaryBatchEntry>;
+  weeks: Record<string, DiaryBatchEntry>;
+  weeklyConfigured: boolean;
 }
 
 export interface DiaryDoc {
@@ -46,6 +60,14 @@ export const fetchDiaryConfig = () => apiFetch<DiaryConfig>("/api/diary/config")
 export const saveDiaryTemplate = async (template: string): Promise<void> => {
   await apiFetch("/api/diary/config", { method: "PUT", body: JSON.stringify({ template }) });
 };
+
+export const saveDiaryWeeklyTemplate = async (weeklyTemplate: string): Promise<void> => {
+  await apiFetch("/api/diary/config", { method: "PUT", body: JSON.stringify({ weeklyTemplate }) });
+};
+
+/** 批量读日记内容：一次请求获取多个日期/周的内容，供回顾页拼装用 */
+export const fetchDiaryBatch = (body: { dates?: string[]; weeks?: string[] }) =>
+  apiFetch<DiaryBatchResult>("/api/diary/batch", { method: "POST", body: JSON.stringify(body) });
 
 export const fetchDiary = (date: string) => apiFetch<DiaryDoc>(`/api/diary/${date}`);
 

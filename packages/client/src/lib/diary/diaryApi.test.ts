@@ -3,9 +3,11 @@ import { ApiError } from "../api.js";
 import {
   DiaryConflictError,
   fetchDiary,
+  fetchDiaryBatch,
   fetchDiaryConfig,
   saveDiary,
   saveDiaryTemplate,
+  saveDiaryWeeklyTemplate,
 } from "./diaryApi.js";
 
 function mockFetch(status: number, body: unknown) {
@@ -64,6 +66,29 @@ describe("diaryApi", () => {
     await expect(saveDiary("2026-07-09", { content: "x", baseMtime: 1 })).rejects.toSatisfy(
       (e: unknown) => e instanceof ApiError && !(e instanceof DiaryConflictError),
     );
+  });
+
+  it("saveDiaryWeeklyTemplate 发起 PUT 请求，只序列化 weeklyTemplate 字段", async () => {
+    const fetchSpy = mockFetch(200, {});
+    await saveDiaryWeeklyTemplate("周记模板");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/diary/config");
+    expect(init?.method).toBe("PUT");
+    expect(init?.body).toBe(JSON.stringify({ weeklyTemplate: "周记模板" }));
+  });
+
+  it("fetchDiaryBatch 发起 POST 请求并透传响应", async () => {
+    const result = {
+      dates: { "2026-07-09": { exists: true, content: "hi" } },
+      weeks: { "2026-W28": { exists: false, content: "" } },
+      weeklyConfigured: true,
+    };
+    const fetchSpy = mockFetch(200, result);
+    await expect(fetchDiaryBatch({ dates: ["2026-07-09"], weeks: ["2026-W28"] })).resolves.toEqual(result);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/diary/batch");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(JSON.stringify({ dates: ["2026-07-09"], weeks: ["2026-W28"] }));
   });
 
   it("saveDiary 遇 vault 权限错误时抛出中文运维提示", async () => {
