@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { StatsModuleDescriptor } from "../pages/stats/modules/types.ts";
 import { resetDb } from "../test/dbReset.js";
-import { setSetting } from "./settings/index.ts";
-import { DEFAULT_STATS_LAYOUT, getStatsLayout, sanitizeStatsLayout } from "./statsLayoutSetting.ts";
+import { getSetting, setSetting } from "./settings/index.ts";
+import {
+  DEFAULT_STATS_LAYOUT,
+  getStatsLayout,
+  sanitizeStatsLayout,
+  setStatsLayoutForKey,
+} from "./statsLayoutSetting.ts";
 
 const MODS: StatsModuleDescriptor[] = [
   { id: "overview", defaultVisible: true },
@@ -45,5 +50,19 @@ describe("sanitizeStatsLayout", () => {
   it("损坏 JSON 回退默认布局", async () => {
     await setSetting("stats.layout.v1", "not-json");
     await expect(getStatsLayout(MODS)).resolves.toEqual(DEFAULT_STATS_LAYOUT(MODS));
+  });
+});
+
+describe("useStatsLayoutForKey", () => {
+  it("不同 key 各自独立存取", async () => {
+    const mods = [
+      { id: "a", defaultVisible: true },
+      { id: "b", defaultVisible: true },
+    ];
+    await setStatsLayoutForKey("stats.todo.layout.v1", { order: ["b", "a"], hidden: [] });
+    const todo = sanitizeStatsLayout(JSON.parse((await getSetting("stats.todo.layout.v1"))!), mods);
+    const time = await getStatsLayout(MODS); // 旧 key 不受影响,仍为默认
+    expect(todo.order).toEqual(["b", "a"]);
+    expect(time.order[0]).toBe("overview");
   });
 });
