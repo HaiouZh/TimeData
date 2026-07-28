@@ -172,3 +172,56 @@ describe("DiaryReviewPage · 模式 B（近三日回顾）", () => {
     expect(host.textContent).toContain("7月24日");
   });
 });
+
+describe("DiaryReviewPage · 模式 C（周览）", () => {
+  async function switchToC(host: HTMLElement) {
+    await click(Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "周览") ?? null);
+  }
+
+  it("batch 请求含 14 个日期 + 2 个周号", async () => {
+    const { host } = await renderPage("/diary/review?date=2026-07-25");
+    fetchDiaryBatch.mockClear();
+
+    await switchToC(host);
+
+    expect(fetchDiaryBatch).toHaveBeenCalledTimes(1);
+    const { dates, weeks } = fetchDiaryBatch.mock.calls[0][0] as { dates: string[]; weeks: string[] };
+    expect(dates).toHaveLength(14);
+    expect(weeks).toHaveLength(2);
+  });
+
+  it("weeklyConfigured:false 时两列都显示「未配置周记路径模板」", async () => {
+    fetchDiaryBatch.mockResolvedValue({ dates: {}, weeks: {}, weeklyConfigured: false });
+    const { host } = await renderPage("/diary/review?date=2026-07-25");
+
+    await switchToC(host);
+
+    const matches = host.textContent?.match(/未配置周记路径模板/g) ?? [];
+    expect(matches.length).toBe(2);
+  });
+
+  it("未来日卡有 opacity-50 且无 ➕ 链接", async () => {
+    const { host } = await renderPage("/diary/review?date=2026-07-25");
+
+    await switchToC(host);
+
+    // 2026-07-25 是周六，本周含未来日期（周日 7/26）
+    const futureCard = Array.from(host.querySelectorAll(".opacity-50")).find((el) =>
+      el.textContent?.includes("7月26日"),
+    );
+    expect(futureCard).toBeTruthy();
+    expect(futureCard?.querySelector('a[aria-label^="创建"]')).toBeNull();
+    expect(futureCard?.textContent).toContain("未来");
+  });
+
+  it("▶ 步进 7 天", async () => {
+    // 起点选比今天早一周以上，避免 +7 撞上"未来钳到今天"的裁决（resolveDiaryDate 契约）。
+    const { host } = await renderPage("/diary/review?date=2026-07-11");
+    await switchToC(host);
+
+    await click(host.querySelector('button[aria-label="下一段"]'));
+
+    const dateInput = host.querySelector('input[aria-label="选择日期"]') as HTMLInputElement;
+    expect(dateInput.value).toBe("2026-07-18");
+  });
+});

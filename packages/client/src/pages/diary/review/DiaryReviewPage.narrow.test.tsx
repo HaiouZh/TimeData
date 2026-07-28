@@ -76,3 +76,16 @@ describe("DiaryReviewPage 窄屏 · 模式 B", () => {
     await unmount(root);
   });
 });
+
+describe("DiaryReviewPage 窄屏 · 模式 C", () => {
+  it("窄屏只渲染本周列，不渲染上周", async () => {
+    const { host, root } = await renderPage("/diary/review?date=2026-07-25");
+    await click(Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "周览") ?? null);
+
+    expect(host.querySelectorAll("h2")).toHaveLength(1);
+    expect(host.textContent).toContain("本周");
+    expect(host.textContent).not.toContain("上周");
+
+    await unmount(root);
+  });
+});

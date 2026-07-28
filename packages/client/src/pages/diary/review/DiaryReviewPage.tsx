@@ -5,7 +5,7 @@ import { Icon } from "../../../components/Icon.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
 import { resolveDiaryDate } from "../../../lib/diary/diaryDate.js";
-import { modeADates, modeBDates } from "../../../lib/diary/reviewDates.js";
+import { modeADates, modeBDates, modeCDates } from "../../../lib/diary/reviewDates.js";
 import {
   getReviewLayoutB,
   getReviewMode,
@@ -18,6 +18,7 @@ import {
 import { addDays, formatMonthDay, formatWeekday, getDateString } from "../../../lib/time.js";
 import { useIsWideScreen } from "../../../lib/useIsWideScreen.js";
 import ReviewCard from "./ReviewCard.js";
+import WeekColumn from "./WeekColumn.js";
 
 const CARD_MIN_HEIGHT = 160;
 
@@ -76,13 +77,18 @@ export default function DiaryReviewPage() {
     (async () => {
       try {
         let dates: string[] = [];
+        let weeks: string[] | undefined;
         if (mode === "A") {
           const { left, right } = modeADates(anchor, yearRange);
           dates = Array.from(new Set([...left, ...right]));
         } else if (mode === "B") {
           dates = modeBDates(anchor);
+        } else {
+          const { lastWeek, thisWeek } = modeCDates(anchor);
+          dates = [...lastWeek.days, ...thisWeek.days];
+          weeks = [lastWeek.key, thisWeek.key];
         }
-        const result = await fetchDiaryBatch({ dates });
+        const result = await fetchDiaryBatch({ dates, weeks });
         if (cancelled) return;
         setBatch(result);
         setLoading(false);
@@ -270,6 +276,34 @@ export default function DiaryReviewPage() {
               ))}
             </div>
           )}
+          {mode === "C" && (() => {
+            const { lastWeek, thisWeek } = modeCDates(anchor);
+            return (
+              <div className={wide ? "grid grid-cols-[1fr_auto_1fr]" : "grid grid-cols-1"}>
+                {wide && (
+                  <WeekColumn
+                    title="上周"
+                    weekKey={lastWeek.key}
+                    weekEntry={batch?.weeks[lastWeek.key]}
+                    weeklyConfigured={batch?.weeklyConfigured ?? false}
+                    days={lastWeek.days}
+                    entries={batch?.dates ?? {}}
+                    liveToday={liveToday}
+                  />
+                )}
+                {wide && <div className="mx-1 w-px bg-border" />}
+                <WeekColumn
+                  title="本周"
+                  weekKey={thisWeek.key}
+                  weekEntry={batch?.weeks[thisWeek.key]}
+                  weeklyConfigured={batch?.weeklyConfigured ?? false}
+                  days={thisWeek.days}
+                  entries={batch?.dates ?? {}}
+                  liveToday={liveToday}
+                />
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
