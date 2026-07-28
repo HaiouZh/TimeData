@@ -106,7 +106,7 @@ describe("SettingsNavPage", () => {
     const { host, root } = await renderPage();
 
     await clickAndFlushSettings(host.querySelector('button[aria-label="下移 记录"]'));
-    await waitForDesktopConfig((items) => items[0]?.to === "/" && items[1]?.to === "/quick-notes");
+    await waitForDesktopConfig((items) => items[0]?.to === "/diary" && items[1]?.to === "/quick-notes");
 
     await unmount(root);
   });

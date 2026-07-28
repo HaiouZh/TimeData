@@ -9,6 +9,7 @@ import {
 
 const defaultItems = [
   { to: "/quick-notes", placement: "primary" },
+  { to: "/diary", placement: "primary" },
   { to: "/", placement: "primary" },
   { to: "/todo", placement: "primary" },
   { to: "/tracks", placement: "primary" },
@@ -39,6 +40,7 @@ describe("desktopSidebarSetting", () => {
       { to: "/tracks", placement: "more" },
       { to: "/goals", placement: "primary" },
       { to: "/quick-notes", placement: "primary" },
+      { to: "/diary", placement: "primary" },
       { to: "/", placement: "primary" },
       { to: "/todo", placement: "primary" },
       { to: "/stats/time", placement: "primary" },
@@ -62,6 +64,7 @@ describe("desktopSidebarSetting", () => {
       { to: "/tracks", placement: "primary" },
       { to: "/goals", placement: "more" },
       { to: "/quick-notes", placement: "primary" },
+      { to: "/diary", placement: "primary" },
       { to: "/", placement: "primary" },
       { to: "/todo", placement: "primary" },
       { to: "/stats/time", placement: "primary" },
