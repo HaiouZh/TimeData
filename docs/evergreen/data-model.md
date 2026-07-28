@@ -25,6 +25,8 @@ contracts:
   - packages/shared/src/entitySchemas.ts
   - packages/shared/src/syncDomains.ts
   - packages/shared/src/constants.ts
+  - packages/shared/src/healthSchemas.ts
+  - packages/shared/src/chartSchemas.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
 last-reviewed: 2026-07-29
@@ -49,14 +51,14 @@ last-reviewed: 2026-07-29
 | 手头软会话 / `Session` | `sessions` | `sessions` | [todo/at-hand](todo/at-hand.md) §Schema |
 | 同步设置 / `Setting` | `settings` | `settings` | 本文 §2；具体 key 见对应域 |
 | 客户端同步日志 / `SyncLogEntry` | 无 | `syncLog` | 本文 §3 |
-| 健康原始数据（已退役 UI，表保留） | `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | `healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` | `shared/src/healthSchemas.ts`；本文 §1.1 |
-| 健康图表配置（已退役 UI，表保留） | `health_charts` | `healthCharts` | `shared/src/chartSchemas.ts`；本文 §1.1 |
+| 健康原始数据（数据层，无 UI 消费） | `health_heart_rate` / `health_hrv` / `health_sleep` / `health_stress` / `runs` | `healthHeartRate` / `healthHrv` / `healthSleep` / `healthStress` / `runs` | `shared/src/healthSchemas.ts`；本文 §1.1 |
+| 健康图表配置（数据层，无 UI 消费） | `health_charts` | `healthCharts` | `shared/src/chartSchemas.ts`；本文 §1.1 |
 
 ### 1.1 健康域：只剩数据层
 
-健康子系统的**客户端 UI 已退役**（2026-07-28）：健康统计页、图表配置面板、佳明设置页、指标/块引擎（`lib/healthMetrics/**`、`lib/healthBlocks/**`）与服务端抓取管线全部删除，体征/跑步数据改由独立项目 run-track 采集。完整退役前状态可回溯 tag `retire/health`。
+健康子系统**只有数据层**：没有健康统计页、图表配置面板、佳明设置页、指标/块引擎，也没有服务端抓取管线；体征/跑步数据由独立项目 run-track 采集。这是有意的退役，决策、回溯点与被否决的替代方案见 [ADR 0024](../adr/0024-retire-health-subsystem.md)。
 
-**保留不动的是数据层**：上述 6 张表（SQLite + Dexie）、`healthSchemas.ts` / `chartSchemas.ts` 字段 schema、`healthRows.ts` / `chartRows.ts` 行映射、6 个同步域（见 [sync/domain-registry](sync/domain-registry.md)）与 backup bundled 域（见 [backup](backup.md)）。历史数据仍在库里、仍随同步和备份流转，只是不再有 UI 消费。**改这些表/域仍按正常 schema 变更红线走**（见 AGENTS.md「边界 · Schema / 字段变更」）。
+**数据层完整保留**：上述 6 张表（SQLite + Dexie）、`healthSchemas.ts` / `chartSchemas.ts` 字段 schema、`healthRows.ts` / `chartRows.ts` 行映射、6 个同步域（见 [sync/domain-registry](sync/domain-registry.md)）与 backup bundled 域（见 [backup](backup.md)）。历史数据在库里，随同步和备份流转，只是没有 UI 消费。**改这些表/域仍按正常 schema 变更红线走**（见 AGENTS.md「边界 · Schema / 字段变更」）。
 
 服务端辅助表：
 

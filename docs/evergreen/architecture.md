@@ -36,7 +36,7 @@ TimeData 是个人时间记录 PWA：
 - 本地优先：Web 端先写 IndexedDB，再异步同步。
 - 自托管：服务端是 Hono + SQLite，负责最终校验、写入、同步账本和受控 API。
 - 多入口：Web/PWA、CLI、Android WebView；授权 agent 只能经服务端受控 API 写入。
-- 数据域：时间记录、分类/设置、速记、待办、任务轨道、目标层、健康数据（仅数据层，UI 已退役）、统计/洞察、同步、备份。
+- 数据域：时间记录、分类/设置、速记、待办、任务轨道、目标层、健康数据（仅数据层，无 UI）、统计/洞察、同步、备份。
 
 **不做**：多用户、协作、SaaS、复杂权限、AI 直接写 DB 或备份/导出文件。
 
@@ -78,7 +78,7 @@ CLI 写时间记录见 [cli](cli.md) 与 [timeline](timeline.md)；agent 投递�
 
 ### 3.4 统计与终端视图
 
-统计页只读 `timeEntries/categories/settings`，写入仅限 UI 设置。时间统计与洞察见 [stats-insights](stats-insights.md)。健康仪表盘已退役（2026-07-28），由独立项目 run-track 接管，代码见 tag `retire/health`；健康 Dexie 表仍在但无 UI 消费（见 [data-model](data-model.md) §1.1）。
+统计页只读 `timeEntries/categories/settings`，写入仅限 UI 设置。时间统计与洞察见 [stats-insights](stats-insights.md)。**没有健康仪表盘**：健康 Dexie 表只有数据层、无 UI 消费（见 [data-model](data-model.md) §1.1），体征/跑步由独立项目 run-track 承担（决策见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）。
 
 ## 4. 启动顺序
 

@@ -109,6 +109,15 @@ async function waitForText(root: ParentNode, text: string): Promise<void> {
   throw new Error(`Timed out waiting for text: ${text}`);
 }
 
+// 分组标题必须按元素取，不能按「页面文本包含这个词」断言：像「统计」「记录偏好」这类词
+// 同时出现在若干行文案里，包含式断言会被行文案喂饱，分组标题改名甚至整组消失都照样绿。
+// SettingsSection 把标题渲染成 section 的直属 h3（行列表是并列的另一个 div），据此取全集。
+function settingsGroupTitles(html: string): string[] {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  return Array.from(container.querySelectorAll("section > div > h3")).map((node) => node.textContent ?? "");
+}
+
 function buttonByText(root: ParentNode, text: string): HTMLButtonElement {
   const button = Array.from(root.querySelectorAll("button")).find((candidate) => candidate.textContent?.includes(text));
   expect(button).toBeTruthy();
@@ -184,11 +193,8 @@ describe("SettingsPage", () => {
   it("organizes settings into four user-facing groups", () => {
     const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(SettingsPage)));
 
-    for (const label of ["记录偏好", "统计", "导航与界面", "高级与更新"]) {
-      expect(html).toContain(label);
-    }
+    expect(settingsGroupTitles(html)).toEqual(["记录偏好", "统计", "导航与界面", "高级与更新"]);
     expect(html).toContain('href="/settings/insights"');
-    expect(html).toContain("记录偏好");
     expect(html).not.toContain(">杂项<");
   });
 

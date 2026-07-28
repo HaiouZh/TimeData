@@ -138,5 +138,5 @@ SQL `categories`（`db/schema.ts`）：`parent_id` FK → categories(id)，`is_a
 
 ## 深水细节
 
-- **`SettingsStatsLayoutPage` 不归本域**：归 [stats-insights](stats-insights.md)。（原并列的 `SettingsHealthRangePage` 已随健康子系统客户端退役，2026-07-28。）
+- **`SettingsStatsLayoutPage` 不归本域**：归 [stats-insights](stats-insights.md)。设置里没有健康范围页——健康子系统只剩数据层（见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）。
 - **`SettingsInsightsPage` 是跨域宿主**（显示名“记录偏好”，历史路由 `/settings/insights`），归 [stats-insights](stats-insights.md) covers；本域的 `punchCategorySetting` 在该页有编辑 UI，但页面本身不属本域。

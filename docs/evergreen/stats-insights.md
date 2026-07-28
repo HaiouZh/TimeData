@@ -114,7 +114,7 @@ last-reviewed: 2026-07-25
 4. **baseline 只在可见模块声明 `needs.baseline` 时取**；`needs.sleepCategory` 声明但未被 TimeStatsPage 消费。
 5. **布局设置读取时按注册表 sanitize**：防注册表变动后旧设置崩溃（剔除未知 id、补缺失、去重、损坏回退）。
 6. **趋势窗口完全独立于页面周期**：`TrendSection` 用自己的 `trendWindowSpec + today` 解析，不随 mode/anchor；窗口超 baseline 时独立 `useLiveQuery` 兜底。
-7. **`/stats` 下曾有平级的健康统计页**（`stats/health/**` + `HealthStatsPage`），已随健康子系统客户端退役（2026-07-28），由独立项目 run-track 接管，代码见 tag `retire/health`；本域从未收编那批文件，退役不影响 `/stats/time`。
+7. **`/stats` 下只有 `/stats/time` 一个页面**：健康统计页（`stats/health/**` + `HealthStatsPage`）随健康子系统退役（见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）；那批文件从不属于本域 covers，本页不依赖它们。
 8. **时间一律 UTC ISO，本地日桶按 `APP_TIME_ZONE` 切分**：`dailyRollup.ts` 用 `localDateTimeToUtc`；`routine.ts`/`anomalies.ts` 用 `Intl.DateTimeFormat` 带 `APP_TIME_ZONE`。
 9. **会话合并容差 3min、噪声会话下限 1min**（`lib/insights/constants.ts`）。
 10. **统计视觉已按 P3 收口**：统计模块、时间趋势图、`InsightCharts` 已全部 token 化，`P3-stat-health` allowlist 归零；图表 chrome 走 `CHART_CHROME` 镜像、数据序列走用户分类色。新增统计 UI 一律用 token，不写裸 `slate-*`/裸状态色，图表色统一从 `chartColors.ts` 取。

@@ -52,7 +52,7 @@ last-reviewed: 2026-07-10
 
 旧 `track.actionTags.v1` 只作为影子读取来源；新写入继续使用 `track.actionTags.v2`。早期 v2 的 `court` 字段不再作为产品语义消费。server agent context API 与 client 轨道列表使用同一 shared parser 读取该 key，避免看板信号词表在前后端漂移。
 
-`health.range.presets` 已退役（2026-07-28）：健康统计页与 `healthRangeSetting.ts` 随健康子系统客户端一起删除，由独立项目 run-track 接管，代码见 tag `retire/health`。老设备 `settings` 表里可能仍留有这条历史键值，无代码消费，不清理也无副作用。
+`health.range.presets` 不在上表：健康统计页与 `healthRangeSetting.ts` 随健康子系统一起退役（见 [ADR 0024](../../adr/0024-retire-health-subsystem.md)），没有任何代码读写这个 key。老设备 `settings` 表里可能留有这条历史键值，无消费方，不清理也无副作用。
 
 > 本子文档 covers 只含通用基础设施 `lib/settings/index.ts` + 四个本域归属的包装：`desktopSidebarSetting.ts`、`navVisibleTabsSetting.ts`、`punchCategorySetting.ts`、`sleepCategorySetting.ts`（在 `lib/` 非 `lib/settings/` 目录）。其余包装（stats-layout / stats-trend / todo-dest）的 covers 归各自消费域文档，本表只导航。
 
