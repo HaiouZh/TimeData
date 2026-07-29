@@ -58,7 +58,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z,
         <div className="mx-auto mt-2 h-1 w-8 rounded-pill bg-border-strong" aria-hidden="true" />
         {title && (
           <div className="flex items-center justify-between px-4 py-3">
-            <h2 className="text-base text-ink">{title}</h2>
+            <h2 className="td-text-title text-ink">{title}</h2>
             <button type="button" aria-label="关闭" onClick={onClose} className="text-ink-3">
               <Icon icon={X} size={20} />
             </button>

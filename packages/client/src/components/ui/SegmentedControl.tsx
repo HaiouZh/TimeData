@@ -35,7 +35,7 @@ export function SegmentedControl<T extends string>({
             aria-checked={selected}
             disabled={opt.disabled}
             onClick={() => !opt.disabled && onChange(opt.value)}
-            className={`min-h-9 flex-1 rounded-pill px-3 text-sm transition-colors motion-reduce:transition-none disabled:opacity-40 ${
+            className={`min-h-9 flex-1 rounded-pill px-3 td-text-label transition-colors motion-reduce:transition-none disabled:opacity-40 ${
               selected ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
             }`}
           >

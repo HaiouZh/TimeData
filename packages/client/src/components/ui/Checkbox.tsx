@@ -36,7 +36,7 @@ export function Checkbox({ checked, onChange, label, ariaLabel, disabled, classN
       >
         {checked && <Icon icon={Check} size={14} weight="bold" />}
       </span>
-      {label && <span className="text-sm text-ink">{label}</span>}
+      {label && <span className="td-text-label text-ink">{label}</span>}
     </label>
   );
 }

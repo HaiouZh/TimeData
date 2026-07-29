@@ -102,7 +102,7 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
               aria-selected={selected}
               key={option.key}
               onClick={() => onChange(option.value)}
-              className={`wheel-item td-num block w-full snap-center text-center text-base transition-colors ${
+              className={`wheel-item td-num block w-full snap-center text-center transition-colors ${
                 selected ? "font-semibold text-ink" : "text-ink-3"
               }`}
             >

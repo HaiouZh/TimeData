@@ -83,7 +83,7 @@ export function DesktopSidebar() {
                     to={item.to}
                     aria-label={item.ariaLabel}
                     onClick={() => setOpen(false)}
-                    className="flex items-center gap-2 rounded-row px-3 py-2 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink"
+                    className="flex items-center gap-2 rounded-row px-3 py-2 td-text-label text-ink-2 hover:bg-surface-hover hover:text-ink"
                   >
                     <Icon icon={item.icon} size={18} weight="regular" />
                     <span>{item.label}</span>

@@ -54,7 +54,7 @@ function TimeGroup({
 }) {
   return (
     <div className="min-w-0 space-y-1">
-      <div className="text-center text-xs font-medium text-ink-2">{label}</div>
+      <div className="text-center td-text-caption font-medium text-ink-2">{label}</div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
         <Wheel
           ariaLabel={`${label}小时`}
@@ -62,7 +62,7 @@ function TimeGroup({
           options={hourOptions}
           onChange={(hour) => onChange({ ...value, hour })}
         />
-        <span className="td-time text-lg font-semibold text-ink-3">:</span>
+        <span className="td-time wheel-separator font-semibold text-ink-3">:</span>
         <Wheel
           ariaLabel={`${label}分钟`}
           value={value.minute}
@@ -86,8 +86,8 @@ export default function TimeRangeWheelPicker({
       <div
         className={`rounded-xl px-3 py-2 text-center ${error ? "bg-danger-soft text-danger" : "bg-page text-ink"}`}
       >
-        <div className="text-xs text-ink-3">本次记录时长</div>
-        <div className={`text-lg font-semibold ${error ? "" : "td-duration"}`}>
+        <div className="td-text-caption text-ink-3">本次记录时长</div>
+        <div className={`td-text-title font-semibold ${error ? "" : "td-duration"}`}>
           {error || formatRangeDuration(start, end)}
         </div>
       </div>

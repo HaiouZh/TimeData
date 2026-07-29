@@ -25,19 +25,19 @@ export function ConfirmSheet({
   return (
     <Sheet open={open} onClose={onCancel} title={title}>
       <div className="space-y-4 px-4 pb-4">
-        <div className="whitespace-pre-line text-sm text-ink-2">{body}</div>
+        <div className="whitespace-pre-line td-text-body text-ink-2">{body}</div>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-11 rounded-ctl border border-border px-4 text-sm text-ink"
+            className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-ink"
           >
             {cancelLabel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={`min-h-11 rounded-ctl px-4 text-sm text-page ${danger ? "bg-danger" : "bg-accent-strong"}`}
+            className={`min-h-11 rounded-ctl px-4 td-text-label text-page ${danger ? "bg-danger" : "bg-accent-strong"}`}
           >
             {confirmLabel}
           </button>

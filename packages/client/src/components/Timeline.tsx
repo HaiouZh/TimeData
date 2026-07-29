@@ -34,12 +34,12 @@ export default function Timeline({ slots, onGapClick, onEntryClick, highlight }:
     .reverse();
 
   if (displaySlots.length === 0) {
-    return <div className="px-4 py-10 text-center text-sm text-ink-2">今天还没有记录</div>;
+    return <div className="px-4 py-10 text-center td-text-body text-ink-2">今天还没有记录</div>;
   }
 
   return (
     <section className="px-4 pb-2 pt-4">
-      <h2 className="mb-1.5 px-0.5 text-xs font-medium text-ink-3">时间流</h2>
+      <h2 className="mb-1.5 px-0.5 td-text-caption font-medium text-ink-3">时间流</h2>
       {displaySlots.map((slot) => {
         const slotKey = slot.entry
           ? `entry-${slot.entry.id}-${slot.startTime}-${slot.endTime}`

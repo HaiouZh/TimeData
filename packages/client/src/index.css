@@ -300,6 +300,14 @@ details[open] > summary .ts-collapse-caret {
   .wheel-item {
     height: var(--wheel-item-height);
   }
+  /* 转盘数字与其分隔符的字号也是转盘几何的一部分（要贴着 34px 行高读），落在
+     td-text-body(0.9375rem) 与 td-text-title(1.25rem) 之间，故随几何一起定。 */
+  .wheel-item {
+    font-size: 1rem;
+  }
+  .wheel-separator {
+    font-size: 1.125rem;
+  }
 
   /* 环形时间轴：正方形表盘的宽度上限，超过后表盘刻度过疏。 */
   .circular-timeline-frame {

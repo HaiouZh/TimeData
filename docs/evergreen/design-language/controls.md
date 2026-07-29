@@ -47,6 +47,18 @@ last-reviewed: 2026-07-29
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
+### 控件排版档
+
+控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [design-language](../design-language.md) §3）。档位分工：
+
+| 用途 | 档 |
+|---|---|
+| 控件标签、选项行、trigger 显示值、按钮文字 | `td-text-label` |
+| 成段正文（`ConfirmSheet` 的 `body`）、空态文案 | `td-text-body` |
+| `Sheet` 标题（`title` 渲染的 `<h2>`） | `td-text-title` |
+
+**`input` / `textarea` / `select` 上不加任何字号类**：`index.css` 顶层的 `input,select,textarea { font-size: 16px }` 是 iOS 聚焦防缩放兜底（字号 <16px 时 Safari 会自动放大视口）。它是元素选择器，而 `.td-text-*` 是类选择器、特异性更高，加上去会盖掉兜底并让聚焦时整页放大回归。这类元素上的字号声明本就不生效，正确做法是不写。
+
 ## 2. 图标（`components/Icon.tsx` → Phosphor）
 
 - 全站图标走 `@phosphor-icons/react`，统一经 `components/Icon.tsx` 包装。
