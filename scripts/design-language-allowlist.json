@@ -506,22 +506,6 @@
       "removeBy": "typography-migration"
     },
     {
-      "file": "packages/client/src/components/DateNav.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"td-time text-lg font-medium text-ink\">{formatMonthDay(date)}</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/DateNav.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"ml-2 text-sm text-ink-2\">{isToday ? \"今天\" : weekday}</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
       "file": "packages/client/src/components/EntryForm.tsx",
       "rule": "bare-text-size",
       "lineText": "<label className=\"text-sm text-ink-2\">分类</label>",
@@ -581,30 +565,6 @@
       "file": "packages/client/src/components/EntryForm.tsx",
       "rule": "bare-text-size",
       "lineText": "className=\"w-full rounded-xl bg-danger-soft py-3 text-sm font-medium text-danger hover:bg-danger-soft/80\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/MonthCalendar.tsx",
-      "rule": "bare-text-size",
-      "lineText": "\"td-num flex aspect-square min-h-9 w-full items-center justify-center rounded-lg border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent\";",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/MonthCalendar.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"td-time text-sm font-semibold text-ink\">{monthLabel(year, month)}</div>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/components/MonthCalendar.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<div className=\"grid grid-cols-7 gap-1 text-center text-xs font-medium text-ink-3\">",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
@@ -1269,22 +1229,6 @@
       "file": "packages/client/src/pages/QuickNotesPage.tsx",
       "rule": "bare-text-size",
       "lineText": "<span className=\"rounded-full border border-border-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/QuickNotesPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"hidden text-[11px] text-ink-3 sm:block\">日期</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/QuickNotesPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm\"",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
@@ -2252,22 +2196,6 @@
     {
       "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<label className=\"space-y-1 text-xs text-ink-2\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<label className=\"space-y-1 text-xs text-ink-2\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsDataPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<div className=\"text-xs text-ink-3\">删除前请先导出需要保留的内容。</div>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -2476,31 +2404,7 @@
     {
       "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "<span className=\"text-xs text-ink-3\">抓取时间 (HH:MM)</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<span className=\"text-xs text-ink-3\">首次回填天数</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
@@ -2533,30 +2437,6 @@
       "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
       "rule": "bare-text-size",
       "lineText": "<h3 className=\"text-sm font-medium uppercase tracking-wider text-ink-3\">",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"text-xs text-ink-3\">开始日期</span>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "<span className=\"text-xs text-ink-3\">结束日期</span>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
@@ -3340,22 +3220,6 @@
     {
       "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
       "rule": "bare-text-size",
-      "lineText": "className=\"min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/stats/modules/TrendSection.tsx",
-      "rule": "bare-text-size",
       "lineText": "<div className=\"text-xs text-ink-3\">",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -3484,14 +3348,6 @@
     {
       "file": "packages/client/src/pages/TimeStatsPage.tsx",
       "rule": "bare-text-size",
-      "lineText": "className=\"mt-1 w-full bg-transparent text-sm text-ink-2 outline-none [color-scheme:dark]\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/TimeStatsPage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<div className=\"text-xs font-medium text-ink-2\">已记录</div>",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
@@ -3612,23 +3468,7 @@
     {
       "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
       "rule": "bare-text-size",
-      "lineText": "className=\"min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent\"",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-text-size",
       "lineText": "<div className=\"text-xs font-medium text-ink-3\">时间</div>",
-      "reason": "字号语义类迁移前的存量裸字号",
-      "ownerBatch": "typography-debt",
-      "removeBy": "typography-migration"
-    },
-    {
-      "file": "packages/client/src/pages/todo/CustomRecurrencePage.tsx",
-      "rule": "bare-text-size",
-      "lineText": "className=\"min-h-11 rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent\"",
       "reason": "字号语义类迁移前的存量裸字号",
       "ownerBatch": "typography-debt",
       "removeBy": "typography-migration"
@@ -4068,14 +3908,6 @@
     {
       "file": "packages/client/src/pages/QuickNotesPage.tsx",
       "rule": "bare-arbitrary-value",
-      "lineText": "className=\"td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm\"",
-      "reason": "任意值收口前的存量裸尺寸/间距值",
-      "ownerBatch": "arbitrary-value-debt",
-      "removeBy": "arbitrary-cleanup"
-    },
-    {
-      "file": "packages/client/src/pages/QuickNotesPage.tsx",
-      "rule": "bare-arbitrary-value",
       "lineText": "className={`fixed left-1/2 top-[4.75rem] z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${",
       "reason": "任意值收口前的存量裸尺寸/间距值",
       "ownerBatch": "arbitrary-value-debt",
@@ -4085,22 +3917,6 @@
       "file": "packages/client/src/pages/settings/SettingsAdminInsightsPage.tsx",
       "rule": "bare-arbitrary-value",
       "lineText": "<label className=\"flex min-w-[9rem] flex-1 flex-col gap-1 text-xs text-ink-3\">",
-      "reason": "任意值收口前的存量裸尺寸/间距值",
-      "ownerBatch": "arbitrary-value-debt",
-      "removeBy": "arbitrary-cleanup"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-arbitrary-value",
-      "lineText": "<label className=\"block min-w-[9rem] flex-1\">",
-      "reason": "任意值收口前的存量裸尺寸/间距值",
-      "ownerBatch": "arbitrary-value-debt",
-      "removeBy": "arbitrary-cleanup"
-    },
-    {
-      "file": "packages/client/src/pages/settings/SettingsGarminPage.tsx",
-      "rule": "bare-arbitrary-value",
-      "lineText": "<label className=\"block min-w-[9rem] flex-1\">",
       "reason": "任意值收口前的存量裸尺寸/间距值",
       "ownerBatch": "arbitrary-value-debt",
       "removeBy": "arbitrary-cleanup"

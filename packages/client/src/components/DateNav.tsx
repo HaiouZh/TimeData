@@ -1,6 +1,7 @@
-import { CalendarBlank, CaretLeft, CaretRight, MagnifyingGlass } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, MagnifyingGlass } from "@phosphor-icons/react";
 import { addDays, formatMonthDay, formatWeekday, getDateString } from "../lib/time.ts";
 import { Icon } from "./Icon.js";
+import { DateField } from "./ui/DateField.js";
 
 interface DateNavProps {
   date: string;
@@ -21,32 +22,22 @@ export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) 
       <button onClick={() => onDateChange(addDays(date, -1))} className={arrowClass} aria-label="前一天">
         <Icon icon={CaretLeft} size={18} />
       </button>
-      <div className="relative rounded-lg px-2 py-1 text-center focus-within:ring-2 focus-within:ring-accent">
-        <span className="td-time text-lg font-medium text-ink">{formatMonthDay(date)}</span>
-        <span className="ml-2 text-sm text-ink-2">{isToday ? "今天" : weekday}</span>
-        <span data-calendar-hint="true" className="ml-1.5 inline-flex align-middle text-ink-3">
-          <Icon icon={CalendarBlank} size={14} />
-        </span>
-        <input
-          type="date"
+      <div className="min-w-0 flex-1 px-2">
+        <DateField
           value={date}
           max={today}
-          onChange={(event) => {
-            if (event.target.value) onDateChange(event.target.value);
+          ariaLabel="选择日期"
+          onChange={(next) => {
+            if (next) onDateChange(next);
           }}
-          onClick={(event) => {
-            // 桌面端点击文本区不会自动弹出，主动调起；移动端原生聚焦已会弹出。
-            const input = event.currentTarget;
-            if (typeof input.showPicker === "function") {
-              try {
-                input.showPicker();
-              } catch {
-                // 需用户手势或环境不支持时忽略，回退到原生聚焦行为
-              }
-            }
-          }}
-          aria-label="选择日期"
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          portal
+          className="justify-center border-0 bg-transparent px-2 py-1 text-center shadow-none hover:bg-surface-hover"
+          formatValue={(value) => (
+            <>
+              <span className="td-time td-text-title font-medium text-ink">{formatMonthDay(value)}</span>
+              <span className="ml-2 td-text-label text-ink-2">{isToday ? "今天" : weekday}</span>
+            </>
+          )}
         />
       </div>
       <div className="flex items-center">

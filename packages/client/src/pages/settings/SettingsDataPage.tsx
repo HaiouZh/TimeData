@@ -7,6 +7,7 @@ import { downloadBackupFile } from "../../backup/fileDownload.ts";
 import { importBackup } from "../../backup/importBackup.ts";
 import { validateBackup } from "../../backup/validateBackup.ts";
 import { Checkbox } from "../../components/ui/Checkbox.js";
+import { DateField } from "../../components/ui/DateField.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { resetLocalDataToDefaults } from "../../db/index.ts";
@@ -33,7 +34,6 @@ const warnButtonClassName =
 const dangerButtonClassName =
   "rounded-ctl bg-danger px-4 py-2 text-sm text-page hover:bg-danger/80 disabled:opacity-40";
 const inputClassName = "w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-sm text-ink";
-
 export default function SettingsDataPage() {
   const {
     syncing,
@@ -415,24 +415,26 @@ export default function SettingsDataPage() {
         <h3 className="text-sm font-medium text-ink-2">速记数据</h3>
         <div className="text-xs text-ink-3">只处理速记，不影响时间记录。</div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="space-y-1 text-xs text-ink-2">
-            开始日期
-            <input
-              type="date"
+          <div className="space-y-1 td-text-caption text-ink-2">
+            <div>开始日期</div>
+            <DateField
               value={quickNotesFromDate}
-              onChange={(e) => setQuickNotesFromDate(e.target.value)}
-              className={inputClassName}
+              ariaLabel="导出起始日期"
+              onChange={(next) => {
+                if (next) setQuickNotesFromDate(next);
+              }}
             />
-          </label>
-          <label className="space-y-1 text-xs text-ink-2">
-            结束日期
-            <input
-              type="date"
+          </div>
+          <div className="space-y-1 text-xs text-ink-2">
+            <div>结束日期</div>
+            <DateField
               value={quickNotesToDate}
-              onChange={(e) => setQuickNotesToDate(e.target.value)}
-              className={inputClassName}
+              ariaLabel="导出结束日期"
+              onChange={(next) => {
+                if (next) setQuickNotesToDate(next);
+              }}
             />
-          </label>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -505,7 +507,7 @@ export default function SettingsDataPage() {
               {healthLoading ? "诊断中…" : "检查本地与云端状态"}
             </button>
             {healthReport && (
-              <div className="space-y-1 text-xs text-ink-2">
+              <div className="space-y-1 td-text-caption text-ink-2">
                 <div>
                   本地：{healthReport.local.categoryCount} 个分类，{healthReport.local.entryCount} 条记录，未同步{" "}
                   {healthReport.local.unsyncedCount} 条，速记 {healthReport.local.quickNoteCount} 条。

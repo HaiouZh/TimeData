@@ -2,7 +2,7 @@ import { CaretRight, Check } from "@phosphor-icons/react";
 import type { Recurrence } from "@timedata/shared";
 import { useState } from "react";
 import { Icon } from "../../components/Icon.js";
-import MonthCalendar from "../../components/MonthCalendar.js";
+import MonthCalendar from "../../components/ui/MonthCalendar.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import {
   buildPresetRows,

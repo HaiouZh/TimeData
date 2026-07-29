@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Checkbox } from "../../components/ui/Checkbox.js";
+import { DateField } from "../../components/ui/DateField.js";
 import { Switch } from "../../components/ui/Switch.js";
+import { TimeField } from "../../components/ui/TimeField.js";
 import { useSyncContext } from "../../contexts/SyncContext.tsx";
 import { STORAGE_KEYS } from "../../lib/storageKeys.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
@@ -380,15 +382,16 @@ export default function SettingsGarminPage() {
                 <Switch ariaLabel="启用每日定时抓取" checked={enabled} onChange={setEnabled} />
               </label>
               {enabled && (
-                <label className="block">
-                  <span className="text-xs text-ink-3">抓取时间 (HH:MM)</span>
-                  <input
-                    type="time"
-                    value={schedule}
-                    onChange={(e) => setSchedule(e.target.value)}
-                    className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+                <div className="block">
+                  <div className="td-text-caption text-ink-3">抓取时间 (HH:MM)</div>
+                  <TimeField
+                    value={schedule || null}
+                    ariaLabel="Garmin 同步时间"
+                    clearable
+                    className="mt-1"
+                    onChange={(next) => setSchedule(next ?? "")}
                   />
-                </label>
+                </div>
               )}
               <label className="block">
                 <span className="text-xs text-ink-3">首次回填天数</span>
@@ -435,24 +438,26 @@ export default function SettingsGarminPage() {
               手动抓取
             </h3>
             <div className="flex flex-wrap gap-3 rounded-card border border-border bg-surface p-4">
-              <label className="block min-w-[9rem] flex-1">
-                <span className="text-xs text-ink-3">开始日期</span>
-                <input
-                  type="date"
-                  value={fetchStartDate}
-                  onChange={(e) => setFetchStartDate(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+              <div className="block min-w-36 flex-1">
+                <div className="td-text-caption text-ink-3">开始日期</div>
+                <DateField
+                  value={fetchStartDate || null}
+                  ariaLabel="Garmin 手动抓取开始日期"
+                  clearable
+                  className="mt-1"
+                  onChange={(next) => setFetchStartDate(next ?? "")}
                 />
-              </label>
-              <label className="block min-w-[9rem] flex-1">
-                <span className="text-xs text-ink-3">结束日期</span>
-                <input
-                  type="date"
-                  value={fetchEndDate}
-                  onChange={(e) => setFetchEndDate(e.target.value)}
-                  className="mt-1 block w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
+              </div>
+              <div className="block min-w-36 flex-1">
+                <div className="td-text-caption text-ink-3">结束日期</div>
+                <DateField
+                  value={fetchEndDate || null}
+                  ariaLabel="Garmin 手动抓取结束日期"
+                  clearable
+                  className="mt-1"
+                  onChange={(next) => setFetchEndDate(next ?? "")}
                 />
-              </label>
+              </div>
               <label className="block min-w-[9rem] flex-1">
                 <span className="text-xs text-ink-3">强制重抓最近 N 天</span>
                 <input

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderDom } from "../test/domHarness.js";
+import { click, renderDom } from "../test/domHarness.js";
 import DateNav from "./DateNav.js";
 
 async function mount(date: string, onDateChange: (next: string) => void): Promise<HTMLElement> {
@@ -13,11 +13,6 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll("button")).find((b) => b.getAttribute("aria-label") === label);
   if (!button) throw new Error(`button with aria-label "${label}" not found`);
   return button as HTMLButtonElement;
-}
-
-function setNativeValue(input: HTMLInputElement, value: string): void {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-  setter?.call(input, value);
 }
 
 describe("DateNav", () => {
@@ -45,18 +40,27 @@ describe("DateNav", () => {
     expect(onDateChange).toHaveBeenCalledWith("2026-06-02");
   });
 
-  it("exposes a date picker capped at today and jumps to the picked date", async () => {
+  it("exposes DateField capped at today and jumps to the picked date", async () => {
     const onDateChange = vi.fn();
     const container = await mount("2026-05-20", onDateChange);
-    const input = container.querySelector('input[type="date"]') as HTMLInputElement | null;
-    if (!input) throw new Error("date input not found");
-    expect(input.getAttribute("max")).toBe("2026-06-03");
+    expect(container.querySelector('input[type="date"]')).toBeNull();
 
-    act(() => {
-      setNativeValue(input, "2026-01-15");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    expect(onDateChange).toHaveBeenCalledWith("2026-01-15");
+    await click(findButton(container, "选择日期"));
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("选择日期");
+
+    await click(document.body.querySelector('button[aria-label="2026-05-15"]'));
+    expect(onDateChange).toHaveBeenCalledWith("2026-05-15");
+  });
+
+  it("DateField caps future days at today", async () => {
+    const container = await mount("2026-05-20", vi.fn());
+
+    await click(findButton(container, "选择日期"));
+    await click(document.body.querySelector('button[aria-label="下个月"]'));
+
+    expect((document.body.querySelector('button[aria-label="2026-06-03"]') as HTMLButtonElement | null)?.disabled).toBe(false);
+    expect((document.body.querySelector('button[aria-label="2026-06-04"]') as HTMLButtonElement | null)?.disabled).toBe(true);
   });
 
   it("非今天时显示回到今天 pill，点击回今天", async () => {
@@ -77,9 +81,9 @@ describe("DateNav", () => {
     expect(todayContainer.textContent).not.toContain("回到今天");
   });
 
-  it("日期文字带日历图标线索", async () => {
+  it("日期文字作为 DateField 按钮入口", async () => {
     const container = await mount("2026-01-15", () => {});
-    expect(container.querySelector('[data-calendar-hint="true"]')).not.toBeNull();
+    expect(findButton(container, "选择日期").textContent).toContain("1月15日");
   });
 
   it("传入 onSearch 时渲染搜索按钮并回调", async () => {

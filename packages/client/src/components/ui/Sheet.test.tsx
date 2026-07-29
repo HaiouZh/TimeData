@@ -6,12 +6,21 @@ import { Sheet } from "./Sheet.js";
 
 afterEach(() => vi.restoreAllMocks());
 
+function dialog(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>('[role="dialog"]');
+}
+
+function overlay(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>(".sheet-overlay");
+}
+
 describe("Sheet", () => {
   it("open=false 不渲染", async () => {
     const { host, root } = await renderDom(
       createElement(Sheet, { open: false, onClose: () => {}, title: "标题" }, "内容"),
     );
     expect(host.querySelector('[role="dialog"]')).toBeNull();
+    expect(dialog()).toBeNull();
     await unmount(root);
   });
 
@@ -19,10 +28,25 @@ describe("Sheet", () => {
     const { host, root } = await renderDom(
       createElement(Sheet, { open: true, onClose: () => {}, title: "选择分类" }, "正文"),
     );
-    const dialog = host.querySelector('[role="dialog"]');
-    expect(dialog?.getAttribute("aria-modal")).toBe("true");
-    expect(dialog?.getAttribute("aria-label")).toBe("选择分类");
+    const localDialog = host.querySelector('[role="dialog"]');
+    expect(localDialog?.getAttribute("aria-modal")).toBe("true");
+    expect(localDialog?.getAttribute("aria-label")).toBe("选择分类");
     expect(host.textContent).toContain("正文");
+    await unmount(root);
+  });
+
+  it("portal=true 时不受带 transform 的父容器定位影响", async () => {
+    const { host, root } = await renderDom(
+      createElement(
+        "div",
+        { style: { transform: "translateX(-50%)" }, "data-testid": "transformed-parent" },
+        createElement(Sheet, { open: true, onClose: () => {}, title: "选择日期", portal: true }, "正文"),
+      ),
+    );
+
+    const parent = host.querySelector('[data-testid="transformed-parent"]');
+    expect(parent?.querySelector('[role="dialog"]')).toBeNull();
+    expect(dialog()?.getAttribute("aria-label")).toBe("选择日期");
     await unmount(root);
   });
 

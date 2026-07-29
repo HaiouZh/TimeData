@@ -1,6 +1,7 @@
 import { UNCATEGORIZED_COLOR, localDateTimeToUtc } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
+import { DateField } from "../../../components/ui/DateField.js";
 import { db } from "../../../db/index.ts";
 import { memoTrend } from "../../../lib/insights/cache.ts";
 import { type ParentTrend, type TrendPoint, resolveTrendWindow } from "../../../lib/insights/trends.ts";
@@ -120,33 +121,31 @@ export default function TrendSection(props: StatsModuleProps) {
           className="min-h-10 w-28 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
         />
         <span className="text-xs text-ink-3">或</span>
-        <input
-          type="date"
+        <DateField
           max={props.today}
-          aria-label="趋势起始日"
-          value={trendWindowSpec.kind === "customRange" ? trendWindowSpec.from : ""}
-          onChange={(event) => {
-            const from = event.target.value;
+          ariaLabel="趋势起始日"
+          value={trendWindowSpec.kind === "customRange" ? trendWindowSpec.from : null}
+          onChange={(from) => {
             if (from) {
               const to = trendWindowSpec.kind === "customRange" ? trendWindowSpec.to : props.today;
               setWindow({ kind: "customRange", from, to: to < from ? from : to });
             }
           }}
-          className="min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
+          placeholder="起始日"
+          className="min-h-10 rounded-full bg-surface-elevated px-3 td-text-caption text-ink-2"
         />
-        <input
-          type="date"
+        <DateField
           max={props.today}
-          aria-label="趋势结束日"
-          value={trendWindowSpec.kind === "customRange" ? trendWindowSpec.to : ""}
-          onChange={(event) => {
-            const to = event.target.value;
+          ariaLabel="趋势结束日"
+          value={trendWindowSpec.kind === "customRange" ? trendWindowSpec.to : null}
+          onChange={(to) => {
             if (to) {
               const from = trendWindowSpec.kind === "customRange" ? trendWindowSpec.from : to;
               setWindow({ kind: "customRange", from: from > to ? to : from, to });
             }
           }}
-          className="min-h-10 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
+          placeholder="结束日"
+          className="min-h-10 rounded-full bg-surface-elevated px-3 td-text-caption text-ink-2"
         />
       </div>
 

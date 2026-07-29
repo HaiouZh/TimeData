@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import type { Recurrence } from "@timedata/shared";
 import { Check } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
-import MonthCalendar from "../../components/MonthCalendar.js";
+import { DateField } from "../../components/ui/DateField.js";
+import { MonthCalendar } from "../../components/ui/MonthCalendar.js";
+import { TimeField } from "../../components/ui/TimeField.js";
 import Wheel from "../../components/Wheel.js";
 import {
   customToRecurrence,
@@ -158,12 +160,13 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
             />
           )}
           {draft.endMode === "until" && (
-            <input
-              type="date"
-              aria-label="结束日期"
+            <DateField
               value={draft.until ?? draft.start}
-              onChange={(event) => patch({ until: event.currentTarget.value })}
-              className="min-h-11 w-full rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
+              min={draft.start}
+              ariaLabel="结束日期"
+              onChange={(next) => {
+                if (next) patch({ until: next });
+              }}
             />
           )}
         </section>
@@ -179,12 +182,11 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
             >
               无
             </button>
-            <input
-              type="time"
-              aria-label="重复时间"
-              value={draft.time ?? ""}
-              onChange={(event) => patch({ time: event.currentTarget.value || undefined })}
-              className="min-h-11 rounded-xl border border-border bg-surface px-3 text-sm text-ink outline-none focus:border-accent"
+            <TimeField
+              value={draft.time ?? null}
+              ariaLabel="重复时间"
+              clearable
+              onChange={(next) => patch({ time: next ?? undefined })}
             />
           </div>
         </section>

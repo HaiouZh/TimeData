@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDateString } from "../lib/time.ts";
-import { renderDom, unmount } from "../test/domHarness.js";
+import { click, renderDom, unmount } from "../test/domHarness.js";
 import TimeStatsPage from "./TimeStatsPage.js";
 
 const categoriesState = vi.hoisted(() => ({
@@ -80,6 +80,25 @@ vi.mock("../hooks/useCategories.ts", () => ({
     parentCategories: categoriesState.categories.filter((category) => category.parentId === null),
   }),
 }));
+
+function buttonByLabel(host: HTMLElement, label: string): HTMLButtonElement | null {
+  return host.querySelector(`button[aria-label="${label}"]`);
+}
+
+async function pickStatsDate(host: HTMLElement, date: string): Promise<void> {
+  await click(buttonByLabel(host, "选择统计日期"));
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const target = buttonByLabel(host, date);
+    if (target) {
+      await click(target);
+      return;
+    }
+    await click(buttonByLabel(host, "上个月"));
+  }
+
+  throw new Error(`date button ${date} not found`);
+}
 
 describe("TimeStatsPage", () => {
   beforeEach(() => {
@@ -229,15 +248,7 @@ describe("TimeStatsPage", () => {
     await act(async () => {
       dayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    const dateInput = host.querySelector('input[type="date"]') as HTMLInputElement | null;
-    // React 受控 input：直接设 .value 不会被 React 的 onChange 识别，需用原型 setter 再派发 change。
-    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-    await act(async () => {
-      if (dateInput && nativeValueSetter) {
-        nativeValueSetter.call(dateInput, "2026-05-08");
-        dateInput.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
+    await pickStatsDate(host, "2026-05-08");
 
     // 异常区出现超长记录文案
     expect(host.textContent).toContain("疑似忘停");
@@ -309,14 +320,7 @@ describe("TimeStatsPage", () => {
     await act(async () => {
       dayButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    const dateInput = host.querySelector('input[type="date"]') as HTMLInputElement | null;
-    const nativeValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-    await act(async () => {
-      if (dateInput && nativeValueSetter) {
-        nativeValueSetter.call(dateInput, "2026-05-08");
-        dateInput.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
+    await pickStatsDate(host, "2026-05-08");
 
     expect(host.textContent).toContain("总览");
     expect(host.textContent).toContain("记录覆盖率");

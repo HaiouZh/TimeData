@@ -13,6 +13,8 @@ const PATTERNS = [
   { re: /<select[\s>]/, msg: "原生 <select>（用 SelectSheet / SegmentedControl）" },
   { re: /type=["']checkbox["']/, msg: 'type="checkbox"（用 Checkbox / Switch）' },
   { re: /type=["']radio["']/, msg: 'type="radio"（用 SegmentedControl）' },
+  { re: /type\s*=\s*(?:["']date["']|{\s*["']date["']\s*})/, msg: 'type="date"（用 DateField）' },
+  { re: /type\s*=\s*(?:["']time["']|{\s*["']time["']\s*})/, msg: 'type="time"（用 TimeField）' },
   { re: /window\.confirm\(/, msg: "window.confirm（用 useConfirm）" },
   { re: /window\.alert\(/, msg: "window.alert（用轻提示 / ConfirmSheet）" },
 ];
@@ -42,4 +44,4 @@ if (violations.length > 0) {
   console.error(`✗ 发现原生表单控件（Phase 1 棘轮闸）：\n${violations.join("\n")}`);
   process.exit(1);
 }
-console.log("✓ 无原生表单控件（select/checkbox/radio/confirm/alert）");
+console.log("✓ 无原生表单控件（select/checkbox/radio/date/time/confirm/alert）");

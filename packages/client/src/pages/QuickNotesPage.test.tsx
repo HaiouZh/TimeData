@@ -371,7 +371,7 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
-  it("exposes a native date input on the floating scroll date chip", async () => {
+  it("浮动日期气泡使用自绘日期选择器", async () => {
     await db.quickNotes.bulkAdd([
       {
         id: "first-day",
@@ -411,11 +411,24 @@ describe("QuickNotesPage", () => {
       list.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
     await flush();
+    const floatingDateButton = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+      button.getAttribute("aria-label")?.includes("点击选择日期"),
+    );
+    expect(floatingDateButton).toBeInstanceOf(HTMLButtonElement);
+    expect(host.querySelector('input[type="date"]')).toBeNull();
 
-    const floatingDateInput = host.querySelector('input[aria-label="选择当前浮层日期"]');
-    expect(floatingDateInput).toBeInstanceOf(HTMLInputElement);
-    expect((floatingDateInput as HTMLInputElement).type).toBe("date");
-    expect((floatingDateInput as HTMLInputElement).value).toBe("2026-06-02");
+    await act(async () => {
+      floatingDateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    expect(document.body.querySelector('button[aria-label="2026-06-02"]')?.getAttribute("aria-pressed")).toBe("true");
 
     vi.unstubAllGlobals();
     await unmount(root);
@@ -951,6 +964,19 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
+  it("顶部日期选择器跳转到选中的日期", async () => {
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-20");
+
+    const dateButton = host.querySelector('button[aria-label="跳转日期"]');
+    if (!(dateButton instanceof HTMLButtonElement)) throw new Error("missing jump date button");
+    await click(dateButton);
+    await click(document.body.querySelector('button[aria-label="2026-06-01"]'));
+    await flush();
+
+    expect(host.querySelector('[data-testid="date-param"]')?.textContent).toBe("2026-06-01");
+    await unmount(root);
+  });
+
   it("退出搜索后 jumpDate 与 URL 归位到今天", async () => {
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
     try {
@@ -1482,16 +1508,7 @@ describe("QuickNotesPage", () => {
       createdAt: "2026-06-20T04:00:00.000Z",
       updatedAt: "2026-06-20T04:00:00.000Z",
     });
-    const { host, root } = await renderPage();
-
-    const dateInput = host.querySelector('input[aria-label="跳转日期"]');
-    if (!(dateInput instanceof HTMLInputElement)) throw new Error("missing jump date input");
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(dateInput, "2026-06-01");
-      dateInput.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await flush();
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
 
     await typeInto(input(host), "在历史里记一条");
     await click(composerButton(host, "记录速记"));

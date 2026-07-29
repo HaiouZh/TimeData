@@ -25,6 +25,7 @@ import {
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { ActionToastBar } from "../components/ui/ActionToastBar.tsx";
+import { DateField } from "../components/ui/DateField.js";
 import { BOTTOM_NAV_HEIGHT_PX, useBottomNav } from "../contexts/BottomNavContext.tsx";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
@@ -131,6 +132,7 @@ export default function QuickNotesPage() {
   const [atBottom, setAtBottom] = useState(true);
   const [bubbleDate, setBubbleDate] = useState<{ label: string; localDate: string } | null>(null);
   const [bubbleVisible, setBubbleVisible] = useState(false);
+  const [bubbleDatePickerOpen, setBubbleDatePickerOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -144,7 +146,6 @@ export default function QuickNotesPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const composeDraftRef = useRef("");
   // 进入编辑时快照被编辑那条的原文，用来判「用户改过没」。
   // 故意用进入编辑时的快照而不是当前库里的值：编辑期间那条被另一台设备改了而用户没动，
@@ -1124,17 +1125,18 @@ export default function QuickNotesPage() {
                 </span>
               )}
             </div>
-            <label className="flex items-center gap-1 rounded-xl border border-border bg-surface px-2 py-1 text-right shadow-sm sm:rounded-card sm:px-3 sm:py-2">
-              <span className="hidden text-[11px] text-ink-3 sm:block">日期</span>
-              <input
-                ref={dateInputRef}
-                type="date"
-                aria-label="跳转日期"
+            <div className="w-36 shrink-0 sm:w-44">
+              <DateField
                 value={jumpDate}
-                onChange={(event) => handleJumpDateChange(event.target.value)}
-                className="td-time w-[7.5rem] bg-transparent text-xs font-medium text-ink outline-none [color-scheme:dark] sm:mt-0.5 sm:w-36 sm:text-sm"
+                ariaLabel="跳转日期"
+                onChange={(next) => {
+                  if (next) handleJumpDateChange(next);
+                }}
+                portal
+                className="min-h-9 rounded-card border-border bg-surface px-2 py-1 shadow-elev1 td-text-caption sm:min-h-11 sm:px-3 sm:py-2"
+                formatValue={(value) => <span className="td-time font-medium">{value}</span>}
               />
-            </label>
+            </div>
 
             <Link
               to="/diary"
@@ -1430,21 +1432,23 @@ export default function QuickNotesPage() {
       </section>
 
       {bubbleDate && !pinnedOpen && !searchOpen && (
-        <label
-          aria-label={`当前日期 ${bubbleDate.label}，点击选择日期`}
+        <div
           className={`fixed left-1/2 top-[4.75rem] z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
-            bubbleVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+            bubbleVisible || bubbleDatePickerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
           }`}
         >
-          <span aria-hidden="true">{bubbleDate.label}</span>
-          <input
-            type="date"
-            aria-label="选择当前浮层日期"
+          <DateField
             value={bubbleDate.localDate}
-            onChange={(event) => handleJumpDateChange(event.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [color-scheme:dark]"
+            ariaLabel={`当前日期 ${bubbleDate.label}，点击选择日期`}
+            onChange={(next) => {
+              if (next) handleJumpDateChange(next);
+            }}
+            onOpenChange={setBubbleDatePickerOpen}
+            portal
+            className="min-h-0 rounded-full border-0 bg-transparent p-0 td-text-caption font-medium text-ink-2 shadow-none hover:bg-transparent"
+            formatValue={() => <span>{bubbleDate.label}</span>}
           />
-        </label>
+        </div>
       )}
 
       {!searchOpen && shouldShowJumpToLatest({ atBottom, atLatest: timeline.atLatest }) && (

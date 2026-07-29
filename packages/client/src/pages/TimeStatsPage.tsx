@@ -4,6 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../components/Icon.js";
+import { DateField } from "../components/ui/DateField.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { memoOverview } from "../lib/insights/cache.ts";
@@ -198,18 +199,18 @@ export default function TimeStatsPage() {
           >
             <Icon icon={CaretLeft} size={18} />
           </button>
-          <label className="min-w-0 flex-1 rounded-row border border-border bg-surface-elevated px-3 py-2">
+          <div className="min-w-0 flex-1 rounded-row border border-border bg-surface-elevated px-3 py-2">
             <span className="block truncate text-sm font-medium text-ink">{rangeLabel}</span>
-            <input
-              type="date"
+            <DateField
               value={statsRange.fromDate}
+              ariaLabel="选择统计日期"
               max={today}
-              onChange={(event) => {
-                if (event.target.value) setAnchor(event.target.value);
+              onChange={(next) => {
+                if (next) setAnchor(next);
               }}
-              className="mt-1 w-full bg-transparent text-sm text-ink-2 outline-none [color-scheme:dark]"
+              className="mt-1 min-h-9 rounded-ctl border-0 bg-transparent px-0 py-0 td-text-label text-ink-2 shadow-none hover:bg-transparent"
             />
-          </label>
+          </div>
           <button
             type="button"
             aria-label={`下一${periodUnit}`}

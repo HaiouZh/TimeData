@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X } from "@phosphor-icons/react";
 import { Icon } from "../Icon.js";
 import { Z } from "../../lib/zLayers.js";
@@ -11,9 +12,10 @@ export interface SheetProps {
   children: ReactNode;
   className?: string;
   z?: number;
+  portal?: boolean;
 }
 
-export function Sheet({ open, onClose, title, ariaLabel, children, className, z }: SheetProps) {
+export function Sheet({ open, onClose, title, ariaLabel, children, className, z, portal = false }: SheetProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -36,7 +38,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z 
 
   if (!open) return null;
 
-  return (
+  const node = (
     <div
       className="sheet-overlay fixed inset-0 flex items-end justify-center bg-black/60"
       style={{ zIndex: z ?? Z.modal }}
@@ -66,4 +68,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z 
       </div>
     </div>
   );
+
+  if (!portal || typeof document === "undefined") return node;
+  return createPortal(node, document.body);
 }

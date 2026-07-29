@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { ErrorBoundary } from "../../../components/ErrorBoundary.js";
 import { Icon } from "../../../components/Icon.js";
+import { DateField } from "../../../components/ui/DateField.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
 import { resolveDiaryDate } from "../../../lib/diary/diaryDate.js";
@@ -177,16 +178,18 @@ export default function DiaryReviewPage() {
               </button>
             ))}
           </div>
-          <input
-            type="date"
-            aria-label="选择日期"
-            value={anchor}
-            max={liveToday}
-            onChange={(event) => {
-              if (event.target.value) goToDate(event.target.value);
-            }}
-            className="rounded-ctl border border-border bg-surface px-2 py-1 td-text-caption text-ink"
-          />
+          <div className="w-40 shrink-0">
+            <DateField
+              value={anchor}
+              max={liveToday}
+              ariaLabel="选择日期"
+              onChange={(next) => {
+                if (next) goToDate(next);
+              }}
+              portal
+              className="min-h-8 rounded-ctl bg-surface px-2 py-1 td-text-caption text-ink"
+            />
+          </div>
           <button
             type="button"
             aria-label="上一段"

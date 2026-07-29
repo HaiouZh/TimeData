@@ -6,12 +6,12 @@ covers:
   - packages/shared/src/occurrence.ts
   - packages/client/src/lib/tasks/recurrence.ts
   - packages/client/src/lib/tasks/recurrencePresets.ts
-  - packages/client/src/components/MonthCalendar.tsx
+  - packages/client/src/components/ui/MonthCalendar.tsx
   - packages/client/src/components/Wheel.tsx
 contracts:
   - packages/shared/src/recurrence.ts
   - packages/shared/src/occurrence.ts
-last-reviewed: 2026-07-04
+last-reviewed: 2026-07-28
 ---
 
 # 待办 · 重复规则引擎
@@ -77,7 +77,7 @@ last-reviewed: 2026-07-04
 - 常用 每天/工作日/每周/每月/月末 一击写入；复杂规则进 `RecurrencePresetSheet` → `CustomRecurrencePage`（z=70 全屏）。
 - 逾期重复模板从详情抽屉打开重复设置时，预设门和自定义页默认用今天作为锚点；从“今天”区把旧逾期改成“每天”等新规则时，会从今天重新开始，而不是继续显示旧到期日。
 - `preserveHitDays`（`recurrencePresets.ts`）保留多周几/多月号/`byMonthday:[-1]` 月末，不因打开/完成而静默降级。
-- `CustomRecurrencePage` UI 限制 `interval`/`count` 1..99（schema 允许 1..999，UI 更严）；时间滚轮用共享 `components/Wheel.tsx`，月号选择用 `components/MonthCalendar.tsx`。这两个共享组件消费 [design-language](../design-language.md) token 与 `td-num` 数字角色；样式迁移不改变重复规则的取值、锚点或保存语义。
+- `CustomRecurrencePage` UI 限制 `interval`/`count` 1..99（schema 允许 1..999，UI 更严）；时间滚轮用共享 `components/Wheel.tsx`，月号选择用 `components/ui/MonthCalendar.tsx`。这两个共享组件消费 [design-language](../design-language.md) token 与 `td-num` 数字角色；样式迁移不改变重复规则的取值、锚点或保存语义。
 - “仅某天”预设通过 `applyRecurrenceChoice()` 一次写成普通排期任务（非重复）。
 - **`ruleId` 与 `recurrence` 互斥，防线只在这层 UI**：occurrence 的重复编辑一律重定向到它的规则模板；孤儿 occurrence（`ruleId` 指向已不存在的模板）把可点入口降级为静态说明「重复规则已删除，不能在这里改」。降级是有意的——回退到 occurrence 自身会让保存把 `recurrence` 写进这一发，就地造出混合体行。写路径本身不设防：`updateTask` / `applyRecurrenceChoice` 不校验，sync tasks 域无 `validate`，故这条不变量由“不给入口”维持、不由代码强制。混合体行仍删得掉（`deleteTaskCascade` 兜底）、能自愈（预设门选“不重复”清掉 `recurrence`）。
 
@@ -89,10 +89,10 @@ last-reviewed: 2026-07-04
 | `shared/src/occurrence.ts` | occurrence 物化引擎纯函数：`occurrenceId`/`materializeOccurrence`/`isRuleExhausted`/`nextDueDate`/`materializeDue`/`latestOccurrenceForRule`（零副作用；耗尽/游标通常只计入 `startAt` 锚点后的已处理发，completion 提前完成链可继续纳入锚点前的派生发；为 today 切读、代理式完成和规则行子任务代理提供地基） |
 | `lib/tasks.ts`（P3 新增） | `runMaterialization`（遍历 rule → `materializeDue` → 写 occurrence + occurrence children，in-flight 合并）、`markOccurrenceSkipped`（删·跳这一发并即时物化下一发）、`toggleTaskDone`（pending occurrence 完成后即时物化下一发；重复模板 root 在无 active/到期发时可强制物化下一发并完成；规则模板子任务重定向到当前可代理 occurrence child）、`updateTask` 重锚级联删活跃 occurrence 并即时物化、`applyRecurrenceChoice` none/scheduled 清孤儿 |
 | `lib/tasks/recurrencePresets.ts` | 预设↔Recurrence 映射 + `preserveHitDays` |
-| `components/MonthCalendar.tsx` | 月号选择日历 |
+| `components/ui/MonthCalendar.tsx` | 月号选择日历 |
 | `components/Wheel.tsx` | 共享时间滚轮（被重复规则等复用） |
 | 预设门 UI | `pages/todo/{RecurrencePresetSheet,RecurrencePresetList,CustomRecurrencePage}.tsx`（covers 归 [todo](../todo.md)） |
 
-**测试**：`shared/src/recurrence.test.ts`（由 client 迁入）、`lib/tasks/recurrencePresets.test.ts`、`lib/tasks.recurrenceChoice.test.ts`（点号文件，在 `lib/` 下不在 `lib/tasks/`）、`pages/todo/{RecurrencePresetSheet,CustomRecurrencePage}.test.tsx`、`components/{MonthCalendar,TimeRangeWheelPicker}.test.tsx`。
+**测试**：`shared/src/recurrence.test.ts`（由 client 迁入）、`lib/tasks/recurrencePresets.test.ts`、`lib/tasks.recurrenceChoice.test.ts`（点号文件，在 `lib/` 下不在 `lib/tasks/`）、`pages/todo/{RecurrencePresetSheet,CustomRecurrencePage}.test.tsx`、`components/ui/MonthCalendar.test.tsx`、`components/TimeRangeWheelPicker.test.ts`。
 
 > `TimeRangeWheelPicker.test.ts` 指向的组件已改名为 `Wheel.tsx`（历史遗留），两组件名都可能在测试里出现。

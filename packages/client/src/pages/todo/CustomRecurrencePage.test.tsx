@@ -116,4 +116,38 @@ describe("CustomRecurrencePage", () => {
     expect(onComplete).not.toHaveBeenCalled();
     await unmount(root);
   });
+
+  it("结束日期通过自绘日期选择器更新 until", async () => {
+    const onComplete = vi.fn();
+    const { host, root } = await render({
+      initial: { ...initial, endMode: "until" },
+      onComplete,
+      onBack: vi.fn(),
+    });
+
+    await click(byLabel(host, "结束日期"));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("结束日期");
+    await click(byLabel(host, "2026-06-20"));
+    await click(byLabel(host, "完成"));
+
+    expect(onComplete.mock.calls.at(-1)?.[0]).toMatchObject({ until: "2026-06-20T00:00:00.000Z" });
+    await unmount(root);
+  });
+
+  it("重复时间通过自绘时间选择器清除", async () => {
+    const onComplete = vi.fn();
+    const { host, root } = await render({
+      initial: { ...initial, time: "08:30" },
+      onComplete,
+      onBack: vi.fn(),
+    });
+
+    await click(byLabel(host, "重复时间"));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("重复时间");
+    await click(byLabel(host, "清除时间"));
+    await click(byLabel(host, "完成"));
+
+    expect(onComplete.mock.calls.at(-1)?.[0]).not.toHaveProperty("time");
+    await unmount(root);
+  });
 });

@@ -34,6 +34,7 @@ import {
 } from "../../lib/adminNewIps.ts";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
 import { Switch } from "../../components/ui/Switch.js";
+import { TimeField } from "../../components/ui/TimeField.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
 import { messages } from "../../lib/messages.ts";
 import { formatAppDateTime } from "../../lib/time.ts";
@@ -767,22 +768,21 @@ export default function SettingsAdminInsightsPage() {
                     />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1 td-text-caption text-ink-3">
-                      定时时点
-                      <input
-                        aria-label="每日备份时点"
-                        type="time"
+                    <div className="space-y-1 td-text-caption text-ink-3">
+                      <div>定时时点</div>
+                      <TimeField
                         value={backupConfig.dailyBackup.timeOfDay}
+                        ariaLabel="每日备份时点"
                         disabled={backupActionBusy}
-                        onChange={(event) =>
+                        onChange={(next) => {
+                          if (!next) return;
                           setBackupConfig({
                             ...backupConfig,
-                            dailyBackup: { ...backupConfig.dailyBackup, timeOfDay: event.target.value },
-                          })
-                        }
-                        className={inputClassName}
+                            dailyBackup: { ...backupConfig.dailyBackup, timeOfDay: next },
+                          });
+                        }}
                       />
-                    </label>
+                    </div>
                     <label className="space-y-1 td-text-caption text-ink-3">
                       保留天数
                       <input

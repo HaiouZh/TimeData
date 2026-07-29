@@ -126,8 +126,8 @@ describe("DiaryReviewPage · 骨架 + 模式 A（那年今日）", () => {
   it("?date=2026-13-99 非法值钳到今天", async () => {
     const { host } = await renderPage("/diary/review?date=2026-13-99");
 
-    const dateInput = host.querySelector('input[aria-label="选择日期"]') as HTMLInputElement;
-    expect(dateInput.value).toBe("2026-07-25");
+    const dateButton = host.querySelector('button[aria-label="选择日期"]');
+    expect(dateButton?.textContent).toContain("2026-07-25");
   });
 
   it("点 ▶ 后 ?date= 前进一天", async () => {
@@ -136,9 +136,19 @@ describe("DiaryReviewPage · 骨架 + 模式 A（那年今日）", () => {
 
     await click(host.querySelector('button[aria-label="下一段"]'));
 
-    const dateInput = host.querySelector('input[aria-label="选择日期"]') as HTMLInputElement;
-    expect(dateInput.value).toBe("2026-07-21");
+    const dateButton = host.querySelector('button[aria-label="选择日期"]');
+    expect(dateButton?.textContent).toContain("2026-07-21");
     expect(fetchDiaryBatch).toHaveBeenCalled();
+  });
+
+  it("日期选择 Sheet 挂到 body，不被 sticky header 限制", async () => {
+    const { host } = await renderPage("/diary/review?date=2026-07-20");
+
+    await click(host.querySelector('button[aria-label="选择日期"]'));
+
+    const header = host.querySelector("header");
+    expect(header?.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("选择日期");
   });
 
   it("batch 失败显示错误条 + 重试按钮，点重试重新发起请求", async () => {
@@ -241,8 +251,8 @@ describe("DiaryReviewPage · 模式 C（周览）", () => {
 
     await click(host.querySelector('button[aria-label="下一段"]'));
 
-    const dateInput = host.querySelector('input[aria-label="选择日期"]') as HTMLInputElement;
-    expect(dateInput.value).toBe("2026-07-18");
+    const dateButton = host.querySelector('button[aria-label="选择日期"]');
+    expect(dateButton?.textContent).toContain("2026-07-18");
   });
 });
 
