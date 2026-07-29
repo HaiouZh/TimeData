@@ -380,7 +380,7 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
             aria-label="打点（记录到现在）"
             className="flex-1 self-stretch rounded-card transition focus-visible:outline-none active:bg-ink/10"
           />
-          <div className="relative aspect-square w-full max-w-[372px]">
+          <div className="circular-timeline-frame relative aspect-square w-full">
             {overlay}
             <svg
               viewBox={`0 0 ${SIZE} ${SIZE}`}

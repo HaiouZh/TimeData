@@ -82,8 +82,8 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
   }
 
   return (
-    <div className="relative h-[102px] overflow-hidden rounded-lg bg-page">
-      <div className="pointer-events-none absolute inset-x-1 top-1/2 z-10 h-[34px] -translate-y-1/2 rounded-md border border-accent bg-accent-soft/60" />
+    <div className="wheel-viewport relative overflow-hidden rounded-lg bg-page">
+      <div className="wheel-selection pointer-events-none absolute inset-x-1 top-1/2 z-10 -translate-y-1/2 rounded-md border border-accent bg-accent-soft/60" />
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-page to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-page to-transparent" />
       <div
@@ -91,7 +91,7 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
         role="listbox"
         aria-label={ariaLabel}
         onScroll={handleScroll}
-        className="wheel-scroll h-full overflow-y-auto snap-y snap-mandatory py-[34px] overscroll-contain"
+        className="wheel-scroll h-full overflow-y-auto snap-y snap-mandatory overscroll-contain"
       >
         {allOptions.map((option) => {
           const selected = option.value === normalizedValue;
@@ -102,7 +102,7 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
               aria-selected={selected}
               key={option.key}
               onClick={() => onChange(option.value)}
-              className={`td-num block h-[34px] w-full snap-center text-center text-base transition-colors ${
+              className={`wheel-item td-num block w-full snap-center text-center text-base transition-colors ${
                 selected ? "font-semibold text-ink" : "text-ink-3"
               }`}
             >

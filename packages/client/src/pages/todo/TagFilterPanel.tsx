@@ -38,7 +38,7 @@ export function TagFilterPanel({
 
   return (
     <div
-      className={`flex max-h-[40vh] flex-1 flex-wrap items-center gap-1.5 overflow-y-auto ${className ?? ""}`}
+      className={`todo-tag-filter-panel flex flex-1 flex-wrap items-center gap-1.5 overflow-y-auto ${className ?? ""}`}
       data-testid="tag-filter-panel"
     >
       <button

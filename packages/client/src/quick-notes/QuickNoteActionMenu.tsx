@@ -65,7 +65,7 @@ export default function QuickNoteActionMenu({
         ref={menuRef}
         role="menu"
         aria-label="速记操作"
-        className="absolute min-w-[120px] overflow-hidden rounded-ctl border border-border bg-surface-elevated py-1 shadow-elev2"
+        className="quick-note-action-menu absolute overflow-hidden rounded-ctl border border-border bg-surface-elevated py-1 shadow-elev2"
         style={{ left, top }}
         onClick={(event) => event.stopPropagation()}
       >

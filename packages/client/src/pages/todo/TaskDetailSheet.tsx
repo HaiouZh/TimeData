@@ -283,7 +283,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
     >
       <div
         data-testid="detail-sheet"
-        className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? "h-[90vh]" : "max-h-[calc(90vh)]"}`}
+        className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? "task-detail-sheet-expanded" : "task-detail-sheet"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         onTouchStart={(event) => {
           touchStartY.current = event.touches[0]?.clientY ?? null;
@@ -312,7 +312,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
         </div>
 
         {task && subtaskTotal > 0 && (
-          <div data-testid="subtask-progress" className="h-[3px] w-full bg-surface-hover" aria-hidden="true">
+          <div data-testid="subtask-progress" className="task-subtask-progress w-full bg-surface-hover" aria-hidden="true">
             <div
               data-testid="subtask-progress-fill"
               className={`h-full transition-all ${subtaskDone === subtaskTotal ? "bg-ok" : "bg-accent-strong"}`}

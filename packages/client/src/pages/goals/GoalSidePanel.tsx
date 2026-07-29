@@ -15,7 +15,7 @@ export function GoalSidePanel({ open, title, onClose, children }: GoalSidePanelP
   return (
     <aside
       aria-label={title}
-      className="flex h-full min-h-0 w-[420px] max-w-[40vw] shrink-0 flex-col border-l border-border bg-surface-elevated text-ink shadow-elev2"
+      className="goal-side-panel flex h-full min-h-0 shrink-0 flex-col border-l border-border bg-surface-elevated text-ink shadow-elev2"
     >
       <div className="flex min-h-14 items-center justify-between border-b border-border-hairline px-4">
         <h2 className="text-base text-ink">{title}</h2>

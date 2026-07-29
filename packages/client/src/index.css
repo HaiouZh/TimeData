@@ -90,7 +90,8 @@
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-rise { from { transform: translateY(6%); opacity: 0.5; } to { transform: none; opacity: 1; } }
 .sheet-overlay { animation: overlay-fade var(--duration-fast) var(--ease-standard); }
-.sheet-panel { animation: sheet-rise var(--duration-base) var(--ease-standard); }
+/* 面板限高与动画同属弹层外壳，一处声明；调用方不传 max-h，故留在顶层不进 components 层。 */
+.sheet-panel { animation: sheet-rise var(--duration-base) var(--ease-standard); max-height: 88vh; }
 @media (prefers-reduced-motion: reduce) {
   .sheet-overlay, .sheet-panel { animation: none; }
 }
@@ -223,6 +224,8 @@ html {
 
 .wheel-scroll {
   scrollbar-width: none;
+  /* 上下各留一个条目高的空白，首/末项才能滚到选中框（变量来自 .wheel-viewport）。 */
+  padding-block: var(--wheel-item-height);
 }
 .wheel-scroll::-webkit-scrollbar {
   display: none;
@@ -278,6 +281,78 @@ html {
 
 details[open] > summary .ts-collapse-caret {
   transform: rotate(90deg);
+}
+
+/*
+ * —— 功能几何语义类 ——
+ * 落不进 token 阶梯、又确属某功能专有的尺寸/定位（design-language §3 的正当出口）。
+ * 一律进 @layer components 而非顶层：顶层规则会压过 Tailwind utilities，调用方就再也
+ * 盖不住默认值了（TagFilterPanel 的 max-h-28、日期气泡的 sm:top-20 都靠 utility 覆盖）。
+ */
+@layer components {
+  /* 转盘：条目高与 Wheel.tsx 的 ITEM_HEIGHT 同数（滚动定位按它算），故只在容器上写一次；
+     视口恰好三个条目高（上一个 / 选中 / 下一个）。 */
+  .wheel-viewport {
+    --wheel-item-height: 34px;
+    height: calc(var(--wheel-item-height) * 3);
+  }
+  .wheel-selection,
+  .wheel-item {
+    height: var(--wheel-item-height);
+  }
+
+  /* 环形时间轴：正方形表盘的宽度上限，超过后表盘刻度过疏。 */
+  .circular-timeline-frame {
+    max-width: 372px;
+  }
+
+  /* 目标星图画布与其加载占位同高，切换时不跳版。 */
+  .galaxy-canvas {
+    min-height: 520px;
+  }
+
+  /* 目标侧栏：桌面定宽，窄屏最多占四成视口。 */
+  .goal-side-panel {
+    width: 420px;
+    max-width: 40vw;
+  }
+
+  /* 图表框最小高与各自 ResponsiveContainer 的 height 同数，数据为空时不塌陷。 */
+  .chart-trend-frame {
+    min-height: 220px;
+  }
+  .chart-pie-frame {
+    min-height: 250px;
+  }
+
+  /* 待办标签筛选面板：标签多时限高滚动。 */
+  .todo-tag-filter-panel {
+    max-height: 40vh;
+  }
+
+  /* 任务详情抽屉：常态限高、放大态定高，均为九成视口。 */
+  .task-detail-sheet {
+    max-height: 90vh;
+  }
+  .task-detail-sheet-expanded {
+    height: 90vh;
+  }
+  /* 子任务进度条：比 h-px 粗一档但不占版面的发丝条。 */
+  .task-subtask-progress {
+    height: 3px;
+  }
+
+  /* 速记：日期气泡吸顶位（sm 断点由 utility 覆盖）、行内时间戳占位、右键菜单最小宽。 */
+  .quick-note-date-bubble {
+    top: 4.75rem;
+  }
+  .quick-note-time-spacer {
+    height: 1em;
+    width: 4.25rem;
+  }
+  .quick-note-action-menu {
+    min-width: 120px;
+  }
 }
 
 /*

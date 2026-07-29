@@ -81,7 +81,7 @@ export function GoalsPage() {
             onNavigate={(to) => navigate(to)}
           />
         ) : showGalaxy ? (
-          <div data-galaxy-loading className="h-full min-h-[520px] bg-page" />
+          <div data-galaxy-loading className="galaxy-canvas h-full bg-page" />
         ) : (
           <GoalsListPage />
         )}

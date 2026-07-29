@@ -1433,7 +1433,7 @@ export default function QuickNotesPage() {
 
       {bubbleDate && !pinnedOpen && !searchOpen && (
         <div
-          className={`fixed left-1/2 top-[4.75rem] z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
+          className={`quick-note-date-bubble fixed left-1/2 z-[var(--z-dropdown)] -translate-x-1/2 rounded-full border border-border-strong bg-surface/90 px-3 py-1 text-xs font-medium text-ink-2 shadow-elev1 backdrop-blur transition-opacity duration-300 sm:top-20 ${
             bubbleVisible || bubbleDatePickerOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
           }`}
         >

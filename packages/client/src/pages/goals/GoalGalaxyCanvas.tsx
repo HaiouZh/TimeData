@@ -1151,7 +1151,7 @@ function GoalGalaxyCanvasInner({
       onDragLeave={onGalaxyDragLeave}
       onDragEnd={onGalaxyDragEnd}
       onDrop={onGalaxyDrop}
-      className="relative h-full min-h-[520px] overflow-hidden bg-page text-ink"
+      className="galaxy-canvas relative h-full overflow-hidden bg-page text-ink"
     >
       <ReactFlow
         nodes={renderNodes}

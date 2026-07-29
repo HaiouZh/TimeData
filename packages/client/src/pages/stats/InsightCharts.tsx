@@ -59,7 +59,7 @@ export const TrendChart = memo(function TrendChart({
 }) {
   const tooltipFormatter = (value: unknown) => formatTooltipValue(value, tooltipSuffix);
   return (
-    <div className="min-h-[220px] px-1 py-3">
+    <div className="chart-trend-frame px-1 py-3">
       <ResponsiveContainer width="100%" height={220}>
         {chart === "line" ? (
           <LineChart data={data}>
@@ -235,7 +235,7 @@ export const CategoryDonut = memo(function CategoryDonut({
 }) {
   const total = data.reduce((sum, datum) => sum + datum.value, 0);
   return (
-    <div className="relative min-h-[250px] py-2">
+    <div className="chart-pie-frame relative py-2">
       <ResponsiveContainer width="100%" height={250}>
         <PieChart>
           <Pie

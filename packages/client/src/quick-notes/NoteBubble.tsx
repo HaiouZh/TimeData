@@ -17,7 +17,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
   const isAgent = note.source === "agent";
   const sourceLabel = note.sourceLabel ?? "助手";
   const markdownLayout = looksLikeMarkdown(text);
-  const inlineSpacer = <span aria-hidden="true" className="inline-block h-[1em] w-[4.25rem]" />;
+  const inlineSpacer = <span aria-hidden="true" className="quick-note-time-spacer inline-block" />;
 
   useLayoutEffect(() => {
     const el = contentRef.current;

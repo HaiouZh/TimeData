@@ -270,12 +270,12 @@ describe("TaskDetailSheet 展示与关闭", () => {
     const t = await addTask({ title: "x" });
     const { host, root } = await renderSheet(t.id);
     const sheet = host.querySelector('[data-testid="detail-sheet"]') as HTMLElement;
-    expect(sheet.className).not.toContain("h-[90vh]");
+    expect(sheet.className).not.toContain("task-detail-sheet-expanded");
     const expand = host.querySelector('button[aria-label="放大"]') as HTMLButtonElement;
     await act(async () => {
       expand.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(sheet.className).toContain("h-[90vh]");
+    expect(sheet.className).toContain("task-detail-sheet-expanded");
     await unmount(root);
   });
 });

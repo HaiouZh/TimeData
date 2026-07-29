@@ -52,7 +52,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z,
         aria-modal="true"
         aria-label={title ?? ariaLabel}
         tabIndex={-1}
-        className={`sheet-panel flex w-full max-w-2xl flex-col rounded-t-card border border-border bg-surface-elevated text-ink shadow-elev2 outline-none max-h-[88vh] ${className ?? ""}`}
+        className={`sheet-panel flex w-full max-w-2xl flex-col rounded-t-card border border-border bg-surface-elevated text-ink shadow-elev2 outline-none ${className ?? ""}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="mx-auto mt-2 h-1 w-8 rounded-pill bg-border-strong" aria-hidden="true" />

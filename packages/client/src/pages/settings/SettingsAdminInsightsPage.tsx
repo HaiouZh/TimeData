@@ -190,7 +190,7 @@ function FilterSelectSheet({
   options: SelectOption<string>[];
 }) {
   return (
-    <label className="flex min-w-[9rem] flex-1 flex-col gap-1 text-xs text-ink-3">
+    <label className="flex min-w-36 flex-1 flex-col gap-1 text-xs text-ink-3">
       <span>{label}</span>
       <SelectSheet
         label={label}

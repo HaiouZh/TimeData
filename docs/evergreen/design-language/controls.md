@@ -9,7 +9,7 @@ covers:
   - scripts/check-design-language.mjs
 contracts:
   - packages/client/src/components/ui/**
-last-reviewed: 2026-07-28
+last-reviewed: 2026-07-29
 ---
 
 # 设计语言 · 控件库
@@ -44,6 +44,8 @@ last-reviewed: 2026-07-28
 控件本身在棘轮豁免目录内（它们是对原生元素的合法封装），可以内部使用原生元素。
 
 `Sheet` 的 `portal?: boolean` 决定弹层挂在原地还是 `document.body`，默认 `false`（就地渲染）。`DateField` / `TimeField` 同样透传 `portal`。
+
+面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
 ## 2. 图标（`components/Icon.tsx` → Phosphor）
 
