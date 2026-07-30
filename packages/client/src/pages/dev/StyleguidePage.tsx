@@ -135,7 +135,7 @@ export default function StyleguidePage() {
             ))}
           </div>
           <p className="td-text-caption text-ink-3">
-            筛选面板的填充态（旧色板在这里只有 2.3:1 对比度，是提亮的主要动因之一）：
+            筛选面板的填充态（旧色板在这里是 1.9–3.1:1、12 支全不达标，是换色板的主要动因之一）：
           </p>
           <div className="flex flex-wrap gap-1.5">
             {TINT_TOKENS.map((token, i) => (

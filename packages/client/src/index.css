@@ -71,9 +71,11 @@
   --color-data-purple: #a78bfa;
 
   /* —— 用户内容身份色（项目 / 标签共用，固定 12 支，见 ADR 0026） ——
-     明度 60–65%：同时满足 6px 圆点在 surface-elevated 上可见、caption 档 `#` 字形可读、
-     填充态配 --color-page 深字达 8:1。色相避开 accent(217°)/ok(160°)/warn(43°)/danger(0°)
-     四个已占用值——小圆点撞上动作色会被当成可点元素，撞上状态色会被读成告警。 */
+     约束是 WCAG 对比度（不是 HSL 明度，两者在这组色里近乎负相关）：圆点对 surface ≥3:1、
+     caption 档 `#` 对 surface-elevated ≥4.5:1、填充态配 --color-page 深字 ≥4.5:1，实测最差支
+     仍有 1.4 倍余量。色相尽量避开 accent(213°)/ok(158°)/warn(43°)/danger(0°)——小圆点撞上
+     动作色会被当成可点元素、撞上状态色会被读成告警；但四禁区吃掉 160° 后放不下 12 支互不
+     挤压，故 tint-12 距 danger 仅 9°、紫区偏挤，属已知待验收项（ADR 0026 取舍）。 */
   --color-tint-1: #fb923c;
   --color-tint-2: #a3e635;
   --color-tint-3: #4ade80;

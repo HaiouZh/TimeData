@@ -55,7 +55,7 @@ last-reviewed: 2026-07-29
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
 - **动效**：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-slow`(300ms) + `--ease-standard`/`--ease-emphasized`。交互过渡 / 弹层动画就近映射到这组 token；keyframe 与长循环动画（如 `sync-pulse`）属合法多值，保留裸时长。行级入场提示（如 Todo occurrence 新派生高亮）只复用现有 token/`color-mix`，并尊重 `prefers-reduced-motion`。
 - **z-index 层级**：`--z-sticky`(20) / `--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；组件内部局部 stacking 仍用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
-- **用户内容身份色**：`--color-tint-1..12`，明度 60–65%、色相避开 accent / ok / warn / danger 四个已占用值。取色内核 `lib/contentTint.ts` 的 `contentTint(seed)` 以 FNV-1a 取模返回 `var(--color-tint-N)`，确定性、不存储；项目种子取 `goalId`，标签种子取标签名。**类型区分靠形状不靠颜色**：圆点 = 项目，`#` = 标签——同一行 meta 区两者并排时，颜色只表达「是哪一个」，形状表达「是哪一类」，故两者共用一组色板、偶尔撞色不构成歧义。真实形态（6px 圆点 / caption 档 `#` / 筛选面板填充态）在 `/dev/styleguide` 的「身份色的真实形态」一节验收，色块预览不作为验收依据。因由见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)。
+- **用户内容身份色**：`--color-tint-1..12`。约束是 WCAG 对比度（圆点 ≥3:1、caption 档 `#` 与填充态深字 ≥4.5:1），色相尽量避开 accent / ok / warn / danger 四个已占用值——四禁区放不下 12 支互不挤压，残留冲突记在 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md) 取舍。取色内核 `lib/contentTint.ts` 的 `contentTint(seed)` 由种子哈希取模返回 `var(--color-tint-N)`，确定性、不存储；项目种子取 `goalId`（改名不变色），标签种子取标签名。**类型区分靠形状不靠颜色**：圆点 = 项目，`#` = 标签——同一行 meta 区两者并排时，颜色只表达「是哪一个」，形状表达「是哪一类」，故两者共用一组色板、偶尔撞色不构成歧义。真实形态（6px 圆点 / caption 档 `#` / 筛选面板填充态）在 `/dev/styleguide` 的「身份色的真实形态」一节验收，色块预览不作为验收依据。因由见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)。
 - **派生软色**用 `color-mix(in srgb, <token> N%, transparent)` 或已有 soft token，不另写裸色。
 
 新增颜色流程：
@@ -96,7 +96,7 @@ last-reviewed: 2026-07-29
 ## 4. 关键不变量 / 坑 / 红线
 
 1. **新 UI 一律用 token，不写裸 hex/rgba**；统计面（TimeStats、stats 模块、图表 chrome）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零；裸色剩余仅 `user-content-color` 长期例外（分类预设色），不作范式；裸任意尺寸/间距已全量收口（功能几何语义类，见 §3）；裸字号也已全量收口（语义排版类，`typography-debt` 批归零）。
-2. **数据色不外溢 UI chrome**（只在图表可视化里）；用户内容色只代表分类、标签、用户自定义标记。
+2. **数据色不外溢 UI chrome**（只在图表可视化里）；用户内容色只代表分类、项目、标签、用户自定义标记。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。
 5. **recharts 不解析 CSS `var()`**：图表 chrome（axis/grid/tooltip 背景边框文字/legend/cursor）须把中性 token 镜像成 JS 常量，统一出自 `pages/stats/chartColors.ts`（只导出 `CHART_CHROME`），唯一消费方是 TimeStats 的 `InsightCharts`（健康图表随健康子系统退役，见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源是 `index.css` token。取色规则：图表 chrome 取 `CHART_CHROME` 中性镜像；**数据序列不由本文件取色，走用户分类色**（`item.color`，无色回退 `UNCATEGORIZED_COLOR`，见 [stats-insights](stats-insights.md) §1.2）；`--color-data-*` token 是数据色的事实源，没有 JS 镜像消费方。状态色只留给真状态，不上数据序列。
