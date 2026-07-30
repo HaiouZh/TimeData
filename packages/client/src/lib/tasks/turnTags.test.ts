@@ -1,6 +1,6 @@
 import type { Task } from "@timedata/shared";
 import { describe, expect, it } from "vitest";
-import { allTags, filterTasks, type TaskFilter, tagColor } from "./turnTags.js";
+import { allTags, filterTasks, type TaskFilter } from "./turnTags.js";
 
 function task(overrides: Partial<Task> = {}): Task {
   return {
@@ -25,9 +25,9 @@ function task(overrides: Partial<Task> = {}): Task {
 const emptyFilter: TaskFilter = { searchQuery: "", includeTags: [], excludeTags: [], tagMode: "and" };
 
 describe("turnTags public surface", () => {
-  it("导出 tag 聚合/过滤/取色 helper", async () => {
+  it("导出 tag 聚合/过滤 helper（取色已移出，见 lib/contentTint.ts）", async () => {
     const mod = await import("./turnTags.js");
-    expect(Object.keys(mod).sort()).toEqual(["allTags", "filterTasks", "tagColor"]);
+    expect(Object.keys(mod).sort()).toEqual(["allTags", "filterTasks"]);
   });
 });
 
@@ -108,21 +108,5 @@ describe("filterTasks", () => {
     const tasks = [task({ id: "a", tags: ["x"] }), task({ id: "b", tags: ["y"] })];
     const f: TaskFilter = { ...emptyFilter, includeTags: ["x"], excludeTags: ["y"] };
     expect(filterTasks(tasks, f).map((t) => t.id)).toEqual(["a"]);
-  });
-});
-
-describe("tagColor", () => {
-  it("返回合法 #RRGGBB", () => {
-    expect(tagColor("工作")).toMatch(/^#[0-9A-Fa-f]{6}$/);
-  });
-
-  it("确定性：同名同色", () => {
-    expect(tagColor("工作")).toBe(tagColor("工作"));
-  });
-
-  it("不同名分布到色板（不全塌成一种色）", () => {
-    const names = ["工作", "生活", "紧急", "学习", "健康", "财务", "家庭", "项目"];
-    const colors = new Set(names.map(tagColor));
-    expect(colors.size).toBeGreaterThan(1);
   });
 });

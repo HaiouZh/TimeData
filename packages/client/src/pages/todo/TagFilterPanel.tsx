@@ -1,4 +1,4 @@
-import { tagColor } from "../../lib/tasks/turnTags.js";
+import { contentTint } from "../../lib/contentTint.js";
 
 export interface TagFilterPanelProps {
   tags: { tag: string; count: number }[];
@@ -70,7 +70,7 @@ export function TagFilterPanel({
       </button>
 
       {tags.map(({ tag, count }) => {
-        const color = tagColor(tag);
+        const color = contentTint(tag);
         const state: ChipState = includeSet.has(tag) ? "include" : excludeSet.has(tag) ? "exclude" : "unselected";
         const style =
           state === "include"

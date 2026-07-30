@@ -17,11 +17,11 @@ import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, 
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
+import { contentTint } from "../../lib/contentTint.js";
 import { currentDueDateString, recurrenceSummary } from "../../lib/tasks/recurrence.js";
 import { rowClickZone } from "../../lib/tasks/taskRowZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { projectTemplateChildren } from "../../lib/tasks/templateChildrenProjection.js";
-import { tagColor } from "../../lib/tasks/turnTags.js";
 import { formatYearAwareMonthDay, getDateString } from "../../lib/time.js";
 import { InlineChildren, type InlineChildrenMode } from "./InlineChildren.js";
 import { SubtaskOutline } from "./SubtaskOutline.js";
@@ -381,13 +381,12 @@ export function TaskRow({
               )}
               {(task.tags ?? []).slice(0, 3).map((tag) => (
                 <span key={tag} data-testid="tag-chip" className={`${META_CHIP_CLASS} text-ink-2`}>
-                  <span
-                    data-tag-dot
-                    aria-hidden="true"
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: tagColor(tag) }}
-                  />
-                  #{tag}
+                  {/* `#` 自己着色，不另画色点：`#` 是既有的类型标记（圆点归项目，见 ADR 0026），
+                      且作为字形其面积远大于原先那个 6px 点——同一个色终于读得出。 */}
+                  <span data-tag-hash style={{ color: contentTint(tag) }}>
+                    #
+                  </span>
+                  {tag}
                 </span>
               ))}
               {(task.tags ?? []).length > 3 && <span>…</span>}

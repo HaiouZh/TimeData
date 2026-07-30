@@ -39,28 +39,3 @@ export function filterTasks(tasks: Task[], f: TaskFilter): Task[] {
     return true;
   });
 }
-
-const TAG_PALETTE = [
-  "#2F4858",
-  "#33636C",
-  "#3D5A80",
-  "#4C5C68",
-  "#3A5743",
-  "#48506B",
-  "#5A4E6D",
-  "#2C5F60",
-  "#445A7A",
-  "#54667A",
-  "#3E6259",
-  "#615A77",
-] as const;
-
-/** 标签名 → 稳定颜色（FNV-1a hash 取模色板，确定性、不存储）。 */
-export function tagColor(tag: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < tag.length; i++) {
-    h ^= tag.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return TAG_PALETTE[(h >>> 0) % TAG_PALETTE.length];
-}

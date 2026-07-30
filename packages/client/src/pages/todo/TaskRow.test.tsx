@@ -501,20 +501,25 @@ describe("TaskRow", () => {
     await unmount(root);
   });
 
-  it("tag chip 内含确定性色点（inline backgroundColor）", async () => {
+  it("tag chip 用着色的 # 标类型，不再画色点（ADR 0026）", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task({ tags: ["工作"] }), pool: "today", ...handlers }),
     );
     const chip = host.querySelector('[data-testid="tag-chip"]') as HTMLElement;
-    const dot = chip.querySelector("[data-tag-dot]") as HTMLElement;
-    expect(dot).not.toBeNull();
-    expect(dot.style.backgroundColor).not.toBe("");
+    // 圆点撤掉：明度 25-30% 的旧色板铺在暗胶囊上本就不可见，它没在传递信息。
+    expect(chip.querySelector("[data-tag-dot]")).toBeNull();
+    const hash = chip.querySelector("[data-tag-hash]") as HTMLElement;
+    expect(hash).not.toBeNull();
+    expect(hash.textContent).toBe("#");
+    expect(hash.style.color).not.toBe("");
+    // 文案不因把 # 挪进 span 而变：拼起来仍是 #工作
+    expect(chip.textContent).toBe("#工作");
 
     const second = await render(
       createElement(TaskRow, { task: task({ id: "t2", tags: ["工作"] }), pool: "today", ...handlers }),
     );
-    const dot2 = second.host.querySelector("[data-tag-dot]") as HTMLElement;
-    expect(dot2.style.backgroundColor).toBe(dot.style.backgroundColor);
+    const hash2 = second.host.querySelector("[data-tag-hash]") as HTMLElement;
+    expect(hash2.style.color).toBe(hash.style.color);
     await unmount(root);
     await unmount(second.root);
   });
