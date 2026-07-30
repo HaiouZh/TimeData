@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
+import { contentTint } from "../../lib/contentTint.js";
 import { getActiveSession, grabTaskToHand, releaseTaskFromHand } from "../../lib/sessions.js";
 import { normalizeScheduledDate } from "../../lib/tasks/placement.js";
 import { recurrenceToCustomInput } from "../../lib/tasks/recurrencePresets.js";
@@ -400,7 +401,11 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                       data-testid="tag-edit-chip"
                       className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2"
                     >
-                      #{tag}
+                      {/* `#` 着色与任务行同构：这里是增删标签的入口，改完回到行上必须是同一个色 */}
+                      <span data-tag-hash style={{ color: contentTint(tag) }}>
+                        #
+                      </span>
+                      {tag}
                       <button
                         type="button"
                         aria-label={`删除标签 ${tag}`}
