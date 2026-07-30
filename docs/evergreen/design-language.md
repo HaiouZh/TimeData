@@ -44,7 +44,7 @@ last-reviewed: 2026-07-29
 | **单一动作色** | `--color-accent` `--color-accent-strong` `--color-accent-soft` `--color-accent-ink`（蓝） | 全站唯一动作色。按钮/聚焦/主操作/active 只用蓝，不引入第二动作色 |
 | **状态色** | `--color-ok` `--color-warn` `--color-danger` + `*-soft` | 只表达成功/警告/危险/错误/冲突，不做装饰色 |
 | **数据色板** | `--color-data-blue/teal/green/amber/red/purple`（固定 6 色） | 仅图表、健康指标曲线、数据序列使用，不外溢到 UI chrome |
-| **用户内容色** | `--color-tint-1..12`（固定 12 支，项目 / 标签共用）+ 分类色 | 属业务数据，不属于 UI chrome；使用时要能说明来自用户内容 |
+| **用户内容色** | `--color-tint-1..9`（固定 9 支，项目 / 标签共用）+ 分类色 | 属业务数据，不属于 UI chrome；使用时要能说明来自用户内容 |
 | **scoped 特殊场景色** | 例如 `--galaxy-*` | 只服务独立画布/世界观场景，必须有独立 prefix，不扩展全站动作色 |
 
 - **模块署名色已退役**：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 不再作为设计语言的一部分。模块身份靠固定位置、图标、页面标题、信息架构和 active 形态，不靠每个模块一套品牌色。
@@ -55,7 +55,7 @@ last-reviewed: 2026-07-29
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
 - **动效**：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-slow`(300ms) + `--ease-standard`/`--ease-emphasized`。交互过渡 / 弹层动画就近映射到这组 token；keyframe 与长循环动画（如 `sync-pulse`）属合法多值，保留裸时长。行级入场提示（如 Todo occurrence 新派生高亮）只复用现有 token/`color-mix`，并尊重 `prefers-reduced-motion`。
 - **z-index 层级**：`--z-sticky`(20) / `--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；组件内部局部 stacking 仍用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
-- **用户内容身份色**：`--color-tint-1..12`。约束是 WCAG 对比度（圆点 ≥3:1、caption 档 `#` 与填充态深字 ≥4.5:1），色相尽量避开 accent / ok / warn / danger 四个已占用值——四禁区放不下 12 支互不挤压，残留冲突记在 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md) 取舍。取色内核 `lib/contentTint.ts` 的 `contentTint(seed)` 由种子哈希取模返回 `var(--color-tint-N)`，确定性、不存储；项目种子取 `goalId`（改名不变色），标签种子取标签名。**类型区分靠形状不靠颜色**：圆点 = 项目，`#` = 标签——同一行 meta 区两者并排时，颜色只表达「是哪一个」，形状表达「是哪一类」，故两者共用一组色板、偶尔撞色不构成歧义。真实形态（6px 圆点 / caption 档 `#` / 筛选面板填充态）在 `/dev/styleguide` 的「身份色的真实形态」一节验收，色块预览不作为验收依据。因由见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)。
+- **用户内容身份色**：`--color-tint-1..9`。约束是 WCAG 对比度（圆点 ≥3:1、caption 档 `#` 与填充态深字 ≥4.5:1），色相尽量避开 accent / ok / warn / danger 四个已占用值；支数定在 9 是因为四禁区吃掉 160° 色相环后，再多就有相邻支在 6px 圆点上分不出（取舍见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)）。取色内核 `lib/contentTint.ts` 两条路都不存储：**标签** `contentTint(标签名)` 哈希取模、允许撞色；**项目** `assignProjectTints(按 createdAt 升序的 goalId)` 集合内避撞——首选位由哈希决定（色因此散布在整个色板上，不是从 `tint-1` 依次发号），被占才顺移，≤9 个项目保证互不同色。项目分配由 `listTasks` 基于**全部 active project** 算出、随 `TodoBuckets.projectTints` 下发，组件不自行取色。**类型区分靠形状不靠颜色**：圆点 = 项目，`#` = 标签——同一行 meta 区两者并排时，颜色只表达「是哪一个」，形状表达「是哪一类」，故两者共用一组色板、偶尔撞色不构成歧义。真实形态（6px 圆点 / caption 档 `#` / 筛选面板填充态）在 `/dev/styleguide` 的「身份色的真实形态」一节验收——色值与支数都由这一节定，色块预览不作为验收依据。因由见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)。
 - **派生软色**用 `color-mix(in srgb, <token> N%, transparent)` 或已有 soft token，不另写裸色。
 
 新增颜色流程：
