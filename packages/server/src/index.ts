@@ -8,7 +8,7 @@ import { initializeDatabase } from "./db/schema.js";
 import { runUtcResetIfNeeded } from "./db/utcReset.js";
 import { authMiddleware, type AuthTokenTier, scopedAuthMiddleware } from "./middleware/auth.js";
 import { bodyLimit } from "./middleware/bodyLimit.js";
-import { ALLOWED_REQUEST_HEADERS, allowedOriginsFromEnv } from "./middleware/cors.js";
+import { allowedOriginsFromEnv, corsOptions } from "./middleware/cors.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { requestAudit } from "./middleware/requestAudit.js";
 import { requireTotp } from "./middleware/totp.js";
@@ -70,23 +70,7 @@ app.use(
   }),
 );
 
-app.use(
-  "/api/*",
-  cors({
-    origin: (origin) => {
-      if (!origin) {
-        return null;
-      }
-      if (allowedOrigins.includes("*")) {
-        return origin;
-      }
-      return allowedOrigins.includes(origin) ? origin : null;
-    },
-    allowHeaders: [...ALLOWED_REQUEST_HEADERS],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-  }),
-);
+app.use("/api/*", cors(corsOptions(allowedOrigins)));
 
 app.use("/api/*", bodyLimit(MAX_BODY_BYTES));
 app.use("/api/*", requestAudit());

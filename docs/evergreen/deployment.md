@@ -103,6 +103,8 @@ last-reviewed: 2026-07-28
 
 服务端 CORS 允许的请求头由 `packages/server/src/middleware/cors.ts` 的 `ALLOWED_REQUEST_HEADERS` 单点定义，`index.ts` 的 CORS 中间件直接消费：`Content-Type`、`Authorization`、`X-Confirm`、`X-TimeData-Client`、`X-TimeData-Client-Build`、`X-TOTP-Code`。`X-Confirm` 供 `/api/admin/sync-logs` 清空确认使用，`X-TimeData-Client` 供请求审计记录 client hint，`X-TimeData-Client-Build` 是 `apiFetch` 给每个请求带的构建观测头（见 [`sync`](sync.md) §5.8），`X-TOTP-Code` 供危险操作补码重试。**客户端新增任何跨域自定义 header 必须同步这份白名单**——漏掉会让 Capacitor 壳的每个请求预检失败，而同源网页版毫无感知。`cors.test.ts` 有一条跨包闸机检 `client/src/lib/api.ts` 里 `headers.set` 的 `X-` 头是否都在白名单内。
 
+CORS 中间件的完整配置由 `cors.ts` 的 `corsOptions()` 单点构造，`index.ts` 只做 `cors(corsOptions(allowedOrigins))` 接线。其中 `maxAge` 取 `CORS_PREFLIGHT_MAX_AGE_SECONDS`（86400 秒 = 1 天）：Capacitor 壳每个请求都跨域且带 `Authorization`，属于非简单请求、必须预检，而不发 `Access-Control-Max-Age` 时 Chromium/WebView 只缓存 5 秒，于是安卓的每次 API 调用实际是两个整往返。移动网络上这笔翻倍很贵——2026-07-30 生产取证，一次冷启动里客户端测得 status 阶段 5311ms，同一请求服务端只花了 5ms。同源网页版不走预检，所以这个开销在电脑上复现不出来。
+
 **部署陷阱**：`docker-compose.yml` 的 `environment:` 块**必须**显式列出 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}`，否则就算 `.env` 写了值，变量也进不到容器里。Web 前端走同源不触发 CORS，所以这种漏配通常要等到 Android App 第一次跨域请求 `/api/sync/status` 才会暴露，表现为 App 内提示"网络请求失败：无法连接 https://&lt;your-host&gt;/api/sync/status"。
 
 **自部署排错**：当 Android App 报上述错误而 PC 浏览器访问正常时，原因只有两类，都在同一个预检响应里能看出来——发一次带安卓 origin 的 OPTIONS 预检即可同时验两项：

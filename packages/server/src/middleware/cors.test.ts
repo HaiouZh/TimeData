@@ -1,8 +1,15 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { describe, expect, it } from "vitest";
-import { ALLOWED_REQUEST_HEADERS, allowedOriginsFromEnv } from "./cors.js";
+import {
+  ALLOWED_REQUEST_HEADERS,
+  CORS_PREFLIGHT_MAX_AGE_SECONDS,
+  allowedOriginsFromEnv,
+  corsOptions,
+} from "./cors.js";
 
 describe("allowedOriginsFromEnv", () => {
   it("defaults to empty array when ALLOWED_ORIGINS is not set", () => {
@@ -60,5 +67,64 @@ describe("CORS 放行头覆盖客户端实际发送的自定义头", () => {
     const allowed = ALLOWED_REQUEST_HEADERS.map((header) => header.toLowerCase());
     const missing = sent.filter((header) => !allowed.includes(header.toLowerCase()));
     expect(missing).toEqual([]);
+  });
+});
+
+// 2026-07-30 生产取证：安卓壳(origin https://localhost)跨域 + 每请求带 Authorization
+// = 非简单请求，每次都要 OPTIONS 预检。不发 Access-Control-Max-Age 时 WebView 只缓存 5 秒，
+// 冷启动期间每个 API 请求都多一个整往返（客户端实测 status 阶段 5311ms，服务端只用 5ms）。
+describe("CORS 预检缓存", () => {
+  function preflight(options: Parameters<typeof cors>[0]) {
+    const app = new Hono();
+    app.use("/api/*", cors(options));
+    app.post("/api/sync/status", (c) => c.json({ ok: true }));
+    return app.request("/api/sync/status", {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://localhost",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization,x-timedata-client",
+      },
+    });
+  }
+
+  it("预检响应带 Access-Control-Max-Age，安卓壳不必每个请求都重新预检", async () => {
+    const res = await preflight(corsOptions(["https://localhost"]));
+
+    expect(res.headers.get("Access-Control-Max-Age")).toBe(String(CORS_PREFLIGHT_MAX_AGE_SECONDS));
+    expect(CORS_PREFLIGHT_MAX_AGE_SECONDS).toBeGreaterThanOrEqual(3600);
+  });
+
+  it("缺 maxAge 时这条闸确实会红（闸自身不空转）", async () => {
+    const withoutMaxAge = { ...corsOptions(["https://localhost"]), maxAge: undefined };
+
+    const res = await preflight(withoutMaxAge);
+
+    expect(res.headers.get("Access-Control-Max-Age")).toBeNull();
+  });
+
+  it("corsOptions 仍然只放行白名单 origin", async () => {
+    const options = corsOptions(["https://localhost"]);
+    const allowed = await preflight(options);
+    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe("https://localhost");
+
+    const app = new Hono();
+    app.use("/api/*", cors(options));
+    app.post("/api/sync/status", (c) => c.json({ ok: true }));
+    const denied = await app.request("/api/sync/status", {
+      method: "OPTIONS",
+      headers: { Origin: "https://evil.example.com", "Access-Control-Request-Method": "POST" },
+    });
+    expect(denied.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  // 提炼出 corsOptions 却忘了在 index.ts 接线，上面的闸照样全绿而生产没修好。
+  it("index.ts 用的是 corsOptions，没有内联另一份 cors 配置", () => {
+    const indexSource = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "index.ts"),
+      "utf8",
+    );
+
+    expect(indexSource).toContain("cors(corsOptions(allowedOrigins))");
   });
 });

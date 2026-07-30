@@ -25,6 +25,10 @@ function latestLog() {
   return db.prepare("SELECT * FROM api_request_logs ORDER BY id DESC LIMIT 1").get() as Record<string, unknown>;
 }
 
+function logCount() {
+  return (db.prepare("SELECT COUNT(*) AS c FROM api_request_logs").get() as { c: number }).c;
+}
+
 describe("requestAudit", () => {
   it("records successful API requests and strips the query string from path", async () => {
     app.get("/api/ok", (c) => {
@@ -89,6 +93,32 @@ describe("requestAudit", () => {
 
     expect((await app.request("/api/rate")).status).toBe(429);
     expect(latestLog()).toMatchObject({ path: "/api/rate", status: 429, outcome: "rate_limited" });
+  });
+
+  // 2026-07-30 生产取证：容器健康检查每 30 秒打一次 /api/health，占满了请求日志表
+  // （5000 行里 4390 条 = 88%），把真正有用的日志挤到只剩 40 小时可回溯。
+  it("成功的 /api/health 探活不写日志", async () => {
+    app.get("/api/health", (c) => c.json({ ok: true }));
+
+    expect((await app.request("/api/health")).status).toBe(200);
+
+    expect(logCount()).toBe(0);
+  });
+
+  it("异常的 /api/health 仍然记录——探活挂了必须看得见", async () => {
+    app.get("/api/health", (c) => c.json({ error: "db down" }, 500));
+
+    expect((await app.request("/api/health")).status).toBe(500);
+
+    expect(latestLog()).toMatchObject({ path: "/api/health", status: 500, outcome: "server_error" });
+  });
+
+  it("只豁免 /api/health 本身，同前缀的别的路径照常记录", async () => {
+    app.get("/api/health-checks", (c) => c.json({ ok: true }));
+
+    expect((await app.request("/api/health-checks")).status).toBe(200);
+
+    expect(latestLog()).toMatchObject({ path: "/api/health-checks", status: 200 });
   });
 
   it("swallows audit write failures and warns", async () => {
