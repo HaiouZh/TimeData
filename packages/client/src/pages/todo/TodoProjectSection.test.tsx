@@ -593,6 +593,27 @@ describe("TodoProjectSection 落点", () => {
     expect(host.querySelector('[data-testid="task-row-grab-area"]')).toBeNull();
     await unmount(root);
   });
+
+  it("组标题圆点与同项目的组外 chip 圆点同色（点↔点认同一项目）", async () => {
+    const { host: sectionHost, root: sectionRoot } = await renderSection({
+      groups: [group({ goalId: "g1", goalTitle: "重构同步层" })],
+    });
+    const groupDot = sectionHost.querySelector(
+      '[data-testid="project-group"] [data-project-dot]',
+    ) as HTMLElement;
+    expect(groupDot).not.toBeNull();
+
+    const { host: chipHost, root: chipRoot } = await renderDom(
+      <ProjectNameChip chip={{ goalId: "g1", goalTitle: "重构同步层" }} onOpen={vi.fn()} />,
+    );
+    const chipDot = chipHost.querySelector("[data-project-dot]") as HTMLElement;
+    expect(chipDot).not.toBeNull();
+    expect(chipDot.style.backgroundColor).not.toBe("");
+    expect(chipDot.style.backgroundColor).toBe(groupDot.style.backgroundColor);
+
+    await unmount(sectionRoot);
+    await unmount(chipRoot);
+  });
 });
 
 describe("ProjectNameChip", () => {
@@ -617,5 +638,17 @@ describe("ProjectNameChip", () => {
     // 行本身是 role="link"，点 chip 不能顺手把详情抽屉也打开。
     expect(onEdit).not.toHaveBeenCalled();
     await unmount(root);
+  });
+
+  it("不同项目取不同色圆点（不再全场同一个绿）", async () => {
+    const seen = new Set<string>();
+    for (const goalId of ["g1", "g2", "g3", "g4", "g5", "g6"]) {
+      const { host, root } = await renderDom(
+        <ProjectNameChip chip={{ goalId, goalTitle: goalId }} onOpen={vi.fn()} />,
+      );
+      seen.add((host.querySelector("[data-project-dot]") as HTMLElement).style.backgroundColor);
+      await unmount(root);
+    }
+    expect(seen.size).toBeGreaterThan(1);
   });
 });

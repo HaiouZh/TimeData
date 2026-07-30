@@ -4,6 +4,7 @@ import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
+import { contentTint } from "../../lib/contentTint.js";
 import {
   isProjectMemberCountNearCap,
   RECENT_DONE_WINDOW_DAYS,
@@ -308,6 +309,14 @@ function ProjectGroupCard({
             <span className="shrink-0 text-ink-3">
               <Icon icon={expanded ? CaretDown : CaretRight} size={14} />
             </span>
+            {/* 与组外 chip 同形同色的身份点，构成「点↔点」认同。组卡片不另加左侧色条：
+                同一张卡片上两个颜色信号是同一件事的两种说法（同 chip / 竖条排他那条规则）。 */}
+            <span
+              aria-hidden="true"
+              data-project-dot
+              style={{ backgroundColor: contentTint(group.goalId) }}
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+            />
             <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
             <span className="shrink-0 td-text-caption font-normal text-ink-3">
               {summary.allDone
@@ -566,7 +575,14 @@ export function ProjectNameChip({ chip, onOpen }: { chip: ProjectChip; onOpen: (
       }}
       className={`relative z-20 ${META_CHIP_CLASS} text-ink-2 hover:text-ink`}
     >
-      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-ok" />
+      {/* 圆点是项目的专属形状、色按 goalId 派生（标签那边归 `#`，见 ADR 0026）。
+          不再用 bg-ok：绿是「已完成 / theme 归属」的状态语义，不归项目身份占用。 */}
+      <span
+        aria-hidden="true"
+        data-project-dot
+        style={{ backgroundColor: contentTint(chip.goalId) }}
+        className="h-1.5 w-1.5 shrink-0 rounded-full"
+      />
       {chip.goalTitle}
     </button>
   );
