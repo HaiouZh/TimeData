@@ -7,6 +7,7 @@ describe("StyleguidePage", () => {
     const html = renderToStaticMarkup(<StyleguidePage />);
     expect(html).toContain("设计语言预览");
     expect(html).toContain("--color-accent");
+    expect(html).toContain("--color-tint-1");
   });
 
   it("lists the typography and number role classes", () => {

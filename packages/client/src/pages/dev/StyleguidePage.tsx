@@ -2,6 +2,9 @@ import { useState } from "react";
 import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { Switch } from "../../components/ui/Switch.js";
 
+/** 用户内容身份色（见 ADR 0026）。色块预览与「真实形态验收台」两处共用这一份，不各列一遍。 */
+const TINT_TOKENS = Array.from({ length: 12 }, (_, i) => `--color-tint-${i + 1}`);
+
 const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
   { title: "中性底盘", tokens: ["--color-page", "--color-surface", "--color-surface-elevated", "--color-surface-hover"] },
   { title: "文字", tokens: ["--color-ink", "--color-ink-2", "--color-ink-3"] },
@@ -19,6 +22,7 @@ const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
       "--color-data-purple",
     ],
   },
+  { title: "用户内容身份色（项目圆点 / 标签 #）", tokens: [...TINT_TOKENS] },
 ];
 
 const RADII: [string, string][] = [
@@ -95,6 +99,57 @@ export default function StyleguidePage() {
                   ))}
                 </div>
               </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="身份色的真实形态（验收台）">
+          <p className="td-text-caption text-ink-3">
+            12 支 tint 在真实尺寸下的样子：项目是 6px 圆点铺在胶囊上，标签是 caption 档的 # 字形。
+            色块看着分得开、缩到这个尺寸未必分得开——验收看这一节，不看上面的大色块。
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {TINT_TOKENS.map((token, i) => (
+              <span
+                key={token}
+                className="inline-flex items-center gap-1 rounded-pill bg-surface-elevated px-1.5 py-px td-text-caption text-ink-2"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: `var(${token})` }}
+                />
+                项目 {i + 1}
+              </span>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {TINT_TOKENS.map((token, i) => (
+              <span
+                key={token}
+                className="inline-flex items-center gap-1 rounded-pill bg-surface-elevated px-1.5 py-px td-text-caption text-ink-2"
+              >
+                <span style={{ color: `var(${token})` }}>#</span>
+                标签{i + 1}
+              </span>
+            ))}
+          </div>
+          <p className="td-text-caption text-ink-3">
+            筛选面板的填充态（旧色板在这里只有 2.3:1 对比度，是提亮的主要动因之一）：
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {TINT_TOKENS.map((token, i) => (
+              <span
+                key={token}
+                className="min-h-9 rounded-pill border px-2.5 td-text-caption leading-9"
+                style={{
+                  backgroundColor: `var(${token})`,
+                  borderColor: `var(${token})`,
+                  color: "var(--color-page)",
+                }}
+              >
+                #标签{i + 1}
+              </span>
             ))}
           </div>
         </Section>
