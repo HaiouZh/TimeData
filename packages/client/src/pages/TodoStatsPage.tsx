@@ -20,6 +20,7 @@ const EMPTY_BUCKETS: TodoBuckets = {
   atHand: [],
   handSession: null,
   projects: [],
+  projectTints: new Map(),
   goalLinkedIds: new Set(),
 };
 

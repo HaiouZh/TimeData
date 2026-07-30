@@ -70,24 +70,23 @@
   --color-data-red: #f87171;
   --color-data-purple: #a78bfa;
 
-  /* —— 用户内容身份色（项目 / 标签共用，固定 12 支，见 ADR 0026） ——
+  /* —— 用户内容身份色（项目 / 标签共用，固定 9 支，见 ADR 0026） ——
      约束是 WCAG 对比度（不是 HSL 明度，两者在这组色里近乎负相关）：圆点对 surface ≥3:1、
      caption 档 `#` 对 surface-elevated ≥4.5:1、填充态配 --color-page 深字 ≥4.5:1，实测最差支
      仍有 1.4 倍余量。色相尽量避开 accent(213°)/ok(158°)/warn(43°)/danger(0°)——小圆点撞上
-     动作色会被当成可点元素、撞上状态色会被读成告警；但四禁区吃掉 160° 后放不下 12 支互不
-     挤压，故 tint-12 距 danger 仅 9°、紫区偏挤，属已知待验收项（ADR 0026 取舍）。 */
-  --color-tint-1: #fb923c;
-  --color-tint-2: #a3e635;
-  --color-tint-3: #4ade80;
-  --color-tint-4: #2dd4bf;
-  --color-tint-5: #22d3ee;
-  --color-tint-6: #38bdf8;
-  --color-tint-7: #818cf8;
-  --color-tint-8: #a78bfa;
-  --color-tint-9: #c084fc;
-  --color-tint-10: #e879f9;
-  --color-tint-11: #f472b6;
-  --color-tint-12: #fb7185;
+     动作色会被当成可点元素、撞上状态色会被读成告警。
+     **9 支而非 12 支**：四个禁区吃掉 160° 色相环，塞 12 支会让相邻两支只差 10-15°，6px 圆点
+     上分不出（实测紫区四支里最近一对色差仅 5.5）。砍到 9 支后任意两支色相 ≥24°、最近一对
+     色差 13.1，全部靠色相区分、不靠深浅。残留最近项是 tint-3 距 ok 色差 7.3。 */
+  --color-tint-1: #fb923c; /* 橙 27° */
+  --color-tint-2: #a3e635; /* 草绿 83° */
+  --color-tint-3: #4ade80; /* 绿 142° */
+  --color-tint-4: #2dd4bf; /* 青绿 172° */
+  --color-tint-5: #38bdf8; /* 天蓝 198° */
+  --color-tint-6: #818cf8; /* 靛 234° */
+  --color-tint-7: #e879f9; /* 洋红 292° */
+  --color-tint-8: #f472b6; /* 粉 329° */
+  --color-tint-9: #fda4af; /* 淡粉 353° */
 
   /* —— 星图专属色（仅 Goal 星图组件使用，不外溢到全站 chrome） —— */
   --galaxy-edge: #a78bfa;

@@ -13,6 +13,7 @@ import {
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { recordSyncLog } from "../sync/engine.js";
+import { assignProjectTints } from "./contentTint.js";
 import { getActiveSession } from "./sessions.js";
 import { occurrenceChildId } from "./tasks/occurrenceChildId.js";
 import { completionOp } from "./tasks/completionOp.js";
@@ -784,6 +785,14 @@ export interface TodoBuckets {
    */
   projects: TodoProjectGroup[];
   /**
+   * goalId → 项目身份色 `var(--color-tint-N)`，供项目区组卡片与组外 chip 的圆点取色。
+   *
+   * **基于全部 active project 算，与「本次显示了哪些组」无关**：若只按 `projects`（有可解析
+   * 成员的组）算，某个项目的成员全部完成后它离开显示集合、释放色位，会让别的项目跟着换色。
+   * 排序键是 createdAt（新建项目排末尾 → 不影响已有项目的分配），机制见 `lib/contentTint.ts`。
+   */
+  projectTints: ReadonlyMap<string, string>;
+  /**
    * 被任一 active 目标引用的 task id，**不看 kind**，喂行内绿竖条 `inGoal`。
    * 与 projects 的口径（只认 kind==="project"）不同，两者不得互相派生：
    * 若由 projects 派生，只属于 theme 目标的任务会失去绿竖条。
@@ -841,6 +850,13 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     atHand,
     handSession,
     projects: [],
+    // 裸行取 createdAt 要兜 undefined（老行可能缺字段）；createdAt 并列时用 id 兜稳定序。
+    projectTints: assignProjectTints(
+      goalRows
+        .filter((row) => row.status === "active" && row.kind === "project")
+        .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.id.localeCompare(b.id))
+        .map((row) => row.id),
+    ),
     goalLinkedIds: goalLinkedTaskIds(goalRows),
   };
   // 规则的耗尽判定与到期日排序统一走 occurrence 账本（§9.1 读口径），不再读模板死游标。

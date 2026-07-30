@@ -25,6 +25,7 @@ const EMPTY: TodoBuckets = {
   atHand: [],
   handSession: null,
   projects: [],
+  projectTints: new Map<string, string>(),
   goalLinkedIds: new Set<string>(),
 };
 

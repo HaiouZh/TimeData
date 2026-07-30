@@ -1711,4 +1711,48 @@ describe("listTasks projects 桶", () => {
     const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
     expect(buckets.projects).toEqual([]);
   });
+
+  /**
+   * projectTints 的三条契约（ADR 0026 决策三）。它们无法由组件层的闸覆盖——
+   * 组件只拿到「显示出来的组」，而这里守的正是「分配基于全集、与显示无关」。
+   */
+  describe("projectTints", () => {
+    it("覆盖全部 active project，包含没有可解析成员因而不进 projects 桶的那些", async () => {
+      const t = await addTask({ title: "刷墙", toInbox: true });
+      await seedGoal({ id: "g1", members: [{ kind: "task", id: t.id }] });
+      // 成员全是悬空 ref：这个组不会出现在 projects 桶里，但它仍占一个色位。
+      await seedGoal({ id: "g2", members: [{ kind: "task", id: "不存在的任务" }] });
+
+      const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+      expect(buckets.projects.map((g) => g.goalId)).toEqual(["g1"]);
+      // 若实现改成按 buckets.projects 算，g2 拿不到色、且 g1 的分配会随显示集合漂移。
+      expect(buckets.projectTints.has("g2")).toBe(true);
+      expect(buckets.projectTints.get("g1")).toBeDefined();
+      expect(buckets.projectTints.get("g1")).not.toBe(buckets.projectTints.get("g2"));
+    });
+
+    it("归档目标与 theme 目标不占色位", async () => {
+      const t = await addTask({ title: "刷墙", toInbox: true });
+      await seedGoal({ id: "g1", members: [{ kind: "task", id: t.id }] });
+      await seedGoal({ id: "archived", status: "archived", members: [] });
+      await seedGoal({ id: "themed", kind: "theme", members: [] });
+
+      const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+      expect([...buckets.projectTints.keys()]).toEqual(["g1"]);
+    });
+
+    /**
+     * `g1` 与 `g12` 的哈希首选位相同（都是 tint-1），所以「谁拿到首选」直接暴露排序键。
+     * 这里让 `g12` 的 createdAt 更早：它应当拿到 tint-1，`g1` 顺移到 tint-2。
+     * 若实现改用 id 字典序（或 db 返回顺序），`g1` 会拿到 tint-1，两条断言都红。
+     */
+    it("按 createdAt 排序分配，不按 id 字典序", async () => {
+      await seedGoal({ id: "g1", members: [], createdAt: "2026-07-05T00:00:00.000Z" });
+      await seedGoal({ id: "g12", members: [], createdAt: "2026-07-01T00:00:00.000Z" });
+
+      const buckets = await listTasks(new Date("2026-07-10T10:00:00.000Z"));
+      expect(buckets.projectTints.get("g12")).toBe("var(--color-tint-1)");
+      expect(buckets.projectTints.get("g1")).toBe("var(--color-tint-2)");
+    });
+  });
 });

@@ -4,7 +4,6 @@ import type { Task } from "@timedata/shared";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../components/Icon.js";
-import { contentTint } from "../../lib/contentTint.js";
 import {
   isProjectMemberCountNearCap,
   RECENT_DONE_WINDOW_DAYS,
@@ -19,6 +18,11 @@ import { projectContainerId } from "./todoDnd.js";
 export interface TodoProjectSectionProps {
   /** 已按组间排序好的项目区分组，**不过标签筛选**（与手头区一致，见 design §非目标）。 */
   groups: TodoProjectGroup[];
+  /**
+   * goalId → 身份色，来自 `buckets.projectTints`（集合内避撞分配，见 `lib/contentTint.ts`）。
+   * 组件不自己按 goalId 取色：那要拿着全部 active project 才算得出，组件手上只有显示出来的组。
+   */
+  projectTints: ReadonlyMap<string, string>;
   handSessionId: string | null;
   now: Date;
   /**
@@ -97,6 +101,7 @@ function displayProjectTasks(
  */
 function ProjectGroupCard({
   group,
+  tint,
   expanded,
   dropBlocked,
   onToggleExpand,
@@ -108,6 +113,8 @@ function ProjectGroupCard({
   children,
 }: {
   group: TodoProjectGroup;
+  /** 该组的身份色；空串 = 查不到，不画圆点（比画一个继承色的隐形点诚实）。 */
+  tint: string;
   expanded: boolean;
   /** null = 没在拖，不画任何态 */
   dropBlocked: boolean | null;
@@ -311,12 +318,14 @@ function ProjectGroupCard({
             </span>
             {/* 与组外 chip 同形同色的身份点，构成「点↔点」认同。组卡片不另加左侧色条：
                 同一张卡片上两个颜色信号是同一件事的两种说法（同 chip / 竖条排他那条规则）。 */}
-            <span
-              aria-hidden="true"
-              data-project-dot
-              style={{ backgroundColor: contentTint(group.goalId) }}
-              className="h-1.5 w-1.5 shrink-0 rounded-full"
-            />
+            {tint !== "" && (
+              <span
+                aria-hidden="true"
+                data-project-dot
+                style={{ backgroundColor: tint }}
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+              />
+            )}
             <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
             <span className="shrink-0 td-text-caption font-normal text-ink-3">
               {summary.allDone
@@ -455,6 +464,7 @@ function ProjectGroupCard({
 
 export function TodoProjectSection({
   groups,
+  projectTints,
   handSessionId,
   now,
   revealGoals,
@@ -509,6 +519,7 @@ export function TodoProjectSection({
             <ProjectGroupCard
               key={group.goalId}
               group={group}
+              tint={projectTints.get(group.goalId) ?? ""}
               expanded={isExpanded(group.goalId)}
               dropBlocked={dropBlocked}
               onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
@@ -575,14 +586,17 @@ export function ProjectNameChip({ chip, onOpen }: { chip: ProjectChip; onOpen: (
       }}
       className={`relative z-20 ${META_CHIP_CLASS} text-ink-2 hover:text-ink`}
     >
-      {/* 圆点是项目的专属形状、色按 goalId 派生（标签那边归 `#`，见 ADR 0026）。
-          不再用 bg-ok：绿是「已完成 / theme 归属」的状态语义，不归项目身份占用。 */}
-      <span
-        aria-hidden="true"
-        data-project-dot
-        style={{ backgroundColor: contentTint(chip.goalId) }}
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
-      />
+      {/* 圆点是项目的专属形状（标签那边归 `#`，见 ADR 0026）。色由索引层带下来——它是集合内
+          避撞分配的结果，组件手上没有「全部 active project」那份集合。不再用 bg-ok：绿是
+          「已完成 / theme 归属」的状态语义，不归项目身份占用。 */}
+      {chip.tint !== "" && (
+        <span
+          aria-hidden="true"
+          data-project-dot
+          style={{ backgroundColor: chip.tint }}
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+        />
+      )}
       {chip.goalTitle}
     </button>
   );

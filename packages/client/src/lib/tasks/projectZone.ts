@@ -102,16 +102,32 @@ export function sortProjectMembers(
 export interface ProjectChip {
   goalId: string;
   goalTitle: string;
+  /**
+   * 该项目的身份色 `var(--color-tint-N)`，来自 `buckets.projectTints`。
+   *
+   * 由索引层带下来而不是让组件按 goalId 自己算：项目色是**集合内避撞分配**的结果
+   * （见 `lib/contentTint.ts`），只有拿着全部 active project 才算得出，组件手上没有那份集合。
+   */
+  tint: string;
 }
 
 /**
  * taskId → 它所属的项目，供今天 / 已排期 / 手头三区渲染可点的项目名 chip。
  * 只索引未完成成员：已完成成员不在项目区显示集合里，chip 点过去也无处可展开。
+ *
+ * `tints` 查不到时留空串：组件对空串不画圆点（比画一个继承色的隐形点诚实）。
+ * 正常不会发生——两者同源于 `listTasks` 的同一次 `db.goals` 读。
  */
-export function projectChipIndex(groups: readonly TodoProjectGroup[]): Map<string, ProjectChip> {
+export function projectChipIndex(
+  groups: readonly TodoProjectGroup[],
+  tints: ReadonlyMap<string, string>,
+): Map<string, ProjectChip> {
   const index = new Map<string, ProjectChip>();
   for (const group of groups) {
-    for (const task of group.tasks) index.set(task.id, { goalId: group.goalId, goalTitle: group.goalTitle });
+    const tint = tints.get(group.goalId) ?? "";
+    for (const task of group.tasks) {
+      index.set(task.id, { goalId: group.goalId, goalTitle: group.goalTitle, tint });
+    }
   }
   return index;
 }

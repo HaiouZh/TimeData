@@ -7,7 +7,6 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TodoProjectGroup } from "../../lib/tasks/goalMembership.js";
 import { GOAL_MEMBERS_MAX } from "../../lib/tasks/goalMembership.js";
-import { contentTint } from "../../lib/contentTint.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TaskRow } from "./TaskRow.js";
 import { ProjectNameChip, TodoProjectSection } from "./TodoProjectSection.js";
@@ -62,6 +61,7 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
     <MemoryRouter>
       <TodoProjectSection
         groups={props.groups ?? []}
+        projectTints={props.projectTints ?? new Map()}
         handSessionId={props.handSessionId ?? null}
         now={props.now ?? NOW}
         revealGoals={props.revealGoals ?? []}
@@ -595,38 +595,53 @@ describe("TodoProjectSection 落点", () => {
     await unmount(root);
   });
 
-  it("组标题圆点与同项目的组外 chip 圆点同色（点↔点认同一项目）", async () => {
+  it("组标题圆点用传入的项目色，与同项目的 chip 构成「点↔点」同色", async () => {
+    const tint = "var(--color-tint-4)";
     const { host: sectionHost, root: sectionRoot } = await renderSection({
       groups: [group({ goalId: "g1", goalTitle: "重构同步层" })],
+      projectTints: new Map([["g1", tint]]),
     });
     const groupDot = sectionHost.querySelector(
       '[data-testid="project-group"] [data-project-dot]',
     ) as HTMLElement;
     expect(groupDot).not.toBeNull();
+    // 值断言而非只比「两处相等」：只比相等时，两处一起改错取色来源也会全绿。
+    expect(groupDot.style.backgroundColor).toBe(tint);
 
     const { host: chipHost, root: chipRoot } = await renderDom(
-      <ProjectNameChip chip={{ goalId: "g1", goalTitle: "重构同步层" }} onOpen={vi.fn()} />,
+      <ProjectNameChip chip={{ goalId: "g1", goalTitle: "重构同步层", tint }} onOpen={vi.fn()} />,
     );
     const chipDot = chipHost.querySelector("[data-project-dot]") as HTMLElement;
-    expect(chipDot).not.toBeNull();
-    expect(chipDot.style.backgroundColor).not.toBe("");
     expect(chipDot.style.backgroundColor).toBe(groupDot.style.backgroundColor);
-    // 值断言而非只比「两处彼此相等」：只比相等时，两处一起错用 goalTitle 会全绿。
-    expect(chipDot.style.backgroundColor).toBe(contentTint("g1"));
 
     await unmount(sectionRoot);
     await unmount(chipRoot);
   });
 
-  // 组卡片那行圆点是与 chip 相互独立的代码，种子口径要各自有闸：同名不同 id 必须不同色。
-  it("组标题圆点按 goalId 派生，同名不同项目不同色", async () => {
+  it("不同项目各用自己的色（不再全场同一个绿）", async () => {
     const { host, root } = await renderSection({
       groups: [group({ goalId: "g1", goalTitle: "同名项目" }), group({ goalId: "g2", goalTitle: "同名项目" })],
+      projectTints: new Map([
+        ["g1", "var(--color-tint-1)"],
+        ["g2", "var(--color-tint-7)"],
+      ]),
     });
     const dots = [...host.querySelectorAll('[data-testid="project-group"] [data-project-dot]')] as HTMLElement[];
     expect(dots).toHaveLength(2);
-    // 种子若取 goalTitle，两个"同名项目"落同一支，这行红。
-    expect(dots[0]?.style.backgroundColor).not.toBe(dots[1]?.style.backgroundColor);
+    // 按 goalId 取色。若改成按 goalTitle 取，两个「同名项目」会拿同一个值，这行红。
+    expect(dots[0]?.style.backgroundColor).toBe("var(--color-tint-1)");
+    expect(dots[1]?.style.backgroundColor).toBe("var(--color-tint-7)");
+    await unmount(root);
+  });
+
+  it("查不到项目色时不画圆点（不留一个继承色的隐形点）", async () => {
+    const { host, root } = await renderSection({
+      groups: [group({ goalId: "g1", goalTitle: "无色项目" })],
+      projectTints: new Map(),
+    });
+    expect(host.querySelector('[data-testid="project-group"] [data-project-dot]')).toBeNull();
+    // 组本身照常渲染，只是没有圆点
+    expect(host.textContent).toContain("无色项目");
     await unmount(root);
   });
 });
@@ -639,7 +654,7 @@ describe("ProjectNameChip", () => {
       <TaskRow
         task={task({ id: "t1", title: "刷墙" })}
         pool="today"
-        metaChip={<ProjectNameChip chip={{ goalId: "g1", goalTitle: "装修" }} onOpen={onOpen} />}
+        metaChip={<ProjectNameChip chip={{ goalId: "g1", goalTitle: "装修", tint: "var(--color-tint-2)" }} onOpen={onOpen} />}
         {...handlers}
         onEdit={onEdit}
       />,
@@ -655,37 +670,21 @@ describe("ProjectNameChip", () => {
     await unmount(root);
   });
 
-  it("不同项目取不同色圆点（不再全场同一个绿）", async () => {
-    const seen = new Set<string>();
-    for (const goalId of ["g1", "g2", "g3", "g4", "g5", "g6"]) {
-      const { host, root } = await renderDom(
-        <ProjectNameChip chip={{ goalId, goalTitle: goalId }} onOpen={vi.fn()} />,
-      );
-      seen.add((host.querySelector("[data-project-dot]") as HTMLElement).style.backgroundColor);
-      await unmount(root);
-    }
-    // toBe(6) 而非 > 1：阈值写 > 1 时，色板从 12 支退化成 2 支也照样绿，钉不住色板宽度。
-    expect(seen.size).toBe(6);
+  it("圆点用 chip.tint，不自己按 goalId 取色", async () => {
+    const { host, root } = await renderDom(
+      <ProjectNameChip chip={{ goalId: "g1", goalTitle: "装修", tint: "var(--color-tint-6)" }} onOpen={vi.fn()} />,
+    );
+    const dot = host.querySelector("[data-project-dot]") as HTMLElement;
+    expect(dot.style.backgroundColor).toBe("var(--color-tint-6)");
+    await unmount(root);
   });
 
-  // 上面那条与「同色」那条都让 goalTitle 等于/关联 goalId，故种子改取标题也照样绿——
-  // 这一条专钉种子口径本身（ADR 0026 决策三「色是身份不是标签、改名不变色」）。
-  it("色按 goalId 派生、与标题无关（改名不变色）", async () => {
-    const dotOf = (host: HTMLElement) =>
-      (host.querySelector("[data-project-dot]") as HTMLElement).style.backgroundColor;
-    const a = await renderDom(<ProjectNameChip chip={{ goalId: "g1", goalTitle: "旧名" }} onOpen={vi.fn()} />);
-    const renamed = await renderDom(
-      <ProjectNameChip chip={{ goalId: "g1", goalTitle: "改过的名字" }} onOpen={vi.fn()} />,
+  it("tint 为空串时不画圆点，组名照常显示", async () => {
+    const { host, root } = await renderDom(
+      <ProjectNameChip chip={{ goalId: "g1", goalTitle: "装修", tint: "" }} onOpen={vi.fn()} />,
     );
-    const sameTitle = await renderDom(
-      <ProjectNameChip chip={{ goalId: "g2", goalTitle: "旧名" }} onOpen={vi.fn()} />,
-    );
-    // 同 id 改名 → 同色。种子若取标题，"旧名"与"改过的名字"落不同支，这行红。
-    expect(dotOf(renamed.host)).toBe(dotOf(a.host));
-    // 同名不同 id → 不同色。种子若取标题，两个"旧名"落同一支，这行红。
-    expect(dotOf(sameTitle.host)).not.toBe(dotOf(a.host));
-    await unmount(a.root);
-    await unmount(renamed.root);
-    await unmount(sameTitle.root);
+    expect(host.querySelector("[data-project-dot]")).toBeNull();
+    expect(host.textContent).toContain("装修");
+    await unmount(root);
   });
 });

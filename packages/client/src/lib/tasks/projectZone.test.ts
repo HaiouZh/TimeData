@@ -93,11 +93,32 @@ describe("summarizeProjectGroup", () => {
 
 describe("projectChipIndex", () => {
   it("只索引未完成成员，已完成成员不给 chip", () => {
-    const chips = projectChipIndex([
-      group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "a" })], doneCount: 1 }),
-    ]);
-    expect(chips.get("a")).toEqual({ goalId: "g1", goalTitle: "装修" });
+    const chips = projectChipIndex(
+      [group({ goalId: "g1", goalTitle: "装修", tasks: [task({ id: "a" })], doneCount: 1 })],
+      new Map([["g1", "var(--color-tint-3)"]]),
+    );
+    expect(chips.get("a")).toEqual({ goalId: "g1", goalTitle: "装修", tint: "var(--color-tint-3)" });
     expect(chips.has("done")).toBe(false);
+  });
+
+  it("把项目色带下来（组件不自己按 goalId 取色——避撞分配只有全集才算得出）", () => {
+    const chips = projectChipIndex(
+      [
+        group({ goalId: "g1", tasks: [task({ id: "a" })] }),
+        group({ goalId: "g2", tasks: [task({ id: "b" })] }),
+      ],
+      new Map([
+        ["g1", "var(--color-tint-1)"],
+        ["g2", "var(--color-tint-7)"],
+      ]),
+    );
+    expect(chips.get("a")?.tint).toBe("var(--color-tint-1)");
+    expect(chips.get("b")?.tint).toBe("var(--color-tint-7)");
+  });
+
+  it("色表查不到时给空串，渲染层据此不画圆点", () => {
+    const chips = projectChipIndex([group({ goalId: "g1", tasks: [task({ id: "a" })] })], new Map());
+    expect(chips.get("a")?.tint).toBe("");
   });
 });
 
@@ -175,7 +196,7 @@ describe("sortProjectMembers", () => {
 
 describe("goalBarTaskIds", () => {
   it("有项目名 chip 的行不再画绿竖条，只剩 theme 归属", () => {
-    const chips = projectChipIndex([group({ goalId: "g1", tasks: [task({ id: "项目成员" })] })]);
+    const chips = projectChipIndex([group({ goalId: "g1", tasks: [task({ id: "项目成员" })] })], new Map());
     const bars = goalBarTaskIds(new Set(["项目成员", "主题成员"]), chips);
     expect([...bars]).toEqual(["主题成员"]);
   });

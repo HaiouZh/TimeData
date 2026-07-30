@@ -3,7 +3,7 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl.js";
 import { Switch } from "../../components/ui/Switch.js";
 
 /** 用户内容身份色（见 ADR 0026）。色块预览与「真实形态验收台」两处共用这一份，不各列一遍。 */
-const TINT_TOKENS = Array.from({ length: 12 }, (_, i) => `--color-tint-${i + 1}`);
+const TINT_TOKENS = Array.from({ length: 9 }, (_, i) => `--color-tint-${i + 1}`);
 
 const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
   { title: "中性底盘", tokens: ["--color-page", "--color-surface", "--color-surface-elevated", "--color-surface-hover"] },
@@ -105,7 +105,7 @@ export default function StyleguidePage() {
 
         <Section title="身份色的真实形态（验收台）">
           <p className="td-text-caption text-ink-3">
-            12 支 tint 在真实尺寸下的样子：项目是 6px 圆点铺在胶囊上，标签是 caption 档的 # 字形。
+            9 支 tint 在真实尺寸下的样子：项目是 6px 圆点铺在胶囊上，标签是 caption 档的 # 字形。
             色块看着分得开、缩到这个尺寸未必分得开——验收看这一节，不看上面的大色块。
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -135,7 +135,7 @@ export default function StyleguidePage() {
             ))}
           </div>
           <p className="td-text-caption text-ink-3">
-            筛选面板的填充态（旧色板在这里是 1.9–3.1:1、12 支全不达标，是换色板的主要动因之一）：
+            筛选面板的填充态（旧色板在这里是 1.9–3.1:1、12 支无一达标，是换色板的主要动因之一）：
           </p>
           <div className="flex flex-wrap gap-1.5">
             {TINT_TOKENS.map((token, i) => (

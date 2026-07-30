@@ -114,6 +114,7 @@ const EMPTY: TodoBuckets = {
   atHand: [],
   handSession: null,
   projects: [],
+  projectTints: new Map<string, string>(),
   goalLinkedIds: new Set<string>(),
 };
 const TODO_COMPOSER_CONTENT_GAP_PX = 24;
@@ -128,7 +129,7 @@ export function TodoPage() {
   const [gravityNow, setGravityNow] = useState(() => currentGravityDate());
   const buckets = useLiveQuery(() => listTasks(gravityNow), [gravityNow], EMPTY) ?? EMPTY;
   // 项目成员用可点的项目名 chip 表达归属，绿竖条退回只表达 theme 归属——同屏两种说法是重复信号。
-  const projectChips = projectChipIndex(buckets.projects);
+  const projectChips = projectChipIndex(buckets.projects, buckets.projectTints);
   const goalLinkedIds = goalBarTaskIds(buckets.goalLinkedIds, projectChips);
   const resumable = useLiveQuery(() => listResumableSessions(), []) ?? [];
   useEffect(() => {
@@ -787,6 +788,7 @@ export function TodoPage() {
   const projectsBlock = (
     <TodoProjectSection
       groups={buckets.projects}
+      projectTints={buckets.projectTints}
       handSessionId={buckets.handSession?.id ?? null}
       now={gravityNow}
       revealGoals={revealGoals}
