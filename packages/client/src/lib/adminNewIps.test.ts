@@ -10,12 +10,16 @@ afterEach(() => {
 });
 
 describe("adminNewIps", () => {
-  it("fetchUnacknowledgedNewIps 请求未确认新 IP 列表", async () => {
+  it("fetchUnacknowledgedNewIps 请求未确认新来源列表", async () => {
     const response = {
       newIps: [
         {
           tokenTier: "master",
-          ip: "203.0.113.1",
+          scopeKey: "asn:9808|city:上海",
+          country: "中国",
+          city: "上海",
+          asnOrg: "China Mobile",
+          lastIp: "203.0.113.1",
           firstSeen: "2026-07-28T08:00:00.000Z",
           lastSeen: "2026-07-28T09:00:00.000Z",
         },
@@ -27,14 +31,14 @@ describe("adminNewIps", () => {
     expect(apiFetch).toHaveBeenCalledWith("/api/admin/request-logs/new-ips");
   });
 
-  it("acknowledgeNewIp POST 确认指定 tier+ip", async () => {
+  it("acknowledgeNewIp POST 确认指定 tier+scopeKey", async () => {
     apiFetch.mockResolvedValue({ ok: true });
 
-    await acknowledgeNewIp("master", "203.0.113.1");
+    await acknowledgeNewIp("master", "asn:9808|city:上海");
 
     expect(apiFetch).toHaveBeenCalledWith("/api/admin/request-logs/new-ips/acknowledge", {
       method: "POST",
-      body: JSON.stringify({ tokenTier: "master", ip: "203.0.113.1" }),
+      body: JSON.stringify({ tokenTier: "master", scopeKey: "asn:9808|city:上海" }),
     });
   });
 });

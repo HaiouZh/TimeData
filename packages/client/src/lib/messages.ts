@@ -61,12 +61,12 @@ export const messages = {
     promptCancel: "取消",
   },
 
-  /** 陌生 IP 提醒（服务端数据洞察页） */
+  /** 陌生来源提醒（服务端数据洞察页） */
   newIpAlert: {
-    title: "检测到陌生 IP",
-    hint: "以下来源 IP 首次使用带凭证的令牌访问服务器。若不是你本人或已授权的设备，请立即更换令牌。",
+    title: "检测到陌生来源",
+    hint: "以下来源（按运营商 + 城市划范围）首次使用带凭证的令牌访问服务器。同一范围内换 IP 不再重复提醒。若不是你本人或已授权的设备，请立即更换令牌。",
     acknowledge: "知道了",
-    rowBadge: "新 IP",
+    rowBadge: "新来源",
   },
 
   /** Confirm dialog generic labels */

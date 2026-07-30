@@ -1,9 +1,13 @@
-// 陌生 IP 提醒 API。独立成文件(不进 adminApi.ts):并行任务在改 adminApi.ts,避免合并冲突。
+// 陌生来源提醒 API。独立成文件(不进 adminApi.ts):并行任务在改 adminApi.ts,避免合并冲突。
 import { apiFetch } from "./api.ts";
 
 export interface UnacknowledgedNewIp {
   tokenTier: string;
-  ip: string;
+  scopeKey: string;
+  country: string | null;
+  city: string | null;
+  asnOrg: string | null;
+  lastIp: string | null;
   firstSeen: string;
   lastSeen: string;
 }
@@ -16,9 +20,9 @@ export function fetchUnacknowledgedNewIps(): Promise<UnacknowledgedNewIpsRespons
   return apiFetch("/api/admin/request-logs/new-ips");
 }
 
-export function acknowledgeNewIp(tokenTier: string, ip: string): Promise<{ ok: boolean }> {
+export function acknowledgeNewIp(tokenTier: string, scopeKey: string): Promise<{ ok: boolean }> {
   return apiFetch("/api/admin/request-logs/new-ips/acknowledge", {
     method: "POST",
-    body: JSON.stringify({ tokenTier, ip }),
+    body: JSON.stringify({ tokenTier, scopeKey }),
   });
 }

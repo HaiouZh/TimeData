@@ -211,6 +211,9 @@ const requestLogsResponse: AdminRequestLogsResponse = {
       deviceLabel: "agent",
       durationMs: 12,
       isNewIp: false,
+      country: null,
+      city: null,
+      asnOrg: null,
     },
   ],
 };
@@ -318,13 +321,17 @@ describe("SettingsAdminInsightsPage", () => {
     await unmount(root);
   });
 
-  it("renders new-IP alert card, highlights new-IP log rows, and acknowledges", async () => {
+  it("renders new-source alert card with geo label, highlights rows, and acknowledges by scopeKey", async () => {
     mockSuccessfulAdminInsights();
     fetchUnacknowledgedNewIps.mockResolvedValue({
       newIps: [
         {
           tokenTier: "master",
-          ip: "203.0.113.9",
+          scopeKey: "asn:9808|city:上海",
+          country: "中国",
+          city: "上海",
+          asnOrg: "China Mobile",
+          lastIp: "203.0.113.9",
           firstSeen: "2026-07-28T08:00:00.000Z",
           lastSeen: "2026-07-28T09:00:00.000Z",
         },
@@ -333,22 +340,31 @@ describe("SettingsAdminInsightsPage", () => {
     fetchAdminRequestLogs.mockResolvedValue({
       limit: 100,
       logs: [
-        { ...requestLogsResponse.logs[0], id: 1, ip: "203.0.113.9", isNewIp: true },
-        { ...requestLogsResponse.logs[0], id: 2, ip: "127.0.0.1", isNewIp: false },
+        {
+          ...requestLogsResponse.logs[0], id: 1, ip: "203.0.113.9", isNewIp: true,
+          country: "中国", city: "上海", asnOrg: "China Mobile",
+        },
+        {
+          ...requestLogsResponse.logs[0], id: 2, ip: "127.0.0.1", isNewIp: false,
+          country: null, city: null, asnOrg: null,
+        },
       ],
     });
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
-    // 提醒卡与条目
-    expect(host.textContent).toContain("检测到陌生 IP");
+    // 提醒卡主行是归属地 + 运营商,IP 降为副行
+    expect(host.textContent).toContain("检测到陌生来源");
+    expect(host.textContent).toContain("中国 · 上海");
+    expect(host.textContent).toContain("China Mobile");
     expect(host.textContent).toContain("203.0.113.9");
-    // 新 IP 行带「新 IP」徽标,旧 IP 行没有
-    const newIpBadges = Array.from(host.querySelectorAll("span")).filter(
-      (item) => item.textContent === "新 IP",
+    // 查不到归属地的日志行显示「位置未知」
+    expect(host.textContent).toContain("位置未知");
+    const badges = Array.from(host.querySelectorAll("span")).filter(
+      (item) => item.textContent === "新来源",
     );
-    expect(newIpBadges.length).toBeGreaterThan(0);
+    expect(badges.length).toBeGreaterThan(0);
 
-    // 点「知道了」→ 调 acknowledge 并从列表移除
+    // 点「知道了」→ 按 scopeKey 确认并从列表移除
     const ackButton = Array.from(host.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("知道了"),
     );
@@ -356,8 +372,8 @@ describe("SettingsAdminInsightsPage", () => {
     await act(async () => {
       ackButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(acknowledgeNewIp).toHaveBeenCalledWith("master", "203.0.113.9");
-    expect(host.textContent).not.toContain("检测到陌生 IP");
+    expect(acknowledgeNewIp).toHaveBeenCalledWith("master", "asn:9808|city:上海");
+    expect(host.textContent).not.toContain("检测到陌生来源");
 
     await unmount(root);
   });
@@ -366,7 +382,7 @@ describe("SettingsAdminInsightsPage", () => {
     mockSuccessfulAdminInsights();
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
-    expect(host.textContent).not.toContain("检测到陌生 IP");
+    expect(host.textContent).not.toContain("检测到陌生来源");
 
     await unmount(root);
   });

@@ -36,6 +36,7 @@ import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.
 import { Switch } from "../../components/ui/Switch.js";
 import { TimeField } from "../../components/ui/TimeField.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
+import { geoLabel } from "../../lib/geoLabel.ts";
 import { messages } from "../../lib/messages.ts";
 import { formatAppDateTime } from "../../lib/time.ts";
 import { callWithTotp, TotpCancelledError } from "../../lib/totpChallenge.ts";
@@ -220,15 +221,17 @@ function NewIpAlertCard({
       <div className="space-y-2">
         {newIps.map((item) => (
           <div
-            key={`${item.tokenTier}:${item.ip}`}
+            key={`${item.tokenTier}:${item.scopeKey}`}
             className="flex flex-wrap items-center justify-between gap-2 rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2"
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-ink">
-                <code>{item.ip}</code>
+                <span className="font-medium">{geoLabel(item.country, item.city)}</span>
+                {item.asnOrg && <span className="text-ink-2">{item.asnOrg}</span>}
                 <SyncIssueBadge label={tokenTierLabel[item.tokenTier as AdminRequestLogTokenTier] ?? item.tokenTier} />
               </div>
               <div className="mt-1 text-ink-3">
+                {item.lastIp ? `最近 IP ${item.lastIp} · ` : ""}
                 首见 {formatAppDateTime(item.firstSeen)} · 最近 {formatAppDateTime(item.lastSeen)}
               </div>
             </div>
@@ -332,7 +335,7 @@ function RequestAuditSection({
       </div>
 
       <p className="td-text-caption text-ink-3">
-        IP 仅用于展示；反代未清洗 X-Forwarded-For / X-Real-IP 时不可作为安全证据。
+        IP 与归属地仅用于展示；归属地是按 IP 段推测的大致位置、不是定位，反代未清洗 X-Forwarded-For / X-Real-IP 时不可作为安全证据。
       </p>
 
       {loading && <div className="td-text-label text-ink-2">正在加载请求审计…</div>}
@@ -358,7 +361,11 @@ function RequestAuditSection({
             </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
               <span>{formatAppDateTime(log.timestamp)}</span>
-              <span>IP：{log.ip ?? "未知"}</span>
+              <span>
+                IP：{log.ip ?? "未知"}
+                {log.ip ? ` · ${geoLabel(log.country, log.city)}` : ""}
+                {log.asnOrg ? ` · ${log.asnOrg}` : ""}
+              </span>
               <span>设备：{log.deviceLabel ?? clientHintLabel[log.clientHint]}</span>
               <span>{log.durationMs} ms</span>
             </div>
@@ -388,7 +395,7 @@ export default function SettingsAdminInsightsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    // 陌生 IP 提醒独立加载:失败不影响其余洞察,静默忽略
+    // 陌生来源提醒独立加载:失败不影响其余洞察,静默忽略
     fetchUnacknowledgedNewIps()
       .then((response) => {
         if (!cancelled) setNewIps(response.newIps);
@@ -402,9 +409,9 @@ export default function SettingsAdminInsightsPage() {
   async function handleAcknowledgeNewIp(item: UnacknowledgedNewIp) {
     setNewIpAckBusy(true);
     try {
-      await acknowledgeNewIp(item.tokenTier, item.ip);
+      await acknowledgeNewIp(item.tokenTier, item.scopeKey);
       setNewIps((current) =>
-        current.filter((entry) => !(entry.tokenTier === item.tokenTier && entry.ip === item.ip)),
+        current.filter((entry) => !(entry.tokenTier === item.tokenTier && entry.scopeKey === item.scopeKey)),
       );
     } catch {
       // 确认失败保留条目,下次进入页面仍会提醒

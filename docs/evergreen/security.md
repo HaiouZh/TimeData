@@ -26,6 +26,7 @@ covers:
   - packages/client/src/components/TotpPromptDialog.tsx
   - packages/client/src/pages/settings/SettingsTotpSection.tsx
   - packages/client/src/lib/adminNewIps.ts
+  - packages/client/src/lib/geoLabel.ts
 contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
