@@ -5,6 +5,7 @@ import type {
   AdminRequestLogTokenTier,
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
+import { type GeoLookup, lookupGeo } from "./geoip.js";
 
 export interface RequestLogEntry {
   timestamp: string;
@@ -50,7 +51,9 @@ function normalizeLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(500, Math.floor(limit ?? 100)));
 }
 
-function mapRequestLog(row: RequestLogDbRow): AdminRequestLogRow {
+function mapRequestLog(row: RequestLogDbRow, geoLookup: (ip: string) => GeoLookup | null): AdminRequestLogRow {
+  // 归属地不落库:mmdb 是 mmap 查询(微秒级),历史日志因此也自动带上地址。
+  const geo = row.ip === null ? null : geoLookup(row.ip);
   return {
     id: row.id,
     timestamp: row.timestamp,
@@ -65,6 +68,9 @@ function mapRequestLog(row: RequestLogDbRow): AdminRequestLogRow {
     deviceLabel: row.device_label,
     durationMs: row.duration_ms,
     isNewIp: row.is_new_ip === 1,
+    country: geo?.country ?? null,
+    city: geo?.city ?? null,
+    asnOrg: geo?.asnOrg ?? null,
   };
 }
 
@@ -103,7 +109,10 @@ export function recordRequestLog(entry: RequestLogEntry): void {
     );
 }
 
-export function queryRequestLogs(filter: RequestLogFilter = {}): AdminRequestLogRow[] {
+export function queryRequestLogs(
+  filter: RequestLogFilter = {},
+  geoLookup: (ip: string) => GeoLookup | null = lookupGeo,
+): AdminRequestLogRow[] {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
@@ -148,7 +157,7 @@ export function queryRequestLogs(filter: RequestLogFilter = {}): AdminRequestLog
       ORDER BY timestamp DESC, id DESC
       LIMIT ?
     `)
-    .all(...params) as RequestLogDbRow[]).map(mapRequestLog);
+    .all(...params) as RequestLogDbRow[]).map((row) => mapRequestLog(row, geoLookup));
 }
 
 export function pruneRequestLogs(opts: { maxAgeDays?: number; maxRows?: number } = {}): void {

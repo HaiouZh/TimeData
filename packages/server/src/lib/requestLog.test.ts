@@ -62,6 +62,9 @@ describe("requestLog", () => {
         deviceLabel: "agent",
         durationMs: 12,
         isNewIp: true,
+        country: null,
+        city: null,
+        asnOrg: null,
       },
       expect.objectContaining({
         timestamp: "2026-06-25T00:00:00.000Z",
@@ -131,5 +134,53 @@ describe("requestLog", () => {
 
     expect(queryRequestLogs({ limit: 10 }).map((row) => row.path)).toEqual(["/api/3", "/api/2"]);
     vi.useRealTimers();
+  });
+});
+
+describe("queryRequestLogs 归属地", () => {
+  it("按 IP 实时填充归属地,注入的查询结果原样映射", async () => {
+    const { queryRequestLogs, recordRequestLog } = await import("./requestLog.js");
+
+    recordRequestLog({
+      timestamp: "2026-07-30T00:00:00.000Z",
+      method: "GET",
+      path: "/api/entries",
+      status: 200,
+      outcome: "ok",
+      tokenTier: "master",
+      ip: "203.0.113.9",
+      userAgent: "Vitest",
+      clientHint: "web",
+      deviceLabel: null,
+      durationMs: 5,
+      isNewIp: false,
+    });
+
+    const logs = queryRequestLogs({}, () => ({
+      country: "中国", city: "上海", asn: 9808, asnOrg: "China Mobile",
+    }));
+    expect(logs[0]).toMatchObject({ country: "中国", city: "上海", asnOrg: "China Mobile" });
+  });
+
+  it("查不到归属地或 ip 为 null 时三个字段都是 null", async () => {
+    const { queryRequestLogs, recordRequestLog } = await import("./requestLog.js");
+
+    recordRequestLog({
+      timestamp: "2026-07-30T00:00:00.000Z",
+      method: "GET",
+      path: "/api/health",
+      status: 200,
+      outcome: "ok",
+      tokenTier: "public",
+      ip: null,
+      userAgent: null,
+      clientHint: "unknown",
+      deviceLabel: null,
+      durationMs: 1,
+      isNewIp: false,
+    });
+
+    const logs = queryRequestLogs({}, () => null);
+    expect(logs[0]).toMatchObject({ country: null, city: null, asnOrg: null });
   });
 });

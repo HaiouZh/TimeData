@@ -6,7 +6,7 @@ import {
 } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
-import { acknowledgeIp, listUnacknowledgedNewIps } from "../../lib/knownIps.js";
+import { acknowledgeIpScope, listUnacknowledgedNewIpScopes } from "../../lib/knownIps.js";
 import { queryRequestLogs } from "../../lib/requestLog.js";
 import { validateBody, validateQuery } from "../../middleware/validate.js";
 
@@ -22,17 +22,17 @@ const requestLogsQuerySchema = z.object({
 
 const acknowledgeBodySchema = z.object({
   tokenTier: z.string().min(1),
-  ip: z.string().min(1),
+  scopeKey: z.string().min(1),
 }).strict();
 
-// 陌生 IP 提醒:未确认的新来源 IP 列表与「知道了」确认。
+// 陌生来源提醒:未确认的新来源范围列表与「知道了」确认。
 requestLogs.get("/new-ips", (c) => {
-  return c.json({ newIps: listUnacknowledgedNewIps() });
+  return c.json({ newIps: listUnacknowledgedNewIpScopes() });
 });
 
 requestLogs.post("/new-ips/acknowledge", validateBody(acknowledgeBodySchema), (c) => {
-  const { tokenTier, ip } = c.var.body;
-  acknowledgeIp(tokenTier, ip);
+  const { tokenTier, scopeKey } = c.var.body;
+  acknowledgeIpScope(tokenTier, scopeKey);
   return c.json({ ok: true });
 });
 

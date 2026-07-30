@@ -150,9 +150,40 @@ describe("admin response schemas", () => {
         deviceLabel: "web",
         durationMs: 12,
         isNewIp: false,
+        country: null,
+        city: null,
+        asnOrg: null,
       }],
       limit: 100,
     })).toMatchObject({ logs: [{ outcome: "ok", tokenTier: "master" }] });
+  });
+
+  it("请求日志行带归属地字段,允许为 null", () => {
+    const row = {
+      id: 1,
+      timestamp: "2026-07-30T00:00:00.000Z",
+      method: "GET",
+      path: "/api/entries",
+      status: 200,
+      outcome: "ok",
+      tokenTier: "master",
+      ip: "203.0.113.9",
+      userAgent: "Vitest",
+      clientHint: "web",
+      deviceLabel: null,
+      durationMs: 5,
+      isNewIp: false,
+      country: "中国",
+      city: "上海",
+      asnOrg: "China Mobile",
+    };
+    expect(AdminRequestLogsResponseSchema.parse({ logs: [row], limit: 100 }).logs[0]).toMatchObject({
+      country: "中国", city: "上海", asnOrg: "China Mobile",
+    });
+    expect(AdminRequestLogsResponseSchema.parse({
+      logs: [{ ...row, country: null, city: null, asnOrg: null }],
+      limit: 100,
+    }).logs[0]).toMatchObject({ country: null, city: null, asnOrg: null });
   });
 
   it("rejects non-finite or non-integer counts and empty backup identifiers", () => {

@@ -197,6 +197,10 @@ export const AdminRequestLogRowSchema = z.object({
   deviceLabel: z.string().nullable(),
   durationMs: NonNegativeIntSchema,
   isNewIp: z.boolean(),
+  // 归属地不落库,由服务端查询时实时查 GeoLite2 填充;库缺失或查不到即 null。
+  country: z.string().nullable(),
+  city: z.string().nullable(),
+  asnOrg: z.string().nullable(),
 });
 
 export const AdminRequestLogsResponseSchema = z.object({

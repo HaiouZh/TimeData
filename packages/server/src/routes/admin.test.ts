@@ -73,15 +73,6 @@ function createSchema() {
       used_at TEXT
     );
 
-    CREATE TABLE known_ips (
-      token_tier TEXT NOT NULL,
-      ip TEXT NOT NULL,
-      first_seen TEXT NOT NULL,
-      last_seen TEXT NOT NULL,
-      acknowledged INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (token_tier, ip)
-    );
-
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,

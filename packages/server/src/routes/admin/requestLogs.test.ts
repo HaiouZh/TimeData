@@ -16,19 +16,28 @@ afterEach(() => {
   cleanupRouteTestDb(db);
 });
 
-function seedKnownIp(overrides: Partial<{
+function seedKnownIpScope(overrides: Partial<{
   tokenTier: string;
-  ip: string;
+  scopeKey: string;
+  country: string | null;
+  city: string | null;
+  asnOrg: string | null;
+  lastIp: string | null;
   firstSeen: string;
   lastSeen: string;
   acknowledged: boolean;
 }> = {}): void {
   db.prepare(`
-    INSERT INTO known_ips (token_tier, ip, first_seen, last_seen, acknowledged)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO known_ip_scopes
+      (token_tier, scope_key, country, city, asn_org, last_ip, first_seen, last_seen, acknowledged)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     overrides.tokenTier ?? "master",
-    overrides.ip ?? "203.0.113.1",
+    overrides.scopeKey ?? "asn:9808|city:上海",
+    overrides.country ?? "中国",
+    overrides.city ?? "上海",
+    overrides.asnOrg ?? "China Mobile",
+    overrides.lastIp ?? "203.0.113.1",
     overrides.firstSeen ?? "2026-07-28T08:00:00.000Z",
     overrides.lastSeen ?? "2026-07-28T09:00:00.000Z",
     overrides.acknowledged ? 1 : 0,
@@ -58,9 +67,9 @@ function seedRequestLog(overrides: Partial<{ ip: string; isNewIp: boolean }> = {
 }
 
 describe("GET /api/admin/request-logs/new-ips", () => {
-  it("只返回未确认的新 IP", async () => {
-    seedKnownIp({ tokenTier: "master", ip: "203.0.113.1", acknowledged: false });
-    seedKnownIp({ tokenTier: "agent", ip: "198.51.100.7", acknowledged: true });
+  it("只返回未确认的新来源范围,带归属地与最近 IP", async () => {
+    seedKnownIpScope({ tokenTier: "master", scopeKey: "asn:9808|city:上海", acknowledged: false });
+    seedKnownIpScope({ tokenTier: "agent", scopeKey: "asn:14061", acknowledged: true });
 
     const res = await app.request("/api/admin/request-logs/new-ips");
     expect(res.status).toBe(200);
@@ -68,7 +77,11 @@ describe("GET /api/admin/request-logs/new-ips", () => {
       newIps: [
         {
           tokenTier: "master",
-          ip: "203.0.113.1",
+          scopeKey: "asn:9808|city:上海",
+          country: "中国",
+          city: "上海",
+          asnOrg: "China Mobile",
+          lastIp: "203.0.113.1",
           firstSeen: "2026-07-28T08:00:00.000Z",
           lastSeen: "2026-07-28T09:00:00.000Z",
         },
@@ -84,30 +97,39 @@ describe("GET /api/admin/request-logs/new-ips", () => {
 });
 
 describe("POST /api/admin/request-logs/new-ips/acknowledge", () => {
-  it("确认后从未确认列表消失,其余不受影响", async () => {
-    seedKnownIp({ tokenTier: "master", ip: "203.0.113.1" });
-    seedKnownIp({ tokenTier: "agent", ip: "198.51.100.7", firstSeen: "2026-07-28T07:00:00.000Z" });
+  it("按 scopeKey 确认后从未确认列表消失,其余不受影响", async () => {
+    seedKnownIpScope({ tokenTier: "master", scopeKey: "asn:9808|city:上海" });
+    seedKnownIpScope({ tokenTier: "agent", scopeKey: "asn:14061", firstSeen: "2026-07-28T07:00:00.000Z" });
 
     const ackRes = await app.request("/api/admin/request-logs/new-ips/acknowledge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tokenTier: "master", ip: "203.0.113.1" }),
+      body: JSON.stringify({ tokenTier: "master", scopeKey: "asn:9808|city:上海" }),
     });
     expect(ackRes.status).toBe(200);
     expect(await ackRes.json()).toEqual({ ok: true });
 
     const listRes = await app.request("/api/admin/request-logs/new-ips");
-    const body = (await listRes.json()) as { newIps: Array<{ tokenTier: string; ip: string }> };
+    const body = (await listRes.json()) as { newIps: Array<{ tokenTier: string; scopeKey: string }> };
     expect(body.newIps).toEqual([
-      expect.objectContaining({ tokenTier: "agent", ip: "198.51.100.7" }),
+      expect.objectContaining({ tokenTier: "agent", scopeKey: "asn:14061" }),
     ]);
   });
 
-  it("缺字段返回 400", async () => {
+  it("缺 scopeKey 返回 400", async () => {
     const res = await app.request("/api/admin/request-logs/new-ips/acknowledge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tokenTier: "master" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("旧的 ip 字段形状被拒(strict),不会静默当成确认成功", async () => {
+    const res = await app.request("/api/admin/request-logs/new-ips/acknowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokenTier: "master", ip: "203.0.113.1" }),
     });
     expect(res.status).toBe(400);
   });
@@ -125,5 +147,13 @@ describe("GET /api/admin/request-logs 行 isNewIp 映射", () => {
     const byIp = new Map(body.logs.map((log) => [log.ip, log.isNewIp]));
     expect(byIp.get("203.0.113.9")).toBe(true);
     expect(byIp.get("127.0.0.1")).toBe(false);
+  });
+
+  it("测试环境无 mmdb 时归属地字段为 null,不影响日志返回", async () => {
+    seedRequestLog({ ip: "203.0.113.9", isNewIp: false });
+
+    const res = await app.request("/api/admin/request-logs");
+    const body = (await res.json()) as { logs: Array<{ country: string | null; city: string | null; asnOrg: string | null }> };
+    expect(body.logs[0]).toMatchObject({ country: null, city: null, asnOrg: null });
   });
 });
