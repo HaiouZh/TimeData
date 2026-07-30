@@ -13,6 +13,8 @@ describe("index.css design tokens", () => {
     expect(css).toContain("--color-page: #0e1320;");
     expect(css).toContain("--color-surface: #161d30;");
     expect(css).toContain("--color-data-purple: #a78bfa;");
+    expect(css).toContain("--color-tint-1: #fb923c;");
+    expect(css).toContain("--color-tint-12: #fb7185;");
     expect(css).toContain(
       '--font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;',
     );

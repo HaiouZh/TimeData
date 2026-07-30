@@ -11,6 +11,7 @@ covers:
   - packages/client/src/lib/zLayers.ts
   - packages/client/src/pages/dev/StyleguidePage.tsx
   - packages/client/src/pages/stats/chartColors.ts
+  - packages/client/src/lib/contentTint.ts
   - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
 contracts:

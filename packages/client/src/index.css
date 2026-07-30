@@ -70,6 +70,23 @@
   --color-data-red: #f87171;
   --color-data-purple: #a78bfa;
 
+  /* —— 用户内容身份色（项目 / 标签共用，固定 12 支，见 ADR 0026） ——
+     明度 60–65%：同时满足 6px 圆点在 surface-elevated 上可见、caption 档 `#` 字形可读、
+     填充态配 --color-page 深字达 8:1。色相避开 accent(217°)/ok(160°)/warn(43°)/danger(0°)
+     四个已占用值——小圆点撞上动作色会被当成可点元素，撞上状态色会被读成告警。 */
+  --color-tint-1: #fb923c;
+  --color-tint-2: #a3e635;
+  --color-tint-3: #4ade80;
+  --color-tint-4: #2dd4bf;
+  --color-tint-5: #22d3ee;
+  --color-tint-6: #38bdf8;
+  --color-tint-7: #818cf8;
+  --color-tint-8: #a78bfa;
+  --color-tint-9: #c084fc;
+  --color-tint-10: #e879f9;
+  --color-tint-11: #f472b6;
+  --color-tint-12: #fb7185;
+
   /* —— 星图专属色（仅 Goal 星图组件使用，不外溢到全站 chrome） —— */
   --galaxy-edge: #a78bfa;
   --galaxy-edge-glow: #7c6fd6;
