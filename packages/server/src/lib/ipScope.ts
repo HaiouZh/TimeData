@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import type { GeoLookup } from "./geoip.js";
 
 export interface IpScope {
@@ -7,11 +8,10 @@ export interface IpScope {
   asnOrg: string | null;
 }
 
-// 纯 IPv4,以及 IPv4-mapped/compat 形式(`::ffff:203.0.113.9`)。两者都按 IPv4 的 /24 收敛。
-// 锚定到整串:IP 来自 X-Real-IP / X-Forwarded-For,是外部可控字符串,
-// 不锚定的话 `whatever-1.2.3.4` 这类垃圾会被当成 IPv4,把互不相干的来源并成同一个键。
-const IPV4_ONLY = /^\d{1,3}(?:\.\d{1,3}){3}$/;
-const IPV4_MAPPED = /^[0-9a-fA-F:]*:(\d{1,3}(?:\.\d{1,3}){3})$/;
+// 只认真正的 IPv4-mapped(`::ffff:203.0.113.9`)与已废弃的 IPv4-compatible(`::203.0.113.9`),
+// 按 IPv4 的 /24 收敛。不能放宽成「结尾是点分四段」——`2001:db8::1.2.3.4` 是合法 IPv6、
+// 只是低 32 位恰好写成点分,若当 IPv4 处理会让 2001:db8:: 与 2002:db8:: 并成同一个键。
+const IPV4_MAPPED_ONLY = /^::(?:ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/i;
 
 /** 把压缩过的 IPv6 展开成 8 组;无法解析返回 null。 */
 function expandIpv6(ip: string): string[] | null {
@@ -33,30 +33,51 @@ function normalizeGroup(group: string): string {
 }
 
 /**
- * 无归属地时的退回前缀:IPv4 取 /24,IPv6 取 /64。
+ * 无归属地时的退回前缀:IPv4 取 /24,IPv6 取 /64,认不出的原样兜底。
+ *
+ * 先用 node:net 的 isIP 把闸(与 geoip.ts 的 maxmind.validate 同一把)。IP 来自
+ * X-Real-IP / X-Forwarded-For,是外部可控字符串,自造正则挡不干净:曾经因此把
+ * `whatever-1.2.3.4` 当成 IPv4、把 `2001:db8::1.2.3.4` 与 `2002:db8::1.2.3.4`
+ * (两个合法但不同 /16 的 IPv6)并成同一个键,那是漏报陌生来源。
+ *
  * IPv6 必须先展开——`2001:db8::1` 直接 split(":") 取前四组会得到整个地址,
  * 导致同 /64 内不同地址被判成不同范围,噪音照旧。
  */
 function networkPrefix(ip: string): string {
-  const ipv4 = IPV4_ONLY.test(ip) ? ip : (IPV4_MAPPED.exec(ip)?.[1] ?? null);
-  if (ipv4 !== null) return ipv4.split(".").slice(0, 3).join(".");
-  if (ip.includes(":")) {
+  const family = isIP(ip);
+  if (family === 4) return ip.split(".").slice(0, 3).join(".");
+  if (family === 6) {
+    const mapped = IPV4_MAPPED_ONLY.exec(ip);
+    if (mapped?.[1] !== undefined) return mapped[1].split(".").slice(0, 3).join(".");
     const groups = expandIpv6(ip);
     if (groups) return groups.slice(0, 4).map(normalizeGroup).join(":");
+    // 走到这里的是 expandIpv6 认不出的合法 IPv6:只有「非 mapped 却内嵌点分 IPv4」
+    // 这一种(如 1:2:3:4:5:6:1.2.3.4,组数按点分算不齐)。整串兜底=多报一次,不漏报。
   }
-  // 认不出来就按整串兜底:宁可多报一次陌生来源,也不要把不同来源静默并成一个键。
+  // 不是合法 IP 就整串兜底:宁可多报一次陌生来源,也不要把不同来源静默并成一个键。
   return ip;
 }
 
-/** 算某个 IP 归属的「告警范围」。同一 scopeKey 内换 IP 不算新来源。 */
+/**
+ * 算某个 IP 归属的「告警范围」。同一 scopeKey 内换 IP 不算新来源。
+ *
+ * 城市那一档用 GeoLite2 的 geoname_id 而非本地化城市名:名字会随 mmdb 构建变化
+ * (zh-CN 缺失时回落 en),换库就会让已确认范围重报;而同名不同国的城市(London
+ * UK/加拿大、San Jose US/哥斯达黎加)在同一 ASN 下会被并成一个键。数字 ID 两者都免。
+ */
 export function computeIpScope(ip: string, geo: GeoLookup | null): IpScope {
   const country = geo?.country ?? null;
   const city = geo?.city ?? null;
   const asnOrg = geo?.asnOrg ?? null;
   const asn = geo?.asn ?? null;
+  const cityGeonameId = geo?.cityGeonameId ?? null;
 
   // 城市缺失只退回 asn,不拼空串:否则「未知城市」与真实城市会是两个键。
-  const scopeKey = asn === null ? `net:${networkPrefix(ip)}` : city ? `asn:${asn}|city:${city}` : `asn:${asn}`;
+  const scopeKey = asn === null
+    ? `net:${networkPrefix(ip)}`
+    : cityGeonameId === null
+      ? `asn:${asn}`
+      : `asn:${asn}|geo:${cityGeonameId}`;
 
   return { scopeKey, country, city, asnOrg };
 }

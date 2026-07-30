@@ -19,6 +19,8 @@ describe("geoip 缺库降级", () => {
     expect(lookupGeo("203.0.113.9")).toBeNull();
   });
 
+  // 注意:这条在缺库前提下是被 `if (!city && !asn) return null` 提前接住的,
+  // 并不守护 validate() 短路本身——真闸在下面「库就绪」组里(库在时才走得到 validate)。
   it("非法 IP 字符串返回 null", () => {
     process.env.GEOIP_DIR = "/nonexistent/geoip-dir-for-tests";
     expect(lookupGeo("not-an-ip")).toBeNull();
@@ -59,5 +61,109 @@ describe("geoip 缺库降级", () => {
       vi.doUnmock("node:fs");
       vi.resetModules();
     }
+  });
+});
+
+/**
+ * 库就绪路径。真 mmdb 有 70MB、不进仓库,但 lookupGeo 只用到 Reader 的 .get(),
+ * 所以 mock 掉 maxmind 就能覆盖整段成功路径(zh-CN 优先、geonameId、validate 短路、
+ * 半加载态),不需要给生产代码开任何测试专用缝。
+ */
+type FakeRows = { city?: unknown; asn?: unknown };
+
+async function loadGeoipWithFakeReaders(rows: FakeRows, opts: { cityOk?: boolean; asnOk?: boolean } = {}) {
+  const { cityOk = true, asnOk = true } = opts;
+  const validateSpy = vi.fn((ip: string) => /^[0-9a-fA-F:.]+$/.test(ip));
+
+  vi.resetModules();
+  vi.doMock("node:fs", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("node:fs")>()),
+    // buffer 内容带库名标记,让 Reader 桩能认出自己是哪个库——不能靠构造顺序,
+    // 因为某个库加载失败时它的 Reader 压根不会被构造。
+    readFileSync: vi.fn((filePath: string) => {
+      const isCity = String(filePath).includes("City");
+      if (isCity ? !cityOk : !asnOk) throw new Error("ENOENT（测试桩）");
+      return Buffer.from(isCity ? "city" : "asn");
+    }),
+  }));
+  vi.doMock("maxmind", () => ({
+    validate: validateSpy,
+    Reader: class {
+      #isCity: boolean;
+      constructor(buf: Buffer, _opts?: unknown) {
+        this.#isCity = buf.toString() === "city";
+      }
+      get(_ip: string) {
+        return this.#isCity ? (rows.city ?? null) : (rows.asn ?? null);
+      }
+    },
+  }));
+
+  const geoip = await import("./geoip.js");
+  return { geoip, validateSpy };
+}
+
+const CITY_ROW = {
+  country: { names: { en: "China", "zh-CN": "中国" } },
+  city: { geoname_id: 1796236, names: { en: "Shanghai", "zh-CN": "上海" } },
+};
+const ASN_ROW = { autonomous_system_number: 9808, autonomous_system_organization: "China Mobile" };
+
+describe("geoip 库就绪时的查询", () => {
+  afterEach(() => {
+    vi.doUnmock("node:fs");
+    vi.doUnmock("maxmind");
+    vi.resetModules();
+  });
+
+  it("两库都在:返回中文地名、geonameId 与运营商", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.lookupGeo("203.0.113.9")).toEqual({
+      country: "中国",
+      city: "上海",
+      cityGeonameId: 1796236,
+      asn: 9808,
+      asnOrg: "China Mobile",
+    });
+  });
+
+  it("地名优先 zh-CN,缺中文名时回落 en", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({
+      city: { country: { names: { en: "Canada" } }, city: { geoname_id: 6058560, names: { en: "London" } } },
+      asn: ASN_ROW,
+    });
+    expect(geoip.lookupGeo("203.0.113.9")).toMatchObject({ country: "Canada", city: "London" });
+  });
+
+  it("库在时非法 IP 被 validate 短路挡下,不查库", async () => {
+    const { geoip, validateSpy } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.lookupGeo("not-an-ip")).toBeNull();
+    expect(validateSpy).toHaveBeenCalledWith("not-an-ip");
+  });
+
+  it("两库都查不到该 IP 时返回 null", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({});
+    expect(geoip.lookupGeo("203.0.113.9")).toBeNull();
+  });
+
+  it("半加载态:只有 ASN 库在 → 有运营商无地名,就绪状态如实报告", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW }, { cityOk: false });
+    expect(geoip.lookupGeo("203.0.113.9")).toMatchObject({
+      country: null, city: null, cityGeonameId: null, asn: 9808,
+    });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: false, asn: true });
+  });
+
+  it("半加载态:只有 City 库在 → 有地名无运营商", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW }, { asnOk: false });
+    expect(geoip.lookupGeo("203.0.113.9")).toMatchObject({
+      country: "中国", city: "上海", asn: null, asnOrg: null,
+    });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: false });
+  });
+
+  it("两库都在时就绪状态全 true", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: true });
   });
 });

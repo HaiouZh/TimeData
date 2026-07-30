@@ -73,6 +73,22 @@ function createSchema() {
       used_at TEXT
     );
 
+    -- 与 initializeDatabase 保持对称。当前该套件没挂 requestAudit、也没打 /new-ips,
+    -- 所以缺了不会红;但 requestAudit 把 checkAndRecordIp 的异常吞成 console.warn,
+    -- 将来谁给这里挂上中间件,故障会表现为 isNewIp 恒 false(提醒静默失效)而非测试失败。
+    CREATE TABLE known_ip_scopes (
+      token_tier TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      country TEXT,
+      city TEXT,
+      asn_org TEXT,
+      last_ip TEXT,
+      first_seen TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      acknowledged INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (token_tier, scope_key)
+    );
+
     CREATE TABLE sync_tombstones (
       table_name TEXT NOT NULL,
       record_id TEXT NOT NULL,

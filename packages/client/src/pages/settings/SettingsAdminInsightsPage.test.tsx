@@ -324,10 +324,11 @@ describe("SettingsAdminInsightsPage", () => {
   it("renders new-source alert card with geo label, highlights rows, and acknowledges by scopeKey", async () => {
     mockSuccessfulAdminInsights();
     fetchUnacknowledgedNewIps.mockResolvedValue({
+      geoip: { city: true, asn: true },
       newIps: [
         {
           tokenTier: "master",
-          scopeKey: "asn:9808|city:上海",
+          scopeKey: "asn:9808|geo:1796236",
           country: "中国",
           city: "上海",
           asnOrg: "China Mobile",
@@ -337,12 +338,14 @@ describe("SettingsAdminInsightsPage", () => {
         },
       ],
     });
+    // 日志行故意用另一组归属地:否则提醒卡整段不渲染,页面级 textContent 断言也会
+    // 被日志行满足(曾是假闸——把卡片主行删掉测试照样绿)。
     fetchAdminRequestLogs.mockResolvedValue({
       limit: 100,
       logs: [
         {
-          ...requestLogsResponse.logs[0], id: 1, ip: "203.0.113.9", isNewIp: true,
-          country: "中国", city: "上海", asnOrg: "China Mobile",
+          ...requestLogsResponse.logs[0], id: 1, ip: "198.51.100.7", isNewIp: true,
+          country: "美国", city: "圣何塞", asnOrg: "DigitalOcean",
         },
         {
           ...requestLogsResponse.logs[0], id: 2, ip: "127.0.0.1", isNewIp: false,
@@ -352,13 +355,23 @@ describe("SettingsAdminInsightsPage", () => {
     });
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
 
-    // 提醒卡主行是归属地 + 运营商,IP 降为副行
-    expect(host.textContent).toContain("检测到陌生来源");
-    expect(host.textContent).toContain("中国 · 上海");
-    expect(host.textContent).toContain("China Mobile");
-    expect(host.textContent).toContain("203.0.113.9");
-    // 查不到归属地的日志行显示「位置未知」
+    // 提醒卡内部断言:主行是归属地 + 运营商,IP 降为副行。范围限定在卡片子树里,
+    // 不用页面级 textContent——否则日志行能冒充卡片。
+    const card = host.querySelector('[data-testid="new-ip-alert-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain("检测到陌生来源");
+    expect(card?.textContent).toContain("中国 · 上海");
+    expect(card?.textContent).toContain("China Mobile");
+    expect(card?.textContent).toContain("最近 IP 203.0.113.9");
+
+    // 日志行侧:有归属地的显示出来,查不到的显示「位置未知」
+    expect(host.textContent).toContain("美国 · 圣何塞");
+    expect(host.textContent).toContain("DigitalOcean");
     expect(host.textContent).toContain("位置未知");
+
+    // 两个库都就绪时不显示未就绪提示
+    expect(host.querySelector('[data-testid="geoip-readiness-notice"]')).toBeNull();
+
     const badges = Array.from(host.querySelectorAll("span")).filter(
       (item) => item.textContent === "新来源",
     );
@@ -372,10 +385,32 @@ describe("SettingsAdminInsightsPage", () => {
     await act(async () => {
       ackButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    expect(acknowledgeNewIp).toHaveBeenCalledWith("master", "asn:9808|city:上海");
-    expect(host.textContent).not.toContain("检测到陌生来源");
+    expect(acknowledgeNewIp).toHaveBeenCalledWith("master", "asn:9808|geo:1796236");
+    expect(host.querySelector('[data-testid="new-ip-alert-card"]')).toBeNull();
 
     await unmount(root);
+  });
+
+  it("归属地库未就绪时显示提示,缺哪个库说哪个", async () => {
+    mockSuccessfulAdminInsights();
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: false, asn: false } });
+    const bothMissing = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    const bothNotice = bothMissing.host.querySelector('[data-testid="geoip-readiness-notice"]');
+    expect(bothNotice?.textContent).toContain("两个 GeoLite2 库都没读到");
+    expect(bothNotice?.textContent).toContain("data/geoip/");
+    await unmount(bothMissing.root);
+
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: true, asn: false } });
+    const asnMissing = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    expect(asnMissing.host.querySelector('[data-testid="geoip-readiness-notice"]')?.textContent)
+      .toContain("缺 GeoLite2-ASN");
+    await unmount(asnMissing.root);
+
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: false, asn: true } });
+    const cityMissing = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    expect(cityMissing.host.querySelector('[data-testid="geoip-readiness-notice"]')?.textContent)
+      .toContain("缺 GeoLite2-City");
+    await unmount(cityMissing.root);
   });
 
   it("hides new-IP alert card when nothing is unacknowledged", async () => {

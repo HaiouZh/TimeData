@@ -6,6 +6,7 @@ import {
 } from "@timedata/shared";
 import { Hono } from "hono";
 import { z } from "zod";
+import { getGeoipReadiness } from "../../lib/geoip.js";
 import { acknowledgeIpScope, listUnacknowledgedNewIpScopes } from "../../lib/knownIps.js";
 import { queryRequestLogs } from "../../lib/requestLog.js";
 import { validateBody, validateQuery } from "../../middleware/validate.js";
@@ -26,8 +27,10 @@ const acknowledgeBodySchema = z.object({
 }).strict();
 
 // 陌生来源提醒:未确认的新来源范围列表与「知道了」确认。
+// geoip 就绪状态一并返回:半加载/全缺时收敛档会变宽,不暴露的话用户只看到一片
+// 「位置未知」,无从判断是库没传还是功能没生效。
 requestLogs.get("/new-ips", (c) => {
-  return c.json({ newIps: listUnacknowledgedNewIpScopes() });
+  return c.json({ newIps: listUnacknowledgedNewIpScopes(), geoip: getGeoipReadiness() });
 });
 
 requestLogs.post("/new-ips/acknowledge", validateBody(acknowledgeBodySchema), (c) => {

@@ -20,7 +20,7 @@ covers:
 contracts:
   - packages/shared/src/admin-schemas.ts
   - packages/server/src/routes/admin/backupConfig.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-30
 ---
 
 # 备份与恢复

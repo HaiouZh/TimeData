@@ -1,48 +1,56 @@
 import { describe, expect, it } from "vitest";
+import type { GeoLookup } from "./geoip.js";
 import { computeIpScope } from "./ipScope.js";
 
+const SHANGHAI_MOBILE: GeoLookup = {
+  country: "中国",
+  city: "上海",
+  cityGeonameId: 1796236,
+  asn: 9808,
+  asnOrg: "China Mobile",
+};
+
 describe("computeIpScope 三档收敛", () => {
-  it("有 ASN 且有城市:按 asn+city 收敛,同范围换 IP 得同一个键", () => {
-    const geo = { country: "中国", city: "上海", asn: 9808, asnOrg: "China Mobile" };
-    const a = computeIpScope("203.0.113.9", geo);
-    const b = computeIpScope("203.0.113.77", geo);
-    expect(a.scopeKey).toBe("asn:9808|city:上海");
+  it("有 ASN 且有城市:按 asn+geonameId 收敛,同范围换 IP 得同一个键", () => {
+    const a = computeIpScope("203.0.113.9", SHANGHAI_MOBILE);
+    const b = computeIpScope("203.0.113.77", SHANGHAI_MOBILE);
+    expect(a.scopeKey).toBe("asn:9808|geo:1796236");
     expect(b.scopeKey).toBe(a.scopeKey);
     expect(a).toMatchObject({ country: "中国", city: "上海", asnOrg: "China Mobile" });
   });
 
   it("有 ASN 无城市:退回只用 asn,不拼空城市", () => {
     const scope = computeIpScope("203.0.113.9", {
-      country: "美国",
-      city: null,
-      asn: 14061,
-      asnOrg: "DigitalOcean",
+      country: "美国", city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean",
     });
     expect(scope.scopeKey).toBe("asn:14061");
     expect(scope.city).toBeNull();
   });
 
   it("换城市算不同范围,换 ASN 也算不同范围", () => {
-    const shanghai = computeIpScope("203.0.113.9", {
-      country: "中国",
-      city: "上海",
-      asn: 9808,
-      asnOrg: "China Mobile",
+    const nanjing = computeIpScope("203.0.113.9", { ...SHANGHAI_MOBILE, city: "南京", cityGeonameId: 1799962 });
+    const unicom = computeIpScope("203.0.113.9", { ...SHANGHAI_MOBILE, asn: 4837, asnOrg: "China Unicom" });
+    expect(nanjing.scopeKey).not.toBe("asn:9808|geo:1796236");
+    expect(unicom.scopeKey).not.toBe("asn:9808|geo:1796236");
+  });
+
+  it("键用 geonameId 而非城市名:换库导致地名本地化变化时,已确认范围不重报", () => {
+    // 同一物理城市,mmdb 换构建后 zh-CN 名缺失、回落成英文名。
+    const zh = computeIpScope("203.0.113.9", SHANGHAI_MOBILE);
+    const en = computeIpScope("203.0.113.9", { ...SHANGHAI_MOBILE, city: "Shanghai" });
+    expect(en.scopeKey).toBe(zh.scopeKey);
+    // 显示字段仍跟着库走,只有键是稳定的。
+    expect(en.city).toBe("Shanghai");
+  });
+
+  it("键用 geonameId:同一 ASN 下同名不同国的城市不会被并成一个键", () => {
+    const londonUk = computeIpScope("203.0.113.9", {
+      country: "英国", city: "London", cityGeonameId: 2643743, asn: 14061, asnOrg: "DigitalOcean",
     });
-    const nanjing = computeIpScope("203.0.113.9", {
-      country: "中国",
-      city: "南京",
-      asn: 9808,
-      asnOrg: "China Mobile",
+    const londonCa = computeIpScope("198.51.100.4", {
+      country: "加拿大", city: "London", cityGeonameId: 6058560, asn: 14061, asnOrg: "DigitalOcean",
     });
-    const unicom = computeIpScope("203.0.113.9", {
-      country: "中国",
-      city: "上海",
-      asn: 4837,
-      asnOrg: "China Unicom",
-    });
-    expect(nanjing.scopeKey).not.toBe(shanghai.scopeKey);
-    expect(unicom.scopeKey).not.toBe(shanghai.scopeKey);
+    expect(londonCa.scopeKey).not.toBe(londonUk.scopeKey);
   });
 });
 
@@ -54,14 +62,9 @@ describe("computeIpScope 无归属地时按网段前缀退回", () => {
   });
 
   it("geo 存在但 asn 为 null 时同样退回网段", () => {
-    expect(
-      computeIpScope("203.0.113.9", {
-        country: "中国",
-        city: "上海",
-        asn: null,
-        asnOrg: null,
-      }).scopeKey,
-    ).toBe("net:203.0.113");
+    expect(computeIpScope("203.0.113.9", {
+      country: "中国", city: "上海", cityGeonameId: 1796236, asn: null, asnOrg: null,
+    }).scopeKey).toBe("net:203.0.113");
   });
 
   it("IPv6 取 /64,压缩形式要先展开:同 /64 内不同地址必须同键", () => {
@@ -72,18 +75,57 @@ describe("computeIpScope 无归属地时按网段前缀退回", () => {
   });
 
   it("IPv6 换 /64 算不同范围", () => {
-    expect(computeIpScope("2001:db8:1::1", null).scopeKey).not.toBe(computeIpScope("2001:db8:2::1", null).scopeKey);
+    expect(computeIpScope("2001:db8:1::1", null).scopeKey).not.toBe(
+      computeIpScope("2001:db8:2::1", null).scopeKey,
+    );
   });
 
   it("IPv6 组内前导零归一化:0db8 与 db8 同键", () => {
-    expect(computeIpScope("2001:0db8:0000:0000::1", null).scopeKey).toBe(computeIpScope("2001:db8::1", null).scopeKey);
+    expect(computeIpScope("2001:0db8:0000:0000::1", null).scopeKey).toBe(
+      computeIpScope("2001:db8::1", null).scopeKey,
+    );
   });
 
   it("IPv4-mapped IPv6 按 IPv4 的 /24 处理", () => {
     expect(computeIpScope("::ffff:203.0.113.9", null).scopeKey).toBe("net:203.0.113");
   });
+});
 
-  it("无法解析的字符串按整串兜底(宁多报不漏报)", () => {
+// 这一组守的是「不同来源绝不静默并成一个键」。IP 来自外部可控的 X-Real-IP /
+// X-Forwarded-For,曾因自造正则不锚定而把垃圾串与真实来源并键(漏报陌生来源)。
+describe("computeIpScope 对非法 IP 串只整串兜底,绝不并键", () => {
+  it("带垃圾前缀但结尾像 IPv4 的串,不得被当成那个 IPv4 的 /24", () => {
+    const junk = computeIpScope("whatever-1.2.3.4", null);
+    expect(junk.scopeKey).toBe("net:whatever-1.2.3.4");
+    expect(junk.scopeKey).not.toBe(computeIpScope("1.2.3.4", null).scopeKey);
+  });
+
+  it("结尾像 IPv4 的合法 IPv6 之间不得跨 /16 并键", () => {
+    // 这两个 net.isIP 都返回 6,且 /16 不同,必须是两个键。
+    const a = computeIpScope("2001:db8::1.2.3.4", null);
+    const b = computeIpScope("2002:db8::1.2.3.4", null);
+    expect(a.scopeKey).not.toBe(b.scopeKey);
+  });
+
+  it("含冒号的垃圾串不得按 IPv6 组数并键", () => {
+    const a = computeIpScope("foo:bar:baz:qux:1:2:3:4", null);
+    const b = computeIpScope("foo:bar:baz:qux:9:9:9:9", null);
+    expect(a.scopeKey).toBe("net:foo:bar:baz:qux:1:2:3:4");
+    expect(a.scopeKey).not.toBe(b.scopeKey);
+  });
+
+  it("非法串与合法地址不得同键", () => {
+    expect(computeIpScope(":1:2:3:4:5:6:7", null).scopeKey).not.toBe(
+      computeIpScope("0:1:2:3:4:5:6:7", null).scopeKey,
+    );
+  });
+
+  it("方括号形式与裸地址不同键(不是合法 IP,整串兜底)", () => {
+    expect(computeIpScope("[2001:db8::1]", null).scopeKey).toBe("net:[2001:db8::1]");
+  });
+
+  it("认不出的字符串按整串兜底", () => {
     expect(computeIpScope("garbage", null).scopeKey).toBe("net:garbage");
+    expect(computeIpScope("", null).scopeKey).toBe("net:");
   });
 });

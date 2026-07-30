@@ -60,6 +60,7 @@ last-reviewed: 2026-07-30
 │                                             │
 │  ./data/timedata.db    SQLite 主库          │
 │  ./data/backups/*.db   sync push 备份       │
+│  ./data/geoip/*.mmdb   GeoLite2 归属地库    │
 │  ./data/update.log     自更新日志           │
 │  ./data/update-status.json  自更新状态       │
 │  ./vault/              Obsidian vault(日记) │
@@ -84,7 +85,7 @@ last-reviewed: 2026-07-30
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
 | `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流，其中 sync logs 清空必须发送 `X-Confirm: true` |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
-| `GEOIP_DIR` | 否 | GeoLite2 mmdb 所在目录，默认 `/app/data/geoip`。库缺失时归属地整体降级为「位置未知」、陌生来源按网段收敛，服务照常工作 |
+| `GEOIP_DIR` | 否 | GeoLite2 mmdb（City + ASN）所在目录，默认 `/app/data/geoip`。两个库都缺时归属地降级为「位置未知」、陌生来源按网段收敛；单缺一个只半降级（缺 City：有运营商无地名，收敛按 ASN；缺 ASN：有地名无运营商，收敛按网段），服务在任何一种情况下照常工作。两库读进内存常驻，全就绪约多占 70 MB RSS。语义见 [security](security.md#陌生来源提醒) |
 | `PORT` | 否 | 监听端口，默认 3000 |
 | `UPDATE_REPO` | 否 | 查最新版本的 GitHub 仓库，默认 `HaiouZh/TimeData` |
 | `GITHUB_TOKEN` | 否 | 提高 GitHub API 限额（匿名 60 次/小时，带 token 5000） |
@@ -122,7 +123,7 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 
 ### 2.1 GeoLite2 归属地库（可选，但装了才有地址）
 
-陌生来源提醒与请求日志的归属地来自两个离线库，**不进镜像**（否则每次部署多传 80MB），走现有 `./data` 挂载卷：
+陌生来源提醒与请求日志的归属地来自两个离线库，**不进镜像**（否则每次部署多传约 70MB：City ≈ 60MB + ASN ≈ 9MB），走现有 `./data` 挂载卷：
 
 1. 在 maxmind.com 注册免费账号，生成 license key。
 2. 下载 `GeoLite2-City.mmdb` 与 `GeoLite2-ASN.mmdb`。
@@ -131,7 +132,11 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 
 `docker-compose.yml` 无需改动。**顺序不敏感**：新版本可以先上、库后传，中间那段跑降级模式。
 
-GeoLite2 许可要求不长期使用过期数据；更新方式就是换这两个文件后重启（ASN 与城市段变动缓慢，半年一次即可）。装好后的自检：打开设置 →「服务端数据洞察」，告警卡与日志行应显示中文地名（如「中国 · 上海」）；若显示「位置未知」，说明库没被读到——检查路径与文件名大小写。
+GeoLite2 许可要求不长期使用过期数据；更新方式就是换这两个文件后重启（ASN 与城市段变动缓慢，半年一次即可）。
+
+装好后的自检：打开设置 →「服务端数据洞察」，看页面顶部有没有归属地库提示条。**没有提示条**即两个库都读到了（告警卡与日志行会显示地名加运营商，如「中国 · 上海」+「China Mobile」）。提示条会写明缺的是哪个库，据此检查路径与文件名大小写。不要用「有没有显示位置未知」判断库是否读到：只缺 City 库时 ASN 库其实读到了，地名仍是「位置未知」；地名取 `zh-CN` 缺失时回落 `en`，某些地区本就显示英文名。
+
+**首次装库或换库会触发一次性重报**：库就绪前按 `net:` 档确认过的范围成为死数据，同一批来源会按新算出的 `asn:` 档键各报一次新来源。反向（把库撤掉）同理。这是收敛键变了的预期结果，不是漏报也不是故障。
 
 ## 3. 镜像与发布流程
 
@@ -298,6 +303,9 @@ data/
 ├── backups/                 sync push 前的服务端备份
 │   ├── sync_push-2026-05-08T...-...-...db
 │   └── ...
+├── geoip/                   GeoLite2 归属地库（可选，非用户数据）
+│   ├── GeoLite2-City.mmdb
+│   └── GeoLite2-ASN.mmdb
 ├── update.log               自更新日志
 └── update-status.json       自更新状态
 ```
@@ -305,7 +313,7 @@ data/
 **用户运维必读**：
 
 - `data/` 目录是所有用户数据所在，定期 host 侧备份。
-- 升级前备份这整个目录最稳。
+- 升级前备份这整个目录最稳。唯一例外是 `geoip/`：约 70 MB 的第三方库文件，可从 maxmind 重新下载（见 §2.1），不是用户数据，备份时可以排除。
 - `backups/` 是服务端自动生成的，服务启动时会跑一次清理，每次创建 server backup 后也会异步清理旧普通备份；具体保留窗口见 [`backup.md` 第 6 节](./backup.md#6-server-backup服务端写入前)。
 
 ## 9. 本地开发环境（不走 Docker）

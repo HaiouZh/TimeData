@@ -24,9 +24,10 @@ afterEach(() => {
   vi.doUnmock("../db/connection.js");
 });
 
-const CN_MOBILE_SH: GeoLookup = { country: "中国", city: "上海", asn: 9808, asnOrg: "China Mobile" };
-const CN_MOBILE_NJ: GeoLookup = { country: "中国", city: "南京", asn: 9808, asnOrg: "China Mobile" };
-const DO_NO_CITY: GeoLookup = { country: "美国", city: null, asn: 14061, asnOrg: "DigitalOcean" };
+const CN_MOBILE_SH: GeoLookup = { country: "中国", city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile" };
+const CN_MOBILE_NJ: GeoLookup = { country: "中国", city: "南京", cityGeonameId: 1799962, asn: 9808, asnOrg: "China Mobile" };
+const DO_NO_CITY: GeoLookup = { country: "美国", city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean" };
+const SH_KEY = "asn:9808|geo:1796236";
 
 function geo(value: GeoLookup | null): (ip: string) => GeoLookup | null {
   return () => value;
@@ -44,7 +45,7 @@ describe("knownIps 按范围收敛", () => {
         scope_key: string; first_seen: string; last_seen: string; last_ip: string;
         country: string; city: string; asn_org: string;
       };
-    expect(row.scope_key).toBe("asn:9808|city:上海");
+    expect(row.scope_key).toBe(SH_KEY);
     expect(row.first_seen).toBe("2026-07-28T00:00:00.000Z");
     expect(row.last_seen).toBe("2026-07-28T01:00:00.000Z");
     expect(row.last_ip).toBe("203.0.113.77");
@@ -96,7 +97,7 @@ describe("knownIps 按范围收敛", () => {
     store.checkAndRecordIp("agent", "198.51.100.4", "2026-07-28T00:30:00.000Z", geo(DO_NO_CITY));
     expect(store.listUnacknowledgedNewIpScopes()).toHaveLength(2);
 
-    store.acknowledgeIpScope("master", "asn:9808|city:上海");
+    store.acknowledgeIpScope("master", SH_KEY);
     const remaining = store.listUnacknowledgedNewIpScopes();
     expect(remaining).toHaveLength(1);
     expect(remaining[0]).toMatchObject({
@@ -114,7 +115,7 @@ describe("knownIps 按范围收敛", () => {
   it("已确认的范围再次出现仍是旧范围(不重置 acknowledged)", async () => {
     const store = await loadStore();
     store.checkAndRecordIp("master", "203.0.113.9", "2026-07-28T00:00:00.000Z", geo(CN_MOBILE_SH));
-    store.acknowledgeIpScope("master", "asn:9808|city:上海");
+    store.acknowledgeIpScope("master", SH_KEY);
     expect(store.checkAndRecordIp("master", "203.0.113.77", "2026-07-28T02:00:00.000Z", geo(CN_MOBILE_SH))).toBe(false);
     expect(store.listUnacknowledgedNewIpScopes()).toHaveLength(0);
   });
@@ -122,6 +123,30 @@ describe("knownIps 按范围收敛", () => {
   it("acknowledgeIpScope 对不存在的范围幂等,不抛", async () => {
     const store = await loadStore();
     expect(() => store.acknowledgeIpScope("master", "asn:99999")).not.toThrow();
+  });
+
+  // 上面那条 acknowledge 用例里两个 tier 用的是不同 scopeKey,所以隔离与否都绿。
+  // 这条用同一个 scopeKey 跨两个 tier,才真正守住「按 token tier 隔离」这条承诺。
+  it("acknowledge 的 tier 隔离:确认 master 的范围不会连带确认 agent 的同名范围", async () => {
+    const store = await loadStore();
+    store.checkAndRecordIp("master", "203.0.113.9", "2026-07-28T00:00:00.000Z", geo(CN_MOBILE_SH));
+    store.checkAndRecordIp("agent", "203.0.113.9", "2026-07-28T00:30:00.000Z", geo(CN_MOBILE_SH));
+    expect(store.listUnacknowledgedNewIpScopes()).toHaveLength(2);
+
+    store.acknowledgeIpScope("master", SH_KEY);
+
+    const remaining = store.listUnacknowledgedNewIpScopes();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toMatchObject({ tokenTier: "agent", scopeKey: SH_KEY });
+  });
+
+  it("未确认列表按 first_seen 倒序:新出现的在前", async () => {
+    const store = await loadStore();
+    store.checkAndRecordIp("master", "203.0.113.9", "2026-07-28T00:00:00.000Z", geo(CN_MOBILE_SH));
+    store.checkAndRecordIp("master", "198.51.100.4", "2026-07-28T05:00:00.000Z", geo(DO_NO_CITY));
+
+    const scopes = store.listUnacknowledgedNewIpScopes();
+    expect(scopes.map((item) => item.scopeKey)).toEqual(["asn:14061", SH_KEY]);
   });
 
   it("默认不传 geoLookup 时走真实查询(测试环境无库 → 按网段收敛)", async () => {

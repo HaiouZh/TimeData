@@ -67,6 +67,11 @@ export const messages = {
     hint: "以下来源（按运营商 + 城市划范围）首次使用带凭证的令牌访问服务器。同一范围内换 IP 不再重复提醒。若不是你本人或已授权的设备，请立即更换令牌。",
     acknowledge: "知道了",
     rowBadge: "新来源",
+    /** 归属地库未就绪时的提示。缺哪个库决定收敛退化到哪一档，所以分开说。 */
+    geoipMissingBoth: "归属地库未就绪：两个 GeoLite2 库都没读到，暂时显示不出地址，来源只能按 IP 网段粗略归并（同一运营商跨网段换 IP 仍会重复提醒）。",
+    geoipMissingCity: "归属地库不完整：缺 GeoLite2-City，能看到运营商但看不到地址；来源只能按运营商整体归并——同一运营商在任何城市换 IP 都不再提醒，提醒范围比两库齐全时宽得多。",
+    geoipMissingAsn: "归属地库不完整：缺 GeoLite2-ASN，能看到地址但认不出运营商，来源只能按 IP 网段粗略归并。",
+    geoipHowTo: "把 GeoLite2-City.mmdb 与 GeoLite2-ASN.mmdb 放进服务器 data/geoip/ 后重启容器即可。",
   },
 
   /** Confirm dialog generic labels */

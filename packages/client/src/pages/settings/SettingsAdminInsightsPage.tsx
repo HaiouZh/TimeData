@@ -30,6 +30,7 @@ import {
 import {
   acknowledgeNewIp,
   fetchUnacknowledgedNewIps,
+  type GeoipReadiness,
   type UnacknowledgedNewIp,
 } from "../../lib/adminNewIps.ts";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
@@ -204,6 +205,25 @@ function FilterSelectSheet({
   );
 }
 
+/**
+ * 归属地库未就绪提示。与提醒卡分开:没有新来源时也要提示,否则用户只能从一片
+ * 「位置未知」里猜是库没传还是功能没生效。
+ */
+function GeoipReadinessNotice({ readiness }: { readiness: GeoipReadiness | null }) {
+  if (readiness === null || (readiness.city && readiness.asn)) return null;
+  const detail = !readiness.city && !readiness.asn
+    ? messages.newIpAlert.geoipMissingBoth
+    : readiness.city
+      ? messages.newIpAlert.geoipMissingAsn
+      : messages.newIpAlert.geoipMissingCity;
+  return (
+    <div data-testid="geoip-readiness-notice" className="space-y-1 rounded-card border border-border bg-surface-elevated p-4">
+      <p className="td-text-caption text-ink-2">{detail}</p>
+      <p className="td-text-caption text-ink-3">{messages.newIpAlert.geoipHowTo}</p>
+    </div>
+  );
+}
+
 function NewIpAlertCard({
   newIps,
   busy,
@@ -215,7 +235,7 @@ function NewIpAlertCard({
 }) {
   if (newIps.length === 0) return null;
   return (
-    <div className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
+    <div data-testid="new-ip-alert-card" className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
       <div className="td-text-body font-medium text-warn">{messages.newIpAlert.title}</div>
       <p className="td-text-caption text-ink-2">{messages.newIpAlert.hint}</p>
       <div className="space-y-2">
@@ -391,6 +411,7 @@ export default function SettingsAdminInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [newIps, setNewIps] = useState<UnacknowledgedNewIp[]>([]);
+  const [geoipReadiness, setGeoipReadiness] = useState<GeoipReadiness | null>(null);
   const [newIpAckBusy, setNewIpAckBusy] = useState(false);
 
   useEffect(() => {
@@ -398,7 +419,9 @@ export default function SettingsAdminInsightsPage() {
     // 陌生来源提醒独立加载:失败不影响其余洞察,静默忽略
     fetchUnacknowledgedNewIps()
       .then((response) => {
-        if (!cancelled) setNewIps(response.newIps);
+        if (cancelled) return;
+        setNewIps(response.newIps);
+        setGeoipReadiness(response.geoip ?? null);
       })
       .catch(() => {});
     return () => {
@@ -572,6 +595,7 @@ export default function SettingsAdminInsightsPage() {
         诊断数据只读查看；仅备份管理会修改服务器备份（创建、删除、配置）。
       </div>
 
+      <GeoipReadinessNotice readiness={geoipReadiness} />
       <NewIpAlertCard newIps={newIps} busy={newIpAckBusy} onAcknowledge={(item) => void handleAcknowledgeNewIp(item)} />
 
       {loading && <div className="td-text-label text-ink-2">正在加载服务端数据…</div>}

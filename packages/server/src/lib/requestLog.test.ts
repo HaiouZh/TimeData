@@ -138,31 +138,42 @@ describe("requestLog", () => {
 });
 
 describe("queryRequestLogs 归属地", () => {
-  it("按 IP 实时填充归属地,注入的查询结果原样映射", async () => {
+  it("每行查的是自己的 IP:两行不同 IP 得到各自的归属地", async () => {
     const { queryRequestLogs, recordRequestLog } = await import("./requestLog.js");
 
-    recordRequestLog({
-      timestamp: "2026-07-30T00:00:00.000Z",
-      method: "GET",
-      path: "/api/entries",
-      status: 200,
-      outcome: "ok",
-      tokenTier: "master",
-      ip: "203.0.113.9",
-      userAgent: "Vitest",
-      clientHint: "web",
-      deviceLabel: null,
-      durationMs: 5,
-      isNewIp: false,
-    });
+    for (const [ip, timestamp] of [
+      ["203.0.113.9", "2026-07-30T00:00:00.000Z"],
+      ["198.51.100.4", "2026-07-30T01:00:00.000Z"],
+    ] as const) {
+      recordRequestLog({
+        timestamp,
+        method: "GET",
+        path: "/api/entries",
+        status: 200,
+        outcome: "ok",
+        tokenTier: "master",
+        ip,
+        userAgent: "Vitest",
+        clientHint: "web",
+        deviceLabel: null,
+        durationMs: 5,
+        isNewIp: false,
+      });
+    }
 
-    const logs = queryRequestLogs({}, () => ({
-      country: "中国", city: "上海", asn: 9808, asnOrg: "China Mobile",
-    }));
-    expect(logs[0]).toMatchObject({ country: "中国", city: "上海", asnOrg: "China Mobile" });
+    // 桩按入参分支——常量桩会让「每行查自己的 IP」这条根本没被断言。
+    const logs = queryRequestLogs({}, (ip) =>
+      ip === "203.0.113.9"
+        ? { country: "中国", city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile" }
+        : { country: "美国", city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean" },
+    );
+
+    const byIp = new Map(logs.map((log) => [log.ip, log]));
+    expect(byIp.get("203.0.113.9")).toMatchObject({ country: "中国", city: "上海", asnOrg: "China Mobile" });
+    expect(byIp.get("198.51.100.4")).toMatchObject({ country: "美国", city: null, asnOrg: "DigitalOcean" });
   });
 
-  it("查不到归属地或 ip 为 null 时三个字段都是 null", async () => {
+  it("ip 为 null 的行不调用 geoLookup,三个字段都是 null", async () => {
     const { queryRequestLogs, recordRequestLog } = await import("./requestLog.js");
 
     recordRequestLog({
@@ -177,6 +188,34 @@ describe("queryRequestLogs 归属地", () => {
       clientHint: "unknown",
       deviceLabel: null,
       durationMs: 1,
+      isNewIp: false,
+    });
+
+    const geoLookup = vi.fn(() => ({
+      country: "中国", city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile",
+    }));
+    const logs = queryRequestLogs({}, geoLookup);
+
+    expect(logs[0]).toMatchObject({ country: null, city: null, asnOrg: null });
+    // 数调用次数才守得住 row.ip === null 那道短路:常量桩下两个分支不可区分。
+    expect(geoLookup).not.toHaveBeenCalled();
+  });
+
+  it("查不到归属地时三个字段都是 null", async () => {
+    const { queryRequestLogs, recordRequestLog } = await import("./requestLog.js");
+
+    recordRequestLog({
+      timestamp: "2026-07-30T00:00:00.000Z",
+      method: "GET",
+      path: "/api/entries",
+      status: 200,
+      outcome: "ok",
+      tokenTier: "master",
+      ip: "203.0.113.9",
+      userAgent: "Vitest",
+      clientHint: "web",
+      deviceLabel: null,
+      durationMs: 5,
       isNewIp: false,
     });
 

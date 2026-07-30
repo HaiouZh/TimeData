@@ -426,6 +426,10 @@ export function initializeDatabase(): void {
     -- 陌生来源检测：按 token tier 隔离记录见过的「来源范围」(运营商+城市，查不到则退回网段)，
     -- acknowledged=0 即待确认。旧表 known_ips 按精确 IP 去重，动态 IP / VPN 出口下永远确认不完，
     -- 已按 ADR 0025 弃用并直接删除(用户批准清空重开)；DROP 幂等，重复启动无害。
+    --
+    -- 这是一次性迁移，却写成了每次启动无条件执行的破坏性 DDL。留着只为覆盖「回滚到旧版本
+    -- 重建了 known_ips 后再滚回新版本」这一种情形。**生产盒确认已跑过新版本后即可删除本语句**；
+    -- 在删除之前，不要新建任何名为 known_ips 的表——它会在下次重启时被静默清空。
     DROP TABLE IF EXISTS known_ips;
 
     CREATE TABLE IF NOT EXISTS known_ip_scopes (

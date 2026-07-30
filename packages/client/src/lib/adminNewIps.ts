@@ -12,8 +12,15 @@ export interface UnacknowledgedNewIp {
   lastSeen: string;
 }
 
+/** 两个 GeoLite2 库各自是否就绪。缺哪个决定收敛退化到哪一档,所以分开报告。 */
+export interface GeoipReadiness {
+  city: boolean;
+  asn: boolean;
+}
+
 export interface UnacknowledgedNewIpsResponse {
   newIps: UnacknowledgedNewIp[];
+  geoip?: GeoipReadiness;
 }
 
 export function fetchUnacknowledgedNewIps(): Promise<UnacknowledgedNewIpsResponse> {

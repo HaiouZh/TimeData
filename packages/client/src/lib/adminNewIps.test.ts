@@ -15,7 +15,7 @@ describe("adminNewIps", () => {
       newIps: [
         {
           tokenTier: "master",
-          scopeKey: "asn:9808|city:上海",
+          scopeKey: "asn:9808|geo:1796236",
           country: "中国",
           city: "上海",
           asnOrg: "China Mobile",
@@ -24,6 +24,7 @@ describe("adminNewIps", () => {
           lastSeen: "2026-07-28T09:00:00.000Z",
         },
       ],
+      geoip: { city: true, asn: true },
     };
     apiFetch.mockResolvedValue(response);
 
@@ -34,11 +35,11 @@ describe("adminNewIps", () => {
   it("acknowledgeNewIp POST 确认指定 tier+scopeKey", async () => {
     apiFetch.mockResolvedValue({ ok: true });
 
-    await acknowledgeNewIp("master", "asn:9808|city:上海");
+    await acknowledgeNewIp("master", "asn:9808|geo:1796236");
 
     expect(apiFetch).toHaveBeenCalledWith("/api/admin/request-logs/new-ips/acknowledge", {
       method: "POST",
-      body: JSON.stringify({ tokenTier: "master", scopeKey: "asn:9808|city:上海" }),
+      body: JSON.stringify({ tokenTier: "master", scopeKey: "asn:9808|geo:1796236" }),
     });
   });
 });
