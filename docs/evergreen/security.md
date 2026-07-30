@@ -19,6 +19,8 @@ covers:
   - packages/server/src/lib/totp.ts
   - packages/server/src/lib/totpStore.ts
   - packages/server/src/lib/knownIps.ts
+  - packages/server/src/lib/geoip.ts
+  - packages/server/src/lib/ipScope.ts
   - packages/server/src/routes/admin/totp.ts
   - packages/client/src/lib/totpChallenge.ts
   - packages/client/src/components/TotpPromptDialog.tsx
@@ -28,7 +30,7 @@ contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-07-28
+last-reviewed: 2026-07-30
 ---
 
 # 安全与凭据处理
@@ -110,9 +112,13 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 密钥纪律(零代码防线):master `AUTH_TOKEN` 只存自己设备的客户端,绝不进对话记录、脚本配置或公开平台;一切 agent/脚本场合只用窄域 `AGENT_TOKEN`。
 
-## 陌生 IP 提醒
+## 陌生来源提醒
 
-`known_ips` 表按 token tier(master/agent/dev_bypass)隔离记录见过的来源 IP;请求审计写入时同步判定,首见 IP 的日志行落 `is_new_ip=1`。`GET /api/admin/request-logs/new-ips` 列出未确认的新 IP,`POST .../new-ips/acknowledge` 消化;设置页「服务端数据洞察」顶部展示提醒卡并标黄相关日志行。**只提醒不拦截**——用户换网/出差 IP 常变,强拦截首先挡住本人;真拦截仍只依赖限流。public/missing/invalid/unknown tier 与空 IP 不记录。IP 可信度同请求审计一节:依赖反向代理清洗转发头。
+`known_ip_scopes` 表按 token tier(master/agent/dev_bypass)隔离记录见过的**来源范围**，主键 `(token_tier, scope_key)`。`scope_key` 由 `lib/ipScope.ts` 的 `computeIpScope` 算出，三档降级：有 ASN 且有城市 → `asn:<asn>|city:<city>`；有 ASN 无城市 → `asn:<asn>`；无 ASN → `net:<IPv4 的 /24 或 IPv6 的 /64>`。收敛到范围而非精确 IP 是因为动态 IP 与 VPN 出口下按精确 IP 永远确认不完（[ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)）——代价是同运营商同城换 IP 不再报警，取舍见该 ADR。
+
+归属地由 `lib/geoip.ts` 查 GeoLite2 离线库（City + ASN，读 `zh-CN` 地名）得到，**库缺失时整体降级**：`lookupGeo` 恒返回 null、收敛退回网段前缀、界面显示「位置未知」，服务照常工作。请求日志的归属地不落库，`queryRequestLogs` 返回时实时查。
+
+请求审计写入时同步判定，首见范围的日志行落 `is_new_ip=1`。`GET /api/admin/request-logs/new-ips` 列出未确认的新范围，`POST .../new-ips/acknowledge`（body `{tokenTier, scopeKey}`）消化；设置页「服务端数据洞察」顶部展示提醒卡并标黄相关日志行。**只提醒不拦截**——用户换网/出差 IP 常变，强拦截首先挡住本人；真拦截仍只依赖限流。public/missing/invalid/unknown tier 与空 IP 不记录。IP 可信度同请求审计一节：依赖反向代理清洗转发头。**归属地是按 IP 段推测的大致位置，不是定位，不可作为安全证据。**
 
 ## PWA API 缓存边界
 

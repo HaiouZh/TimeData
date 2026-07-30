@@ -29,7 +29,7 @@ contracts:
   - packages/shared/src/chartSchemas.ts
   - packages/server/src/db/schema.ts
   - packages/client/src/db/index.ts
-last-reviewed: 2026-07-29
+last-reviewed: 2026-07-30
 ---
 
 # 数据模型与契约
@@ -70,10 +70,10 @@ last-reviewed: 2026-07-29
 | `sync_state` | 服务端状态摘要缓存，避免每次 status 全量扫描业务表 |
 | `app_metadata` | 全局一次性迁移/重置标记 |
 | `server_config` | 服务端独有配置，例如日记路径模板；不同步客户端。通用 KV 读写：`lib/serverConfig.ts` 的 `getServerConfig`/`setServerConfig` |
-| `api_request_logs` | 服务端 `/api/*` 请求审计运维表；不同步客户端，不保存 body、Authorization 或完整 query。`is_new_ip` INTEGER 0/1 列（幂等补列，默认 0）标记该请求的来源 IP 在其 token tier 下首见 |
+| `api_request_logs` | 服务端 `/api/*` 请求审计运维表；不同步客户端，不保存 body、Authorization 或完整 query。`is_new_ip` INTEGER 0/1 列（幂等补列，默认 0）标记该请求的来源范围在其 token tier 下首见 |
 | `totp_config` | TOTP 危险操作锁的单行配置表，`id` 恒为 1，`secret` 存 base32 明文；不同步客户端。见 [security](security.md) |
 | `totp_recovery_codes` | 恢复码表，主键是 sha256 哈希（不存明文），`used_at` 非空即已消费（一次性） |
-| `known_ips` | 已见来源 IP 表，复合主键 `(token_tier, ip)`，带 `first_seen` / `last_seen` / `acknowledged`；`acknowledged=0` 即未确认的新 IP |
+| `known_ip_scopes` | 已见来源范围表，复合主键 `(token_tier, scope_key)`，带 `country` / `city` / `asn_org` / `last_ip` / `first_seen` / `last_seen` / `acknowledged`；`acknowledged=0` 即未确认的新来源。`scope_key` 算法与收敛取舍见 [security](security.md#陌生来源提醒) 与 [ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)。前身 `known_ips`（按精确 IP）已删除 |
 | `deleted_tasks_archive` | tasks 域 delete 生效前的整行快照归档，不进同步域，经 `GET /api/tasks/deleted-archive` 只读查询，用于删除死因分析 |
 | `sync_push_requests` | push `requestId` 幂等回放表：(requestId → status_code, 原响应 JSON)，TTL 24h 惰性清理；见 [ADR 0020](../adr/0020-sync-push-request-idempotency.md) |
 

@@ -27,7 +27,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-07-28
+last-reviewed: 2026-07-30
 ---
 
 # 部署与自更新
@@ -84,6 +84,7 @@ last-reviewed: 2026-07-28
 | `SYNC_RATE_MAX` | 否 | `/api/sync/*` 每 60 秒最大请求次数（按 token 标识），默认 `60`；超出返回 HTTP 429 |
 | `ADMIN_RATE_MAX` | 否 | `/api/admin/*` 每 60 秒最大请求次数，默认 `120`；超出返回 HTTP 429。`/api/admin/sync-logs` 的读写清空和 `/api/admin/request-logs` 的只读查询都使用该限流，其中 sync logs 清空必须发送 `X-Confirm: true` |
 | `DB_PATH` | 否 | 容器内 SQLite 路径，默认 `/app/data/timedata.db` |
+| `GEOIP_DIR` | 否 | GeoLite2 mmdb 所在目录，默认 `/app/data/geoip`。库缺失时归属地整体降级为「位置未知」、陌生来源按网段收敛，服务照常工作 |
 | `PORT` | 否 | 监听端口，默认 3000 |
 | `UPDATE_REPO` | 否 | 查最新版本的 GitHub 仓库，默认 `HaiouZh/TimeData` |
 | `GITHUB_TOKEN` | 否 | 提高 GitHub API 限额（匿名 60 次/小时，带 token 5000） |
@@ -118,6 +119,19 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 
 1. **origin 未放行**：响应缺 `access-control-allow-origin: https://localhost`。多是 `.env` 漏了 `https://localhost`，或 `docker-compose.yml` 漏了 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}` 那一行。修改后 `docker compose up -d` 重建容器（不需要 `down`），用 `docker compose exec timedata sh -c 'echo $ALLOWED_ORIGINS'` 确认变量已注入。
 2. **自定义请求头未放行**：`access-control-allow-headers` 缺客户端实际发送的某个 `X-` 头。这是纯代码问题，与部署配置无关，改 `ALLOWED_REQUEST_HEADERS` 后需重新发版。2026-07-28 踩过一次：client 加了 `X-TimeData-Client-Build` 但白名单没同步，安卓端全线断连而网页版（同源、不预检）无感。
+
+### 2.1 GeoLite2 归属地库（可选，但装了才有地址）
+
+陌生来源提醒与请求日志的归属地来自两个离线库，**不进镜像**（否则每次部署多传 80MB），走现有 `./data` 挂载卷：
+
+1. 在 maxmind.com 注册免费账号，生成 license key。
+2. 下载 `GeoLite2-City.mmdb` 与 `GeoLite2-ASN.mmdb`。
+3. 放到宿主机 `/opt/timedata/data/geoip/`（容器内即 `/app/data/geoip`）。
+4. `docker compose restart timedata`——reader 在首次查询时加载并缓存结果，放库后必须重启才生效。
+
+`docker-compose.yml` 无需改动。**顺序不敏感**：新版本可以先上、库后传，中间那段跑降级模式。
+
+GeoLite2 许可要求不长期使用过期数据；更新方式就是换这两个文件后重启（ASN 与城市段变动缓慢，半年一次即可）。装好后的自检：打开设置 →「服务端数据洞察」，告警卡与日志行应显示中文地名（如「中国 · 上海」）；若显示「位置未知」，说明库没被读到——检查路径与文件名大小写。
 
 ## 3. 镜像与发布流程
 
