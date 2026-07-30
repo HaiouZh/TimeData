@@ -895,7 +895,7 @@ export function TodoPage() {
         }
       >
         {inboxFiltered.length === 0 && sunkenFiltered.length === 0 ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">收件箱为空</p>
+          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">收件箱为空</p>
         ) : (
           <DayGroupedList
             segments={groupInboxByDay(inboxFiltered)}
@@ -1079,7 +1079,7 @@ export function TodoPage() {
       onToggle={(open) => setScheduledCollapsed(!open)}
     >
       {scheduledFiltered.length === 0 ? (
-        <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">没有已排期任务</p>
+        <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">没有已排期任务</p>
       ) : (
         <div className="rounded-card p-1.5">
           {scheduledSurface.length > 0 && (

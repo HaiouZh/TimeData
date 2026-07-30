@@ -122,7 +122,7 @@ export function GoalGraphNodeView({
       data-selected={selected ? "true" : "false"}
       data-galaxy-lively={lively ? "true" : undefined}
       aria-describedby={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
-      className="group/goal-node relative inline-flex items-center text-sm"
+      className="group/goal-node relative inline-flex items-center td-text-label"
     >
       <span
         data-goal-graph-node-shape="true"
@@ -161,10 +161,10 @@ export function GoalGraphNodeView({
         {isGoal ? (
           <span className="flex min-w-0 flex-col items-center gap-1">
             <GoalStarCore label={isFar ? "" : "◎"} size={isFar ? "sm" : "md"} />
-            <span className={isFar ? "sr-only" : "max-w-24 truncate text-center text-xs font-semibold text-ink"}>
+            <span className={isFar ? "sr-only" : "max-w-24 truncate text-center td-text-caption font-semibold text-ink"}>
               {title}
             </span>
-            <span className={isFar ? "sr-only" : "text-[10px] text-[var(--galaxy-star-core)]"}>
+            <span className={isFar ? "sr-only" : "td-text-caption text-[var(--galaxy-star-core)]"}>
               {statusMeta.label}
             </span>
           </span>
@@ -175,7 +175,7 @@ export function GoalGraphNodeView({
         {!isGoal && showTitleInsideShape && (
           <span className={`min-w-0 ${isFar ? "sr-only" : "flex flex-col leading-tight"}`}>
             {!isFar && <span className="max-w-36 truncate font-medium text-current">{title}</span>}
-            <span className={isFar ? "sr-only" : "text-xs text-current opacity-80"}>{statusMeta.label}</span>
+            <span className={isFar ? "sr-only" : "td-text-caption text-current opacity-80"}>{statusMeta.label}</span>
           </span>
         )}
       </span>
@@ -186,7 +186,7 @@ export function GoalGraphNodeView({
           className="nodrag nopan absolute left-full top-1/2 ml-2 min-w-0 -translate-y-1/2 leading-tight"
         >
           <span className="block max-w-40 truncate font-medium text-ink">{title}</span>
-          <span className="block text-xs text-ink-3">{statusMeta.label}</span>
+          <span className="block td-text-caption text-ink-3">{statusMeta.label}</span>
         </span>
       )}
 
@@ -198,7 +198,7 @@ export function GoalGraphNodeView({
         id={`goal-graph-tooltip-${node.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`}
         role="tooltip"
         data-goal-graph-node-tooltip="true"
-        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left text-xs leading-relaxed text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100"
+        className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 whitespace-normal break-words rounded-card border border-border-strong bg-surface-elevated/95 px-3 py-2 text-left td-text-caption leading-relaxed text-ink opacity-0 shadow-elev2 backdrop-blur-sm transition-opacity delay-150 group-hover/goal-node:opacity-100 group-focus-within/goal-node:opacity-100"
       >
         <span className="block font-medium">{node.title}</span>
         <span className="mt-0.5 block text-ink-3">{statusMeta.label}</span>

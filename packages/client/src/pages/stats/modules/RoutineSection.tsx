@@ -44,21 +44,21 @@ export default function RoutineSection(props: StatsModuleProps) {
       {props.sleepCategoryId === null ? (
         <Link
           to="/settings/insights"
-          className="inline-flex min-h-11 items-center gap-1 rounded-full border border-border bg-surface px-4 text-sm text-ink-2"
+          className="inline-flex min-h-11 items-center gap-1 rounded-full border border-border bg-surface px-4 td-text-label text-ink-2"
         >
           设置睡眠分类后可查看作息分析
           <Icon icon={CaretRight} size={14} className="text-ink-3" />
         </Link>
       ) : routine.sampleCount === 0 ? (
-        <p className="text-sm text-ink-3">本周期暂无睡眠样本。</p>
+        <p className="td-text-body text-ink-3">本周期暂无睡眠样本。</p>
       ) : (
         <div className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 td-text-label sm:grid-cols-3">
             <MetricCard label="平均入睡" value={formatClockFromMinute(routine.averageBedTimeMin)} />
             <MetricCard label="平均起床" value={formatClockFromMinute(routine.averageWakeTimeMin)} />
             <MetricCard label="平均睡眠" value={formatHoursFromMin(routine.averageDurationMin)} tone="good" />
           </div>
-          <p className="text-xs text-ink-3">
+          <p className="td-text-caption text-ink-3">
             {routineStateText(routine.regularity.state)} · 样本 {routine.sampleCount} 天
             {routine.sleepWindow.source === "samples" &&
               ` · 通常睡眠时段 ${formatClockFromMinute(routine.sleepWindow.startMin)}~${formatClockFromMinute(routine.sleepWindow.endMin)}`}

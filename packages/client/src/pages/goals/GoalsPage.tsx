@@ -53,7 +53,7 @@ export function GoalsPage() {
             aria-label="切换到目标星图"
             aria-selected={showGalaxy}
             onClick={() => chooseMode("galaxy")}
-            className={`min-h-8 rounded-pill px-3 text-sm ${showGalaxy ? "bg-accent text-page" : "text-ink-2 hover:bg-surface-hover"}`}
+            className={`min-h-8 rounded-pill px-3 td-text-label ${showGalaxy ? "bg-accent text-page" : "text-ink-2 hover:bg-surface-hover"}`}
           >
             星图
           </button>
@@ -63,7 +63,7 @@ export function GoalsPage() {
             aria-label="切换到目标列表"
             aria-selected={!showGalaxy}
             onClick={() => chooseMode("list")}
-            className={`min-h-8 rounded-pill px-3 text-sm ${showGalaxy ? "text-ink-2 hover:bg-surface-hover" : "bg-accent text-page"}`}
+            className={`min-h-8 rounded-pill px-3 td-text-label ${showGalaxy ? "text-ink-2 hover:bg-surface-hover" : "bg-accent text-page"}`}
           >
             列表
           </button>

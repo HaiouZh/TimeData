@@ -71,7 +71,7 @@ export function GoalEditForm({ goal, active, onSave, onToggleArchive, onDelete }
     <>
       <form onSubmit={submit} className="space-y-4 px-4 pb-4 pt-3">
         <label className="block space-y-1">
-          <span className="text-xs text-ink-3">标题</span>
+          <span className="td-text-caption text-ink-3">标题</span>
           <input
             type="text"
             value={title}
@@ -79,43 +79,43 @@ export function GoalEditForm({ goal, active, onSave, onToggleArchive, onDelete }
             aria-label="目标标题"
             aria-invalid={Boolean(titleError)}
             aria-describedby={titleError ? "goal-edit-title-error" : undefined}
-            className="w-full rounded-ctl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full rounded-ctl border border-border bg-surface px-3 py-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </label>
         {titleError && (
-          <p id="goal-edit-title-error" className="-mt-3 text-xs text-danger">
+          <p id="goal-edit-title-error" className="-mt-3 td-text-caption text-danger">
             {titleError}
           </p>
         )}
         <label className="block space-y-1">
-          <span className="text-xs text-ink-3">备注</span>
+          <span className="td-text-caption text-ink-3">备注</span>
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
             aria-label="目标备注"
             rows={4}
             placeholder="备注"
-            className="w-full resize-none rounded-ctl border border-border bg-surface px-3 py-2 text-sm leading-6 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+            className="w-full resize-none rounded-ctl border border-border bg-surface px-3 py-2 leading-6 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
           />
         </label>
         <div className="space-y-1">
-          <p className="text-xs text-ink-3">类型</p>
+          <p className="td-text-caption text-ink-3">类型</p>
           <SegmentedControl ariaLabel="目标类型" value={kind} options={KIND_OPTIONS} onChange={setKind} />
         </div>
         <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
           <div className="flex gap-2">
-            <button type="button" onClick={onToggleArchive} className="min-h-11 rounded-ctl border border-border px-4 text-sm text-ink">
+            <button type="button" onClick={onToggleArchive} className="min-h-11 rounded-ctl border border-border px-4 td-text-label text-ink">
               {archiveLabel}
             </button>
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
-              className="min-h-11 rounded-ctl border border-danger/40 px-4 text-sm text-danger"
+              className="min-h-11 rounded-ctl border border-danger/40 px-4 td-text-label text-danger"
             >
               删除目标
             </button>
           </div>
-          <button type="submit" className="min-h-11 rounded-ctl bg-accent px-4 text-sm text-page">
+          <button type="submit" className="min-h-11 rounded-ctl bg-accent px-4 td-text-label text-page">
             保存目标
           </button>
         </div>

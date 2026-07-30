@@ -26,7 +26,7 @@ export default function GoalsListPage() {
       <div className="mx-auto w-full max-w-2xl px-4 py-4 pb-24">
         <NewGoalComposer onCreate={(input) => void create(input)} />
         {active.length === 0 ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">还没有进行中的目标</p>
+          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">还没有进行中的目标</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {active.map((overview) => (

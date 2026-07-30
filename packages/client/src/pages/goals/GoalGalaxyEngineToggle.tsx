@@ -3,7 +3,7 @@ import { Icon } from "../../components/Icon.js";
 import type { GalaxyEngineMode } from "../../lib/galaxyEngineMode.js";
 
 const CONTROL_CLASS =
-  "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent";
+  "pointer-events-auto inline-flex h-9 items-center gap-1.5 rounded-pill border border-border bg-surface-elevated px-3 td-text-caption text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent";
 
 export function GoalGalaxyEngineToggle({
   live,

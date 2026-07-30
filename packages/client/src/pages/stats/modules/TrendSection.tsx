@@ -100,7 +100,7 @@ export default function TrendSection(props: StatsModuleProps) {
               type="button"
               aria-pressed={active}
               onClick={() => setWindow({ kind: "preset", days: preset.days })}
-              className={`min-h-10 rounded-full px-3 text-xs font-medium ${
+              className={`min-h-10 rounded-full px-3 td-text-caption font-medium ${
                 active ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
@@ -118,9 +118,9 @@ export default function TrendSection(props: StatsModuleProps) {
             const days = Number(event.target.value);
             if (Number.isFinite(days) && days >= 1) setWindow({ kind: "customDays", days });
           }}
-          className="min-h-10 w-28 rounded-full border border-border bg-surface-elevated px-3 text-xs text-ink-2 outline-none"
+          className="min-h-10 w-28 rounded-full border border-border bg-surface-elevated px-3 text-ink-2 outline-none"
         />
-        <span className="text-xs text-ink-3">或</span>
+        <span className="td-text-caption text-ink-3">或</span>
         <DateField
           max={props.today}
           ariaLabel="趋势起始日"
@@ -149,20 +149,20 @@ export default function TrendSection(props: StatsModuleProps) {
         />
       </div>
 
-      <div className="text-xs text-ink-3">
+      <div className="td-text-caption text-ink-3">
         {trend.window.from} ~ {trend.window.to}
         {!trend.prevComparable && "（对比期数据不足，仅显示本期投入）"}
       </div>
 
       {trend.parentTrends.length === 0 ? (
-        <p className="text-sm text-ink-3">本期窗口无投入记录。</p>
+        <p className="td-text-body text-ink-3">本期窗口无投入记录。</p>
       ) : (
         <>
           <ul className="space-y-1.5">
             {trend.parentTrends.map((t) => (
               <li
                 key={t.parentId}
-                className="flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm"
+                className="flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 td-text-label"
               >
                 <span className="text-ink">{props.parentNameById.get(t.parentId) ?? t.parentId}</span>
                 <span
@@ -181,7 +181,7 @@ export default function TrendSection(props: StatsModuleProps) {
           </ul>
 
           {(trend.topRising.length > 0 || trend.topFalling.length > 0) && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-2 gap-2 td-text-caption">
               <div className="rounded-card border border-ok/30 bg-ok/10 p-3">
                 <div className="mb-1 text-ink-2">上升最多</div>
                 {trend.topRising.length === 0 ? (
@@ -214,7 +214,7 @@ export default function TrendSection(props: StatsModuleProps) {
               type="button"
               aria-pressed={trendChart === "line"}
               onClick={() => setChart("line")}
-              className={`min-h-10 rounded-full px-3 text-xs font-medium ${
+              className={`min-h-10 rounded-full px-3 td-text-caption font-medium ${
                 trendChart === "line" ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
@@ -224,7 +224,7 @@ export default function TrendSection(props: StatsModuleProps) {
               type="button"
               aria-pressed={trendChart === "area"}
               onClick={() => setChart("area")}
-              className={`min-h-10 rounded-full px-3 text-xs font-medium ${
+              className={`min-h-10 rounded-full px-3 td-text-caption font-medium ${
                 trendChart === "area" ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >

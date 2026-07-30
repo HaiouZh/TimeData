@@ -156,7 +156,7 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
               type="button"
               aria-expanded={expanded}
               onClick={() => setExpandedId(expanded ? null : parent.id)}
-              className="flex min-h-10 w-full items-center justify-between gap-2 text-sm"
+              className="flex min-h-10 w-full items-center justify-between gap-2 td-text-label"
             >
               <span className="flex min-w-0 items-center gap-2">
                 <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
@@ -179,7 +179,7 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
             {expanded && (
               <ul className="mt-2 space-y-1">
                 {parent.children.map((child) => (
-                  <li key={child.id} className="flex items-center justify-between gap-2 text-xs">
+                  <li key={child.id} className="flex items-center justify-between gap-2 td-text-caption">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: child.color }} />
                       <span className="truncate text-ink-2">{child.name}</span>
@@ -216,7 +216,7 @@ function DonutTooltip({ active, payload, total }: DonutTooltipProps) {
   const datum = payload[0].payload;
   const pct = total > 0 ? Math.round((datum.value / total) * 1000) / 10 : 0;
   return (
-    <div className="rounded-card border border-border bg-surface px-3 py-2 text-xs text-ink shadow-elev2">
+    <div className="rounded-card border border-border bg-surface px-3 py-2 td-text-caption text-ink shadow-elev2">
       {datum.name} · {datum.value}h · {pct}%
     </div>
   );
@@ -257,9 +257,9 @@ export const CategoryDonut = memo(function CategoryDonut({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-semibold text-ink">{totalHours.toFixed(1)}h</div>
-        <div className="text-xs text-ink-2">覆盖率 {coveragePct.toFixed(1)}%</div>
-        {coverageNote && <div className="text-[10px] text-ink-3">{coverageNote}</div>}
+        <div className="td-text-display text-ink">{totalHours.toFixed(1)}h</div>
+        <div className="td-text-caption text-ink-2">覆盖率 {coveragePct.toFixed(1)}%</div>
+        {coverageNote && <div className="td-text-caption text-ink-3">{coverageNote}</div>}
       </div>
     </div>
   );

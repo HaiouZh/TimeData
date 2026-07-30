@@ -64,7 +64,7 @@ export default function OverviewSection(props: StatsModuleProps) {
       </div>
       {compositionParents.length > 0 && (
         <div className="mt-4 space-y-2">
-          <div className="text-xs font-medium text-ink-3">父分类 → 子分类构成</div>
+          <div className="td-text-caption font-medium text-ink-3">父分类 → 子分类构成</div>
           <CategoryCompositionBars parents={compositionParents} />
         </div>
       )}
@@ -78,7 +78,7 @@ export default function OverviewSection(props: StatsModuleProps) {
           />
         </div>
       ) : (
-        <div className="mt-4 rounded-card border border-dashed border-border bg-surface-elevated py-10 text-center text-sm text-ink-3">
+        <div className="mt-4 rounded-card border border-dashed border-border bg-surface-elevated py-10 text-center td-text-body text-ink-3">
           暂无统计数据
         </div>
       )}

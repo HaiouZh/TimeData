@@ -116,10 +116,10 @@ function ServerStatusCard() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-ink">服务器配置</span>
+            <span className="td-text-body font-semibold text-ink">服务器配置</span>
             <ConnectionLight color={connectionState.color} />
           </div>
-          <div className="mt-0.5 truncate text-xs text-ink-3">{connectionState.subtitle}</div>
+          <div className="mt-0.5 truncate td-text-caption text-ink-3">{connectionState.subtitle}</div>
         </div>
         <Icon icon={CaretRight} size={20} className="text-ink-3" />
       </Link>
@@ -127,17 +127,17 @@ function ServerStatusCard() {
       {cloudSyncEnabled && (
         <div className="border-t border-border p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-medium text-ink">同步信息</h3>
+            <h3 className="td-text-label font-medium text-ink">同步信息</h3>
             <button
               type="button"
               onClick={() => sync()}
               disabled={syncing}
-              className="shrink-0 rounded-ctl bg-accent px-3 py-1.5 text-xs font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+              className="shrink-0 rounded-ctl bg-accent px-3 py-1.5 td-text-caption font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
             >
               {syncing ? "同步中…" : "同步"}
             </button>
           </div>
-          <div className="mt-2 space-y-1 text-xs text-ink-2">
+          <div className="mt-2 space-y-1 td-text-caption text-ink-2">
             <p>上次同步: {lastSynced ? formatAppDateTime(lastSynced) : "从未"}</p>
             <p>待同步: {unsyncedCount} 条</p>
             {lastResult?.identical && <p className="text-ok">本地与云端数据一致，无需同步。</p>}
@@ -282,7 +282,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-xl space-y-5 bg-page p-4 pb-10 text-ink">
       {dialog}
       <header className="px-1 pt-1">
-        <h2 className="text-2xl font-semibold text-ink">设置</h2>
+        <h2 className="td-text-title text-ink">设置</h2>
       </header>
 
       {/* 状态总览：服务器连接 + 同步摘要合并为一张卡（顺序：服务器配置 → 同步信息） */}

@@ -52,7 +52,7 @@ export default function TodoStatsPage() {
       <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="td-text-caption font-medium uppercase tracking-[0.16em] text-ink-2">TimeData</div>
+            <div className="td-eyebrow text-ink-2">TimeData</div>
             <h2 className="mt-1 td-text-title tracking-normal text-ink">待办统计</h2>
           </div>
           <Link

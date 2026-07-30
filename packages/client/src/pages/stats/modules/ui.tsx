@@ -26,9 +26,9 @@ export function SectionPanel({
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           {eyebrow && (
-            <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">{eyebrow}</div>
+            <div className="mb-1 td-eyebrow text-ink-3">{eyebrow}</div>
           )}
-          <h3 className="text-base font-semibold text-ink">{title}</h3>
+          <h3 className="td-text-body font-semibold text-ink">{title}</h3>
         </div>
         {action}
       </div>
@@ -50,9 +50,9 @@ export function MetricCard({
 }) {
   return (
     <div className={`rounded-card border px-3.5 py-3 ${metricToneClass(tone)}`}>
-      <div className="text-[11px] font-medium text-ink-2">{label}</div>
-      <div className="td-metric mt-1 text-xl font-semibold leading-tight">{value}</div>
-      {hint && <div className="mt-1 text-[11px] leading-snug text-ink-3">{hint}</div>}
+      <div className="td-text-caption font-medium text-ink-2">{label}</div>
+      <div className="td-metric td-text-title mt-1 leading-tight">{value}</div>
+      {hint && <div className="mt-1 td-text-caption leading-snug text-ink-3">{hint}</div>}
     </div>
   );
 }

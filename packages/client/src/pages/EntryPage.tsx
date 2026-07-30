@@ -199,7 +199,7 @@ export default function EntryPage() {
         <button onClick={() => goBack(fallbackBackPath)} className="px-3 py-1.5 rounded-lg bg-surface-hover td-text-caption text-ink-2">
           返回
         </button>
-        <h1 className="text-lg font-medium">{existingEntry ? "编辑记录" : "新增记录"}</h1>
+        <h1 className="td-text-title">{existingEntry ? "编辑记录" : "新增记录"}</h1>
       </header>
       <main className="p-3">
         <EntryForm

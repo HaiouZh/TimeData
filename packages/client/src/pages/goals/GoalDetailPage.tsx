@@ -24,11 +24,11 @@ export default function GoalDetailPage() {
     steps === undefined ||
     layoutPins === undefined
   ) {
-    return <div className="min-h-full bg-page px-4 py-6 text-sm text-ink-3">正在加载...</div>;
+    return <div className="min-h-full bg-page px-4 py-6 td-text-body text-ink-3">正在加载...</div>;
   }
 
   if (goal === null) {
-    return <div className="min-h-full bg-page px-4 py-6 text-sm text-ink-3">目标不存在</div>;
+    return <div className="min-h-full bg-page px-4 py-6 td-text-body text-ink-3">目标不存在</div>;
   }
 
   return (

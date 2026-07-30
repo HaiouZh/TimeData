@@ -134,7 +134,7 @@ const PASSIVE_HANDLE_CLASS = "nodrag nopan !h-1 !w-1 !border-0 !bg-transparent !
 const CENTER_HANDLE_CLASS =
   "nodrag nopan !left-1/2 !top-1/2 !h-1 !w-1 !-translate-x-1/2 !-translate-y-1/2 !border-0 !bg-transparent !opacity-0";
 const CONTROL_PILL_CLASS =
-  "pointer-events-auto inline-flex h-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface-elevated px-3 text-xs text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent aria-pressed:bg-accent aria-pressed:text-page";
+  "pointer-events-auto inline-flex h-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface-elevated px-3 td-text-caption text-ink-2 shadow-sm transition-colors hover:bg-surface-hover hover:text-ink focus:outline-none focus:ring-1 focus:ring-accent aria-pressed:bg-accent aria-pressed:text-page";
 const HANDLE_POSITIONS = [
   { id: "left", position: Position.Left },
   { id: "right", position: Position.Right },
@@ -1231,14 +1231,14 @@ function GoalGalaxyCanvasInner({
         >
           <Icon icon={CornersOut} size={16} />
         </button>
-        <div className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-pill border border-border bg-surface-elevated px-2 text-xs text-ink-2 shadow-sm">
+        <div className="pointer-events-auto inline-flex h-9 items-center gap-2 rounded-pill border border-border bg-surface-elevated px-2 td-text-caption text-ink-2 shadow-sm">
           <div className="inline-flex overflow-hidden rounded-pill border border-border bg-surface">
             <button
               type="button"
               aria-label="归属线透明度"
               aria-pressed={opacityTarget === "tether"}
               onClick={() => setOpacityTarget("tether")}
-              className="h-6 px-2 text-xs transition-colors aria-pressed:bg-accent aria-pressed:text-page"
+              className="h-6 px-2 td-text-caption transition-colors aria-pressed:bg-accent aria-pressed:text-page"
             >
               归属线
             </button>
@@ -1247,7 +1247,7 @@ function GoalGalaxyCanvasInner({
               aria-label="连接线透明度"
               aria-pressed={opacityTarget === "prerequisite"}
               onClick={() => setOpacityTarget("prerequisite")}
-              className="h-6 px-2 text-xs transition-colors aria-pressed:bg-accent aria-pressed:text-page"
+              className="h-6 px-2 td-text-caption transition-colors aria-pressed:bg-accent aria-pressed:text-page"
             >
               连接线
             </button>
@@ -1363,7 +1363,7 @@ function GoalGalaxyCanvasInner({
                 type="button"
                 aria-label={`在 ${title} 中编辑`}
                 onClick={() => navigateBridgeGoal(goalId)}
-                className="min-h-11 rounded-ctl border border-border px-3 text-left text-sm text-ink"
+                className="min-h-11 rounded-ctl border border-border px-3 text-left td-text-body text-ink"
               >
                 {title}
               </button>

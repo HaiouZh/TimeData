@@ -42,7 +42,7 @@ export function GoalGraphUndoToast({
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-4 bottom-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 text-sm text-page shadow-lg"
+      className="fixed inset-x-4 bottom-4 z-[var(--z-backdrop)] mx-auto flex max-w-md items-center gap-3 rounded-card border border-border bg-ink px-4 py-3 td-text-body text-page shadow-lg"
     >
       <span className="min-w-0 flex-1 break-words">{message}</span>
       {canUndo ? (
@@ -50,7 +50,7 @@ export function GoalGraphUndoToast({
           type="button"
           data-goal-undo-action
           onClick={onAction}
-          className="shrink-0 rounded-ctl bg-page px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface-elevated"
+          className="shrink-0 rounded-ctl bg-page px-3 py-1.5 td-text-label font-medium text-ink hover:bg-surface-elevated"
         >
           {actionLabel}
         </button>

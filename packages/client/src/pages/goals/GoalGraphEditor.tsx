@@ -457,7 +457,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
               type="button"
               aria-label={actionLabel(action, selectedNode)}
               onClick={() => void runNodeAction(action.id, selectedNode)}
-              className={`min-h-9 rounded-ctl px-3 text-sm ${
+              className={`min-h-9 rounded-ctl px-3 td-text-label ${
                 action.tone === "danger" ? "text-danger" : action.tone === "primary" ? "bg-accent text-page" : "text-ink"
               }`}
             >
@@ -475,7 +475,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
               type="button"
               aria-label={action.label}
               onClick={() => void runEdgeAction(selectedEdge)}
-              className="min-h-9 rounded-ctl px-3 text-sm text-danger"
+              className="min-h-9 rounded-ctl px-3 td-text-label text-danger"
             >
               {action.label}
             </button>
@@ -524,7 +524,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       />
 
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 text-sm text-danger">
+        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger">
           {errorMessage}
         </div>
       )}
@@ -644,7 +644,7 @@ function ActionList({
           type="button"
           aria-label={labelFor(action)}
           onClick={() => onAction(action)}
-          className={`min-h-11 rounded-ctl border px-3 text-sm ${
+          className={`min-h-11 rounded-ctl border px-3 td-text-body ${
             action.tone === "danger"
               ? "border-danger/40 text-danger"
               : action.tone === "primary"

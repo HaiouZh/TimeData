@@ -24,7 +24,7 @@ export function NewGoalComposer({ onCreate }: { onCreate: (input: { title: strin
           onChange={(event) => setTitle(event.target.value)}
           placeholder="新建目标..."
           aria-label="新建目标标题"
-          className="min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
+          className="min-w-0 flex-1 rounded-ctl border border-border bg-surface px-3 py-2 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-accent"
         />
         <button
           type="submit"

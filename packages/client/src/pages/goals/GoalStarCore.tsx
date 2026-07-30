@@ -8,17 +8,17 @@ const SIZE_CLASS = {
   sm: {
     shell: "h-12 w-12",
     ring: "inset-[-5px]",
-    center: "h-10 w-10 text-[11px]",
+    center: "h-10 w-10 td-text-caption",
   },
   md: {
     shell: "h-16 w-16",
     ring: "inset-[-6px]",
-    center: "h-12 w-12 text-xs",
+    center: "h-12 w-12 td-text-caption",
   },
   lg: {
     shell: "h-20 w-20",
     ring: "inset-[-7px]",
-    center: "h-14 w-14 text-sm",
+    center: "h-14 w-14 td-text-label",
   },
 } as const;
 

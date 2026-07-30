@@ -35,7 +35,7 @@ export function GoalGalaxyActionBar({
       type="button"
       aria-label={actionLabel(action, node)}
       onClick={() => onAction(action)}
-      className={`min-h-11 rounded-ctl border px-3 text-sm ${actionClass(action)}`}
+      className={`min-h-11 rounded-ctl border px-3 td-text-body ${actionClass(action)}`}
     >
       {action.label}
     </button>
@@ -75,7 +75,7 @@ export function GoalGalaxyEdgeActionBar({
       type="button"
       aria-label={action.label}
       onClick={() => onAction(action)}
-      className={`min-h-11 rounded-ctl border px-3 text-sm ${actionClass(action)}`}
+      className={`min-h-11 rounded-ctl border px-3 td-text-body ${actionClass(action)}`}
     >
       {action.label}
     </button>

@@ -4,7 +4,7 @@ export function GoalGalaxyHud({ rollup }: { rollup: GalaxyRollup }) {
   const pct = Math.round(rollup.ratio * 100);
 
   return (
-    <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm text-ink shadow-sm">
+    <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-card border border-border bg-surface-elevated px-3 py-2 td-text-label text-ink shadow-sm">
       <span className="font-medium text-accent">全局 {pct}%</span>
       <span className="text-ink-3">
         {rollup.completed}/{rollup.total}

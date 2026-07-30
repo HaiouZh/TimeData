@@ -150,15 +150,15 @@ export default function TimeStatsPage() {
       <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-2">TimeData</div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-normal text-ink">时间统计</h2>
+            <div className="td-eyebrow text-ink-2">TimeData</div>
+            <h2 className="mt-1 td-text-title text-ink">时间统计</h2>
           </div>
           <div className="flex items-center gap-2">
             {!atLatest && (
               <button
                 type="button"
                 onClick={() => setAnchor(today)}
-                className="min-h-11 rounded-pill border border-accent bg-accent-soft px-4 text-sm font-medium text-accent"
+                className="min-h-11 rounded-pill border border-accent bg-accent-soft px-4 td-text-label font-medium text-accent"
               >
                 回到今天
               </button>
@@ -181,7 +181,7 @@ export default function TimeStatsPage() {
               type="button"
               onClick={() => setMode(m)}
               aria-pressed={mode === m}
-              className={`min-h-11 rounded-xl text-sm font-medium transition ${
+              className={`min-h-11 rounded-xl td-text-label font-medium transition ${
                 mode === m ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
               }`}
             >
@@ -200,7 +200,7 @@ export default function TimeStatsPage() {
             <Icon icon={CaretLeft} size={18} />
           </button>
           <div className="min-w-0 flex-1 rounded-row border border-border bg-surface-elevated px-3 py-2">
-            <span className="block truncate text-sm font-medium text-ink">{rangeLabel}</span>
+            <span className="block truncate td-text-label font-medium text-ink">{rangeLabel}</span>
             <DateField
               value={statsRange.fromDate}
               ariaLabel="选择统计日期"
@@ -223,17 +223,17 @@ export default function TimeStatsPage() {
         </div>
 
         <div className="mt-4 rounded-card border border-border bg-surface-elevated px-4 py-3">
-          <div className="text-xs font-medium text-ink-2">已记录</div>
+          <div className="td-text-caption font-medium text-ink-2">已记录</div>
           <div className="mt-1 flex items-end gap-2">
-            <span className="td-num text-4xl font-semibold leading-none text-ink">{totalHours.toFixed(1)}</span>
-            <span className="pb-1 text-sm text-ink-2">小时</span>
+            <span className="td-num td-text-display leading-none text-ink">{totalHours.toFixed(1)}</span>
+            <span className="pb-1 td-text-label text-ink-2">小时</span>
           </div>
-          {rangeClampedToToday && <div className="mt-2 text-xs text-ink-3">截至 {effectiveRange.toDate}</div>}
+          {rangeClampedToToday && <div className="mt-2 td-text-caption text-ink-3">截至 {effectiveRange.toDate}</div>}
         </div>
       </header>
 
       {layout.visibleModulesInOrder.length === 0 ? (
-        <div className="rounded-card border border-dashed border-border bg-surface p-8 text-center text-sm text-ink-3">
+        <div className="rounded-card border border-dashed border-border bg-surface p-8 text-center td-text-body text-ink-3">
           所有统计模块已隐藏。
           <Link to="/settings/stats-layout" className="ml-1 text-accent underline">
             去设置启用

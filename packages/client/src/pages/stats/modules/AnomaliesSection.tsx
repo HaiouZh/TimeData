@@ -131,17 +131,17 @@ export default function AnomaliesSection(props: StatsModuleProps) {
       eyebrow="Attention"
       action={
         anomalies.length > 0 ? (
-          <span className="rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 text-xs text-warn">
+          <span className="rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 td-text-caption text-warn">
             {anomalies.length} 项
           </span>
         ) : null
       }
     >
       {anomalies.length === 0 ? (
-        <p className="text-sm text-ink-3">本周期未发现明显异常或长空挡。</p>
+        <p className="td-text-body text-ink-3">本周期未发现明显异常或长空挡。</p>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="grid grid-cols-3 gap-2 td-text-label">
             <MetricCard
               label="长空挡"
               value={anomalyStats.longGapCount}
@@ -164,17 +164,17 @@ export default function AnomaliesSection(props: StatsModuleProps) {
 
           {longGapAnomalies.length > 0 && (
             <div className="mt-4 space-y-2">
-              <div className="text-xs font-medium text-ink-3">长空挡 Top</div>
+              <div className="td-text-caption font-medium text-ink-3">长空挡 Top</div>
               <ul className="space-y-1.5">
                 {longGapAnomalies.slice(0, 5).map((anomaly) => (
                   <li
                     key={anomalyKey(anomaly, "top")}
-                    className="flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 text-sm"
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-card border border-border bg-surface-elevated px-3 py-2 td-text-label"
                   >
                     <span className="min-w-0 text-ink-2">
                       {anomaly.date}
                       {formatAnomalyTimeRange(anomaly) && (
-                        <span className="ml-2 text-xs text-ink-3">{formatAnomalyTimeRange(anomaly)}</span>
+                        <span className="ml-2 td-text-caption text-ink-3">{formatAnomalyTimeRange(anomaly)}</span>
                       )}
                     </span>
                     <span className="shrink-0 text-ink">{formatDurationFromMin(anomaly.valueMin)}</span>
@@ -188,13 +188,13 @@ export default function AnomaliesSection(props: StatsModuleProps) {
             className="mt-4 space-y-2 rounded-card border border-border bg-surface-elevated px-3 py-2"
             open={props.mode !== "month"}
           >
-            <summary className="min-h-10 cursor-pointer py-2 text-xs font-medium text-ink-2">按日期分布</summary>
+            <summary className="min-h-10 cursor-pointer py-2 td-text-caption font-medium text-ink-2">按日期分布</summary>
             <div className="mt-2 space-y-2">
               {anomalyDateGroups.map((group) => (
                 <div key={group.date} className="rounded-card border border-border bg-surface px-3 py-2">
-                  <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex items-center justify-between gap-3 td-text-label">
                     <span className="font-medium text-ink">{group.date}</span>
-                    <span className="text-xs text-ink-3">{group.items.length} 项</span>
+                    <span className="td-text-caption text-ink-3">{group.items.length} 项</span>
                   </div>
                   <ul className="mt-2 divide-y divide-border">
                     {group.items.map((anomaly) => {
@@ -205,15 +205,15 @@ export default function AnomaliesSection(props: StatsModuleProps) {
                           className="py-2 first:pt-0 last:pb-0"
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-ink-2">
+                            <span className="rounded-full bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
                               {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
                             </span>
-                            {timeRange && <span className="text-xs text-ink-3">{timeRange}</span>}
+                            {timeRange && <span className="td-text-caption text-ink-3">{timeRange}</span>}
                             {anomaly.valueMin !== undefined && (
-                              <span className="text-xs text-ink-2">{formatDurationFromMin(anomaly.valueMin)}</span>
+                              <span className="td-text-caption text-ink-2">{formatDurationFromMin(anomaly.valueMin)}</span>
                             )}
                           </div>
-                          <p className="mt-1 text-sm text-ink-2">{anomaly.message}</p>
+                          <p className="mt-1 td-text-body text-ink-2">{anomaly.message}</p>
                         </li>
                       );
                     })}
