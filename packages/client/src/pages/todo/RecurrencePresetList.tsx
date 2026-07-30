@@ -68,7 +68,7 @@ export function RecurrencePresetList({ current, scheduledAt, anchor, onChoose, o
               type="button"
               aria-label={ariaLabelFor(row.key, row.label)}
               onClick={() => chooseRow(row.key)}
-              className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left text-sm text-ink transition-colors hover:bg-surface-hover"
+              className="flex min-h-11 w-full items-center justify-between gap-3 px-2 text-left td-text-label text-ink transition-colors hover:bg-surface-hover"
             >
               <span>{row.label}</span>
               {row.key === "custom" ? (

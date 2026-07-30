@@ -21,12 +21,12 @@ export default function SettingsDetailPage({
       <div className="sticky top-0 z-20 border-b border-border bg-page/80 px-4 py-3 backdrop-blur">
         <Link
           to={backTo}
-          className="inline-flex items-center gap-1.5 text-sm text-ink-3 transition-colors hover:text-ink-2"
+          className="inline-flex items-center gap-1.5 td-text-label text-ink-3 transition-colors hover:text-ink-2"
         >
           <Icon icon={ArrowLeft} size={16} />
           {backLabel}
         </Link>
-        <h2 className="mt-1.5 text-xl font-semibold text-ink">{title}</h2>
+        <h2 className="mt-1.5 td-text-title text-ink">{title}</h2>
       </div>
       <div className="space-y-5 p-4">{children}</div>
     </div>

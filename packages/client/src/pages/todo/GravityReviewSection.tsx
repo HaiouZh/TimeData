@@ -122,7 +122,7 @@ export function GravityReviewSection({
         }}
       >
         {batchTasks.length === 0 ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">水下暂时没有可翻的任务</p>
+          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">水下暂时没有可翻的任务</p>
         ) : (
           <div className="rounded-card p-1.5">
             <TaskList
@@ -138,7 +138,7 @@ export function GravityReviewSection({
             />
             <button
               type="button"
-              className="mt-1 w-full rounded-ctl px-3 py-1.5 text-xs text-ink-3 hover:bg-surface-elevated"
+              className="mt-1 w-full rounded-ctl px-3 py-1.5 td-text-caption text-ink-3 hover:bg-surface-elevated"
               onClick={() => drawBatch()}
             >
               再翻几张

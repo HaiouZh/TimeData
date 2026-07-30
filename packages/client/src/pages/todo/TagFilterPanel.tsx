@@ -16,7 +16,7 @@ export interface TagFilterPanelProps {
 type ChipState = "unselected" | "include" | "exclude";
 
 const TOGGLE_BTN =
-  "min-h-9 rounded-pill border border-border px-3 text-xs transition-colors disabled:opacity-40";
+  "min-h-9 rounded-pill border border-border px-3 td-text-caption transition-colors disabled:opacity-40";
 
 export function TagFilterPanel({
   tags,
@@ -93,7 +93,7 @@ export function TagFilterPanel({
             aria-label={`筛选 ${tag}`}
             aria-pressed={state === "include"}
             onClick={() => onToggleTag(tag)}
-            className={`min-h-9 rounded-pill border px-2.5 text-xs transition-colors ${cls}`}
+            className={`min-h-9 rounded-pill border px-2.5 td-text-caption transition-colors ${cls}`}
             style={style}
           >
             #{tag}

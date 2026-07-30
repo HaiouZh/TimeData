@@ -30,12 +30,12 @@ function RowBody({
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-ink">{title}</div>
-        {subtitle && <div className="mt-0.5 truncate text-xs text-ink-3">{subtitle}</div>}
+        <div className="td-text-label font-medium text-ink">{title}</div>
+        {subtitle && <div className="mt-0.5 truncate td-text-caption text-ink-3">{subtitle}</div>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {accessory && (
-          <span className="rounded-pill bg-surface-elevated px-2 py-0.5 text-[11px] font-medium text-ink-2">
+          <span className="rounded-pill bg-surface-elevated px-2 py-0.5 td-text-caption font-medium text-ink-2">
             {accessory}
           </span>
         )}
@@ -58,8 +58,8 @@ export function SettingsSection({
     <section className="space-y-2">
       {(title || description) && (
         <div className="px-1">
-          {title && <h3 className="text-xs font-medium uppercase tracking-wider text-ink-3">{title}</h3>}
-          {description && <p className="mt-1 text-xs text-ink-3">{description}</p>}
+          {title && <h3 className="td-eyebrow text-ink-3">{title}</h3>}
+          {description && <p className="mt-1 td-text-caption text-ink-3">{description}</p>}
         </div>
       )}
       <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface">
@@ -130,8 +130,8 @@ export function SettingsToggleRow({
       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-elevated disabled:opacity-60"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-ink">{title}</span>
-        {subtitle && <span className="mt-0.5 block text-xs text-ink-3">{subtitle}</span>}
+        <span className="block td-text-label font-medium text-ink">{title}</span>
+        {subtitle && <span className="mt-0.5 block td-text-caption text-ink-3">{subtitle}</span>}
       </span>
       <span className={`relative h-6 w-11 rounded-pill transition-colors ${checked ? "bg-accent" : "bg-surface-elevated"}`}>
         <span
@@ -167,8 +167,8 @@ export function SettingsNumberRow({
   return (
     <div className="flex w-full items-center justify-between gap-3 px-4 py-3 disabled:opacity-60">
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-ink">{title}</span>
-        {subtitle && <span className="mt-0.5 block text-xs text-ink-3">{subtitle}</span>}
+        <span className="block td-text-label font-medium text-ink">{title}</span>
+        {subtitle && <span className="mt-0.5 block td-text-caption text-ink-3">{subtitle}</span>}
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <button
@@ -192,7 +192,7 @@ export function SettingsNumberRow({
             const n = Number(event.target.value);
             if (Number.isFinite(n)) onChange(clamp(Math.round(n)));
           }}
-          className="w-14 rounded-ctl border border-border bg-surface px-2 py-1 text-center text-sm text-ink focus:border-accent focus:outline-none"
+          className="w-14 rounded-ctl border border-border bg-surface px-2 py-1 text-center text-ink focus:border-accent focus:outline-none"
         />
         <button
           type="button"

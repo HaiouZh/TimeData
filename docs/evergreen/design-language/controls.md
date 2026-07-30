@@ -54,8 +54,13 @@ last-reviewed: 2026-07-29
 | 用途 | 档 |
 |---|---|
 | 控件标签、选项行、trigger 显示值、按钮文字 | `td-text-label` |
-| 成段正文（`ConfirmSheet` 的 `body`）、空态文案 | `td-text-body` |
-| `Sheet` 标题（`title` 渲染的 `<h2>`） | `td-text-title` |
+| 表单内联错误提示（贴着控件的那行红字） | `td-text-label` |
+| 行内次级信息、徽标/胶囊、行副标题 | `td-text-caption` |
+| 成段正文（`ConfirmSheet` 的 `body`）、整段说明、空态文案、浮层提示条 | `td-text-body` |
+| 面板标题（`<h3>` 级）| `td-text-body font-semibold` |
+| `Sheet` 标题、页面标题（`title` 渲染的 `<h2>`） | `td-text-title` |
+
+错误提示归 `label` 而不是 `body`：它是控件的附属反馈，跟同一行的标签/按钮文字同档才不会比自己所属的行标题还大；独立成段的说明卡片与空状态才用 `body`。面板标题不落 `title`：页面标题已占 `title`(20px)，面板标题再落同档会让原本 24/16px 的两级层级塌成一档。
 
 **`input` / `textarea` / `select` 上不加任何字号类**：`index.css` 顶层的 `input,select,textarea { font-size: 16px }` 是 iOS 聚焦防缩放兜底（字号 <16px 时 Safari 会自动放大视口）。它是元素选择器，而 `.td-text-*` 是类选择器、特异性更高，加上去会盖掉兜底并让聚焦时整页放大回归。这类元素上的字号声明本就不生效，正确做法是不写。
 

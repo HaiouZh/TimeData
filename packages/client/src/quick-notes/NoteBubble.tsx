@@ -40,7 +40,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
   return (
     <div>
       {isAgent && (
-        <div className="mb-1 text-[11px] font-semibold text-accent-ink">
+        <div className="mb-1 td-text-caption font-semibold text-accent-ink">
           {sourceLabel}
         </div>
       )}
@@ -84,7 +84,7 @@ export default function NoteBubble({ note, pending = false }: { note: QuickNote;
               event.stopPropagation();
               setExpanded((value) => !value);
             }}
-            className="text-xs font-medium text-accent transition hover:text-accent-ink"
+            className="td-text-caption font-medium text-accent transition hover:text-accent-ink"
           >
             {expanded ? "收起" : "展开"}
           </button>

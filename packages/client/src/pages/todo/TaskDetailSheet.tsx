@@ -305,7 +305,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
             type="button"
             aria-label={expanded ? "还原" : "放大"}
             onClick={() => setExpanded((value) => !value)}
-            className="absolute right-3 rounded-ctl px-2 py-1 text-xs text-ink-3 hover:bg-surface-hover"
+            className="absolute right-3 rounded-ctl px-2 py-1 td-text-caption text-ink-3 hover:bg-surface-hover"
           >
             {expanded ? "▢" : "⤢"}
           </button>
@@ -321,7 +321,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
           </div>
         )}
 
-        {error && <p className="px-4 pb-2 text-sm text-danger">{error}</p>}
+        {error && <p className="px-4 pb-2 td-text-label text-danger">{error}</p>}
 
         {task && (
           <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-6">
@@ -338,7 +338,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {isChild ? (
-                    <span className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-3">
+                    <span className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 td-text-caption text-ink-3">
                       作为子任务
                     </span>
                   ) : recurrenceTarget ? (
@@ -346,7 +346,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                       type="button"
                       aria-label="编辑重复与时间"
                       onClick={() => setOverlay("preset")}
-                      className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 text-xs text-ink-2 hover:bg-surface-elevated"
+                      className="inline-flex min-h-8 items-center rounded-ctl bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2 hover:bg-surface-elevated"
                     >
                       {nextTimeLabel}
                     </button>
@@ -357,7 +357,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                     </span>
                   ) : null}
                   {subtaskTotal > 0 && (
-                    <span className="text-xs text-ink-3">
+                    <span className="td-text-caption text-ink-3">
                       <span aria-hidden="true">
                         {subtaskDone}/{subtaskTotal}
                       </span>
@@ -384,7 +384,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                     }
                   }}
                   placeholder="任务标题"
-                  className="w-full resize-none break-words bg-transparent py-2 text-xl font-medium leading-relaxed text-ink outline-none placeholder:text-ink-3"
+                  className="w-full resize-none break-words bg-transparent py-2 font-medium leading-relaxed text-ink outline-none placeholder:text-ink-3"
                 />
               </div>
             </div>
@@ -398,7 +398,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                     <span
                       key={tag}
                       data-testid="tag-edit-chip"
-                      className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 text-xs text-ink-2"
+                      className="inline-flex items-center gap-1 rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2"
                     >
                       #{tag}
                       <button
@@ -424,7 +424,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                   }}
                   onBlur={commitTagAdd}
                   placeholder="加标签，回车确认"
-                  className="w-full rounded-ctl border border-border-hairline bg-surface px-2 py-1 text-sm text-ink outline-none"
+                  className="w-full rounded-ctl border border-border-hairline bg-surface px-2 py-1 text-ink outline-none"
                 />
               </div>
             )}

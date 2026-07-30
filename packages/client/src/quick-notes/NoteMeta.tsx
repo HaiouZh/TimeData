@@ -14,7 +14,7 @@ export default function NoteMeta({ occurredAt, pending, agent = false, className
   return (
     <span
       className={[
-        "td-time inline-flex items-center gap-1 whitespace-nowrap text-[11px] leading-none",
+        "td-time inline-flex items-center gap-1 whitespace-nowrap td-text-caption",
         colorClass,
         className,
       ]

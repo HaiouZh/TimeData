@@ -158,9 +158,9 @@ function maybeDateTime(value: string | null): string {
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="rounded-card border border-border bg-surface p-4">
-      <div className="text-xs text-ink-3">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-ink">{value}</div>
-      {hint && <div className="mt-1 text-xs text-ink-3">{hint}</div>}
+      <div className="td-text-caption text-ink-3">{label}</div>
+      <div className="mt-2 td-text-display text-ink">{value}</div>
+      {hint && <div className="mt-1 td-text-caption text-ink-3">{hint}</div>}
     </div>
   );
 }
@@ -168,14 +168,14 @@ function StatCard({ label, value, hint }: { label: string; value: string | numbe
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3 rounded-card border border-border bg-surface p-4">
-      <h3 className="text-sm font-medium text-ink-2">{title}</h3>
+      <h3 className="td-text-label font-medium text-ink-2">{title}</h3>
       {children}
     </section>
   );
 }
 
 function SyncIssueBadge({ label }: { label: string }) {
-  return <span className="rounded-pill bg-warn-soft px-2 py-0.5 text-[11px] text-warn">{label}</span>;
+  return <span className="rounded-pill bg-warn-soft px-2 py-0.5 td-text-caption text-warn">{label}</span>;
 }
 
 function FilterSelectSheet({
@@ -190,7 +190,7 @@ function FilterSelectSheet({
   options: SelectOption<string>[];
 }) {
   return (
-    <label className="flex min-w-36 flex-1 flex-col gap-1 text-xs text-ink-3">
+    <label className="flex min-w-36 flex-1 flex-col gap-1 td-text-caption text-ink-3">
       <span>{label}</span>
       <SelectSheet
         label={label}
@@ -257,7 +257,7 @@ function PermissionMatrix() {
   return (
     <Section title="权限矩阵">
       <div className="overflow-x-auto">
-        <table className="min-w-full text-left text-xs">
+        <table className="min-w-full text-left td-text-caption">
           <thead className="text-ink-3">
             <tr>
               <th className="px-3 py-2 font-medium">层级</th>
@@ -331,12 +331,12 @@ function RequestAuditSection({
         />
       </div>
 
-      <p className="text-xs text-ink-3">
+      <p className="td-text-caption text-ink-3">
         IP 仅用于展示；反代未清洗 X-Forwarded-For / X-Real-IP 时不可作为安全证据。
       </p>
 
-      {loading && <div className="text-sm text-ink-2">正在加载请求审计…</div>}
-      {error && <div className="rounded-ctl border border-danger/40 bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      {loading && <div className="td-text-label text-ink-2">正在加载请求审计…</div>}
+      {error && <div className="rounded-ctl border border-danger/40 bg-danger-soft p-3 td-text-label text-danger">{error}</div>}
 
       <div className="space-y-2">
         {logs?.logs.map((log) => (
@@ -365,7 +365,7 @@ function RequestAuditSection({
             {log.userAgent && <div className="mt-1 truncate text-ink-3">{log.userAgent}</div>}
           </div>
         ))}
-        {logs && logs.logs.length === 0 && <div className="text-sm text-ink-3">暂无请求审计记录。</div>}
+        {logs && logs.logs.length === 0 && <div className="td-text-label text-ink-3">暂无请求审计记录。</div>}
       </div>
     </Section>
   );
@@ -561,15 +561,15 @@ export default function SettingsAdminInsightsPage() {
   return (
     <SettingsDetailPage title="服务端数据洞察">
       {dialog}
-      <div className="rounded-card border border-accent/30 bg-accent-soft p-4 text-sm text-accent-ink">
+      <div className="rounded-card border border-accent/30 bg-accent-soft p-4 td-text-body text-accent-ink">
         诊断数据只读查看；仅备份管理会修改服务器备份（创建、删除、配置）。
       </div>
 
       <NewIpAlertCard newIps={newIps} busy={newIpAckBusy} onAcknowledge={(item) => void handleAcknowledgeNewIp(item)} />
 
-      {loading && <div className="text-sm text-ink-2">正在加载服务端数据…</div>}
+      {loading && <div className="td-text-label text-ink-2">正在加载服务端数据…</div>}
       {error && (
-        <div className="rounded-card border border-danger/40 bg-danger-soft p-4 text-sm text-danger">{error}</div>
+        <div className="rounded-card border border-danger/40 bg-danger-soft p-4 td-text-label text-danger">{error}</div>
       )}
 
       {data && (
@@ -605,17 +605,17 @@ export default function SettingsAdminInsightsPage() {
                 {data.health.checks.map((check) => (
                 <div
                   key={check.code}
-                  className="flex items-center justify-between gap-3 rounded-ctl bg-surface-elevated px-3 py-2 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-ctl bg-surface-elevated px-3 py-2 td-text-label"
                 >
                   <div>
                     <div className={check.severity === "error" ? "text-danger" : "text-warn"}>
                       {anomalyLabel[check.code] ?? check.code}
                     </div>
-                    <div className="mt-1 text-xs text-ink-3">
+                    <div className="mt-1 td-text-caption text-ink-3">
                       样例：{check.sampleIds.length ? check.sampleIds.join("、") : "无"}
                     </div>
                   </div>
-                  <div className="text-lg font-semibold text-ink">{check.count}</div>
+                  <div className="td-text-title text-ink">{check.count}</div>
                 </div>
               ))}
             </div>
@@ -626,7 +626,7 @@ export default function SettingsAdminInsightsPage() {
             <Section title="分析概览">
               <div className="space-y-3">
                 {data.analytics.byTime.slice(-7).map((bucket) => (
-                <div key={bucket.bucket} className="flex items-center justify-between text-sm">
+                <div key={bucket.bucket} className="flex items-center justify-between td-text-label">
                   <span className="text-ink-2">{bucket.bucket}</span>
                   <span className="text-ink">
                     {minutesLabel(bucket.totalMinutes)} · {bucket.entryCount} 条
@@ -635,7 +635,7 @@ export default function SettingsAdminInsightsPage() {
               ))}
               <div className="border-t border-border pt-3">
                 {data.analytics.byCategory.slice(0, 5).map((category) => (
-                  <div key={category.categoryId} className="mt-2 flex items-center justify-between text-sm">
+                  <div key={category.categoryId} className="mt-2 flex items-center justify-between td-text-label">
                     <span className="flex min-w-0 items-center gap-2 text-ink-2">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
                       <span className="truncate">
@@ -656,17 +656,17 @@ export default function SettingsAdminInsightsPage() {
             <Section title="最近记录">
               <div className="space-y-2">
                 {data.entries.entries.map((entry) => (
-                <div key={entry.id} className="rounded-ctl bg-surface-elevated px-3 py-2 text-sm">
+                <div key={entry.id} className="rounded-ctl bg-surface-elevated px-3 py-2 td-text-label">
                   <div className="flex items-center justify-between gap-3">
                     <span className="min-w-0 truncate text-ink">{entry.categoryName ?? entry.categoryId}</span>
-                    <span className="shrink-0 text-xs text-ink-3">
+                    <span className="shrink-0 td-text-caption text-ink-3">
                       {entry.durationMinutes === null ? "无效时段" : minutesLabel(entry.durationMinutes)}
                     </span>
                   </div>
-                  <div className="mt-1 text-xs text-ink-3">
+                  <div className="mt-1 td-text-caption text-ink-3">
                     {formatAppDateTime(entry.startTime)} - {formatAppDateTime(entry.endTime)}
                   </div>
-                  {entry.anomaly && <div className="mt-1 text-xs text-warn">{anomalyLabel[entry.anomaly]}</div>}
+                  {entry.anomaly && <div className="mt-1 td-text-caption text-warn">{anomalyLabel[entry.anomaly]}</div>}
                 </div>
               ))}
             </div>
@@ -677,7 +677,7 @@ export default function SettingsAdminInsightsPage() {
             <Section title="分类汇总">
               <div className="space-y-2">
                 {data.categories.categories.map((category) => (
-                <div key={category.id} className="flex items-center justify-between gap-3 text-sm">
+                <div key={category.id} className="flex items-center justify-between gap-3 td-text-label">
                   <span className="min-w-0 truncate text-ink-2">
                     {category.parentName ? `${category.parentName} / ${category.name}` : category.name}
                   </span>
@@ -692,7 +692,7 @@ export default function SettingsAdminInsightsPage() {
 
           {data.sync && (
             <Section title="同步诊断">
-              <div className="space-y-2 text-sm text-ink-2">
+              <div className="space-y-2 td-text-label text-ink-2">
                 <div>
                   最近拒绝 {data.sync.recentRejectedCount} 次，最近冲突 {data.sync.recentConflictCount} 次。
                 </div>
@@ -846,7 +846,7 @@ export default function SettingsAdminInsightsPage() {
                   </div>
                 </div>
               ))}
-                {!data.backups.backups.length && <div className="text-sm text-ink-3">暂无服务端备份。</div>}
+                {!data.backups.backups.length && <div className="td-text-body text-ink-3">暂无服务端备份。</div>}
               </div>
             </Section>
           )}

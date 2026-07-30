@@ -36,7 +36,7 @@ export function DayGroupedList({
       {visible.map((segment) => (
         <div key={segment.key}>
           <div className="flex items-center gap-2 px-2 pt-2 pb-1">
-            <span className="shrink-0 text-xs text-ink-3">{segment.label}</span>
+            <span className="shrink-0 td-text-caption text-ink-3">{segment.label}</span>
             <span aria-hidden="true" className="h-px flex-1 bg-border-hairline" />
           </div>
           {renderTasks(segment.tasks)}
@@ -47,7 +47,7 @@ export function DayGroupedList({
           type="button"
           aria-label={`显示更多（${hidden}）`}
           onClick={() => setExpanded(true)}
-          className="mt-1 w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover"
+          className="mt-1 w-full rounded-ctl px-2 py-1.5 td-text-caption text-ink-3 hover:bg-surface-hover"
         >
           显示更多（{hidden}）
         </button>
@@ -59,7 +59,7 @@ export function DayGroupedList({
           type="button"
           aria-label="收起"
           onClick={() => setExpanded(false)}
-          className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 text-xs text-ink-3 shadow-sm hover:bg-surface-hover"
+          className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 td-text-caption text-ink-3 shadow-sm hover:bg-surface-hover"
           style={{ bottom: stickyBottomOffsetPx + 4 }}
         >
           收起

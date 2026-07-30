@@ -345,7 +345,7 @@ export function TaskRow({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <span className={`select-text break-words text-sm ${checked ? "text-ink-3 line-through" : "text-ink"}`}>
+          <span className={`select-text break-words td-text-label ${checked ? "text-ink-3 line-through" : "text-ink"}`}>
             {task.title}
           </span>
           {hasMeta && (

@@ -25,7 +25,7 @@ export default function SettingsStatsLayoutPage() {
   return (
     <SettingsDetailPage title="统计页面布局">
       <section className="space-y-3">
-        <p className="px-1 text-xs leading-relaxed text-ink-3">调整统计页各模块的显示与顺序，设置会跨设备同步。</p>
+        <p className="px-1 td-text-caption leading-relaxed text-ink-3">调整统计页各模块的显示与顺序，设置会跨设备同步。</p>
         <ul className="space-y-2">
           {order.map((id, index) => {
             const module = STATS_MODULES[id];
@@ -34,8 +34,8 @@ export default function SettingsStatsLayoutPage() {
               <li key={id} className="rounded-card border border-border bg-surface p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-ink">{module.title}</div>
-                    <div className="mt-0.5 text-xs leading-relaxed text-ink-3">{module.description}</div>
+                    <div className="td-text-label font-medium text-ink">{module.title}</div>
+                    <div className="mt-0.5 td-text-caption leading-relaxed text-ink-3">{module.description}</div>
                   </div>
                   <button
                     type="button"
@@ -60,7 +60,7 @@ export default function SettingsStatsLayoutPage() {
                     aria-label={`上移 ${module.title}`}
                     disabled={index === 0}
                     onClick={() => move(id, -1)}
-                    className="min-h-9 rounded-full border border-border bg-surface px-3 text-xs text-ink-2 disabled:opacity-30"
+                    className="min-h-9 rounded-full border border-border bg-surface px-3 td-text-caption text-ink-2 disabled:opacity-30"
                   >
                     上移
                   </button>
@@ -69,7 +69,7 @@ export default function SettingsStatsLayoutPage() {
                     aria-label={`下移 ${module.title}`}
                     disabled={index === order.length - 1}
                     onClick={() => move(id, 1)}
-                    className="min-h-9 rounded-full border border-border bg-surface px-3 text-xs text-ink-2 disabled:opacity-30"
+                    className="min-h-9 rounded-full border border-border bg-surface px-3 td-text-caption text-ink-2 disabled:opacity-30"
                   >
                     下移
                   </button>
@@ -82,7 +82,7 @@ export default function SettingsStatsLayoutPage() {
       <button
         type="button"
         onClick={reset}
-        className="min-h-11 w-full rounded-full border border-border bg-surface text-sm text-ink-2"
+        className="min-h-11 w-full rounded-full border border-border bg-surface td-text-label text-ink-2"
       >
         重置默认布局
       </button>

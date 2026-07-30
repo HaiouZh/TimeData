@@ -131,7 +131,7 @@ export function TodoComposer({
                   value={composerText}
                   onChange={(event) => onComposerTextChange(event.currentTarget.value)}
                   placeholder="做什么？怎样算做完…"
-                  className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-sm text-ink outline-none focus:border-accent"
+                  className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-ink outline-none focus:border-accent"
                 />
                 {composerText && (
                   <button
@@ -147,14 +147,14 @@ export function TodoComposer({
               <button
                 type="submit"
                 disabled={saving || !composerText.trim()}
-                className="min-h-11 shrink-0 rounded-lg bg-accent px-4 text-sm font-medium text-page disabled:opacity-60"
+                className="min-h-11 shrink-0 rounded-lg bg-accent px-4 td-text-label font-medium text-page disabled:opacity-60"
               >
                 添加
               </button>
             </>
           )}
         </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p className="td-text-label text-danger">{error}</p>}
       </div>
     </form>
   );

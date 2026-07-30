@@ -50,7 +50,7 @@ export function SunkenInboxTail({
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full rounded-ctl px-2 py-1.5 text-xs text-ink-3 hover:bg-surface-hover"
+        className="w-full rounded-ctl px-2 py-1.5 td-text-caption text-ink-3 hover:bg-surface-hover"
       >
         {expanded ? `收起水下 ${sunkenTasks.length} 条` : `水下 ${sunkenTasks.length} 条`}
       </button>
@@ -59,7 +59,7 @@ export function SunkenInboxTail({
           {segments.map((segment) => (
             <div key={segment.key}>
               <div className="flex items-center gap-2 px-2 pt-2 pb-1">
-                <span className="shrink-0 text-xs text-ink-3">{segment.label}</span>
+                <span className="shrink-0 td-text-caption text-ink-3">{segment.label}</span>
                 <span aria-hidden="true" className="h-px flex-1 bg-border-hairline" />
               </div>
               <TaskList

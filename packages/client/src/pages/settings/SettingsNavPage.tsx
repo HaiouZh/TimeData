@@ -62,7 +62,7 @@ export function SettingsNavPage() {
           return (
             <label
               key={tab}
-              className="flex min-h-12 items-center justify-between rounded-row border border-border bg-surface px-4 text-sm text-ink"
+              className="flex min-h-12 items-center justify-between rounded-row border border-border bg-surface px-4 td-text-label text-ink"
             >
               <span className="inline-flex items-center gap-2">
                 {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
@@ -77,14 +77,14 @@ export function SettingsNavPage() {
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-ink">桌面侧栏</h3>
-            <p className="mt-1 text-sm text-ink-3">控制宽屏左侧纯图标导航的顺序和更多收纳。</p>
+            <h3 className="td-text-body font-semibold text-ink">桌面侧栏</h3>
+            <p className="mt-1 td-text-body text-ink-3">控制宽屏左侧纯图标导航的顺序和更多收纳。</p>
           </div>
           <button
             type="button"
             aria-label="恢复桌面侧栏默认"
             onClick={restoreDesktopDefaults}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-ctl border border-border px-3 text-sm text-ink-2 hover:bg-surface-hover hover:text-ink"
+            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-ctl border border-border px-3 td-text-label text-ink-2 hover:bg-surface-hover hover:text-ink"
           >
             <Icon icon={ArrowCounterClockwise} size={16} weight="regular" />
             恢复默认
@@ -96,7 +96,7 @@ export function SettingsNavPage() {
           return (
             <div
               key={item.to}
-              className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-row border border-border bg-surface px-4 text-sm text-ink"
+              className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-row border border-border bg-surface px-4 td-text-label text-ink"
             >
               <span className="inline-flex min-w-0 items-center gap-2">
                 <Icon icon={navItem.icon} size={18} weight="regular" />

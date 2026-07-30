@@ -50,7 +50,7 @@ function initialKey(input: CustomRecurrenceInput): string {
 }
 
 function segmentedClass(active: boolean): string {
-  return `min-h-9 rounded-lg px-3 text-sm transition-colors ${
+  return `min-h-9 rounded-lg px-3 td-text-label transition-colors ${
     active ? "bg-accent/20 text-accent-ink" : "text-ink-3 hover:bg-surface-hover hover:text-ink"
   }`;
 }
@@ -96,16 +96,16 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
           type="button"
           aria-label="返回"
           onClick={onBack}
-          className="rounded-lg px-2 py-1 text-sm text-ink-2 hover:bg-surface-hover"
+          className="rounded-lg px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
         >
           返回
         </button>
-        <h2 className="text-sm font-semibold text-ink">自定义重复</h2>
+        <h2 className="td-text-label font-semibold text-ink">自定义重复</h2>
         <button
           type="button"
           aria-label="完成"
           onClick={() => onComplete(customToRecurrence(draft), draft.start)}
-          className="rounded-lg px-2 py-1 text-sm font-medium text-accent-ink hover:bg-accent/10"
+          className="rounded-lg px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
         >
           完成
         </button>
@@ -113,10 +113,10 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
 
       <div className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
         <section className="space-y-3">
-          <div className="text-xs font-medium text-ink-3">频率</div>
+          <div className="td-text-caption font-medium text-ink-3">频率</div>
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
             <div>
-              <div className="mb-1 text-center text-xs text-ink-3">每</div>
+              <div className="mb-1 text-center td-text-caption text-ink-3">每</div>
               <Wheel
                 ariaLabel="重复间隔"
                 value={String(draft.interval)}
@@ -125,7 +125,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
               />
             </div>
             <div>
-              <div className="mb-1 text-center text-xs text-ink-3">单位</div>
+              <div className="mb-1 text-center td-text-caption text-ink-3">单位</div>
               <Wheel
                 ariaLabel="重复单位"
                 value={unitToLabel(draft.unit)}
@@ -137,7 +137,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
         </section>
 
         <section className="space-y-3">
-          <div className="text-xs font-medium text-ink-3">结束</div>
+          <div className="td-text-caption font-medium text-ink-3">结束</div>
           <div className="grid grid-cols-3 rounded-xl bg-surface p-1">
             {endModes.map((mode) => (
               <button
@@ -172,7 +172,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
         </section>
 
         <section className="space-y-3">
-          <div className="text-xs font-medium text-ink-3">时间</div>
+          <div className="td-text-caption font-medium text-ink-3">时间</div>
           <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
             <button
               type="button"
@@ -192,7 +192,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
         </section>
 
         <section className="space-y-3">
-          <div className="text-xs font-medium text-ink-3">顺延基准</div>
+          <div className="td-text-caption font-medium text-ink-3">顺延基准</div>
           <div className="grid grid-cols-2 rounded-xl bg-surface p-1">
             {basisOptions.map((option) => (
               <button
@@ -215,7 +215,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
               aria-label="每月最后一天"
               aria-pressed={draft.monthEnd === true}
               onClick={() => patch({ monthEnd: !draft.monthEnd })}
-              className={`flex min-h-11 w-full items-center justify-between rounded-xl px-3 text-sm ${
+              className={`flex min-h-11 w-full items-center justify-between rounded-xl px-3 td-text-label ${
                 draft.monthEnd ? "bg-accent/15 text-accent-ink" : "bg-surface text-ink-2"
               }`}
             >
@@ -228,7 +228,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
         )}
 
         <section className="space-y-3">
-          <div className="text-xs font-medium text-ink-3">起始日期</div>
+          <div className="td-text-caption font-medium text-ink-3">起始日期</div>
           <MonthCalendar value={draft.start} onChange={setStart} />
         </section>
       </div>

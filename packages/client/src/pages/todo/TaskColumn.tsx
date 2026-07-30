@@ -12,11 +12,11 @@ export function TaskColumn(props: TaskColumnProps) {
   return (
     <section data-section={pool}>
       <div className="mb-2 flex items-baseline justify-between px-2">
-        <h2 className={`font-medium text-ink ${hero ? "text-base" : "text-sm"}`}>{title}</h2>
-        <span className="text-xs text-ink-3">{tasks.length}</span>
+        <h2 className={`font-medium text-ink ${hero ? "td-text-body" : "td-text-label"}`}>{title}</h2>
+        <span className="td-text-caption text-ink-3">{tasks.length}</span>
       </div>
       {tasks.length === 0 ? (
-        <p className="rounded-card bg-surface px-3 py-6 text-center text-sm text-ink-3">{emptyText}</p>
+        <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">{emptyText}</p>
       ) : (
         <div className="rounded-card p-1.5">
           <TaskList pool={pool} tasks={tasks} {...listProps} />

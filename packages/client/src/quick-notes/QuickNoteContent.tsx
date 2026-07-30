@@ -18,9 +18,9 @@ class MarkdownBoundary extends Component<{ fallback: ReactNode; children: ReactN
 
 const components = {
   p: ({ node: _node, ...props }) => <p {...props} className="my-1 first:mt-0 last:mb-0" />,
-  h1: ({ children }) => <p className="mb-1 mt-2 text-base font-semibold">{children}</p>,
-  h2: ({ children }) => <p className="mb-1 mt-2 text-[15px] font-semibold">{children}</p>,
-  h3: ({ children }) => <p className="mb-1 mt-2 text-sm font-semibold">{children}</p>,
+  h1: ({ children }) => <p className="mb-1 mt-2 td-text-body font-bold">{children}</p>,
+  h2: ({ children }) => <p className="mb-1 mt-2 td-text-body font-semibold">{children}</p>,
+  h3: ({ children }) => <p className="mb-1 mt-2 td-text-body font-medium">{children}</p>,
   ul: ({ node: _node, ...props }) => <ul {...props} className="my-1 ml-4 list-disc space-y-0.5" />,
   ol: ({ node: _node, ...props }) => <ol {...props} className="my-1 ml-4 list-decimal space-y-0.5" />,
   blockquote: ({ node: _node, ...props }) => (
@@ -37,7 +37,7 @@ const components = {
     </a>
   ),
   pre: ({ node: _node, ...props }) => (
-    <pre {...props} className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 text-[13px]" />
+    <pre {...props} className="my-1 overflow-x-auto rounded-ctl bg-page/70 p-3 td-text-label" />
   ),
   code: ({ node: _node, children, className, ...props }) => {
     const isBlock = String(children).includes("\n") || /language-/.test(className ?? "");
@@ -46,14 +46,14 @@ const components = {
         {children}
       </code>
     ) : (
-      <code {...props} className="rounded bg-surface-elevated px-1 py-0.5 text-[13px]">
+      <code {...props} className="rounded bg-surface-elevated px-1 py-0.5 td-text-label">
         {children}
       </code>
     );
   },
   table: ({ node: _node, ...props }) => (
     <div className="my-1 overflow-x-auto">
-      <table {...props} className="border-collapse text-sm" />
+      <table {...props} className="border-collapse td-text-body" />
     </div>
   ),
   th: ({ node: _node, ...props }) => <th {...props} className="border border-border px-2 py-1 text-left" />,
@@ -71,7 +71,7 @@ export default function QuickNoteContent({ text, trailing }: { text: string; tra
 
   return (
     <MarkdownBoundary fallback={plain}>
-      <div className="text-[15px] leading-relaxed">
+      <div className="td-text-body">
         <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]} components={components}>
           {text}
         </Markdown>

@@ -66,7 +66,7 @@ export default function SettingsTodoGravityPage() {
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-row bg-surface-hover text-ink-2">
             <Icon icon={Cards} size={20} />
           </span>
-          <div className="text-sm text-ink-2">
+          <div className="td-text-body text-ink-2">
             现在 inbox 里 <span className="font-semibold text-ink">{sunken.length}</span> /{" "}
             <span className="font-semibold text-ink">{buckets.inbox.length}</span> 条在水下
           </div>
@@ -126,7 +126,7 @@ export default function SettingsTodoGravityPage() {
         <button
           type="button"
           onClick={restoreDefaults}
-          className="w-full rounded-ctl border border-border bg-surface px-4 py-2.5 text-sm text-ink-2 transition-colors hover:bg-surface-hover"
+          className="w-full rounded-ctl border border-border bg-surface px-4 py-2.5 td-text-label text-ink-2 transition-colors hover:bg-surface-hover"
         >
           恢复默认
         </button>

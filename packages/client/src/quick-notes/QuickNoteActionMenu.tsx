@@ -73,7 +73,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onCopy)}
-          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
+          className="block w-full px-4 py-2 text-left td-text-label text-ink hover:bg-surface-hover"
         >
           复制
         </button>
@@ -81,7 +81,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onEdit)}
-          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
+          className="block w-full px-4 py-2 text-left td-text-label text-ink hover:bg-surface-hover"
         >
           编辑
         </button>
@@ -89,7 +89,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onTogglePin)}
-          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
+          className="block w-full px-4 py-2 text-left td-text-label text-ink hover:bg-surface-hover"
         >
           {pinned ? "取消置顶" : "置顶"}
         </button>
@@ -97,7 +97,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onSelect)}
-          className="block w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-hover"
+          className="block w-full px-4 py-2 text-left td-text-label text-ink hover:bg-surface-hover"
         >
           选择
         </button>
@@ -105,7 +105,7 @@ export default function QuickNoteActionMenu({
           type="button"
           role="menuitem"
           onClick={() => run(onDelete)}
-          className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-danger-soft"
+          className="block w-full px-4 py-2 text-left td-text-label text-danger hover:bg-danger-soft"
         >
           删除
         </button>

@@ -85,14 +85,14 @@ export default function SettingsCategoriesPage() {
         <button
           type="button"
           onClick={() => setPaletteDialogOpen(true)}
-          className="rounded bg-surface-hover px-3 py-1.5 text-sm text-ink-2 hover:bg-surface"
+          className="rounded bg-surface-hover px-3 py-1.5 td-text-label text-ink-2 hover:bg-surface"
         >
           一键配色
         </button>
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="rounded bg-accent px-3 py-1.5 text-sm text-page hover:bg-accent-strong"
+          className="rounded bg-accent px-3 py-1.5 td-text-label text-page hover:bg-accent-strong"
         >
           + 新增分类
         </button>
@@ -119,14 +119,14 @@ export default function SettingsCategoriesPage() {
                   >
                     <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
                     <span className="min-w-0 flex-1 truncate font-medium">{parent.name}</span>
-                    <span className="shrink-0 text-xs text-ink-3">{childCount} 个子分类</span>
+                    <span className="shrink-0 td-text-caption text-ink-3">{childCount} 个子分类</span>
                     <span className="shrink-0 text-ink-3"><Icon icon={CaretRight} size={14} /></span>
                   </button>
                 </SortableCategoryItem>
               );
             })}
             {parentCategories.length === 0 && (
-              <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-3">
+              <div className="rounded-lg border border-dashed border-border p-6 text-center td-text-body text-ink-3">
                 暂无分类，点击新增分类开始创建。
               </div>
             )}
@@ -149,10 +149,10 @@ export default function SettingsCategoriesPage() {
                 setAddError(null);
               }}
               placeholder="分类名称"
-              className="w-full rounded bg-surface px-3 py-2 text-sm"
+              className="w-full rounded bg-surface px-3 py-2"
             />
             <div className="flex items-center gap-2">
-              <label className="text-sm text-ink-3">颜色</label>
+              <label className="td-text-label text-ink-3">颜色</label>
               <input
                 type="color"
                 aria-label="分类颜色"
@@ -161,16 +161,16 @@ export default function SettingsCategoriesPage() {
                 className="h-8 w-8"
               />
             </div>
-            {addError && <p className="text-sm text-danger">{addError}</p>}
+            {addError && <p className="td-text-label text-danger">{addError}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleAdd}
-                className="flex-1 rounded bg-accent py-2 text-sm text-page hover:bg-accent-strong"
+                className="flex-1 rounded bg-accent py-2 td-text-label text-page hover:bg-accent-strong"
               >
                 添加
               </button>
-              <button type="button" onClick={() => setAdding(false)} className="rounded bg-surface-hover px-4 py-2 text-sm">
+              <button type="button" onClick={() => setAdding(false)} className="rounded bg-surface-hover px-4 py-2 td-text-label">
                 取消
               </button>
             </div>
@@ -185,7 +185,7 @@ export default function SettingsCategoriesPage() {
         >
           <div className="w-96 space-y-4 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">一键配色</h3>
-            <p className="text-sm text-ink-3">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>
+            <p className="td-text-label text-ink-3">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>
             <div className="space-y-2">
               {(Object.keys(CATEGORY_COLOR_PALETTES) as CategoryColorPaletteId[]).map((paletteId) => (
                 <button
@@ -194,7 +194,7 @@ export default function SettingsCategoriesPage() {
                   onClick={() => setOneClickPalette(paletteId)}
                   className={`w-full rounded-lg p-3 text-left ${oneClickPalette === paletteId ? "bg-accent/20 ring-1 ring-accent" : "bg-surface hover:bg-surface-hover"}`}
                 >
-                  <div className="mb-2 text-sm">{CATEGORY_COLOR_PALETTES[paletteId].label}</div>
+                  <div className="mb-2 td-text-label">{CATEGORY_COLOR_PALETTES[paletteId].label}</div>
                   <div className="flex h-3 overflow-hidden rounded">
                     {CATEGORY_COLOR_PALETTES[paletteId].colors.map((color) => (
                       <span key={color} className="flex-1" style={{ backgroundColor: color }} />
@@ -205,7 +205,7 @@ export default function SettingsCategoriesPage() {
             </div>
             <div className="space-y-1">
               {parentCategories.slice(0, 6).map((category, index) => (
-                <div key={category.id} className="flex items-center gap-2 text-sm text-ink-2">
+                <div key={category.id} className="flex items-center gap-2 td-text-label text-ink-2">
                   <span
                     className="h-3 w-3 rounded-full"
                     style={{
@@ -219,23 +219,23 @@ export default function SettingsCategoriesPage() {
                 </div>
               ))}
               {parentCategories.length > 6 && (
-                <p className="text-xs text-ink-3">还有 {parentCategories.length - 6} 个一级分类会继续循环配色。</p>
+                <p className="td-text-caption text-ink-3">还有 {parentCategories.length - 6} 个一级分类会继续循环配色。</p>
               )}
             </div>
-            {colorError && <p className="text-sm text-danger">{colorError}</p>}
+            {colorError && <p className="td-text-label text-danger">{colorError}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleApplyPalette}
                 disabled={parentCategories.length === 0}
-                className="flex-1 rounded bg-accent py-2 text-sm text-page hover:bg-accent-strong disabled:bg-surface-hover disabled:text-ink-3"
+                className="flex-1 rounded bg-accent py-2 td-text-label text-page hover:bg-accent-strong disabled:bg-surface-hover disabled:text-ink-3"
               >
                 应用
               </button>
               <button
                 type="button"
                 onClick={() => setPaletteDialogOpen(false)}
-                className="rounded bg-surface-hover px-4 py-2 text-sm"
+                className="rounded bg-surface-hover px-4 py-2 td-text-label"
               >
                 取消
               </button>
