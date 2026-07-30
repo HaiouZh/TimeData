@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
+import { contentTint } from "../../lib/contentTint.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { TagFilterPanel } from "./TagFilterPanel.js";
 
@@ -89,5 +90,37 @@ describe("TagFilterPanel", () => {
     await click(host.querySelector('[aria-label="清除筛选"]'));
     expect(onClear).toHaveBeenCalled();
     await unmount(root);
+  });
+
+  /**
+   * 三态取色此前零覆盖：把 `contentTint(tag)` 换成任意固定色（全部标签塌成同一个色，
+   * ADR 0026 决策一「填充态对比度」那条修复被整体抹平）时，本文件其余用例全绿，
+   * `check:design` 也过——`var()` 是合规写法。
+   */
+  it("三态颜色都取自 contentTint(标签名)，不同标签不同色", async () => {
+    const { host, root } = await renderDom(
+      <TagFilterPanel {...base} tags={TAGS} includeTags={["bug"]} excludeTags={["api"]} />,
+    );
+    const chips = [...host.querySelectorAll('[data-testid="tag-filter-chip"]')] as HTMLElement[];
+    const byState = (state: string) => chips.find((c) => c.dataset.state === state);
+
+    // include：填充底 + 描边都用标签色，文字压 page 深色（对比度靠色板明度撑）
+    const include = byState("include");
+    expect(include?.style.backgroundColor).toBe(contentTint("bug"));
+    expect(include?.style.borderColor).toBe(contentTint("bug"));
+    expect(include?.style.color).toBe("var(--color-page)");
+    // exclude：走 danger 语义，不带标签色
+    expect(byState("exclude")?.getAttribute("style")).toBeNull();
+
+    const { host: h2, root: r2 } = await renderDom(<TagFilterPanel {...base} tags={TAGS} />);
+    const unselected = [...h2.querySelectorAll('[data-testid="tag-filter-chip"]')] as HTMLElement[];
+    // unselected：只描边
+    expect(unselected[0]?.style.borderColor).toBe(contentTint("bug"));
+    expect(unselected[1]?.style.borderColor).toBe(contentTint("api"));
+    // 两个不同标签不能塌成同一个色
+    expect(unselected[0]?.style.borderColor).not.toBe(unselected[1]?.style.borderColor);
+
+    await unmount(root);
+    await unmount(r2);
   });
 });

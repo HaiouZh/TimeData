@@ -11,18 +11,24 @@ describe("contentTint", () => {
     expect(contentTint("goal-abc")).toBe(contentTint("goal-abc"));
   });
 
-  it("返回值恒在色板内", () => {
-    for (const seed of ["a", "工作", "goal-01H9", "", "很长很长很长的标签名"]) {
-      expect(TINT_VARS).toContain(contentTint(seed));
+  /**
+   * 遍历取代采样，`toBe(12)` 取代 `> 3`——两处都是被反证逼出来的：
+   * 手挑几个种子时，返回 `TINT_VARS[idx + 1]`（1/12 的种子拿到根本不存在的 `--color-tint-13`，
+   * 真机上圆点与 `#` 继承成透明）能全绿；阈值写 `> 3` 时，模数从 12 退化成 4
+   * （撞色率翻三倍）也能全绿。
+   */
+  it("12 支全部可达，且任何种子恒落在色板内（不越界、不塌档）", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const tint = contentTint(`seed-${i}`);
+      expect(TINT_VARS).toContain(tint);
+      seen.add(tint);
     }
+    expect(seen.size).toBe(12);
   });
 
-  it("不同种子分布到多支，不塌成一色", () => {
-    const seeds = ["工作", "生活", "紧急", "学习", "健康", "财务", "家庭", "项目", "写作", "重构"];
-    expect(new Set(seeds.map(contentTint)).size).toBeGreaterThan(3);
-  });
-
-  it("空串也返回合法色（不抛、不返回 undefined）", () => {
+  it("空串不抛（长度为 0 时哈希初值直接取模）", () => {
+    expect(() => contentTint("")).not.toThrow();
     expect(TINT_VARS).toContain(contentTint(""));
   });
 });

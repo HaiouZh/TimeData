@@ -3,6 +3,22 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync(new URL("./index.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
+/** 用户内容身份色，顺序即 `--color-tint-1..12`（见 ADR 0026）。 */
+const TINT_HEXES = [
+  "#fb923c",
+  "#a3e635",
+  "#4ade80",
+  "#2dd4bf",
+  "#22d3ee",
+  "#38bdf8",
+  "#818cf8",
+  "#a78bfa",
+  "#c084fc",
+  "#e879f9",
+  "#f472b6",
+  "#fb7185",
+];
+
 describe("index.css design tokens", () => {
   it("defines the visual foundation after the Tailwind import", () => {
     const tailwindImport = css.indexOf('@import "tailwindcss";');
@@ -13,8 +29,13 @@ describe("index.css design tokens", () => {
     expect(css).toContain("--color-page: #0e1320;");
     expect(css).toContain("--color-surface: #161d30;");
     expect(css).toContain("--color-data-purple: #a78bfa;");
-    expect(css).toContain("--color-tint-1: #fb923c;");
-    expect(css).toContain("--color-tint-12: #fb7185;");
+    // 全 12 支逐支断言 + 计数：只钉首尾两支时，删掉中间任意几支照样全绿，
+    // 而 contentTint 仍会把 `var(--color-tint-5)` 之类发给真实种子——那些圆点/`#`
+    // 在真机上继承成透明，且 check:design 只拦裸色、不校验 var() 引用的 token 是否存在。
+    expect(css.match(/--color-tint-\d+:/g)).toHaveLength(TINT_HEXES.length);
+    TINT_HEXES.forEach((hex, i) => {
+      expect(css).toContain(`--color-tint-${i + 1}: ${hex};`);
+    });
     expect(css).toContain(
       '--font-body: "Times New Roman", "Tinos", "LXGW WenKai Screen", "KaiTi", "STKaiti", serif;',
     );
