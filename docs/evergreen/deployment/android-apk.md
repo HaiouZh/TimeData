@@ -55,7 +55,7 @@ packages/mobile/android/app/build/outputs/apk/release/app-release.apk
 
 构建完成后，workflow 先上传 APK artifact，再用 `gh release` 创建或更新 `android-<versionCode>` GitHub Release，并对 GitHub Release API 的临时超时做最多 3 次重试。Release 发布失败不代表 APK 编译失败；排查时先看 `Build signed release APK` 和 `Upload release APK` 两步是否成功，再看 `Publish latest release APK release` 的 GitHub API 错误。
 
-设置页的「APK 更新」读取最新 GitHub Release；发现新版本时打开该 Release 里的 APK asset 下载链接。Android 原生环境优先通过 `@capacitor/app-launcher` 把 APK 直链交给系统 URL 处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
+设置页的「APK 更新」拉 `GET /releases?per_page=30`（列表按创建时间倒序），取第一个 tag 能解析出 Android versionCode 且带 `.apk` 资产的 Release，发现新版本时打开它的下载链接。**不能改用 `/releases/latest`**：Android 与 iOS 的 Release 由同一次 CI 几乎同时创建，而 `latest` 取创建时间最晚的那个——iOS 晚一秒顶掉 Android 时 tag 是 `ios-*`、资产只有 `.ipa`，Android 侧就会误报「还没有可下载的 Android APK Release」。Android 原生环境优先通过 `@capacitor/app-launcher` 把 APK 直链交给系统 URL 处理，失败时再 fallback 到 `@capacitor/browser` / Web `window.open`。Android 仍会要求用户确认安装，首次从旧 debug 签名包迁移到 release 签名包时不能覆盖安装，需要先备份数据、卸载旧包，再安装 release 包；后续 release 包之间可以覆盖安装。
 
 ## 2. Capacitor / Gradle 契约
 

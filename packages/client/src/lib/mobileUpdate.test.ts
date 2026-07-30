@@ -93,9 +93,26 @@ describe("openAndroidApkUpdate", () => {
   });
 });
 
+const iosRelease = {
+  tag_name: "ios-26050801",
+  html_url: "https://github.com/HaiouZh/TimeData/releases/tag/ios-26050801",
+  assets: [
+    {
+      name: "TimeData-unsigned.ipa",
+      browser_download_url: "https://example.com/TimeData-unsigned.ipa",
+    },
+  ],
+};
+
+function mockReleasesResponse(body: unknown, status = 200) {
+  globalThis.fetch = vi.fn(
+    async () => new Response(JSON.stringify(body), { status }),
+  ) as unknown as typeof fetch;
+}
+
 describe("fetchAndroidApkUpdate", () => {
-  it("parses a valid GitHub release response", async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(release), { status: 200 })) as unknown as typeof fetch;
+  it("parses a valid GitHub release list", async () => {
+    mockReleasesResponse([release]);
 
     await expect(fetchAndroidApkUpdate("26050701")).resolves.toMatchObject({
       versionCode: "26050801",
@@ -103,18 +120,39 @@ describe("fetchAndroidApkUpdate", () => {
     });
   });
 
+  // 2026-07-30 线上事故：Android 与 iOS 的 release 由同一次 CI 几乎同时创建,
+  // GitHub 的 /releases/latest 取创建时间最晚的那个。iOS 晚 1 秒顶掉 Android 后,
+  // tag 变成 ios-*、资产只剩 .ipa,APK 检查直接报「还没有可下载的 Android APK Release」。
+  it("跳过排在前面的 iOS release，仍能找到 Android 的 APK", async () => {
+    mockReleasesResponse([iosRelease, release]);
+
+    await expect(fetchAndroidApkUpdate("26050701")).resolves.toMatchObject({
+      versionCode: "26050801",
+      apkName: "timedata-debug.apk",
+      hasUpdate: true,
+    });
+  });
+
+  it("列表里只有 iOS release 时返回 null，而不是把 .ipa 当成 APK", async () => {
+    mockReleasesResponse([iosRelease]);
+
+    await expect(fetchAndroidApkUpdate("26050701")).resolves.toBeNull();
+  });
+
+  it("returns null when the repository has no releases yet", async () => {
+    mockReleasesResponse([]);
+
+    await expect(fetchAndroidApkUpdate("26050701")).resolves.toBeNull();
+  });
+
   it("rejects GitHub rate-limit JSON", async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ message: "API rate limit exceeded", documentation_url: "https://docs.github.com" }), {
-        status: 200,
-      })
-    ) as unknown as typeof fetch;
+    mockReleasesResponse({ message: "API rate limit exceeded", documentation_url: "https://docs.github.com" });
 
     await expect(fetchAndroidApkUpdate("26050701")).rejects.toThrow("GitHub Release 响应格式无效");
   });
 
   it("rejects release JSON with missing fields", async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ tag_name: "android-26050801" }), { status: 200 })) as unknown as typeof fetch;
+    mockReleasesResponse([{ tag_name: "android-26050801" }]);
 
     await expect(fetchAndroidApkUpdate("26050701")).rejects.toThrow("GitHub Release 响应格式无效");
   });

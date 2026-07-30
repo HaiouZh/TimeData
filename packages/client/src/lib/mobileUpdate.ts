@@ -37,6 +37,9 @@ function isGitHubRelease(value: unknown): value is GitHubRelease {
   );
 }
 
+// 一次 CI 最多产出 Android + iOS 两个 release，30 条足够回溯到最近的 Android 版本。
+const RELEASES_PAGE_SIZE = 30;
+
 export interface AndroidApkUpdate {
   versionCode: string;
   pageUrl: string;
@@ -107,13 +110,25 @@ async function openExternalUrl(url: string): Promise<void> {
 }
 
 export async function fetchAndroidApkUpdate(currentVersionCode: string): Promise<AndroidApkUpdate | null> {
-  const res = await fetch("https://api.github.com/repos/HaiouZh/TimeData/releases/latest", {
+  // 故意扫列表而不用 /releases/latest：Android 与 iOS 的 release 由同一次 CI 几乎同时创建，
+  // 而 "latest" 取创建时间最晚的那个——iOS 晚一秒就顶掉 Android，此时 tag 是 ios-*、
+  // 资产只有 .ipa，Android 侧会误判成「没有可下载的 APK」。列表按创建时间倒序，
+  // 取第一个能解析出 Android version code 且带 .apk 资产的 release 才与发布先后无关。
+  const res = await fetch(`https://api.github.com/repos/HaiouZh/TimeData/releases?per_page=${RELEASES_PAGE_SIZE}`, {
     headers: { Accept: "application/vnd.github+json" },
   });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GitHub Release 检查失败：${res.status}`);
 
-  const release = await res.json();
-  if (!isGitHubRelease(release)) throw new Error("GitHub Release 响应格式无效");
-  return getAndroidApkUpdateFromRelease(release, currentVersionCode);
+  const payload: unknown = await res.json();
+  // 限流等错误响应是对象而非数组，落在这里而不是被当成"没有 release"静默放过。
+  if (!Array.isArray(payload)) throw new Error("GitHub Release 响应格式无效");
+  const releases = payload.filter(isGitHubRelease);
+  if (payload.length > 0 && releases.length === 0) throw new Error("GitHub Release 响应格式无效");
+
+  for (const release of releases) {
+    const update = getAndroidApkUpdateFromRelease(release, currentVersionCode);
+    if (update) return update;
+  }
+  return null;
 }
