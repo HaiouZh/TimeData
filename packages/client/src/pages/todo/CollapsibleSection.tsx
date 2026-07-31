@@ -29,7 +29,7 @@ export function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   return (
-    <details open={defaultOpen} onToggle={(event) => onToggle?.(event.currentTarget.open)} className="rounded-xl">
+    <details open={defaultOpen} onToggle={(event) => onToggle?.(event.currentTarget.open)} className="rounded-row">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 px-2 py-2 td-text-label font-medium text-ink-2">
         <span className="ts-collapse-caret inline-flex text-ink-3 transition-transform duration-150">
           <Icon icon={CaretRight} size={14} />

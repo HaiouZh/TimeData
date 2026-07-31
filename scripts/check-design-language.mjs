@@ -91,8 +91,10 @@ const RULES = [
   },
   {
     id: "bare-card-radius",
-    re: new RegExp(`\\b${TAILWIND_VARIANTS}rounded-(?:2xl|3xl)\\b`),
-    msg: "卡片圆角必须使用 rounded-ctl/row/card token（rounded-2xl/3xl 已并入 --radius 阶梯）",
+    re: new RegExp(
+      `\\b${TAILWIND_VARIANTS}rounded(?:-(?:[trblxy]{1,2}|[se]{1,2}))?-(?:md|lg|xl|2xl|3xl|full)\\b`,
+    ),
+    msg: "生产圆角必须使用 rounded-ctl/row/card/pill（rounded/rounded-sm 仅保留给原子细节）",
     skip: (file) => isTestFile(file),
   },
   {

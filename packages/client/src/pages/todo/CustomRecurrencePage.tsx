@@ -50,7 +50,7 @@ function initialKey(input: CustomRecurrenceInput): string {
 }
 
 function segmentedClass(active: boolean): string {
-  return `min-h-9 rounded-lg px-3 td-text-label transition-colors ${
+  return `min-h-9 rounded-ctl px-3 td-text-label transition-colors ${
     active ? "bg-accent/20 text-accent-ink" : "text-ink-3 hover:bg-surface-hover hover:text-ink"
   }`;
 }
@@ -96,7 +96,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
           type="button"
           aria-label="返回"
           onClick={onBack}
-          className="rounded-lg px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
+          className="rounded-ctl px-2 py-1 td-text-label text-ink-2 hover:bg-surface-hover"
         >
           返回
         </button>
@@ -105,7 +105,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
           type="button"
           aria-label="完成"
           onClick={() => onComplete(customToRecurrence(draft), draft.start)}
-          className="rounded-lg px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
+          className="rounded-ctl px-2 py-1 td-text-label font-medium text-accent-ink hover:bg-accent/10"
         >
           完成
         </button>
@@ -138,7 +138,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
 
         <section className="space-y-3">
           <div className="td-text-caption font-medium text-ink-3">结束</div>
-          <div className="grid grid-cols-3 rounded-xl bg-surface p-1">
+          <div className="grid grid-cols-3 rounded-row bg-surface p-1">
             {endModes.map((mode) => (
               <button
                 key={mode.value}
@@ -193,7 +193,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
 
         <section className="space-y-3">
           <div className="td-text-caption font-medium text-ink-3">顺延基准</div>
-          <div className="grid grid-cols-2 rounded-xl bg-surface p-1">
+          <div className="grid grid-cols-2 rounded-row bg-surface p-1">
             {basisOptions.map((option) => (
               <button
                 key={option.value}
@@ -215,7 +215,7 @@ export function CustomRecurrencePage({ initial, onComplete, onBack }: CustomRecu
               aria-label="每月最后一天"
               aria-pressed={draft.monthEnd === true}
               onClick={() => patch({ monthEnd: !draft.monthEnd })}
-              className={`flex min-h-11 w-full items-center justify-between rounded-xl px-3 td-text-label ${
+              className={`flex min-h-11 w-full items-center justify-between rounded-row px-3 td-text-label ${
                 draft.monthEnd ? "bg-accent/15 text-accent-ink" : "bg-surface text-ink-2"
               }`}
             >

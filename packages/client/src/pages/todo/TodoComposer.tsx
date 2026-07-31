@@ -69,7 +69,7 @@ export function TodoComposer({
       type="button"
       aria-label="收起标签筛选"
       onClick={onToggleFilterOpen}
-      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-accent text-page"
+      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-ctl border border-border bg-accent text-page"
     >
       <Icon icon={Tag} size={18} />
     </button>
@@ -79,7 +79,7 @@ export function TodoComposer({
       aria-label="搜索中"
       title="按标题实时搜索中"
       disabled
-      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-ink-2"
+      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-ctl border border-border bg-surface text-ink-2"
     >
       <Icon icon={MagnifyingGlass} size={18} />
     </button>
@@ -89,7 +89,7 @@ export function TodoComposer({
       aria-label="展开标签筛选"
       disabled={!hasTags}
       onClick={onToggleFilterOpen}
-      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-ink-2 hover:text-ink disabled:opacity-40"
+      className="flex min-h-11 w-11 shrink-0 items-center justify-center rounded-ctl border border-border bg-surface text-ink-2 hover:text-ink disabled:opacity-40"
     >
       <Icon icon={Tag} size={18} />
     </button>
@@ -131,7 +131,7 @@ export function TodoComposer({
                   value={composerText}
                   onChange={(event) => onComposerTextChange(event.currentTarget.value)}
                   placeholder="做什么？怎样算做完…"
-                  className="min-h-11 w-full rounded-lg border border-border bg-surface px-3 pr-9 text-ink outline-none focus:border-accent"
+                  className="min-h-11 w-full rounded-ctl border border-border bg-surface px-3 pr-9 text-ink outline-none focus:border-accent"
                 />
                 {composerText && (
                   <button
@@ -147,7 +147,7 @@ export function TodoComposer({
               <button
                 type="submit"
                 disabled={saving || !composerText.trim()}
-                className="min-h-11 shrink-0 rounded-lg bg-accent px-4 td-text-label font-medium text-page disabled:opacity-60"
+                className="min-h-11 shrink-0 rounded-ctl bg-accent px-4 td-text-label font-medium text-page disabled:opacity-60"
               >
                 添加
               </button>

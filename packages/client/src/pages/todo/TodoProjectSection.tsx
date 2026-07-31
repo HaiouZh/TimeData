@@ -331,7 +331,7 @@ function ProjectGroupCard({
                 aria-hidden="true"
                 data-project-dot
                 style={{ backgroundColor: tint }}
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                className="h-1.5 w-1.5 shrink-0 rounded-pill"
               />
             )}
             <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
@@ -425,7 +425,7 @@ function ProjectGroupCard({
               {/* 幽灵任务行：复选框占位 + accent 描边表达「正在输入」，与任务行同形，提交后原地变真任务 */}
               <div
                 data-testid="project-create-draft-row"
-                className="flex items-center gap-2 rounded-lg bg-surface px-2 py-1 ring-2 ring-inset ring-accent"
+                className="flex items-center gap-2 rounded-row bg-surface px-2 py-1 ring-2 ring-inset ring-accent"
               >
                 <span aria-hidden="true" data-slot="checkbox-placeholder" className="h-4 w-4 shrink-0 rounded border border-border" />
                 <input
@@ -628,7 +628,7 @@ export function ProjectNameChip({ chip, onOpen }: { chip: ProjectChip; onOpen: (
           aria-hidden="true"
           data-project-dot
           style={{ backgroundColor: chip.tint }}
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          className="h-1.5 w-1.5 shrink-0 rounded-pill"
         />
       )}
       {chip.goalTitle}

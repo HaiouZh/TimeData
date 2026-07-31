@@ -366,26 +366,37 @@ test("does not let one allowlist entry cover duplicated line text", () => {
   assert.equal(result.staleAllowlist.length, 0);
 });
 
-test("flags bare card radii outside the token ladder", () => {
-  assert.equal(
-    classifyLine("x.tsx", 'className="rounded-3xl border"').some((v) => v.rule === "bare-card-radius"),
-    true,
-  );
-  assert.equal(
-    classifyLine("x.tsx", 'className="sm:rounded-2xl"').some((v) => v.rule === "bare-card-radius"),
-    true,
-  );
+test("flags every retired production radius vocabulary", () => {
+  for (const token of ["rounded-md", "rounded-lg", "rounded-xl", "rounded-2xl", "rounded-3xl", "rounded-full"]) {
+    assert.equal(
+      classifyLine("x.tsx", `className="${token}"`).some((violation) => violation.rule === "bare-card-radius"),
+      true,
+    );
+  }
+  for (const token of [
+    "hover:rounded-t-xl",
+    "rounded-s-xl",
+    "rounded-e-xl",
+    "rounded-ss-xl",
+    "rounded-se-xl",
+    "rounded-ee-xl",
+    "rounded-es-xl",
+  ]) {
+    assert.equal(
+      classifyLine("x.tsx", `className="${token}"`).some(
+        (violation) => violation.rule === "bare-card-radius",
+      ),
+      true,
+    );
+  }
 });
 
-test("does not flag token radii or radii in test files", () => {
+test("allows the semantic radius vocabulary and test fixtures", () => {
   assert.equal(
-    classifyLine("x.tsx", 'className="rounded-card rounded-pill"').some((v) => v.rule === "bare-card-radius"),
-    false,
+    classifyLine("x.tsx", 'className="rounded rounded-sm rounded-ctl rounded-row rounded-card rounded-pill"').length,
+    0,
   );
-  assert.equal(
-    classifyLine("x.test.tsx", 'expect(html).toContain("rounded-2xl")').some((v) => v.rule === "bare-card-radius"),
-    false,
-  );
+  assert.equal(classifyLine("x.test.tsx", 'expect(html).toContain("rounded-xl")').length, 0);
 });
 
 test("flags bare high z-index on global overlays", () => {

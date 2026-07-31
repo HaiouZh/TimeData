@@ -284,7 +284,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
     >
       <div
         data-testid="detail-sheet"
-        className={`flex w-full max-w-2xl flex-col rounded-t-2xl border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? "task-detail-sheet-expanded" : "task-detail-sheet"}`}
+        className={`flex w-full max-w-2xl flex-col rounded-t-card border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? "task-detail-sheet-expanded" : "task-detail-sheet"}`}
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         onTouchStart={(event) => {
           touchStartY.current = event.touches[0]?.clientY ?? null;
@@ -300,7 +300,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
       >
         <div className="relative flex items-center justify-center py-3">
           <button type="button" aria-label="关闭" onClick={handleClose} className="flex justify-center">
-            <span className="block h-1 w-10 rounded-full bg-ink-3" />
+            <span className="block h-1 w-10 rounded-pill bg-ink-3" />
           </button>
           <button
             type="button"

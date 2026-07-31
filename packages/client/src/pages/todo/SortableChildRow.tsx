@@ -153,7 +153,7 @@ function ChildRowBody({
   }
 
   return (
-    <div className="group flex items-start gap-2 rounded-lg px-1 py-0.5 hover:bg-surface-hover">
+    <div className="group flex items-start gap-2 rounded-row px-1 py-0.5 hover:bg-surface-hover">
       {!readonly && (
         <Checkbox
           ariaLabel={`完成子任务 ${child.title}`}
@@ -252,7 +252,7 @@ export function SortableChildRow(props: SortableChildRowProps) {
       ref={setNodeRef}
       style={style}
       // 拖拽中高亮选中框：ring 用 inset，外侧 box-shadow 会被滑动容器 overflow 裁掉
-      className={`group flex items-start gap-1 rounded-lg ${isDragging ? "bg-surface-hover ring-1 ring-inset ring-accent" : ""}`}
+      className={`group flex items-start gap-1 rounded-row ${isDragging ? "bg-surface-hover ring-1 ring-inset ring-accent" : ""}`}
     >
       <div className="min-w-0 flex-1">
         <ChildRowBody {...props} readonly={false} />
@@ -349,7 +349,7 @@ export function NewChildRow({ onResolve }: NewChildRowProps) {
     <li className="group flex items-start gap-1">
       <div
         data-testid="child-create-draft-row"
-        className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-1 py-0.5 ring-2 ring-inset ring-accent"
+        className="flex min-w-0 flex-1 items-start gap-2 rounded-row px-1 py-0.5 ring-2 ring-inset ring-accent"
       >
         {/* 占位与已有子任务行的复选框对齐 */}
         <span aria-hidden="true" className="mt-1.5 h-4 w-4 shrink-0" />
