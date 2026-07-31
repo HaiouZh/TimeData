@@ -84,7 +84,7 @@ export default function SettingsDiaryPage() {
       ) : (
         <div className="space-y-4">
           {!enabled && (
-            <div className="rounded-xl border border-warn/40 bg-warn/10 p-3 td-text-body text-warn">
+            <div className="rounded-row border border-warn/40 bg-warn/10 p-3 td-text-body text-warn">
               服务器未挂载日记 vault（DIARY_VAULT_DIR），保存的模板暂时不会生效
             </div>
           )}
@@ -97,7 +97,7 @@ export default function SettingsDiaryPage() {
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
+                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                 placeholder={TEMPLATE_EXAMPLE}
               />
             </label>
@@ -110,16 +110,16 @@ export default function SettingsDiaryPage() {
             type="button"
             disabled={saving}
             onClick={() => void handleSave()}
-            className="rounded-xl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+            className="rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
             {saving ? "保存中…" : "保存"}
           </button>
 
           {message && (
-            <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{message}</div>
+            <div className="rounded-row border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{message}</div>
           )}
           {error && (
-            <div className="rounded-xl border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">{error}</div>
+            <div className="rounded-row border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">{error}</div>
           )}
 
           <div className="space-y-3 rounded-card border border-border bg-surface p-4">
@@ -130,7 +130,7 @@ export default function SettingsDiaryPage() {
                 value={weeklyTemplate}
                 onChange={(e) => setWeeklyTemplate(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
+                className="mt-1 block w-full resize-none rounded-row border border-border bg-surface px-3 py-2 td-text-body text-ink placeholder-ink-3 focus:border-accent focus:outline-none"
                 placeholder={WEEKLY_TEMPLATE_EXAMPLE}
               />
             </label>
@@ -143,16 +143,16 @@ export default function SettingsDiaryPage() {
             type="button"
             disabled={weeklySaving}
             onClick={() => void handleSaveWeekly()}
-            className="rounded-xl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
+            className="rounded-ctl bg-accent px-4 py-2 td-text-body font-medium text-page transition-colors hover:bg-accent-strong disabled:opacity-50"
           >
             {weeklySaving ? "保存中…" : "保存"}
           </button>
 
           {weeklyMessage && (
-            <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{weeklyMessage}</div>
+            <div className="rounded-row border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{weeklyMessage}</div>
           )}
           {weeklyError && (
-            <div className="rounded-xl border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">
+            <div className="rounded-row border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">
               {weeklyError}
             </div>
           )}

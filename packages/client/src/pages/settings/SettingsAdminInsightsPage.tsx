@@ -668,7 +668,7 @@ export default function SettingsAdminInsightsPage() {
                 {data.analytics.byCategory.slice(0, 5).map((category) => (
                   <div key={category.categoryId} className="mt-2 flex items-center justify-between td-text-label">
                     <span className="flex min-w-0 items-center gap-2 text-ink-2">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
+                      <span className="h-2.5 w-2.5 rounded-pill" style={{ backgroundColor: category.color }} />
                       <span className="truncate">
                         {category.parentCategoryName
                           ? `${category.parentCategoryName} / ${category.categoryName}`

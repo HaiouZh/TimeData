@@ -61,8 +61,8 @@ function ConnectionLight({ color }: { color: ServerConnectionColor }) {
   const dot = statusDotClass(color);
   return (
     <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-      <span className={`absolute h-2.5 w-2.5 rounded-full opacity-50 blur-[3px] ${dot}`} />
-      <span className={`relative h-2 w-2 rounded-full ${dot}`} />
+      <span className={`absolute h-2.5 w-2.5 rounded-pill opacity-50 blur-[3px] ${dot}`} />
+      <span className={`relative h-2 w-2 rounded-pill ${dot}`} />
     </span>
   );
 }

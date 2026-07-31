@@ -199,7 +199,7 @@ export default function SettingsCategoryDetailPage() {
 
   return (
     <SettingsDetailPage title={category.name} backTo="/settings/categories" backLabel="返回分类">
-      <section className="space-y-3 rounded-xl border border-border bg-surface p-4">
+      <section className="space-y-3 rounded-card border border-border bg-surface p-4">
         <h3 className="td-text-label font-medium text-ink-3">基本信息</h3>
         <div className="flex items-center justify-between gap-4">
           <span className="td-text-label text-ink-2">名称</span>
@@ -215,7 +215,7 @@ export default function SettingsCategoryDetailPage() {
           <span className="td-text-label text-ink-2">颜色</span>
           <button type="button" onClick={openColorEditor} className="flex items-center gap-2">
             <span
-              className="h-5 w-5 rounded-full border border-border"
+              className="h-5 w-5 rounded-pill border border-border"
               style={{ backgroundColor: category.color }}
             />
             <span className="td-text-label text-accent hover:text-accent-ink">修改</span>
@@ -223,7 +223,7 @@ export default function SettingsCategoryDetailPage() {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-border bg-surface p-4">
+      <section className="space-y-3 rounded-card border border-border bg-surface p-4">
         <div className="flex items-center justify-between gap-4">
           <h3 className="td-text-label font-medium text-ink-3">子分类</h3>
           <button
@@ -247,7 +247,7 @@ export default function SettingsCategoryDetailPage() {
                     key={child.id}
                     id={child.id}
                     dragLabel={`拖动子分类 ${child.name}`}
-                    className="flex items-center rounded-lg bg-surface-elevated px-2 py-2"
+                    className="flex items-center rounded-row bg-surface-elevated px-2 py-2"
                   >
                     <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
                       <button
@@ -273,7 +273,7 @@ export default function SettingsCategoryDetailPage() {
         )}
       </section>
 
-      <section className="space-y-3 rounded-xl border border-danger/40 bg-danger/10 p-4">
+      <section className="space-y-3 rounded-card border border-danger/40 bg-danger/10 p-4">
         <h3 className="td-text-label font-medium text-danger">危险操作</h3>
         <button
           type="button"
@@ -290,7 +290,7 @@ export default function SettingsCategoryDetailPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setEditingName(false)}
         >
-          <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">重命名分类</h3>
             <input
               type="text"
@@ -328,11 +328,11 @@ export default function SettingsCategoryDetailPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setColorEditing(false)}
         >
-          <div className="w-96 space-y-4 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-96 space-y-4 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">修改分类颜色</h3>
             <div className="flex items-center gap-3">
               <span
-                className="h-8 w-8 rounded-full border border-border"
+                className="h-8 w-8 rounded-pill border border-border"
                 style={{ backgroundColor: selectedColor }}
               />
               <span className="td-text-label text-ink-2">{category.name}</span>
@@ -363,7 +363,7 @@ export default function SettingsCategoryDetailPage() {
                   type="button"
                   aria-label={`选择颜色 ${color}`}
                   onClick={() => setSelectedColor(color)}
-                  className={`h-8 w-8 rounded-full border ${selectedColor.toUpperCase() === color ? "border-ink" : "border-border"}`}
+                  className={`h-8 w-8 rounded-pill border ${selectedColor.toUpperCase() === color ? "border-ink" : "border-border"}`}
                   style={{ backgroundColor: color }}
                 />
               ))}
@@ -394,7 +394,7 @@ export default function SettingsCategoryDetailPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setAddingChild(false)}
         >
-          <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">添加子分类</h3>
             <input
               type="text"
@@ -432,7 +432,7 @@ export default function SettingsCategoryDetailPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setRenamingChild(null)}
         >
-          <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">重命名子分类</h3>
             <input
               type="text"
@@ -470,7 +470,7 @@ export default function SettingsCategoryDetailPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setDeleting(null)}
         >
-          <div className="w-96 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-96 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium text-danger">删除分类</h3>
             <p className="td-text-body leading-6 text-ink-2">{deleteMessage()}</p>
             {deleteError && <p className="td-text-label text-danger">{deleteError}</p>}

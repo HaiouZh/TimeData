@@ -135,7 +135,7 @@ export function SettingsToggleRow({
       </span>
       <span className={`relative h-6 w-11 rounded-pill transition-colors ${checked ? "bg-accent" : "bg-surface-elevated"}`}>
         <span
-          className={`absolute top-1 h-4 w-4 rounded-full bg-page transition-[left] ${
+          className={`absolute top-1 h-4 w-4 rounded-pill bg-page transition-[left] ${
             checked ? "left-6" : "left-1"
           }`}
         />

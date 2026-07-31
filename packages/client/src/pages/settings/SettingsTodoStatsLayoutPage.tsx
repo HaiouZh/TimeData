@@ -78,12 +78,12 @@ export default function SettingsTodoStatsLayoutPage() {
                         aria-checked={!isHidden}
                         aria-label={`显示 ${module.title}`}
                         onClick={() => toggle(id)}
-                        className={`h-7 w-12 shrink-0 rounded-full p-0.5 transition ${
+                        className={`h-7 w-12 shrink-0 rounded-pill p-0.5 transition ${
                           isHidden ? "bg-border-strong" : "bg-accent"
                         }`}
                       >
                         <span
-                          className={`block h-6 w-6 rounded-full bg-page transition ${
+                          className={`block h-6 w-6 rounded-pill bg-page transition ${
                             isHidden ? "translate-x-0" : "translate-x-5"
                           }`}
                         />
@@ -100,7 +100,7 @@ export default function SettingsTodoStatsLayoutPage() {
         type="button"
         aria-label="重置默认布局"
         onClick={reset}
-        className="min-h-11 w-full rounded-full border border-border bg-surface td-text-label text-ink-2"
+        className="min-h-11 w-full rounded-pill border border-border bg-surface td-text-label text-ink-2"
       >
         重置默认布局
       </button>

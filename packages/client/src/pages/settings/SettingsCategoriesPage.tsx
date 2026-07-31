@@ -109,7 +109,7 @@ export default function SettingsCategoriesPage() {
                   key={parent.id}
                   id={parent.id}
                   dragLabel={`拖动分类 ${parent.name}`}
-                  className="flex items-stretch overflow-hidden rounded-lg border border-border bg-surface"
+                  className="flex items-stretch overflow-hidden rounded-row border border-border bg-surface"
                 >
                   <button
                     type="button"
@@ -117,7 +117,7 @@ export default function SettingsCategoriesPage() {
                     className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left text-ink hover:bg-surface-hover"
                     style={{ borderLeft: `4px solid ${parent.color}` }}
                   >
-                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
+                    <span className="h-3 w-3 shrink-0 rounded-pill" style={{ backgroundColor: parent.color }} />
                     <span className="min-w-0 flex-1 truncate font-medium">{parent.name}</span>
                     <span className="shrink-0 td-text-caption text-ink-3">{childCount} 个子分类</span>
                     <span className="shrink-0 text-ink-3"><Icon icon={CaretRight} size={14} /></span>
@@ -126,7 +126,7 @@ export default function SettingsCategoriesPage() {
               );
             })}
             {parentCategories.length === 0 && (
-              <div className="rounded-lg border border-dashed border-border p-6 text-center td-text-body text-ink-3">
+              <div className="rounded-row border border-dashed border-border p-6 text-center td-text-body text-ink-3">
                 暂无分类，点击新增分类开始创建。
               </div>
             )}
@@ -139,7 +139,7 @@ export default function SettingsCategoriesPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setAdding(false)}
         >
-          <div className="w-80 space-y-3 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-80 space-y-3 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">新增分类</h3>
             <input
               type="text"
@@ -183,7 +183,7 @@ export default function SettingsCategoriesPage() {
           className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
           onClick={() => setPaletteDialogOpen(false)}
         >
-          <div className="w-96 space-y-4 rounded-xl bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="w-96 space-y-4 rounded-card bg-surface-elevated p-5" onClick={(event) => event.stopPropagation()}>
             <h3 className="font-medium">一键配色</h3>
             <p className="td-text-label text-ink-3">将按当前一级分类顺序循环应用配色方案，子分类会跟随父分类颜色。</p>
             <div className="space-y-2">
@@ -192,7 +192,7 @@ export default function SettingsCategoriesPage() {
                   key={paletteId}
                   type="button"
                   onClick={() => setOneClickPalette(paletteId)}
-                  className={`w-full rounded-lg p-3 text-left ${oneClickPalette === paletteId ? "bg-accent/20 ring-1 ring-accent" : "bg-surface hover:bg-surface-hover"}`}
+                  className={`w-full rounded-row p-3 text-left ${oneClickPalette === paletteId ? "bg-accent/20 ring-1 ring-accent" : "bg-surface hover:bg-surface-hover"}`}
                 >
                   <div className="mb-2 td-text-label">{CATEGORY_COLOR_PALETTES[paletteId].label}</div>
                   <div className="flex h-3 overflow-hidden rounded">
@@ -207,7 +207,7 @@ export default function SettingsCategoriesPage() {
               {parentCategories.slice(0, 6).map((category, index) => (
                 <div key={category.id} className="flex items-center gap-2 td-text-label text-ink-2">
                   <span
-                    className="h-3 w-3 rounded-full"
+                    className="h-3 w-3 rounded-pill"
                     style={{
                       backgroundColor:
                         CATEGORY_COLOR_PALETTES[oneClickPalette].colors[
