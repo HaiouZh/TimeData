@@ -68,6 +68,14 @@ describe("navVisibleTabsSetting", () => {
     expect(sanitizeTabOrder("nope")).toEqual(CONFIGURABLE_TABS.map((to) => ({ to, hidden: false })));
   });
 
+  it("treats non-boolean hidden values as visible (strict === true)", () => {
+    const todoEntry = { to: "/todo" as const, hidden: false };
+    expect(sanitizeTabOrder([{ to: "/todo", hidden: 1 }]).find((item) => item.to === "/todo")).toEqual(todoEntry);
+    expect(sanitizeTabOrder([{ to: "/todo", hidden: "true" }]).find((item) => item.to === "/todo")).toEqual(
+      todoEntry,
+    );
+  });
+
   it("persists order and hidden flags and writes a settings syncLog", async () => {
     await setTabOrder([
       { to: "/", hidden: false },

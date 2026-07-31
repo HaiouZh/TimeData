@@ -35,7 +35,7 @@ vi.mock("@dnd-kit/sortable", async (importOriginal) => {
 
 vi.mock("../../components/SortableCategoryItem.tsx", () => ({
   default: ({ children, dragLabel }: { children?: React.ReactNode; dragLabel?: string }) =>
-    createElement("div", { "data-drag-handle": dragLabel }, children),
+    createElement("div", { "aria-label": dragLabel }, children),
 }));
 
 beforeEach(resetDb);
@@ -92,9 +92,34 @@ describe("SettingsStatsLayoutPage", () => {
     await unmount(root);
   });
 
+  it("先隐藏一个模块，再拖拽另一个模块，hidden 保持且顺序更新", async () => {
+    const { host, root } = await renderPage();
+    await click(host.querySelector('[role="switch"][aria-label="显示 作息"]'));
+    await waitForLayout((layout) => layout.hidden?.includes("routine") ?? false);
+
+    // 等组件带新 hidden 重渲染（liveQuery 异步）再取最新 onDragEnd，避免旧闭包把 hidden 冲回空集
+    const handlersAfterToggle = dndState.onDragEnds.length;
+    for (let i = 0; i < MAX_FLUSHES && dndState.onDragEnds.length <= handlersAfterToggle; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      });
+    }
+    const dragEnd = dndState.onDragEnds.at(-1);
+    await act(async () => {
+      dragEnd?.({ active: { id: "routine" }, over: { id: "overview" } });
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    await waitForLayout(
+      (layout) => layout.order?.[0] === "routine" && (layout.hidden?.includes("routine") ?? false),
+    );
+
+    await unmount(root);
+  });
+
   it("全部行渲染拖拽手柄且无上移/下移按钮", async () => {
     const { host, root } = await renderPage();
-    expect(host.querySelector('[data-drag-handle="拖动 作息"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 作息"]')).not.toBeNull();
     expect(host.querySelector('[aria-label="上移 作息"]')).toBeNull();
     expect(host.querySelector('[aria-label="下移 作息"]')).toBeNull();
     await unmount(root);

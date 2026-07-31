@@ -5,7 +5,12 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/index.js";
 import { readDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
-import { readTabOrder, readVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
+import {
+  CONFIGURABLE_TABS,
+  NAV_VISIBLE_TABS_KEY,
+  readTabOrder,
+  readVisibleTabs,
+} from "../../lib/settings/navVisibleTabsSetting.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsNavPage } from "./SettingsNavPage.js";
 
@@ -42,7 +47,7 @@ vi.mock("../../components/SortableCategoryItem.tsx", () => ({
     children?: React.ReactNode;
     dragLabel?: string;
     className?: string;
-  }) => createElement("div", { className, "data-drag-handle": dragLabel }, children),
+  }) => createElement("div", { className, "aria-label": dragLabel }, children),
 }));
 
 beforeEach(async () => {
@@ -111,23 +116,23 @@ async function waitForDesktopConfig(predicate: (items: { to: string; placement: 
 describe("SettingsNavPage", () => {
   it("toggles a tab off and persists", async () => {
     const { host, root } = await renderPage();
-    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="显示 轨道"]'));
     await waitForTabs((tabs) => tabs.includes("/stats/time") && !tabs.includes("/tracks"));
     await unmount(root);
   });
 
   it("offers 轨道, 目标 and 时间 as separate toggles, not 统计", async () => {
     const { host, root } = await renderPage();
-    expect(host.querySelector('[role="switch"][aria-label="轨道"]')).not.toBeNull();
-    expect(host.querySelector('[role="switch"][aria-label="目标"]')).not.toBeNull();
-    expect(host.querySelector('[role="switch"][aria-label="时间"]')).not.toBeNull();
-    expect(host.querySelector('[role="switch"][aria-label="统计"]')).toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="显示 轨道"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="显示 目标"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="显示 时间"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="显示 统计"]')).toBeNull();
     await unmount(root);
   });
 
   it("does not offer 设置 as toggleable", async () => {
     const { host, root } = await renderPage();
-    expect(host.querySelector('[role="switch"][aria-label="设置"]')).toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="显示 设置"]')).toBeNull();
     await unmount(root);
   });
 
@@ -159,11 +164,11 @@ describe("SettingsNavPage", () => {
 
   it("renders drag handles for both lists and no arrow buttons", async () => {
     const { host, root } = await renderPage();
-    expect(host.querySelector('[data-drag-handle="拖动 记录"]')).not.toBeNull();
-    expect(host.querySelector('[data-drag-handle="拖动 待办"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 记录"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 待办"]')).not.toBeNull();
     // 全部 7 行都有手柄（含隐藏行：留在原位、可拖占位）
-    expect(host.querySelector('[data-drag-handle="拖动 轨道"]')).not.toBeNull();
-    expect(host.querySelector('[data-drag-handle="拖动 时间"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 轨道"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 时间"]')).not.toBeNull();
     expect(host.querySelector('button[aria-label="上移 记录"]')).toBeNull();
     expect(host.querySelector('button[aria-label="下移 记录"]')).toBeNull();
     await unmount(root);
@@ -171,21 +176,21 @@ describe("SettingsNavPage", () => {
 
   it("keeps a disabled tab in place with its switch off", async () => {
     const { host, root } = await renderPage();
-    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="显示 轨道"]'));
     await waitForTabOrder((order) => order.find((item) => item.to === "/tracks")?.hidden === true);
     const order = await readTabOrder();
     // 位置不变（规范位 4），行仍在列表且可拖
     expect(order.findIndex((item) => item.to === "/tracks")).toBe(4);
-    expect(host.querySelector('[data-drag-handle="拖动 轨道"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="拖动 轨道"]')).not.toBeNull();
     await unmount(root);
   });
 
   it("reopens a tab in its original position", async () => {
     const { host, root } = await renderPage();
-    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="显示 轨道"]'));
     await waitForTabOrder((order) => order.find((item) => item.to === "/tracks")?.hidden === true);
-    await waitForSwitchChecked(host, '[role="switch"][aria-label="轨道"]', false);
-    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await waitForSwitchChecked(host, '[role="switch"][aria-label="显示 轨道"]', false);
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="显示 轨道"]'));
     await waitForTabOrder((order) => order.find((item) => item.to === "/tracks")?.hidden === false);
     const order = await readTabOrder();
     expect(order.findIndex((item) => item.to === "/tracks")).toBe(4);
@@ -204,6 +209,20 @@ describe("SettingsNavPage", () => {
       const todo = tabs.indexOf("/todo");
       return diary !== -1 && todo !== -1 && diary > todo;
     });
+    await unmount(root);
+  });
+
+  it("ignores a drag end with no over target and writes nothing", async () => {
+    const { root } = await renderPage();
+    const [mobileDragEnd] = dndState.onDragEnds;
+    await act(async () => {
+      mobileDragEnd?.({ active: { id: "/diary" }, over: null });
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    await expect(readVisibleTabs()).resolves.toEqual([...CONFIGURABLE_TABS]);
+    const logs = await db.syncLog.where("recordId").equals(NAV_VISIBLE_TABS_KEY).toArray();
+    expect(logs).toHaveLength(0);
     await unmount(root);
   });
 
