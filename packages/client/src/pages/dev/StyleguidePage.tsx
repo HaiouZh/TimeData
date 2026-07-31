@@ -34,8 +34,6 @@ const NUMBER_ROLES: [string, string][] = [
   ["td-num", "12,345"],
   ["td-time", "09:42"],
   ["td-duration", "1h 20m"],
-  ["td-stat", "12.5"],
-  ["td-metric", "98%"],
 ];
 
 const Z_LAYERS = ["--z-dropdown · 30", "--z-backdrop · 40", "--z-modal · 50", "--z-top · 70"];

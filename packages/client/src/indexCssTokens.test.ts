@@ -90,8 +90,8 @@ describe("index.css design tokens", () => {
     expect(css).toContain(".td-num");
     expect(css).toContain(".td-time");
     expect(css).toContain(".td-duration");
-    expect(css).toContain(".td-stat");
-    expect(css).toContain(".td-metric");
+    expect(css).not.toContain(".td-stat");
+    expect(css).not.toContain(".td-metric");
     expect(css).toContain("font-family: var(--font-body)");
     expect(css).toContain("font-variant-numeric: tabular-nums");
   });

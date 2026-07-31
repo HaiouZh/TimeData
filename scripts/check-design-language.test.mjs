@@ -130,12 +130,12 @@ test("flags bare raw colors outside token declarations", () => {
 });
 
 test("flags business typography that directly uses font-mono", () => {
-  assert.equal(
-    classifyLine("x.tsx", '<time className="font-mono text-xs">12:00</time>').some(
-      (violation) => violation.rule === "font-mono-business-number",
-    ),
-    true,
+  const violation = classifyLine("x.tsx", '<time className="font-mono text-xs">12:00</time>').find(
+    (item) => item.rule === "font-mono-business-number",
   );
+  assert.ok(violation);
+  assert.match(violation.message, /td-num\/td-time\/td-duration/);
+  assert.doesNotMatch(violation.message, /td-stat|td-metric/);
   assert.equal(
     classifyLine("x.tsx", '<td className="px-2 font-mono">12:00</td>').some(
       (violation) => violation.rule === "font-mono-business-number",

@@ -73,9 +73,9 @@ last-reviewed: 2026-07-31
 - `--font-mono`（JetBrains Mono…）只用于 `code/pre/kbd/samp`、日志、ID、debug、技术标识。
 - 字体在 `main.tsx` 引入：**只引霞鹭文楷 GB 屏显子集** `lxgw-wenkai-screen-webfont/lxgwwenkaigbscreen.css`（约 4.7MB，避免 R 变体与重复字族撑大 APK）+ `@fontsource/tinos` 的 400/400-italic/700。`fontLoading.test.ts` 守 import 顺序（lxgw 在 tinos 之前）。
 - 全站 `body` 用 `--font-body`；远程加载推迟到做字体设置时再上。
-- 排版**只用**语义排版类：`td-text-caption`、`td-text-label`、`td-text-body`、`td-text-title`、`td-text-display`。**全站裸字号已归零**（`typography-debt` 批清空），`bare-text-size` 现已是硬闸：新写 `text-xs/sm/base/...` 或 `text-[13px]` 一律直接失败，不得加 allowlist。**图标按钮与 `input`/`textarea`/`select` 上的字号声明不生效**（前者内容是 SVG，后者被顶层 iOS 防缩放兜底压过），这类行的正确处置是删掉字号而非迁语义类（见 [controls](design-language/controls.md) §1）。语义档与字号映射：caption≈12px、label≈13px、body≈15px、title≈20px(600)、display≈28px(600)。
+- 排版**只用**语义排版类：`td-text-caption`、`td-text-label`、`td-text-body`、`td-text-title`、`td-text-display`。`bare-text-size` 是硬闸：新写 `text-xs/sm/base/...` 或 `text-[13px]` 一律直接失败，不得加 allowlist。**图标按钮与 `input`/`textarea`/`select` 上的字号声明不生效**（前者内容是 SVG，后者被顶层 iOS 防缩放兜底压过），这类行的正确处置是删掉字号而非迁语义类（见 [controls](design-language/controls.md) §1）。语义档与字号映射：caption≈12px、label≈13px、body≈15px、title≈20px(600)、display≈28px(600)。
 - **`.td-text-*` 定义在 `index.css` 顶层未分层区，会压过 `@layer utilities` 里的所有 Tailwind 排版 utility**：同一行上的 `leading-*`、`tracking-*` 一律不生效，`font-*` 只对 caption/label/body 生效（这三档不定义 `font-weight`），对 title/display 不生效（两档自带 600）。要偏离档位内建值时不要靠 utility 叠加，而是加一条**排版角色语义类**——如卡片眉标 `.td-eyebrow`（12px + 500 + 大写 + `letter-spacing: 0.16em`），放 `@layer components`。
-- 数字/时间/时长/统计值使用 `td-num`、`td-time`、`td-duration`、`td-stat`、`td-metric`，当前仍指向 `--font-body`，并启用 `font-variant-numeric: tabular-nums`。数字默认不使用等宽字体；未来若切换数字字体，只改这些语义角色。
+- 数字/时间/时长使用 `td-num`、`td-time`、`td-duration`，三者指向 `--font-body` 并启用 `font-variant-numeric: tabular-nums`；统计卡数值使用 `td-num`。数字默认不使用等宽字体。
 
 ## 3. 设计语言棘轮
 
@@ -83,7 +83,7 @@ last-reviewed: 2026-07-31
 
 - 禁止退役模块色：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 等。
 - 禁止退役 data palette：`--color-data-*` 及其 Tailwind utility；图表序列走分类色，Track agent 信号走 `track-agent`。
-- 禁止退役 motion token 与 `warn-soft`/`danger-soft`；motion 使用 Tailwind 标准档或 keyframe 邻近值，状态柔面使用主状态色 alpha。
+- 禁止退役 motion token 与独立 soft 状态色别名；motion 使用 Tailwind 标准档或 keyframe 邻近值，状态柔面使用主状态色 alpha。
 - 禁止新增 UI chrome 裸 `slate-*`，主操作裸 `blue-*` / `sky-*`，状态裸 `emerald-*` / `green-*` / `amber-*` / `yellow-*` / `orange-*` / `red-*` / `rose-*` / `gray-*`；覆盖 `bg/text/border/ring/fill/stroke/outline/caret/accent/shadow/decoration` 等常见 Tailwind 色彩工具。
 - 禁止 UI chrome 新增裸 hex / rgb / rgba / hsl / oklch / lab；测试 fixture、用户内容色、图表色和 scoped 特殊场景由脚本/allowlist 显式区分。
 - **token 定义与图表镜像不算「裸色」**：`index.css` 里 `--color-*` / `--galaxy-*` / `--shadow-*` 的 token 定义本身（值含 hex/rgba）是颜色的唯一事实源，脚本直接跳过；图表色镜像文件 `pages/stats/chartColors.ts`（recharts 不解析 `var()`，故把 token 镜像成 JS 常量）也整文件跳过 `bare-raw-color`。镜像文件登记在脚本的 `TOKEN_MIRROR_FILES`，新增镜像文件需登记；长期 allowlist 不是维持图表裸 hex 的手段。
@@ -92,13 +92,13 @@ last-reviewed: 2026-07-31
 - 禁止原生圆角 `rounded-md/lg/xl/2xl/3xl/full` 及其方向变体：规则 `bare-card-radius`，生产代码使用 `rounded-ctl/row/card/pill`，仅发丝级/小型原子细节保留 `rounded/rounded-sm`（测试文件豁免）。
 - 禁止裸字号 `text-{xs,sm,base,lg,xl,2xl…}` 与字号任意值 `text-[…px|rem]`：规则 `bare-text-size`，须用 `.td-text-{caption,label,body,title,display}` 语义类（`.css` 与测试文件豁免）。
 - 禁止全局浮层裸高 z-index（`z-30/40/50/60/70`、`z-[…]`）：规则 `bare-zindex`，须用 `z-[var(--z-*)]`；局部 stacking `z-10`/`z-20` 放行（测试文件豁免）。
-- 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。数值无法落进 token 阶梯又确属某功能专有（如某区限高）时，正当出口是在 `index.css` 里加一条**功能语义类**（如 `.todo-project-group-body { max-height: 45vh; }`）交组件消费——不是在组件里留裸任意值，也不是进 allowlist。存量已全量收口（`arbitrary-value-debt` 批归零），转盘 / 弹层 / 图表框 / 星图画布等专有几何集中在 `index.css` 的「功能几何语义类」块。**该块统一放 `@layer components`**：顶层裸规则会压过 Tailwind utilities，调用方就盖不住默认值了（如 `TagFilterPanel` 用 `max-h-28` 覆盖默认限高、速记日期气泡用 `sm:top-20` 覆盖吸顶位）。
+- 禁止裸任意尺寸/间距/定位值（`w-[34px]`、`top-[4.75rem]` 等纯数字+单位）：规则 `bare-arbitrary-value`，收进 token 或标准 Tailwind 阶；`calc()`/`var()` 例外，字号任意值归 `bare-text-size`（测试文件豁免）。数值无法落进 token 阶梯又确属某功能专有（如某区限高）时，正当出口是在 `index.css` 里加一条**功能语义类**（如 `.todo-project-group-body { max-height: 45vh; }`）交组件消费——不是在组件里留裸任意值，也不是进 allowlist。转盘 / 弹层 / 图表框 / 星图画布等专有几何集中在 `index.css` 的「功能几何语义类」块。**该块统一放 `@layer components`**：顶层裸规则会压过 Tailwind utilities，调用方就盖不住默认值了（如 `TagFilterPanel` 用 `max-h-28` 覆盖默认限高、速记日期气泡用 `sm:top-20` 覆盖吸顶位）。
 
-`scripts/design-language-allowlist.json` 是旧债登记簿，每项必须写清 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确豁免，并按条目计数消费；同一旧债行被复制新增时必须新增一条 allowlist，否则会报违规。脚本也会报告 stale allowlist 项。P1–P4 全量收口完成后，所有 `P[1-4]-*` 临时 owner batch 已归零；`arbitrary-value-debt` 与 `typography-debt` 两批也已归零。**当前 allowlist 只剩一类共 42 项 `user-content-color` 长期例外**（`categoryColors.ts` 的分类预设色，属业务数据非 UI chrome），即除这一类外所有规则都已是硬闸、没有任何在迁移中的旧债。后续主干页面新增裸色 / 散装图标 / 业务 `font-mono` / 裸圆角 / 裸字号 / 裸任意值会直接失败。不得把新写的代码的违规加入 allowlist。
+`scripts/design-language-allowlist.json` 是显式例外登记簿，每项写明 `file`、`rule`、`lineText`、`reason`、`ownerBatch`、`removeBy`。脚本按 `file + rule + lineText` 精确匹配并报告 stale 条目；新增代码不得通过 allowlist 绕过棘轮。当前长期例外是 `categoryColors.ts` 的用户内容分类预设色，属于业务数据而非 UI chrome，其余设计语言规则均直接拦截违规。
 
 ## 4. 关键不变量 / 坑 / 红线
 
-1. **新 UI 一律用 token，不写裸 hex/rgba**；统计面（TimeStats、stats 模块、图表 chrome）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零；裸色剩余仅 `user-content-color` 长期例外（分类预设色），不作范式；裸任意尺寸/间距已全量收口（功能几何语义类，见 §3）；裸字号也已全量收口（语义排版类，`typography-debt` 批归零）。
+1. **新 UI 一律用 token，不写裸 hex/rgba**；统计、设置、Todo、Entry、Track、Goal 等页面的 UI chrome 都消费语义颜色、圆角、排版和几何类；用户内容分类预设色是业务数据例外。裸任意尺寸/间距、裸字号、裸圆角均由 §3 棘轮直接拦截。
 2. **图表不维护独立 data palette**：图表序列走用户分类色；用户内容色只代表分类、项目、标签、用户自定义标记。Track agent tone 只表达该调度信号。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。

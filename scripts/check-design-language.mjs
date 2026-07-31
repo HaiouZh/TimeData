@@ -86,7 +86,7 @@ const RULES = [
   {
     id: "font-mono-business-number",
     re: /\bfont-mono\b/,
-    msg: "业务时间/数字/统计值不得直接使用 font-mono，使用 td-num/td-time/td-duration/td-stat",
+    msg: "业务时间/数字/统计值不得直接使用 font-mono，使用 td-num/td-time/td-duration",
     skip: (file, line) => isFontMonoTechnicalLine(file, line),
   },
   {

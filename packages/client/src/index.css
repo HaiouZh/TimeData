@@ -154,18 +154,10 @@ samp {
 
 .td-num,
 .td-time,
-.td-duration,
-.td-stat,
-.td-metric {
+.td-duration {
   font-family: var(--font-body);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
-}
-
-.td-stat {
-  font-size: 1.5rem;
-  line-height: 1.9rem;
-  font-weight: 600;
 }
 
 @keyframes sync-pulse {

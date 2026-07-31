@@ -25,6 +25,8 @@ describe("StyleguidePage", () => {
   it("lists the typography and number role classes", () => {
     const html = renderToStaticMarkup(<StyleguidePage />);
     expect(html).toContain("td-text-display");
-    expect(html).toContain("td-stat");
+    expect(html).toContain("td-num");
+    expect(html).toContain("td-time");
+    expect(html).toContain("td-duration");
   });
 });
