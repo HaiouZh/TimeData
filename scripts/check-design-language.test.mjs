@@ -51,6 +51,18 @@ test("flags retired motion tokens and utilities", () => {
 
 test("flags retired soft status colors and allows alpha utilities", () => {
   assert.equal(
+    classifyLine("packages/client/src/index.css", "  --color-ok-soft: #123456;").some(
+      (violation) => violation.rule === "retired-soft-status-colors",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-ok-soft text-ok-soft"').some(
+      (violation) => violation.rule === "retired-soft-status-colors",
+    ),
+    true,
+  );
+  assert.equal(
     classifyLine("x.tsx", 'className="bg-warn-soft hover:bg-danger-soft/80"').some(
       (violation) => violation.rule === "retired-soft-status-colors",
     ),

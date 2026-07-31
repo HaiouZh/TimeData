@@ -203,6 +203,13 @@ samp {
   animation: sync-blink 2.5s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-sync-pulse,
+  .animate-sync-blink {
+    animation: none;
+  }
+}
+
 /*
  * 滚动条纳入设计语言：html 上声明、全站继承。用标准属性而非 ::-webkit-scrollbar——
  * 伪元素会让 Chrome/Edge 从 overlay（浮在内容上、滑完即隐）退化成常驻占位条，

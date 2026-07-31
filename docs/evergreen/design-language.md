@@ -16,6 +16,7 @@ covers:
   - scripts/design-language-allowlist.json
 contracts:
   - packages/client/src/index.css
+  - scripts/check-design-language.mjs
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
 last-reviewed: 2026-07-31

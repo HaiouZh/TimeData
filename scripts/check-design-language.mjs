@@ -50,7 +50,7 @@ const RULES = [
   {
     id: "retired-soft-status-colors",
     re: new RegExp(
-      `(?:--color-(?:warn|danger)-soft\\b|var\\(--color-(?:warn|danger)-soft\\)|\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:warn|danger)-soft(?:\\/\\d+)?\\b)`,
+      `(?:--color-(?:ok|warn|danger)-soft\\b|var\\(--color-(?:ok|warn|danger)-soft\\)|\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:ok|warn|danger)-soft(?:\\/\\d+)?\\b)`,
     ),
     msg: "退役 soft 状态色不得通过任何颜色 utility 消费；状态面使用 ok/warn/danger 的 alpha 档（背景 /10，hover /15）",
   },

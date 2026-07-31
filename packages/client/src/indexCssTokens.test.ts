@@ -47,6 +47,12 @@ describe("index.css design tokens", () => {
     expect(css).toContain("300ms cubic-bezier(0.2, 0, 0, 1)");
   });
 
+  it("disables the looping sync animations when reduced motion is requested", () => {
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.animate-sync-pulse,\s*\.animate-sync-blink\s*\{\s*animation: none;\s*\}\s*\}/,
+    );
+  });
+
   it("derives soft status surfaces from the main status colors", () => {
     expect(css).not.toContain("--color-warn-soft");
     expect(css).not.toContain("--color-danger-soft");
