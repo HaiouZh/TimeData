@@ -18,6 +18,7 @@ const INTERACTIVE_CONTEXT_RE = /<button\b|<a\b|<Link\b|<NavLink\b|role=["']butto
 
 const COLOR_FIXTURE_RULES = new Set([
   "retired-module-colors",
+  "retired-data-colors",
   "bare-action-blue",
   "bare-status-color",
   "bare-slate-chrome",
@@ -31,6 +32,13 @@ const RULES = [
     msg: "退役模块署名色不得新增或继续消费",
   },
   {
+    id: "retired-data-colors",
+    re: new RegExp(
+      `(?:--color-data-|\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-data-(?:blue|teal|green|amber|red|purple)(?:\\/\\d+)?\\b)`,
+    ),
+    msg: "退役 data palette 不得重新定义或消费；图表序列走业务数据色，Track agent 使用 track-agent",
+  },
+  {
     id: "bare-action-blue",
     re: new RegExp(`\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:blue|sky)-\\d{2,3}(?:\\/\\d+)?\\b`),
     msg: "动作/焦点蓝必须使用 accent token",
@@ -40,7 +48,7 @@ const RULES = [
     re: new RegExp(
       `\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:emerald|green|amber|yellow|orange|red|rose|gray)-\\d{2,3}(?:\\/\\d+)?\\b`,
     ),
-    msg: "状态色必须使用 ok/warn/danger token 或数据色板",
+    msg: "状态色必须使用 ok/warn/danger token",
   },
   {
     id: "bare-slate-chrome",
@@ -121,7 +129,7 @@ function isThemeTokenDeclaration(file, line) {
 // 故这些文件把 index.css 的 --color-* token 镜像成具体 hex 的 JS 常量，是 token 唯一事实源的镜像，
 // 不是 UI chrome 裸色。集中登记，便于审计。
 const TOKEN_MIRROR_FILES = new Set([
-  "packages/client/src/pages/stats/chartColors.ts", // --color-data-* / 中性 chrome token
+  "packages/client/src/pages/stats/chartColors.ts", // 中性 chrome token
   "packages/client/src/lib/navigation/routeFavicon.ts", // --color-page / --color-ink（favicon SVG data-URI）
 ]);
 

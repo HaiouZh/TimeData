@@ -452,7 +452,7 @@ export default function DiaryPage() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
       {dialog}
-      <header className="sticky top-0 z-[var(--z-dropdown)] shrink-0 border-b border-border bg-page/95 backdrop-blur">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 backdrop-blur">
         <div className="flex items-center gap-3 px-4 py-3">
           <button
             type="button"

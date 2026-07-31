@@ -18,7 +18,7 @@ contracts:
   - packages/client/src/index.css
   - scripts/design-language-allowlist.json
   - packages/client/src/lib/navigation/navRegistry.ts
-last-reviewed: 2026-07-29
+last-reviewed: 2026-07-31
 ---
 
 # 设计语言
@@ -43,8 +43,8 @@ last-reviewed: 2026-07-29
 | **中性底盘** | `--color-page` `--color-surface` `--color-surface-elevated` `--color-surface-hover`；文字 `--color-ink` `--color-ink-2` `--color-ink-3` | 暗色底盘 + 三级文字（均 ≥ WCAG AA）。绝大多数 UI chrome 只用这一层 |
 | **单一动作色** | `--color-accent` `--color-accent-strong` `--color-accent-soft` `--color-accent-ink`（蓝） | 全站唯一动作色。按钮/聚焦/主操作/active 只用蓝，不引入第二动作色 |
 | **状态色** | `--color-ok` `--color-warn` `--color-danger` + `*-soft` | 只表达成功/警告/危险/错误/冲突，不做装饰色 |
-| **数据色板** | `--color-data-blue/teal/green/amber/red/purple`（固定 6 色） | 仅图表、健康指标曲线、数据序列使用，不外溢到 UI chrome |
 | **用户内容色** | `--color-tint-1..9`（固定 9 支，项目 / 标签共用）+ 分类色 | 属业务数据，不属于 UI chrome；使用时要能说明来自用户内容 |
+| **Track scoped 信号色** | `--color-track-agent` | 只表达 Track 调度台“agent 在跑”，不充当动作色、状态色或模块署名色 |
 | **scoped 特殊场景色** | 例如 `--galaxy-*` | 只服务独立画布/世界观场景，必须有独立 prefix，不扩展全站动作色 |
 
 - **模块署名色已退役**：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 不再作为设计语言的一部分。模块身份靠固定位置、图标、页面标题、信息架构和 active 形态，不靠每个模块一套品牌色。
@@ -54,15 +54,16 @@ last-reviewed: 2026-07-29
 - **滚动条**：`--color-scrollbar-thumb` / `--color-scrollbar-thumb-hover`（滑块常态 / 悬停提亮，色值同边框灰蓝档但语义独立）。`html` 上 `scrollbar-width: thin` + `scrollbar-color` 全站继承，轨道透明；hover 提亮走零特异性 `:where(:hover)`，局部隐藏特例（如转盘 `.wheel-scroll`）可直接压过。**只用标准属性，不用 `::-webkit-scrollbar` 伪元素**——后者会让 Chrome/Edge 从 overlay 条退化成常驻占位条（`indexCssTokens.test.ts` 有计数闸守着，全站仅转盘的 display:none 隐藏一处豁免）。
 - **阴影**：`--shadow-elev1`（小表面）/ `--shadow-elev2`（浮层），仅大表面用；两者均叠了顶部 `inset 0 1px 0` hairline 高光，暗色下给大表面一道微亮上沿。
 - **动效**：`--duration-fast`(150ms) / `--duration-base`(200ms) / `--duration-slow`(300ms) + `--ease-standard`/`--ease-emphasized`。交互过渡 / 弹层动画就近映射到这组 token；keyframe 与长循环动画（如 `sync-pulse`）属合法多值，保留裸时长。行级入场提示（如 Todo occurrence 新派生高亮）只复用现有 token/`color-mix`，并尊重 `prefers-reduced-motion`。
-- **z-index 层级**：`--z-sticky`(20) / `--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；组件内部局部 stacking 仍用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
+- **z-index 层级**：`--z-dropdown`(30) / `--z-backdrop`(40) / `--z-modal`(50) / `--z-top`(70)，只治理**全局浮层**；普通 sticky header、画布 HUD 与 notice 属局部 stacking，使用 `z-10`/`z-20`。CSS 是单一事实源，内联 `style.zIndex` 走 JS 镜像 `lib/zLayers.ts` 的 `Z`（类比图表色镜像），`zLayers.test.ts` 守 JS 与 CSS 阶梯一致。
 - **用户内容身份色**：`--color-tint-1..9`。约束是 WCAG 对比度（圆点 ≥3:1、caption 档 `#` 与填充态深字 ≥4.5:1），色相尽量避开 accent / ok / warn / danger 四个已占用值；支数定在 9 是因为四禁区吃掉 160° 色相环后，再多就有相邻支在 6px 圆点上分不出（取舍见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)）。取色内核 `lib/contentTint.ts` 两条路都不存储：**标签** `contentTint(标签名)` 哈希取模、允许撞色；**项目** `assignProjectTints(按 createdAt 升序的 goalId)` 集合内避撞——首选位由哈希决定（色因此散布在整个色板上，不是从 `tint-1` 依次发号），被占才顺移，≤9 个项目保证互不同色。项目分配由 `listTasks` 基于**全部 active project** 算出、随 `TodoBuckets.projectTints` 下发，组件不自行取色。**类型区分靠形状不靠颜色**：圆点 = 项目，`#` = 标签——同一行 meta 区两者并排时，颜色只表达「是哪一个」，形状表达「是哪一类」，故两者共用一组色板、偶尔撞色不构成歧义。真实形态（6px 圆点 / caption 档 `#` / 筛选面板填充态）在 `/dev/styleguide` 的「身份色的真实形态」一节验收——色值与支数都由这一节定，色块预览不作为验收依据。因由见 [ADR 0026](../adr/0026-content-tint-shared-palette-shape-distinguishes-type.md)。
+- **当前 token 分账**：A 阶段为 `core 38 / business identity 10 / Goal scoped 12 = 60`；business identity 是 tint 9 支与 Track agent 1 支。按 owner 与生产消费审计，不为 `<50` 合并跨域职责（见 [ADR 0027](../adr/0027-retire-unused-data-palette-and-scope-track-agent-tone.md)）。
 - **派生软色**用 `color-mix(in srgb, <token> N%, transparent)` 或已有 soft token，不另写裸色。
 
 新增颜色流程：
 
-1. 先判断现有层级是否足够：背景/文字用中性，操作用动作蓝，状态用状态色，图表用数据色，用户内容用业务色。
+1. 先判断现有层级是否足够：背景/文字用中性，操作用动作蓝，状态用状态色，图表序列用分类色，用户内容用业务身份色。
 2. 如果不够，写清新颜色表达的语义，不能以“页面更有特色”为理由。
-3. 限定作用域：全站 token、数据色板、用户内容色，还是 scoped 特殊场景色。
+3. 限定 owner：全站 core、business identity，还是有明确 prefix 的领域 scoped 层。
 4. 同步 evergreen 文档、`check:design` 规则 / allowlist、必要测试和人工验收条目。
 5. 新增颜色层级或 scoped palette 必须用户拍板。
 
@@ -81,6 +82,7 @@ last-reviewed: 2026-07-29
 `pnpm check:design` 扫描 `packages/client/src`，由 `scripts/check-design-language.mjs` 执行。它不是审美检查，而是防回退闸：
 
 - 禁止退役模块色：`--color-mod-*`、`text-mod-*`、`bg-mod-*`、`border-mod-*` 等。
+- 禁止退役 data palette：`--color-data-*` 及其 Tailwind utility；图表序列走分类色，Track agent 信号走 `track-agent`。
 - 禁止新增 UI chrome 裸 `slate-*`，主操作裸 `blue-*` / `sky-*`，状态裸 `emerald-*` / `green-*` / `amber-*` / `yellow-*` / `orange-*` / `red-*` / `rose-*` / `gray-*`；覆盖 `bg/text/border/ring/fill/stroke/outline/caret/accent/shadow/decoration` 等常见 Tailwind 色彩工具。
 - 禁止 UI chrome 新增裸 hex / rgb / rgba / hsl / oklch / lab；测试 fixture、用户内容色、图表色和 scoped 特殊场景由脚本/allowlist 显式区分。
 - **token 定义与图表镜像不算「裸色」**：`index.css` 里 `--color-*` / `--galaxy-*` / `--shadow-*` 的 token 定义本身（值含 hex/rgba）是颜色的唯一事实源，脚本直接跳过；图表色镜像文件 `pages/stats/chartColors.ts`（recharts 不解析 `var()`，故把 token 镜像成 JS 常量）也整文件跳过 `bare-raw-color`。镜像文件登记在脚本的 `TOKEN_MIRROR_FILES`，新增镜像文件需登记；长期 allowlist 不是维持图表裸 hex 的手段。
@@ -96,14 +98,14 @@ last-reviewed: 2026-07-29
 ## 4. 关键不变量 / 坑 / 红线
 
 1. **新 UI 一律用 token，不写裸 hex/rgba**；统计面（TimeStats、stats 模块、图表 chrome）已在 P3 收口，设置子页、共享边角组件、Todo/Entry 边角、Goal galaxy shadow 已在 P4 收口；`P[1-4]-*` allowlist 全部归零；裸色剩余仅 `user-content-color` 长期例外（分类预设色），不作范式；裸任意尺寸/间距已全量收口（功能几何语义类，见 §3）；裸字号也已全量收口（语义排版类，`typography-debt` 批归零）。
-2. **数据色不外溢 UI chrome**（只在图表可视化里）；用户内容色只代表分类、项目、标签、用户自定义标记。
+2. **图表不维护独立 data palette**：图表序列走用户分类色；用户内容色只代表分类、项目、标签、用户自定义标记。Track agent tone 只表达该调度信号。
 3. **无原生表单控件**：`<select>`/`type=checkbox`/`type=radio`/`window.confirm`/`window.alert` 一律用自绘控件——**CI 棘轮 `check:ui` 强制**（见 [design-language/controls](design-language/controls.md)）。
 4. **图标统一 Phosphor**，经 `components/Icon.tsx` 包装（见子文档）；不用 emoji 或文字字符伪装图标。
-5. **recharts 不解析 CSS `var()`**：图表 chrome（axis/grid/tooltip 背景边框文字/legend/cursor）须把中性 token 镜像成 JS 常量，统一出自 `pages/stats/chartColors.ts`（只导出 `CHART_CHROME`），唯一消费方是 TimeStats 的 `InsightCharts`（健康图表随健康子系统退役，见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），唯一事实源是 `index.css` token。取色规则：图表 chrome 取 `CHART_CHROME` 中性镜像；**数据序列不由本文件取色，走用户分类色**（`item.color`，无色回退 `UNCATEGORIZED_COLOR`，见 [stats-insights](stats-insights.md) §1.2）；`--color-data-*` token 是数据色的事实源，没有 JS 镜像消费方。状态色只留给真状态，不上数据序列。
+5. **recharts 不解析 CSS `var()`**：图表 chrome（axis/grid/tooltip 背景边框文字/legend/cursor）须把中性 token 镜像成 JS 常量，统一出自 `pages/stats/chartColors.ts`（只导出 `CHART_CHROME`），唯一消费方是 TimeStats 的 `InsightCharts`（健康图表随健康子系统退役，见 [ADR 0024](../adr/0024-retire-health-subsystem.md)）；该文件在 `check:design` 整文件豁免 `bare-raw-color`（见 §3），对应的中性颜色事实源是 `index.css` token。数据序列不由本文件取色，走用户分类色（`item.color`，无色回退 `UNCATEGORIZED_COLOR`，见 [stats-insights](stats-insights.md) §1.2）；状态色只留给真状态，不上数据序列。
 6. **横向溢出从组件源头收口**：全站 `<main>` 负责纵向滚动，交互组件若会产生临时横向位移（如 Todo 拖拽 / swipe 行），应在组件行容器或本主题全局规则里裁掉横向溢出，避免把页面撑出横向滚动面；纵向拖拽让位可单独放开。**推论：swipe 行内的装饰必须画在内侧**——`ring-*` 与任何向外画的 `box-shadow` 会被祖先 `.swipeable-list-item { overflow:hidden }` 整圈裁掉，真机不可见，而 jsdom / happy-dom 不算裁剪，只断言 className 的单测照样全绿（"已归目标任务绿外圈"就这么 ship 成过隐形功能）。用绝对定位子元素（`pointer-events-none`，避开圆角与拖拽命中区）或 `ring-inset`，并靠真机 / 截图验收——单测在这件事上给不出结论。
 7. **主导航：移动纯图标 / 桌面图标+文字**：移动底栏主导航用 Phosphor 纯图标（仅 `aria-label`），只渲染 `nav.visibleTabs.v1` 选中的入口并固定保留设置，不提供三点菜单；未选入口由设置的“更多功能”子页承接。桌面侧栏主导航图标下方配 `td-text-caption` 文字标签（aside `w-20`，"更多"按钮同款），这是设计审查 C1 的可读性收口——**仅桌面，移动底栏维持纯图标不变**。图标来自 `navRegistry`，用户配置只保存 route/placement，不保存 icon 名或颜色；主导航按钮必须有 `aria-label`。active 用 `accent-soft` 背景、`accent` 图标色和 `accent` ring，hover/focus 只消费现有 `page/surface/border/ink/accent` token，不为主导航单独引入裸色。轨道回手计数以 `NavBadge`（`bg-accent`/`text-page` 圆点，`td-text-caption`，>9 显「9+」）叠在 `/tracks` 图标右上角，计数为 0 时不渲染；两端复用同一 `NavBadge`，不引裸色。
 8. **设置壳与设置行复用 token 组件**：设置详情页外壳 `SettingsDetailPage` 使用 `page/surface/border/ink` token；设置首页的 `SettingsSection` / `SettingsRow` / `SettingsToggleRow` / `SettingsNumberRow` 使用 `surface/border/ink/accent` 语义 tone，避免各设置入口重新引入旧 `slate-*` / 模块色 / 大圆角样式。`SettingsNumberRow` 的 `−`/`+` 按钮和 `input[type=number]` 消费 `surface-hover`/`border`/`ink`/`accent` token，不引入裸色。
-9. **z-index 走层级 token**：全局浮层（粘顶头 / 下拉 / 遮罩 / 弹层 / 全屏接管）用 `z-[var(--z-*)]`，内联 `style.zIndex` 用 `lib/zLayers.ts` 的 `Z`；组件内部局部 stacking 保留 `z-10`/`z-20`，不升 token。新全局浮层选层级按语义对号入座，不另造数值。
+9. **z-index 走层级 token**：跨局部内容的下拉 / 日期气泡、遮罩、弹层与全屏接管用 `z-[var(--z-*)]`，内联 `style.zIndex` 用 `lib/zLayers.ts` 的 `Z`；普通粘顶头、画布 HUD/notice 等局部 stacking 使用 `z-10`/`z-20`，不升全局 token。新全局浮层选层级按语义对号入座，不另造数值。
 10. **单一暗色主题 + 单一动作色**：不搭换肤机制、不引 `[data-theme]`、不出亮色主题；动作色只有品牌蓝一支。动效 / z-index / 任意值均已 token 化并由棘轮守；字号按棘轮渐进迁移。视觉一致性靠单测 + `/dev/styleguide` 预览页人工验收，**不做像素快照**。
 
 ## 5. 模块速查

@@ -987,7 +987,7 @@ export default function QuickNotesPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
-      <header className="sticky top-0 z-[var(--z-dropdown)] shrink-0 border-b border-border bg-page/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-elev1">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-elev1">
         {selectionMode ? (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <button

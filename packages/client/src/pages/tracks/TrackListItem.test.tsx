@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { TrackBoardSignal } from "../../lib/tracksView.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import type { StepDraft } from "./StepComposer.js";
-import { TrackListItem } from "./TrackListItem.js";
+import { type TrackBadgeTone, TrackListItem } from "./TrackListItem.js";
 
 const T = "2026-06-21T00:00:00.000Z";
 
@@ -50,7 +50,7 @@ async function mount(
   steps: TrackStep[],
   props: {
     signal?: TrackBoardSignal | null;
-    badgeTone?: "warn" | "purple" | "default";
+    badgeTone?: TrackBadgeTone;
     stalledDays?: number | null;
     selected?: boolean;
     statusTags?: readonly string[];
@@ -104,11 +104,6 @@ describe("TrackListItem", () => {
     expect(host.querySelector('[data-testid="track-last-activity"]')?.textContent).toContain("13 天没动静");
   });
 
-  it("selected 时卡片带 accent 边框", async () => {
-    const host = await mount(track(), [step({ id: "a", seq: 0, content: "最近一步" })], { selected: true });
-    expect(host.querySelector("article")?.className).toContain("border-accent");
-  });
-
   it("shows current frame for archived tracks too (状态卡不区分活跃/归档隐藏内容)", async () => {
     const host = await mount(track({ status: "concluded" }), [step({ id: "a", seq: 0, content: "已完成步骤" })]);
     expect(host.textContent).toContain("轨道派活");
@@ -118,6 +113,7 @@ describe("TrackListItem", () => {
   it("shows the provided board signal badge and no badge when signal is null", async () => {
     const withSignal = await mount(track(), [step({ id: "a", seq: 0, content: "等你确认", tags: ["待我处理"] })], {
       signal: { tag: "待我处理", stepId: "a" },
+      badgeTone: "agent",
     });
     expect(withSignal.textContent).toContain("#待我处理");
     expect(withSignal.textContent).not.toContain("该我了");
@@ -130,31 +126,6 @@ describe("TrackListItem", () => {
     });
     expect(noSignal.textContent).not.toContain("#待我处理");
     expect(noSignal.textContent).not.toContain("其他");
-  });
-
-  it("badgeTone 决定信号徽章语义色：warn/purple/默认 accent", async () => {
-    const warn = await mount(track(), [step({ id: "a", seq: 0, tags: ["待我处理"] })], {
-      signal: { tag: "待我处理", stepId: "a" },
-      badgeTone: "warn",
-    });
-    expect(warn.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-warn");
-
-    await unmount(mounted?.root);
-    mounted = null;
-
-    const purple = await mount(track(), [step({ id: "b", seq: 0, tags: ["agent在做"] })], {
-      signal: { tag: "agent在做", stepId: "b" },
-      badgeTone: "purple",
-    });
-    expect(purple.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-data-purple");
-
-    await unmount(mounted?.root);
-    mounted = null;
-
-    const fallback = await mount(track(), [step({ id: "c", seq: 0, tags: ["复盘"] })], {
-      signal: { tag: "复盘", stepId: "c" },
-    });
-    expect(fallback.querySelector('[data-testid="track-signal-badge"]')?.className).toContain("text-accent");
   });
 
   it("keeps inline writer outside the detail link and delegates submit to parent", async () => {

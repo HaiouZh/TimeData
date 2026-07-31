@@ -11,17 +11,17 @@ import { NewTrackComposer } from "./NewTrackComposer.js";
 import type { StepDraft } from "./StepComposer.js";
 import { type TrackBadgeTone, TrackListItem } from "./TrackListItem.js";
 
-// 分组视觉分层（spec 判定表）：等我接=警示色、agent 在跑=紫系（agent 语义色沿用 --color-data-purple 惯例）、停滞=弱化、推进中=常规。
+// agent 在跑使用 Track scoped 信号 tone，其余分组按警示、常规与弱化层级表达。
 const GROUP_HEADER_CLASSES: Record<DispatchGroupKey, string> = {
   "awaiting-me": "text-warn",
-  "agent-running": "text-data-purple",
+  "agent-running": "text-track-agent",
   "in-progress": "text-ink-2",
   stalled: "text-ink-3",
 };
 
 const GROUP_BADGE_TONES: Record<DispatchGroupKey, TrackBadgeTone> = {
   "awaiting-me": "warn",
-  "agent-running": "purple",
+  "agent-running": "agent",
   "in-progress": "default",
   stalled: "default",
 };

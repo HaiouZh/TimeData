@@ -11,17 +11,7 @@ const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
   { title: "动作色", tokens: ["--color-accent", "--color-accent-strong", "--color-accent-soft", "--color-accent-ink"] },
   { title: "状态色", tokens: ["--color-ok", "--color-warn", "--color-danger", "--color-warn-soft", "--color-danger-soft"] },
   { title: "边框", tokens: ["--color-border", "--color-border-strong"] },
-  {
-    title: "数据色板（仅图表/健康）",
-    tokens: [
-      "--color-data-blue",
-      "--color-data-teal",
-      "--color-data-green",
-      "--color-data-amber",
-      "--color-data-red",
-      "--color-data-purple",
-    ],
-  },
+  { title: "Track 调度信号", tokens: ["--color-track-agent"] },
   { title: "用户内容身份色（项目圆点 / 标签 #）", tokens: [...TINT_TOKENS] },
 ];
 
@@ -56,7 +46,7 @@ const MOTION_TOKENS = [
   "--ease-emphasized · cubic-bezier(0.2, 0, 0, 1)",
 ];
 
-const Z_LAYERS = ["--z-sticky · 20", "--z-dropdown · 30", "--z-backdrop · 40", "--z-modal · 50", "--z-top · 70"];
+const Z_LAYERS = ["--z-dropdown · 30", "--z-backdrop · 40", "--z-modal · 50", "--z-top · 70"];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

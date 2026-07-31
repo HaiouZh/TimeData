@@ -25,7 +25,8 @@ describe("index.css design tokens", () => {
     expect(themeBlock).toBeGreaterThan(tailwindImport);
     expect(css).toContain("--color-page: #0e1320;");
     expect(css).toContain("--color-surface: #161d30;");
-    expect(css).toContain("--color-data-purple: #a78bfa;");
+    expect(css).not.toContain("--color-data-");
+    expect(css).toContain("--color-track-agent: #a78bfa;");
     // 全 9 支逐支断言 + 计数：只钉首尾两支时，删掉中间任意几支照样全绿，
     // 而 contentTint 仍会把 `var(--color-tint-5)` 之类发给真实种子——那些圆点/`#`
     // 在真机上继承成透明，且 check:design 只拦裸色、不校验 var() 引用的 token 是否存在。
@@ -46,7 +47,7 @@ describe("index.css design tokens", () => {
   });
 
   it("defines a z-index layer ladder", () => {
-    expect(css).toContain("--z-sticky: 20;");
+    expect(css).not.toContain("--z-sticky:");
     expect(css).toContain("--z-dropdown: 30;");
     expect(css).toContain("--z-backdrop: 40;");
     expect(css).toContain("--z-modal: 50;");

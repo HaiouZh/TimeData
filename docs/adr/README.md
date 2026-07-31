@@ -35,7 +35,8 @@ status: living
 | [0023](0023-diary-editor-remount-on-width-breakpoint.md) | 日记编辑器跨宽窄断点重挂，知情不修 | 2026-07-26 | 1024px 断点两侧元素类型不同致重挂丢撤销栈；修法要动 APK 主场景的窄屏布局且 jsdom 验不出，风险不对称 | |
 | [0024](0024-retire-health-subsystem.md) | 退役健康子系统，数据层保留 | 2026-07-29 | 佳明体征/跑步 UI 与抓取管线全删、移交独立项目 run-track；6 张表与 6 个同步域刻意留着（删域是破坏性协议变更），回溯点 tag `retire/health` | 受 [0012](0012-sync-ledger-and-domain-registry.md) 的封闭登记簿约束 |
 | [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) | 陌生来源提醒按「运营商+城市」收敛，不再按精确 IP | 2026-07-30 | 动态 IP 与 VPN 出口下按精确 IP 去重永远确认不完；改按 ASN+城市收敛并显示 GeoLite2 中文归属地，删 `known_ips` 换 `known_ip_scopes`，主动降低灵敏度换「用户真的会看」 | |
-| [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) | 项目与标签共用一组 tint token，类型区分靠形状不靠颜色 | 2026-07-30 | 用户内容身份色统一走 `--color-tint-1..12`（明度 60–65%，避开 accent/ok/warn）；圆点 = 项目、`#` = 标签，颜色只管同类型内区分个体；`TAG_PALETTE` 12 个裸 hex 退出 allowlist | |
+| [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) | 项目与标签共用一组 tint token，类型区分靠形状不靠颜色 | 2026-07-30 | 用户内容身份色统一走 `--color-tint-1..9`；圆点 = 项目、`#` = 标签，颜色只管同类型内区分个体；旧 `TAG_PALETTE` 裸色退出 allowlist | data palette 部分被 [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) 修订 |
+| [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) | 退役失活 data palette，Track agent tone 归入业务作用域 | 2026-07-31 | 删除无生产消费的 data palette；“agent 在跑”保留原紫色外观并改用 Track scoped token | 修订 [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) 的 data palette 部分 |
 
 ## 按主题速查
 
@@ -44,5 +45,5 @@ status: living
 - **备份**：0002、0003、0007、0015
 - **数据建模**：0004（UTC）、0008（Dexie 版本链）、0010（QuickNote 域）、0014（tags vs 字段）
 - **日记编辑器**：0022（列表识别口径）、0023（跨断点重挂）
-- **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）
+- **设计语言**：0026（用户内容身份色共用 tint 色板 + 形状分型）→ 0027（退役 data palette + Track agent scoped tone）
 - **范围决策**：0005、0009、0024（健康子系统退役）

@@ -9,6 +9,25 @@ test("flags retired module colors", () => {
   );
 });
 
+test("flags retired data palette tokens and utilities", () => {
+  assert.equal(
+    classifyLine("packages/client/src/index.css", "  --color-data-blue: #4f9bf5;").some(
+      (violation) => violation.rule === "retired-data-colors",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="text-data-purple bg-data-blue/10"').some(
+      (violation) => violation.rule === "retired-data-colors",
+    ),
+    true,
+  );
+});
+
+test("allows the scoped Track agent signal token", () => {
+  assert.equal(classifyLine("x.tsx", 'className="text-track-agent bg-track-agent/10"').length, 0);
+});
+
 test("flags bare blue action classes", () => {
   assert.equal(
     classifyLine("x.tsx", 'className="bg-blue-600"').some((violation) => violation.rule === "bare-action-blue"),

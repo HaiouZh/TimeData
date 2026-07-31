@@ -7,12 +7,12 @@ import { StepComposer, type StepDraft } from "./StepComposer.js";
 
 const STATUS_DOT: Record<string, string> = { active: "bg-accent", concluded: "bg-ink-3", parked: "bg-ink-3" };
 
-export type TrackBadgeTone = "warn" | "purple" | "default";
+export type TrackBadgeTone = "warn" | "agent" | "default";
 
-// 信号徽章按调度组语义着色：等我接=警示、agent 在跑=紫系（agent 语义色沿用 --color-data-purple 惯例）、其余=动作蓝。
+// agent 在跑使用 Track scoped 信号 tone，其余调度组复用现有状态或动作语义。
 const BADGE_TONE_CLASSES: Record<TrackBadgeTone, string> = {
   warn: "border-warn/40 bg-warn-soft text-warn",
-  purple: "border-data-purple/40 bg-data-purple/10 text-data-purple",
+  agent: "border-track-agent/40 bg-track-agent/10 text-track-agent",
   default: "border-accent/30 bg-accent-soft text-accent",
 };
 
