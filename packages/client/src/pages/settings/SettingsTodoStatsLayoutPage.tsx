@@ -66,7 +66,10 @@ export default function SettingsTodoStatsLayoutPage() {
                   >
                     <div className="flex w-full min-w-0 items-start justify-between gap-3 p-3 pr-1">
                       <div className="min-w-0">
-                        <div className="td-text-label font-medium text-ink">{module.title}</div>
+                        <div className="td-text-label font-medium text-ink">
+                          {module.title}
+                          {isHidden && <span className="ml-2 td-text-caption text-ink-3">已隐藏</span>}
+                        </div>
                         <div className="mt-0.5 td-text-caption leading-relaxed text-ink-3">{module.description}</div>
                       </div>
                       <button

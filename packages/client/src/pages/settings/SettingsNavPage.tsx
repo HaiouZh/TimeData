@@ -90,9 +90,10 @@ export function SettingsNavPage() {
                       <span className="inline-flex items-center gap-2">
                         {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
                         {labelFor(tab)}
+                        {item.hidden && <span className="td-text-caption text-ink-3">已隐藏</span>}
                       </span>
                       <Switch
-                        ariaLabel={labelFor(tab)}
+                        ariaLabel={`显示 ${labelFor(tab)}`}
                         checked={!item.hidden}
                         onChange={() => toggle(tab)}
                       />
