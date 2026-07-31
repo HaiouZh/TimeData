@@ -9,5 +9,5 @@ export function reorderById<T>(
   const oldIndex = items.findIndex((item) => idOf(item) === activeId);
   const newIndex = items.findIndex((item) => idOf(item) === overId);
   if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return [...items];
-  return arrayMove(items, oldIndex, newIndex);
+  return arrayMove([...items], oldIndex, newIndex);
 }
