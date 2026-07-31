@@ -13,18 +13,13 @@ import { ArrowCounterClockwise, DotsThree, SidebarSimple } from "@phosphor-icons
 import { Icon } from "../../components/Icon.js";
 import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { Switch } from "../../components/ui/Switch.js";
-import { insertTabAtCanonicalPosition, reorderById, reorderTabs } from "../../lib/navOrder.js";
+import { reorderById } from "../../lib/navOrder.js";
 import {
   DESKTOP_NAV_DEFAULT_ITEMS,
   findMainNavItem,
 } from "../../lib/navigation/navRegistry.js";
 import { setDesktopSidebarConfig, useDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
-import {
-  CONFIGURABLE_TABS,
-  setVisibleTabs,
-  useVisibleTabs,
-  type ConfigurableTab,
-} from "../../lib/settings/navVisibleTabsSetting.js";
+import { setTabOrder, useTabOrder, type ConfigurableTab } from "../../lib/settings/navVisibleTabsSetting.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 function labelFor(to: string): string {
@@ -32,15 +27,8 @@ function labelFor(to: string): string {
 }
 
 export function SettingsNavPage() {
-  const visibleTabs = useVisibleTabs();
+  const tabOrder = useTabOrder();
   const desktopItems = useDesktopSidebarConfig();
-  const visibleSet = new Set(visibleTabs);
-
-  // 列表渲染顺序 = 可见项按数组序 + 隐藏项按规范序尾随
-  const orderedRows: ConfigurableTab[] = [
-    ...visibleTabs,
-    ...CONFIGURABLE_TABS.filter((tab) => !visibleSet.has(tab)),
-  ];
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -49,16 +37,13 @@ export function SettingsNavPage() {
   );
 
   function toggle(tab: ConfigurableTab) {
-    const next = visibleSet.has(tab)
-      ? visibleTabs.filter((item) => item !== tab)
-      : insertTabAtCanonicalPosition(visibleTabs, tab);
-    void setVisibleTabs(next);
+    void setTabOrder(tabOrder.map((item) => (item.to === tab ? { ...item, hidden: !item.hidden } : item)));
   }
 
   function handleMobileDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    void setVisibleTabs(reorderTabs(visibleTabs, String(active.id), String(over.id)));
+    void setTabOrder(reorderById(tabOrder, String(active.id), String(over.id), (item) => item.to));
   }
 
   function handleDesktopDragEnd(event: DragEndEvent) {
@@ -87,35 +72,32 @@ export function SettingsNavPage() {
           </p>
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMobileDragEnd}>
-          <SortableContext items={visibleTabs} strategy={verticalListSortingStrategy}>
+          <SortableContext items={tabOrder.map((item) => item.to)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
-              {orderedRows.map((tab) => {
+              {tabOrder.map((item) => {
+                const tab = item.to;
                 const navItem = findMainNavItem(tab);
-                const row = (
-                  <div key={tab} className="flex w-full min-w-0 items-center justify-between gap-2 pr-2">
-                    <span className="inline-flex items-center gap-2">
-                      {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
-                      {labelFor(tab)}
-                    </span>
-                    <Switch ariaLabel={labelFor(tab)} checked={visibleSet.has(tab)} onChange={() => toggle(tab)} />
-                  </div>
-                );
-                return visibleSet.has(tab) ? (
+                return (
                   <SortableCategoryItem
                     key={tab}
                     id={tab}
                     dragLabel={`拖动 ${labelFor(tab)}`}
-                    className="flex items-stretch rounded-row border border-border bg-surface td-text-label text-ink"
+                    className={`flex items-stretch rounded-row border border-border bg-surface td-text-label text-ink ${
+                      item.hidden ? "opacity-60" : ""
+                    }`}
                   >
-                    {row}
+                    <div className="flex w-full min-w-0 items-center justify-between gap-2 pr-2">
+                      <span className="inline-flex items-center gap-2">
+                        {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
+                        {labelFor(tab)}
+                      </span>
+                      <Switch
+                        ariaLabel={labelFor(tab)}
+                        checked={!item.hidden}
+                        onChange={() => toggle(tab)}
+                      />
+                    </div>
                   </SortableCategoryItem>
-                ) : (
-                  <label
-                    key={tab}
-                    className="flex min-h-12 items-center justify-between rounded-row border border-border bg-surface px-4 td-text-label text-ink"
-                  >
-                    {row}
-                  </label>
                 );
               })}
             </div>

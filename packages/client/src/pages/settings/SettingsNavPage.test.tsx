@@ -5,14 +5,9 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db/index.js";
 import { readDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
-import { readVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
+import { readTabOrder, readVisibleTabs } from "../../lib/settings/navVisibleTabsSetting.js";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { SettingsNavPage } from "./SettingsNavPage.js";
-
-vi.mock("../../lib/settings/index.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../lib/settings/index.ts")>();
-  return { ...actual, useSetting: () => null };
-});
 
 const dndState = vi.hoisted(() => ({ onDragEnds: [] as Array<(event: unknown) => void> }));
 
@@ -76,6 +71,30 @@ async function waitForTabs(predicate: (tabs: string[]) => boolean): Promise<void
     if (predicate(await readVisibleTabs())) return;
   }
   throw new Error("Timed out waiting for nav.visibleTabs.v1");
+}
+
+async function waitForTabOrder(predicate: (order: { to: string; hidden: boolean }[]) => boolean): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    if (predicate(await readTabOrder())) return;
+  }
+  throw new Error("Timed out waiting for nav.visibleTabs.v1 order");
+}
+
+// 等组件重渲染（liveQuery 异步），避免 db 已更新但组件仍持旧状态导致的翻转竞态。
+async function waitForSwitchChecked(host: HTMLElement, selector: string, checked: boolean): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    const el = host.querySelector(selector);
+    if (el?.getAttribute("aria-checked") === String(checked)) return;
+  }
+  throw new Error(`Timed out waiting for switch ${selector} to be ${checked}`);
 }
 
 async function waitForDesktopConfig(predicate: (items: { to: string; placement: string }[]) => boolean): Promise<void> {
@@ -142,8 +161,34 @@ describe("SettingsNavPage", () => {
     const { host, root } = await renderPage();
     expect(host.querySelector('[data-drag-handle="拖动 记录"]')).not.toBeNull();
     expect(host.querySelector('[data-drag-handle="拖动 待办"]')).not.toBeNull();
+    // 全部 7 行都有手柄（含隐藏行：留在原位、可拖占位）
+    expect(host.querySelector('[data-drag-handle="拖动 轨道"]')).not.toBeNull();
+    expect(host.querySelector('[data-drag-handle="拖动 时间"]')).not.toBeNull();
     expect(host.querySelector('button[aria-label="上移 记录"]')).toBeNull();
     expect(host.querySelector('button[aria-label="下移 记录"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("keeps a disabled tab in place with its switch off", async () => {
+    const { host, root } = await renderPage();
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await waitForTabOrder((order) => order.find((item) => item.to === "/tracks")?.hidden === true);
+    const order = await readTabOrder();
+    // 位置不变（规范位 4），行仍在列表且可拖
+    expect(order.findIndex((item) => item.to === "/tracks")).toBe(4);
+    expect(host.querySelector('[data-drag-handle="拖动 轨道"]')).not.toBeNull();
+    await unmount(root);
+  });
+
+  it("reopens a tab in its original position", async () => {
+    const { host, root } = await renderPage();
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await waitForTabOrder((order) => order.find((item) => item.to === "/tracks")?.hidden === true);
+    await waitForSwitchChecked(host, '[role="switch"][aria-label="轨道"]', false);
+    await clickAndFlushSettings(host.querySelector('[role="switch"][aria-label="轨道"]'));
+    await waitForTabOrder((order) => order.find((item) => item.to === "/tracks")?.hidden === false);
+    const order = await readTabOrder();
+    expect(order.findIndex((item) => item.to === "/tracks")).toBe(4);
     await unmount(root);
   });
 

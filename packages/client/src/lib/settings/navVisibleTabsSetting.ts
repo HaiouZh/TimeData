@@ -8,45 +8,93 @@ export const CONFIGURABLE_TABS = ["/quick-notes", "/diary", "/", "/todo", "/trac
 
 export type ConfigurableTab = (typeof CONFIGURABLE_TABS)[number];
 
+// 全量有序 + 每项显隐标记：排序与显隐解耦（关掉留在原位，重开回原位）。
+// 旧数据是 string[]（仅可见项），读时自动迁移：缺失项按规范位补入并标 hidden。
+export interface NavTabConfig {
+  to: ConfigurableTab;
+  hidden: boolean;
+}
+
 function normalizeTab(value: string): ConfigurableTab | null {
   if (value === "/stats") return "/stats/time";
   return (CONFIGURABLE_TABS as readonly string[]).includes(value) ? (value as ConfigurableTab) : null;
 }
 
-export function sanitizeVisibleTabs(values: unknown): ConfigurableTab[] {
-  if (!Array.isArray(values)) return [...CONFIGURABLE_TABS];
+function defaultTabOrder(): NavTabConfig[] {
+  return CONFIGURABLE_TABS.map((to) => ({ to, hidden: false }));
+}
+
+/**
+ * 兼容两种输入：
+ * - 新格式 `{to, hidden}[]`：全量有序，保序、去重；
+ * - 旧格式 `string[]`：仅可见项（hidden: false）。
+ * 两者都缺项补齐：按 CONFIGURABLE_TABS 规范位插入、标 hidden: true（旧数据被隐藏的 tab / 残缺数据）。
+ * 空数组 = 全部隐藏（旧语义保留）；非数组 / 坏值 = 全量默认可见。
+ */
+export function sanitizeTabOrder(values: unknown): NavTabConfig[] {
+  if (!Array.isArray(values)) return defaultTabOrder();
 
   const seen = new Set<ConfigurableTab>();
-  const result: ConfigurableTab[] = [];
+  const result: NavTabConfig[] = [];
   for (const value of values) {
-    if (typeof value !== "string") continue;
-    const normalized = normalizeTab(value);
-    if (normalized && !seen.has(normalized)) {
-      seen.add(normalized);
-      result.push(normalized);
+    if (typeof value === "string") {
+      const normalized = normalizeTab(value);
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        result.push({ to: normalized, hidden: false });
+      }
+    } else if (value && typeof value === "object") {
+      const normalized = normalizeTab((value as { to?: unknown }).to as string);
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        result.push({ to: normalized, hidden: (value as { hidden?: unknown }).hidden === true });
+      }
     }
+  }
+
+  // 缺失项按规范位补入（插在第一个规范位更大的已存在项之前），用户相对顺序不动。
+  for (const tab of CONFIGURABLE_TABS) {
+    if (seen.has(tab)) continue;
+    const canonicalIndex = CONFIGURABLE_TABS.indexOf(tab);
+    const insertAt = result.findIndex((item) => CONFIGURABLE_TABS.indexOf(item.to) > canonicalIndex);
+    const entry = { to: tab, hidden: true };
+    if (insertAt === -1) result.push(entry);
+    else result.splice(insertAt, 0, entry);
   }
   return result;
 }
 
-function parseVisibleTabs(raw: string | null): ConfigurableTab[] {
-  if (!raw) return [...CONFIGURABLE_TABS];
+function parseTabOrder(raw: string | null): NavTabConfig[] {
+  if (!raw) return defaultTabOrder();
   try {
-    return sanitizeVisibleTabs(JSON.parse(raw));
+    return sanitizeTabOrder(JSON.parse(raw));
   } catch {
-    return [...CONFIGURABLE_TABS];
+    return defaultTabOrder();
   }
 }
 
-export async function readVisibleTabs(): Promise<ConfigurableTab[]> {
-  return parseVisibleTabs(await getSetting(NAV_VISIBLE_TABS_KEY));
+export async function readTabOrder(): Promise<NavTabConfig[]> {
+  return parseTabOrder(await getSetting(NAV_VISIBLE_TABS_KEY));
 }
 
-export function setVisibleTabs(tabs: readonly string[]): Promise<void> {
-  return setSetting(NAV_VISIBLE_TABS_KEY, JSON.stringify(sanitizeVisibleTabs([...tabs])));
+export function setTabOrder(tabs: readonly NavTabConfig[]): Promise<void> {
+  return setSetting(NAV_VISIBLE_TABS_KEY, JSON.stringify(sanitizeTabOrder([...tabs])));
+}
+
+export function useTabOrder(): NavTabConfig[] {
+  const raw = useSetting(NAV_VISIBLE_TABS_KEY);
+  return useMemo(() => parseTabOrder(raw), [raw]);
+}
+
+// —— 派生便捷 API：语义与旧版一致（底栏 / 更多页消费）——
+
+export async function readVisibleTabs(): Promise<ConfigurableTab[]> {
+  return (await readTabOrder())
+    .filter((item) => !item.hidden)
+    .map((item) => item.to);
 }
 
 export function useVisibleTabs(): ConfigurableTab[] {
-  const raw = useSetting(NAV_VISIBLE_TABS_KEY);
-  return useMemo(() => parseVisibleTabs(raw), [raw]);
+  const order = useTabOrder();
+  return useMemo(() => order.filter((item) => !item.hidden).map((item) => item.to), [order]);
 }
