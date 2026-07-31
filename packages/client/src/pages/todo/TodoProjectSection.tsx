@@ -16,10 +16,12 @@ import { META_CHIP_CLASS } from "./TaskRow.js";
 import { projectContainerId } from "./todoDnd.js";
 
 export interface TodoProjectSectionProps {
-  /** 已按组间排序好的项目区分组，**不过标签筛选**（与手头区一致，见 design §非目标）。 */
+  /** 已按组间排序好的项目区分组，调用方可传入已按当前筛选裁剪的成员。 */
   groups: TodoProjectGroup[];
   /** 标签或关键字筛选是否激活 */
   filterActive?: boolean;
+  /** 原始数据中是否存在 active project，用于区分「无项目」与「筛选无匹配」。 */
+  hasActiveProjects: boolean;
   /**
    * goalId → 身份色，来自 `buckets.projectTints`（集合内避撞分配，见 `lib/contentTint.ts`）。
    * 组件不自己按 goalId 取色：那要拿着全部 active project 才算得出，组件手上只有显示出来的组。
@@ -473,6 +475,7 @@ function ProjectGroupCard({
 export function TodoProjectSection({
   groups,
   filterActive = false,
+  hasActiveProjects,
   projectTints,
   handSessionId,
   now,
@@ -489,8 +492,12 @@ export function TodoProjectSection({
   const [recentTaskIds, setRecentTaskIds] = useState<Map<string, readonly string[]>>(() => new Map());
   const rowRefs = useRef(new Map<string, HTMLElement | null>());
 
-  // 默认折叠。筛选激活（filterActive）时默认自动展开；组展开亦可由用户点击或落点反馈（revealGoals）驱动。
-  const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? filterActive;
+  // 默认折叠。筛选激活时强制展开匹配组，但不写入 overrides，清除筛选即可恢复用户偏好。
+  const isExpanded = (goalId: string): boolean => filterActive || (overrides.get(goalId) ?? false);
+  const toggleExpanded = (goalId: string): void => {
+    if (filterActive) return;
+    setOverrides((prev) => new Map(prev).set(goalId, !isExpanded(goalId)));
+  };
 
   // 消费展开意图：只认**这一帧真的渲染出来了**的组（渲染出来 ⇒ ref 回调已跑完，节点必在 rowRefs 里）。
   // 没渲染出来的留着不消费，groups 变化时本 effect 重跑、届时补上——这正是「滚动那一半永久丢失」的修法。
@@ -500,20 +507,22 @@ export function TodoProjectSection({
     const consumed = revealGoals.filter((goalId) => rendered.has(goalId));
     const first = consumed[0];
     if (first === undefined) return;
-    setOverrides((prev) => {
-      const next = new Map(prev);
-      for (const goalId of consumed) next.set(goalId, true);
-      return next;
-    });
+    if (!filterActive) {
+      setOverrides((prev) => {
+        const next = new Map(prev);
+        for (const goalId of consumed) next.set(goalId, true);
+        return next;
+      });
+    }
     // 只滚到第一个：同时展开多组时连着滚会互相打架。
     // 两级可选调用兜的是两件不同的事，都不能删：`?.` 兜 ref 尚未挂上，`scrollIntoView?.` 兜 jsdom 的
     // Element 根本没有这个方法（测试环境不能因此抛）。
     rowRefs.current.get(first)?.scrollIntoView?.({ block: "nearest" });
     onRevealConsumed(consumed);
-  }, [revealGoals, groups, onRevealConsumed]);
+  }, [revealGoals, groups, onRevealConsumed, filterActive]);
 
   if (groups.length === 0) {
-    if (filterActive) {
+    if (filterActive && hasActiveProjects) {
       return (
         <section data-section="todo-projects" data-testid="todo-projects-empty">
           <div className="mb-2 flex items-baseline justify-between px-2">
@@ -547,7 +556,7 @@ export function TodoProjectSection({
               filterActive={filterActive}
               matchCount={visibleTasks.length}
               dropBlocked={dropBlocked}
-              onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
+              onToggleExpand={() => toggleExpanded(group.goalId)}
               onCreateTask={onCreateTask}
               onTaskCreated={(goalId, taskId) => {
                 setRecentTaskIds((prev) => {

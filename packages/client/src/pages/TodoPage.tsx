@@ -503,7 +503,11 @@ export function TodoPage() {
     ).values(),
   );
   const tagOptions = allTags(allTasks);
-  const f = (list: Task[]) => filterTasks(list, { searchQuery: composerText, includeTags, excludeTags, tagMode });
+  const projectFilter = useMemo(
+    () => ({ searchQuery: composerText, includeTags, excludeTags, tagMode }),
+    [composerText, includeTags, excludeTags, tagMode],
+  );
+  const f = (list: Task[]) => filterTasks(list, projectFilter);
   const filterActive = composerText.trim() !== "" || includeTags.length > 0 || excludeTags.length > 0;
 
   const filteredProjects = useMemo(() => {
@@ -511,16 +515,20 @@ export function TodoPage() {
     return buckets.projects
       .map((group) => ({
         ...group,
-        tasks: f(group.tasks),
+        tasks: filterTasks(group.tasks, projectFilter),
       }))
       .filter((group) => group.tasks.length > 0);
-  }, [buckets.projects, composerText, includeTags, excludeTags, tagMode, filterActive]);
+  }, [buckets.projects, filterActive, projectFilter]);
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
   const createTaskInsideProject = async (goalId: string, title: string): Promise<Task> => {
     try {
-      return await createTaskForProject(goalId, { title, now: gravityNow });
+      const created = await createTaskForProject(goalId, { title, now: gravityNow });
+      if (filterActive && f([created]).length === 0) {
+        showActionToast({ message: "任务已创建，但当前筛选未显示它" });
+      }
+      return created;
     } catch (error) {
       if (error instanceof ProjectAssignError) {
         showActionToast({ message: error.message });
@@ -800,6 +808,7 @@ export function TodoPage() {
     <TodoProjectSection
       groups={filteredProjects}
       filterActive={filterActive}
+      hasActiveProjects={buckets.projects.length > 0}
       projectTints={buckets.projectTints}
       handSessionId={buckets.handSession?.id ?? null}
       now={gravityNow}

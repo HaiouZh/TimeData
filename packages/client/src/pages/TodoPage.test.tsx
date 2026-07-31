@@ -549,6 +549,109 @@ describe("TodoPage", () => {
     await unmount(root);
   });
 
+  it("项目区跟随标签筛选并自动展开，只显示匹配成员", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    const match = await addTask({ title: "项目匹配", toInbox: true });
+    await setTaskTags(match.id, ["工作"]);
+    const other = await addTask({ title: "项目不匹配", toInbox: true });
+    await setTaskTags(other.id, ["生活"]);
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [
+        { kind: "task", id: match.id },
+        { kind: "task", id: other.id },
+      ],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group");
+    await click(host.querySelector('[aria-label="展开标签筛选"]'));
+    await click(host.querySelector('[aria-label="筛选 工作"]'));
+    await click(host.querySelector('[aria-label="收起标签筛选"]'));
+    await waitForCondition(() => zoneText(host).includes("项目匹配"), "filtered project member");
+
+    const zone = host.querySelector('[data-section="todo-projects"]') as HTMLElement;
+    expect(zone.textContent).toContain("项目匹配");
+    expect(zone.textContent).not.toContain("项目不匹配");
+    expect(zone.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("true");
+    await unmount(root);
+  });
+
+  it("无项目时激活筛选仍不渲染项目区", async () => {
+    await addTask({ title: "自由任务", toInbox: true });
+    const { host, root } = await renderPage();
+    await waitForText(host, "自由任务");
+
+    const input = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
+    await setInputValue(input, "自由");
+    await flushAsync();
+    expect(host.querySelector('[data-section="todo-projects"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("存在 active project 但筛选后无匹配成员时显示项目区空态", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "项目成员", toInbox: true });
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('[data-testid="project-group"]') !== null, "project group");
+
+    const input = host.querySelector('input[placeholder="做什么？怎样算做完…"]') as HTMLInputElement;
+    await setInputValue(input, "完全不匹配");
+    await waitForText(host, "项目区无匹配任务");
+
+    expect(host.querySelector('[data-testid="todo-projects-empty"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="project-group"]')).toBeNull();
+    await unmount(root);
+  });
+
+  it("筛选态项目内新建任务后提示当前筛选未显示该任务", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    const member = await addTask({ title: "已有成员", toInbox: true });
+    await setTaskTags(member.id, ["工作"]);
+    await db.goals.add({
+      id: "g1",
+      title: "装修",
+      kind: "project",
+      status: "active",
+      members: [{ kind: "task", id: member.id }],
+      prerequisites: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(() => host.querySelector('button[aria-label="在项目 装修中创建任务"]') !== null, "project add button");
+    await click(host.querySelector('[aria-label="展开标签筛选"]'));
+    await click(host.querySelector('[aria-label="筛选 工作"]'));
+    await click(host.querySelector('[aria-label="收起标签筛选"]'));
+    await waitForCondition(() => zoneText(host).includes("已有成员"), "filtered project member");
+
+    await click(host.querySelector('button[aria-label="在项目 装修中创建任务"]'));
+    const input = host.querySelector('input[aria-label="在项目 装修中新建任务"]') as HTMLInputElement;
+    await setInputValue(input, "筛选外任务");
+    await submitInputByEnter(input);
+    await waitForToast(host, "任务已创建，但当前筛选未显示它");
+    expect((await db.tasks.toArray()).some((task) => task.title === "筛选外任务")).toBe(true);
+    await unmount(root);
+  });
+
   it("底栏和输入框隐藏时，收件箱展开的收起按钮不避让已滑出视口的输入框", async () => {
     const now = new Date("2026-06-20T09:00:00.000Z");
     vi.spyOn(Date, "now").mockReturnValue(now.getTime());

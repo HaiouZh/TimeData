@@ -61,7 +61,8 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
     <MemoryRouter>
       <TodoProjectSection
         groups={props.groups ?? []}
-          filterActive={props.filterActive}
+        filterActive={props.filterActive}
+        hasActiveProjects={props.hasActiveProjects ?? (props.groups?.length ?? 0) > 0}
         projectTints={props.projectTints ?? new Map()}
         handSessionId={props.handSessionId ?? null}
         now={props.now ?? NOW}
@@ -536,6 +537,46 @@ describe("TodoProjectSection", () => {
 });
 
   describe("filterActive 属性支持", () => {
+    it("筛选时强制展开匹配组，清除筛选后恢复原折叠状态", async () => {
+      const g1 = group({ goalId: "g1", tasks: [task({ id: "t1", title: "设计方案" })] });
+      const { host, root } = await renderDom(sectionElement({ groups: [g1] }));
+
+      await click(host.querySelector('[data-testid="project-group-toggle"]'));
+      await click(host.querySelector('[data-testid="project-group-toggle"]'));
+      expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
+
+      await act(async () => root.render(sectionElement({ groups: [g1], filterActive: true })));
+      expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("true");
+      expect(host.textContent).toContain("设计方案");
+
+      await click(host.querySelector('[data-testid="project-group-toggle"]'));
+      await act(async () => root.render(sectionElement({ groups: [g1] })));
+      expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
+      expect(host.textContent).not.toContain("设计方案");
+      await unmount(root);
+    });
+
+    it("筛选中消费 reveal 后，清除筛选仍恢复原折叠状态", async () => {
+      const g1 = group({ goalId: "g1", tasks: [task({ id: "t1", title: "设计方案" })] });
+      const onRevealConsumed = vi.fn();
+      const { host, root } = await renderDom(
+        sectionElement({
+          groups: [g1],
+          filterActive: true,
+          revealGoals: ["g1"],
+          onRevealConsumed,
+        }),
+      );
+
+      expect(onRevealConsumed).toHaveBeenCalledWith(["g1"]);
+      expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("true");
+
+      await act(async () => root.render(sectionElement({ groups: [g1] })));
+      expect(host.querySelector('[data-testid="project-group-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
+      expect(host.textContent).not.toContain("设计方案");
+      await unmount(root);
+    });
+
     it("filterActive=true 时，匹配组自动展开且 Header 显示匹配项数量", async () => {
       const g1 = group({ goalId: "g1", goalTitle: "项目一", tasks: [task({ id: "t1", title: "设计方案" })] });
       const { host, root } = await renderDom(
@@ -554,6 +595,7 @@ describe("TodoProjectSection", () => {
         sectionElement({
           groups: [],
           filterActive: true,
+          hasActiveProjects: true,
         }),
       );
       expect(host.querySelector('[data-testid="todo-projects-empty"]')).not.toBeNull();
