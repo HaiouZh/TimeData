@@ -1,13 +1,31 @@
-import { ArrowCounterClockwise, CaretDown, CaretUp, DotsThree, SidebarSimple } from "@phosphor-icons/react";
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { ArrowCounterClockwise, DotsThree, SidebarSimple } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
+import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
 import { Switch } from "../../components/ui/Switch.js";
+import { insertTabAtCanonicalPosition, reorderById, reorderTabs } from "../../lib/navOrder.js";
 import {
   DESKTOP_NAV_DEFAULT_ITEMS,
   findMainNavItem,
   type DesktopNavItemConfig,
 } from "../../lib/navigation/navRegistry.js";
 import { setDesktopSidebarConfig, useDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
-import { CONFIGURABLE_TABS, setVisibleTabs, useVisibleTabs, type ConfigurableTab } from "../../lib/settings/navVisibleTabsSetting.js";
+import {
+  CONFIGURABLE_TABS,
+  setVisibleTabs,
+  useVisibleTabs,
+  type ConfigurableTab,
+} from "../../lib/settings/navVisibleTabsSetting.js";
 import SettingsDetailPage from "./SettingsDetailPage.tsx";
 
 function labelFor(to: string): string {
@@ -19,33 +37,45 @@ export function SettingsNavPage() {
   const desktopItems = useDesktopSidebarConfig();
   const visibleSet = new Set(visibleTabs);
 
+  // 列表渲染顺序 = 可见项按数组序 + 隐藏项按规范序尾随
+  const orderedRows: ConfigurableTab[] = [
+    ...visibleTabs,
+    ...CONFIGURABLE_TABS.filter((tab) => !visibleSet.has(tab)),
+  ];
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   function toggle(tab: ConfigurableTab) {
-    const next = new Set(visibleTabs);
-    if (next.has(tab)) next.delete(tab);
-    else next.add(tab);
-    void setVisibleTabs(CONFIGURABLE_TABS.filter((item) => next.has(item)));
+    const next = visibleSet.has(tab)
+      ? visibleTabs.filter((item) => item !== tab)
+      : insertTabAtCanonicalPosition(visibleTabs, tab);
+    void setVisibleTabs(next);
   }
 
-  function persistDesktop(next: DesktopNavItemConfig[]) {
-    void setDesktopSidebarConfig(next);
+  function handleMobileDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    void setVisibleTabs(reorderTabs(visibleTabs, String(active.id), String(over.id)));
   }
 
-  function moveDesktopItem(index: number, delta: -1 | 1) {
-    const target = index + delta;
-    if (target < 0 || target >= desktopItems.length) return;
-    const next = [...desktopItems];
-    const [item] = next.splice(index, 1);
-    if (!item) return;
-    next.splice(target, 0, item);
-    persistDesktop(next);
+  function handleDesktopDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    void setDesktopSidebarConfig(reorderById(desktopItems, String(active.id), String(over.id), (item) => item.to));
   }
 
   function setDesktopPlacement(to: string, placement: "primary" | "more") {
-    persistDesktop(desktopItems.map((item) => (item.to === to ? { ...item, placement } : item)));
+    void setDesktopSidebarConfig(
+      desktopItems.map((item) => (item.to === to ? { ...item, placement } : item)),
+    );
   }
 
   function restoreDesktopDefaults() {
-    persistDesktop(DESKTOP_NAV_DEFAULT_ITEMS);
+    void setDesktopSidebarConfig(DESKTOP_NAV_DEFAULT_ITEMS);
   }
 
   return (
@@ -54,31 +84,53 @@ export function SettingsNavPage() {
         <div>
           <h3 className="td-text-body font-semibold text-ink">手机底栏</h3>
           <p className="td-text-label mt-1 text-ink-3">
-            开启后显示在手机底栏；关闭后显示在“设置 &gt; 更多功能”。
+            开启后显示在手机底栏；关闭后显示在“设置 &gt; 更多功能”。拖动调整顺序。
           </p>
         </div>
-        {CONFIGURABLE_TABS.map((tab) => {
-          const navItem = findMainNavItem(tab);
-          return (
-            <label
-              key={tab}
-              className="flex min-h-12 items-center justify-between rounded-row border border-border bg-surface px-4 td-text-label text-ink"
-            >
-              <span className="inline-flex items-center gap-2">
-                {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
-                {labelFor(tab)}
-              </span>
-              <Switch ariaLabel={labelFor(tab)} checked={visibleSet.has(tab)} onChange={() => toggle(tab)} />
-            </label>
-          );
-        })}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMobileDragEnd}>
+          <SortableContext items={visibleTabs} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {orderedRows.map((tab) => {
+                const navItem = findMainNavItem(tab);
+                const row = (
+                  <div className="flex w-full min-w-0 items-center justify-between gap-2 pr-2">
+                    <span className="inline-flex items-center gap-2">
+                      {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
+                      {labelFor(tab)}
+                    </span>
+                    <Switch ariaLabel={labelFor(tab)} checked={visibleSet.has(tab)} onChange={() => toggle(tab)} />
+                  </div>
+                );
+                return visibleSet.has(tab) ? (
+                  <SortableCategoryItem
+                    key={tab}
+                    id={tab}
+                    dragLabel={`拖动 ${labelFor(tab)}`}
+                    className="flex items-stretch rounded-row border border-border bg-surface td-text-label text-ink"
+                  >
+                    {row}
+                  </SortableCategoryItem>
+                ) : (
+                  <label
+                    key={tab}
+                    className="flex min-h-12 items-center justify-between rounded-row border border-border bg-surface px-4 td-text-label text-ink"
+                  >
+                    {row}
+                  </label>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       </section>
 
       <section className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="td-text-body font-semibold text-ink">桌面侧栏</h3>
-            <p className="mt-1 td-text-body text-ink-3">控制宽屏左侧纯图标导航的顺序和更多收纳。</p>
+            <p className="mt-1 td-text-body text-ink-3">
+              控制宽屏左侧纯图标导航的顺序和更多收纳。拖动调整顺序。
+            </p>
           </div>
           <button
             type="button"
@@ -90,54 +142,54 @@ export function SettingsNavPage() {
             恢复默认
           </button>
         </div>
-        {desktopItems.map((item, index) => {
-          const navItem = findMainNavItem(item.to);
-          if (!navItem) return null;
-          return (
-            <div
-              key={item.to}
-              className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-row border border-border bg-surface px-4 td-text-label text-ink"
-            >
-              <span className="inline-flex min-w-0 items-center gap-2">
-                <Icon icon={navItem.icon} size={18} weight="regular" />
-                <span>{navItem.label}</span>
-                <span className="inline-flex items-center gap-1 text-ink-3">
-                  <Icon icon={item.placement === "more" ? DotsThree : SidebarSimple} size={15} weight="regular" />
-                  {item.placement === "more" ? "更多" : "侧栏"}
-                </span>
-              </span>
-              <span className="inline-flex gap-1">
-                <button
-                  type="button"
-                  aria-label={`上移 ${navItem.label}`}
-                  disabled={index === 0}
-                  onClick={() => moveDesktopItem(index, -1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-ctl border border-border text-ink-2 hover:bg-surface-hover hover:text-ink disabled:opacity-40"
-                >
-                  <Icon icon={CaretUp} size={16} weight="regular" />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`下移 ${navItem.label}`}
-                  disabled={index === desktopItems.length - 1}
-                  onClick={() => moveDesktopItem(index, 1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-ctl border border-border text-ink-2 hover:bg-surface-hover hover:text-ink disabled:opacity-40"
-                >
-                  <Icon icon={CaretDown} size={16} weight="regular" />
-                </button>
-              </span>
-              <button
-                type="button"
-                aria-label={item.placement === "more" ? `移出更多 ${navItem.label}` : `收进更多 ${navItem.label}`}
-                onClick={() => setDesktopPlacement(item.to, item.placement === "more" ? "primary" : "more")}
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-ctl border border-border px-2 text-ink-2 hover:bg-surface-hover hover:text-ink"
-              >
-                <Icon icon={item.placement === "more" ? SidebarSimple : DotsThree} size={15} weight="regular" />
-                {item.placement === "more" ? "放回侧栏" : "收进更多"}
-              </button>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDesktopDragEnd}>
+          <SortableContext items={desktopItems.map((item) => item.to)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {desktopItems.map((item) => {
+                const navItem = findMainNavItem(item.to);
+                if (!navItem) return null;
+                return (
+                  <SortableCategoryItem
+                    key={item.to}
+                    id={item.to}
+                    dragLabel={`拖动 ${navItem.label}`}
+                    className="flex items-stretch rounded-row border border-border bg-surface td-text-label text-ink"
+                  >
+                    <div className="flex w-full min-w-0 items-center gap-2 pr-2">
+                      <span className="flex min-w-0 flex-1 items-center gap-2 px-2">
+                        <Icon icon={navItem.icon} size={18} weight="regular" />
+                        <span>{navItem.label}</span>
+                        <span className="inline-flex items-center gap-1 text-ink-3">
+                          <Icon
+                            icon={item.placement === "more" ? DotsThree : SidebarSimple}
+                            size={15}
+                            weight="regular"
+                          />
+                          {item.placement === "more" ? "更多" : "侧栏"}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={
+                          item.placement === "more" ? `移出更多 ${navItem.label}` : `收进更多 ${navItem.label}`
+                        }
+                        onClick={() => setDesktopPlacement(item.to, item.placement === "more" ? "primary" : "more")}
+                        className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-ctl border border-border px-2 text-ink-2 hover:bg-surface-hover hover:text-ink"
+                      >
+                        <Icon
+                          icon={item.placement === "more" ? SidebarSimple : DotsThree}
+                          size={15}
+                          weight="regular"
+                        />
+                        {item.placement === "more" ? "放回侧栏" : "收进更多"}
+                      </button>
+                    </div>
+                  </SortableCategoryItem>
+                );
+              })}
             </div>
-          );
-        })}
+          </SortableContext>
+        </DndContext>
       </section>
     </SettingsDetailPage>
   );

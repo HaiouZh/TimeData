@@ -14,12 +14,49 @@ vi.mock("../../lib/settings/index.ts", async (importOriginal) => {
   return { ...actual, useSetting: () => null };
 });
 
+const dndState = vi.hoisted(() => ({ onDragEnds: [] as Array<(event: unknown) => void> }));
+
+vi.mock("@dnd-kit/core", () => ({
+  DndContext: ({ children, onDragEnd }: { children?: React.ReactNode; onDragEnd?: (event: unknown) => void }) => {
+    if (onDragEnd) dndState.onDragEnds.push(onDragEnd);
+    return createElement("div", null, children);
+  },
+  KeyboardSensor: function KeyboardSensor() {},
+  MouseSensor: function MouseSensor() {},
+  TouchSensor: function TouchSensor() {},
+  closestCenter: () => [],
+  useSensor: () => null,
+  useSensors: () => [],
+}));
+
+vi.mock("@dnd-kit/sortable", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@dnd-kit/sortable")>();
+  return {
+    ...actual,
+    SortableContext: ({ children }: { children?: React.ReactNode }) => createElement("div", null, children),
+    verticalListSortingStrategy: () => null,
+  };
+});
+
+vi.mock("../../components/SortableCategoryItem.tsx", () => ({
+  default: ({
+    children,
+    dragLabel,
+    className,
+  }: {
+    children?: React.ReactNode;
+    dragLabel?: string;
+    className?: string;
+  }) => createElement("div", { className, "data-drag-handle": dragLabel }, children),
+}));
+
 beforeEach(async () => {
   await db.settings.clear();
   await db.syncLog.clear();
 });
 
 async function renderPage() {
+  dndState.onDragEnds = [];
   return renderDom(createElement(MemoryRouter, null, createElement(SettingsNavPage)));
 }
 
@@ -101,12 +138,38 @@ describe("SettingsNavPage", () => {
     await unmount(root);
   });
 
-  it("moves a desktop sidebar item down and persists order", async () => {
+  it("renders drag handles for both lists and no arrow buttons", async () => {
     const { host, root } = await renderPage();
+    expect(host.querySelector('[data-drag-handle="拖动 记录"]')).not.toBeNull();
+    expect(host.querySelector('[data-drag-handle="拖动 待办"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="上移 记录"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="下移 记录"]')).toBeNull();
+    await unmount(root);
+  });
 
-    await clickAndFlushSettings(host.querySelector('button[aria-label="下移 记录"]'));
+  it("drags a mobile tab and persists the new order", async () => {
+    const { host, root } = await renderPage();
+    const [mobileDragEnd] = dndState.onDragEnds;
+    await act(async () => {
+      mobileDragEnd?.({ active: { id: "/diary" }, over: { id: "/todo" } });
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    await waitForTabs((tabs) => {
+      const diary = tabs.indexOf("/diary");
+      const todo = tabs.indexOf("/todo");
+      return diary !== -1 && todo !== -1 && diary > todo;
+    });
+    await unmount(root);
+  });
+
+  it("drags a desktop item and persists the new order", async () => {
+    const { host, root } = await renderPage();
+    const [, desktopDragEnd] = dndState.onDragEnds;
+    await act(async () => {
+      desktopDragEnd?.({ active: { id: "/diary" }, over: { id: "/quick-notes" } });
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
     await waitForDesktopConfig((items) => items[0]?.to === "/diary" && items[1]?.to === "/quick-notes");
-
     await unmount(root);
   });
 
