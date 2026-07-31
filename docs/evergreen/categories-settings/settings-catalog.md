@@ -6,12 +6,13 @@ covers:
   - packages/client/src/lib/settings/desktopSidebarSetting.ts
   - packages/client/src/lib/settings/navVisibleTabsSetting.ts
   - packages/client/src/lib/settings/punchCategorySetting.ts
+  - packages/client/src/lib/navOrder.ts
   - packages/client/src/lib/sleepCategorySetting.ts
   - packages/client/src/pages/settings/SettingsNavPage.tsx
   - packages/client/src/pages/settings/SettingsMorePage.tsx
 contracts:
   - packages/client/src/lib/settings/index.ts
-last-reviewed: 2026-07-10
+last-reviewed: 2026-07-31
 ---
 
 # 设置 · 同步键值表
@@ -41,7 +42,7 @@ last-reviewed: 2026-07-10
 |---|---|---|---|
 | `sleep.categoryId` | 顶层分类 ID 或 null | `lib/sleepCategorySetting.ts` | [stats-insights](../stats-insights.md)（睡眠口径） |
 | `punch.categoryId.v1` | 子分类 ID 或 null（须未归档子分类） | `lib/settings/punchCategorySetting.ts` | [timeline](../timeline.md)（打点） |
-| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/diary,/,/todo,/tracks,/goals,/stats/time]`；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 导航入口归属：数组内显示在底栏，数组外显示在 `/settings/more` |
+| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/diary,/,/todo,/tracks,/goals,/stats/time]`；数组顺序 = 底栏显示顺序（设置>导航可拖拽排序，重开回规范位）；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 导航入口归属与排序：数组内显示在底栏，数组外显示在 `/settings/more` |
 | `nav.desktopSidebar.v1` | JSON `{items:{to,placement}[]}`；`to` ⊆ 主导航 route，`placement=primary\|more`；缺失/坏值按 registry 默认补齐 | `lib/settings/desktopSidebarSetting.ts` | 宽屏桌面侧栏排序与更多收纳 |
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
