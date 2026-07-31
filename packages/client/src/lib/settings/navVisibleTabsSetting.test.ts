@@ -21,11 +21,16 @@ describe("navVisibleTabsSetting", () => {
   });
 
   it("maps legacy /stats to /stats/time", () => {
-    expect(sanitizeVisibleTabs(["/", "/stats", "/todo"])).toEqual(["/", "/todo", "/stats/time"]);
+    expect(sanitizeVisibleTabs(["/", "/stats", "/todo"])).toEqual(["/", "/stats/time", "/todo"]);
   });
 
   it("deduplicates legacy and new stats tabs", () => {
-    expect(sanitizeVisibleTabs(["/stats", "/stats/time", "/todo"])).toEqual(["/todo", "/stats/time"]);
+    expect(sanitizeVisibleTabs(["/stats", "/stats/time", "/todo"])).toEqual(["/stats/time", "/todo"]);
+  });
+
+  it("preserves user-defined order", () => {
+    expect(sanitizeVisibleTabs(["/todo", "/", "/tracks"])).toEqual(["/todo", "/", "/tracks"]);
+    expect(sanitizeVisibleTabs(["/tracks", "/todo"])).toEqual(["/tracks", "/todo"]);
   });
 
   it("persists selection and writes a settings syncLog", async () => {

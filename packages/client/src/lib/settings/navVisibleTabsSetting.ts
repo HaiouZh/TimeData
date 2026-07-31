@@ -17,13 +17,16 @@ export function sanitizeVisibleTabs(values: unknown): ConfigurableTab[] {
   if (!Array.isArray(values)) return [...CONFIGURABLE_TABS];
 
   const seen = new Set<ConfigurableTab>();
+  const result: ConfigurableTab[] = [];
   for (const value of values) {
     if (typeof value !== "string") continue;
     const normalized = normalizeTab(value);
-    if (normalized) seen.add(normalized);
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(normalized);
+    }
   }
-
-  return CONFIGURABLE_TABS.filter((tab) => seen.has(tab));
+  return result;
 }
 
 function parseVisibleTabs(raw: string | null): ConfigurableTab[] {
