@@ -17,7 +17,6 @@ import { insertTabAtCanonicalPosition, reorderById, reorderTabs } from "../../li
 import {
   DESKTOP_NAV_DEFAULT_ITEMS,
   findMainNavItem,
-  type DesktopNavItemConfig,
 } from "../../lib/navigation/navRegistry.js";
 import { setDesktopSidebarConfig, useDesktopSidebarConfig } from "../../lib/settings/desktopSidebarSetting.js";
 import {
@@ -93,7 +92,7 @@ export function SettingsNavPage() {
               {orderedRows.map((tab) => {
                 const navItem = findMainNavItem(tab);
                 const row = (
-                  <div className="flex w-full min-w-0 items-center justify-between gap-2 pr-2">
+                  <div key={tab} className="flex w-full min-w-0 items-center justify-between gap-2 pr-2">
                     <span className="inline-flex items-center gap-2">
                       {navItem && <Icon icon={navItem.icon} size={18} weight="regular" />}
                       {labelFor(tab)}
