@@ -18,6 +18,8 @@ import { projectContainerId } from "./todoDnd.js";
 export interface TodoProjectSectionProps {
   /** 已按组间排序好的项目区分组，**不过标签筛选**（与手头区一致，见 design §非目标）。 */
   groups: TodoProjectGroup[];
+  /** 标签或关键字筛选是否激活 */
+  filterActive?: boolean;
   /**
    * goalId → 身份色，来自 `buckets.projectTints`（集合内避撞分配，见 `lib/contentTint.ts`）。
    * 组件不自己按 goalId 取色：那要拿着全部 active project 才算得出，组件手上只有显示出来的组。
@@ -103,6 +105,8 @@ function ProjectGroupCard({
   group,
   tint,
   expanded,
+  filterActive,
+  matchCount,
   dropBlocked,
   onToggleExpand,
   registerRef,
@@ -116,6 +120,8 @@ function ProjectGroupCard({
   /** 该组的身份色；空串 = 查不到，不画圆点（比画一个继承色的隐形点诚实）。 */
   tint: string;
   expanded: boolean;
+  filterActive?: boolean;
+  matchCount?: number;
   /** null = 没在拖，不画任何态 */
   dropBlocked: boolean | null;
   onToggleExpand: () => void;
@@ -328,11 +334,13 @@ function ProjectGroupCard({
             )}
             <span className="min-w-0 flex-1 truncate">{group.goalTitle}</span>
             <span className="shrink-0 td-text-caption font-normal text-ink-3">
-              {summary.allDone
-                ? `已完成 · ${summary.doneCount} 条`
-                : summary.recentDoneCount > 0
-                  ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
-                  : `还剩 ${summary.remaining}`}
+              {filterActive
+                ? `${matchCount ?? 0} 项匹配`
+                : summary.allDone
+                  ? `已完成 · ${summary.doneCount} 条`
+                  : summary.recentDoneCount > 0
+                    ? `还剩 ${summary.remaining} · 近 ${RECENT_DONE_WINDOW_DAYS} 天 +${summary.recentDoneCount}`
+                    : `还剩 ${summary.remaining}`}
             </span>
             {showCapWarning && <span className="shrink-0 td-text-caption font-normal text-warn">接近上限</span>}
           </button>
@@ -464,6 +472,7 @@ function ProjectGroupCard({
 
 export function TodoProjectSection({
   groups,
+  filterActive = false,
   projectTints,
   handSessionId,
   now,
@@ -480,9 +489,8 @@ export function TodoProjectSection({
   const [recentTaskIds, setRecentTaskIds] = useState<Map<string, readonly string[]>>(() => new Map());
   const rowRefs = useRef(new Map<string, HTMLElement | null>());
 
-  // 默认全折叠。组展开只由用户点击或落点反馈（revealGoals）驱动，没有「首次全展开」那一档——
-  // 那一档原本挂在排他上线的一次性说明条上，说明条 2026-07-27 撤掉后一并退役。
-  const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? false;
+  // 默认折叠。筛选激活（filterActive）时默认自动展开；组展开亦可由用户点击或落点反馈（revealGoals）驱动。
+  const isExpanded = (goalId: string): boolean => overrides.get(goalId) ?? filterActive;
 
   // 消费展开意图：只认**这一帧真的渲染出来了**的组（渲染出来 ⇒ ref 回调已跑完，节点必在 rowRefs 里）。
   // 没渲染出来的留着不消费，groups 变化时本 effect 重跑、届时补上——这正是「滚动那一半永久丢失」的修法。
@@ -504,7 +512,22 @@ export function TodoProjectSection({
     onRevealConsumed(consumed);
   }, [revealGoals, groups, onRevealConsumed]);
 
-  if (groups.length === 0) return null;
+  if (groups.length === 0) {
+    if (filterActive) {
+      return (
+        <section data-section="todo-projects" data-testid="todo-projects-empty">
+          <div className="mb-2 flex items-baseline justify-between px-2">
+            <h2 className="td-text-label font-medium text-ink">项目</h2>
+            <span className="td-text-caption text-ink-3">0</span>
+          </div>
+          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">
+            项目区无匹配任务
+          </p>
+        </section>
+      );
+    }
+    return null;
+  }
 
   return (
     <section data-section="todo-projects">
@@ -521,6 +544,8 @@ export function TodoProjectSection({
               group={group}
               tint={projectTints.get(group.goalId) ?? ""}
               expanded={isExpanded(group.goalId)}
+              filterActive={filterActive}
+              matchCount={visibleTasks.length}
               dropBlocked={dropBlocked}
               onToggleExpand={() => setOverrides((prev) => new Map(prev).set(group.goalId, !isExpanded(group.goalId)))}
               onCreateTask={onCreateTask}
@@ -601,4 +626,3 @@ export function ProjectNameChip({ chip, onOpen }: { chip: ProjectChip; onOpen: (
     </button>
   );
 }
-

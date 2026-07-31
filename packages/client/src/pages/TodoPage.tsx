@@ -504,6 +504,17 @@ export function TodoPage() {
   );
   const tagOptions = allTags(allTasks);
   const f = (list: Task[]) => filterTasks(list, { searchQuery: composerText, includeTags, excludeTags, tagMode });
+  const filterActive = composerText.trim() !== "" || includeTags.length > 0 || excludeTags.length > 0;
+
+  const filteredProjects = useMemo(() => {
+    if (!filterActive) return buckets.projects;
+    return buckets.projects
+      .map((group) => ({
+        ...group,
+        tasks: f(group.tasks),
+      }))
+      .filter((group) => group.tasks.length > 0);
+  }, [buckets.projects, composerText, includeTags, excludeTags, tagMode, filterActive]);
 
   // —— 顶层 DnD：单一 DndContext 包住整页，可拖区只有 today/inbox ——
   const { toast: actionToast, showToast: showActionToast, clearToast: clearActionToast } = useActionToast();
@@ -779,7 +790,7 @@ export function TodoPage() {
     }
   }
 
-  // 项目区不过 f()：与手头区一致，标签筛选与搜索本期不覆盖项目区（design §非目标）。
+  // 项目区在激活标签/搜索筛选（filterActive）时透传 f() 过滤组内任务并自动展开匹配组。
   // 「放进…」的候选：项目区当前显示的组即可，与用户看到的一致。
   const selectableProjects = buckets.projects.map((group) => ({
     goalId: group.goalId,
@@ -787,7 +798,8 @@ export function TodoPage() {
   }));
   const projectsBlock = (
     <TodoProjectSection
-      groups={buckets.projects}
+      groups={filteredProjects}
+      filterActive={filterActive}
       projectTints={buckets.projectTints}
       handSessionId={buckets.handSession?.id ?? null}
       now={gravityNow}

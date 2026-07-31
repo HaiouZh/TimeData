@@ -5,7 +5,7 @@ covers:
   - packages/client/src/lib/tasks/goalMembership.ts
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/pages/todo/TodoProjectSection.tsx
-last-reviewed: 2026-07-27
+last-reviewed: 2026-07-31
 ---
 
 # 待办 · 项目区与归属轴
@@ -97,6 +97,7 @@ last-reviewed: 2026-07-27
   - 查归属分两级：先查 `projectChipIndex`（渲染期闭包，覆盖"动作前就是未完成根成员"的情形），未命中再 `findActiveProjectGoalIdForTask` 读一次库——**子任务不在任何客户端投影里**；已完成成员现在只计入 `doneCount`、不在 `projectChipIndex`，两者都得查库才补得上归属。查库要 `catch` 后静默降级：`TaskRow` 的 `onToggle` 是裸调用，抛出去没人接。
   - **reveal 是待消费意图，不是脉冲**：`revealProjectHome` 只等一次 `db.goals.toArray()`，而项目区要等整轮 `listTasks` 才产出新组，前者几乎必然先落——若置位后立刻消费，那一帧 `rowRefs` 上还没有节点，`scrollIntoView` 静默跳过且永不重试（展开那一半却生效了，成了「展开了但没滚到」）。故宿主持一份待消费 `goalId` **集合**（单槽会被 React 自动批处理合并、丢掉先置位的那个），组件只消费**这一帧真的渲染出来**的组、其余留到下一轮 `groups` 变化时补上，消费后回报宿主清空。**清空是硬要求**：不清的话，跨 1024px 断点时项目区整棵重挂（换了父容器），mount effect 会把上一次的意图重放一遍——用户手动折叠的状态丢失、页面被滚走。
 - **项目区不参与标签筛选与搜索**（与手头区一致）；但 `tagOptions` 的来源必须包含项目区成员，否则筛选栏会随圈组而缩水。
+- **项目区标签与搜索筛选（`filterActive`）**：项目区支持全域标签与关键字筛选。当筛选激活时，项目组内部按筛选规则过滤任务，包含匹配任务的项目组自动展开，无匹配任务的组隐去；筛选清除后恢复用户原有的折叠/展开偏好。手头区（AtHand）维持焦点隔离，不受筛选影响；`tagOptions` 的来源包含项目区成员。
 - **存量提示条已退役**（2026-07-27）：排他上线时收件箱顶部那条「N 条任务已归入 M 个项目」连同它挂着的「首次默认展开」一起删除，`ProjectZoneIntroBar`、`timedata_todo_project_zone_intro_dismissed` 与两个 `workbenchPrefs` 读写函数均已移除。**没有替代物**——排他语义已被用户吸收，不需要常驻解释。老浏览器里的残留 localStorage 值不再被任何代码读取。
 
 ## 6. 拖拽归入（动作二）

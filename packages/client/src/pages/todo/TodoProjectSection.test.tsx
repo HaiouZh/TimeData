@@ -61,6 +61,7 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
     <MemoryRouter>
       <TodoProjectSection
         groups={props.groups ?? []}
+          filterActive={props.filterActive}
         projectTints={props.projectTints ?? new Map()}
         handSessionId={props.handSessionId ?? null}
         now={props.now ?? NOW}
@@ -533,6 +534,33 @@ describe("TodoProjectSection", () => {
     await unmount(root);
   });
 });
+
+  describe("filterActive 属性支持", () => {
+    it("filterActive=true 时，匹配组自动展开且 Header 显示匹配项数量", async () => {
+      const g1 = group({ goalId: "g1", goalTitle: "项目一", tasks: [task({ id: "t1", title: "设计方案" })] });
+      const { host, root } = await renderDom(
+        sectionElement({
+          groups: [g1],
+          filterActive: true,
+        }),
+      );
+      expect(host.textContent).toContain("1 项匹配");
+      expect(host.textContent).toContain("设计方案");
+      await unmount(root);
+    });
+
+    it("filterActive=true 且 groups 为空数组时展示无匹配任务空态提示", async () => {
+      const { host, root } = await renderDom(
+        sectionElement({
+          groups: [],
+          filterActive: true,
+        }),
+      );
+      expect(host.querySelector('[data-testid="todo-projects-empty"]')).not.toBeNull();
+      expect(host.textContent).toContain("项目区无匹配任务");
+      await unmount(root);
+    });
+  });
 
 describe("TodoProjectSection 落点", () => {
   function renderWithDnd(props: Partial<Parameters<typeof TodoProjectSection>[0]> = {}) {
