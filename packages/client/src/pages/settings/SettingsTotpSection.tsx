@@ -101,7 +101,7 @@ export default function SettingsTotpSection() {
       <p className="td-text-caption text-ink-3">{totpMessages.sectionIntro}</p>
 
       {statusError && (
-        <div className="rounded-ctl border border-danger/40 bg-danger-soft p-3 td-text-body text-danger">{statusError}</div>
+        <div className="rounded-ctl border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">{statusError}</div>
       )}
 
       {enrolled === false && !pending && (

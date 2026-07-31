@@ -48,7 +48,7 @@ export default function DeletedInsightsSection() {
       )}
 
       {state.status === "error" && (
-        <div className="mt-2 space-y-2 rounded-xl border border-danger/40 bg-danger-soft p-3">
+        <div className="mt-2 space-y-2 rounded-xl border border-danger/40 bg-danger/10 p-3">
           <p className="td-text-caption text-danger">{state.message}</p>
           <button
             type="button"

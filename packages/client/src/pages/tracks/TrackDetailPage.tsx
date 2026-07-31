@@ -247,7 +247,7 @@ export default function TrackDetailPage() {
             {actionError && (
               <p
                 role="alert"
-                className="mb-3 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-caption text-danger"
+                className="mb-3 rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-caption text-danger"
               >
                 {actionError}
               </p>

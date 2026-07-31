@@ -19,6 +19,8 @@ const INTERACTIVE_CONTEXT_RE = /<button\b|<a\b|<Link\b|<NavLink\b|role=["']butto
 const COLOR_FIXTURE_RULES = new Set([
   "retired-module-colors",
   "retired-data-colors",
+  "retired-motion-tokens",
+  "retired-soft-status-colors",
   "bare-action-blue",
   "bare-status-color",
   "bare-slate-chrome",
@@ -37,6 +39,20 @@ const RULES = [
       `(?:--color-data-|\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-data-(?:blue|teal|green|amber|red|purple)(?:\\/\\d+)?\\b)`,
     ),
     msg: "退役 data palette 不得重新定义或消费；图表序列走业务数据色，Track agent 使用 track-agent",
+  },
+  {
+    id: "retired-motion-tokens",
+    re: new RegExp(
+      `(?:--(?:duration-(?:fast|base|slow)|ease-(?:standard|emphasized))\\b|var\\(--(?:duration-(?:fast|base|slow)|ease-(?:standard|emphasized))\\)|\\b${TAILWIND_VARIANTS}(?:duration|ease)-(?:fast|base|slow|standard|emphasized)\\b)`,
+    ),
+    msg: "motion 使用 Tailwind 标准档；keyframe 在 index.css 邻近写具体时长/曲线，不再使用退役 motion token",
+  },
+  {
+    id: "retired-soft-status-colors",
+    re: new RegExp(
+      `(?:--color-(?:warn|danger)-soft\\b|var\\(--color-(?:warn|danger)-soft\\)|\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:warn|danger)-soft(?:\\/\\d+)?\\b)`,
+    ),
+    msg: "退役 soft 状态色不得通过任何颜色 utility 消费；状态面使用 ok/warn/danger 的 alpha 档（背景 /10，hover /15）",
   },
   {
     id: "bare-action-blue",

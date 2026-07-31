@@ -273,7 +273,7 @@ export default function SettingsCategoryDetailPage() {
         )}
       </section>
 
-      <section className="space-y-3 rounded-xl border border-danger/40 bg-danger-soft p-4">
+      <section className="space-y-3 rounded-xl border border-danger/40 bg-danger/10 p-4">
         <h3 className="td-text-label font-medium text-danger">危险操作</h3>
         <button
           type="button"

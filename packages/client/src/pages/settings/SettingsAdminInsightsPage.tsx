@@ -177,7 +177,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function SyncIssueBadge({ label }: { label: string }) {
-  return <span className="rounded-pill bg-warn-soft px-2 py-0.5 td-text-caption text-warn">{label}</span>;
+  return <span className="rounded-pill bg-warn/10 px-2 py-0.5 td-text-caption text-warn">{label}</span>;
 }
 
 function FilterSelectSheet({
@@ -235,7 +235,7 @@ function NewIpAlertCard({
 }) {
   if (newIps.length === 0) return null;
   return (
-    <div data-testid="new-ip-alert-card" className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
+    <div data-testid="new-ip-alert-card" className="space-y-3 rounded-card border border-warn/40 bg-warn/10 p-4">
       <div className="td-text-body font-medium text-warn">{messages.newIpAlert.title}</div>
       <p className="td-text-caption text-ink-2">{messages.newIpAlert.hint}</p>
       <div className="space-y-2">
@@ -359,7 +359,7 @@ function RequestAuditSection({
       </p>
 
       {loading && <div className="td-text-label text-ink-2">正在加载请求审计…</div>}
-      {error && <div className="rounded-ctl border border-danger/40 bg-danger-soft p-3 td-text-label text-danger">{error}</div>}
+      {error && <div className="rounded-ctl border border-danger/40 bg-danger/10 p-3 td-text-label text-danger">{error}</div>}
 
       <div className="space-y-2">
         {logs?.logs.map((log) => (
@@ -367,7 +367,7 @@ function RequestAuditSection({
             key={log.id}
             className={
               log.isNewIp
-                ? "rounded-ctl border border-warn/40 bg-warn-soft px-3 py-2 td-text-caption text-ink-2"
+                ? "rounded-ctl border border-warn/40 bg-warn/10 px-3 py-2 td-text-caption text-ink-2"
                 : "rounded-ctl bg-surface-elevated px-3 py-2 td-text-caption text-ink-2"
             }
           >
@@ -600,7 +600,7 @@ export default function SettingsAdminInsightsPage() {
 
       {loading && <div className="td-text-label text-ink-2">正在加载服务端数据…</div>}
       {error && (
-        <div className="rounded-card border border-danger/40 bg-danger-soft p-4 td-text-label text-danger">{error}</div>
+        <div className="rounded-card border border-danger/40 bg-danger/10 p-4 td-text-label text-danger">{error}</div>
       )}
 
       {data && (

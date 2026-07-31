@@ -449,7 +449,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
                 type="button"
                 aria-label="删除任务"
                 onClick={handleDelete}
-                className="flex h-11 w-11 items-center justify-center rounded-ctl text-ink-3 hover:bg-danger-soft hover:text-danger"
+                className="flex h-11 w-11 items-center justify-center rounded-ctl text-ink-3 hover:bg-danger/15 hover:text-danger"
               >
                 <Icon icon={Trash} size={18} />
               </button>

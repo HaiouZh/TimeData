@@ -507,7 +507,7 @@ export default function DiaryPage() {
       )}
 
       {conflict && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger-soft px-4 py-2 td-text-body text-danger">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2 td-text-body text-danger">
           <span className="flex-1">日记已被其他窗口修改</span>
           <button
             type="button"
@@ -529,7 +529,7 @@ export default function DiaryPage() {
       )}
 
       {error && (
-        <p className="shrink-0 border-b border-danger/40 bg-danger-soft px-4 py-2 td-text-body text-danger">{error}</p>
+        <p className="shrink-0 border-b border-danger/40 bg-danger/10 px-4 py-2 td-text-body text-danger">{error}</p>
       )}
 
       {loading ? (

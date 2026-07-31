@@ -34,7 +34,7 @@ const STATUS_META = {
   blocked: {
     label: "受阻",
     icon: WarningCircle,
-    className: "border-border-strong bg-danger-soft text-danger",
+    className: "border-border-strong bg-danger/10 text-danger",
     glowClassName: "shadow-[var(--shadow-galaxy-blocked)]",
   },
   completed: {

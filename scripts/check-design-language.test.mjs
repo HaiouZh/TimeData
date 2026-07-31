@@ -28,6 +28,43 @@ test("allows the scoped Track agent signal token", () => {
   assert.equal(classifyLine("x.tsx", 'className="text-track-agent bg-track-agent/10"').length, 0);
 });
 
+test("flags retired motion tokens and utilities", () => {
+  assert.equal(
+    classifyLine("packages/client/src/index.css", "  --duration-fast: 150ms;").some(
+      (violation) => violation.rule === "retired-motion-tokens",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="duration-base ease-standard"').some(
+      (violation) => violation.rule === "retired-motion-tokens",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'style={{ transitionDuration: "var(--duration-base)" }}').some(
+      (violation) => violation.rule === "retired-motion-tokens",
+    ),
+    true,
+  );
+});
+
+test("flags retired soft status colors and allows alpha utilities", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-warn-soft hover:bg-danger-soft/80"').some(
+      (violation) => violation.rule === "retired-soft-status-colors",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="text-danger-soft border-warn-soft/50 ring-danger-soft"').some(
+      (violation) => violation.rule === "retired-soft-status-colors",
+    ),
+    true,
+  );
+  assert.equal(classifyLine("x.tsx", 'className="bg-warn/10 hover:bg-danger/15"').length, 0);
+});
+
 test("flags bare blue action classes", () => {
   assert.equal(
     classifyLine("x.tsx", 'className="bg-blue-600"').some((violation) => violation.rule === "bare-action-blue"),

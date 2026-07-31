@@ -71,7 +71,7 @@ function SyncIssueList({ issues }: { issues: NonNullable<RegularSyncResult["push
   if (issues.length === 0) return null;
 
   return (
-    <div className="space-y-1 rounded-ctl border border-warn/50 bg-warn-soft p-2 text-warn">
+    <div className="space-y-1 rounded-ctl border border-warn/50 bg-warn/10 p-2 text-warn">
       <p>需要处理的同步项：</p>
       {issues.map((issue) => (
         <p key={`${issue.tableName}:${issue.recordId}:${issue.action}`}>

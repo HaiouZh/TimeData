@@ -84,7 +84,7 @@ export default function SettingsDiaryPage() {
       ) : (
         <div className="space-y-4">
           {!enabled && (
-            <div className="rounded-xl border border-warn/40 bg-warn-soft p-3 td-text-body text-warn">
+            <div className="rounded-xl border border-warn/40 bg-warn/10 p-3 td-text-body text-warn">
               服务器未挂载日记 vault（DIARY_VAULT_DIR），保存的模板暂时不会生效
             </div>
           )}
@@ -119,7 +119,7 @@ export default function SettingsDiaryPage() {
             <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{message}</div>
           )}
           {error && (
-            <div className="rounded-xl border border-danger/40 bg-danger-soft p-3 td-text-body text-danger">{error}</div>
+            <div className="rounded-xl border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">{error}</div>
           )}
 
           <div className="space-y-3 rounded-card border border-border bg-surface p-4">
@@ -152,7 +152,7 @@ export default function SettingsDiaryPage() {
             <div className="rounded-xl border border-ok/40 bg-ok/10 p-3 td-text-body text-ok">{weeklyMessage}</div>
           )}
           {weeklyError && (
-            <div className="rounded-xl border border-danger/40 bg-danger-soft p-3 td-text-body text-danger">
+            <div className="rounded-xl border border-danger/40 bg-danger/10 p-3 td-text-body text-danger">
               {weeklyError}
             </div>
           )}

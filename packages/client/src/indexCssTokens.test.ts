@@ -39,11 +39,17 @@ describe("index.css design tokens", () => {
     );
   });
 
-  it("defines motion duration and easing tokens", () => {
-    expect(css).toContain("--duration-fast: 150ms;");
-    expect(css).toContain("--duration-base: 200ms;");
-    expect(css).toContain("--duration-slow: 300ms;");
-    expect(css).toContain("--ease-standard:");
+  it("keeps motion values local after retiring global motion tokens", () => {
+    expect(css).not.toMatch(/--duration-(?:fast|base|slow):/);
+    expect(css).not.toMatch(/--ease-(?:standard|emphasized):/);
+    expect(css).toContain("animation: overlay-fade 150ms ease-out;");
+    expect(css).toContain("animation: sheet-rise 200ms ease-out;");
+    expect(css).toContain("300ms cubic-bezier(0.2, 0, 0, 1)");
+  });
+
+  it("derives soft status surfaces from the main status colors", () => {
+    expect(css).not.toContain("--color-warn-soft");
+    expect(css).not.toContain("--color-danger-soft");
   });
 
   it("defines a z-index layer ladder", () => {

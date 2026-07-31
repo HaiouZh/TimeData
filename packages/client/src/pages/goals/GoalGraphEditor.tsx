@@ -524,7 +524,7 @@ function GoalGraphEditorInner({ goal, tasks, tracks, steps, layoutPins, onNaviga
       />
 
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger">
+        <div className="absolute bottom-3 right-3 z-10 rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger">
           {errorMessage}
         </div>
       )}
@@ -709,7 +709,7 @@ function ConnectSheet({
           <p
             data-connect-sheet-error
             role="alert"
-            className="rounded-row border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger"
+            className="rounded-row border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger"
           >
             {errorMessage}
           </p>

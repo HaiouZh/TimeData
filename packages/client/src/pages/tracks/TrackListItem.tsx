@@ -11,7 +11,7 @@ export type TrackBadgeTone = "warn" | "agent" | "default";
 
 // agent 在跑使用 Track scoped 信号 tone，其余调度组复用现有状态或动作语义。
 const BADGE_TONE_CLASSES: Record<TrackBadgeTone, string> = {
-  warn: "border-warn/40 bg-warn-soft text-warn",
+  warn: "border-warn/40 bg-warn/10 text-warn",
   agent: "border-track-agent/40 bg-track-agent/10 text-track-agent",
   default: "border-accent/30 bg-accent-soft text-accent",
 };

@@ -1302,7 +1302,7 @@ function GoalGalaxyCanvasInner({
         onClose={clearSelection}
       />
       {errorMessage && (
-        <div className="absolute bottom-3 right-3 z-20 rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger">
+        <div className="absolute bottom-3 right-3 z-20 rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger">
           {errorMessage}
         </div>
       )}

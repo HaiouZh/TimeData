@@ -30,7 +30,7 @@ const primaryButtonClassName =
 const secondaryButtonClassName =
   "rounded-ctl border border-border bg-surface-elevated px-4 py-2 td-text-label text-ink hover:bg-surface-hover disabled:opacity-40";
 const warnButtonClassName =
-  "rounded-ctl border border-warn/40 bg-warn-soft px-4 py-2 td-text-label text-warn hover:border-warn disabled:opacity-40";
+  "rounded-ctl border border-warn/40 bg-warn/10 px-4 py-2 td-text-label text-warn hover:border-warn disabled:opacity-40";
 const dangerButtonClassName =
   "rounded-ctl bg-danger px-4 py-2 td-text-label text-page hover:bg-danger/80 disabled:opacity-40";
 const inputClassName = "w-full rounded-ctl border border-border bg-surface-elevated px-3 py-2 text-ink";
@@ -332,7 +332,7 @@ export default function SettingsDataPage() {
     <SettingsDetailPage title="数据设置">
       {dialog}
       {remoteDeleteConflicts.length > 0 && (
-        <section className="space-y-3 rounded-card border border-warn/40 bg-warn-soft p-4">
+        <section className="space-y-3 rounded-card border border-warn/40 bg-warn/10 p-4">
           <h3 className="td-text-label font-medium text-warn">服务器上这条记录已被删除</h3>
           <div className="td-text-caption text-warn">本地仍保留了一些未同步的修改。</div>
           <div className="td-text-caption text-ink-3">受影响：{remoteDeleteConflicts.length} 条冲突。</div>
@@ -491,7 +491,7 @@ export default function SettingsDataPage() {
         </summary>
         <div className="space-y-5 p-4 pt-0">
           {needsSyncDiagnostics && (
-            <div className="rounded-ctl border border-warn/40 bg-warn-soft p-3 td-text-caption text-warn">
+            <div className="rounded-ctl border border-warn/40 bg-warn/10 p-3 td-text-caption text-warn">
               普通同步已连续失败 {syncFailureCount} 次。建议先运行诊断，再决定使用云端覆盖本地或本地覆盖云端。
             </div>
           )}
@@ -534,7 +534,7 @@ export default function SettingsDataPage() {
             <div className="td-text-caption text-ink-3">此操作会用云端完整数据覆盖本地，本地未同步的改动将丢失。</div>
           </section>
 
-          <section className="space-y-3 rounded-ctl border border-danger/40 bg-danger-soft p-3">
+          <section className="space-y-3 rounded-ctl border border-danger/40 bg-danger/10 p-3">
             <h3 className="td-text-label font-medium text-danger">将本地数据覆盖到云端</h3>
             <div className="td-text-caption text-danger">
               仅当你已经确认当前设备数据是正确版本时使用。此操作会先在服务器创建备份，然后清空服务器分类和时间记录并导入本地数据。

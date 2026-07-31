@@ -9,7 +9,7 @@ const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
   { title: "中性底盘", tokens: ["--color-page", "--color-surface", "--color-surface-elevated", "--color-surface-hover"] },
   { title: "文字", tokens: ["--color-ink", "--color-ink-2", "--color-ink-3"] },
   { title: "动作色", tokens: ["--color-accent", "--color-accent-strong", "--color-accent-soft", "--color-accent-ink"] },
-  { title: "状态色", tokens: ["--color-ok", "--color-warn", "--color-danger", "--color-warn-soft", "--color-danger-soft"] },
+  { title: "状态色", tokens: ["--color-ok", "--color-warn", "--color-danger"] },
   { title: "边框", tokens: ["--color-border", "--color-border-strong"] },
   { title: "Track 调度信号", tokens: ["--color-track-agent"] },
   { title: "用户内容身份色（项目圆点 / 标签 #）", tokens: [...TINT_TOKENS] },
@@ -36,14 +36,6 @@ const NUMBER_ROLES: [string, string][] = [
   ["td-duration", "1h 20m"],
   ["td-stat", "12.5"],
   ["td-metric", "98%"],
-];
-
-const MOTION_TOKENS = [
-  "--duration-fast · 150ms",
-  "--duration-base · 200ms",
-  "--duration-slow · 300ms",
-  "--ease-standard · ease-out",
-  "--ease-emphasized · cubic-bezier(0.2, 0, 0, 1)",
 ];
 
 const Z_LAYERS = ["--z-dropdown · 30", "--z-backdrop · 40", "--z-modal · 50", "--z-top · 70"];
@@ -187,25 +179,6 @@ export default function StyleguidePage() {
                 <span className="td-text-caption text-ink-3">{cls}</span>
               </div>
             ))}
-          </div>
-        </Section>
-
-        <Section title="动效 token">
-          <div className="space-y-3">
-            <ul className="flex flex-wrap gap-2">
-              {MOTION_TOKENS.map((token) => (
-                <li key={token} className="rounded-pill border border-border bg-surface px-3 py-1 td-text-caption text-ink-2">
-                  {token}
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              className="rounded-ctl border border-border bg-surface px-3 py-2 td-text-label text-ink-2 transition-colors hover:bg-accent-soft hover:text-accent"
-              style={{ transitionDuration: "var(--duration-base)", transitionTimingFunction: "var(--ease-standard)" }}
-            >
-              悬停看过渡（var(--duration-base)）
-            </button>
           </div>
         </Section>
 

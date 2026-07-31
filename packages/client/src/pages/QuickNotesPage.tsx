@@ -1087,7 +1087,7 @@ export default function QuickNotesPage() {
               type="button"
               disabled={selectedIds.size === 0}
               onClick={() => void handleBatchDelete()}
-              className="rounded-xl border border-danger/40 bg-danger-soft px-3 py-1.5 td-text-label font-medium text-danger disabled:cursor-not-allowed disabled:text-ink-3"
+              className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-1.5 td-text-label font-medium text-danger disabled:cursor-not-allowed disabled:text-ink-3"
             >
               删除
             </button>
@@ -1221,7 +1221,7 @@ export default function QuickNotesPage() {
                         setActionsOpen(false);
                         void handleDeleteDate();
                       }}
-                      className="block w-full px-4 py-3 text-left td-text-label font-medium text-danger transition hover:bg-danger-soft"
+                      className="block w-full px-4 py-3 text-left td-text-label font-medium text-danger transition hover:bg-danger/15"
                     >
                       {deleteDateLabel}
                     </button>
@@ -1467,7 +1467,7 @@ export default function QuickNotesPage() {
 
       {error && (
         <p
-          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger-soft px-3 py-2 td-text-body text-danger shadow-elev1"
+          className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger shadow-elev1"
           style={{ bottom: navOffsetPx + bottomInsetPx }}
         >
           {error}

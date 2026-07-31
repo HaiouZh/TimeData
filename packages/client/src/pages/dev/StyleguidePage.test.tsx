@@ -10,6 +10,10 @@ describe("StyleguidePage", () => {
     expect(html).toContain("--color-track-agent");
     expect(html).not.toContain("--color-data-");
     expect(html).not.toContain("--z-sticky");
+    expect(html).not.toContain("--color-warn-soft");
+    expect(html).not.toContain("--color-danger-soft");
+    expect(html).not.toContain("--duration-");
+    expect(html).not.toContain("--ease-");
     // 带右括号避开子串假绿（"--color-tint-1" 是 "--color-tint-10" 的前缀，
     // 支数缩到 1 支时那条断言照样绿）。
     for (let i = 1; i <= 9; i++) expect(html).toContain(`--color-tint-${i})`);

@@ -204,7 +204,7 @@ export default function EntryForm({
       {onDelete && (
         <button
           onClick={onDelete}
-          className="w-full rounded-xl bg-danger-soft py-3 td-text-label font-medium text-danger hover:bg-danger-soft/80"
+          className="w-full rounded-xl bg-danger/10 py-3 td-text-label font-medium text-danger hover:bg-danger/15"
         >
           删除这条记录
         </button>

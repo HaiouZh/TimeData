@@ -89,13 +89,10 @@ export function TodoDragDock({
         anchorLeftPx === null ? "right-3" : ""
       } ${
         dragging
-          ? "pointer-events-auto translate-x-0 opacity-100 delay-300"
-          : "pointer-events-none translate-x-2 opacity-0 delay-0"
+          ? "pointer-events-auto translate-x-0 opacity-100 delay-300 duration-200"
+          : "pointer-events-none translate-x-2 opacity-0 delay-0 duration-0"
       }`}
-      style={{
-        transitionDuration: dragging ? "var(--duration-base)" : "0ms",
-        ...(anchorLeftPx === null ? {} : { left: anchorLeftPx }),
-      }}
+      style={anchorLeftPx === null ? undefined : { left: anchorLeftPx }}
     >
       {targets.map((target) => (
         <DockPill

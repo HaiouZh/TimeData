@@ -244,7 +244,7 @@ export default function DiaryReviewPage() {
 
       {/* 错误条叠加在内容之上，不替换内容区：batch 失败时已有卡片继续可读。 */}
       {error && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger-soft px-4 py-2 td-text-body text-danger">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-danger/40 bg-danger/10 px-4 py-2 td-text-body text-danger">
           <span className="flex-1">{error}</span>
           <button
             type="button"
