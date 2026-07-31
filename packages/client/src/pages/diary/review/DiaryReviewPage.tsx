@@ -156,7 +156,7 @@ export default function DiaryReviewPage() {
             type="button"
             aria-label="返回"
             onClick={handleBack}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
+            className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
           >
             <Icon icon={ArrowLeft} size={16} />
           </button>
@@ -194,7 +194,7 @@ export default function DiaryReviewPage() {
             type="button"
             aria-label="上一段"
             onClick={() => step(-1)}
-            className="flex size-8 items-center justify-center rounded-full text-ink-2 transition hover:bg-surface-hover hover:text-ink"
+            className="flex size-8 items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
           >
             <Icon icon={CaretLeft} size={16} />
           </button>
@@ -202,7 +202,7 @@ export default function DiaryReviewPage() {
             type="button"
             aria-label="下一段"
             onClick={() => step(1)}
-            className="flex size-8 items-center justify-center rounded-full text-ink-2 transition hover:bg-surface-hover hover:text-ink"
+            className="flex size-8 items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
           >
             <Icon icon={CaretRight} size={16} />
           </button>
@@ -249,7 +249,7 @@ export default function DiaryReviewPage() {
           <button
             type="button"
             onClick={handleRetry}
-            className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
+            className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
           >
             重试
           </button>
@@ -266,7 +266,7 @@ export default function DiaryReviewPage() {
             <button
               type="button"
               onClick={handleRetry}
-              className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
+              className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger"
             >
               重试
             </button>

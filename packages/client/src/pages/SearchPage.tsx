@@ -126,7 +126,7 @@ export default function SearchPage() {
             {resolvedCategoryId && (
               <span
                 aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-full"
+                className="size-2.5 shrink-0 rounded-pill"
                 style={{ backgroundColor: getCategoryColor(resolvedCategoryId) }}
               />
             )}
@@ -180,7 +180,7 @@ export default function SearchPage() {
               type="button"
               aria-pressed={state.mode === mode}
               onClick={() => updateState({ mode })}
-              className={`min-h-11 rounded-xl td-text-body font-medium transition ${
+              className={`min-h-11 rounded-ctl td-text-body font-medium transition ${
                 state.mode === mode ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
               }`}
             >
@@ -252,7 +252,7 @@ export default function SearchPage() {
                   </span>
                   <span
                     aria-hidden="true"
-                    className="size-2.5 shrink-0 rounded-full"
+                    className="size-2.5 shrink-0 rounded-pill"
                     style={{ backgroundColor: getCategoryColor(entry.categoryId) }}
                   />
                   <span className="truncate text-ink">{getCategoryPath(entry.categoryId)}</span>

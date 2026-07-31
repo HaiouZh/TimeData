@@ -458,7 +458,7 @@ export default function DiaryPage() {
             type="button"
             aria-label="返回"
             onClick={handleBack}
-            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
+            className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
           >
             <Icon icon={ArrowLeft} size={16} />
           </button>
@@ -466,7 +466,7 @@ export default function DiaryPage() {
           <Link
             to="/diary/review"
             aria-label="日记回顾"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
+            className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
           >
             <Icon icon={ClockCounterClockwise} size={16} />
           </Link>
@@ -475,7 +475,7 @@ export default function DiaryPage() {
             aria-label="保存"
             disabled={!dirty || saving || reloading || loading || loadFailed}
             onClick={() => void handleSave()}
-            className="rounded-xl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+            className="rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
           >
             保存
           </button>
@@ -499,7 +499,7 @@ export default function DiaryPage() {
             type="button"
             data-testid="diary-rollover-accept"
             onClick={() => void switchDate(liveToday)}
-            className="rounded-xl border border-accent bg-surface px-3 py-1 td-text-body font-medium text-accent"
+            className="rounded-ctl border border-accent bg-surface px-3 py-1 td-text-body font-medium text-accent"
           >
             切到今天
           </button>
@@ -513,7 +513,7 @@ export default function DiaryPage() {
             type="button"
             disabled={saving || reloading}
             onClick={() => void handleReload()}
-            className="rounded-xl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
+            className="rounded-ctl border border-danger/40 bg-surface px-3 py-1 td-text-body font-medium text-danger disabled:cursor-not-allowed disabled:border-border disabled:text-ink-3"
           >
             刷新重载
           </button>
@@ -521,7 +521,7 @@ export default function DiaryPage() {
             type="button"
             disabled={saving || reloading}
             onClick={() => void handleSave({ force: true })}
-            className="rounded-xl bg-danger px-3 py-1 td-text-body font-medium text-page disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+            className="rounded-ctl bg-danger px-3 py-1 td-text-body font-medium text-page disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
           >
             仍然覆盖
           </button>

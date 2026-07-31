@@ -36,7 +36,7 @@ export function DiaryRefPunches({ date }: { date: string }) {
             return (
               <li
                 key={row.id}
-                className="rounded-lg py-1 pl-3 pr-2"
+                className="rounded-row py-1 pl-3 pr-2"
                 style={{ backgroundColor: `${color}1a`, boxShadow: `inset 3px 0 0 ${color}` }}
               >
                 <div className="flex items-baseline justify-between gap-2">

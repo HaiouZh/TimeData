@@ -148,7 +148,7 @@ export default function EntryForm({
                 <button
                   type="button"
                   onClick={handleMergeUp}
-                  className="rounded-full bg-surface-elevated px-3 py-1 td-text-caption text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
+                  className="rounded-pill bg-surface-elevated px-3 py-1 td-text-caption text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
                 >
                   <span className="inline-flex items-center gap-1">
                     <Icon icon={ArrowUp} size={14} />
@@ -160,7 +160,7 @@ export default function EntryForm({
                 <button
                   type="button"
                   onClick={handleMergeDown}
-                  className="rounded-full bg-surface-elevated px-3 py-1 td-text-caption text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
+                  className="rounded-pill bg-surface-elevated px-3 py-1 td-text-caption text-ink-2 transition-colors hover:bg-surface-hover hover:text-ink"
                 >
                   <span className="inline-flex items-center gap-1">
                     <Icon icon={ArrowDown} size={14} />
@@ -181,21 +181,21 @@ export default function EntryForm({
           onChange={(event) => setNote(event.target.value)}
           placeholder="做了什么，或补充一点细节..."
           rows={2}
-          className="w-full resize-none rounded-lg bg-surface-elevated px-3 py-2 text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="w-full resize-none rounded-ctl bg-surface-elevated px-3 py-2 text-ink placeholder:text-ink-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
       </section>
 
       <div className="grid grid-cols-2 gap-3 pb-4">
         <button
           onClick={onCancel}
-          className="rounded-xl bg-surface-elevated py-3 td-text-label font-medium text-ink-2 hover:bg-surface-hover hover:text-ink"
+          className="rounded-ctl bg-surface-elevated py-3 td-text-label font-medium text-ink-2 hover:bg-surface-hover hover:text-ink"
         >
           取消
         </button>
         <button
           onClick={handleSave}
           disabled={!categoryId || saving}
-          className="rounded-xl bg-accent py-3 td-text-label font-medium text-page hover:bg-accent-strong disabled:opacity-40"
+          className="rounded-ctl bg-accent py-3 td-text-label font-medium text-page hover:bg-accent-strong disabled:opacity-40"
         >
           {saving ? "保存中…" : "保存"}
         </button>
@@ -204,7 +204,7 @@ export default function EntryForm({
       {onDelete && (
         <button
           onClick={onDelete}
-          className="w-full rounded-xl bg-danger/10 py-3 td-text-label font-medium text-danger hover:bg-danger/15"
+          className="w-full rounded-ctl bg-danger/10 py-3 td-text-label font-medium text-danger hover:bg-danger/15"
         >
           删除这条记录
         </button>

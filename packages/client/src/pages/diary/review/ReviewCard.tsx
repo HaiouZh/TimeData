@@ -41,7 +41,7 @@ export default function ReviewCard({
           <Link
             to={`/diary?date=${date}`}
             aria-label={exists ? `打开 ${label} 日记` : `创建 ${label} 日记`}
-            className="flex size-7 items-center justify-center rounded-full text-ink-2 transition hover:bg-surface-hover hover:text-ink"
+            className="flex size-7 items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
           >
             <Icon icon={exists ? NotePencil : Plus} size={16} />
           </Link>

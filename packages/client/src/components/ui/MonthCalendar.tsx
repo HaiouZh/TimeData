@@ -46,11 +46,11 @@ export function isDateOutsideRange(date: string, min?: string, max?: string): bo
 }
 
 const navButtonClass =
-  "flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-elevated text-ink-2 transition-colors hover:border-border-strong hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  "flex h-9 w-9 items-center justify-center rounded-ctl border border-border bg-surface-elevated text-ink-2 transition-colors hover:border-border-strong hover:bg-surface-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 function dayButtonClass(selected: boolean, today: boolean, disabled: boolean): string {
   const base =
-    "td-num td-text-label flex aspect-square min-h-9 w-full items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+    "td-num td-text-label flex aspect-square min-h-9 w-full items-center justify-center rounded-ctl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
   if (disabled) return `${base} cursor-not-allowed border-border bg-surface text-ink-3 opacity-50`;
   if (selected) return `${base} border-accent bg-accent-soft font-semibold text-accent-ink`;
@@ -84,7 +84,7 @@ export function MonthCalendar({ value, onChange, min, max, ariaLabel = "月历" 
   }
 
   return (
-    <section className="rounded-xl border border-border bg-surface/80 p-3 text-ink" aria-label={ariaLabel}>
+    <section className="rounded-card border border-border bg-surface/80 p-3 text-ink" aria-label={ariaLabel}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <button type="button" aria-label="上个月" onClick={() => moveMonth(-1)} className={navButtonClass}>
           <Icon icon={CaretLeft} size={18} weight="bold" />
@@ -104,7 +104,7 @@ export function MonthCalendar({ value, onChange, min, max, ariaLabel = "月历" 
       <div className="mt-2 grid grid-cols-7 gap-1">
         {viewCells.map(({ day, key }) => {
           if (day === null) {
-            return <div key={key} aria-hidden="true" className="aspect-square min-h-9 rounded-lg" />;
+            return <div key={key} aria-hidden="true" className="aspect-square min-h-9 rounded-ctl" />;
           }
 
           const date = formatDate(year, month, day);

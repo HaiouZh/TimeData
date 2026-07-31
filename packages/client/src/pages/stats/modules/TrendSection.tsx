@@ -100,7 +100,7 @@ export default function TrendSection(props: StatsModuleProps) {
               type="button"
               aria-pressed={active}
               onClick={() => setWindow({ kind: "preset", days: preset.days })}
-              className={`min-h-10 rounded-full px-3 td-text-caption font-medium ${
+              className={`min-h-10 rounded-pill px-3 td-text-caption font-medium ${
                 active ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
@@ -118,7 +118,7 @@ export default function TrendSection(props: StatsModuleProps) {
             const days = Number(event.target.value);
             if (Number.isFinite(days) && days >= 1) setWindow({ kind: "customDays", days });
           }}
-          className="min-h-10 w-28 rounded-full border border-border bg-surface-elevated px-3 text-ink-2 outline-none"
+          className="min-h-10 w-28 rounded-pill border border-border bg-surface-elevated px-3 text-ink-2 outline-none"
         />
         <span className="td-text-caption text-ink-3">或</span>
         <DateField
@@ -132,7 +132,7 @@ export default function TrendSection(props: StatsModuleProps) {
             }
           }}
           placeholder="起始日"
-          className="min-h-10 rounded-full bg-surface-elevated px-3 td-text-caption text-ink-2"
+          className="min-h-10 rounded-pill bg-surface-elevated px-3 td-text-caption text-ink-2"
         />
         <DateField
           max={props.today}
@@ -145,7 +145,7 @@ export default function TrendSection(props: StatsModuleProps) {
             }
           }}
           placeholder="结束日"
-          className="min-h-10 rounded-full bg-surface-elevated px-3 td-text-caption text-ink-2"
+          className="min-h-10 rounded-pill bg-surface-elevated px-3 td-text-caption text-ink-2"
         />
       </div>
 
@@ -214,7 +214,7 @@ export default function TrendSection(props: StatsModuleProps) {
               type="button"
               aria-pressed={trendChart === "line"}
               onClick={() => setChart("line")}
-              className={`min-h-10 rounded-full px-3 td-text-caption font-medium ${
+              className={`min-h-10 rounded-pill px-3 td-text-caption font-medium ${
                 trendChart === "line" ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >
@@ -224,7 +224,7 @@ export default function TrendSection(props: StatsModuleProps) {
               type="button"
               aria-pressed={trendChart === "area"}
               onClick={() => setChart("area")}
-              className={`min-h-10 rounded-full px-3 td-text-caption font-medium ${
+              className={`min-h-10 rounded-pill px-3 td-text-caption font-medium ${
                 trendChart === "area" ? "bg-accent text-page" : "border border-border bg-surface-elevated text-ink-2"
               }`}
             >

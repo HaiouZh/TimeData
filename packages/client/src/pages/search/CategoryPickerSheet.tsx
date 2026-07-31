@@ -98,7 +98,7 @@ export function CategoryPickerSheet({
               </span>
               <span
                 aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-full"
+                className="size-2.5 shrink-0 rounded-pill"
                 style={{ backgroundColor: parent.color }}
               />
               <span className="truncate">{parent.name}</span>
@@ -120,7 +120,7 @@ export function CategoryPickerSheet({
                 >
                   <span
                     aria-hidden="true"
-                    className="size-2.5 shrink-0 rounded-full"
+                    className="size-2.5 shrink-0 rounded-pill"
                     style={{ backgroundColor: parent.color }}
                   />
                   <span className="truncate">{child.name}</span>

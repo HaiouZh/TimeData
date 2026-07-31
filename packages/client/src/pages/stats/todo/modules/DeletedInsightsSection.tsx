@@ -48,12 +48,12 @@ export default function DeletedInsightsSection() {
       )}
 
       {state.status === "error" && (
-        <div className="mt-2 space-y-2 rounded-xl border border-danger/40 bg-danger/10 p-3">
+        <div className="mt-2 space-y-2 rounded-row border border-danger/40 bg-danger/10 p-3">
           <p className="td-text-caption text-danger">{state.message}</p>
           <button
             type="button"
             onClick={load}
-            className="rounded-xl border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-2 transition-colors hover:bg-surface-hover"
+            className="rounded-ctl border border-border bg-surface px-3 py-1.5 td-text-caption font-medium text-ink-2 transition-colors hover:bg-surface-hover"
           >
             重试
           </button>
@@ -90,9 +90,9 @@ export default function DeletedInsightsSection() {
               return (
                 <div key={bucket.label} className="flex items-center gap-2 td-text-caption text-ink-3">
                   <span className="w-16 shrink-0">{bucket.label}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-hover">
+                  <div className="h-2 flex-1 overflow-hidden rounded-pill bg-surface-hover">
                     <div
-                      className="h-full rounded-full bg-accent"
+                      className="h-full rounded-pill bg-accent"
                       style={{ width: `${(bucket.count / max) * 100}%` }}
                     />
                   </div>

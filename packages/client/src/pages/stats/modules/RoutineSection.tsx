@@ -44,7 +44,7 @@ export default function RoutineSection(props: StatsModuleProps) {
       {props.sleepCategoryId === null ? (
         <Link
           to="/settings/insights"
-          className="inline-flex min-h-11 items-center gap-1 rounded-full border border-border bg-surface px-4 td-text-label text-ink-2"
+          className="inline-flex min-h-11 items-center gap-1 rounded-pill border border-border bg-surface px-4 td-text-label text-ink-2"
         >
           设置睡眠分类后可查看作息分析
           <Icon icon={CaretRight} size={14} className="text-ink-3" />

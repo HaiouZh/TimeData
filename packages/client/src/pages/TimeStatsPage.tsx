@@ -181,7 +181,7 @@ export default function TimeStatsPage() {
               type="button"
               onClick={() => setMode(m)}
               aria-pressed={mode === m}
-              className={`min-h-11 rounded-xl td-text-label font-medium transition ${
+              className={`min-h-11 rounded-ctl td-text-label font-medium transition ${
                 mode === m ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
               }`}
             >

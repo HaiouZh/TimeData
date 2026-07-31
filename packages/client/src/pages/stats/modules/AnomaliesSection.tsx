@@ -131,7 +131,7 @@ export default function AnomaliesSection(props: StatsModuleProps) {
       eyebrow="Attention"
       action={
         anomalies.length > 0 ? (
-          <span className="rounded-full border border-warn/30 bg-warn/10 px-2.5 py-1 td-text-caption text-warn">
+          <span className="rounded-pill border border-warn/30 bg-warn/10 px-2.5 py-1 td-text-caption text-warn">
             {anomalies.length} 项
           </span>
         ) : null
@@ -205,7 +205,7 @@ export default function AnomaliesSection(props: StatsModuleProps) {
                           className="py-2 first:pt-0 last:pb-0"
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
+                            <span className="rounded-pill bg-surface-hover px-2 py-0.5 td-text-caption text-ink-2">
                               {ANOMALY_LABEL[anomaly.type] ?? anomaly.type}
                             </span>
                             {timeRange && <span className="td-text-caption text-ink-3">{timeRange}</span>}

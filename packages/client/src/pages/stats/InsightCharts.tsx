@@ -159,14 +159,14 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
               className="flex min-h-10 w-full items-center justify-between gap-2 td-text-label"
             >
               <span className="flex min-w-0 items-center gap-2">
-                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: parent.color }} />
+                <span className="size-2.5 shrink-0 rounded-pill" style={{ backgroundColor: parent.color }} />
                 <span className="truncate text-ink">{parent.name}</span>
               </span>
               <span className="shrink-0 text-ink-2">
                 {parent.totalHours.toFixed(1)}h · {parent.sharePct}%
               </span>
             </button>
-            <div className="mt-2 flex h-2.5 overflow-hidden rounded-full bg-page">
+            <div className="mt-2 flex h-2.5 overflow-hidden rounded-pill bg-page">
               {parent.children.map((child) => (
                 <div
                   key={child.id}
@@ -181,7 +181,7 @@ export const CategoryCompositionBars = memo(function CategoryCompositionBars({
                 {parent.children.map((child) => (
                   <li key={child.id} className="flex items-center justify-between gap-2 td-text-caption">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: child.color }} />
+                      <span className="size-2 shrink-0 rounded-pill" style={{ backgroundColor: child.color }} />
                       <span className="truncate text-ink-2">{child.name}</span>
                     </span>
                     <span className="shrink-0 text-ink-3">

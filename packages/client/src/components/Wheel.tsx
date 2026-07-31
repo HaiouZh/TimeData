@@ -82,8 +82,8 @@ export function Wheel({ value, options, onChange, ariaLabel }: WheelProps) {
   }
 
   return (
-    <div className="wheel-viewport relative overflow-hidden rounded-lg bg-page">
-      <div className="wheel-selection pointer-events-none absolute inset-x-1 top-1/2 z-10 -translate-y-1/2 rounded-md border border-accent bg-accent-soft/60" />
+    <div className="wheel-viewport relative overflow-hidden rounded-row bg-page">
+      <div className="wheel-selection pointer-events-none absolute inset-x-1 top-1/2 z-10 -translate-y-1/2 rounded-ctl border border-accent bg-accent-soft/60" />
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-8 bg-gradient-to-b from-page to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-8 bg-gradient-to-t from-page to-transparent" />
       <div

@@ -517,7 +517,7 @@ export default function CircularTimeline({ date, slots, onSelectionChange, onPun
               type="button"
               onClick={() => centerTarget && onCenterAction?.(centerTarget)}
               disabled={!centerTarget}
-              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95 disabled:opacity-60 disabled:active:scale-100"
+              className="absolute inset-0 m-auto flex aspect-square w-[48%] flex-col items-center justify-center gap-0.5 rounded-pill px-3 text-center text-ink ring-1 ring-inset ring-border-hairline transition hover:ring-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:scale-95 disabled:opacity-60 disabled:active:scale-100"
               style={{ containerType: "inline-size" }}
               aria-label={centerLabel}
             >

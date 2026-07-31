@@ -47,6 +47,8 @@ last-reviewed: 2026-07-29
 
 面板的入场动画与 88vh 限高一并由 `index.css` 的 `.sheet-panel` 承载（顶层规则，优先级高于 utilities）：调用方传进来的 `className` 改不动限高，要调只能改那条 CSS。
 
+`MonthCalendar` 的月历面板使用 `rounded-card`，日期格与导航按钮使用 `rounded-ctl`；圆角只表达控件与面板角色，不改变日期选择行为。
+
 ### 控件排版档
 
 控件内文字一律用 `.td-text-*` 语义类，不写裸字号（由 `bare-text-size` 棘轮守，见 [design-language](../design-language.md) §3）。档位分工：

@@ -98,7 +98,7 @@ export default function StyleguidePage() {
               >
                 <span
                   aria-hidden="true"
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  className="h-1.5 w-1.5 shrink-0 rounded-pill"
                   style={{ backgroundColor: `var(${token})` }}
                 />
                 项目 {i + 1}

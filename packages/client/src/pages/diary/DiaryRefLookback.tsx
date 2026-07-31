@@ -47,7 +47,7 @@ function LookbackEntry({ date, label, epoch }: { date: string; label: string; ep
   }
 
   return (
-    <div className="rounded-xl">
+    <div className="rounded-row">
       <button
         type="button"
         onClick={toggle}

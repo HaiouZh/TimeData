@@ -84,7 +84,7 @@ export default function TimeRangeWheelPicker({
   return (
     <div className="space-y-3 rounded-card border border-border bg-surface p-3">
       <div
-        className={`rounded-xl px-3 py-2 text-center ${error ? "bg-danger/10 text-danger" : "bg-page text-ink"}`}
+        className={`rounded-row px-3 py-2 text-center ${error ? "bg-danger/10 text-danger" : "bg-page text-ink"}`}
       >
         <div className="td-text-caption text-ink-3">本次记录时长</div>
         <div className={`td-text-title font-semibold ${error ? "" : "td-duration"}`}>

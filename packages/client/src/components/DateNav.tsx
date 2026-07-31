@@ -10,7 +10,7 @@ interface DateNavProps {
 }
 
 const arrowClass =
-  "rounded-lg px-4 py-2.5 leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3";
+  "rounded-ctl px-4 py-2.5 leading-none text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-3";
 
 export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) {
   const today = getDateString(new Date());
@@ -58,7 +58,7 @@ export default function DateNav({ date, onDateChange, onSearch }: DateNavProps) 
             type="button"
             onClick={onSearch}
             aria-label="搜索记录"
-            className="rounded-lg px-3 py-2.5 text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="rounded-ctl px-3 py-2.5 text-ink-3 transition-colors hover:bg-surface-hover hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <Icon icon={MagnifyingGlass} size={18} />
           </button>
