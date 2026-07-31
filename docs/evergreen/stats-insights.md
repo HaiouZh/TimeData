@@ -12,7 +12,8 @@ covers:
   - packages/client/src/lib/statsModuleTrendSetting.ts
   - packages/client/src/pages/settings/SettingsInsightsPage.tsx
   - packages/client/src/pages/settings/SettingsStatsLayoutPage.tsx
-last-reviewed: 2026-07-25
+  - packages/client/src/pages/settings/SettingsTodoStatsLayoutPage.tsx
+last-reviewed: 2026-07-31
 ---
 
 # 统计与洞察
@@ -34,7 +35,7 @@ last-reviewed: 2026-07-25
 
 - `/stats` → `StatsPage` 仅 `<Navigate to="/stats/time" replace />`。
 - `/stats/time` → `TimeStatsPage`。
-- `/settings/stats-layout` → `SettingsStatsLayoutPage`（模块显隐/上下移/重置）。
+- `/settings/stats-layout` → `SettingsStatsLayoutPage`（模块显隐/可拖拽排序/重置）。
 - `/settings/insights` → `SettingsInsightsPage`（**历史路由名保留，显示名为“记录偏好”**：含待办默认落点（[todo](todo.md)）+ 打点分类（[categories-settings](categories-settings.md)）+ 睡眠分类（本域消费）三块，仅睡眠分类属本域）。
 
 ### 1.2 TimeStatsPage 周期/日期/总时长上下文 + 共享取数（`TimeStatsPage.tsx`）
@@ -135,7 +136,7 @@ last-reviewed: 2026-07-25
 | `lib/insights/{cache,constants,types,dailyRollup,sessions,overview,routine,baseline,anomalies,trends,structure}.ts` | 见 §2.4 |
 | `lib/statsLayoutSetting.ts` / `lib/statsModuleTrendSetting.ts` | 布局 / 趋势设置存取 + sanitize |
 | `pages/settings/SettingsInsightsPage.tsx` | “记录偏好”设置页（历史路由 `/settings/insights` 的跨域宿主）：待办默认落点 + 打点分类 + 睡眠分类（仅睡眠属本域） |
-| `pages/settings/SettingsStatsLayoutPage.tsx` | 统计模块显隐/上移下移/重置 |
+| `pages/settings/SettingsStatsLayoutPage.tsx` | 统计模块显隐/可拖拽排序/重置 |
 
 ### 4.2 测试
 

@@ -42,14 +42,17 @@ last-reviewed: 2026-07-31
 |---|---|---|---|
 | `sleep.categoryId` | 顶层分类 ID 或 null | `lib/sleepCategorySetting.ts` | [stats-insights](../stats-insights.md)（睡眠口径） |
 | `punch.categoryId.v1` | 子分类 ID 或 null（须未归档子分类） | `lib/settings/punchCategorySetting.ts` | [timeline](../timeline.md)（打点） |
-| `nav.visibleTabs.v1` | JSON 数组 ⊆ `[/quick-notes,/diary,/,/todo,/tracks,/goals,/stats/time]`；数组顺序 = 底栏显示顺序（设置>导航可拖拽排序，重开回规范位）；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 导航入口归属与排序：数组内显示在底栏，数组外显示在 `/settings/more` |
+| `nav.visibleTabs.v1` | JSON `{to,hidden}[]` 全量有序：`to` ⊆ `[/quick-notes,/diary,/,/todo,/tracks,/goals,/stats/time]`，`hidden` 为每项显隐标记；数组顺序 = 底栏显示顺序（设置>导航可拖拽排序，关闭留在原位、重开回原位）；旧 `string[]` 读时自动迁移（仅可见项，缺失按规范位补 `hidden:true`）；空数组 = 全部隐藏、坏值 = 全默认可见；旧 `/stats`→`/stats/time` | `lib/settings/navVisibleTabsSetting.ts` | 窄屏 / APK 导航入口归属与排序：`hidden:false` 项显示在底栏，`hidden:true` 项显示在 `/settings/more` |
 | `nav.desktopSidebar.v1` | JSON `{items:{to,placement}[]}`；`to` ⊆ 主导航 route，`placement=primary\|more`；缺失/坏值按 registry 默认补齐 | `lib/settings/desktopSidebarSetting.ts` | 宽屏桌面侧栏排序与更多收纳 |
 | `stats.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
+| `stats.todo.layout.v1` | JSON `{order, hidden}` | `lib/statsLayoutSetting.ts`（covers 归 [stats-insights](../stats-insights.md)）；key 定义于 `pages/stats/todo/todoStatsModules.ts` | [stats-insights](../stats-insights.md) |
 | `stats.module.trend.v1` | JSON 趋势窗口/图表类型 | `lib/statsModuleTrendSetting.ts`（covers 归 [stats-insights](../stats-insights.md)） | [stats-insights](../stats-insights.md) |
 | `todo.defaultDestination.v1` | `"today"\|"inbox"`，默认 today | `lib/settings/todoDefaultDestinationSetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md) |
 | `todo.gravity.v1` | JSON `{enabled,waterlineDays,weightStepDays,graceDays,drawM,pickN}`，默认 `{true,14,7,7,5,1}` | `lib/settings/todoGravitySetting.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（inbox 水位线 + 翻牌参数，可视化入口 `/settings/todo-gravity`） |
 | `todo.gravity.review.v1` | JSON `{[taskId]: iso}`；机器轮换状态，写时 merge + prune `max(90, waterlineDays*4)` 天 | `lib/tasks/gravityReviewStorage.ts`（covers 归 [todo](../todo.md)） | [todo](../todo.md)（翻牌跨设备避重） |
 | `track.actionTags.v2` | JSON 字符串数组；旧 `{tag,court}` 数组兼容读取但忽略 `court`；未配置→种子 `[待我处理,agent在做]`；旧默认 `[等我,待决策,卡住,agent在做]` 读时归一为新默认；显式 `"[]"`→空 | `lib/settings/trackActionTagsSetting.ts` + `shared/src/trackBoardSignals.ts` parser（covers 归 [tracks](../tracks.md)） | [tracks](../tracks.md)(看板信号 + 步骤检索标签) |
+
+> **`nav.visibleTabs.v1` 兼容警告**：key 仍是 v1，新旧端读写同一个 key。未升级的旧端（APK / PWA 缓存）读到新 `{to,hidden}[]` 格式会视为空列表（底栏只剩固定 `/settings`）；旧端再写入会按「仅可见项 string[]」覆盖，冲掉 hidden 标记与自定义排序。
 
 旧 `track.actionTags.v1` 只作为影子读取来源；新写入继续使用 `track.actionTags.v2`。早期 v2 的 `court` 字段不再作为产品语义消费。server agent context API 与 client 轨道列表使用同一 shared parser 读取该 key，避免看板信号词表在前后端漂移。
 
