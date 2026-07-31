@@ -193,7 +193,7 @@ describe("SettingsNavPage", () => {
   });
 
   it("drags a mobile tab and persists the new order", async () => {
-    const { host, root } = await renderPage();
+    const { root } = await renderPage();
     const [mobileDragEnd] = dndState.onDragEnds;
     await act(async () => {
       mobileDragEnd?.({ active: { id: "/diary" }, over: { id: "/todo" } });
@@ -208,7 +208,7 @@ describe("SettingsNavPage", () => {
   });
 
   it("drags a desktop item and persists the new order", async () => {
-    const { host, root } = await renderPage();
+    const { root } = await renderPage();
     const [, desktopDragEnd] = dndState.onDragEnds;
     await act(async () => {
       desktopDragEnd?.({ active: { id: "/diary" }, over: { id: "/quick-notes" } });

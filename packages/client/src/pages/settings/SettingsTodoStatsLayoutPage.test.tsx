@@ -7,7 +7,7 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSetting } from "../../lib/settings/index.ts";
 import { click, renderDom, unmount } from "../../test/domHarness.tsx";
-import SettingsStatsLayoutPage from "./SettingsStatsLayoutPage.tsx";
+import SettingsTodoStatsLayoutPage from "./SettingsTodoStatsLayoutPage.tsx";
 
 const dndState = vi.hoisted(() => ({ onDragEnds: [] as Array<(event: unknown) => void> }));
 
@@ -40,30 +40,27 @@ vi.mock("../../components/SortableCategoryItem.tsx", () => ({
 
 beforeEach(resetDb);
 
-// 上限用「事件循环轮次」而非墙钟：等的是同线程的 Dexie 持久化 + React 重渲染，
-// 快桶 isolate:false 多 worker 并行时墙钟会在很少的轮次内流干，导致没坏也判超时。
 const MAX_FLUSHES = 200;
 
 async function waitForLayout(expected: (layout: { order?: string[]; hidden?: string[] }) => boolean): Promise<void> {
   for (let i = 0; i < MAX_FLUSHES; i += 1) {
-    const raw = await getSetting("stats.layout.v1");
+    const raw = await getSetting("stats.todo.layout.v1");
     const layout = raw ? (JSON.parse(raw) as { order?: string[]; hidden?: string[] }) : {};
     if (expected(layout)) return;
-    // setTimeout(0)：让位给 Dexie 持久化的宏任务边界，非真实计时等待。
     await new Promise((resolve) => window.setTimeout(resolve, 0));
   }
-  throw new Error("Timed out waiting for stats.layout.v1");
+  throw new Error("Timed out waiting for stats.todo.layout.v1");
 }
 
 async function renderPage() {
   dndState.onDragEnds = [];
-  return await renderDom(createElement(MemoryRouter, null, createElement(SettingsStatsLayoutPage)));
+  return await renderDom(createElement(MemoryRouter, null, createElement(SettingsTodoStatsLayoutPage)));
 }
 
-describe("SettingsStatsLayoutPage", () => {
+describe("SettingsTodoStatsLayoutPage", () => {
   it("列出全部模块标题", async () => {
     const { host, root } = await renderPage();
-    for (const title of ["总览", "作息", "异常与空挡", "趋势变化", "结构诊断"]) {
+    for (const title of ["总览", "创建分布", "完成分布", "存活时长分布", "完成热力图", "周期指标", "节奏", "维度拆解", "删除洞察"]) {
       expect(host.textContent).toContain(title);
     }
     await unmount(root);
@@ -71,10 +68,10 @@ describe("SettingsStatsLayoutPage", () => {
 
   it("隐藏某模块写入 layout，hidden 含该 id", async () => {
     const { host, root } = await renderPage();
-    const toggle = host.querySelector('[role="switch"][aria-label="显示 总览"]');
+    const toggle = host.querySelector('[role="switch"][aria-label="显示 创建分布"]');
     await click(toggle);
 
-    await waitForLayout((layout) => layout.hidden?.includes("overview") ?? false);
+    await waitForLayout((layout) => layout.hidden?.includes("created") ?? false);
 
     await unmount(root);
   });
@@ -83,20 +80,20 @@ describe("SettingsStatsLayoutPage", () => {
     const { root } = await renderPage();
     const [dragEnd] = dndState.onDragEnds;
     await act(async () => {
-      dragEnd?.({ active: { id: "routine" }, over: { id: "overview" } });
+      dragEnd?.({ active: { id: "created" }, over: { id: "overview" } });
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
 
-    await waitForLayout((layout) => layout.order?.[0] === "routine");
+    await waitForLayout((layout) => layout.order?.[0] === "created");
 
     await unmount(root);
   });
 
   it("全部行渲染拖拽手柄且无上移/下移按钮", async () => {
     const { host, root } = await renderPage();
-    expect(host.querySelector('[data-drag-handle="拖动 作息"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="上移 作息"]')).toBeNull();
-    expect(host.querySelector('[aria-label="下移 作息"]')).toBeNull();
+    expect(host.querySelector('[data-drag-handle="拖动 创建分布"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="上移 创建分布"]')).toBeNull();
+    expect(host.querySelector('[aria-label="下移 创建分布"]')).toBeNull();
     await unmount(root);
   });
 
@@ -104,10 +101,10 @@ describe("SettingsStatsLayoutPage", () => {
     const { host, root } = await renderPage();
     const [dragEnd] = dndState.onDragEnds;
     await act(async () => {
-      dragEnd?.({ active: { id: "routine" }, over: { id: "overview" } });
+      dragEnd?.({ active: { id: "created" }, over: { id: "overview" } });
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     });
-    await waitForLayout((layout) => layout.order?.[0] === "routine");
+    await waitForLayout((layout) => layout.order?.[0] === "created");
 
     const reset = host.querySelector('button[aria-label="重置默认布局"]');
     await click(reset);

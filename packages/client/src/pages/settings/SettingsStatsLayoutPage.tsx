@@ -1,3 +1,16 @@
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import SortableCategoryItem from "../../components/SortableCategoryItem.tsx";
+import { reorderById } from "../../lib/navOrder.js";
 import { useStatsLayout } from "../../lib/statsLayoutSetting.ts";
 import { STATS_MODULE_LIST, STATS_MODULES } from "../stats/modules/statsModules.ts";
 import type { StatsModuleId } from "../stats/modules/types.ts";
@@ -6,6 +19,12 @@ import SettingsDetailPage from "./SettingsDetailPage.tsx";
 export default function SettingsStatsLayoutPage() {
   const { order, hidden, setLayout, reset } = useStatsLayout(STATS_MODULE_LIST);
 
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   const toggle = (id: StatsModuleId) => {
     const nextHidden = new Set(hidden);
     if (nextHidden.has(id)) nextHidden.delete(id);
@@ -13,74 +32,66 @@ export default function SettingsStatsLayoutPage() {
     setLayout({ order, hidden: order.filter((item) => nextHidden.has(item)) });
   };
 
-  const move = (id: StatsModuleId, direction: -1 | 1) => {
-    const index = order.indexOf(id);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
-    const nextOrder = [...order];
-    [nextOrder[index], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[index]];
-    setLayout({ order: nextOrder, hidden: nextOrder.filter((item) => hidden.has(item)) });
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const nextOrder = reorderById(order, String(active.id), String(over.id), (id) => id);
+    setLayout({ order: nextOrder, hidden: nextOrder.filter((id) => hidden.has(id)) });
   };
 
   return (
     <SettingsDetailPage title="统计页面布局">
       <section className="space-y-3">
-        <p className="px-1 td-text-caption leading-relaxed text-ink-3">调整统计页各模块的显示与顺序，设置会跨设备同步。</p>
-        <ul className="space-y-2">
-          {order.map((id, index) => {
-            const module = STATS_MODULES[id];
-            const isHidden = hidden.has(id);
-            return (
-              <li key={id} className="rounded-card border border-border bg-surface p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="td-text-label font-medium text-ink">{module.title}</div>
-                    <div className="mt-0.5 td-text-caption leading-relaxed text-ink-3">{module.description}</div>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={!isHidden}
-                    aria-label={`显示 ${module.title}`}
-                    onClick={() => toggle(id)}
-                    className={`h-7 w-12 shrink-0 rounded-full p-0.5 transition ${
-                      isHidden ? "bg-border-strong" : "bg-accent"
+        <p className="px-1 td-text-caption leading-relaxed text-ink-3">
+          调整统计页各模块的显示与顺序，设置会跨设备同步。拖动调整顺序。
+        </p>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            <ul className="space-y-2">
+              {order.map((id) => {
+                const module = STATS_MODULES[id];
+                const isHidden = hidden.has(id);
+                return (
+                  <SortableCategoryItem
+                    key={id}
+                    id={id}
+                    dragLabel={`拖动 ${module.title}`}
+                    className={`flex items-stretch rounded-card border border-border bg-surface ${
+                      isHidden ? "opacity-60" : ""
                     }`}
                   >
-                    <span
-                      className={`block h-6 w-6 rounded-full bg-page transition ${
-                        isHidden ? "translate-x-0" : "translate-x-5"
-                      }`}
-                    />
-                  </button>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    aria-label={`上移 ${module.title}`}
-                    disabled={index === 0}
-                    onClick={() => move(id, -1)}
-                    className="min-h-9 rounded-full border border-border bg-surface px-3 td-text-caption text-ink-2 disabled:opacity-30"
-                  >
-                    上移
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`下移 ${module.title}`}
-                    disabled={index === order.length - 1}
-                    onClick={() => move(id, 1)}
-                    className="min-h-9 rounded-full border border-border bg-surface px-3 td-text-caption text-ink-2 disabled:opacity-30"
-                  >
-                    下移
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                    <div className="flex w-full min-w-0 items-start justify-between gap-3 p-3 pr-1">
+                      <div className="min-w-0">
+                        <div className="td-text-label font-medium text-ink">{module.title}</div>
+                        <div className="mt-0.5 td-text-caption leading-relaxed text-ink-3">{module.description}</div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={!isHidden}
+                        aria-label={`显示 ${module.title}`}
+                        onClick={() => toggle(id)}
+                        className={`h-7 w-12 shrink-0 rounded-full p-0.5 transition ${
+                          isHidden ? "bg-border-strong" : "bg-accent"
+                        }`}
+                      >
+                        <span
+                          className={`block h-6 w-6 rounded-full bg-page transition ${
+                            isHidden ? "translate-x-0" : "translate-x-5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </SortableCategoryItem>
+                );
+              })}
+            </ul>
+          </SortableContext>
+        </DndContext>
       </section>
       <button
         type="button"
+        aria-label="重置默认布局"
         onClick={reset}
         className="min-h-11 w-full rounded-full border border-border bg-surface td-text-label text-ink-2"
       >
