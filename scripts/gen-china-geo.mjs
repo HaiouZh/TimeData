@@ -3,6 +3,10 @@
 // 源数据: https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ipv4_source.txt
 // 格式: 起始IP|结束IP|国家|省|市|运营商|国家码
 
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 /** 34 个省级行政区在源数据里的多数派写法。白名单之外一律报错，不静默透传。 */
 export const PROVINCE_CANONICAL = new Set([
   "北京", "天津", "河北省", "山西省", "内蒙古", "辽宁省", "吉林省", "黑龙江省",
@@ -29,7 +33,7 @@ export const TAIWAN_CITIES_IN_PROVINCE_SLOT = new Set([
   "台北市", "桃园市", "基隆市", "新竹县", "彰化县", "台中市",
 ]);
 
-/** 少数派条目的市位是英文。表外的英文名一律报错。 */
+/** 少数派条目的市位是英文。表外的英文名一律报错。区/镇级写法归一到所属地级市,与主流段共用收敛键。 */
 export const CITY_ALIASES = {
   "Beijing": "北京市",
   "Shanghai": "上海市",
@@ -37,6 +41,46 @@ export const CITY_ALIASES = {
   "Chongqing": "重庆市",
   "Nanning Shi": "南宁市",
   "Wulumuqi": "乌鲁木齐市",
+  // Cloudflare/Akamai CDN 段的英文写法(源数据里同市段的中文写法是主流,归并过去)
+  "Taipei City": "台北市",
+  "Zhongli District": "桃园市",
+  "Fengyuan": "台中市",
+  "Changchun Shi": "长春市",
+  "Chengdu Shi": "成都市",
+  "Fuyang Shi": "阜阳市",
+  "Hefei Shi": "合肥市",
+  "Heze Shi": "菏泽市",
+  "Jining Shi": "济宁市",
+  "Linyi Xian": "临沂市",
+  "Weifang Shi": "潍坊市",
+  "Dongguan Shi": "东莞市",
+  "Foshan Shi": "佛山市",
+  "Guangzhou Shi": "广州市",
+  "Maoming Shi": "茂名市",
+  "Shenzhen": "深圳市",
+  "Zhuhai Shi": "珠海市",
+  "Nanjing Shi": "南京市",
+  "Nantong Shi": "南通市",
+  "Tongshan": "徐州市",
+  "Yancheng Shi": "盐城市",
+  "Ganzhou Shi": "赣州市",
+  "Baoding Shi": "保定市",
+  "Hanshan Qu": "邯郸市",
+  "Langfang Shi": "廊坊市",
+  "Shijiazhuang Shi": "石家庄市",
+  "Nanyang Shi": "南阳市",
+  "Zhengzhou Shi": "郑州市",
+  "Zhoukou Shi": "周口市",
+  "Zhumadian Shi": "驻马店市",
+  "Ningbo Shi": "宁波市",
+  "Wuhan Shi": "武汉市",
+  "Xiangyang": "襄阳市",
+  "Changsha Shi": "长沙市",
+  "Hengyang Xian": "衡阳市",
+  "Shenyang Shi": "沈阳市",
+  "Guozhen": "宝鸡市",
+  "Xi'an Shi": "西安市",
+  "Kowloon": "九龙",
 };
 
 /** 同一家运营商在源数据里有多种写法，不归一会在界面上显示成两个不同来源。 */
@@ -86,3 +130,96 @@ export function normalizeRow(fields) {
 
   return { province, city, isp };
 }
+
+export const FORMAT_VERSION = 1;
+export const HEADER_BYTES = 18;
+
+export function ipToU32(ip) {
+  const parts = ip.split(".");
+  if (parts.length !== 4) throw new Error(`非法 IPv4「${ip}」`);
+  return parts.reduce((acc, part) => acc * 256 + Number(part), 0);
+}
+
+export function encodeTable(entries, generatedOn) {
+  const sorted = [...entries].sort((a, b) => a.start - b.start);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].start <= sorted[i - 1].end) {
+      throw new Error(`区间重叠：${sorted[i - 1].start}-${sorted[i - 1].end} 与 ${sorted[i].start}-${sorted[i].end}`);
+    }
+  }
+
+  const poolIndex = new Map();
+  const pool = [];
+  const indices = sorted.map((entry) => {
+    const key = `${entry.province}\u0000${entry.city ?? ""}\u0000${entry.isp ?? ""}`;
+    let idx = poolIndex.get(key);
+    if (idx === undefined) {
+      idx = pool.length;
+      pool.push([entry.province, entry.city, entry.isp]);
+      poolIndex.set(key, idx);
+    }
+    return idx;
+  });
+  if (pool.length > 0xffff) throw new Error(`地区组合数 ${pool.length} 超出 u16 上限`);
+
+  const poolBuf = Buffer.from(JSON.stringify(pool), "utf8");
+  const buf = Buffer.alloc(HEADER_BYTES + sorted.length * 10 + poolBuf.length);
+  buf.write("TDCN", 0, "ascii");
+  buf.writeUInt16BE(FORMAT_VERSION, 4);
+  buf.writeUInt32BE(generatedOn, 6);
+  buf.writeUInt32BE(sorted.length, 10);
+  buf.writeUInt32BE(poolBuf.length, 14);
+  sorted.forEach((entry, i) => {
+    const at = HEADER_BYTES + i * 10;
+    buf.writeUInt32BE(entry.start, at);
+    buf.writeUInt32BE(entry.end, at + 4);
+    buf.writeUInt16BE(indices[i], at + 8);
+  });
+  poolBuf.copy(buf, HEADER_BYTES + sorted.length * 10);
+  return buf;
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (const arg of argv) {
+    const m = /^--([^=]+)=(.*)$/.exec(arg);
+    if (m) out[m[1]] = m[2];
+  }
+  return out;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args.source) {
+    console.error("用法: node scripts/gen-china-geo.mjs --source=<ipv4_source.txt 路径> [--out=<输出路径>] [--date=YYYYMMDD]");
+    console.error("源文件: https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ipv4_source.txt");
+    process.exit(1);
+  }
+  const outPath = args.out ?? join(dirname(fileURLToPath(import.meta.url)), "..", "packages", "server", "assets", "china-geo.bin");
+  const generatedOn = Number(args.date ?? new Date().toISOString().slice(0, 10).replace(/-/g, ""));
+
+  const entries = [];
+  let total = 0, withCity = 0, normalized = 0;
+  for (const line of readFileSync(args.source, "utf8").split("\n")) {
+    if (!line) continue;
+    const fields = line.split("|");
+    const region = normalizeRow(fields);
+    if (region === null) continue;
+    total++;
+    if (region.city !== null) withCity++;
+    // 归一计数是人工核对的依据:突然暴涨说明上游改了写法,该看一眼再提交
+    if (region.province !== fields[3] || (region.city !== null && region.city !== fields[4]) || (region.isp !== null && region.isp !== fields[5])) normalized++;
+    entries.push({ start: ipToU32(fields[0]), end: ipToU32(fields[1]), ...region });
+  }
+
+  const buf = encodeTable(entries, generatedOn);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, buf);
+
+  const poolLen = buf.readUInt32BE(14);
+  const pool = JSON.parse(buf.subarray(HEADER_BYTES + total * 10, HEADER_BYTES + total * 10 + poolLen).toString("utf8"));
+  console.log(`中国区间 ${total} 条 | 有城市 ${withCity} (${(withCity / total * 100).toFixed(1)}%) | 地区组合 ${pool.length} | 被归一 ${normalized} 条`);
+  console.log(`生成日 ${generatedOn} | 输出 ${outPath} | ${(buf.length / 1024).toFixed(0)}KB`);
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();

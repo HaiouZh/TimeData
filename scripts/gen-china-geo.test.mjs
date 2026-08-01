@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeRow } from "./gen-china-geo.mjs";
+import { encodeTable, ipToU32, normalizeRow } from "./gen-china-geo.mjs";
 
 const row = (province, city, isp) => ["1.0.0.0", "1.0.0.255", "中国", province, city, isp, "CN"];
 
@@ -57,4 +57,61 @@ test("未知省名必须抛错，不得静默透传", () => {
 
 test("未知的英文城市名必须抛错", () => {
   assert.throws(() => normalizeRow(row("江苏省", "Atlantis", "移动")), /未知英文城市名.*Atlantis/);
+});
+
+// 2026-08-01 实测:上游把 Cloudflare/Akamai CDN 段写成英文城市名(共 39 个变体),
+// 与源数据里的中文主流写法归并,避免生成新收敛键
+test("CDN 段的英文城市名归一到主流中文写法", () => {
+  assert.equal(normalizeRow(row("广东省", "Shenzhen", "0")).city, "深圳市");
+  assert.equal(normalizeRow(row("江苏省", "Tongshan", "0")).city, "徐州市");
+  assert.equal(normalizeRow(row("香港特别行政区", "Kowloon", "0")).city, "九龙");
+  assert.equal(normalizeRow(row("台湾省", "Taipei City", "0")).city, "台北市");
+  assert.equal(normalizeRow(row("台湾省", "Zhongli District", "0")).city, "桃园市");
+});
+
+test("ipToU32 按大端换算", () => {
+  assert.equal(ipToU32("0.0.0.0"), 0);
+  assert.equal(ipToU32("1.0.0.0"), 16777216);
+  assert.equal(ipToU32("255.255.255.255"), 4294967295);
+});
+
+test("encodeTable 写出可解析的头部", () => {
+  const buf = encodeTable([
+    { start: ipToU32("112.25.0.0"), end: ipToU32("112.25.63.255"), province: "江苏省", city: "南京市", isp: "中国移动" },
+  ], 20260801);
+  assert.equal(buf.subarray(0, 4).toString("ascii"), "TDCN");
+  assert.equal(buf.readUInt16BE(4), 1);
+  assert.equal(buf.readUInt32BE(6), 20260801);
+  assert.equal(buf.readUInt32BE(10), 1);
+});
+
+// 3781 个唯一组合 vs 65412 条区间——池化是这张表能压到 750KB 的原因
+test("相同地区组合共用一个池条目", () => {
+  const entries = [
+    { start: 1, end: 2, province: "江苏省", city: "南京市", isp: "中国移动" },
+    { start: 3, end: 4, province: "江苏省", city: "南京市", isp: "中国移动" },
+    { start: 5, end: 6, province: "江苏省", city: "无锡市", isp: "中国移动" },
+  ];
+  const buf = encodeTable(entries, 20260801);
+  const poolLen = buf.readUInt32BE(14);
+  const pool = JSON.parse(buf.subarray(18 + 3 * 10, 18 + 3 * 10 + poolLen).toString("utf8"));
+  assert.equal(pool.length, 2);
+  assert.equal(buf.readUInt16BE(18 + 0 * 10 + 8), buf.readUInt16BE(18 + 1 * 10 + 8));
+  assert.notEqual(buf.readUInt16BE(18 + 0 * 10 + 8), buf.readUInt16BE(18 + 2 * 10 + 8));
+});
+
+test("区间按 start 升序写出（二分查找的前提）", () => {
+  const buf = encodeTable([
+    { start: 100, end: 200, province: "江苏省", city: "南京市", isp: null },
+    { start: 1, end: 50, province: "上海", city: "上海市", isp: null },
+  ], 20260801);
+  assert.equal(buf.readUInt32BE(18), 1);
+  assert.equal(buf.readUInt32BE(18 + 10), 100);
+});
+
+test("区间重叠时报错——重叠会让二分查找的结果取决于命中顺序", () => {
+  assert.throws(() => encodeTable([
+    { start: 1, end: 100, province: "江苏省", city: "南京市", isp: null },
+    { start: 50, end: 200, province: "上海", city: "上海市", isp: null },
+  ], 20260801), /区间重叠/);
 });
