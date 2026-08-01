@@ -11,6 +11,7 @@ import { grabTaskToHand } from "../lib/sessions.js";
 import { getSetting } from "../lib/settings/index.js";
 import { setTodoDefaultDestination } from "../lib/settings/todoDefaultDestinationSetting.js";
 import { addTask, createChildTask, deleteTaskCascade, scheduleTask, setTaskTags, toggleTaskDone } from "../lib/tasks.js";
+import * as tasksLib from "../lib/tasks.js";
 import { normalizeScheduledDate } from "../lib/tasks/placement.js";
 import { setInboxCollapsed } from "../lib/tasks/workbenchPrefs.js";
 import { click, renderDom, unmount } from "../test/domHarness.js";
@@ -2717,6 +2718,47 @@ describe("TodoPage 多选提交", () => {
       "at-hand view reordered",
       settle,
     );
+    await unmount(root);
+  });
+
+  it("手头区重排是乐观的：落库完成前视图已按新序渲染（不出现先回弹再硬跳）", async () => {
+    // 拦截 persistTaskOrder 挂起：验证「放手即落位」不依赖落库回流。
+    // 承重点：若乐观接线被删（reorder 分支只 await、不 setOptimisticOrder），
+    // 本用例在 resolve 前断言 DOM 会拿到旧序而红——这是本功能的核心行为。
+    const now = "2026-06-28T09:00:00.000Z";
+    let resolvePersist: (() => void) | null = null;
+    const persistSpy = vi
+      .spyOn(tasksLib, "persistTaskOrder")
+      .mockImplementationOnce((orderedIds: string[]) => new Promise<void>((resolve) => { resolvePersist = resolve; }));
+
+    const a = await addTask({ title: "买菜", toInbox: true });
+    const b = await addTask({ title: "洗碗", toInbox: true });
+    await grabTaskToHand(a.id, { now: new Date(now) });
+    await grabTaskToHand(b.id, { now: new Date(now) });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-at-hand"] [aria-label="移动 洗碗"]') !== null,
+      "at-hand drag handle",
+      settle,
+    );
+
+    await keyboardDrag(host.querySelector('[data-section="todo-at-hand"] [aria-label="移动 洗碗"]') as HTMLElement);
+
+    // persistTaskOrder 尚未 resolve：视图顺序必须已经翻转（乐观渲染生效）。
+    await waitForCondition(
+      () =>
+        host.querySelector('[data-section="todo-at-hand"] [aria-label^="移动 "]')?.getAttribute("aria-label") ===
+        "移动 洗碗",
+      "optimistic view reordered before persist resolves",
+      settle,
+    );
+
+    resolvePersist?.();
+    await act(async () => {
+      await persistSpy.mock.results[0]?.value;
+    });
+    persistSpy.mockRestore();
     await unmount(root);
   });
 });
