@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { DndContext } from "@dnd-kit/core";
 import type { Task } from "@timedata/shared";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderDom, unmount } from "../../test/domHarness.js";
 import { TaskList } from "./TaskList.js";
@@ -127,6 +128,35 @@ describe("TaskList prop 透传", () => {
     );
     expect(host.querySelector('[data-testid="swipeable-item"]')?.getAttribute("data-classname")).toContain("min-w-0");
 
+    await unmount(root);
+  });
+
+  it("onCopyTitle 透传到行：Shift+单击标题触发复制回调", async () => {
+    vi.mocked(useIsCoarsePointer).mockReturnValue(false);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const onCopyTitle = vi.fn();
+    const { host, root } = await renderDom(
+      <TaskList
+        pool="today"
+        tasks={[task({ title: "买啤酒" })]}
+        onToggle={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onToToday={noop}
+        onToInbox={noop}
+        onCopyTitle={onCopyTitle}
+      />,
+    );
+
+    const title = host.querySelector(".select-text") as HTMLElement | null;
+    expect(title).not.toBeNull();
+    title!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    await act(async () => {});
+
+    expect(writeText).toHaveBeenCalledWith("买啤酒");
+    expect(onCopyTitle).toHaveBeenCalledTimes(1);
+    delete (navigator as { clipboard?: unknown }).clipboard;
     await unmount(root);
   });
 });

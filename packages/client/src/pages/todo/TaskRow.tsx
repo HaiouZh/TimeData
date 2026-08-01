@@ -489,6 +489,7 @@ export function TaskRow({
             parentId={task.id}
             mode={childrenMode}
             autoDraft={childTotal === 0 || undefined}
+            onCopyTitle={onCopyTitle}
             onEmptyDismiss={childTotal === 0 ? () => setExpanded(false) : undefined}
           />
         </div>

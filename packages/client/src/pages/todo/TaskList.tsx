@@ -36,6 +36,8 @@ export interface TaskListProps {
   onToToday: (t: Task) => void;
   onToInbox: (t: Task) => void;
   onToHand?: (t: Task) => void;
+  /** 标题 Shift+单击复制成功后的上抛回调（透传给 TaskRow）。 */
+  onCopyTitle?: (t: Task) => void;
   /** 行内额外动作插槽（如翻牌「顶一下」）。 */
   extraAction?: (task: Task) => ReactNode;
   /** meta 胶囊带插槽（项目区状态点 / 项目名 chip）；返回 null 即该行不加。 */
@@ -68,6 +70,7 @@ export function TaskList(props: TaskListProps) {
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
         onToHand={props.onToHand}
+        onCopyTitle={props.onCopyTitle}
         extraAction={props.extraAction}
         childrenModeOverride={props.selectionMode ? "static" : props.childrenModeOverride}
         indentTargetActive={props.indentTargetId === task.id}
