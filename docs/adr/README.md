@@ -37,6 +37,7 @@ status: living
 | [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) | 陌生来源提醒按「运营商+城市」收敛，不再按精确 IP | 2026-07-30 | 动态 IP 与 VPN 出口下按精确 IP 去重永远确认不完；改按 ASN+城市收敛并显示 GeoLite2 中文归属地，删 `known_ips` 换 `known_ip_scopes`，主动降低灵敏度换「用户真的会看」 | |
 | [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) | 项目与标签共用一组 tint token，类型区分靠形状不靠颜色 | 2026-07-30 | 用户内容身份色统一走 `--color-tint-1..9`；圆点 = 项目、`#` = 标签，颜色只管同类型内区分个体；旧 `TAG_PALETTE` 裸色退出 allowlist | data palette 部分被 [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) 修订 |
 | [0027](0027-retire-unused-data-palette-and-scope-track-agent-tone.md) | 退役失活 data palette，Track agent tone 归入业务作用域 | 2026-07-31 | 删除无生产消费的 data palette；“agent 在跑”保留原紫色外观并改用 Track scoped token | 修订 [0026](0026-content-tint-shared-palette-shape-distinguishes-type.md) 的 data palette 部分 |
+| [0028](0028-china-geo-from-builtin-ip2region-table.md) | 中国归属地改用内置 ip2region 段表，收敛键加中国省市档 | 2026-08-01 | GeoLite2 免费库对中国运营商段无 city 级数据是结构缺失；中国段改走随镜像发布的内置表（命中即中国、中文省市+运营商），收敛键中国走 `asn\|cn:省[:市]`，国外路径不变；另接可选 geoipupdate 自动更新 GeoLite2 | 修订 [0025](0025-new-ip-alert-scoped-by-asn-and-city.md) 的收敛键地名与数据源部分（仅中国段），其余决策仍有效 |
 
 ## 按主题速查
 

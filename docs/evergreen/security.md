@@ -20,6 +20,7 @@ covers:
   - packages/server/src/lib/totpStore.ts
   - packages/server/src/lib/knownIps.ts
   - packages/server/src/lib/geoip.ts
+  - packages/server/src/lib/chinaGeo.ts
   - packages/server/src/lib/ipScope.ts
   - packages/server/src/routes/admin/totp.ts
   - packages/client/src/lib/totpChallenge.ts
@@ -27,11 +28,12 @@ covers:
   - packages/client/src/pages/settings/SettingsTotpSection.tsx
   - packages/client/src/lib/adminNewIps.ts
   - packages/client/src/lib/geoLabel.ts
+  - scripts/gen-china-geo.mjs
 contracts:
   - packages/server/src/middleware/auth.ts
   - packages/server/src/middleware/totp.ts
   - packages/client/src/lib/storageKeys.ts
-last-reviewed: 2026-07-30
+last-reviewed: 2026-08-01
 ---
 
 # 安全与凭据处理
@@ -115,15 +117,15 @@ Android 原生环境保持 HTTPS-only：`packages/mobile/capacitor.config.ts` �
 
 ## 陌生来源提醒
 
-`known_ip_scopes` 表按 token tier(master/agent/dev_bypass)隔离记录见过的**来源范围**，主键 `(token_tier, scope_key)`。`scope_key` 由 `lib/ipScope.ts` 的 `computeIpScope` 算出，三档降级：有 ASN 且查到城市 → `asn:<asn>|geo:<cityGeonameId>`；有 ASN 无城市 → `asn:<asn>`；无 ASN → `net:<网段前缀>`。城市那一档的键用 GeoLite2 的城市数字 id（`geoname_id`）而非本地化城市名：地名随 mmdb 构建变化（`zh-CN` 缺失时回落 `en`），用名字做键会让换库后已确认的范围重报；且同一 ASN 下同名不同国的城市（London 英国 / 加拿大、San Jose 美国 / 哥斯达黎加）会被并成一个键。收敛到范围而非精确 IP 是因为动态 IP 与 VPN 出口下按精确 IP 永远确认不完（[ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)）——代价是同运营商同城换 IP 不再报警，取舍见该 ADR。
+`known_ip_scopes` 表按 token tier(master/agent/dev_bypass)隔离记录见过的**来源范围**，主键 `(token_tier, scope_key)`。`scope_key` 由 `lib/ipScope.ts` 的 `computeIpScope` 算出，两套键并存、前缀不同因而不碰撞：**中国**（内置段表命中）走 `asn:<asn>|cn:<省>:<市>`，缺市退 `asn:<asn>|cn:<省>`（香港等 5802 个段只有省没有市，缺这档会掉进最宽的 asn 档）；**国外**仍走 GeoLite2 的 `asn:<asn>|geo:<cityGeonameId>`（城市档用 `geoname_id` 而非地名，理由见 [ADR 0025](../adr/0025-new-ip-alert-scoped-by-asn-and-city.md)）。中国档用归一后的中文省市名做键而非数字 id——内置表是固定版本、跨版本稳定，且键带 `cn:` 前缀、只用于中国，「同名不同国」碰撞不成立（[ADR 0028](../adr/0028-china-geo-from-builtin-ip2region-table.md)）。省市皆无或 ASN 缺失时退 `asn:<asn>` / `net:<网段前缀>`。收敛到范围而非精确 IP 是因为动态 IP 与 VPN 出口下按精确 IP 永远确认不完——代价是同运营商同城换 IP 不再报警，取舍见 ADR 0025。
 
 `net:` 档的前缀由 `networkPrefix` 算，共四种形态：合法 IPv4 取 /24；合法 IPv6 取展开并去前导零后的 /64；真正的 IPv4-mapped / IPv4-compatible 形式（`::ffff:a.b.c.d`、`::a.b.c.d`）按内嵌 IPv4 的 /24；**不是合法 IP 的字符串按整串当前缀**（键即 `net:<原始串>`）。前置闸是 `node:net` 的 `isIP`，与 `geoip.ts` 的 `maxmind.validate` 是同一把闸——IP 取自 `X-Real-IP` / `X-Forwarded-For`，是外部可控字符串，这条兜底保证不同来源绝不被静默并成一个键（宁可对同一个来源多报一次）。
 
-归属地由 `lib/geoip.ts` 查 GeoLite2 离线库（City + ASN）得到，地名取 `names["zh-CN"] ?? names.en ?? null`——缺中文名的地区显示英文名。`lookupGeo` 在 IP 非法、**两个库都缺失**、或两个库都查不到该 IP 时返回 null。**单缺一个库不是整体降级**，两种半加载态的表现不同：缺 City 库时 `asn` 仍有值，收敛落在 `asn:<asn>` 档（不是 `net:` 档），界面显示「位置未知」加运营商名；缺 ASN 库时收敛退回 `net:` 档，界面照常显示地名。`getGeoipReadiness()` 报告两个库各自是否加载成功，洞察页在任一为 false 时显示提示条，写明缺哪个库、收敛退化到哪一档；半加载态的收敛范围比全就绪时宽。库缺失只降级不报错，任何一种缺失组合下服务照常工作。请求日志的归属地不落库，`queryRequestLogs` 返回时实时查。
+归属地由 `lib/geoip.ts` 合成两个数据源得到：**内置中国段表**（`lib/chinaGeo.ts` 二分查找 `assets/china-geo.bin`，约 750KB、随镜像发布）与 GeoLite2 离线库（City + ASN）。`lookupGeo` 先查中国段表——命中即中国（`country: "中国"`、省、市、运营商全取自带数据，ASN 号仍取自 GeoLite2-ASN）；未命中原样走 GeoLite2，地名取 `names["zh-CN"] ?? names.en ?? null`。国外路径不碰中国表。`lookupGeo` 在 IP 非法、两个 mmdb 都缺失且中国表未命中、或两个数据源都查不到该 IP 时返回 null（缺 mmdb 但中国表在时，中国 IP 仍有省市、ASN 为 null）。**单缺一个 mmdb 不是整体降级**：缺 City 库时 `asn` 仍有值，国外收敛落在 `asn:<asn>` 档（不是 `net:` 档），界面显示「位置未知」加运营商名；缺 ASN 库时国外收敛退回 `net:` 档，界面照常显示地名。`getGeoipReadiness()` 报告三个数据源各自是否就绪（city / asn / chinaTable），洞察页在任一为 false 时显示提示条，写明缺哪个、收敛退化到哪一档；半加载态的收敛范围比全就绪时宽。中国表缺文件或损坏时按「未命中」降级不报错，服务照常工作。请求日志的归属地不落库，`queryRequestLogs` 返回时实时查，展示走 `geoDisplayCity`（省市拼串，省是市的前缀时只出一个——直辖市不会打出「北京 北京市」）。中国表的生成与数据来源见 `assets/README.md` 与 [ADR 0028](../adr/0028-china-geo-from-builtin-ip2region-table.md)。
 
 两个 reader 由 `readFileSync` 把整库读进内存常驻（City ≈ 60 MB + ASN ≈ 9 MB，合计约 70 MB RSS），**不是 mmap 按需读盘**：`lookupGeo` 必须同步（`requestAudit` 在 finally 里同步调用），而 maxmind 的 `openSync` 是 `() => never`、`open` 是异步，只剩 `Reader(Buffer)` 同步构造器一条路。这条路拿不到 `maxmind.open()` 内部挂的 LRU，所以 Reader 显式收一个解码缓存（`createDecodeCache`，满 10000 条整体清空），否则每次查询都要重新解码数据段。加载结果（含失败）缓存在模块级，库文件放入或替换后要重启进程才生效。
 
-请求审计写入时同步判定，首见范围的日志行落 `is_new_ip=1`。`GET /api/admin/request-logs/new-ips` 返回 `{ newIps, geoip: { city, asn } }`——未确认的新范围列表加两个库的就绪状态，`POST .../new-ips/acknowledge`（body `{tokenTier, scopeKey}`）消化；设置页「服务端数据洞察」顶部展示提醒卡并标黄相关日志行。确认只是把该行 `acknowledged` 置 1：**无 TTL、无复报**，该 tier 下该 `scope_key` 此后永不再进未确认列表。**只提醒不拦截**——用户换网/出差 IP 常变，强拦截首先挡住本人；真拦截仍只依赖限流。public/missing/invalid/unknown tier 与空 IP 不记录。IP 可信度同请求审计一节：依赖反向代理清洗转发头。**归属地是按 IP 段推测的大致位置，不是定位，不可作为安全证据。**
+请求审计写入时同步判定，首见范围的日志行落 `is_new_ip=1`。`GET /api/admin/request-logs/new-ips` 返回 `{ newIps, geoip: { city, asn, chinaTable } }`——未确认的新范围列表加三个数据源的就绪状态（`chinaTable` 为中国段表；老客户端不认识该字段时按就绪处理），`POST .../new-ips/acknowledge`（body `{tokenTier, scopeKey}`）消化；设置页「服务端数据洞察」顶部展示提醒卡并标黄相关日志行。确认只是把该行 `acknowledged` 置 1：**无 TTL、无复报**，该 tier 下该 `scope_key` 此后永不再进未确认列表。**只提醒不拦截**——用户换网/出差 IP 常变，强拦截首先挡住本人；真拦截仍只依赖限流。public/missing/invalid/unknown tier 与空 IP 不记录。IP 可信度同请求审计一节：依赖反向代理清洗转发头。**归属地是按 IP 段推测的大致位置，不是定位，不可作为安全证据。**
 
 ## PWA API 缓存边界
 

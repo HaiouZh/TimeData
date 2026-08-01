@@ -27,7 +27,7 @@ contracts:
   - packages/server/Dockerfile
   - packages/server/docker-entrypoint.sh
   - .env.example
-last-reviewed: 2026-07-30
+last-reviewed: 2026-08-01
 ---
 
 # 部署与自更新
@@ -121,7 +121,7 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 1. **origin 未放行**：响应缺 `access-control-allow-origin: https://localhost`。多是 `.env` 漏了 `https://localhost`，或 `docker-compose.yml` 漏了 `- ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}` 那一行。修改后 `docker compose up -d` 重建容器（不需要 `down`），用 `docker compose exec timedata sh -c 'echo $ALLOWED_ORIGINS'` 确认变量已注入。
 2. **自定义请求头未放行**：`access-control-allow-headers` 缺客户端实际发送的某个 `X-` 头。这是纯代码问题，与部署配置无关，改 `ALLOWED_REQUEST_HEADERS` 后需重新发版。2026-07-28 踩过一次：client 加了 `X-TimeData-Client-Build` 但白名单没同步，安卓端全线断连而网页版（同源、不预检）无感。
 
-### 2.1 GeoLite2 归属地库（可选，但装了才有地址）
+### 2.1 GeoLite2 归属地库（可选，但装了才有国外地址）
 
 陌生来源提醒与请求日志的归属地来自两个离线库，**不进镜像**（否则每次部署多传约 70MB：City ≈ 60MB + ASN ≈ 9MB），走现有 `./data` 挂载卷：
 
@@ -134,7 +134,11 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 
 GeoLite2 许可要求不长期使用过期数据；更新方式就是换这两个文件后重启（ASN 与城市段变动缓慢，半年一次即可）。
 
-装好后的自检：打开设置 →「服务端数据洞察」，看页面顶部有没有归属地库提示条。**没有提示条**即两个库都读到了（告警卡与日志行会显示地名加运营商，如「中国 · 上海」+「China Mobile」）。提示条会写明缺的是哪个库，据此检查路径与文件名大小写。不要用「有没有显示位置未知」判断库是否读到：只缺 City 库时 ASN 库其实读到了，地名仍是「位置未知」；地名取 `zh-CN` 缺失时回落 `en`，某些地区本就显示英文名。
+**自动更新（可选）**：`docker-compose.yml` 带一个 profile 为 `geoip` 的 `geoipupdate` 容器（`ghcr.io/maxmind/geoipupdate`），每月拉取新版 GeoLite2 落盘到 `./data/geoip`。启用方式：`.env` 里填 `COMPOSE_PROFILES=geoip`、`GEOIPUPDATE_ACCOUNT_ID`、`GEOIPUPDATE_LICENSE_KEY` 三个变量（账号在 maxmind.com 注册免费获得），然后 `docker compose up -d`。**库更新后要等 timedata 容器下次重启才生效**：`geoip.ts` 是进程启动时把 mmdb 读进内存、之后不重读，本仓发版频繁（Watchtower 常态重启），因此不实现热重载。未配凭据时容器会直接报错退出——先填齐三个变量再启动。
+
+**中国归属地（内置，无需配置）**：中国 IP 的省 / 市 / 运营商走随镜像发布的内置段表 `assets/china-geo.bin`（约 750KB），不依赖 MaxMind、不需要往服务器传文件。表由 `scripts/gen-china-geo.mjs` 从 ip2region 原始数据离线生成，重新生成方法见 `packages/server/assets/README.md`。中国表命中即中国（中文省市 + 运营商，ASN 号仍取自 GeoLite2-ASN）；表缺失时中国 IP 降级为只有国家，不影响国外路径。
+
+装好后的自检：打开设置 →「服务端数据洞察」，看页面顶部有没有归属地库提示条。**没有提示条**即三个数据源都读到了（告警卡与日志行会显示地名加运营商，如「江苏省 南京市」+「中国移动」）。提示条会写明缺的是哪个库/表，据此检查路径与文件名大小写。不要用「有没有显示位置未知」判断库是否读到：只缺 City 库时 ASN 库其实读到了，地名仍是「位置未知」；地名取 `zh-CN` 缺失时回落 `en`，某些地区本就显示英文名。
 
 **首次装库或换库会触发一次性重报**：库就绪前按 `net:` 档确认过的范围成为死数据，同一批来源会按新算出的 `asn:` 档键各报一次新来源。反向（把库撤掉）同理。这是收敛键变了的预期结果，不是漏报也不是故障。
 
