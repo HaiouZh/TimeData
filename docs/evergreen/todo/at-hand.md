@@ -7,7 +7,7 @@ covers:
   - packages/server/src/lib/session-rows.ts
 contracts:
   - packages/client/src/lib/sessions.ts
-last-reviewed: 2026-07-28
+last-reviewed: 2026-08-01
 ---
 
 # 待办 · 手头
@@ -90,6 +90,7 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 3. **skipped/模板排除**：`t.recurrence !== null`（重复模板本体）与 `t.ruleId !== null && t.skipped`（已删·跳的发）在这段判定之前就被上层循环过滤/绕开，不会进入手头分桶。occurrence（`ruleId!==null && recurrence===null`）本身是普通 root 语义，可以被抓；模板本体不行（见 §7.1）。
 4. **散场自然回桶**：`endActiveSession()` 不改任务的 `sessionId`，只是活跃场从此换成别的/none；下次 `listTasks()` 算出的 `handSessionId` 不再等于该任务的 `sessionId`，判定自然为假，任务落回原有 placement 分区。**这不是一次迁移操作，是投影结果**——没有代码"把任务搬回收件箱"，只是排他条件不再成立，零写零迁移。
 5. 想法重力的水位线/翻牌只作用于**排他后**的 inbox（见 [todo/gravity](gravity.md)）：手头任务已被排他判定拿走，不会同时被重力沉底或抽入翻牌区。
+6. **区内拖拽重排**：手头区未完成行是 sortable（容器 `hand`，`AtHandSection` 未完行注册 `SortableTaskRow` 并渲染拖柄），重排走 `persistTaskOrder` 槽位回填这些行的全局 `sortOrder`——只交换手头行之间的值，不影响其他任务；散场回桶后任务按新序落位。手头行**不参与缩进**（`clampTodoIndentPreview` 对 `hand` 夹 x=0）、**不开放拖出手头**（`todoDockTargets` 对 `hand` 源返回空坞，`resolveTodoDockDrop` 拦 invalid）；「本场已完成」折叠区行不注册 sortable。判定层细节见母文 [todo](../todo.md) §3.5。
 
 ## 5. 续场 = 散当前场 + 开新场 + 迁移未完任务
 
@@ -128,9 +129,9 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 | 入口 | 职责 |
 |---|---|
 | `lib/sessions.ts` | 生命周期：`getActiveSession`（纯读）/ `healActiveSessions`（显式自愈）/ `grabTaskToHand` / `releaseTaskFromHand` / `endActiveSession` / `listResumableSessions` / `resumeSession` / `updateSessionNote`（场便签） |
-| `pages/todo/AtHandSection.tsx` | 手头区 UI：沿用待办区「独立标题行 + 等宽行面板」骨架；活跃场显示未完列表 / 「本场已完成」折叠 / 散场按钮，无活跃场时显示续场行列表，全无则隐藏 |
+| `pages/todo/AtHandSection.tsx` | 手头区 UI：沿用待办区「独立标题行 + 等宽行面板」骨架；活跃场显示未完列表 / 「本场已完成」折叠 / 散场按钮，无活跃场时显示续场行列表，全无则隐藏；未完行是 sortable（容器 `hand`）并渲染拖柄，区内拖拽重排（见 §4.6） |
 | `server/src/lib/session-rows.ts` | `sessionToRow` / `rowToSession`：SQL ↔ JS 映射，不写 `updated_at` |
 | `pages/TodoPage.tsx`（归 [todo](../todo.md) covers） | 接线：`buckets.atHand`/`handSession` 渲染 `AtHandSection`；`rowHandlers.onToHand` 透传给 `TaskRow`/`TaskList`/`TaskDetailSheet`/`GravityReviewSection`/`SunkenInboxTail`/`SunkenScheduledTail`；`useEffect` 触发 `healActiveSessions` |
 | `lib/tasks.ts: listTasks()`（归 [todo](../todo.md) covers） | `TodoBuckets.atHand`/`handSession` 字段与 §4 的排他投影判定 |
 
-测试：`lib/sessions.test.ts`（抓/移/散/续/自愈/可续列表全部行为，含幂等 no-op；`updateSessionNote` 写入/空串归 null/不存在场 throw）、`pages/todo/AtHandSection.test.tsx`（活跃场渲染/移出/续场行/全无隐藏；场便签标题显示回退/行内编辑保存与取消/续场态不可编辑）、`lib/tasks.test.ts`（`describe("listTasks atHand 投影")`：排他、done 双显、散场回桶、指向已散场 sessionId 不影响分桶、occurrence 物化下一发不继承 sessionId）、`pages/todo/TaskRow.test.tsx`（overlay 抓取入口按钮 + 重复模板不渲染 + 不传 onToHand 不渲染）、`pages/todo/TaskDetailSheet.test.tsx`（抽屉抓/移按钮）、`shared/src/entitySchemas.test.ts` / `shared/src/syncDomains.test.ts`（`SessionSchema` + `sessions` 域注册）、`server/src/db/schema.test.ts`（`session_id` 列 + 索引幂等补齐）、`server/src/sync/domains.test.ts`（sessions 域注册）、`client/src/sync/clientDomains.test.ts`（sessions 客户端域 + bundled backup）、`client/src/db/schemaNormalization.test.ts`（`sessionId` 归一）。
+测试：`lib/sessions.test.ts`（抓/移/散/续/自愈/可续列表全部行为，含幂等 no-op；`updateSessionNote` 写入/空串归 null/不存在场 throw）、`pages/todo/AtHandSection.test.tsx`（活跃场渲染/移出/续场行/全无隐藏；场便签标题显示回退/行内编辑保存与取消/续场态不可编辑；拖柄：未完行渲染/已完成行不渲染/续场态不渲染）、`pages/TodoPage.test.tsx`（手头区键盘拖拽重排：sortOrder 落库 + 视图顺序更新）、`lib/tasks.test.ts`（`describe("listTasks atHand 投影")`：排他、done 双显、散场回桶、指向已散场 sessionId 不影响分桶、occurrence 物化下一发不继承 sessionId）、`pages/todo/todoDnd.test.ts`（hand 容器：解析/id 往返/同容器 reorder/拖池与拖项目 null/缩进父 null/坞不显示/坞落点 invalid/clamp 夹 0）、`pages/todo/TaskRow.test.tsx`（overlay 抓取入口按钮 + 重复模板不渲染 + 不传 onToHand 不渲染）、`pages/todo/TaskDetailSheet.test.tsx`（抽屉抓/移按钮）、`shared/src/entitySchemas.test.ts` / `shared/src/syncDomains.test.ts`（`SessionSchema` + `sessions` 域注册）、`server/src/db/schema.test.ts`（`session_id` 列 + 索引幂等补齐）、`server/src/sync/domains.test.ts`（sessions 域注册）、`client/src/sync/clientDomains.test.ts`（sessions 客户端域 + bundled backup）、`client/src/db/schemaNormalization.test.ts`（`sessionId` 归一）。

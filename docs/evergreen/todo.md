@@ -36,7 +36,7 @@ contracts:
   - packages/shared/src/taskDates.ts
   - packages/shared/src/syncDomains.ts
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-01
 ---
 
 # 待办任务
@@ -171,8 +171,8 @@ agent / CLI (task-done/task-tag)
 2. **"取消完成"两端不对称（root only）**：agent root `done=false` 仅置 `done=false`、**不清 `completedAt`**，而客户端 root reopen 会清 `completedAt=null`（且对 occurrence 会连删后来物化的 active 发防双 active）。child 是例外：agent child `done=true/false` 走轻量路径并与客户端子任务勾选对齐（true 写 now，false 清 `completedAt=null`）。撤销完成的 root 语义两端不一致，是当前状态而非疏漏。
 3. **schedule 端点绕过 applyChange**（见 §1.3）：tasks 有三条 server 写通道（sync push 的 LWW apply、agent status 的 applyChange、schedule 的事务内直写+记账），机制不同；schedule 必须保持提交后 SSE 通知。
 4. **四分区是读时视图**：`today` / `inbox` / `scheduled` / `completed`，另有全量去重桶 `recurring` 供标签来源去重。`today` 只读 pending occurrence（`ruleId!==null && !skipped && !done`），重复模板不投影到今天，归入 `scheduled` 规则管理区；`scheduled` = 一次性未来排期 + 重复模板，按下一发生日升序，行内显示重复摘要与下一发生日，`listTasks` 同时给出 7 天水位线切点 `scheduledSunkenFromIndex`（第一个下一发生日超出「今天+7 天」的下标，本地日历口径与排序键一致），UI 把切点后的行折叠进 `SunkenScheduledTail`「更远还有 N 条」（搜索/标签过滤激活时水位线失效、命中即显示）；`completed` 收纳普通完成任务、done occurrence 与账本判耗尽的模板（`completedAt=null` 沉底），按 `completedAt` 倒序、**无日期过滤**；`scheduled` 内规则的下一发生日与耗尽判定读 occurrence 账本（`nextDueDate`/`isRuleExhausted`），不读模板游标。改 `recurrence` 或 `startAt` 视为重锚：`startAt` 移到新值或当下，同事务级联删旧活跃 occurrence 及其 children、即时物化；锚点前历史发保留但不计入配额/游标；规则/起始日未变则保留进度（见 [todo/recurrence](todo/recurrence.md) §3）。
-5. **DnD 拓扑：顶层单一 `DndContext`，可拖区只有今天 / 收件箱 / 某 root 的 children**。
-   - **拓扑**：`TodoPage` 顶层一个 `DndContext`，下挂 droppable/SortableContext 命名空间 `pool:today` / `pool:inbox` / `parent:<rootId>`；收件箱按天分段，**每段各建一个 SortableContext**（容器 id 都是 `pool:inbox`）。`upcoming` / `completed` / `recurring` / 水下找回尾部 **不参与拖拽**——每个任务在可拖范围内只渲染一次，draggable id 全局唯一。root 行拖拽 activator 在行左 2/5 区域（复选框独立 `stopPropagation`，右侧标题区保留打开详情/选词）。
+5. **DnD 拓扑：顶层单一 `DndContext`，可拖区只有今天 / 收件箱 / 某 root 的 children / 手头区未完成行**。
+   - **拓扑**：`TodoPage` 顶层一个 `DndContext`，下挂 droppable/SortableContext 命名空间 `pool:today` / `pool:inbox` / `parent:<rootId>` / 手头 `hand`；收件箱按天分段，**每段各建一个 SortableContext**（容器 id 都是 `pool:inbox`）。`upcoming` / `completed` / `recurring` / 水下找回尾部 **不参与拖拽**——每个任务在可拖范围内只渲染一次，draggable id 全局唯一。root 行拖拽 activator 在行左 2/5 区域（复选框独立 `stopPropagation`，右侧标题区保留打开详情/选词）。
    - **缩进判定**（`todoDnd.resolveIndentLevel`）：层级由横向位移**相对被拖项自身基线**判定，两侧带滞回防纵向排序抖动误触。
 
      | 起拖基线 | 判 child | 回落 root/child | 静止时 |
@@ -190,7 +190,7 @@ agent / CLI (task-done/task-tag)
 9. **`tasks` 不引用分类/时间/速记/目标等业务域**：SQL 无外键，不参与分类校验/时间段重叠/时长统计/速记导入导出；目标组织关系属于 [goals](goals.md)，不回流到 Task schema。
 10. **轨道不是子任务系统**：`tracks` / `track_steps` 是独立监控域（见 [tracks](tracks.md)），task 只会作为 `Ref{kind:"task"}` 被指向；轨道不镜像 `Task.done`、不回写父子进度，也不改变 `tasks` 的 force-push 契约。
 11. **想法重力只作用于 root inbox 展示层**：`Task.weight` 同步字段 + `updatedAt` 时间衰减，`TodoPage` 出桶后把 inbox 拆浮起/水下；`listTasks()`、排期分桶、tag/search、DnD 域登记都不感知。水位线 / 翻牌复查 / 已过目记忆 / 水下找回尾部 / 设置见 [todo/gravity](todo/gravity.md)。
-12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。详见 [todo/at-hand](todo/at-hand.md)。
+12. **手头投影**：`Task.sessionId` 指向活跃 session 的 root（非重复模板）不进 `today`/`inbox`/`scheduled`，只出现在手头卡；散场零迁移自然回桶——`sessionId` 不清空，只是排他条件（等于*当前*活跃场 id）不再成立。`sessionId` 是历史归属指针，不是"当前状态"标记。手头区未完成行支持区内拖拽重排（容器 `hand`，只交换这些行的全局 `sortOrder` 槽位，散场后回桶顺序保留同一序）；手头行不参与缩进（`clampTodoIndentPreview` 夹 0）、不开放拖出手头（`todoDockTargets` 对手头源不显示坞，`resolveTodoDockDrop` 拦 invalid）。详见 [todo/at-hand](todo/at-hand.md)。
 13. **项目区与归属轴**：`Goal(kind="project", status="active")` 的成员任务在待办页聚成「项目区」，并对收件箱**排他**——成员不进 `inbox`，收件箱因此回归「真·未归类托盘」；焦点轴（手头）与时间轴（今天/已排期）与它正交，成员同时出现在对应桶与项目区。两份 goal→task 索引口径不同且**不得互相派生**，归属变更必须同事务刷新成员 `updatedAt`（重力可见性所需）。完整契约（投影规则、排他红线、写入不变量、呈现约定）见 [todo/project-zone](todo/project-zone.md)。
 14. **投递坞不发明语义**：宽屏拖拽中贴着**来源区块左缘**浮现的瞬态落点按钮（`TodoDragDock`，拖起时量 `[data-section]` 左缘定位，量不到退回视口右缘;锚左缘是为了让奔向坞的行程向左——向右正是缩进变子任务的手势方向），`dock:pool:*`/`dock:project:*` 折算成既有容器走 `resolveTodoDragOperation`，`dock:hand` = `grabTaskToHand`；坞永不产生 reorder（`resolveTodoDockDrop` 拦截）。坞常驻挂载只切透明度、`pointer-events` 仅拖拽中放开（坞内滚动需要接滚轮，平时 none 不拦点击），仅宽屏渲染；被拖行所在池的药丸不显示，**拖子任务时「手头」药丸也不显示**（`grabTaskToHand` 拒收子任务，不给必失败落点，解析层同拦成 invalid）；子任务投项目药丸的拒绝口径与项目卡一致。`preferProjectCollisions` 中坞命中优先于项目组与行；`hoveredRootIdFromOver` 对 dock id 恒返回 `null`（坞不是缩进落点）。
 
