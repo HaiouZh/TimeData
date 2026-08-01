@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 export const HEARTBEAT_TIMEOUT_MS = 60_000;
@@ -179,4 +180,11 @@ export async function run(argv, opts) {
     clearInterval(beat);
     releaseLock(handle);
   }
+}
+
+
+if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+  const gitCommonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], { encoding: "utf8" }).trim();
+  const code = await run(process.argv.slice(2), { lockDir: resolveLockDir(path.resolve(gitCommonDir)) });
+  process.exit(code);
 }

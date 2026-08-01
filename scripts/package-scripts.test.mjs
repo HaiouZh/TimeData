@@ -63,3 +63,38 @@ test("compose preserves an explicitly empty DIARY_VAULT_DIR to disable diary", (
   assert.match(compose, /DIARY_VAULT_DIR=\$\{DIARY_VAULT_DIR-\/app\/vault\}/);
   assert.doesNotMatch(compose, /DIARY_VAULT_DIR=\$\{DIARY_VAULT_DIR:-\/app\/vault\}/);
 });
+
+import { GATE_STEPS } from "./gate.mjs";
+
+// CI 里跑了但 gate 不跑的命令，每条都要有理由——加豁免等于放松棘轮，必须显式。
+const CI_ONLY = new Map([
+  ["pnpm install --frozen-lockfile", "装依赖，不是门禁"],
+  ["pnpm audit --audit-level=high --prod", "要联网查漏洞库，本地离线时会假红；CI 有即可"],
+  ["pnpm check:docs --since=<expr>", "dependabot/renovate PR 专用的 warn 降级版；gate 跑的是更严的 strict，已覆盖"],
+]);
+
+function ciPnpmCommands(workflow) {
+  return workflow
+    .split("\n")
+    .map((line) => line.match(/^\s*run:\s*(pnpm .+)$/)?.[1]?.trim())
+    .filter(Boolean)
+    .map((cmd) => cmd.replace(/\$\{\{[^}]+\}\}/g, "<expr>"));
+}
+
+test("gate 清单覆盖 CI 跑的每条 pnpm 步骤（CI 加新棘轮，gate 不许静默漏掉）", () => {
+  const ciWorkflow = fs.readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+  const gateNames = new Set(GATE_STEPS.map((s) => s.name));
+
+  const missing = ciPnpmCommands(ciWorkflow).filter((cmd) => {
+    if (CI_ONLY.has(cmd)) return false;
+    // client-unit 那 4 个分片 job 是 CI 侧的加速切分，本地 `pnpm test` 已整桶跑完同一批用例
+    if (cmd.includes("--shard=")) return false;
+    return ![...gateNames].some((name) => cmd.includes(name));
+  });
+
+  assert.deepEqual(missing, [], `这些 CI 步骤在 pnpm gate 里没有对应：\n${missing.join("\n")}`);
+});
+
+test("root gate script 指向 scripts/gate.mjs", () => {
+  assert.equal(readRootScripts().gate, "node scripts/gate.mjs");
+});
