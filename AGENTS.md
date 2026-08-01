@@ -77,6 +77,7 @@
     - **别只看 vite 打印的 URL 就报"起好了"**——它打印的是 `localhost`，不告诉你绑的是哪个地址族。
 - 文档检查：`pnpm check:docs`（warn）/ `:strict`（CI）/ `:stale` / `:size`（单文档过长上限 + covers 棘轮）/ `:coverage --since=<base>` / `:links`。各 mode 守什么、棘轮 / 基线 / 豁免机制见 [`_docs-guide`](docs/evergreen/_docs-guide.md) §4–§5。**无参 = `--since=HEAD`**：提交干净后比对为空会**假通过**，自测一律带 `--since=main`。
 - ROADMAP 程序门：`pnpm check:roadmap`——docs_local/ROADMAP.md 的 size ≤8k、格式、全 [完成] 主题报归档；每次收工/合并前跑（docs_local 不入 Git，CI 够不着，本地是唯一执行点）。
+- **收工 / 合并前一律 `pnpm gate`**——全量门禁唯一入口，串行跑 CI 同集棘轮（lint / 四道静态闸 / typecheck / test / e2e / 四道 docs / roadmap / build）。本机全局互斥：同一时刻只允许一份，撞上别人在跑会自动排队（`--no-wait` 则立即退出）。**日常提交走聚焦验证，不必 gate。** 锁在主仓 `.git/timedata-gate.lock/`，进程被强杀留下的残锁 60 秒后自动接管，不用手删。
 - 部署、环境变量、自更新见 [`README.md`](README.md)。
 
 ------
@@ -100,7 +101,7 @@
 - 未经明确批准不改基线 / 快照 / 忽略来消除失败。
 - 交付前本地通过 `pnpm test` 与 `pnpm check:docs`。无法运行时（环境受限）显式说明跳过的检查。
 - **改了 `shared` 先 `pnpm build` 再验收**：server / cli 的测试可能解析到陈旧 `dist`，表现为与改动无关的 schema / 类型报错。
-- 合并 / push 前本地补跑 CI 同集棘轮：`check:docs:strict`、`check:docs:size`（covers 涨了要显式重写基线）、`check:test`、`check:ui`、`check:design`、`check:diary`、`check:roadmap`——CI 跑的比日常交付清单多，漏跑 `check:docs:size` 已两次导致 push 后 CI 红。
+- 合并 / push 前跑 `pnpm gate`（清单见「命令」节，已含全部 CI 同集棘轮）。别再手工挨个敲——漏跑 `check:docs:size` 已两次导致 push 后 CI 红，gate 存在的理由就是这个。`check:docs:size` 报 covers 涨了仍需显式重写基线。
 - **测试分层归位**：纯逻辑测 `lib/` / `hooks/`；组件行为测 component；整页测只留烟测 + 真正跨组件协作的流程，别把单组件/单函数行为又在整页重测一遍。
 - **去冗余分级举证**：删任何测试前须先确认"同一行为已在更低层覆盖"（看的是同一行为，不是同一函数名）。数据完整性域（sync / backup / 数据契约 / 迁移）blast radius 大，须**正面贴出低层覆盖证据**且优先 merge 不 delete；其余域低层确证覆盖即可删。
 - **无效测试定义（可删）**：只测实现细节非行为（如断言具体 className 串）、永远绿（断言已删除代码"不存在"）、grep 文档字符串、无人看的快照。
