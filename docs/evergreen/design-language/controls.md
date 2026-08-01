@@ -40,6 +40,7 @@ last-reviewed: 2026-07-31
 | `TimeField.tsx` | `type="time"` | 时间字段 + Sheet 滚轮 |
 | `ConfirmSheet.tsx` | `window.alert` / 危险确认 | 确认弹层 |
 | `Sheet.tsx` | — | 底部抽屉基元（其它弹层复用） |
+| `ActionToastBar.tsx` | — | 轻提示条（toast 视觉 + 动作按钮），非原生控件替代件 |
 
 控件本身在棘轮豁免目录内（它们是对原生元素的合法封装），可以内部使用原生元素。
 

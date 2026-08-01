@@ -24,7 +24,7 @@ export default function CompletionHeatmapSection({ today, tasks }: TodoStatsModu
           <div
             key={cell.date}
             title={`${cell.date} · ${cell.count}`}
-            className={`size-2.5 rounded-[2px] ${LEVEL_CLASS[cell.level]}`}
+            className={`size-2.5 rounded-sm ${LEVEL_CLASS[cell.level]}`}
           />
         ))}
       </div>

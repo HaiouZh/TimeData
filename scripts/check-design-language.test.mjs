@@ -152,6 +152,25 @@ test("flags bare black/white named colors and allows token substitutes", () => {
   assert.equal(classifyLine("x.tsx", 'className="text-black bg-white"').some((v) => v.rule === "bare-black-white"), true);
 });
 
+test("flags arbitrary named black/white and directional border variants", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-[white] text-[black]"').some((v) => v.rule === "bare-black-white"),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-[white/50]"').some((v) => v.rule === "bare-black-white"),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="border-t-white border-x-black"').some((v) => v.rule === "bare-black-white"),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-[#ffffff]"').some((v) => v.rule === "bare-black-white"),
+    false,
+  );
+});
+
 test("flags bare raw colors outside token declarations", () => {
   assert.equal(
     classifyLine("x.tsx", 'style={{ color: "#60a5fa" }}').some((violation) => violation.rule === "bare-raw-color"),
@@ -184,6 +203,9 @@ test("flags business typography that directly uses font-mono", () => {
     ),
     true,
   );
+  // token 名 / var() 引用是技术标识，不算业务 font-mono
+  assert.equal(classifyLine("x.tsx", '["--font-mono", "JetBrains Mono"]').length, 0);
+  assert.equal(classifyLine("x.tsx", "font-family: var(--font-mono)").length, 0);
 });
 
 test("flags string and entity text icons in interactive content", () => {
@@ -425,6 +447,25 @@ test("flags every retired production radius vocabulary", () => {
       ),
       true,
     );
+  }
+  assert.equal(
+    classifyLine("x.tsx", 'className="rounded-[20px] rounded-[4rem]"').some(
+      (violation) => violation.rule === "bare-card-radius",
+    ),
+    true,
+  );
+  assert.equal(classifyLine("x.tsx", 'className="rounded-sm rounded"').length, 0);
+});
+
+test("flags any global z-index level outside 0/10/20", () => {
+  for (const token of ["z-30", "z-40", "z-50", "z-60", "z-70", "z-25", "z-45", "z-100", "z-9", "z-[30]"]) {
+    assert.equal(
+      classifyLine("x.tsx", `className="${token}"`).some((violation) => violation.rule === "bare-zindex"),
+      true,
+    );
+  }
+  for (const token of ["z-0", "z-10", "z-20", "z-[var(--z-modal)]", "z-10 hover:z-20"]) {
+    assert.equal(classifyLine("x.tsx", `className="${token}"`).length, 0);
   }
 });
 

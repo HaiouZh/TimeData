@@ -6,7 +6,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "packages", "client", "src");
 const ALLOWLIST = join(ROOT, "scripts", "design-language-allowlist.json");
 const COLOR_PREFIXES =
-  "bg|text|border|ring|from|to|via|divide|placeholder|ring-offset|fill|stroke|outline|caret|accent|shadow|decoration";
+  "bg|text|border(?:-[trblxy]{1,2})?|ring|from|to|via|divide|placeholder|ring-offset|fill|stroke|outline|caret|accent|shadow|decoration";
 const TAILWIND_VARIANTS = "(?:[a-z][a-z0-9-]*:)*!?";
 const LEGAL_RULE_IDS = new Set();
 const INTERACTIVE_TEXT_ICON_PATTERN =
@@ -74,7 +74,9 @@ const RULES = [
   },
   {
     id: "bare-black-white",
-    re: new RegExp(`\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:white|black)(?:\\/\\d+)?\\b`),
+    re: new RegExp(
+      `\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:white|black)(?:\\/\\d+(?:\\.\\d+)?)?\\b|\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-\\[(?:white|black)(?:\\/\\d+(?:\\.\\d+)?)?\\]`,
+    ),
     msg: "黑白命名色必须 token 化：遮罩用 bg-backdrop/*，accent 实心面反白字用 text-accent-contrast",
     skip: (file) => isTestFile(file),
   },
@@ -99,14 +101,14 @@ const RULES = [
   {
     id: "bare-card-radius",
     re: new RegExp(
-      `\\b${TAILWIND_VARIANTS}rounded(?:-(?:[trblxy]{1,2}|[se]{1,2}))?-(?:md|lg|xl|2xl|3xl|full)\\b`,
+      `\\b${TAILWIND_VARIANTS}rounded(?:-(?:[trblxy]{1,2}|[se]{1,2}))?-(?:md|lg|xl|2xl|3xl|full)\\b|\\b${TAILWIND_VARIANTS}rounded-\\[[0-9.]+(?:px|rem)\\]`,
     ),
     msg: "生产圆角必须使用 rounded-ctl/row/card/pill（rounded/rounded-sm 仅保留给原子细节），对应 --radius-ctl/row/card/pill",
     skip: (file) => isTestFile(file),
   },
   {
     id: "bare-zindex",
-    re: new RegExp(`\\b${TAILWIND_VARIANTS}z-(?:(?:30|40|50|60|70)\\b|\\[\\d+\\])`),
+    re: new RegExp(`\\b${TAILWIND_VARIANTS}z-(?:(?!0\\b|10\\b|20\\b)\\d{1,3}\\b|\\[\\d+\\])`),
     msg: "全局浮层 z-index 必须用 z-[var(--z-*)]（局部 stacking 用 z-10/z-20；内联 style.zIndex 用 lib/zLayers.ts 的 Z）",
     skip: (file) => isTestFile(file),
   },
@@ -164,6 +166,7 @@ function isTokenColorMirror(file) {
 
 function isFontMonoTechnicalLine(file, line) {
   if (normalizePath(file).endsWith(".css")) return true;
+  if (line.includes("--font-mono")) return true;
   return /<(?:code|pre|kbd|samp)\b/.test(line);
 }
 

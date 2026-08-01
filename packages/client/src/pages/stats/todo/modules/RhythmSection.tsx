@@ -27,7 +27,7 @@ export default function RhythmSection({ tasks }: TodoStatsModuleProps) {
               <div
                 key={SLOT_LABELS[slotIndex]}
                 title={`周${WEEKDAY_LABELS[dayIndex]} ${SLOT_LABELS[slotIndex]} · ${count}`}
-                className={`h-7 rounded-[2px] ${count > 0 ? "bg-accent" : "bg-surface-elevated"}`}
+                className={`h-7 rounded-sm ${count > 0 ? "bg-accent" : "bg-surface-elevated"}`}
                 style={count > 0 && max > 0 ? { opacity: 0.25 + (count / max) * 0.75 } : undefined}
               />
             ))}

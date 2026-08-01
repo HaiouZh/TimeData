@@ -10,9 +10,28 @@ const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
   { title: "文字", tokens: ["--color-ink", "--color-ink-2", "--color-ink-3"] },
   { title: "动作色", tokens: ["--color-accent", "--color-accent-strong", "--color-accent-soft", "--color-accent-ink", "--color-accent-contrast"] },
   { title: "状态色", tokens: ["--color-ok", "--color-warn", "--color-danger"] },
-  { title: "边框", tokens: ["--color-border", "--color-border-strong"] },
+  { title: "边框", tokens: ["--color-border", "--color-border-strong", "--color-border-hairline"] },
+  { title: "滚动条滑块", tokens: ["--color-scrollbar-thumb", "--color-scrollbar-thumb-hover"] },
   { title: "Track 调度信号", tokens: ["--color-track-agent"] },
+  { title: "Goal scoped 星图", tokens: ["--galaxy-edge", "--galaxy-edge-glow", "--galaxy-star-core"] },
   { title: "用户内容身份色（项目圆点 / 标签 #）", tokens: [...TINT_TOKENS] },
+];
+
+const GALAXY_GLOWS = [
+  "--shadow-galaxy-ready",
+  "--shadow-galaxy-blocked",
+  "--shadow-galaxy-completed",
+  "--shadow-galaxy-parked",
+  "--shadow-galaxy-active",
+  "--shadow-galaxy-anchor",
+  "--shadow-galaxy-star-core",
+  "--shadow-galaxy-star-core-strong",
+  "--shadow-galaxy-star-core-wide",
+];
+
+const FONT_STACKS: [string, string][] = [
+  ["--font-body", "Times New Roman / Tinos / LXGW WenKai Screen / KaiTi / serif"],
+  ["--font-mono", "JetBrains Mono / ui-monospace / monospace"],
 ];
 
 const RADII: [string, string][] = [
@@ -28,6 +47,7 @@ const TEXT_ROLES: [string, string][] = [
   ["td-text-body", "body · 15px"],
   ["td-text-title", "title · 20px"],
   ["td-text-display", "display · 28px"],
+  ["td-eyebrow", "eyebrow · 12px/500/0.16em 大写"],
 ];
 
 const NUMBER_ROLES: [string, string][] = [
@@ -155,6 +175,34 @@ export default function StyleguidePage() {
               <span aria-hidden="true" className="h-16 w-28 rounded-card bg-surface-elevated shadow-elev2" />
               <span className="td-text-caption text-ink-2">shadow-elev2</span>
             </div>
+          </div>
+        </Section>
+
+        <Section title="星图光晕（Goal scoped shadow token）">
+          <div className="flex flex-wrap gap-3 rounded-card border border-border bg-surface p-4">
+            {GALAXY_GLOWS.map((token) => (
+              <div key={token} className="flex flex-col items-center gap-1">
+                <span
+                  aria-hidden="true"
+                  className="h-10 w-10 rounded-pill bg-surface-elevated"
+                  style={{ boxShadow: `var(${token})` }}
+                />
+                <span className="td-text-caption text-ink-3">{token}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="字体栈">
+          <div className="space-y-2 rounded-card border border-border bg-surface p-4">
+            {FONT_STACKS.map(([token, label]) => (
+              <div key={token} className="flex items-baseline justify-between gap-4">
+                <span style={{ fontFamily: `var(${token})` }} className="text-ink">
+                  霞鹭文楷 · The quick brown fox 0123456789
+                </span>
+                <span className="td-text-caption shrink-0 text-ink-3">{`${token} · ${label}`}</span>
+              </div>
+            ))}
           </div>
         </Section>
 
