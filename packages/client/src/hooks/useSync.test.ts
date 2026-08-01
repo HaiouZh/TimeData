@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, createElement, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSyncTimings } from "../sync/phaseTimings.ts";
 import { renderDom, unmount } from "../test/domHarness.js";
@@ -149,6 +150,74 @@ describe("useSync", () => {
     expect(timings[0].waitMs).toBe(250);
     expect(timings[0].connection).toBe("connected");
     expect(timings[0].unsyncedAtStart).toBe(0);
+
+    await unmount(root);
+  });
+
+  it("Android resume sync selects native transport and records it", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("android");
+    vi.spyOn(Capacitor, "isPluginAvailable").mockReturnValue(true);
+    vi.spyOn(performance, "getEntriesByType").mockReturnValue([
+      { name: "https://example.com/api/sync/status", nextHopProtocol: "h2" },
+    ] as PerformanceResourceTiming[]);
+    vi.mocked(regularSync).mockResolvedValueOnce({
+      checked: true,
+      identical: true,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const { root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      await captured.value?.sync({ reason: "resume", waitMs: 0 });
+    });
+
+    expect(regularSync).toHaveBeenCalledWith(expect.objectContaining({ transport: "native-android" }));
+    expect(getSyncTimings()[0].transport).toBe("native-android");
+    expect(getSyncTimings()[0].protocol).toBeUndefined();
+
+    await unmount(root);
+  });
+
+  it("Android resume sync records web when CapacitorHttp is unavailable", async () => {
+    const { regularSync } = await import("../sync/engine.ts");
+    vi.spyOn(Capacitor, "getPlatform").mockReturnValue("android");
+    vi.spyOn(Capacitor, "isPluginAvailable").mockReturnValue(false);
+    vi.mocked(regularSync).mockResolvedValueOnce({
+      checked: true,
+      identical: true,
+      pushed: 0,
+      rejected: 0,
+      pushConflicts: 0,
+      pushIssues: [],
+      pulled: 0,
+      conflicts: [],
+    });
+
+    const captured: { value: ReturnType<typeof useSync> | null } = { value: null };
+    function Probe() {
+      captured.value = useSync();
+      return createElement("span", null, "probe");
+    }
+    const { root } = await renderDom(createElement(Probe));
+
+    await act(async () => {
+      await captured.value?.sync({ reason: "resume", waitMs: 0 });
+    });
+
+    expect(regularSync).toHaveBeenCalledWith(expect.objectContaining({ transport: "web" }));
+    expect(getSyncTimings()[0].transport).toBe("web");
 
     await unmount(root);
   });

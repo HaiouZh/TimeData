@@ -6,8 +6,10 @@ import {
   type TimingsKV,
   createPhaseRecorder,
   getSyncTimings,
+  mergeSyncTimingTransport,
   readSyncTransportProtocol,
   recordSyncTiming,
+  resolveSyncTimingTransport,
   timingTotalsPercentiles,
 } from "./phaseTimings.js";
 
@@ -151,6 +153,39 @@ describe("recordSyncTiming / getSyncTimings", () => {
     );
 
     expect(getSyncTimings(kv)).toEqual([good]);
+  });
+
+  it("transport 字段兼容旧记录并拒绝未知值", () => {
+    const kv = createMemoryKV();
+    const legacy = makeEntry({ totalMs: 90 });
+    const native = makeEntry({ totalMs: 100, transport: "native-android" });
+    kv.set(
+      STORAGE_KEYS.syncPhaseTimings,
+      JSON.stringify([legacy, native, { ...native, transport: "unknown" }]),
+    );
+
+    expect(getSyncTimings(kv)).toEqual([legacy, native]);
+  });
+});
+
+describe("resolveSyncTimingTransport", () => {
+  it("marks a native resume with Web push and native pull as mixed", () => {
+    expect(resolveSyncTimingTransport("native-android", { push: 20, pull: 30 })).toBe("mixed");
+  });
+
+  it("keeps native read-only phases and Web push-only phases distinct", () => {
+    expect(resolveSyncTimingTransport("native-android", { status: 20, pull: 30 })).toBe("native-android");
+    expect(resolveSyncTimingTransport("native-android", { push: 20 })).toBe("web");
+    expect(resolveSyncTimingTransport("web", { status: 20, pull: 30 })).toBe("web");
+    expect(resolveSyncTimingTransport("native-android", { bumpApply: 20 })).toBeUndefined();
+    expect(resolveSyncTimingTransport("native-android", {})).toBe("native-android");
+  });
+
+  it("merges actual Web and native phases", () => {
+    expect(mergeSyncTimingTransport(undefined, "native-android")).toBe("native-android");
+    expect(mergeSyncTimingTransport("native-android", "native-android")).toBe("native-android");
+    expect(mergeSyncTimingTransport("native-android", "web")).toBe("mixed");
+    expect(mergeSyncTimingTransport("mixed", "web")).toBe("mixed");
   });
 });
 

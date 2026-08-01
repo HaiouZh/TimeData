@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { Capacitor } from "@capacitor/core";
 import {
   getConsecutiveSyncFailureCount,
   getSyncHealth,
@@ -19,9 +20,11 @@ import {
   createPhaseRecorder,
   readSyncTransportProtocol,
   recordSyncTiming,
+  resolveSyncTimingTransport,
   type SyncTimingOutcome,
 } from "../sync/phaseTimings.ts";
 import type { SyncExecutorMeta, SyncExecutorOutcome } from "../sync/scheduler.ts";
+import { selectSyncTransport } from "../sync/transport.ts";
 import type { SyncForcePushPrepareResponse, SyncForcePushResponse, SyncHealthReport } from "@timedata/shared";
 import { SYNC_DIAGNOSTIC_FAILURE_THRESHOLD } from "@timedata/shared";
 
@@ -103,8 +106,14 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
     const startedAt = new Date().toISOString();
     const t0 = performance.now();
     let outcome: SyncTimingOutcome = "error";
+    const platform = Capacitor.getPlatform();
+    const transport = selectSyncTransport({
+      platform,
+      reason: meta?.reason,
+      nativeHttpAvailable: platform !== "android" || Capacitor.isPluginAvailable("CapacitorHttp"),
+    });
     try {
-      const result = await regularSync({ phases: recorder });
+      const result = await regularSync({ phases: recorder, transport });
       setLastResult(result);
       if (result.conflicts.length > 0) {
         setConflicts(result.conflicts);
@@ -118,6 +127,7 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
       const retryAfterMs = getSyncRetryAfterMs(e);
       return retryAfterMs === undefined ? false : { ok: false, retryAfterMs };
     } finally {
+      const timingTransport = recorder.transport ?? resolveSyncTimingTransport(transport, recorder.phases);
       recordSyncTiming({
         at: startedAt,
         outcome,
@@ -128,7 +138,10 @@ export function useSync({ autoSyncOnMount = false }: UseSyncOptions = {}) {
         waitMs: meta?.waitMs,
         reason: meta?.reason,
         connection: meta?.connection,
-        protocol: readSyncTransportProtocol(),
+        transport: timingTransport,
+        protocol: timingTransport === "native-android" || timingTransport === undefined
+          ? undefined
+          : readSyncTransportProtocol(),
       });
       setSyncFailureCount(getConsecutiveSyncFailureCount());
       setSyncing(false);

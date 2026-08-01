@@ -18,6 +18,7 @@ covers:
   - packages/client/src/sync/engine.ts
   - packages/client/src/sync/reason.ts
   - packages/client/src/sync/phaseTimings.ts
+  - packages/client/src/sync/transport.ts
   - packages/client/src/lib/api.ts
   - packages/shared/src/schemas.ts
   - packages/shared/src/taskCompletion.ts
@@ -37,7 +38,7 @@ contracts:
   - packages/shared/src/schemas.ts
   - packages/shared/src/types.ts:SyncPushOutcome
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-30
+last-reviewed: 2026-07-31
 ---
 
 # 同步机制
@@ -81,7 +82,11 @@ last-reviewed: 2026-07-30
 
 no-op 判定只比较账本读数，不算哈希、不数行数、不拉快照。`contentHash` 只是诊断工具：`getSyncHealth()`（设置页同步健康诊断）仍用它做本地与云端的深度体检。
 
-客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量拉取可在调用处设置 `timeoutMs: 30_000`。调用方传入的 `AbortSignal` 会和内部超时信号合并；成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误；204 / 空 body 视为 `undefined`。
+客户端请求统一走 `apiFetch()`（`packages/client/src/lib/api.ts`）：它负责拼接 API 根地址、附带 Bearer Token、保留 API 错误响应 JSON，并默认在 15 秒后中止网络请求；全量拉取可在调用处设置 `timeoutMs: 30_000`。调用方传入的 `AbortSignal` 会和内部超时信号合并；Web `fetch` 的成功响应体如果不是合法 JSON，会抛出包含 URL 与响应片段的人类可读错误；原生响应由 Capacitor 解码后再由 status/pull schema 校验；204 / 空 body 视为 `undefined`。
+
+Android 原生同步通道是显式、窄范围的 transport 选择：只有 `Capacitor.getPlatform() === "android"` 且调度原因是 `resume` 时，普通同步的 `/api/sync/status` 与 `sinceSeq > 0` 的增量 `/api/sync/pull` 才使用 `native-android`；Web/PWA 以及启动、写入、重连、定时兜底等原因继续使用 Web `fetch`。原生适配调用 Capacitor 7 内置 `CapacitorHttp`（Android `HttpURLConnection`），复用 URL、Bearer、`Content-Type`、`X-TimeData-Client-Build` 和 TOTP headers，并继续由客户端做 pull schema 校验与分页游标推进。`sinceSeq: 0` 全量拉取、push、force-push、健康诊断、管理/日记/备份 API 和 SSE 均保持 Web `fetch`；不启用全局 `CapacitorHttp` fetch/XHR patch。
+
+`CapacitorHttp` 返回完整响应体且没有逐请求 `AbortSignal`/cancel，因此原生请求不复用 Web hedge：一次 JS 超时或调用方 abort 只停止等待，底层 Android 连接可能仍在完成；原生 HTTP 失败不盲目重发 Web 请求，避免已到达服务端的 POST 产生重复写。原生 HTTP 错误仍归一为 `ApiError`（保留 status、headers 和 body），不可用或非 Android 平台在请求发出前回到 Web 默认路径。Android 原生路径绕过浏览器 CORS enforcement，但不绕过系统 DNS、VPN、代理、TLS 或服务器链路，HTTPS-only 约束仍然有效。
 
 客户端 UI 层的同步状态由 `SyncContext` 统一提供，同步指示灯区分 `pending`（本地 Dexie `syncLog.synced=0` 计数大于 0）和 `success` / `idle`。所有自动触发统一走模块级调度器 `syncScheduler`（`packages/client/src/sync/scheduler.ts`），页面不再人肉接线，见下方"1.6 调度器"。设置页"上次同步"展示时间来自 `STORAGE_KEYS.lastSyncDisplayAt`，纯展示，不参与任何同步判定。
 
@@ -251,7 +256,7 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 
 `useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`，默认单调时钟 `performance.now`，与 `totalMs` 同源）给 status/push/pull 三个阶段计时——写后路径只有 push/pull，补差路径只有 status/pull；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。`getSyncTimings()` 读取时做逐元素 shape 校验，坏元素丢弃；`phases` 允许携带未知阶段键（值须为有限 number），带 health/backup/report 等旧阶段键的存量数据仍合法、无需迁移。
 
-`SyncTimingEntry` 额外携带三个可选诊断字段，均来自调度器 `SyncExecutorMeta` 与 SSE 连接态：`waitMs`（executor 触发前在调度器里排队的时长，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2）、`reason`（`SyncRequestReason` 字符串，本轮由谁触发）、`connection`（触发时的 `SyncStreamState`）。三者都做类型校验（number 需有限、string 类型），缺失时按可选字段处理，不影响存量数据兼容性。设置页同步卡片的 `SyncTimingsPanel` 展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs`/`reason`/`connection`。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
+`SyncTimingEntry` 额外携带四个可选诊断字段，均来自调度器 `SyncExecutorMeta`、SSE 连接态与本轮实际请求：`waitMs`（executor 触发前在调度器里排队的时长，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2）、`reason`（`SyncRequestReason` 字符串，本轮由谁触发）、`connection`（触发时的 `SyncStreamState`）和 `transport`（`web`、`native-android` 或 `mixed`；pending 路径的 Web push + 原生 pull、或 native status + 游标为 0 的 Web 全量 pull 记为 `mixed`）。SSE stash 就地应用只有 `bumpApply` 阶段、没有网络请求时不落 transport。四者都做类型校验，缺失时按可选字段处理，不影响存量数据兼容性；原生 transport 不强行写入可能陈旧的 `PerformanceResourceTiming.nextHopProtocol`。设置页同步卡片的 `SyncTimingsPanel` 展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs`/`reason`/`connection`/`transport`。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
 
 ## 8. 改这块代码前的清单
 

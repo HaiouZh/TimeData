@@ -6,6 +6,10 @@ describe("selectSyncTransport", () => {
     expect(selectSyncTransport({ platform: "android", reason: "resume" })).toBe("native-android");
   });
 
+  it("falls back to web when the CapacitorHttp plugin is unavailable", () => {
+    expect(selectSyncTransport({ platform: "android", reason: "resume", nativeHttpAvailable: false })).toBe("web");
+  });
+
   it.each(["startup", "write", "bump", "reconnect", "fallback", "flush"] as const)(
     "keeps Android %s sync on the web transport",
     (reason) => {

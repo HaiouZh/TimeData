@@ -1,11 +1,13 @@
 import { safeGetItem, safeSetItem } from "../lib/safeStorage.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
+import type { SyncTransport } from "./transport.js";
 
 export type SyncPhaseName = "status" | "push" | "pull" | "bumpApply";
 
 export interface PhaseRecorder {
   time<T>(phase: SyncPhaseName, fn: () => Promise<T>): Promise<T>; // 异常照抛，仍记耗时
   readonly phases: Partial<Record<SyncPhaseName, number>>; // 整数 ms
+  transport?: SyncTimingTransport; // engine 按实际网络阶段汇总
 }
 
 export function createPhaseRecorder(now: () => number = () => performance.now()): PhaseRecorder {
@@ -24,6 +26,15 @@ export function createPhaseRecorder(now: () => number = () => performance.now())
 }
 
 export type SyncTimingOutcome = "identical" | "pushed" | "pull_only" | "error";
+export type SyncTimingTransport = SyncTransport | "mixed";
+
+export function mergeSyncTimingTransport(
+  current: SyncTimingTransport | undefined,
+  next: SyncTransport,
+): SyncTimingTransport {
+  if (current === undefined || current === next) return next;
+  return "mixed";
+}
 
 export interface SyncTimingEntry {
   at: string; // UTC ISO
@@ -35,6 +46,7 @@ export interface SyncTimingEntry {
   waitMs?: number; // scheduler 侧等待耗时（executor 触发前的排队时长）
   reason?: string; // SyncRequestReason，来自 scheduler
   connection?: string; // SyncStreamState，触发时的 SSE 连接状态
+  transport?: SyncTimingTransport; // 本轮实际请求通道；push(Web)+pull(native) 记 mixed
   protocol?: string; // nextHopProtocol（h2/h3/http/1.1），resource timing 缺失时 undefined
 }
 
@@ -67,6 +79,14 @@ function isValidTimingEntry(value: unknown): value is SyncTimingEntry {
   }
   if (entry.reason !== undefined && typeof entry.reason !== "string") return false;
   if (entry.connection !== undefined && typeof entry.connection !== "string") return false;
+  if (
+    entry.transport !== undefined
+    && entry.transport !== "web"
+    && entry.transport !== "native-android"
+    && entry.transport !== "mixed"
+  ) {
+    return false;
+  }
   if (entry.protocol !== undefined && typeof entry.protocol !== "string") return false;
   return true;
 }
@@ -89,6 +109,19 @@ export function readSyncTransportProtocol(): string | undefined {
     // 观测缺失不影响同步
   }
   return undefined;
+}
+
+export function resolveSyncTimingTransport(
+  selected: SyncTransport,
+  phases: Partial<Record<SyncPhaseName, number>>,
+): SyncTimingTransport | undefined {
+  const usedWeb = phases.push !== undefined;
+  const usedNative = phases.status !== undefined || phases.pull !== undefined;
+  if (!usedWeb && !usedNative && phases.bumpApply !== undefined) return undefined;
+  if (selected === "web") return "web";
+  if (usedWeb && usedNative) return "mixed";
+  if (usedWeb) return "web";
+  return "native-android";
 }
 
 export function getSyncTimings(kv: TimingsKV = defaultKV): SyncTimingEntry[] {

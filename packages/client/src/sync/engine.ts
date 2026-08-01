@@ -6,11 +6,13 @@ import { safeGetItem, safeSetItem, safeRemoveItem } from "../lib/safeStorage.js"
 import type { Table } from "dexie";
 import { classifyReasonCode } from "./reason.ts";
 import { CLIENT_SYNC_DOMAINS, parseRemoteRecord, type ClientDomainConfig } from "./clientDomains.ts";
-import type { PhaseRecorder } from "./phaseTimings.ts";
+import { mergeSyncTimingTransport, type PhaseRecorder } from "./phaseTimings.ts";
 import { syncScheduler } from "./scheduler.js";
+import type { SyncTransport } from "./transport.js";
 import {
   getSyncDomain,
   SyncPullResponseSchema,
+  SyncStatusResponseSchema,
   SYNC_DIAGNOSTIC_FAILURE_THRESHOLD,
 } from "@timedata/shared";
 import type {
@@ -83,6 +85,7 @@ export interface RegularSyncResult {
 
 export interface RegularSyncOptions {
   phases?: PhaseRecorder;
+  transport?: SyncTransport;
 }
 
 interface CompactedSyncLog extends SyncLog {
@@ -300,16 +303,21 @@ function isFullPullBody(body: unknown): boolean {
   return !sinceSeq;
 }
 
-async function fetchSyncPullResponse(body: unknown, options: { timeoutMs?: number } = {}): Promise<SyncPullResponse> {
+async function fetchSyncPullResponse(
+  body: unknown,
+  options: { timeoutMs?: number; transport?: SyncTransport } = {},
+): Promise<SyncPullResponse> {
+  const fullPull = isFullPullBody(body);
+  const transport = fullPull ? "web" : options.transport ?? "web";
   const request = (totpHeaders: Record<string, string>) =>
     apiFetch<unknown>("/api/sync/pull", {
       method: "POST",
       body: JSON.stringify(body),
-      hedge: SYNC_HEDGE,
-      ...options,
+      ...(transport === "native-android" ? { transport } : { hedge: SYNC_HEDGE }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
       ...(Object.keys(totpHeaders).length > 0 ? { headers: totpHeaders } : {}),
     });
-  const response = isFullPullBody(body) ? await callWithTotp(request) : await request({});
+  const response = fullPull ? await callWithTotp(request) : await request({});
   const parsed = SyncPullResponseSchema.safeParse(response);
   if (!parsed.success) throw new Error("Invalid /api/sync/pull response");
   return parsed.data;
@@ -346,11 +354,15 @@ function validatePullPageProgress(response: SyncPullResponse, cursor: number): v
 async function fetchPullBatches(
   startSeq: number,
   applyBatch: (response: SyncPullResponse) => Promise<void>,
+  options: { transport?: SyncTransport } = {},
 ): Promise<SyncPullResponse> {
   let cursor = startSeq;
   let lastResponse: SyncPullResponse | undefined;
   for (;;) {
-    const response = await fetchSyncPullResponse({ sinceSeq: cursor, limit: PULL_PAGE_LIMIT });
+    const response = await fetchSyncPullResponse(
+      { sinceSeq: cursor, limit: PULL_PAGE_LIMIT },
+      { transport: options.transport },
+    );
     recordClockSkew(response.serverTime);
     validatePullPageProgress(response, cursor);
     await applyBatch(response);
@@ -754,8 +766,11 @@ async function applyPullChangesBatch(
   return { applied: batchApplied, conflicts: batchConflicts };
 }
 
-export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: SyncConflict[] }> {
+export async function syncPullSinceSeq(
+  options: { transport?: SyncTransport } = {},
+): Promise<{ applied: number; conflicts: SyncConflict[]; transport: SyncTransport }> {
   const startSeq = buildPullCursor("incremental").sinceSeq;
+  const transport = startSeq > 0 ? options.transport ?? "web" : "web";
 
   let applied = 0;
   const conflicts: SyncConflict[] = [];
@@ -765,10 +780,10 @@ export async function syncPullSinceSeq(): Promise<{ applied: number; conflicts: 
     const batch = await applyPullChangesBatch(response.changes, protectedCascadeRecords);
     applied += batch.applied;
     conflicts.push(...batch.conflicts);
-  });
+  }, { transport });
 
   advanceSeqCursor(last); // 末批收尾兜底到 latestSeq
-  return { applied, conflicts };
+  return { applied, conflicts, transport };
 }
 
 export async function syncForceReplace(): Promise<number> {
@@ -874,10 +889,16 @@ function compareSyncStatus(local: SyncHealthReport["local"], server: SyncStatusR
   return { recommendation: "pull_from_server", reason: "服务端数据可能更新；建议先全量拉取到本地检查。" };
 }
 
+function parseSyncStatusResponse(response: unknown): SyncStatusResponse {
+  const parsed = SyncStatusResponseSchema.safeParse(response);
+  if (!parsed.success) throw new Error("Invalid /api/sync/status response");
+  return parsed.data;
+}
+
 export async function getSyncHealth(): Promise<SyncHealthReport> {
   const [local, server] = await Promise.all([
     getLocalStatus(),
-    apiFetch<SyncStatusResponse>("/api/sync/status"),
+    apiFetch<unknown>("/api/sync/status").then(parseSyncStatusResponse),
   ]);
   return { local, server, ...compareSyncStatus(local, server) };
 }
@@ -1035,9 +1056,14 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
 
       // 无 pending：status 预查仅在此路径保留，承担 no-op 判定。
       // contentHash 不再参与主路径，仅保留在 getSyncHealth() 诊断工具里做深度体检。
-      const serverStatus = rec
-        ? await rec.time("status", () => apiFetch<SyncStatusResponse>("/api/sync/status", { hedge: SYNC_HEDGE }))
-        : await apiFetch<SyncStatusResponse>("/api/sync/status", { hedge: SYNC_HEDGE });
+      const statusRequestOptions = options.transport === "native-android"
+        ? { transport: options.transport }
+        : { hedge: SYNC_HEDGE };
+      const statusResponse = rec
+        ? await rec.time("status", () => apiFetch<unknown>("/api/sync/status", statusRequestOptions))
+        : await apiFetch<unknown>("/api/sync/status", statusRequestOptions);
+      const serverStatus = parseSyncStatusResponse(statusResponse);
+      if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, options.transport ?? "web");
       recordClockSkew(serverStatus.serverTime);
       const serverSeq = serverStatus.latestSeq ?? 0;
       const localSeq = getLastSyncedSeq() ?? 0;
@@ -1058,7 +1084,10 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
         };
       }
 
-      const { applied, conflicts } = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
+      const pull = () => syncPullSinceSeq({ transport: options.transport });
+      const pulled = rec ? await rec.time("pull", pull) : await pull();
+      if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pulled.transport);
+      const { applied, conflicts } = pulled;
       const logs: Array<{ action: string; detail?: string; record_count?: number }> = [
         { action: "pull_seq_catchup", record_count: applied },
       ];
@@ -1081,6 +1110,7 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
     // 有 pending（写后路径）：跳过 status——它唯一的用途是 no-op 判定，此处恒不成立；
     // 冲突分析在服务端 baseSeq 逻辑里，push 后回声 pull 追平。
     const pushResult = rec ? await rec.time("push", () => syncPush()) : await syncPush();
+    if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, "web");
 
     let applied = 0;
     let conflicts: SyncConflict[] = [];
@@ -1089,7 +1119,9 @@ async function runRegularSync(options: RegularSyncOptions = {}): Promise<Regular
       setLastSyncedSeq(pushResult.serverLatestSeq); // 无插队：本地即最新，直接推游标
       pullSkipped = true;
     } else {
-      const pulled = rec ? await rec.time("pull", () => syncPullSinceSeq()) : await syncPullSinceSeq();
+      const pull = () => syncPullSinceSeq({ transport: options.transport });
+      const pulled = rec ? await rec.time("pull", pull) : await pull();
+      if (rec) rec.transport = mergeSyncTimingTransport(rec.transport, pulled.transport);
       applied = pulled.applied;
       conflicts = pulled.conflicts;
     }

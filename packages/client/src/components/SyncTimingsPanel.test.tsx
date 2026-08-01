@@ -122,4 +122,20 @@ describe("SyncTimingsPanel", () => {
 
     await unmount(root);
   });
+
+  it("shows the selected sync transport when present", async () => {
+    recordSyncTiming({
+      at: "2026-07-01T00:00:00.000Z",
+      outcome: "pull_only",
+      totalMs: 400,
+      phases: { status: 30, pull: 100 },
+      transport: "native-android",
+    });
+
+    const { host, root } = await renderDom(createElement(SyncTimingsPanel));
+
+    expect(host.textContent).toContain("native-android");
+
+    await unmount(root);
+  });
 });

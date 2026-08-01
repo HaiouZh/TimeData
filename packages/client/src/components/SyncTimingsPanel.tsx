@@ -21,6 +21,7 @@ export default function SyncTimingsPanel() {
   const percentiles = timingTotalsPercentiles(entries);
 
   const metaParts = [
+    latest.transport != null ? latest.transport : null,
     latest.protocol != null ? latest.protocol : null,
     latest.reason != null ? latest.reason : null,
     latest.connection != null ? latest.connection : null,

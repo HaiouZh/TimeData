@@ -1,3 +1,4 @@
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { CURRENT_BUILD_ID } from "./frontendUpdate.js";
 import { messages } from "./messages.ts";
 import { safeGetItem } from "./safeStorage.js";
@@ -38,10 +39,14 @@ export interface ApiFetchOptions extends RequestInit {
   timeoutMs?: number;
   /** 对冲：delayMs 内响应头未到并发第二枪，网络错误立即补枪；共 2 枪。仅限幂等请求 + 字符串 body。 */
   hedge?: { delayMs: number };
+  /** 显式 Android 原生通道；平台或插件能力不满足时在请求发出前回退 Web fetch。 */
+  transport?: "web" | "native-android";
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const HEDGE_MAX_ATTEMPTS = 2;
+type NativeHttpResponse = Awaited<ReturnType<typeof CapacitorHttp.request>>;
+const activeNativeRequests = new Map<string, Promise<NativeHttpResponse>>();
 
 function combineSignals(signals: Array<AbortSignal | null | undefined>): AbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
@@ -64,8 +69,43 @@ function combineSignals(signals: Array<AbortSignal | null | undefined>): AbortSi
   return controller.signal;
 }
 
+function nativeResponseDetails(data: unknown): string {
+  if (typeof data === "string") return data;
+  if (data === null || data === undefined) return "";
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return "";
+  }
+}
+
+function nativeResponseBody(data: unknown): unknown {
+  if (typeof data !== "string") return data ?? null;
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return data;
+  }
+}
+
+function nativeRequestKey(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string | undefined,
+): string {
+  return JSON.stringify([url, method, headers, body ?? null]);
+}
+
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { timeoutMs: requestedTimeoutMs, hedge, signal: callerSignal, ...fetchOptions } = options;
+  const {
+    timeoutMs: requestedTimeoutMs,
+    hedge,
+    transport = "web",
+    signal: callerSignal,
+    ...fetchOptions
+  } = options;
   const url = buildApiUrl(getApiBase(), path);
   const headers = new Headers(fetchOptions.headers);
   if (!headers.has("Content-Type")) {
@@ -88,6 +128,94 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     timedOut = true;
     totalController.abort();
   }, timeoutMs);
+
+  const useNativeAndroidTransport =
+    transport === "native-android"
+    && Capacitor.getPlatform() === "android"
+    && Capacitor.isPluginAvailable("CapacitorHttp");
+
+  if (useNativeAndroidTransport) {
+    if (fetchOptions.body != null && typeof fetchOptions.body !== "string") {
+      clearTimeout(totalTimer);
+      throw new TypeError("Native Android transport only supports string request bodies");
+    }
+
+    const abortSignal = combineSignals([callerSignal, totalController.signal]);
+    if (abortSignal.aborted) {
+      clearTimeout(totalTimer);
+      throw abortSignal.reason ?? new DOMException("Aborted", "AbortError");
+    }
+    const nativeHeaders = Object.fromEntries(headers.entries());
+    const nativeMethod = fetchOptions.method ?? "GET";
+    const nativeBody = typeof fetchOptions.body === "string" ? fetchOptions.body : undefined;
+    const requestKey = nativeRequestKey(url, nativeMethod, nativeHeaders, nativeBody);
+    let abortListener: (() => void) | null = null;
+    const abortPromise = new Promise<never>((_resolve, reject) => {
+      const rejectFromSignal = () => {
+        reject(abortSignal.reason ?? new DOMException("Aborted", "AbortError"));
+      };
+      if (abortSignal.aborted) {
+        rejectFromSignal();
+        return;
+      }
+      abortListener = rejectFromSignal;
+      abortSignal.addEventListener("abort", rejectFromSignal, { once: true });
+    });
+
+    try {
+      let nativeRequest = activeNativeRequests.get(requestKey);
+      if (!nativeRequest) {
+        nativeRequest = CapacitorHttp.request({
+          url,
+          method: nativeMethod,
+          headers: nativeHeaders,
+          ...(nativeBody === undefined ? {} : { data: nativeBody }),
+          connectTimeout: timeoutMs,
+          readTimeout: timeoutMs,
+        });
+        activeNativeRequests.set(requestKey, nativeRequest);
+        void nativeRequest.then(
+          () => {
+            if (activeNativeRequests.get(requestKey) === nativeRequest) activeNativeRequests.delete(requestKey);
+          },
+          () => {
+            if (activeNativeRequests.get(requestKey) === nativeRequest) activeNativeRequests.delete(requestKey);
+          },
+        );
+      }
+      // CapacitorHttp 没有逐请求 cancel；abort/timeout 只停止 JS 等待，底层请求可能继续完成。
+      const nativeResponse = await Promise.race([
+        nativeRequest,
+        abortPromise,
+      ]);
+      const responseHeaders = new Headers(nativeResponse.headers);
+      if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+        const body = nativeResponseBody(nativeResponse.data);
+        throw new ApiError(
+          nativeResponse.status,
+          "",
+          nativeResponseDetails(nativeResponse.data),
+          body,
+          responseHeaders,
+        );
+      }
+      if (nativeResponse.status === 204 || nativeResponse.data === "" || nativeResponse.data === undefined) {
+        return undefined as T;
+      }
+      // CapacitorHttp 已按响应 Content-Type 解码 application/json；不能再次 JSON.parse，
+      // 否则原生层返回的 JSON 字符串值会被误判为非法 JSON。
+      return nativeResponse.data as T;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (timedOut) throw new Error(messages.network.timeout(timeoutMs, url));
+      if (callerSignal?.aborted) throw error;
+      if ((error as Error).name === "AbortError") throw error;
+      throw describeFetchFailure(url);
+    } finally {
+      clearTimeout(totalTimer);
+      if (abortListener) abortSignal.removeEventListener("abort", abortListener);
+    }
+  }
 
   // 竞速多枪：先到的响应头定胜负，输家 abort；HTTP 状态错误算"有响应"，照走下方 ApiError 路径。
   const raceAttempts = (): Promise<Response> =>

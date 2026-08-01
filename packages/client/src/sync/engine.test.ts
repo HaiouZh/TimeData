@@ -353,7 +353,7 @@ describe("getSyncHealth", () => {
       categoryCount: 1,
       entryCount: 1,
       quickNoteCount: 0,
-      lastUpdatedAt: "2026-05-08T11:00:00",
+      lastUpdatedAt: "2026-05-08T11:00:00.000Z",
       contentHash: localHash,
       serverTime: "2026-05-08T12:00:00.000Z",
     });
@@ -2081,6 +2081,37 @@ function categoryChange(recordId: string, timestamp: string) {
 }
 
 describe("pull 分批拉取", () => {
+  it("native option 下从 seq 0 开始的分页全量 pull 全程保持 Web", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        serverTime: "2026-08-01T00:00:00.000Z",
+        latestSeq: 2,
+        nextSinceSeq: 1,
+        hasMore: true,
+        changes: [],
+      })
+      .mockResolvedValueOnce({
+        serverTime: "2026-08-01T00:00:01.000Z",
+        latestSeq: 2,
+        nextSinceSeq: 2,
+        hasMore: false,
+        changes: [],
+      });
+
+    await expect(syncPullSinceSeq({ transport: "native-android" })).resolves.toMatchObject({ transport: "web" });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/pull", expect.objectContaining({
+      body: JSON.stringify({ sinceSeq: 0, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
+    }));
+    expect(apiFetchMock).toHaveBeenNthCalledWith(2, "/api/sync/pull", expect.objectContaining({
+      body: JSON.stringify({ sinceSeq: 1, limit: 500 }),
+      hedge: { delayMs: SYNC_HEDGE_DELAY_MS },
+    }));
+    expect(apiFetchMock.mock.calls[0][1]).not.toHaveProperty("transport");
+    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("transport");
+  });
+
   it("分批拉取：逐批推进游标，全部 apply，末批收尾到 latestSeq", async () => {
     apiFetchMock
       .mockResolvedValueOnce({
@@ -2863,12 +2894,18 @@ describe("canSkipEchoPull", () => {
 });
 
 describe("regularSync", () => {
+  it("rejects a malformed status response before comparing sequence cursors", async () => {
+    apiFetchMock.mockResolvedValueOnce("decoded-but-not-status");
+
+    await expect(regularSync()).rejects.toThrow("Invalid /api/sync/status response");
+  });
+
   it("deduplicates concurrent regularSync calls in one browser context", async () => {
     const fetchCalls: string[] = [];
     apiFetchMock.mockImplementation(async (url: string) => {
       fetchCalls.push(url.toString());
       if (url.toString().endsWith("/api/sync/status")) {
-        return { categoryCount: 0, entryCount: 0, lastUpdatedAt: null, latestSeq: 1, serverTime: "2026-05-17T00:00:00.000Z", contentHash: "empty" };
+        return { categoryCount: 0, entryCount: 0, quickNoteCount: 0, lastUpdatedAt: null, latestSeq: 1, serverTime: "2026-05-17T00:00:00.000Z", contentHash: "empty" };
       }
       if (url.toString().endsWith("/api/sync/pull")) {
         return { changes: [], serverTime: "2026-05-17T00:00:01.000Z", latestSeq: 1 };
@@ -2906,6 +2943,122 @@ describe("regularSync", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/sync/pull", expect.objectContaining({ hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }));
   });
 
+  it("native transport 只用于 status 与增量 pull，且不叠加 Web hedge", async () => {
+    setLastSyncedSeq(4);
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 0,
+        entryCount: 0,
+        quickNoteCount: 0,
+        lastUpdatedAt: null,
+        latestSeq: 5,
+        serverTime: "2026-05-17T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        changes: [],
+        latestSeq: 5,
+        nextSinceSeq: 5,
+        hasMore: false,
+        serverTime: "2026-05-17T00:00:01.000Z",
+      });
+
+    await regularSync({ transport: "native-android" });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", { transport: "native-android" });
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/sync/pull",
+      expect.objectContaining({ method: "POST", transport: "native-android" }),
+    );
+    expect(apiFetchMock.mock.calls[0][1]).not.toHaveProperty("hedge");
+    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("hedge");
+  });
+
+  it("native status 后游标为 0 的全量 pull 保持 Web，并把计时通道记为 mixed", async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        categoryCount: 0,
+        entryCount: 0,
+        quickNoteCount: 0,
+        lastUpdatedAt: null,
+        latestSeq: 1,
+        serverTime: "2026-07-31T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        changes: [],
+        latestSeq: 1,
+        nextSinceSeq: 1,
+        hasMore: false,
+        serverTime: "2026-07-31T00:00:01.000Z",
+      })
+      .mockResolvedValueOnce({ ok: true });
+    const phases = createPhaseRecorder();
+
+    await regularSync({ transport: "native-android", phases });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(1, "/api/sync/status", { transport: "native-android" });
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/sync/pull",
+      expect.objectContaining({ method: "POST", hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }),
+    );
+    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("transport");
+    expect(phases.transport).toBe("mixed");
+  });
+
+  it("native resume with pending changes keeps push on Web and only moves the follow-up pull", async () => {
+    await db.settings.add({ key: "theme", value: "dark", updatedAt: "2026-07-31T00:00:00.000Z" });
+    await db.syncLog.add({
+      id: "setting-log-native-resume",
+      tableName: "settings",
+      recordId: "theme",
+      action: "update",
+      timestamp: "2026-07-31T00:00:01.000Z",
+      synced: 0,
+    });
+    setLastSyncedSeq(3);
+    apiFetchMock
+      .mockResolvedValueOnce({
+        accepted: 1,
+        rejected: 0,
+        conflicts: 0,
+        outcomes: [{
+          tableName: "settings",
+          recordId: "theme",
+          action: "update",
+          status: "accepted",
+          reasonCode: "applied",
+          message: "Applied",
+          incomingTimestamp: "2026-07-31T00:00:01.000Z",
+        }],
+        backupId: null,
+        serverTime: "2026-07-31T00:00:02.000Z",
+      })
+      .mockResolvedValueOnce({
+        changes: [],
+        latestSeq: 4,
+        nextSinceSeq: 4,
+        hasMore: false,
+        serverTime: "2026-07-31T00:00:03.000Z",
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    await regularSync({ transport: "native-android" });
+
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/sync/push",
+      expect.objectContaining({ method: "POST", hedge: { delayMs: SYNC_HEDGE_DELAY_MS } }),
+    );
+    expect(apiFetchMock.mock.calls[0][1]).not.toHaveProperty("transport");
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/sync/pull",
+      expect.objectContaining({ method: "POST", transport: "native-android" }),
+    );
+    expect(apiFetchMock.mock.calls[1][1]).not.toHaveProperty("hedge");
+  });
+
   it("returns identical from meta status without pulling a full snapshot", async () => {
     await db.categories.add({
       id: "cat-1",
@@ -2932,6 +3085,7 @@ describe("regularSync", () => {
     apiFetchMock.mockResolvedValue({
       categoryCount: 1,
       entryCount: 1,
+      quickNoteCount: 0,
       lastUpdatedAt: "2026-05-08T09:00:00.000Z",
       latestSeq: 7,
       serverTime: "2026-05-08T10:00:00.000Z",
@@ -3000,6 +3154,7 @@ describe("regularSync", () => {
       .mockResolvedValueOnce({
         categoryCount: 1,
         entryCount: 1,
+        quickNoteCount: 0,
         lastUpdatedAt: "2026-05-08T09:30:00.000Z",
         latestSeq: 7,
         serverTime: "2026-05-08T10:00:00.000Z",
@@ -3266,6 +3421,7 @@ describe("regularSync", () => {
       .mockResolvedValueOnce({
         categoryCount: 1,
         entryCount: 1,
+        quickNoteCount: 0,
         lastUpdatedAt: "2026-05-08T09:30:00.000Z",
         latestSeq: 7,
         serverTime: "2026-05-08T10:00:00.000Z",

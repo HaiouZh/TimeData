@@ -19,7 +19,7 @@ covers:
 contracts:
   - .github/workflows/android-apk.yml
   - packages/mobile/capacitor.config.ts
-last-reviewed: 2026-07-26
+last-reviewed: 2026-07-31
 ---
 
 # 部署 · Android APK 发布
@@ -64,6 +64,8 @@ Capacitor 7 版本的 Android 构建要求：Node 22+、pnpm 11、Java 21、Andr
 Android 端依赖的 Capacitor 插件清单：`@capacitor/app`（返回键）、`@capacitor/app-launcher`（把 APK 下载直链交给系统处理）、`@capacitor/browser`（外链浏览器 fallback）、`@capacitor/filesystem` + `@capacitor/share`（备份导出落盘和分享）。新增或升级这些插件后必须重跑 `pnpm --filter @timedata/mobile android:sync`，让 `packages/mobile/android/capacitor.settings.gradle` 与 `packages/mobile/android/app/capacitor.build.gradle` 同步注册原生插件，否则原生工程拿不到新插件。
 
 Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，并且 `packages/mobile/capacitor.config.ts` 保持 `server.cleartext: false`、`android.allowMixedContent: false`。App 内服务器配置在原生 Android 环境会拒绝保存 `http://` API 地址；自托管服务器需要先通过 Caddy / Nginx / Tunnel 等方式暴露 HTTPS，再在 App 中填写 `https://` 地址。`pnpm --filter @timedata/mobile test` 会静态检查这些安全配置，避免 release APK 默认允许 HTTP 明文流量或混合内容。
+
+同步客户端不启用 `CapacitorHttp` 的全局 fetch/XHR patch。仅 Android 回前台时，`/api/sync/status` 与增量 `/api/sync/pull` 可由 client 显式调用 Capacitor 7 内置 `CapacitorHttp`；它使用系统 `HttpURLConnection`，不经过浏览器 CORS 预检，但仍受设备 DNS、VPN、代理、TLS 与服务器 HTTPS 链路影响，也没有逐请求取消能力。push、SSE、force-push、健康诊断、管理/日记/备份继续走 WebView `fetch`，所以部署仍需把 `https://localhost` 放入 `ALLOWED_ORIGINS`；原生路径不是放宽 CORS 或 cleartext 的理由。该内置能力无需新增 npm 依赖、Manifest 权限或原生插件注册。
 
 `packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。
 
