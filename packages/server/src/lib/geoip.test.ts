@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { lookupGeo, resetGeoipForTests } from "./geoip.js";
+import { geoDisplayCity, lookupGeo, resetGeoipForTests } from "./geoip.js";
 
 const originalDir = process.env.GEOIP_DIR;
 
@@ -40,10 +40,19 @@ describe("geoip 缺库降级", () => {
       throw new Error("ENOENT: mmdb 不存在（测试桩）");
     });
     vi.resetModules();
-    vi.doMock("node:fs", async (importOriginal) => ({
-      ...(await importOriginal<typeof import("node:fs")>()),
-      readFileSync: readFileSyncSpy,
-    }));
+    vi.doMock("node:fs", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("node:fs")>();
+      return {
+        ...actual,
+        // 中国段表放行真实读盘:它随仓库走,且这条守的是 mmdb 读盘缓存,不该被它搅计数
+        readFileSync: vi.fn((filePath: string, ...rest: unknown[]) => {
+          if (String(filePath).endsWith("china-geo.bin")) {
+            return (actual.readFileSync as (...args: unknown[]) => Buffer)(filePath, ...rest);
+          }
+          return readFileSyncSpy(filePath);
+        }),
+      };
+    });
 
     try {
       const geoip = await import("./geoip.js");
@@ -76,16 +85,23 @@ async function loadGeoipWithFakeReaders(rows: FakeRows, opts: { cityOk?: boolean
   const validateSpy = vi.fn((ip: string) => /^[0-9a-fA-F:.]+$/.test(ip));
 
   vi.resetModules();
-  vi.doMock("node:fs", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("node:fs")>()),
-    // buffer 内容带库名标记,让 Reader 桩能认出自己是哪个库——不能靠构造顺序,
-    // 因为某个库加载失败时它的 Reader 压根不会被构造。
-    readFileSync: vi.fn((filePath: string) => {
-      const isCity = String(filePath).includes("City");
-      if (isCity ? !cityOk : !asnOk) throw new Error("ENOENT（测试桩）");
-      return Buffer.from(isCity ? "city" : "asn");
-    }),
-  }));
+  vi.doMock("node:fs", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("node:fs")>();
+    return {
+      ...actual,
+      // buffer 内容带库名标记,让 Reader 桩能认出自己是哪个库——不能靠构造顺序,
+      // 因为某个库加载失败时它的 Reader 压根不会被构造。
+      readFileSync: vi.fn((filePath: string, ...rest: unknown[]) => {
+        // 中国段表走真实读盘:它随仓库走、CI 里也在,劫持它会让中国路径整片假降级
+        if (String(filePath).endsWith("china-geo.bin")) {
+          return (actual.readFileSync as (...args: unknown[]) => Buffer)(filePath, ...rest);
+        }
+        const isCity = String(filePath).includes("City");
+        if (isCity ? !cityOk : !asnOk) throw new Error("ENOENT（测试桩）");
+        return Buffer.from(isCity ? "city" : "asn");
+      }),
+    };
+  });
   vi.doMock("maxmind", () => ({
     validate: validateSpy,
     Reader: class {
@@ -120,6 +136,7 @@ describe("geoip 库就绪时的查询", () => {
     const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
     expect(geoip.lookupGeo("203.0.113.9")).toEqual({
       country: "中国",
+      region: null,
       city: "上海",
       cityGeonameId: 1796236,
       asn: 9808,
@@ -151,7 +168,7 @@ describe("geoip 库就绪时的查询", () => {
     expect(geoip.lookupGeo("203.0.113.9")).toMatchObject({
       country: null, city: null, cityGeonameId: null, asn: 9808,
     });
-    expect(geoip.getGeoipReadiness()).toEqual({ city: false, asn: true });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: false, asn: true, chinaTable: true });
   });
 
   it("半加载态:只有 City 库在 → 有地名无运营商", async () => {
@@ -159,11 +176,100 @@ describe("geoip 库就绪时的查询", () => {
     expect(geoip.lookupGeo("203.0.113.9")).toMatchObject({
       country: "中国", city: "上海", asn: null, asnOrg: null,
     });
-    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: false });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: false, chinaTable: true });
   });
 
   it("两库都在时就绪状态全 true", async () => {
     const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
-    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: true });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: true, chinaTable: true });
+  });
+});
+
+describe("中国表命中优先", () => {
+  afterEach(() => {
+    vi.doUnmock("node:fs");
+    vi.doUnmock("maxmind");
+    vi.resetModules();
+  });
+
+  it("中国 IP 用中国表的中文省市与运营商，ASN 号仍取自 GeoLite2-ASN", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.lookupGeo("112.25.1.1")).toEqual({
+      country: "中国",
+      region: "江苏省",
+      city: "南京市",
+      cityGeonameId: null,
+      asn: 9808,
+      asnOrg: "中国移动",
+    });
+  });
+
+  // 中国表只在中国段命中,国外必须原样走 GeoLite2 —— 这条守的是「国外路径一行不改」。
+  // 断言里的「中国 / 上海」是 CITY_ROW 桩数据,不是说 8.8.8.8 在中国:重点是 region 为
+  // null、cityGeonameId 有值,证明它没被中国表接管。
+  it("未命中中国表的 IP 仍走 GeoLite2 且 region 为 null", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.lookupGeo("8.8.8.8")).toEqual({
+      country: "中国", region: null, city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile",
+    });
+  });
+
+  // 中国表内置随镜像走,GeoLite2 要手动放;本地开发/CI 常态就是「有中国表没 mmdb」。
+  // 这条同时守住「lookupGeo 里那句 if (!city && !asn) return null 早退必须删掉」。
+  it("GeoLite2 全缺但中国表在：中国 IP 仍有省市，ASN 为 null", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({}, { cityOk: false, asnOk: false });
+    expect(geoip.lookupGeo("112.25.1.1")).toMatchObject({
+      country: "中国", region: "江苏省", city: "南京市", asn: null,
+    });
+  });
+
+  // 真实段 1.1.0.0-1.1.0.255：福州,源数据里运营商是 0 → 归一后 null → 回落 GeoLite2
+  it("中国表命中但运营商未知时回落 GeoLite2 的 asnOrg", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.lookupGeo("1.1.0.1")).toEqual({
+      country: "中国", region: "福建省", city: "福州市", cityGeonameId: null, asn: 9808, asnOrg: "China Mobile",
+    });
+  });
+
+  // 香港段：省有、市无、运营商无
+  it("香港段只有省时 city 为 null", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.lookupGeo("1.32.192.1")).toMatchObject({
+      country: "中国", region: "香港特别行政区", city: null, asnOrg: "China Mobile",
+    });
+  });
+
+  it("就绪状态多报一路中国表", async () => {
+    const { geoip } = await loadGeoipWithFakeReaders({ city: CITY_ROW, asn: ASN_ROW });
+    expect(geoip.getGeoipReadiness()).toEqual({ city: true, asn: true, chinaTable: true });
+  });
+});
+
+describe("geoDisplayCity", () => {
+  it("省市都有时拼成一串", () => {
+    expect(geoDisplayCity({ country: "中国", region: "江苏省", city: "南京市", cityGeonameId: null, asn: null, asnOrg: null }))
+      .toBe("江苏省 南京市");
+  });
+
+  // 直辖市归一后省=北京、市=北京市,不去重会打出「北京 北京市」
+  it("省是市的前缀时只出一个", () => {
+    expect(geoDisplayCity({ country: "中国", region: "北京", city: "北京市", cityGeonameId: null, asn: null, asnOrg: null }))
+      .toBe("北京市");
+  });
+
+  // 香港 5802 个段的城市字段全是空
+  it("只有省时出省", () => {
+    expect(geoDisplayCity({ country: "中国", region: "香港特别行政区", city: null, cityGeonameId: null, asn: null, asnOrg: null }))
+      .toBe("香港特别行政区");
+  });
+
+  it("GeoLite2 路径原样返回城市", () => {
+    expect(geoDisplayCity({ country: "美国", region: null, city: "San Jose", cityGeonameId: 5392171, asn: null, asnOrg: null }))
+      .toBe("San Jose");
+  });
+
+  it("两者都无时返回 null", () => {
+    expect(geoDisplayCity({ country: "中国", region: null, city: null, cityGeonameId: null, asn: null, asnOrg: null }))
+      .toBeNull();
   });
 });
