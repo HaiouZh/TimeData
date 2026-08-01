@@ -12,6 +12,7 @@ import {
 } from "react";
 import { Trash } from "@phosphor-icons/react";
 import { Icon } from "../../components/Icon.js";
+import { copyText } from "../../quick-notes/clipboard.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 
 export interface ChildRowCallbacks {
@@ -21,6 +22,8 @@ export interface ChildRowCallbacks {
   onEnter?: (child: Task) => void;
   onBeginEdit?: (child: Task) => void;
   onCancelEdit?: (child: Task) => void;
+  /** 标题被 Shift+单击复制成功后的上抛回调。 */
+  onCopyTitle?: (child: Task) => void;
 }
 
 interface ChildRowBodyProps extends ChildRowCallbacks {
@@ -87,6 +90,7 @@ function ChildRowBody({
   onCancelEdit,
   doneOverride,
   toggleDisabled = false,
+  onCopyTitle,
 }: ChildRowBodyProps) {
   const [draft, setDraft] = useState(child.title);
   const lastExternal = useRef(child.title);
@@ -202,8 +206,17 @@ function ChildRowBody({
           tabIndex={0}
           data-testid={`child-title-${child.id}`}
           aria-label={`编辑子任务 ${child.title}`}
-          onClick={() => {
+          onClick={(event) => {
             if (hasNonEmptySelection()) return;
+            // Shift+单击=复制标题（纯 Shift 才拦）；其余情况照常进编辑。
+            if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+              event.preventDefault();
+              event.stopPropagation();
+              void copyText(child.title)
+                .then(() => onCopyTitle?.(child))
+                .catch(() => {});
+              return;
+            }
             beginEdit();
           }}
           onKeyDown={handleTitleKey}

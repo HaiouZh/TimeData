@@ -611,4 +611,26 @@ describe("InlineChildren mode 行为矩阵", () => {
 
     await unmount(root);
   });
+
+  it("draggable：子任务标题 Shift+单击复制并上抛 onCopyTitle，不进入编辑", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const onCopyTitle = vi.fn();
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderDom(
+      createElement(SyncProvider, null, createElement(InlineChildren, { parentId: parent.id, mode: "draggable", onCopyTitle })),
+    );
+    await settle();
+
+    await act(async () => {
+      childTitle(host).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    });
+    await settle();
+
+    expect(writeText).toHaveBeenCalledWith("子任务0");
+    expect(onCopyTitle).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
+    delete (navigator as { clipboard?: unknown }).clipboard;
+    await unmount(root);
+  });
 });
