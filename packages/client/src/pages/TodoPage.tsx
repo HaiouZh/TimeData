@@ -598,8 +598,8 @@ export function TodoPage() {
 
   function targetContainerFromOver(overContainerId: string, rootAboveId: string | null): TodoContainer | null {
     const container = parseTodoContainerId(overContainerId);
-    // 池容器与项目组容器都是直接落点；parent 容器不是（它要按下面的根行反查它所在的池）。
-    if (container?.kind === "pool" || container?.kind === "project") return container;
+    // 池容器、项目组容器与手头区容器都是直接落点；parent 容器不是（它要按下面的根行反查它所在的池）。
+    if (container?.kind === "pool" || container?.kind === "project" || container?.kind === "hand") return container;
     if (!rootAboveId) return null;
     if (buckets.today.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "today" };
     if (floatingInbox.some((task) => task.id === rootAboveId)) return { kind: "pool", pool: "inbox" };
@@ -709,7 +709,9 @@ export function TodoPage() {
               ? f(buckets.today)
               : op.containerId === "pool:inbox"
                 ? f(floatingInbox)
-                : [];
+                : op.containerId === "hand"
+                  ? buckets.atHand.filter((t) => !t.done)
+                  : [];
           if (containerTasks.length === 0) return;
           const ids = containerTasks.map((t) => t.id);
           const oldIndex = ids.indexOf(activeId);

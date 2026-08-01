@@ -2674,6 +2674,45 @@ describe("TodoPage 多选提交", () => {
     expect(selectionBar(host)).not.toBeNull();
     await unmount(root);
   });
+
+  it("手头区键盘拖拽重排：sortOrder 落库、视图顺序更新", async () => {
+    const now = "2026-06-28T09:00:00.000Z";
+    const a = await addTask({ title: "买菜", toInbox: true });
+    const b = await addTask({ title: "洗碗", toInbox: true });
+    await grabTaskToHand(a.id, { now: new Date(now) });
+    await grabTaskToHand(b.id, { now: new Date(now) });
+
+    const { host, root } = await renderPage();
+    await waitForCondition(
+      () => host.querySelector('[data-section="todo-at-hand"] [aria-label="移动 洗碗"]') !== null,
+      "at-hand drag handle",
+      settle,
+    );
+
+    // 窄屏布局 atHandBlock 排最前；今天/收件箱为空、无项目组 → droppable 只有手头两行，
+    // closestCenter 取挂载顺序第一名 = 买菜。拖第二行（洗碗）落到买菜上 = 交换序。
+    await keyboardDrag(host.querySelector('[data-section="todo-at-hand"] [aria-label="移动 洗碗"]') as HTMLElement);
+
+    // 落库轮询照 waitForTask 的写法：waitForCondition 的断言是同步 predicate，async 断言
+    // 返回 Promise 恒 truthy、第一轮就放行，不会真等到回流——视图断言必须在回流完成后读。
+    let swapped = false;
+    for (let i = 0; i < 20 && !swapped; i += 1) {
+      const aRow = await db.tasks.get(a.id);
+      const bRow = await db.tasks.get(b.id);
+      swapped = aRow !== undefined && bRow !== undefined && aRow.sortOrder > bRow.sortOrder;
+      if (!swapped) await settle();
+    }
+    expect(swapped).toBe(true);
+
+    await waitForCondition(
+      () =>
+        host.querySelector('[data-section="todo-at-hand"] [aria-label^="移动 "]')?.getAttribute("aria-label") ===
+        "移动 洗碗",
+      "at-hand view reordered",
+      settle,
+    );
+    await unmount(root);
+  });
 });
 
 describe("拖拽投递坞", () => {
