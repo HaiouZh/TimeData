@@ -14,6 +14,7 @@ import {
 import { nextDueDate, type Task } from "@timedata/shared";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { copyText } from "../../quick-notes/clipboard.js";
 import { Icon } from "../../components/Icon.js";
 import { Checkbox } from "../../components/ui/Checkbox.js";
 import { db } from "../../db/index.js";
@@ -44,6 +45,8 @@ export interface TaskRowProps {
   coarsePointer?: boolean;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
+  /** 标题被 Shift+单击复制成功后的上抛回调（反馈 toast 由宿主负责）。 */
+  onCopyTitle?: (t: Task) => void;
   onDelete?: (t: Task) => void;
   onToToday?: (t: Task) => void;
   onToInbox?: (t: Task) => void;
@@ -105,6 +108,7 @@ export function TaskRow({
   coarsePointer,
   onToggle,
   onEdit,
+  onCopyTitle,
   onDelete,
   onToToday,
   onToInbox,
@@ -345,7 +349,21 @@ export function TaskRow({
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <span className={`select-text break-words td-text-label ${checked ? "text-ink-3 line-through" : "text-ink"}`}>
+          <span
+            className={`select-text break-words td-text-label ${checked ? "text-ink-3 line-through" : "text-ink"}`}
+            onClick={(event) => {
+              // Shift+单击=复制标题：纯 Shift（无 Ctrl/Alt/Meta）、非多选态、无文本选中才拦。
+              // 拦下即 preventDefault+stopPropagation，避免打开详情；复制失败静默。
+              if (selectionMode) return;
+              if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+              if (window.getSelection()?.toString()) return;
+              event.preventDefault();
+              event.stopPropagation();
+              void copyText(task.title)
+                .then(() => onCopyTitle?.(task))
+                .catch(() => {});
+            }}
+          >
             {task.title}
           </span>
           {hasMeta && (

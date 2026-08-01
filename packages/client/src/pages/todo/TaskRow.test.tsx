@@ -63,6 +63,138 @@ function render(node: ReturnType<typeof createElement>) {
 }
 
 describe("TaskRow", () => {
+  describe("标题 Shift+单击复制", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    let originalSelection: typeof window.getSelection;
+
+    beforeEach(() => {
+      originalSelection = window.getSelection;
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    });
+
+    afterEach(() => {
+      writeText.mockClear();
+      window.getSelection = originalSelection;
+      delete (navigator as { clipboard?: unknown }).clipboard;
+    });
+
+    function titleSpan(host: HTMLElement): HTMLElement {
+      const el = host.querySelector(".select-text");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    }
+
+    function shiftClick(el: Element): Promise<void> {
+      return act(async () => {
+        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+      });
+    }
+
+    it("Shift+单击标题：复制标题、上抛 onCopyTitle、不打开详情", async () => {
+      const onCopyTitle = vi.fn();
+      const onEdit = vi.fn();
+      const { host, root } = await render(
+        createElement(TaskRow, {
+          task: task({ title: "买啤酒" }),
+          pool: "inbox",
+          onToggle: noop,
+          onEdit,
+          onCopyTitle,
+        }),
+      );
+      await shiftClick(titleSpan(host));
+      expect(writeText).toHaveBeenCalledWith("买啤酒");
+      expect(onCopyTitle).toHaveBeenCalledTimes(1);
+      expect(onEdit).not.toHaveBeenCalled();
+      await unmount(root);
+    });
+
+    it("普通单击标题：不复制，照常打开详情", async () => {
+      const onCopyTitle = vi.fn();
+      const onEdit = vi.fn();
+      const { host, root } = await render(
+        createElement(TaskRow, {
+          task: task({ title: "买啤酒" }),
+          pool: "inbox",
+          onToggle: noop,
+          onEdit,
+          onCopyTitle,
+        }),
+      );
+      await act(async () => {
+        titleSpan(host).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      });
+      expect(writeText).not.toHaveBeenCalled();
+      expect(onCopyTitle).not.toHaveBeenCalled();
+      expect(onEdit).toHaveBeenCalledTimes(1);
+      await unmount(root);
+    });
+
+    it("Shift+Ctrl+单击标题：不复制（非纯 Shift），照常打开详情", async () => {
+      const onCopyTitle = vi.fn();
+      const onEdit = vi.fn();
+      const { host, root } = await render(
+        createElement(TaskRow, {
+          task: task({ title: "买啤酒" }),
+          pool: "inbox",
+          onToggle: noop,
+          onEdit,
+          onCopyTitle,
+        }),
+      );
+      await act(async () => {
+        titleSpan(host).dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true, ctrlKey: true }),
+        );
+      });
+      expect(writeText).not.toHaveBeenCalled();
+      expect(onCopyTitle).not.toHaveBeenCalled();
+      expect(onEdit).toHaveBeenCalledTimes(1);
+      await unmount(root);
+    });
+
+    it("有文本选中时 Shift+单击标题：不复制、不开详情", async () => {
+      const onCopyTitle = vi.fn();
+      const onEdit = vi.fn();
+      window.getSelection = () => ({ toString: () => "选中的文字" }) as Selection;
+      const { host, root } = await render(
+        createElement(TaskRow, {
+          task: task({ title: "买啤酒" }),
+          pool: "inbox",
+          onToggle: noop,
+          onEdit,
+          onCopyTitle,
+        }),
+      );
+      await shiftClick(titleSpan(host));
+      expect(writeText).not.toHaveBeenCalled();
+      expect(onCopyTitle).not.toHaveBeenCalled();
+      expect(onEdit).not.toHaveBeenCalled();
+      await unmount(root);
+    });
+
+    it("多选态下 Shift+单击标题：不复制，走勾选", async () => {
+      const onCopyTitle = vi.fn();
+      const onToggleSelect = vi.fn();
+      const { host, root } = await render(
+        createElement(TaskRow, {
+          task: task({ title: "买啤酒" }),
+          pool: "inbox",
+          selectionMode: true,
+          onToggle: noop,
+          onEdit: noop,
+          onCopyTitle,
+          onToggleSelect,
+        }),
+      );
+      await shiftClick(titleSpan(host));
+      expect(writeText).not.toHaveBeenCalled();
+      expect(onCopyTitle).not.toHaveBeenCalled();
+      expect(onToggleSelect).toHaveBeenCalledTimes(1);
+      await unmount(root);
+    });
+  });
+
   it("已归入目标的任务：行内渲染绿色归属竖条", async () => {
     const { host, root } = await render(
       createElement(TaskRow, { task: task(), pool: "inbox", inGoal: true, ...handlers }),
