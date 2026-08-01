@@ -38,7 +38,7 @@ contracts:
   - packages/shared/src/schemas.ts
   - packages/shared/src/types.ts:SyncPushOutcome
   - packages/server/src/db/schema.ts
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-01
 ---
 
 # 同步机制
@@ -257,6 +257,17 @@ UI 挂起冲突只发生在 manual 域（categories / time_entries）。lww 域�
 `useSync.sync()` 每轮用 `createPhaseRecorder()`（`packages/client/src/sync/phaseTimings.ts`，默认单调时钟 `performance.now`，与 `totalMs` 同源）给 status/push/pull 三个阶段计时——写后路径只有 push/pull，补差路径只有 status/pull；无论成功还是失败，收尾都会落一条 `SyncTimingEntry` 到 localStorage `timedata_sync_phase_timings` 环形缓冲（最多 20 条，最新在前）。`getSyncTimings()` 读取时做逐元素 shape 校验，坏元素丢弃；`phases` 允许携带未知阶段键（值须为有限 number），带 health/backup/report 等旧阶段键的存量数据仍合法、无需迁移。
 
 `SyncTimingEntry` 额外携带四个可选诊断字段，均来自调度器 `SyncExecutorMeta`、SSE 连接态与本轮实际请求：`waitMs`（executor 触发前在调度器里排队的时长，见 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2）、`reason`（`SyncRequestReason` 字符串，本轮由谁触发）、`connection`（触发时的 `SyncStreamState`）和 `transport`（`web`、`native-android` 或 `mixed`；pending 路径的 Web push + 原生 pull、或 native status + 游标为 0 的 Web 全量 pull 记为 `mixed`）。SSE stash 就地应用只有 `bumpApply` 阶段、没有网络请求时不落 transport。四者都做类型校验，缺失时按可选字段处理，不影响存量数据兼容性；原生 transport 不强行写入可能陈旧的 `PerformanceResourceTiming.nextHopProtocol`。设置页同步卡片的 `SyncTimingsPanel` 展示最近一次各阶段耗时、p50/p95，以及最新一条的 `waitMs`/`reason`/`connection`/`transport`。带 push 或补差的那一轮，`reportToServer` 写给服务端的日志会多带一条 `action: "phase_timings"`（detail 是各阶段 ms 的 JSON；report 本身 fire-and-forget，不再计时）。服务端侧，push/pull 各自在 `sync_logs` 的 detail 里记 `timings` 首字段：`push_received` 含 `parseMs`/`validateMs`/`analyzeBackupMs`/`applyMs`/`totalMs`（真实增量，非累计），`push_rejected` 含 `parseMs`/`validateMs`，`pull_returned` 含 `readMs`/`totalMs`。这套观测纯附加，不改变任何同步判定或行为。
+
+### 同步慢排查入口
+
+同步指示灯开始闪只说明客户端进入了同步轮次，不能据此判断慢在调度器、网络还是服务端。排查先固定一条完整时间线（触发动作、指示灯开始、最新数据可见），再按以下顺序对同一轮数据取证：
+
+1. **先看 `reason` 与 `waitMs`**：回前台问题应看到 `reason=resume`。`waitMs` 本身已接近用户感知的延迟时，慢点在 executor 之前，优先查上一轮单飞、scheduler 防抖/退避和生命周期接线，入口是 [sync/realtime-and-scheduler](sync/realtime-and-scheduler.md) §2；改 HTTP transport 不会缩短这段等待。
+2. **再看客户端阶段**：`waitMs` 很小而 `status` / `pull` 很大，说明同步已及时启动，长尾在请求阶段。Android resume 的增量补差应记录 `transport=native-android`；有 Web push 后再原生 pull、或 native status 后退到 `sinceSeq=0` Web 全量 pull 时是 `mixed`。出现 `transport=web` 时先核对触发原因、平台、插件可用性和是否走全量拉取，不要直接归因服务器。
+3. **客户端与服务端对表**：把设置页阶段耗时与服务端 `sync_logs.timings`、请求审计的到达时间/次数放在同一时间窗。客户端阶段长而服务端 `totalMs` 只有毫秒级，瓶颈在请求到达服务端之前或响应返回客户端之后，继续查 WebView/原生连接、DNS、VPN/TUN、代理、TLS、CORS 预检；两边同时长才优先查 server/SQLite。服务端完全没有对应请求时，也不能把等待归因于数据库。
+4. **最后按平台做对照**：同一服务端、同一网络下比较 Web/PWA 与 Android APK，并重复采样看 p50/p95，不用单次秒表下结论。Android 原生 HTTP 只绕过浏览器 CORS enforcement 和 WebView 连接栈，不绕过系统 DNS、VPN、代理、TLS 或服务端链路；相关边界见 [deployment](deployment.md) §2 与 [deployment/android-apk](deployment/android-apk.md)。
+
+取证最小集是：客户端最近一条 `waitMs/reason/connection/transport` 与 status/push/pull 分段、服务端同时间窗的 sync/request logs、APK build id、Android 当时的 VPN/代理状态。先完成这组对表，再决定改 scheduler、transport、CORS/网络还是 server；不要从“安卓慢”直接跳到全局启用 CapacitorHttp，也不要在请求可能已经发出后盲目换 transport 重发写请求。
 
 ## 8. 改这块代码前的清单
 
