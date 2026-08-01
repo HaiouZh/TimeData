@@ -76,7 +76,7 @@ describe("GET /api/admin/request-logs/new-ips", () => {
     const res = await app.request("/api/admin/request-logs/new-ips");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      geoip: { city: false, asn: false },
+      geoip: { city: false, asn: false, chinaTable: true },
       newIps: [
         {
           tokenTier: "master",
@@ -95,7 +95,7 @@ describe("GET /api/admin/request-logs/new-ips", () => {
   it("无未确认记录时返回空列表", async () => {
     const res = await app.request("/api/admin/request-logs/new-ips");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ newIps: [], geoip: { city: false, asn: false } });
+    expect(await res.json()).toEqual({ newIps: [], geoip: { city: false, asn: false, chinaTable: true } });
   });
 });
 

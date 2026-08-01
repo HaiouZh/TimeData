@@ -5,7 +5,7 @@ import type {
   AdminRequestLogTokenTier,
 } from "@timedata/shared";
 import { getDb } from "../db/connection.js";
-import { type GeoLookup, lookupGeo } from "./geoip.js";
+import { type GeoLookup, geoDisplayCity, lookupGeo } from "./geoip.js";
 
 export interface RequestLogEntry {
   timestamp: string;
@@ -69,7 +69,7 @@ function mapRequestLog(row: RequestLogDbRow, geoLookup: (ip: string) => GeoLooku
     durationMs: row.duration_ms,
     isNewIp: row.is_new_ip === 1,
     country: geo?.country ?? null,
-    city: geo?.city ?? null,
+    city: geo === null ? null : geoDisplayCity(geo),
     asnOrg: geo?.asnOrg ?? null,
   };
 }

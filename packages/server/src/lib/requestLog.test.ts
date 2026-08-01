@@ -164,8 +164,8 @@ describe("queryRequestLogs 归属地", () => {
     // 桩按入参分支——常量桩会让「每行查自己的 IP」这条根本没被断言。
     const logs = queryRequestLogs({}, (ip) =>
       ip === "203.0.113.9"
-        ? { country: "中国", city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile" }
-        : { country: "美国", city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean" },
+        ? { country: "中国", region: null, city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile" }
+        : { country: "美国", region: null, city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean" },
     );
 
     const byIp = new Map(logs.map((log) => [log.ip, log]));
@@ -192,7 +192,7 @@ describe("queryRequestLogs 归属地", () => {
     });
 
     const geoLookup = vi.fn(() => ({
-      country: "中国", city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile",
+      country: "中国", region: null, city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile",
     }));
     const logs = queryRequestLogs({}, geoLookup);
 
@@ -221,5 +221,40 @@ describe("queryRequestLogs 归属地", () => {
 
     const logs = queryRequestLogs({}, () => null);
     expect(logs[0]).toMatchObject({ country: null, city: null, asnOrg: null });
+  });
+
+  it("中国 IP 的行 city 是省市展示串,国外行不变", async () => {
+    const { queryRequestLogs, recordRequestLog } = await import("./requestLog.js");
+
+    for (const [ip, timestamp] of [
+      ["112.25.1.1", "2026-08-01T00:00:00.000Z"],
+      ["198.51.100.4", "2026-08-01T01:00:00.000Z"],
+    ] as const) {
+      recordRequestLog({
+        timestamp,
+        method: "GET",
+        path: "/api/entries",
+        status: 200,
+        outcome: "ok",
+        tokenTier: "master",
+        ip,
+        userAgent: "Vitest",
+        clientHint: "web",
+        deviceLabel: null,
+        durationMs: 5,
+        isNewIp: false,
+      });
+    }
+
+    const logs = queryRequestLogs({}, (ip) =>
+      ip === "112.25.1.1"
+        ? { country: "中国", region: "江苏省", city: "南京市", cityGeonameId: null, asn: 9808, asnOrg: "中国移动" }
+        : { country: "美国", region: null, city: "San Jose", cityGeonameId: 5392171, asn: 14061, asnOrg: "DigitalOcean" },
+    );
+
+    const byIp = new Map(logs.map((log) => [log.ip, log]));
+    expect(byIp.get("112.25.1.1")).toMatchObject({ country: "中国", city: "江苏省 南京市", asnOrg: "中国移动" });
+    // 国外行原样,不被拼串逻辑碰到
+    expect(byIp.get("198.51.100.4")).toMatchObject({ country: "美国", city: "San Jose" });
   });
 });

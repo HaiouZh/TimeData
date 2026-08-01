@@ -24,9 +24,9 @@ afterEach(() => {
   vi.doUnmock("../db/connection.js");
 });
 
-const CN_MOBILE_SH: GeoLookup = { country: "中国", city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile" };
-const CN_MOBILE_NJ: GeoLookup = { country: "中国", city: "南京", cityGeonameId: 1799962, asn: 9808, asnOrg: "China Mobile" };
-const DO_NO_CITY: GeoLookup = { country: "美国", city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean" };
+const CN_MOBILE_SH: GeoLookup = { country: "中国", region: null, city: "上海", cityGeonameId: 1796236, asn: 9808, asnOrg: "China Mobile" };
+const CN_MOBILE_NJ: GeoLookup = { country: "中国", region: null, city: "南京", cityGeonameId: 1799962, asn: 9808, asnOrg: "China Mobile" };
+const DO_NO_CITY: GeoLookup = { country: "美国", region: null, city: null, cityGeonameId: null, asn: 14061, asnOrg: "DigitalOcean" };
 const SH_KEY = "asn:9808|geo:1796236";
 
 function geo(value: GeoLookup | null): (ip: string) => GeoLookup | null {
