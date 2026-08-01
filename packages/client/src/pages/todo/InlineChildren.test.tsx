@@ -633,4 +633,51 @@ describe("InlineChildren mode 行为矩阵", () => {
     delete (navigator as { clipboard?: unknown }).clipboard;
     await unmount(root);
   });
+
+  it("copyDisabled：Shift+单击子任务标题不复制、不上抛，回落为普通单击（进编辑）", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const onCopyTitle = vi.fn();
+    const parent = await seedParentWithChildren();
+    const { host, root } = await renderDom(
+      createElement(SyncProvider, null, createElement(InlineChildren, { parentId: parent.id, mode: "static", copyDisabled: true, onCopyTitle })),
+    );
+    await settle();
+
+    await act(async () => {
+      childTitle(host).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    });
+    await settle();
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(onCopyTitle).not.toHaveBeenCalled();
+    // 复制被断掉后 Shift+单击与普通单击同行为：多选态子行标题照常可编辑
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).not.toBeNull();
+    delete (navigator as { clipboard?: unknown }).clipboard;
+    await unmount(root);
+  });
+
+  it("已有非空选区时 Shift+单击子任务标题：不复制、不上抛、不进编辑", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const onCopyTitle = vi.fn();
+    const parent = await seedParentWithChildren();
+    const selection = vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "选中的文字" } as Selection);
+    const { host, root } = await renderDom(
+      createElement(SyncProvider, null, createElement(InlineChildren, { parentId: parent.id, mode: "draggable", onCopyTitle })),
+    );
+    await settle();
+
+    await act(async () => {
+      childTitle(host).dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    });
+    await settle();
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(onCopyTitle).not.toHaveBeenCalled();
+    expect(host.querySelector('textarea[aria-label="子任务标题"]')).toBeNull();
+    selection.mockRestore();
+    delete (navigator as { clipboard?: unknown }).clipboard;
+    await unmount(root);
+  });
 });

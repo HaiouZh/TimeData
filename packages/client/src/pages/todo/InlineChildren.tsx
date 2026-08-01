@@ -20,6 +20,8 @@ export interface InlineChildrenProps {
   onEmptyDismiss?: () => void;
   /** 子任务标题 Shift+单击复制成功后的上抛回调（宿主反馈 toast）。 */
   onCopyTitle?: (child: Task) => void;
+  /** 宿主在多选态断掉子行复制：置 true 时 Shift+单击子任务标题回落为普通单击（进编辑）。 */
+  copyDisabled?: boolean;
 }
 
 /**
@@ -32,7 +34,14 @@ export interface InlineChildrenProps {
  * 新增子任务走「草稿行」：点 +子任务 或在某条子任务上回车，都会在末尾打开一条空白聚焦输入框，
  * 不预填充占位文案；输入为空不落库。不渲染 recurrence/tags/scheduledAt 入口——子任务隐藏高级控件。
  */
-export function InlineChildren({ parentId, mode, autoDraft = false, onEmptyDismiss, onCopyTitle }: InlineChildrenProps) {
+export function InlineChildren({
+  parentId,
+  mode,
+  autoDraft = false,
+  onEmptyDismiss,
+  onCopyTitle,
+  copyDisabled = false,
+}: InlineChildrenProps) {
   const children = useTaskChildren(parentId);
   const [drafting, setDrafting] = useState(autoDraft);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
@@ -92,6 +101,7 @@ export function InlineChildren({ parentId, mode, autoDraft = false, onEmptyDismi
         onCancelEdit={(c) => setEditingChildId((current) => (current === c.id ? null : current))}
         onEnter={() => setDrafting(true)}
         onCopyTitle={onCopyTitle}
+        copyDisabled={copyDisabled}
         doneOverride={projectionByChildId?.get(child.id)?.effectiveDone}
         toggleDisabled={projectionByChildId != null && projectionByChildId.get(child.id)?.targetOccChildId == null}
       />
@@ -107,6 +117,7 @@ export function InlineChildren({ parentId, mode, autoDraft = false, onEmptyDismi
         onCancelEdit={(c) => setEditingChildId((current) => (current === c.id ? null : current))}
         onEnter={() => setDrafting(true)}
         onCopyTitle={onCopyTitle}
+        copyDisabled={copyDisabled}
       />
     ),
   );

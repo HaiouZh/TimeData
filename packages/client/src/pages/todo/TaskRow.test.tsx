@@ -193,6 +193,51 @@ describe("TaskRow", () => {
       expect(onToggleSelect).toHaveBeenCalledTimes(1);
       await unmount(root);
     });
+
+    it("Shift+单击拖柄区：复制标题、上抛 onCopyTitle、不展开子任务", async () => {
+      const onCopyTitle = vi.fn();
+      const onEdit = vi.fn();
+      const parent = await addTask({ title: "买啤酒" });
+      await createChildTask(parent.id, "子任务甲");
+      const fresh = (await db.tasks.get(parent.id))!;
+      const handle = { setActivatorNodeRef: vi.fn(), attributes: {}, listeners: {} };
+
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={fresh}
+          pool="today"
+          onToggle={noop}
+          onEdit={onEdit}
+          onCopyTitle={onCopyTitle}
+          dragHandle={handle}
+        />,
+      );
+      await settle();
+      await shiftClick(host.querySelector('[data-testid="task-row-grab-area"]')!);
+      await settle();
+
+      expect(writeText).toHaveBeenCalledWith("买啤酒");
+      expect(onCopyTitle).toHaveBeenCalledTimes(1);
+      expect(onEdit).not.toHaveBeenCalled();
+      // 复制分支消费了这次点击：子任务层不展开、草稿不出现
+      expect(host.querySelector('[data-testid^="child-title-"]')).toBeNull();
+      expect(host.querySelector('textarea[aria-label="新子任务标题"]')).toBeNull();
+      await unmount(root);
+    });
+
+    it("复制失败（clipboard 拒绝且 DOM 兜底失败）：不上抛、不开详情", async () => {
+      const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+      const onCopyTitle = vi.fn();
+      const onEdit = vi.fn();
+      const { host, root } = await render(
+        createElement(TaskRow, { task: task({ title: "买啤酒" }), pool: "inbox", onToggle: noop, onEdit, onCopyTitle }),
+      );
+      await shiftClick(titleSpan(host));
+      expect(onCopyTitle).not.toHaveBeenCalled();
+      expect(onEdit).not.toHaveBeenCalled();
+      await unmount(root);
+    });
   });
 
   it("已归入目标的任务：行内渲染绿色归属竖条", async () => {

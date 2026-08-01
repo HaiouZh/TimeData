@@ -307,6 +307,13 @@ export function TaskRow({
             onClick={(event) => {
               event.stopPropagation();
               if (window.getSelection()?.toString()) return;
+              // 纯 Shift+单击拖柄区=复制标题（与标题 span 同一守卫；拖柄只在非多选态渲染）
+              if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                void copyText(task.title)
+                  .then(() => onCopyTitle?.(task))
+                  .catch(() => {});
+                return;
+              }
               if (!toggleChildLayer()) onEdit(task);
             }}
             {...dragHandle.attributes}
@@ -351,6 +358,7 @@ export function TaskRow({
         <div className="min-w-0 flex-1">
           <span
             className={`select-text break-words td-text-label ${checked ? "text-ink-3 line-through" : "text-ink"}`}
+            title={selectionMode ? undefined : "Shift+单击复制"}
             onClick={(event) => {
               // Shift+单击=复制标题：纯 Shift（无 Ctrl/Alt/Meta）、非多选态、无文本选中才拦。
               // 拦下即 preventDefault+stopPropagation，避免打开详情；复制失败静默。
@@ -489,6 +497,7 @@ export function TaskRow({
             parentId={task.id}
             mode={childrenMode}
             autoDraft={childTotal === 0 || undefined}
+            copyDisabled={selectionMode}
             onCopyTitle={onCopyTitle}
             onEmptyDismiss={childTotal === 0 ? () => setExpanded(false) : undefined}
           />

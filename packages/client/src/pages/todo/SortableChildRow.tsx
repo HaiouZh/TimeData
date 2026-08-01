@@ -24,6 +24,8 @@ export interface ChildRowCallbacks {
   onCancelEdit?: (child: Task) => void;
   /** 标题被 Shift+单击复制成功后的上抛回调。 */
   onCopyTitle?: (child: Task) => void;
+  /** 宿主在多选态断掉子行复制：置 true 时 Shift+单击回落为普通单击（进编辑）。 */
+  copyDisabled?: boolean;
 }
 
 interface ChildRowBodyProps extends ChildRowCallbacks {
@@ -91,6 +93,7 @@ function ChildRowBody({
   doneOverride,
   toggleDisabled = false,
   onCopyTitle,
+  copyDisabled = false,
 }: ChildRowBodyProps) {
   const [draft, setDraft] = useState(child.title);
   const lastExternal = useRef(child.title);
@@ -206,10 +209,11 @@ function ChildRowBody({
           tabIndex={0}
           data-testid={`child-title-${child.id}`}
           aria-label={`编辑子任务 ${child.title}`}
+          title={copyDisabled ? undefined : "Shift+单击复制"}
           onClick={(event) => {
             if (hasNonEmptySelection()) return;
             // Shift+单击=复制标题（纯 Shift 才拦）；其余情况照常进编辑。
-            if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            if (!copyDisabled && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
               event.preventDefault();
               event.stopPropagation();
               void copyText(child.title)

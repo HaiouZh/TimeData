@@ -129,6 +129,31 @@ describe("AtHandSection", () => {
 
     await unmount(root);
   });
+
+  it("未完任务标题 Shift+单击：复制并上抛 onCopyTitle（透传 TaskRow）", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const onCopyTitle = vi.fn();
+    const { host, root } = await renderDom(
+      <AtHandSection
+        atHand={[task({ id: "a", title: "买菜" })]}
+        session={session({})}
+        resumable={[]}
+        {...handlers}
+        onCopyTitle={onCopyTitle}
+      />,
+    );
+    const { act } = await import("react");
+    const title = host.querySelector(".select-text") as HTMLElement;
+    expect(title?.textContent).toContain("买菜");
+    await act(async () => {
+      title.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    });
+    expect(writeText).toHaveBeenCalledWith("买菜");
+    expect(onCopyTitle).toHaveBeenCalledTimes(1);
+    delete (navigator as { clipboard?: unknown }).clipboard;
+    await unmount(root);
+  });
 });
 
 describe("场便签标题", () => {

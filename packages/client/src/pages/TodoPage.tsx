@@ -487,7 +487,7 @@ export function TodoPage() {
     onToInbox: moveToInbox,
     onToHand: grabToHand,
     onTagsChange: changeTags,
-    onCopyTitle: (task: Task) => showActionToast({ message: "已复制" }),
+    onCopyTitle: () => showActionToast({ message: "已复制" }),
   };
 
   // 项目区成员一并纳入：P2 打开归属轴排他后它们会离开 inbox，
@@ -842,6 +842,7 @@ export function TodoPage() {
       onResume={resumeHand}
       onToggle={toggle}
       onEdit={openDetail}
+      onCopyTitle={rowHandlers.onCopyTitle}
       goalLinkedIds={goalLinkedIds}
       metaChip={projectMetaChip}
       onUpdateNote={(note) => {

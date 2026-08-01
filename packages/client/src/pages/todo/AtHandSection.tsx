@@ -17,6 +17,8 @@ export interface AtHandSectionProps {
   onResume: (sessionId: string) => void;
   onToggle: (t: Task) => void;
   onEdit: (t: Task) => void;
+  /** 标题 Shift+单击复制成功后的上抛回调（透传 TaskRow；宿主反馈 toast）。 */
+  onCopyTitle?: (t: Task) => void;
   goalLinkedIds?: ReadonlySet<string>;
   /** meta 胶囊带插槽：手头区用它显示项目名 chip。 */
   metaChip?: (task: Task) => ReactNode;
@@ -113,6 +115,7 @@ export function AtHandSection({
   onResume,
   onToggle,
   onEdit,
+  onCopyTitle,
   goalLinkedIds,
   metaChip,
   onUpdateNote,
@@ -199,6 +202,7 @@ export function AtHandSection({
                     extraAction={releaseAction}
                     onToggle={onToggle}
                     onEdit={onEdit}
+                    onCopyTitle={onCopyTitle}
                     inGoal={goalLinkedIds?.has(task.id)}
                     metaChip={metaChip?.(task)}
                   />
@@ -215,7 +219,14 @@ export function AtHandSection({
               {atHand
                 .filter((t) => t.done)
                 .map((task) => (
-                  <TaskRow key={task.id} task={task} pool="completed" onToggle={onToggle} onEdit={onEdit} />
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    pool="completed"
+                    onToggle={onToggle}
+                    onEdit={onEdit}
+                    onCopyTitle={onCopyTitle}
+                  />
                 ))}
             </AtHandRowsSurface>
           </CollapsibleSection>
