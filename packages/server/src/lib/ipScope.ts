@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import type { GeoLookup } from "./geoip.js";
+import { type GeoLookup, geoDisplayCity } from "./geoip.js";
 
 export interface IpScope {
   scopeKey: string;
@@ -61,23 +61,33 @@ function networkPrefix(ip: string): string {
 /**
  * 算某个 IP 归属的「告警范围」。同一 scopeKey 内换 IP 不算新来源。
  *
- * 城市那一档用 GeoLite2 的 geoname_id 而非本地化城市名:名字会随 mmdb 构建变化
- * (zh-CN 缺失时回落 en),换库就会让已确认范围重报;而同名不同国的城市(London
- * UK/加拿大、San Jose US/哥斯达黎加)在同一 ASN 下会被并成一个键。数字 ID 两者都免。
+ * 两套键并存、前缀不同因而不碰撞:
+ * - 中国走 `cn:<省>:<市>`,数据来自内置中国段表(ADR 0027)。它没有 geoname_id,
+ *   但归一后的中文省市名跨版本稳定,且键带 cn: 前缀、只用于中国,不存在 ADR 0025
+ *   否决地名做键时担心的「同名不同国」碰撞。
+ * - 国外仍走 GeoLite2 的 `geo:<cityGeonameId>`(ADR 0025)。
+ *
+ * 缺失一律退回上一档、不拼空值:否则「未知城市」与真实城市会是两个键。
  */
 export function computeIpScope(ip: string, geo: GeoLookup | null): IpScope {
   const country = geo?.country ?? null;
-  const city = geo?.city ?? null;
   const asnOrg = geo?.asnOrg ?? null;
   const asn = geo?.asn ?? null;
+  const region = geo?.region ?? null;
+  const city = geo?.city ?? null;
   const cityGeonameId = geo?.cityGeonameId ?? null;
 
-  // 城市缺失只退回 asn,不拼空串:否则「未知城市」与真实城市会是两个键。
-  const scopeKey = asn === null
-    ? `net:${networkPrefix(ip)}`
-    : cityGeonameId === null
-      ? `asn:${asn}`
-      : `asn:${asn}|geo:${cityGeonameId}`;
+  let scopeKey: string;
+  if (asn === null) {
+    scopeKey = `net:${networkPrefix(ip)}`;
+  } else if (region !== null) {
+    // 香港等 5802 个段只有省没有市,省级档避免它们全部掉进最宽的 asn: 档
+    scopeKey = city === null ? `asn:${asn}|cn:${region}` : `asn:${asn}|cn:${region}:${city}`;
+  } else if (cityGeonameId === null) {
+    scopeKey = `asn:${asn}`;
+  } else {
+    scopeKey = `asn:${asn}|geo:${cityGeonameId}`;
+  }
 
-  return { scopeKey, country, city, asnOrg };
+  return { scopeKey, country, city: geo === null ? null : geoDisplayCity(geo), asnOrg };
 }
