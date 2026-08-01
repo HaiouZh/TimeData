@@ -100,6 +100,7 @@ import {
   parseTodoContainerId,
   preferProjectCollisions,
   resolveIndentLevel,
+  resolveTodoDockDrop,
   resolveTodoDragWithIndent,
   type TodoContainer,
   type TodoIndentLevel,
@@ -681,15 +682,27 @@ export function TodoPage() {
     // 依赖注入使这段可被单测钉住(终审 mutation 实测:不提炼则整段接线删掉测试照样绿);
     // 折算出的 op 走下方 switch,与拖到池容器/项目卡同一条路。overContainerId 与 overId
     // 同值(坞 droppable 的 data.containerId 就是它的 id),取 || 只是防 data 缺失。
-    const dockOutcome = await applyTodoDockDrop(
-      {
-        grabToHand: grabTaskToHand,
-        showToast: (message) => showActionToast({ message }),
-        subtaskBlockMessage: (goalTitle) => projectAssignBlockMessage("subtask", goalTitle),
-        findGoalTitle: (goalId) => buckets.projects.find((g) => g.goalId === goalId)?.goalTitle ?? null,
-      },
-      { dockId: overContainerId || overId, activeContainerId, activeParentId, activeId },
-    );
+    //
+    // 先同步解析 dock 落点再决定是否 await:not-dock(页面内拖拽的绝大多数)若也走
+    // await applyTodoDockDrop,会让出微任务、乐观重排晚一帧渲染,与 dnd-kit 放手动画
+    // 错帧——表现为"放手瞬间卡顿"。纯判定无副作用,同步做完;只有真命中坞才 await 副作用。
+    const dockResolution = resolveTodoDockDrop({
+      dockId: overContainerId || overId,
+      activeContainerId,
+      activeParentId,
+    });
+    const dockOutcome =
+      dockResolution.kind === "not-dock"
+        ? null
+        : await applyTodoDockDrop(
+            {
+              grabToHand: grabTaskToHand,
+              showToast: (message) => showActionToast({ message }),
+              subtaskBlockMessage: (goalTitle) => projectAssignBlockMessage("subtask", goalTitle),
+              findGoalTitle: (goalId) => buckets.projects.find((g) => g.goalId === goalId)?.goalTitle ?? null,
+            },
+            { dockId: overContainerId || overId, activeContainerId, activeParentId, activeId },
+          );
     if (dockOutcome === "handled") return;
 
     const rootAboveId = hoveredRootIdFromOver(overContainerId, overId, activeContainerId);
