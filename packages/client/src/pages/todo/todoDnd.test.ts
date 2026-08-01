@@ -680,3 +680,62 @@ describe("dock 对既有判定的守卫", () => {
     expect((noDock as { id: string }[]).map((c) => c.id)).toEqual(["project:g2"]);
   });
 });
+
+describe("hand 容器（手头区拖拽排序）", () => {
+  it("parseTodoContainerId 认 hand", () => {
+    expect(parseTodoContainerId("hand")).toEqual({ kind: "hand" });
+  });
+
+  it("todoContainerId(hand) 与解析互为逆", () => {
+    const id = todoContainerId({ kind: "hand" });
+    expect(id).toBe("hand");
+    expect(todoContainerId(parseTodoContainerId(id) as TodoContainer)).toBe(id);
+  });
+
+  it("active 与 target 同一 hand 容器 → reorder", () => {
+    expect(
+      resolveTodoDragOperation({ activeContainerId: "hand", targetContainerId: "hand", activeParentId: null }),
+    ).toEqual({ kind: "reorder", containerId: "hand" });
+  });
+
+  it("手头行拖到池容器 → null（不开放拖出手头）", () => {
+    expect(
+      resolveTodoDragOperation({ activeContainerId: "hand", targetContainerId: "pool:today", activeParentId: null }),
+    ).toBeNull();
+    expect(
+      resolveTodoDragOperation({ activeContainerId: "hand", targetContainerId: "pool:inbox", activeParentId: null }),
+    ).toBeNull();
+  });
+
+  it("手头行拖到项目组 → null（不开放拖出手头）", () => {
+    expect(
+      resolveTodoDragOperation({ activeContainerId: "hand", targetContainerId: "project:g1", activeParentId: null }),
+    ).toBeNull();
+  });
+
+  it("hoveredRootIdFromOver 对 hand 容器恒返回 null（手头行不作缩进父）", () => {
+    expect(hoveredRootIdFromOver("hand", "t1")).toBeNull();
+  });
+
+  it("todoDockTargets 对 hand 源返回空数组（坞不显示）", () => {
+    expect(todoDockTargets("hand", [{ goalId: "g1" }])).toEqual([]);
+  });
+
+  it("resolveTodoDockDrop 对 hand 源 → invalid（防御层：坞隐藏规则漏了也不能放怪异操作过去）", () => {
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:pool:today", activeContainerId: "hand", activeParentId: null }),
+    ).toEqual({ kind: "invalid", target: { kind: "pool", pool: "today" } });
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:hand", activeContainerId: "hand", activeParentId: null }),
+    ).toEqual({ kind: "invalid", target: { kind: "hand" } });
+  });
+
+  it("clampTodoIndentPreview 对 hand 容器夹 x 到 0（手头行不能缩进）", () => {
+    const handActive = { data: { current: { containerId: "hand" } } };
+    const result = clampTodoIndentPreview({
+      transform: { x: 40, y: 5, scaleX: 1, scaleY: 1 },
+      active: handActive,
+    } as Parameters<Modifier>[0]);
+    expect(result.x).toBe(0);
+  });
+});

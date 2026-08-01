@@ -40,7 +40,10 @@ export function resolveIndentLevel(
  */
 export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
   const containerId = (active?.data.current as { containerId?: string } | undefined)?.containerId ?? "";
-  const isChild = parseTodoContainerId(containerId)?.kind === "parent";
+  const container = parseTodoContainerId(containerId);
+  // 手头行不能缩进（区内只有平级重排），横向预览夹 0，避免误导性的跟手虚影。
+  if (container?.kind === "hand") return { ...transform, x: 0 };
+  const isChild = container?.kind === "parent";
   const x = isChild
     ? Math.min(0, Math.max(transform.x, -TODO_CHILD_INDENT_PX))
     : Math.max(0, Math.min(transform.x, TODO_CHILD_INDENT_PX));
@@ -51,7 +54,8 @@ export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
 export type TodoContainer =
   | { kind: "pool"; pool: TodoPool }
   | { kind: "parent"; parentId: string }
-  | { kind: "project"; goalId: string };
+  | { kind: "project"; goalId: string }
+  | { kind: "hand" };
 
 /** drop 后要执行的语义化操作。 */
 export type TodoDragOperation =
@@ -67,6 +71,7 @@ export function projectContainerId(goalId: string): string {
 }
 
 export function todoContainerId(container: TodoContainer): string {
+  if (container.kind === "hand") return "hand";
   if (container.kind === "pool") return `pool:${container.pool}`;
   if (container.kind === "parent") return `parent:${container.parentId}`;
   return projectContainerId(container.goalId);
@@ -81,6 +86,7 @@ export function todoContainerId(container: TodoContainer): string {
  */
 export function parseTodoContainerId(value: string | null | undefined): TodoContainer | null {
   if (!value) return null;
+  if (value === "hand") return { kind: "hand" };
   if (value === "pool:today") return { kind: "pool", pool: "today" };
   if (value === "pool:inbox") return { kind: "pool", pool: "inbox" };
   if (value.startsWith("parent:")) {
@@ -144,6 +150,8 @@ export function resolveTodoDockDrop({
 }): TodoDockDropResolution {
   const target = parseTodoDockId(dockId);
   if (!target) return { kind: "not-dock" };
+  // 手头源不开放投坞（区内重排专属）：todoDockTargets 已不渲染，这里是隐藏规则漏了时的兜底。
+  if (parseTodoContainerId(activeContainerId)?.kind === "hand") return { kind: "invalid", target };
   if (target.kind === "hand") {
     // 子任务不能单独抓到手头(grabTaskToHand 硬拒),手头药丸对子任务也不渲染(todoDockTargets);
     // 这里是防御层:隐藏规则将来漏了,也不能放一个必抛错的动作过去。
@@ -171,6 +179,8 @@ export function todoDockTargets(
   projects: readonly { goalId: string }[],
 ): TodoDockTarget[] {
   const active = parseTodoContainerId(activeContainerId);
+  // 手头区只做区内重排，坞不对手头源显示任何药丸。
+  if (active?.kind === "hand") return [];
   const targets: TodoDockTarget[] = [];
   if (!(active?.kind === "pool" && active.pool === "today")) targets.push({ kind: "pool", pool: "today" });
   if (active?.kind !== "parent") targets.push({ kind: "hand" });
@@ -268,8 +278,8 @@ export function hoveredRootIdFromOver(
   if (parseTodoDockId(overContainerId) !== null || parseTodoDockId(overId) !== null) return null;
   const container = parseTodoContainerId(overContainerId) ?? parseTodoContainerId(fallbackContainerId);
   if (!container) return null;
-  // 项目区没有可作缩进父的根行（组内行不注册 draggable），恒返回 null 让缩进系统对项目组让位。
-  if (container.kind === "project") return null;
+  // 项目区 / 手头区没有可作缩进父的根行，恒返回 null 让缩进系统对它们让位。
+  if (container.kind === "project" || container.kind === "hand") return null;
   if (container.kind === "pool") return overId;
   return container.parentId;
 }
