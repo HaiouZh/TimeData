@@ -14,6 +14,10 @@ import {
   resolveLockDir,
 } from "./gate.mjs";
 
+import { GATE_STEPS, formatBusyMessage, parseArgs, run } from "./gate.mjs";
+
+const silent = { log: () => {}, error: () => {} };
+
 /** 造一个临时锁父目录，绝不碰真实 .git。返回 lockDir 路径（尚未创建）。 */
 function makeLockDir() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "timedata-gate-"));
@@ -100,4 +104,119 @@ test("meta.json 损坏（写到一半被杀）也能被接管，不永久堵死"
   assert.equal(readLockInfo(lockDir).pid, 333);
 
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("parseArgs 默认排队等待，--no-wait 才立即失败", () => {
+  assert.equal(parseArgs([]).wait, true);
+  assert.equal(parseArgs(["--no-wait"]).wait, false);
+  assert.equal(parseArgs([]).maxWaitMs, 30 * 60_000);
+});
+
+test("GATE_STEPS 顺序：静态闸在前、慢活在后，失败早停才省时间", () => {
+  const names = GATE_STEPS.map((s) => s.name);
+  assert.ok(names.indexOf("lint") < names.indexOf("test"));
+  assert.ok(names.indexOf("check:ui") < names.indexOf("build"));
+  assert.equal(names.at(-1), "build");
+});
+
+test("空闲时按清单顺序全部跑完，返回 0，且跑完把锁删干净", async () => {
+  const { root, lockDir } = makeLockDir();
+  const ran = [];
+  const code = await run([], { lockDir, runStep: (s) => (ran.push(s.name), 0), ...silent });
+
+  assert.equal(code, 0);
+  assert.deepEqual(ran, GATE_STEPS.map((s) => s.name));
+  assert.equal(fs.existsSync(lockDir), false, "跑完必须释放锁");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("某步失败即刻停下，后续步骤不跑，退出码非 0，锁照样释放", async () => {
+  const { root, lockDir } = makeLockDir();
+  const ran = [];
+  const code = await run([], {
+    lockDir,
+    runStep: (s) => {
+      ran.push(s.name);
+      return s.name === "lint" ? 1 : 0;
+    },
+    ...silent,
+  });
+
+  assert.equal(code, 1);
+  assert.deepEqual(ran, ["lint"], "lint 红了就不该再往下跑");
+  assert.equal(fs.existsSync(lockDir), false);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("步骤抛异常也释放锁，不给下一份留残锁", async () => {
+  const { root, lockDir } = makeLockDir();
+  await assert.rejects(
+    run([], {
+      lockDir,
+      runStep: () => {
+        throw new Error("boom");
+      },
+      ...silent,
+    }),
+  );
+  assert.equal(fs.existsSync(lockDir), false);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("--no-wait 撞上别人持锁：一步都不跑，直接退 1", async () => {
+  const { root, lockDir } = makeLockDir();
+  acquireLock({ lockDir, now: () => Date.now(), pid: 111, worktree: "slot-1" });
+
+  const ran = [];
+  const code = await run(["--no-wait"], { lockDir, runStep: (s) => (ran.push(s.name), 0), ...silent });
+
+  assert.equal(code, 1);
+  assert.deepEqual(ran, []);
+  assert.equal(readLockInfo(lockDir).pid, 111, "别人的锁不能被动");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("默认排队：等到前一份释放后自动开跑（注入 sleep，不真等）", async () => {
+  const { root, lockDir } = makeLockDir();
+  const holder = acquireLock({ lockDir, now: () => Date.now(), pid: 111 });
+
+  let slept = 0;
+  const sleep = async () => {
+    slept += 1;
+    if (slept === 2) releaseLock(holder.handle); // 第二次轮询时前一份跑完了
+  };
+  const ran = [];
+  const code = await run([], { lockDir, sleep, runStep: (s) => (ran.push(s.name), 0), ...silent });
+
+  assert.equal(code, 0);
+  assert.equal(slept, 2);
+  assert.deepEqual(ran, GATE_STEPS.map((s) => s.name));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("排队超时：等满上限仍拿不到就退 1，不无限挂着", async () => {
+  const { root, lockDir } = makeLockDir();
+  acquireLock({ lockDir, now: () => Date.now(), pid: 111 });
+
+  let clock = 0;
+  const code = await run([], {
+    lockDir,
+    now: () => clock,
+    maxWaitMs: 20_000, // 注入小上限：真等 30 分钟当然不行，轮询 360 次也没必要
+    sleep: async () => {
+      clock += 5_000;
+    },
+    runStep: () => 0,
+    ...silent,
+  });
+
+  assert.equal(code, 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("排队提示写清是谁在跑、跑了多久——别让人以为是自己代码红了", () => {
+  const msg = formatBusyMessage({ pid: 111, worktree: "D:/x/.worktrees/slot-1", startedAt: 0 }, { now: 125_000 });
+  assert.match(msg, /slot-1/);
+  assert.match(msg, /111/);
+  assert.match(msg, /2 分 5 秒/);
 });
