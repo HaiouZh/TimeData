@@ -71,6 +71,7 @@ export const messages = {
     geoipMissingBoth: "归属地库未就绪：两个 GeoLite2 库都没读到，暂时显示不出地址，来源只能按 IP 网段粗略归并（同一运营商跨网段换 IP 仍会重复提醒）。",
     geoipMissingCity: "归属地库不完整：缺 GeoLite2-City，能看到运营商但看不到地址；来源只能按运营商整体归并——同一运营商在任何城市换 IP 都不再提醒，提醒范围比两库齐全时宽得多。",
     geoipMissingAsn: "归属地库不完整：缺 GeoLite2-ASN，能看到地址但认不出运营商，来源只能按 IP 网段粗略归并。",
+    geoipMissingChinaTable: "中国归属地表未就绪：中国 IP 只能显示国家、看不到省市，这些来源按运营商整体归并——同一运营商在中国任何城市换 IP 都不再提醒。该表随镜像发布，出现此提示说明构建或镜像有问题。",
     geoipHowTo: "把 GeoLite2-City.mmdb 与 GeoLite2-ASN.mmdb 放进服务器 data/geoip/ 后重启容器即可。",
   },
 

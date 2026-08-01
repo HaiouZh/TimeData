@@ -210,15 +210,18 @@ function FilterSelectSheet({
  * 「位置未知」里猜是库没传还是功能没生效。
  */
 function GeoipReadinessNotice({ readiness }: { readiness: GeoipReadiness | null }) {
-  if (readiness === null || (readiness.city && readiness.asn)) return null;
-  const detail = !readiness.city && !readiness.asn
-    ? messages.newIpAlert.geoipMissingBoth
-    : readiness.city
-      ? messages.newIpAlert.geoipMissingAsn
-      : messages.newIpAlert.geoipMissingCity;
+  if (readiness === null) return null;
+  const details: string[] = [];
+  if (!readiness.city && !readiness.asn) details.push(messages.newIpAlert.geoipMissingBoth);
+  else if (!readiness.city) details.push(messages.newIpAlert.geoipMissingCity);
+  else if (!readiness.asn) details.push(messages.newIpAlert.geoipMissingAsn);
+  // 老服务端不返回 chinaTable,undefined 按「就绪」处理,免得升级前刷出假告警
+  if (readiness.chinaTable === false) details.push(messages.newIpAlert.geoipMissingChinaTable);
+  if (details.length === 0) return null;
+
   return (
     <div data-testid="geoip-readiness-notice" className="space-y-1 rounded-card border border-border bg-surface-elevated p-4">
-      <p className="td-text-caption text-ink-2">{detail}</p>
+      {details.map((detail) => <p key={detail} className="td-text-body text-ink-2">{detail}</p>)}
       <p className="td-text-caption text-ink-3">{messages.newIpAlert.geoipHowTo}</p>
     </div>
   );

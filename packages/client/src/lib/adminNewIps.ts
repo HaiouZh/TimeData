@@ -12,10 +12,12 @@ export interface UnacknowledgedNewIp {
   lastSeen: string;
 }
 
-/** 两个 GeoLite2 库各自是否就绪。缺哪个决定收敛退化到哪一档,所以分开报告。 */
+/** 归属地数据源各自是否就绪。缺哪个决定收敛退化到哪一档,所以分开报告。 */
 export interface GeoipReadiness {
   city: boolean;
   asn: boolean;
+  /** 中国段表。随镜像发布,为 false 说明构建或镜像有问题。老服务端不返回此字段。 */
+  chinaTable?: boolean;
 }
 
 export interface UnacknowledgedNewIpsResponse {

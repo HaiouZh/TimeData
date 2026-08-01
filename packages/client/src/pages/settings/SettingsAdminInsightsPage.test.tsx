@@ -413,6 +413,41 @@ describe("SettingsAdminInsightsPage", () => {
     await unmount(cityMissing.root);
   });
 
+  it("中国段表缺失时单独提示,并可与 GeoLite2 缺失并列显示", async () => {
+    mockSuccessfulAdminInsights();
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: true, asn: true, chinaTable: false } });
+    const cnMissing = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    const cnNotice = cnMissing.host.querySelector('[data-testid="geoip-readiness-notice"]');
+    expect(cnNotice?.textContent).toContain("中国归属地表未就绪");
+    expect(cnNotice?.textContent).not.toContain("缺 GeoLite2");
+    await unmount(cnMissing.root);
+
+    // 两种缺失正交,提示条要能同时说两件事
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: false, asn: true, chinaTable: false } });
+    const both = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    const bothText = both.host.querySelector('[data-testid="geoip-readiness-notice"]')?.textContent ?? "";
+    expect(bothText).toContain("缺 GeoLite2-City");
+    expect(bothText).toContain("中国归属地表未就绪");
+    await unmount(both.root);
+  });
+
+  // 老服务端不返回 chinaTable,升级前不该刷出假告警
+  it("chinaTable 字段缺失时按就绪处理,不显示提示条", async () => {
+    mockSuccessfulAdminInsights();
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: true, asn: true } });
+    const legacy = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    expect(legacy.host.querySelector('[data-testid="geoip-readiness-notice"]')).toBeNull();
+    await unmount(legacy.root);
+  });
+
+  it("三者都就绪时不显示提示条", async () => {
+    mockSuccessfulAdminInsights();
+    fetchUnacknowledgedNewIps.mockResolvedValue({ newIps: [], geoip: { city: true, asn: true, chinaTable: true } });
+    const ready = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
+    expect(ready.host.querySelector('[data-testid="geoip-readiness-notice"]')).toBeNull();
+    await unmount(ready.root);
+  });
+
   it("hides new-IP alert card when nothing is unacknowledged", async () => {
     mockSuccessfulAdminInsights();
     const { host, root } = await renderDom(createElement(MemoryRouter, null, createElement(SettingsAdminInsightsPage)));
