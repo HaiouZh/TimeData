@@ -51,6 +51,7 @@ import {
   unscheduleTask,
 } from "../lib/tasks.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
+import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
 import type { GravitySurfacedMap } from "../lib/tasks/gravity.js";
 import { markGravityTasksSurfaced, useGravitySurfacedMap } from "../lib/tasks/gravityReviewStorage.js";
@@ -170,6 +171,14 @@ export function TodoPage() {
   const indentBaseRef = useRef<TodoIndentLevel>("root");
   const [indentTargetId, setIndentTargetId] = useState<string | null>(null);
   const [revealChildren, setRevealChildren] = useState<{ id: string; nonce: number } | null>(null);
+  // 拖拽落库前的乐观重排：containerId → 该容器的最新渲染序。放手瞬间先同步渲染新序，
+  // 让 dnd-kit 的 transform 归位动画直接作用在新序上，避免「先弹回原位再硬跳」的两段视觉。
+  const [optimisticOrder, setOptimisticOrder] = useState<{ containerId: string; orderedIds: string[] } | null>(null);
+  // 乐观序在落库后的下一次 liveQuery 回流时收敛：回流后 buckets 已是新序（或外部同步改动覆盖），
+  // 清除后渲染结果不变，无跳变；落库失败由 reorder 分支 catch 里清。
+  useEffect(() => {
+    setOptimisticOrder(null);
+  }, [buckets]);
   const composerRef = useRef<HTMLFormElement>(null);
   const [composerHeightPx, setComposerHeightPx] = useState(0);
   const { hidden: navHidden } = useBottomNav();
@@ -510,6 +519,20 @@ export function TodoPage() {
   );
   const f = (list: Task[]) => filterTasks(list, projectFilter);
   const filterActive = composerText.trim() !== "" || includeTags.length > 0 || excludeTags.length > 0;
+  // 乐观重排的显示序：拖拽落库前先按新序渲染（放手即落位，无回弹硬跳两段视觉）。
+  // 必须与 handleDragEnd 的 containerTasks 同源（同一 buckets 派生 + 同 filter），否则下标对不上。
+  // 手头区只重排 pending 段：done 行不参与排序，保持各自原序（AtHandSection 只 filter 展示）。
+  const displayAtHand =
+    optimisticOrder?.containerId === "hand"
+      ? [
+          ...applyOptimisticOrder(buckets.atHand.filter((t) => !t.done), optimisticOrder.orderedIds),
+          ...buckets.atHand.filter((t) => t.done),
+        ]
+      : buckets.atHand;
+  const displayToday =
+    optimisticOrder?.containerId === "pool:today"
+      ? applyOptimisticOrder(f(buckets.today), optimisticOrder.orderedIds)
+      : f(buckets.today);
 
   const filteredProjects = useMemo(() => {
     if (!filterActive) return buckets.projects;
@@ -725,7 +748,16 @@ export function TodoPage() {
           const newIndex = ids.indexOf(overId);
           if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
           const ordered = arrayMove(ids, oldIndex, newIndex);
-          await persistTaskOrder(ordered);
+          // 乐观：先同步落地渲染序，dnd-kit 归位动画直接作用在新序上（不落库回流的两段式
+          //「先弹回原位再硬跳」）；回流收敛在 useEffect([buckets])，失败在这里回滚。
+          setOptimisticOrder({ containerId: op.containerId, orderedIds: ordered });
+          try {
+            await persistTaskOrder(ordered);
+          } catch (error) {
+            setOptimisticOrder(null);
+            console.error("[todo] 重排落库失败:", error);
+            showActionToast({ message: "重排保存失败，顺序未变" });
+          }
           break;
         }
         case "move-to-parent": {
@@ -834,7 +866,7 @@ export function TodoPage() {
 
   const atHandBlock = (
     <AtHandSection
-      atHand={buckets.atHand}
+      atHand={displayAtHand}
       session={buckets.handSession}
       resumable={resumable}
       onRelease={releaseFromHand}
@@ -856,7 +888,7 @@ export function TodoPage() {
     <TaskColumn
       title="今天"
       pool="today"
-      tasks={f(buckets.today)}
+      tasks={displayToday}
       emptyText="今天没有任务 🎉"
       hero
       isOverdue={isOverdue}
