@@ -25,6 +25,8 @@ describe("index.css design tokens", () => {
     expect(themeBlock).toBeGreaterThan(tailwindImport);
     expect(css).toContain("--color-page: #0e1320;");
     expect(css).toContain("--color-surface: #161d30;");
+    expect(css).toContain("--color-backdrop: #000000;");
+    expect(css).toContain("--color-accent-contrast: #ffffff;");
     expect(css).not.toContain("--color-data-");
     expect(css).toContain("--color-track-agent: #a78bfa;");
     // 全 9 支逐支断言 + 计数：只钉首尾两支时，删掉中间任意几支照样全绿，

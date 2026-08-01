@@ -1,6 +1,6 @@
 import { type SyncStatus, useSyncContext } from "../contexts/SyncContext.tsx";
 
-const BASE_CLASS = "absolute right-2 top-2 h-2 w-2 rounded-pill border border-white/90 shadow-sm pointer-events-none";
+const BASE_CLASS = "absolute right-2 top-2 h-2 w-2 rounded-pill border border-accent-ink/90 shadow-sm pointer-events-none";
 
 export function syncIndicatorClassName(status: SyncStatus): string {
   if (status === "disabled") return `${BASE_CLASS} bg-ink-3`;

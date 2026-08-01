@@ -6,9 +6,9 @@ import { Switch } from "../../components/ui/Switch.js";
 const TINT_TOKENS = Array.from({ length: 9 }, (_, i) => `--color-tint-${i + 1}`);
 
 const COLOR_GROUPS: { title: string; tokens: string[] }[] = [
-  { title: "中性底盘", tokens: ["--color-page", "--color-surface", "--color-surface-elevated", "--color-surface-hover"] },
+  { title: "中性底盘", tokens: ["--color-page", "--color-surface", "--color-surface-elevated", "--color-surface-hover", "--color-backdrop"] },
   { title: "文字", tokens: ["--color-ink", "--color-ink-2", "--color-ink-3"] },
-  { title: "动作色", tokens: ["--color-accent", "--color-accent-strong", "--color-accent-soft", "--color-accent-ink"] },
+  { title: "动作色", tokens: ["--color-accent", "--color-accent-strong", "--color-accent-soft", "--color-accent-ink", "--color-accent-contrast"] },
   { title: "状态色", tokens: ["--color-ok", "--color-warn", "--color-danger"] },
   { title: "边框", tokens: ["--color-border", "--color-border-strong"] },
   { title: "Track 调度信号", tokens: ["--color-track-agent"] },

@@ -12,11 +12,15 @@
   --color-ink-2: #aab4c8;
   --color-ink-3: #8b94a8;
 
+  /* 全局弹层遮罩（深色底，用 bg-backdrop/50 或 /60 派生透明度） */
+  --color-backdrop: #000000;
+
   /* —— 单一动作色（蓝） —— */
   --color-accent: #4f9bf5;
   --color-accent-strong: #3b82f6;
   --color-accent-soft: #1b2740;
   --color-accent-ink: #8fbdf8;
+  --color-accent-contrast: #ffffff; /* accent 实心面上的反白文字 */
 
   /* —— 状态色 —— */
   --color-ok: #34d399;

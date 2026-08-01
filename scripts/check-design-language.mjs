@@ -24,6 +24,7 @@ const COLOR_FIXTURE_RULES = new Set([
   "bare-action-blue",
   "bare-status-color",
   "bare-slate-chrome",
+  "bare-black-white",
   "bare-raw-color",
 ]);
 
@@ -31,7 +32,7 @@ const RULES = [
   {
     id: "retired-module-colors",
     re: new RegExp(`(--color-mod-|${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-mod-)`),
-    msg: "退役模块署名色不得新增或继续消费",
+    msg: "退役模块署名色不得新增或继续消费；UI chrome 改 page/surface/border/ink 中性 token",
   },
   {
     id: "retired-data-colors",
@@ -57,36 +58,42 @@ const RULES = [
   {
     id: "bare-action-blue",
     re: new RegExp(`\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:blue|sky)-\\d{2,3}(?:\\/\\d+)?\\b`),
-    msg: "动作/焦点蓝必须使用 accent token",
+    msg: "动作/焦点蓝必须使用 accent token（bg-accent / text-accent / ring-accent / focus-visible:ring-accent）",
   },
   {
     id: "bare-status-color",
     re: new RegExp(
       `\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:emerald|green|amber|yellow|orange|red|rose|gray)-\\d{2,3}(?:\\/\\d+)?\\b`,
     ),
-    msg: "状态色必须使用 ok/warn/danger token",
+    msg: "状态色必须使用 ok/warn/danger token（bg-ok、text-danger、border-warn 等）",
   },
   {
     id: "bare-slate-chrome",
     re: new RegExp(`\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-slate-\\d{2,3}(?:\\/\\d+)?\\b`),
-    msg: "UI chrome 必须使用 page/surface/border/ink token",
+    msg: "UI chrome 必须使用 page/surface/border/ink token（bg-surface、text-ink-2、border-border 等）",
+  },
+  {
+    id: "bare-black-white",
+    re: new RegExp(`\\b${TAILWIND_VARIANTS}(?:${COLOR_PREFIXES})-(?:white|black)(?:\\/\\d+)?\\b`),
+    msg: "黑白命名色必须 token 化：遮罩用 bg-backdrop/*，accent 实心面反白字用 text-accent-contrast",
+    skip: (file) => isTestFile(file),
   },
   {
     id: "bare-raw-color",
     re: /(?:#[0-9A-Fa-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(|oklab\(|lch\(|lab\()/,
-    msg: "UI chrome 不得直接写裸 hex/rgb/hsl/oklch/lab 颜色",
+    msg: "UI chrome 不得直接写裸 hex/rgb/hsl/oklch/lab；颜色唯一事实源是 index.css @theme 的 --color-* token",
     skip: (file, line) => isThemeTokenDeclaration(file, line) || isTokenColorMirror(file),
   },
   {
     id: "interactive-text-icon",
     re: INTERACTIVE_TEXT_ICON_RE,
-    msg: "交互图标必须使用 Phosphor Icon",
+    msg: "交互图标必须使用 Phosphor（components/Icon.tsx 包装），不得用文字字符/emoji 伪装",
     skip: (_file, line) => !isInteractiveTextIconLine(line),
   },
   {
     id: "font-mono-business-number",
     re: /\bfont-mono\b/,
-    msg: "业务时间/数字/统计值不得直接使用 font-mono，使用 td-num/td-time/td-duration",
+    msg: "业务时间/数字/统计值使用 td-num/td-time/td-duration 语义类；font-mono 只给 code/pre/kbd/samp 等技术文本",
     skip: (file, line) => isFontMonoTechnicalLine(file, line),
   },
   {
@@ -94,19 +101,19 @@ const RULES = [
     re: new RegExp(
       `\\b${TAILWIND_VARIANTS}rounded(?:-(?:[trblxy]{1,2}|[se]{1,2}))?-(?:md|lg|xl|2xl|3xl|full)\\b`,
     ),
-    msg: "生产圆角必须使用 rounded-ctl/row/card/pill（rounded/rounded-sm 仅保留给原子细节）",
+    msg: "生产圆角必须使用 rounded-ctl/row/card/pill（rounded/rounded-sm 仅保留给原子细节），对应 --radius-ctl/row/card/pill",
     skip: (file) => isTestFile(file),
   },
   {
     id: "bare-zindex",
     re: new RegExp(`\\b${TAILWIND_VARIANTS}z-(?:(?:30|40|50|60|70)\\b|\\[\\d+\\])`),
-    msg: "全局浮层 z-index 必须用 z-[var(--z-*)]（局部 stacking 用 z-10/z-20）",
+    msg: "全局浮层 z-index 必须用 z-[var(--z-*)]（局部 stacking 用 z-10/z-20；内联 style.zIndex 用 lib/zLayers.ts 的 Z）",
     skip: (file) => isTestFile(file),
   },
   {
     id: "bare-text-size",
     re: new RegExp(`\\b${TAILWIND_VARIANTS}text-(?:xs|sm|base|lg|\\dxl|xl)\\b|\\btext-\\[[0-9.]+(?:px|rem)\\]`),
-    msg: "字号必须使用 .td-text-{caption,label,body,title,display} 语义类",
+    msg: "字号必须使用 .td-text-{caption,label,body,title,display} 语义类；input/textarea/select 与图标按钮上的字号声明不生效，直接删除",
     skip: (file) => isTestFile(file) || normalizePath(file).endsWith(".css"),
   },
   {
@@ -115,7 +122,7 @@ const RULES = [
     re: new RegExp(
       `\\b${TAILWIND_VARIANTS}(?:w|h|min-w|min-h|max-w|max-h|top|bottom|left|right|inset|m[trblxy]?|p[trblxy]?|gap|gap-[xy]|translate-[xy])-\\[[0-9.]+(?:px|rem|em|vh|vw)\\]`,
     ),
-    msg: "裸任意尺寸/间距值应收进 token 或标准 Tailwind 阶（calc/var 例外）",
+    msg: "裸任意尺寸/间距值收进 --radius/--shadow token 或标准 Tailwind 阶；功能专有几何在 index.css @layer components 加功能语义类（calc/var 例外）",
     skip: (file) => isTestFile(file),
   },
 ];
@@ -298,7 +305,7 @@ function main() {
     console.error(
       `✗ 设计语言棘轮闸（新增违规 ${violations.length}）：\n${violations
         .map((violation) => `${violation.file}:${violation.line} ${violation.rule} ${violation.message}`)
-        .join("\n")}\n\n旧债请写入 scripts/design-language-allowlist.json，并在对应批次完成后删除。`,
+        .join("\n")}\n\n修法指引：正确 token / 语义类与规则清单见 docs/evergreen/design-language.md §3，效果可在 /dev/styleguide 预览。旧债请写入 scripts/design-language-allowlist.json，并在对应批次完成后删除；新代码违规不得写入 allowlist。`,
     );
     process.exit(1);
   }
@@ -310,7 +317,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log("✓ 设计语言：无未豁免裸色 / 退役模块色 / 散装交互图标 / 业务 font-mono");
+  console.log("✓ 设计语言：无未豁免违规（裸色/退役色/退役 token/黑白命名色/裸字号/裸圆角/裸 z-index/裸任意值/散装图标/业务 font-mono）");
 }
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {

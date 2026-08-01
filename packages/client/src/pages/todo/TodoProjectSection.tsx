@@ -456,7 +456,7 @@ function ProjectGroupCard({
                   // pointerdown 阻断失焦：避免「点按钮先触发 blur 提交、click 再提交一次」
                   onPointerDown={(event) => event.preventDefault()}
                   onClick={() => void submitCreate()}
-                  className="flex h-6 w-7 shrink-0 items-center justify-center rounded-ctl bg-accent text-white"
+                  className="flex h-6 w-7 shrink-0 items-center justify-center rounded-ctl bg-accent text-accent-contrast"
                 >
                   ↵
                 </button>

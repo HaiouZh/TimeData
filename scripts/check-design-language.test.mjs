@@ -128,6 +128,30 @@ test("flags bare slate classes beyond text and background", () => {
   );
 });
 
+test("flags bare black/white named colors and allows token substitutes", () => {
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-black/50"').some((violation) => violation.rule === "bare-black-white"),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-black/60 text-white border-white/90"').some(
+      (violation) => violation.rule === "bare-black-white",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="hover:bg-white ring-black/20"').some(
+      (violation) => violation.rule === "bare-black-white",
+    ),
+    true,
+  );
+  assert.equal(
+    classifyLine("x.tsx", 'className="bg-backdrop/50 text-accent-contrast border-accent-ink/90"').length,
+    0,
+  );
+  assert.equal(classifyLine("x.tsx", 'className="text-black bg-white"').some((v) => v.rule === "bare-black-white"), true);
+});
+
 test("flags bare raw colors outside token declarations", () => {
   assert.equal(
     classifyLine("x.tsx", 'style={{ color: "#60a5fa" }}').some((violation) => violation.rule === "bare-raw-color"),
@@ -210,6 +234,7 @@ test("skips color fixture checks in test files", () => {
   assert.equal(classifyLine("x.test.tsx", 'expect(html).toContain("text-mod-time")').length, 0);
   assert.equal(classifyLine("x.test.tsx", 'const color = "#60a5fa";').length, 0);
   assert.equal(classifyLine("x.test.tsx", 'expect(css).toContain("font-family: var(--font-mono)")').length, 0);
+  assert.equal(classifyLine("x.test.tsx", 'className="text-white bg-black/50"').length, 0);
 });
 
 test("keeps interactive icon checks active in test files", () => {

@@ -374,7 +374,7 @@ export function NewChildRow({ onResolve }: NewChildRowProps) {
           // pointerdown 阻断失焦：避免「点按钮先触发 blur 提交、click 再提交一次」
           onPointerDown={(event) => event.preventDefault()}
           onClick={submitByButton}
-          className="my-0.5 flex h-6 w-7 shrink-0 items-center justify-center self-start rounded-ctl bg-accent text-white"
+          className="my-0.5 flex h-6 w-7 shrink-0 items-center justify-center self-start rounded-ctl bg-accent text-accent-contrast"
         >
           ↵
         </button>

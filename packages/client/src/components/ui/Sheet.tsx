@@ -40,7 +40,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z,
 
   const node = (
     <div
-      className="sheet-overlay fixed inset-0 flex items-end justify-center bg-black/60"
+      className="sheet-overlay fixed inset-0 flex items-end justify-center bg-backdrop/60"
       style={{ zIndex: z ?? Z.modal }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
