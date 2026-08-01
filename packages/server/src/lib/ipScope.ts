@@ -4,6 +4,7 @@ import { type GeoLookup, geoDisplayCity } from "./geoip.js";
 export interface IpScope {
   scopeKey: string;
   country: string | null;
+  /** 展示串（中国命中为『省 市』，GeoLite2 路径为城市名）——不用于拼收敛键。 */
   city: string | null;
   asnOrg: string | null;
 }
@@ -62,7 +63,7 @@ function networkPrefix(ip: string): string {
  * 算某个 IP 归属的「告警范围」。同一 scopeKey 内换 IP 不算新来源。
  *
  * 两套键并存、前缀不同因而不碰撞:
- * - 中国走 `cn:<省>:<市>`,数据来自内置中国段表(ADR 0027)。它没有 geoname_id,
+ * - 中国走 `cn:<省>:<市>`,数据来自内置中国段表(ADR 0028)。它没有 geoname_id,
  *   但归一后的中文省市名跨版本稳定,且键带 cn: 前缀、只用于中国,不存在 ADR 0025
  *   否决地名做键时担心的「同名不同国」碰撞。
  * - 国外仍走 GeoLite2 的 `geo:<cityGeonameId>`(ADR 0025)。
@@ -74,7 +75,8 @@ export function computeIpScope(ip: string, geo: GeoLookup | null): IpScope {
   const asnOrg = geo?.asnOrg ?? null;
   const asn = geo?.asn ?? null;
   const region = geo?.region ?? null;
-  const city = geo?.city ?? null;
+  // 空串按「无市」处理:否则 `cn:<省>:<空>` 会拼出空尾巴,与 `cn:<省>` 是两个键
+  const city = geo?.city || null;
   const cityGeonameId = geo?.cityGeonameId ?? null;
 
   let scopeKey: string;

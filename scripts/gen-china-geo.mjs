@@ -118,6 +118,7 @@ function normalizeCity(raw) {
 /** 一行 split("|") 的结果 → 归一后的地区；非中国行或省未知返回 null。 */
 export function normalizeRow(fields) {
   if (fields[2] !== "中国") return null;
+  if (fields.length < 7) throw new Error(`行字段不足 7 段（${fields.length}）：${fields.join("|")}`);
   const rawProvince = fields[3];
   if (rawProvince === UNKNOWN || rawProvince === "" || rawProvince === undefined) return null;
 
@@ -137,7 +138,10 @@ export const HEADER_BYTES = 18;
 export function ipToU32(ip) {
   const parts = ip.split(".");
   if (parts.length !== 4) throw new Error(`非法 IPv4「${ip}」`);
-  return parts.reduce((acc, part) => acc * 256 + Number(part), 0);
+  return parts.reduce((acc, part) => {
+    if (Number(part) > 255) throw new Error(`非法 IPv4「${ip}」段值超限`);
+    return acc * 256 + Number(part);
+  }, 0);
 }
 
 export function encodeTable(entries, generatedOn) {

@@ -12,6 +12,8 @@ export interface ChinaGeo {
 // 且 compose 的 ./data:/app/data 挂载会把镜像里的同名目录整个遮住。
 const TABLE_PATH = fileURLToPath(new URL("../../assets/china-geo.bin", import.meta.url));
 const MAGIC = "TDCN";
+// 生成端(scripts/gen-china-geo.mjs)写入同一常量;混跑期旧二进制会在此处被拒。
+const FORMAT_VERSION = 1;
 const HEADER_BYTES = 18;
 const ENTRY_BYTES = 10;
 
@@ -25,6 +27,7 @@ function loadTable(): Table | null {
   try {
     const buf = readFileSync(TABLE_PATH);
     if (buf.length < HEADER_BYTES || buf.subarray(0, 4).toString("ascii") !== MAGIC) return null;
+    if (buf.readUInt16BE(4) !== FORMAT_VERSION) return null;
     const count = buf.readUInt32BE(10);
     const poolLen = buf.readUInt32BE(14);
     const poolAt = HEADER_BYTES + count * ENTRY_BYTES;

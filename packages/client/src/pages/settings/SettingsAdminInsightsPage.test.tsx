@@ -420,6 +420,8 @@ describe("SettingsAdminInsightsPage", () => {
     const cnNotice = cnMissing.host.querySelector('[data-testid="geoip-readiness-notice"]');
     expect(cnNotice?.textContent).toContain("中国归属地表未就绪");
     expect(cnNotice?.textContent).not.toContain("缺 GeoLite2");
+    // 中国表随镜像发布,单独缺失时不该指引用户上传 mmdb
+    expect(cnNotice?.textContent).not.toContain("data/geoip/");
     await unmount(cnMissing.root);
 
     // 两种缺失正交,提示条要能同时说两件事

@@ -85,7 +85,7 @@ export function lookupGeo(ip: string): GeoLookup | null {
   const { city, asn } = getReaders();
   try {
     const asnRow = asn?.get(ip) ?? null;
-    // 中国段表优先:GeoLite2 免费库对中国运营商段没有 city 级数据(ADR 0027)。
+    // 中国段表优先:GeoLite2 免费库对中国运营商段没有 city 级数据(ADR 0028)。
     // ASN 号仍取自 GeoLite2-ASN——收敛键要数字 ASN,中国表不提供。
     const cn = lookupChinaGeo(ip);
     if (cn !== null) {
@@ -133,10 +133,11 @@ export function resetGeoipForTests(): void {
  * 不去重会打出「北京 北京市」。中国表没命中时原样返回 GeoLite2 的城市名。
  *
  * 拼串而非加一列:known_ip_scopes 与请求日志里的地名纯粹用于展示,收敛判定走独立的
- * scope_key,所以不值得为它开 schema 变更(ADR 0027)。
+ * scope_key,所以不值得为它开 schema 变更(ADR 0028)。
  */
 export function geoDisplayCity(geo: GeoLookup): string | null {
   if (geo.region === null) return geo.city;
-  if (geo.city === null) return geo.region;
+  // 空串按无市处理:否则会返回「江苏 」这类尾随空格
+  if (geo.city === null || geo.city === "") return geo.region;
   return geo.city.startsWith(geo.region) ? geo.city : `${geo.region} ${geo.city}`;
 }

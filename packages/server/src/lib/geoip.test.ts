@@ -19,7 +19,7 @@ describe("geoip 缺库降级", () => {
     expect(lookupGeo("203.0.113.9")).toBeNull();
   });
 
-  // 注意:这条在缺库前提下是被 `if (!city && !asn) return null` 提前接住的,
+  // 注意:缺库时这条走的是「mmdb 读盘失败 + 中国表查询后返回 null」的完整路径,
   // 并不守护 validate() 短路本身——真闸在下面「库就绪」组里(库在时才走得到 validate)。
   it("非法 IP 字符串返回 null", () => {
     process.env.GEOIP_DIR = "/nonexistent/geoip-dir-for-tests";
@@ -261,6 +261,12 @@ describe("geoDisplayCity", () => {
   it("只有省时出省", () => {
     expect(geoDisplayCity({ country: "中国", region: "香港特别行政区", city: null, cityGeonameId: null, asn: null, asnOrg: null }))
       .toBe("香港特别行政区");
+  });
+
+  // 空串 city 等同无市,不能打出「江苏省 」尾随空格
+  it("空串 city 按无市处理,只出省", () => {
+    expect(geoDisplayCity({ country: "中国", region: "江苏省", city: "", cityGeonameId: null, asn: null, asnOrg: null }))
+      .toBe("江苏省");
   });
 
   it("GeoLite2 路径原样返回城市", () => {

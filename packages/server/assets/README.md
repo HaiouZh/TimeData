@@ -12,3 +12,19 @@
   ```
 
 上游约一年更新一次。生成脚本遇到未知的省名或英文城市名会**报错退出**——这是刻意的：静默透传会引入新的收敛键、让已确认的来源范围重报却查不出原因。
+
+## 二进制格式
+
+大端布局，头 18 字节：
+
+| 偏移 | 长度 | 内容 |
+|---|---|---|
+| 0 | 4B | magic `TDCN`（ASCII） |
+| 4 | u16 | 格式版本（当前 1；读取端不认时按缺表处理，避免混跑期错位） |
+| 6 | u32 | 生成日 `YYYYMMDD` |
+| 10 | u32 | 区间数 N |
+| 14 | u32 | 地区池 JSON 字节长 P |
+
+头之后是 N 个区间条目，每条 10 字节：`start` u32、`end` u32、`regionIdx` u16（池下标）。区间按 start 升序且不重叠（生成端 `encodeTable` 强校验，重叠即报错）。最后是 P 字节的 JSON 地区池：`[[province, city|null, isp|null], ...]`。
+
+读取端：`packages/server/src/lib/chinaGeo.ts`（头部校验、二分查找、池解析）。生成端：`scripts/gen-china-geo.mjs`（`encodeTable` 写出，自测在 `scripts/gen-china-geo.test.mjs`）。

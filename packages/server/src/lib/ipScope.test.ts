@@ -144,6 +144,11 @@ describe("中国档收敛键", () => {
     expect(computeIpScope("1.32.192.1", cnGeo("香港特别行政区", null)).scopeKey).toBe("asn:9808|cn:香港特别行政区");
   });
 
+  // 空串 city 等同无市,不能拼出 `cn:省:` 尾巴——那是与省级档不同的第二个键
+  it("空串 city 按无市处理,不拼空尾巴", () => {
+    expect(computeIpScope("1.32.192.1", cnGeo("香港特别行政区", "")).scopeKey).toBe("asn:9808|cn:香港特别行政区");
+  });
+
   it("省市皆无 → 退回 asn 档，不拼空值", () => {
     expect(computeIpScope("112.25.1.1", cnGeo(null, null)).scopeKey).toBe("asn:9808");
   });

@@ -48,6 +48,12 @@ describe("中国段表查找（真实数据）", () => {
     expect(lookupChinaGeo("999.1.1.1")).toBeNull();
   });
 
+  // 中段溢出会被算成 1.1.2.0 命中真实中国段;去掉 >255 检查时这条会返回非 null,
+  // 而 999.1.1.1 那种首段溢出无论如何都算不出命中,守不住段值校验。
+  it("中段溢出按非法 IP 处理返回 null", () => {
+    expect(lookupChinaGeo("1.1.1.256")).toBeNull();
+  });
+
   it("表就绪状态为真", () => {
     expect(isChinaTableReady()).toBe(true);
   });

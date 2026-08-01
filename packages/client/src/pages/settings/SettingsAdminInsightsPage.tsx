@@ -212,6 +212,7 @@ function FilterSelectSheet({
 function GeoipReadinessNotice({ readiness }: { readiness: GeoipReadiness | null }) {
   if (readiness === null) return null;
   const details: string[] = [];
+  const geoLite2Missing = !readiness.city || !readiness.asn;
   if (!readiness.city && !readiness.asn) details.push(messages.newIpAlert.geoipMissingBoth);
   else if (!readiness.city) details.push(messages.newIpAlert.geoipMissingCity);
   else if (!readiness.asn) details.push(messages.newIpAlert.geoipMissingAsn);
@@ -222,7 +223,7 @@ function GeoipReadinessNotice({ readiness }: { readiness: GeoipReadiness | null 
   return (
     <div data-testid="geoip-readiness-notice" className="space-y-1 rounded-card border border-border bg-surface-elevated p-4">
       {details.map((detail) => <p key={detail} className="td-text-body text-ink-2">{detail}</p>)}
-      <p className="td-text-caption text-ink-3">{messages.newIpAlert.geoipHowTo}</p>
+      {geoLite2Missing && <p className="td-text-caption text-ink-3">{messages.newIpAlert.geoipHowTo}</p>}
     </div>
   );
 }

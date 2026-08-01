@@ -134,7 +134,7 @@ curl -sS -i -X OPTIONS https://<your-host>/api/health \
 
 GeoLite2 许可要求不长期使用过期数据；更新方式就是换这两个文件后重启（ASN 与城市段变动缓慢，半年一次即可）。
 
-**自动更新（可选）**：`docker-compose.yml` 带一个 profile 为 `geoip` 的 `geoipupdate` 容器（`ghcr.io/maxmind/geoipupdate`），每月拉取新版 GeoLite2 落盘到 `./data/geoip`。启用方式：`.env` 里填 `COMPOSE_PROFILES=geoip`、`GEOIPUPDATE_ACCOUNT_ID`、`GEOIPUPDATE_LICENSE_KEY` 三个变量（账号在 maxmind.com 注册免费获得），然后 `docker compose up -d`。**库更新后要等 timedata 容器下次重启才生效**：`geoip.ts` 是进程启动时把 mmdb 读进内存、之后不重读，本仓发版频繁（Watchtower 常态重启），因此不实现热重载。未配凭据时容器会直接报错退出——先填齐三个变量再启动。
+**自动更新（可选）**：`docker-compose.yml` 带一个 profile 为 `geoip` 的 `geoipupdate` 容器（`ghcr.io/maxmind/geoipupdate`），每月拉取新版 GeoLite2 落盘到 `./data/geoip`。启用方式：`.env` 里填 `COMPOSE_PROFILES=geoip`、`GEOIPUPDATE_ACCOUNT_ID`、`GEOIPUPDATE_LICENSE_KEY` 三个变量（账号在 maxmind.com 注册免费获得），然后 `docker compose up -d`。**库更新后要等 timedata 容器下次重启才生效**：`geoip.ts` 在首次归属地查询时才把 mmdb 读进内存（懒加载）、之后不重读，本仓发版频繁（Watchtower 常态重启），因此不实现热重载。未配凭据时容器会直接报错退出——先填齐三个变量再启动。**首次部署启用 geoip profile 时，若容器启动早于 geoipupdate 首轮下载完成，库就位后需 `docker compose restart timedata` 才生效**。
 
 **中国归属地（内置，无需配置）**：中国 IP 的省 / 市 / 运营商走随镜像发布的内置段表 `assets/china-geo.bin`（约 750KB），不依赖 MaxMind、不需要往服务器传文件。表由 `scripts/gen-china-geo.mjs` 从 ip2region 原始数据离线生成，重新生成方法见 `packages/server/assets/README.md`。中国表命中即中国（中文省市 + 运营商，ASN 号仍取自 GeoLite2-ASN）；表缺失时中国 IP 降级为只有国家，不影响国外路径。
 
