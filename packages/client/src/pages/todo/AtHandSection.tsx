@@ -1,9 +1,11 @@
 import { HandGrabbing, X } from "@phosphor-icons/react";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Session, Task } from "@timedata/shared";
 import { useState, type ReactNode } from "react";
 import { Icon } from "../../components/Icon.js";
 import type { ResumableSession } from "../../lib/sessions.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { SortableTaskRow } from "./SortableTaskRow.js";
 import { TaskRow } from "./TaskRow.js";
 
 export interface AtHandSectionProps {
@@ -185,19 +187,25 @@ export function AtHandSection({
         <p className="rounded-card bg-surface px-3 py-6 text-center td-text-label text-ink-3">手头空了，抓点活或散场</p>
       ) : (
         <AtHandRowsSurface>
-          {pending.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              pool="inbox"
-              childrenModeOverride="static"
-              extraAction={releaseAction}
-              onToggle={onToggle}
-              onEdit={onEdit}
-              inGoal={goalLinkedIds?.has(task.id)}
-              metaChip={metaChip?.(task)}
-            />
-          ))}
+          <SortableContext items={pending.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+            {pending.map((task) => (
+              <SortableTaskRow key={task.id} id={task.id} containerId="hand">
+                {(handle) => (
+                  <TaskRow
+                    task={task}
+                    pool="inbox"
+                    childrenModeOverride="static"
+                    dragHandle={handle}
+                    extraAction={releaseAction}
+                    onToggle={onToggle}
+                    onEdit={onEdit}
+                    inGoal={goalLinkedIds?.has(task.id)}
+                    metaChip={metaChip?.(task)}
+                  />
+                )}
+              </SortableTaskRow>
+            ))}
+          </SortableContext>
         </AtHandRowsSurface>
       )}
       {doneCount > 0 && (

@@ -13,7 +13,7 @@ export function SortableTaskRow({
   children,
 }: {
   id: string;
-  containerId: "pool:today" | "pool:inbox";
+  containerId: "pool:today" | "pool:inbox" | "hand";
   children: (handle: RowDragHandle) => ReactNode;
 }) {
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition, isDragging } = useSortable({
