@@ -36,7 +36,7 @@ export function GoalStarNode({ data }: { data: GoalStarNodeData }) {
         data-goal-star-progress-ring="true"
         aria-hidden="true"
         className="absolute inset-0 rounded-pill opacity-90"
-        style={{ background: `conic-gradient(var(--galaxy-edge) ${progressDeg}deg, var(--border) 0deg)` }}
+        style={{ background: `conic-gradient(var(--galaxy-edge) ${progressDeg}deg, var(--color-border) 0deg)` }}
       />
       <span aria-hidden="true" className="absolute inset-2 rounded-pill bg-surface-elevated" />
       {data.pinned && data.onRestoreAuto ? (

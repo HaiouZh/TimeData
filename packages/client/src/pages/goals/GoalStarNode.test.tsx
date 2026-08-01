@@ -28,6 +28,8 @@ describe("GoalStarNode", () => {
     const ring = host.querySelector('[data-goal-star-progress-ring="true"]');
     expect(ring?.getAttribute("aria-hidden")).toBe("true");
     expect((ring as HTMLElement | null)?.style.background).toContain("conic-gradient");
+    // 进度弧的终止色必须引用已定义 token：var(--border) 这类悬空引用会让整条 background 失效
+    expect((ring as HTMLElement | null)?.style.background).toContain("var(--color-border)");
     const shellClass = host.querySelector('[data-goal-star-shell="true"]')?.className;
     expect(shellClass).toContain("rounded-pill");
     expect(shellClass).toContain("h-20");

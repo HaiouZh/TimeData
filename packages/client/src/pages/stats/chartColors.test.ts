@@ -12,7 +12,7 @@ describe("CHART_CHROME", () => {
       tooltipBg: "#1b2336", // --color-surface-elevated
       tooltipBorder: "#2b344e", // --color-border
       tooltipText: "#e8edf6", // --color-ink
-      tooltipShadow: "0 8px 30px rgba(0,0,0,.4)", // --shadow-elev2
+      tooltipShadow: "inset 0 1px 0 rgba(255,255,255,.06), 0 8px 30px rgba(0,0,0,.4)", // --shadow-elev2
       cursor: "#4f9bf5", // --color-accent
     });
   });

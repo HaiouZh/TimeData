@@ -11,6 +11,6 @@ export const CHART_CHROME = {
   tooltipBg: "#1b2336",
   tooltipBorder: "#2b344e",
   tooltipText: "#e8edf6",
-  tooltipShadow: "0 8px 30px rgba(0,0,0,.4)",
+  tooltipShadow: "inset 0 1px 0 rgba(255,255,255,.06), 0 8px 30px rgba(0,0,0,.4)",
   cursor: "#4f9bf5",
 } as const;
