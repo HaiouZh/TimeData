@@ -2729,7 +2729,7 @@ describe("TodoPage 多选提交", () => {
     let resolvePersist: (() => void) | null = null;
     const persistSpy = vi
       .spyOn(tasksLib, "persistTaskOrder")
-      .mockImplementationOnce((orderedIds: string[]) => new Promise<void>((resolve) => { resolvePersist = resolve; }));
+      .mockImplementationOnce((_orderedIds: string[]) => new Promise<void>((resolve) => { resolvePersist = resolve; }));
 
     const a = await addTask({ title: "买菜", toInbox: true });
     const b = await addTask({ title: "洗碗", toInbox: true });

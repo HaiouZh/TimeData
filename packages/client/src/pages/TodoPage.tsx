@@ -176,7 +176,9 @@ export function TodoPage() {
   const [optimisticOrder, setOptimisticOrder] = useState<{ containerId: string; orderedIds: string[] } | null>(null);
   // 乐观序在落库后的下一次 liveQuery 回流时收敛：回流后 buckets 已是新序（或外部同步改动覆盖），
   // 清除后渲染结果不变，无跳变；落库失败由 reorder 分支 catch 里清。
+  // void buckets 是显式声明依赖意图：本 effect 的触发信号就是 buckets 引用变化（一次回流）。
   useEffect(() => {
+    void buckets;
     setOptimisticOrder(null);
   }, [buckets]);
   const composerRef = useRef<HTMLFormElement>(null);
