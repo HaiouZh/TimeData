@@ -2695,10 +2695,16 @@ describe("TodoPage 多选提交", () => {
 
     // 落库轮询照 waitForTask 的写法：waitForCondition 的断言是同步 predicate，async 断言
     // 返回 Promise 恒 truthy、第一轮就放行，不会真等到回流——视图断言必须在回流完成后读。
+    // 读取必须包在 act 里：persistTaskOrder 写入会触发 liveQuery 重渲染，act 外裸读会报
+    // "not wrapped in act" 噪声。
     let swapped = false;
     for (let i = 0; i < 20 && !swapped; i += 1) {
-      const aRow = await db.tasks.get(a.id);
-      const bRow = await db.tasks.get(b.id);
+      let aRow: Task | undefined;
+      let bRow: Task | undefined;
+      await act(async () => {
+        aRow = await db.tasks.get(a.id);
+        bRow = await db.tasks.get(b.id);
+      });
       swapped = aRow !== undefined && bRow !== undefined && aRow.sortOrder > bRow.sortOrder;
       if (!swapped) await settle();
     }

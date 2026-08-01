@@ -110,9 +110,12 @@ describe("parseTodoContainerId", () => {
     expect(parseTodoContainerId(input)).toEqual(expected);
   });
 
-  it.each(["", null, undefined, "parent:", "pool:upcoming", "pool:completed", "random"])("拒绝 %s", (value) => {
-    expect(parseTodoContainerId(value as string | null | undefined)).toBeNull();
-  });
+  it.each(["", null, undefined, "parent:", "pool:upcoming", "pool:completed", "random", "hand:", "hand:anything"])(
+    "拒绝 %s",
+    (value) => {
+      expect(parseTodoContainerId(value as string | null | undefined)).toBeNull();
+    },
+  );
 });
 
 describe("resolveTodoDragOperation", () => {
@@ -713,6 +716,29 @@ describe("hand 容器（手头区拖拽排序）", () => {
     ).toBeNull();
   });
 
+  it("手头行拖到 parent 容器 → null（手头行不能缩进成子任务）", () => {
+    expect(
+      resolveTodoDragOperation({ activeContainerId: "hand", targetContainerId: "parent:r1", activeParentId: null }),
+    ).toBeNull();
+  });
+
+  it("手头行带 child 缩进手势（跨行悬停）仍 → null，不把手头行变成子任务", () => {
+    // 承重单位：clamp 只修视觉（x 夹 0），判定层靠 resolveTodoDragOperation 对 hand 的兜底才不缩进。
+    // handleDragMove 对手头源早退是页面侧防线；这里锁的是纯函数契约——将来若有人给
+    // canBecomeChild 加 active 判断或给 hand 开放拖出，这条立刻红。
+    expect(
+      resolveTodoDragWithIndent({
+        activeContainerId: "hand",
+        activeParentId: null,
+        activeId: "h1",
+        activeHasChildren: false,
+        indentLevel: "child",
+        rootAboveId: "t1",
+        targetContainer: { kind: "pool", pool: "today" },
+      }),
+    ).toBeNull();
+  });
+
   it("hoveredRootIdFromOver 对 hand 容器恒返回 null（手头行不作缩进父）", () => {
     expect(hoveredRootIdFromOver("hand", "t1")).toBeNull();
   });
@@ -728,6 +754,10 @@ describe("hand 容器（手头区拖拽排序）", () => {
     expect(
       resolveTodoDockDrop({ dockId: "dock:hand", activeContainerId: "hand", activeParentId: null }),
     ).toEqual({ kind: "invalid", target: { kind: "hand" } });
+    // dock:project 药丸同拦（坞全部药丸对 hand 源都无效，不只是池药丸）。
+    expect(
+      resolveTodoDockDrop({ dockId: "dock:project:g1", activeContainerId: "hand", activeParentId: null }),
+    ).toEqual({ kind: "invalid", target: { kind: "project", goalId: "g1" } });
   });
 
   it("clampTodoIndentPreview 对 hand 容器夹 x 到 0（手头行不能缩进）", () => {

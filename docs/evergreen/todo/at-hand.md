@@ -90,7 +90,7 @@ if (handSessionId !== null && t.recurrence === null && (t.sessionId ?? null) ===
 3. **skipped/模板排除**：`t.recurrence !== null`（重复模板本体）与 `t.ruleId !== null && t.skipped`（已删·跳的发）在这段判定之前就被上层循环过滤/绕开，不会进入手头分桶。occurrence（`ruleId!==null && recurrence===null`）本身是普通 root 语义，可以被抓；模板本体不行（见 §7.1）。
 4. **散场自然回桶**：`endActiveSession()` 不改任务的 `sessionId`，只是活跃场从此换成别的/none；下次 `listTasks()` 算出的 `handSessionId` 不再等于该任务的 `sessionId`，判定自然为假，任务落回原有 placement 分区。**这不是一次迁移操作，是投影结果**——没有代码"把任务搬回收件箱"，只是排他条件不再成立，零写零迁移。
 5. 想法重力的水位线/翻牌只作用于**排他后**的 inbox（见 [todo/gravity](gravity.md)）：手头任务已被排他判定拿走，不会同时被重力沉底或抽入翻牌区。
-6. **区内拖拽重排**：手头区未完成行是 sortable（容器 `hand`，`AtHandSection` 未完行注册 `SortableTaskRow` 并渲染拖柄），重排走 `persistTaskOrder` 槽位回填这些行的全局 `sortOrder`——只交换手头行之间的值，不影响其他任务；散场回桶后任务按新序落位。手头行**不参与缩进**（`clampTodoIndentPreview` 对 `hand` 夹 x=0）、**不开放拖出手头**（`todoDockTargets` 对 `hand` 源返回空坞，`resolveTodoDockDrop` 拦 invalid）；「本场已完成」折叠区行不注册 sortable。判定层细节见母文 [todo](../todo.md) §3.5。
+6. **区内拖拽重排**：手头区未完成行是 sortable（容器 `hand`，`AtHandSection` 未完行注册 `SortableTaskRow` 并渲染拖柄），重排走 `persistTaskOrder` 槽位回填这些行的全局 `sortOrder`——只交换手头行之间的值，不影响其他任务；`updatedAt` 会被推到当下（重置重力下沉时钟，与池内重排同级副作用）。散场回桶：**today 按新序保留**（today 排序键含 sortOrder），**inbox 不保留**（收件箱显示序 = createdAt 分天 + 段内 createdAt 倒序，不读 sortOrder——见 [todo](../todo.md) §3.5「池同容器重排只有今天」的同一理由），这是已知取舍。手头重排同步反映到项目区同组段内序（`sortProjectMembers` 段内保持全局 sortOrder 序）。手头行**不参与缩进**（`clampTodoIndentPreview` 对 `hand` 夹 x=0，`handleDragMove` 对手头源早退）、**不开放拖出手头**（`todoDockTargets` 对 `hand` 源返回空坞，`resolveTodoDockDrop` 拦 invalid）；「本场已完成」折叠区行不注册 sortable。判定层细节见母文 [todo](../todo.md) §3.5 + §12。
 
 ## 5. 续场 = 散当前场 + 开新场 + 迁移未完任务
 
