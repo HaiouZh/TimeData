@@ -18,6 +18,7 @@ const EMPTY_BUCKETS: TodoBuckets = {
   recurring: [],
   completed: [],
   atHand: [],
+  atHandPendingTotal: 0,
   handSession: null,
   projects: [],
   projectTints: new Map(),

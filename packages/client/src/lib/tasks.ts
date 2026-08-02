@@ -795,6 +795,12 @@ export interface TodoBuckets {
   atHand: Task[];
   handSession: Session | null;
   /**
+   * 手头未完的活总数 = 未完根任务 + 它们名下未完子任务。
+   * **刻意与收件箱/今天区的根任务口径不同**：那两区是清单，数根任务合理；
+   * 手头区是工作台，压成父子只是整理结构，活一件没少。别当 bug 改掉。
+   */
+  atHandPendingTotal: number;
+  /**
    * 项目区：按 active project 目标分组的成员任务，组间按成员 max(updatedAt) 倒序。
    * 归属轴排他已打开——这些成员不再进 `inbox`，收件箱因此是「真·未归类托盘」。
    * 焦点轴与时间轴正交：被抓到手头 / 排了今天的成员**同时**出现在对应桶与本桶。
@@ -864,6 +870,7 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     completed: [],
     scheduledSunkenFromIndex: 0,
     atHand,
+    atHandPendingTotal: 0,
     handSession,
     projects: [],
     // 裸行取 createdAt 要兜 undefined（老行可能缺字段）；createdAt 并列时用 id 兜稳定序。
@@ -932,5 +939,12 @@ export async function listTasks(now: Date = new Date()): Promise<TodoBuckets> {
     ...group,
     tasks: sortProjectMembers(group.tasks, { handSessionId, now }),
   }));
+  // 子任务被投影层的 parentId 早退整个丢掉，不在任何桶里；这里直接按 atHand 的根任务反查。
+  const pendingRoots = atHand.filter((t) => !t.done);
+  const pendingRootIds = new Set(pendingRoots.map((t) => t.id));
+  const pendingChildCount = all.filter(
+    (t) => !t.done && !t.skipped && t.parentId !== null && pendingRootIds.has(t.parentId),
+  ).length;
+  buckets.atHandPendingTotal = pendingRoots.length + pendingChildCount;
   return buckets;
 }

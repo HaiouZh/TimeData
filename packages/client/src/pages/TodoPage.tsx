@@ -116,6 +116,7 @@ const EMPTY: TodoBuckets = {
   completed: [],
   scheduledSunkenFromIndex: 0,
   atHand: [],
+  atHandPendingTotal: 0,
   handSession: null,
   projects: [],
   projectTints: new Map<string, string>(),

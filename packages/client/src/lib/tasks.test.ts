@@ -1771,3 +1771,38 @@ describe("moveTaskToParent 清手头场指针", () => {
     expect(after?.sessionId ?? null).toBeNull();
   });
 });
+
+describe("atHandPendingTotal", () => {
+  it("含子任务：3 条压成 1 父 2 子后仍为 3", async () => {
+    const a = await addTask({ title: "A" });
+    const b = await addTask({ title: "B" });
+    const c = await addTask({ title: "C" });
+    await grabTaskToHand(a.id);
+    await grabTaskToHand(b.id);
+    await grabTaskToHand(c.id);
+    expect((await listTasks()).atHandPendingTotal).toBe(3);
+
+    await moveTaskToParent(b.id, a.id);
+    await moveTaskToParent(c.id, a.id);
+
+    expect((await listTasks()).atHandPendingTotal).toBe(3);
+  });
+
+  it("子任务勾完不再计入", async () => {
+    const a = await addTask({ title: "A" });
+    const b = await addTask({ title: "B" });
+    await grabTaskToHand(a.id);
+    await grabTaskToHand(b.id);
+    await moveTaskToParent(b.id, a.id);
+    expect((await listTasks()).atHandPendingTotal).toBe(2);
+
+    await toggleTaskDone(b.id);
+
+    expect((await listTasks()).atHandPendingTotal).toBe(1);
+  });
+
+  it("无活跃场时为 0", async () => {
+    await addTask({ title: "游离任务" });
+    expect((await listTasks()).atHandPendingTotal).toBe(0);
+  });
+});
