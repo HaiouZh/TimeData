@@ -53,7 +53,7 @@ export function Sheet({ open, onClose, title, ariaLabel, children, className, z,
         aria-label={title ?? ariaLabel}
         tabIndex={-1}
         className={`sheet-panel flex w-full max-w-2xl flex-col rounded-t-card border border-border bg-surface-elevated text-ink shadow-elev2 outline-none ${className ?? ""}`}
-        style={{ paddingBottom: "var(--safe-bottom)" }}
+        style={{ paddingBottom: "var(--safe-bottom-sheet)" }}
       >
         <div className="mx-auto mt-2 h-1 w-8 rounded-pill bg-border-strong" aria-hidden="true" />
         {title && (

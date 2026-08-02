@@ -285,7 +285,7 @@ export function TaskDetailSheet({ id, onClose, onTagsChange, onTimeChanged }: Ta
       <div
         data-testid="detail-sheet"
         className={`flex w-full max-w-2xl flex-col rounded-t-card border border-border-hairline bg-surface-elevated text-ink shadow-2xl ${expanded ? "task-detail-sheet-expanded" : "task-detail-sheet"}`}
-        style={{ paddingBottom: "var(--safe-bottom)" }}
+        style={{ paddingBottom: "var(--safe-bottom-sheet)" }}
         onTouchStart={(event) => {
           touchStartY.current = event.touches[0]?.clientY ?? null;
         }}

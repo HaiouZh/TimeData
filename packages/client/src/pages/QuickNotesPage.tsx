@@ -1017,7 +1017,9 @@ export default function QuickNotesPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-page text-ink">
-      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 px-4 pb-2 pt-3 backdrop-blur sm:pb-3 sm:pt-4 sm:shadow-elev1">
+      {/* 顶部间距走 --page-top-gap（原 pt-3 / sm:pt-4）：有系统安全区时归零，避免与安全区自带的
+          呼吸位叠成刘海下方那条空带；桌面 / 无刘海设备上取值不变，见 index.css 的变量注释。 */}
+      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 px-4 pb-2 [padding-top:var(--page-top-gap)] backdrop-blur sm:pb-3 sm:[padding-top:var(--page-top-gap-lg)] sm:shadow-elev1">
         {selectionMode ? (
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
             <button

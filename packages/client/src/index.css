@@ -96,19 +96,40 @@
 }
 
 /* 安全区变量：默认取 env(safe-area-inset-*)，各让位点统一经 var(--safe-*) 消费（不散写裸 env()）。
-   Android 壳由 MainActivity 在原生层做唯一让位（systemBars+displayCutout 的 inset padding），而 WebView
-   里 env() 会照常报非零值、与原生 padding 叠加成双倍留白，故按 <html data-platform="android"> 一键清零。 */
+   Android 壳由 MainActivity 在原生层让位**顶部与左右**（systemBars+displayCutout 的 inset padding），
+   而 WebView 里 env() 会照常报非零值、与原生 padding 叠加成双倍留白，故这三边按
+   <html data-platform="android"> 一键清零。底部两平台都不再走原生，见下。 */
 :root {
   --safe-top: env(safe-area-inset-top);
   --safe-right: env(safe-area-inset-right);
-  --safe-bottom: env(safe-area-inset-bottom);
+  /* 底部**刻意不让位**：底栏与内容延伸到 home 横条（iOS）/ 手势条（Android）之下，横条浮在其上。
+     产品取向而非疏漏——此前两平台各留 34px / 手势条高的一条空带，视觉上是纯浪费。
+     要整体恢复让位，把这里改回 env(safe-area-inset-bottom) 即可，14 处消费点一律不动。 */
+  --safe-bottom: 0px;
+  /* 例外：底部弹层（Sheet / 任务详情）的操作按钮就在面板最下沿，压到横条下会点不到，故仍让位。
+     底部原生 padding 已撤（MainActivity 只让顶部与左右），两平台同源走 env()，无需按平台清零。 */
+  --safe-bottom-sheet: env(safe-area-inset-bottom);
   --safe-left: env(safe-area-inset-left);
 }
 html[data-platform="android"] {
   --safe-top: 0px;
   --safe-right: 0px;
-  --safe-bottom: 0px;
   --safe-left: 0px;
+}
+
+/* 页面顶栏自己的顶部间距。
+   safe-area-inset-top ≠ 刘海高度：iPhone 上它是 47~59px，而刘海/灵动岛物理高度只有 30~37px，
+   多出的 10~20px 是系统留的呼吸位（Android 状态栏 inset 同理）。页面再叠自己那 12/16px，
+   刘海下方就成了 22~36px 的空带——「刘海下方多出一块」正是这两笔账叠出来的。
+   故：有系统安全区时归零（呼吸位已够），无安全区（桌面 / 无刘海）时保持原值不变。
+   Android 由原生让位、CSS 侧 --safe-top 已清零，env() 在此算不出来，按平台标记直接归零。 */
+:root {
+  --page-top-gap: max(0px, calc(12px - env(safe-area-inset-top)));
+  --page-top-gap-lg: max(0px, calc(16px - env(safe-area-inset-top)));
+}
+html[data-platform="android"] {
+  --page-top-gap: 0px;
+  --page-top-gap-lg: 0px;
 }
 
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
