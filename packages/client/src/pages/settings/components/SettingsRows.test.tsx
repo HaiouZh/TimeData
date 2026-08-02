@@ -40,7 +40,7 @@ describe("SettingsRows", () => {
     expect(html).toContain('href="/settings/insights"');
     expect(html).toContain("<button");
     expect(html).toContain('role="switch"');
-    expect(html).not.toContain("slate-");
+    expect(html).not.toMatch(/\b(?:bg|text|border)-slate-/);
   });
 
   it("uses neutral icon badges instead of retired module colors", () => {

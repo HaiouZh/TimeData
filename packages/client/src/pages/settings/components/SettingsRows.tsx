@@ -2,6 +2,7 @@ import { CaretRight } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Icon } from "../../../components/Icon.js";
+import { Switch } from "../../../components/ui/Switch.js";
 
 export type SettingsRowTone = "neutral" | "accent" | "status";
 
@@ -121,26 +122,19 @@ export function SettingsToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
+    <div
+      aria-disabled={disabled}
+      onClick={disabled ? undefined : () => onChange(!checked)}
       className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-elevated disabled:opacity-60"
     >
       <span className="min-w-0 flex-1">
         <span className="block td-text-label font-medium text-ink">{title}</span>
         {subtitle && <span className="mt-0.5 block td-text-caption text-ink-3">{subtitle}</span>}
       </span>
-      <span className={`relative h-6 w-11 rounded-pill transition-colors ${checked ? "bg-accent" : "bg-surface-elevated"}`}>
-        <span
-          className={`absolute top-1 h-4 w-4 rounded-pill bg-page transition-[left] ${
-            checked ? "left-6" : "left-1"
-          }`}
-        />
+      <span onClick={(event) => event.stopPropagation()}>
+        <Switch checked={checked} onChange={onChange} ariaLabel={title} disabled={disabled} />
       </span>
-    </button>
+    </div>
   );
 }
 
