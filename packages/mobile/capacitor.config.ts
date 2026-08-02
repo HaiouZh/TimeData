@@ -5,11 +5,11 @@ const config: CapacitorConfig = {
   appName: "TimeData",
   webDir: "../client/dist",
   ios: {
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0e1320",
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#0e1320",
   },
   server: {
     androidScheme: "https",
