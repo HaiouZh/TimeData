@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { DateField } from "../components/ui/DateField.js";
+import { SegmentedControl } from "../components/ui/SegmentedControl.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { memoOverview } from "../lib/insights/cache.ts";
@@ -174,21 +175,17 @@ export default function TimeStatsPage() {
       </header>
 
       <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
-        <div className="grid grid-cols-3 gap-1 rounded-pill border border-border bg-surface-elevated p-1">
-          {(["day", "week", "month"] as ViewMode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              aria-pressed={mode === m}
-              className={`min-h-11 rounded-ctl td-text-label font-medium transition ${
-                mode === m ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
-              }`}
-            >
-              {{ day: "日", week: "周", month: "月" }[m]}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="统计周期"
+          size="lg"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "day", label: "日" },
+            { value: "week", label: "周" },
+            { value: "month", label: "月" },
+          ]}
+        />
 
         <div className="mt-4 flex items-center gap-2">
           <button

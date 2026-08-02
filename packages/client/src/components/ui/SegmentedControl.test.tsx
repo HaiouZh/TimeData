@@ -42,4 +42,21 @@ describe("SegmentedControl", () => {
     expect(onChange).not.toHaveBeenCalled();
     await unmount(root);
   });
+
+  it("size 档：lg 用大热区与 body 字号，sm 用紧凑档（非等宽）", async () => {
+    const lg = await renderDom(
+      createElement(SegmentedControl, { options: opts, value: "a", onChange: () => {}, ariaLabel: "t", size: "lg" }),
+    );
+    expect(lg.host.querySelector('[role="radio"]')?.className).toContain("min-h-11");
+    expect(lg.host.querySelector('[role="radio"]')?.className).toContain("td-text-body");
+    await unmount(lg.root);
+
+    const sm = await renderDom(
+      createElement(SegmentedControl, { options: opts, value: "a", onChange: () => {}, ariaLabel: "t", size: "sm" }),
+    );
+    expect(sm.host.querySelector('[role="radio"]')?.className).toContain("min-h-9");
+    expect(sm.host.querySelector('[role="radio"]')?.className).toContain("td-text-caption");
+    expect(sm.host.querySelector('[role="radio"]')?.className).not.toContain("flex-1");
+    await unmount(sm.root);
+  });
 });

@@ -5,6 +5,7 @@ import { ErrorBoundary } from "../../../components/ErrorBoundary.js";
 import { Icon } from "../../../components/Icon.js";
 import { DateField } from "../../../components/ui/DateField.js";
 import { PageBackButton } from "../../../components/ui/PageBackButton.js";
+import { SegmentedControl } from "../../../components/ui/SegmentedControl.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
 import { resolveDiaryDate } from "../../../lib/diary/diaryDate.js";
@@ -157,21 +158,13 @@ export default function DiaryReviewPage() {
           <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记回顾</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
-          <div className="flex items-center gap-1 rounded-pill border border-border bg-surface p-1">
-            {(["A", "B", "C"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={mode === m}
-                onClick={() => handleModeChange(m)}
-                className={`rounded-pill px-3 py-1 td-text-caption font-medium transition ${
-                  mode === m ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
-                }`}
-              >
-                {MODE_LABELS[m]}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="回顾模式"
+            size="sm"
+            value={mode}
+            onChange={handleModeChange}
+            options={(["A", "B", "C"] as const).map((m) => ({ value: m, label: MODE_LABELS[m] }))}
+          />
           <div className="w-40 shrink-0">
             <DateField
               value={anchor}

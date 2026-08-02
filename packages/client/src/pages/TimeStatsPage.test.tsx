@@ -121,14 +121,14 @@ describe("TimeStatsPage", () => {
 
     const weekButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "周");
     const monthButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "月");
-    expect(weekButton?.getAttribute("aria-pressed")).toBe("true");
+    expect(weekButton?.getAttribute("aria-checked")).toBe("true");
 
     await act(async () => {
       monthButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(monthButton?.getAttribute("aria-pressed")).toBe("true");
-    expect(weekButton?.getAttribute("aria-pressed")).toBe("false");
+    expect(monthButton?.getAttribute("aria-checked")).toBe("true");
+    expect(weekButton?.getAttribute("aria-checked")).toBe("false");
 
     await unmount(root);
   });

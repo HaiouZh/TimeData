@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { PageBackButton } from "../components/ui/PageBackButton.js";
+import { SegmentedControl } from "../components/ui/SegmentedControl.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
@@ -167,21 +168,16 @@ export default function SearchPage() {
       </header>
 
       <section className="bg-surface px-3 pb-3">
-        <div className="grid grid-cols-4 gap-1 rounded-pill border border-border bg-surface-elevated p-1">
-          {(["all", "year", "month", "week"] as SearchRangeMode[]).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              aria-pressed={state.mode === mode}
-              onClick={() => updateState({ mode })}
-              className={`min-h-11 rounded-ctl td-text-body font-medium transition ${
-                state.mode === mode ? "bg-accent text-page" : "text-ink-2 hover:text-ink"
-              }`}
-            >
-              {MODE_LABELS[mode]}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          ariaLabel="搜索范围"
+          size="lg"
+          value={state.mode}
+          onChange={(mode) => updateState({ mode })}
+          options={(["all", "year", "month", "week"] as SearchRangeMode[]).map((m) => ({
+            value: m,
+            label: MODE_LABELS[m],
+          }))}
+        />
 
         <div className="mt-3 flex items-center justify-center gap-2">
           {/* all 档没有可翻的区间，两个箭头一起隐藏（linsen 同款行为）。 */}
