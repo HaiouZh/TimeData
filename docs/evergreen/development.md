@@ -146,7 +146,7 @@ pnpm check:docs:size   # evergreen 文档体量棘轮，拦新增膨胀
 pnpm check:design      # 设计语言棘轮：退役模块色、裸色、散装交互图标、业务 font-mono
 pnpm check:ui          # UI 控件棘轮：禁新增原生 select/checkbox/radio/confirm/alert
 pnpm check:test        # 测试卫生棘轮：禁新增真实等待 / 裸 createRoot / 干净桶混入脏文件
-pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon 全套图标
+pnpm icons:generate    # 从根目录 icon.png 生成 PWA / Android / favicon / iOS 全套图标
 ```
 
 `packages/shared` 的运行时契约测试使用 Vitest，覆盖 `packages/shared/src/schemas.ts` 中的 schema；改跨端类型或同步 payload 形状时先跑 `pnpm --filter @timedata/shared test` 和 `pnpm --filter @timedata/shared build`。`@timedata/cli` 的 `typecheck` 会先构建 shared，因为 CLI 在 package 解析时读取 `packages/shared/dist/index.d.ts`；干净 CI 环境不能依赖本地已有 dist。

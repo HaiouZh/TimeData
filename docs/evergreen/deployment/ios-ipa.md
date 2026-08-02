@@ -2,10 +2,12 @@
 type: evergreen
 title: 部署 · iOS 未签名 IPA
 covers:
-  - .github/workflows/ios-ipa.yml
+  - .github/workflows/mobile-release.yml
   - packages/mobile/scripts/ios/**
+  - scripts/ios-app-icon.mjs
+  - packages/mobile/ios-assets/**
 contracts:
-  - .github/workflows/ios-ipa.yml
+  - .github/workflows/mobile-release.yml
 last-reviewed: 2026-08-02
 ---
 
@@ -17,8 +19,8 @@ last-reviewed: 2026-08-02
 ## 承上启下
 
 - **上游**：`main` 的 GitHub Actions macOS runner、`packages/mobile` 的 Capacitor 配置与 client 的 mobile 构建产物。
-- **下游**：`TimeData-unsigned.ipa` artifact、`ios-<buildNumber>` GitHub Release、用户手机上的 SideStore / AltStore。
-- **契约**：iOS Release **不打 `--latest`**；`packages/mobile/ios/` 永不入库。
+- **下游**：`TimeData-unsigned.ipa` artifact、`v<code>` GitHub Release（与 Android 共用）、用户手机上的 SideStore / AltStore。
+- **契约**：`--latest` 只由带 APK 的发布步骤打（`prepare` 创建时显式 `--latest=false`），iOS 侧不碰；`packages/mobile/ios/` 永不入库。
 - **邻居**：[deployment/android-apk](android-apk.md)（同一套 Capacitor 配置的 Android 侧）、[security](../security.md)（HTTPS-only 边界同样适用）。
 
 ## 1. 为什么原生工程不进仓库
@@ -29,14 +31,15 @@ last-reviewed: 2026-08-02
 
 ## 2. 构建链路
 
-`ios-ipa.yml` 跑在 `macos-15` runner 上，触发方式为 `workflow_dispatch` 或 client / mobile / shared 变更推 main。步骤顺序（顺序本身是契约，错位会静默产出没打补丁的包）：
+`ios` job 跑在 `macos-15` runner 上，由 `mobile-release.yml` 的 `prepare` job 算好版本号后触发（版本号来自 `prepare` 输出，与 Android 共用同一个 `v<code>`）。步骤顺序（顺序本身是契约，错位会静默产出没打补丁的包）：
 
-1. **算 build number**：`yymmddNN`（Asia/Shanghai 日期 + 当日序号，数已有 `ios-<日期>*` tag）。与 Android 同理靠 workflow 级 `concurrency`（`ios-ipa-release`，排队不取消）防重号。
+1. **版本号**：`prepare` job 单点计算 `yymmddNN`（Asia/Shanghai 日期 + 当日序号，跨 `v-` / `android-` 前缀取最大序号 +1），`ios` job 消费它的输出，不再自己数 tag。
 2. `pnpm install --frozen-lockfile` → `pnpm --filter @timedata/mobile add @capacitor/ios@<core 同版本>`。
 3. `build:web` 产出 client 的 mobile 构建 → `cap add ios` 生成工程。
 4. `ruby scripts/ios/patch-ios.rb` 打补丁（见 §3）——**必须在 `cap add` 之后、`cap sync` 之前**。
-5. `cap sync ios`（含 `pod install`）→ PlistBuddy 写 `CFBundleVersion` → `xcodebuild archive`。
-6. 归档时关签名（`CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""`），因此不能用 `xcodebuild -exportArchive`（它必然要签名），改成手工把 `App.app` 塞进 `Payload/` 再 zip 成 `.ipa`。
+5. `node scripts/ios-app-icon.mjs <appiconset 目录> packages/mobile/ios-assets/AppIcon-1024.png` 把 TimeData 图标盖进 `AppIcon.appiconset`（不硬编码目标文件名，读 `Contents.json` 声明的 filename 决定覆盖目标，模板改版即报错）——同样在 `cap add` 之后、`cap sync` 之前。
+6. `cap sync ios`（含 `pod install`）→ PlistBuddy 写 `CFBundleVersion` → `xcodebuild archive`。
+7. 归档时关签名（`CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""`），因此不能用 `xcodebuild -exportArchive`（它必然要签名），改成手工把 `App.app` 塞进 `Payload/` 再 zip 成 `.ipa`。
 
 ## 3. 原生补丁：键盘工具条与状态栏样式
 
@@ -54,9 +57,11 @@ last-reviewed: 2026-08-02
 
 `MainViewController` 覆写 `preferredStatusBarStyle` 返回 `.lightContent`——app 底色 `--color-page`（#0e1320）是深色，默认黑字读不出来。它随同一个 Swift 文件走 §3 开头那三步管线，无需额外步骤；`cap add ios` 生成的 `Info.plist` 自带 `UIViewControllerBasedStatusBarAppearance=true`，状态栏样式统一由 VC 决定，不需要 plist 补丁。同批把 `capacitor.config.ts` 的 `ios.backgroundColor`（Android 侧同步）从 `#0f172a` 对齐到 `#0e1320`，消除启动 / 旋转 / 滚动越界时露出原生背景的色差带。
 
-## 4. Release 契约：不标 latest
+## 4. Release 契约：latest 只由带 APK 的发布步骤打
 
-iOS Release 发布到 `ios-<buildNumber>` tag，`gh release create` **不带 `--latest`**。这条是硬约束：设置页的「APK 更新」入口读的是仓库的 latest Release，iOS 包一旦标成 latest，Android 用户的应用内更新就会指向一个装不了的 `.ipa`。改 iOS 发布步骤时必须保住这一点。
+发布合流后，iOS 与 Android 共用一个 `v<code>` tag 与同一个 Release（`mobile-release.yml`：`prepare` 建 Release → `android` / `ios` 两个 job 各自上传附件）。latest 规则是硬约束：设置页的「APK 更新」入口读的是仓库的 latest Release，latest 一旦落到只有 `.ipa` 的 Release 上，Android 用户的应用内更新就会指向一个装不了的包（更早那批走 `/releases/latest` 的客户端首当其冲，合并前它们就被 iOS 顶掉的 latest 打坏过）。
+
+因此：**latest 只由含 APK 的发布步骤打**——`prepare` 创建 Release 时显式 `--latest=false`（`gh` 的 `--latest` 默认是 `automatic`，非 semver tag 按创建时间自动成为 latest，不显式关掉的话 prepare 一创建就把 latest 从上一个带 APK 的 Release 抢走，Android 构建失败时更会永久停在没 APK 的 Release 上）；`android` job 上传 APK 成功后 `gh release edit --latest` 落位；iOS 侧与补包路径绝不碰这个标记。合并后早期走 `/releases/latest` 的客户端一并被修复——从此 latest 指向的 Release 必然带 apk。
 
 产物同时上传为 workflow artifact（`timedata-unsigned-ipa`），Release 发布失败时仍可从 run 页面取包；发布步骤对 GitHub API 临时超时做最多 3 次重试，与 Android 侧同构。
 
@@ -70,5 +75,6 @@ IPA 未签名，不能直接安装。手机上用 SideStore（推荐，可离机
 
 - **`cap add ios` 或 `pod install` 失败**：多半是 runner 的 Xcode / CocoaPods 版本与 Capacitor 7 模板不匹配，先看 runner 镜像的 Xcode 版本。
 - **storyboard patch did not match**：Capacitor 升级换了模板布局，按新模板改 `patch-ios.rb` 的替换串。
+- **`Contents.json 声明了多个不同的 filename`**：Capacitor 换了图标模板（如拆成多尺寸变体），按新结构调整 `scripts/ios-app-icon.mjs`。
 - **包能装但键盘工具条还在**：先确认 `Patch iOS project` 步骤真跑过且 App target 里有两个 Swift 文件；再确认 storyboard 的 `customClass` 已是 `MainViewController`。
 - **签名 7 天到期后打不开**：SideStore 重签即可，不需要重装、不丢数据。

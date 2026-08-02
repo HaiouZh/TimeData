@@ -4,9 +4,11 @@ This package contains the Capacitor Android shell for TimeData, plus CI configur
 
 ## iOS（未签名 IPA，CI 生成）
 
-iOS 原生工程**不进仓库**，由 `.github/workflows/ios-ipa.yml` 在 macOS runner 上现场 `cap add ios` 生成，产出未签名 `TimeData-unsigned.ipa`。构建链路、键盘工具条补丁、Release 契约与 SideStore 装机见 [docs/evergreen/deployment/ios-ipa.md](../../docs/evergreen/deployment/ios-ipa.md)。
+iOS 原生工程**不进仓库**，由 `mobile-release.yml` 的 `ios` job 在 macOS runner 上现场 `cap add ios` 生成，产出未签名 `TimeData-unsigned.ipa`。构建链路、键盘工具条补丁、Release 契约与 SideStore 装机见 [docs/evergreen/deployment/ios-ipa.md](../../docs/evergreen/deployment/ios-ipa.md)。
 
-手动触发：GitHub → Actions → `ios-ipa` → Run workflow。
+App 图标由 `pnpm icons:generate` 从根目录 `icon.png` 生成 `ios-assets/AppIcon-1024.png`（入库），CI 经 `scripts/ios-app-icon.mjs` 装配进生成的工程。
+
+手动触发：GitHub → Actions → `mobile-release` → Run workflow（`platform` 留 `both` 或选 `ios`）。
 
 本地调试 iOS 工程（需 macOS）：
 
@@ -14,6 +16,7 @@ iOS 原生工程**不进仓库**，由 `.github/workflows/ios-ipa.yml` 在 macOS
 pnpm add @capacitor/ios@<与 @capacitor/core 同版本>
 pnpm build:web && pnpm exec cap add ios
 ruby scripts/ios/patch-ios.rb
+node ../../scripts/ios-app-icon.mjs ios/App/App/Assets.xcassets/AppIcon.appiconset ../ios-assets/AppIcon-1024.png
 pnpm exec cap sync ios && pnpm exec cap open ios
 ```
 

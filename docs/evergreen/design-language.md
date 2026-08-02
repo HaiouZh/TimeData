@@ -136,5 +136,5 @@ last-reviewed: 2026-08-02
 
 ## 深水细节
 
-- **App 启动图标是另一条管线**：`scripts/generate-icons.mjs` 用 sharp 从根 `icon.png` 生成 PWA/Android/favicon 全套（与 UI 内 Phosphor 图标无关），属构建/资产，不在本主题 covers。
+- **App 启动图标是另一条管线**：`scripts/generate-icons.mjs` 用 sharp 从根 `icon.png` 生成 PWA/Android/favicon/iOS 全套（与 UI 内 Phosphor 图标无关），属构建/资产，不在本主题 covers。
 - **单文件 CSS**：全站样式集中在 `index.css`（含 token + 全局规则 + 部分组件类）。它被多功能触及，但主轴身份是“设计系统/全局样式”，故归本主题单一 covers；功能主题改样式时在「邻居」链回本文，不另 cover `index.css`。

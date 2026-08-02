@@ -37,7 +37,7 @@ function isGitHubRelease(value: unknown): value is GitHubRelease {
   );
 }
 
-// 一次 CI 最多产出 Android + iOS 两个 release，30 条足够回溯到最近的 Android 版本。
+// 一次 CI 产出单个 Release（APK + IPA 同页）；30 条足够回溯最近的 Android 版本。
 const RELEASES_PAGE_SIZE = 30;
 
 export interface AndroidApkUpdate {
