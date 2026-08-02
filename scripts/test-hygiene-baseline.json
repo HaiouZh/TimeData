@@ -56,6 +56,7 @@
   "dirty-in-clean-bucket:lib/adminNewIps.test.ts",
   "dirty-in-clean-bucket:lib/diary/textareaEdit.test.tsx",
   "dirty-in-clean-bucket:lib/galaxyEngineMode.test.ts",
+  "dirty-in-clean-bucket:lib/haptics.test.ts",
   "dirty-in-clean-bucket:lib/safeStorage.test.ts",
   "dirty-in-clean-bucket:lib/settings/trackActionTagsSetting.test.ts",
   "dirty-in-clean-bucket:lib/useIsCoarsePointer.test.ts",

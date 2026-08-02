@@ -10,6 +10,7 @@ const sharedPackages = [
   "@capacitor/browser",
   "@capacitor/core",
   "@capacitor/filesystem",
+  "@capacitor/haptics",
   "@capacitor/keyboard",
   "@capacitor/share",
 ];
