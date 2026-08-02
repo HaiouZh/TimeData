@@ -77,5 +77,10 @@
   "src/quick-notes/searchQuickNotes.test.ts",
   "src/quick-notes/useQuickNoteTimeline.test.tsx",
   "src/quick-notes/useUnsyncedQuickNoteIds.test.tsx",
-  "src/test/domHarness.test.tsx"
+  "src/test/domHarness.test.tsx",
+  "src/components/ui/EmptyState.test.tsx",
+  "src/components/ui/LoadingState.test.tsx",
+  "src/components/ui/PageBackButton.test.tsx",
+  "src/components/ui/PageHeader.test.tsx",
+  "src/components/ui/StatusBanner.test.tsx"
 ]
