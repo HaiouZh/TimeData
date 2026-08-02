@@ -762,6 +762,24 @@ describe("hand 容器（手头区拖拽排序）", () => {
     expect(todoDockTargets("parent:p1", [])).toContainEqual({ kind: "hand" });
   });
 
+  it("todoDockTargets 第三参 activeParentInHand=true 时,子任务源坞不出任何药丸(父在手头,与父行一致)", () => {
+    expect(todoDockTargets("parent:p1", [{ goalId: "g1" }], true)).toEqual([]);
+  });
+
+  it("todoDockTargets 不传第三参(默认 false)时,子任务源坞行为不变(收件箱子任务坞不受影响)", () => {
+    expect(todoDockTargets("parent:p1", [])).toEqual([
+      { kind: "pool", pool: "today" },
+      { kind: "hand" },
+      { kind: "pool", pool: "inbox" },
+    ]);
+    expect(todoDockTargets("parent:p1", [], false)).toEqual(todoDockTargets("parent:p1", []));
+  });
+
+  it("todoDockTargets 第三参对非子任务源无影响(池/手头源本就各自恒定)", () => {
+    expect(todoDockTargets("pool:inbox", [], true)).toEqual(todoDockTargets("pool:inbox", []));
+    expect(todoDockTargets("hand", [{ goalId: "g1" }], true)).toEqual([]);
+  });
+
   it("resolveTodoDockDrop 对 hand 源 → invalid（防御层：坞隐藏规则漏了也不能放怪异操作过去）", () => {
     expect(
       resolveTodoDockDrop({ dockId: "dock:pool:today", activeContainerId: "hand", activeParentId: null }),

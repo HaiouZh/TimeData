@@ -17,6 +17,12 @@ export interface TodoDragDockProps {
   /** 拖拽中的行不允许入项目时,项目药丸置禁用视觉(与项目卡 data-drop-blocked 同源判定)。 */
   dropBlocked: boolean | null;
   /**
+   * 被拖子任务的父是否在手头。透传给 `todoDockTargets` 判定层——手头区整个区都不出坞，
+   * 子任务要与父行（`activeContainerId === "hand"`）保持一致（见 todoDockTargets 注释）。
+   * 非子任务或未在拖拽时无意义，默认 false。
+   */
+  activeParentInHand?: boolean;
+  /**
    * 坞的左缘锚点(视口坐标 px):拖起时按**来源栏左缘**定位——拖柄在行左 2/5,
    * 锚右缘意味着全程向右横穿,恰是缩进手势(+28px 变子任务)的方向,极易误触;
    * 锚来源栏左缘让行程向左,缩进阈值永远不会被拖向坞的手势触发。null 退回视口右缘。
@@ -79,8 +85,9 @@ export function TodoDragDock({
   projects,
   dropBlocked,
   anchorLeftPx = null,
+  activeParentInHand = false,
 }: TodoDragDockProps) {
-  const targets = todoDockTargets(activeContainerId ?? "", projects);
+  const targets = todoDockTargets(activeContainerId ?? "", projects, activeParentInHand);
   return (
     <ul
       data-testid="todo-drag-dock"

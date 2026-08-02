@@ -174,14 +174,22 @@ export function resolveTodoDockDrop({
  * 拖拽中应显示的坞落点(有序:今天/手头/收件箱/项目)。
  * 被拖行所在池的药丸不显示;子任务(parent:)时 today/inbox 都显示(升根语义),
  * 子任务也显示手头药丸——投上去走升根到手头。
+ *
+ * `activeParentInHand`：被拖子任务的父是否在手头。容器 id 只有 `parent:<父id>` 一种形状，
+ * 收件箱子任务与手头子任务在这一层完全同形、判定层本身分不出来——这个参数由调用方
+ * （TodoPage，能查 `buckets.atHand`）算好了传进来。手头区整个区都不出坞（父行本就不出，
+ * 子任务跟着一致，见用户反馈「手头收掉扩展坞，回池已经有 × 按钮了」）；收件箱子任务的坞
+ * 不受影响，默认值 `false` 保证不传这个参数时行为一字不变。
  */
 export function todoDockTargets(
   activeContainerId: string,
   projects: readonly { goalId: string }[],
+  activeParentInHand = false,
 ): TodoDockTarget[] {
   const active = parseTodoContainerId(activeContainerId);
-  // 手头区只做区内重排，坞不对手头源显示任何药丸。
+  // 手头区只做区内重排，坞不对手头源显示任何药丸。子任务的父若在手头，同一条规则也套用。
   if (active?.kind === "hand") return [];
+  if (active?.kind === "parent" && activeParentInHand) return [];
   const targets: TodoDockTarget[] = [];
   if (!(active?.kind === "pool" && active.pool === "today")) targets.push({ kind: "pool", pool: "today" });
   targets.push({ kind: "hand" });

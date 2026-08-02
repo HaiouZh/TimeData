@@ -2834,4 +2834,81 @@ describe("拖拽投递坞", () => {
     expect(host.querySelector('[data-testid="todo-drag-dock"]')).toBeNull();
     await unmount(root);
   });
+
+  it("手头子任务拖起时坞不出任何药丸:父在手头,与手头根行(拖起不出坞)保持一致", async () => {
+    // 用户反馈原话：「手头收掉扩展坞，回池已经有 × 按钮了」——手头区整个区都不该出坞，
+    // 子任务的容器 id 只有 `parent:<父id>` 一种形状，本例专锁「父在手头」这条要落成坞恒空。
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, "matchMedia");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 1024px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    try {
+      const now = "2026-06-28T09:00:00.000Z";
+      const parent = await addTask({ title: "父任务", toInbox: true });
+      await grabTaskToHand(parent.id, { now: new Date(now) });
+      await createChildTask(parent.id, "子任务");
+      // 挂一个可落的项目组：即便坞里本该有项目药丸可选，本例仍要证明手头子任务源坞恒空——
+      // 不是"碰巧没有候选"，而是判定层主动拦下了它。
+      await db.goals.add({
+        id: "g1",
+        title: "装修房子",
+        kind: "project",
+        status: "active",
+        members: [],
+        prerequisites: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const { host, root } = await renderPage();
+      await waitForCondition(
+        () => host.querySelector('[data-section="todo-at-hand"] [aria-label="移动 父任务"]') !== null,
+        "at-hand parent row",
+        settle,
+      );
+
+      // 展开父任务的子任务层（点抓取区），子任务行的拖柄才存在（同「拖起子任务或重复待办…」用例）。
+      await act(async () => {
+        (host.querySelector('[data-section="todo-at-hand"] [aria-label="移动 父任务"]') as HTMLElement).dispatchEvent(
+          new MouseEvent("click", { bubbles: true }),
+        );
+      });
+      await waitForCondition(
+        () => host.querySelector('[data-section="todo-at-hand"] [aria-label="拖动子任务 子任务"]') !== null,
+        "at-hand child drag handle",
+        settle,
+      );
+
+      const dockEl = () => host.querySelector('[data-testid="todo-drag-dock"]');
+      await waitForCondition(() => dockEl() !== null, "dock 常驻挂载");
+
+      const childHandle = host.querySelector(
+        '[data-section="todo-at-hand"] [aria-label="拖动子任务 子任务"]',
+      ) as HTMLElement;
+      await act(async () => {
+        childHandle.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }));
+      });
+      // 拖拽中(dragging=true)坞容器本身可见,但一个药丸都不出——与手头根行拖起时的行为一致。
+      expect(dockEl()?.getAttribute("aria-hidden")).toBe("false");
+      expect(host.querySelectorAll('[data-testid="todo-dock-pill"]').length).toBe(0);
+
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", bubbles: true, cancelable: true }));
+      });
+      await waitForCondition(() => dockEl()?.getAttribute("aria-hidden") === "true", "松手即散");
+      await unmount(root);
+    } finally {
+      if (originalMatchMedia) Object.defineProperty(window, "matchMedia", originalMatchMedia);
+    }
+  });
 });

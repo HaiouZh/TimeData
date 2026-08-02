@@ -639,6 +639,19 @@ export function TodoPage() {
     // 查不到就当可落：满员与目标组失效本来就由写入侧兜，宁可假高亮也不假禁止。
     return task ? projectAssignBlock(task, 0) !== null : false;
   })();
+  /**
+   * 被拖子任务的父是否在手头。坞的判定层（`todoDockTargets`）只拿得到 `parent:<父id>` 这个
+   * 容器 id 字符串——收件箱子任务与手头子任务在这一层完全同形，分不出父在不在手头。
+   * 这里能查 `buckets.atHand` 才分得出来，算好了传给 `TodoDragDock`。
+   * 手头区整个区都不出坞（父行本就不出，见 `todoDockTargets` 对 `hand` 源恒返回 `[]`）：
+   * 子任务跟着一致——移出手头走 × 按钮，子任务要拿出来就往手头区空白处拖（升根站到手头）。
+   * 收件箱子任务的父不在 `buckets.atHand` 里，这里恒 false，坞行为不变。
+   */
+  const dragCandidateParentInHand: boolean = (() => {
+    const container = parseTodoContainerId(dragCandidateContainerId);
+    if (container?.kind !== "parent") return false;
+    return buckets.atHand.some((t) => t.id === container.parentId);
+  })();
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
@@ -1331,6 +1344,7 @@ export function TodoPage() {
             projects={selectableProjects}
             dropBlocked={dragDropBlocked}
             anchorLeftPx={dockAnchorLeftPx}
+            activeParentInHand={dragCandidateParentInHand}
           />
         )}
 
