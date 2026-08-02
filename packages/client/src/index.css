@@ -411,11 +411,37 @@ details[open] > summary .ts-collapse-caret {
      .stuck 由页面层在停止滚动后打上；多选态靠页面层跳过扫描来保持常显，CSS 不参与判断。
      行内时间戳占位、右键菜单最小宽见下。 */
   .quick-note-date-divider {
-    transition: opacity 300ms ease;
+    visibility: visible;
+    /* visibility 无延迟：摘掉 .stuck 时立刻回来，不等 300ms 才可点。 */
+    transition:
+      opacity 300ms ease,
+      visibility 0s linear 0s;
   }
+  /* 用 visibility 而不是 pointer-events 隐身：opacity:0 的元素仍在无障碍树里、仍可 Tab 聚焦，
+     键盘用户会落到一个完全看不见的按钮上；visibility:hidden 同时摘掉可聚焦性、可点击性和
+     无障碍树存在，语义才对。visibility 延迟 300ms 生效：淡出那 300ms 里元素还清晰可见，
+     用户伸手点它必须点得到（旧写法 pointer-events 立即生效，点击穿透到下面的气泡）。 */
   .quick-note-date-divider.stuck {
     opacity: 0;
-    pointer-events: none;
+    visibility: hidden;
+    transition:
+      opacity 300ms ease,
+      visibility 0s linear 300ms;
+  }
+  /* 逃生阀：键盘焦点已经落在里面（月历触发钮）时不隐身。靠的正是上面那 300ms 延迟——
+     真隐身之前这条就已经把 visibility 拉回来，焦点不会被浏览器 blur 掉。 */
+  .quick-note-date-divider.stuck:focus-within {
+    opacity: 1;
+    visibility: visible;
+  }
+  /* 减弱动效：隐身照常发生（重影仍要消除），只是不做渐变——同时把 visibility 的 300ms
+     延迟一并归零，否则会留下「已经看不见但还挡着」的空窗。 */
+  @media (prefers-reduced-motion: reduce) {
+    .quick-note-date-divider,
+    .quick-note-date-divider.stuck {
+      transition-duration: 0s;
+      transition-delay: 0s;
+    }
   }
   .quick-note-time-spacer {
     height: 1em;

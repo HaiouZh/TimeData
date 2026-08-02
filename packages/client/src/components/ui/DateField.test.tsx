@@ -119,4 +119,41 @@ describe("DateField", () => {
     await unmount(root);
   });
 
+  it("开着月历时被卸载会补发 onOpenChange(false)——否则调用方的单闩永久停在 true", async () => {
+    const onOpenChange = vi.fn();
+    const { host, root } = await renderDom(
+      createElement(DateField, { value: "2026-03-15", onChange: () => {}, ariaLabel: "选择日期", onOpenChange }),
+    );
+
+    await click(buttonByLabel(host, "选择日期"));
+    expect(onOpenChange.mock.calls).toEqual([[true]]);
+
+    // 这个字段可能挂在会随数据变动重建的列表行上（速记页每条日期分隔条各一个）：那一天的速记
+    // 被另一台设备删光时整行连同本组件一起卸载。不补发的话调用方的「日历开着」状态就冻死了。
+    await unmount(root);
+    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("关着月历被卸载时不多发 onOpenChange", async () => {
+    const onOpenChange = vi.fn();
+    const { root } = await renderDom(
+      createElement(DateField, { value: "2026-03-15", onChange: () => {}, ariaLabel: "选择日期", onOpenChange }),
+    );
+
+    await unmount(root);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("打开后正常关闭再卸载，只发一次 false（补发不重复触发）", async () => {
+    const onOpenChange = vi.fn();
+    const { host, root } = await renderDom(
+      createElement(DateField, { value: "2026-03-15", onChange: () => {}, ariaLabel: "选择日期", onOpenChange }),
+    );
+
+    await click(buttonByLabel(host, "选择日期"));
+    await click(buttonByLabel(host, "2026-03-20"));
+    await unmount(root);
+
+    expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
+  });
 });

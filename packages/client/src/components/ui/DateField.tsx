@@ -1,5 +1,5 @@
 import { CalendarBlank, X } from "@phosphor-icons/react";
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../Icon.js";
 import { MonthCalendar } from "./MonthCalendar.js";
 import { Sheet } from "./Sheet.js";
@@ -38,6 +38,24 @@ export function DateField({
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const valueDescriptionId = useId();
+  // 卸载补发 onOpenChange(false)：这个字段可能挂在会随数据变动重建的列表行上（速记页每条
+  // 日期分隔条各一个）。用户开着月历时那一天的速记被另一台设备删光 → 整行连同本组件一起卸载
+  // → onOpenChange(false) 永不触发 → 调用方的「日历开着」单闩永久停在 true，成了静默锁死
+  // 整套机制的暗开关（速记页表现为日期条再不淡出、导出/清理永远打在冻结那天上，只能刷新恢复）。
+  // 已卸载的字段其弹层必然也没了，补发对所有调用方都是正确语义。
+  // 经 ref 读最新的 open/onOpenChange：cleanup 只在卸载时跑一次，闭包直接读会冻结首渲染的值。
+  const openRef = useRef(open);
+  const onOpenChangeRef = useRef(onOpenChange);
+  useEffect(() => {
+    openRef.current = open;
+    onOpenChangeRef.current = onOpenChange;
+  });
+  useEffect(
+    () => () => {
+      if (openRef.current) onOpenChangeRef.current?.(false);
+    },
+    [],
+  );
   const displayValue = value ? (formatValue ? formatValue(value) : value) : placeholder;
   const accessibleValue = value ? `当前日期 ${value}` : placeholder;
 

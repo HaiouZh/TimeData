@@ -137,3 +137,37 @@ describe("index.css design tokens", () => {
     expect(webkitUses.length).toBe(1); // 仅 .wheel-scroll::-webkit-scrollbar 那一处
   });
 });
+
+// 这一组只能断言 CSS 文本，不能断言 getComputedStyle：页面级 jsdom 用例根本没加载 index.css
+// （vitest 不注入样式表），computed visibility 恒为默认值，写出来是永绿的假闸。文本闸弱在
+// 「不证明浏览器里真生效」，但它咬得住这三条会静默回潮的写法。
+describe("速记日期条隐身态（.quick-note-date-divider.stuck）", () => {
+  const block = css.slice(
+    css.indexOf(".quick-note-date-divider {"),
+    css.indexOf(".quick-note-time-spacer"),
+  );
+
+  it("用 visibility 隐身而不是 pointer-events：opacity:0 的元素仍可 Tab 聚焦、仍在无障碍树里", () => {
+    expect(block).toMatch(/\.quick-note-date-divider\.stuck\s*\{[^}]*visibility:\s*hidden;/s);
+    // pointer-events 立即生效而 opacity 走 300ms：淡出途中元素还清晰可见却点不到，点击穿透到气泡。
+    // 先剥注释——上面这条解释里就写着这个词，不剥的话闸恒红。
+    expect(block.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("pointer-events");
+  });
+
+  it("visibility 延迟 300ms 才隐身、摘类时无延迟立刻回来", () => {
+    expect(block).toMatch(/\.quick-note-date-divider\.stuck\s*\{[^}]*visibility 0s linear 300ms/s);
+    expect(block).toMatch(/\.quick-note-date-divider\s*\{[^}]*visibility 0s linear 0s/s);
+  });
+
+  it("键盘焦点落在里面时不隐身（逃生阀）", () => {
+    expect(block).toMatch(
+      /\.quick-note-date-divider\.stuck:focus-within\s*\{[^}]*opacity:\s*1;[^}]*visibility:\s*visible;/s,
+    );
+  });
+
+  it("减弱动效时过渡时长与延迟一并归零", () => {
+    expect(block).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[^@]*\.quick-note-date-divider[^@]*transition-duration:\s*0s;[^@]*transition-delay:\s*0s;/s,
+    );
+  });
+});
