@@ -35,6 +35,7 @@ import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { useActionToast } from "../hooks/useActionToast.ts";
 import { useEntryMutations } from "../hooks/useEntries.js";
+import { useKeyboardHeight } from "../hooks/useKeyboardHeight.ts";
 import { useLongPress } from "../hooks/useLongPress.ts";
 import { punchNow } from "../lib/punch.js";
 import { formatLocalClock, groupQuickNotesForDisplay, quickNoteAriaLabel } from "../lib/quickNoteDisplay.ts";
@@ -76,7 +77,6 @@ const SCROLL_TRIGGER_PX = 48;
 const INPUT_MAX_HEIGHT_PX = 160;
 const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
-const KEYBOARD_BOTTOM_GAP_THRESHOLD_PX = 80;
 const STATUS_AUTO_DISMISS_MS = 2400;
 const BUBBLE_HIDE_DELAY_MS = 1200;
 const SEARCH_RESULT_PAGE_SIZE = 100;
@@ -103,15 +103,6 @@ interface MenuTarget {
 function normalizeDateParam(value: string | null): string | null {
   if (!value || !isValidDateString(value)) return null;
   return value;
-}
-
-function isSoftKeyboardLikelyOpen(): boolean {
-  if (typeof window === "undefined") return false;
-  const viewport = window.visualViewport;
-  if (!viewport || window.innerHeight <= 0) return false;
-
-  const visualViewportBottomGap = window.innerHeight - viewport.height - viewport.offsetTop;
-  return visualViewportBottomGap > KEYBOARD_BOTTOM_GAP_THRESHOLD_PX;
 }
 
 export default function QuickNotesPage() {
@@ -145,9 +136,9 @@ export default function QuickNotesPage() {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
-  const [softKeyboardOpen, setSoftKeyboardOpen] = useState(false);
   // 宽屏（≥1024px）回车发送；窄屏（手机）回车交给 textarea 默认换行，靠「记录」按钮发送。
   const isWideScreen = useIsWideScreen();
+  const keyboardHeight = useKeyboardHeight();
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -192,7 +183,7 @@ export default function QuickNotesPage() {
   const timeline = useQuickNoteTimeline();
   const unsyncedQuickNoteIds = useUnsyncedQuickNoteIds();
   const pinnedNotes = useLiveQuery(() => listPinnedQuickNotes(), []) ?? [];
-  const inputInteractionActive = composerFocused || searchOpen || softKeyboardOpen;
+  const inputInteractionActive = composerFocused || searchOpen || keyboardHeight > 0;
   const navOffsetPx = !isWideScreen && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
   const bottomInsetPx = selectionMode || searchOpen ? COMPOSER_BOTTOM_GAP_PX : composerInsetPx;
   const displayItems = useMemo(
@@ -310,21 +301,6 @@ export default function QuickNotesPage() {
 
     setNavHidden(false);
   }, [inputInteractionActive, setNavHidden]);
-
-  useEffect(() => {
-    const viewport = typeof window === "undefined" ? undefined : window.visualViewport;
-    if (!viewport) return;
-
-    const handleViewportChange = () => setSoftKeyboardOpen(isSoftKeyboardLikelyOpen());
-    handleViewportChange();
-    viewport.addEventListener("resize", handleViewportChange);
-    viewport.addEventListener("scroll", handleViewportChange);
-
-    return () => {
-      viewport.removeEventListener("resize", handleViewportChange);
-      viewport.removeEventListener("scroll", handleViewportChange);
-    };
-  }, []);
 
   // 多选与搜索互斥；置顶浮层在多选态保留（QN-09「通」：选中的置顶必须可见可反选）。
   useEffect(() => {
