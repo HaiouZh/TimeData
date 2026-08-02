@@ -51,7 +51,7 @@ import {
   toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
-import { nestTaskUnderParent } from "../lib/taskNesting.js";
+import { nestTaskUnderParent, promoteTaskToHand } from "../lib/taskNesting.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
@@ -828,6 +828,18 @@ export function TodoPage() {
           await revealProjectHome(promoted);
           break;
         }
+        case "promote-to-hand": {
+          // 落位到手头区末尾：与 promote-to-root 的算法同形（取目标容器现有 max+1）。
+          const handTasks = buckets.atHand.filter((t) => !t.done);
+          const sortOrder = handTasks.length > 0 ? Math.max(...handTasks.map((t) => t.sortOrder)) + 1 : 0;
+          try {
+            await promoteTaskToHand(activeId, sortOrder);
+          } catch (error) {
+            console.error("[todo] 升根到手头失败:", error);
+            showActionToast({ message: error instanceof Error ? error.message : "抓到手头失败" });
+          }
+          break;
+        }
         case "schedule-root": {
           if (op.pool === "today") {
             await scheduleTask(activeId, localDateString(new Date()));
@@ -933,6 +945,8 @@ export function TodoPage() {
         const sessionId = buckets.handSession?.id;
         if (sessionId) updateSessionNote(sessionId, note).catch((error) => console.error("场便签保存失败", error));
       }}
+      pendingTotal={buckets.atHandPendingTotal}
+      indentTargetId={indentTargetId}
     />
   );
 
