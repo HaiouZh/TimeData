@@ -905,12 +905,23 @@ describe("QuickNotesPage", () => {
     await unmount(root);
   });
 
-  it("顶部日期选择器跳转到选中的日期", async () => {
+  it("日期条跳转到选中的日期", async () => {
+    // header 常驻跳转框已收掉（Task 5），入口改为当前日期条自身；先给目标日种一条速记
+    // 才有分隔条可点——沿用「主线日期条」describe 里同一套 trigger 选择器。
+    await db.quickNotes.add({
+      id: "jump-anchor",
+      text: "跳转锚点",
+      occurredAt: "2026-06-20T04:00:00.000Z",
+      createdAt: "2026-06-20T04:00:00.000Z",
+      updatedAt: "2026-06-20T04:00:00.000Z",
+    });
     const { host, root } = await renderPage("/quick-notes?date=2026-06-20");
 
-    const dateButton = host.querySelector('button[aria-label="跳转日期"]');
-    if (!(dateButton instanceof HTMLButtonElement)) throw new Error("missing jump date button");
-    await click(dateButton);
+    const trigger = host.querySelector<HTMLButtonElement>(
+      '[data-local-date="2026-06-20"] button[aria-label*="点击跳转到其他日期"]',
+    );
+    if (!trigger) throw new Error("missing jump date trigger");
+    await click(trigger);
     await click(document.body.querySelector('button[aria-label="2026-06-01"]'));
     await flush();
 
@@ -943,7 +954,9 @@ describe("QuickNotesPage", () => {
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
 
     try {
-      await click(host.querySelector('button[aria-label="跳转日期"]'));
+      await click(
+        host.querySelector('[data-local-date="2026-06-01"] button[aria-label*="点击跳转到其他日期"]'),
+      );
       await click(document.body.querySelector('button[aria-label="2026-06-20"]'));
       await flush();
 
@@ -982,7 +995,9 @@ describe("QuickNotesPage", () => {
       // 防假绿：确认 jsdom 保存了赋值，后面的归零断言才有意义
       expect(list.scrollTop).toBe(480);
 
-      await click(host.querySelector('button[aria-label="跳转日期"]'));
+      await click(
+        host.querySelector('[data-local-date="2026-06-01"] button[aria-label*="点击跳转到其他日期"]'),
+      );
       await click(document.body.querySelector('button[aria-label="2026-06-10"]'));
       await flush();
 
@@ -2317,6 +2332,58 @@ describe("停手隐身", () => {
     expect(host.querySelector<HTMLElement>("[data-date-label]")?.classList.contains("stuck")).toBe(false);
 
     vi.useRealTimers();
+    await unmount(root);
+  });
+}, PAGE_TEST_TIMEOUT_MS);
+
+describe("viewingDate 接管导出/清理", () => {
+  it("停手后导出/清理的目标日期跟随眼前那天，不再是「今天」", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "v1",
+        text: "六月一日",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "v2",
+        text: "六月二日",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    vi.useRealTimers();
+
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
+
+    const labels = Array.from(host.querySelectorAll("button")).map((b) => b.textContent ?? "");
+    expect(labels.some((text) => text.includes("6月1日"))).toBe(true);
+    expect(labels.some((text) => text.includes("导出今天"))).toBe(false);
+
+    await unmount(root);
+  });
+
+  it("header 不再有常驻的「跳转日期」输入框", async () => {
+    const { host, root } = await renderPage();
+    expect(host.querySelector('[aria-label="跳转日期"]')).toBeNull();
     await unmount(root);
   });
 }, PAGE_TEST_TIMEOUT_MS);

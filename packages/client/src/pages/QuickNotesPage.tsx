@@ -112,7 +112,13 @@ export default function QuickNotesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const today = getDateString(new Date());
   const queryDate = normalizeDateParam(searchParams.get("date"));
-  const [jumpDate, setJumpDate] = useState(queryDate ?? today);
+  // 值本身已不再被读取（header 跳转框已收掉，Task 5），只留 setJumpDate 驱动
+  // ?date= 深链同步与 timeline.jumpToDate；保留状态但用 _ 前缀避免 biome 误报未使用。
+  const [_jumpDate, setJumpDate] = useState(queryDate ?? today);
+  // 「你眼前正在看的那天」——由停手扫描更新，导出/清理的唯一目标。
+  // 与 jumpDate（最后一次显式跳转的意图，负责 URL ?date= 同步）刻意分开：
+  // 让它跟随滚动写 URL 会把浏览历史刷爆。
+  const [viewingDate, setViewingDate] = useState(queryDate ?? today);
   const [draftText, setDraftText] = useState(() => readComposerDraft());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -277,10 +283,10 @@ export default function QuickNotesPage() {
       clearTimeout(timer);
     };
   }, []);
-  const jumpDateLabel = formatJumpDateLabel(jumpDate, today);
-  const exportMarkdownLabel = jumpDateLabel === "今天" ? "导出今天 Markdown" : `导出 ${jumpDateLabel} Markdown`;
-  const exportJsonLabel = jumpDateLabel === "今天" ? "导出今天 JSON" : `导出 ${jumpDateLabel} JSON`;
-  const deleteDateLabel = jumpDateLabel === "今天" ? "清理今天" : `清理 ${jumpDateLabel}`;
+  const viewingDateLabel = formatJumpDateLabel(viewingDate, today);
+  const exportMarkdownLabel = viewingDateLabel === "今天" ? "导出今天 Markdown" : `导出 ${viewingDateLabel} Markdown`;
+  const exportJsonLabel = viewingDateLabel === "今天" ? "导出今天 JSON" : `导出 ${viewingDateLabel} JSON`;
+  const deleteDateLabel = viewingDateLabel === "今天" ? "清理今天" : `清理 ${viewingDateLabel}`;
 
   const longPress = useLongPress(({ x, y }) => {
     const note = pressedNoteRef.current;
@@ -506,6 +512,9 @@ export default function QuickNotesPage() {
     if (!stuck) return;
     stuck.node.classList.add("stuck");
     stuckElRef.current = stuck.node;
+    // 搜索态不更新：导出/清理在搜索态不可达，跟着搜索结果乱跳只会在退出搜索后留下错的目标日。
+    // 用上面从 scanGuardRef 解构出的 searching，不是 state 上的 searchOpen。
+    if (!searching) setViewingDate(stuck.localDate);
   }
 
   function clearStuckDivider() {
@@ -541,6 +550,7 @@ export default function QuickNotesPage() {
       stickBottomRef.current = true;
       pendingJumpRef.current = null;
       setJumpDate(today);
+      setViewingDate(today);
       setSearchParams({});
       void timeline.resetToLatest();
     }
@@ -549,6 +559,7 @@ export default function QuickNotesPage() {
   // 「回到最新」的唯一实现：浮标按钮与历史视图保存后的 toast 共用，避免两处各写一遍。
   function jumpToLatest() {
     setJumpDate(today);
+    setViewingDate(today);
     setSearchParams({});
     stickBottomRef.current = true;
     pendingJumpRef.current = null;
@@ -899,6 +910,7 @@ export default function QuickNotesPage() {
   function handleJumpDateChange(nextDate: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
     setJumpDate(nextDate);
+    setViewingDate(nextDate);
     setSearchParams(nextDate === today ? {} : { date: nextDate });
     stickBottomRef.current = false;
     pendingJumpRef.current = { localDate: nextDate, utcStart: localDateTimeToUtc(`${nextDate}T00:00:00`) };
@@ -910,9 +922,9 @@ export default function QuickNotesPage() {
     setError(null);
     setStatus(null);
     try {
-      const backup = await exportQuickNotesJsonByDate(jumpDate);
+      const backup = await exportQuickNotesJsonByDate(viewingDate);
       if (backup.notes.length === 0) {
-        showStatus(`${jumpDateLabel} 没有速记，未导出。`);
+        showStatus(`${viewingDateLabel} 没有速记，未导出。`);
         return;
       }
       await downloadQuickNotesJson(backup);
@@ -926,13 +938,13 @@ export default function QuickNotesPage() {
     setError(null);
     setStatus(null);
     try {
-      const notes = await listQuickNotesByDate(jumpDate);
+      const notes = await listQuickNotesByDate(viewingDate);
       if (notes.length === 0) {
-        showStatus(`${jumpDateLabel} 没有速记，未导出。`);
+        showStatus(`${viewingDateLabel} 没有速记，未导出。`);
         return;
       }
-      const markdown = quickNotesMarkdown(`速记 ${jumpDate}`, notes);
-      await downloadQuickNotesMarkdown(markdown, jumpDate);
+      const markdown = quickNotesMarkdown(`速记 ${viewingDate}`, notes);
+      await downloadQuickNotesMarkdown(markdown, viewingDate);
       showStatus(`已导出 ${notes.length} 条速记 Markdown。`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "导出失败");
@@ -940,19 +952,19 @@ export default function QuickNotesPage() {
   }
 
   async function handleDeleteDate() {
-    const dayNotes = await listQuickNotesByRange(jumpDate, jumpDate);
+    const dayNotes = await listQuickNotesByRange(viewingDate, viewingDate);
     const pinnedCount = dayNotes.filter((note) => note.pinned === true).length;
     const deletableCount = dayNotes.length - pinnedCount;
     if (deletableCount === 0) {
-      showStatus(`${jumpDateLabel} 没有可清理的速记。`);
+      showStatus(`${viewingDateLabel} 没有可清理的速记。`);
       return;
     }
 
     const confirmed = await confirm({
-      title: `删除 ${jumpDateLabel} 的速记？`,
+      title: `删除 ${viewingDateLabel} 的速记？`,
       body: (
         <div className="space-y-1">
-          {jumpDate !== today && <p className="font-medium text-danger">这不是今天，你正要删除 {jumpDateLabel}（{jumpDate}）的记录。</p>}
+          {viewingDate !== today && <p className="font-medium text-danger">这不是今天，你正要删除 {viewingDateLabel}（{viewingDate}）的记录。</p>}
           <p>
             将删除 <strong>{deletableCount}</strong> 条速记
             {pinnedCount > 0 ? `（另有 ${pinnedCount} 条置顶会保留）` : ""}，不影响时间记录。
@@ -966,7 +978,7 @@ export default function QuickNotesPage() {
     });
     if (!confirmed) return;
 
-    const result = await deleteQuickNotesByRange(jumpDate, jumpDate);
+    const result = await deleteQuickNotesByRange(viewingDate, viewingDate);
     showStatus(`已删除 ${result.deleted} 条速记。`);
   }
 
@@ -1154,19 +1166,6 @@ export default function QuickNotesPage() {
                 </span>
               )}
             </div>
-            <div className="w-36 shrink-0 sm:w-44">
-              <DateField
-                value={jumpDate}
-                ariaLabel="跳转日期"
-                onChange={(next) => {
-                  if (next) handleJumpDateChange(next);
-                }}
-                portal
-                className="min-h-9 rounded-card border-border bg-surface px-2 py-1 shadow-elev1 td-text-caption sm:min-h-11 sm:px-3 sm:py-2"
-                formatValue={(value) => <span className="td-time font-medium">{value}</span>}
-              />
-            </div>
-
             <Link
               to="/diary"
               aria-label="日记"
