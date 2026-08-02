@@ -54,3 +54,6 @@ Thumbs.db
 
 # iOS native project is CI-generated (see packages/mobile/README.md); never track
 packages/mobile/ios/
+
+# Rust / Tauri 构建产物
+target/
