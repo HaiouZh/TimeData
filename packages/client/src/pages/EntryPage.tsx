@@ -2,6 +2,8 @@ import { isUtcIso, localDateTimeToUtc, utcToLocalDateTime } from "@timedata/shar
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import EntryForm from "../components/EntryForm.tsx";
+import { PageBackButton } from "../components/ui/PageBackButton.js";
+import { LoadingState } from "../components/ui/LoadingState.js";
 import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
@@ -115,7 +117,7 @@ export default function EntryPage() {
   }
 
   if (isEdit && existingEntry === undefined) {
-    return <div className="p-6 text-center text-ink-3">正在加载记录...</div>;
+    return <LoadingState label="正在加载记录..." className="p-6" />;
   }
 
   if (isEdit && !existingEntry) {
@@ -196,9 +198,7 @@ export default function EntryPage() {
   return (
     <div className="min-h-full bg-page">
       <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-page/95 px-3 py-2 backdrop-blur">
-        <button onClick={() => goBack(fallbackBackPath)} className="px-3 py-1.5 rounded-ctl bg-surface-hover td-text-caption text-ink-2">
-          返回
-        </button>
+        <PageBackButton onClick={() => goBack(fallbackBackPath)} />
         <h1 className="td-text-title">{existingEntry ? "编辑记录" : "新增记录"}</h1>
       </header>
       <main className="p-3">

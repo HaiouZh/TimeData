@@ -1,9 +1,10 @@
-import { ArrowLeft, CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { ErrorBoundary } from "../../../components/ErrorBoundary.js";
 import { Icon } from "../../../components/Icon.js";
 import { DateField } from "../../../components/ui/DateField.js";
+import { PageBackButton } from "../../../components/ui/PageBackButton.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
 import { resolveDiaryDate } from "../../../lib/diary/diaryDate.js";
@@ -152,14 +153,7 @@ export default function DiaryReviewPage() {
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
       <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 backdrop-blur">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            type="button"
-            aria-label="返回"
-            onClick={handleBack}
-            className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
-          >
-            <Icon icon={ArrowLeft} size={16} />
-          </button>
+          <PageBackButton onClick={handleBack} />
           <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记回顾</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3">

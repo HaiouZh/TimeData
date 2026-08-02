@@ -4,6 +4,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
+import { PageBackButton } from "../components/ui/PageBackButton.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
@@ -107,14 +108,7 @@ export default function SearchPage() {
     <div className="min-h-full bg-page pb-6 text-ink">
       <header className="bg-surface px-3 py-2">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="返回"
-            onClick={() => navigate(-1)}
-            className="grid size-11 shrink-0 place-items-center rounded-pill text-ink-2 hover:bg-surface-hover hover:text-ink"
-          >
-            <Icon icon={CaretLeft} size={18} />
-          </button>
+          <PageBackButton onClick={() => navigate(-1)} />
           <h2 className="shrink-0 td-text-title">搜索</h2>
           <button
             type="button"

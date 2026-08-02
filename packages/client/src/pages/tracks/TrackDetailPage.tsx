@@ -1,8 +1,10 @@
-import { ArrowLeft, Check, PencilSimple, X } from "@phosphor-icons/react";
+import { Check, PencilSimple, X } from "@phosphor-icons/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { Icon } from "../../components/Icon.js";
+import { LoadingState } from "../../components/ui/LoadingState.js";
+import { PageBackButton } from "../../components/ui/PageBackButton.js";
 import { useTrackActionTags } from "../../lib/settings/trackActionTagsSetting.js";
 import {
   appendUserStep,
@@ -140,12 +142,11 @@ export default function TrackDetailPage() {
   return (
     <div className="min-h-full bg-page text-ink">
       <div className="mx-auto w-full max-w-3xl px-4 py-4 pb-24">
-        <Link to="/tracks" className="mb-3 inline-flex items-center gap-1 td-text-label text-ink-3 hover:text-ink">
-          <Icon icon={ArrowLeft} size={16} />
-          轨道
-        </Link>
+        <div className="mb-3">
+          <PageBackButton to="/tracks" label="轨道" />
+        </div>
         {track === undefined ? (
-          <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">正在加载...</p>
+          <LoadingState label="正在加载..." className="rounded-card bg-surface px-3 py-6" />
         ) : track === null ? (
           <p className="rounded-card bg-surface px-3 py-6 text-center td-text-body text-ink-3">轨道不存在</p>
         ) : (

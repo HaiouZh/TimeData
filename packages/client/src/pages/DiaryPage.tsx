@@ -1,8 +1,10 @@
-import { ArrowLeft, ClockCounterClockwise } from "@phosphor-icons/react";
+import { ClockCounterClockwise } from "@phosphor-icons/react";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import DateNav from "../components/DateNav.js";
 import { Icon } from "../components/Icon.js";
+import { PageBackButton } from "../components/ui/PageBackButton.js";
+import { LoadingState } from "../components/ui/LoadingState.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useNowMinute } from "../hooks/useNowMinute.js";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard.js";
@@ -454,14 +456,7 @@ export default function DiaryPage() {
       {dialog}
       <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 backdrop-blur">
         <div className="flex items-center gap-3 px-4 py-3">
-          <button
-            type="button"
-            aria-label="返回"
-            onClick={handleBack}
-            className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
-          >
-            <Icon icon={ArrowLeft} size={16} />
-          </button>
+          <PageBackButton onClick={handleBack} />
           <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记</h1>
           <Link
             to="/diary/review"
@@ -533,7 +528,7 @@ export default function DiaryPage() {
       )}
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center td-text-body text-ink-3">正在加载...</div>
+        <LoadingState label="正在加载..." className="flex-1" />
       ) : loadFailed ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center td-text-body text-ink-3">
           加载失败，请检查网络后重试

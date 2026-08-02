@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router";
-import { ArrowLeft } from "@phosphor-icons/react";
-import { Icon } from "../../components/Icon.js";
+import { PageBackButton } from "../../components/ui/PageBackButton.js";
 
 interface SettingsDetailPageProps {
   title: string;
@@ -19,13 +17,7 @@ export default function SettingsDetailPage({
   return (
     <div className="min-h-full bg-page text-ink">
       <div className="sticky top-0 z-20 border-b border-border bg-page/80 px-4 py-3 backdrop-blur">
-        <Link
-          to={backTo}
-          className="inline-flex items-center gap-1.5 td-text-label text-ink-3 transition-colors hover:text-ink-2"
-        >
-          <Icon icon={ArrowLeft} size={16} />
-          {backLabel}
-        </Link>
+        <PageBackButton to={backTo} label={backLabel} />
         <h2 className="mt-1.5 td-text-title text-ink">{title}</h2>
       </div>
       <div className="space-y-5 p-4">{children}</div>
