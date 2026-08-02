@@ -28,6 +28,8 @@ export interface AtHandSectionProps {
   pendingTotal?: number;
   /** 缩进候选父：命中该 id 的行渲染高亮环。 */
   indentTargetId?: string | null;
+  /** 收纳后要展开的父行 id（透传 TaskRow，落点反馈）。只作用于未完成区。 */
+  revealChildren?: { id: string; nonce: number } | null;
 }
 
 function sessionDateLabel(iso: string): string {
@@ -125,6 +127,7 @@ export function AtHandSection({
   onUpdateNote,
   pendingTotal,
   indentTargetId,
+  revealChildren,
 }: AtHandSectionProps) {
   if (session === null && resumable.length === 0) return null;
 
@@ -205,6 +208,7 @@ export function AtHandSection({
                     pool="inbox"
                     childrenModeOverride="draggable"
                     indentTargetActive={indentTargetId === task.id}
+                    revealChildren={revealChildren}
                     dragHandle={handle}
                     extraAction={releaseAction}
                     onToggle={onToggle}
@@ -230,6 +234,10 @@ export function AtHandSection({
                     key={task.id}
                     task={task}
                     pool="completed"
+                    // 父行完成不代理子任务：库里它们仍是 done:false，没有这条 override 会落到
+                    // pool==="completed" 的默认 readonly（见 TaskRow childModeForPool），
+                    // 那些子任务会永久拿不到勾选框/编辑入口。static 允许勾选/编辑/删除但不参与拖拽。
+                    childrenModeOverride="static"
                     onToggle={onToggle}
                     onEdit={onEdit}
                     onCopyTitle={onCopyTitle}

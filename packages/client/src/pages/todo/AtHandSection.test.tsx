@@ -4,7 +4,9 @@ import { DndContext } from "@dnd-kit/core";
 import type { Session, Task } from "@timedata/shared";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { addTask, createChildTask } from "../../lib/tasks.js";
 import type { ResumableSession } from "../../lib/sessions.js";
+import { resetDb } from "../../test/dbReset.js";
 import { click, renderDom, unmount } from "../../test/domHarness.js";
 import { AtHandSection } from "./AtHandSection.js";
 
@@ -54,6 +56,7 @@ const handlers = {
 beforeEach(() => {
   vi.clearAllMocks();
 });
+beforeEach(resetDb);
 
 describe("AtHandSection", () => {
   it("活跃场：渲染未完任务标题、本场已完成折叠计数、散场按钮；点散场调 onEndSession", async () => {
@@ -392,6 +395,67 @@ describe("手头区父子收纳", () => {
       />,
     );
     expect(host.querySelectorAll(".ring-accent")).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("revealChildren 命中未完成行时展开该行的子任务面板（透传 TaskRow，A1）", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection
+        atHand={[task({ id: "a", title: "A" }), task({ id: "b", title: "B" })]}
+        session={session({})}
+        resumable={[]}
+        revealChildren={{ id: "a", nonce: 1 }}
+        {...handlers}
+      />,
+    );
+    // 命中行展开后（draggable 模式、0 子任务时 autoDraft 直开草稿行）渲染子任务创建输入框；
+    // 未命中的 b 仍收着，不渲染。
+    expect(host.querySelectorAll('[data-testid="child-create-draft-row"]')).toHaveLength(1);
+    await unmount(root);
+  });
+
+  it("不传 revealChildren 或不命中任何行时不自动展开", async () => {
+    const { host, root } = await renderSection(
+      <AtHandSection atHand={[task({ id: "a", title: "A" })]} session={session({})} resumable={[]} {...handlers} />,
+    );
+    expect(host.querySelector('button[aria-label="添加子任务"]')).toBeNull();
+    await unmount(root);
+  });
+});
+
+describe("手头区「本场已完成」子任务可操作性（A2）", () => {
+  it("父任务已完成但子任务未完时，子任务渲染可勾选复选框，不再是只读快照", async () => {
+    const parent = await addTask({ title: "已完成的父任务" });
+    const child = await createChildTask(parent.id, "还没做完的子任务");
+    const done = task({ id: parent.id, title: parent.title, done: true });
+
+    const { host, root } = await renderSection(
+      <AtHandSection atHand={[done]} session={session({})} resumable={[]} {...handlers} />,
+    );
+
+    // 「本场已完成」是原生 <details>，未展开时子节点仍在 DOM 里（只是视觉隐藏），
+    // 不需要先点开 summary 就能拿到行节点。
+
+    // 展开父行左 2/5 命中区，进入子任务层
+    const row = host.querySelector('[aria-label^="打开"]') as HTMLElement;
+    expect(row).toBeTruthy();
+    row.getBoundingClientRect = () =>
+      ({ width: 200, height: 40, top: 0, left: 0, right: 200, bottom: 40, x: 0, y: 0, toJSON: () => "" }) as DOMRect;
+    const { act } = await import("react");
+    await act(async () => row.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 5 })));
+
+    // InlineChildren 自己另开一份 useTaskChildren(parentId) liveQuery，与 TaskRow 那份不同实例，
+    // 送达拍数不定：轮询等它真正把子任务查回来，而不是单拍 settle。
+    let checkbox: Element | null = null;
+    for (let i = 0; i < 20 && !checkbox; i += 1) {
+      checkbox = host.querySelector(`input[aria-label="完成子任务 ${child.title}"]`);
+      if (!checkbox) await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    }
+
+    // readonly 模式下不会渲染这枚复选框（ReadonlyChildRow 无 Checkbox）；
+    // 有它就证明 childrenModeOverride="static" 生效，子任务不再是永久只读。
+    expect(checkbox).toBeTruthy();
+
     await unmount(root);
   });
 });

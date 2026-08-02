@@ -1805,4 +1805,19 @@ describe("atHandPendingTotal", () => {
     await addTask({ title: "游离任务" });
     expect((await listTasks()).atHandPendingTotal).toBe(0);
   });
+
+  it("只数手头未完根任务名下的子任务，不含手头外根任务的子任务", async () => {
+    // R1 在手头、带 1 条未完子任务；R2 不在手头、也带 1 条未完子任务——
+    // 过滤条件 pendingRootIds.has(t.parentId) 被删掉时两条子任务都会被计入，本例会漏抓。
+    const r1 = await addTask({ title: "R1" });
+    const r1Child = await addTask({ title: "R1 子任务" });
+    const r2 = await addTask({ title: "R2" });
+    const r2Child = await addTask({ title: "R2 子任务" });
+    await grabTaskToHand(r1.id);
+    await moveTaskToParent(r1Child.id, r1.id);
+    await moveTaskToParent(r2Child.id, r2.id);
+
+    // R1（1）+ r1Child（1）= 2；r2/r2Child 都不在手头，不应计入。
+    expect((await listTasks()).atHandPendingTotal).toBe(2);
+  });
 });

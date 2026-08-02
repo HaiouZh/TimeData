@@ -813,8 +813,22 @@ export function TodoPage() {
           break;
         }
         case "move-to-parent": {
-          await nestTaskUnderParent(activeId, op.parentId);
-          setRevealChildren((prev) => ({ id: op.parentId, nonce: (prev?.nonce ?? 0) + 1 }));
+          try {
+            await nestTaskUnderParent(activeId, op.parentId);
+            setRevealChildren((prev) => ({ id: op.parentId, nonce: (prev?.nonce ?? 0) + 1 }));
+          } catch (error) {
+            console.error("[todo] 收纳为子任务失败:", error);
+            // 内部错误码不直接弹给用户：目前唯二可达的是 moveTaskToParentInCurrentTransaction
+            // 的两条 throw（见 lib/tasks.ts），没有映射的错误码兜底成一句通俗文案。
+            const code = error instanceof Error ? error.message : null;
+            const message =
+              code === "CANNOT_DEMOTE_ROOT_WITH_CHILDREN"
+                ? "带子任务的任务不能收纳成子任务"
+                : code === "CANNOT_NEST_BEYOND_ONE_LEVEL"
+                  ? "只支持一层嵌套，不能收纳到子任务下"
+                  : "收纳失败，稍后再试";
+            showActionToast({ message });
+          }
           break;
         }
         case "promote-to-root": {
@@ -947,6 +961,7 @@ export function TodoPage() {
       }}
       pendingTotal={buckets.atHandPendingTotal}
       indentTargetId={indentTargetId}
+      revealChildren={revealChildren}
     />
   );
 
