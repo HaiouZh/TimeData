@@ -41,7 +41,6 @@ import {
   deleteTaskCascade,
   listTasks,
   markOccurrenceSkipped,
-  moveTaskToParent,
   persistTaskOrder,
   promoteToRoot,
   reorderChildren,
@@ -52,6 +51,7 @@ import {
   toggleTaskDone,
   unscheduleTask,
 } from "../lib/tasks.js";
+import { nestTaskUnderParent } from "../lib/taskNesting.js";
 import { goalBarTaskIds, landsInCollapsedProjectGroup, projectChipIndex } from "../lib/tasks/projectZone.js";
 import { applyOptimisticOrder } from "../lib/tasks/reorderDisplay.js";
 import { splitInboxByGravity } from "../lib/tasks/gravity.js";
@@ -816,7 +816,7 @@ export function TodoPage() {
           break;
         }
         case "move-to-parent": {
-          await moveTaskToParent(activeId, op.parentId);
+          await nestTaskUnderParent(activeId, op.parentId);
           setRevealChildren((prev) => ({ id: op.parentId, nonce: (prev?.nonce ?? 0) + 1 }));
           break;
         }
