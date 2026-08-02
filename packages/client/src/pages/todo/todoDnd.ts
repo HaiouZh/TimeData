@@ -41,8 +41,6 @@ export function resolveIndentLevel(
 export const clampTodoIndentPreview: Modifier = ({ transform, active }) => {
   const containerId = (active?.data.current as { containerId?: string } | undefined)?.containerId ?? "";
   const container = parseTodoContainerId(containerId);
-  // 手头行不能缩进（区内只有平级重排），横向预览夹 0，避免误导性的跟手虚影。
-  if (container?.kind === "hand") return { ...transform, x: 0 };
   const isChild = container?.kind === "parent";
   const x = isChild
     ? Math.min(0, Math.max(transform.x, -TODO_CHILD_INDENT_PX))

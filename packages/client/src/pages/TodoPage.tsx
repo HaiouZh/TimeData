@@ -660,10 +660,6 @@ export function TodoPage() {
   }
 
   function handleDragMove(event: DragMoveEvent): void {
-    // 手头行不参与缩进：indentRef 恒 root，handleDragOver 的 child 分支进不去——
-    // 否则横拖手头行悬停在池行上会亮起缩进候选高亮，松手却因落点恒 null 无任何反馈。
-    const activeContainerId = (event.active.data.current as { containerId?: string } | undefined)?.containerId ?? "";
-    if (parseTodoContainerId(activeContainerId)?.kind === "hand") return;
     indentRef.current = resolveIndentLevel(event.delta.x, indentRef.current, indentBaseRef.current);
   }
 

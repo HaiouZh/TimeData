@@ -770,12 +770,18 @@ describe("hand 容器（手头区拖拽排序）", () => {
     ).toEqual({ kind: "invalid", target: { kind: "project", goalId: "g1" } });
   });
 
-  it("clampTodoIndentPreview 对 hand 容器夹 x 到 0（手头行不能缩进）", () => {
+  it("clampTodoIndentPreview 对 hand 容器按 root 基线夹 [0, 28]", () => {
     const handActive = { data: { current: { containerId: "hand" } } };
     const result = clampTodoIndentPreview({
       transform: { x: 40, y: 5, scaleX: 1, scaleY: 1 },
       active: handActive,
     } as Parameters<Modifier>[0]);
-    expect(result.x).toBe(0);
+    expect(result.x).toBe(TODO_CHILD_INDENT_PX);
+
+    const leftward = clampTodoIndentPreview({
+      transform: { x: -40, y: 5, scaleX: 1, scaleY: 1 },
+      active: handActive,
+    } as Parameters<Modifier>[0]);
+    expect(leftward.x).toBe(0);
   });
 });
