@@ -7,8 +7,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WindowEvent};
+use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
-use shell::{resolve_close_behavior, resolve_tray_action, CloseBehavior, TrayAction};
+use shell::{
+    resolve_close_behavior, resolve_tray_action, should_apply_default_autostart, should_show_on_startup,
+    CloseBehavior, TrayAction,
+};
 
 /// 托盘「退出」置上这个标记后再关窗，让 CloseRequested 放行。
 static QUITTING: AtomicBool = AtomicBool::new(false);
@@ -23,6 +27,10 @@ fn show_main_window(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "打开 TimeData", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
@@ -53,6 +61,25 @@ fn main() {
                     }
                 })
                 .build(app)?;
+
+            // 开机自启默认开，但只做一次：写个标记文件记住做过了。
+            // 不按 is_enabled() 判断——那样用户手动关掉后下次启动会被重新开上，永远关不掉。
+            let marker = app.path().app_config_dir()?.join("autostart-initialized");
+            if should_apply_default_autostart(marker.exists()) {
+                let _ = app.autolaunch().enable();
+                if let Some(dir) = marker.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
+                let _ = std::fs::write(&marker, "1");
+            }
+
+            // 被开机自启拉起时不弹窗口，直接躲托盘。
+            let args: Vec<String> = std::env::args().collect();
+            if !should_show_on_startup(&args) {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
 
             Ok(())
         })
