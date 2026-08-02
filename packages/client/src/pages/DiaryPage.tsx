@@ -429,7 +429,7 @@ export default function DiaryPage() {
   function handleBack() {
     // 脏态确认由 useUnsavedChangesGuard 统一处理，这里不再自己弹一次（否则会连弹两个）
     // 无 app 内历史时（书签 / PWA 快捷方式 / 硬刷新直接落地）navigate(-1) 是 no-op，
-    // 兜底回速记页，与安卓返回键 androidBackNavigation.ts 的 /diary 分支保持一致。
+    // 兜底回速记页，与安卓返回键 backNavigation.ts 的 /diary 分支保持一致。
     // 读挂载时冻结的 ref，不现读 location.key（见该 ref 声明处的注释——切日期会打破它）。
     if (landedWithoutHistoryRef.current) navigate("/quick-notes", { replace: true });
     else navigate(-1);

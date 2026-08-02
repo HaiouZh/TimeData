@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeAndroidBackAction, resolveAndroidBackAction } from "./androidBackNavigation.ts";
+import { executeAndroidBackAction, hasParentRoute, resolveAndroidBackAction } from "./backNavigation.ts";
 
 describe("resolveAndroidBackAction", () => {
   it("returns settings parent for settings detail pages", () => {
@@ -33,7 +33,6 @@ describe("resolveAndroidBackAction", () => {
   it("returns home from secondary tab pages", () => {
     expect(resolveAndroidBackAction("/quick-notes")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/stats")).toEqual({ type: "navigate", to: "/", replace: true });
-    expect(resolveAndroidBackAction("/stats/time")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/categories")).toEqual({ type: "navigate", to: "/", replace: true });
     expect(resolveAndroidBackAction("/settings")).toEqual({ type: "navigate", to: "/", replace: true });
   });
@@ -129,5 +128,52 @@ describe("executeAndroidBackAction", () => {
 
     expect(exitApp).toHaveBeenCalledOnce();
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe("补齐的漏网子页（改前一律落兜底回时间轴）", () => {
+  it("日记回顾回日记页", () => {
+    expect(resolveAndroidBackAction("/diary/review")).toEqual({ type: "navigate", to: "/diary", replace: true });
+  });
+
+  it("时间统计与待办统计回统计页", () => {
+    expect(resolveAndroidBackAction("/stats/time")).toEqual({ type: "navigate", to: "/stats", replace: true });
+    expect(resolveAndroidBackAction("/stats/todo")).toEqual({ type: "navigate", to: "/stats", replace: true });
+  });
+
+  it("日记设置与待办统计布局设置回设置页", () => {
+    expect(resolveAndroidBackAction("/settings/diary")).toEqual({ type: "navigate", to: "/settings", replace: true });
+    expect(resolveAndroidBackAction("/settings/todo-stats-layout")).toEqual({
+      type: "navigate",
+      to: "/settings",
+      replace: true,
+    });
+  });
+});
+
+describe("hasParentRoute", () => {
+  it("层级子页为真", () => {
+    for (const p of [
+      "/entries/new",
+      "/entries/e1/edit",
+      "/search",
+      "/diary",
+      "/diary/review",
+      "/tracks/t1",
+      "/goals/g1",
+      "/stats/time",
+      "/stats/todo",
+      "/settings/data",
+      "/settings/categories",
+      "/settings/categories/c1",
+    ]) {
+      expect(hasParentRoute(p), p).toBe(true);
+    }
+  });
+
+  it("tab 主页与首页为假", () => {
+    for (const p of ["/", "/quick-notes", "/todo", "/stats", "/settings", "/tracks", "/goals", "/dev/styleguide"]) {
+      expect(hasParentRoute(p), p).toBe(false);
+    }
   });
 });
