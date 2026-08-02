@@ -1325,7 +1325,7 @@ export default function QuickNotesPage() {
                     return (
                       <div key={item.key} data-search-date={item.localDate} className="flex items-center gap-3 pt-1">
                         <div className="h-px flex-1 bg-border" />
-                        <div className="rounded-pill border border-border bg-surface px-3 py-1 td-text-caption font-medium text-ink-3">
+                        <div className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3">
                           {item.label}
                         </div>
                         <div className="h-px flex-1 bg-border" />
@@ -1412,7 +1412,7 @@ export default function QuickNotesPage() {
                   return (
                     <div key={item.key} data-date-label={item.label} data-local-date={item.localDate} className="flex items-center gap-3 pt-1">
                       <div className="h-px flex-1 bg-border" />
-                      <div className="rounded-pill border border-border bg-surface px-3 py-1 td-text-caption font-medium text-ink-3">
+                      <div className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3">
                         {item.label}
                       </div>
                       <div className="h-px flex-1 bg-border" />
