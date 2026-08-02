@@ -395,6 +395,43 @@ details[open] > summary .ts-collapse-caret {
   .td-safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  /* 触控热区语义档：lg = 44px 触控下限（页面级操作），md = 36px（常规行内），
+     sm = 32px（紧凑行内）。固定正方形，配 flex 居中装图标。 */
+  .hotarea-sm {
+    width: 2rem;
+    height: 2rem;
+  }
+  .hotarea-md {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  .hotarea-lg {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  /* 内容色点：6px 圆点，承载分类 / 项目 / 状态身份色（styleguide 6px 规范）。
+     颜色由调用方经 style 或 bg 类提供，本类只锁尺寸与形状。 */
+  .content-dot {
+    display: inline-block;
+    height: 0.375rem;
+    width: 0.375rem;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+    transition: transform 120ms ease-out;
+  }
+  .content-dot:hover {
+    transform: scale(1.5);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .content-dot {
+      transition: none;
+    }
+    .content-dot:hover {
+      transform: none;
+    }
+  }  }
 }
 
 /*

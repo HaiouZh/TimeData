@@ -181,7 +181,7 @@ export default function DiaryReviewPage() {
             type="button"
             aria-label="上一段"
             onClick={() => step(-1)}
-            className="flex size-8 items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
+            className="flex hotarea-sm items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
           >
             <Icon icon={CaretLeft} size={16} />
           </button>
@@ -189,7 +189,7 @@ export default function DiaryReviewPage() {
             type="button"
             aria-label="下一段"
             onClick={() => step(1)}
-            className="flex size-8 items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
+            className="flex hotarea-sm items-center justify-center rounded-pill text-ink-2 transition hover:bg-surface-hover hover:text-ink"
           >
             <Icon icon={CaretRight} size={16} />
           </button>

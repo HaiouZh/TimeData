@@ -201,7 +201,7 @@ export default function EntryPage() {
         <PageBackButton onClick={() => goBack(fallbackBackPath)} />
         <h1 className="td-text-title">{existingEntry ? "编辑记录" : "新增记录"}</h1>
       </header>
-      <main className="p-3">
+      <main className="mx-auto w-full max-w-2xl p-3">
         <EntryForm
           startTime={startTime}
           endTime={endTime}

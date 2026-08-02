@@ -147,7 +147,7 @@ export default function TimeStatsPage() {
   );
 
   return (
-    <div className="min-h-full space-y-4 bg-page px-3.5 pb-6 pt-4 text-ink sm:px-6">
+    <div className="mx-auto min-h-full w-full max-w-2xl space-y-4 bg-page px-3.5 pb-6 pt-4 text-ink sm:px-6">
       <header className="rounded-card border border-border bg-surface p-4 shadow-elev1">
         <div className="flex items-start justify-between gap-3">
           <div>

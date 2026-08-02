@@ -121,7 +121,7 @@ export default function SearchPage() {
             {resolvedCategoryId && (
               <span
                 aria-hidden="true"
-                className="size-2.5 shrink-0 rounded-pill"
+                className="content-dot rounded-pill"
                 style={{ backgroundColor: getCategoryColor(resolvedCategoryId) }}
               />
             )}
@@ -242,7 +242,7 @@ export default function SearchPage() {
                   </span>
                   <span
                     aria-hidden="true"
-                    className="size-2.5 shrink-0 rounded-pill"
+                    className="content-dot rounded-pill"
                     style={{ backgroundColor: getCategoryColor(entry.categoryId) }}
                   />
                   <span className="truncate text-ink">{getCategoryPath(entry.categoryId)}</span>
