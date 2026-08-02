@@ -68,7 +68,7 @@ describe("DayGroupedList", () => {
     await click(host.querySelector('[aria-label^="显示更多"]') as HTMLButtonElement);
 
     const collapse = host.querySelector('[aria-label="收起"]') as HTMLButtonElement;
-    expect(collapse.style.bottom).toBe("calc(124px + env(safe-area-inset-bottom))");
+    expect(collapse.style.bottom).toBe("calc(124px + var(--safe-bottom))");
 
     await unmount(root);
   });

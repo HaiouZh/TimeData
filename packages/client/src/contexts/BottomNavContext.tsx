@@ -2,8 +2,8 @@ import { createContext, type ReactNode, useContext, useMemo, useState } from "re
 
 /**
  * 底部导航**内容区**高度（不含底部安全区 inset），与 MobileBottomNav 的内容高同源。
- * nav 实际渲染总高 = 本值 + env(safe-area-inset-bottom)（iPhone 可达 83px）；
- * 要与 nav 对齐的消费方需自行追加 env(safe-area-inset-bottom)。
+ * nav 实际渲染总高 = 本值 + var(--safe-bottom)（iPhone 可达 83px；安全区变量机制见 index.css）；
+ * 要与 nav 对齐的消费方需自行追加 var(--safe-bottom)。
  */
 export const BOTTOM_NAV_HEIGHT_PX = 49;
 

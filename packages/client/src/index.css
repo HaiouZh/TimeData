@@ -95,6 +95,22 @@
   --shadow-galaxy-star-core-wide: 0 0 34px rgba(155,188,255,0.2);
 }
 
+/* 安全区变量：默认取 env(safe-area-inset-*)，各让位点统一经 var(--safe-*) 消费（不散写裸 env()）。
+   Android 壳由 MainActivity 在原生层做唯一让位（systemBars+displayCutout 的 inset padding），而 WebView
+   里 env() 会照常报非零值、与原生 padding 叠加成双倍留白，故按 <html data-platform="android"> 一键清零。 */
+:root {
+  --safe-top: env(safe-area-inset-top);
+  --safe-right: env(safe-area-inset-right);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left: env(safe-area-inset-left);
+}
+html[data-platform="android"] {
+  --safe-top: 0px;
+  --safe-right: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+}
+
 @keyframes overlay-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sheet-rise { from { transform: translateY(6%); opacity: 0.5; } to { transform: none; opacity: 1; } }
 .sheet-overlay { animation: overlay-fade 150ms ease-out; }
@@ -383,17 +399,18 @@ details[open] > summary .ts-collapse-caret {
   }
 
   /* 安全区（刘海 / 圆角 / 手势条）：仅随 viewport-fit=cover 生效，桌面 env() 为 0 零变化。
+     值经 :root 的 --safe-* 变量流入（Android 壳清零，见上方变量定义）。
      只挂根容器——它是非滚动层、自带 bg-page，padding 区域由自身底色绘制，内容永远不钻
      进刘海底下；bottom 留给底部导航批次用。 */
   .td-safe-top {
-    padding-top: env(safe-area-inset-top);
+    padding-top: var(--safe-top);
   }
   .td-safe-x {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
   }
   .td-safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: var(--safe-bottom);
   }
 
   /* 触控热区语义档：lg = 44px 触控下限（页面级操作），md = 36px（常规行内），

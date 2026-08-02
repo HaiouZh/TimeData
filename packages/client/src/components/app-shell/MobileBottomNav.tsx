@@ -48,9 +48,10 @@ export function MobileBottomNav() {
       // 内边距用 calc 包裹而非裸 env()：与浮层批次同一写法，jsdom 的 CSSOM 也能保留该值供测试断言。
       // env(safe-area-inset-bottom) 未定义的环境（Firefox 桌面 / 旧 WebView）里两个 calc 都失效：
       // height 落回 auto（内容高 ≈49px）、paddingBottom 落回 0——恰是批次前的桌面行为，无需兜底类。
+      // 安全区经 var(--safe-bottom) 流入（:root 默认 env()，Android 壳清零），见 index.css。
       style={{
-        height: hidden ? 0 : `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`,
-        paddingBottom: hidden ? 0 : "calc(0px + env(safe-area-inset-bottom))",
+        height: hidden ? 0 : `calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`,
+        paddingBottom: hidden ? 0 : "calc(0px + var(--safe-bottom))",
       }}
     >
       {items.map((item) => (

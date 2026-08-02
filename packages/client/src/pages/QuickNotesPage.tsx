@@ -1279,8 +1279,8 @@ export default function QuickNotesPage() {
         style={
           {
             "--pad-bottom": `${bottomInsetPx}px`,
-            paddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
-            scrollPaddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
+            paddingBottom: `calc(${bottomInsetPx}px + var(--safe-bottom))`,
+            scrollPaddingBottom: `calc(${bottomInsetPx}px + var(--safe-bottom))`,
           } as CSSProperties
         }
         aria-label="速记列表"
@@ -1468,7 +1468,7 @@ export default function QuickNotesPage() {
           style={
             {
               "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
-              bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))`,
+              bottom: `calc(${navOffsetPx + bottomInsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1486,7 +1486,7 @@ export default function QuickNotesPage() {
           style={
             {
               "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
-              bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))`,
+              bottom: `calc(${navOffsetPx + bottomInsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1499,7 +1499,7 @@ export default function QuickNotesPage() {
           style={
             {
               "--bottom-offset": `${navOffsetPx + bottomInsetPx}px`,
-              bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))`,
+              bottom: `calc(${navOffsetPx + bottomInsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1516,7 +1516,7 @@ export default function QuickNotesPage() {
           style={
             {
               "--bottom-offset": `${navOffsetPx}px`,
-              bottom: `calc(${navOffsetPx}px + env(safe-area-inset-bottom))`,
+              bottom: `calc(${navOffsetPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
           onSubmit={(event) => {

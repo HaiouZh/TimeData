@@ -74,8 +74,8 @@ describe("MobileBottomNav", () => {
     const nav = host.querySelector('nav[aria-label="主导航"]') as HTMLElement | null;
     expect(nav).not.toBeNull();
     // 可见态基线：总高 = 内容高 + 底部安全区，内边距 = 安全区（nav 背景铺满到屏幕最底）
-    expect(nav?.style.height).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`);
-    expect(nav?.style.paddingBottom).toBe("calc(0px + env(safe-area-inset-bottom))");
+    expect(nav?.style.height).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
+    expect(nav?.style.paddingBottom).toBe("calc(0px + var(--safe-bottom))");
 
     await click(host.querySelector("button"));
     // border-box 下高度与内边距必须同时归零，否则 padding 会撑出 inset 高的一条空带

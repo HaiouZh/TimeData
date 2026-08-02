@@ -54,7 +54,7 @@ describe("AppShell bottom nav hide", () => {
     const nav = host.querySelector('nav[aria-label="主导航"]');
     expect(nav).toBeInstanceOf(HTMLElement);
     // 显示态：占据固定高度（内容高 + 底部安全区，桌面 env()=0 时即原 49px）
-    expect((nav as HTMLElement).style.height).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`);
+    expect((nav as HTMLElement).style.height).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + var(--safe-bottom))`);
     // 用 transform 隐藏不会释放 flex 占位，必须靠塌缩高度
     expect((nav as HTMLElement).className).not.toContain("translate-y");
 

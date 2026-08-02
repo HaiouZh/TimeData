@@ -104,13 +104,14 @@ export function TodoComposer({
       // 下移自身高度（translateY 100%）滑出视口；bottom 的瞬跳发生在元素已移出屏幕外，回弹时不可见。
       // 上滑则随底栏一起归位。
       // zIndex backdrop(40) 压过任务行内部交互层，低于详情抽屉/系统弹层。
-      // env(safe-area-inset-bottom) 未定义的环境（Firefox 桌面 bug 1505842 / 旧 WebView）里 calc 整条
+      // 安全区经 var(--safe-bottom) 流入（:root 默认 env()，Android 壳清零，见 index.css）。
+      // env() 未定义的环境（Firefox 桌面 bug 1505842 / 旧 WebView）里 calc 整条
       // 声明在计算值时失效、内联 bottom 被丢弃，由兜底类还原批次前的纯数值位置（0 或 49px，即
       // --bottom-offset）；桌面浏览器 env()=0，calc 有效时内联样式优先，兜底类不生效。
       style={
         {
           "--bottom-offset": `${bottomOffsetPx}px`,
-          bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom))`,
+          bottom: `calc(${bottomOffsetPx}px + var(--safe-bottom))`,
           transform: hiddenByScroll ? "translateY(100%)" : "translateY(0)",
           zIndex: Z.backdrop,
         } as CSSProperties

@@ -1198,7 +1198,7 @@ export function TodoPage() {
           style={
             {
               "--pad-bottom": `${contentBottomPaddingPx}px`,
-              paddingBottom: `calc(${contentBottomPaddingPx}px + env(safe-area-inset-bottom))`,
+              paddingBottom: `calc(${contentBottomPaddingPx}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >
@@ -1244,7 +1244,7 @@ export function TodoPage() {
           style={
             {
               "--bottom-offset": `${composerAvoidancePx + 8}px`,
-              bottom: `calc(${composerAvoidancePx + 8}px + env(safe-area-inset-bottom))`,
+              bottom: `calc(${composerAvoidancePx + 8}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >

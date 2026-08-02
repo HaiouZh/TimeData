@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { createBrowserRouter, useLocation } from "react-router";
 import { RouterProvider } from "react-router/dom";
+import { Capacitor } from "@capacitor/core";
 import AndroidBackButtonHandler from "./components/AndroidBackButtonHandler.tsx";
 import AppUpdatePrompt from "./components/AppUpdatePrompt.tsx";
 import { AppRoutes } from "./components/app-shell/AppRoutes.tsx";
@@ -15,6 +16,14 @@ import { useDocumentTitle } from "./hooks/useDocumentTitle.ts";
 import { useFavicon } from "./hooks/useFavicon.ts";
 import { useHideBottomNavOnScroll } from "./hooks/useHideBottomNavOnScroll.ts";
 import { useIsWideScreen } from "./lib/useIsWideScreen.ts";
+
+// Android 壳由 MainActivity 在原生层做唯一安全区让位（systemBars+displayCutout 的 inset padding），
+// 而 WebView 里的 env(safe-area-inset-*) 会照常报非零值、与原生 padding 叠加成双倍留白，故在首帧前
+// 给 <html> 打平台标记，让 CSS 把 --safe-* 清零（见 index.css）。模块顶层执行：早于 React 渲染无闪跳；
+// 非 Android（web / iOS）不设标记、行为不变。
+if (typeof document !== "undefined" && Capacitor.getPlatform() === "android") {
+  document.documentElement.dataset.platform = "android";
+}
 
 export function AppShell() {
   const location = useLocation();

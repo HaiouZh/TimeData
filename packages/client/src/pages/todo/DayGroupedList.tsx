@@ -65,7 +65,7 @@ export function DayGroupedList({
           style={
             {
               "--bottom-offset": `${stickyBottomOffsetPx + 4}px`,
-              bottom: `calc(${stickyBottomOffsetPx + 4}px + env(safe-area-inset-bottom))`,
+              bottom: `calc(${stickyBottomOffsetPx + 4}px + var(--safe-bottom))`,
             } as CSSProperties
           }
         >

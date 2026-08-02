@@ -72,7 +72,7 @@ Android 生产 Manifest 显式设置 `android:usesCleartextTraffic="false"`，�
 
 `packages/mobile/capacitor.config.ts` 是两个平台共用的：`android` 段与 `server` 段归本文档，`ios` 段（背景色）与 iOS 构建链路归 [deployment/ios-ipa](ios-ipa.md)。`server.androidScheme` 只作用于 Android；iOS 走 Capacitor 默认的 `capacitor://localhost`，两个壳的本地库不同源。`android.backgroundColor` 与 `ios.backgroundColor` 均为 `#0e1320`（= client `--color-page`），原生背景露出时（启动瞬间、旋转过渡、滚动越界回弹）与网页底色一致。
 
-Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上显式应用 `systemBars` + `displayCutout` 的 inset padding，让 Capacitor WebView 避开状态栏、导航栏和刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。
+Android 壳入口是 `packages/mobile/android/app/src/main/java/app/timedata/mobile/MainActivity.java`。Activity 启动时关闭 decor 自动适配，并在根内容视图上显式应用 `systemBars` + `displayCutout` 的 inset padding，让 Capacitor WebView 避开状态栏、导航栏和刘海区域，避免 APK 在全面屏设备上把页面顶部绘制到通知栏下面。**该原生 padding 是 Android 壳唯一的让位机制**：edge-to-edge 下 WebView 的 `env(safe-area-inset-*)` 会照常报非零值、与原生 padding 叠加成双倍留白，故 client 在 Android 壳把 `<html data-platform="android">` 标记置上，CSS 随之把网页层 `--safe-*` 安全区变量全部清零（机制见 [design-language](../design-language.md) §1 / §4 第 11 条），iOS / 桌面 / PWA 仍走 `env()` 值。
 
 ## 3. 本地生成 release keystore
 

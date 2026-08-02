@@ -54,7 +54,7 @@ export function TodoSelectionBar({
       style={
         {
           "--bottom-offset": `${bottomOffsetPx}px`,
-          bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom))`,
+          bottom: `calc(${bottomOffsetPx}px + var(--safe-bottom))`,
           zIndex: Z.backdrop,
         } as CSSProperties
       }

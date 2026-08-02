@@ -693,7 +693,7 @@ describe("TodoPage", () => {
 
     const collapse = inboxSection?.querySelector('[aria-label="收起"]') as HTMLButtonElement | null;
     expect(collapse).not.toBeNull();
-    expect(collapse?.style.bottom).toBe("calc(4px + env(safe-area-inset-bottom))");
+    expect(collapse?.style.bottom).toBe("calc(4px + var(--safe-bottom))");
 
     await unmount(root);
   });
@@ -2005,7 +2005,7 @@ describe("TodoPage 多选态", () => {
     await waitForText(host, "买灯");
     const dockBottom = () => {
       const raw = (host.querySelector('[data-testid="todo-toast-dock"]') as HTMLElement).style.bottom;
-      const match = /^calc\((\d+)px \+ env\(safe-area-inset-bottom\)\)$/.exec(raw);
+      const match = /^calc\((\d+)px \+ var\(--safe-bottom\)\)$/.exec(raw);
       return match ? Number.parseInt(match[1], 10) : Number.NaN;
     };
 
