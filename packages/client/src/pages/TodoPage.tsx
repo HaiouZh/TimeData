@@ -195,7 +195,9 @@ export function TodoPage() {
       const children = await db.tasks.filter((task) => task.parentId !== null).toArray();
       return new Set(children.map((child) => child.parentId).filter((id): id is string => Boolean(id)));
     }, []) ?? new Set<string>();
-  const navOffsetPx = !wide && !navHidden ? BOTTOM_NAV_HEIGHT_PX : 0;
+  // 键盘弹起时 nav 藏在键盘后面、不该再占避让空间，故加 keyboardHeightPx===0 守卫；键盘收起
+  // （桌面浏览器恒如此）时 = 原公式，逐值不变，安全不变量守住（fix round 1，见 task-3-report.md）。
+  const navOffsetPx = !wide && !navHidden && keyboardHeightPx === 0 ? BOTTOM_NAV_HEIGHT_PX : 0;
   const composerHiddenByScroll = !wide && navHidden;
   /**
    * 底部**实际占位者**的高度。照 QuickNotesPage 的 `bottomInsetPx` 那条路子：避让量按「此刻底部
@@ -222,6 +224,11 @@ export function TodoPage() {
   // navOffsetPx)，与合成前的批 1 值逐值相等，见 bottomInset.test.ts 回归护栏。
   const composerAvoidancePx = composeBottomInset({ barHeightPx: bottomBarHeightPx, navOffsetPx, keyboardHeightPx });
   const contentBottomPaddingPx = Math.max(192, composerAvoidancePx + TODO_COMPOSER_CONTENT_GAP_PX);
+  // TodoComposer/TodoSelectionBar 自身的 bottom 定位（fix round 1）：这两个元素就是底栏本身，不需要
+  // 再叠一层 barHeightPx，故传 0；navOffsetPx 已被上方守卫（键盘弹起时归 0），键盘弹起时
+  // composerBarBottomPx = keyboardHeightPx，输入条稳贴键盘上沿；keyboard=0 时 = navOffsetPx，与本轮前
+  // 完全一致（TodoSelectionBar 只在多选态出现，那时不会有文字输入、keyboardHeightPx 恒 0，故它实际不变）。
+  const composerBarBottomPx = composeBottomInset({ barHeightPx: 0, navOffsetPx, keyboardHeightPx });
   const deepLinkedTask = useLiveQuery(
     async () => {
       if (!taskIdParam) return null;
@@ -1278,7 +1285,7 @@ export function TodoPage() {
           <TodoSelectionBar
             selectedCount={selectedIds.size}
             projects={selectableProjects}
-            bottomOffsetPx={navOffsetPx}
+            bottomOffsetPx={composerBarBottomPx}
             onCreate={(title) => void submitCreateProject(title)}
             onAssign={(goalId) => void submitAssignToProject(goalId)}
             onCancel={exitSelection}
@@ -1298,7 +1305,7 @@ export function TodoPage() {
             onToggleMode={toggleMode}
             onToggleNotMode={toggleNotMode}
             onClear={clearTags}
-            bottomOffsetPx={navOffsetPx}
+            bottomOffsetPx={composerBarBottomPx}
             hiddenByScroll={composerHiddenByScroll}
             formRef={composerRef}
           />
