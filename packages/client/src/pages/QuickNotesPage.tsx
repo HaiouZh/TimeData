@@ -179,6 +179,11 @@ export default function QuickNotesPage() {
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 当前被打上隐身类的日期条。滚动一开始就要摘掉它，粘住那条才会随 transition 淡入。
   const stuckElRef = useRef<HTMLElement | null>(null);
+  // 「下一次 scroll 事件不排停手扫描」的一次性标志位，只由落点定位 effect 竖起。
+  // 必须是标志位而不是「滚动之前清一次定时器」：scrollIntoView / scrollTop 赋值触发的 scroll
+  // 事件由浏览器在滚动真正发生**之后**异步派发，handleScroll 那时才排下新定时器——要压的正是
+  // 那一个，滚之前清的是别人的旧定时器，压不到它。见落点 effect 与 handleScroll 尾部。
+  const skipNextScrollScanRef = useRef(false);
   // 停手定时器的回调捕获的是「创建定时器那一次渲染」的闭包：用户在那 1.2 秒内打开日历、
   // 进多选、开搜索或点开「更多操作」，回调里读到的仍是旧值，照样会打上隐身类 / 改写
   // viewingDate——日历失去锚点、「选中这天」被藏掉、菜单里的目标日在用户眼皮底下换掉。
@@ -389,6 +394,12 @@ export default function QuickNotesPage() {
     pendingJumpRef.current = null;
     const el = scrollRef.current;
     if (!el) return;
+    // 这次滚动是程序化落点，不算「用户在浏览」：viewingDate 刚被 setViewingDateExplicitly
+    // 显式设成目标日，紧随其后那次 scroll 排下的停手扫描会在 1.2 秒后按落点位置把它悄悄改掉。
+    // 目标日有速记时无害（落点就是目标日），**目标日一条速记都没有时就错了**：落点退回列表顶
+    // （那里是别的天），用户全程没滚过，「清理 6月8日」却静默变成「清理 6月7日」，而导出侧没有
+    // 二次确认，直接落下另一天的文件。用户真正手动滚动时会重新排扫描，跟随随即恢复。
+    skipNextScrollScanRef.current = true;
     const divider = el.querySelector(`[data-local-date="${pending.localDate}"]`);
     if (divider instanceof HTMLElement) divider.scrollIntoView({ block: "start" });
     else el.scrollTop = 0;
@@ -487,6 +498,14 @@ export default function QuickNotesPage() {
 
     clearStuckDivider();
     if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+    // 程序化落点滚动派发的这一次 scroll：日期条照常淡入，但不排扫描——见 skipNextScrollScanRef。
+    // 标志位若因落点位置恰好没变而没被消费（浏览器不派发 scroll），它顶多让用户之后的第一次
+    // scroll 少排一次扫描；手指还在动就会有下一次 scroll 接着排，跟随不会真的停掉。
+    if (skipNextScrollScanRef.current) {
+      skipNextScrollScanRef.current = false;
+      stuckTimerRef.current = null;
+      return;
+    }
     stuckTimerRef.current = setTimeout(() => {
       stuckTimerRef.current = null;
       scanStuckDivider();
@@ -547,9 +566,9 @@ export default function QuickNotesPage() {
    * 于是去扫主线并把刚设成今天的 viewingDate 改成别的天——用户根本没滚过主线，「清理今天」
    * 却变成「清理 6月X日」）。
    *
-   * 只清「写入之前」那个，不额外压制写入之后由程序化滚动排下的新扫描：那些扫描反映的是落定后
-   * 的真实位置，且与本次显式目标一致（jumpToLatest 滚到底 = 最新那天、日历跳转把目标日分隔条
-   * 滚到贴顶 = 目标日、退出搜索 resetToLatest 同理），压制它反而会掐掉「跟随滚动」这条正常语义。
+   * 这里只清「写入之前」那个。写入**之后**由程序化落点滚动排下的新扫描不归它管，也清不到
+   * （那次 scroll 是浏览器异步派发的，此刻还没发生）——那一支由 skipNextScrollScanRef 在落点
+   * 定位 effect 里单独压制，理由见那里：目标日没有速记时落点是别的天，跟随扫描会改错。
    */
   function setViewingDateExplicitly(nextDate: string) {
     if (stuckTimerRef.current) {

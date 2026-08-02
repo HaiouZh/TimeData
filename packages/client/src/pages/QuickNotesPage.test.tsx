@@ -2319,6 +2319,145 @@ describe("停手隐身", () => {
     await unmount(root);
   });
 
+  it("滑动途中每次 scroll 都重排定时器，不是各排各的陆续 fire", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "db1",
+        text: "防抖第一天",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "db2",
+        text: "防抖第二天",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    // 手指还在动：第二次 scroll 必须把上一次排下的定时器清掉再重排。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    // 忘了 clearTimeout 的实现：第一次 scroll 那个定时器已在累计 1200ms 处 fire 过，这里就已隐身。
+    // 退化后果是滑动途中日期条闪烁 + 全程反复 setState，正是这条防抖分支要消灭的东西。
+    expect(dividers[0].classList.contains("stuck")).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(900);
+    });
+    // 从最后一次 scroll 起算满 1.2 秒才隐身。
+    expect(dividers[0].classList.contains("stuck")).toBe(true);
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+
+  it("搜索态停手后粘住的搜索日期条也隐身——不与同日结果行重影", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "sd1",
+        text: "可搜索六月一日",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "sd2",
+        text: "可搜索六月二日",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+
+    await click(composerButton(host, "搜索速记"));
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await typeIntoSearch(searchInput(host), "可搜索");
+    await waitForSearchDebounce();
+
+    const searchDividers = Array.from(host.querySelectorAll<HTMLElement>("[data-search-date]"));
+    expect(searchDividers.length).toBe(2);
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    for (const [index, node] of searchDividers.entries()) {
+      node.getBoundingClientRect = () => ({ top: index === 0 ? -10 : 300, height: 28 }) as DOMRect;
+    }
+
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    vi.useRealTimers();
+
+    // 扫描把选择器塌成 "[data-date-label]" 的实现在搜索态一个节点都选不到，粘顶那条永远不淡出。
+    expect(searchDividers[0].classList.contains("stuck")).toBe(true);
+    expect(searchDividers[1].classList.contains("stuck")).toBe(false);
+
+    await unmount(root);
+  });
+
+  it("先滚出隐身再进多选：残留的隐身类必须摘掉，否则「选中这天」跟着隐身", async () => {
+    await db.quickNotes.add({
+      id: "sw1",
+      text: "模式切换样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const divider = host.querySelector<HTMLElement>("[data-date-label]");
+    if (!divider) throw new Error("missing date divider");
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    divider.getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    vi.useRealTimers();
+    expect(divider.classList.contains("stuck")).toBe(true);
+
+    // 已经隐身之后再进多选（既有那条多选用例是先进多选再滚，走不到这一支）。
+    await openMenu(host, "模式切换样本");
+    await click(menuItem(host, "选择"));
+
+    // React 按 key 复用**同一个** DOM 节点、className 字符串也没变，所以 React 不会替你重写它——
+    // 模式切换那条 effect 不摘类，新渲染出来的「选中这天」按钮就跟着一起隐身且点不到。
+    expect(host.querySelector<HTMLElement>("[data-date-label]")).toBe(divider);
+    expect(divider.classList.contains("stuck")).toBe(false);
+
+    await unmount(root);
+  });
+
   it("多选态下粘住的日期条不隐身——「选中这天」必须点得到", async () => {
     await db.quickNotes.add({
       id: "m1",
@@ -2464,7 +2603,9 @@ describe("viewingDate 接管导出/清理", () => {
 
     await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
 
-    const labels = Array.from(host.querySelectorAll("button")).map((b) => b.textContent ?? "");
+    // 只认菜单项：host 里所有 button 也包括日期分隔条自身的 DateField trigger，它的 textContent
+    // 恒等于「6月1日」，用全量 button 收文案会让这条断言恒绿（扫描根本没写 viewingDate 也照过）。
+    const labels = Array.from(host.querySelectorAll('button[role="menuitem"]')).map((b) => b.textContent ?? "");
     expect(labels.some((text) => text.includes("6月1日"))).toBe(true);
     expect(labels.some((text) => text.includes("导出今天"))).toBe(false);
 
@@ -2595,6 +2736,170 @@ describe("viewingDate 接管导出/清理", () => {
     expect(after.some((text) => text.includes("6月1日"))).toBe(false);
 
     await unmount(root);
+  });
+
+  it("跳到没有速记的那天：落点回列表顶，停手 1.2 秒后目标日仍是它", async () => {
+    // 显式跳转之后还会发生一次**程序化**落点滚动，浏览器在滚完之后才异步派发 scroll，
+    // handleScroll 那时才排下扫描——setViewingDateExplicitly 清的是写入之前那个，压不到它。
+    // 目标日有速记时无害（落点就是目标日），一条都没有时落点退回列表顶（别的天的内容），
+    // 用户全程没滚过，1.2 秒后「清理 6月8日」静默变成「清理 6月7日」，而导出没有二次确认。
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn();
+    await db.quickNotes.bulkAdd([
+      {
+        id: "d7",
+        text: "六月七日",
+        occurredAt: "2026-06-07T04:00:00.000Z",
+        createdAt: "2026-06-07T04:00:00.000Z",
+        updatedAt: "2026-06-07T04:00:00.000Z",
+      },
+      {
+        id: "d10",
+        text: "六月十日",
+        occurredAt: "2026-06-10T04:00:00.000Z",
+        createdAt: "2026-06-10T04:00:00.000Z",
+        updatedAt: "2026-06-10T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-10");
+
+    try {
+      await click(
+        host.querySelector('[data-local-date="2026-06-10"] button[aria-label*="点击跳转到其他日期"]'),
+      );
+      await click(document.body.querySelector('button[aria-label="2026-06-08"]'));
+      await flush();
+
+      const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+      if (!list) throw new Error("missing quick notes list");
+      list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      // jsdom 不会替程序化滚动派发 scroll，这里手动补上浏览器那一次（异步、滚动之后）。
+      await act(async () => {
+        list.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      await flush();
+
+      // 落点回顶顺带触发 loadOlder，6月7 那条随之进窗口——正是「列表顶是别的天」这个前提。
+      const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+      expect(dividers[0]?.dataset.localDate).toBe("2026-06-07");
+      for (const [index, node] of dividers.entries()) {
+        node.getBoundingClientRect = () => ({ top: index === 0 ? -10 : 300, height: 28 }) as DOMRect;
+      }
+
+      await act(async () => {
+        vi.advanceTimersByTime(1_500);
+      });
+      vi.useRealTimers();
+
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+      expect(items).toContain("清理 6月8日");
+      expect(items.some((text) => text.includes("6月7日"))).toBe(false);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      vi.useRealTimers();
+      await unmount(root);
+    }
+  });
+
+  it("日期条跳转把导出/清理的目标日换成选中那天", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn();
+    await db.quickNotes.bulkAdd([
+      {
+        id: "j1",
+        text: "六月一日",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "j2",
+        text: "六月二日",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+
+    try {
+      await click(
+        host.querySelector('[data-local-date="2026-06-01"] button[aria-label*="点击跳转到其他日期"]'),
+      );
+      await click(document.body.querySelector('button[aria-label="2026-06-02"]'));
+      await flush();
+
+      // 跳转只换 URL 不换 viewingDate 的实现：菜单仍写「清理 6月1日」，按下去删的是另一天。
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+      expect(items).toContain("清理 6月2日");
+      expect(items.some((text) => text.includes("6月1日"))).toBe(false);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      await unmount(root);
+    }
+  });
+
+  it("搜索结果定位到某天后，导出/清理的目标日跟着换到那天", async () => {
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = vi.fn();
+    const target = await addQuickNote("西瓜 目标", { occurredAt: "2026-06-01T04:00:00.000Z" });
+    await addQuickNote("今天无关", {});
+    const { host, root } = await renderPage();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      await click(composerButton(host, "搜索速记"));
+      await typeIntoSearch(searchInput(host), "西瓜");
+      await waitForSearchDebounce();
+      await click(locateButtonIn(host.querySelector(`[data-note-id="${target.id}"]`)));
+      vi.useRealTimers();
+
+      // 定位跳到 6月1日 却不改 viewingDate 的实现：导出/清理仍打在进搜索前那天（今天）。
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+      expect(items).toContain("清理 6月1日");
+      expect(items).not.toContain("清理今天");
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      vi.useRealTimers();
+      await unmount(root);
+    }
+  });
+
+  it("「回到最新」把导出/清理的目标日拉回今天", async () => {
+    // 满 50 条同日 + 一条更新的，jumpToDate 才会离开「最新」窗口，发速记后才给「回到最新」入口。
+    await db.quickNotes.bulkAdd(
+      Array.from({ length: 50 }, (_, index) => {
+        const at = `2026-06-01T04:${String(index).padStart(2, "0")}:00.000Z`;
+        return { id: `old-${index}`, text: `旧记录 ${index}`, occurredAt: at, createdAt: at, updatedAt: at };
+      }),
+    );
+    await db.quickNotes.add({
+      id: "newer",
+      text: "更新的一条",
+      occurredAt: "2026-06-20T04:00:00.000Z",
+      createdAt: "2026-06-20T04:00:00.000Z",
+      updatedAt: "2026-06-20T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
+
+    try {
+      await typeInto(input(host), "在历史里记一条");
+      await click(composerButton(host, "记录速记"));
+      await click(lastButtonByText(host, "回到最新"));
+
+      // 不显式归位的实现：人已经回到最新，导出/清理却还停在 6月1日。
+      await click(host.querySelector('button[aria-label="更多操作"]'));
+      const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+      expect(items).toContain("清理今天");
+      expect(items.some((text) => text.includes("6月1日"))).toBe(false);
+    } finally {
+      await unmount(root);
+    }
   });
 
   it("header 不再有常驻的「跳转日期」输入框", async () => {
