@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Icon } from "../components/Icon.js";
 import { PageBackButton } from "../components/ui/PageBackButton.js";
+import { PageHeader } from "../components/ui/PageHeader.js";
 import { SegmentedControl } from "../components/ui/SegmentedControl.js";
 import { db } from "../db/index.ts";
 import { useCategories } from "../hooks/useCategories.ts";
@@ -107,42 +108,45 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-full bg-page pb-6 text-ink">
-      <header className="bg-surface px-3 py-2">
-        <div className="flex items-center gap-2">
-          <PageBackButton onClick={() => navigate(-1)} />
-          <h2 className="shrink-0 td-text-title">搜索</h2>
-          <button
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={pickerOpen}
-            onClick={() => setPickerOpen((open) => !open)}
-            className="ml-auto flex min-h-11 min-w-0 items-center gap-1.5 rounded-pill border border-border bg-surface-elevated px-3 td-text-body text-ink"
-          >
-            {resolvedCategoryId && (
-              <span
-                aria-hidden="true"
-                className="content-dot rounded-pill"
-                style={{ backgroundColor: getCategoryColor(resolvedCategoryId) }}
-              />
-            )}
-            <span className="truncate">{categoryLabel}</span>
-          </button>
-          <button
-            type="button"
-            aria-label={searchOpen ? "收起搜索" : "搜索备注"}
-            onClick={() => {
-              if (searchOpen) {
-                setQueryInput("");
-                updateState({ query: "" });
-              }
-              setSearchOpen((open) => !open);
-            }}
-            className="grid size-11 shrink-0 place-items-center rounded-pill text-ink-2 hover:bg-surface-hover hover:text-ink"
-          >
-            <Icon icon={searchOpen ? X : MagnifyingGlass} size={18} />
-          </button>
-        </div>
-
+      <PageHeader
+        title="搜索"
+        back={<PageBackButton onClick={() => navigate(-1)} />}
+        className="bg-surface/95"
+        actions={
+          <>
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={pickerOpen}
+              onClick={() => setPickerOpen((open) => !open)}
+              className="flex min-h-11 min-w-0 items-center gap-1.5 rounded-pill border border-border bg-surface-elevated px-3 td-text-body text-ink"
+            >
+              {resolvedCategoryId && (
+                <span
+                  aria-hidden="true"
+                  className="content-dot rounded-pill"
+                  style={{ backgroundColor: getCategoryColor(resolvedCategoryId) }}
+                />
+              )}
+              <span className="truncate">{categoryLabel}</span>
+            </button>
+            <button
+              type="button"
+              aria-label={searchOpen ? "收起搜索" : "搜索备注"}
+              onClick={() => {
+                if (searchOpen) {
+                  setQueryInput("");
+                  updateState({ query: "" });
+                }
+                setSearchOpen((open) => !open);
+              }}
+              className="grid size-11 shrink-0 place-items-center rounded-pill text-ink-2 hover:bg-surface-hover hover:text-ink"
+            >
+              <Icon icon={searchOpen ? X : MagnifyingGlass} size={18} />
+            </button>
+          </>
+        }
+      >
         {searchOpen && (
           <input
             type="search"
@@ -150,12 +154,12 @@ export default function SearchPage() {
             onChange={(event) => setQueryInput(event.target.value)}
             placeholder="搜索备注"
             aria-label="搜索备注"
-            className="mt-2 min-h-11 w-full rounded-row border border-border bg-surface-elevated px-3 td-text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mx-3 mb-2 mt-0 min-h-11 w-[calc(100%-1.5rem)] rounded-row border border-border bg-surface-elevated px-3 td-text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent sm:mx-4 sm:w-[calc(100%-2rem)]"
           />
         )}
 
         {pickerOpen && (
-          <div className="mt-2">
+          <div className="mt-0">
             <CategoryPickerSheet
               parentCategories={parentCategories}
               getChildren={getChildren}
@@ -165,7 +169,7 @@ export default function SearchPage() {
             />
           </div>
         )}
-      </header>
+      </PageHeader>
 
       <section className="bg-surface px-3 pb-3">
         <SegmentedControl

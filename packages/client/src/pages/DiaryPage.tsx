@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import DateNav from "../components/DateNav.js";
 import { Icon } from "../components/Icon.js";
 import { PageBackButton } from "../components/ui/PageBackButton.js";
+import { PageHeader } from "../components/ui/PageHeader.js";
 import { LoadingState } from "../components/ui/LoadingState.js";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { useNowMinute } from "../hooks/useNowMinute.js";
@@ -454,34 +455,37 @@ export default function DiaryPage() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
       {dialog}
-      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 backdrop-blur">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <PageBackButton onClick={handleBack} />
-          <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记</h1>
-          <Link
-            to="/diary/review"
-            aria-label="日记回顾"
-            className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
-          >
-            <Icon icon={ClockCounterClockwise} size={16} />
-          </Link>
-          <button
-            type="button"
-            aria-label="保存"
-            disabled={!dirty || saving || reloading || loading || loadFailed}
-            onClick={() => void handleSave()}
-            className="rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
-          >
-            保存
-          </button>
-        </div>
+      <PageHeader
+        title="日记"
+        back={<PageBackButton onClick={handleBack} />}
+        actions={
+          <>
+            <Link
+              to="/diary/review"
+              aria-label="日记回顾"
+              className="flex size-9 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-2 transition hover:border-accent hover:text-ink"
+            >
+              <Icon icon={ClockCounterClockwise} size={16} />
+            </Link>
+            <button
+              type="button"
+              aria-label="保存"
+              disabled={!dirty || saving || reloading || loading || loadFailed}
+              onClick={() => void handleSave()}
+              className="rounded-ctl bg-accent px-3 py-1.5 td-text-body font-medium text-page transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-ink-3"
+            >
+              保存
+            </button>
+          </>
+        }
+      >
         {/* DateNav 一个字节都不许改：它有 3 条 check:design 逐字豁免（DateNav.tsx:11/24/25），
             匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符豁免就失配、门禁当场红。
             要调间距就在外面包容器。
             放在 header 内做第二行、而不是塞进下面的内容分支：阶段四要在 header 之下挂左右
             分栏，日期导航必须横跨两栏，掉进左栏就得返工。 */}
         <DateNav date={date} onDateChange={handleDateChange} />
-      </header>
+      </PageHeader>
 
       {rolledOver && (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-accent/40 bg-accent-soft px-4 py-2 td-text-body text-accent-ink">

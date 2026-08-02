@@ -5,6 +5,7 @@ import { ErrorBoundary } from "../../../components/ErrorBoundary.js";
 import { Icon } from "../../../components/Icon.js";
 import { DateField } from "../../../components/ui/DateField.js";
 import { PageBackButton } from "../../../components/ui/PageBackButton.js";
+import { PageHeader } from "../../../components/ui/PageHeader.js";
 import { SegmentedControl } from "../../../components/ui/SegmentedControl.js";
 import { useNowMinute } from "../../../hooks/useNowMinute.js";
 import { type DiaryBatchResult, fetchDiaryBatch } from "../../../lib/diary/diaryApi.js";
@@ -152,11 +153,10 @@ export default function DiaryReviewPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-page text-ink">
-      <header className="sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 backdrop-blur">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <PageBackButton onClick={handleBack} />
-          <h1 className="min-w-0 flex-1 truncate td-text-body font-medium text-ink">日记回顾</h1>
-        </div>
+      <PageHeader
+        title="日记回顾"
+        back={<PageBackButton onClick={handleBack} />}
+      >
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
           <SegmentedControl
             ariaLabel="回顾模式"
@@ -227,7 +227,7 @@ export default function DiaryReviewPage() {
             </button>
           )}
         </div>
-      </header>
+      </PageHeader>
 
       {/* 错误条叠加在内容之上，不替换内容区：batch 失败时已有卡片继续可读。 */}
       {error && (

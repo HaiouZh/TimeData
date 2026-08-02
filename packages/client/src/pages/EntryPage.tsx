@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import EntryForm from "../components/EntryForm.tsx";
 import { PageBackButton } from "../components/ui/PageBackButton.js";
+import { PageHeader } from "../components/ui/PageHeader.js";
 import { LoadingState } from "../components/ui/LoadingState.js";
 import { useAppResumeRefresh } from "../hooks/useAppResumeRefresh.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -197,10 +198,7 @@ export default function EntryPage() {
 
   return (
     <div className="min-h-full bg-page">
-      <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-page/95 px-3 py-2 backdrop-blur">
-        <PageBackButton onClick={() => goBack(fallbackBackPath)} />
-        <h1 className="td-text-title">{existingEntry ? "编辑记录" : "新增记录"}</h1>
-      </header>
+      <PageHeader title={existingEntry ? "编辑记录" : "新增记录"} back={<PageBackButton onClick={() => goBack(fallbackBackPath)} />} />
       <main className="mx-auto w-full max-w-2xl p-3">
         <EntryForm
           startTime={startTime}
