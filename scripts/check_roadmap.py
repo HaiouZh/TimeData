@@ -7,9 +7,11 @@
 路线 A（docs_local 不入 git）挂本地门禁，路线 B（过程文档入 git）同一脚本挂 CI。
 检查项与级别见 live-roadmap references/rules.md §4。exit 1 = 有 ERROR；WARN 不挡门。
 
-本副本已偏离 live-roadmap skill v5.0：废除 构想/搁置/冰箱，新增 notes/ 孤儿 WARN（索引源 = ROADMAP/backlog/ideas）。
-回写惯例库（bump v6.0）前不要从库重装覆盖。设计：docs_local/specs/2026-07-27-ideas-ledger-design.md（归档后在 archive/specs/）。
-并发协议（v5.0 第二处偏离）：阶段行 [进行中@分支] 领取标记，OK 行打印在飞清单；配套 docs_snap.py 见 package.json 链。
+6.0 形态：状态收窄为四态（废 [构想]/[搁置]，去处见 rules §3.2/§5 的 ideas 台账）、
+阶段行支持 [进行中@分支] 领取标记并在 OK 行打印在飞清单（rules §9 并发协议）、
+notes/ 孤儿 WARN 的索引源是 ROADMAP + backlog + ideas 三份、
+单主题分节预算随小节内链接条数浮动（长命主题的链接开销是结构性的，不该挤内容）。
+6.3：「现在在哪」行首词表封闭（进行中/刚完成/下一步，词表外报 WARN，rules §8）。
 """
 import re
 import sys
@@ -18,20 +20,35 @@ from pathlib import Path
 SIZE_CAP = 8000
 NOW_MAX_LINES = 5
 NOW_BUDGET = 600
+# 「现在在哪」行首词表（6.3，rules §8）：体量闸管不住内容漂移——「闸/约束」「另」类
+# 即兴行没有例行覆盖事件，一写就腐。词表管行首不管行内（括注合法）。
+NOW_LINE_PREFIXES = ("进行中", "刚完成", "下一步")
 TOPIC_BUDGET = 1200
 PHASE_LINE_BUDGET = 150
+# 分节预算随**小节内 markdown 链接条数**浮动：前 5 条免费，之后每条 +80
+# （≈ 一条 spec/plan 路径的长度）。
+# 依据：本库 skill-runtime-split 6 阶段主题光链接就占 ~420 字符，榨干第 2 档仍 1259 > 1200。
+# 2026-07-28（6.2）计数口径从「阶段行数」改为「链接条数」：链接开销才是被浮动
+# 补偿的对象，而阶段行数只是它的一个代理量——代理在「链接不挂阶段行」时失真。
+# 实证（conventions-writeback 主题）：4 个阶段未过免费额度、预算仍是 1200，但
+# 3 条 design 链接按规矩挂在「约束/前置」行上（阶段行 ≤150 字符塞不下两条链接），
+# 小节 1324 > 1200 报 WARN——开销只是从阶段行搬进了分节，旧口径数不到它。
+TOPIC_BUDGET_FREE_LINKS = 5
+TOPIC_BUDGET_PER_LINK = 80
+MD_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]*\)")
 NO_PHASE_STATES = {"设计中", "排队", "进行中", "完成"}
 MOVE_LADDER = [
     "搬家五档（按优先序，做一档就重跑；只搬家不改写）：",
     "  ① 全 [完成] 主题 → 归档四联动（rules §3.1）",
     "  ② [完成] 阶段行 → 压一行，详情回写该阶段 plan 尾部「落地记录」（rules §2.2）",
-    "  ③ 已否决/暂缓主题 → 移进 ideas.md「已处置」（本地口径，已偏离 rules §3.2）",
+    "  ③ 已否决/暂缓主题 → 移进 ideas.md「已处置」，一句原因 + 指针（rules §3.2）",
     "  ④ 沉淀记录 → 做沉淀 pass，压成去向指针（rules §2.1）",
     "  ⑤ 「现在在哪」→ 只留进行中 + 下一步；「刚完成」≤1 行只写主题名 + 归档去向（rules §8）",
 ]
 VALID_STATES = {"设计中", "排队", "进行中", "完成"}
 REQUIRED_SECTIONS = ["现在在哪", "主题总览", "阶段完成定义"]
 MUST_HAVE_SECTION = {"设计中", "排队", "进行中"}  # 这些状态的主题必须开五件套小节
+INDEX_FILES = ("backlog.md", "ideas.md")  # notes/ 孤儿的索引源，与 ROADMAP 正文合并后判定
 ACTIVE_DOC_DIRS = ("specs", "plans")  # 孤儿检查范围：活目录只放活的（rules.md §3）
 ARCHIVE_TOPIC_DIR = "archive/roadmap"  # 一主题一文件的归档页目录（ADR 式），每份须挂进 ROADMAP-archive 索引表
 LINK_SKIP_PREFIXES = ("http://", "https://", "mailto:", "#")
@@ -47,7 +64,11 @@ LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
 def split_state(raw: str):
-    """'进行中@fix/x' → ('进行中', 'fix/x')；无 @ → (raw, None)。@ 只许挂 [进行中]，由调用方校验。"""
+    """'进行中@fix/x' → ('进行中', 'fix/x')；无 @ → (raw, None)。
+
+    @ 只许挂 [进行中]（rules §9 并发协议：领取标记标的是「谁在飞这条线」，
+    非进行中的行挂了它就是过期领取），由调用方校验。
+    """
     base, _, branch = raw.partition("@")
     return base, (branch or None)
 
@@ -136,12 +157,19 @@ def check(root: Path):
         if not any(t.startswith(req) for t, _ in sections):
             report("error", "section", f"缺必需节「## {req}」")
 
-    # 「现在在哪」硬顶行数
+    # 「现在在哪」硬顶行数 + 行首词表
     for t, body in sections:
         if t.startswith("现在在哪"):
-            n = len([ln for ln in body.split("\n") if ln.strip()])
-            if n > NOW_MAX_LINES:
-                report("error", "now", f"「现在在哪」{n} 行 > 硬顶 {NOW_MAX_LINES} 行——只写进行中 + 下一步，历史不进这节")
+            lines = [ln for ln in body.split("\n") if ln.strip()]
+            if len(lines) > NOW_MAX_LINES:
+                report("error", "now", f"「现在在哪」{len(lines)} 行 > 硬顶 {NOW_MAX_LINES} 行——只写进行中 + 下一步，历史不进这节")
+            for ln in lines:
+                s = ln.strip()
+                if s.startswith("-") and not s.lstrip("- ").startswith(NOW_LINE_PREFIXES):
+                    report("warn", "now-vocab",
+                           f"「现在在哪」行首不在词表 {{进行中|刚完成|下一步}}：「{s.lstrip('- ')[:14]}…」"
+                           f"——即兴行无例行覆盖事件、一写就腐；按三分法回家："
+                           f"一次性待办→backlog、持久决策→ADR/evergreen+主题小节、历史→archive（rules.md §8）")
 
     # 总览表
     topics = {}
@@ -182,15 +210,21 @@ def check(root: Path):
                    f"主题「{slug}」（[{topics.get(slug)}]）无编号阶段行 —— 归档触发器静默失效（rules.md §2.2）")
 
     # 分节体量预算（WARN）
-    def _budget_for(title):
+    def _budget_for(title, body):
         if title.startswith("现在在哪"):
             return NOW_BUDGET
         if TOPIC_TITLE_RE.match(title):
-            return TOPIC_BUDGET
+            # 链接开销是结构性的（一条 spec/plan 路径 ≈ 80 字符），链接多的长命
+            # 主题会被固定预算挤掉内容——前 5 条免费，之后按条放宽。数的是小节内
+            # **全部** markdown 链接，不问它挂在阶段行上还是「约束/前置」行上：
+            # 挂哪儿是排版选择，占的字符一样多。
+            n_links = len(MD_LINK_RE.findall(body))
+            extra = max(0, n_links - TOPIC_BUDGET_FREE_LINKS)
+            return TOPIC_BUDGET + TOPIC_BUDGET_PER_LINK * extra
         return None
 
     for t, body in sections:
-        cap = _budget_for(t)
+        cap = _budget_for(t, body)
         if cap and len(body) > cap:
             report("warn", "budget", f"「{t.split('（')[0]}」{len(body)} 字符 > 预算 {cap}")
 
@@ -228,9 +262,10 @@ def check(root: Path):
                 report("warn", "orphan",
                        f"{d}/{f.name} 未被 ROADMAP.md 引用——漏归档候选？（活目录只放活的，rules.md §3）")
 
-    # notes/ 孤儿（WARN）：notes/*.md（不含子目录）须被 ROADMAP/backlog/ideas 之一按文件名实引
+    # notes/ 孤儿（WARN）：notes/*.md 须被 ROADMAP / backlog / ideas 之一按文件名实引。
+    # 索引源是三份而非只有 ROADMAP——这正是三分法（rules.md §5）在机检上的投影。
     index_text = text
-    for idx_name in ("backlog.md", "ideas.md"):
+    for idx_name in INDEX_FILES:
         p = root / idx_name
         if p.is_file():
             index_text += p.read_text(encoding="utf-8")
@@ -238,14 +273,15 @@ def check(root: Path):
     for f in sorted(notes_dir.glob("*.md")) if notes_dir.is_dir() else []:
         if f.name not in index_text:
             report("warn", "orphan",
-                   f"notes/{f.name} 未被 ROADMAP/backlog/ideas 任一索引——写完就沉底？（ideas 台账口径，design 见 archive/specs/2026-07-27-ideas-ledger-design.md）")
+                   f"notes/{f.name} 未被 ROADMAP / backlog / ideas 任一索引"
+                   "——写完就沉底？（三分法，rules.md §5）")
 
     # 撞线 diagnostics：分节体量排行 + 搬家五档
     diagnostics = []
     if len(text) > SIZE_CAP:
         diagnostics.append("分节体量（降序，✗ = 超预算）：")
-        for n, t in sorted(((len(b), t) for t, b in sections), reverse=True):
-            cap = _budget_for(t)
+        for n, t, b in sorted(((len(b), t, b) for t, b in sections), reverse=True):
+            cap = _budget_for(t, b)
             mark = "✗" if cap and n > cap else " "
             cap_note = f"（预算 {cap}）" if cap else ""
             diagnostics.append(f"  {n:>5} {mark}  {t.split('（')[0]}  {cap_note}")
@@ -269,7 +305,9 @@ def main(argv):
     if errors:
         print(f"[check_roadmap] ROADMAP.md: {len(errors)} error(s), {len(warns)} warn(s)")
         return 1
-    inflight_note = f"，{len(inflight)} 线在飞：{' · '.join(f'{s}@{b}' for s, b in inflight)}" if inflight else ""
+    # 在飞清单印在 OK 行：谁在飞哪条线不用 grep 就看得见（rules.md §9）
+    inflight_note = (f"，{len(inflight)} 线在飞：" + " · ".join(f"{s}@{b}" for s, b in inflight)
+                     if inflight else "")
     print(f"[check_roadmap] OK（{size} 字符，{n_topics} 主题，{len(warns)} warn{inflight_note}）")
     return 0
 
