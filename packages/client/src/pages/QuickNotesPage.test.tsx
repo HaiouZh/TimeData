@@ -12,7 +12,7 @@ import { getDateString } from "../lib/time.js";
 import { STORAGE_KEYS } from "../lib/storageKeys.js";
 import { db } from "../test/dbReset.js";
 import { type Root, renderDom, unmount } from "../test/domHarness.js";
-import QuickNotesPage from "./QuickNotesPage.js";
+import QuickNotesPage, { STICKY_TOP_PX } from "./QuickNotesPage.js";
 
 vi.mock("../quick-notes/fileDownload.ts", () => ({
   downloadQuickNotesJson: vi.fn(async () => {}),
@@ -1008,7 +1008,7 @@ describe("QuickNotesPage", () => {
     }
   });
 
-  it("退出搜索后 jumpDate 与 URL 归位到今天", async () => {
+  it("退出搜索后 viewingDate 与 URL 归位到今天", async () => {
     const { host, root } = await renderPage("/quick-notes?date=2026-06-01");
     try {
       expect(host.querySelector('[data-testid="date-param"]')?.textContent).toBe("2026-06-01");
@@ -2221,6 +2221,51 @@ describe("搜索态日期条", () => {
   });
 }, PAGE_TEST_TIMEOUT_MS);
 
+describe("sticky 偏移常量与 JSX 同步", () => {
+  // 这条不是同义反复：STICKY_TOP_PX 是 findStuckDivider 判定区间的上界，必须等于日期条 sticky 的
+  // 实际像素偏移，而那个偏移写在 JSX 的 `top-2` 类里。三处独立字面量（1 个 TS 常量 + 主线/搜索
+  // 两处 className），改任一处而不同步，既不报错、也不 typecheck 失败、也没有别的用例会红——
+  // 粘住判定会静默偏 N 像素（顶部那条落不进区间 → 日期条再不淡出、viewingDate 停更）。
+  // 由常量派生类名（Tailwind 的 `top-{n}` = n × 0.25rem），任一处改动而不同步都会让它红。
+  it("STICKY_TOP_PX 与主线、搜索两处日期条的 top-{n} 类保持同一个值", async () => {
+    await db.quickNotes.add({
+      id: "t1",
+      text: "偏移同步样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const expectedTopClass = `top-${STICKY_TOP_PX / 4}`;
+    const { host, root } = await renderPage();
+
+    const mainDivider = host.querySelector<HTMLElement>("[data-date-label]");
+    expect(mainDivider?.className.split(/\s+/)).toContain("sticky");
+    expect(mainDivider?.className.split(/\s+/)).toContain(expectedTopClass);
+
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="搜索速记"]'));
+    const searchBox = host.querySelector<HTMLInputElement>('input[placeholder="搜索速记…"]');
+    if (!searchBox) throw new Error("missing search input");
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(searchBox, "偏移");
+      searchBox.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300); // 搜索 debounce 200ms
+    });
+    await flush();
+    vi.useRealTimers();
+
+    const searchDivider = host.querySelector<HTMLElement>("[data-search-date]");
+    expect(searchDivider?.className.split(/\s+/)).toContain("sticky");
+    expect(searchDivider?.className.split(/\s+/)).toContain(expectedTopClass);
+
+    await unmount(root);
+  });
+}, PAGE_TEST_TIMEOUT_MS);
+
 describe("停手隐身", () => {
   it("停手后粘住的日期条隐身，一开始滚动立刻现身", async () => {
     await db.quickNotes.bulkAdd([
@@ -2431,6 +2476,123 @@ describe("viewingDate 接管导出/清理", () => {
 
     await expect(db.quickNotes.get("v1")).resolves.toBeUndefined();
     await expect(db.quickNotes.get("v2")).resolves.toMatchObject({ text: "六月二日" });
+
+    await unmount(root);
+  });
+
+  it("搜索态滚动后立刻退出搜索，遗留的停手定时器不得改写刚归位的今天", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "r1",
+        text: "六月一日可搜索",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "r2",
+        text: "六月二日可搜索",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="搜索速记"]'));
+    const searchBox = host.querySelector<HTMLInputElement>('input[placeholder="搜索速记…"]');
+    if (!searchBox) throw new Error("missing search input");
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(searchBox, "可搜索");
+      searchBox.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300); // 搜索 debounce 200ms
+    });
+    await flush();
+
+    // 搜索态里滚一下：种下停手定时器（此刻 searching 为真，回调本该只扫搜索结果）。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    // 1.2 秒内退出搜索：viewingDate 显式归位到今天。
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="退出搜索"]'));
+
+    // 主线子树是重新挂的，几何要在这里重新伪造：定时器若还在，它会扫到 6月1日 那条粘住。
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    expect(dividers.length).toBe(2);
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    vi.useRealTimers();
+
+    // 不清定时器的实现：回调 fire 时 searching 已是 false，于是去扫主线、把刚设成今天的
+    // viewingDate 改成 6月1日——用户根本没滚过主线，「清理今天」却变成「清理 6月1日」。
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
+    const items = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+    expect(items).toContain("清理今天");
+    expect(items.some((text) => text.includes("6月1日"))).toBe(false);
+
+    await unmount(root);
+  });
+
+  it("「更多操作」开着时停手扫描不改写 viewingDate——菜单项不在眼皮底下换目标日", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "n1",
+        text: "六月一日",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "n2",
+        text: "六月二日",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    dividers[0].getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+    dividers[1].getBoundingClientRect = () => ({ top: 300, height: 28 }) as DOMRect;
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // 先滚动种下定时器，此刻菜单还没开——回调闭包冻结的就是这个值。
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    // 倒计时途中点开「更多操作」（不再滚动，所以定时器不会被重设）。
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]'));
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    const before = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+    expect(before).toContain("清理今天");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    vi.useRealTimers();
+
+    // 无菜单守卫的实现会在这里把 viewingDate 改成 6月1日：同一个位置的按钮从「导出今天 Markdown」
+    // 变成「导出 6月1日 Markdown」，用户按视觉记忆按下去，导出的是另一天且导出没有二次确认。
+    const after = Array.from(host.querySelectorAll('[role="menuitem"]')).map((el) => el.textContent ?? "");
+    expect(after).toContain("清理今天");
+    expect(after.some((text) => text.includes("6月1日"))).toBe(false);
 
     await unmount(root);
   });

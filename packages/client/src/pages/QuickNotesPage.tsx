@@ -81,8 +81,13 @@ const DEFAULT_COMPOSER_INSET_PX = 128;
 const COMPOSER_BOTTOM_GAP_PX = 16;
 const STATUS_AUTO_DISMISS_MS = 2400;
 const STUCK_HIDE_DELAY_MS = 1200;
-// 与 JSX 上的 top-2（0.5rem）是同一个值：日期条粘住时距滚动容器可视区顶部的像素。
-const STICKY_TOP_PX = 8;
+/**
+ * 与 JSX 上的 `sticky top-2`（0.5rem = 8px）是同一个值：日期条粘住时距滚动容器可视区顶部的
+ * 像素，也是 `findStuckDivider` 判定区间的上界。三处独立字面量（这个常量 + 主线/搜索两处
+ * className），改一处不同步既不报错也不 typecheck 失败，故导出给用例做绊线（见测试
+ * 「STICKY_TOP_PX 与两处 JSX top-2 必须同步」）。Tailwind 的 `top-{n}` = n × 0.25rem。
+ */
+export const STICKY_TOP_PX = 8;
 const SEARCH_RESULT_PAGE_SIZE = 100;
 const SEARCH_FOCUS_HIGHLIGHT_MS = 1500;
 // 草稿落盘的防抖窗口：停顿超过这个时长才落盘，连续不停打字（键间隔 < 400ms）期间一次都不落盘，
@@ -175,12 +180,14 @@ export default function QuickNotesPage() {
   // 当前被打上隐身类的日期条。滚动一开始就要摘掉它，粘住那条才会随 transition 淡入。
   const stuckElRef = useRef<HTMLElement | null>(null);
   // 停手定时器的回调捕获的是「创建定时器那一次渲染」的闭包：用户在那 1.2 秒内打开日历、
-  // 进多选或开搜索，回调里读到的仍是旧值，照样会打上隐身类——日历失去锚点、「选中这天」
-  // 被藏掉。同 draftTextRef / editingIdRef 的老问题，经这个随渲染同步的 ref 读最新值。
-  const scanGuardRef = useRef({ datePickerOpen, selectionMode, searchOpen });
+  // 进多选、开搜索或点开「更多操作」，回调里读到的仍是旧值，照样会打上隐身类 / 改写
+  // viewingDate——日历失去锚点、「选中这天」被藏掉、菜单里的目标日在用户眼皮底下换掉。
+  // 同 draftTextRef / editingIdRef 的老问题，经这个随渲染同步的 ref 读最新值。
+  const menuOpen = actionsOpen || exportMenuOpen;
+  const scanGuardRef = useRef({ datePickerOpen, selectionMode, searchOpen, menuOpen });
   useEffect(() => {
-    scanGuardRef.current = { datePickerOpen, selectionMode, searchOpen };
-  }, [datePickerOpen, selectionMode, searchOpen]);
+    scanGuardRef.current = { datePickerOpen, selectionMode, searchOpen, menuOpen };
+  }, [datePickerOpen, selectionMode, searchOpen, menuOpen]);
   const pressedNoteRef = useRef<QuickNote | null>(null);
   const stickBottomRef = useRef(true);
   const prevScrollHeightRef = useRef(0);
@@ -327,12 +334,18 @@ export default function QuickNotesPage() {
     }
   }, [selectionMode]);
 
-  // 进多选 / 开搜索 / 开置顶浮层时列表 DOM 会整块换掉，隐身 ref 会指向孤儿节点：不清则下次
-  // remove 打空，真正粘住那条永远摘不掉 .stuck 类，表现为滚动时日期条再也不出现。
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 这三个是触发器不是读取值——模式切换时列表 DOM 整块换掉，stuckElRef 会指向孤儿节点，必须重跑清类
+  // 模式切换时摘掉残留的隐身类。两个依赖守的**不是同一件事**，别按同一条理由判去留：
+  // - searchOpen：主线与搜索是两棵子树，切换时列表 DOM 整块换掉，stuckElRef 指向孤儿节点。
+  //   不清则下次 remove 打在孤儿上，真正粘住那条永远摘不掉 .stuck，表现为滚动时日期条再不出现。
+  // - selectionMode：React 按 key 复用**同一个** divider DOM 节点（不是孤儿）。这里是对活节点
+  //   摘类，好让 .stuck 不挡住刚渲染出来的「选中这天」——机制与上面那条恰好相反。
+  // 刻意**不含 pinnedOpen**：置顶浮层渲染在 <header> 内、不在滚动容器子树里，主线也恒过滤
+  // pinned，开合它既不换列表 DOM 也不产生孤儿。留着它只会让日期条一次性现身，而 scanStuckDivider
+  // 并没有 pinnedOpen 守卫，下一次停手 1.2 秒又藏回去——半条守卫，两处语义自相矛盾。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 这两个是触发器不是读取值，理由逐条见上
   useEffect(() => {
     clearStuckDivider();
-  }, [selectionMode, searchOpen, pinnedOpen]);
+  }, [selectionMode, searchOpen]);
 
   // header 更多操作 / 导出菜单开着时 Escape 可关（QN-16）。气泡操作菜单的 Escape
   // 在 QuickNoteActionMenu 内部处理，这里只管这两个内联菜单。
@@ -486,9 +499,16 @@ export default function QuickNotesPage() {
     const el = scrollRef.current;
     if (!el) return;
     // 一律经 ref 读，别直接读 state——见 scanGuardRef 的注释。
-    const { datePickerOpen: pickerOpen, selectionMode: selecting, searchOpen: searching } = scanGuardRef.current;
-    // 日历开着时隐身会让月历失去锚点；多选态隐身会让「选中这天」点不到。
-    if (pickerOpen || selecting) return;
+    const {
+      datePickerOpen: pickerOpen,
+      selectionMode: selecting,
+      searchOpen: searching,
+      menuOpen: menuShowing,
+    } = scanGuardRef.current;
+    // 日历开着时隐身会让月历失去锚点；多选态隐身会让「选中这天」点不到；「更多操作」/导出菜单
+    // 开着时改写 viewingDate 会让菜单项在用户眼皮底下换目标日——他按视觉记忆点下去，导出的是
+    // 另一天，而导出没有二次确认（清理那侧的 await confirm 前后读同一次渲染的常量，本来就干净）。
+    if (pickerOpen || selecting || menuShowing) return;
 
     const containerTop = el.getBoundingClientRect().top;
     const nodes = Array.from(
@@ -519,6 +539,26 @@ export default function QuickNotesPage() {
     stuckElRef.current = null;
   }
 
+  /**
+   * 显式设定「眼前那天」（退出搜索 / 回到最新 / 日历跳转 / 搜索结果定位）。
+   *
+   * 必须连同待触发的停手定时器一起清掉：那个定时器是**写入之前**排下的，它扫的是旧位置、
+   * 甚至是另一棵子树（搜索态滚动后 1.2 秒内点「退出搜索」，定时器 fire 时 searching 已是 false，
+   * 于是去扫主线并把刚设成今天的 viewingDate 改成别的天——用户根本没滚过主线，「清理今天」
+   * 却变成「清理 6月X日」）。
+   *
+   * 只清「写入之前」那个，不额外压制写入之后由程序化滚动排下的新扫描：那些扫描反映的是落定后
+   * 的真实位置，且与本次显式目标一致（jumpToLatest 滚到底 = 最新那天、日历跳转把目标日分隔条
+   * 滚到贴顶 = 目标日、退出搜索 resetToLatest 同理），压制它反而会掐掉「跟随滚动」这条正常语义。
+   */
+  function setViewingDateExplicitly(nextDate: string) {
+    if (stuckTimerRef.current) {
+      clearTimeout(stuckTimerRef.current);
+      stuckTimerRef.current = null;
+    }
+    setViewingDate(nextDate);
+  }
+
   function focusInput() {
     if (typeof requestAnimationFrame === "function") {
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -545,7 +585,7 @@ export default function QuickNotesPage() {
     if (options.resetTimeline ?? true) {
       stickBottomRef.current = true;
       pendingJumpRef.current = null;
-      setViewingDate(today);
+      setViewingDateExplicitly(today);
       setSearchParams({});
       void timeline.resetToLatest();
     }
@@ -553,7 +593,7 @@ export default function QuickNotesPage() {
 
   // 「回到最新」的唯一实现：浮标按钮与历史视图保存后的 toast 共用，避免两处各写一遍。
   function jumpToLatest() {
-    setViewingDate(today);
+    setViewingDateExplicitly(today);
     setSearchParams({});
     stickBottomRef.current = true;
     pendingJumpRef.current = null;
@@ -574,7 +614,7 @@ export default function QuickNotesPage() {
       handleJumpDateChange(localDate);
       return;
     }
-    setViewingDate(localDate);
+    setViewingDateExplicitly(localDate);
     setSearchParams(localDate === today ? {} : { date: localDate });
     stickBottomRef.current = false;
     // 定位交给 focusNoteId 的 scrollIntoView，别让残留的日期定位请求抢滚动。
@@ -903,7 +943,7 @@ export default function QuickNotesPage() {
 
   function handleJumpDateChange(nextDate: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
-    setViewingDate(nextDate);
+    setViewingDateExplicitly(nextDate);
     setSearchParams(nextDate === today ? {} : { date: nextDate });
     stickBottomRef.current = false;
     pendingJumpRef.current = { localDate: nextDate, utcStart: localDateTimeToUtc(`${nextDate}T00:00:00`) };
