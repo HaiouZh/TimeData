@@ -111,7 +111,7 @@ export default function SearchPage() {
       <PageHeader
         title="搜索"
         back={<PageBackButton onClick={() => navigate(-1)} />}
-        className="bg-surface/95"
+        background="surface"
         actions={
           <>
             <button

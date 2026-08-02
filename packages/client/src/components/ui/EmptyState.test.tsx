@@ -52,6 +52,20 @@ describe("EmptyState", () => {
     await unmount(root);
   });
 
+  it("inline 变体也渲染 description 与 action", async () => {
+    const { host, root } = await renderDom(
+      createElement(EmptyState, {
+        title: "今天还没有记录",
+        description: "先记一条时间",
+        action: createElement("button", { type: "button" }, "去记录"),
+        variant: "inline",
+      }),
+    );
+    expect(host.textContent).toContain("先记一条时间");
+    expect(host.querySelector("button")?.textContent).toBe("去记录");
+    await unmount(root);
+  });
+
   it("文案不含 emoji", async () => {
     const { host, root } = await renderDom(
       createElement(EmptyState, { title: "今天没有任务", description: "写下一个想法" }),

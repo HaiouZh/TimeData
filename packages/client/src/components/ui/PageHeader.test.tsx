@@ -42,6 +42,23 @@ describe("PageHeader", () => {
     const second = host.querySelector('[data-testid="second-row"]');
     expect(second).not.toBeNull();
     expect(h1 && second && h1.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(second?.closest("header")).toBe(h1?.closest("header"));
+    await unmount(root);
+  });
+
+  it("默认背景 bg-page/95，不含 bg-surface/95", async () => {
+    const { host, root } = await renderDom(createElement(PageHeader, { title: "测试页" }));
+    const header = host.querySelector("header");
+    expect(header?.className).toContain("bg-page/95");
+    expect(header?.className).not.toContain("bg-surface/95");
+    await unmount(root);
+  });
+
+  it("background=\"surface\" 时背景为 bg-surface/95，不含 bg-page/95", async () => {
+    const { host, root } = await renderDom(createElement(PageHeader, { title: "测试页", background: "surface" }));
+    const header = host.querySelector("header");
+    expect(header?.className).toContain("bg-surface/95");
+    expect(header?.className).not.toContain("bg-page/95");
     await unmount(root);
   });
 });

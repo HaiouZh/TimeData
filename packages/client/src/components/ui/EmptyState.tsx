@@ -14,6 +14,8 @@ export function EmptyState({ icon, title, description, action, variant = "card" 
       <div className="td-text-body text-ink-2">
         {icon && <span className="mr-1.5 inline-flex align-middle">{icon}</span>}
         {title}
+        {description && <div className="mt-1 td-text-caption text-ink-3">{description}</div>}
+        {action && <div className="mt-3">{action}</div>}
       </div>
     );
   }

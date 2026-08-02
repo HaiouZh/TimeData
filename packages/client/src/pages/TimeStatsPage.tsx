@@ -192,7 +192,7 @@ export default function TimeStatsPage() {
             type="button"
             aria-label={`上一${periodUnit}`}
             onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, -1))}
-            className="grid size-11 shrink-0 place-items-center rounded-pill border border-border bg-surface-elevated text-ink-2 hover:text-ink disabled:opacity-35"
+            className="grid hotarea-lg shrink-0 place-items-center rounded-pill border border-border bg-surface-elevated text-ink-2 hover:text-ink disabled:opacity-35"
           >
             <Icon icon={CaretLeft} size={18} />
           </button>
@@ -213,7 +213,7 @@ export default function TimeStatsPage() {
             aria-label={`下一${periodUnit}`}
             disabled={atLatest}
             onClick={() => setAnchor((current) => shiftStatsAnchor(mode, current, 1))}
-            className="grid size-11 shrink-0 place-items-center rounded-pill border border-border bg-surface-elevated text-ink-2 hover:text-ink disabled:opacity-35"
+            className="grid hotarea-lg shrink-0 place-items-center rounded-pill border border-border bg-surface-elevated text-ink-2 hover:text-ink disabled:opacity-35"
           >
             <Icon icon={CaretRight} size={18} />
           </button>

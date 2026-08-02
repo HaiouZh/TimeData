@@ -125,7 +125,9 @@ export function SettingsToggleRow({
     <div
       aria-disabled={disabled}
       onClick={disabled ? undefined : () => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover active:bg-surface-elevated disabled:opacity-60"
+      className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors ${
+        disabled ? "opacity-60" : "hover:bg-surface-hover active:bg-surface-elevated"
+      }`}
     >
       <span className="min-w-0 flex-1">
         <span className="block td-text-label font-medium text-ink">{title}</span>

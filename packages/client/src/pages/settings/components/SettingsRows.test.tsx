@@ -64,4 +64,12 @@ describe("SettingsRows", () => {
     expect(html).toContain("text-ink-2");
     expect(html).not.toContain("text-mod-");
   });
+
+  it("disabled 的 SettingsToggleRow 行容器用条件 opacity-60，不挂 hover 反馈类", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsToggleRow, { title: "启用", checked: true, disabled: true, onChange: () => {} }),
+    );
+    expect(html).toContain("opacity-60");
+    expect(html).not.toContain("hover:bg-surface-hover");
+  });
 });

@@ -34,6 +34,7 @@ import {
   type UnacknowledgedNewIp,
 } from "../../lib/adminNewIps.ts";
 import { SelectSheet, type SelectOption } from "../../components/ui/SelectSheet.js";
+import { LoadingState } from "../../components/ui/LoadingState.js";
 import { Switch } from "../../components/ui/Switch.js";
 import { TimeField } from "../../components/ui/TimeField.js";
 import { useConfirm } from "../../hooks/useConfirm.tsx";
@@ -362,7 +363,7 @@ function RequestAuditSection({
         IP 与归属地仅用于展示；归属地是按 IP 段推测的大致位置、不是定位，反代未清洗 X-Forwarded-For / X-Real-IP 时不可作为安全证据。
       </p>
 
-      {loading && <div className="td-text-label text-ink-2">正在加载请求审计…</div>}
+      {loading && <LoadingState label="正在加载请求审计…" className="py-4" />}
       {error && <div className="rounded-ctl border border-danger/40 bg-danger/10 p-3 td-text-label text-danger">{error}</div>}
 
       <div className="space-y-2">
@@ -602,7 +603,7 @@ export default function SettingsAdminInsightsPage() {
       <GeoipReadinessNotice readiness={geoipReadiness} />
       <NewIpAlertCard newIps={newIps} busy={newIpAckBusy} onAcknowledge={(item) => void handleAcknowledgeNewIp(item)} />
 
-      {loading && <div className="td-text-label text-ink-2">正在加载服务端数据…</div>}
+      {loading && <LoadingState label="正在加载服务端数据…" className="py-4" />}
       {error && (
         <div className="rounded-card border border-danger/40 bg-danger/10 p-4 td-text-label text-danger">{error}</div>
       )}

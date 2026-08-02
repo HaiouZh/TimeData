@@ -479,9 +479,7 @@ export default function DiaryPage() {
           </>
         }
       >
-        {/* DateNav 一个字节都不许改：它有 3 条 check:design 逐字豁免（DateNav.tsx:11/24/25），
-            匹配是「rule + 文件 + trim 后整行文本」三元组，改一个字符豁免就失配、门禁当场红。
-            要调间距就在外面包容器。
+        {/* DateNav 是既有组件，改动前先读它自身；如需调整间距，在外包容器上做。
             放在 header 内做第二行、而不是塞进下面的内容分支：阶段四要在 header 之下挂左右
             分栏，日期导航必须横跨两栏，掉进左栏就得返工。 */}
         <DateNav date={date} onDateChange={handleDateChange} />

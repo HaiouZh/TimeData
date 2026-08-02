@@ -39,4 +39,24 @@ describe("PageBackButton", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
     await unmount(root);
   });
+
+  it("传 to + onClick 时渲染 <a> 且点击触发 onClick（Link 透传）", async () => {
+    const onClick = vi.fn();
+    const { host, root } = await renderDom(
+      createElement(MemoryRouter, null, createElement(PageBackButton, { to: "/settings", onClick })),
+    );
+    const link = host.querySelector("a");
+    expect(link).not.toBeNull();
+    await click(link);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    await unmount(root);
+  });
+
+  it("按钮带 focus-visible 焦点环类", async () => {
+    const { host, root } = await renderDom(createElement(PageBackButton));
+    const btn = host.querySelector("button");
+    expect(btn?.className).toContain("hotarea-lg");
+    expect(btn?.className).toContain("focus-visible:ring-accent");
+    await unmount(root);
+  });
 });

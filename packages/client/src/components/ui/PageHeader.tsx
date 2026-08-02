@@ -4,18 +4,20 @@ export interface PageHeaderProps {
   title: string;
   back?: ReactNode;
   actions?: ReactNode;
-  /** 覆盖容器类（如 SearchPage 的 surface 底色），默认 sticky 顶栏形态。 */
+  /** 背景色：page（默认，sticky 顶栏）或 surface。背景只走本 prop，别用 className 覆盖——两个 bg-* 并存时胜负由编译产物顺序决定。 */
+  background?: "page" | "surface";
+  /** 布局类覆盖（不承载背景色）。 */
   className?: string;
   /** header 内第二行内容（保持 sticky，如 DiaryReviewPage 的分段/日期工具行）。 */
   children?: ReactNode;
 }
 
-export function PageHeader({ title, back, actions, className, children }: PageHeaderProps) {
+export function PageHeader({ title, back, actions, background = "page", className, children }: PageHeaderProps) {
   return (
     <header
-      className={`sticky top-0 z-20 shrink-0 border-b border-border bg-page/95 backdrop-blur ${
-        className ?? ""
-      }`}
+      className={`sticky top-0 z-20 shrink-0 border-b border-border backdrop-blur ${
+        background === "surface" ? "bg-surface/95" : "bg-page/95"
+      } ${className ?? ""}`}
     >
       <div className="flex items-center gap-3 px-3 py-2 sm:px-4 sm:py-3">
         {back}
