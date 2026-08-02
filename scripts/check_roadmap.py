@@ -11,7 +11,8 @@
 阶段行支持 [进行中@分支] 领取标记并在 OK 行打印在飞清单（rules §9 并发协议）、
 notes/ 孤儿 WARN 的索引源是 ROADMAP + backlog + ideas 三份、
 单主题分节预算随小节内链接条数浮动（长命主题的链接开销是结构性的，不该挤内容）。
-6.3：「现在在哪」行首词表封闭（进行中/刚完成/下一步，词表外报 WARN，rules §8）。
+6.3：「现在在哪」行首词表封闭（词表外报 WARN，rules §8）。
+6.4：词表收窄为 刚完成/下一步——「进行中」是集合、正本在阶段行 @标记，单行复述必失真。
 """
 import re
 import sys
@@ -22,7 +23,11 @@ NOW_MAX_LINES = 5
 NOW_BUDGET = 600
 # 「现在在哪」行首词表（6.3，rules §8）：体量闸管不住内容漂移——「闸/约束」「另」类
 # 即兴行没有例行覆盖事件，一写就腐。词表管行首不管行内（括注合法）。
-NOW_LINE_PREFIXES = ("进行中", "刚完成", "下一步")
+# 6.4 收窄：「进行中」行首出列——「刚完成/下一步」是标量（最新者胜，覆盖即正确），
+# 「进行中」是集合（在飞的线），单行写集合必失真：多线时要么一线一行增殖挤爆
+# 5 行硬顶（TimeData 实证），要么漏写误导。在飞正本 = 阶段行 [进行中@分支] +
+# 本脚本 OK 行在飞清单，机器汇总，不需要人工复述行。
+NOW_LINE_PREFIXES = ("刚完成", "下一步")
 TOPIC_BUDGET = 1200
 PHASE_LINE_BUDGET = 150
 # 分节预算随**小节内 markdown 链接条数**浮动：前 5 条免费，之后每条 +80
@@ -43,7 +48,7 @@ MOVE_LADDER = [
     "  ② [完成] 阶段行 → 压一行，详情回写该阶段 plan 尾部「落地记录」（rules §2.2）",
     "  ③ 已否决/暂缓主题 → 移进 ideas.md「已处置」，一句原因 + 指针（rules §3.2）",
     "  ④ 沉淀记录 → 做沉淀 pass，压成去向指针（rules §2.1）",
-    "  ⑤ 「现在在哪」→ 只留进行中 + 下一步；「刚完成」≤1 行只写主题名 + 归档去向（rules §8）",
+    "  ⑤ 「现在在哪」→ 压到两行公式最小态：「刚完成」≤1 行只写主题名 + 归档去向，「下一步」一句指针（rules §8）",
 ]
 VALID_STATES = {"设计中", "排队", "进行中", "完成"}
 REQUIRED_SECTIONS = ["现在在哪", "主题总览", "阶段完成定义"]
@@ -162,12 +167,19 @@ def check(root: Path):
         if t.startswith("现在在哪"):
             lines = [ln for ln in body.split("\n") if ln.strip()]
             if len(lines) > NOW_MAX_LINES:
-                report("error", "now", f"「现在在哪」{len(lines)} 行 > 硬顶 {NOW_MAX_LINES} 行——只写进行中 + 下一步，历史不进这节")
+                report("error", "now", f"「现在在哪」{len(lines)} 行 > 硬顶 {NOW_MAX_LINES} 行——只写刚完成 + 下一步，历史不进这节")
             for ln in lines:
                 s = ln.strip()
-                if s.startswith("-") and not s.lstrip("- ").startswith(NOW_LINE_PREFIXES):
+                if not s.startswith("-") or s.lstrip("- ").startswith(NOW_LINE_PREFIXES):
+                    continue
+                if s.lstrip("- ").startswith("进行中"):
                     report("warn", "now-vocab",
-                           f"「现在在哪」行首不在词表 {{进行中|刚完成|下一步}}：「{s.lstrip('- ')[:14]}…」"
+                           "「现在在哪」不写「进行中」行——在飞是集合，正本在阶段行 [进行中@分支] 与"
+                           "本脚本 OK 行在飞清单，此行是复述（多线时还会一线一行增殖挤爆 5 行硬顶）。"
+                           "删即可；开工的领取动作写在阶段行（rules.md §8/§9）")
+                else:
+                    report("warn", "now-vocab",
+                           f"「现在在哪」行首不在词表 {{刚完成|下一步}}：「{s.lstrip('- ')[:14]}…」"
                            f"——即兴行无例行覆盖事件、一写就腐；按三分法回家："
                            f"一次性待办→backlog、持久决策→ADR/evergreen+主题小节、历史→archive（rules.md §8）")
 
