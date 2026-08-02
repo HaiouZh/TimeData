@@ -1312,12 +1312,14 @@ export default function QuickNotesPage() {
                 {searchDisplayItems.map((item) => {
                   if (item.type === "date") {
                     return (
-                      <div key={item.key} data-search-date={item.localDate} className="flex items-center gap-3 pt-1">
-                        <div className="h-px flex-1 bg-border" />
+                      <div
+                        key={item.key}
+                        data-search-date={item.localDate}
+                        className="quick-note-date-divider sticky top-2 z-10 flex items-center justify-center"
+                      >
                         <div className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3">
                           {item.label}
                         </div>
-                        <div className="h-px flex-1 bg-border" />
                       </div>
                     );
                   }

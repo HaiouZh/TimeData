@@ -2185,3 +2185,41 @@ describe("主线日期条", () => {
     await unmount(root);
   });
 }, PAGE_TEST_TIMEOUT_MS);
+
+describe("搜索态日期条", () => {
+  it("搜索结果的日期条同样粘顶，但不是跳转入口", async () => {
+    await db.quickNotes.add({
+      id: "s1",
+      text: "可搜索的速记",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="搜索速记"]'));
+    // 输入框只有 placeholder 可定位，省略号是全角 U+2026，照抄别手打。
+    const input = host.querySelector<HTMLInputElement>('input[placeholder="搜索速记…"]');
+    if (!input) throw new Error("missing search input");
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "可搜索");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300); // 搜索 debounce 200ms
+    });
+    await flush();
+
+    const divider = host.querySelector<HTMLElement>("[data-search-date]");
+    expect(divider).toBeInstanceOf(HTMLElement);
+    expect(divider?.classList.contains("quick-note-date-divider")).toBe(true);
+    // 纯展示：日期条内没有任何按钮，点它不会离开搜索。
+    expect(divider?.querySelector("button")).toBeNull();
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+}, PAGE_TEST_TIMEOUT_MS);
