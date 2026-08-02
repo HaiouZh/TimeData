@@ -6,12 +6,12 @@ covers:
   - packages/mobile/scripts/ios/**
 contracts:
   - .github/workflows/ios-ipa.yml
-last-reviewed: 2026-07-26
+last-reviewed: 2026-08-02
 ---
 
 # 部署 · iOS 未签名 IPA
 
-> [deployment](../deployment.md) 的 iOS 发布子文档：CI 现场生成 iOS 原生工程、产出**未签名** IPA、键盘工具条补丁、SideStore 装机与数据边界。
+> [deployment](../deployment.md) 的 iOS 发布子文档：CI 现场生成 iOS 原生工程、产出**未签名** IPA、键盘工具条与状态栏补丁、SideStore 装机与数据边界。
 > 不讲 Android 签名与 Gradle（见 [deployment/android-apk](android-apk.md)），也不讲服务器镜像与自更新（见 [deployment](../deployment.md)）。
 
 ## 承上启下
@@ -38,15 +38,21 @@ last-reviewed: 2026-07-26
 5. `cap sync ios`（含 `pod install`）→ PlistBuddy 写 `CFBundleVersion` → `xcodebuild archive`。
 6. 归档时关签名（`CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""`），因此不能用 `xcodebuild -exportArchive`（它必然要签名），改成手工把 `App.app` 塞进 `Payload/` 再 zip 成 `.ipa`。
 
-## 3. 键盘工具条补丁
+## 3. 原生补丁：键盘工具条与状态栏样式
 
 `patch-ios.rb` 做三件事：把 `scripts/ios/` 下两个 Swift 文件拷进生成的工程、用 `xcodeproj` gem 挂进 App target、把 `Main.storyboard` 的根 VC 从 `CAPBridgeViewController` 换成 `MainViewController`。storyboard 替换没匹配上时脚本直接 `abort`——Capacitor 模板改版会在这里炸出来，而不是产出一个悄悄没打上补丁的包。
+
+### 3.1 键盘工具条
 
 `KeyboardAccessoryRemover` 改的是私有类 `WKContentView` 的 `inputAccessoryView` 实现，让它返回 `nil`，去掉键盘上方系统强加的 ▲▼/完成 工具条。**刻意不走"取 `webView.scrollView` 的子视图实例再 `object_setClass`"那条路**：该子视图懒创建，页面加载完成前拿不到，时机稍早就静默失效——而失效的表现和"补丁没生效"完全一样，很难查。改类的做法与 WebView 实例的创建时机无关。
 
 替换 IMP 时先试 `class_addMethod`：成功说明 `WKContentView` 自己没实现该方法（继承自 `UIResponder`），新增的覆盖只作用于它；失败才 `method_setImplementation` 改它自己那份。两条路都不会误伤 `UIResponder` 的全局实现。
 
 去不掉的是输入法自带的候选词条——那是输入法本体的一部分，原生应用同样去不掉。
+
+### 3.2 状态栏样式
+
+`MainViewController` 覆写 `preferredStatusBarStyle` 返回 `.lightContent`——app 底色 `--color-page`（#0e1320）是深色，默认黑字读不出来。它随同一个 Swift 文件走 §3 开头那三步管线，无需额外步骤；`cap add ios` 生成的 `Info.plist` 自带 `UIViewControllerBasedStatusBarAppearance=true`，状态栏样式统一由 VC 决定，不需要 plist 补丁。同批把 `capacitor.config.ts` 的 `ios.backgroundColor`（Android 侧同步）从 `#0f172a` 对齐到 `#0e1320`，消除启动 / 旋转 / 滚动越界时露出原生背景的色差带。
 
 ## 4. Release 契约：不标 latest
 
