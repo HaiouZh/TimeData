@@ -2136,6 +2136,51 @@ describe("主线日期条", () => {
 
     await unmount(root);
   });
+
+  it("每天各自成一个 sticky 包含块——两天的日期条不共享父节点", async () => {
+    await db.quickNotes.bulkAdd([
+      {
+        id: "a1",
+        text: "六月一日上午",
+        occurredAt: "2026-06-01T04:00:00.000Z",
+        createdAt: "2026-06-01T04:00:00.000Z",
+        updatedAt: "2026-06-01T04:00:00.000Z",
+      },
+      {
+        id: "a2",
+        text: "六月一日下午",
+        occurredAt: "2026-06-01T08:00:00.000Z",
+        createdAt: "2026-06-01T08:00:00.000Z",
+        updatedAt: "2026-06-01T08:00:00.000Z",
+      },
+      {
+        id: "b1",
+        text: "六月二日",
+        occurredAt: "2026-06-02T04:00:00.000Z",
+        createdAt: "2026-06-02T04:00:00.000Z",
+        updatedAt: "2026-06-02T04:00:00.000Z",
+      },
+    ]);
+    const { host, root } = await renderPage();
+
+    const dividers = Array.from(host.querySelectorAll<HTMLElement>("[data-date-label]"));
+    expect(dividers.length).toBe(2);
+
+    // 这条守的是 DOM 层级，不是样式：position:sticky 的约束框是元素的父级内容盒，同一父级下的
+    // sticky 兄弟互不推挤。若两条日期条共享父节点（拍平渲染），滚过去的每条都会一直钉在 top-2、
+    // 层层相叠，findStuckDivider 就会把窗口里最早那天误判成「眼前这天」，导出/清理打错日子。
+    const parents = dividers.map((divider) => divider.parentElement);
+    expect(parents[0]).toBeInstanceOf(HTMLElement);
+    expect(parents[0]).not.toBe(parents[1]);
+
+    // 每个包裹节点只装本天的气泡——否则「下一天的包裹把上一天的日期条顶出视口」的推挤时机是错的。
+    const noteIdsIn = (element: Element | null) =>
+      Array.from(element?.querySelectorAll<HTMLElement>("[data-note-id]") ?? []).map((node) => node.dataset.noteId);
+    expect(noteIdsIn(parents[0])).toEqual(["a1", "a2"]);
+    expect(noteIdsIn(parents[1])).toEqual(["b1"]);
+
+    await unmount(root);
+  });
 }, PAGE_TEST_TIMEOUT_MS);
 
 describe("搜索态日期条", () => {

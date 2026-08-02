@@ -56,6 +56,7 @@ import { formatTime, getDateString, isValidDateString } from "../lib/time.ts";
 import { copyText } from "../quick-notes/clipboard.ts";
 import { clearComposerDraft, isEditDraftDirty, readComposerDraft, writeComposerDraft } from "../quick-notes/composerDraft.ts";
 import { findStuckDivider } from "../quick-notes/currentDate.ts";
+import { groupDisplayItemsByDay } from "../quick-notes/dayGroups.ts";
 import { deleteQuickNotesByIds } from "../quick-notes/deleteQuickNotesByIds.ts";
 import { deleteQuickNotesByRange } from "../quick-notes/deleteQuickNotesRange.ts";
 import {
@@ -212,6 +213,8 @@ export default function QuickNotesPage() {
     () => groupQuickNotesForDisplay(timeline.notes.filter((note) => !note.pinned), { today }),
     [timeline.notes, today],
   );
+  // 渲染吃的是按天折过的结构而不是扁平数组：每天必须各自成一个 sticky 包含块，理由见 dayGroups.ts。
+  const dayGroups = useMemo(() => groupDisplayItemsByDay(displayItems), [displayItems]);
   const selectableNotes = useMemo(() => {
     const byId = new Map<string, QuickNote>();
     for (const note of timeline.notes) byId.set(note.id, note);
@@ -253,6 +256,7 @@ export default function QuickNotesPage() {
     () => groupQuickNotesForDisplay(visibleSearchResults, { today, order: "desc" }),
     [visibleSearchResults, today],
   );
+  const searchDayGroups = useMemo(() => groupDisplayItemsByDay(searchDisplayItems), [searchDisplayItems]);
   const searchHiddenCount = searchResults.length - visibleSearchResults.length;
   const hasQuery = searchTerms.length > 0;
   const hasDraft = draftText.trim().length > 0;
@@ -1309,53 +1313,55 @@ export default function QuickNotesPage() {
               <EmptyState variant="card" title="没有匹配的速记" />
             ) : (
               <>
-                {searchDisplayItems.map((item) => {
-                  if (item.type === "date") {
-                    return (
+                {/* 搜索态同样按天分包裹：sticky 包含块的语义前提与主线一致，见 dayGroups.ts。
+                    这里的日期条是**纯展示**，里面不能有任何 button——误触会把人拽离搜索流。 */}
+                {searchDayGroups.map((group) => (
+                  <div key={group.key} className="flex flex-col gap-4">
+                    {group.date && (
                       <div
-                        key={item.key}
-                        data-search-date={item.localDate}
+                        data-search-date={group.date.localDate}
                         className="quick-note-date-divider sticky top-2 z-10 flex items-center justify-center"
                       >
                         <div className="rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3">
-                          {item.label}
+                          {group.date.label}
                         </div>
                       </div>
-                    );
-                  }
-
-                  const note = item.note;
-                  const isAgentNote = note.source === "agent";
-                  // 卡片本体不再可点（误触就被拽离搜索流）；跳时间线走角上的定位小按钮。
-                  return (
-                    <div
-                      key={item.key}
-                      data-note-id={note.id}
-                      className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
-                    >
-                      <span className="float-right ml-2 flex items-center gap-1.5">
-                        <time className="td-time td-text-caption text-ink-3">
-                          {formatLocalClock(note.occurredAt)}
-                        </time>
-                        <button
-                          type="button"
-                          aria-label="定位到时间线"
-                          title="定位到时间线"
-                          onClick={() => void handleResultClick(note)}
-                          className="flex size-8 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-3 transition hover:border-accent hover:text-ink"
+                    )}
+                    {group.notes.map((entry) => {
+                      const note = entry.note;
+                      const isAgentNote = note.source === "agent";
+                      // 卡片本体不再可点（误触就被拽离搜索流）；跳时间线走角上的定位小按钮。
+                      return (
+                        <div
+                          key={entry.key}
+                          data-note-id={note.id}
+                          className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT}`}
                         >
-                          <Icon icon={Crosshair} size={14} />
-                        </button>
-                      </span>
-                      {isAgentNote && (
-                        <div className="mb-1 td-text-caption font-semibold text-accent-ink">
-                          {note.sourceLabel ?? "助手"}
+                          <span className="float-right ml-2 flex items-center gap-1.5">
+                            <time className="td-time td-text-caption text-ink-3">
+                              {formatLocalClock(note.occurredAt)}
+                            </time>
+                            <button
+                              type="button"
+                              aria-label="定位到时间线"
+                              title="定位到时间线"
+                              onClick={() => void handleResultClick(note)}
+                              className="flex size-8 shrink-0 items-center justify-center rounded-pill border border-border bg-surface text-ink-3 transition hover:border-accent hover:text-ink"
+                            >
+                              <Icon icon={Crosshair} size={14} />
+                            </button>
+                          </span>
+                          {isAgentNote && (
+                            <div className="mb-1 td-text-caption font-semibold text-accent-ink">
+                              {note.sourceLabel ?? "助手"}
+                            </div>
+                          )}
+                          <HighlightedText text={note.text} terms={searchTerms} />
                         </div>
-                      )}
-                      <HighlightedText text={note.text} terms={searchTerms} />
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ))}
                 {searchHiddenCount > 0 && (
                   <div className="flex justify-center pb-1">
                     <button
@@ -1396,83 +1402,90 @@ export default function QuickNotesPage() {
                 />
               )}
 
-              {displayItems.map((item) => {
-                if (item.type === "date") {
-                  const dayIds = noteIdsByLocalDate.get(item.localDate) ?? [];
-                  const daySelected = dayIds.length > 0 && dayIds.every((id) => selectedIds.has(id));
-                  return (
-                    <div
-                      key={item.key}
-                      data-date-label={item.label}
-                      data-local-date={item.localDate}
-                      // w-fit mx-auto 是承重的：DateField 基础类带 w-full，容器不收窄
-                      // 药丸就会被撑成通栏（w-full 解析成父级宽），别当排版类顺手删掉。
-                      className="quick-note-date-divider sticky top-2 z-10 mx-auto flex w-fit items-center gap-2"
-                    >
-                      <DateField
-                        value={item.localDate}
-                        ariaLabel={`${item.label}，点击跳转到其他日期`}
-                        onChange={(next) => {
-                          if (next) handleJumpDateChange(next);
-                        }}
-                        onOpenChange={setDatePickerOpen}
-                        portal
-                        hideIcon
-                        className="min-h-0 rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3 shadow-none"
-                        formatValue={() => <span>{item.label}</span>}
-                      />
-                      {selectionMode && (
-                        <button
-                          type="button"
-                          aria-label={`${daySelected ? "取消选中" : "选中"}${item.label}的速记`}
-                          aria-pressed={daySelected}
-                          onClick={() => toggleSelectDay(item.localDate)}
-                          className={`shrink-0 rounded-pill border px-3 py-1 td-text-caption font-medium transition ${
-                            daySelected
-                              ? "border-accent bg-accent-soft text-accent-ink"
-                              : "border-border bg-surface text-ink-3 hover:border-accent hover:text-ink-2"
-                          }`}
-                        >
-                          {daySelected ? "已选这天" : "选中这天"}
-                        </button>
-                      )}
-                    </div>
-                  );
-                }
-
-                const note = item.note;
-                const isAgentNote = note.source === "agent";
-                const selected = selectedIds.has(note.id);
-                const pending = unsyncedQuickNoteIds.has(note.id);
+              {/* 每天一个包裹 div：它就是这一天日期条的 sticky 包含块，下一天的包裹上来时
+                  会把这一天的日期条顶出视口（Telegram 同款）。别给它加 overflow/contain/
+                  transform/filter——任何一个都会掐断内部 sticky 或改写包含块。
+                  内外都 gap-4：天与天、日期条与气泡、气泡与气泡的间距仍统一是 1rem。 */}
+              {dayGroups.map((group) => {
+                const dayIds = group.date ? (noteIdsByLocalDate.get(group.date.localDate) ?? []) : [];
+                const daySelected = dayIds.length > 0 && dayIds.every((id) => selectedIds.has(id));
+                const groupDate = group.date;
                 return (
-                  <article key={item.key}>
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      data-note-id={note.id}
-                      aria-label={quickNoteAriaLabel(note)}
-                      aria-pressed={selectionMode ? selected : undefined}
-                      {...noteInteractionProps(note)}
-                      style={{ WebkitTouchCallout: "none" }}
-                      className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT} ${
-                        selected ? NOTE_CARD_SELECTED : ""
-                      } ${highlightNoteId === note.id ? NOTE_CARD_LOCATED : ""}`}
-                    >
-                      {selectionMode && (
-                        <span
-                          aria-hidden="true"
-                          className={`absolute right-2 top-2 flex size-5 items-center justify-center rounded-pill border ${
-                            selected
-                              ? "border-accent bg-accent text-page"
-                              : "border-border-strong bg-page/60 text-transparent"
-                          }`}
-                        >
-                          <Icon icon={Check} size={14} />
-                        </span>
-                      )}
-                      <NoteBubble note={note} pending={pending} />
-                    </div>
-                  </article>
+                  <div key={group.key} className="flex flex-col gap-4">
+                    {groupDate && (
+                      <div
+                        data-date-label={groupDate.label}
+                        data-local-date={groupDate.localDate}
+                        // w-fit mx-auto 是承重的：DateField 基础类带 w-full，容器不收窄
+                        // 药丸就会被撑成通栏（w-full 解析成父级宽），别当排版类顺手删掉。
+                        className="quick-note-date-divider sticky top-2 z-10 mx-auto flex w-fit items-center gap-2"
+                      >
+                        <DateField
+                          value={groupDate.localDate}
+                          ariaLabel={`${groupDate.label}，点击跳转到其他日期`}
+                          onChange={(next) => {
+                            if (next) handleJumpDateChange(next);
+                          }}
+                          onOpenChange={setDatePickerOpen}
+                          portal
+                          hideIcon
+                          className="min-h-0 rounded-pill border border-border bg-surface px-2.5 td-text-body font-medium text-ink-3 shadow-none"
+                          formatValue={() => <span>{groupDate.label}</span>}
+                        />
+                        {selectionMode && (
+                          <button
+                            type="button"
+                            aria-label={`${daySelected ? "取消选中" : "选中"}${groupDate.label}的速记`}
+                            aria-pressed={daySelected}
+                            onClick={() => toggleSelectDay(groupDate.localDate)}
+                            className={`shrink-0 rounded-pill border px-3 py-1 td-text-caption font-medium transition ${
+                              daySelected
+                                ? "border-accent bg-accent-soft text-accent-ink"
+                                : "border-border bg-surface text-ink-3 hover:border-accent hover:text-ink-2"
+                            }`}
+                          >
+                            {daySelected ? "已选这天" : "选中这天"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {group.notes.map((entry) => {
+                      const note = entry.note;
+                      const isAgentNote = note.source === "agent";
+                      const selected = selectedIds.has(note.id);
+                      const pending = unsyncedQuickNoteIds.has(note.id);
+                      return (
+                        <article key={entry.key}>
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            data-note-id={note.id}
+                            aria-label={quickNoteAriaLabel(note)}
+                            aria-pressed={selectionMode ? selected : undefined}
+                            {...noteInteractionProps(note)}
+                            style={{ WebkitTouchCallout: "none" }}
+                            className={`${NOTE_CARD_BASE} rounded-card ${isAgentNote ? NOTE_CARD_AGENT : NOTE_CARD_DEFAULT} ${
+                              selected ? NOTE_CARD_SELECTED : ""
+                            } ${highlightNoteId === note.id ? NOTE_CARD_LOCATED : ""}`}
+                          >
+                            {selectionMode && (
+                              <span
+                                aria-hidden="true"
+                                className={`absolute right-2 top-2 flex size-5 items-center justify-center rounded-pill border ${
+                                  selected
+                                    ? "border-accent bg-accent text-page"
+                                    : "border-border-strong bg-page/60 text-transparent"
+                                }`}
+                              >
+                                <Icon icon={Check} size={14} />
+                              </span>
+                            )}
+                            <NoteBubble note={note} pending={pending} />
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
                 );
               })}
             </>

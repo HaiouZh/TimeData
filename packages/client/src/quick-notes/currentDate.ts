@@ -13,6 +13,11 @@ export interface StuckCandidate {
  * 同参考系这个隐含前提。
  *
  * 多条同时落在区间时返回第一条——它正被下一条顶出、此刻仍占着顶部那块像素。
+ *
+ * 这条「取第一条」依赖一个 **DOM 前提：每天各自成一个 sticky 包含块**（页面层按天包一层 div，
+ * 见 `dayGroups.ts`）。只有这样「上一条被下一条顶出」才真的会发生，区间里同时出现两条才等价于
+ * 「前一条正在退场」。若把日期条与气泡拍平成同一父级的兄弟，sticky 兄弟互不推挤，窗口里滚过的
+ * 每一条 top 都恒等于 stickyTop、全部落进区间，这里就会返回最早那天——语义直接反掉。
  */
 export function findStuckDivider<T extends StuckCandidate>(dividers: T[], stickyTop: number): T | null {
   for (const divider of dividers) {
