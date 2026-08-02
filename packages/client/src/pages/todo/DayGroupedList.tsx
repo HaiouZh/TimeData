@@ -60,7 +60,7 @@ export function DayGroupedList({
           aria-label="收起"
           onClick={() => setExpanded(false)}
           className="sticky z-10 mt-1 w-full rounded-ctl bg-surface px-2 py-1.5 td-text-caption text-ink-3 shadow-sm hover:bg-surface-hover"
-          style={{ bottom: stickyBottomOffsetPx + 4 }}
+          style={{ bottom: `calc(${stickyBottomOffsetPx + 4}px + env(safe-area-inset-bottom))` }}
         >
           收起
         </button>

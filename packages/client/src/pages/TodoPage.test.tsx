@@ -693,7 +693,7 @@ describe("TodoPage", () => {
 
     const collapse = inboxSection?.querySelector('[aria-label="收起"]') as HTMLButtonElement | null;
     expect(collapse).not.toBeNull();
-    expect(collapse?.style.bottom).toBe("4px");
+    expect(collapse?.style.bottom).toBe("calc(4px + env(safe-area-inset-bottom))");
 
     await unmount(root);
   });
@@ -2003,8 +2003,11 @@ describe("TodoPage 多选态", () => {
     await addTask({ title: "买灯", toInbox: true });
     const { host, root } = await renderPage({ hideBottomNav: true });
     await waitForText(host, "买灯");
-    const dockBottom = () =>
-      Number.parseInt((host.querySelector('[data-testid="todo-toast-dock"]') as HTMLElement).style.bottom, 10);
+    const dockBottom = () => {
+      const raw = (host.querySelector('[data-testid="todo-toast-dock"]') as HTMLElement).style.bottom;
+      const match = /^calc\((\d+)px \+ env\(safe-area-inset-bottom\)\)$/.exec(raw);
+      return match ? Number.parseInt(match[1], 10) : Number.NaN;
+    };
 
     // 探针：非多选态下记录框自己也被滚动藏起来了，底部真的空着，toast 贴底是对的。
     // 这一行同时钉死「本用例确实跑在 navHidden 分支上」——否则下面那条断言无论如何都会绿。

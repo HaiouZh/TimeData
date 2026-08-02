@@ -617,7 +617,7 @@ describe("QuickNotesPage", () => {
     const list = host.querySelector('[aria-label="速记列表"]');
 
     expect(list).toBeInstanceOf(HTMLElement);
-    expect((list as HTMLElement).style.paddingBottom).toBe("164px");
+    expect((list as HTMLElement).style.paddingBottom).toBe("calc(164px + env(safe-area-inset-bottom))");
 
     await unmount(root);
   });
@@ -629,7 +629,7 @@ describe("QuickNotesPage", () => {
     const composer = host.querySelector('form[aria-label="速记输入区"]');
 
     expect(composer).toBeInstanceOf(HTMLFormElement);
-    expect((composer as HTMLFormElement).style.bottom).toBe("0px");
+    expect((composer as HTMLFormElement).style.bottom).toBe("calc(0px + env(safe-area-inset-bottom))");
 
     await unmount(root);
   });

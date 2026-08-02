@@ -1193,7 +1193,7 @@ export function TodoPage() {
       <div className={`min-h-full bg-page text-ink${dragging ? " todo-dnd-dragging" : ""}`}>
         <div
           className="mx-auto w-full max-w-2xl px-4 py-4 lg:max-w-none"
-          style={{ paddingBottom: contentBottomPaddingPx }}
+          style={{ paddingBottom: `calc(${contentBottomPaddingPx}px + env(safe-area-inset-bottom))` }}
         >
           {wide ? (
             <ResizableSplit
@@ -1232,7 +1232,7 @@ export function TodoPage() {
         <div
           data-testid="todo-toast-dock"
           className="pointer-events-none fixed inset-x-0 z-[var(--z-backdrop)] px-4"
-          style={{ bottom: composerAvoidancePx + 8 }}
+          style={{ bottom: `calc(${composerAvoidancePx + 8}px + env(safe-area-inset-bottom))` }}
         >
           <div className="pointer-events-auto mx-auto w-full max-w-2xl">
             <ActionToastBar toast={actionToast} onDismiss={clearActionToast} ariaLabel="待办操作反馈" />

@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./App.js";
-import { BottomNavProvider, useBottomNav } from "./contexts/BottomNavContext.js";
+import { BOTTOM_NAV_HEIGHT_PX, BottomNavProvider, useBottomNav } from "./contexts/BottomNavContext.js";
 import { click, renderDom, unmount } from "./test/domHarness.js";
 
 vi.mock("./hooks/useAppResumeRefresh.ts", () => ({ useAppResumeRefresh: () => {} }));
@@ -53,8 +53,8 @@ describe("AppShell bottom nav hide", () => {
 
     const nav = host.querySelector('nav[aria-label="主导航"]');
     expect(nav).toBeInstanceOf(HTMLElement);
-    // 显示态：占据固定高度
-    expect((nav as HTMLElement).style.height).toBe("49px");
+    // 显示态：占据固定高度（内容高 + 底部安全区，桌面 env()=0 时即原 49px）
+    expect((nav as HTMLElement).style.height).toBe(`calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`);
     // 用 transform 隐藏不会释放 flex 占位，必须靠塌缩高度
     expect((nav as HTMLElement).className).not.toContain("translate-y");
 

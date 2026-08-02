@@ -49,7 +49,7 @@ export function TodoSelectionBar({
       // 两处各自让路，别改这个数字：页面用 composerAvoidancePx 把 toast 顶到操作栏上沿之外
       //（TodoPage 的 bottomBarHeightPx），列表则「选完即收起」（见下面 onClick）。
       // 调 z 层级只会把这两个各自自洽的决定改成互相打架的两个数字，下一个人还会撞。
-      style={{ bottom: bottomOffsetPx, zIndex: Z.backdrop }}
+      style={{ bottom: `calc(${bottomOffsetPx}px + env(safe-area-inset-bottom))`, zIndex: Z.backdrop }}
     >
       <div className="mx-auto w-full max-w-2xl">
         {pickerOpen && projects.length > 0 && (

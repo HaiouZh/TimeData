@@ -1270,7 +1270,10 @@ export default function QuickNotesPage() {
         ref={scrollRef}
         onScroll={handleScroll}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-5"
-        style={{ paddingBottom: bottomInsetPx, scrollPaddingBottom: bottomInsetPx }}
+        style={{
+          paddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
+          scrollPaddingBottom: `calc(${bottomInsetPx}px + env(safe-area-inset-bottom))`,
+        }}
         aria-label="速记列表"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
@@ -1456,7 +1459,7 @@ export default function QuickNotesPage() {
           type="button"
           onClick={jumpToLatest}
           className="fixed right-4 rounded-pill border border-border-strong bg-surface px-3 py-2 td-text-caption font-medium text-ink-2 shadow-elev1 transition hover:border-accent hover:text-ink"
-          style={{ bottom: navOffsetPx + bottomInsetPx }}
+          style={{ bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))` }}
         >
           <span className="inline-flex items-center gap-1">
             <Icon icon={ArrowDown} size={14} />
@@ -1468,7 +1471,7 @@ export default function QuickNotesPage() {
       {error && (
         <p
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-danger/40 bg-danger/10 px-3 py-2 td-text-body text-danger shadow-elev1"
-          style={{ bottom: navOffsetPx + bottomInsetPx }}
+          style={{ bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))` }}
         >
           {error}
         </p>
@@ -1476,7 +1479,7 @@ export default function QuickNotesPage() {
       {status && (
         <p
           className="fixed left-4 right-4 mx-auto max-w-3xl rounded-card border border-border bg-surface/95 px-3 py-2 td-text-body text-ink-2 shadow-elev1"
-          style={{ bottom: navOffsetPx + bottomInsetPx }}
+          style={{ bottom: `calc(${navOffsetPx + bottomInsetPx}px + env(safe-area-inset-bottom))` }}
         >
           {status}
         </p>
@@ -1486,7 +1489,7 @@ export default function QuickNotesPage() {
           ref={composerRef}
           aria-label="速记输入区"
           className="fixed left-0 right-0 border-t border-border bg-page/95 p-2 shadow-elev2 backdrop-blur transition-[bottom] duration-200 sm:p-3"
-          style={{ bottom: navOffsetPx }}
+          style={{ bottom: `calc(${navOffsetPx}px + env(safe-area-inset-bottom))` }}
           onSubmit={(event) => {
             event.preventDefault();
             void handleSubmit();

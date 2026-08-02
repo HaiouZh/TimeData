@@ -6,7 +6,10 @@ export default function AppUpdatePrompt() {
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed inset-x-3 bottom-20 z-[var(--z-modal)] mx-auto max-w-lg rounded-card border border-accent/40 bg-surface-elevated p-4 shadow-elev2">
+    <div
+      className="fixed inset-x-3 z-[var(--z-modal)] mx-auto max-w-lg rounded-card border border-accent/40 bg-surface-elevated p-4 shadow-elev2"
+      style={{ bottom: "calc(5rem + env(safe-area-inset-bottom))" }}
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="td-text-label font-medium text-ink">发现新版本</div>

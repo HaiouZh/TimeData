@@ -43,7 +43,13 @@ export function MobileBottomNav() {
       className={`flex shrink-0 overflow-hidden bg-surface-elevated transition-[height] duration-200 ${
         hidden ? "" : "border-t border-border"
       }`}
-      style={{ height: hidden ? 0 : BOTTOM_NAV_HEIGHT_PX }}
+      // nav 背景必须铺到屏幕最底（home 横条区露出底色就是 bug），故总高 = 内容高 + 底部安全区；
+      // 隐藏时高度与内边距必须**同时**归零——border-box 下只归零 height 会被 padding 撑成 inset 高的一条空带。
+      // 内边距用 calc 包裹而非裸 env()：与浮层批次同一写法，jsdom 的 CSSOM 也能保留该值供测试断言。
+      style={{
+        height: hidden ? 0 : `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom))`,
+        paddingBottom: hidden ? 0 : "calc(0px + env(safe-area-inset-bottom))",
+      }}
     >
       {items.map((item) => (
         <MobileIconLink key={item.to} item={item} badge={item.to === "/tracks" ? attentionCount : 0} />
