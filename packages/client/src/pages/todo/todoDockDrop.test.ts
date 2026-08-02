@@ -59,7 +59,7 @@ describe("applyTodoDockDrop", () => {
     expect(deps.showToast).toHaveBeenCalledWith("子任务不能单独抓到手头");
   });
 
-  it("子任务(parent:)投手头 = 防御层 invalid:不调 grabToHand、静默消化", async () => {
+  it("子任务(parent:)投手头:透传 promote-to-hand,不调 grabToHand", async () => {
     const deps = makeDeps();
     const result = await applyTodoDockDrop(deps, {
       dockId: "dock:hand",
@@ -67,7 +67,7 @@ describe("applyTodoDockDrop", () => {
       activeParentId: "p1",
       activeId: "c1",
     });
-    expect(result).toBe("handled");
+    expect(result).toEqual({ kind: "promote-to-hand" });
     expect(deps.grabToHand).not.toHaveBeenCalled();
     expect(deps.showToast).not.toHaveBeenCalled();
   });

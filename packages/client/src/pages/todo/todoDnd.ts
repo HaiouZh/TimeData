@@ -152,9 +152,11 @@ export function resolveTodoDockDrop({
   // 手头源不开放投坞（区内重排专属）：todoDockTargets 已不渲染，这里是隐藏规则漏了时的兜底。
   if (parseTodoContainerId(activeContainerId)?.kind === "hand") return { kind: "invalid", target };
   if (target.kind === "hand") {
-    // 子任务不能单独抓到手头(grabTaskToHand 硬拒),手头药丸对子任务也不渲染(todoDockTargets);
-    // 这里是防御层:隐藏规则将来漏了,也不能放一个必抛错的动作过去。
-    if (parseTodoContainerId(activeContainerId)?.kind === "parent") return { kind: "invalid", target };
+    // 子任务投手头 = 升根并站到手头（走 promote-to-hand，落库先升根再抓；
+    // grabTaskToHand 对子任务的硬拒因此不会被这条路径触发）。
+    if (parseTodoContainerId(activeContainerId)?.kind === "parent") {
+      return { kind: "op", op: { kind: "promote-to-hand" } };
+    }
     return { kind: "grab-to-hand" };
   }
   const container: TodoContainer =
@@ -171,7 +173,7 @@ export function resolveTodoDockDrop({
 /**
  * 拖拽中应显示的坞落点(有序:今天/手头/收件箱/项目)。
  * 被拖行所在池的药丸不显示;子任务(parent:)时 today/inbox 都显示(升根语义),
- * 但**手头药丸不显示**——grabTaskToHand 硬拒子任务,不给用户一个必失败的落点。
+ * 子任务也显示手头药丸——投上去走升根到手头。
  */
 export function todoDockTargets(
   activeContainerId: string,
@@ -182,7 +184,7 @@ export function todoDockTargets(
   if (active?.kind === "hand") return [];
   const targets: TodoDockTarget[] = [];
   if (!(active?.kind === "pool" && active.pool === "today")) targets.push({ kind: "pool", pool: "today" });
-  if (active?.kind !== "parent") targets.push({ kind: "hand" });
+  targets.push({ kind: "hand" });
   if (!(active?.kind === "pool" && active.pool === "inbox")) targets.push({ kind: "pool", pool: "inbox" });
   for (const project of projects) targets.push({ kind: "project", goalId: project.goalId });
   return targets;

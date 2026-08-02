@@ -591,10 +591,10 @@ describe("resolveTodoDockDrop", () => {
     ).toEqual({ kind: "grab-to-hand" });
   });
 
-  it("子任务 → dock:hand = invalid(grabTaskToHand 硬拒子任务,防御层不放行)", () => {
+  it("子任务 → dock:hand = promote-to-hand（升根并站到手头）", () => {
     expect(
       resolveTodoDockDrop({ dockId: "dock:hand", activeContainerId: "parent:p1", activeParentId: "p1" }),
-    ).toEqual({ kind: "invalid", target: { kind: "hand" } });
+    ).toEqual({ kind: "op", op: { kind: "promote-to-hand" } });
   });
 
   it("inbox 根任务 → dock:pool:today = schedule-root today", () => {
@@ -655,9 +655,10 @@ describe("todoDockTargets", () => {
     ]);
   });
 
-  it("拖子任务(parent:):今天/收件箱都在(升根语义),手头不在(必失败落点不显示)", () => {
+  it("拖子任务(parent:):今天/收件箱都在(升根语义),手头也在(投上去升根到手头)", () => {
     expect(todoDockTargets("parent:p1", [])).toEqual([
       { kind: "pool", pool: "today" },
+      { kind: "hand" },
       { kind: "pool", pool: "inbox" },
     ]);
   });
@@ -755,6 +756,10 @@ describe("hand 容器（手头区拖拽排序）", () => {
 
   it("todoDockTargets 对 hand 源返回空数组（坞不显示）", () => {
     expect(todoDockTargets("hand", [{ goalId: "g1" }])).toEqual([]);
+  });
+
+  it("todoDockTargets 对子任务源包含手头药丸", () => {
+    expect(todoDockTargets("parent:p1", [])).toContainEqual({ kind: "hand" });
   });
 
   it("resolveTodoDockDrop 对 hand 源 → invalid（防御层：坞隐藏规则漏了也不能放怪异操作过去）", () => {
