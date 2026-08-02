@@ -5,6 +5,7 @@ import {
   goalBarTaskIds,
   landsInCollapsedProjectGroup,
   projectChipIndex,
+  projectMemberRowActions,
   projectMemberState,
   sortProjectMembers,
   summarizeProjectGroup,
@@ -75,6 +76,40 @@ describe("projectMemberState", () => {
   it("已完成成员 → idle（placement 判 completed，不当成时间轴状态）", () => {
     const t = task({ id: "t1", done: true, completedAt: "2026-07-20T00:00:00.000Z" });
     expect(projectMemberState(t, { handSessionId: null, now: NOW }).kind).toBe("idle");
+  });
+});
+
+describe("projectMemberRowActions", () => {
+  const opts = { handSessionId: "s1", now: NOW };
+
+  it("在手头且已排今天：两根轴各说各的，不互相遮蔽", () => {
+    const t = task({ id: "t1", sessionId: "s1", scheduledAt: "2026-07-25T00:00:00.000Z" });
+    expect(projectMemberRowActions(t, opts)).toEqual({ atHand: true, pool: "today" });
+  });
+
+  it("在手头、没排期：pool 仍是 inbox——抓手关掉但箭头照样指「排进今天」", () => {
+    const t = task({ id: "t1", sessionId: "s1" });
+    expect(projectMemberRowActions(t, opts)).toEqual({ atHand: true, pool: "inbox" });
+  });
+
+  it("没在手头、排了今天：箭头该指「回收件箱」", () => {
+    const t = task({ id: "t1", scheduledAt: "2026-07-25T00:00:00.000Z" });
+    expect(projectMemberRowActions(t, opts)).toEqual({ atHand: false, pool: "today" });
+  });
+
+  it("排到未来：pool=inbox——那条的动作是「排进今天」不是「回收件箱」", () => {
+    const t = task({ id: "t1", scheduledAt: "2026-08-20T00:00:00.000Z" });
+    expect(projectMemberRowActions(t, opts)).toEqual({ atHand: false, pool: "inbox" });
+  });
+
+  it("sessionId 是历史指针：不等于当前活跃场就不算在手头", () => {
+    const t = task({ id: "t1", sessionId: "旧场" });
+    expect(projectMemberRowActions(t, opts).atHand).toBe(false);
+  });
+
+  it("没有活跃场（handSessionId 为 null）：sessionId 非空也不算在手头", () => {
+    const t = task({ id: "t1", sessionId: "s1" });
+    expect(projectMemberRowActions(t, { handSessionId: null, now: NOW }).atHand).toBe(false);
   });
 });
 

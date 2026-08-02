@@ -17,6 +17,14 @@ import type { InlineChildrenMode } from "./InlineChildren.js";
 
 export interface TaskListProps {
   pool: Extract<TaskPool, "today" | "inbox" | "upcoming" | "completed">;
+  /**
+   * 混池列表（项目区）按行覆盖 pool。列表级 `pool` 在那里只表达「这块怎么铺」，
+   * 组内成员各自处在不同的时间轴位置，行动作跟着列表级 pool 走就会全挂同一个箭头——
+   * 已排今天的行照样显示「排进今天」。返回值同时喂 TaskRow 与滑动动作，两条通道一个口径。
+   */
+  rowPool?: (task: Task) => Extract<TaskPool, "today" | "inbox">;
+  /** 已在手头的行：关掉「抓到手头」（悬停按钮 + 滑动），它已经在那儿了。 */
+  atHandIds?: ReadonlySet<string>;
   tasks: Task[];
   isOverdue?: (t: Task) => boolean;
   /**
@@ -55,12 +63,14 @@ export function TaskList(props: TaskListProps) {
   const readOnly = pool === "completed";
   const canSort = Boolean(sortable && containerId && !readOnly && !props.selectionMode);
   const isCoarsePointer = useIsCoarsePointer();
+  // 只读列表不给行覆盖：completed 的行动作本来就全关，逐行改 pool 只会把「回收件箱」放回来。
+  const poolOf = (task: Task): TaskPool => (readOnly ? pool : (props.rowPool?.(task) ?? pool));
 
   function renderTaskRow(task: Task, dragHandle?: RowDragHandle) {
     return (
       <TaskRow
         task={task}
-        pool={pool}
+        pool={poolOf(task)}
         overdue={pool === "today" && (isOverdue?.(task) ?? false)}
         dragHandle={dragHandle}
         coarsePointer={isCoarsePointer}
@@ -70,6 +80,7 @@ export function TaskList(props: TaskListProps) {
         onToToday={readOnly ? undefined : props.onToToday}
         onToInbox={readOnly ? undefined : props.onToInbox}
         onToHand={props.onToHand}
+        atHand={props.atHandIds?.has(task.id) ?? false}
         onCopyTitle={props.onCopyTitle}
         extraAction={props.extraAction}
         childrenModeOverride={props.selectionMode ? "static" : props.childrenModeOverride}
@@ -86,8 +97,10 @@ export function TaskList(props: TaskListProps) {
 
   function renderItem(task: Task) {
     const canSwap = !readOnly && task.recurrence === null && task.ruleId === null;
+    // 与悬停按钮同一个 poolOf：滑动与悬停是同一批动作的两种指针形态，口径分叉就是「桌面对了、手机还错」。
+    const rowPool = poolOf(task);
     const leading =
-      canSwap && (pool === "inbox" || pool === "upcoming") ? (
+      canSwap && (rowPool === "inbox" || rowPool === "upcoming") ? (
         <LeadingActions>
           <SwipeAction onClick={() => props.onToToday(task)}>
             {/* 行卡片化后动作色块跟随行圆角，避免直角块贴圆角卡透出底色缺口 */}
@@ -99,14 +112,14 @@ export function TaskList(props: TaskListProps) {
       ) : undefined;
     const trailing = (
       <TrailingActions>
-        {canSwap && pool === "today" && (
+        {canSwap && rowPool === "today" && (
           <SwipeAction onClick={() => props.onToInbox(task)}>
             <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
               回收件箱
             </div>
           </SwipeAction>
         )}
-        {props.onToHand && task.recurrence === null && pool !== "completed" && (
+        {props.onToHand && task.recurrence === null && pool !== "completed" && !props.atHandIds?.has(task.id) && (
           <SwipeAction onClick={() => props.onToHand?.(task)}>
             <div className="flex h-full items-center rounded-row bg-surface-elevated px-4 td-text-label font-medium text-ink">
               抓到手头

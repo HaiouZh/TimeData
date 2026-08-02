@@ -51,6 +51,11 @@ export interface TaskRowProps {
   onToToday?: (t: Task) => void;
   onToInbox?: (t: Task) => void;
   onToHand?: (t: Task) => void;
+  /**
+   * 这条已经在手头：不再渲染「抓到手头」入口——它已经在那儿了，点了也没有第二个手头可去。
+   * 由调用方判定：手头是「sessionId 等于当前活跃场 id」，行拿不到活跃场（见 evergreen todo/at-hand）。
+   */
+  atHand?: boolean;
   /** 只读场景强制覆盖按 pool 推断的 children mode。 */
   childrenModeOverride?: InlineChildrenMode;
   /** 行内额外动作插槽（如翻牌「顶一下」）；UI 按钮自带 stopPropagation。 */
@@ -113,6 +118,7 @@ export function TaskRow({
   onToToday,
   onToInbox,
   onToHand,
+  atHand,
   childrenModeOverride,
   extraAction,
   indentTargetActive,
@@ -190,7 +196,8 @@ export function TaskRow({
   // 与 TaskList.tsx 的左右滑判据（canSwap）对齐：occurrence 不进排期通道。
   const canSwapPool = task.recurrence === null && task.ruleId === null && pool !== "completed";
   // canGrab 刻意不加 ruleId：把「这一发」抓到手头是另一个动词，与排期无关，照常开放。
-  const canGrab = task.recurrence === null && pool !== "completed";
+  // atHand 则是「已经在手头」——同一个动作对它是空动作，收掉。
+  const canGrab = task.recurrence === null && pool !== "completed" && !atHand;
   const childrenMode = childrenModeOverride ?? childModeForPool(pool);
   const canInlineCompose = childTotal === 0 && childrenMode !== "readonly";
   const showInlineChildren = expanded && (childTotal > 0 || canInlineCompose);

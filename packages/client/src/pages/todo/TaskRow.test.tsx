@@ -895,6 +895,24 @@ describe("TaskRow", () => {
       await unmount(root);
     });
 
+    it("atHand：这条已经在手头，不再渲染「抓到手头」按钮", async () => {
+      const onToHand = vi.fn();
+      const { host, root } = await renderDom(
+        <TaskRow
+          task={task()}
+          pool="inbox"
+          coarsePointer={false}
+          atHand
+          onToggle={noop}
+          onEdit={noop}
+          onToHand={onToHand}
+        />,
+      );
+
+      expect(host.querySelector('[aria-label^="抓到手头"]')).toBeNull();
+      await unmount(root);
+    });
+
     it("不传 onToHand 不渲染「抓到手头」按钮（向后兼容）", async () => {
       const { host, root } = await renderDom(
         <TaskRow task={task()} pool="inbox" coarsePointer={false} onToggle={noop} onEdit={noop} />,

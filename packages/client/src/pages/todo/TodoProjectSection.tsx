@@ -9,7 +9,13 @@ import {
   RECENT_DONE_WINDOW_DAYS,
   type TodoProjectGroup,
 } from "../../lib/tasks/goalMembership.js";
-import { type ProjectChip, projectMemberState, sortProjectMembers, summarizeProjectGroup } from "../../lib/tasks/projectZone.js";
+import {
+  type ProjectChip,
+  projectMemberRowActions,
+  projectMemberState,
+  sortProjectMembers,
+  summarizeProjectGroup,
+} from "../../lib/tasks/projectZone.js";
 import { taskDueDateLabel } from "../../lib/tasks/taskTimeLabel.js";
 import { TaskList } from "./TaskList.js";
 import { META_CHIP_CLASS } from "./TaskRow.js";
@@ -547,6 +553,9 @@ export function TodoProjectSection({
       <div className="space-y-1">
         {groups.map((group) => {
           const visibleTasks = displayProjectTasks(group, recentTaskIds.get(group.goalId) ?? [], handSessionId, now);
+          const rowActions = new Map(
+            visibleTasks.map((task) => [task.id, projectMemberRowActions(task, { handSessionId, now })]),
+          );
           return (
             <ProjectGroupCard
               key={group.goalId}
@@ -573,7 +582,11 @@ export function TodoProjectSection({
             >
               {visibleTasks.length > 0 && (
                 <TaskList
+                  // pool="inbox" 只定这块「怎么铺」（组内不排序、不换池）；行动作各自按真实状态走 rowPool /
+                  // atHandIds——组内混着在手头的、排了今天的、躺着的，跟着列表级 pool 会让前两类挂上空动作。
                   pool="inbox"
+                  rowPool={(task) => rowActions.get(task.id)?.pool ?? "inbox"}
+                  atHandIds={new Set([...rowActions].filter(([, a]) => a.atHand).map(([id]) => id))}
                   tasks={visibleTasks}
                   childrenModeOverride="static"
                   metaChip={(task) => memberStateChip(task, handSessionId, now)}

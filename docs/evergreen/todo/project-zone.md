@@ -5,7 +5,7 @@ covers:
   - packages/client/src/lib/tasks/goalMembership.ts
   - packages/client/src/lib/tasks/projectZone.ts
   - packages/client/src/pages/todo/TodoProjectSection.tsx
-last-reviewed: 2026-07-31
+last-reviewed: 2026-08-02
 ---
 
 # 待办 · 项目区与归属轴
@@ -89,6 +89,7 @@ last-reviewed: 2026-07-31
 - **上限预警**：`memberCount >= Math.ceil(GOAL_MEMBERS_MAX * 0.9)` 且组未全完成时显示轻量「接近上限」提示。阈值从上限推导，不写死 450；预警不改变写入行为，真正撞线仍由 `ProjectAssignError("full")` 拒绝。
 - **展开态记忆**：组件内 `Map<goalId, boolean>` 覆盖表，不持久化。无筛选时默认全折叠，展开由用户点击或 `revealGoals`（落点反馈 / chip 回跳）驱动；筛选激活时匹配组强制展开，但不改写覆盖表，清除筛选后恢复用户偏好。曾有一档「存量提示条未读时首次全展开」，2026-07-27 随提示条一并退役。
 - **成员状态点**：`projectMemberState` 判四态——`at-hand`（焦点轴优先于时间轴）/ `today` / `scheduled` / `idle`。`idle` 是默认多数态，渲染层不画胶囊：没有胶囊本身就是答案。**没有「逾期」态**：`placementForTask` 只对重复模板与 occurrence 给 `overdue`，一次性任务过期会被退回 `inbox`，而项目区的归集守卫恰好把前两类挡在门外——项目区成员拿不到 overdue。
+- **成员行动作按两根轴各自渲染**：组内列表按 `pool="inbox"` 铺（组内不排序也不换池），但行右端的换池箭头与「抓到手头」各走自己的轴——`projectMemberRowActions` 同时给出 `atHand`（焦点轴）与 `pool`（时间轴：在今天 → `today` 显示「回收件箱」，其余含排到未来 → `inbox` 显示「排进今天」），经 `TaskList` 的 `rowPool` / `atHandIds` 落到行上，悬停按钮与滑动菜单共用这同一份判定。**项目区是唯一会撞上这件事的区域**：别处 `listTasks` 早把在手头 / 在今天的行截去各自的区，只有这里按 §1「一条被抓到手头、或排到今天的成员仍留在项目区」原样留着，跟着列表级 `pool` 走就会给它们挂上空动作（已在手头的还显示「抓到手头」、已排今天的还显示「排进今天」）。与 `projectMemberState` 的四态互斥刻意不同：那个答的是「当前在哪」（焦点轴压过时间轴）、只用来画胶囊，拿它开关按钮会把「在手头且已排今天」判成没排今天、箭头指反。时间轴刻意不给 `upcoming`——`TaskRow` 拿到它会再画一枚排期日胶囊，与状态胶囊重复。
 - **项目名 chip**：只出现在**手头 / 今天 / 已排期（含水下尾）**。它与绿竖条**不得同屏**——chip 说得出是哪个项目（携带该项目的身份色）、点得开，竖条只说「有去处」（全场同一个绿），同屏出现时后者是前者的冗余——`goalBarTaskIds` 把有 chip 的行从竖条集合里裁掉，竖条退回只表达 theme 归属。chip 需 `relative z-20` 才能压过行左 2/5 的 `z-10` 拖拽 activator。裁剪后的 `goalLinkedIds` 同时也喂给了翻牌区 / 水下收件箱 / 收件箱这三个**不渲染 chip** 的分区，看着像多裁了，其实零语义损失：「chip 集合 ∩ 收件箱 = ∅」是**构造性**成立的——`projectChipIndex` 的输入是 `buckets.projects`，而它与 inbox 排他共用同一个 `ownedByProject`（§3 第 2 条），进得了 chip 索引的就一定进不了 inbox——这行不是笔误。chip 与组卡片标题行各画一个同色圆点，色取自 `TodoBuckets.projectTints`（集合内避撞分配，见 [design-language](../design-language.md) §1），构成「点↔点」的同一项目认同；两处都不自行取色——避撞只有拿着全部 active project 才算得出，组件手上只有显示出来的组；组卡片不另加左侧色条——同一张卡片上两个颜色信号与本条的「chip / 竖条不得同屏」是同一条裁剪规则。
 - **退出项目**：行内动作调 `removeGoalMember`，任务浮在水上回落收件箱。组内最后一条成员退出后 **Goal 保留不自动归档**（归档是 goals 页的显式动作）。
 - **落点反馈**：排他打开后「回到 inbox 池」不再等于「出现在收件箱」——项目成员会落进项目区里一个默认折叠的组，而组 header 的「还剩 N / 共 M」本来就把它算在内、数字纹丝不动，全屏零反馈，体感是「任务凭空消失」。故凡是让成员回落 inbox 池的路径，动作后都要复用 chip 的回跳机制（`revealProjectHome`）展开它的归属组并滚过去：行尾/左滑「回收件箱」、拖进 `pool:inbox`、移出手头、子任务升根、详情抽屉改「重复与时间」、取消勾选。**「拖入项目」不在此列**——它是把成员送**进**组、不是回落 inbox 池，落点就在手指下方，自动展开反而会在连续拖入第二条时改变布局；它的反馈走 toast（§6）。
@@ -173,7 +174,7 @@ last-reviewed: 2026-07-31
 | `pages/todo/CollapsibleSection.tsx` | 通用折叠区块；`action` 插槽渲染在 summary 内并 `preventDefault`（§7），16 个调用方不传即行为不变 |
 | `pages/todo/todoDnd.ts`（归 [todo](../todo.md) covers） | `project:<goalId>` 容器域与 `assign-to-project` 操作、对缩进系统让位、`preferProjectCollisions` 碰撞策略（§6） |
 
-测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、组计数、四段排序、recentTaskIds 覆盖、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
+测试：`lib/tasks/goalMembership.test.ts`（两份索引口径、分组投影、近 7 天窗口上下界、`memberCount` 原始口径、组间排序、同挂多组仲裁、悬空 ref、上限阈值）、`lib/tasks/projectZone.test.ts`（成员四态、行动作两轴不互遮、组计数、四段排序、recentTaskIds 覆盖、chip 索引、竖条裁剪）、`lib/tasks.test.ts`（`describe("listTasks projects 桶")`：归集/排他同源、手头正交、重复模板与 occurrence 挡在门外、组内排序接线）、`pages/todo/TodoProjectSection.test.tsx`（组展开折叠、标题文案、状态胶囊、成员行动作按真实状态渲染、退出项目、已完成零渲染、限高结构、`+` 创建输入、`⋯` 菜单、改名、上限预警、`revealGoals` 消费与「组还没渲染出来就留着、出现后补上」、chip）、`pages/TodoPage.test.tsx`（页面级：排他后成员离开收件箱、项目内创建成功/满员拒绝、菜单改名和跳转、零 project 不渲染、chip 回跳、回收件箱后展开归属组、红线 3 竖条不同屏，以及落点判据的三条反向用例——手头区取消勾选 / 抽屉清时间但已完成 / 抽屉选未来某天都**不**展开，外加「抽屉→页面」这根线本身）、`lib/goals.test.ts`（`createTaskForProject` 的同事务成功/满员/失效目标/裸行解析失败回滚，`describe("归属变更同事务刷新成员任务 updatedAt")` 与 `describe("assignTaskToProject")`：单一归属先摘后加、theme/归档组不被摘、目标组失效被拒、准入四拒、幂等重入不动钉点、事务原子性）。
 
 多选的用例分三层：`pages/todo/TodoSelectionBar.test.tsx`（计数、命名必填与 trim、回车两条路径、「放进…」列表、零项目时不渲染该按钮）、`pages/todo/TaskRow.test.tsx` 与 `TaskList.test.tsx`（行点击/Enter/Space 三种勾选路径、复选框在多选态下仍是「完成」、内层控件上按键不连带勾选、多选态不渲染拖柄与禁滑）、`pages/TodoPage.test.tsx`（进出多选、三处渲染点可选、其余区 inert 且窄屏宽屏**各一条**、Esc 退出与「有弹窗时让位」、建组/批量归入成功、满员拒绝、兜底文案两侧、剪枝四条、在途闸两条）。`lib/goals.test.ts` 覆盖批量写入的原子性（全成全败、撞 500 一条不写、摘除闸的 `status`/`kind` **各一条**、去重占位、`prerequisiteLossOnAssignMany` 的边去重与源组口径）。
 

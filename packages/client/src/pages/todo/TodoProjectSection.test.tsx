@@ -74,6 +74,7 @@ function sectionElement(props: Partial<Parameters<typeof TodoProjectSection>[0]>
         onOpenGoal={props.onOpenGoal ?? vi.fn()}
         dropBlocked={props.dropBlocked ?? null}
         {...handlers}
+        onToHand={props.onToHand}
       />
     </MemoryRouter>
   );
@@ -118,6 +119,70 @@ describe("TodoProjectSection", () => {
     await click(host.querySelector('[data-testid="project-group-toggle"]'));
     expect(host.textContent).toContain("刷墙");
     await unmount(root);
+  });
+
+  // 成员行的行动作按两根**独立**的轴渲染：抓手看焦点轴、换池箭头看时间轴。
+  // 组内列表按 pool="inbox" 铺（组内不排序也不换池），若行动作也跟着这个列表级 pool 走，
+  // 已在手头的行照样挂着「抓到手头」、已排今天的行照样挂着「排进今天」——两个都是空动作。
+  describe("成员行动作按真实状态渲染", () => {
+    async function expandedRowButtons(taskOverrides: Partial<Task> & Pick<Task, "id">, handSessionId: string | null) {
+      const rendered = await renderSection({
+        handSessionId,
+        onToHand: vi.fn(),
+        groups: [group({ goalId: "g1", goalTitle: "装修", tasks: [task(taskOverrides)] })],
+      });
+      await click(rendered.host.querySelector('[data-testid="project-group-toggle"]'));
+      return rendered;
+    }
+
+    it("已抓到手头的成员：不再显示「抓到手头」按钮", async () => {
+      const { host, root } = await expandedRowButtons({ id: "t1", title: "刷墙", sessionId: "s1" }, "s1");
+      expect(host.querySelector('[aria-label^="抓到手头"]')).toBeNull();
+      await unmount(root);
+    });
+
+    it("sessionId 是历史指针：不等于当前活跃场的成员，「抓到手头」照常在", async () => {
+      const { host, root } = await expandedRowButtons({ id: "t1", title: "刷墙", sessionId: "旧场" }, "s1");
+      expect(host.querySelector('[aria-label^="抓到手头"]')).not.toBeNull();
+      await unmount(root);
+    });
+
+    it("已排今天的成员：换池按钮是「回收件箱」，不是「排进今天」", async () => {
+      const { host, root } = await expandedRowButtons(
+        { id: "t1", title: "刷墙", scheduledAt: "2026-07-25T00:00:00.000Z" },
+        null,
+      );
+      expect(host.querySelector('[aria-label^="回收件箱"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label^="排进今天"]')).toBeNull();
+      await unmount(root);
+    });
+
+    it("躺着的成员：换池按钮是「排进今天」", async () => {
+      const { host, root } = await expandedRowButtons({ id: "t1", title: "刷墙" }, null);
+      expect(host.querySelector('[aria-label^="排进今天"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label^="回收件箱"]')).toBeNull();
+      await unmount(root);
+    });
+
+    it("排到未来的成员：换池按钮仍是「排进今天」——它还没到今天", async () => {
+      const { host, root } = await expandedRowButtons(
+        { id: "t1", title: "刷墙", scheduledAt: "2026-08-20T00:00:00.000Z" },
+        null,
+      );
+      expect(host.querySelector('[aria-label^="排进今天"]')).not.toBeNull();
+      expect(host.querySelector('[aria-label^="回收件箱"]')).toBeNull();
+      await unmount(root);
+    });
+
+    it("在手头且已排今天：抓手关掉，箭头仍按时间轴指「回收件箱」——两根轴谁也不遮谁", async () => {
+      const { host, root } = await expandedRowButtons(
+        { id: "t1", title: "刷墙", sessionId: "s1", scheduledAt: "2026-07-25T00:00:00.000Z" },
+        "s1",
+      );
+      expect(host.querySelector('[aria-label^="抓到手头"]')).toBeNull();
+      expect(host.querySelector('[aria-label^="回收件箱"]')).not.toBeNull();
+      await unmount(root);
+    });
   });
 
   it("有未完成成员时显示「还剩 N · 近 7 天 +M」，不出现去归档入口", async () => {

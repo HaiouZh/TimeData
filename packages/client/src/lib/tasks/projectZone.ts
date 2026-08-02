@@ -46,6 +46,25 @@ export function projectMemberState(
   return { kind: "idle" };
 }
 
+/**
+ * 项目区成员行的**动作**口径：焦点轴（在不在手头）与时间轴（换池箭头指哪边）分开返回。
+ *
+ * 与 `projectMemberState` 的四态互斥刻意不同——那个答的是「当前在哪」，一条一个答案、焦点轴压过
+ * 时间轴，适合画胶囊；拿它开关按钮会把「在手头且已排今天」判成没排今天，箭头指反。
+ * 动作是两根独立的轴：抓手动作看焦点轴，换池动作看时间轴，谁也不遮谁。
+ *
+ * `pool` 只有两值：非今天的（收件箱 / 排到未来）动作都是「排进今天」，故一律给 `inbox`。
+ * 不给 `upcoming` 是因为 TaskRow 拿它会再画一枚排期日胶囊，与项目区自己的状态胶囊重复。
+ */
+export function projectMemberRowActions(
+  task: Task,
+  options: { handSessionId: string | null; now: Date },
+): { atHand: boolean; pool: "today" | "inbox" } {
+  const atHand = options.handSessionId !== null && (task.sessionId ?? null) === options.handSessionId;
+  const pool = placementForTask(task, options.now).pool === "today" ? "today" : "inbox";
+  return { atHand, pool };
+}
+
 export interface ProjectGroupSummary {
   /** 未完成成员数 */
   remaining: number;
