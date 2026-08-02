@@ -2273,10 +2273,47 @@ describe("停手隐身", () => {
     // 倒计时途中进多选（不再滚动，所以定时器不会被重设）。
     await openMenu(host, "闭包守卫样本");
     await click(menuItem(host, "选择"));
+    // 这条用例的闸建立在「定时器还没 fire」之上：若前面两步真实耗时超过 1.2s，
+    // shouldAdvanceTime 会让它提前 fire，坏实现打的类又被 3f 的清理摘掉，闸会静默变绿。
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
     await act(async () => {
       vi.advanceTimersByTime(1_500);
     });
     // 直接读 state 而非 ref 的实现会在这里打上 stuck，把「选中这天」藏掉。
+    expect(host.querySelector<HTMLElement>("[data-date-label]")?.classList.contains("stuck")).toBe(false);
+
+    vi.useRealTimers();
+    await unmount(root);
+  });
+
+  it("日历打开期间粘住的日期条不隐身——月历不能失去锚点", async () => {
+    await db.quickNotes.add({
+      id: "p1",
+      text: "日历态样本",
+      occurredAt: "2026-06-01T04:00:00.000Z",
+      createdAt: "2026-06-01T04:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z",
+    });
+    const { host, root } = await renderPage();
+    const list = host.querySelector<HTMLElement>('[aria-label="速记列表"]');
+    if (!list) throw new Error("missing quick notes list");
+    const divider = host.querySelector<HTMLElement>("[data-date-label]");
+    if (!divider) throw new Error("missing date divider");
+    list.getBoundingClientRect = () => ({ top: 0, height: 400 }) as DOMRect;
+    divider.getBoundingClientRect = () => ({ top: -10, height: 28 }) as DOMRect;
+
+    // 点日期药丸开出月历，datePickerOpen 置真。
+    await click(divider.querySelector<HTMLButtonElement>('button[aria-label*="点击跳转到其他日期"]'));
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await act(async () => {
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    await act(async () => {
+      vi.advanceTimersByTime(1_500);
+    });
+    // 把实现里的 `pickerOpen ||` 去掉，这条必须变红。
     expect(host.querySelector<HTMLElement>("[data-date-label]")?.classList.contains("stuck")).toBe(false);
 
     vi.useRealTimers();

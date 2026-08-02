@@ -327,6 +327,7 @@ export default function QuickNotesPage() {
 
   // 进多选 / 开搜索 / 开置顶浮层时列表 DOM 会整块换掉，隐身 ref 会指向孤儿节点：不清则下次
   // remove 打空，真正粘住那条永远摘不掉 .stuck 类，表现为滚动时日期条再也不出现。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 这三个是触发器不是读取值——模式切换时列表 DOM 整块换掉，stuckElRef 会指向孤儿节点，必须重跑清类
   useEffect(() => {
     clearStuckDivider();
   }, [selectionMode, searchOpen, pinnedOpen]);
